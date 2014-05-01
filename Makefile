@@ -5,12 +5,13 @@ OBJS	:= m_units_constants.o m_config.o m_lookup_table.o\
 TESTS	:= test_m_config test_m_lookup_table test_m_random
 
 LIBS	:= fosito
+LIBDIRS := .
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS)
 
 %:	%.o
-	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -l,$(LIBS))
+	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 
 .PHONY: all test clean
 
