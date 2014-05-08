@@ -4,9 +4,8 @@ program test
 
   integer, parameter :: dp = kind(0.0d0)
   integer            :: i, cntr, table_size
-  integer, parameter :: test_size = 5*1000*1000, min_table_size = 10
-  type(LT_col_t)     :: tbl_col
-  type(LT_mcol_t)    :: tbl_mcol
+  integer, parameter :: test_size = 1000*1000, min_table_size = 10
+  type(LT_mcol_t)    :: lkp_tbl
 
   real(dp)           :: x_values(test_size), y_values(test_size), y2_values(2, test_size)
   real(dp)           :: lkp_results(test_size), lkp2_results(2, test_size)
@@ -14,11 +13,11 @@ program test
   real(dp)           :: total_time, time_t1, time_t2
 
   ! Create some testing data
-  forall (i = 1:test_size)
+  do i = 1, test_size
      x_values(i) = i / (0.1_dp * test_size)
      y_values(i) = sin(x_values(i))
-     y2_values(:, i) = (/sin(x_values(i)), cos(x_values(i))/)
-  end forall
+     y2_values(:, i) = (/sin(x_values(i)), atan(x_values(i))/)
+  end do
 
   print *, "Testing m_lookup_table.f90 implementation..."
   print *, ""
@@ -36,13 +35,13 @@ program test
 
      ! Create lookup table, last two arguments are optional (defaults 1.0 and 1)
      ! First arguments are min x, max x, num points
-     tbl_col = LT_create_col(x_values(1), x_values(test_size), table_size)
+     lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 1)
 
      ! Add the data to the table
-     call LT_set_col(tbl_col, x_values, y_values)
+     call LT_set_col(lkp_tbl, 1, x_values, y_values)
 
      call cpu_time(time_t1)
-     lkp_results = LT_get_col(tbl_col, x_values)
+     lkp_results = LT_get_col(lkp_tbl, 1, x_values)
      call cpu_time(time_t2)
      total_time = total_time + (time_t2 - time_t1)
 
@@ -72,15 +71,15 @@ program test
 
      ! Create lookup table, last two arguments are optional (defaults 1.0 and 1)
      ! First arguments are min x, max x, num points
-     tbl_mcol = LT_create_mcol(x_values(1), x_values(test_size), table_size, 2)
+     lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 2)
 
      ! Add the data to the table
-     call LT_set_mcol(tbl_mcol, 1, x_values, y2_values(1, :))
-     call LT_set_mcol(tbl_mcol, 2, x_values, y2_values(2, :))
+     call LT_set_col(lkp_tbl, 1, x_values, y2_values(1, :))
+     call LT_set_col(lkp_tbl, 2, x_values, y2_values(2, :))
 
      call cpu_time(time_t1)
      do i = 1, test_size
-        lkp2_results(:, i) = LT_get_mcol(tbl_mcol, x_values(i))
+        lkp2_results(:, i) = LT_get_mcol(lkp_tbl, x_values(i))
      end do
      call cpu_time(time_t2)
      total_time = total_time + (time_t2 - time_t1)

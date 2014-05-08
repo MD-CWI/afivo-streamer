@@ -14,9 +14,11 @@ LIBDIRS := $(INCDIRS)
 %:	%.o
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 
-.PHONY: all clean
+.PHONY: all test clean
 
 all: 	$(TESTS)
+
+test:	$(TESTS)
 	$(foreach test, $(TESTS), ./$(test);)
 
 clean:
