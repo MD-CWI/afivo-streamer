@@ -4,29 +4,54 @@ module m_random
    private
 
    integer, parameter :: dp = kind(0.0d0)
+   integer, parameter :: i4 = selected_int_kind(9)
 
+   type, public :: RNG_state_t
+      integer(i4), private :: qq(4)
+   end type RNG_state_t
+
+   ! Procedures
+   public :: RNG_int4
+   public :: RNG_U01
+   public :: RNG_set_state
    public :: RNG_normal
    public :: RNG_poisson
-   public :: RNG_set_seed
 
 contains
 
-   !> Initialize the RNG seed
-   subroutine RNG_set_seed(arg_seed)
-      integer, intent(IN)  :: arg_seed
-      integer              :: n, seed_size
-      integer, allocatable :: used_seed(:)
+   subroutine RNG_set_state(state, initializer)
+      type(RNG_state_t), intent(out) :: state
+      integer(i4), intent(in), optional :: initializer(4)
 
-      call random_seed(size = seed_size) ! Get required size of seed
-      allocate(used_seed(seed_size))
+      if (present(initializer)) then
+         state%qq = initializer
+      else
+         state%qq = (/521288629, 362436069, 16163801, 1131199299/)
+      end if
+   end subroutine RNG_set_state
 
-      do n = 1, seed_size
-         used_seed(n) = arg_seed * n ! Fill with some arbritrary values depending on arg_seed
-      end do
+   ! Method mzran (Marsaglia), see http://jblevins.org/log/openmp
+   function RNG_int4(self) result(r_int)
+      type(RNG_state_t), intent(inout) :: self
+      integer(i4)                    :: r_int
 
-      call random_seed(put = used_seed)
-      deallocate(used_seed)
-   end subroutine RNG_set_seed
+      r_int = self%qq(1) - self%qq(3)
+      if (r_int < 0) r_int = r_int + 2147483579
+
+      self%qq(1:2) = self%qq(2:3)
+      self%qq(3)   = r_int
+      self%qq(4)   = 69069 * self%qq(4) + 1013904243
+      r_int        = r_int + self%qq(4)
+   end function RNG_int4
+
+   ! Random [0,1) number
+   function RNG_U01(self) result(r_U01)
+      type(RNG_state_t), intent(inout) :: self
+      real(dp)                       :: r_U01
+      real(dp), parameter            :: conv_fac = 0.5_dp / 2.0_dp**31
+
+      r_U01 = 0.5_dp + conv_fac * RNG_int4(self)
+   end function RNG_U01
 
    !> Return normal random variate with mean 0 and variance 1
    ! Source: http://en.wikipedia.org/wiki/Marsaglia_polar_method
@@ -55,9 +80,9 @@ contains
 
    !> Return Poisson random variate with rate labda. Works well for labda < 30 or so.
    !! For labda >> 1 it can produce wrong results due to roundoff error.
-   integer function RNG_poisson(labda)
+   integer(i4) function RNG_poisson(labda)
       real(dp), intent(IN) :: labda
-      integer :: k
+      integer(i4) :: k
       real(dp) :: expL, p
 
       expL = exp(-labda)

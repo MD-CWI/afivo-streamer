@@ -3,11 +3,15 @@ program test_m_random
 
    implicit none
    integer, parameter  :: dp = kind(0.0d0)
-   integer, parameter  :: n_samples = 10*1000*1000
+   integer, parameter  :: n_samples = 100*1000*1000
    integer             :: nn, rng_seed
-   real(dp)            :: rand_value, sum_sq, new_mean, old_mean, variance
+   real(dp)            :: mean, variance
    real(dp), parameter :: pi        = acos(-1.0_dp)
    real(dp)            :: time_start, time_end
+   real(dp), allocatable :: rand_results(:)
+   type(RNG_state_t) :: rng_state
+
+   allocate(rand_results(n_samples))
 
    print *, "Testing implementation of m_random.f90"
    print *, "This is just checking whether everything works, and by no means"
@@ -15,60 +19,62 @@ program test_m_random
    print *, "For these tests, ", n_samples, " values are used"
 
    call system_clock(count=rng_seed)
-   call RNG_set_seed(rng_seed)
 
-   sum_sq = 0.0_dp
-   old_mean = 0.0_dp
    call cpu_time(time_start)
-   do nn = 1, n_samples
-      call random_number(rand_value)
-      new_mean = old_mean + (rand_value - old_mean) / nn
-      sum_sq = sum_sq + (rand_value - old_mean) * (rand_value - new_mean)
-      old_mean = new_mean
-   end do
+   call random_number(rand_results)
    call cpu_time(time_end)
-   variance = sum_sq / n_samples
+   mean = sum(rand_results) / n_samples
+   variance = sum((rand_results - mean)**2) / n_samples
 
    print *, ""
-   print *, "For uniform random numbers, the result is:"
+   print *, "For uniform random numbers (random_number), the result is:"
    print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
-   print *, "mean/<mean>", new_mean/0.5_dp
+   print *, "mean/<mean>", mean/0.5_dp
    print *, "std dev/<std dev>", sqrt(variance)*sqrt(12.0_dp)
 
-   sum_sq = 0.0_dp
-   old_mean = 0.0_dp
+   call RNG_set_state(rng_state, (/rng_seed, 1337, 711337, 623454235/))
+
    call cpu_time(time_start)
    do nn = 1, n_samples
-      rand_value = 1 + RNG_normal()
-      new_mean = old_mean + (rand_value - old_mean) / nn
-      sum_sq = sum_sq + (rand_value - old_mean) * (rand_value - new_mean)
-      old_mean = new_mean
+      rand_results(nn) = RNG_U01(rng_state)
    end do
    call cpu_time(time_end)
-   variance = sum_sq / n_samples
+   mean = sum(rand_results) / n_samples
+   variance = sum((rand_results - mean)**2) / n_samples
 
    print *, ""
-   print *, "For normal/Gaussian random numbers, the result is:"
+   print *, "For uniform random numbers (random_number), the result is:"
    print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
-   print *, "mean/<mean>", new_mean/1.0_dp ! Above we add one to RNG_normal()
-   print *, "std dev/<std dev>", sqrt(variance)
+   print *, "mean/<mean>", mean/0.5_dp
+   print *, "std dev/<std dev>", sqrt(variance)*sqrt(12.0_dp)
 
-   sum_sq = 0.0_dp
-   old_mean = 0.0_dp
-   call cpu_time(time_start)
-   do nn = 1, n_samples
-      rand_value = RNG_poisson(pi)
-      new_mean = old_mean + (rand_value - old_mean) / nn
-      sum_sq = sum_sq + (rand_value - old_mean) * (rand_value - new_mean)
-      old_mean = new_mean
-   end do
-   call cpu_time(time_end)
-   variance = sum_sq / n_samples
+   ! call cpu_time(time_start)
+   ! do nn = 1, n_samples
+   !    rand_results(nn) = RNG_normal()
+   ! end do
+   ! call cpu_time(time_end)
+   ! rand_results = rand_results + 1
+   ! mean = sum(rand_results) / n_samples
+   ! variance = sum((rand_results - mean)**2) / n_samples
 
-   print *, ""
-   print *, "For Poisson random numbers, the result is:"
-   print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
-   print *, "mean/<mean>", new_mean/pi ! Above we add one to RNG_normal()
-   print *, "std dev/<std dev>", sqrt(variance/pi)
+   ! print *, ""
+   ! print *, "For normal/Gaussian random numbers, the result is:"
+   ! print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
+   ! print *, "mean/<mean>", mean/1.0_dp ! Above we add one to RNG_normal()
+   ! print *, "std dev/<std dev>", sqrt(variance)
+
+   ! call cpu_time(time_start)
+   ! do nn = 1, n_samples
+   !    rand_results(nn) = RNG_poisson(pi)
+   ! end do
+   ! call cpu_time(time_end)
+   ! mean = sum(rand_results) / n_samples
+   ! variance = sum((rand_results - mean)**2) / n_samples
+
+   ! print *, ""
+   ! print *, "For Poisson random numbers, the result is:"
+   ! print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
+   ! print *, "mean/<mean>", mean/pi ! Above we add one to RNG_normal()
+   ! print *, "std dev/<std dev>", sqrt(variance/pi)
 
 end program test_m_random
