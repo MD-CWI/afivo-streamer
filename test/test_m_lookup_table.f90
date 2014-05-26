@@ -5,7 +5,7 @@ program test
   integer, parameter :: dp = kind(0.0d0)
   integer            :: i, cntr, table_size
   integer, parameter :: test_size = 1000*1000, min_table_size = 10
-  type(LT_mcol_t)    :: lkp_tbl
+  type(LT_table_t)   :: lkp_tbl
 
   real(dp)           :: x_values(test_size), y_values(test_size), y2_values(2, test_size)
   real(dp)           :: lkp_results(test_size), lkp2_results(2, test_size)

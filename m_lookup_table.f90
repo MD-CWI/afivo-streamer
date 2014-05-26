@@ -4,14 +4,14 @@ module m_lookup_table
 
    integer, parameter :: dp = kind(1.0d0)
 
-   type LT_mcol_t
+   type LT_table_t
       private
       integer               :: n_rows
       integer               :: n_cols
       real(dp)              :: x_min, inv_dx
       real(dp), allocatable :: cols_rows(:, :)
       real(dp), allocatable :: rows_cols(:, :)
-   end type LT_mcol_t
+   end type LT_table_t
 
    type LT_loc_t
       private
@@ -20,7 +20,7 @@ module m_lookup_table
    end type LT_loc_t
 
    ! Public types
-   public :: LT_mcol_t
+   public :: LT_table_t
    public :: LT_loc_t
 
    ! Public methods
@@ -44,7 +44,7 @@ contains
    function LT_create(x_min, x_max, n_rows, n_cols) result(my_lt)
       real(dp), intent(in) :: x_min, x_max
       integer, intent(in)  :: n_rows, n_cols
-      type(LT_mcol_t)      :: my_lt
+      type(LT_table_t)      :: my_lt
 
       if (x_max <= x_min) print *, "set_xdata: x_max should be > x_min"
       if (n_rows <= 1)    print *, "set_xdata: n_rows should be bigger than 1"
@@ -61,7 +61,7 @@ contains
    end function LT_create
 
    subroutine LT_set_col(my_lt, col_ix, xx, yy)
-      type(LT_mcol_t), intent(inout) :: my_lt
+      type(LT_table_t), intent(inout) :: my_lt
       integer, intent(in)            :: col_ix
       real(dp), intent(in)           :: xx(:), yy(:)
       my_lt%cols_rows(col_ix, :) = &
@@ -70,9 +70,9 @@ contains
    end subroutine LT_set_col
 
    subroutine LT_add_col(my_lt, xx, yy)
-      type(LT_mcol_t), intent(inout) :: my_lt
+      type(LT_table_t), intent(inout) :: my_lt
       real(dp), intent(in)           :: xx(:), yy(:)
-      type(LT_mcol_t)                :: temp_lt
+      type(LT_table_t)                :: temp_lt
 
       temp_lt = my_lt
       deallocate(my_lt%cols_rows)
@@ -86,7 +86,7 @@ contains
    end subroutine LT_add_col
 
    subroutine LT_add_to_col(my_lt, col_ix, xx, yy)
-      type(LT_mcol_t), intent(inout) :: my_lt
+      type(LT_table_t), intent(inout) :: my_lt
       integer, intent(in)            :: col_ix
       real(dp), intent(in)           :: xx(:), yy(:)
       my_lt%cols_rows(col_ix, :) = &
@@ -95,14 +95,14 @@ contains
    end subroutine LT_add_to_col
 
    elemental function LT_get_loc(my_lt, x) result(my_loc)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       real(dp), intent(in)        :: x
       type(LT_loc_t)              :: my_loc
       my_loc = get_loc(my_lt, x)
    end function LT_get_loc
 
    elemental function get_loc(my_lt, x) result(my_loc)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       real(dp), intent(in)        :: x
       type(LT_loc_t)              :: my_loc
       real(dp)                    :: frac
@@ -122,7 +122,7 @@ contains
    end function get_loc
 
    function LT_get_mcol(my_lt, x) result(col_values)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       real(dp), intent(in)        :: x
       real(dp)                    :: col_values(my_lt%n_cols)
       type(LT_loc_t)              :: loc
@@ -131,7 +131,7 @@ contains
    end function LT_get_mcol
 
    elemental function LT_get_col(my_lt, col_ix, x) result(col_value)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       integer, intent(in)         :: col_ix
       real(dp), intent(in)        :: x
       real(dp)                    :: col_value
@@ -141,7 +141,7 @@ contains
    end function LT_get_col
 
    function LT_get_mcol_at_loc(my_lt, loc) result(col_values)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       type(LT_loc_t), intent(in)  :: loc
       real(dp)                    :: col_values(my_lt%n_cols)
       col_values = loc%low_frac * my_lt%cols_rows(:, loc%low_ix) + &
@@ -149,7 +149,7 @@ contains
    end function LT_get_mcol_at_loc
 
    elemental function LT_get_col_at_loc(my_lt, col_ix, loc) result(col_value)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       integer, intent(in)         :: col_ix
       type(LT_loc_t), intent(in)  :: loc
       real(dp)                    :: col_value
@@ -158,24 +158,24 @@ contains
    end function LT_get_col_at_loc
 
    integer function LT_get_num_rows(my_lt)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       LT_get_num_rows = my_lt%n_rows
    end function LT_get_num_rows
 
    integer function LT_get_num_cols(my_lt)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       LT_get_num_cols = size(my_lt%cols_rows, 1)
    end function LT_get_num_cols
 
    subroutine LT_get_data(my_lt, x_data, cols_rows)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       real(dp), intent(out)      :: x_data(:), cols_rows(:, :)
       x_data  = LT_get_xdata(my_lt)
       cols_rows = my_lt%cols_rows
    end subroutine LT_get_data
 
    function LT_get_xdata(my_lt) result(xdata)
-      type(LT_mcol_t), intent(in) :: my_lt
+      type(LT_table_t), intent(in) :: my_lt
       real(dp)                    :: xdata(my_lt%n_rows)
       integer                     :: ix
       real(dp)                    :: dx
