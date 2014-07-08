@@ -192,49 +192,27 @@ contains
       end do
    end function get_spaced_data
 
-   ! Searches list for the interval containing value, such that list(i) <= value
-   ! < list(i+1), and returns i
-   integer function get_ix_in_list(list, value)
-      real(dp), intent(in) :: list(:)
-      real(dp), intent(in) :: value
-      integer              :: iMin, iMax, iMiddle
-
-      iMin = 1
-      iMax = size(list)
-
-      do
-         iMiddle = iMin + (iMax - iMin) / 2
-         if (value < list(iMiddle)) then
-            iMax = iMiddle
-         else
-            iMin = iMiddle
-         end if
-         if (iMax - iMin <= 1) exit
-      end do
-
-      get_ix_in_list = iMin
-   end function get_ix_in_list
-
    subroutine LT_lin_interp_list(x_list, y_list, x_value, y_value)
-      real(dp), intent(in)    :: x_list(:), y_list(:)
-      real(dp), intent(in)    :: x_value
-      real(dp), intent(inout) :: y_value
+     use m_find_index
+     real(dp), intent(in)    :: x_list(:), y_list(:)
+     real(dp), intent(in)    :: x_value
+     real(dp), intent(inout) :: y_value
 
-      integer                 :: ix, iMin, iMax
-      real(dp)                :: temp
+     integer                 :: ix, iMin, iMax
+     real(dp)                :: temp
 
-      iMin = lbound(x_list, 1)
-      iMax = ubound(x_list, 1)
+     iMin = lbound(x_list, 1)
+     iMax = ubound(x_list, 1)
 
-      if (x_value <= x_list(iMin)) then
-         y_value = y_list(iMin)
-      else if (x_value >= x_list(iMax)) then
-         y_value = y_list(iMax)
-      else
-         ix = get_ix_in_list(x_list, x_value)
-         temp = (x_value - x_list(ix)) / (x_list(ix+1) - x_list(ix))
-         y_value = (1 - temp) * y_list(ix) + temp * y_list(ix+1)
-      end if
+     if (x_value <= x_list(iMin)) then
+        y_value = y_list(iMin)
+     else if (x_value >= x_list(iMax)) then
+        y_value = y_list(iMax)
+     else
+        ix = FI_adaptive_r(x_list, x_value)
+        temp = (x_value - x_list(ix-1)) / (x_list(ix) - x_list(ix-1))
+        y_value = (1 - temp) * y_list(ix-1) + temp * y_list(ix)
+     end if
    end subroutine LT_lin_interp_list
 
 end module m_lookup_table
