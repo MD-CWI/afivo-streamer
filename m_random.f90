@@ -1,100 +1,91 @@
-!> Module for the random number generation
+!> Module for pseudo random number generation
 module m_random
-   implicit none
-   private
 
-   integer, parameter :: dp = kind(0.0d0)
-   integer, parameter :: i4 = selected_int_kind(9)
+  implicit none
+  private
 
-   type, public :: RNG_state_t
-      integer(i4), private :: qq(4)
-   end type RNG_state_t
+  integer, parameter :: dp = kind(0.0d0)
+  integer, parameter :: i4 = selected_int_kind(9)
 
-   ! Procedures
-   public :: RNG_int4
-   public :: RNG_U01
-   public :: RNG_set_state
-   public :: RNG_normal
-   public :: RNG_poisson
+  type, public :: RNG_t
+     integer(i4), private :: state(4) = (/521288629, &
+          362436069, 16163801, 1131199299/)
+   contains
+     procedure, non_overridable :: set_seed
+     procedure, non_overridable :: int4
+     procedure, non_overridable :: uni_01
+     procedure, non_overridable :: uni_ab
+     procedure, non_overridable :: two_normals
+     procedure, non_overridable :: poisson
+  end type RNG_t
 
 contains
 
-   subroutine RNG_set_state(state, initializer)
-      type(RNG_state_t), intent(out) :: state
-      integer(i4), intent(in), optional :: initializer(4)
+  subroutine set_seed(self, seed)
+    class(RNG_t), intent(out) :: self
+    integer(i4), intent(in)   :: seed(4)
+    self%state = seed
+  end subroutine Set_seed
 
-      if (present(initializer)) then
-         state%qq = initializer
-      else
-         state%qq = (/521288629, 362436069, 16163801, 1131199299/)
-      end if
-   end subroutine RNG_set_state
+  ! Method mzran (Marsaglia), see http://jblevins.org/log/openmp
+  function int4(self) result(rr)
+    class(RNG_t), intent(inout) :: self
+    integer(i4)                 :: rr
 
-   ! Method mzran (Marsaglia), see http://jblevins.org/log/openmp
-   function RNG_int4(self) result(r_int)
-      type(RNG_state_t), intent(inout) :: self
-      integer(i4)                    :: r_int
+    rr              = self%state(1) - self%state(3)
+    if (rr < 0) rr  = rr + 2147483579
+    self%state(1:2) = self%state(2:3)
+    self%state(3)   = rr
+    self%state(4)   = 69069 * self%state(4) + 1013904243
+    rr              = rr + self%state(4)
+  end function int4
 
-      r_int = self%qq(1) - self%qq(3)
-      if (r_int < 0) r_int = r_int + 2147483579
+  ! Uniform random number in range [0,1)
+  function uni_01(self) result(rr)
+    class(RNG_t), intent(inout) :: self
+    real(dp)                    :: rr
+    real(dp), parameter         :: conv_fac = 2.0_dp**(-32)
+    rr = 0.5_dp + conv_fac * self%int4()
+  end function uni_01
 
-      self%qq(1:2) = self%qq(2:3)
-      self%qq(3)   = r_int
-      self%qq(4)   = 69069 * self%qq(4) + 1013904243
-      r_int        = r_int + self%qq(4)
-   end function RNG_int4
+  ! Uniform random number in range [a,b)
+  function uni_ab(self, a, b) result(rr)
+    class(RNG_t), intent(inout) :: self
+    real(dp), intent(in)        :: a, b
+    real(dp)                    :: rr
+    rr = a + self%uni_01() * (b-a)
+  end function uni_ab
 
-   ! Random [0,1) number
-   function RNG_U01(self) result(r_U01)
-      type(RNG_state_t), intent(inout) :: self
-      real(dp)                       :: r_U01
-      real(dp), parameter            :: conv_fac = 0.5_dp / 2.0_dp**31
+  ! Return two normal random variates with mean 0 and variance 1
+  ! Source: http://en.wikipedia.org/wiki/Marsaglia_polar_method
+  function two_normals(self) result(rands)
+    class(RNG_t), intent(inout) :: self
+    real(dp)                    :: rands(2), sum_sq
+    do
+       rands(1) = self%uni_ab(-1.0_dp, 1.0_dp)
+       rands(2) = self%uni_ab(-1.0_dp, 1.0_dp)
+       sum_sq = sum(rands**2)
+       if (sum_sq < 1.0_dp .and. sum_sq /= 0.0_dp) exit
+    end do
+    rands = rands * sqrt(-2 * log(sum_sq) / sum_sq)
+  end function two_normals
 
-      r_U01 = 0.5_dp + conv_fac * RNG_int4(self)
-   end function RNG_U01
+  ! Return Poisson random variate with rate lambda. Works well for lambda < 30
+  ! or so. For lambda >> 1 it can produce wrong results due to roundoff error.
+  function poisson(self, lambda) result(rr)
+    class(RNG_t), intent(inout) :: self
+    real(dp), intent(in)        :: lambda
+    integer(i4)                 :: rr
+    real(dp)                    :: expl, p
 
-   !> Return normal random variate with mean 0 and variance 1
-   ! Source: http://en.wikipedia.org/wiki/Marsaglia_polar_method
-   real(dp) function RNG_normal()
-      logical, save :: have_spare = .false.
-      real(dp), save :: spare
-      real(dp) :: rands(2), sum_sq, mul
+    expl = exp(-lambda)
+    rr = 0
+    p = self%uni_01()
 
-      if (have_spare) then
-         have_spare = .false.
-         RNG_normal = spare
-      else
-         do
-            call random_number(rands)
-            rands = 2 * rands - 1
-            sum_sq = sum(rands**2)
-            if (sum_sq < 1.0_dp .and. sum_sq /= 0.0_dp) exit
-         end do
-
-         mul        = sqrt(-2 * log(sum_sq) / sum_sq)
-         RNG_normal = rands(1) * mul
-         spare      = rands(2) * mul
-         have_spare = .true.
-      end if
-   end function RNG_normal
-
-   !> Return Poisson random variate with rate labda. Works well for labda < 30 or so.
-   !! For labda >> 1 it can produce wrong results due to roundoff error.
-   integer(i4) function RNG_poisson(labda)
-      real(dp), intent(IN) :: labda
-      integer(i4) :: k
-      real(dp) :: expL, p
-
-      expL = exp(-labda)
-      k = 0
-      call random_number(p)
-
-      do while (p > expL)
-         k = k + 1
-         call random_number(p)
-      end do
-      RNG_poisson = k
-
-   end function RNG_poisson
+    do while (p > expl)
+       rr = rr + 1
+       p = p * self%uni_01()
+    end do
+  end function poisson
 
 end module m_random
