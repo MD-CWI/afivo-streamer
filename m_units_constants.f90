@@ -42,6 +42,8 @@ module m_units_constants
   real(dp), parameter :: UC_boltzmann_const = 1.3806503d-23           ! the Boltzmann constant
   real(dp), parameter :: UC_bohr_radius     = 5.29d-11                ! the Bohr radius (m)
   real(dp), parameter :: UC_torr_to_bar     = 133.322368 * 1.0D-5     ! one Torr in units of bar
+  real(dp), parameter :: UC_elec_q_over_eps0 = UC_elec_charge / UC_eps0
+  real(dp), parameter :: UC_elec_q_over_m = UC_elec_charge / UC_elec_mass
 
   ! Small and large numbers
   real(dp), parameter :: UC_tiny            = epsilon(1.0_dp)

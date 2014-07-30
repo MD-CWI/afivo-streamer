@@ -20,3 +20,6 @@ test: 	libfosito.a
 clean:
 	$(RM) -f *.o *.mod
 	$(MAKE) -C test clean
+
+# Dependencies
+m_lookup_table.o:	m_find_index.o
