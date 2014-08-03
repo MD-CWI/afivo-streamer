@@ -1,5 +1,5 @@
 FC 	:= gfortran
-FFLAGS	:= -Wall -fcheck=all -ffpe-trap=invalid,zero,overflow -g -O3
+FFLAGS	:= -Wall -fcheck=all -ffpe-trap=invalid,zero,overflow -g -O0
 TESTS	:= test_m_config test_m_lookup_table test_m_random test_m_linked_list\
 	test_m_find_index
 
