@@ -22,8 +22,11 @@ module m_config
 
   ! Types
   integer, parameter :: dp = kind(0.0d0)
-  integer, parameter :: CFG_int_type = 0, CFG_real_type = 1, &
-       CFG_char_type = 2, CFG_logic_type = 3
+  integer, parameter :: CFG_n_types = 4
+  integer, parameter :: CFG_int_type = 1, CFG_real_type = 2, &
+       CFG_char_type = 3, CFG_logic_type = 4
+  character(len=5), parameter :: CFG_type_names(CFG_n_types) = &
+       (/"int  ", "real ", "char ", "logic"/)
 
   ! String lengths
   integer, parameter :: tiny_len = 20
@@ -50,54 +53,20 @@ module m_config
      logical                           :: sorted      = .false.
      integer                           :: n_vars      = 0
      type(CFG_var_t), allocatable      :: vars(:)
-     ! procedure(err_p), pointer, nopass :: err_handler => null()
-   ! contains
-   !   procedure, non_overridable        :: set_err_handler
-   !   procedure, non_overridable        :: add_real
-   !   procedure, non_overridable        :: add_real_array
-   !   procedure, non_overridable        :: add_int
-   !   procedure, non_overridable        :: add_int_array
-   !   procedure, non_overridable        :: add_char
-   !   procedure, non_overridable        :: add_char_array
-   !   procedure, non_overridable        :: add_logical
-   !   procedure, non_overridable        :: add_logical_array
-   !   generic                           :: add => &
-   !        add_real, add_real_array, add_int, add_int_array, add_char, &
-   !        add_char_array, add_logical, add_logical_array
-   !   procedure, non_overridable        :: get_real_array
-   !   procedure, non_overridable        :: get_int_array
-   !   procedure, non_overridable        :: get_char_array
-   !   procedure, non_overridable        :: get_logical_array
-   !   generic                           :: get_array => get_real_array, &
-   !        get_int_array, get_char_array, get_logical_array
-   !   procedure, non_overridable        :: get_real
-   !   procedure, non_overridable        :: get_int
-   !   procedure, non_overridable        :: get_logic
-   !   procedure, non_overridable        :: get_string
-   !   procedure, non_overridable        :: get_size
-   !   procedure, non_overridable        :: get_type
-   !   procedure, non_overridable        :: sort
-   !   procedure, non_overridable        :: write
-   !   procedure, non_overridable        :: read_file
   end type CFG_t
 
   interface CFG_add
-     module procedure :: add_real, add_real_array, add_int, add_int_array, add_char, &
-       add_char_array, add_logical, add_logical_array
+     module procedure :: add_real, add_real_array, add_int, add_int_array, &
+          add_char, add_char_array, add_logical, add_logical_array
   end interface CFG_add
 
   interface CFG_get
-     module procedure :: get_real, get_int, get_logic, get_string
+     module procedure :: get_real, get_int, get_logic, get_string, &
+          get_real_array, get_int_array, get_char_array, get_logical_array
   end interface CFG_get
-
-  interface CFG_get_array
-     module procedure ::  get_real_array, &
-       get_int_array, get_char_array, get_logical_array
-  end interface CFG_get_array
 
   public :: CFG_add
   public :: CFG_get
-  public :: CFG_get_array
   public :: CFG_get_size
   public :: CFG_get_type
   public :: CFG_sort
@@ -340,9 +309,10 @@ contains
        call handle_error(&
          "CFG_get(...): variable ["//p_name//"] not found")
     else if (cfg%vars(ix)%p_type /= p_type) then
-       write(err_string, fmt="(A,I0,A,I0,A)") "CFG_get(...): variable [" &
-            // p_name // "] has different type (", cfg%vars(ix)%p_type, &
-            ") than requested (", p_type, ")"
+       write(err_string, fmt="(A)") "CFG_get(...): variable [" &
+            // p_name // "] has different type (" // &
+            trim(CFG_type_names(cfg%vars(ix)%p_type)) // &
+            ") than requested (" // trim(CFG_type_names(p_type)) // ")"
        call handle_error(err_string)
     else if (cfg%vars(ix)%p_size /= p_size) then
        write(err_string, fmt="(A,I0,A,I0,A)") "CFG_get(...): variable [" &
@@ -482,10 +452,10 @@ contains
   end subroutine get_logic
 
   subroutine get_string(cfg, p_name, res)
-    type(CFG_t), intent(in)              :: cfg
-    character(len=*), intent(in)         :: p_name
-    character(len=name_len), intent(out) :: res
-    integer                              :: ix
+    type(CFG_t), intent(in)       :: cfg
+    character(len=*), intent(in)  :: p_name
+    character(len=*), intent(out) :: res
+    integer                       :: ix
     call prepare_get_var(cfg, p_name, CFG_char_type, 1, ix)
     res = cfg%vars(ix)%char_data(1)
   end subroutine get_string
