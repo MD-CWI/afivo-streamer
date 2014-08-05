@@ -3,8 +3,10 @@ program test_m_config
 
   integer, parameter :: dp = kind(0.0d0)
   type(CFG_t) :: my_cfg
-  integer :: n_reals
+  integer :: n_reals, v_type
   real(dp), allocatable :: my_reals(:)
+  logical :: my_logic
+  integer :: my_int
   print *, "Testing m_config.f90 implementation"
 
   ! Create some parameters
@@ -24,15 +26,18 @@ program test_m_config
   call CFG_write(my_cfg, "test_m_config_output.txt")    ! Write to file
 
   print *, "We can get values in different ways:"
-  print *, "lots_of_work:", CFG_get_logic(my_cfg, "lots_of_work")
-  print *, "my_age:", CFG_get_int(my_cfg, "my_age")
-  n_reals = CFG_get_size(my_cfg, "my_fav_reals")
+  call CFG_get(my_cfg, "lots_of_work", my_logic)
+  print *, "lots_of_work:", my_logic
+  call CFG_get(my_cfg, "my_age", my_int)
+  print *, "my_age:", my_int
+  call CFG_get_size(my_cfg, "my_fav_reals", n_reals)
   print *, "number of favourite numbers:", n_reals
   allocate(my_reals(n_reals))
-  call CFG_get_array(my_cfg, "my_fav_reals", my_reals)
+  call CFG_get(my_cfg, "my_fav_reals", my_reals)
   print *, "my favourite number:", my_reals(1)
   print *, "my second favourite number:", my_reals(2)
-  print *, "type of full name:", CFG_get_type(my_cfg, "full_name")
+  call CFG_get_type(my_cfg, "full_name", v_type)
+  print *, "type of full name:", v_type
 
   print *, "Done, the configuration file has been written to test_m_config_output.txt"
   print *, ""

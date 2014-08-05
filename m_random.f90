@@ -13,6 +13,7 @@ module m_random
    contains
      procedure, non_overridable :: set_seed
      procedure, non_overridable :: int4
+     procedure, non_overridable :: int_ab
      procedure, non_overridable :: uni_01
      procedure, non_overridable :: uni_ab
      procedure, non_overridable :: two_normals
@@ -39,6 +40,14 @@ contains
     self%state(4)   = 69069 * self%state(4) + 1013904243
     rr              = rr + self%state(4)
   end function int4
+
+  function int_ab(self, a, b) result(rr)
+    class(RNG_t), intent(inout) :: self
+    integer, intent(in)         :: a, b
+    integer                     :: rr
+
+    rr = a + int(self%uni_01() * (b-a+1))
+  end function int_ab
 
   ! Uniform random number in range [0,1)
   function uni_01(self) result(rr)
