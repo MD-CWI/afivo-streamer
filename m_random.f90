@@ -26,7 +26,7 @@ contains
     class(RNG_t), intent(out) :: self
     integer(i4), intent(in)   :: seed(4)
     self%state = seed
-  end subroutine Set_seed
+  end subroutine set_seed
 
   ! Method mzran (Marsaglia), see http://jblevins.org/log/openmp
   function int4(self) result(rr)
@@ -45,7 +45,6 @@ contains
     class(RNG_t), intent(inout) :: self
     integer, intent(in)         :: a, b
     integer                     :: rr
-
     rr = a + int(self%uni_01() * (b-a+1))
   end function int_ab
 

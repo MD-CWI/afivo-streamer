@@ -2,14 +2,14 @@ program test_m_random
    use m_random
 
    implicit none
-   integer, parameter  :: dp = kind(0.0d0)
-   integer, parameter  :: n_samples = 1000*1000
-   integer             :: nn, rng_seed
-   real(dp)            :: mean, variance
-   real(dp), parameter :: pi        = acos(-1.0_dp)
-   real(dp)            :: time_start, time_end
+   integer, parameter    :: dp        = kind(0.0d0)
+   integer, parameter    :: n_samples = 1000*1000
+   integer               :: nn, rng_seed
+   real(dp)              :: mean, variance
+   real(dp), parameter   :: pi        = acos(-1.0_dp)
+   real(dp)              :: time_start, time_end
    real(dp), allocatable :: rand_results(:)
-   type(RNG_t) :: rng
+   type(RNG_t)           :: rng
 
    allocate(rand_results(n_samples))
 
