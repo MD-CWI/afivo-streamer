@@ -36,4 +36,10 @@ To keep the code lean & fast, we restrict the framework in the following way:
 
 ### Current status
 
-Nothing is done yet.
+Decided to use (modern) Fortran for this project. Nothing else has been done.
+
+### Todo
+
+* Select output format / library from
+  [this list](http://www.visitusers.org/index.php?title=Detailed_list_of_file_formats_VisIt_supports).
+* Create basic datatypes.
