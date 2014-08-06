@@ -1,5 +1,5 @@
 FC 	:= gfortran
-FFLAGS	:= -Wall -O0 -fcheck=all -ffpe-trap=invalid,zero,overflow -g
+FFLAGS	:= -Wall -O2 # -fcheck=all -ffpe-trap=invalid,zero,overflow -g
 OBJS	:= m_units_constants.o m_config.o m_lookup_table.o\
 	m_random.o m_mrgrnk.o m_linked_list.o m_find_index.o
 

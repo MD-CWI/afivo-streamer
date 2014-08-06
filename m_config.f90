@@ -164,8 +164,8 @@ contains
           end if
 
        else
-          call handle_error("CFG_read_file: variable [" // p_name // &
-               "] from " //  filename // " could not be updated")
+          call handle_error("CFG_read_file: variable [" // trim(p_name) // &
+               "] from [" //  filename // "] could not be updated")
        end if
 
        ! Go to the next iteration
