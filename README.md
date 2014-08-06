@@ -1,7 +1,7 @@
 afivo
 =====
 
-**A**daptive **Fi**nite **V**olume **O**ctree
+<b>A</b>daptive <b>Fi</b>nite <b>V</b>olume <b>O</b>ctree
 
 The goal of this project is to provide a framework for adaptive finite volume
 simulations, with a focus on **simplicity** and **adaptive grid refinement**.
