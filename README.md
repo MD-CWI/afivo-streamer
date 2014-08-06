@@ -8,9 +8,9 @@ simulations, with a focus on **simplicity** and **adaptive grid refinement**.
 
 The framework should:
 
-* Be easy to use for many types of simulations.
 * Provide all the basic grid functionality for finite volume simulations with
   adaptive mesh refinement.
+* Be relatively easy to use.
 * Efficiently make use of a multicore machine.
 * Provide a simple multigrid solver (with point relaxation).
 * Provide routines for generating output that can be visualized with
