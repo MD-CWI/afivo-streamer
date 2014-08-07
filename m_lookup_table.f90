@@ -194,15 +194,15 @@ contains
 
    subroutine LT_lin_interp_list(x_list, y_list, x_value, y_value)
      use m_find_index
-     real(dp), intent(in)    :: x_list(:), y_list(:)
-     real(dp), intent(in)    :: x_value
-     real(dp), intent(inout) :: y_value
+     real(dp), intent(in)  :: x_list(:), y_list(:)
+     real(dp), intent(in)  :: x_value
+     real(dp), intent(out) :: y_value
 
-     integer                 :: ix, iMin, iMax
-     real(dp)                :: temp
+     integer               :: ix, iMin, iMax
+     real(dp)              :: temp
 
-     iMin = lbound(x_list, 1)
-     iMax = ubound(x_list, 1)
+     iMin = 1
+     iMax = size(x_list)
 
      if (x_value <= x_list(iMin)) then
         y_value = y_list(iMin)
