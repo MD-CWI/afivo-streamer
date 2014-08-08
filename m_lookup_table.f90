@@ -180,7 +180,9 @@ contains
       integer                     :: ix
       real(dp)                    :: dx
       dx = 1 / my_lt%inv_dx
-      xdata = my_lt%x_min + (/ (ix * dx, ix = 0, my_lt%n_rows-1) /)
+      do ix = 1, my_lt%n_rows
+         xdata(ix) = my_lt%x_min + (ix-1) * dx
+      end do
    end function LT_get_xdata
 
    function get_spaced_data(in_xx, in_yy, new_xx) result(out_yy)
