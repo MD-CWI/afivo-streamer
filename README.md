@@ -46,3 +46,5 @@ checks/ifs
 * Decide: use tree structure, or index into an array, or index into a "pool" of
   arrays?
 * Decide on programming language, started in F90 but that can change
+* For morton order / "bit" stuff, C would be nice, especially since it has
+  unsigned integers
