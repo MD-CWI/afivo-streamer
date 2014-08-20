@@ -34,13 +34,15 @@ To keep the code lean & fast, we restrict the framework in the following way:
   may also be included if it isn't too much work with the MG solver.
 * Parallellization is provided only for shared memory systems (using OpenMP).
 
-### Current status
-
-Decided to use (modern) Fortran for this project. Started writing base module.
-
 ### Todo
 
 * Select output format / library from
   [this list](http://www.visitusers.org/index.php?title=Detailed_list_of_file_formats_VisIt_supports).
   This will probably be Silo...
 * Create basic datatypes (now wip)
+* Decide: dimension independent code or not (e.g., each block gets a variable
+n_dim indicating its dimension). Pro: same code for 2D/3D, Con: overhead, many
+checks/ifs
+* Decide: use tree structure, or index into an array, or index into a "pool" of
+  arrays?
+* Decide on programming language, started in F90 but that can change

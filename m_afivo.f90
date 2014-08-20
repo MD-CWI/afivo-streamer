@@ -11,17 +11,18 @@ module m_afivo
      procedure, deferred :: fill
   end type bnd_t
 
-  type box_t
+  type box2_t
      integer               :: i_min(3)
-     type(box_t), pointer  :: parent
-     type(box_t), pointer  :: children(4)
+     type(box2_t), pointer :: parent
+     type(box2_t), pointer :: children(4)
+     type(box2_t), pointer :: neighbors(4)
      type(bnd_t)           :: bounds(4)
      real(dp), allocatable :: vars(:, :, :)
-  end type box_t
+  end type box2_t
 
-  type box_ptr
-     type(box_t), pointer  :: ptr
-  end type box_ptr
+  type box2_ptr
+     type(box2_t), pointer  :: ptr
+  end type box2_ptr
 
   type box_array_t
      type(box_ptr), allocatable :: boxes(:)
@@ -30,7 +31,7 @@ module m_afivo
 contains
 
   subroutine a5_create_box(bx, i_min, bounds, n_vars)
-    type(box_t), intent(out) :: bx
+    type(box2_t), intent(out) :: bx
     integer, intent(in)      :: i_min(3), bounds(4)
 
     bx%i_min  = i_min
@@ -42,7 +43,7 @@ contains
   end subroutine a5_create_box
 
   subroutine a5_destroy_box(bx)
-    type(box_t), intent(inout) :: bx
+    type(box2_t), intent(inout) :: bx
     if (associated(bx%children)) stop "still have children"
     deallocate(vars)
   end subroutine a5_destroy_box
