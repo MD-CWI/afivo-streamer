@@ -19,7 +19,6 @@ module m_afivo
      integer               :: parent
      integer               :: children(4)
      integer               :: neighbors(4)
-     logical               :: periodic(4)
      real(dp), allocatable :: cc(:, :, :)
      real(dp), allocatable :: fx(:, :, :)
      real(dp), allocatable :: fy(:, :, :)
@@ -71,7 +70,7 @@ contains
   end subroutine a5_2d_init
 
   subroutine a5_tidy_storage(self, new_size)
-    type(a5_2d_t) :: 
+    type(a5_2d_t) :: ! TODO
   end subroutine a5_tidy_storage
 
   subroutine a5_set_neighbors_2d(self)
@@ -83,37 +82,56 @@ contains
           ! For each "fresh" box, find possible neighbors
           id = self%levels(lvl)%box_ids(i)
           if (btest(self%boxes(id)%tag, a5_bit_fresh)) then
-             call set_nbs_2d(self, lvl, id)
+             call set_nbs_2d(self, id)
           end if
        end do
     end do
   end subroutine a5_set_neighbors_2d
 
-  subroutine set_nbs_2d(self, lvl, id)
+  subroutine set_nbs_2d(self, id)
     type(a5_2d_t), intent(inout) :: self
-    integer, intent(in) :: lvl, id
-    integer :: i, ix(2), nb_ix(2), nb_dim, diff
-    type(morton_t) :: nb_morton
-    ix = self%boxes(id)%ix
+    integer, intent(in)          :: id
+    integer                      :: i
 
     do i = 1, 4
        if (self%boxes(id)%neighbors(i) == 0) then
-          ! Determine the index of the neighbor
-          nb_ix = ix
-          nb_dim = (i+1)/2
-          diff = 1 - 2 * iand(i, 1)
-          nb_ix(nb_dim) = nb_ix(nb_dim) + diff
-          nb_morton = morton_from_ix2(nb_ix)
+          nb_id = get_nb_id_2d(self, id, i)
 
-          nb_id = find_box_id(self, lvl, nb_morton)
-          if (nb_id == -1) then
-             self%boxes(id)%neighbors(i) = a5_bnd_refinement
-          else
+          if (nb_id /= -1) then
              self%boxes(id)%neighbors(i) = nb_id
+             self%boxes(nb_id)%neighbors(i) = nb_id
+          else
+             self%boxes(id)%neighbors(i) = a5_bnd_refinement
           end if
        end if
     end do
   end subroutine set_nbs_2d
+
+  function get_nb_id_2d(self, id, nb_num) result(nb_id)
+    type(a5_2d_t), intent(inout) :: self
+    integer, intent(in)          :: lvl, id, nb_num
+    integer                      :: nb_id, nb_ix(2)
+    type(morton_t)               :: nb_morton
+
+    nb_ix     = get_nb_ix(self%boxes(id)%ix, nb_num)
+    nb_morton = morton_from_ix2(nb_ix)
+    nb_id     = find_box_2d(self, self%boxes(id)%lvl, nb_morton)
+  end function get_nb_id_2d
+
+  ! Determine the index of the neighbor. Order is -x, +x, -y, +y, (3D: -z, +z)
+  function get_nb_ix(ix, nb_num) result(nb_ix)
+    integer, intent(in) :: ix(:), nb_num
+    integer             :: nb_ix(:), nb_dim
+
+    nb_ix         = ix
+    nb_dim        = (nb_num+1)/2
+
+    if (btest(nb_num, 1)) then  ! Odd numbers: 1, 3, (3D: 5)
+       nb_ix(nb_dim) = nb_ix(nb_dim) - 1
+    else                        ! Even numbers: 2, 4, (3D: 6)
+       nb_ix(nb_dim) = nb_ix(nb_dim) + 1
+    end if
+  end function get_nb_ix
 
   ! After boxes have been added to level 1, this stores them as a "level" and
   ! sets the connectivity
@@ -196,17 +214,16 @@ contains
 
   end subroutine a5_restrict
 
-  function find_box_2d(self, lvl, morton) result(id)
-    type(a5_2d_t), intent(in)  :: self
-    integer, intent(in)        :: lvl
-    type(morton_t), intent(in) :: morton
-    integer                    :: id, ix
+  function find_box_2d(lvl_2d, morton) result(id)
+    type(level_2d_t), intent(in) :: lvl_2d
+    type(morton_t), intent(in)   :: morton
+    integer                      :: id, ix
 
-    ix = bsearch(self%levels(lvl)%mortons, morton)
-    if (ix == -1) then
-       id = -1
+    ix = bsearch(lvl_2d%mortons, morton)
+    if (ix /= -1) then
+       id = lvl_2d%ids(ix)
     else
-       id = self%levels(lvl)%ids(ix)
+       id = -1
     end if
   end function find_box_2d
 
