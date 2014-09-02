@@ -17,14 +17,10 @@ contains
   ! On failure, returns size(list)+1
   function FI_linear_r(list, val) result(ix)
     real(dp), intent(in) :: list(:), val
-    integer :: i, ix
+    integer :: ix
 
-    ix = size(list) + 1
-    do i = 1, size(list)
-       if (val <= list(i)) then
-          ix = i
-          exit
-       end if
+    do ix = 1, size(list)
+       if (val <= list(ix)) exit
     end do
   end function FI_linear_r
 
