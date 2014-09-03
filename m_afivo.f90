@@ -91,15 +91,17 @@ contains
   subroutine set_nbs_2d(self, id)
     type(a5_2d_t), intent(inout) :: self
     integer, intent(in)          :: id
-    integer                      :: i
+    integer                      :: d, i
 
-    do i = 1, 4
-       if (self%boxes(id)%neighbors(i) == 0) then
-          nb_id = get_nb_id_2d(self, id, i)
+    do d = 1, 2                 ! Dimension
+       do i = 1, 2              ! Lower / higher
+          if (self%boxes(id)%neighbors(d, i) == 0) then
+          nb_id = get_nb_id_2d(self, id, d, i)
 
           if (nb_id /= -1) then
-             self%boxes(id)%neighbors(i) = nb_id
-             self%boxes(nb_id)%neighbors(i) = nb_id
+             self%boxes(id)%neighbors(d, i) = nb_id
+             j = reverse_nb(i)
+             self%boxes(nb_id)%neighbors(d, j) = id
           else
              self%boxes(id)%neighbors(i) = a5_bnd_refinement
           end if
@@ -107,85 +109,75 @@ contains
     end do
   end subroutine set_nbs_2d
 
-  function get_nb_id_2d(self, id, nb_num) result(nb_id)
-    type(a5_2d_t), intent(inout) :: self
-    integer, intent(in)          :: lvl, id, nb_num
-    integer                      :: nb_id, nb_ix(2)
-    type(morton_t)               :: nb_morton
+  ! Swap 1 -> 2, 2 -> 1
+  elemental function reverse_ix(ix)
+    integer, intent(in) :: ix
+    reverse_ix = ieor(nb_num, 3)
+  end function reverse_ix
 
-    nb_ix     = get_nb_ix(self%boxes(id)%ix, nb_num)
-    nb_morton = morton_from_ix2(nb_ix)
-    nb_id     = find_box_2d(self, self%boxes(id)%lvl, nb_morton)
+  ! Odd to 1, even to 2
+  elemental function get_child_ix(ix)
+    integer, intent(in) :: ix
+    get_child_ix = 2 - iand(ix, 1)
+  end function get_child_ix
+
+  ! Get neighbor_id of id, in direction d, i = 1 means lower neighbor, i = 2
+  ! means higher neighbor.
+  function get_nb_id_2d(boxes, id, d, i) result(nb_id)
+    type(box_2d_t), intent(in) :: boxes(:)
+    integer, intent(in)        :: id, d, i
+    integer                    :: p_id, c_ix(2)
+
+    p_id = boxes(ix)%parent
+    c_ix = get_child_ix(boxes(id)%ix)
+
+    ! Check if neighbor is in same direction as current id is (1 = lower ix, 2 =
+    ! higher ix). If so, use neighbor of parent
+    if (btest(c_ix(d), 0) .eqv. btest(i, 0)) &
+         p_id = boxes(p_id)%neighbors(d, i)
+
+    ! The child ix of the neighbor is swapped in direction d
+    c_ix(d) = reverse(c_ix(d))
+    nb_id = boxes(p_id)%child(c_ix(1), c_ix(2))
   end function get_nb_id_2d
 
-  ! Determine the index of the neighbor. Order is -x, +x, -y, +y, (3D: -z, +z)
-  function get_nb_ix(ix, nb_num) result(nb_ix)
-    integer, intent(in) :: ix(:), nb_num
-    integer             :: nb_ix(:), nb_dim
-
-    nb_ix         = ix
-    nb_dim        = (nb_num+1)/2
-
-    if (btest(nb_num, 1)) then  ! Odd numbers: 1, 3, (3D: 5)
-       nb_ix(nb_dim) = nb_ix(nb_dim) - 1
-    else                        ! Even numbers: 2, 4, (3D: 6)
-       nb_ix(nb_dim) = nb_ix(nb_dim) + 1
-    end if
-  end function get_nb_ix
-
-  ! After boxes have been added to level 1, this stores them as a "level" and
-  ! sets the connectivity
+  ! After boxes have been added to level 1, this stores them as a "level"
   subroutine a5_set_base_2d(self)
     use mrgrnk
     type(a5_2d_t), intent(inout) :: self
-    integer :: n_boxes
-    integer, allocatable :: ixs(:)
+    integer                      :: n_boxes
+    integer, allocatable         :: ixs(:)
 
     self%n_levels = 1
-    n_boxes = self%n_boxes
+    n_boxes       = self%n_boxes
+
     allocate(self%levels(1)%box_ids(n_boxes))
-
     call mrgrnk(self%mortons(1:n_boxes), ixs)
-
-    do i = 1, n_boxes
-       self%levels(1)%box_ids(i) = ixs(i)
-    end do
-
-    call a5_set_neighbors_2d(self)
+    self%levels(1)%box_ids(:) = ixs(:)
   end subroutine a5_set_base_2d
 
   ! This can be used to add level 1 boxes
-  subroutine a5_add_base_box_2d(self, ix, periodic_neighbors)
+  subroutine a5_add_base_box_2d(self, ix, nbs)
     type(a5_2d_t), intent(inout) :: self
-    integer, intent(in)           :: ix(2)
-    integer, intent(in), optional :: periodic_neighbors(:,:)
-    type(a5_box_2d)               :: new_box
-    integer                       :: i, id
+    integer, intent(in)          :: ix(2)
+    integer, intent(in)          :: nbs(2, 2)
+    type(a5_box_2d)              :: new_box
+    integer                      :: i, id
 
     new_box%ix        = ix
     new_box%lvl       = 1
     new_box%parent    = 0
     new_box%children  = 0
-
+    new_box%neighbors = nbs
+    
     ! Set "in_use" and "fresh" tag
     new_box%tag       = 0
     new_box%tag       = ibset(new_box%tag, a5_bit_in_use)
     new_box%tag       = ibset(new_box%tag, a5_bit_fresh)
 
-    ! Set neighbor information
-    new_box%neighbors = 0
-    new_box%periodic  = .false.
-
-    do i = 1, size(per_neighbors, 2)
-       direction                    = periodic_neighbors(1, i)
-       neighbor                     = periodic_neighbors(2, i)
-       new_box%neighbors(direction) = neighbor
-       new_box%periodic(direction)  = .true.
-    end do
-
     ! Add box to storage
-    id = self%n_boxes + 1
-    self%n_boxes = id
+    id             = self%n_boxes + 1
+    self%n_boxes   = id
     self%boxes(id) = new_box
     call alloc_storage_2d(self, id)
 
