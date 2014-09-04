@@ -5,8 +5,7 @@ module m_afivo
 
   integer, parameter :: dp = kind(0.0d0)
 
-  ! Boundary conditions
-  integer, parameter :: a5_bnd_refinement = -1
+  integer, parameter :: a5_no_neighbor = 0
 
   ! Each box contains a tag, for which the following bits are set:
   integer, parameter :: a5_bit_in_use = 1
@@ -95,15 +94,13 @@ contains
 
     do d = 1, 2                 ! Dimension
        do i = 1, 2              ! Lower / higher
-          if (self%boxes(id)%neighbors(d, i) == 0) then
+          if (self%boxes(id)%neighbors(d, i) == a5_no_neighbor) then
           nb_id = get_nb_id_2d(self, id, d, i)
 
           if (nb_id /= -1) then
              self%boxes(id)%neighbors(d, i) = nb_id
-             j = reverse_nb(i)
+             j = reverse_ix(i)
              self%boxes(nb_id)%neighbors(d, j) = id
-          else
-             self%boxes(id)%neighbors(i) = a5_bnd_refinement
           end if
        end if
     end do
@@ -184,12 +181,6 @@ contains
     ! Set morton number for box
     call morton_from_ix2(ix, self%mortons(id))
   end subroutine a5_add_base_box_2d
-
-  subroutine a5_destroy_box(box)
-    type(box_2d_t), intent(inout) :: box
-    if (associated(box%children)) stop "still have children"
-    deallocate(vars)
-  end subroutine a5_destroy_box
 
   subroutine a5_get_child_array(bxa, bxa_children)
     type(box_array_t), intent(in) :: bxa
