@@ -11,7 +11,7 @@ module m_afivo
   integer, parameter :: a5_bit_in_use = 1
   integer, parameter :: a5_bit_fresh = 2
 
-  type box_2d_t
+  type box2_t
      integer               :: lvl
      integer               :: tag
      integer               :: ix(2)
@@ -21,36 +21,33 @@ module m_afivo
      real(dp), allocatable :: cc(:, :, :)
      real(dp), allocatable :: fx(:, :, :)
      real(dp), allocatable :: fy(:, :, :)
-  end type box_2d_t
+  end type box2_t
 
-  type level_2d_t
+  type level2_t
      integer, allocatable        :: ids(:)
      type(morton_t), allocatable :: mortons(:)
-  end type level_2d_t
+  end type level2_t
 
-  type a5_2d_t
+  type a2_t
      real(dp)                    :: r_min(2)
      real(dp)                    :: dr(2, a5_max_levels)
-     type(level_2d_t)            :: levels(a5_max_levels)
+     type(level2_t)            :: levels(a5_max_levels)
      integer                     :: n_levels
-     integer                     :: n_points
+     integer                     :: box_size
      integer                     :: n_cc
      integer                     :: n_fx
      integer                     :: n_fy
      integer                     :: n_boxes
-     type(box_2d_t), allocatable :: boxes(:)
-     procedure(ref_f), pointer   :: ref_func => null()
-  end type a5_2d_t
+     type(box2_t), allocatable :: boxes(:)
+  end type a2_t
 
 contains
 
-  subroutine a5_2d_init(self, dr_coarse, n_boxes_max, ref_func, &
-       n_points, n_cc, n_fx, n_fy)
-    type(a5_2d_t)        :: self
-    real(dp), intent(in) :: dr_coarse(2)
+  subroutine a2_init(self, dr, n_boxes_max, box_size, n_cc, n_fx, n_fy)
+    type(a2_t)        :: self
+    real(dp), intent(in) :: dr(2)
     integer, intent(in)  :: n_boxes_max
-    integer, intent(in)  :: n_points, n_cc, n_fx, n_fy
-    procedure(ref_f)     :: ref_func
+    integer, intent(in)  :: box_size, n_cc, n_fx, n_fy
     integer              :: lvl, ix
 
     do lvl = 1, a5_max_levels
@@ -58,7 +55,7 @@ contains
     end do
 
     self%n_levels = 0
-    self%n_points = n_points
+    self%box_size = box_size
     self%n_cc     = n_cc
     self%n_fx     = n_fx
     self%n_fy     = n_fy
@@ -66,14 +63,14 @@ contains
     self%ref_func => ref_func
     allocate(self%boxes(n_boxes_max))
     allocate(self%mortons(n_boxes_max))
-  end subroutine a5_2d_init
+  end subroutine a2_init
 
   subroutine a5_tidy_storage(self, new_size)
-    type(a5_2d_t) :: ! TODO
+    type(a2_t) :: ! TODO
   end subroutine a5_tidy_storage
 
-  subroutine a5_set_neighbors_2d(self)
-    type(a5_2d_t), intent(inout) :: self
+  subroutine a2_set_neighbors(self)
+    type(a2_t), intent(inout) :: self
 
     do lvl = 1, self%n_levels
        n_boxes = size(self%levels(lvl)%box_ids)
@@ -85,10 +82,10 @@ contains
           end if
        end do
     end do
-  end subroutine a5_set_neighbors_2d
+  end subroutine a2_set_neighbors
 
   subroutine set_nbs_2d(self, id)
-    type(a5_2d_t), intent(inout) :: self
+    type(a2_t), intent(inout) :: self
     integer, intent(in)          :: id
     integer                      :: d, i
 
@@ -121,7 +118,7 @@ contains
   ! Get neighbor_id of id, in direction d, i = 1 means lower neighbor, i = 2
   ! means higher neighbor.
   function get_nb_id_2d(boxes, id, d, i) result(nb_id)
-    type(box_2d_t), intent(in) :: boxes(:)
+    type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)        :: id, d, i
     integer                    :: p_id, c_ix(2)
 
@@ -139,9 +136,9 @@ contains
   end function get_nb_id_2d
 
   ! After boxes have been added to level 1, this stores them as a "level"
-  subroutine a5_set_base_2d(self)
+  subroutine a2_set_base(self)
     use mrgrnk
-    type(a5_2d_t), intent(inout) :: self
+    type(a2_t), intent(inout) :: self
     integer                      :: n_boxes
     integer, allocatable         :: ixs(:)
 
@@ -151,11 +148,11 @@ contains
     allocate(self%levels(1)%box_ids(n_boxes))
     call mrgrnk(self%mortons(1:n_boxes), ixs)
     self%levels(1)%box_ids(:) = ixs(:)
-  end subroutine a5_set_base_2d
+  end subroutine a2_set_base
 
   ! This can be used to add level 1 boxes
-  subroutine a5_add_base_box_2d(self, ix, nbs)
-    type(a5_2d_t), intent(inout) :: self
+  subroutine a2_add_base_box(self, ix, nbs)
+    type(a2_t), intent(inout) :: self
     integer, intent(in)          :: ix(2)
     integer, intent(in)          :: nbs(2, 2)
     type(a5_box_2d)              :: new_box
@@ -180,25 +177,25 @@ contains
 
     ! Set morton number for box
     call morton_from_ix2(ix, self%mortons(id))
-  end subroutine a5_add_base_box_2d
+  end subroutine a2_add_base_box
 
-  subroutine a5_get_child_array(bxa, bxa_children)
+  subroutine a2_get_child_array(bxa, bxa_children)
     type(box_array_t), intent(in) :: bxa
     type(box_array_t), intent(out) :: bxa_children
 
     ...
-  end subroutine a5_get_child_array
+  end subroutine a2_get_child_array
 
-  subroutine a5_prolong()
+  subroutine a2_prolong()
 
-  end subroutine a5_prolong
+  end subroutine a2_prolong
 
-  subroutine a5_restrict()
+  subroutine a2_restrict()
 
-  end subroutine a5_restrict
+  end subroutine a2_restrict
 
   function find_box_2d(lvl_2d, morton) result(id)
-    type(level_2d_t), intent(in) :: lvl_2d
+    type(level2_t), intent(in) :: lvl_2d
     type(morton_t), intent(in)   :: morton
     integer                      :: id, ix
 
