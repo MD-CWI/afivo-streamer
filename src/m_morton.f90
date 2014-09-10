@@ -22,6 +22,7 @@ module m_morton
   ! Public methods
   public :: morton_from_ix2
   public :: morton_to_ix2
+  public :: morton_bsearch
   public :: print_bits
   public :: print_bits_k15
 
@@ -42,6 +43,28 @@ contains
     ix(1) = bit_despace_1(m_ix%mrtn)
     ix(2) = bit_despace_1(ishft(m_ix%mrtn, -1))
   end function morton_to_ix2
+
+  function morton_bsearch(list, val) result(ix)
+    integer(kind=morton_k), intent(in) :: list(:)
+    integer(kind=morton_k), intent(in) :: val
+    integer                            :: ix, i_min, i_max, i_middle
+
+    i_min = 1
+    i_max = size(list)
+
+    do while (i_min < i_max)
+       i_middle = i_min + (i_max - i_min) / 2
+
+       if (val <= list(i_middle)) then
+          i_max = i_middle
+       else
+          i_min = i_middle + 1
+       end if
+    end do
+
+    ix = i_min
+    if (val > list(ix)) ix = -1
+  end function morton_bsearch
 
   ! Add two "zero" bits between each bit of the input. Because the result has 64
   ! bits available, only the first 21 bits from the input are spaced.
