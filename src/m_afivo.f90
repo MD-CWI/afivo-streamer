@@ -25,7 +25,6 @@ module m_afivo
 
   type level2_t
      integer, allocatable        :: ids(:)
-     type(morton_t), allocatable :: mortons(:)
   end type level2_t
 
   type a2_t
@@ -62,7 +61,6 @@ contains
     self%n_boxes  = 0
     self%ref_func => ref_func
     allocate(self%boxes(n_boxes_max))
-    allocate(self%mortons(n_boxes_max))
   end subroutine a2_init
 
   subroutine a5_tidy_storage(self, new_size)
@@ -147,7 +145,6 @@ contains
     self%n_levels = 1
     n_boxes       = size(ix_list, 2)
     allocate(self%levels(1)%ids(n_boxes))
-    allocate(self%levels(1)%mortons(n_boxes))
 
     do id = 1, n_boxes
        new_box%ix        = ix_list(:, ix)
@@ -164,14 +161,9 @@ contains
        ! Add box to storage
        self%n_boxes   = id
        self%boxes(id) = new_box
+       self%levels(1)%box_ids(id) = id
        call alloc_storage_2d(self, id)
-
-       ! Set morton number for box
-       call morton_from_ix2(ix, self%mortons(id))
     end do
-
-    call mrgrnk(self%mortons(1:n_boxes), ixs)
-    self%levels(1)%box_ids(:) = ixs(:)
   end subroutine a2_set_base
 
   subroutine a2_set_levels(self)
@@ -206,9 +198,6 @@ contains
           ic = ic + 4
        end if
     end do
-
-    ! TODO: sort immediately?
-    allocate(c_lvl%mortons(n_children))
   end subroutine set_child_lvl
 
   subroutine a2_prolong()
@@ -219,17 +208,17 @@ contains
 
   end subroutine a2_restrict
 
-  function find_box_2d(lvl_2d, morton) result(id)
-    type(level2_t), intent(in) :: lvl_2d
-    type(morton_t), intent(in)   :: morton
-    integer                      :: id, ix
+  ! function find_box_2d(lvl_2d, morton) result(id)
+  !   type(level2_t), intent(in) :: lvl_2d
+  !   type(morton_t), intent(in)   :: morton
+  !   integer                      :: id, ix
 
-    ix = morton_bsearch(lvl_2d%mortons, morton)
-    if (ix /= -1) then
-       id = lvl_2d%ids(ix)
-    else
-       id = -1
-    end if
-  end function find_box_2d
+  !   ix = morton_bsearch(lvl_2d%mortons, morton)
+  !   if (ix /= -1) then
+  !      id = lvl_2d%ids(ix)
+  !   else
+  !      id = -1
+  !   end if
+  ! end function find_box_2d
   
 end module m_afivo
