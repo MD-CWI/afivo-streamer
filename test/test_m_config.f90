@@ -28,10 +28,22 @@ program test_m_config
   print *, "We can get values in different ways:"
   call CFG_get(my_cfg, "lots_of_work", my_logic)
   print *, "lots_of_work:", my_logic
+
+  my_logic = CFG_fget_logic(my_cfg, "lots_of_work")
+  print *, "lots_of_work:", my_logic
+
   call CFG_get(my_cfg, "my_age", my_int)
   print *, "my_age:", my_int
+
+  my_int = CFG_fget_int(my_cfg, "my_age")
+  print *, "my_age:", my_int
+
   call CFG_get_size(my_cfg, "my_fav_reals", n_reals)
   print *, "number of favourite numbers:", n_reals
+
+  n_reals = CFG_fget_size(my_cfg, "my_fav_reals")
+  print *, "number of favourite numbers:", n_reals
+
   allocate(my_reals(n_reals))
   call CFG_get(my_cfg, "my_fav_reals", my_reals)
   print *, "my favourite number:", my_reals(1)
