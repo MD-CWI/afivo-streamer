@@ -7,6 +7,19 @@ module m_afivo
 
   integer, parameter :: a5_no_neighbor = 0
 
+  integer, parameter :: a2_ch_rev(4, 2) = (/ (/2, 1, 4, 3/), (/3, 4, 1, 2/) /)
+  logical, parameter :: a2_ch_low(4, 2) = (/ &
+       (/.true., .false., .true., .false./), &
+       (/.true., .true., .false., .false./), /)
+  logical, parameter :: a2_nb_low(4) = (/.true., .false., .true., .false./)
+  integer, parameter :: a2_nb_rev(4) = (/2, 1, 4, 3/)
+  integer, parameter :: a2_nb_dim(4) = (/1, 1, 2, 2/)
+
+  integer, parameter :: nb_lx = 1
+  integer, parameter :: nb_hx = 2
+  integer, parameter :: nb_ly = 3
+  integer, parameter :: nb_hy = 4
+
   ! Each box contains a tag, for which the following bits are set:
   integer, parameter :: a5_bit_in_use = 1
   integer, parameter :: a5_bit_fresh = 2
@@ -87,51 +100,36 @@ contains
     integer, intent(in)          :: id
     integer                      :: d, i
 
-    do d = 1, 2                 ! Dimension
-       do i = 1, 2              ! Lower / higher
-          if (self%boxes(id)%neighbors(d, i) == a5_no_neighbor) then
-          nb_id = get_nb_id_2d(self, id, d, i)
+    do nb = 1, 4                 ! Dimension
+       if (self%boxes(id)%neighbors(nb) == a5_no_neighbor) then
+          nb_id = find_nb_2d(self%boxes, id, nb)
 
           if (nb_id /= -1) then
-             self%boxes(id)%neighbors(d, i) = nb_id
-             j = reverse_ix(i)
-             self%boxes(nb_id)%neighbors(d, j) = id
+             self%boxes(id)%neighbors(nb) = nb_id
+             self%boxes(nb_id)%neighbors(a2_nb_rev(nb)) = id
           end if
        end if
     end do
   end subroutine set_nbs_2d
 
-  ! Swap 1 -> 2, 2 -> 1
-  elemental function reverse_ix(ix)
-    integer, intent(in) :: ix
-    reverse_ix = ieor(nb_num, 3)
-  end function reverse_ix
-
-  ! Odd to 1, even to 2
-  elemental function get_child_ix(ix)
-    integer, intent(in) :: ix
-    get_child_ix = 2 - iand(ix, 1)
-  end function get_child_ix
-
-  ! Get neighbor_id of id, in direction d, i = 1 means lower neighbor, i = 2
-  ! means higher neighbor.
-  function get_nb_id_2d(boxes, id, d, i) result(nb_id)
+  ! Get neighbor nb of id, through its parent
+  function find_nb_2d(boxes, id, nb) result(nb_id)
     type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)        :: id, d, i
-    integer                    :: p_id, c_ix(2)
+    integer, intent(in)        :: id, nb
+    integer                    :: p_id, c_ix
 
-    p_id = boxes(ix)%parent
-    c_ix = get_child_ix(boxes(id)%ix)
+    p_id = boxes(id)%parent
+    c_ix = boxes(id)%
 
-    ! Check if neighbor is in same direction as current id is (1 = lower ix, 2 =
-    ! higher ix). If so, use neighbor of parent
-    if (btest(c_ix(d), 0) .eqv. btest(i, 0)) &
-         p_id = boxes(p_id)%neighbors(d, i)
+    ! Check if neighbor is in same direction as ix is (low/high). If so,
+    ! use neighbor of parent
+    if (a2_ch_low(c_ix, d) .eqv. a2_nb_low(nb)) &
+         p_id = boxes(p_id)%neighbors(nb)
 
     ! The child ix of the neighbor is swapped in direction d
-    c_ix(d) = reverse(c_ix(d))
-    nb_id = boxes(p_id)%child(c_ix(1), c_ix(2))
-  end function get_nb_id_2d
+    d = a2_nb_dim(nb)
+    nb_id = boxes(p_id)%child(a2_ch_rev(c_ix, d))
+  end function find_nb_2d
 
   ! After boxes have been added to level 1, this stores them as a "level"
   subroutine a2_set_base(self, ix_list, nb_list)
@@ -171,16 +169,59 @@ contains
 
     ! Lvl 1 is always set
     do lvl = 1, self%n_levels-1
-       call set_child_lvl(self%levels(lvl), self%levels(lvl+1), self%boxes)
-       n_children = count(btest(self%boxes(lvl_ixs)%tag, a5_refined))
-       n_parent = size(self%levels(lvl)%ids)
-       do ip = 1, n_parent
-          id = self%levels(lvl)%ids(ip)
-          
-       end do
+       call set_child_lvl(self%levels(lvl)%ids, &
+            self%levels(lvl+1)%ids, self%boxes)
     end do
   end subroutine a2_get_child_array
 
+  ! Refine function returns integer:
+  ! 0  -> derefine
+  ! 1  -> refine
+  ! All other values do nothing
+  subroutine a2_refine(self, refine_func)
+    type(a2_t), intent(inout) :: self
+    procedure(a2_to_int_f) :: refine_func
+
+    ! Set refinement flags for all boxes
+    do lvl = 1, self%n_levels
+       do i = 1, size(self%levels(lvl)%ids)
+          id = self%levels(lvl)%ids(i)
+          ref = refine_func(self%boxes(id))
+          select case (ref)
+          case (0)
+             self%boxes(id)%tag = ibset(self%boxes(id)%tag, a5_derefine)
+          case (1)
+             self%boxes(id)%tag = ibset(self%boxes(id)%tag, a5_refine)
+          end select
+       end do
+    end do
+
+    ! Propagate refinement flags to parents
+    do lvl = 1, self%n_levels
+       do i = 1, size(self%levels(lvl)%ids)
+          id = self%levels(lvl)%ids(i)
+          
+  end subroutine a2_refine
+
+  subroutine a2_derefine(boxes, id)
+    type(box2_t), intent(inout) :: boxes
+    integer, intent(in) :: id
+
+    ! Set tag to not in use
+    boxes(id)%tag = ibclr(boxes(id)%tag, a5_in_use)
+
+    ! Remove this box at the neighbors
+    do nb = 1, 4
+       nb_id = boxes(id)%neighbors(nb)
+       if (nb_id =/ a5_no_neighbor) then
+          nb_rev = a2_nb_rev(nb)
+          boxes(nb_id)%neighbors(nb_rev) = a5_no_neighbor
+       end if
+    end do
+
+    ! Remove this box from parent
+  end subroutine a2_derefine
+  
   subroutine set_child_lvl(p_ids, c_ids, boxes)
     integer, intent(in) :: p_ids(:)
     integer, allocatable, intent(inout) :: c_ids(:)
@@ -208,17 +249,4 @@ contains
 
   end subroutine a2_restrict
 
-  ! function find_box_2d(lvl_2d, morton) result(id)
-  !   type(level2_t), intent(in) :: lvl_2d
-  !   type(morton_t), intent(in)   :: morton
-  !   integer                      :: id, ix
-
-  !   ix = morton_bsearch(lvl_2d%mortons, morton)
-  !   if (ix /= -1) then
-  !      id = lvl_2d%ids(ix)
-  !   else
-  !      id = -1
-  !   end if
-  ! end function find_box_2d
-  
 end module m_afivo
