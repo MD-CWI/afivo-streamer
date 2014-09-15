@@ -1,20 +1,5 @@
-! Author: Jannis Teunissen
-!
-! This program is free software: you can redistribute it and/or modify
-! it under the terms of the GNU General Public License as published by
-! the Free Software Foundation, either version 3 of the License, or
-! (at your option) any later version.
-!
-! This program is distributed in the hope that it will be useful,
-! but WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-! Module that allows working with a configuration file. Only contains
-! subroutines for safety (ask me why if you're interested.)
+! Module that allows working with a configuration file.
+! Don't use the functions in this module in a print statement!
 module m_config
 
   implicit none
@@ -72,6 +57,12 @@ module m_config
   public :: CFG_sort
   public :: CFG_write
   public :: CFG_read_file
+
+  public :: CFG_fget_real
+  public :: CFG_fget_int
+  public :: CFG_fget_logic
+  public :: CFG_fget_string
+  public :: CFG_fget_size
 
   ! Public types
   public :: CFG_t
@@ -307,7 +298,7 @@ contains
 
     if (ix == -1) then
        call handle_error(&
-         "CFG_get(...): variable ["//p_name//"] not found")
+            "CFG_get(...): variable ["//p_name//"] not found")
     else if (cfg%vars(ix)%p_type /= p_type) then
        write(err_string, fmt="(A)") "CFG_get(...): variable [" &
             // p_name // "] has different type (" // &
@@ -475,6 +466,52 @@ contains
     end if
   end subroutine CFG_get_size
 
+  real(dp) function CFG_fget_real(cfg, p_name)
+    type(CFG_t), intent(in)      :: cfg
+    character(len=*), intent(in) :: p_name
+    integer                      :: ix
+    call prepare_get_var(cfg, p_name, CFG_real_type, 1, ix)
+    CFG_fget_real = cfg%vars(ix)%real_data(1)
+  end function CFG_fget_real
+
+  integer function CFG_fget_int(cfg, p_name)
+    type(CFG_t), intent(in)      :: cfg
+    character(len=*), intent(in) :: p_name
+    integer                      :: ix
+    call prepare_get_var(cfg, p_name, CFG_int_type, 1, ix)
+    CFG_fget_int = cfg%vars(ix)%int_data(1)
+  end function CFG_fget_int
+
+  logical function CFG_fget_logic(cfg, p_name)
+    type(CFG_t), intent(in)      :: cfg
+    character(len=*), intent(in) :: p_name
+    integer                      :: ix
+    call prepare_get_var(cfg, p_name, CFG_logic_type, 1, ix)
+    CFG_fget_logic = cfg%vars(ix)%logic_data(1)
+  end function CFG_fget_logic
+
+  character(len=name_len) function CFG_fget_string(cfg, p_name)
+    type(CFG_t), intent(in)      :: cfg
+    character(len=*), intent(in) :: p_name
+    integer                      :: ix
+    call prepare_get_var(cfg, p_name, CFG_char_type, 1, ix)
+    CFG_fget_string = cfg%vars(ix)%char_data(1)
+  end function CFG_fget_string
+
+  integer function CFG_fget_size(cfg, p_name)
+    type(CFG_t), intent(in)      :: cfg
+    character(len=*), intent(in) :: p_name
+    integer                      :: ix
+
+    call get_var_index(cfg, p_name, ix)
+    if (ix /= -1) then
+       CFG_fget_size = cfg%vars(ix)%p_size
+    else
+       CFG_fget_size = -1
+       call handle_error("CFG_get_size: variable ["//p_name//"] not found")
+    end if
+  end function CFG_fget_size
+
   subroutine CFG_get_type(cfg, p_name, res)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -482,7 +519,7 @@ contains
     integer                      :: ix
 
     call get_var_index(cfg, p_name, ix)
-    
+
     if (ix /= -1) then
        res = cfg%vars(ix)%p_type
     else
