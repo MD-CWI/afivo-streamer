@@ -26,25 +26,16 @@ To keep the code lean & fast, we restrict the framework in the following way:
   [Paramesh](http://www.physics.drexel.edu/~olson/paramesh-doc/Users_manual/amr.html).
 * The refinement ratio is always 2.
 * There is always a layer of width 1 of ghost cells.
-* Corner ghost cells are **not** used.
+* Corner ghost cells are used (although optionally).
 * Quantities are either cell-centered or face-centered.
 * We use one type of conservative restriction.
-* We use 2-1-1 prolongation (because there are no corner ghost cells).
-* We support only periodic and dirichlet boundary conditions at first. Neumann
-  may also be included if it isn't too much work with the MG solver.
+* We use bi/tri-linear prolongation.
+* Boundary conditions are provided by the user.
 * Parallellization is provided only for shared memory systems (using OpenMP).
 
 ### Todo
 
-* Select output format / library from
-  [this list](http://www.visitusers.org/index.php?title=Detailed_list_of_file_formats_VisIt_supports).
-  This will probably be Silo...
-* Create basic datatypes (now wip)
-* Decide: dimension independent code or not (e.g., each block gets a variable
-n_dim indicating its dimension). Pro: same code for 2D/3D, Con: overhead, many
-checks/ifs
-* Decide: use tree structure, or index into an array, or index into a "pool" of
-  arrays?
-* Decide on programming language, started in F90 but that can change
-* For morton order / "bit" stuff, C would be nice, especially since it has
-  unsigned integers
+### Status
+* Using silo for output
+* Use 1d array with indexing as data storage
+* Use morton order for enhancing data locality
