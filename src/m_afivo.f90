@@ -5,8 +5,17 @@ module m_afivo
 
   integer, parameter :: dp = kind(0.0d0)
 
-  integer, parameter :: a5_no_neighbor = 0
+  ! Tags that can be set for a block
+  integer, parameter :: a5_do_ref = 1
+  integer, parameter :: a5_rm_ref = 2
+  integer, parameter :: a5_kp_ref = 3
+  integer, parameter :: a5_rm_children = 4
 
+  ! Neighbor topology information (todo: add documentation)
+  integer, parameter :: a5_no_neighbor = 0
+  integer, parameter :: a5_no_children = 0
+
+  integer, parameter :: a2_ch_dix(2, 4) = ( (/0,0/), (/0,1/), !TODO
   integer, parameter :: a2_ch_rev(4, 2) = (/ (/2, 1, 4, 3/), (/3, 4, 1, 2/) /)
   logical, parameter :: a2_ch_low(4, 2) = (/ &
        (/.true., .false., .true., .false./), &
@@ -164,77 +173,163 @@ contains
     end do
   end subroutine a2_set_base
 
-  subroutine a2_set_levels(self)
+  ! On input, self should be balanced. On output, self is still balanced, and
+  ! its refinement is updated (with at most one level per call).
+  subroutine a2_adjust_refinement(self, ref_func)
     type(a2_t), intent(inout) :: self
+    procedure(a2_to_int_f)    :: ref_func
+    integer                   :: tag_bit
+    integer, allocatable      :: ref_vals(:)
 
-    ! Lvl 1 is always set
-    do lvl = 1, self%n_levels-1
-       call set_child_lvl(self%levels(lvl)%ids, &
-            self%levels(lvl+1)%ids, self%boxes)
+    allocate(ref_vals(self%n_boxes))
+    call a2_set_ref_vals(self%levels(1:self%n_levels), self%boxes, ref_vals, ref_func)
+
+    do lvl = 1, n_levels
+       do i = 1, size(levels(lvl)%ids)
+          id = levels(lvl)%ids(i)
+          if (ref_vals(id) == a5_do_ref) then
+             ! Add children
+          else if (ref_vals(id) == a5_rm_children) then
+             ! Remove children
+          end if
+       end do
+
+       ! Set the next level
+       deallocate(levels(lvl+1)%ids)
+       call set_child_lvl(levels(lvl)%ids, levels(lvl+1)%ids, boxes)
     end do
-  end subroutine a2_get_child_array
+  end subroutine a2_adjust_refinement
 
-  ! Refine function returns integer:
-  ! 0  -> derefine
-  ! 1  -> refine
-  ! All other values do nothing
-  subroutine a2_refine(self, refine_func)
-    type(a2_t), intent(inout) :: self
-    procedure(a2_to_int_f) :: refine_func
+  subroutine a2_set_ref_vals(levels, boxes, ref_vals, ref_func)
+    type(level2_t), intent(in)  :: levels(:)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(inout)      :: ref_vals(:)
+    procedure(a2_to_int_f)      :: ref_func
 
-    ! Set refinement flags for all boxes
-    do lvl = 1, self%n_levels
-       do i = 1, size(self%levels(lvl)%ids)
-          id = self%levels(lvl)%ids(i)
-          ref = refine_func(self%boxes(id))
-          select case (ref)
-          case (0)
-             self%boxes(id)%tag = ibset(self%boxes(id)%tag, a5_derefine)
-          case (1)
-             self%boxes(id)%tag = ibset(self%boxes(id)%tag, a5_refine)
-          end select
+    integer                     :: n_levels, tag_bit
+    integer                     :: lvl, i, id, c_ids(4)
+
+    n_levels = size(levels)
+
+    ! Set refinement flags for all boxes using ref_func
+    do lvl = 1, n_levels
+       do i = 1, size(levels(lvl)%ids)
+          id           = levels(lvl)%ids(i)
+          ref_vals(id) = ref_func(boxes(id))
        end do
     end do
 
-    ! Propagate refinement flags to parents
-    do lvl = 1, self%n_levels
-       do i = 1, size(self%levels(lvl)%ids)
-          id = self%levels(lvl)%ids(i)
-          
-  end subroutine a2_refine
-
-  subroutine a2_derefine(boxes, id)
-    type(box2_t), intent(inout) :: boxes
-    integer, intent(in) :: id
-
-    ! Set tag to not in use
-    boxes(id)%tag = ibclr(boxes(id)%tag, a5_in_use)
-
-    ! Remove this box at the neighbors
-    do nb = 1, 4
-       nb_id = boxes(id)%neighbors(nb)
-       if (nb_id =/ a5_no_neighbor) then
-          nb_rev = a2_nb_rev(nb)
-          boxes(nb_id)%neighbors(nb_rev) = a5_no_neighbor
+    ! Make the (de)refinement flags consistent for blocks with children.
+    do lvl = n_levels-1, 1, -1
+       do i = 1, size(levels(lvl)%ids)
+          id = levels(lvl)%ids(i)
+          if (btest(boxes(id)%tag, a5_has_children)) then ! Have children
+             ! Can only remove children if they are all marked for
+             ! derefinement, and the box itself not for refinement.
+             c_ids = boxes(id)%children
+             if (any(ref_vals(c_ids) /= a5_rm_ref) .or. &
+                  ref_vals(id) == a5_do_ref)) then
+             ! The children cannot be removed
+             where (ref_vals(c_ids) == a5_rm_ref))
+             ref_vals(c_ids) == a5_kp_ref
+          end where
+       else
+          ! The children are removed
+          ref_vals(id) = a5_rm_children
        end if
+
+       ! Since we have children, we cannot refine the box again
+       if (ref_vals(id) == a5_do_ref) ref_vals(id) = a5_kp_ref
     end do
 
-    ! Remove this box from parent
-  end subroutine a2_derefine
-  
+    ! Ensure 2-1 balance
+    do lvl = n_levels, 2, -1
+       do i = 1, size(levels(lvl)%ids)
+          id      = levels(lvl)%ids(i)
+          if (ref_vals(id) == a5_do_ref) then
+             ! Ensure we will have the necessary neighbors
+             do nb = 1, 4
+                if (boxes(id)%neighbors(nb) == a5_no_neighbor) then
+                   ! Mark the parent's neighbor for refinement
+                   p_id = boxes(id)%parent
+                   p_nb_id = boxes(p_id)%neighbors(nb)
+                   ref_vals(p_nb_id) = a5_do_ref
+                end if
+             end do
+          end if
+       end do
+    end do
+
+  end subroutine a2_set_ref_vals
+
+  subroutine a2_remove_children(boxes, id)
+    type(box2_t), intent(inout) :: boxes
+    integer, intent(in)         :: id
+    integer                     :: c_ids(4)
+
+    boxes(id)%tag = ibclr(boxes(id)%tag, a5_has_children)
+    c_ids         = boxes(id)%children
+
+    do i = 1, 4
+       c_id            = c_ids(i)
+       boxes(c_id)%tag = ibclr(boxes(c_id)%tag, a5_in_use)
+
+       ! Remove this box at the neighbors
+       do nb = 1, 4
+          nb_id = boxes(id)%neighbors(nb)
+          if (nb_id =/ a5_no_neighbor) then
+             nb_rev = a2_nb_rev(nb)
+             boxes(nb_id)%neighbors(nb_rev) = a5_no_neighbor
+          end if
+       end do
+    end do
+
+    boxes(id)%children = a5_no_children
+  end subroutine a2_remove_children
+
+  subroutine a2_add_children(boxes, id, c_ids)
+    type(box2_t), intent(inout) :: boxes
+    integer, intent(in)         :: id
+    integer, intent(in)         :: c_ids(4)
+
+    boxes(id)%tag = ibset(boxes(id)%tag, a5_has_children)
+    boxes(id)%children = c_ids
+
+    do i = 1, 4
+       c_id            = c_ids(i)
+       c_ix = 2 * p_ix
+       new_box%ix        = ix_list(:, ix)
+       new_box%lvl       = 1
+       new_box%parent    = 0
+       new_box%children  = 0
+       new_box%neighbors = nb_list(:,:, ix)
+
+       ! Set "in_use" and "fresh" tag
+       new_box%tag       = 0
+       new_box%tag       = ibset(new_box%tag, a5_bit_in_use)
+       new_box%tag       = ibset(new_box%tag, a5_bit_fresh)
+
+       ! Add box to storage
+       self%n_boxes   = id
+       self%boxes(id) = new_box
+       self%levels(1)%box_ids(id) = id
+       call alloc_storage_2d(self, id)
+    end do
+  end subroutine a2_add_children
+
   subroutine set_child_lvl(p_ids, c_ids, boxes)
     integer, intent(in) :: p_ids(:)
     integer, allocatable, intent(inout) :: c_ids(:)
     type(box2_t), intent(in) :: boxes(:)
 
     ! Count 4 times the number of refined parent blocks
-    n_children = 4 * count(btest(boxes(p_ids)%tag, a5_refined))
+    n_children = 4 * count(btest(boxes(p_ids)%tag, a5_has_children))
     allocate(c_ids(n_children))
 
     ic = 0
     do i = 1, size(p_ids)
        ip = p_ids(i)
-       if (btest(boxes(ip)%tag, a5_refined)) then
+       if (btest(boxes(ip)%tag, a5_has_children)) then
           c_ids(ic+1:ic+4) = reshape(boxes(ip)%children, ...)
           ic = ic + 4
        end if
