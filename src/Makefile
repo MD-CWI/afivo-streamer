@@ -1,6 +1,6 @@
 FC 	:= mpif90
 FFLAGS	:= -Wall -O2 -fcheck=all -g -ffpe-trap=invalid,zero,overflow
-OBJS	:= m_morton.f90 m_write_silo.f90
+OBJS	:= m_morton.f90 m_write_silo.f90 m_afivo.f90
 
 INCDIRS	:= ../silo/include
 LIBDIRS := ../silo/lib
@@ -14,7 +14,7 @@ LIBS	:= silo
 
 .PHONY: all clean
 
-all: test_morton test_silo
+all: test_morton test_silo test_base
 
 clean:
 	$(RM) *.o *.mod test_m_morton
@@ -22,5 +22,5 @@ clean:
 # Dependency information
 test_morton:		m_morton.o
 test_silo:		m_write_silo.o
-
+test_base:		m_afivo.o m_write_silo.o
 

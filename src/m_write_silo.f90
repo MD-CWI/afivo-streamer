@@ -96,6 +96,8 @@ contains
          do i = 1, N_r(2)
             y_coords(i) = r_min(2) + (i-1) * dr(2)
          end do
+      else
+         allocate(y_coords(0))
       end if
 
       if (n_dim > 2) then
@@ -103,6 +105,8 @@ contains
          do i = 1, N_r(3)
             z_coords(i) = r_min(3) + (i-1) * dr(3)
          end do
+      else
+         allocate(z_coords(0))
       end if
 
       ! Make option list
@@ -166,7 +170,7 @@ contains
       ! Write the data to the grid
       ierr = dbputqv1(dbix, trim(dataname), len_trim(dataname), &
            trim(gridname), len_trim(gridname), d_packed, d_shape, &
-           size(d_shape), dummy, 0, DB_DOUBLE, DB_NODECENT, dboptix, iostat)
+           size(d_shape), dummy, 0, DB_DOUBLE, DB_ZONECENT, dboptix, iostat)
 
       ! Close the file and remove option list
       call close_file(dbix)
@@ -183,7 +187,7 @@ contains
      integer                        :: dbix, dboptix, iostat, old_str_len
      integer                        :: n_grids, name_len, total_len
      integer, allocatable           :: m_types(:), name_lengths(:)
-     character(long_len)            :: mnames
+     character(:), allocatable      :: mnames
 
       interface
          function dbputmmesh(dbid, name, lname, nmesh, meshnames, lmeshnames, &
@@ -201,19 +205,16 @@ contains
          return
       end if
 
-      name_len = len(gridnames(1))
+      name_len  = len(gridnames(1))
       total_len = name_len * n_grids
-      if (total_len > long_len) then
-         print *, "Increase long_len! Not enough space"
-         stop
-      end if
-
+      allocate(character(total_len) :: mnames)
       allocate(name_lengths(n_grids))
       allocate(m_types(n_grids))
 
       do i = 1, n_grids
          mnames((i-1)*name_len+1:i*name_len) = trim(gridnames(i)) // char(0)
       end do
+
       old_str_len  = dbset2dstrlen(name_len)
       m_types      = DB_QUADMESH
       name_lengths = name_len
@@ -242,7 +243,7 @@ contains
      integer                        :: i, ierr, dbix, dboptix, iostat
      integer                        :: old_str_len, n_grids, name_len, total_len
      integer, allocatable           :: m_types(:), name_lengths(:)
-     character(long_len)            :: dnames
+     character(:), allocatable      :: dnames
 
       interface
          function dbputmvar(dbid, name, lname, nlevels, meshnames, &
@@ -263,11 +264,7 @@ contains
 
       name_len = len(datanames(1))
       total_len = name_len * n_grids
-      if (total_len > long_len) then
-         print *, "Increase long_len! Not enough space"
-         stop
-      end if
-
+      allocate(character(total_len) :: dnames)
       allocate(name_lengths(n_grids))
       allocate(m_types(n_grids))
 

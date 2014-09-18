@@ -45,9 +45,9 @@ contains
   end function morton_to_ix2
 
   function morton_bsearch(list, val) result(ix)
-    integer(kind=morton_k), intent(in) :: list(:)
-    integer(kind=morton_k), intent(in) :: val
-    integer                            :: ix, i_min, i_max, i_middle
+    integer(kind=k15), intent(in) :: list(:)
+    integer(kind=k15), intent(in) :: val
+    integer                       :: ix, i_min, i_max, i_middle
 
     i_min = 1
     i_max = size(list)
