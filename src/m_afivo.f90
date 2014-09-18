@@ -15,7 +15,7 @@ module m_afivo
   integer, parameter :: a5_no_neighbor = 0
   integer, parameter :: a5_no_children = 0
 
-  integer, parameter :: a2_ch_dix(2, 4) = ( (/0,0/), (/0,1/), !TODO
+  integer, parameter :: a2_ch_dix(2, 4) = (/(/0,0/), (/1,0/), (/0,1/), (/1,1/)/)
   integer, parameter :: a2_ch_rev(4, 2) = (/ (/2, 1, 4, 3/), (/3, 4, 1, 2/) /)
   logical, parameter :: a2_ch_low(4, 2) = (/ &
        (/.true., .false., .true., .false./), &
@@ -188,9 +188,12 @@ contains
        do i = 1, size(levels(lvl)%ids)
           id = levels(lvl)%ids(i)
           if (ref_vals(id) == a5_do_ref) then
-             ! Add children
+             ! Add children. First need to get 4 free id's
+             call a2_get_free_ids(self, c_ids)
+             call a2_add_children(boxes, id, c_ids)
           else if (ref_vals(id) == a5_rm_children) then
              ! Remove children
+             call a2_remove_children(self%boxes, id)
           end if
        end do
 
@@ -199,6 +202,23 @@ contains
        call set_child_lvl(levels(lvl)%ids, levels(lvl+1)%ids, boxes)
     end do
   end subroutine a2_adjust_refinement
+
+  subroutine a2_get_free_ids(self, ids)
+    type(a2_t), intent(inout) :: self
+    integer, intent(in) :: ids(:)
+    integer :: n_ids
+
+    n_ids = size(ids)
+    ! Critical part
+    ids(1) = self%n_boxes
+    self%n_boxes = self%n_boxes + n_ids
+    ! End critical
+    do i = 2, n_ids
+       ids(i) = ids(i-1) + 1
+    end do
+  end subroutine a2_get_free_ids
+    
+  end subroutine a2_get_free_ids
 
   subroutine a2_set_ref_vals(levels, boxes, ref_vals, ref_func)
     type(level2_t), intent(in)  :: levels(:)
@@ -224,43 +244,41 @@ contains
        do i = 1, size(levels(lvl)%ids)
           id = levels(lvl)%ids(i)
           if (btest(boxes(id)%tag, a5_has_children)) then ! Have children
+
              ! Can only remove children if they are all marked for
              ! derefinement, and the box itself not for refinement.
              c_ids = boxes(id)%children
-             if (any(ref_vals(c_ids) /= a5_rm_ref) .or. &
-                  ref_vals(id) == a5_do_ref)) then
+             if (all(ref_vals(c_ids) == a5_rm_ref) .and. &
+                  ref_vals(id) /= a5_do_ref)) then
+             ! The children are removed
+             ref_vals(id) = a5_rm_children
+          else
              ! The children cannot be removed
-             where (ref_vals(c_ids) == a5_rm_ref))
-             ref_vals(c_ids) == a5_kp_ref
-          end where
-       else
-          ! The children are removed
-          ref_vals(id) = a5_rm_children
-       end if
-
-       ! Since we have children, we cannot refine the box again
-       if (ref_vals(id) == a5_do_ref) ref_vals(id) = a5_kp_ref
-    end do
-
-    ! Ensure 2-1 balance
-    do lvl = n_levels, 2, -1
-       do i = 1, size(levels(lvl)%ids)
-          id      = levels(lvl)%ids(i)
-          if (ref_vals(id) == a5_do_ref) then
-             ! Ensure we will have the necessary neighbors
-             do nb = 1, 4
-                if (boxes(id)%neighbors(nb) == a5_no_neighbor) then
-                   ! Mark the parent's neighbor for refinement
-                   p_id = boxes(id)%parent
-                   p_nb_id = boxes(p_id)%neighbors(nb)
-                   ref_vals(p_nb_id) = a5_do_ref
-                end if
-             end do
+             ref_vals(id) = a5_kp_ref
+             where (ref_vals(c_ids) == a5_rm_ref)) &
+                  ref_vals(c_ids) == a5_kp_ref
           end if
        end do
-    end do
 
-  end subroutine a2_set_ref_vals
+       ! Ensure 2-1 balance
+       do lvl = n_levels, 2, -1
+          do i = 1, size(levels(lvl)%ids)
+             id      = levels(lvl)%ids(i)
+             if (ref_vals(id) == a5_do_ref) then
+                ! Ensure we will have the necessary neighbors
+                do nb = 1, 4
+                   if (boxes(id)%neighbors(nb) == a5_no_neighbor) then
+                      ! Mark the parent's neighbor for refinement
+                      p_id = boxes(id)%parent
+                      p_nb_id = boxes(p_id)%neighbors(nb)
+                      ref_vals(p_nb_id) = a5_do_ref
+                   end if
+                end do
+             end if
+          end do
+       end do
+
+     end subroutine a2_set_ref_vals
 
   subroutine a2_remove_children(boxes, id)
     type(box2_t), intent(inout) :: boxes
@@ -291,28 +309,24 @@ contains
     type(box2_t), intent(inout) :: boxes
     integer, intent(in)         :: id
     integer, intent(in)         :: c_ids(4)
+    integer                     :: i, c_id, c_ix_base(2)
 
-    boxes(id)%tag = ibset(boxes(id)%tag, a5_has_children)
+    boxes(id)%tag      = ibset(boxes(id)%tag, a5_has_children)
     boxes(id)%children = c_ids
+    c_ix_base          = 2 * boxes(id)%ix
 
     do i = 1, 4
-       c_id            = c_ids(i)
-       c_ix = 2 * p_ix
-       new_box%ix        = ix_list(:, ix)
-       new_box%lvl       = 1
-       new_box%parent    = 0
-       new_box%children  = 0
-       new_box%neighbors = nb_list(:,:, ix)
+       c_id              = c_ids(i)
+       new_box%ix        = c_ix_base + a2_ch_dix(i)
+       new_box%lvl       = boxes(id)%lvl+1
+       new_box%parent    = id
+       new_box%children  = a5_no_children
+       new_box%neighbors = a5_no_neighbor
 
        ! Set "in_use" and "fresh" tag
-       new_box%tag       = 0
-       new_box%tag       = ibset(new_box%tag, a5_bit_in_use)
+       new_box%tag       = ibset(0, a5_bit_in_use)
        new_box%tag       = ibset(new_box%tag, a5_bit_fresh)
 
-       ! Add box to storage
-       self%n_boxes   = id
-       self%boxes(id) = new_box
-       self%levels(1)%box_ids(id) = id
        call alloc_storage_2d(self, id)
     end do
   end subroutine a2_add_children
