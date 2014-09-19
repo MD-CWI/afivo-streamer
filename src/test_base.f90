@@ -8,9 +8,10 @@ program test_base
   integer    :: ix(2)
   integer    :: ix_list(2, 1)
   integer    :: nb_list(4, 1)
-  integer    :: box_size    = 16
-  integer    :: n_boxes_max = 100000
+  integer    :: box_size    = 2
+  integer    :: n_boxes_max = 1000*1000
   real(dp)   :: dr(2)
+  character(len=40) :: fname
 
   dr = 2 * acos(-1.0_dp) / box_size
 
@@ -24,17 +25,17 @@ program test_base
 
   call a2_set_base(tree, ix_list, nb_list, dr, (/0.0_dp, 0.0_dp/))
   call a2_loop_box(tree, set_init_cond)
-  call a2_loop_box(tree, set_init_cond)
   call a2_fill_internal_gc(tree)
 
-  do i = 1, 2
+  do i = 1, 16
+     print *, "Iteration", i
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_fresh)
      call a2_fill_internal_gc(tree)
+     write(fname, "(A,I0,A)") "test_base_", i, ".silo"
+     call a2_write_tree(tree, trim(fname), (/"my_var"/), &
+          (/"my_unit"/), 0, 0.0_dp)
   end do
-
-  call a2_write_tree(tree, "test_base.silo", (/"my_var"/), &
-       (/"my_unit"/), 0, 0.0_dp)
 
 contains
 
@@ -43,16 +44,16 @@ contains
     real(dp) :: rr
     call random_number(rr)
 
-    ! if (rr < 0.25_dp) then
+    if (rr < 0.2_dp) then
+       ref_func = a5_do_ref
+    else
+       ref_func = a5_rm_ref
+    end if
+    ! if (all(box%ix == 1)) then
     !    ref_func = a5_do_ref
     ! else
     !    ref_func = a5_kp_ref
     ! end if
-    if (all(box%ix == 1)) then
-       ref_func = a5_do_ref
-    else
-       ref_func = a5_kp_ref
-    end if
   end function ref_func
 
   subroutine set_init_cond(box)
