@@ -32,6 +32,7 @@ module m_afivo
   ! Each box contains a tag, for which the following bits are set:
   integer, parameter :: a5_bit_in_use = 1
   integer, parameter :: a5_bit_fresh = 2
+  integer, parameter :: a5_bit_just_ref = 3
 
   type box2_t
      integer               :: lvl
@@ -71,6 +72,12 @@ module m_afivo
        import
        type(box2_t), intent(inout) :: box
      end subroutine a2_subr
+
+     subroutine a2_subr_boxes(boxes, id)
+       import
+       type(box2_t), intent(inout) :: boxes(:)
+       integer, intent(in)         :: id
+     end subroutine a2_subr_boxes
   end interface
 
 contains
@@ -92,18 +99,40 @@ contains
     end do
   end subroutine a2_init
 
+  integer function a5_n_levels(self)
+    type(a2_t), intent(in) :: self
+    integer                :: lvl
+    do lvl = 1, a5_max_levels-1
+       if (size(self%levels(lvl)%ids) == 0) exit
+    end do
+    a5_n_levels = lvl
+  end function a5_n_levels
+
   subroutine a2_loop_box(self, my_procedure)
     type(a2_t), intent(inout) :: self
     procedure(a2_subr)        :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = 1, a5_max_levels
+    do lvl = 1, a5_n_levels(self)
        do i = 1, size(self%levels(lvl)%ids)
           id = self%levels(lvl)%ids(i)
           call my_procedure(self%boxes(id))
        end do
     end do
   end subroutine a2_loop_box
+
+  subroutine a2_loop_boxes(self, my_procedure)
+    type(a2_t), intent(inout) :: self
+    procedure(a2_subr_boxes)  :: my_procedure
+    integer                   :: lvl, i, id
+
+    do lvl = 1, a5_n_levels(self)
+       do i = 1, size(self%levels(lvl)%ids)
+          id = self%levels(lvl)%ids(i)
+          call my_procedure(self%boxes, id)
+       end do
+    end do
+  end subroutine a2_loop_boxes
 
   subroutine a5_tidy_storage(self, new_size)
     type(a2_t) :: self
@@ -198,6 +227,7 @@ contains
 
   ! On input, self should be balanced. On output, self is still balanced, and
   ! its refinement is updated (with at most one level per call).
+  ! Sets the following bits: a5_bit_fresh, a5_bit_just_ref
   subroutine a2_adjust_refinement(self, ref_func)
     type(a2_t), intent(inout) :: self
     procedure(a2_to_int_f)    :: ref_func
@@ -210,7 +240,7 @@ contains
          ref_vals, ref_func)
     print *, "ref", ref_vals
 
-    do lvl = 1, a5_max_levels
+    do lvl = 1, a5_n_levels(self)
        print *, "lvl", lvl, size(self%levels(lvl)%ids)
        do i = 1, size(self%levels(lvl)%ids)
           id = self%levels(lvl)%ids(i)
@@ -262,7 +292,6 @@ contains
        allocate(self%boxes(id)%cc(0:bs+1, 0:bs+1, self%n_cc))
        allocate(self%boxes(id)%fx(bs+1, bs, self%n_fx))
        allocate(self%boxes(id)%fy(bs, bs+1, self%n_fy))
-       print *, "created", id, shape(self%boxes(id)%cc)
     end do
   end subroutine a2_get_free_ids
 
@@ -284,6 +313,12 @@ contains
           id           = levels(lvl)%ids(i)
           ref_vals(id) = ref_func(boxes(id))
        end do
+    end do
+
+    ! Cannot refine beyond max level
+    do i = 1, size(levels(a5_max_levels)%ids)
+       id           = levels(a5_max_levels)%ids(i)
+       if (ref_vals(id) == a5_do_ref) ref_vals(id) = a5_kp_ref
     end do
 
     ! Make the (de)refinement flags consistent for blocks with children.
@@ -362,6 +397,7 @@ contains
 
     boxes(id)%children = c_ids
     c_ix_base          = 2 * boxes(id)%ix - 1
+    boxes(id)%tag      = ibset(boxes(id)%tag, a5_bit_just_ref)
 
     do i = 1, 4
        c_id                  = c_ids(i)
@@ -405,40 +441,76 @@ contains
     a2_has_children = (box%children(1) /= a5_no_children)
   end function a2_has_children
 
-  subroutine a2_prolong_from(boxes, id)
-    type(box2_t), intent(inout) :: boxes
-    integer, intent(in) :: id
-    integer ::
+  ! Prolongation using bilinear interpolation. Uses ghost cells and corners.
+  subroutine a2_prolong_from(boxes, id, v_ixs)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, v_ixs(:)
+    real(dp), parameter         :: one16th=1/16.0_dp
+    integer                     :: bs, ic, c_id, i_base, j_base
+    integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 
     bs = size(boxes(id)%cc, 1) - 2
-    do i = 1, 4
-       c_id = boxes(id)%children(i)
+    do ic = 1, 4
+       c_id = boxes(id)%children(ic)
 
+       ! Offset of child w.r.g. parent
+       i_base = a2_ch_dix(1, ic) * bs/2
+       j_base = a2_ch_dix(2, ic) * bs/2
 
-                 do j = clo(2), chi(2)
-             twoj   = 2*j
-             twojp1 = twoj+1
+       ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
+       ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
+       do j = 1, bs
+          j_c1 = j_base + ishft(j, -1) + iand(j, 1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+          do i = 1, bs
+             i_c1 = i_base + ishft(i, -1) + iand(i, 1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
-             do i = clo(1), chi(1)
-                twoi   = 2*i
-                twoip1 = twoi+1
-
-                ff(twoip1, twojp1) = ff(twoip1, twojp1) + one16th * &
-                     ( 9*cc(i,j) + 3*cc(i+1,j) + 3*cc(i,j+1) + cc(i+1,j+1) )
-                ff(twoi,   twojp1) = ff(twoi,   twojp1) + one16th * &
-                     ( 9*cc(i,j) + 3*cc(i-1,j) + 3*cc(i,j+1) + cc(i-1,j+1) )
-                ff(twoip1, twoj  ) = ff(twoip1, twoj  ) + one16th * &
-                     ( 9*cc(i,j) + 3*cc(i,j-1) + 3*cc(i+1,j) + cc(i+1,j-1) )
-                ff(twoi,   twoj  ) = ff(twoi,   twoj  ) + one16th * &
-                     ( 9*cc(i,j) + 3*cc(i-1,j) + 3*cc(i,j-1) + cc(i-1,j-1) )
-             end do
+             boxes(c_id)%cc(i, j, v_ixs) = one16th * ( &
+                  9*boxes(id)%cc(i_c1, j_c1, v_ixs) + &
+                  3*boxes(id)%cc(i_c2, j_c1, v_ixs) + &
+                  3*boxes(id)%cc(i_c1, j_c2, v_ixs) + &
+                  boxes(id)%cc(i_c2, j_c2, v_ixs))
           end do
+       end do
+    end do
 
-  end subroutine a2_prolong
+  end subroutine a2_prolong_from
 
-  subroutine a2_restrict_to(boxes, id)
+  ! subroutine a2_restrict_to(boxes, id)
 
-  end subroutine a2_restrict
+  ! end subroutine a2_restrict
+
+  subroutine a2_fill_internal_gc(self)
+    type(a2_t), intent(inout) :: self
+    integer :: lvl, i, id
+    do lvl = 1, a5_n_levels(self)
+       do i = 1, size(self%levels(lvl)%ids)
+          id = self%levels(lvl)%ids(i)
+          call a2_internal_gc(self%boxes, id)
+       end do
+    end do
+  end subroutine a2_fill_internal_gc
+
+  subroutine a2_internal_gc(boxes, id)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in) :: id
+    integer :: bs, nb_id
+
+    bs = size(boxes(id)%cc, 1) - 2
+    nb_id = boxes(id)%neighbors(1)
+    if (nb_id > a5_no_neighbor) &
+         boxes(id)%cc(0, 1:bs, :) = boxes(nb_id)%cc(bs, 1:bs, :)
+    nb_id = boxes(id)%neighbors(2)
+    if (nb_id > a5_no_neighbor) &
+         boxes(id)%cc(bs+1, 1:bs, :) = boxes(nb_id)%cc(1, 1:bs, :)
+    nb_id = boxes(id)%neighbors(3)
+    if (nb_id > a5_no_neighbor) &
+         boxes(id)%cc(1:bs, 0, :) = boxes(nb_id)%cc(1:bs, bs, :)
+    nb_id = boxes(id)%neighbors(4)
+    if (nb_id > a5_no_neighbor) &
+         boxes(id)%cc(1:bs, bs+1, :) = boxes(nb_id)%cc(1:bs, 1, :)
+  end subroutine a2_internal_gc
 
   subroutine a2_write_tree(self, filename, cc_names, cc_units, n_cycle, time)
     use m_write_silo
@@ -449,43 +521,44 @@ contains
     character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
     character(len=*), parameter     :: amr_name  = "amr"
     character(len=100), allocatable :: grid_list(:), var_list(:, :)
-    integer                         :: lvl, i, id, ig, iv, bs, n_grids
+    integer                         :: lvl, i, id, ig, iv, bs, n_grids, dbix
 
     bs = self%box_size
     n_grids = 0
-    do lvl = 1, a5_max_levels
+    do lvl = 1, a5_n_levels(self)
        n_grids = n_grids + size(self%levels(lvl)%ids)
     end do
 
     allocate(grid_list(n_grids))
     allocate(var_list(self%n_cc, n_grids))
 
-    call SILO_create_file(filename)
+    call SILO_create_file(filename, dbix)
     ig = 0
 
-    do lvl = 1, a5_max_levels
+    do lvl = 1, a5_n_levels(self)
        do i = 1, size(self%levels(lvl)%ids)
           id = self%levels(lvl)%ids(i)
           ig = ig + 1
           write(grid_list(ig), "(A,I0)") grid_name, ig
-          call SILO_add_grid(filename, grid_list(ig), 2, &
+          call SILO_add_grid(dbix, grid_list(ig), 2, &
                (/bs+1, bs+1/), self%boxes(id)%r_min, self%boxes(id)%dr)
-          print *, ig, id, size(self%boxes), shape(self%boxes(id)%cc)
+
           do iv = 1, self%n_cc
              write(var_list(iv, ig), "(A,I0)") trim(cc_names(iv)) // "_", ig
-             call SILO_add_var(filename, var_list(iv, ig), grid_list(ig), &
+             call SILO_add_var(dbix, var_list(iv, ig), grid_list(ig), &
                   pack(self%boxes(id)%cc(1:bs, 1:bs, iv), .true.), (/bs, bs/), &
                   trim(cc_units(iv)))
           end do
        end do
     end do
 
-    call SILO_set_mmesh_grid(filename, amr_name, grid_list, n_cycle, time)
+    call SILO_set_mmesh_grid(dbix, amr_name, grid_list, n_cycle, time)
     do iv = 1, self%n_cc
-       call SILO_set_mmesh_var(filename, trim(cc_names(iv)), amr_name, &
+       call SILO_set_mmesh_var(dbix, trim(cc_names(iv)), amr_name, &
             var_list(iv, :), n_cycle, time)
     end do
+    call SILO_close_file(dbix)
+    print *, "Number of grids", ig
   end subroutine a2_write_tree
-
 
 end module m_afivo

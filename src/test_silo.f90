@@ -9,7 +9,7 @@ program test_silo
   character(len=*), parameter    :: grid_name = "gg"
   character(len=*), parameter    :: var_name  = "vv"
   character(len=*), parameter    :: amr_name  = "amr"
-  integer                        :: ix, n_grids
+  integer                        :: ix, n_grids, dbix
   character(len=40), allocatable :: mesh_name_list(:), var_name_list(:)
 
   type grid_t
@@ -38,23 +38,24 @@ program test_silo
      call fill_grid(grid_list(ix))
   end do
 
-  call SILO_create_file(filename)
+  call SILO_create_file(filename, dbix)
   allocate(mesh_name_list(n_grids))
   allocate(var_name_list(n_grids))
 
   do ix = 1, n_grids
      grid = grid_list(ix)
      write(mesh_name_list(ix), "(A,I0)") grid_name, ix
-     call SILO_add_grid(filename, mesh_name_list(ix), 3, &
+     call SILO_add_grid(dbix, mesh_name_list(ix), 3, &
           (/NN, NN, NN/), grid%r_min, grid%dr)
      write(var_name_list(ix), "(A,I0)") trim(var_name) // "_", ix
-     call SILO_add_var(filename, var_name_list(ix), mesh_name_list(ix), &
+     call SILO_add_var(dbix, var_name_list(ix), mesh_name_list(ix), &
           pack(grid%var, .true.), (/NN, NN, NN/), "UNIT")
   end do
 
-  call SILO_set_mmesh_grid(filename, amr_name, mesh_name_list, 1, 0.0d0)
-  call SILO_set_mmesh_var(filename, trim(var_name), amr_name, &
+  call SILO_set_mmesh_grid(dbix, amr_name, mesh_name_list, 1, 0.0d0)
+  call SILO_set_mmesh_var(dbix, trim(var_name), amr_name, &
        var_name_list(:), 1, 0.0d0)
+  call SILO_close_file(dbix)
 
 contains
 
