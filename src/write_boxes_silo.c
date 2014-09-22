@@ -1,6 +1,6 @@
 /*
 Compile:
-h5cc write_boxes_silo.c -o write_boxes_silo -I../silo/include -L../silo/lib -lsiloh5 -lm -Wall -std=c99
+gcc write_boxes_silo.c -o write_boxes_silo -I../silo/include -L../silo/lib -lsilo -lm -Wall -std=c99
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,7 +47,7 @@ int main(void) {
     coords[d] = (double*) malloc(NN * sizeof(double));
   }
 
-  file = DBCreate("test.silo", DB_CLOBBER, DB_LOCAL, NULL, DB_HDF5);
+  file = DBCreate("test.silo", DB_CLOBBER, DB_LOCAL, NULL, DB_PDB);
 
   optlist = DBMakeOptlist(10);
   dummy = 1;
