@@ -34,8 +34,10 @@ To keep the code lean & fast, we restrict the framework in the following way:
 * Parallellization is provided only for shared memory systems (using OpenMP).
 
 ### Todo
+* Use morton order for enhancing data locality
+* (Idem) Reorder memory
+* Fill ghost cells from boundary condition
 
 ### Status
-* Using silo for output
+* Using vtk unstructured for output
 * Use 1d array with indexing as data storage
-* Use morton order for enhancing data locality
