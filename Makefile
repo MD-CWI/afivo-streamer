@@ -14,9 +14,6 @@ $(SRC_DIRS):
 $(CLEANSRC):
 		$(MAKE) -C $(@:clean-%=%) clean
 
-silo:
-		bash build_silo.sh
-
 # Dependecy information
-$(SRC_DIRS):	| silo
+$(SRC_DIRS):
 

@@ -53,7 +53,7 @@ module m_afivo
 
   type a2_t
      type(level2_t)            :: levels(a5_max_levels)
-     integer                   :: box_size
+     integer                   :: box_cells
      integer                   :: n_cc
      integer                   :: n_fx
      integer                   :: n_fy
@@ -81,13 +81,13 @@ module m_afivo
 
 contains
 
-  subroutine a2_init(self, n_boxes_max, box_size, n_cc, n_fx, n_fy)
+  subroutine a2_init(self, n_boxes_max, box_cells, n_cc, n_fx, n_fy)
     type(a2_t)          :: self
     integer, intent(in) :: n_boxes_max
-    integer, intent(in) :: box_size, n_cc, n_fx, n_fy
+    integer, intent(in) :: box_cells, n_cc, n_fx, n_fy
     integer             :: lvl
 
-    self%box_size = box_size
+    self%box_cells = box_cells
     self%n_cc     = n_cc
     self%n_fx     = n_fx
     self%n_fy     = n_fy
@@ -247,7 +247,7 @@ contains
           else if (ref_vals(id) == a5_do_ref) then
              ! Add children. First need to get 4 free id's
              call a2_get_free_ids(self, c_ids)
-             call a2_add_children(self%boxes, id, c_ids, self%box_size)
+             call a2_add_children(self%boxes, id, c_ids, self%box_cells)
           else if (ref_vals(id) == a5_rm_children) then
              ! Remove children
              call a2_remove_children(self%boxes, id)
@@ -280,7 +280,7 @@ contains
     end do
 
     ! Allocate storage
-    bs = self%box_size
+    bs = self%box_cells
     do i = 1, n_ids
        id = ids(i)
        allocate(self%boxes(id)%cc(0:bs+1, 0:bs+1, self%n_cc))
@@ -403,9 +403,9 @@ contains
     end do
   end subroutine a2_remove_children
 
-  subroutine a2_add_children(boxes, id, c_ids, box_size)
+  subroutine a2_add_children(boxes, id, c_ids, box_cells)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, box_size
+    integer, intent(in)         :: id, box_cells
     integer, intent(in)         :: c_ids(4)
     integer                     :: i, c_id, c_ix_base(2)
 
@@ -419,7 +419,7 @@ contains
        boxes(c_id)%lvl       = boxes(id)%lvl+1
        boxes(c_id)%dr        = boxes(id)%dr * 0.5_dp
        boxes(c_id)%r_min     = boxes(id)%r_min + &
-            a2_ch_dix(:,i) * boxes(c_id)%dr * box_size
+            a2_ch_dix(:,i) * boxes(c_id)%dr * box_cells
        boxes(c_id)%parent    = id
        boxes(c_id)%children  = a5_no_box
        boxes(c_id)%neighbors = a5_no_box
@@ -527,52 +527,135 @@ contains
   end subroutine a2_internal_gc
 
   subroutine a2_write_tree(self, filename, cc_names, cc_units, n_cycle, time)
-    use m_write_silo
-    type(a2_t), intent(in)          :: self
-    character(len=*)                :: filename, cc_names(:), cc_units(:)
-    integer, intent(in)             :: n_cycle
-    real(dp), intent(in)            :: time
-    character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
-    character(len=*), parameter     :: amr_name  = "amr"
-    character(len=100), allocatable :: grid_list(:), var_list(:, :)
-    integer                         :: lvl, i, id, ig, iv, bs, n_grids, dbix
+    use m_vtk
+    type(a2_t), intent(in) :: self
+    character(len=*)       :: filename, cc_names(:), cc_units(:)
+    integer, intent(in)    :: n_cycle
+    real(dp), intent(in)   :: time
+    integer                :: lvl, bc, bn, n, n_cells, n_nodes, n_grids
+    integer                :: ig, i, j, id, iv, n_ix, c_ix
+    integer                :: cell_ix, node_ix
+    integer                :: nodes_per_box, cells_per_box
+    real(dp), allocatable  :: coords(:), v(:)
+    integer, allocatable   :: offsets(:), connects(:), cell_types(:)
+    type(vtk_t)            :: vtkf
 
-    bs = self%box_size
+    bc = self%box_cells
+    bn = bc + 1
+    nodes_per_box = bn**2
+    cells_per_box = bc**2
+
     n_grids = 0
     do lvl = 1, a5_n_levels(self)
-       n_grids = n_grids + size(self%levels(lvl)%ids)
+       do n = 1, size(self%levels(lvl)%ids)
+          id = self%levels(lvl)%ids(n)
+          if (.not. a2_has_children(self%boxes(id))) n_grids = n_grids + 1
+       end do
     end do
+    n_nodes = nodes_per_box * n_grids
+    n_cells = cells_per_box * n_grids
 
-    allocate(grid_list(n_grids))
-    allocate(var_list(self%n_cc, n_grids))
+    allocate(coords(2 * n_nodes))
+    allocate(v(n_cells))
+    allocate(offsets(cells_per_box * n_grids))
+    allocate(cell_types(cells_per_box * n_grids))
+    allocate(connects(4 * cells_per_box * n_grids))
 
-    call SILO_create_file(filename, dbix)
+    cell_types = 8              ! VTK pixel type
+
     ig = 0
-
     do lvl = 1, a5_n_levels(self)
-       do i = 1, size(self%levels(lvl)%ids)
-          id = self%levels(lvl)%ids(i)
-          ig = ig + 1
-          write(grid_list(ig), "(A,I0)") grid_name, ig
-          call SILO_add_grid(dbix, grid_list(ig), 2, &
-               (/bs+1, bs+1/), self%boxes(id)%r_min, self%boxes(id)%dr)
+       do n = 1, size(self%levels(lvl)%ids)
+          id = self%levels(lvl)%ids(n)
+          if (a2_has_children(self%boxes(id))) cycle
 
-          do iv = 1, self%n_cc
-             write(var_list(iv, ig), "(A,I0)") trim(cc_names(iv)) // "_", ig
-             call SILO_add_var(dbix, var_list(iv, ig), grid_list(ig), &
-                  pack(self%boxes(id)%cc(1:bs, 1:bs, iv), .true.), (/bs, bs/), &
-                  trim(cc_units(iv)))
+          ig = ig + 1
+          cell_ix = (ig-1) * cells_per_box
+          node_ix = (ig-1) * nodes_per_box
+
+          do j = 1, bn
+             do i = 1, bn
+                n_ix = 2 * (node_ix + (j-1) * bn + i) - 1
+                coords(n_ix) = self%boxes(id)%r_min(1) + &
+                     (i-1) * self%boxes(id)%dr(1)
+                coords(n_ix+1) = self%boxes(id)%r_min(2) + &
+                     (j-1) * self%boxes(id)%dr(2)
+             end do
+          end do
+
+          do j = 1, bc
+             do i = 1, bc
+                ! In vtk, indexing starts at 0, so subtract 1
+                n_ix                      = node_ix + (j-1) * bn + i - 1
+                c_ix                      = cell_ix + (j-1) * bc + i
+                v(c_ix) = self%boxes(id)%cc(i, j, 1)
+                offsets(c_ix)             = 4 * c_ix
+                connects(4*c_ix-3:4*c_ix) = (/n_ix, n_ix+1, n_ix+bn, n_ix+bn+1/)
+             end do
           end do
        end do
     end do
 
-    call SILO_set_mmesh_grid(dbix, amr_name, grid_list, n_cycle, time)
-    do iv = 1, self%n_cc
-       call SILO_set_mmesh_var(dbix, trim(cc_names(iv)), amr_name, &
-            var_list(iv, :), n_cycle, time)
-    end do
-    call SILO_close_file(dbix)
-    print *, "Number of grids", ig
+    call vtk_ini_xml(vtkf, trim(filename), 'UnstructuredGrid')
+    call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
+    call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, 2, n_cycle, time)
+    call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
+    call vtk_dat_xml(vtkf, "CellData", .true.)
+    call vtk_var_r8_xml(vtkf, 'scalars', v, n_cells)
+    call vtk_dat_xml(vtkf, "CellData", .false.)
+    call vtk_geo_xml_close(vtkf)
+    call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
+    call vtk_end_xml(vtkf)
+    print *, "Written ", trim(filename), "n_grids", n_grids
   end subroutine a2_write_tree
+
+  ! subroutine a2_write_tree(self, filename, cc_names, cc_units, n_cycle, time)
+  !   use m_write_silo
+  !   type(a2_t), intent(in)          :: self
+  !   character(len=*)                :: filename, cc_names(:), cc_units(:)
+  !   integer, intent(in)             :: n_cycle
+  !   real(dp), intent(in)            :: time
+  !   character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
+  !   character(len=*), parameter     :: amr_name  = "amr"
+  !   character(len=100), allocatable :: grid_list(:), var_list(:, :)
+  !   integer                         :: lvl, i, id, ig, iv, bs, n_grids, dbix
+
+  !   bs = self%box_cells
+  !   n_grids = 0
+  !   do lvl = 1, a5_n_levels(self)
+  !      n_grids = n_grids + size(self%levels(lvl)%ids)
+  !   end do
+
+  !   allocate(grid_list(n_grids))
+  !   allocate(var_list(self%n_cc, n_grids))
+
+  !   call SILO_create_file(filename, dbix)
+  !   ig = 0
+
+  !   do lvl = 1, a5_n_levels(self)
+  !      do i = 1, size(self%levels(lvl)%ids)
+  !         id = self%levels(lvl)%ids(i)
+  !         ig = ig + 1
+  !         write(grid_list(ig), "(A,I0)") grid_name, ig
+  !         call SILO_add_grid(dbix, grid_list(ig), 2, &
+  !              (/bs+1, bs+1/), self%boxes(id)%r_min, self%boxes(id)%dr)
+  !         print *, id, self%boxes(id)%r_min, self%boxes(id)%dr
+  !         do iv = 1, self%n_cc
+  !            write(var_list(iv, ig), "(A,I0)") trim(cc_names(iv)) // "_", ig
+  !            call SILO_add_var(dbix, var_list(iv, ig), grid_list(ig), &
+  !                 pack(self%boxes(id)%cc(1:bs, 1:bs, iv), .true.), (/bs, bs/), &
+  !                 trim(cc_units(iv)))
+  !         end do
+  !      end do
+  !   end do
+
+  !   call SILO_set_mmesh_grid(dbix, amr_name, grid_list, n_cycle, time)
+  !   do iv = 1, self%n_cc
+  !      call SILO_set_mmesh_var(dbix, trim(cc_names(iv)), amr_name, &
+  !           var_list(iv, :), n_cycle, time)
+  !   end do
+  !   call SILO_close_file(dbix)
+  !   print *, "Number of grids", ig
+  ! end subroutine a2_write_tree
 
 end module m_afivo

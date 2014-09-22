@@ -8,7 +8,7 @@ program test_base
   integer    :: ix(2)
   integer    :: ix_list(2, 1)
   integer    :: nb_list(4, 1)
-  integer    :: box_size    = 2
+  integer    :: box_size    = 8
   integer    :: n_boxes_max = 1000*1000
   real(dp)   :: dr(2)
   character(len=40) :: fname
@@ -27,12 +27,13 @@ program test_base
   call a2_loop_box(tree, set_init_cond)
   call a2_fill_internal_gc(tree)
 
-  do i = 1, 16
+  do i = 1, 20
      print *, "Iteration", i
      call a2_adjust_refinement(tree, ref_func)
-     call a2_loop_boxes(tree, prolong_to_fresh)
-     call a2_fill_internal_gc(tree)
-     write(fname, "(A,I0,A)") "test_base_", i, ".silo"
+     call a2_loop_box(tree, set_init_cond)
+     ! call a2_loop_boxes(tree, prolong_to_fresh)
+     ! call a2_fill_internal_gc(tree)
+     write(fname, "(A,I0,A)") "test_base_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), (/"my_var"/), &
           (/"my_unit"/), 0, 0.0_dp)
   end do
