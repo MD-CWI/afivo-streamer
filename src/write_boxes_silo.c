@@ -7,8 +7,8 @@ gcc write_boxes_silo.c -o write_boxes_silo -I../silo/include -L../silo/lib -lsil
 #include <math.h>
 #include "silo.h"
 
-const int	NN    = 9;
-const int	ndims = 2;
+const int NN      = 9;
+const int ndims   = 2;
 const int nmeshes = 32;
 
 void get_coords(double *coords[], const int *ix, const double dr) {
@@ -25,18 +25,18 @@ void get_coords(double *coords[], const int *ix, const double dr) {
 
 
 int main(void) {
-  DBfile	*file = NULL;
-  double	*coords[ndims];
-  int		 dims[ndims];
-  int		 ierr;
-  int ix[2];
-  int meshtype;
-  int dummy;
-  char gridname[10];
+  DBfile    *file = NULL;
+  double    *coords[ndims];
+  int        dims[ndims];
+  int        ierr;
+  int        ix[2];
+  int        meshtype;
+  int        dummy;
+  char       gridname[10];
   DBoptlist *optlist;
-  double *extents;
-  int *zonecounts;
-  int *extzones;
+  double    *extents;
+  int       *zonecounts;
+  int       *extzones;
 
   extents = (double*) malloc(2*nmeshes*nmeshes*ndims*sizeof(double));
   zonecounts = (int*) malloc(nmeshes*nmeshes*sizeof(int));
@@ -52,7 +52,7 @@ int main(void) {
   optlist = DBMakeOptlist(10);
   dummy = 1;
   DBAddOption(optlist, DBOPT_HIDE_FROM_GUI, &dummy);
-  
+
   for(int i=0; i<nmeshes; i++) {
     for(int j=0; j<nmeshes; j++) {
       ix[0] = i;
@@ -81,11 +81,10 @@ int main(void) {
   DBAddOption(optlist, DBOPT_EXTENTS, extents);
   DBAddOption(optlist, DBOPT_ZONECOUNTS, zonecounts);
   DBAddOption(optlist, DBOPT_HAS_EXTERNAL_ZONES, extzones);
-  printf("extents %lu\n", sizeof(extents));
   ierr = DBPutMultimesh(file, "bigmesh", nmeshes*nmeshes, NULL, NULL, optlist);
   DBFreeOptlist(optlist);
 
   DBClose(file);
-  printf("hi %d\n", ierr);
+  printf("written test.silo, ierr = %d\n", ierr);
   return 0;
 }
