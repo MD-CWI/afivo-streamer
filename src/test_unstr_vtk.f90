@@ -11,7 +11,7 @@ program test_unstr_vtk
     subroutine test_unst()
       use m_vtk
 
-      integer, parameter      :: nn = 100
+      integer, parameter      :: nn = 1001
       integer, parameter      :: n_dim       = 2
       integer, parameter :: n_nodes = nn**2
       integer, parameter :: n_cells  = (nn-1)**2
@@ -49,9 +49,9 @@ program test_unstr_vtk
       call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
       call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, 2, 0, 0.0_dp)
       call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
-      call vtk_dat_xml(vtkf, "PointData", .true.)
-      call vtk_var_r8_xml(vtkf, 'scalars', v, n_nodes)
-      call vtk_dat_xml(vtkf, "PointData", .false.)
+      ! call vtk_dat_xml(vtkf, "PointData", .true.)
+      ! call vtk_var_r8_xml(vtkf, 'scalars', v, n_nodes)
+      ! call vtk_dat_xml(vtkf, "PointData", .false.)
       call vtk_geo_xml_close(vtkf)
       call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
       call vtk_end_xml(vtkf)
