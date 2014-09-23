@@ -43,8 +43,7 @@ module m_afivo
      integer  :: n_cell
      integer  :: n_node
      integer  :: n_cc
-     integer  :: n_fx
-     integer  :: n_fy
+     integer  :: n_flux
      real(dp) :: dr(2, a5_max_levels)
      real(dp) :: dbr(2, a5_max_levels)
      real(dp) :: r_min(2)
@@ -100,19 +99,23 @@ module m_afivo
 
 contains
 
-  subroutine a2_init(self, n_boxes_max, n_cell, n_cc, n_fx, n_fy, dr, r_min)
+  subroutine a2_init(self, n_boxes_max, n_cell, n_cc, n_flux, dr, r_min)
     type(a2_t), intent(out) :: self
     integer, intent(in)     :: n_boxes_max
-    integer, intent(in)     :: n_cell, n_cc, n_fx, n_fy
+    integer, intent(in)     :: n_cell, n_cc, n_flux
     real(dp), intent(in)    :: dr(2), r_min(2)
     integer                 :: lvl
+
+    if (n_cell < 2)       stop "a2_init: n_cell should be >= 2"
+    if (btest(n_cell, 0)) stop "a2_init: n_cell should be even"
+    if (n_cc <= 0)        stop "a2_init: n_cc should be > 0"
+    if (n_boxes_max <= 0) stop "a2_init: n_boxes_max should be > 0"
 
     allocate(self%cfg)
     self%cfg%n_cell = n_cell
     self%cfg%n_node = n_cell + 1
     self%cfg%n_cc   = n_cc
-    self%cfg%n_fx   = n_fx
-    self%cfg%n_fy   = n_fy
+    self%cfg%n_flux = n_flux
     self%cfg%r_min  = r_min
     self%n_boxes    = 0
 
@@ -325,8 +328,8 @@ contains
     do i = 1, n_ids
        id = ids(i)
        allocate(self%boxes(id)%cc(0:nc+1, 0:nc+1, self%cfg%n_cc))
-       allocate(self%boxes(id)%fx(nc+1, nc, self%cfg%n_fx))
-       allocate(self%boxes(id)%fy(nc, nc+1, self%cfg%n_fy))
+       allocate(self%boxes(id)%fx(nc+1, nc, self%cfg%n_flux))
+       allocate(self%boxes(id)%fy(nc, nc+1, self%cfg%n_flux))
     end do
   end subroutine a2_get_free_ids
 
@@ -531,16 +534,12 @@ contains
     nc = boxes(id)%cfg%n_cell
     do ic = 1, 4
        c_id = boxes(id)%children(ic)
+       ix_offset = a2_ch_dix(:, ic) * ishft(nc, -1) ! Offset child
 
-       ! Offset of child w.r.g. parent
-       ix_offset = a2_ch_dix(:, ic) * ishft(nc, -1)
-
-       ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
-       ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
        do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j, -1) + iand(j, 1) ! (j+1)/2
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i, -1) + iand(i, 1) ! (i+1)/2
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              boxes(c_id)%cc(i, j, v_ixs) = boxes(id)%cc(i_c1, j_c1, v_ixs)
           end do
        end do
@@ -559,16 +558,16 @@ contains
     do ic = 1, 4
        c_id = boxes(id)%children(ic)
 
-       ! Offset of child w.r.g. parent
+       ! Offset of child w.r.t. parent
        ix_offset = a2_ch_dix(:, ic) * ishft(nc, -1)
 
        ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
        ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
        do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j, -1) + iand(j, 1) ! (j+1)/2
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
           do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i, -1) + iand(i, 1) ! (i+1)/2
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
              boxes(c_id)%cc(i, j, v_ixs) = &
@@ -588,20 +587,17 @@ contains
     integer                     :: nc, p_id, ix_offset(2)
     integer                     :: ii, jj, i, j, i_c1, j_c1
 
-    nc = boxes(id)%cfg%n_cell
-    p_id = boxes(id)%parent
+    nc        = boxes(id)%cfg%n_cell
+    p_id      = boxes(id)%parent
+    ! Offset of child w.r.t. parent
+    ix_offset = (boxes(id)%ix - 2*boxes(p_id)%ix + 1) * ishft(nc, -1)
 
-    ! Offset of child w.r.g. parent
-    ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
-
-    ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
-    ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
     do jj = 1, size(j_ixs)
        j = j_ixs(jj)
-       j_c1 = ix_offset(2) + ishft(j, -1) + iand(j, 1) ! (j+1)/2
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
        do ii = 1, size(i_ixs)
           i = i_ixs(ii)
-          i_c1 = ix_offset(1) + ishft(i, -1) + iand(i, 1) ! (i+1)/2
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           boxes(id)%cc(i, j, v_ixs) = boxes(p_id)%cc(i_c1, j_c1, v_ixs)
        end do
     end do
@@ -611,39 +607,61 @@ contains
   subroutine a2_prolong1_to(boxes, id, i_ixs, j_ixs, v_ixs)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, i_ixs(:), j_ixs(:), v_ixs(:)
-    real(dp), parameter         :: one16th=1/16.0_dp
+    real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
     integer                     :: nc, p_id, ix_offset(2)
     integer                     :: ii, jj, i, j, i_c1, i_c2, j_c1, j_c2
 
-    nc = boxes(id)%cfg%n_cell
-    p_id = boxes(id)%parent
-
-    ! Offset of child w.r.g. parent
+    nc        = boxes(id)%cfg%n_cell
+    p_id      = boxes(id)%parent
+    ! Offset of child w.r.t. parent
     ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
 
     ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
     ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
     do jj = 1, size(j_ixs)
        j = j_ixs(jj)
-       j_c1 = ix_offset(2) + ishft(j, -1) + iand(j, 1) ! (j+1)/2
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
        j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
        do ii = 1, size(i_ixs)
           i = i_ixs(ii)
-          i_c1 = ix_offset(1) + ishft(i, -1) + iand(i, 1) ! (i+1)/2
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          boxes(id)%cc(i, j, v_ixs) = one16th * ( &
-               9*boxes(p_id)%cc(i_c1, j_c1, v_ixs) + &
-               3*boxes(p_id)%cc(i_c2, j_c1, v_ixs) + &
-               3*boxes(p_id)%cc(i_c1, j_c2, v_ixs) + &
-               boxes(p_id)%cc(i_c2, j_c2, v_ixs))
+          boxes(id)%cc(i, j, v_ixs) = &
+               f9 * boxes(p_id)%cc(i_c1, j_c1, v_ixs) + &
+               f3 * boxes(p_id)%cc(i_c2, j_c1, v_ixs) + &
+               f3 * boxes(p_id)%cc(i_c1, j_c2, v_ixs) + &
+               f1 * boxes(p_id)%cc(i_c2, j_c2, v_ixs)
        end do
     end do
   end subroutine a2_prolong1_to
 
+  ! Conservative restriction. 4 fine cells to one parent cell
+  subroutine a2_restrict_to(boxes, id, v_ixs)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, v_ixs(:)
+    integer                     :: nc, ic, c_id, ix_offset(2)
+    integer                     :: i, j, i_c1, j_c1
 
-  ! subroutine a2_restrict_to(boxes, id)
+    nc = boxes(id)%cfg%n_cell
+    do ic = 1, 4
+       c_id = boxes(id)%children(ic)
+       ! Offset of child w.r.t. parent
+       ix_offset = a2_ch_dix(:, ic) * ishft(nc, -1)
 
-  ! end subroutine a2_restrict
+       do j = 1, nc, 2
+          j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
+          do i = 1, nc, 2
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+             boxes(id)%cc(i_c1, j_c1, v_ixs) = 0.25_dp * (&
+                  boxes(c_id)%cc(i,   j,   v_ixs) + &
+                  boxes(c_id)%cc(i+1, j,   v_ixs) + &
+                  boxes(c_id)%cc(i,   j+1, v_ixs) + &
+                  boxes(c_id)%cc(i+1, j+1, v_ixs) )
+          end do
+       end do
+    end do
+  end subroutine a2_restrict_to
 
   subroutine a2_fill_gc_sides(self, side_subr)
     type(a2_t), intent(inout)  :: self
@@ -660,7 +678,7 @@ contains
   subroutine a2_gc_box_sides(boxes, id, side_subr)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    procedure(a2_subr_box_int)    :: side_subr
+    procedure(a2_subr_box_int)  :: side_subr
     integer                     :: nb
 
     do nb = 1, 4
@@ -699,7 +717,6 @@ contains
     do lvl = 1, a5_n_levels(self)
        do i = 1, size(self%levels(lvl)%ids)
           id = self%levels(lvl)%ids(i)
-          ! print *, lvl, id, self%boxes(id)%ix
           call a2_gc_box_corners(self%boxes, id, corner_subr)
        end do
     end do
@@ -708,23 +725,17 @@ contains
   subroutine a2_gc_box_corners(boxes, id, corner_subr)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    procedure(a2_subr_box_int)    :: corner_subr
+    procedure(a2_subr_box_int)  :: corner_subr
     integer                     :: cn, nbs(2)
 
     do cn = 1, 4
        nbs = a2_cn_nbs(:, cn)
        if (boxes(id)%neighbors(nbs(1)) > a5_no_box) then
           call a2_gc_box_corner_internal(boxes, id, cn, nbs(1))
-          ! if (id == 25) then
-          !    print *, "FILL CORNER1", cn, nbs
-          !    print *, boxes(25)%cc(0:2,9,1)
-          ! end if
        else if (boxes(id)%neighbors(nbs(2)) > a5_no_box) then
           call a2_gc_box_corner_internal(boxes, id, cn, nbs(2))
-          ! if (id == 25) print *, "FILL CORNER2", cn, nbs
        else
           call corner_subr(boxes, id, cn)
-          ! if (id == 25) print *, "FILL CORNER user", cn
        end if
     end do
   end subroutine a2_gc_box_corners

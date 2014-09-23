@@ -16,7 +16,7 @@ program test_base
   dr = 2 * acos(-1.0_dp) / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_boxes_max, box_size, n_cc=1, n_fx=0, n_fy=0, &
+  call a2_init(tree, n_boxes_max, box_size, n_cc=1, n_flux=0, &
        dr = dr, r_min = [0.0_dp, 0.0_dp])
 
   ! Create base level which is periodic in all directions
@@ -27,7 +27,7 @@ program test_base
   call a2_set_base(tree, ix_list, nb_list)
   call a2_loop_box(tree, set_init_cond)
 
-  do i = 1, 25
+  do i = 1, 20
      print *, "Iteration", i
      write(fname, "(A,I0,A)") "test_base_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), (/"my_var"/), i, i * 1.0_dp)
@@ -37,7 +37,13 @@ program test_base
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
-
+     call a2_loop_boxes(tree, restrict_from_children)
+     call a2_loop_boxes(tree, restrict_from_children)
+     call a2_loop_boxes(tree, restrict_from_children)
+     call a2_loop_boxes(tree, restrict_from_children)
+     call a2_loop_boxes(tree, restrict_from_children)
+     call a2_loop_boxes(tree, restrict_from_children)
+     call a2_loop_boxes(tree, restrict_from_children)
      call a5_tidy_storage(tree, n_boxes_max)
   end do
 
@@ -122,4 +128,13 @@ contains
     end if
     boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
   end subroutine prolong_to_new_children
+
+  subroutine restrict_from_children(boxes, id)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in) :: id
+
+    if (a2_has_children(boxes(id))) then
+       call a2_restrict_to(boxes, id, [1])
+    end if
+  end subroutine restrict_from_children
 end program test_base
