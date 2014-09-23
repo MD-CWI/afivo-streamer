@@ -9,7 +9,7 @@ gcc write_boxes_silo.c -o write_boxes_silo -I../silo/include -L../silo/lib -lsil
 
 const int NN      = 9;
 const int ndims   = 2;
-const int nmeshes = 32;
+const int nmeshes = 125;
 
 void get_coords(double *coords[], const int *ix, const double dr) {
   double r_min[2];
@@ -48,6 +48,8 @@ int main(void) {
   }
 
   file = DBCreate("test.silo", DB_CLOBBER, DB_LOCAL, NULL, DB_PDB);
+  DBMkDir(file, "foo");
+  DBSetDir(file,"foo");
 
   optlist = DBMakeOptlist(10);
   dummy = 1;
@@ -67,14 +69,16 @@ int main(void) {
       extents[dummy+3] = coords[1][NN-1];
       sprintf(gridname, "grid%d", i*nmeshes+j);
       ierr = DBPutQuadmesh(file, gridname, NULL, coords, dims, ndims,
-			   DB_DOUBLE, DB_COLLINEAR, optlist);
+                           DB_DOUBLE, DB_COLLINEAR, optlist);
     }
   }
   DBFreeOptlist(optlist);
 
+  DBSetDir(file, "..");
+
   optlist = DBMakeOptlist(10);
   meshtype = DB_QUADMESH;
-  DBAddOption(optlist, DBOPT_MB_BLOCK_NS, "|grid%d|n");
+  DBAddOption(optlist, DBOPT_MB_BLOCK_NS, "|foo/grid%d|n");
   DBAddOption(optlist, DBOPT_MB_BLOCK_TYPE, &meshtype);
   dummy = 4;
   DBAddOption(optlist, DBOPT_EXTENTS_SIZE, &dummy);
@@ -86,5 +90,6 @@ int main(void) {
 
   DBClose(file);
   printf("written test.silo, ierr = %d\n", ierr);
+  printf("number of cells %d\n", nmeshes * nmeshes * (NN-1) * (NN-1));
   return 0;
 }
