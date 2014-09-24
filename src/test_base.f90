@@ -38,12 +38,6 @@ program test_base
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
      call a2_loop_boxes(tree, restrict_from_children)
-     call a2_loop_boxes(tree, restrict_from_children)
-     call a2_loop_boxes(tree, restrict_from_children)
-     call a2_loop_boxes(tree, restrict_from_children)
-     call a2_loop_boxes(tree, restrict_from_children)
-     call a2_loop_boxes(tree, restrict_from_children)
-     call a2_loop_boxes(tree, restrict_from_children)
      call a5_tidy_storage(tree, n_boxes_max)
   end do
 
