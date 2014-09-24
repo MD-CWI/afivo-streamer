@@ -1,6 +1,6 @@
 /*
 Compile:
-gcc write_boxes_silo.c -o write_boxes_silo -I../silo/include -L../silo/lib -lsilo -lm -Wall -std=c99
+gcc write_boxes_silo.c -o write_boxes_silo -I../silo/include -L../silo/lib -lsiloh5 -lm -Wall -std=c99
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,6 @@ void get_coords(double *coords[], const int *ix, const double dr) {
     }
   }
 }
-
 
 int main(void) {
   DBfile    *file = NULL;
@@ -47,7 +46,7 @@ int main(void) {
     coords[d] = (double*) malloc(NN * sizeof(double));
   }
 
-  file = DBCreate("test.silo", DB_CLOBBER, DB_LOCAL, NULL, DB_PDB);
+  file = DBCreate("test.silo", DB_CLOBBER, DB_LOCAL, NULL, DB_HDF5);
   DBMkDir(file, "foo");
   DBSetDir(file,"foo");
 

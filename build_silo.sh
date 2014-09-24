@@ -25,7 +25,7 @@ fi
 # Configure
 cd ${SILO_DIRNAME}
 ./configure CC=h5cc CXX=h5c++ --disable-shared --disable-fpzip --disable-hzip --disable-silex \
-    --disable-browser --disable-dependency-tracking \
-    --disable-libtool-lock --prefix=${TARGET_DIR}
+    --disable-browser --disable-dependency-tracking --enable-optimization \
+    --disable-libtool-lock --prefix=${TARGET_DIR} --with-hdf5="",""
 make
 make install
