@@ -1,5 +1,8 @@
-! Still need to add license info, most taken from lib_vtk_io!!
-
+! This file is a modification of code found in Lib_VTK_IO, see
+! https://github.com/szaghi/Lib_VTK_IO. I have extracted the parts that I needed
+! and simplified them a bit. The license for this file is thus also GPLv3.
+! Author Lib_VTK_IO: Stefano Zaghi
+! Modifications: Jannis Teunissen
 module m_vtk
 
   implicit none
