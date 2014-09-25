@@ -145,21 +145,21 @@ contains
     tree%n_boxes = 0
   end subroutine a2_destroy
 
-  integer function a5_n_levels(tree)
+  integer function a2_n_levels(tree)
     type(a2_t), intent(in) :: tree
     integer                :: lvl
     do lvl = 1, a5_max_levels-1
        if (size(tree%levels(lvl)%ids) == 0) exit
     end do
-    a5_n_levels = lvl
-  end function a5_n_levels
+    a2_n_levels = lvl
+  end function a2_n_levels
 
   subroutine a2_loop_box(tree, my_procedure)
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr)        :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = 1, a5_n_levels(tree)
+    do lvl = 1, a2_n_levels(tree)
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call my_procedure(tree%boxes(id))
@@ -172,7 +172,7 @@ contains
     procedure(a2_subr_boxes)  :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = 1, a5_n_levels(tree)
+    do lvl = 1, a2_n_levels(tree)
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call my_procedure(tree%boxes, id)
@@ -180,53 +180,100 @@ contains
     end do
   end subroutine a2_loop_boxes
 
-  subroutine a5_tidy_storage(tree, fraction_free, shrink)
-    type(a2_t)                :: tree
-    real(dp), intent(in)      :: fraction_free
-    logical, intent(in)       :: shrink
-    integer                   :: i, n, n_boxes, n_used, new_size
-    integer, allocatable      :: ixs_used(:), ixs_map(:)
-    type(box2_t), allocatable :: boxes_cpy(:)
+  subroutine a2_tidy_up(tree, frac_max, frac_goal, n_clean_min, reorder)
+    use m_morton
+    type(a2_t), intent(inout)      :: tree
+    real(dp), intent(in)           :: frac_max, frac_goal
+    integer, intent(in)            :: n_clean_min
+    logical, intent(in)            :: reorder
+    real(dp)                       :: frac_in_use
+    logical :: only_reorder
+    integer                        :: n, lvl, id, old_size, new_size, n_clean
+    integer                        :: n_boxes, n_used, n_stored, n_used_lvl
+    integer, allocatable           :: ixs_sort(:), ixs_map(:)
+    type(box2_t), allocatable      :: boxes_cpy(:)
+    integer(morton_k), allocatable :: mortons(:)
 
-    n_boxes  = tree%n_boxes
-    n_used   = count(btest(tree%boxes(1:n_boxes)%tag, a5_bit_in_use))
-    new_size = max(1, nint(n_used/fraction_free))
-    if (.not. shrink) new_size = max(size(tree%boxes), new_size)
+    if (frac_goal > frac_max) stop "a2_tidy_up: need frac_goal < frac_max"
+    if (frac_max >= 1.0_dp)   stop "a2_tidy_up: need frac_max < 1"
+    if (n_clean_min < 1)      stop "a2_tidy_up: need n_clean_min > 0"
 
-    allocate(ixs_used(n_used))
-    allocate(ixs_map(0:n_boxes))
-    i = 0
-    ixs_map(0) = 0
-    do n = 1, n_boxes
-       if (btest(tree%boxes(n)%tag, a5_bit_in_use)) then
-          i = i + 1
-          ixs_used(i) = n
-          ixs_map(n) = i
+    n_boxes     = tree%n_boxes
+    n_used      = count(btest(tree%boxes(1:n_boxes)%tag, a5_bit_in_use))
+    old_size    = size(tree%boxes)
+    frac_in_use = n_used / real(old_size, dp)
+    n_clean     = nint((frac_goal - frac_in_use) * old_size)
+
+    if (frac_in_use > frac_max .or. (frac_in_use < frac_goal .and. &
+         n_clean > n_clean_min)) then
+       new_size = max(1, nint(n_used/frac_goal))
+    else
+       new_size = old_size
+    end if
+
+    if (new_size /= old_size .or. reorder) then
+       only_reorder = (new_size == old_size)
+       print *, "a2_tidy_up:", old_size, new_size, only_reorder
+
+       if (only_reorder) then
+          allocate(boxes_cpy(n_used))  ! Need just enough space
+       else
+          allocate(boxes_cpy(new_size))
        end if
-    end do
 
-    allocate(boxes_cpy(new_size))
-    boxes_cpy(1:n_used)      = tree%boxes(ixs_used)
-    boxes_cpy(n_used+1:)%tag = 0
+       allocate(ixs_map(0:n_boxes))
+       ixs_map(0)       = 0
+       n_stored         = 0
 
-    do n = 1, n_used
-       boxes_cpy(n)%parent = ixs_map(boxes_cpy(n)%parent)
-       boxes_cpy(n)%children = ixs_map(boxes_cpy(n)%children)
-       boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
-    end do
+       do lvl = 1, a2_n_levels(tree)
+          n_used_lvl = size(tree%levels(lvl)%ids)
+          allocate(mortons(n_used_lvl))
+          allocate(ixs_sort(n_used_lvl))
 
-    do i = 1, a5_n_levels(tree)
-       tree%levels(i)%ids = ixs_map(tree%levels(i)%ids)
-    end do
+          do n = 1, n_used_lvl
+             id = tree%levels(lvl)%ids(n)
+             ! Note the -1, since our indices start at 1
+             mortons(n) = morton_from_ix2(tree%boxes(id)%ix-1)
+          end do
 
-    ! TODO: fix
-    print *, ixs_used
-    print *, ixs_map
-    print *, any(boxes_cpy(1:n_boxes)%parent /= tree%boxes(1:n_boxes)%parent)
-    call move_alloc(boxes_cpy, tree%boxes)
-    tree%n_boxes = n_used
-    print *, "new size", new_size, n_boxes, n_used
-  end subroutine a5_tidy_storage
+          call morton_rank(mortons, ixs_sort)
+          tree%levels(lvl)%ids = tree%levels(lvl)%ids(ixs_sort)
+
+          do n = 1, n_used_lvl
+             id = tree%levels(lvl)%ids(n)
+             boxes_cpy(n_stored + n) = tree%boxes(id)
+             ixs_map(tree%levels(lvl)%ids(n)) = n_stored + n
+          end do
+
+          tree%levels(lvl)%ids = [(n_stored+n, n=1,n_used_lvl)]
+          n_stored = n_stored + n_used_lvl
+          deallocate(mortons)
+          deallocate(ixs_sort)
+       end do
+
+       ! Update id's to new indices
+       do n = 1, n_used
+          boxes_cpy(n)%parent = ixs_map(boxes_cpy(n)%parent)
+          boxes_cpy(n)%children = ixs_map(boxes_cpy(n)%children)
+          boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
+       end do
+
+       if (only_reorder) then
+          tree%boxes(1:n_used) = boxes_cpy
+          tree%boxes(n_used+1:n_boxes)%tag = 0
+          do n = n_used+1, n_boxes
+             deallocate(tree%boxes(n)%cc)
+             deallocate(tree%boxes(n)%fx)
+             deallocate(tree%boxes(n)%fy)
+          end do
+          tree%n_boxes = n_used
+       else
+          call move_alloc(boxes_cpy, tree%boxes)
+       end if
+
+       tree%n_boxes = n_used
+    end if
+  end subroutine a2_tidy_up
 
   subroutine a2_set_new_child_neighbors(boxes, ids)
     type(box2_t), intent(inout) :: boxes(:)
@@ -292,6 +339,8 @@ contains
     integer, intent(in)       :: ix_list(:, :), nb_list(:, :)
     integer                   :: n_boxes, i, id
 
+    if (any(ix_list < 1)) stop "a2_set_base: need ix_list > 0"
+
     n_boxes = size(ix_list, 2)
     deallocate(tree%levels(1)%ids)
     allocate(tree%levels(1)%ids(n_boxes))
@@ -305,8 +354,6 @@ contains
        tree%boxes(id)%children  = 0
        tree%boxes(id)%neighbors = nb_list(:, i)
        tree%boxes(id)%cfg       => tree%cfg
-
-       ! Set "in_use" tag
        tree%boxes(id)%tag       = ibset(0, a5_bit_in_use)
     end do
   end subroutine a2_set_base
@@ -318,14 +365,25 @@ contains
     type(a2_t), intent(inout) :: tree
     procedure(a2_to_int_f)    :: ref_func
     integer                   :: lvl, id, i, c_ids(4), n_boxes_start
+    integer :: n_boxes_req
     integer, allocatable      :: ref_vals(:)
+    type(box2_t), allocatable :: boxes_cpy(:)
 
     n_boxes_start = tree%n_boxes
     allocate(ref_vals(n_boxes_start))
-    call a2_set_ref_vals(tree%levels, tree%boxes, &
-         ref_vals, ref_func)
+    call a2_set_ref_vals(tree%levels, tree%boxes, ref_vals, ref_func)
 
-    do lvl = 1, a5_n_levels(tree)
+    ! Check whether there is enough free space, otherwise extend the list
+    n_boxes_req = n_boxes_start + 4 * count(ref_vals == a5_do_ref)
+    if (n_boxes_req > size(tree%boxes)) then
+       print *, "Resizing box storage for refinement", n_boxes_req
+       allocate(boxes_cpy(n_boxes_req))
+       boxes_cpy(1:n_boxes_start)      = tree%boxes(1:n_boxes_start)
+       boxes_cpy(n_boxes_start+1:)%tag = 0 ! Set to not in use
+       call move_alloc(boxes_cpy, tree%boxes)
+    end if
+
+    do lvl = 1, a2_n_levels(tree)
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
 
@@ -387,6 +445,7 @@ contains
     integer                     :: nb, p_id, nb_id, p_nb_id
 
     n_levels = size(levels)
+    ref_vals = a5_kp_ref        ! Used indices are overwritten
 
     ! Set refinement flags for all boxes using ref_func
     do lvl = 1, n_levels
@@ -469,15 +528,13 @@ contains
   subroutine a2_remove_children(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    integer                     :: i, c_id, nb_id, nb_rev, nb
+    integer                     :: ic, c_id, nb_id, nb_rev, nb
 
-    boxes(id)%children = a5_no_box
-    do i = 1, 4
-       c_id            = boxes(id)%children(i)
+    do ic = 1, 4
+       c_id            = boxes(id)%children(ic)
        boxes(c_id)%tag = ibclr(boxes(c_id)%tag, a5_bit_in_use)
 
-       ! Remove this box at the neighbors
-       do nb = 1, 4
+       do nb = 1, 4             ! Remove from neighbors
           nb_id = boxes(c_id)%neighbors(nb)
           if (nb_id /= a5_no_box) then
              nb_rev = a2_nb_rev(nb)
@@ -485,6 +542,8 @@ contains
           end if
        end do
     end do
+
+    boxes(id)%children = a5_no_box
   end subroutine a2_remove_children
 
   subroutine a2_add_children(boxes, id, c_ids)
@@ -734,7 +793,7 @@ contains
     procedure(a2_subr_box_int) :: side_subr
     integer                    :: lvl, i, id
 
-    do lvl = 1, a5_n_levels(tree)
+    do lvl = 1, a2_n_levels(tree)
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call a2_gc_box_sides(tree%boxes, id, side_subr)
@@ -801,7 +860,7 @@ contains
     type(a2_t), intent(inout)  :: tree
     procedure(a2_subr_box_int) :: corner_subr
     integer                    :: lvl, i, id
-    do lvl = 1, a5_n_levels(tree)
+    do lvl = 1, a2_n_levels(tree)
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call a2_gc_box_corners(tree%boxes, id, corner_subr)
@@ -888,7 +947,7 @@ contains
     integer, intent(in) :: f_ixs(:)
     integer :: lvl, i, id, nb, nb_id
 
-    do lvl = a5_n_levels(tree)-1, 1, -1
+    do lvl = a2_n_levels(tree)-1, 1, -1
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           if (.not. a2_has_children(tree%boxes(id))) cycle
@@ -971,7 +1030,7 @@ contains
     cells_per_box = bc**2
 
     n_grids = 0
-    do lvl = 1, a5_n_levels(tree)
+    do lvl = 1, a2_n_levels(tree)
        do n = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(n)
           if (.not. a2_has_children(tree%boxes(id))) n_grids = n_grids + 1
@@ -989,7 +1048,7 @@ contains
     cell_types = 8              ! VTK pixel type
 
     ig = 0
-    do lvl = 1, a5_n_levels(tree)
+    do lvl = 1, a2_n_levels(tree)
        do n = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(n)
           if (a2_has_children(tree%boxes(id))) cycle
@@ -1047,7 +1106,7 @@ contains
 
   !   bs = tree%box_cells
   !   n_grids = 0
-  !   do lvl = 1, a5_n_levels(tree)
+  !   do lvl = 1, a2_n_levels(tree)
   !      n_grids = n_grids + size(tree%levels(lvl)%ids)
   !   end do
 
@@ -1057,7 +1116,7 @@ contains
   !   call SILO_create_file(filename, dbix)
   !   ig = 0
 
-  !   do lvl = 1, a5_n_levels(tree)
+  !   do lvl = 1, a2_n_levels(tree)
   !      do i = 1, size(tree%levels(lvl)%ids)
   !         id = tree%levels(lvl)%ids(i)
   !         ig = ig + 1

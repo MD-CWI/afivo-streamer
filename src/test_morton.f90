@@ -3,7 +3,7 @@ program test_m_morton
   
   implicit none
 
-  type(morton_t) :: m_ix
+  integer(morton_k) :: m_ix
   integer        :: ix(2)
 
   ix = (/15, 2047/)
@@ -14,5 +14,5 @@ program test_m_morton
   print *, "index again ", ix
   call print_bits(ix(1))
   call print_bits(ix(2))
-  call print_bits_k15(m_ix%mrtn)
+  call print_bits_morton(m_ix)
 end program test_m_morton

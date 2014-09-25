@@ -9,7 +9,7 @@ program test_base
   integer    :: ix_list(2, 1)
   integer    :: nb_list(4, 1)
   integer, parameter :: box_size    = 8
-  integer    :: n_boxes_max = 1000
+  integer    :: n_boxes_max = 100*1000
   real(dp)   :: dr(2)
   character(len=40) :: fname
 
@@ -29,7 +29,7 @@ program test_base
   call a2_gc_sides(tree, a2_sides_from_parent)
   call a2_gc_corners(tree, a2_corners_from_parent)
 
-  do i = 1, 13
+  do i = 1, 35
      print *, "Iteration", i
      write(fname, "(A,I0,A)") "test_base_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), (/"my_var"/), i, i * 1.0_dp)
@@ -38,7 +38,7 @@ program test_base
      call a2_loop_boxes(tree, prolong_to_new_children)
 
      ! call a2_loop_boxes(tree, restrict_from_children)
-     call a5_tidy_storage(tree, 0.5_dp, .false.)
+     call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
   end do
 
   print *, "n_grids", tree%n_boxes

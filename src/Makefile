@@ -20,7 +20,7 @@ clean:
 	$(RM) *.o *.mod test_m_morton
 
 # Dependency information
-m_afivo.o:		m_vtk.o
+m_afivo.o:		m_vtk.o m_morton.o
 test_morton:		m_morton.o
-test_base:		m_afivo.o m_vtk.o
+test_base:		m_afivo.o m_vtk.o m_morton.o
 test_unstr_vtk:		m_vtk.o
