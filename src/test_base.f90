@@ -9,7 +9,7 @@ program test_base
   integer    :: ix_list(2, 1)
   integer    :: nb_list(4, 1)
   integer, parameter :: box_size    = 8
-  integer    :: n_boxes_max = 1000*1000
+  integer    :: n_boxes_max = 1000
   real(dp)   :: dr(2)
   character(len=40) :: fname
 
@@ -26,19 +26,19 @@ program test_base
 
   call a2_set_base(tree, ix_list, nb_list)
   call a2_loop_box(tree, set_init_cond)
+  call a2_gc_sides(tree, a2_sides_from_parent)
+  call a2_gc_corners(tree, a2_corners_from_parent)
 
-  do i = 1, 20
+  do i = 1, 13
      print *, "Iteration", i
      write(fname, "(A,I0,A)") "test_base_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), (/"my_var"/), i, i * 1.0_dp)
-
-     call a2_fill_gc_sides(tree, gc_side_subr)
-     call a2_fill_gc_corners(tree, gc_corner_subr)
+     ! call a2_write_tree(tree, trim(fname), (/"my_var"/), i, i * 1.0_dp)
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
-     call a2_loop_boxes(tree, restrict_from_children)
-     call a5_tidy_storage(tree, n_boxes_max)
+
+     ! call a2_loop_boxes(tree, restrict_from_children)
+     call a5_tidy_storage(tree, 0.5_dp, .false.)
   end do
 
   print *, "n_grids", tree%n_boxes
@@ -63,42 +63,6 @@ contains
     ! end if
   end function ref_func
 
-  subroutine gc_side_subr(boxes, id, nb)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb
-    integer                     :: n, nc
-
-    nc    = boxes(id)%cfg%n_cell
-    select case (nb)
-    case (nb_lx)
-       call a2_prolong1_to(boxes, id, [0], [(n, n=1,nc)], [1])
-    case (nb_hx)
-       call a2_prolong1_to(boxes, id, [nc+1], [(n, n=1,nc)], [1])
-    case (nb_ly)
-       call a2_prolong1_to(boxes, id, [(n, n=1,nc)], [0], [1])
-    case (nb_hy)
-       call a2_prolong1_to(boxes, id, [(n, n=1,nc)], [nc+1], [1])
-    end select
-  end subroutine gc_side_subr
-
-  subroutine gc_corner_subr(boxes, id, cn)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, cn
-    integer                     :: nc
-
-    nc    = boxes(id)%cfg%n_cell
-    select case (cn)
-    case (cn_lxly)
-       call a2_prolong1_to(boxes, id, [0], [0], [1])
-    case (cn_hxly)
-       call a2_prolong1_to(boxes, id, [nc+1], [0], [1])
-    case (cn_lxhy)
-       call a2_prolong1_to(boxes, id, [0], [nc+1], [1])
-    case (cn_hxhy)
-       call a2_prolong1_to(boxes, id, [nc+1], [nc+1], [1])
-    end select
-  end subroutine gc_corner_subr
-
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, bs
@@ -118,7 +82,7 @@ contains
     integer, intent(in) :: id
 
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
-       call a2_prolong1_from(boxes, id, [1])
+       call a2_prolong1_from(boxes, id, [1], .true.)
     end if
     boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
   end subroutine prolong_to_new_children
