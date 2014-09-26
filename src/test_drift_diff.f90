@@ -11,7 +11,7 @@ program test_drift_diff
   integer            :: n_boxes_max = 10*1000
   real(dp)           :: dr(2), dt, time, end_time
   real(dp)           :: time_per_adapt, time_in_loop
-  real(dp)           :: diff_coeff, vel_x, vel_y
+  real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=40)  :: fname
   logical            :: done_with_loop
 
@@ -30,11 +30,10 @@ program test_drift_diff
   do i = 1, 3
      call a2_adjust_refinement(tree, ref_func_init)
   end do
-  call a2_loop_box(tree, set_init_cond)
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, a2_sides_from_parent)
-  call a2_gc_corners(tree, a2_corners_from_parent)
+  call a2_gc_sides(tree, [1], a2_sides_from_parent)
+  call a2_gc_corners(tree, [1], a2_corners_from_parent)
 
   do i = 1, 5
      call a2_adjust_refinement(tree, ref_func)
@@ -42,14 +41,14 @@ program test_drift_diff
   end do
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, a2_sides_from_parent)
-  call a2_gc_corners(tree, a2_corners_from_parent)
+  call a2_gc_sides(tree, [1], a2_sides_from_parent)
+  call a2_gc_corners(tree, [1], a2_corners_from_parent)
 
   i              = 0
   time           = 0
   time_per_adapt = 0.02_dp
   end_time       = 1.0_dp
-  diff_coeff     = 0.02_dp
+  diff_coeff     = 0.1_dp
   vel_x          = 2.0_dp
   vel_y          = 2.0_dp
 
@@ -65,12 +64,10 @@ program test_drift_diff
      time_in_loop   = 0
 
      do while (.not. done_with_loop)
-        ! Diffusion limit for timestep
-        dt = 0.5_dp * minval(a2_min_dr(tree))**2 / &
-             (diff_coeff + epsilon(1.0_dp))
-        ! Cfl limit for timestep
-        dt = min(dt, 0.5_dp / &
-             (epsilon(1.0_dp) + sum(abs([vel_x, vel_y])/a2_min_dr(tree))))
+        ! Set diffusion and CFL limit for timestep
+        dr_min = a2_min_dr(tree)
+        dt = 0.9_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
+             sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
 
         if (time_in_loop + dt > time_per_adapt) then
            dt = time_per_adapt - time_in_loop
@@ -80,8 +77,8 @@ program test_drift_diff
         call a2_loop_box_arg(tree, calculate_fluxes, [diff_coeff, vel_x, vel_y])
         call a2_consisent_fluxes(tree, [1])
         call a2_loop_box_arg(tree, update_solution, [dt])
-        call a2_gc_sides(tree, a2_sides_from_parent)
-        call a2_gc_corners(tree, a2_corners_from_parent)
+        call a2_gc_sides(tree, [1], a2_sides_from_parent)
+        call a2_gc_corners(tree, [1], a2_corners_from_parent)
         time_in_loop = time_in_loop + dt
      end do
 
@@ -156,7 +153,7 @@ contains
     real(dp) :: inv_dr(2)
     integer :: nc
 
-    nc = box%cfg%n_cell
+    nc     = box%cfg%n_cell
     inv_dr = 1/a2_dr(box)
 
     ! Diffusion

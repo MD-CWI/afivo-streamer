@@ -24,8 +24,8 @@ program test_base
 
   call a2_set_base(tree, ix_list, nb_list)
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, a2_sides_from_parent)
-  call a2_gc_corners(tree, a2_corners_from_parent)
+  call a2_gc_sides(tree, [1], a2_sides_from_parent)
+  call a2_gc_corners(tree, [1], a2_corners_from_parent)
 
   do i = 1, 20
      print *, "i = ", i, "n_boxes", tree%n_boxes
