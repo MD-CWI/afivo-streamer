@@ -14,7 +14,7 @@ LIBS	:=
 
 .PHONY: all clean
 
-all: test_morton test_base test_unstr_vtk
+all: test_morton test_base test_unstr_vtk test_diffusion
 
 clean:
 	$(RM) *.o *.mod test_m_morton
@@ -23,4 +23,5 @@ clean:
 m_afivo.o:		m_vtk.o m_morton.o
 test_morton:		m_morton.o
 test_base:		m_afivo.o m_vtk.o m_morton.o
+test_diffusion:		m_afivo.o m_vtk.o m_morton.o
 test_unstr_vtk:		m_vtk.o
