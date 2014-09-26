@@ -7,7 +7,7 @@ program test_mg
   integer            :: i, id
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
-  integer, parameter :: box_size    = 4
+  integer, parameter :: box_size    = 8
   integer            :: n_boxes_max = 10*1000
   real(dp)           :: dr(2)
   character(len=40)  :: fname, var_names(4)
@@ -46,7 +46,7 @@ program test_mg
 
   ! Set up the initial conditions
   call a2_set_base(tree, ix_list, nb_list)
-  do i = 1, 3
+  do i = 1, 7
      call a2_adjust_refinement(tree, ref_func_init)
   end do
 
@@ -54,11 +54,14 @@ program test_mg
   call a2_gc_sides(tree, [1,4], mg2d_gc_sides)
   call a2_gc_corners(tree, [1,4], mg2d_gc_corners)
 
-  do i = 1, 10
-     write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
+  do i = 1, 100
+     ! write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
+     ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
      call fas_v_cycle(tree, mg, tree%n_levels)
   end do
+
+  print *, tree%n_boxes
+  print *, tree%n_boxes * tree%cfg%n_cell**2
 
   call a2_destroy(tree)
 
@@ -66,7 +69,7 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 3 .or. (norm2(a2_r_min(box)-2) < 0.5)) then
+    if (box%lvl < 7 .or. (norm2(a2_r_center(box)-2) < 1)) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref
@@ -82,10 +85,10 @@ contains
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
-          if (norm2(xy - 2) < 1) then
+          if (norm2(xy - 2) < 0.5) then
              box%cc(i, j, 4) = 1
-          else if (norm2(xy - 2) < 1.1_dp) then
-             box%cc(i, j, 4) = (1.1_dp - norm2(xy - 2)) * 10
+          else if (norm2(xy - 2) < 0.6_dp) then
+             box%cc(i, j, 4) = (0.6_dp - norm2(xy - 2)) * 10
           else
              box%cc(i, j, 4) = 0
           end if
@@ -101,13 +104,13 @@ contains
     integer, intent(in) :: lvl
     integer :: i
 
-    print *, lvl, "pre-relax"
+    ! print *, lvl, "pre-relax"
     do i = 1, mg%n_cycle_up
        call gsrb(tree, lvl, mg%i_phi, mg%i_rhs)
     end do
 
     if (lvl > 1) then
-       print *, lvl, "adjust coarse grid"
+       ! print *, lvl, "adjust coarse grid"
        call restrict(tree, lvl-1, [mg%i_phi])
        call fill_gc(tree, lvl-1, [mg%i_phi])
        call laplacian(tree, lvl-1, mg%i_rhs, mg%i_phi, .false.)
@@ -118,7 +121,7 @@ contains
        ! rhs_c = laplacian(phi_c) + coarsen(res)
        call add_vars(tree, lvl-1, mg%i_rhs, 1.0_dp, mg%i_res, .false.)
 
-       print *, lvl, "call fas_v_cycle for lvl-1"
+       ! print *, lvl, "call fas_v_cycle for lvl-1"
        call copy_var(tree, lvl-1, mg%i_phi, mg%i_phi_old)
        call fas_v_cycle(tree, mg, lvl-1)
 
@@ -127,7 +130,7 @@ contains
        call correct(tree, lvl, mg%i_phi, mg%i_phi_old)
     end if
 
-    print *, lvl, "post-relax"
+    ! print *, lvl, "post-relax"
     do i = 1, mg%n_cycle_down
        call gsrb(tree, lvl, mg%i_phi, mg%i_rhs)
     end do
@@ -191,14 +194,14 @@ contains
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
              boxes(c_id)%cc(i, j, i_phi) = boxes(c_id)%cc(i, j, i_phi) &
-                  + f9 * boxes(id)%cc(i_c1, j_c1, i_phi) &
-                  - f9 * boxes(id)%cc(i_c1, j_c1, i_phi_old) &
-                  + f3 * boxes(id)%cc(i_c2, j_c1, i_phi) &
-                  - f3 * boxes(id)%cc(i_c2, j_c1, i_phi_old) &
-                  + f3 * boxes(id)%cc(i_c1, j_c2, i_phi) &
-                  - f3 * boxes(id)%cc(i_c1, j_c2, i_phi_old) &
-                  + f1 * boxes(id)%cc(i_c2, j_c2, i_phi) &
-                  - f1 * boxes(id)%cc(i_c2, j_c2, i_phi_old)
+                  + f9 * (boxes(id)%cc(i_c1, j_c1, i_phi) &
+                        - boxes(id)%cc(i_c1, j_c1, i_phi_old)) &
+                  + f3 * (boxes(id)%cc(i_c2, j_c1, i_phi) &
+                        - boxes(id)%cc(i_c2, j_c1, i_phi_old) &
+                        + boxes(id)%cc(i_c1, j_c2, i_phi) &
+                        - boxes(id)%cc(i_c1, j_c2, i_phi_old)) &
+                  + f1 * (boxes(id)%cc(i_c2, j_c2, i_phi) &
+                        - boxes(id)%cc(i_c2, j_c2, i_phi_old))
           end do
        end do
     end do
