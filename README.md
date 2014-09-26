@@ -11,6 +11,7 @@ The framework should:
 * Provide all the basic grid functionality for finite volume simulations with
   adaptive mesh refinement.
 * Be relatively easy to use.
+* Be easy to modify.
 * Efficiently make use of a multicore machine.
 * Provide a simple multigrid solver (with point relaxation).
 * Provide routines for generating output that can be visualized with
@@ -20,24 +21,21 @@ The framework should:
 
 To keep the code lean & fast, we restrict the framework in the following way:
 
-* We use an octree-like grid. The basic blocks in this grid have size
-  2<sup>kD</sup>, where k is an integer > 1 and D is the dimension used. This is
-  similar to
+* We use an octree-like grid. The basic blocks in this grid contain NxN (2D) or
+  NxNxN (3D) cells, where N is an even number. This is similar to
   [Paramesh](http://www.physics.drexel.edu/~olson/paramesh-doc/Users_manual/amr.html).
 * The refinement ratio is always 2.
 * There is always a layer of width 1 of ghost cells.
-* Corner ghost cells are used (although optionally).
+* Corner ghost cells can be optionally filled.
 * Quantities are either cell-centered or face-centered.
 * We use one type of conservative restriction.
-* We use bi/tri-linear prolongation.
+* We implement bi/tri-linear prolongation and injection.
 * Boundary conditions are provided by the user.
 * Parallellization is provided only for shared memory systems (using OpenMP).
 
 ### Todo
-* Use morton order for enhancing data locality
-* (Idem) Reorder memory
-* Fill ghost cells from boundary condition
+* Test and improve multigrid code in 2D
+* Reorganize 2D code and start writing 3D code
 
-### Status
-* Using vtk unstructured for output
-* Use 1d array with indexing as data storage
+### Features
+* I'll write about them soon
