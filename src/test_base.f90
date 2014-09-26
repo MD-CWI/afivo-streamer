@@ -15,7 +15,7 @@ program test_base
   dr = 2 * acos(-1.0_dp) / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_boxes_max, box_size, n_cc=1, n_flux=0, &
+  call a2_init(tree, n_boxes_max, box_size, n_var_cell=1, n_var_face=0, &
        dr = dr, r_min = [0.0_dp, 0.0_dp])
 
   id = 1

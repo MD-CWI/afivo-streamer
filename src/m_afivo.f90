@@ -47,8 +47,8 @@ module m_afivo
   type box2_cfg_t
      integer  :: n_cell
      integer  :: n_node
-     integer  :: n_cc
-     integer  :: n_flux
+     integer  :: n_var_cell
+     integer  :: n_var_face
      real(dp) :: dr(2, a5_max_levels)
      real(dp) :: dbr(2, a5_max_levels)
      real(dp) :: r_min(2)
@@ -111,24 +111,24 @@ module m_afivo
 
 contains
 
-  subroutine a2_init(tree, n_boxes_max, n_cell, n_cc, n_flux, dr, r_min)
+  subroutine a2_init(tree, n_boxes_max, n_cell, n_var_cell, n_var_face, dr, r_min)
     type(a2_t), intent(out) :: tree
     integer, intent(in)     :: n_boxes_max
-    integer, intent(in)     :: n_cell, n_cc, n_flux
+    integer, intent(in)     :: n_cell, n_var_cell, n_var_face
     real(dp), intent(in)    :: dr(2), r_min(2)
     integer                 :: lvl
 
     if (n_cell < 2)       stop "a2_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a2_init: n_cell should be even"
-    if (n_cc <= 0)        stop "a2_init: n_cc should be > 0"
+    if (n_var_cell <= 0)        stop "a2_init: n_var_cell should be > 0"
     if (n_boxes_max <= 0) stop "a2_init: n_boxes_max should be > 0"
 
     allocate(tree%cfg)
     allocate(tree%boxes(n_boxes_max))
     tree%cfg%n_cell   = n_cell
     tree%cfg%n_node   = n_cell + 1
-    tree%cfg%n_cc     = n_cc
-    tree%cfg%n_flux   = n_flux
+    tree%cfg%n_var_cell     = n_var_cell
+    tree%cfg%n_var_face   = n_var_face
     tree%cfg%r_min    = r_min
     tree%n_boxes      = 0
     tree%n_levels     = 0
@@ -294,9 +294,9 @@ contains
   subroutine alloc_box(box, cfg)
     type(box2_t), intent(inout)  :: box
     type(box2_cfg_t), intent(in) :: cfg
-    allocate(box%cc(0:cfg%n_cell+1, 0:cfg%n_cell+1, cfg%n_cc))
-    allocate(box%fx(cfg%n_cell+1,   cfg%n_cell,     cfg%n_flux))
-    allocate(box%fy(cfg%n_cell,     cfg%n_cell+1,   cfg%n_flux))
+    allocate(box%cc(0:cfg%n_cell+1, 0:cfg%n_cell+1, cfg%n_var_cell))
+    allocate(box%fx(cfg%n_cell+1,   cfg%n_cell,     cfg%n_var_face))
+    allocate(box%fy(cfg%n_cell,     cfg%n_cell+1,   cfg%n_var_face))
   end subroutine alloc_box
 
   subroutine dealloc_box(box)
@@ -405,6 +405,11 @@ contains
 
     n_boxes_prev = tree%n_boxes
     allocate(ref_vals(n_boxes_prev))
+
+    ! Clear refinement tags from previous calls
+    call a2_clear_tagbit(tree, a5_bit_new_children)
+
+    ! Set refinement values for all boxes
     call a2_set_ref_vals(tree%levels, tree%boxes, ref_vals, ref_func)
 
     ! Check whether there is enough free space, otherwise extend the list
@@ -447,7 +452,6 @@ contains
     end do
 
     tree%n_levels = lvl
-    print *, "New levels", tree%n_levels
   end subroutine a2_adjust_refinement
 
   subroutine a2_get_free_ids(tree, ids)
@@ -843,7 +847,7 @@ contains
     integer                     :: n, nc, nv
 
     nc = boxes(id)%cfg%n_cell
-    nv = boxes(id)%cfg%n_cc
+    nv = boxes(id)%cfg%n_var_cell
 
     select case (nb)
     case (nb_lx)
@@ -910,7 +914,7 @@ contains
     integer                     :: n, nc, nv
 
     nc = boxes(id)%cfg%n_cell
-    nv = boxes(id)%cfg%n_cc
+    nv = boxes(id)%cfg%n_var_cell
 
     select case (cn)
     case (a2_cn_lxly)
@@ -1077,7 +1081,7 @@ contains
     n_cells = cells_per_box * n_grids
 
     allocate(coords(2 * n_nodes))
-    allocate(cc_vars(n_cells, tree%cfg%n_cc))
+    allocate(cc_vars(n_cells, tree%cfg%n_var_cell))
     allocate(offsets(cells_per_box * n_grids))
     allocate(cell_types(cells_per_box * n_grids))
     allocate(connects(4 * cells_per_box * n_grids))
@@ -1119,7 +1123,7 @@ contains
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
     call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, 2, n_cycle, time)
     call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
-    do n = 1, tree%cfg%n_cc
+    do n = 1, tree%cfg%n_var_cell
        call vtk_dat_xml(vtkf, "CellData", .true.)
        call vtk_var_r8_xml(vtkf, trim(cc_names(n)), cc_vars(:, n), n_cells)
        call vtk_dat_xml(vtkf, "CellData", .false.)
@@ -1148,7 +1152,7 @@ contains
   !   end do
 
   !   allocate(grid_list(n_grids))
-  !   allocate(var_list(tree%n_cc, n_grids))
+  !   allocate(var_list(tree%n_var_cell, n_grids))
 
   !   call SILO_create_file(filename, dbix)
   !   ig = 0
@@ -1161,7 +1165,7 @@ contains
   !         call SILO_add_grid(dbix, grid_list(ig), 2, &
   !              [bs+1, bs+1], tree%boxes(id)%r_min, tree%boxes(id)%dr)
   !         print *, id, tree%boxes(id)%r_min, tree%boxes(id)%dr
-  !         do iv = 1, tree%n_cc
+  !         do iv = 1, tree%n_var_cell
   !            write(var_list(iv, ig), "(A,I0)") trim(cc_names(iv)) // "_", ig
   !            call SILO_add_var(dbix, var_list(iv, ig), grid_list(ig), &
   !                 pack(tree%boxes(id)%cc(1:bs, 1:bs, iv), .true.), [bs, bs], &
@@ -1171,7 +1175,7 @@ contains
   !   end do
 
   !   call SILO_set_mmesh_grid(dbix, amr_name, grid_list, n_cycle, time)
-  !   do iv = 1, tree%n_cc
+  !   do iv = 1, tree%n_var_cell
   !      call SILO_set_mmesh_var(dbix, trim(cc_names(iv)), amr_name, &
   !           var_list(iv, :), n_cycle, time)
   !   end do
