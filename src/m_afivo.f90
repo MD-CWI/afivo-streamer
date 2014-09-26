@@ -14,10 +14,10 @@ module m_afivo
   integer, parameter :: a5_no_box = 0
 
   ! Corners
-  integer, parameter :: cn_lxly = 1
-  integer, parameter :: cn_hxly = 2
-  integer, parameter :: cn_lxhy = 3
-  integer, parameter :: cn_hxhy = 4
+  integer, parameter :: a2_cn_lxly = 1
+  integer, parameter :: a2_cn_hxly = 2
+  integer, parameter :: a2_cn_lxhy = 3
+  integer, parameter :: a2_cn_hxhy = 4
   integer, parameter :: a2_cn_nbs(2, 4) = reshape([1,3,3,2,4,1,2,4], [2,4])
 
   integer, parameter :: nb_lx = 1
@@ -40,9 +40,9 @@ module m_afivo
   integer, parameter :: a2_nb_rev(4) = [2, 1, 4, 3]
   integer, parameter :: a2_nb_dim(4) = [1, 1, 2, 2]
 
-  ! Each box contains a tag, for which the following bits are set:
-  integer, parameter :: a5_bit_in_use = 1
-  integer, parameter :: a5_bit_new_children = 2
+  ! Each box contains a tag, for which bits can be set.
+  integer, parameter :: a5_bit_in_use = 1 ! For internal use
+  integer, parameter :: a5_bit_new_children = 2 ! For the user
 
   type box2_cfg_t
      integer  :: n_cell
@@ -73,8 +73,9 @@ module m_afivo
 
   type a2_t
      type(level2_t)            :: levels(a5_max_levels)
-     type(box2_cfg_t), pointer :: cfg => null()
+     integer                   :: n_levels
      integer                   :: n_boxes
+     type(box2_cfg_t), pointer :: cfg => null()
      type(box2_t), allocatable :: boxes(:)
   end type a2_t
 
@@ -88,6 +89,12 @@ module m_afivo
        import
        type(box2_t), intent(inout) :: box
      end subroutine a2_subr
+
+     subroutine a2_subr_arg(box, rarg)
+       import
+       type(box2_t), intent(inout) :: box
+       real(dp), intent(in)        :: rarg(:)
+     end subroutine a2_subr_arg
 
      subroutine a2_subr_boxes(boxes, id)
        import
@@ -117,14 +124,14 @@ contains
     if (n_boxes_max <= 0) stop "a2_init: n_boxes_max should be > 0"
 
     allocate(tree%cfg)
-    tree%cfg%n_cell = n_cell
-    tree%cfg%n_node = n_cell + 1
-    tree%cfg%n_cc   = n_cc
-    tree%cfg%n_flux = n_flux
-    tree%cfg%r_min  = r_min
-    tree%n_boxes    = 0
-
     allocate(tree%boxes(n_boxes_max))
+    tree%cfg%n_cell   = n_cell
+    tree%cfg%n_node   = n_cell + 1
+    tree%cfg%n_cc     = n_cc
+    tree%cfg%n_flux   = n_flux
+    tree%cfg%r_min    = r_min
+    tree%n_boxes      = 0
+    tree%n_levels     = 0
     tree%boxes(:)%tag = 0
 
     do lvl = 1, a5_max_levels
@@ -145,21 +152,12 @@ contains
     tree%n_boxes = 0
   end subroutine a2_destroy
 
-  integer function a2_n_levels(tree)
-    type(a2_t), intent(in) :: tree
-    integer                :: lvl
-    do lvl = 1, a5_max_levels-1
-       if (size(tree%levels(lvl)%ids) == 0) exit
-    end do
-    a2_n_levels = lvl
-  end function a2_n_levels
-
   subroutine a2_loop_box(tree, my_procedure)
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr)        :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = 1, a2_n_levels(tree)
+    do lvl = 1, tree%n_levels
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call my_procedure(tree%boxes(id))
@@ -167,18 +165,38 @@ contains
     end do
   end subroutine a2_loop_box
 
+  subroutine a2_loop_box_arg(tree, my_procedure, rarg)
+    type(a2_t), intent(inout) :: tree
+    procedure(a2_subr_arg)    :: my_procedure
+    real(dp), intent(in)      :: rarg(:)
+    integer                   :: lvl, i, id
+
+    do lvl = 1, tree%n_levels
+       do i = 1, size(tree%levels(lvl)%ids)
+          id = tree%levels(lvl)%ids(i)
+          call my_procedure(tree%boxes(id), rarg)
+       end do
+    end do
+  end subroutine a2_loop_box_arg
+
   subroutine a2_loop_boxes(tree, my_procedure)
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr_boxes)  :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = 1, a2_n_levels(tree)
+    do lvl = 1, tree%n_levels
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call my_procedure(tree%boxes, id)
        end do
     end do
   end subroutine a2_loop_boxes
+
+  subroutine a2_clear_tagbit(tree, bit)
+    type(a2_t), intent(inout) :: tree
+    integer, intent(in)       :: bit
+    tree%boxes(1:tree%n_boxes)%tag = ibclr(tree%boxes(1:tree%n_boxes)%tag, bit)
+  end subroutine a2_clear_tagbit
 
   subroutine a2_tidy_up(tree, frac_max, frac_goal, n_clean_min, reorder)
     use m_morton
@@ -225,7 +243,7 @@ contains
        ixs_map(0)       = 0
        n_stored         = 0
 
-       do lvl = 1, a2_n_levels(tree)
+       do lvl = 1, tree%n_levels
           n_used_lvl = size(tree%levels(lvl)%ids)
           allocate(mortons(n_used_lvl))
           allocate(ixs_sort(n_used_lvl))
@@ -259,13 +277,11 @@ contains
        end do
 
        if (only_reorder) then
-          tree%boxes(1:n_used) = boxes_cpy
-          tree%boxes(n_used+1:n_boxes)%tag = 0
-          do n = n_used+1, n_boxes
-             deallocate(tree%boxes(n)%cc)
-             deallocate(tree%boxes(n)%fx)
-             deallocate(tree%boxes(n)%fy)
+          do n = 1, n_boxes
+             call dealloc_box(tree%boxes(n)) ! First remove data
           end do
+          tree%boxes(1:n_used) = boxes_cpy ! Then put it back ordered
+          tree%boxes(n_used+1:n_boxes)%tag = 0
           tree%n_boxes = n_used
        else
           call move_alloc(boxes_cpy, tree%boxes)
@@ -274,6 +290,21 @@ contains
        tree%n_boxes = n_used
     end if
   end subroutine a2_tidy_up
+
+  subroutine alloc_box(box, cfg)
+    type(box2_t), intent(inout)  :: box
+    type(box2_cfg_t), intent(in) :: cfg
+    allocate(box%cc(0:cfg%n_cell+1, 0:cfg%n_cell+1, cfg%n_cc))
+    allocate(box%fx(cfg%n_cell+1,   cfg%n_cell,     cfg%n_flux))
+    allocate(box%fy(cfg%n_cell,     cfg%n_cell+1,   cfg%n_flux))
+  end subroutine alloc_box
+
+  subroutine dealloc_box(box)
+    type(box2_t), intent(inout) :: box
+    deallocate(box%cc)
+    deallocate(box%fx)
+    deallocate(box%fy)
+  end subroutine dealloc_box
 
   subroutine a2_set_new_child_neighbors(boxes, ids)
     type(box2_t), intent(inout) :: boxes(:)
@@ -339,9 +370,12 @@ contains
     integer, intent(in)       :: ix_list(:, :), nb_list(:, :)
     integer                   :: n_boxes, i, id
 
-    if (any(ix_list < 1)) stop "a2_set_base: need ix_list > 0"
+    if (any(ix_list < 1))          stop "a2_set_base: need all ix_list > 0"
+    if (any(nb_list == a5_no_box)) stop "a2_set_base: a neighbor is a5_no_box"
 
-    n_boxes = size(ix_list, 2)
+    n_boxes       = size(ix_list, 2)
+    tree%n_levels = 1
+
     deallocate(tree%levels(1)%ids)
     allocate(tree%levels(1)%ids(n_boxes))
     call a2_get_free_ids(tree, tree%levels(1)%ids)
@@ -364,30 +398,32 @@ contains
   subroutine a2_adjust_refinement(tree, ref_func)
     type(a2_t), intent(inout) :: tree
     procedure(a2_to_int_f)    :: ref_func
-    integer                   :: lvl, id, i, c_ids(4), n_boxes_start
-    integer :: n_boxes_req
+    integer                   :: lvl, id, i, c_ids(4)
+    integer                   :: n_boxes_prev, n_boxes_req
     integer, allocatable      :: ref_vals(:)
     type(box2_t), allocatable :: boxes_cpy(:)
 
-    n_boxes_start = tree%n_boxes
-    allocate(ref_vals(n_boxes_start))
+    n_boxes_prev = tree%n_boxes
+    allocate(ref_vals(n_boxes_prev))
     call a2_set_ref_vals(tree%levels, tree%boxes, ref_vals, ref_func)
 
     ! Check whether there is enough free space, otherwise extend the list
-    n_boxes_req = n_boxes_start + 4 * count(ref_vals == a5_do_ref)
+    n_boxes_req = n_boxes_prev + 4 * count(ref_vals == a5_do_ref)
     if (n_boxes_req > size(tree%boxes)) then
        print *, "Resizing box storage for refinement", n_boxes_req
        allocate(boxes_cpy(n_boxes_req))
-       boxes_cpy(1:n_boxes_start)      = tree%boxes(1:n_boxes_start)
-       boxes_cpy(n_boxes_start+1:)%tag = 0 ! Set to not in use
+       boxes_cpy(1:n_boxes_prev)      = tree%boxes(1:n_boxes_prev)
+       boxes_cpy(n_boxes_prev+1:)%tag = 0 ! Set to not in use
        call move_alloc(boxes_cpy, tree%boxes)
     end if
 
-    do lvl = 1, a2_n_levels(tree)
+    do lvl = 1, a5_max_levels-1
+       if (size(tree%levels(lvl)%ids) == 0) exit
+
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
 
-          if (id > n_boxes_start) then
+          if (id > n_boxes_prev) then
              cycle              ! This is a newly added box
           else if (ref_vals(id) == a5_do_ref) then
              ! Add children. First need to get 4 free id's
@@ -399,38 +435,35 @@ contains
           end if
        end do
 
-       ! Set the next level
        if (lvl < a5_max_levels) then
+          ! Set next level to children of this level
           deallocate(tree%levels(lvl+1)%ids)
           call set_child_lvl(tree%levels(lvl)%ids, &
                tree%levels(lvl+1)%ids, tree%boxes)
-          ! Set connectivity
+
+          ! Update connectivity of children
           call a2_set_new_child_neighbors(tree%boxes, tree%levels(lvl)%ids)
        end if
     end do
+
+    tree%n_levels = lvl
+    print *, "New levels", tree%n_levels
   end subroutine a2_adjust_refinement
 
   subroutine a2_get_free_ids(tree, ids)
     type(a2_t), intent(inout) :: tree
     integer, intent(out)      :: ids(:)
-    integer                   :: i, n_ids, id, nc
+    integer                   :: i, n_boxes_prev, n_ids
 
     n_ids = size(ids)
     ! Critical part
-    ids(1)       = tree%n_boxes + 1
+    n_boxes_prev = tree%n_boxes
     tree%n_boxes = tree%n_boxes + n_ids
     ! End critical
-    do i = 2, n_ids
-       ids(i) = ids(1) + i - 1
-    end do
 
-    ! Allocate storage
-    nc = tree%cfg%n_cell
     do i = 1, n_ids
-       id = ids(i)
-       allocate(tree%boxes(id)%cc(0:nc+1, 0:nc+1, tree%cfg%n_cc))
-       allocate(tree%boxes(id)%fx(nc+1, nc, tree%cfg%n_flux))
-       allocate(tree%boxes(id)%fy(nc, nc+1, tree%cfg%n_flux))
+       ids(i) = n_boxes_prev + i
+       call alloc_box(tree%boxes(ids(i)), tree%cfg) ! Allocate data storage
     end do
   end subroutine a2_get_free_ids
 
@@ -548,8 +581,7 @@ contains
 
   subroutine a2_add_children(boxes, id, c_ids)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id
-    integer, intent(in)         :: c_ids(4)
+    integer, intent(in)         :: id, c_ids(4)
     integer                     :: i, c_id, c_ix_base(2)
 
     boxes(id)%children = c_ids
@@ -564,8 +596,6 @@ contains
        boxes(c_id)%children  = a5_no_box
        boxes(c_id)%neighbors = a5_no_box
        boxes(c_id)%cfg       => boxes(id)%cfg
-
-       ! Set "in_use" tag
        boxes(c_id)%tag       = ibset(0, a5_bit_in_use)
     end do
   end subroutine a2_add_children
@@ -597,13 +627,19 @@ contains
 
   pure function a2_dr(box) result(dr)
     type(box2_t), intent(in) :: box
-    real(dp) :: dr(2)
+    real(dp)                 :: dr(2)
     dr = box%cfg%dr(:, box%lvl)
   end function a2_dr
 
+  pure function a2_min_dr(tree) result(dr)
+    type(a2_t), intent(in) :: tree
+    real(dp)               :: dr(2)
+    dr = tree%cfg%dr(:, tree%n_levels)
+  end function a2_min_dr
+
   pure function a2_r_min(box) result(r_min)
     type(box2_t), intent(in) :: box
-    real(dp) :: r_min(2)
+    real(dp)                 :: r_min(2)
     r_min = box%cfg%r_min + (box%ix-1) * box%cfg%dbr(:, box%lvl)
   end function a2_r_min
 
@@ -793,7 +829,7 @@ contains
     procedure(a2_subr_box_int) :: side_subr
     integer                    :: lvl, i, id
 
-    do lvl = 1, a2_n_levels(tree)
+    do lvl = 1, tree%n_levels
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call a2_gc_box_sides(tree%boxes, id, side_subr)
@@ -860,7 +896,7 @@ contains
     type(a2_t), intent(inout)  :: tree
     procedure(a2_subr_box_int) :: corner_subr
     integer                    :: lvl, i, id
-    do lvl = 1, a2_n_levels(tree)
+    do lvl = 1, tree%n_levels
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           call a2_gc_box_corners(tree%boxes, id, corner_subr)
@@ -877,13 +913,13 @@ contains
     nv = boxes(id)%cfg%n_cc
 
     select case (cn)
-    case (cn_lxly)
+    case (a2_cn_lxly)
        call a2_prolong1_to(boxes, id, [0], [0], [(n, n=1,nv)])
-    case (cn_hxly)
+    case (a2_cn_hxly)
        call a2_prolong1_to(boxes, id, [nc+1], [0], [(n, n=1,nv)])
-    case (cn_lxhy)
+    case (a2_cn_lxhy)
        call a2_prolong1_to(boxes, id, [0], [nc+1], [(n, n=1,nv)])
-    case (cn_hxhy)
+    case (a2_cn_hxhy)
        call a2_prolong1_to(boxes, id, [nc+1], [nc+1], [(n, n=1,nv)])
     end select
   end subroutine a2_corners_from_parent
@@ -915,25 +951,25 @@ contains
     nc    = boxes(id)%cfg%n_cell
 
     select case (cn)
-    case (cn_lxly)
+    case (a2_cn_lxly)
        if (nb == nb_lx) then
           boxes(id)%cc(0, 0, :) = boxes(nb_id)%cc(nc, 0, :)
        else                     ! nb_ly
           boxes(id)%cc(0, 0, :) = boxes(nb_id)%cc(0, nc, :)
        end if
-    case (cn_hxly)
+    case (a2_cn_hxly)
        if (nb == nb_hx) then
           boxes(id)%cc(nc+1, 0, :) = boxes(nb_id)%cc(1, 0, :)
        else                     ! nb_ly
           boxes(id)%cc(nc+1, 0, :) = boxes(nb_id)%cc(nc+1, nc, :)
        end if
-    case (cn_lxhy)
+    case (a2_cn_lxhy)
        if (nb == nb_lx) then
           boxes(id)%cc(0, nc+1, :) = boxes(nb_id)%cc(nc, nc+1, :)
        else                     ! nb_hy
           boxes(id)%cc(0, nc+1, :) = boxes(nb_id)%cc(0, 1, :)
        end if
-    case (cn_hxhy)
+    case (a2_cn_hxhy)
        if (nb == nb_hx) then
           boxes(id)%cc(nc+1, nc+1, :) = boxes(nb_id)%cc(1, nc+1, :)
        else                     ! nb_hy
@@ -947,14 +983,15 @@ contains
     integer, intent(in) :: f_ixs(:)
     integer :: lvl, i, id, nb, nb_id
 
-    do lvl = a2_n_levels(tree)-1, 1, -1
+    do lvl = tree%n_levels-1, 1, -1
        do i = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(i)
           if (.not. a2_has_children(tree%boxes(id))) cycle
           do nb = 1, 4
              nb_id = tree%boxes(id)%neighbors(nb)
              if (nb_id <= a5_no_box) cycle
-             call a2_flux_from_children(tree%boxes, id, nb, f_ixs)
+             if (.not. a2_has_children(tree%boxes(nb_id))) &
+                  call a2_flux_from_children(tree%boxes, id, nb, f_ixs)
           end do
        end do
     end do
@@ -967,7 +1004,7 @@ contains
     integer, intent(in)         :: id, nb, f_ixs(:)
     integer                     :: nc, nch, c_id
 
-    nc  = boxes(id)%cfg%n_cc
+    nc  = boxes(id)%cfg%n_cell
     nch = ishft(nc, -1) ! nc/2
 
     select case (nb)
@@ -982,31 +1019,31 @@ contains
             boxes(c_id)%fx(1, 2:nc:2, f_ixs))
     case (nb_hx)
        c_id = boxes(id)%children(ch_hxly)
-       boxes(id)%fx(nc, 1:nch, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(nc, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(nc, 2:nc:2, f_ixs))
+       boxes(id)%fx(nc+1, 1:nch, f_ixs) = 0.5_dp * ( &
+            boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
+            boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
        c_id = boxes(id)%children(ch_hxhy)
-       boxes(id)%fx(nc, nch+1:, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(nc, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(nc, 2:nc:2, f_ixs))
+       boxes(id)%fx(nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
+            boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
+            boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
     case (nb_ly)
        c_id = boxes(id)%children(ch_lxly)
-       boxes(id)%fx(1:nch, 1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1:nc:2, 1, f_ixs) + &
-            boxes(c_id)%fx(2:nc:2, 1, f_ixs))
+       boxes(id)%fy(1:nch, 1, f_ixs) = 0.5_dp * ( &
+            boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
+            boxes(c_id)%fy(2:nc:2, 1, f_ixs))
        c_id = boxes(id)%children(ch_hxly)
-       boxes(id)%fx(nch+1:, 1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1:nc:2, 1, f_ixs) + &
-            boxes(c_id)%fx(2:nc:2, 1, f_ixs))
+       boxes(id)%fy(nch+1:, 1, f_ixs) = 0.5_dp * ( &
+            boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
+            boxes(c_id)%fy(2:nc:2, 1, f_ixs))
     case (nb_hy)
        c_id = boxes(id)%children(ch_lxhy)
-       boxes(id)%fx(1:nch, nc, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1:nc:2, nc, f_ixs) + &
-            boxes(c_id)%fx(2:nc:2, nc, f_ixs))
+       boxes(id)%fy(1:nch, nc+1, f_ixs) = 0.5_dp * ( &
+            boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
+            boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
        c_id = boxes(id)%children(ch_hxhy)
-       boxes(id)%fx(nch+1:, nc, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1:nc:2, nc, f_ixs) + &
-            boxes(c_id)%fx(2:nc:2, nc, f_ixs))
+       boxes(id)%fy(nch+1:, nc, f_ixs) = 0.5_dp * ( &
+            boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
+            boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
     end select
   end subroutine a2_flux_from_children
 
@@ -1030,7 +1067,7 @@ contains
     cells_per_box = bc**2
 
     n_grids = 0
-    do lvl = 1, a2_n_levels(tree)
+    do lvl = 1, tree%n_levels
        do n = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(n)
           if (.not. a2_has_children(tree%boxes(id))) n_grids = n_grids + 1
@@ -1048,7 +1085,7 @@ contains
     cell_types = 8              ! VTK pixel type
 
     ig = 0
-    do lvl = 1, a2_n_levels(tree)
+    do lvl = 1, tree%n_levels
        do n = 1, size(tree%levels(lvl)%ids)
           id = tree%levels(lvl)%ids(n)
           if (a2_has_children(tree%boxes(id))) cycle
@@ -1106,7 +1143,7 @@ contains
 
   !   bs = tree%box_cells
   !   n_grids = 0
-  !   do lvl = 1, a2_n_levels(tree)
+  !   do lvl = 1, tree%n_levels
   !      n_grids = n_grids + size(tree%levels(lvl)%ids)
   !   end do
 
@@ -1116,7 +1153,7 @@ contains
   !   call SILO_create_file(filename, dbix)
   !   ig = 0
 
-  !   do lvl = 1, a2_n_levels(tree)
+  !   do lvl = 1, tree%n_levels
   !      do i = 1, size(tree%levels(lvl)%ids)
   !         id = tree%levels(lvl)%ids(i)
   !         ig = ig + 1
