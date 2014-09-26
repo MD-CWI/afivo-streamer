@@ -68,7 +68,7 @@ contains
     integer(morton_k)   :: x
 
     ! We only look at the first 21 bits
-    x = iand(a,                    int(z'1fffff', morton_k))
+    x = iand(int(a, morton_k),     int(z'1fffff', morton_k))
     x = iand(ior(x, ishft(x, 32)), int(z'1f00000000ffff', morton_k))
     x = iand(ior(x, ishft(x, 16)), int(z'1f0000ff0000ff', morton_k))
     x = iand(ior(x, ishft(x, 8)),  int(z'100f00f00f00f00f', morton_k))
