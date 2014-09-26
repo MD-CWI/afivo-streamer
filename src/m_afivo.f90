@@ -656,6 +656,12 @@ contains
     r_min = box%cfg%r_min + (box%ix-1) * box%cfg%dbr(:, box%lvl)
   end function a2_r_min
 
+  pure function a2_r_center(box) result(r_center)
+    type(box2_t), intent(in) :: box
+    real(dp)                 :: r_center(2)
+    r_center = box%cfg%r_min + (box%ix-0.5_dp) * box%cfg%dbr(:, box%lvl)
+  end function a2_r_center
+
   ! Location of cell center with index cc_ix
   pure function a2_r_cc(box, cc_ix) result(r)
     type(box2_t), intent(in) :: box
