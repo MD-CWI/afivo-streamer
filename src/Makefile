@@ -1,5 +1,7 @@
-FC 	:= mpif90
-FFLAGS	:= -Wall -O2 -fcheck=all -g -ffpe-trap=invalid,zero,overflow
+FC 	:= gfortran
+FFLAGS	:= -Wall -O2 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow\
+	-pedantic -std=f2008
+# FFLAGS	:= -Ofast
 OBJS	:= m_morton.f90 m_afivo.f90 m_vtk.f90
 
 INCDIRS	:=
