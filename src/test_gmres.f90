@@ -14,9 +14,9 @@ program test_gmres
 
   call random_number(a)
   do i = 1, nn
-     a(i, i) = sum(abs(a(:, i)))
+     a(i, i) = 2 * sum(abs(a(:, i))) / nn
   end do
-  
+
   ! a = 0
   ! do i = 1, nn
   !    a(i,i) = -4
@@ -31,12 +31,15 @@ program test_gmres
 
   do i = 1, 1
      call gmr_gmres(x, rhs, my_matrix, max_outer, max_inner, &
-          1.0e-5_dp, 1.0e-5_dp)
-     call my_matrix(x, ax)
-     print *, x(1)
-     print *, "HI", i, norm2(ax-rhs)
+          1.0e-16_dp, 1.0e-16_dp)
+     ! call my_matrix(x, ax)
+     ! print *, x(1)
+     ! print *, "HI", i, norm2(ax-rhs)
+
   end do
-  
+  call my_matrix(x, ax)
+  print *, "HI", i, norm2(ax-rhs)
+
   ! print *, "result", x
   ! print *, "ax", ax
 contains

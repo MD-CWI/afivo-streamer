@@ -42,7 +42,7 @@ contains
     real(dp)                :: htmp
     real(dp)                :: rho
     real(dp)                :: rho_tol
-    real(dp)                :: r
+    real(dp)                :: radius
 
     real(dp)                :: g(max_inner+1)
     real(dp)                :: h(max_inner+1, max_inner)
@@ -74,7 +74,7 @@ contains
        g(2:)    = 0.0_dp
        h(:,:)   = 0.0_dp
 
-       write ( *, '(a,i8,a,g14.6)') '  ITR = ', itr, '  Residual = ', rho
+       ! write ( *, '(a,i8,a,g14.6)') '  ITR = ', itr, '  Residual = ', rho
 
        k = 0
        do
@@ -121,17 +121,18 @@ contains
              h(1:k+1,k) = y(1:k+1)
           end if
 
-          r        = hypot(h(k,k), h(k+1,k))
-          inv_tmp  = 1/r
+          ! Compute givens rotation angle cos/sin
+          radius   = hypot(h(k,k), h(k+1,k))
+          inv_tmp  = 1/radius
           gcos(k)  = h(k,k) * inv_tmp
           gsin(k)  = -h(k+1,k) * inv_tmp
-          h(k,k)   = r
+          h(k,k)   = radius
           h(k+1,k) = 0.0_dp
 
           call mult_givens(gcos(k), gsin(k), k, g(1:k+1))
           rho      = abs(g(k+1))
 
-          write ( *, '(a,i8,a,g14.6)') '  K =   ', k, '  Residual = ', rho
+          ! write ( *, '(a,i8,a,g14.6)') '  K =   ', k, '  Residual = ', rho
        end do
 
        ! Update solution guess x
