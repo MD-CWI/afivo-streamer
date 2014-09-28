@@ -3,6 +3,7 @@ program test_base
 
   implicit none
 
+  integer, parameter :: dp = kind(0.0d0)
   type(a2_t)         :: tree
   integer            :: i, id
   integer            :: ix_list(2, 1)
@@ -24,8 +25,8 @@ program test_base
 
   call a2_set_base(tree, ix_list, nb_list)
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, [1], a2_sides_from_parent)
-  call a2_gc_corners(tree, [1], a2_corners_from_parent)
+  call a2_gc_sides(tree, [1], a2_sides_prolong1, have_no_bc)
+  call a2_gc_corners(tree, [1], a2_corners_prolong1, have_no_bc)
 
   do i = 1, 20
      print *, "i = ", i, "n_boxes", tree%n_boxes
@@ -77,5 +78,11 @@ contains
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children
+
+  subroutine have_no_bc(boxes, id, i, ivs)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, i, ivs(:)
+    stop "We have no boundary conditions in this example"
+  end subroutine have_no_bc
 
 end program test_base

@@ -3,6 +3,7 @@ program test_drift_diff
 
   implicit none
 
+  integer, parameter :: dp = kind(0.0d0)
   type(a2_t)         :: tree
   integer            :: i, id
   integer            :: ix_list(2, 1)
@@ -32,8 +33,8 @@ program test_drift_diff
   end do
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, [1], a2_sides_from_parent)
-  call a2_gc_corners(tree, [1], a2_corners_from_parent)
+  call a2_gc_sides(tree, [1], a2_sides_prolong1, have_no_bc)
+  call a2_gc_corners(tree, [1], a2_corners_prolong1, have_no_bc)
 
   do i = 1, 5
      call a2_adjust_refinement(tree, ref_func)
@@ -41,8 +42,8 @@ program test_drift_diff
   end do
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, [1], a2_sides_from_parent)
-  call a2_gc_corners(tree, [1], a2_corners_from_parent)
+  call a2_gc_sides(tree, [1], a2_sides_prolong1, have_no_bc)
+  call a2_gc_corners(tree, [1], a2_corners_prolong1, have_no_bc)
 
   i              = 0
   time           = 0
@@ -75,10 +76,10 @@ program test_drift_diff
         end if
 
         call a2_loop_box_arg(tree, calculate_fluxes, [diff_coeff, vel_x, vel_y])
-        call a2_consisent_fluxes(tree, [1])
+        call a2_consistent_fluxes(tree, [1])
         call a2_loop_box_arg(tree, update_solution, [dt])
-        call a2_gc_sides(tree, [1], a2_sides_from_parent)
-        call a2_gc_corners(tree, [1], a2_corners_from_parent)
+        call a2_gc_sides(tree, [1], a2_sides_prolong1, have_no_bc)
+        call a2_gc_corners(tree, [1], a2_corners_prolong1, have_no_bc)
         time_in_loop = time_in_loop + dt
      end do
 
@@ -208,5 +209,11 @@ contains
        call a2_restrict_to(boxes, id, [1])
     end if
   end subroutine restrict_from_children
+
+  subroutine have_no_bc(boxes, id, i, ivs)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, i, ivs(:)
+    stop "We have no boundary conditions in this example"
+  end subroutine have_no_bc
 
 end program test_drift_diff
