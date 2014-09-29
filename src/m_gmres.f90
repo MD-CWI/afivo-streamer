@@ -34,32 +34,26 @@ contains
     procedure(subr_ax)      :: a_times_x
 
     real(dp), parameter     :: delta   = 1.0e-3_dp
-    logical, parameter      :: verbose = .true.
+    logical, parameter      :: verbose = .false.
+
+    logical                 :: finished
     integer                 :: i, j, k, itr, itr_used
 
-    real(dp)                :: av
-    real(dp)                :: inv_tmp
-    real(dp)                :: htmp
-    real(dp)                :: rho
-    real(dp)                :: rho_tol
-    real(dp)                :: radius
-
-    real(dp)                :: g(max_inner+1)
-    real(dp)                :: h(max_inner+1, max_inner)
+    real(dp)                :: prev_norm, r_tmp, rho, rho_tol, radius
     real(dp)                :: res(size(x))
     real(dp)                :: gcos(max_inner)
     real(dp)                :: gsin(max_inner)
-    real(dp)                :: v(size(x), max_inner+1)
+    real(dp)                :: g(max_inner+1)
     real(dp)                :: y(max_inner+1)
+    real(dp)                :: h(max_inner+1, max_inner)
+    real(dp)                :: v(size(x), max_inner+1)
 
-    if (size(x) < max_inner) stop "gmr_gmres: size(x) < max_inner"
     itr_used = 0
 
     do itr = 1, max_outer
        call a_times_x(x, res)
 
        res      = rhs - res
-       print *, "res", res(1)
        rho      = norm2(res)
 
        ! Use first residual to set tolerance
@@ -68,25 +62,27 @@ contains
        ! Check whether we can stop already
        if (rho <= rho_tol .and. rho <= tol_abs) exit
 
-       inv_tmp  = 1/rho
-       v(:,1)   = res * inv_tmp
-       g(1)     = rho
-       g(2:)    = 0.0_dp
-       h(:,:)   = 0.0_dp
+       r_tmp  = 1/rho
+       v(:,1) = res * r_tmp
+       g(1)   = rho
+       g(2:)  = 0.0_dp
+       h(:,:) = 0.0_dp
 
-       ! write ( *, '(a,i8,a,g14.6)') '  ITR = ', itr, '  Residual = ', rho
+       if (verbose) print *, "outer", itr, "norm residual:", rho
 
-       k = 0
+       finished = .false.
+       k        = 0
+
        do
-          if (k == max_inner .or. (rho <= rho_tol .and. rho <= tol_abs)) exit
+          if (finished) exit
           k = k + 1
 
           call a_times_x(v(:,k), v(:,k+1))
-          av = norm2(v(:,k+1))
+          prev_norm = norm2(v(:,k+1))
 
           ! Orthogonalize new vector
           do j = 1, k
-             h(j,k) = dot_product(v(:,k+1), v(:,j))
+             h(j,k)   = dot_product(v(:,k+1), v(:,j))
              v(:,k+1) = v(:,k+1) - h(j,k) * v(:,j)
           end do
 
@@ -95,11 +91,11 @@ contains
 
           ! If the orthogonalized vector norm is very small compared to the
           ! initial norm, orthogonalize again to improve accuracy
-          if (av + delta * h(k+1,k) == av) then
+          if (prev_norm + delta * h(k+1,k) == prev_norm) then
              do j = 1, k
-                htmp = dot_product(v(:,k+1), v(:,j))
-                h(j,k) = h(j,k) + htmp
-                v(:,k+1) = v(:,k+1) - htmp * v(:,j)
+                r_tmp    = dot_product(v(:,k+1), v(:,j))
+                h(j,k)   = h(j,k) + r_tmp
+                v(:,k+1) = v(:,k+1) - r_tmp * v(:,j)
              end do
              h(k+1,k) = norm2(v(:,k+1))
           end if
@@ -107,8 +103,10 @@ contains
           ! Normalize new vector, but avoid division by zero. If division by
           ! zero would occur, we will exit at the next convergence check.
           if (h(k+1, k) > epsilon(1.0_dp)) then
-             inv_tmp = 1/h(k+1,k)
-             v(:,k+1) = v(:,k+1) * inv_tmp
+             r_tmp = 1/h(k+1,k)
+             v(:,k+1) = v(:,k+1) * r_tmp
+          else
+             finished = .true.
           end if
 
           if (k > 1) then
@@ -123,16 +121,19 @@ contains
 
           ! Compute givens rotation angle cos/sin
           radius   = hypot(h(k,k), h(k+1,k))
-          inv_tmp  = 1/radius
-          gcos(k)  = h(k,k) * inv_tmp
-          gsin(k)  = -h(k+1,k) * inv_tmp
+          r_tmp    = 1/radius
+          gcos(k)  = h(k,k) * r_tmp
+          gsin(k)  = -h(k+1,k) * r_tmp
           h(k,k)   = radius
           h(k+1,k) = 0.0_dp
 
           call mult_givens(gcos(k), gsin(k), k, g(1:k+1))
-          rho      = abs(g(k+1))
 
-          ! write ( *, '(a,i8,a,g14.6)') '  K =   ', k, '  Residual = ', rho
+          rho      = abs(g(k+1))
+          finished = finished .or. (k == max_inner) .or. &
+               (rho <= rho_tol .and. rho <= tol_abs)
+
+          if (verbose) print *, "inner", k, "norm residual:", rho
        end do
 
        ! Update solution guess x
@@ -148,6 +149,7 @@ contains
     end do
   end subroutine gmr_gmres
 
+  ! Perform givens rotation
   subroutine mult_givens(gcos, gsin, k, my_vec)
     integer, intent(in)     :: k
     real(dp), intent(in)    :: gcos, gsin
