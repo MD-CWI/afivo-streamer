@@ -20,11 +20,6 @@ module m_afivo
   integer, parameter :: a2_cn_hxhy = 4
   integer, parameter :: a2_cn_nbs(2, 4) = reshape([1,3,3,2,4,1,2,4], [2,4])
 
-  integer, parameter :: nb_lx = 1
-  integer, parameter :: nb_hx = 2
-  integer, parameter :: nb_ly = 3
-  integer, parameter :: nb_hy = 4
-
   ! Children (same as corners)
   integer, parameter :: ch_lxly = 1
   integer, parameter :: ch_hxly = 2
@@ -37,6 +32,11 @@ module m_afivo
        .false., .true., .true., .false., .false.], [4,2])
 
   ! Neighbor topology information (todo: add documentation)
+  integer, parameter :: a2_nb_lx = 1
+  integer, parameter :: a2_nb_hx = 2
+  integer, parameter :: a2_nb_ly = 3
+  integer, parameter :: a2_nb_hy = 4
+  integer, parameter :: a2_nb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
   logical, parameter :: a2_nb_low(4) = [.true., .false., .true., .false.]
   integer, parameter :: a2_nb_rev(4) = [2, 1, 4, 3]
   integer, parameter :: a2_nb_dim(4) = [1, 1, 2, 2]
@@ -946,13 +946,13 @@ contains
     nv = boxes(id)%cfg%n_var_cell
 
     select case (nb)
-    case (nb_lx)
+    case (a2_nb_lx)
        call a2_prolong1_to(boxes, id, [0], [(n, n=1,nc)], ivs)
-    case (nb_hx)
+    case (a2_nb_hx)
        call a2_prolong1_to(boxes, id, [nc+1], [(n, n=1,nc)], ivs)
-    case (nb_ly)
+    case (a2_nb_ly)
        call a2_prolong1_to(boxes, id, [(n, n=1,nc)], [0], ivs)
-    case (nb_hy)
+    case (a2_nb_hy)
        call a2_prolong1_to(boxes, id, [(n, n=1,nc)], [nc+1], ivs)
     end select
   end subroutine a2_sides_prolong1
@@ -965,28 +965,43 @@ contains
     nc = boxes(id)%cfg%n_cell
 
     select case (nb)
-    case (nb_lx)
+    case (a2_nb_lx)
        call a2_prolong0_to(boxes, id, [0], [(n, n=1,nc)], ivs)
        boxes(id)%cc(0, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(0, 1:nc, ivs) &
             + 0.75_dp * boxes(id)%cc(1, 1:nc, ivs) &
             - 0.25_dp * boxes(id)%cc(2, 1:nc, ivs)
-    case (nb_hx)
+    case (a2_nb_hx)
        call a2_prolong0_to(boxes, id, [nc+1], [(n, n=1,nc)], ivs)
        boxes(id)%cc(nc+1, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, ivs) &
             + 0.75_dp * boxes(id)%cc(nc, 1:nc, ivs) &
             - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, ivs)
-    case (nb_ly)
+    case (a2_nb_ly)
        call a2_prolong0_to(boxes, id, [(n, n=1,nc)], [0], ivs)
        boxes(id)%cc(1:nc, 0, ivs) = 0.5_dp * boxes(id)%cc(1:nc, 0, ivs) &
             + 0.75_dp * boxes(id)%cc(1:nc, 1, ivs) &
             - 0.25_dp * boxes(id)%cc(1:nc, 2, ivs)
-    case (nb_hy)
+    case (a2_nb_hy)
        call a2_prolong0_to(boxes, id, [(n, n=1,nc)], [nc+1], ivs)
        boxes(id)%cc(1:nc, nc+1, ivs) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, ivs) &
             + 0.75_dp * boxes(id)%cc(1:nc, nc, ivs) &
             - 0.25_dp * boxes(id)%cc(1:nc, nc-1, ivs)
     end select
   end subroutine a2_sides_extrap
+
+  ! Get cell centered data in an index range outside boxes(id), but inside one
+  ! of its neighbors (nb).
+  subroutine a2_get_cc_from_nb(boxes, id, nb, ivs, lo, hi, cc)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, ivs(:), lo(2), hi(2)
+    real(dp), intent(out)       :: cc(:,:,:)
+    integer                     :: nc, nb_id, lo_nb(2), hi_nb(2)
+
+    lo_nb = lo + a2_nb_dix(:, nb) * nc
+    hi_nb = hi + a2_nb_dix(:, nb) * nc
+    nc    = boxes(id)%cfg%n_cell
+    nb_id = boxes(id)%neighbors(nb)
+    cc    = boxes(nb_id)%cc(lo_nb(1):hi_nb(1), lo_nb(2):hi_nb(2), ivs)
+  end subroutine a2_get_cc_from_nb
 
   subroutine a2_gc_side_from_nb(boxes, id, nb, ivs)
     type(box2_t), intent(inout) :: boxes(:)
@@ -997,13 +1012,13 @@ contains
     nb_id = boxes(id)%neighbors(nb)
 
     select case (nb)
-    case (nb_lx)
+    case (a2_nb_lx)
        boxes(id)%cc(0, 1:nc, ivs)    = boxes(nb_id)%cc(nc, 1:nc, ivs)
-    case (nb_hx)
+    case (a2_nb_hx)
        boxes(id)%cc(nc+1, 1:nc, ivs) = boxes(nb_id)%cc(1, 1:nc, ivs)
-    case (nb_ly)
+    case (a2_nb_ly)
        boxes(id)%cc(1:nc, 0, ivs)    = boxes(nb_id)%cc(1:nc, nc, ivs)
-    case (nb_hy)
+    case (a2_nb_hy)
        boxes(id)%cc(1:nc, nc+1, ivs) = boxes(nb_id)%cc(1:nc, 1, ivs)
     end select
   end subroutine a2_gc_side_from_nb
@@ -1104,25 +1119,25 @@ contains
 
     select case (cn)
     case (a2_cn_lxly)
-       if (nb == nb_lx) then
+       if (nb == a2_nb_lx) then
           boxes(id)%cc(0, 0, ivs) = boxes(nb_id)%cc(nc, 0, ivs)
        else                     ! nb_ly
           boxes(id)%cc(0, 0, ivs) = boxes(nb_id)%cc(0, nc, ivs)
        end if
     case (a2_cn_hxly)
-       if (nb == nb_hx) then
+       if (nb == a2_nb_hx) then
           boxes(id)%cc(nc+1, 0, ivs) = boxes(nb_id)%cc(1, 0, ivs)
        else                     ! nb_ly
           boxes(id)%cc(nc+1, 0, ivs) = boxes(nb_id)%cc(nc+1, nc, ivs)
        end if
     case (a2_cn_lxhy)
-       if (nb == nb_lx) then
+       if (nb == a2_nb_lx) then
           boxes(id)%cc(0, nc+1, ivs) = boxes(nb_id)%cc(nc, nc+1, ivs)
        else                     ! nb_hy
           boxes(id)%cc(0, nc+1, ivs) = boxes(nb_id)%cc(0, 1, ivs)
        end if
     case (a2_cn_hxhy)
-       if (nb == nb_hx) then
+       if (nb == a2_nb_hx) then
           boxes(id)%cc(nc+1, nc+1, ivs) = boxes(nb_id)%cc(1, nc+1, ivs)
        else                     ! nb_hy
           boxes(id)%cc(nc+1, nc+1, ivs) = boxes(nb_id)%cc(nc+1, 1, ivs)
@@ -1159,7 +1174,7 @@ contains
     nch = ishft(nc, -1) ! nc/2
 
     select case (nb)
-    case (nb_lx)
+    case (a2_nb_lx)
        c_id = boxes(id)%children(ch_lxly)
        boxes(id)%fx(1, 1:nch, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
@@ -1168,7 +1183,7 @@ contains
        boxes(id)%fx(1, nch+1:, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(1, 2:nc:2, f_ixs))
-    case (nb_hx)
+    case (a2_nb_hx)
        c_id = boxes(id)%children(ch_hxly)
        boxes(id)%fx(nc+1, 1:nch, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
@@ -1177,7 +1192,7 @@ contains
        boxes(id)%fx(nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
-    case (nb_ly)
+    case (a2_nb_ly)
        c_id = boxes(id)%children(ch_lxly)
        boxes(id)%fy(1:nch, 1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
@@ -1186,7 +1201,7 @@ contains
        boxes(id)%fy(nch+1:, 1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, 1, f_ixs))
-    case (nb_hy)
+    case (a2_nb_hy)
        c_id = boxes(id)%children(ch_lxhy)
        boxes(id)%fy(1:nch, nc+1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
