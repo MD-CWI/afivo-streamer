@@ -9,39 +9,20 @@ program test_gmres
   integer :: i
   real(dp) :: x(nn), ax(nn), rhs(nn)
   real(dp) :: a(nn, nn)
+
+  call random_number(a)
+  ! do i = 1, nn
+  !    a(i, i) = 0.5_dp * sum(abs(a(:, i)))
+  ! end do
+
   x = 0
   rhs = 1
 
-  call random_number(a)
-  do i = 1, nn
-     a(i, i) = 2 * sum(abs(a(:, i))) / nn
-  end do
-
-  ! a = 0
-  ! do i = 1, nn
-  !    a(i,i) = -4
-  ! end do
-
-  ! do i = 2, nn-1
-  !    a(i,i+1) = 1
-  !    a(i,i-1) = 1
-  !    a(i+1,i) = 1
-  !    a(i-1,i) = 1
-  ! end do
-
-  do i = 1, 1
-     call gmr_gmres(x, rhs, my_matrix, max_outer, max_inner, &
-          1.0e-16_dp, 1.0e-16_dp)
-     ! call my_matrix(x, ax)
-     ! print *, x(1)
-     ! print *, "HI", i, norm2(ax-rhs)
-
-  end do
+  call gmr_gmres(x, rhs, my_matrix, max_outer, max_inner, &
+       0.0_dp, 0.0_dp)
   call my_matrix(x, ax)
-  print *, "HI", i, norm2(ax-rhs)
+  print *, "norm Ax-rhs", norm2(ax-rhs)
 
-  ! print *, "result", x
-  ! print *, "ax", ax
 contains
 
   subroutine my_matrix(x, ax)

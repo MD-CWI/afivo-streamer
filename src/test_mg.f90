@@ -103,18 +103,18 @@ contains
 
     if (boxes(id)%neighbors(nb) == -1) then
        select case (nb)
-       case (nb_lx)
+       case (a2_nb_lx)
           ! Dirichlet zero
           boxes(id)%cc(0, 1:nc, ivs) = -boxes(id)%cc(1, 1:nc, ivs)
-       case (nb_hx)
+       case (a2_nb_hx)
           ! Derivative of 2
           dr = a2_dr(boxes(id))
           boxes(id)%cc(nc+1, 1:nc, ivs) = 2 * dr(1) + &
                boxes(id)%cc(nc, 1:nc, ivs)
-       case (nb_ly)
+       case (a2_nb_ly)
           ! Neumann zero
           boxes(id)%cc(1:nc, 0, ivs) = boxes(id)%cc(1:nc, 1, ivs)
-       case (nb_hy)
+       case (a2_nb_hy)
           ! Neumann zero
           boxes(id)%cc(1:nc, nc+1, ivs) = boxes(id)%cc(1:nc, nc, ivs)
        end select
