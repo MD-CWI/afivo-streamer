@@ -19,7 +19,7 @@ program test_drift_diff
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_boxes_max, box_size, n_var_cell=1, n_var_face=1, &
+  call a2_init(tree, 20, n_boxes_max, box_size, n_var_cell=1, n_var_face=1, &
        dr = dr, r_min = [0.0_dp, 0.0_dp])
 
   id = 1
@@ -206,7 +206,7 @@ contains
     integer, intent(in)         :: id
 
     if (a2_has_children(boxes(id))) then
-       call a2_restrict_to(boxes, id, [1])
+       call a2_restrict_to_box(boxes, id, [1])
     end if
   end subroutine restrict_from_children
 
