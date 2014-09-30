@@ -114,28 +114,29 @@ module m_afivo
 
 contains
 
-  subroutine a2_init(tree, n_boxes_max, n_cell, n_var_cell, n_var_face, dr, r_min)
+  subroutine a2_init(tree, n_boxes, n_cell, n_var_cell, n_var_face, &
+       dr, r_min)
     type(a2_t), intent(out) :: tree
-    integer, intent(in)     :: n_boxes_max
+    integer, intent(in)     :: n_boxes
     integer, intent(in)     :: n_cell, n_var_cell, n_var_face
-    real(dp), intent(in)    :: dr(2), r_min(2)
+    real(dp), intent(in)    :: dr, r_min(2)
     integer                 :: lvl
 
     if (n_cell < 2)       stop "a2_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a2_init: n_cell should be even"
-    if (n_var_cell <= 0)        stop "a2_init: n_var_cell should be > 0"
-    if (n_boxes_max <= 0) stop "a2_init: n_boxes_max should be > 0"
+    if (n_var_cell <= 0)  stop "a2_init: n_var_cell should be > 0"
+    if (n_boxes <= 0)     stop "a2_init: n_boxes should be > 0"
 
     allocate(tree%cfg)
-    allocate(tree%boxes(n_boxes_max))
-    tree%cfg%n_cell   = n_cell
-    tree%cfg%n_node   = n_cell + 1
-    tree%cfg%n_var_cell     = n_var_cell
-    tree%cfg%n_var_face   = n_var_face
-    tree%cfg%r_min    = r_min
-    tree%n_boxes      = 0
-    tree%n_lvls     = 0
-    tree%boxes(:)%tag = 0
+    allocate(tree%boxes(n_boxes))
+    tree%cfg%n_cell     = n_cell
+    tree%cfg%n_node     = n_cell + 1
+    tree%cfg%n_var_cell = n_var_cell
+    tree%cfg%n_var_face = n_var_face
+    tree%cfg%r_min      = r_min
+    tree%n_boxes        = 0
+    tree%n_lvls         = 0
+    tree%boxes(:)%tag   = 0
 
     do lvl = 1, a5_max_lvls
        allocate(tree%lvls(lvl)%ids(0))

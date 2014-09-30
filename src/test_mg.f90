@@ -11,9 +11,9 @@ program test_mg
   integer            :: i, id, n_changes
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
-  integer, parameter :: box_size    = 2
+  integer, parameter :: box_size    = 8
   integer            :: n_boxes_max = 10*1000
-  real(dp)           :: dr(2)
+  real(dp)           :: dr
   character(len=40)  :: fname, var_names(4)
 
   type(mg2_t) :: mg
@@ -49,11 +49,10 @@ program test_mg
   call mg2d_restrict_rhs(tree, mg)
 
   do i = 1, 10
-     write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
-
      ! call mg2d_fas_vcycle(tree, mg, tree%n_lvls)
      call mg2d_fas_fmg(tree, mg)
+     write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
+     call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
   print *, "n_boxes", tree%n_boxes
@@ -66,7 +65,7 @@ contains
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
     if (box%lvl < 4 .or. &
-         (box%lvl < 7 .and. (norm2(a2_r_center(box)-2) < 1.25_dp))) then
+         (box%lvl < 6 .and. (norm2(a2_r_center(box)-2) < 1.25_dp))) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref
@@ -97,7 +96,7 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, ivs(:)
     integer                     :: nc
-    real(dp) :: dr(2)
+    real(dp)                    :: dr(2)
 
     nc = boxes(id)%cfg%n_cell
 
@@ -107,10 +106,8 @@ contains
           ! Dirichlet zero
           boxes(id)%cc(0, 1:nc, ivs) = -boxes(id)%cc(1, 1:nc, ivs)
        case (a2_nb_hx)
-          ! Derivative of 2
-          dr = a2_dr(boxes(id))
-          boxes(id)%cc(nc+1, 1:nc, ivs) = 2 * dr(1) + &
-               boxes(id)%cc(nc, 1:nc, ivs)
+          ! Dirichlet zero
+          boxes(id)%cc(nc+1, 1:nc, ivs) = -boxes(id)%cc(nc, 1:nc, ivs)
        case (a2_nb_ly)
           ! Neumann zero
           boxes(id)%cc(1:nc, 0, ivs) = boxes(id)%cc(1:nc, 1, ivs)

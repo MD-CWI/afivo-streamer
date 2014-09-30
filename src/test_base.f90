@@ -10,7 +10,7 @@ program test_base
   integer            :: nb_list(4, 1)
   integer, parameter :: box_size    = 8
   integer            :: n_boxes_max = 100
-  real(dp)           :: dr(2)
+  real(dp)           :: dr
   character(len=40)  :: fname
 
   dr = 2 * acos(-1.0_dp) / box_size

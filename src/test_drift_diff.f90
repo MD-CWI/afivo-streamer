@@ -10,7 +10,7 @@ program test_drift_diff
   integer            :: nb_list(4, 1)
   integer, parameter :: box_size    = 8
   integer            :: n_boxes_max = 10*1000
-  real(dp)           :: dr(2), dt, time, end_time
+  real(dp)           :: dr, dt, time, end_time
   real(dp)           :: time_per_adapt, time_in_loop
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=40)  :: fname
