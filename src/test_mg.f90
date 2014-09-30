@@ -9,35 +9,45 @@ program test_mg
   integer, parameter :: i_rhs = 3, i_res = 4
   type(a2_t)         :: tree
   integer            :: i, id, n_changes
-  integer            :: ix_list(2, 1)
-  integer            :: nb_list(4, 1)
-  integer, parameter :: box_size    = 8
+  integer            :: ix_list(2, 3)
+  integer            :: nb_list(4, 3)
+  integer, parameter :: box_size    = 32
   integer            :: n_boxes_max = 10*1000
   real(dp)           :: dr
   character(len=40)  :: fname, var_names(4)
 
   type(mg2_t) :: mg
+  type(mg2_subt_t) :: subtree
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
   var_names(i_res) = "res"
-  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, &
-       sides_bc, a2_corners_extrap)
 
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_boxes_max, box_size, n_var_cell=4, n_var_face=0, &
+  call a2_init(tree, 20, n_boxes_max, box_size, n_var_cell=4, n_var_face=0, &
        dr = dr, r_min = [0.0_dp, 0.0_dp])
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
   nb_list(:, id) = -1            ! Dirichlet zero -> -1
+  nb_list(a2_nb_hx, id) = 2
+
+  id = 2
+  ix_list(:, id) = [2,1]         ! Set index of boxnn
+  nb_list(:, id) = -1            ! Dirichlet zero -> -1
+  nb_list(a2_nb_lx, id) = 1
+
+  id = 3
+  ix_list(:, id) = [2,2]         ! Set index of boxnn
+  nb_list(:, id) = -1            ! Dirichlet zero -> -1
+  nb_list(a2_nb_ly, id) = 2
 
   call a2_set_base(tree, ix_list, nb_list)
 
-  do i = 1, 20
+  do i = 1, 2
      call a2_adjust_refinement(tree, ref_func_init, n_changes)
      if (n_changes == 0) exit
   end do
@@ -45,12 +55,17 @@ program test_mg
   ! Set rhs and initial guess for phi
   call a2_loop_box(tree, set_init_cond)
 
+  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
+       sides_bc, a2_corners_extrap)
+
+  call mg2d_create_subtree(tree, subtree)
+
   ! Restrict the rhs from children recursively
-  call mg2d_restrict_rhs(tree, mg)
+  call mg2d_restrict_trees(tree, subtree, mg, .true.)
 
   do i = 1, 10
-     ! call mg2d_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg2d_fas_fmg(tree, mg)
+     ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
+     call mg2d_fas_fmg(tree, subtree, mg, .true.)
      write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
@@ -64,7 +79,7 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 4 .or. &
+    if (box%lvl < 5 .or. &
          (box%lvl < 6 .and. (norm2(a2_r_center(box)-2) < 1.25_dp))) then
        ref_func_init = a5_do_ref
     else
@@ -106,8 +121,8 @@ contains
           ! Dirichlet zero
           boxes(id)%cc(0, 1:nc, ivs) = -boxes(id)%cc(1, 1:nc, ivs)
        case (a2_nb_hx)
-          ! Dirichlet zero
-          boxes(id)%cc(nc+1, 1:nc, ivs) = -boxes(id)%cc(nc, 1:nc, ivs)
+          ! Dirichlet one
+          boxes(id)%cc(nc+1, 1:nc, ivs) = 2-boxes(id)%cc(nc, 1:nc, ivs)
        case (a2_nb_ly)
           ! Neumann zero
           boxes(id)%cc(1:nc, 0, ivs) = boxes(id)%cc(1:nc, 1, ivs)
