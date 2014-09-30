@@ -55,7 +55,7 @@ program test_drift_diff
 
   do while (time < end_time)
      i = i + 1
-     print *, "i = ", i, "n_boxes", tree%n_boxes
+     print *, "i = ", i, "n_boxes", tree%max_id
 
      write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
@@ -109,7 +109,7 @@ contains
     real(dp)                 :: diff
     integer                  :: i, j, nc
 
-    nc   = box%cfg%n_cell
+    nc   = box%n_cell
     diff = 0
     do j = 1, nc
        do i = 1, nc
@@ -133,7 +133,7 @@ contains
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
 
-    nc = box%cfg%n_cell
+    nc = box%n_cell
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
@@ -151,17 +151,17 @@ contains
   subroutine calculate_fluxes(box, flux_args)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in) :: flux_args(:)
-    real(dp) :: inv_dr(2)
+    real(dp) :: inv_dr
     integer :: nc
 
-    nc     = box%cfg%n_cell
-    inv_dr = 1/a2_dr(box)
+    nc     = box%n_cell
+    inv_dr = 1/box%dr
 
     ! Diffusion
     box%fx(:,:,1) = box%cc(0:nc, 1:nc, 1) - box%cc(1:nc+1, 1:nc, 1)
-    box%fx(:,:,1) = box%fx(:,:,1) * flux_args(1) * inv_dr(1)
+    box%fx(:,:,1) = box%fx(:,:,1) * flux_args(1) * inv_dr
     box%fy(:,:,1) = box%cc(1:nc, 0:nc, 1) - box%cc(1:nc, 1:nc+1, 1)
-    box%fy(:,:,1) = box%fy(:,:,1) * flux_args(1) * inv_dr(2)
+    box%fy(:,:,1) = box%fy(:,:,1) * flux_args(1) * inv_dr
 
     ! Drift (1st order upwind)
     if (flux_args(2) > 0) then
@@ -179,16 +179,16 @@ contains
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
-    real(dp)                    :: inv_dr(2)
+    real(dp)                    :: inv_dr
     integer                     :: nc
 
-    nc = box%cfg%n_cell
-    inv_dr = 1/a2_dr(box)
+    nc = box%n_cell
+    inv_dr = 1/box%dr
 
-    nc = box%cfg%n_cell
+    nc = box%n_cell
     box%cc(1:nc, 1:nc, 1) = box%cc(1:nc, 1:nc, 1) + dt(1) * ( &
-         (box%fx(1:nc, :, 1) - box%fx(2:nc+1, :, 1)) * inv_dr(1) + &
-         (box%fy(:, 1:nc, 1) - box%fy(:, 2:nc+1, 1)) * inv_dr(2))
+         (box%fx(1:nc, :, 1) - box%fx(2:nc+1, :, 1)) * inv_dr + &
+         (box%fy(:, 1:nc, 1) - box%fy(:, 2:nc+1, 1)) * inv_dr)
   end subroutine update_solution
 
   subroutine prolong_to_new_children(boxes, id)

@@ -29,7 +29,7 @@ program test_base
   call a2_gc_corners(tree, [1], a2_corners_prolong1, have_no_bc)
 
   do i = 1, 20
-     print *, "i = ", i, "n_boxes", tree%n_boxes
+     print *, "i = ", i, "max_id", tree%max_id
 
      write(fname, "(A,I0,A)") "test_base_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), (/"my_var"/), i, i * 1.0_dp)
@@ -60,7 +60,7 @@ contains
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
 
-    nc = box%cfg%n_cell
+    nc = box%n_cell
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])

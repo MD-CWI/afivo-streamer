@@ -9,7 +9,6 @@ module m_mg2d
   type mg2_subt_t
      integer                   :: min_lvl
      type(lvl2_t), allocatable :: lvls(:)
-     type(box2_cfg_t), pointer :: cfgs(:)
      type(box2_t), allocatable :: boxes(:)
   end type mg2_subt_t
 
@@ -22,10 +21,22 @@ module m_mg2d
      integer  :: n_cycle_down
      integer  :: n_cycle_up
      integer :: n_cycle_base
-     procedure(a2_subr_gc), pointer, nopass :: sides_bc, corners_bc
+     procedure(a2_subr_gc), pointer, nopass    :: sides_bc
+     procedure(a2_subr_gc), pointer, nopass    :: corners_bc
+     procedure(mg2d_box_op), pointer, nopass :: box_op
   end type mg2_t
 
+  abstract interface
+     subroutine mg2d_box_op(box, i_in, i_out, mg)
+       import
+       type(box2_t), intent(inout) :: box
+       integer, intent(in)         :: i_in, i_out
+       type(mg2_t), intent(in)     :: mg
+     end subroutine mg2d_box_op
+  end interface
+
   ! Public types
+  public :: mg2d_box_op
   public :: mg2_t
   public :: mg2_subt_t
 
@@ -35,15 +46,19 @@ module m_mg2d
   public :: mg2d_restrict_trees
   public :: mg2d_fas_fmg
   public :: mg2d_fas_vcycle
+  public :: mg2d_laplacian_box
 
 contains
 
   subroutine mg2d_set(mg, i_phi, i_phi_old, i_rhs, i_res, &
-       n_cycle_down, n_cycle_up, n_cycle_base, sides_bc, corners_bc)
+       n_cycle_down, n_cycle_up, n_cycle_base, &
+       sides_bc, corners_bc, my_operator)
     type(mg2_t), intent(out) :: mg
     integer, intent(in)      :: i_phi, i_phi_old, i_rhs, i_res
     integer, intent(in)      :: n_cycle_down, n_cycle_up, n_cycle_base
     procedure(a2_subr_gc)    :: sides_bc, corners_bc
+    procedure(mg2d_box_op)   :: my_operator
+
     mg%i_phi        = i_phi
     mg%i_phi_old    = i_phi_old
     mg%i_rhs        = i_rhs
@@ -53,6 +68,7 @@ contains
     mg%n_cycle_base = n_cycle_base
     mg%sides_bc     => sides_bc
     mg%corners_bc   => corners_bc
+    mg%box_op       => my_operator
   end subroutine mg2d_set
 
   subroutine mg2d_create_subtree(tree, subt)
@@ -62,7 +78,7 @@ contains
     integer :: i, id, n, lvl, n_lvls, boxes_per_lvl, offset
 
     ! Determine number of lvls for subtree
-    n = tree%cfg%n_cell
+    n = tree%n_cell
     n_lvls = 0
     do
        n = ishft(n, -1)
@@ -78,34 +94,26 @@ contains
 
     ! Allocate tree
     allocate(subt%lvls(-n_lvls+1:0))
-    allocate(subt%cfgs(-n_lvls+1:0))
     allocate(subt%boxes(n_lvls*boxes_per_lvl))
 
     do lvl = 0, -n_lvls+1, -1
        allocate(subt%lvls(lvl)%ids(boxes_per_lvl))
 
-       subt%cfgs(lvl)%n_var_cell = tree%cfg%n_var_cell
-       subt%cfgs(lvl)%n_var_face = tree%cfg%n_var_face
-       subt%cfgs(lvl)%n_cell = tree%cfg%n_cell / 2**(1-lvl)
-       subt%cfgs(lvl)%r_min = tree%cfg%r_min
-       allocate(subt%cfgs(lvl)%dr(2,lvl:lvl))
-       subt%cfgs(lvl)%dr(:, lvl) = tree%cfg%dr(:,1) * 0.5_dp**(lvl-1)
-       offset = (n_lvls+lvl-1) * boxes_per_lvl
-
+       offset             = (n_lvls+lvl-1) * boxes_per_lvl
        subt%lvls(lvl)%ids = tree%lvls(1)%ids + offset
 
        do n = 1, boxes_per_lvl
-          id = tree%lvls(1)%ids(n)
-          i = subt%lvls(lvl)%ids(n)
+          id                     = tree%lvls(1)%ids(n)
+          i                      = subt%lvls(lvl)%ids(n)
+          subt%boxes(i)%lvl      = lvl
+          subt%boxes(i)%ix       = tree%boxes(id)%ix
+          subt%boxes(i)%tag      = ibset(0, a5_bit_in_use)
+          subt%boxes(i)%dr       = tree%dr_base * 2**(1-lvl)
+          subt%boxes(i)%r_min    = tree%boxes(id)%r_min
+          subt%boxes(i)%n_cell   = tree%n_cell / 2**(1-lvl)
 
-          call alloc_box(subt%boxes(i), subt%cfgs(lvl))
-          subt%boxes(i)%lvl = lvl
-          subt%boxes(i)%ix = tree%boxes(id)%ix
-          subt%boxes(i)%tag = ibset(0, a5_bit_in_use)
-          subt%boxes(i)%cfg => subt%cfgs(lvl)
-
-          ! Parent and children are not defined for the subtree
-          subt%boxes(i)%parent = a5_no_box
+          ! Parent and children are not set for the subtree
+          subt%boxes(i)%parent   = a5_no_box
           subt%boxes(i)%children = a5_no_box
 
           ! But neighbors should be set
@@ -114,11 +122,15 @@ contains
              subt%boxes(i)%neighbors = &
                   subt%boxes(i)%neighbors + offset
           end where
+
+          call alloc_box(subt%boxes(i), subt%boxes(i)%n_cell, &
+               tree%n_var_cell, tree%n_var_face)
        end do
     end do
 
   end subroutine mg2d_create_subtree
 
+  ! Restrict phi and rhs
   subroutine mg2d_restrict_trees(tree, subt, mg, use_subtree)
     type(a2_t), intent(inout)       :: tree
     type(mg2_subt_t), intent(inout) :: subt
@@ -148,7 +160,6 @@ contains
              jd = subt%lvls(lvl-1)%ids(i)
              call a2_restrict_box(subt%boxes(id), &
                   subt%boxes(jd), [0, 0], [mg%i_rhs, mg%i_phi])
-             print *, "crse", lvl, i, subt%boxes(jd)%neighbors
           end do
        end do
     end if
@@ -272,13 +283,13 @@ contains
        if (use_subtree .and. lvl == 1) then
           do i = 1, size(subt%lvls(lvl-1)%ids)
              id = subt%lvls(lvl-1)%ids(i)
-             call laplacian_box(subt%boxes(id), mg%i_rhs, mg%i_phi)
+             call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
              call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
           end do
        else
           do i = 1, size(tree%lvls(lvl-1)%parents)
              id = tree%lvls(lvl-1)%parents(i)
-             call laplacian_box(tree%boxes(id), mg%i_rhs, mg%i_phi)
+             call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs, mg)
              call a2_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
           end do
        end if
@@ -356,7 +367,7 @@ contains
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
        do i = 1, size(subt%lvls(lvl-1)%ids)
           id = subt%lvls(lvl-1)%ids(i)
-          call laplacian_box(subt%boxes(id), mg%i_rhs, mg%i_phi)
+          call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
           call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
        end do
 
@@ -406,7 +417,7 @@ contains
     integer, intent(in)         :: id, i_phi, i_phi_old
     integer                     :: nc, i_c, c_id, ix_offset(2)
 
-    nc = boxes(id)%cfg%n_cell
+    nc = boxes(id)%n_cell
     do i_c = 1, 4
        c_id = boxes(id)%children(i_c)
        ! Offset of child w.r.t. parent
@@ -424,7 +435,7 @@ contains
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
 
-    nc = box_c%cfg%n_cell
+    nc = box_c%n_cell
     ! In these loops, we calculate the closest coarse index (_c1), and the
     ! one-but-closest (_c2). The fine cell lies in between.
     do j = 1, nc
@@ -469,8 +480,8 @@ contains
     integer                     :: i, j, nc, di(2)
     real(dp)                    :: dxdy
 
-    dxdy = product(a2_dr(box))
-    nc   = box%cfg%n_cell
+    dxdy = box%dr**2
+    nc   = box%n_cell
 
     ! The parity of redblack_cntr determines which cells we use
     di(1) = iand(redblack_cntr, 1)
@@ -495,24 +506,25 @@ contains
     end do
   end subroutine gsrb_box
 
-  subroutine laplacian_box(box, i_lpl, i_phi)
+  subroutine mg2d_laplacian_box(box, i_in, i_out, mg)
     type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: i_lpl, i_phi
+    integer, intent(in)         :: i_in, i_out
+    type(mg2_t), intent(in)     :: mg
     integer                     :: i, j, nc
     real(dp)                    :: inv_dr_sq(2)
 
-    nc = box%cfg%n_cell
-    inv_dr_sq = 1 / a2_dr(box)**2
+    nc = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
 
     do j = 1, nc
        do i = 1, nc
-          box%cc(i, j, i_lpl) = inv_dr_sq(1) * (box%cc(i-1, j, i_phi) &
-               - 2 * box%cc(i, j, i_phi) + box%cc(i+1, j, i_phi)) + &
-               inv_dr_sq(2) * (box%cc(i, j-1, i_phi) &
-               - 2 * box%cc(i, j, i_phi) + box%cc(i, j+1, i_phi))
+          box%cc(i, j, i_out) = inv_dr_sq(1) * (box%cc(i-1, j, i_in) &
+               - 2 * box%cc(i, j, i_in) + box%cc(i+1, j, i_in)) + &
+               inv_dr_sq(2) * (box%cc(i, j-1, i_in) &
+               - 2 * box%cc(i, j, i_in) + box%cc(i, j+1, i_in))
        end do
     end do
-  end subroutine laplacian_box
+  end subroutine mg2d_laplacian_box
 
   subroutine residual_boxes(boxes, ids, mg)
     type(box2_t), intent(inout) :: boxes(:)
@@ -521,19 +533,19 @@ contains
     integer                     :: i
 
     do i = 1, size(ids)
-       call residual_box(boxes(ids(i)), mg%i_res, mg%i_phi, mg%i_rhs)
+       call residual_box(boxes(ids(i)), mg)
     end do
   end subroutine residual_boxes
 
-  subroutine residual_box(box, i_res, i_phi, i_rhs)
+  subroutine residual_box(box, mg)
     type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: i_res, i_phi, i_rhs
+    type(mg2_t), intent(in)     :: mg
     integer                     :: nc
 
-    call laplacian_box(box, i_res, i_phi)
-    nc                        = box%cfg%n_cell
-    box%cc(1:nc, 1:nc, i_res) = box%cc(1:nc, 1:nc, i_rhs) &
-         - box%cc(1:nc, 1:nc, i_res)
+    call mg%box_op(box, mg%i_phi, mg%i_res, mg)
+    nc = box%n_cell
+    box%cc(1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, mg%i_rhs) &
+         - box%cc(1:nc, 1:nc, mg%i_res)
   end subroutine residual_box
 
 end module m_mg2d

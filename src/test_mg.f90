@@ -11,12 +11,12 @@ program test_mg
   integer            :: i, id, n_changes
   integer            :: ix_list(2, 3)
   integer            :: nb_list(4, 3)
-  integer, parameter :: box_size    = 32
+  integer, parameter :: box_size    = 4
   integer            :: n_boxes_max = 10*1000
   real(dp)           :: dr
   character(len=40)  :: fname, var_names(4)
 
-  type(mg2_t) :: mg
+  type(mg2_t)      :: mg
   type(mg2_subt_t) :: subtree
 
   var_names(i_phi) = "phi"
@@ -47,7 +47,7 @@ program test_mg
 
   call a2_set_base(tree, ix_list, nb_list)
 
-  do i = 1, 2
+  do i = 1, 4
      call a2_adjust_refinement(tree, ref_func_init, n_changes)
      if (n_changes == 0) exit
   end do
@@ -56,7 +56,7 @@ program test_mg
   call a2_loop_box(tree, set_init_cond)
 
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, a2_corners_extrap)
+       sides_bc, a2_corners_extrap, mg2d_laplacian_box)
 
   call mg2d_create_subtree(tree, subtree)
 
@@ -70,8 +70,8 @@ program test_mg
      call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
-  print *, "n_boxes", tree%n_boxes
-  print *, "n_cells", tree%n_boxes * tree%cfg%n_cell**2
+  print *, "max_id", tree%max_id
+  print *, "n_cells", tree%max_id * tree%n_cell**2
 
   call a2_destroy(tree)
 
@@ -92,7 +92,7 @@ contains
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
 
-    nc = box%cfg%n_cell
+    nc = box%n_cell
     box%cc(:, :, i_phi) = 0
 
     do j = 1, nc
@@ -111,9 +111,9 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, ivs(:)
     integer                     :: nc
-    real(dp)                    :: dr(2)
+    real(dp)                    :: dr
 
-    nc = boxes(id)%cfg%n_cell
+    nc = boxes(id)%n_cell
 
     if (boxes(id)%neighbors(nb) == -1) then
        select case (nb)
