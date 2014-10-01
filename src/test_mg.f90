@@ -60,8 +60,8 @@ program test_mg
 
   call mg2d_create_subtree(tree, subtree)
 
-  ! Restrict the rhs from children recursively
-  call mg2d_restrict_trees(tree, subtree, mg, .true.)
+  ! Restrict from children recursively
+  call mg2d_restrict_trees(tree, subtree, [i_rhs, i_phi], mg, .true.)
 
   do i = 1, 10
      ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)

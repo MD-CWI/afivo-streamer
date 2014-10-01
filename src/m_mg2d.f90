@@ -14,12 +14,12 @@ module m_mg2d
 
   type mg2_t
      private
-     integer  :: i_phi
-     integer  :: i_phi_old
-     integer  :: i_rhs
-     integer  :: i_res
-     integer  :: n_cycle_down
-     integer  :: n_cycle_up
+     integer :: i_phi
+     integer :: i_phi_old
+     integer :: i_rhs
+     integer :: i_res
+     integer :: n_cycle_down
+     integer :: n_cycle_up
      integer :: n_cycle_base
      procedure(a2_subr_gc), pointer, nopass    :: sides_bc
      procedure(a2_subr_gc), pointer, nopass    :: corners_bc
@@ -143,18 +143,18 @@ contains
 
   end subroutine mg2d_create_subtree
 
-  ! Restrict phi and rhs
-  subroutine mg2d_restrict_trees(tree, subt, mg, use_subtree)
+  ! Restrict cell centered variables ivs(:) on the trees
+  subroutine mg2d_restrict_trees(tree, subt, ivs, mg, use_subtree)
     type(a2_t), intent(inout)       :: tree
     type(mg2_subt_t), intent(inout) :: subt
+    integer, intent(in)             :: ivs(:)
     logical, intent(in)             :: use_subtree
     type(mg2_t), intent(in)         :: mg
     integer                         :: lvl, i, id, jd
 
     ! Restrict phi and rhs on tree
     do lvl = tree%n_lvls-1, 1, -1
-       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, &
-            [mg%i_rhs, mg%i_phi])
+       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, ivs)
     end do
 
     if (use_subtree) then
@@ -162,8 +162,7 @@ contains
        do i = 1, size(tree%lvls(1)%ids)
           id = tree%lvls(1)%ids(i)
           jd = subt%lvls(0)%ids(i)
-          call a2_restrict_box(tree%boxes(id), &
-               subt%boxes(jd), [0, 0], [mg%i_rhs, mg%i_phi])
+          call a2_restrict_box(tree%boxes(id), subt%boxes(jd), [0, 0], ivs)
        end do
 
        ! Do rest of subtree
@@ -171,8 +170,7 @@ contains
           do i = 1, size(subt%lvls(lvl)%ids)
              id = subt%lvls(lvl)%ids(i)
              jd = subt%lvls(lvl-1)%ids(i)
-             call a2_restrict_box(subt%boxes(id), &
-                  subt%boxes(jd), [0, 0], [mg%i_rhs, mg%i_phi])
+             call a2_restrict_box(subt%boxes(id), subt%boxes(jd), [0, 0], ivs)
           end do
        end do
     end if
