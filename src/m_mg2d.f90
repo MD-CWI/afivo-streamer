@@ -23,7 +23,8 @@ module m_mg2d
      integer :: n_cycle_base
      procedure(a2_subr_gc), pointer, nopass    :: sides_bc
      procedure(a2_subr_gc), pointer, nopass    :: corners_bc
-     procedure(mg2d_box_op), pointer, nopass :: box_op
+     procedure(mg2d_box_op), pointer, nopass   :: box_op
+     procedure(mg2d_box_gsrb), pointer, nopass :: box_gsrb
   end type mg2_t
 
   abstract interface
@@ -33,6 +34,13 @@ module m_mg2d
        integer, intent(in)         :: i_in, i_out
        type(mg2_t), intent(in)     :: mg
      end subroutine mg2d_box_op
+
+     subroutine mg2d_box_gsrb(box, i_phi, i_rhs, redblack_cntr, mg)
+       import
+       type(box2_t), intent(inout) :: box
+       integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
+       type(mg2_t), intent(in)     :: mg
+     end subroutine mg2d_box_gsrb
   end interface
 
   ! Public types
@@ -46,18 +54,22 @@ module m_mg2d
   public :: mg2d_restrict_trees
   public :: mg2d_fas_fmg
   public :: mg2d_fas_vcycle
-  public :: mg2d_laplacian_box
+  public :: mg2d_lpl_box
+  public :: mg2d_lpl_cyl_box
+  public :: gsrb_box_lpl
+  public :: gsrb_box_lpl_cyl
 
 contains
 
   subroutine mg2d_set(mg, i_phi, i_phi_old, i_rhs, i_res, &
        n_cycle_down, n_cycle_up, n_cycle_base, &
-       sides_bc, corners_bc, my_operator)
+       sides_bc, corners_bc, my_operator, my_gsrb)
     type(mg2_t), intent(out) :: mg
     integer, intent(in)      :: i_phi, i_phi_old, i_rhs, i_res
     integer, intent(in)      :: n_cycle_down, n_cycle_up, n_cycle_base
     procedure(a2_subr_gc)    :: sides_bc, corners_bc
     procedure(mg2d_box_op)   :: my_operator
+    procedure(mg2d_box_gsrb)   :: my_gsrb
 
     mg%i_phi        = i_phi
     mg%i_phi_old    = i_phi_old
@@ -69,6 +81,7 @@ contains
     mg%sides_bc     => sides_bc
     mg%corners_bc   => corners_bc
     mg%box_op       => my_operator
+    mg%box_gsrb     => my_gsrb
   end subroutine mg2d_set
 
   subroutine mg2d_create_subtree(tree, subt)
@@ -466,7 +479,7 @@ contains
 
     do n = 1, 2 * n_cycle
        do i = 1, size(ids)
-          call gsrb_box(boxes(ids(i)), mg%i_phi, mg%i_rhs, n)
+          call mg%box_gsrb(boxes(ids(i)), mg%i_phi, mg%i_rhs, n, mg)
        end do
 
        ! Communicate updated boundary cells
@@ -474,9 +487,46 @@ contains
     end do
   end subroutine gsrb_boxes
 
-  subroutine gsrb_box(box, i_phi, i_rhs, redblack_cntr)
+  subroutine gsrb_box_lpl_cyl(box, i_phi, i_rhs, redblack_cntr, mg)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
+    type(mg2_t), intent(in)     :: mg
+    integer                     :: i, j, nc, di(2), ioff
+    real(dp)                    :: dxdy
+
+    dxdy = box%dr**2
+    nc   = box%n_cell
+    ioff = (box%ix(1)-1) * nc
+
+    ! The parity of redblack_cntr determines which cells we use
+    di(1) = iand(redblack_cntr, 1)
+    di(2) = ieor(di(1), 1)
+
+    do j = 1, nc, 2
+       do i = 1+di(1), nc, 2
+          box%cc(i, j, i_phi) = 0.25_dp * ( &
+               (i+ioff)/(i+ioff-0.5_dp) * box%cc(i+1, j, i_phi) + &
+               (i+ioff-1)/(i+ioff-0.5_dp) * box%cc(i-1, j, i_phi) + &
+               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
+               dxdy * box%cc(i, j, i_rhs))
+       end do
+    end do
+
+    do j = 2, nc, 2
+       do i = 1+di(2), nc, 2
+          box%cc(i, j, i_phi) = 0.25_dp * ( &
+               (i+ioff)/(i+ioff-0.5_dp) * box%cc(i+1, j, i_phi) + &
+               (i+ioff-1)/(i+ioff-0.5_dp) * box%cc(i-1, j, i_phi) + &
+               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
+               dxdy * box%cc(i, j, i_rhs))
+       end do
+    end do
+  end subroutine gsrb_box_lpl_cyl
+
+  subroutine gsrb_box_lpl(box, i_phi, i_rhs, redblack_cntr, mg)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
+    type(mg2_t), intent(in)     :: mg
     integer                     :: i, j, nc, di(2)
     real(dp)                    :: dxdy
 
@@ -504,27 +554,48 @@ contains
                dxdy * box%cc(i, j, i_rhs))
        end do
     end do
-  end subroutine gsrb_box
+  end subroutine gsrb_box_lpl
 
-  subroutine mg2d_laplacian_box(box, i_in, i_out, mg)
+  subroutine mg2d_lpl_box(box, i_in, i_out, mg)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: i_in, i_out
     type(mg2_t), intent(in)     :: mg
     integer                     :: i, j, nc
-    real(dp)                    :: inv_dr_sq(2)
+    real(dp)                    :: inv_dr_sq
 
     nc = box%n_cell
     inv_dr_sq = 1 / box%dr**2
 
     do j = 1, nc
        do i = 1, nc
-          box%cc(i, j, i_out) = inv_dr_sq(1) * (box%cc(i-1, j, i_in) &
-               - 2 * box%cc(i, j, i_in) + box%cc(i+1, j, i_in)) + &
-               inv_dr_sq(2) * (box%cc(i, j-1, i_in) &
-               - 2 * box%cc(i, j, i_in) + box%cc(i, j+1, i_in))
+          box%cc(i, j, i_out) = (box%cc(i-1, j, i_in) + box%cc(i+1, j, i_in) + &
+               box%cc(i, j-1, i_in) + box%cc(i, j+1, i_in) - &
+               4 * box%cc(i, j, i_in)) * inv_dr_sq
        end do
     end do
-  end subroutine mg2d_laplacian_box
+  end subroutine mg2d_lpl_box
+
+  subroutine mg2d_lpl_cyl_box(box, i_in, i_out, mg)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: i_in, i_out
+    type(mg2_t), intent(in)     :: mg
+    integer                     :: i, j, nc, ioff
+    real(dp)                    :: inv_dr_sq
+
+    nc = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    ioff = (box%ix(1)-1) * nc
+
+    do j = 1, nc
+       do i = 1, nc
+          box%cc(i, j, i_out) = &
+               ((i+ioff-1)/(i+ioff-0.5_dp) * box%cc(i-1, j, i_in) + &
+               (i+ioff)/(i+ioff-0.5_dp) * box%cc(i+1, j, i_in) + &
+               box%cc(i, j-1, i_in) + box%cc(i, j+1, i_in) - &
+               4 * box%cc(i, j, i_in)) * inv_dr_sq
+       end do
+    end do
+  end subroutine mg2d_lpl_cyl_box
 
   subroutine residual_boxes(boxes, ids, mg)
     type(box2_t), intent(inout) :: boxes(:)

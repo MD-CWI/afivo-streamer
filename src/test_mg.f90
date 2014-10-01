@@ -47,7 +47,7 @@ program test_mg
 
   call a2_set_base(tree, ix_list, nb_list)
 
-  do i = 1, 4
+  do i = 1, 7
      call a2_adjust_refinement(tree, ref_func_init, n_changes)
      if (n_changes == 0) exit
   end do
@@ -56,7 +56,7 @@ program test_mg
   call a2_loop_box(tree, set_init_cond)
 
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, a2_corners_extrap, mg2d_laplacian_box)
+       sides_bc, a2_corners_extrap, mg2d_lpl_box, gsrb_box_lpl)
 
   call mg2d_create_subtree(tree, subtree)
 
@@ -80,7 +80,7 @@ contains
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
     if (box%lvl < 5 .or. &
-         (box%lvl < 6 .and. (norm2(a2_r_center(box)-2) < 1.25_dp))) then
+         (box%lvl < 6 .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref
@@ -98,11 +98,12 @@ contains
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
-          if (norm2(xy - 2) < 1) then
-             box%cc(i, j, i_rhs) = 3
-          else
-             box%cc(i, j, i_rhs) = 0
-          end if
+          ! if (norm2(xy - 2) < 1) then
+          !    box%cc(i, j, i_rhs) = 3
+          ! else
+          !    box%cc(i, j, i_rhs) = 0
+          ! end if
+           box%cc(i, j, i_rhs) = exp(-sum((xy - 2)**2))
        end do
     end do
   end subroutine set_init_cond
