@@ -1,3 +1,4 @@
+! NOTE: this is a test thingy and it is not working
 program test_mg
   use m_afivo
   use m_mg2d
