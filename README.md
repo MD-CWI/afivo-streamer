@@ -13,7 +13,7 @@ The framework should:
 * Be relatively easy to use.
 * Be easy to modify.
 * Efficiently make use of a multicore machine.
-* Provide a simple multigrid solver (with point relaxation).
+* Provide a FAS multigrid solver (v-cycle and fmg) with point relaxation.
 * Provide routines for generating output that can be visualized with
   [Visit](https://wci.llnl.gov/simulation/computer-codes/visit).
 
@@ -25,7 +25,8 @@ To keep the code lean & fast, we restrict the framework in the following way:
   NxNxN (3D) cells, where N is an even number. This is similar to
   [Paramesh](http://www.physics.drexel.edu/~olson/paramesh-doc/Users_manual/amr.html).
 * The refinement ratio is always 2.
-* There is always a layer of width 1 of ghost cells.
+* There is always a layer of width 1 of ghost cells (however you can always get
+  more data from neighbors)
 * Corner ghost cells can be optionally filled.
 * Quantities are either cell-centered or face-centered.
 * We use one type of conservative restriction.
@@ -34,7 +35,6 @@ To keep the code lean & fast, we restrict the framework in the following way:
 * Parallellization is provided only for shared memory systems (using OpenMP).
 
 ### Todo
-* Test and improve multigrid code in 2D
 * Reorganize 2D code and start writing 3D code
 
 ### Features
