@@ -61,7 +61,7 @@ module m_afivo
 
   type lvl2_t
      integer, allocatable      :: ids(:)       ! indices of boxes of level
-     integer, allocatable      :: leafs(:)     ! all ids(:) that are leafs
+     integer, allocatable      :: leaves(:)     ! all ids(:) that are leaves
      integer, allocatable      :: parents(:)   ! all ids(:) that have children
   end type lvl2_t
 
@@ -129,7 +129,7 @@ contains
     ! up to max_lvl+1 to add dummies that are always of size zero
     do lvl = 1, max_lvl+1
        allocate(tree%lvls(lvl)%ids(0))
-       allocate(tree%lvls(lvl)%leafs(0))
+       allocate(tree%lvls(lvl)%leaves(0))
        allocate(tree%lvls(lvl)%parents(0))
     end do
 
@@ -151,7 +151,7 @@ contains
     deallocate(tree%boxes)
     do lvl = 1, tree%max_lvl
        deallocate(tree%lvls(lvl)%ids)
-       deallocate(tree%lvls(lvl)%leafs)
+       deallocate(tree%lvls(lvl)%leaves)
        deallocate(tree%lvls(lvl)%parents)
     end do
     tree%max_id = 0
@@ -271,7 +271,7 @@ contains
           end do
 
           tree%lvls(lvl)%ids = [(n_stored+n, n=1,n_used_lvl)]
-          call set_leafs_parents(boxes_cpy, tree%lvls(lvl))
+          call set_leaves_parents(boxes_cpy, tree%lvls(lvl))
           n_stored = n_stored + n_used_lvl
           deallocate(mortons)
           deallocate(ixs_sort)
@@ -298,7 +298,7 @@ contains
     end if
   end subroutine a2_tidy_up
 
-  subroutine set_leafs_parents(boxes, level)
+  subroutine set_leaves_parents(boxes, level)
     type(box2_t), intent(in)    :: boxes(:)
     type(lvl2_t), intent(inout) :: level
     integer                     :: i, id, i_leaf, i_parent
@@ -312,10 +312,10 @@ contains
           level%parents(i_parent) = id
        else
           i_leaf                  = i_leaf + 1
-          level%leafs(i_leaf)     = id
+          level%leaves(i_leaf)     = id
        end if
     end do
-  end subroutine set_leafs_parents
+  end subroutine set_leaves_parents
 
   subroutine alloc_box(box, n_cell, n_cc, n_fc)
     type(box2_t), intent(inout) :: box
@@ -396,13 +396,13 @@ contains
     if (any(nb_list == a5_no_box)) stop "a2_set_base: unresolved neighbors"
 
     deallocate(tree%lvls(1)%ids)
-    deallocate(tree%lvls(1)%leafs)
+    deallocate(tree%lvls(1)%leaves)
     allocate(tree%lvls(1)%ids(n_boxes))
-    allocate(tree%lvls(1)%leafs(n_boxes))
+    allocate(tree%lvls(1)%leaves(n_boxes))
 
     call a2_get_free_ids(tree, tree%lvls(1)%ids)
     tree%n_lvls = 1
-    tree%lvls(1)%leafs = tree%lvls(1)%ids
+    tree%lvls(1)%leaves = tree%lvls(1)%ids
 
     do i = 1, n_boxes
        id                       = tree%lvls(1)%ids(i)
@@ -428,7 +428,7 @@ contains
     integer, intent(out), optional :: n_changes
     integer                        :: lvl, id, i, c_ids(4), i_c
     integer                        :: max_id_prev, max_id_req
-    integer                        :: n_leafs, n_parents
+    integer                        :: n_leaves, n_parents
     integer, allocatable           :: ref_vals(:)
     type(box2_t), allocatable      :: boxes_cpy(:)
 
@@ -490,16 +490,16 @@ contains
 
     tree%n_lvls = lvl
 
-    ! Update leafs and parents
+    ! Update leaves and parents
     do lvl = 1, tree%n_lvls
        n_parents = size(tree%lvls(lvl+1)%ids)/4
-       n_leafs = size(tree%lvls(lvl)%ids) - n_parents
+       n_leaves = size(tree%lvls(lvl)%ids) - n_parents
 
-       deallocate(tree%lvls(lvl)%leafs)
+       deallocate(tree%lvls(lvl)%leaves)
        deallocate(tree%lvls(lvl)%parents)
-       allocate(tree%lvls(lvl)%leafs(n_leafs))
+       allocate(tree%lvls(lvl)%leaves(n_leaves))
        allocate(tree%lvls(lvl)%parents(n_parents))
-       call set_leafs_parents(tree%boxes, tree%lvls(lvl))
+       call set_leaves_parents(tree%boxes, tree%lvls(lvl))
     end do
   end subroutine a2_adjust_refinement
 
@@ -555,8 +555,8 @@ contains
 
     ! Ensure 2-1 balance.
     do lvl = n_lvls, 2, -1
-       do i = 1, size(lvls(lvl)%leafs) ! We only check leaf boxes
-          id = lvls(lvl)%leafs(i)
+       do i = 1, size(lvls(lvl)%leaves) ! We only check leaf boxes
+          id = lvls(lvl)%leaves(i)
 
           if (ref_vals(id) == a5_do_ref) then
              ! Ensure we will have the necessary neighbors
@@ -1254,7 +1254,7 @@ contains
 
     n_grids = 0
     do lvl = 1, tree%n_lvls
-       n_grids = n_grids + size(tree%lvls(lvl)%leafs)
+       n_grids = n_grids + size(tree%lvls(lvl)%leaves)
     end do
     n_nodes = nodes_per_box * n_grids
     n_cells = cells_per_box * n_grids
@@ -1269,8 +1269,8 @@ contains
 
     ig = 0
     do lvl = 1, tree%n_lvls
-       do n = 1, size(tree%lvls(lvl)%leafs)
-          id = tree%lvls(lvl)%leafs(n)
+       do n = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(n)
 
           ig = ig + 1
           cell_ix = (ig-1) * cells_per_box
