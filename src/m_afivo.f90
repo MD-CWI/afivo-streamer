@@ -203,38 +203,40 @@ contains
     tree%boxes(1:tree%max_id)%tag = ibclr(tree%boxes(1:tree%max_id)%tag, bit)
   end subroutine a2_clear_tagbit
 
-  subroutine a2_tidy_up(tree, frac_max, frac_goal, n_clean_min, reorder)
+  subroutine a2_tidy_up(tree, max_frac_used, goal_frac_used, &
+       n_clean_min, just_reorder)
     use m_morton
     type(a2_t), intent(inout)      :: tree
-    real(dp), intent(in)           :: frac_max, frac_goal
+    real(dp), intent(in)           :: max_frac_used, goal_frac_used
     integer, intent(in)            :: n_clean_min
-    logical, intent(in)            :: reorder
+    logical, intent(in)            :: just_reorder
     real(dp)                       :: frac_in_use
-    logical :: only_reorder
+    logical                        :: only_reorder
     integer                        :: n, lvl, id, old_size, new_size, n_clean
     integer                        :: max_id, n_used, n_stored, n_used_lvl
     integer, allocatable           :: ixs_sort(:), ixs_map(:)
     type(box2_t), allocatable      :: boxes_cpy(:)
     integer(morton_k), allocatable :: mortons(:)
 
-    if (frac_goal > frac_max) stop "a2_tidy_up: need frac_goal < frac_max"
-    if (frac_max >= 1.0_dp)   stop "a2_tidy_up: need frac_max < 1"
-    if (n_clean_min < 1)      stop "a2_tidy_up: need n_clean_min > 0"
+    if (goal_frac_used > max_frac_used) &
+         stop "a2_tidy_up: need goal_frac_used < max_frac_used"
+    if (max_frac_used >= 1.0_dp) stop "a2_tidy_up: need max_frac_used < 1"
+    if (n_clean_min < 1)         stop "a2_tidy_up: need n_clean_min > 0"
 
-    max_id     = tree%max_id
+    max_id      = tree%max_id
     n_used      = count(btest(tree%boxes(1:max_id)%tag, a5_bit_in_use))
     old_size    = size(tree%boxes)
     frac_in_use = n_used / real(old_size, dp)
-    n_clean     = nint((frac_goal - frac_in_use) * old_size)
+    n_clean     = nint((goal_frac_used - frac_in_use) * old_size)
 
-    if (frac_in_use > frac_max .or. (frac_in_use < frac_goal .and. &
+    if (frac_in_use > max_frac_used .or. (frac_in_use < goal_frac_used .and. &
          n_clean > n_clean_min)) then
-       new_size = max(1, nint(n_used/frac_goal))
+       new_size = max(1, nint(n_used/goal_frac_used))
     else
        new_size = old_size
     end if
 
-    if (new_size /= old_size .or. reorder) then
+    if (new_size /= old_size .or. just_reorder) then
        only_reorder = (new_size == old_size)
        print *, "a2_tidy_up:", old_size, new_size, only_reorder
 
@@ -1225,7 +1227,7 @@ contains
             boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
        c_id = boxes(id)%children(ch_hxhy)
-       boxes(id)%fy(nch+1:, nc, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fy(nch+1:, nc+1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
     end select

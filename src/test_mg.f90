@@ -4,20 +4,22 @@ program test_mg
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
+  integer, parameter :: dp           = kind(0.0d0)
+  integer, parameter :: box_size     = 8
+  integer, parameter :: n_boxes_base = 3
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_res = 4
+
   type(a2_t)         :: tree
   integer            :: i, id, n_changes
-  integer            :: ix_list(2, 3)
-  integer            :: nb_list(4, 3)
-  integer, parameter :: box_size    = 4
-  integer            :: n_boxes_max = 10*1000
+  integer            :: ix_list(2, n_boxes_base)
+  integer            :: nb_list(4, n_boxes_base)
+  integer            :: n_boxes_max  = 10*1000
+  integer            :: n_lvls_max   = 20
   real(dp)           :: dr
   character(len=40)  :: fname, var_names(4)
-
-  type(mg2_t)      :: mg
-  type(mg2_subt_t) :: subtree
+  type(mg2_t)        :: mg
+  type(mg2_subt_t)   :: subtree
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
@@ -27,8 +29,8 @@ program test_mg
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, 20, n_boxes_max, box_size, n_var_cell=4, n_var_face=0, &
-       dr = dr, r_min = [0.0_dp, 0.0_dp])
+  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=4, &
+       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp])
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
@@ -47,7 +49,7 @@ program test_mg
 
   call a2_set_base(tree, ix_list, nb_list)
 
-  do i = 1, 7
+  do i = 1, 20
      call a2_adjust_refinement(tree, ref_func_init, n_changes)
      if (n_changes == 0) exit
   end do
@@ -55,17 +57,20 @@ program test_mg
   ! Set rhs and initial guess for phi
   call a2_loop_box(tree, set_init_cond)
 
+  ! Set the multigrid options
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, a2_corners_extrap, mg2d_lpl_box, gsrb_box_lpl)
+       sides_bc, a2_corners_extrap, mg2d_lpl_cyl_box, mg2d_gsrb_lpl_cyl_box)
 
+  ! Create a "subtree" with coarser levels than tree
   call mg2d_create_subtree(tree, subtree)
 
   ! Restrict from children recursively
-  call mg2d_restrict_trees(tree, subtree, [i_rhs, i_phi], mg, .true.)
+  call mg2d_restrict_trees(tree, subtree, [i_rhs, i_phi], mg, &
+       use_subtree=.true.)
 
   do i = 1, 10
      ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
-     call mg2d_fas_fmg(tree, subtree, mg, .true.)
+     call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
      write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
@@ -79,7 +84,7 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 5 .or. &
+    if (box%lvl < 3 .or. &
          (box%lvl < 6 .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
        ref_func_init = a5_do_ref
     else
@@ -93,17 +98,11 @@ contains
     real(dp)                    :: xy(2)
 
     nc = box%n_cell
-    box%cc(:, :, i_phi) = 0
 
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
-          ! if (norm2(xy - 2) < 1) then
-          !    box%cc(i, j, i_rhs) = 3
-          ! else
-          !    box%cc(i, j, i_rhs) = 0
-          ! end if
-           box%cc(i, j, i_rhs) = exp(-sum((xy - 2)**2))
+          box%cc(i, j, i_rhs) = exp(-sum((xy - 2)**2))
        end do
     end do
   end subroutine set_init_cond

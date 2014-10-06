@@ -56,8 +56,8 @@ module m_mg2d
   public :: mg2d_fas_vcycle
   public :: mg2d_lpl_box
   public :: mg2d_lpl_cyl_box
-  public :: gsrb_box_lpl
-  public :: gsrb_box_lpl_cyl
+  public :: mg2d_gsrb_lpl_box
+  public :: mg2d_gsrb_lpl_cyl_box
 
 contains
 
@@ -485,7 +485,7 @@ contains
     end do
   end subroutine gsrb_boxes
 
-  subroutine gsrb_box_lpl_cyl(box, i_phi, i_rhs, redblack_cntr, mg)
+  subroutine mg2d_gsrb_lpl_cyl_box(box, i_phi, i_rhs, redblack_cntr, mg)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
     type(mg2_t), intent(in)     :: mg
@@ -519,9 +519,9 @@ contains
                dxdy * box%cc(i, j, i_rhs))
        end do
     end do
-  end subroutine gsrb_box_lpl_cyl
+  end subroutine mg2d_gsrb_lpl_cyl_box
 
-  subroutine gsrb_box_lpl(box, i_phi, i_rhs, redblack_cntr, mg)
+  subroutine mg2d_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr, mg)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
     type(mg2_t), intent(in)     :: mg
@@ -552,7 +552,7 @@ contains
                dxdy * box%cc(i, j, i_rhs))
        end do
     end do
-  end subroutine gsrb_box_lpl
+  end subroutine mg2d_gsrb_lpl_box
 
   subroutine mg2d_lpl_box(box, i_in, i_out, mg)
     type(box2_t), intent(inout) :: box
