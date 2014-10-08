@@ -1,8 +1,8 @@
 FC 	:= gfortran
 FFLAGS	:= -Wall -O2 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow\
-	-pedantic -std=f2008
-# FFLAGS	:= -Ofast
-OBJS	:= m_morton.f90 m_afivo.f90 m_vtk.f90 m_mg2d.f90 m_gmres.f90
+	-pedantic -std=f2008 -fopenmp
+FFLAGS	:= -Ofast -fopenmp
+OBJS	:= m_morton.f90 m_afivo_constants.f90 m_afivo_2d.f90 m_vtk.f90 m_mg2d.f90 m_gmres.f90
 
 INCDIRS	:=
 LIBDIRS :=
@@ -23,12 +23,12 @@ clean:
 	$(RM) *.o *.mod test_m_morton
 
 # Dependency information
-m_afivo.o:		m_vtk.o m_morton.o
-m_mg2d.o:		m_afivo.o
+m_afivo_2d.o:		m_vtk.o m_morton.o m_afivo_constants.o
+m_mg2d.o:		m_afivo_2d.o
 test_morton:		m_morton.o
-test_base:		m_afivo.o m_vtk.o m_morton.o
-test_drift_diff:	m_afivo.o m_vtk.o m_morton.o
-test_mg:		m_afivo.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
-test_mg_elec:		m_afivo.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
+test_base:		m_afivo_2d.o m_vtk.o m_morton.o
+test_drift_diff:	m_afivo_2d.o m_vtk.o m_morton.o
+test_mg:		m_afivo_2d.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
+test_mg_elec:		m_afivo_2d.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
 test_gmres:		m_gmres.o
 test_unstr_vtk:		m_vtk.o

@@ -1,5 +1,5 @@
 program test_mg
-  use m_afivo
+  use m_afivo_2d
   use m_mg2d
 
   implicit none

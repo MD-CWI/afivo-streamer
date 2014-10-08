@@ -1,5 +1,5 @@
 program test_drift_diff
-  use m_afivo
+  use m_afivo_2d
 
   implicit none
 
@@ -63,7 +63,7 @@ program test_drift_diff
      print *, "i = ", i, "n_boxes", tree%max_id
 
      write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
+     ! call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
 
      ! Advance time_per_adapt
      done_with_loop = .false.
@@ -91,9 +91,9 @@ program test_drift_diff
      time = time + time_per_adapt
 
      call a2_loop_boxes(tree, restrict_from_children)
-     call a2_adjust_refinement(tree, ref_func)
+     ! call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
-     call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
+     ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
   end do
 
   call a2_destroy(tree)
@@ -102,7 +102,7 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 4) then
+    if (box%lvl < 5) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref
@@ -126,7 +126,7 @@ contains
     end do
     diff = sqrt(0.5_dp * diff)
 
-    if (diff > 0.08_dp) then
+    if (diff > 0.06_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref

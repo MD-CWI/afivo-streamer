@@ -1,5 +1,5 @@
 program test_base
-  use m_afivo
+  use m_afivo_2d
 
   implicit none
 
@@ -44,7 +44,7 @@ program test_base
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
-          n_clean_min=10000, just_reorder=.true.)
+          n_clean_min=10000, only_reorder=.true.)
      call a2_loop_boxes(tree, prolong_to_new_children)
      call a2_loop_boxes(tree, set_morton_variable)
   end do

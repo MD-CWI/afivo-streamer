@@ -1,5 +1,5 @@
 module m_mg2d
-  use m_afivo
+  use m_afivo_2d
 
   implicit none
   private
