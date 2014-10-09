@@ -5,7 +5,7 @@ program test_mg
   implicit none
 
   integer, parameter :: dp           = kind(0.0d0)
-  integer, parameter :: box_size     = 8
+  integer, parameter :: box_size     = 32
   integer, parameter :: n_boxes_base = 3
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_res = 4
@@ -68,7 +68,7 @@ program test_mg
   call mg2d_restrict_trees(tree, subtree, [i_rhs, i_phi], mg, &
        use_subtree=.true.)
 
-  do i = 1, 100
+  do i = 1, 10
      ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
      call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
      write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
