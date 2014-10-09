@@ -17,7 +17,7 @@ LIBS	:=
 .PHONY: all clean
 
 all: test_morton test_base test_unstr_vtk test_drift_diff test_mg \
-	test_gmres test_mg_elec
+	test_gmres test_mg_elec test_omp
 
 clean:
 	$(RM) *.o *.mod test_m_morton
@@ -32,3 +32,4 @@ test_mg:		m_afivo_2d.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
 test_mg_elec:		m_afivo_2d.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
 test_gmres:		m_gmres.o
 test_unstr_vtk:		m_vtk.o
+test_omp:		test_mod_omp.o

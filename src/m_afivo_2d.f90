@@ -158,16 +158,14 @@ contains
   subroutine a2_loop_box(tree, my_procedure)
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr)        :: my_procedure
-    integer                   :: lvl, i, id
+    integer                   :: id
 
-    do lvl = 1, tree%n_lvls
-       !$omp parallel do private(id)
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call my_procedure(tree%boxes(id))
-       end do
-       !$omp end parallel do
+    !$omp parallel do
+    do id = 1, tree%max_id
+       if (btest(tree%boxes(id)%tag, a5_bit_in_use)) &
+            call my_procedure(tree%boxes(id))
     end do
+    !$omp end parallel do
   end subroutine a2_loop_box
 
   ! Call procedure for each box in tree, with argument rarg
@@ -175,32 +173,28 @@ contains
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr_arg)    :: my_procedure
     real(dp), intent(in)      :: rarg(:)
-    integer                   :: lvl, i, id
+    integer                   :: id
 
-    do lvl = 1, tree%n_lvls
-       !$omp parallel do private(id)
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call my_procedure(tree%boxes(id), rarg)
-       end do
-       !$omp end parallel do
+    !$omp parallel do
+    do id = 1, tree%max_id
+       if (btest(tree%boxes(id)%tag, a5_bit_in_use)) &
+            call my_procedure(tree%boxes(id), rarg)
     end do
+    !$omp end parallel do
   end subroutine a2_loop_box_arg
 
   ! Call procedure for each id in tree, giving the list of boxes
   subroutine a2_loop_boxes(tree, my_procedure)
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr_boxes)  :: my_procedure
-    integer                   :: lvl, i, id
+    integer                   :: id
 
-    do lvl = 1, tree%n_lvls
-       !$omp parallel do private(id)
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call my_procedure(tree%boxes, id)
-       end do
-       !$omp end parallel do
+    !$omp parallel do
+    do id = 1, tree%max_id
+       if (btest(tree%boxes(id)%tag, a5_bit_in_use)) &
+            call my_procedure(tree%boxes, id)
     end do
+    !$omp end parallel do
   end subroutine a2_loop_boxes
 
   ! Clear the bit from all the tags in the tree
@@ -465,7 +459,7 @@ contains
        print *, "Resizing box storage for refinement", max_id_req
        allocate(boxes_cpy(max_id_req))
        boxes_cpy(1:max_id_prev)      = tree%boxes(1:max_id_prev)
-       boxes_cpy(max_id_prev+1:)%tag = 0 ! Set to not in use
+       boxes_cpy(max_id_prev+1:)%tag = 0 ! empty tag
        call move_alloc(boxes_cpy, tree%boxes)
     end if
 
@@ -640,7 +634,7 @@ contains
 
     do ic = 1, 4
        c_id            = boxes(id)%children(ic)
-       boxes(c_id)%tag = ibclr(boxes(c_id)%tag, a5_bit_in_use)
+       boxes(c_id)%tag = 0      ! clear tag
 
        do nb = 1, 4             ! Remove from neighbors
           nb_id = boxes(c_id)%neighbors(nb)

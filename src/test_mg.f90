@@ -68,11 +68,11 @@ program test_mg
   call mg2d_restrict_trees(tree, subtree, [i_rhs, i_phi], mg, &
        use_subtree=.true.)
 
-  do i = 1, 10
+  do i = 1, 100
      ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
      call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
      write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
+     ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
   print *, "max_id", tree%max_id
@@ -85,7 +85,7 @@ contains
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
     if (box%lvl < 3 .or. &
-         (box%lvl < 6 .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
+         (box%lvl < 7)) then ! .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref

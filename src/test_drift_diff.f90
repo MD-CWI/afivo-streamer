@@ -88,12 +88,14 @@ program test_drift_diff
         time_in_loop = time_in_loop + dt
      end do
 
+     print *, time_per_adapt / dt
+
      time = time + time_per_adapt
 
      call a2_loop_boxes(tree, restrict_from_children)
-     ! call a2_adjust_refinement(tree, ref_func)
+     call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
-     ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
+     call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
   end do
 
   call a2_destroy(tree)
@@ -126,7 +128,7 @@ contains
     end do
     diff = sqrt(0.5_dp * diff)
 
-    if (diff > 0.06_dp) then
+    if (diff > 0.05_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref

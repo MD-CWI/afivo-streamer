@@ -193,13 +193,15 @@ contains
           if (lvl > subt%min_lvl) then
              ! Correct solution at this lvl using lvl-1 data
              ! phi = phi + prolong(phi_coarse - phi_old_coarse)
+             !$omp parallel do private(id, jd)
              do i = 1, size(subt%lvls(lvl)%ids)
                 id = subt%lvls(lvl)%ids(i)
                 jd = subt%lvls(lvl-1)%ids(i)
                 call correct_child_box(subt%boxes(jd), subt%boxes(id), &
                      [0,0], mg%i_phi, mg%i_phi_old)
              end do
-
+             !$omp end parallel do
+             
              ! Update ghost cells
              call mg2d_fill_gc(subt%boxes, subt%lvls(lvl)%ids, [mg%i_phi], &
                   mg%sides_bc, mg%corners_bc)
@@ -218,22 +220,26 @@ contains
        if (lvl > 1) then
           ! Correct solution at this lvl using lvl-1 data
           ! phi = phi + prolong(phi_coarse - phi_old_coarse)
+          !$omp parallel do private(id)
           do i = 1, size(tree%lvls(lvl-1)%parents)
              id = tree%lvls(lvl-1)%parents(i)
              call correct_children(tree%boxes, id, mg%i_phi, mg%i_phi_old)
           end do
+          !$omp end parallel do
 
           ! Update ghost cells
           call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, [mg%i_phi], &
                mg%sides_bc, mg%corners_bc)
 
        else if (lvl == 1 .and. use_subtree) then
+          !$omp parallel do private(id, jd)
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
              jd = subt%lvls(lvl-1)%ids(i)
              call correct_child_box(subt%boxes(jd), tree%boxes(id), &
                   [0,0], mg%i_phi, mg%i_phi_old)
           end do
+          !$omp end parallel do
        endif
 
        ! Perform V-cycle
@@ -270,12 +276,14 @@ contains
 
        ! Restrict phi and res
        if (use_subtree .and. lvl == 1) then
+          !$omp parallel do private(id, jd)
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
              jd = subt%lvls(lvl-1)%ids(i)
              call a2_restrict_box(tree%boxes(id), subt%boxes(jd), &
                   [0,0], [mg%i_phi, mg%i_res])
           end do
+          !$omp end parallel do
        else
           call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, &
                [mg%i_phi, mg%i_res])
@@ -292,17 +300,21 @@ contains
 
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
        if (use_subtree .and. lvl == 1) then
+          !$omp parallel do private(id)
           do i = 1, size(subt%lvls(lvl-1)%ids)
              id = subt%lvls(lvl-1)%ids(i)
              call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
              call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
           end do
+          !$omp end parallel do
        else
+          !$omp parallel do private(id)
           do i = 1, size(tree%lvls(lvl-1)%parents)
              id = tree%lvls(lvl-1)%parents(i)
              call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs, mg)
              call a2_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
           end do
+          !$omp end parallel do
        end if
 
        ! Store current coarse phi in phi_old
@@ -319,17 +331,21 @@ contains
        ! Correct solution at this lvl using lvl-1 data
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
        if (use_subtree .and. lvl == 1) then
+          !$omp parallel do private(id, jd)
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
              jd = subt%lvls(lvl-1)%ids(i)
              call correct_child_box(subt%boxes(jd), tree%boxes(id), &
                   [0,0], mg%i_phi, mg%i_phi_old)
           end do
+          !$omp end parallel do
        else
+          !$omp parallel do private(id)
           do i = 1, size(tree%lvls(lvl-1)%parents)
              id = tree%lvls(lvl-1)%parents(i)
              call correct_children(tree%boxes, id, mg%i_phi, mg%i_phi_old)
           end do
+          !$omp end parallel do
        end if
 
        ! Have to fill ghost cells again (todo: not everywhere?)
@@ -364,23 +380,27 @@ contains
        call residual_boxes(subt%boxes, subt%lvls(lvl)%ids, mg)
 
        ! Restrict phi and res
+       !$omp parallel do private(id, jd)
        do i = 1, size(subt%lvls(lvl)%ids)
           id = subt%lvls(lvl)%ids(i)
           jd = subt%lvls(lvl-1)%ids(i)
           call a2_restrict_box(subt%boxes(id), subt%boxes(jd), &
                [0,0], [mg%i_phi, mg%i_res])
        end do
+       !$omp end parallel do
 
        ! Have to update ghost cells for phi_c (todo: not everywhere?)
        call mg2d_fill_gc(subt%boxes, subt%lvls(lvl-1)%ids, [mg%i_phi], &
             mg%sides_bc, mg%corners_bc)
 
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
+       !$omp parallel do private(id)
        do i = 1, size(subt%lvls(lvl-1)%ids)
           id = subt%lvls(lvl-1)%ids(i)
           call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
           call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
        end do
+       !$omp end parallel do
 
        ! Store current coarse phi in phi_old
        call a2_boxes_copy_cc(subt%boxes, subt%lvls(lvl-1)%ids, &
@@ -390,13 +410,15 @@ contains
 
        ! Correct solution at this lvl using lvl-1 data
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
+       !$omp parallel do private(id, jd)
        do i = 1, size(subt%lvls(lvl)%ids)
           id = subt%lvls(lvl)%ids(i)
           jd = subt%lvls(lvl-1)%ids(i)
           call correct_child_box(subt%boxes(jd), subt%boxes(id), &
                [0,0], mg%i_phi, mg%i_phi_old)
        end do
-
+       !$omp end parallel do
+       
        ! Have to fill ghost cells again (todo: not everywhere?)
        call mg2d_fill_gc(subt%boxes, subt%lvls(lvl)%ids, [mg%i_phi], &
             mg%sides_bc, mg%corners_bc)
@@ -412,14 +434,18 @@ contains
     procedure(a2_subr_gc)       :: sides_bc, corners_bc
     integer                     :: i
 
+    !$omp parallel do
     do i = 1, size(ids)
        call a2_gc_box_sides(boxes, ids(i), ivs, &
             a2_sides_extrap, sides_bc)
     end do
+    !$omp end parallel do
+    !$omp parallel do
     do i = 1, size(ids)
        call a2_gc_box_corners(boxes, ids(i), ivs, &
             a2_corners_extrap, corners_bc)
     end do
+    !$omp end parallel do
   end subroutine mg2d_fill_gc
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
@@ -476,9 +502,11 @@ contains
     integer                     :: n, i
 
     do n = 1, 2 * n_cycle
+       !$omp parallel do
        do i = 1, size(ids)
           call mg%box_gsrb(boxes(ids(i)), mg%i_phi, mg%i_rhs, n, mg)
        end do
+       !$omp end parallel do
 
        ! Communicate updated boundary cells
        call mg2d_fill_gc(boxes, ids, [mg%i_phi], mg%sides_bc, mg%corners_bc)
