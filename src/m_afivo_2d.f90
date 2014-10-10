@@ -158,14 +158,18 @@ contains
   subroutine a2_loop_box(tree, my_procedure)
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr)        :: my_procedure
-    integer                   :: id
+    integer                   :: lvl, i, id
 
-    !$omp parallel do
-    do id = 1, tree%max_id
-       if (btest(tree%boxes(id)%tag, a5_bit_in_use)) &
-            call my_procedure(tree%boxes(id))
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call my_procedure(tree%boxes(id))
+       end do
+       !$omp end do nowait
     end do
-    !$omp end parallel do
+    !$omp end parallel
   end subroutine a2_loop_box
 
   ! Call procedure for each box in tree, with argument rarg
@@ -173,28 +177,36 @@ contains
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr_arg)    :: my_procedure
     real(dp), intent(in)      :: rarg(:)
-    integer                   :: id
+    integer                   :: lvl, i, id
 
-    !$omp parallel do
-    do id = 1, tree%max_id
-       if (btest(tree%boxes(id)%tag, a5_bit_in_use)) &
-            call my_procedure(tree%boxes(id), rarg)
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call my_procedure(tree%boxes(id), rarg)
+       end do
+       !$omp end do nowait
     end do
-    !$omp end parallel do
+    !$omp end parallel
   end subroutine a2_loop_box_arg
 
   ! Call procedure for each id in tree, giving the list of boxes
   subroutine a2_loop_boxes(tree, my_procedure)
     type(a2_t), intent(inout) :: tree
     procedure(a2_subr_boxes)  :: my_procedure
-    integer                   :: id
+    integer                   :: lvl, i, id
 
-    !$omp parallel do
-    do id = 1, tree%max_id
-       if (btest(tree%boxes(id)%tag, a5_bit_in_use)) &
-            call my_procedure(tree%boxes, id)
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call my_procedure(tree%boxes, id)
+       end do
+       !$omp end do nowait
     end do
-    !$omp end parallel do
+    !$omp end parallel
   end subroutine a2_loop_boxes
 
   ! Clear the bit from all the tags in the tree
@@ -221,8 +233,8 @@ contains
 
     if (goal_frac_used > max_frac_used) &
          stop "a2_tidy_up: need goal_frac_used < max_frac_used"
-    if (max_frac_used >= 1.0_dp) stop "a2_tidy_up: need max_frac_used < 1"
-    if (n_clean_min < 1)         stop "a2_tidy_up: need n_clean_min > 0"
+    if (max_frac_used > 1.0_dp) stop "a2_tidy_up: need max_frac_used < 1"
+    if (n_clean_min < 1)        stop "a2_tidy_up: need n_clean_min > 0"
 
     max_id      = tree%max_id
     n_used      = count(btest(tree%boxes(1:max_id)%tag, a5_bit_in_use))
@@ -283,7 +295,9 @@ contains
        do n = 1, n_used
           boxes_cpy(n)%parent = ixs_map(boxes_cpy(n)%parent)
           boxes_cpy(n)%children = ixs_map(boxes_cpy(n)%children)
-          boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
+          where (boxes_cpy(n)%neighbors > a5_no_box)
+             boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
+          end where
        end do
 
        if (only_reorder) then
@@ -548,14 +562,16 @@ contains
     ref_flags(:) = a5_kp_ref      ! Used indices are overwritten
 
     ! Set refinement flags for all boxes using ref_func
+    !$omp parallel private(lvl, i, id)
     do lvl = 1, n_lvls
-       !$omp parallel do private(id)
+       !$omp do
        do i = 1, size(lvls(lvl)%ids)
           id           = lvls(lvl)%ids(i)
           ref_flags(id) = ref_func(boxes(id))
        end do
-       !$omp end parallel do
+       !$omp end do nowait
     end do
+    !$omp end parallel
 
     ! Cannot derefine lvl 1
     do i = 1, size(lvls(1)%ids)

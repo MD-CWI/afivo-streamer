@@ -5,7 +5,7 @@ program test_mg
   implicit none
 
   integer, parameter :: dp           = kind(0.0d0)
-  integer, parameter :: box_size     = 32
+  integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 3
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_res = 4
@@ -69,8 +69,8 @@ program test_mg
        use_subtree=.true.)
 
   do i = 1, 10
-     ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
-     call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
+     call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
+     ! call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
      write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
@@ -85,7 +85,7 @@ contains
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
     if (box%lvl < 3 .or. &
-         (box%lvl < 7)) then ! .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
+         (box%lvl < 10 .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref

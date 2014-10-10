@@ -201,7 +201,7 @@ contains
                      [0,0], mg%i_phi, mg%i_phi_old)
              end do
              !$omp end parallel do
-             
+
              ! Update ghost cells
              call mg2d_fill_gc(subt%boxes, subt%lvls(lvl)%ids, [mg%i_phi], &
                   mg%sides_bc, mg%corners_bc)
@@ -298,13 +298,15 @@ contains
                mg%sides_bc, mg%corners_bc)
        end if
 
-       ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
+       ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
+       ! store current coarse phi in phi_old
        if (use_subtree .and. lvl == 1) then
           !$omp parallel do private(id)
           do i = 1, size(subt%lvls(lvl-1)%ids)
              id = subt%lvls(lvl-1)%ids(i)
              call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
              call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
+             call a2_box_copy_cc(subt%boxes(id), mg%i_phi, mg%i_phi_old)
           end do
           !$omp end parallel do
        else
@@ -313,17 +315,9 @@ contains
              id = tree%lvls(lvl-1)%parents(i)
              call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs, mg)
              call a2_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
+             call a2_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_phi_old)
           end do
           !$omp end parallel do
-       end if
-
-       ! Store current coarse phi in phi_old
-       if (use_subtree .and. lvl == 1) then
-          call a2_boxes_copy_cc(subt%boxes, subt%lvls(lvl-1)%ids, &
-               mg%i_phi, mg%i_phi_old)
-       else
-          call a2_boxes_copy_cc(tree%boxes, tree%lvls(lvl-1)%ids, &
-               mg%i_phi, mg%i_phi_old)
        end if
 
        call mg2d_fas_vcycle(tree, subt, mg, use_subtree, lvl-1)
@@ -393,18 +387,16 @@ contains
        call mg2d_fill_gc(subt%boxes, subt%lvls(lvl-1)%ids, [mg%i_phi], &
             mg%sides_bc, mg%corners_bc)
 
-       ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
+       ! Store current coarse phi in phi_old and set rhs_c = laplacian(phi_c) +
+       ! restrict(res) where it is refined
        !$omp parallel do private(id)
        do i = 1, size(subt%lvls(lvl-1)%ids)
           id = subt%lvls(lvl-1)%ids(i)
           call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
           call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
+          call a2_box_copy_cc(subt%boxes(id), mg%i_phi, mg%i_phi_old)
        end do
        !$omp end parallel do
-
-       ! Store current coarse phi in phi_old
-       call a2_boxes_copy_cc(subt%boxes, subt%lvls(lvl-1)%ids, &
-            mg%i_phi, mg%i_phi_old)
 
        call mg2d_fas_vcycle_subtree(subt, mg, lvl-1)
 
@@ -418,7 +410,7 @@ contains
                [0,0], mg%i_phi, mg%i_phi_old)
        end do
        !$omp end parallel do
-       
+
        ! Have to fill ghost cells again (todo: not everywhere?)
        call mg2d_fill_gc(subt%boxes, subt%lvls(lvl)%ids, [mg%i_phi], &
             mg%sides_bc, mg%corners_bc)
@@ -496,6 +488,7 @@ contains
   end subroutine correct_child_box
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
+    use omp_lib
     type(box2_t), intent(inout) :: boxes(:)
     type(mg2_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:), n_cycle
