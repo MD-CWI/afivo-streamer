@@ -75,7 +75,7 @@ contains
        do j = 1, nc
           do i = 1, nc
              xyz = a3_r_cc(box, [i,j,k])
-             box%cc(i, j, k, i_phi) = sin(norm2(xyz))
+             box%cc(i, j, k, i_phi) = sin(xyz(1)) * sin(xyz(2)) * sin(xyz(3))
           end do
        end do
     end do
