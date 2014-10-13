@@ -69,8 +69,8 @@ program test_mg
        use_subtree=.true.)
 
   do i = 1, 100
-     call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
-     ! call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
+     ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
+     call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
      write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do

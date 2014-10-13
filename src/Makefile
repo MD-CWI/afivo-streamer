@@ -1,7 +1,7 @@
 FC 	:= gfortran
 FFLAGS	:= -Wall -O2 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow\
 	-pedantic -std=f2008 -fopenmp
-# FFLAGS	:= -Ofast -fopenmp
+FFLAGS	:= -Ofast -fopenmp
 OBJS	:= m_morton.f90 m_afivo_constants.f90 m_afivo_2d.f90 m_vtk.f90 m_mg2d.f90 m_gmres.f90
 
 INCDIRS	:=

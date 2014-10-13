@@ -426,18 +426,20 @@ contains
     procedure(a2_subr_gc)       :: sides_bc, corners_bc
     integer                     :: i
 
-    !$omp parallel do
+    !$omp parallel
+    !$omp do
     do i = 1, size(ids)
        call a2_gc_box_sides(boxes, ids(i), ivs, &
             a2_sides_extrap, sides_bc)
     end do
-    !$omp end parallel do
-    !$omp parallel do
+    !$omp end do
+    !$omp do
     do i = 1, size(ids)
        call a2_gc_box_corners(boxes, ids(i), ivs, &
             a2_corners_extrap, corners_bc)
     end do
-    !$omp end parallel do
+    !$omp end do
+    !$omp end parallel
   end subroutine mg2d_fill_gc
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
@@ -494,16 +496,29 @@ contains
     integer, intent(in)         :: ids(:), n_cycle
     integer                     :: n, i
 
+    !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
-       !$omp parallel do
+       !$omp do
        do i = 1, size(ids)
           call mg%box_gsrb(boxes(ids(i)), mg%i_phi, mg%i_rhs, n, mg)
        end do
-       !$omp end parallel do
+       !$omp end do
 
-       ! Communicate updated boundary cells
-       call mg2d_fill_gc(boxes, ids, [mg%i_phi], mg%sides_bc, mg%corners_bc)
+       !$omp do
+       do i = 1, size(ids)
+          call a2_gc_box_sides(boxes, ids(i), [mg%i_phi], &
+               a2_sides_extrap, mg%sides_bc)
+       end do
+       !$omp end do
+
+       !$omp do
+       do i = 1, size(ids)
+          call a2_gc_box_corners(boxes, ids(i), [mg%i_phi], &
+               a2_corners_extrap, mg%corners_bc)
+       end do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine gsrb_boxes
 
   subroutine mg2d_gsrb_lpl_cyl_box(box, i_phi, i_rhs, redblack_cntr, mg)
@@ -622,9 +637,11 @@ contains
     integer, intent(in)         :: ids(:)
     integer                     :: i
 
+    !$omp parallel do
     do i = 1, size(ids)
        call residual_box(boxes(ids(i)), mg)
     end do
+    !$omp end parallel do
   end subroutine residual_boxes
 
   subroutine residual_box(box, mg)
