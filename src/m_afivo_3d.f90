@@ -7,20 +7,7 @@ module m_afivo_3d
 
   integer, parameter, private :: dp = kind(0.0d0)
 
-  ! Corners
-  integer, parameter :: a3_cn_lxlylz = 1
-  integer, parameter :: a3_cn_hxlylz = 2
-  integer, parameter :: a3_cn_lxhylz = 3
-  integer, parameter :: a3_cn_hxhylz = 4
-  integer, parameter :: a3_cn_lxlyhz = 5
-  integer, parameter :: a3_cn_hxlyhz = 6
-  integer, parameter :: a3_cn_lxhyhz = 7
-  integer, parameter :: a3_cn_hxhyhz = 8
-  integer, parameter :: a3_cn_nbs(3, 8) = reshape(&
-       [1,3,5, 2,3,5, 1,4,5, 2,4,5, &
-       1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
-
-  ! Children (same location as corners)
+  ! Children (same location as **corners**)
   integer, parameter :: a3_ch_lxlylz = 1
   integer, parameter :: a3_ch_hxlylz = 2
   integer, parameter :: a3_ch_lxhylz = 3
@@ -29,31 +16,52 @@ module m_afivo_3d
   integer, parameter :: a3_ch_hxlyhz = 6
   integer, parameter :: a3_ch_lxhyhz = 7
   integer, parameter :: a3_ch_hxhyhz = 8
-  integer, parameter :: a3_ch_dix(3, 8) = reshape(&
+
+  ! Neighboring indices for each child
+  integer, parameter :: a3_ch_nbs(3, 8) = reshape( &
+       [1,3,5, 2,3,5, 1,4,5, 2,4,5, &
+       1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
+
+  ! Index offset for each child
+  integer, parameter :: a3_ch_dix(3, 8) = reshape( &
        [0,0,0, 1,0,0, 0,1,0, 1,1,0, &
        0,0,1, 1,0,1, 0,1,1, 1,1,1], [3,8])
+
+  ! Reverse child index in each direction
   integer, parameter :: a3_ch_rev(8, 3) = reshape( &
        [2,1,4,3,6,5,8,7, 3,4,1,2,7,8,5,6, 5,6,7,8,1,2,3,4], [8,3])
+
+  ! Children adjacent to a neighbor
   integer, parameter :: a3_ch_adj_nb(4, 6) = reshape( &
        [1,3,5,7, 2,4,6,8, 1,2,5,6, 3,4,7,8, 1,2,3,4, 5,6,7,8], [4,6])
+
+  ! Which children have a low index per dimension
   logical, parameter :: a3_ch_low(8, 3) = reshape([ &
        .true., .false., .true., .false., .true., .false., .true., .false., &
        .true., .true., .false., .false., .true., .true., .false., .false., &
        .true., .true., .true., .true., .false., .false., .false., .false.], &
        [8,3])
 
-  ! Neighbor topology information (todo: add documentation)
+  ! Neighbor topology information
   integer, parameter :: a3_nb_lx = 1
   integer, parameter :: a3_nb_hx = 2
   integer, parameter :: a3_nb_ly = 3
   integer, parameter :: a3_nb_hy = 4
   integer, parameter :: a3_nb_lz = 5
   integer, parameter :: a3_nb_hz = 6
+
+  ! Index offsets of neighbors
   integer, parameter :: a3_nb_dix(3, 6) = reshape( &
        [-1,0,0, 1,0,0, 0,-1,0, 0,1,0, 0,0,-1, 0,0,1], [3,6])
+
+  ! Which neighbors have a lower index
   logical, parameter :: a3_nb_low(6) = &
        [.true., .false., .true., .false., .true., .false.]
+
+  ! Reverse neighbors
   integer, parameter :: a3_nb_rev(6) = [2, 1, 4, 3, 6, 5]
+
+  ! Direction (dimension) for a neighbor
   integer, parameter :: a3_nb_dim(6) = [1, 1, 2, 2, 3, 3]
 
   type box3_t
@@ -1015,7 +1023,7 @@ contains
              do i = 1, nc, 2
                 i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
 
-                box_p%cc(i_c1, j_c1, k_c1, iv) = 0.125_dp * (&
+                box_p%cc(i_c1, j_c1, k_c1, iv) = 0.125_dp * ( &
                      box_c%cc(i,   j,   k,   iv) + &
                      box_c%cc(i+1, j,   k,   iv) + &
                      box_c%cc(i,   j+1, k,   iv) + &
@@ -1207,7 +1215,7 @@ contains
     integer                     :: cn, nbs(3)
 
     do cn = 1, 8
-       nbs = a3_cn_nbs(:, cn)
+       nbs = a3_ch_nbs(:, cn)
        if (boxes(id)%neighbors(nbs(1)) > a5_no_box) then
           call a3_gc_corner_from_nb(boxes, id, cn, nbs(1), ivs)
        else if (boxes(id)%neighbors(nbs(2)) > a5_no_box) then
@@ -1232,21 +1240,21 @@ contains
     nc = boxes(id)%n_cell
 
     select case (cn)
-    case (a3_cn_lxlylz)
+    case (a3_ch_lxlylz)
        call a3_prolong1_to(boxes, id, [0,0,0], [0,0,0], ivs)
-    case (a3_cn_hxlylz)
+    case (a3_ch_hxlylz)
        call a3_prolong1_to(boxes, id, [nc+1,0,0], [nc+1,0,0], ivs)
-    case (a3_cn_lxhylz)
+    case (a3_ch_lxhylz)
        call a3_prolong1_to(boxes, id, [0,nc+1,0], [0,nc+1,0], ivs)
-    case (a3_cn_hxhylz)
+    case (a3_ch_hxhylz)
        call a3_prolong1_to(boxes, id, [nc+1,nc+1,0], [nc+1,nc+1,0], ivs)
-    case (a3_cn_lxlyhz)
+    case (a3_ch_lxlyhz)
        call a3_prolong1_to(boxes, id, [0,0,nc+1], [0,0,nc+1], ivs)
-    case (a3_cn_hxlyhz)
+    case (a3_ch_hxlyhz)
        call a3_prolong1_to(boxes, id, [nc+1,0,nc+1], [nc+1,0,nc+1], ivs)
-    case (a3_cn_lxhyhz)
+    case (a3_ch_lxhyhz)
        call a3_prolong1_to(boxes, id, [0,nc+1,nc+1], [0,nc+1,nc+1], ivs)
-    case (a3_cn_hxhyhz)
+    case (a3_ch_hxhyhz)
        call a3_prolong1_to(boxes, id, [nc+1,nc+1,nc+1], [nc+1,nc+1,nc+1], ivs)
     end select
   end subroutine a3_corners_prolong1
@@ -1261,46 +1269,70 @@ contains
     nc = boxes(id)%n_cell
 
     select case (cn)
-    case (a3_cn_lxlylz)
-       boxes(id)%cc(0, 0, 0, ivs) = one_third * (&
-            2 * boxes(id)%cc(1, 0, 0, ivs) - boxes(id)%cc(2, 0, 0, ivs) + &
-            2 * boxes(id)%cc(0, 1, 0, ivs) - boxes(id)%cc(0, 2, 0, ivs) + &
-            2 * boxes(id)%cc(0, 0, 1, ivs) - boxes(id)%cc(0, 0, 2, ivs))
-    case (a3_cn_hxlylz)
-       boxes(id)%cc(nc+1, 0, 0, ivs) = one_third * (&
-            2 * boxes(id)%cc(nc, 0, 0, ivs) - boxes(id)%cc(nc-1, 0, 0, ivs) + &
-            2 * boxes(id)%cc(nc+1, 1, 0, ivs) - boxes(id)%cc(nc+1, 2, 0, ivs) +&
-            2 * boxes(id)%cc(nc+1, 0, 1, ivs) - boxes(id)%cc(nc+1, 0, 2, ivs))
-    case (a3_cn_lxhylz)
-       boxes(id)%cc(0, nc+1, 0, ivs) = one_third * (&
-            2 * boxes(id)%cc(0, nc, 0, ivs) - boxes(id)%cc(0, nc-1, 0, ivs) + &
-            2 * boxes(id)%cc(1, nc+1, 0, ivs) - boxes(id)%cc(2, nc+1, 0, ivs) +&
-            2 * boxes(id)%cc(0, nc+1, 1, ivs) - boxes(id)%cc(0, nc+1, 2, ivs))
-    case (a3_cn_hxhylz)
-       boxes(id)%cc(nc+1, nc+1, 0, ivs) = one_third * (&
-            2 * boxes(id)%cc(nc, nc+1, 0, ivs) - boxes(id)%cc(nc-1, nc+1, 0, ivs) + &
-            2 * boxes(id)%cc(nc+1, nc, 0, ivs) - boxes(id)%cc(nc+1, nc-1, 0, ivs) + &
-            2 * boxes(id)%cc(nc+1, nc+1, 1, ivs) - boxes(id)%cc(nc+1, nc+1, 2, ivs))
-    case (a3_cn_lxlyhz)
-       boxes(id)%cc(0, 0, nc+1, ivs) = one_third * (&
-            2 * boxes(id)%cc(1, 0, nc+1, ivs) - boxes(id)%cc(2, 0, nc+1, ivs) + &
-            2 * boxes(id)%cc(0, 1, nc+1, ivs) - boxes(id)%cc(0, 2, nc+1, ivs) + &
-            2 * boxes(id)%cc(0, 0, nc, ivs) - boxes(id)%cc(0, 0, nc-1, ivs))
-    case (a3_cn_hxlyhz)
-       boxes(id)%cc(nc+1, 0, nc+1, ivs) = one_third * (&
-            2 * boxes(id)%cc(nc, 0, nc+1, ivs) - boxes(id)%cc(nc-1, 0, nc+1, ivs) + &
-            2 * boxes(id)%cc(nc+1, 1, nc+1, ivs) - boxes(id)%cc(nc+1, 2, nc+1, ivs) +&
-            2 * boxes(id)%cc(nc+1, 0, nc, ivs) - boxes(id)%cc(nc+1, 0, nc-1, ivs))
-    case (a3_cn_lxhyhz)
-       boxes(id)%cc(0, nc+1, nc+1, ivs) = one_third * (&
-            2 * boxes(id)%cc(0, nc, nc+1, ivs) - boxes(id)%cc(0, nc-1, nc+1, ivs) + &
-            2 * boxes(id)%cc(1, nc+1, nc+1, ivs) - boxes(id)%cc(2, nc+1, nc+1, ivs) +&
-            2 * boxes(id)%cc(0, nc+1, nc, ivs) - boxes(id)%cc(0, nc+1, nc-1, ivs))
-    case (a3_cn_hxhyhz)
-       boxes(id)%cc(nc+1, nc+1, nc+1, ivs) = one_third * (&
-            2 * boxes(id)%cc(nc, nc+1, nc+1, ivs) - boxes(id)%cc(nc-1, nc+1, nc+1, ivs) + &
-            2 * boxes(id)%cc(nc+1, nc, nc+1, ivs) - boxes(id)%cc(nc+1, nc-1, nc+1, ivs) + &
-            2 * boxes(id)%cc(nc+1, nc+1, nc, ivs) - boxes(id)%cc(nc+1, nc+1, nc-1, ivs))
+    case (a3_ch_lxlylz)
+       boxes(id)%cc(0, 0, 0, ivs) = one_third * ( &
+            2 * boxes(id)%cc(1, 0, 0, ivs) - &
+            boxes(id)%cc(2, 0, 0, ivs) + &
+            2 * boxes(id)%cc(0, 1, 0, ivs) - &
+            boxes(id)%cc(0, 2, 0, ivs) + &
+            2 * boxes(id)%cc(0, 0, 1, ivs) - &
+            boxes(id)%cc(0, 0, 2, ivs))
+    case (a3_ch_hxlylz)
+       boxes(id)%cc(nc+1, 0, 0, ivs) = one_third * ( &
+            2 * boxes(id)%cc(nc, 0, 0, ivs) - &
+            boxes(id)%cc(nc-1, 0, 0, ivs) + &
+            2 * boxes(id)%cc(nc+1, 1, 0, ivs) - &
+            boxes(id)%cc(nc+1, 2, 0, ivs) + &
+            2 * boxes(id)%cc(nc+1, 0, 1, ivs) - &
+            boxes(id)%cc(nc+1, 0, 2, ivs))
+    case (a3_ch_lxhylz)
+       boxes(id)%cc(0, nc+1, 0, ivs) = one_third * ( &
+            2 * boxes(id)%cc(0, nc, 0, ivs) - &
+            boxes(id)%cc(0, nc-1, 0, ivs) + &
+            2 * boxes(id)%cc(1, nc+1, 0, ivs) - &
+            boxes(id)%cc(2, nc+1, 0, ivs) +&
+            2 * boxes(id)%cc(0, nc+1, 1, ivs) - &
+            boxes(id)%cc(0, nc+1, 2, ivs))
+    case (a3_ch_hxhylz)
+       boxes(id)%cc(nc+1, nc+1, 0, ivs) = one_third * ( &
+            2 * boxes(id)%cc(nc, nc+1, 0, ivs) - &
+            boxes(id)%cc(nc-1, nc+1, 0, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc, 0, ivs) - &
+            boxes(id)%cc(nc+1, nc-1, 0, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc+1, 1, ivs) - &
+            boxes(id)%cc(nc+1, nc+1, 2, ivs))
+    case (a3_ch_lxlyhz)
+       boxes(id)%cc(0, 0, nc+1, ivs) = one_third * ( &
+            2 * boxes(id)%cc(1, 0, nc+1, ivs) - &
+            boxes(id)%cc(2, 0, nc+1, ivs) + &
+            2 * boxes(id)%cc(0, 1, nc+1, ivs) - &
+            boxes(id)%cc(0, 2, nc+1, ivs) + &
+            2 * boxes(id)%cc(0, 0, nc, ivs) - &
+            boxes(id)%cc(0, 0, nc-1, ivs))
+    case (a3_ch_hxlyhz)
+       boxes(id)%cc(nc+1, 0, nc+1, ivs) = one_third * ( &
+            2 * boxes(id)%cc(nc, 0, nc+1, ivs) - &
+            boxes(id)%cc(nc-1, 0, nc+1, ivs) + &
+            2 * boxes(id)%cc(nc+1, 1, nc+1, ivs) - &
+            boxes(id)%cc(nc+1, 2, nc+1, ivs) +&
+            2 * boxes(id)%cc(nc+1, 0, nc, ivs) - &
+            boxes(id)%cc(nc+1, 0, nc-1, ivs))
+    case (a3_ch_lxhyhz)
+       boxes(id)%cc(0, nc+1, nc+1, ivs) = one_third * ( &
+            2 * boxes(id)%cc(0, nc, nc+1, ivs) - &
+            boxes(id)%cc(0, nc-1, nc+1, ivs) + &
+            2 * boxes(id)%cc(1, nc+1, nc+1, ivs) - &
+            boxes(id)%cc(2, nc+1, nc+1, ivs) +&
+            2 * boxes(id)%cc(0, nc+1, nc, ivs) - &
+            boxes(id)%cc(0, nc+1, nc-1, ivs))
+    case (a3_ch_hxhyhz)
+       boxes(id)%cc(nc+1, nc+1, nc+1, ivs) = one_third * ( &
+            2 * boxes(id)%cc(nc, nc+1, nc+1, ivs) - &
+            boxes(id)%cc(nc-1, nc+1, nc+1, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc, nc+1, ivs) - &
+            boxes(id)%cc(nc+1, nc-1, nc+1, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc+1, nc, ivs) - &
+            boxes(id)%cc(nc+1, nc+1, nc-1, ivs))
     end select
   end subroutine a3_corners_extrap
 

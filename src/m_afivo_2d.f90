@@ -7,32 +7,44 @@ module m_afivo_2d
 
   integer, parameter, private :: dp = kind(0.0d0)
 
-  ! Corners
-  integer, parameter :: a2_cn_lxly = 1
-  integer, parameter :: a2_cn_hxly = 2
-  integer, parameter :: a2_cn_lxhy = 3
-  integer, parameter :: a2_cn_hxhy = 4
-  integer, parameter :: a2_cn_nbs(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
+  ! Children (same location as **corners**)
+  integer, parameter :: a2_ch_lxly = 1
+  integer, parameter :: a2_ch_hxly = 2
+  integer, parameter :: a2_ch_lxhy = 3
+  integer, parameter :: a2_ch_hxhy = 4
 
-  ! Children (same location as corners)
-  integer, parameter :: ch_lxly = 1
-  integer, parameter :: ch_hxly = 2
-  integer, parameter :: ch_lxhy = 3
-  integer, parameter :: ch_hxhy = 4
+  ! Neighboring indices for each child
+  integer, parameter :: a2_ch_nbs(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
+
+  ! Index offset for each child
   integer, parameter :: a2_ch_dix(2, 4) = reshape([0,0,1,0,0,1,1,1], [2,4])
+
+  ! Reverse child index in each direction
   integer, parameter :: a2_ch_rev(4, 2) = reshape([2,1,4,3,3,4,1,2], [4,2])
+
+  ! Children adjacent to a neighbor
   integer, parameter :: a2_ch_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
+
+  ! Which children have a low index per dimension
   logical, parameter :: a2_ch_low(4, 2) = reshape([.true., .false., .true., &
        .false., .true., .true., .false., .false.], [4,2])
 
-  ! Neighbor topology information (todo: add documentation)
+  ! Neighbor topology information
   integer, parameter :: a2_nb_lx = 1
   integer, parameter :: a2_nb_hx = 2
   integer, parameter :: a2_nb_ly = 3
   integer, parameter :: a2_nb_hy = 4
+
+  ! Index offsets of neighbors
   integer, parameter :: a2_nb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
+
+  ! Which neighbors have a lower index
   logical, parameter :: a2_nb_low(4) = [.true., .false., .true., .false.]
+
+  ! Reverse neighbors
   integer, parameter :: a2_nb_rev(4) = [2, 1, 4, 3]
+
+  ! Direction (dimension) for a neighbor
   integer, parameter :: a2_nb_dim(4) = [1, 1, 2, 2]
 
   type box2_t
@@ -1124,7 +1136,7 @@ contains
     integer                     :: cn, nbs(2)
 
     do cn = 1, 4
-       nbs = a2_cn_nbs(:, cn)
+       nbs = a2_ch_nbs(:, cn)
        if (boxes(id)%neighbors(nbs(1)) > a5_no_box) then
           call a2_gc_corner_from_nb(boxes, id, cn, nbs(1), ivs)
        else if (boxes(id)%neighbors(nbs(2)) > a5_no_box) then
@@ -1147,13 +1159,13 @@ contains
     nc = boxes(id)%n_cell
 
     select case (cn)
-    case (a2_cn_lxly)
+    case (a2_ch_lxly)
        call a2_prolong1_to(boxes, id, [0,0], [0,0], ivs)
-    case (a2_cn_hxly)
+    case (a2_ch_hxly)
        call a2_prolong1_to(boxes, id, [nc+1, 0], [nc+1,0], ivs)
-    case (a2_cn_lxhy)
+    case (a2_ch_lxhy)
        call a2_prolong1_to(boxes, id, [0, nc+1], [0, nc+1], ivs)
-    case (a2_cn_hxhy)
+    case (a2_ch_hxhy)
        call a2_prolong1_to(boxes, id, [nc+1, nc+1], [nc+1, nc+1], ivs)
     end select
   end subroutine a2_corners_prolong1
@@ -1167,22 +1179,22 @@ contains
     nc = boxes(id)%n_cell
 
     select case (cn)
-    case (a2_cn_lxly)
+    case (a2_ch_lxly)
        boxes(id)%cc(0, 0, ivs) = boxes(id)%cc(1, 0, ivs) &
             - 0.5_dp * boxes(id)%cc(2, 0, ivs) &
             + boxes(id)%cc(0, 1, ivs) &
             - 0.5_dp * boxes(id)%cc(0, 2, ivs)
-    case (a2_cn_hxly)
+    case (a2_ch_hxly)
        boxes(id)%cc(nc+1, 0, ivs) = boxes(id)%cc(nc, 0, ivs) &
             - 0.5_dp * boxes(id)%cc(nc-1, 0, ivs) &
             + boxes(id)%cc(nc+1, 1, ivs) &
             - 0.5_dp * boxes(id)%cc(nc+1, 2, ivs)
-    case (a2_cn_lxhy)
+    case (a2_ch_lxhy)
        boxes(id)%cc(0, nc+1, ivs) = boxes(id)%cc(0, nc, ivs) &
             - 0.5_dp * boxes(id)%cc(0, nc-1, ivs) &
             + boxes(id)%cc(1, nc+1, ivs) &
             - 0.5_dp * boxes(id)%cc(2, nc+1, ivs)
-    case (a2_cn_hxhy)
+    case (a2_ch_hxhy)
        boxes(id)%cc(nc+1, nc+1, ivs) = boxes(id)%cc(nc, nc+1, ivs) &
             - 0.5_dp * boxes(id)%cc(nc-1, nc+1, ivs) &
             + boxes(id)%cc(nc+1, nc, ivs) &
@@ -1239,38 +1251,38 @@ contains
 
     select case (nb)
     case (a2_nb_lx)
-       c_id = boxes(id)%children(ch_lxly)
+       c_id = boxes(id)%children(a2_ch_lxly)
        boxes(id)%fx(1, 1:nch, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(1, 2:nc:2, f_ixs))
-       c_id = boxes(id)%children(ch_lxhy)
+       c_id = boxes(id)%children(a2_ch_lxhy)
        boxes(id)%fx(1, nch+1:, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(1, 2:nc:2, f_ixs))
     case (a2_nb_hx)
-       c_id = boxes(id)%children(ch_hxly)
+       c_id = boxes(id)%children(a2_ch_hxly)
        boxes(id)%fx(nc+1, 1:nch, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
-       c_id = boxes(id)%children(ch_hxhy)
+       c_id = boxes(id)%children(a2_ch_hxhy)
        boxes(id)%fx(nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
     case (a2_nb_ly)
-       c_id = boxes(id)%children(ch_lxly)
+       c_id = boxes(id)%children(a2_ch_lxly)
        boxes(id)%fy(1:nch, 1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, 1, f_ixs))
-       c_id = boxes(id)%children(ch_hxly)
+       c_id = boxes(id)%children(a2_ch_hxly)
        boxes(id)%fy(nch+1:, 1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, 1, f_ixs))
     case (a2_nb_hy)
-       c_id = boxes(id)%children(ch_lxhy)
+       c_id = boxes(id)%children(a2_ch_lxhy)
        boxes(id)%fy(1:nch, nc+1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
-       c_id = boxes(id)%children(ch_hxhy)
+       c_id = boxes(id)%children(a2_ch_hxhy)
        boxes(id)%fy(nch+1:, nc+1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
