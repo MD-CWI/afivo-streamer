@@ -862,11 +862,11 @@ contains
   end subroutine a2_prolong1_from
 
   ! Partial prolongation from parent using injection.
-  subroutine a2_prolong0_to(boxes, id, i_ixs, j_ixs, ivs)
+  subroutine a2_prolong0_to(boxes, id, lo, hi, ivs)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i_ixs(:), j_ixs(:), ivs(:)
+    integer, intent(in)         :: id, lo(2), hi(2), ivs(:)
     integer                     :: v, iv, nc, p_id, ix_offset(2)
-    integer                     :: ii, jj, i, j, i_c1, j_c1
+    integer                     :: i, j, i_c1, j_c1
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
@@ -875,11 +875,9 @@ contains
 
     do v = 1, size(ivs)
        iv = ivs(v)
-       do jj = 1, size(j_ixs)
-          j = j_ixs(jj)
+       do j = lo(2), hi(2)
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          do ii = 1, size(i_ixs)
-             i = i_ixs(ii)
+          do i = lo(1), hi(1)
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              boxes(id)%cc(i, j, iv) = boxes(p_id)%cc(i_c1, j_c1, iv)
           end do
@@ -888,12 +886,12 @@ contains
   end subroutine a2_prolong0_to
 
   ! Partial bilinear prolongation from parent.
-  subroutine a2_prolong1_to(boxes, id, i_ixs, j_ixs, ivs)
+  subroutine a2_prolong1_to(boxes, id, lo, hi, ivs)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i_ixs(:), j_ixs(:), ivs(:)
+    integer, intent(in)         :: id, lo(2), hi(2), ivs(:)
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
     integer                     :: v, iv, nc, p_id, ix_offset(2)
-    integer                     :: ii, jj, i, j, i_c1, i_c2, j_c1, j_c2
+    integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
@@ -904,12 +902,10 @@ contains
     ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
     do v = 1, size(ivs)
        iv = ivs(v)
-       do jj = 1, size(j_ixs)
-          j = j_ixs(jj)
+       do j = lo(2), hi(2)
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do ii = 1, size(i_ixs)
-             i = i_ixs(ii)
+          do i = lo(1), hi(1)
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
              boxes(id)%cc(i, j, iv) = &
@@ -1017,19 +1013,19 @@ contains
   subroutine a2_sides_prolong1(boxes, id, nb, ivs)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, ivs(:)
-    integer                     :: n, nc
+    integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
     case (a2_nb_lx)
-       call a2_prolong1_to(boxes, id, [0], [(n, n=1,nc)], ivs)
+       call a2_prolong1_to(boxes, id, [0, 1], [0, nc], ivs)
     case (a2_nb_hx)
-       call a2_prolong1_to(boxes, id, [nc+1], [(n, n=1,nc)], ivs)
+       call a2_prolong1_to(boxes, id, [nc+1, 1], [nc+1, nc], ivs)
     case (a2_nb_ly)
-       call a2_prolong1_to(boxes, id, [(n, n=1,nc)], [0], ivs)
+       call a2_prolong1_to(boxes, id, [1, 0], [nc, 0], ivs)
     case (a2_nb_hy)
-       call a2_prolong1_to(boxes, id, [(n, n=1,nc)], [nc+1], ivs)
+       call a2_prolong1_to(boxes, id, [1, nc+1], [nc, nc+1], ivs)
     end select
   end subroutine a2_sides_prolong1
 
@@ -1037,28 +1033,28 @@ contains
   subroutine a2_sides_extrap(boxes, id, nb, ivs)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, ivs(:)
-    integer                     :: n, nc
+    integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
     case (a2_nb_lx)
-       call a2_prolong0_to(boxes, id, [0], [(n, n=1,nc)], ivs)
+       call a2_prolong0_to(boxes, id, [0, 1], [0, nc], ivs)
        boxes(id)%cc(0, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(0, 1:nc, ivs) &
             + 0.75_dp * boxes(id)%cc(1, 1:nc, ivs) &
             - 0.25_dp * boxes(id)%cc(2, 1:nc, ivs)
     case (a2_nb_hx)
-       call a2_prolong0_to(boxes, id, [nc+1], [(n, n=1,nc)], ivs)
+       call a2_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], ivs)
        boxes(id)%cc(nc+1, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, ivs) &
             + 0.75_dp * boxes(id)%cc(nc, 1:nc, ivs) &
             - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, ivs)
     case (a2_nb_ly)
-       call a2_prolong0_to(boxes, id, [(n, n=1,nc)], [0], ivs)
+       call a2_prolong0_to(boxes, id, [1, 0], [nc, 0], ivs)
        boxes(id)%cc(1:nc, 0, ivs) = 0.5_dp * boxes(id)%cc(1:nc, 0, ivs) &
             + 0.75_dp * boxes(id)%cc(1:nc, 1, ivs) &
             - 0.25_dp * boxes(id)%cc(1:nc, 2, ivs)
     case (a2_nb_hy)
-       call a2_prolong0_to(boxes, id, [(n, n=1,nc)], [nc+1], ivs)
+       call a2_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], ivs)
        boxes(id)%cc(1:nc, nc+1, ivs) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, ivs) &
             + 0.75_dp * boxes(id)%cc(1:nc, nc, ivs) &
             - 0.25_dp * boxes(id)%cc(1:nc, nc-1, ivs)
@@ -1152,13 +1148,13 @@ contains
 
     select case (cn)
     case (a2_cn_lxly)
-       call a2_prolong1_to(boxes, id, [0], [0], ivs)
+       call a2_prolong1_to(boxes, id, [0,0], [0,0], ivs)
     case (a2_cn_hxly)
-       call a2_prolong1_to(boxes, id, [nc+1], [0], ivs)
+       call a2_prolong1_to(boxes, id, [nc+1, 0], [nc+1,0], ivs)
     case (a2_cn_lxhy)
-       call a2_prolong1_to(boxes, id, [0], [nc+1], ivs)
+       call a2_prolong1_to(boxes, id, [0, nc+1], [0, nc+1], ivs)
     case (a2_cn_hxhy)
-       call a2_prolong1_to(boxes, id, [nc+1], [nc+1], ivs)
+       call a2_prolong1_to(boxes, id, [nc+1, nc+1], [nc+1, nc+1], ivs)
     end select
   end subroutine a2_corners_prolong1
 
@@ -1198,37 +1194,16 @@ contains
   subroutine a2_gc_corner_from_nb(boxes, id, cn, nb, ivs)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, cn, nb, ivs(:)
-    integer                     :: nc, nb_id
+    integer                     :: nc, nb_id, ij(2), ij_nb(2), d
 
-    nb_id = boxes(id)%neighbors(nb)
-    nc    = boxes(id)%n_cell
+    nb_id    = boxes(id)%neighbors(nb)
+    nc       = boxes(id)%n_cell
+    ij       = a2_ch_dix(:, cn) * (nc+1)
+    ij_nb    = ij
+    d        = a2_nb_dim(nb)
+    ij_nb(d) = mod(ij(d) + nc, 2*nc) ! 0 -> nc and nc+1 -> 1
 
-    select case (cn)
-    case (a2_cn_lxly)
-       if (nb == a2_nb_lx) then
-          boxes(id)%cc(0, 0, ivs) = boxes(nb_id)%cc(nc, 0, ivs)
-       else                     ! nb_ly
-          boxes(id)%cc(0, 0, ivs) = boxes(nb_id)%cc(0, nc, ivs)
-       end if
-    case (a2_cn_hxly)
-       if (nb == a2_nb_hx) then
-          boxes(id)%cc(nc+1, 0, ivs) = boxes(nb_id)%cc(1, 0, ivs)
-       else                     ! nb_ly
-          boxes(id)%cc(nc+1, 0, ivs) = boxes(nb_id)%cc(nc+1, nc, ivs)
-       end if
-    case (a2_cn_lxhy)
-       if (nb == a2_nb_lx) then
-          boxes(id)%cc(0, nc+1, ivs) = boxes(nb_id)%cc(nc, nc+1, ivs)
-       else                     ! nb_hy
-          boxes(id)%cc(0, nc+1, ivs) = boxes(nb_id)%cc(0, 1, ivs)
-       end if
-    case (a2_cn_hxhy)
-       if (nb == a2_nb_hx) then
-          boxes(id)%cc(nc+1, nc+1, ivs) = boxes(nb_id)%cc(1, nc+1, ivs)
-       else                     ! nb_hy
-          boxes(id)%cc(nc+1, nc+1, ivs) = boxes(nb_id)%cc(nc+1, 1, ivs)
-       end if
-    end select
+    boxes(id)%cc(ij(1), ij(2), ivs) = boxes(nb_id)%cc(ij_nb(1), ij_nb(2), ivs)
   end subroutine a2_gc_corner_from_nb
 
   ! Restrict fluxes from children to parents on refinement boundaries
@@ -1348,8 +1323,8 @@ contains
 
           do j = 1, bn
              do i = 1, bn
-                n_ix = 2 * (node_ix + (j-1) * bn + i) - 1
-                coords(n_ix:n_ix+1) = tree%boxes(id)%r_min + &
+                n_ix = 2 * (node_ix + (j-1) * bn + i)
+                coords(n_ix-1:n_ix) = tree%boxes(id)%r_min + &
                      [i-1,j-1] * tree%boxes(id)%dr
              end do
           end do

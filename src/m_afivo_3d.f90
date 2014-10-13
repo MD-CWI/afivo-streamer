@@ -62,13 +62,14 @@ module m_afivo_3d
      integer               :: ix(3)          ! index in the domain
      integer               :: parent         ! index of parent in box list
      integer               :: children(8)    ! index of children in box list
-     integer               :: neighbors(8)   ! index of neighbors in box list
+     integer               :: neighbors(6)   ! index of neighbors in box list
      integer               :: n_cell         ! number of cells per dimension
      real(dp)              :: dr             ! width/height of a cell
      real(dp)              :: r_min(3)       ! min coords. of box
      real(dp), allocatable :: cc(:, :, :, :) ! cell centered variables
      real(dp), allocatable :: fx(:, :, :, :) ! x-face centered variables
      real(dp), allocatable :: fy(:, :, :, :) ! y-face centered variables
+     real(dp), allocatable :: fz(:, :, :, :) ! z-face centered variables
   end type box3_t
 
   type lvl3_t
@@ -132,7 +133,7 @@ contains
     integer, intent(in)     :: n_var_cell ! Number of cell-centered variables
     integer, intent(in)     :: n_var_face ! Number of face-centered variables
     real(dp), intent(in)    :: dr         ! spacing of a cell
-    real(dp), intent(in)    :: r_min(2)   ! Lower left coordinate of box 1,1
+    real(dp), intent(in)    :: r_min(3)   ! Lower left coordinate of box 1,1
     integer                 :: lvl
 
     if (n_cell < 2)       stop "a3_init: n_cell should be >= 2"
@@ -382,7 +383,7 @@ contains
     integer, intent(in)          :: id
     integer                      :: nb, nb_id
 
-    do nb = 1, 8
+    do nb = 1, 6
        if (boxes(id)%neighbors(nb) == a5_no_box) then
           nb_id = find_nb_3d(boxes, id, nb)
           if (nb_id > a5_no_box) then
@@ -395,7 +396,7 @@ contains
 
   ! Compute the child index of ix
   integer function a3_ix_to_cix(ix)
-    integer, intent(in) :: ix(2)
+    integer, intent(in) :: ix(3)
     ! third index odd: -4, second index odd: -2, first ix odd: -1
     a3_ix_to_cix = 8 - 4 * iand(ix(3), 1) - 2 * iand(ix(2), 1) - iand(ix(1), 1)
   end function a3_ix_to_cix
@@ -433,7 +434,7 @@ contains
     ! Neighbors only have to be specified from one side, mirror them
     n_boxes = size(ix_list, 2)
     do i = 1, n_boxes
-       do nb = 1, 8
+       do nb = 1, 6
           nb_id = nb_list(nb, i)
           if (nb_id > a5_no_box) nb_list(a3_nb_rev(nb), nb_id) = i
        end do
@@ -616,7 +617,7 @@ contains
 
           if (ref_flags(id) == a5_do_ref) then
              ! Ensure we will have the necessary neighbors
-             do nb = 1, 8
+             do nb = 1, 6
                 nb_id = boxes(id)%neighbors(nb)
                 if (nb_id == a5_no_box) then
                    ! Mark the parent containing neighbor for refinement
@@ -627,7 +628,7 @@ contains
              end do
           else if (ref_flags(id) == a5_rm_ref) then
              ! Ensure we do not remove a required neighbor
-             do nb = 1, 8
+             do nb = 1, 6
                 nb_id = boxes(id)%neighbors(nb)
                 if (nb_id > a5_no_box) then
                    if (a3_has_children(boxes(nb_id)) .or. &
@@ -675,7 +676,7 @@ contains
        c_id            = boxes(id)%children(ic)
        boxes(c_id)%tag = 0      ! clear tag
 
-       do nb = 1, 8             ! Remove from neighbors
+       do nb = 1, 6             ! Remove from neighbors
           nb_id = boxes(c_id)%neighbors(nb)
           if (nb_id > a5_no_box) then
              nb_rev = a3_nb_rev(nb)
@@ -691,7 +692,7 @@ contains
   subroutine a3_add_children(boxes, id, c_ids)
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, c_ids(8)
-    integer                     :: i, ch_nb(2), c_id, c_ix_base(2)
+    integer                     :: i, nb, ch_nb(4), c_id, c_ix_base(3)
 
     boxes(id)%children = c_ids
     c_ix_base          = 2 * boxes(id)%ix - 1
@@ -712,10 +713,10 @@ contains
     end do
 
     ! Set boundary conditions at children
-    do i = 1, 8
-       if (boxes(id)%neighbors(i) < a5_no_box) then
-          ch_nb = c_ids(a3_ch_adj_nb(:, i)) ! Neighboring children
-          boxes(ch_nb)%neighbors(i) = boxes(id)%neighbors(i)
+    do nb = 1, 6
+       if (boxes(id)%neighbors(nb) < a5_no_box) then
+          ch_nb = c_ids(a3_ch_adj_nb(:, nb)) ! Neighboring children
+          boxes(ch_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
        end if
     end do
   end subroutine a3_add_children
@@ -749,30 +750,30 @@ contains
   ! Return minimum dr that is used in the tree
   pure function a3_min_dr(tree) result(dr)
     type(a3_t), intent(in) :: tree
-    real(dp)               :: dr(2)
+    real(dp)               :: dr(3)
     dr = tree%dr_base * 0.5_dp**(tree%n_lvls-1)
   end function a3_min_dr
 
   ! Return the coordinate of the center of a box
   pure function a3_r_center(box) result(r_center)
     type(box3_t), intent(in) :: box
-    real(dp)                 :: r_center(2)
+    real(dp)                 :: r_center(3)
     r_center = box%r_min + 0.5_dp * box%n_cell * box%dr
   end function a3_r_center
 
   ! Location of cell center with index cc_ix
   pure function a3_r_cc(box, cc_ix) result(r)
     type(box3_t), intent(in) :: box
-    integer, intent(in)      :: cc_ix(2)
-    real(dp)                 :: r(2)
+    integer, intent(in)      :: cc_ix(3)
+    real(dp)                 :: r(3)
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a3_r_cc
 
   ! Location of node with index nd_ix
   pure function a3_r_node(box, nd_ix) result(r)
     type(box3_t), intent(in) :: box
-    integer, intent(in)      :: nd_ix(2)
-    real(dp)                 :: r(2)
+    integer, intent(in)      :: nd_ix(3)
+    real(dp)                 :: r(3)
     r = box%r_min + (nd_ix-1) * box%dr
   end function a3_r_node
 
@@ -825,8 +826,8 @@ contains
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, ivs(:)
     logical, intent(in)         :: fill_gc
-    integer                     :: nc, i_c, c_id, ix_offset(2)
-    integer                     :: i, j, i_c1, j_c1, iv, v
+    integer                     :: nc, i_c, c_id, ix_offset(3)
+    integer                     :: i, j, k, i_c1, j_c1, k_c1, iv, v
 
     nc = boxes(id)%n_cell
     do i_c = 1, 8
@@ -835,11 +836,15 @@ contains
 
        do v = 1, size(ivs)
           iv = ivs(v)
-          do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
-                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-                boxes(c_id)%cc(i, j, iv) = boxes(id)%cc(i_c1, j_c1, iv)
+          do k = 1-l2i(fill_gc), nc+l2i(fill_gc)
+             k_c1 = ix_offset(3) + ishft(k+1, -1) ! (j+1)/2
+             do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
+                j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+                do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
+                   i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                   boxes(c_id)%cc(i, j, k, iv) = &
+                        boxes(id)%cc(i_c1, j_c1, k_c1, iv)
+                end do
              end do
           end do
        end do
@@ -851,9 +856,10 @@ contains
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, ivs(:)
     logical, intent(in)         :: fill_gc
-    real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-    integer                     :: v, iv, nc, i_c, c_id, ix_offset(2)
-    integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
+    real(dp), parameter         :: f1=1/64.0_dp, f3=3/64.0_dp
+    real(dp), parameter         :: f9=9/64.0_dp, f27=27/64.0_dp
+    integer                     :: v, iv, nc, i_c, c_id, ix_offset(3)
+    integer                     :: i, j, k, i_c1, i_c2, j_c1, j_c2, k_c1, k_c2
 
     nc = boxes(id)%n_cell
     do i_c = 1, 8
@@ -866,18 +872,26 @@ contains
        ! one-but-closest (_c2). The fine cell lies in between.
        do v = 1, size(ivs)
           iv = ivs(v)
-          do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
-                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-                i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+          do k = 1-l2i(fill_gc), nc+l2i(fill_gc)
+             k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+             k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+             do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
+                j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+                j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+                do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
+                   i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                   i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
-                boxes(c_id)%cc(i, j, iv) = &
-                     f9 * boxes(id)%cc(i_c1, j_c1, iv) + &
-                     f3 * boxes(id)%cc(i_c2, j_c1, iv) + &
-                     f3 * boxes(id)%cc(i_c1, j_c2, iv) + &
-                     f1 * boxes(id)%cc(i_c2, j_c2, iv)
+                   boxes(c_id)%cc(i, j, k, iv) = &
+                        f27 * boxes(id)%cc(i_c1, j_c1, k_c1, iv) + &
+                        f9 * boxes(id)%cc(i_c2, j_c1, k_c1, iv) + &
+                        f9 * boxes(id)%cc(i_c1, j_c2, k_c1, iv) + &
+                        f9 * boxes(id)%cc(i_c1, j_c1, k_c2, iv) + &
+                        f3 * boxes(id)%cc(i_c1, j_c2, k_c2, iv) + &
+                        f3 * boxes(id)%cc(i_c2, j_c1, k_c2, iv) + &
+                        f3 * boxes(id)%cc(i_c2, j_c2, k_c1, iv) + &
+                        f1 * boxes(id)%cc(i_c2, j_c2, k_c2, iv)
+                end do
              end do
           end do
        end do
@@ -885,11 +899,11 @@ contains
   end subroutine a3_prolong1_from
 
   ! Partial prolongation from parent using injection.
-  subroutine a3_prolong0_to(boxes, id, i_ixs, j_ixs, ivs)
+  subroutine a3_prolong0_to(boxes, id, lo, hi, ivs)
     type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i_ixs(:), j_ixs(:), ivs(:)
-    integer                     :: v, iv, nc, p_id, ix_offset(2)
-    integer                     :: ii, jj, i, j, i_c1, j_c1
+    integer, intent(in)         :: id, lo(3), hi(3), ivs(:)
+    integer                     :: v, iv, nc, p_id, ix_offset(3)
+    integer                     :: i, j, k, i_c1, j_c1, k_c1
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
@@ -898,25 +912,28 @@ contains
 
     do v = 1, size(ivs)
        iv = ivs(v)
-       do jj = 1, size(j_ixs)
-          j = j_ixs(jj)
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          do ii = 1, size(i_ixs)
-             i = i_ixs(ii)
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             boxes(id)%cc(i, j, iv) = boxes(p_id)%cc(i_c1, j_c1, iv)
+       do k = lo(3), hi(3)
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          do j = lo(2), hi(2)
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             do i = lo(1), hi(1)
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                boxes(id)%cc(i, j, k, iv) = boxes(p_id)%cc(i_c1, j_c1, k_c1, iv)
+             end do
           end do
        end do
     end do
   end subroutine a3_prolong0_to
 
   ! Partial bilinear prolongation from parent.
-  subroutine a3_prolong1_to(boxes, id, i_ixs, j_ixs, ivs)
+  subroutine a3_prolong1_to(boxes, id, lo, hi, ivs)
     type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i_ixs(:), j_ixs(:), ivs(:)
-    real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-    integer                     :: v, iv, nc, p_id, ix_offset(2)
-    integer                     :: ii, jj, i, j, i_c1, i_c2, j_c1, j_c2
+    integer, intent(in)         :: id, lo(3), hi(3), ivs(:)
+    real(dp), parameter         :: f1=1/64.0_dp, f3=3/64.0_dp
+    real(dp), parameter         :: f9=9/64.0_dp, f27=27/64.0_dp
+    integer                     :: v, iv, nc, p_id, ix_offset(3)
+    integer                     :: i, j, k
+    integer                     :: i_c1, i_c2, j_c1, j_c2, k_c1, k_c2
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
@@ -927,19 +944,25 @@ contains
     ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
     do v = 1, size(ivs)
        iv = ivs(v)
-       do jj = 1, size(j_ixs)
-          j = j_ixs(jj)
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do ii = 1, size(i_ixs)
-             i = i_ixs(ii)
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, iv) = &
-                  f9 * boxes(p_id)%cc(i_c1, j_c1, iv) + &
-                  f3 * boxes(p_id)%cc(i_c2, j_c1, iv) + &
-                  f3 * boxes(p_id)%cc(i_c1, j_c2, iv) + &
-                  f1 * boxes(p_id)%cc(i_c2, j_c2, iv)
+       do k = lo(3), hi(3)
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do j = lo(2), hi(2)
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+             do i = lo(1), hi(1)
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+                boxes(id)%cc(i, j, k, iv) = &
+                     f27 * boxes(p_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                     f9 * boxes(p_id)%cc(i_c2, j_c1, k_c1, iv) + &
+                     f9 * boxes(p_id)%cc(i_c1, j_c2, k_c1, iv) + &
+                     f9 * boxes(p_id)%cc(i_c1, j_c1, k_c2, iv) + &
+                     f3 * boxes(p_id)%cc(i_c1, j_c2, k_c2, iv) + &
+                     f3 * boxes(p_id)%cc(i_c2, j_c1, k_c2, iv) + &
+                     f3 * boxes(p_id)%cc(i_c2, j_c2, k_c1, iv) + &
+                     f1 * boxes(p_id)%cc(i_c2, j_c2, k_c2, iv)
+             end do
           end do
        end do
     end do
@@ -949,7 +972,7 @@ contains
   subroutine a3_restrict_to_box(boxes, id, ivs)
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, ivs(:)
-    integer                     :: nc, i_c, c_id, ix_offset(2)
+    integer                     :: nc, i_c, c_id, ix_offset(3)
 
     nc = boxes(id)%n_cell
     do i_c = 1, 8
@@ -977,23 +1000,31 @@ contains
   subroutine a3_restrict_box(box_c, box_p, ix_offset, ivs)
     type(box3_t), intent(in)    :: box_c
     type(box3_t), intent(inout) :: box_p
-    integer, intent(in)         :: ix_offset(2), ivs(:)
-    integer                     :: nc, v, iv, i, j, i_c1, j_c1
+    integer, intent(in)         :: ix_offset(3), ivs(:)
+    integer                     :: nc, v, iv, i, j, k
+    integer                     :: i_c1, j_c1, k_c1
 
     nc = box_c%n_cell
 
     do v = 1, size(ivs)
        iv = ivs(v)
-       do j = 1, nc, 2
-          j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
-          do i = 1, nc, 2
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+       do k = 1, nc, 2
+          k_c1 = ix_offset(3) + ishft(k+1, -1)  ! (k+1)/2
+          do j = 1, nc, 2
+             j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
+             do i = 1, nc, 2
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
 
-             box_p%cc(i_c1, j_c1, iv) = 0.25_dp * (&
-                  box_c%cc(i,   j,   iv) + &
-                  box_c%cc(i+1, j,   iv) + &
-                  box_c%cc(i,   j+1, iv) + &
-                  box_c%cc(i+1, j+1, iv) )
+                box_p%cc(i_c1, j_c1, k_c1, iv) = 0.125_dp * (&
+                     box_c%cc(i,   j,   k,   iv) + &
+                     box_c%cc(i+1, j,   k,   iv) + &
+                     box_c%cc(i,   j+1, k,   iv) + &
+                     box_c%cc(i+1, j+1, k,   iv) + &
+                     box_c%cc(i,   j,   k+1, iv) + &
+                     box_c%cc(i+1, j,   k+1, iv) + &
+                     box_c%cc(i,   j+1, k+1, iv) + &
+                     box_c%cc(i+1, j+1, k+1, iv))
+             end do
           end do
        end do
     end do
@@ -1025,7 +1056,7 @@ contains
     procedure(a3_subr_gc)       :: subr_no_nb, subr_bc
     integer                     :: nb
 
-    do nb = 1, 8
+    do nb = 1, 6
        if (boxes(id)%neighbors(nb) > a5_no_box) then
           call a3_gc_side_from_nb(boxes, id, nb, ivs)
        else if (boxes(id)%neighbors(nb) == a5_no_box) then
@@ -1040,19 +1071,23 @@ contains
   subroutine a3_sides_prolong1(boxes, id, nb, ivs)
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, ivs(:)
-    integer                     :: n, nc
+    integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
     case (a3_nb_lx)
-       call a3_prolong1_to(boxes, id, [0], [(n, n=1,nc)], ivs)
+       call a3_prolong1_to(boxes, id, [0, 1, 1], [0, nc, nc], ivs)
     case (a3_nb_hx)
-       call a3_prolong1_to(boxes, id, [nc+1], [(n, n=1,nc)], ivs)
+       call a3_prolong1_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], ivs)
     case (a3_nb_ly)
-       call a3_prolong1_to(boxes, id, [(n, n=1,nc)], [0], ivs)
+       call a3_prolong1_to(boxes, id, [1, 0, 1], [nc, 0, nc], ivs)
     case (a3_nb_hy)
-       call a3_prolong1_to(boxes, id, [(n, n=1,nc)], [nc+1], ivs)
+       call a3_prolong1_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], ivs)
+    case (a3_nb_lz)
+       call a3_prolong1_to(boxes, id, [1, 1, 0], [nc, nc, 0], ivs)
+    case (a3_nb_hz)
+       call a3_prolong1_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], ivs)
     end select
   end subroutine a3_sides_prolong1
 
@@ -1060,31 +1095,47 @@ contains
   subroutine a3_sides_extrap(boxes, id, nb, ivs)
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, ivs(:)
-    integer                     :: n, nc
+    integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
     case (a3_nb_lx)
-       call a3_prolong0_to(boxes, id, [0], [(n, n=1,nc)], ivs)
-       boxes(id)%cc(0, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(0, 1:nc, ivs) &
-            + 0.75_dp * boxes(id)%cc(1, 1:nc, ivs) &
-            - 0.25_dp * boxes(id)%cc(2, 1:nc, ivs)
+       call a3_prolong0_to(boxes, id, [0, 1, 1], [0, nc, nc], ivs)
+       boxes(id)%cc(0, 1:nc, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(0, 1:nc, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(1, 1:nc, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(2, 1:nc, 1:nc, ivs)
     case (a3_nb_hx)
-       call a3_prolong0_to(boxes, id, [nc+1], [(n, n=1,nc)], ivs)
-       boxes(id)%cc(nc+1, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, ivs) &
-            + 0.75_dp * boxes(id)%cc(nc, 1:nc, ivs) &
-            - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, ivs)
+       call a3_prolong0_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], ivs)
+       boxes(id)%cc(nc+1, 1:nc, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(nc+1, 1:nc, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(nc, 1:nc, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, 1:nc, ivs)
     case (a3_nb_ly)
-       call a3_prolong0_to(boxes, id, [(n, n=1,nc)], [0], ivs)
-       boxes(id)%cc(1:nc, 0, ivs) = 0.5_dp * boxes(id)%cc(1:nc, 0, ivs) &
-            + 0.75_dp * boxes(id)%cc(1:nc, 1, ivs) &
-            - 0.25_dp * boxes(id)%cc(1:nc, 2, ivs)
+       call a3_prolong0_to(boxes, id, [1, 0, 1], [nc, 0, nc], ivs)
+       boxes(id)%cc(1:nc, 0, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, 0, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, 1, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, 2, 1:nc, ivs)
     case (a3_nb_hy)
-       call a3_prolong0_to(boxes, id, [(n, n=1,nc)], [nc+1], ivs)
-       boxes(id)%cc(1:nc, nc+1, ivs) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, ivs) &
-            + 0.75_dp * boxes(id)%cc(1:nc, nc, ivs) &
-            - 0.25_dp * boxes(id)%cc(1:nc, nc-1, ivs)
+       call a3_prolong0_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], ivs)
+       boxes(id)%cc(1:nc, nc+1, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, nc+1, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, nc, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, nc-1, 1:nc, ivs)
+    case (a3_nb_lz)
+       call a3_prolong0_to(boxes, id, [1, 1, 0], [nc, nc, 0], ivs)
+       boxes(id)%cc(1:nc, 1:nc, 0, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, 1:nc, 0, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, 1, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, 2, ivs)
+    case (a3_nb_hz)
+       call a3_prolong0_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], ivs)
+       boxes(id)%cc(1:nc, 1:nc, nc+1, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, 1:nc, nc+1, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, nc-1, ivs)
     end select
   end subroutine a3_sides_extrap
 
@@ -1092,15 +1143,16 @@ contains
   ! of its neighbors (nb).
   subroutine a3_get_cc_from_nb(boxes, id, nb, ivs, lo, hi, cc)
     type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, ivs(:), lo(2), hi(2)
+    integer, intent(in)         :: id, nb, ivs(:), lo(3), hi(3)
     real(dp), intent(out)       :: cc(:,:,:,:)
-    integer                     :: nc, nb_id, lo_nb(2), hi_nb(2)
+    integer                     :: nc, nb_id, lo_nb(3), hi_nb(3)
 
     nc    = boxes(id)%n_cell
     lo_nb = lo + a3_nb_dix(:, nb) * nc
     hi_nb = hi + a3_nb_dix(:, nb) * nc
     nb_id = boxes(id)%neighbors(nb)
-    cc    = boxes(nb_id)%cc(lo_nb(1):hi_nb(1), lo_nb(2):hi_nb(2), ivs)
+    cc    = boxes(nb_id)%cc(lo_nb(1):hi_nb(1), lo_nb(2):hi_nb(2), &
+         lo_nb(3):hi_nb(3), ivs)
   end subroutine a3_get_cc_from_nb
 
   ! Fill values on side from a neighbor
@@ -1114,13 +1166,17 @@ contains
 
     select case (nb)
     case (a3_nb_lx)
-       boxes(id)%cc(0, 1:nc, ivs)    = boxes(nb_id)%cc(nc, 1:nc, ivs)
+       boxes(id)%cc(0, 1:nc, 1:nc, ivs)    = boxes(nb_id)%cc(nc, 1:nc, 1:nc, ivs)
     case (a3_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, ivs) = boxes(nb_id)%cc(1, 1:nc, ivs)
+       boxes(id)%cc(nc+1, 1:nc, 1:nc, ivs) = boxes(nb_id)%cc(1, 1:nc, 1:nc, ivs)
     case (a3_nb_ly)
-       boxes(id)%cc(1:nc, 0, ivs)    = boxes(nb_id)%cc(1:nc, nc, ivs)
+       boxes(id)%cc(1:nc, 0, 1:nc, ivs)    = boxes(nb_id)%cc(1:nc, nc, 1:nc, ivs)
     case (a3_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, ivs) = boxes(nb_id)%cc(1:nc, 1, ivs)
+       boxes(id)%cc(1:nc, nc+1, 1:nc, ivs) = boxes(nb_id)%cc(1:nc, 1, 1:nc, ivs)
+    case (a3_nb_lz)
+       boxes(id)%cc(1:nc, 1:nc, 0, ivs)    = boxes(nb_id)%cc(1:nc, 1:nc, nc, ivs)
+    case (a3_nb_hz)
+       boxes(id)%cc(1:nc, 1:nc, nc+1, ivs) = boxes(nb_id)%cc(1:nc, 1:nc, 1, ivs)
     end select
   end subroutine a3_gc_side_from_nb
 
@@ -1148,7 +1204,7 @@ contains
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, ivs(:)
     procedure(a3_subr_gc)       :: subr_no_nb, subr_bc
-    integer                     :: cn, nbs(2)
+    integer                     :: cn, nbs(3)
 
     do cn = 1, 8
        nbs = a3_cn_nbs(:, cn)
@@ -1156,6 +1212,8 @@ contains
           call a3_gc_corner_from_nb(boxes, id, cn, nbs(1), ivs)
        else if (boxes(id)%neighbors(nbs(2)) > a5_no_box) then
           call a3_gc_corner_from_nb(boxes, id, cn, nbs(2), ivs)
+       else if (boxes(id)%neighbors(nbs(3)) > a5_no_box) then
+          call a3_gc_corner_from_nb(boxes, id, cn, nbs(3), ivs)
        else if (all(boxes(id)%neighbors(nbs) == a5_no_box)) then
           call subr_no_nb(boxes, id, cn, ivs)
        else
@@ -1174,14 +1232,22 @@ contains
     nc = boxes(id)%n_cell
 
     select case (cn)
-    case (a3_cn_lxly)
-       call a3_prolong1_to(boxes, id, [0], [0], ivs)
-    case (a3_cn_hxly)
-       call a3_prolong1_to(boxes, id, [nc+1], [0], ivs)
-    case (a3_cn_lxhy)
-       call a3_prolong1_to(boxes, id, [0], [nc+1], ivs)
-    case (a3_cn_hxhy)
-       call a3_prolong1_to(boxes, id, [nc+1], [nc+1], ivs)
+    case (a3_cn_lxlylz)
+       call a3_prolong1_to(boxes, id, [0,0,0], [0,0,0], ivs)
+    case (a3_cn_hxlylz)
+       call a3_prolong1_to(boxes, id, [nc+1,0,0], [nc+1,0,0], ivs)
+    case (a3_cn_lxhylz)
+       call a3_prolong1_to(boxes, id, [0,nc+1,0], [0,nc+1,0], ivs)
+    case (a3_cn_hxhylz)
+       call a3_prolong1_to(boxes, id, [nc+1,nc+1,0], [nc+1,nc+1,0], ivs)
+    case (a3_cn_lxlyhz)
+       call a3_prolong1_to(boxes, id, [0,0,nc+1], [0,0,nc+1], ivs)
+    case (a3_cn_hxlyhz)
+       call a3_prolong1_to(boxes, id, [nc+1,0,nc+1], [nc+1,0,nc+1], ivs)
+    case (a3_cn_lxhyhz)
+       call a3_prolong1_to(boxes, id, [0,nc+1,nc+1], [0,nc+1,nc+1], ivs)
+    case (a3_cn_hxhyhz)
+       call a3_prolong1_to(boxes, id, [nc+1,nc+1,nc+1], [nc+1,nc+1,nc+1], ivs)
     end select
   end subroutine a3_corners_prolong1
 
@@ -1190,68 +1256,70 @@ contains
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, cn, ivs(:)
     integer                     :: nc
+    real(dp), parameter :: one_third = 1 / 3.0_dp
 
     nc = boxes(id)%n_cell
 
     select case (cn)
-    case (a3_cn_lxly)
-       boxes(id)%cc(0, 0, ivs) = boxes(id)%cc(1, 0, ivs) &
-            - 0.5_dp * boxes(id)%cc(2, 0, ivs) &
-            + boxes(id)%cc(0, 1, ivs) &
-            - 0.5_dp * boxes(id)%cc(0, 2, ivs)
-    case (a3_cn_hxly)
-       boxes(id)%cc(nc+1, 0, ivs) = boxes(id)%cc(nc, 0, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc-1, 0, ivs) &
-            + boxes(id)%cc(nc+1, 1, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc+1, 2, ivs)
-    case (a3_cn_lxhy)
-       boxes(id)%cc(0, nc+1, ivs) = boxes(id)%cc(0, nc, ivs) &
-            - 0.5_dp * boxes(id)%cc(0, nc-1, ivs) &
-            + boxes(id)%cc(1, nc+1, ivs) &
-            - 0.5_dp * boxes(id)%cc(2, nc+1, ivs)
-    case (a3_cn_hxhy)
-       boxes(id)%cc(nc+1, nc+1, ivs) = boxes(id)%cc(nc, nc+1, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc-1, nc+1, ivs) &
-            + boxes(id)%cc(nc+1, nc, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc+1, nc-1, ivs)
+    case (a3_cn_lxlylz)
+       boxes(id)%cc(0, 0, 0, ivs) = one_third * (&
+            2 * boxes(id)%cc(1, 0, 0, ivs) - boxes(id)%cc(2, 0, 0, ivs) + &
+            2 * boxes(id)%cc(0, 1, 0, ivs) - boxes(id)%cc(0, 2, 0, ivs) + &
+            2 * boxes(id)%cc(0, 0, 1, ivs) - boxes(id)%cc(0, 0, 2, ivs))
+    case (a3_cn_hxlylz)
+       boxes(id)%cc(nc+1, 0, 0, ivs) = one_third * (&
+            2 * boxes(id)%cc(nc, 0, 0, ivs) - boxes(id)%cc(nc-1, 0, 0, ivs) + &
+            2 * boxes(id)%cc(nc+1, 1, 0, ivs) - boxes(id)%cc(nc+1, 2, 0, ivs) +&
+            2 * boxes(id)%cc(nc+1, 0, 1, ivs) - boxes(id)%cc(nc+1, 0, 2, ivs))
+    case (a3_cn_lxhylz)
+       boxes(id)%cc(0, nc+1, 0, ivs) = one_third * (&
+            2 * boxes(id)%cc(0, nc, 0, ivs) - boxes(id)%cc(0, nc-1, 0, ivs) + &
+            2 * boxes(id)%cc(1, nc+1, 0, ivs) - boxes(id)%cc(2, nc+1, 0, ivs) +&
+            2 * boxes(id)%cc(0, nc+1, 1, ivs) - boxes(id)%cc(0, nc+1, 2, ivs))
+    case (a3_cn_hxhylz)
+       boxes(id)%cc(nc+1, nc+1, 0, ivs) = one_third * (&
+            2 * boxes(id)%cc(nc, nc+1, 0, ivs) - boxes(id)%cc(nc-1, nc+1, 0, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc, 0, ivs) - boxes(id)%cc(nc+1, nc-1, 0, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc+1, 1, ivs) - boxes(id)%cc(nc+1, nc+1, 2, ivs))
+    case (a3_cn_lxlyhz)
+       boxes(id)%cc(0, 0, nc+1, ivs) = one_third * (&
+            2 * boxes(id)%cc(1, 0, nc+1, ivs) - boxes(id)%cc(2, 0, nc+1, ivs) + &
+            2 * boxes(id)%cc(0, 1, nc+1, ivs) - boxes(id)%cc(0, 2, nc+1, ivs) + &
+            2 * boxes(id)%cc(0, 0, nc, ivs) - boxes(id)%cc(0, 0, nc-1, ivs))
+    case (a3_cn_hxlyhz)
+       boxes(id)%cc(nc+1, 0, nc+1, ivs) = one_third * (&
+            2 * boxes(id)%cc(nc, 0, nc+1, ivs) - boxes(id)%cc(nc-1, 0, nc+1, ivs) + &
+            2 * boxes(id)%cc(nc+1, 1, nc+1, ivs) - boxes(id)%cc(nc+1, 2, nc+1, ivs) +&
+            2 * boxes(id)%cc(nc+1, 0, nc, ivs) - boxes(id)%cc(nc+1, 0, nc-1, ivs))
+    case (a3_cn_lxhyhz)
+       boxes(id)%cc(0, nc+1, nc+1, ivs) = one_third * (&
+            2 * boxes(id)%cc(0, nc, nc+1, ivs) - boxes(id)%cc(0, nc-1, nc+1, ivs) + &
+            2 * boxes(id)%cc(1, nc+1, nc+1, ivs) - boxes(id)%cc(2, nc+1, nc+1, ivs) +&
+            2 * boxes(id)%cc(0, nc+1, nc, ivs) - boxes(id)%cc(0, nc+1, nc-1, ivs))
+    case (a3_cn_hxhyhz)
+       boxes(id)%cc(nc+1, nc+1, nc+1, ivs) = one_third * (&
+            2 * boxes(id)%cc(nc, nc+1, nc+1, ivs) - boxes(id)%cc(nc-1, nc+1, nc+1, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc, nc+1, ivs) - boxes(id)%cc(nc+1, nc-1, nc+1, ivs) + &
+            2 * boxes(id)%cc(nc+1, nc+1, nc, ivs) - boxes(id)%cc(nc+1, nc+1, nc-1, ivs))
     end select
   end subroutine a3_corners_extrap
+
 
   ! Fill corner ghost cell from side ghost cells on neighbor
   subroutine a3_gc_corner_from_nb(boxes, id, cn, nb, ivs)
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, cn, nb, ivs(:)
-    integer                     :: nc, nb_id
+    integer                     :: nc, nb_id, ijk(3), ijk_nb(3), d
 
-    nb_id = boxes(id)%neighbors(nb)
-    nc    = boxes(id)%n_cell
+    nb_id     = boxes(id)%neighbors(nb)
+    nc        = boxes(id)%n_cell
+    ijk       = a3_ch_dix(:, cn) * (nc+1)
+    ijk_nb    = ijk
+    d         = a3_nb_dim(nb)
+    ijk_nb(d) = mod(ijk(d) + nc, 2*nc) ! 0 -> nc and nc+1 -> 1
 
-    select case (cn)
-    case (a3_cn_lxly)
-       if (nb == a3_nb_lx) then
-          boxes(id)%cc(0, 0, ivs) = boxes(nb_id)%cc(nc, 0, ivs)
-       else                     ! nb_ly
-          boxes(id)%cc(0, 0, ivs) = boxes(nb_id)%cc(0, nc, ivs)
-       end if
-    case (a3_cn_hxly)
-       if (nb == a3_nb_hx) then
-          boxes(id)%cc(nc+1, 0, ivs) = boxes(nb_id)%cc(1, 0, ivs)
-       else                     ! nb_ly
-          boxes(id)%cc(nc+1, 0, ivs) = boxes(nb_id)%cc(nc+1, nc, ivs)
-       end if
-    case (a3_cn_lxhy)
-       if (nb == a3_nb_lx) then
-          boxes(id)%cc(0, nc+1, ivs) = boxes(nb_id)%cc(nc, nc+1, ivs)
-       else                     ! nb_hy
-          boxes(id)%cc(0, nc+1, ivs) = boxes(nb_id)%cc(0, 1, ivs)
-       end if
-    case (a3_cn_hxhy)
-       if (nb == a3_nb_hx) then
-          boxes(id)%cc(nc+1, nc+1, ivs) = boxes(nb_id)%cc(1, nc+1, ivs)
-       else                     ! nb_hy
-          boxes(id)%cc(nc+1, nc+1, ivs) = boxes(nb_id)%cc(nc+1, 1, ivs)
-       end if
-    end select
+    boxes(id)%cc(ijk(1), ijk(2), ijk(3), ivs) = &
+         boxes(nb_id)%cc(ijk_nb(1), ijk_nb(2), ijk_nb(3), ivs)
   end subroutine a3_gc_corner_from_nb
 
   ! Restrict fluxes from children to parents on refinement boundaries
@@ -1264,7 +1332,7 @@ contains
        !$omp parallel do private(id, nb, nb_id)
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          do nb = 1, 8
+          do nb = 1, 6
              nb_id = tree%boxes(id)%neighbors(nb)
              if (nb_id < a5_no_box) cycle ! Boundary condition
              if (.not. a3_has_children(tree%boxes(nb_id))) &
@@ -1280,48 +1348,55 @@ contains
   subroutine a3_flux_from_children(boxes, id, nb, f_ixs)
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, f_ixs(:)
-    integer                     :: nc, nch, c_id
+    integer                     :: nc, nch, c_id, i_ch, i, ic, d, ioff(3)
 
     nc  = boxes(id)%n_cell
     nch = ishft(nc, -1) ! nc/2
+    d   = a3_nb_dim(nb)
 
-    select case (nb)
-    case (a3_nb_lx)
-       c_id = boxes(id)%children(ch_lxly)
-       boxes(id)%fx(1, 1:nch, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(1, 2:nc:2, f_ixs))
-       c_id = boxes(id)%children(ch_lxhy)
-       boxes(id)%fx(1, nch+1:, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(1, 2:nc:2, f_ixs))
-    case (a3_nb_hx)
-       c_id = boxes(id)%children(ch_hxly)
-       boxes(id)%fx(nc+1, 1:nch, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
-       c_id = boxes(id)%children(ch_hxhy)
-       boxes(id)%fx(nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
-    case (a3_nb_ly)
-       c_id = boxes(id)%children(ch_lxly)
-       boxes(id)%fy(1:nch, 1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, 1, f_ixs))
-       c_id = boxes(id)%children(ch_hxly)
-       boxes(id)%fy(nch+1:, 1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, 1, f_ixs))
-    case (a3_nb_hy)
-       c_id = boxes(id)%children(ch_lxhy)
-       boxes(id)%fy(1:nch, nc+1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
-       c_id = boxes(id)%children(ch_hxhy)
-       boxes(id)%fy(nch+1:, nc+1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
+    if (a3_nb_low(nb)) then
+       i = 1
+    else
+       i = nc
+    end if
+
+    select case (d)
+    case (1)
+       do ic = 1, 4
+          i_ch = a3_ch_adj_nb(ic, nb)
+          c_id = boxes(id)%children(i_ch)
+          ioff = nch*a3_ch_dix(:, i_ch)
+          boxes(id)%fx(i, ioff(2)+1:ioff(2)+nch, &
+               ioff(3)+1:ioff(3)+nch, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(i, 1:nc:2, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(i, 2:nc:2, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(i, 1:nc:2, 2:nc:2, f_ixs) + &
+               boxes(c_id)%fx(i, 2:nc:2, 2:nc:2, f_ixs))
+       end do
+    case (2)
+       do ic = 1, 4
+          i_ch = a3_ch_adj_nb(ic, nb)
+          c_id = boxes(id)%children(i_ch)
+          ioff = nch*a3_ch_dix(:, i_ch)
+          boxes(id)%fx(ioff(2)+1:ioff(2)+nch, i, &
+               ioff(3)+1:ioff(3)+nch, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(1:nc:2, i, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(2:nc:2, i, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(1:nc:2, i, 2:nc:2, f_ixs) + &
+               boxes(c_id)%fx(2:nc:2, i, 2:nc:2, f_ixs))
+       end do
+    case (3)
+       do ic = 1, 4
+          i_ch = a3_ch_adj_nb(ic, nb)
+          c_id = boxes(id)%children(i_ch)
+          ioff = nch*a3_ch_dix(:, i_ch)
+          boxes(id)%fx(ioff(2)+1:ioff(2)+nch, &
+               ioff(3)+1:ioff(3)+nch, i, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(1:nc:2, 1:nc:2, i, f_ixs) + &
+               boxes(c_id)%fx(2:nc:2, 1:nc:2, i, f_ixs) + &
+               boxes(c_id)%fx(1:nc:2, 2:nc:2, i, f_ixs) + &
+               boxes(c_id)%fx(2:nc:2, 2:nc:2, i, f_ixs))
+       end do
     end select
   end subroutine a3_flux_from_children
 
@@ -1332,8 +1407,8 @@ contains
     character(len=*)       :: filename, cc_names(:)
     integer, intent(in)    :: n_cycle
     real(dp), intent(in)   :: time
-    integer                :: lvl, bc, bn, n, n_cells, n_nodes, n_grids
-    integer                :: ig, i, j, id, n_ix, c_ix
+    integer                :: lvl, bc, bn, bn2, n, n_cells, n_nodes, n_grids
+    integer                :: ig, i, j, k, id, n_ix, c_ix
     integer                :: cell_ix, node_ix
     integer                :: nodes_per_box, cells_per_box
     real(dp), allocatable  :: coords(:), cc_vars(:,:)
@@ -1342,8 +1417,9 @@ contains
 
     bc = tree%n_cell         ! number of Box Cells
     bn = tree%n_cell + 1     ! number of Box Nodes
-    nodes_per_box = bn**2
-    cells_per_box = bc**2
+    bn2 = bn**2
+    nodes_per_box = bn**3
+    cells_per_box = bc**3
 
     n_grids = 0
     do lvl = 1, tree%n_lvls
@@ -1352,13 +1428,13 @@ contains
     n_nodes = nodes_per_box * n_grids
     n_cells = cells_per_box * n_grids
 
-    allocate(coords(2 * n_nodes))
+    allocate(coords(3 * n_nodes))
     allocate(cc_vars(n_cells, tree%n_var_cell))
     allocate(offsets(cells_per_box * n_grids))
     allocate(cell_types(cells_per_box * n_grids))
     allocate(connects(8 * cells_per_box * n_grids))
 
-    cell_types = 8              ! VTK pixel type
+    cell_types = 11              ! VTK voxel type
 
     ig = 0
     do lvl = 1, tree%n_lvls
@@ -1369,22 +1445,30 @@ contains
           cell_ix = (ig-1) * cells_per_box
           node_ix = (ig-1) * nodes_per_box
 
-          do j = 1, bn
-             do i = 1, bn
-                n_ix = 2 * (node_ix + (j-1) * bn + i) - 1
-                coords(n_ix:n_ix+1) = tree%boxes(id)%r_min + &
-                     [i-1,j-1] * tree%boxes(id)%dr
+          do k = 1, bn
+             do j = 1, bn
+                do i = 1, bn
+                   n_ix = 3 * (node_ix + (k-1) * bn2 + (j-1) * bn + i)
+                   coords(n_ix-2:n_ix) = tree%boxes(id)%r_min + &
+                        [i-1,j-1,k-1] * tree%boxes(id)%dr
+                end do
              end do
           end do
 
-          do j = 1, bc
-             do i = 1, bc
-                ! In vtk, indexing starts at 0, so subtract 1
-                n_ix                      = node_ix + (j-1) * bn + i - 1
-                c_ix                      = cell_ix + (j-1) * bc + i
-                cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, :)
-                offsets(c_ix)             = 8 * c_ix
-                connects(8*c_ix-3:8*c_ix) = [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1]
+          do k = 1, bc
+             do j = 1, bc
+                do i = 1, bc
+                   ! In vtk, indexing starts at 0, so subtract 1
+                   n_ix                      = node_ix + (k-1) * bn2 + &
+                        (j-1) * bn + i - 1
+                   c_ix                      = cell_ix + (k-1) * bc**2 + &
+                        (j-1) * bc + i
+                   cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, k, :)
+                   offsets(c_ix)             = 8 * c_ix
+                   connects(8*c_ix-7:8*c_ix) = &
+                        [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1, &
+                        n_ix+bn2, n_ix+bn2+1, n_ix+bn2+bn, n_ix+bn2+bn+1]
+                end do
              end do
           end do
        end do
@@ -1392,7 +1476,7 @@ contains
 
     call vtk_ini_xml(vtkf, trim(filename), 'UnstructuredGrid')
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
-    call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, 2, n_cycle, time)
+    call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, 3, n_cycle, time)
     call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
     call vtk_dat_xml(vtkf, "CellData", .true.)
     do n = 1, tree%n_var_cell

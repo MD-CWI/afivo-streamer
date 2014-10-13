@@ -15,7 +15,9 @@ module m_morton
 
   ! Public methods
   public :: morton_from_ix2
+  public :: morton_from_ix3
   public :: morton_to_ix2
+  public :: morton_to_ix3
   public :: morton_bsearch
   public :: morton_rank
   public :: print_bits
@@ -34,10 +36,28 @@ contains
 
   function morton_to_ix2(m_ix) result(ix)
     integer(morton_k), intent(in) :: m_ix
-    integer                    :: ix(2)
+    integer                       :: ix(2)
     ix(1) = bit_despace_1(m_ix)
     ix(2) = bit_despace_1(ishft(m_ix, -1))
   end function morton_to_ix2
+
+  function morton_from_ix3(ix) result(m_ix)
+    integer, intent(in) :: ix(3)
+    integer(morton_k)      :: m_ix
+    integer(morton_k) :: a, b, c
+    a = bit_space_2(ix(1))
+    b = bit_space_2(ix(2))
+    c = bit_space_2(ix(3))
+    m_ix = ior(ior(a, ishft(b, 1)), ishft(c, 2))
+  end function morton_from_ix3
+
+  function morton_to_ix3(m_ix) result(ix)
+    integer(morton_k), intent(in) :: m_ix
+    integer                       :: ix(3)
+    ix(1) = bit_despace_2(m_ix)
+    ix(2) = bit_despace_2(ishft(m_ix, -1))
+    ix(3) = bit_despace_2(ishft(m_ix, -2))
+  end function morton_to_ix3
 
   function morton_bsearch(list, val) result(ix)
     integer(morton_k), intent(in) :: list(:)
