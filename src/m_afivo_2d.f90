@@ -12,9 +12,9 @@ module m_afivo_2d
   integer, parameter :: a2_cn_hxly = 2
   integer, parameter :: a2_cn_lxhy = 3
   integer, parameter :: a2_cn_hxhy = 4
-  integer, parameter :: a2_cn_nbs(2, 4) = reshape([1,3,3,2,4,1,2,4], [2,4])
+  integer, parameter :: a2_cn_nbs(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
 
-  ! Children (same as corners)
+  ! Children (same location as corners)
   integer, parameter :: ch_lxly = 1
   integer, parameter :: ch_hxly = 2
   integer, parameter :: ch_lxhy = 3
@@ -36,18 +36,18 @@ module m_afivo_2d
   integer, parameter :: a2_nb_dim(4) = [1, 1, 2, 2]
 
   type box2_t
-     integer                   :: lvl          ! level of the box
-     integer                   :: tag          ! for setting tag bits
-     integer                   :: ix(2)        ! index in the domain
-     integer                   :: parent       ! index of parent in box list
-     integer                   :: children(4)  ! index of children in box list
-     integer                   :: neighbors(4) ! index of neighbors in box list
-     integer                   :: n_cell       ! number of cells per dimension
-     real(dp)                  :: dr           ! width/height of a cell
-     real(dp)                  :: r_min(2)     ! min coords. of box
-     real(dp), allocatable     :: cc(:, :, :)  ! cell centered variables
-     real(dp), allocatable     :: fx(:, :, :)  ! x-face centered variables
-     real(dp), allocatable     :: fy(:, :, :)  ! y-face centered variables
+     integer               :: lvl          ! level of the box
+     integer               :: tag          ! for setting tag bits
+     integer               :: ix(2)        ! index in the domain
+     integer               :: parent       ! index of parent in box list
+     integer               :: children(4)  ! index of children in box list
+     integer               :: neighbors(4) ! index of neighbors in box list
+     integer               :: n_cell       ! number of cells per dimension
+     real(dp)              :: dr           ! width/height of a cell
+     real(dp)              :: r_min(2)     ! min coords. of box
+     real(dp), allocatable :: cc(:, :, :)  ! cell centered variables
+     real(dp), allocatable :: fx(:, :, :)  ! x-face centered variables
+     real(dp), allocatable :: fy(:, :, :)  ! y-face centered variables
   end type box2_t
 
   type lvl2_t
