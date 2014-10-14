@@ -87,7 +87,7 @@ module m_afivo_3d
   end type lvl3_t
 
   type a3_t
-     integer                   :: max_lvl    ! maximum allowed levels
+     integer                   :: max_lvl    ! maximum allowed level
      integer                   :: n_lvls     ! current maximum level
      integer                   :: max_id     ! max index in box list
      integer                   :: n_cell     ! number of cells per dimension
@@ -190,16 +190,14 @@ contains
     procedure(a3_subr)        :: my_procedure
     integer                   :: lvl, i, id
 
-    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
-       !$omp do
+       !$omp do private(id)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes(id))
        end do
        !$omp end do nowait
     end do
-    !$omp end parallel
   end subroutine a3_loop_box
 
   ! Call procedure for each box in tree, with argument rarg
@@ -209,16 +207,14 @@ contains
     real(dp), intent(in)      :: rarg(:)
     integer                   :: lvl, i, id
 
-    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
-       !$omp do
+       !$omp do private(id)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes(id), rarg)
        end do
        !$omp end do nowait
     end do
-    !$omp end parallel
   end subroutine a3_loop_box_arg
 
   ! Call procedure for each id in tree, giving the list of boxes
@@ -227,16 +223,14 @@ contains
     procedure(a3_subr_boxes)  :: my_procedure
     integer                   :: lvl, i, id
 
-    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
-       !$omp do
+       !$omp do private(id)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes, id)
        end do
        !$omp end do nowait
     end do
-    !$omp end parallel
   end subroutine a3_loop_boxes
 
   ! Clear the bit from all the tags in the tree
@@ -471,6 +465,9 @@ contains
        tree%boxes(id)%r_min     = tree%r_base + &
             (ix_list(:, i) - 1) * tree%dr_base * tree%n_cell
        tree%boxes(id)%tag       = ibset(0, a5_bit_in_use)
+
+       call alloc_box(tree%boxes(id), tree%n_cell, &
+            tree%n_var_cell, tree%n_var_face)
     end do
   end subroutine a3_set_base
 
@@ -510,7 +507,7 @@ contains
     end if
 
     do lvl = 1, tree%max_lvl-1
-       !$omp parallel do private(id, c_ids)
+       !$omp do private(id, c_ids)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
 
@@ -525,7 +522,7 @@ contains
              call a3_remove_children(tree%boxes, id)
           end if
        end do
-       !$omp end parallel do
+       !$omp end do
 
        ! Set next level ids to children of this level
        deallocate(tree%lvls(lvl+1)%ids)
@@ -533,7 +530,7 @@ contains
             tree%lvls(lvl+1)%ids, tree%boxes)
 
        ! Update connectivity of children
-       !$omp parallel do private(id, i_c)
+       !$omp do private(id, i_c)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           if (a3_has_children(tree%boxes(id))) then
@@ -542,7 +539,7 @@ contains
              end do
           end if
        end do
-       !$omp end parallel do
+       !$omp end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
     end do
@@ -574,11 +571,7 @@ contains
     tree%max_id = tree%max_id + n_ids
     !$omp end critical
 
-    do i = 1, n_ids
-       ids(i) = max_id_prev + i
-       call alloc_box(tree%boxes(ids(i)), tree%n_cell, &
-            tree%n_var_cell, tree%n_var_face)
-    end do
+    ids = [(max_id_prev + i, i=1,n_ids)]
   end subroutine a3_get_free_ids
 
   ! Given the refinement function, return consistent refinement flags
@@ -594,16 +587,14 @@ contains
     ref_flags(:) = a5_kp_ref      ! Used indices are overwritten
 
     ! Set refinement flags for all boxes using ref_func
-    !$omp parallel private(lvl, i, id)
     do lvl = 1, n_lvls
-       !$omp do
+       !$omp do private(id)
        do i = 1, size(lvls(lvl)%ids)
-          id           = lvls(lvl)%ids(i)
+          id            = lvls(lvl)%ids(i)
           ref_flags(id) = ref_func(boxes(id))
        end do
        !$omp end do nowait
     end do
-    !$omp end parallel
 
     ! Cannot derefine lvl 1
     do i = 1, size(lvls(1)%ids)
@@ -619,7 +610,7 @@ contains
 
     ! Ensure 2-1 balance.
     do lvl = n_lvls, 2, -1
-       !$omp parallel do private(id, nb, nb_id, p_id, p_nb_id)
+       !$omp do private(id, nb, nb_id, p_id, p_nb_id)
        do i = 1, size(lvls(lvl)%leaves) ! We only check leaf boxes
           id = lvls(lvl)%leaves(i)
 
@@ -647,12 +638,12 @@ contains
              end do
           end if
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
 
     ! Make the (de)refinement flags consistent for blocks with children.
     do lvl = n_lvls-1, 1, -1
-       !$omp parallel do private(id, c_ids)
+       !$omp do private(id, c_ids)
        do i = 1, size(lvls(lvl)%parents)
           id = lvls(lvl)%parents(i)
 
@@ -669,7 +660,7 @@ contains
              end where
           end if
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
 
   end subroutine a3_set_ref_flags
@@ -718,6 +709,8 @@ contains
        boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
             a3_ch_dix(:,i) * boxes(id)%n_cell
        boxes(c_id)%tag       = ibset(0, a5_bit_in_use)
+       call alloc_box(boxes(c_id), boxes(id)%n_cell, &
+            size(boxes(id)%cc, 4), size(boxes(id)%fx, 4))
     end do
 
     ! Set boundary conditions at children
@@ -822,11 +815,11 @@ contains
     integer, intent(in)         :: ids(:), iv_from, iv_to
     integer                     :: i
 
-    !$omp parallel do
+    !$omp do
     do i = 1, size(ids)
        call a3_box_copy_cc(boxes(ids(i)), iv_from, iv_to)
     end do
-    !$omp end parallel do
+    !$omp end do
   end subroutine a3_boxes_copy_cc
 
   ! Injection to children (zero order)
@@ -985,6 +978,7 @@ contains
     nc = boxes(id)%n_cell
     do i_c = 1, 8
        c_id = boxes(id)%children(i_c)
+       if (c_id == a5_no_box) cycle
        ! Offset of child w.r.t. parent
        ix_offset = a3_ch_dix(:, i_c) * ishft(nc, -1)
        call a3_restrict_box(boxes(c_id), boxes(id), ix_offset, ivs)
@@ -997,11 +991,11 @@ contains
     integer, intent(in)         :: ids(:), ivs(:)
     integer                     :: i
 
-    !$omp parallel do
+    !$omp do
     do i = 1, size(ids)
        call a3_restrict_to_box(boxes, ids(i), ivs)
     end do
-    !$omp end parallel do
+    !$omp end do
   end subroutine a3_restrict_to_boxes
 
   ! Conservative restriction. 8 fine cells to one parent cell
@@ -1047,12 +1041,12 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%n_lvls
-       !$omp parallel do private(id)
+       !$omp do private(id)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a3_gc_box_sides(tree%boxes, id, ivs, subr_no_nb, subr_bc)
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
   end subroutine a3_gc_sides
 
@@ -1197,12 +1191,12 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%n_lvls
-       !$omp parallel do private(id)
+       !$omp do private(id)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a3_gc_box_corners(tree%boxes, id, ivs, subr_no_nb, subr_bc)
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
   end subroutine a3_gc_corners
 
@@ -1361,7 +1355,7 @@ contains
     integer :: lvl, i, id, nb, nb_id
 
     do lvl = tree%n_lvls-1, 1, -1
-       !$omp parallel do private(id, nb, nb_id)
+       !$omp do private(id, nb, nb_id)
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           do nb = 1, 6
@@ -1371,7 +1365,7 @@ contains
                   call a3_flux_from_children(tree%boxes, id, nb, f_ixs)
           end do
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
   end subroutine a3_consistent_fluxes
 
