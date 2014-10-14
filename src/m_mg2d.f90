@@ -6,12 +6,6 @@ module m_mg2d
 
   integer, parameter :: dp = kind(0.0d0)
 
-  type mg2_subt_t
-     integer                   :: min_lvl
-     type(lvl2_t), allocatable :: lvls(:)
-     type(box2_t), allocatable :: boxes(:)
-  end type mg2_subt_t
-
   type mg2_t
      private
      integer :: i_phi
@@ -46,7 +40,6 @@ module m_mg2d
   ! Public types
   public :: mg2d_box_op
   public :: mg2_t
-  public :: mg2_subt_t
 
   ! Public methods
   public :: mg2d_set
@@ -84,11 +77,12 @@ contains
     mg%box_gsrb     => my_gsrb
   end subroutine mg2d_set
 
-  subroutine mg2d_create_subtree(tree, subt)
-    type(a2_t), intent(in)             :: tree
-    type(mg2_subt_t), intent(inout) :: subt
+  subroutine mg2d_create_subtree(tree)
+    type(a2_t), intent(inout) :: tree
 
-    integer :: i, id, n, lvl, n_lvls, boxes_per_lvl, offset
+    integer :: id, c_id, n, lvl, n_lvls
+    integer :: min_lvl, boxes_per_lvl, offset
+    type(lvl2_t), allocatable :: tmp_lvls(:)
 
     ! Determine number of lvls for subtree
     n = tree%n_cell
@@ -100,247 +94,136 @@ contains
     end do
 
     if (n_lvls == 0) stop "mg2d_create_subtree: the subtree has no levels"
-    subt%min_lvl = 1 - n_lvls
+
+    min_lvl = 1 - n_lvls
 
     ! Will always have this many boxes per level
     boxes_per_lvl = size(tree%lvls(1)%ids)
 
-    ! Allocate tree
-    allocate(subt%lvls(-n_lvls+1:0))
-    allocate(subt%boxes(n_lvls*boxes_per_lvl))
+    ! Allocate subtree levels
+    allocate(tmp_lvls(min_lvl:ubound(tree%lvls, 1)))
+    tmp_lvls(1:) = tree%lvls
+    call move_alloc(tmp_lvls, tree%lvls)
 
-    do lvl = 0, -n_lvls+1, -1
-       allocate(subt%lvls(lvl)%ids(boxes_per_lvl))
+    ! Create coarser levels which are copies of lvl 1
+    do lvl = 0, min_lvl, -1
+       allocate(tree%lvls(lvl)%ids(boxes_per_lvl))
+       allocate(tree%lvls(lvl)%parents(boxes_per_lvl))
+       allocate(tree%lvls(lvl)%leaves(0))
 
-       offset             = (n_lvls+lvl-1) * boxes_per_lvl
-       subt%lvls(lvl)%ids = tree%lvls(1)%ids + offset
+       call a2_get_free_ids(tree, tree%lvls(lvl)%ids)
+       tree%lvls(lvl)%parents = tree%lvls(lvl)%ids
+       offset = tree%lvls(lvl)%ids(1) - tree%lvls(lvl+1)%ids(1)
 
        do n = 1, boxes_per_lvl
-          id                     = tree%lvls(1)%ids(n)
-          i                      = subt%lvls(lvl)%ids(n)
-          subt%boxes(i)%lvl      = lvl
-          subt%boxes(i)%ix       = tree%boxes(id)%ix
-          subt%boxes(i)%tag      = ibset(0, a5_bit_in_use)
-          subt%boxes(i)%dr       = tree%dr_base * 2**(1-lvl)
-          subt%boxes(i)%r_min    = tree%boxes(id)%r_min
-          subt%boxes(i)%n_cell   = tree%n_cell / 2**(1-lvl)
+          c_id                        = tree%lvls(lvl+1)%ids(n)
+          id                          = tree%lvls(lvl)%ids(n)
+          tree%boxes(id)%lvl          = lvl
+          tree%boxes(id)%ix           = tree%boxes(c_id)%ix
+          tree%boxes(id)%tag          = ibset(0, a5_bit_in_use)
+          tree%boxes(id)%dr           = tree%boxes(c_id)%dr * 2
+          tree%boxes(id)%r_min        = tree%boxes(c_id)%r_min
+          tree%boxes(id)%n_cell       = tree%boxes(c_id)%n_cell / 2
 
-          ! Parent and children are not set for the subtree
-          subt%boxes(i)%parent   = a5_no_box
-          subt%boxes(i)%children = a5_no_box
+          tree%boxes(id)%parent       = a5_no_box
+          tree%boxes(id)%children(1)  = c_id
+          tree%boxes(id)%children(2:) = a5_no_box
 
-          ! But neighbors should be set
-          subt%boxes(i)%neighbors = tree%boxes(id)%neighbors
-          where (subt%boxes(i)%neighbors > a5_no_box)
-             subt%boxes(i)%neighbors = &
-                  subt%boxes(i)%neighbors + offset
+          ! Connectivity stays the same
+          tree%boxes(id)%neighbors = tree%boxes(c_id)%neighbors
+          where (tree%boxes(id)%neighbors > a5_no_box)
+             tree%boxes(id)%neighbors = &
+                  tree%boxes(id)%neighbors + offset
           end where
 
-          call alloc_box(subt%boxes(i), subt%boxes(i)%n_cell, &
+          call alloc_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
     end do
-
   end subroutine mg2d_create_subtree
 
   ! Restrict cell centered variables ivs(:) on the trees
-  subroutine mg2d_restrict_trees(tree, subt, ivs, mg, use_subtree)
+  subroutine mg2d_restrict_trees(tree, ivs, mg)
     type(a2_t), intent(inout)       :: tree
-    type(mg2_subt_t), intent(inout) :: subt
     integer, intent(in)             :: ivs(:)
-    logical, intent(in)             :: use_subtree
     type(mg2_t), intent(in)         :: mg
-    integer                         :: lvl, i, id, jd
+    integer                         :: lvl
 
     ! Restrict phi and rhs on tree
-    do lvl = tree%n_lvls-1, 1, -1
+    do lvl = tree%n_lvls-1, lbound(tree%lvls, 1), -1
        call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, ivs)
+       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, ivs, &
+               mg%sides_bc, mg%corners_bc)
     end do
-
-    if (use_subtree) then
-       ! Move over to subtree
-       do i = 1, size(tree%lvls(1)%ids)
-          id = tree%lvls(1)%ids(i)
-          jd = subt%lvls(0)%ids(i)
-          call a2_restrict_box(tree%boxes(id), subt%boxes(jd), [0, 0], ivs)
-       end do
-
-       ! Do rest of subtree
-       do lvl = 0, subt%min_lvl+1, -1
-          do i = 1, size(subt%lvls(lvl)%ids)
-             id = subt%lvls(lvl)%ids(i)
-             jd = subt%lvls(lvl-1)%ids(i)
-             call a2_restrict_box(subt%boxes(id), subt%boxes(jd), [0, 0], ivs)
-          end do
-       end do
-    end if
   end subroutine mg2d_restrict_trees
 
   ! Need valid ghost cells on input, has valid gc on output
-  subroutine mg2d_fas_fmg(tree, subt, mg, use_subtree)
-    type(a2_t), intent(inout)          :: tree
-    type(mg2_subt_t), intent(inout) :: subt
-    type(mg2_t), intent(in)            :: mg
-    logical, intent(in) :: use_subtree
-    integer                            :: i, id, jd, lvl
+  subroutine mg2d_fas_fmg(tree, mg)
+    type(a2_t), intent(inout)       :: tree
+    type(mg2_t), intent(in)         :: mg
+    integer                         :: i, id, lvl
 
-    if (use_subtree) then
-       do lvl = subt%min_lvl, 0
-          ! Store phi in phi_old
-          call a2_boxes_copy_cc(subt%boxes, subt%lvls(lvl)%ids, &
-               mg%i_phi, mg%i_phi_old)
-
-          if (lvl > subt%min_lvl) then
-             ! Correct solution at this lvl using lvl-1 data
-             ! phi = phi + prolong(phi_coarse - phi_old_coarse)
-             !$omp parallel do private(id, jd)
-             do i = 1, size(subt%lvls(lvl)%ids)
-                id = subt%lvls(lvl)%ids(i)
-                jd = subt%lvls(lvl-1)%ids(i)
-                call correct_child_box(subt%boxes(jd), subt%boxes(id), &
-                     [0,0], mg%i_phi, mg%i_phi_old)
-             end do
-             !$omp end parallel do
-
-             ! Update ghost cells
-             call mg2d_fill_gc(subt%boxes, subt%lvls(lvl)%ids, [mg%i_phi], &
-                  mg%sides_bc, mg%corners_bc)
-          endif
-
-          ! Perform V-cycle on subtree
-          call mg2d_fas_vcycle_subtree(subt, mg, lvl)
-       end do
-    end if
-
-    do lvl = 1, tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%n_lvls
        ! Store phi in phi_old
        call a2_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_phi_old)
 
-       if (lvl > 1) then
+       if (lvl > lbound(tree%lvls, 1)) then
           ! Correct solution at this lvl using lvl-1 data
           ! phi = phi + prolong(phi_coarse - phi_old_coarse)
-          !$omp parallel do private(id)
-          do i = 1, size(tree%lvls(lvl-1)%parents)
-             id = tree%lvls(lvl-1)%parents(i)
-             call correct_children(tree%boxes, id, mg%i_phi, mg%i_phi_old)
-          end do
-          !$omp end parallel do
+          call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
           call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, [mg%i_phi], &
                mg%sides_bc, mg%corners_bc)
-
-       else if (lvl == 1 .and. use_subtree) then
-          !$omp parallel do private(id, jd)
-          do i = 1, size(tree%lvls(lvl)%ids)
-             id = tree%lvls(lvl)%ids(i)
-             jd = subt%lvls(lvl-1)%ids(i)
-             call correct_child_box(subt%boxes(jd), tree%boxes(id), &
-                  [0,0], mg%i_phi, mg%i_phi_old)
-          end do
-          !$omp end parallel do
-       endif
+       end if
 
        ! Perform V-cycle
-       call mg2d_fas_vcycle(tree, subt, mg, use_subtree, lvl)
+       call mg2d_fas_vcycle(tree, mg, lvl)
     end do
 
   end subroutine mg2d_fas_fmg
 
   ! On entrance, need valid ghost cell data. On exit, leave valid ghost cell
   ! data
-  recursive subroutine mg2d_fas_vcycle(tree, subt, mg, use_subtree, lvl)
+  subroutine mg2d_fas_vcycle(tree, mg, max_lvl)
     type(a2_t), intent(inout)          :: tree
-    type(mg2_subt_t), intent(inout) :: subt
     type(mg2_t), intent(in)            :: mg
-    logical, intent(in)                :: use_subtree
-    integer, intent(in)                :: lvl
-    integer                            :: i, id, jd
+    integer, intent(in)                :: max_lvl
+    integer                            :: i, id, lvl
 
-    if (use_subtree .and. lvl < 1) then
-       ! We use a subtree to get an approximation for lvl 1 efficiently
-       call mg2d_fas_vcycle_subtree(subt, mg, lvl)
-
-    else if (.not. use_subtree .and. lvl == 1) then
-       ! Perform base level relaxation because we don't have a subtree
-       call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_base)
-
-    else ! Normal part of the V-cycle
-
+    do lvl = max_lvl,  lbound(tree%lvls, 1)+1, -1
        ! Downwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
        ! Calculate residual at current lvl
        call residual_boxes(tree%boxes, tree%lvls(lvl)%ids, mg)
 
-       ! Restrict phi and res
-       if (use_subtree .and. lvl == 1) then
-          !$omp parallel do private(id, jd)
-          do i = 1, size(tree%lvls(lvl)%ids)
-             id = tree%lvls(lvl)%ids(i)
-             jd = subt%lvls(lvl-1)%ids(i)
-             call a2_restrict_box(tree%boxes(id), subt%boxes(jd), &
-                  [0,0], [mg%i_phi, mg%i_res])
-          end do
-          !$omp end parallel do
-       else
-          call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, &
-               [mg%i_phi, mg%i_res])
-       end if
+       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, &
+            [mg%i_phi, mg%i_res])
 
-       ! Have to update ghost cells for phi_c (todo: not everywhere?)
-       if (use_subtree .and. lvl == 1) then
-          call mg2d_fill_gc(subt%boxes, subt%lvls(lvl-1)%ids, [mg%i_phi], &
-               mg%sides_bc, mg%corners_bc)
-       else
-          call mg2d_fill_gc(tree%boxes, tree%lvls(lvl-1)%ids, [mg%i_phi], &
-               mg%sides_bc, mg%corners_bc)
-       end if
+       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl-1)%ids, [mg%i_phi], &
+            mg%sides_bc, mg%corners_bc)
 
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
        ! store current coarse phi in phi_old
-       if (use_subtree .and. lvl == 1) then
-          !$omp parallel do private(id)
-          do i = 1, size(subt%lvls(lvl-1)%ids)
-             id = subt%lvls(lvl-1)%ids(i)
-             call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
-             call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
-             call a2_box_copy_cc(subt%boxes(id), mg%i_phi, mg%i_phi_old)
-          end do
-          !$omp end parallel do
-       else
-          !$omp parallel do private(id)
-          do i = 1, size(tree%lvls(lvl-1)%parents)
-             id = tree%lvls(lvl-1)%parents(i)
-             call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs, mg)
-             call a2_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
-             call a2_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_phi_old)
-          end do
-          !$omp end parallel do
-       end if
+       !$omp do private(id)
+       do i = 1, size(tree%lvls(lvl-1)%parents)
+          id = tree%lvls(lvl-1)%parents(i)
+          call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs, mg)
+          call a2_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
+          call a2_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_phi_old)
+       end do
+       !$omp end do
+    end do
 
-       call mg2d_fas_vcycle(tree, subt, mg, use_subtree, lvl-1)
+    call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_base)
 
+    ! Do the upwards part of the v-cycle in the tree
+    do lvl = lbound(tree%lvls, 1)+1, max_lvl
        ! Correct solution at this lvl using lvl-1 data
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
-       if (use_subtree .and. lvl == 1) then
-          !$omp parallel do private(id, jd)
-          do i = 1, size(tree%lvls(lvl)%ids)
-             id = tree%lvls(lvl)%ids(i)
-             jd = subt%lvls(lvl-1)%ids(i)
-             call correct_child_box(subt%boxes(jd), tree%boxes(id), &
-                  [0,0], mg%i_phi, mg%i_phi_old)
-          end do
-          !$omp end parallel do
-       else
-          !$omp parallel do private(id)
-          do i = 1, size(tree%lvls(lvl-1)%parents)
-             id = tree%lvls(lvl-1)%parents(i)
-             call correct_children(tree%boxes, id, mg%i_phi, mg%i_phi_old)
-          end do
-          !$omp end parallel do
-       end if
+       call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells again (todo: not everywhere?)
        call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, [mg%i_phi], &
@@ -348,77 +231,13 @@ contains
 
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
+    end do
 
-    end if
-
-    if (lvl > 0) then
+    do lvl = 1, max_lvl
        ! Calculate updated residual at current lvl for output
        call residual_boxes(tree%boxes, tree%lvls(lvl)%ids, mg)
-    end if
+    end do
   end subroutine mg2d_fas_vcycle
-
-  recursive subroutine mg2d_fas_vcycle_subtree(subt, mg, lvl)
-    type(mg2_subt_t), intent(inout) :: subt
-    type(mg2_t), intent(in)         :: mg
-    integer, intent(in)             :: lvl
-    integer                         :: i, id, jd
-
-    if (lvl == subt%min_lvl) then
-       ! Perform base level relaxation on the subtree
-       call gsrb_boxes(subt%boxes, subt%lvls(lvl)%ids, mg, mg%n_cycle_base)
-    else
-       ! Downwards relaxation
-       call gsrb_boxes(subt%boxes, subt%lvls(lvl)%ids, mg, mg%n_cycle_down)
-
-       ! Calculate residual
-       call residual_boxes(subt%boxes, subt%lvls(lvl)%ids, mg)
-
-       ! Restrict phi and res
-       !$omp parallel do private(id, jd)
-       do i = 1, size(subt%lvls(lvl)%ids)
-          id = subt%lvls(lvl)%ids(i)
-          jd = subt%lvls(lvl-1)%ids(i)
-          call a2_restrict_box(subt%boxes(id), subt%boxes(jd), &
-               [0,0], [mg%i_phi, mg%i_res])
-       end do
-       !$omp end parallel do
-
-       ! Have to update ghost cells for phi_c (todo: not everywhere?)
-       call mg2d_fill_gc(subt%boxes, subt%lvls(lvl-1)%ids, [mg%i_phi], &
-            mg%sides_bc, mg%corners_bc)
-
-       ! Store current coarse phi in phi_old and set rhs_c = laplacian(phi_c) +
-       ! restrict(res) where it is refined
-       !$omp parallel do private(id)
-       do i = 1, size(subt%lvls(lvl-1)%ids)
-          id = subt%lvls(lvl-1)%ids(i)
-          call mg%box_op(subt%boxes(id), mg%i_phi, mg%i_rhs, mg)
-          call a2_box_add_cc(subt%boxes(id), mg%i_res, mg%i_rhs)
-          call a2_box_copy_cc(subt%boxes(id), mg%i_phi, mg%i_phi_old)
-       end do
-       !$omp end parallel do
-
-       call mg2d_fas_vcycle_subtree(subt, mg, lvl-1)
-
-       ! Correct solution at this lvl using lvl-1 data
-       ! phi = phi + prolong(phi_coarse - phi_old_coarse)
-       !$omp parallel do private(id, jd)
-       do i = 1, size(subt%lvls(lvl)%ids)
-          id = subt%lvls(lvl)%ids(i)
-          jd = subt%lvls(lvl-1)%ids(i)
-          call correct_child_box(subt%boxes(jd), subt%boxes(id), &
-               [0,0], mg%i_phi, mg%i_phi_old)
-       end do
-       !$omp end parallel do
-
-       ! Have to fill ghost cells again (todo: not everywhere?)
-       call mg2d_fill_gc(subt%boxes, subt%lvls(lvl)%ids, [mg%i_phi], &
-            mg%sides_bc, mg%corners_bc)
-
-       ! Upwards relaxation
-       call gsrb_boxes(subt%boxes, subt%lvls(lvl)%ids, mg, mg%n_cycle_up)
-    end if
-  end subroutine mg2d_fas_vcycle_subtree
 
   subroutine mg2d_fill_gc(boxes, ids, ivs, sides_bc, corners_bc)
     type(box2_t), intent(inout) :: boxes(:)
@@ -426,7 +245,6 @@ contains
     procedure(a2_subr_gc)       :: sides_bc, corners_bc
     integer                     :: i
 
-    !$omp parallel
     !$omp do
     do i = 1, size(ids)
        call a2_gc_box_sides(boxes, ids(i), ivs, &
@@ -439,24 +257,31 @@ contains
             a2_corners_extrap, corners_bc)
     end do
     !$omp end do
-    !$omp end parallel
   end subroutine mg2d_fill_gc
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
-  subroutine correct_children(boxes, id, i_phi, i_phi_old)
+  subroutine correct_children(boxes, ids, mg)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i_phi, i_phi_old
-    integer                     :: nc, i_c, c_id, ix_offset(2)
+    integer, intent(in)         :: ids(:)
+    type(mg2_t), intent(in)     :: mg
+    integer                     :: i, nc, i_c, c_id, ix_offset(2)
 
-    nc = boxes(id)%n_cell
-    do i_c = 1, 4
-       c_id = boxes(id)%children(i_c)
-       ! Offset of child w.r.t. parent
-       ix_offset = a2_ch_dix(:, i_c) * ishft(nc, -1)
+    !$omp do private(nc, i_c, c_id, ix_offset)
+    do i = 1, size(ids)
 
-       call correct_child_box(boxes(id), boxes(c_id), &
-            ix_offset, i_phi, i_phi_old)
+       nc = boxes(ids(i))%n_cell
+       do i_c = 1, 4
+          c_id = boxes(ids(i))%children(i_c)
+          if (c_id == a5_no_box) cycle
+
+          ! Offset of child w.r.t. parent
+          ix_offset = a2_ch_dix(:, i_c) * ishft(nc, -1)
+
+          call correct_child_box(boxes(ids(i)), boxes(c_id), &
+               ix_offset, mg%i_phi, mg%i_phi_old)
+       end do
     end do
+    !$omp end do
   end subroutine correct_children
 
   subroutine correct_child_box(box_p, box_c, ix_offset, i_phi, i_phi_old)
@@ -496,7 +321,6 @@ contains
     integer, intent(in)         :: ids(:), n_cycle
     integer                     :: n, i
 
-    !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
@@ -518,7 +342,7 @@ contains
        end do
        !$omp end do
     end do
-    !$omp end parallel
+
   end subroutine gsrb_boxes
 
   subroutine mg2d_gsrb_lpl_cyl_box(box, i_phi, i_rhs, redblack_cntr, mg)
@@ -637,11 +461,11 @@ contains
     integer, intent(in)         :: ids(:)
     integer                     :: i
 
-    !$omp parallel do
+    !$omp do
     do i = 1, size(ids)
        call residual_box(boxes(ids(i)), mg)
     end do
-    !$omp end parallel do
+    !$omp end do
   end subroutine residual_boxes
 
   subroutine residual_box(box, mg)

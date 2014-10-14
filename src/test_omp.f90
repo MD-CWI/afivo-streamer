@@ -5,7 +5,7 @@ program test_omp
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
-  integer, parameter :: nn = 100
+  integer, parameter :: nn = 10*1000*1000
   integer :: i, n
   real(dp), allocatable :: test_data(:)
 
@@ -13,13 +13,8 @@ program test_omp
   test_data = 0
 
   !$omp parallel private(i, n)
-  do i = 1, 100*1000*1000/nn
-     !$omp do schedule(static)
-     do n = 1, size(test_data)
-        test_data(n) = test_data(n) * 0.5_dp + &
-             1.0_dp / (test_data(n) + abs(test_data(n) + 1.0_dp))
-     end do
-     !$omp end do nowait
+  do i = 1, 1000*1000*1000/nn
+     call test_2(test_data)
   end do
   !$omp end parallel
 
@@ -30,11 +25,11 @@ contains
     real(dp), intent(inout) :: rr(:)
     integer                 :: n
 
-    !$omp parallel do schedule(static)
+    !$omp do schedule(static)
     do n = 1, size(rr)
        ! rr(n) = rr(n) * sin(rr(n)) + cos(rr(n))
        rr(n) = rr(n) * 0.5_dp + 1.0_dp / (rr(n) + abs(rr(n) + 1.0_dp))
     end do
-    !$omp end parallel do
+    !$omp end do
   end subroutine test_1
 end program test_omp
