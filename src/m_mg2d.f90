@@ -161,14 +161,16 @@ contains
   subroutine mg2d_fas_fmg(tree, mg)
     type(a2_t), intent(inout)       :: tree
     type(mg2_t), intent(in)         :: mg
-    integer                         :: i, id, lvl
+    integer                         :: i, id, lvl, min_lvl
 
-    do lvl = lbound(tree%lvls, 1), tree%n_lvls
+    min_lvl = lbound(tree%lvls, 1)
+
+    do lvl = min_lvl, tree%n_lvls
        ! Store phi in phi_old
        call a2_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_phi_old)
 
-       if (lvl > lbound(tree%lvls, 1)) then
+       if (lvl > min_lvl) then
           ! Correct solution at this lvl using lvl-1 data
           ! phi = phi + prolong(phi_coarse - phi_old_coarse)
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
@@ -190,9 +192,11 @@ contains
     type(a2_t), intent(inout)          :: tree
     type(mg2_t), intent(in)            :: mg
     integer, intent(in)                :: max_lvl
-    integer                            :: i, id, lvl
+    integer                            :: i, id, lvl, min_lvl
 
-    do lvl = max_lvl,  lbound(tree%lvls, 1)+1, -1
+    min_lvl = lbound(tree%lvls, 1)
+
+    do lvl = max_lvl,  min_lvl+1, -1
        ! Downwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
@@ -217,10 +221,11 @@ contains
        !$omp end do
     end do
 
+    lvl = min_lvl
     call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_base)
 
     ! Do the upwards part of the v-cycle in the tree
-    do lvl = lbound(tree%lvls, 1)+1, max_lvl
+    do lvl = min_lvl+1, max_lvl
        ! Correct solution at this lvl using lvl-1 data
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
@@ -231,11 +236,6 @@ contains
 
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
-    end do
-
-    do lvl = 1, max_lvl
-       ! Calculate updated residual at current lvl for output
-       call residual_boxes(tree%boxes, tree%lvls(lvl)%ids, mg)
     end do
   end subroutine mg2d_fas_vcycle
 

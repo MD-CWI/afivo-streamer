@@ -61,18 +61,18 @@ program test_mg
        sides_bc, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
 
   ! Create a "subtree" with coarser levels than tree
-  call mg2d_create_subtree(tree)
+  ! call mg2d_create_subtree(tree)
 
   ! Restrict from children recursively
   call mg2d_restrict_trees(tree, [i_rhs, i_phi], mg)
 
   !$omp parallel
-  do i = 1, 10
+  do i = 1, 100
      ! call mg2d_fas_vcycle(tree, mg, tree%n_lvls)
      call mg2d_fas_fmg(tree, mg)
      !$omp single
-     write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
+     ! write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
+     ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
      !$omp end single
   end do
   !$omp end parallel
@@ -89,8 +89,8 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 4 .or. &
-         (box%lvl < 6 .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
+    if (box%lvl < 6 .or. &
+         (box%lvl < 8 .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref
