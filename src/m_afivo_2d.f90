@@ -487,7 +487,6 @@ contains
     end if
 
     do lvl = 1, tree%max_lvl-1
-       !$omp do private(id, c_ids)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
 
@@ -502,7 +501,6 @@ contains
              call a2_remove_children(tree%boxes, id)
           end if
        end do
-       !$omp end do
 
        ! Set next level ids to children of this level
        deallocate(tree%lvls(lvl+1)%ids)
@@ -510,7 +508,6 @@ contains
             tree%lvls(lvl+1)%ids, tree%boxes)
 
        ! Update connectivity of children
-       !$omp do private(id, i_c)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           if (a2_has_children(tree%boxes(id))) then
@@ -519,7 +516,6 @@ contains
              end do
           end if
        end do
-       !$omp end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
     end do
@@ -568,12 +564,10 @@ contains
 
     ! Set refinement flags for all boxes using ref_func
     do lvl = 1, n_lvls
-       !$omp do private(id)
        do i = 1, size(lvls(lvl)%ids)
-          id           = lvls(lvl)%ids(i)
+          id            = lvls(lvl)%ids(i)
           ref_flags(id) = ref_func(boxes(id))
        end do
-       !$omp end do nowait
     end do
 
     ! Cannot derefine lvl 1
@@ -590,7 +584,6 @@ contains
 
     ! Ensure 2-1 balance.
     do lvl = n_lvls, 2, -1
-       !$omp do private(id, nb, nb_id, p_id, p_nb_id)
        do i = 1, size(lvls(lvl)%leaves) ! We only check leaf boxes
           id = lvls(lvl)%leaves(i)
 
@@ -618,12 +611,10 @@ contains
              end do
           end if
        end do
-       !$omp end do
     end do
 
     ! Make the (de)refinement flags consistent for blocks with children.
     do lvl = n_lvls-1, 1, -1
-       !$omp do private(id, c_ids)
        do i = 1, size(lvls(lvl)%parents)
           id = lvls(lvl)%parents(i)
 
@@ -640,7 +631,6 @@ contains
              end where
           end if
        end do
-       !$omp end do
     end do
 
   end subroutine a2_set_ref_flags
@@ -1216,8 +1206,8 @@ contains
   ! Restrict fluxes from children to parents on refinement boundaries
   subroutine a2_consistent_fluxes(tree, f_ixs)
     type(a2_t), intent(inout) :: tree
-    integer, intent(in) :: f_ixs(:)
-    integer :: lvl, i, id, nb, nb_id
+    integer, intent(in)       :: f_ixs(:)
+    integer                   :: lvl, i, id, nb, nb_id
 
     do lvl = tree%n_lvls-1, 1, -1
        !$omp do private(id, nb, nb_id)

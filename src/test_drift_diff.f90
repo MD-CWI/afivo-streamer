@@ -1,4 +1,5 @@
 program test_drift_diff
+  use omp_lib
   use m_afivo_2d
 
   implicit none
@@ -61,7 +62,6 @@ program test_drift_diff
   do while (time < end_time)
      i = i + 1
      print *, "i = ", i, "n_boxes", tree%max_id
-
      write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
 
@@ -72,30 +72,34 @@ program test_drift_diff
      do while (.not. done_with_loop)
         ! Set diffusion and CFL limit for timestep
         dr_min = a2_min_dr(tree)
-        dt = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
+        dt     = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
              sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
 
         if (time_in_loop + dt > time_per_adapt) then
-           dt = time_per_adapt - time_in_loop
+           dt             = time_per_adapt - time_in_loop
            done_with_loop = .true.
         end if
+        time_in_loop = time_in_loop + dt
 
+        !$omp parallel
         call a2_loop_box_arg(tree, calculate_fluxes, [diff_coeff, vel_x, vel_y])
         call a2_consistent_fluxes(tree, [i_phi])
+        !$omp end parallel
         call a2_loop_box_arg(tree, update_solution, [dt])
         call a2_gc_sides(tree, [i_phi], a2_sides_prolong1, have_no_bc)
         call a2_gc_corners(tree, [i_phi], a2_corners_prolong1, have_no_bc)
-        time_in_loop = time_in_loop + dt
      end do
-
-     print *, time_per_adapt / dt
 
      time = time + time_per_adapt
 
      call a2_loop_boxes(tree, restrict_from_children)
+     print *, i, "Adjusting tree", omp_get_thread_num()
      call a2_adjust_refinement(tree, ref_func)
+     print *, i, "Done, tidy up"
+     ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
+     print *, i, "Done"
+     print *, i, "here already", omp_get_thread_num()
      call a2_loop_boxes(tree, prolong_to_new_children)
-     call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
   end do
 
   call a2_destroy(tree)
