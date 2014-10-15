@@ -190,13 +190,14 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%max_lvl
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes(id), rarg)
        end do
        !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a2_loop_box_arg
 
   ! Call procedure for each id in tree, giving the list of boxes
@@ -213,6 +214,7 @@ contains
        end do
        !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a2_loop_boxes
 
   ! Clear the bit from all the tags in the tree
@@ -978,13 +980,14 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%n_lvls
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a2_gc_box_sides(tree%boxes, id, ivs, subr_no_nb, subr_bc)
        end do
        !$omp end do
     end do
+    !$omp barrier
   end subroutine a2_gc_sides
 
   ! Fill ghost cells for variables ivs(:) on the sides of a boxes, using
@@ -1103,13 +1106,14 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%n_lvls
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a2_gc_box_corners(tree%boxes, id, ivs, subr_no_nb, subr_bc)
        end do
        !$omp end do
     end do
+    !$omp barrier
   end subroutine a2_gc_corners
 
   ! Fill ghost cells for variables ivs(:) on the corners of a boxes, using
@@ -1205,12 +1209,13 @@ contains
 
   ! Restrict fluxes from children to parents on refinement boundaries
   subroutine a2_consistent_fluxes(tree, f_ixs)
+    use omp_lib
     type(a2_t), intent(inout) :: tree
     integer, intent(in)       :: f_ixs(:)
     integer                   :: lvl, i, id, nb, nb_id
 
     do lvl = tree%n_lvls-1, 1, -1
-       !$omp do private(id, nb, nb_id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           do nb = 1, 4
@@ -1220,8 +1225,9 @@ contains
                   call a2_flux_from_children(tree%boxes, id, nb, f_ixs)
           end do
        end do
-       !$omp end do
+       !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a2_consistent_fluxes
 
   ! The neighbor nb has no children and id does, so get flux from children for

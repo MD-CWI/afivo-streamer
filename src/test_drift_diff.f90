@@ -61,16 +61,18 @@ program test_drift_diff
 
   do while (time < end_time)
      i = i + 1
-     print *, "i = ", i, "n_boxes", tree%max_id
-     write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
+     ! print *, "i = ", i, "n_boxes", tree%max_id
+     ! write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
 
      ! Advance time_per_adapt
      done_with_loop = .false.
      time_in_loop   = 0
 
-     do while (.not. done_with_loop)
+     !$omp parallel
+     do
         ! Set diffusion and CFL limit for timestep
+        !$omp single
         dr_min = a2_min_dr(tree)
         dt     = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
              sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
@@ -80,25 +82,24 @@ program test_drift_diff
            done_with_loop = .true.
         end if
         time_in_loop = time_in_loop + dt
+        !$omp end single
 
-        !$omp parallel
         call a2_loop_box_arg(tree, calculate_fluxes, [diff_coeff, vel_x, vel_y])
         call a2_consistent_fluxes(tree, [i_phi])
-        !$omp end parallel
         call a2_loop_box_arg(tree, update_solution, [dt])
         call a2_gc_sides(tree, [i_phi], a2_sides_prolong1, have_no_bc)
         call a2_gc_corners(tree, [i_phi], a2_corners_prolong1, have_no_bc)
+
+        if (done_with_loop) exit
+        !$omp barrier
      end do
+     !$omp end parallel
 
      time = time + time_per_adapt
 
      call a2_loop_boxes(tree, restrict_from_children)
-     print *, i, "Adjusting tree", omp_get_thread_num()
      call a2_adjust_refinement(tree, ref_func)
-     print *, i, "Done, tidy up"
      ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
-     print *, i, "Done"
-     print *, i, "here already", omp_get_thread_num()
      call a2_loop_boxes(tree, prolong_to_new_children)
   end do
 
@@ -143,6 +144,8 @@ contains
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
+
+    box%cc(i, j, i_phi) = 0
 
     nc = box%n_cell
     do j = 1, nc
