@@ -173,13 +173,14 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%max_lvl
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes(id))
        end do
        !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a2_loop_box
 
   ! Call procedure for each box in tree, with argument rarg
@@ -207,7 +208,7 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%max_lvl
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes, id)
@@ -453,6 +454,18 @@ contains
     end do
   end subroutine a2_set_base
 
+  ! Resize the box storage to new_size
+  subroutine a2_resize_box_storage(tree, new_size)
+    type(a2_t), intent(inout) :: tree
+    integer, intent(in)       :: new_size
+    type(box2_t), allocatable :: boxes_cpy(:)
+
+    allocate(boxes_cpy(new_size))
+    boxes_cpy(1:tree%max_id)      = tree%boxes(1:tree%max_id)
+    boxes_cpy(tree%max_id+1:)%tag = 0 ! empty tag
+    call move_alloc(boxes_cpy, tree%boxes)
+  end subroutine a2_resize_box_storage
+
   ! On input, tree should be balanced. On output, tree is still balanced, and
   ! its refinement is updated (with at most one level per call).
   ! Sets bit: a5_bit_new_children
@@ -464,7 +477,6 @@ contains
     integer                        :: max_id_prev, max_id_req
     integer                        :: n_leaves, n_parents
     integer, allocatable           :: ref_flags(:)
-    type(box2_t), allocatable      :: boxes_cpy(:)
 
     max_id_prev = tree%max_id
     allocate(ref_flags(max_id_prev))
@@ -482,10 +494,7 @@ contains
     max_id_req = max_id_prev + 4 * count(ref_flags == a5_do_ref)
     if (max_id_req > size(tree%boxes)) then
        print *, "Resizing box storage for refinement", max_id_req
-       allocate(boxes_cpy(max_id_req))
-       boxes_cpy(1:max_id_prev)      = tree%boxes(1:max_id_prev)
-       boxes_cpy(max_id_prev+1:)%tag = 0 ! empty tag
-       call move_alloc(boxes_cpy, tree%boxes)
+       call a2_resize_box_storage(tree, max_id_req)
     end if
 
     do lvl = 1, tree%max_lvl-1
