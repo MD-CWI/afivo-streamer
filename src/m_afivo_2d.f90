@@ -240,6 +240,7 @@ contains
     type(box2_t), allocatable      :: boxes_cpy(:)
     integer(morton_k), allocatable :: mortons(:)
 
+    !$omp single
     if (goal_frac_used > max_frac_used) &
          stop "a2_tidy_up: need goal_frac_used < max_frac_used"
     if (max_frac_used > 1.0_dp) stop "a2_tidy_up: need max_frac_used < 1"
@@ -322,6 +323,7 @@ contains
 
        tree%max_id = n_used
     end if
+    !$omp end single
   end subroutine a2_tidy_up
 
   ! Create a list of leaves and a list of parents for level
@@ -478,6 +480,7 @@ contains
     integer                        :: n_leaves, n_parents
     integer, allocatable           :: ref_flags(:)
 
+    !$omp single
     max_id_prev = tree%max_id
     allocate(ref_flags(max_id_prev))
 
@@ -544,6 +547,7 @@ contains
        allocate(tree%lvls(lvl)%parents(n_parents))
        call set_leaves_parents(tree%boxes, tree%lvls(lvl))
     end do
+    !$omp end single
   end subroutine a2_adjust_refinement
 
   ! Get free ids to store new boxes in
@@ -996,7 +1000,6 @@ contains
        end do
        !$omp end do
     end do
-    !$omp barrier
   end subroutine a2_gc_sides
 
   ! Fill ghost cells for variables ivs(:) on the sides of a boxes, using
@@ -1122,7 +1125,6 @@ contains
        end do
        !$omp end do
     end do
-    !$omp barrier
   end subroutine a2_gc_corners
 
   ! Fill ghost cells for variables ivs(:) on the corners of a boxes, using

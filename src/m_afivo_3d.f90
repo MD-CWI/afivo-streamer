@@ -191,13 +191,14 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%max_lvl
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes(id))
        end do
        !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a3_loop_box
 
   ! Call procedure for each box in tree, with argument rarg
@@ -208,13 +209,14 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%max_lvl
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes(id), rarg)
        end do
        !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a3_loop_box_arg
 
   ! Call procedure for each id in tree, giving the list of boxes
@@ -224,13 +226,14 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%max_lvl
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes, id)
        end do
        !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a3_loop_boxes
 
   ! Clear the bit from all the tags in the tree
@@ -471,6 +474,18 @@ contains
     end do
   end subroutine a3_set_base
 
+  ! Resize the box storage to new_size
+  subroutine a3_resize_box_storage(tree, new_size)
+    type(a3_t), intent(inout) :: tree
+    integer, intent(in)       :: new_size
+    type(box3_t), allocatable :: boxes_cpy(:)
+
+    allocate(boxes_cpy(new_size))
+    boxes_cpy(1:tree%max_id)      = tree%boxes(1:tree%max_id)
+    boxes_cpy(tree%max_id+1:)%tag = 0 ! empty tag
+    call move_alloc(boxes_cpy, tree%boxes)
+  end subroutine a3_resize_box_storage
+
   ! On input, tree should be balanced. On output, tree is still balanced, and
   ! its refinement is updated (with at most one level per call).
   ! Sets bit: a5_bit_new_children
@@ -482,8 +497,8 @@ contains
     integer                        :: max_id_prev, max_id_req
     integer                        :: n_leaves, n_parents
     integer, allocatable           :: ref_flags(:)
-    type(box3_t), allocatable      :: boxes_cpy(:)
 
+    !$omp single
     max_id_prev = tree%max_id
     allocate(ref_flags(max_id_prev))
 
@@ -500,14 +515,10 @@ contains
     max_id_req = max_id_prev + 8 * count(ref_flags == a5_do_ref)
     if (max_id_req > size(tree%boxes)) then
        print *, "Resizing box storage for refinement", max_id_req
-       allocate(boxes_cpy(max_id_req))
-       boxes_cpy(1:max_id_prev)      = tree%boxes(1:max_id_prev)
-       boxes_cpy(max_id_prev+1:)%tag = 0 ! empty tag
-       call move_alloc(boxes_cpy, tree%boxes)
+       call a3_resize_box_storage(tree, max_id_req)
     end if
 
     do lvl = 1, tree%max_lvl-1
-       !$omp do private(id, c_ids)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
 
@@ -522,7 +533,6 @@ contains
              call a3_remove_children(tree%boxes, id)
           end if
        end do
-       !$omp end do
 
        ! Set next level ids to children of this level
        deallocate(tree%lvls(lvl+1)%ids)
@@ -530,7 +540,6 @@ contains
             tree%lvls(lvl+1)%ids, tree%boxes)
 
        ! Update connectivity of children
-       !$omp do private(id, i_c)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           if (a3_has_children(tree%boxes(id))) then
@@ -539,7 +548,6 @@ contains
              end do
           end if
        end do
-       !$omp end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
     end do
@@ -557,6 +565,7 @@ contains
        allocate(tree%lvls(lvl)%parents(n_parents))
        call set_leaves_parents(tree%boxes, tree%lvls(lvl))
     end do
+    !$omp end single
   end subroutine a3_adjust_refinement
 
   ! Get free ids to store new boxes in
@@ -588,12 +597,10 @@ contains
 
     ! Set refinement flags for all boxes using ref_func
     do lvl = 1, n_lvls
-       !$omp do private(id)
        do i = 1, size(lvls(lvl)%ids)
           id            = lvls(lvl)%ids(i)
           ref_flags(id) = ref_func(boxes(id))
        end do
-       !$omp end do nowait
     end do
 
     ! Cannot derefine lvl 1
@@ -610,7 +617,6 @@ contains
 
     ! Ensure 2-1 balance.
     do lvl = n_lvls, 2, -1
-       !$omp do private(id, nb, nb_id, p_id, p_nb_id)
        do i = 1, size(lvls(lvl)%leaves) ! We only check leaf boxes
           id = lvls(lvl)%leaves(i)
 
@@ -638,12 +644,10 @@ contains
              end do
           end if
        end do
-       !$omp end do
     end do
 
     ! Make the (de)refinement flags consistent for blocks with children.
     do lvl = n_lvls-1, 1, -1
-       !$omp do private(id, c_ids)
        do i = 1, size(lvls(lvl)%parents)
           id = lvls(lvl)%parents(i)
 
@@ -660,7 +664,6 @@ contains
              end where
           end if
        end do
-       !$omp end do
     end do
 
   end subroutine a3_set_ref_flags
@@ -1041,7 +1044,7 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%n_lvls
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a3_gc_box_sides(tree%boxes, id, ivs, subr_no_nb, subr_bc)
@@ -1191,7 +1194,7 @@ contains
     integer                   :: lvl, i, id
 
     do lvl = 1, tree%n_lvls
-       !$omp do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a3_gc_box_corners(tree%boxes, id, ivs, subr_no_nb, subr_bc)
@@ -1355,7 +1358,7 @@ contains
     integer :: lvl, i, id, nb, nb_id
 
     do lvl = tree%n_lvls-1, 1, -1
-       !$omp do private(id, nb, nb_id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           do nb = 1, 6
@@ -1365,8 +1368,9 @@ contains
                   call a3_flux_from_children(tree%boxes, id, nb, f_ixs)
           end do
        end do
-       !$omp end do
+       !$omp end do nowait
     end do
+    !$omp barrier
   end subroutine a3_consistent_fluxes
 
   ! The neighbor nb has no children and id does, so get flux from children for

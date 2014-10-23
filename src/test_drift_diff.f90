@@ -59,19 +59,22 @@ program test_drift_diff
   vel_x          = 1.0_dp
   vel_y          = 2.0_dp
 
+  !$omp parallel
   do while (time < end_time)
+     !$omp single
      i = i + 1
-     ! print *, "i = ", i, "n_boxes", tree%max_id
+     print *, "i = ", i, "n_boxes", tree%max_id, time
      ! write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
+     !$omp end single
 
      ! Advance time_per_adapt
      done_with_loop = .false.
      time_in_loop   = 0
 
-     !$omp parallel
      do
         ! Set diffusion and CFL limit for timestep
+        !$omp barrier
         !$omp single
         dr_min = a2_min_dr(tree)
         dt     = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
@@ -81,6 +84,8 @@ program test_drift_diff
            dt             = time_per_adapt - time_in_loop
            done_with_loop = .true.
         end if
+
+        time         = time + dt
         time_in_loop = time_in_loop + dt
         !$omp end single
 
@@ -91,17 +96,15 @@ program test_drift_diff
         call a2_gc_corners(tree, [i_phi], a2_corners_prolong1, have_no_bc)
 
         if (done_with_loop) exit
-        !$omp barrier
      end do
-     !$omp end parallel
-
-     time = time + time_per_adapt
 
      call a2_loop_boxes(tree, restrict_from_children)
      call a2_adjust_refinement(tree, ref_func)
      ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
      call a2_loop_boxes(tree, prolong_to_new_children)
+
   end do
+  !$omp end parallel
 
   call a2_destroy(tree)
 
