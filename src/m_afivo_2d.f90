@@ -945,7 +945,7 @@ contains
     end do
   end subroutine a2_restrict_to_box
 
-  ! Restrict variables ivs(:) to all parent boxes ids(:)
+  ! Restrict variables ivs(:) to parent boxes ids(:)
   subroutine a2_restrict_to_boxes(boxes, ids, ivs)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:), ivs(:)
@@ -957,6 +957,17 @@ contains
     end do
     !$omp end do
   end subroutine a2_restrict_to_boxes
+
+  ! Restrict variables ivs(:) to all parent boxes
+  subroutine a2_restrict_tree(tree, ivs)
+    type(a2_t), intent(inout) :: tree
+    integer, intent(in)       :: ivs(:)
+    integer                   :: lvl
+
+    do lvl = tree%max_lvl-1, 1, -1
+       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, ivs)
+    end do
+  end subroutine a2_restrict_tree
 
   ! Conservative restriction. 4 fine cells to one parent cell
   subroutine a2_restrict_box(box_c, box_p, ix_offset, ivs)
@@ -1225,7 +1236,7 @@ contains
     integer, intent(in)       :: f_ixs(:)
     integer                   :: lvl, i, id, nb, nb_id
 
-    do lvl = tree%n_lvls-1, 1, -1
+    do lvl = 1, tree%n_lvls-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
@@ -1254,42 +1265,84 @@ contains
     select case (nb)
     case (a2_nb_lx)
        c_id = boxes(id)%children(a2_ch_lxly)
-       boxes(id)%fx(1, 1:nch, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fx(       1, 1:nch,  f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(1, 2:nc:2, f_ixs))
        c_id = boxes(id)%children(a2_ch_lxhy)
-       boxes(id)%fx(1, nch+1:, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fx(       1, nch+1:, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(1, 2:nc:2, f_ixs))
     case (a2_nb_hx)
        c_id = boxes(id)%children(a2_ch_hxly)
-       boxes(id)%fx(nc+1, 1:nch, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fx(       nc+1, 1:nch,  f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
        c_id = boxes(id)%children(a2_ch_hxhy)
-       boxes(id)%fx(nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fx(       nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
             boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
     case (a2_nb_ly)
        c_id = boxes(id)%children(a2_ch_lxly)
-       boxes(id)%fy(1:nch, 1, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fy(       1:nch,  1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, 1, f_ixs))
        c_id = boxes(id)%children(a2_ch_hxly)
-       boxes(id)%fy(nch+1:, 1, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fy(       nch+1:, 1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, 1, f_ixs))
     case (a2_nb_hy)
        c_id = boxes(id)%children(a2_ch_lxhy)
-       boxes(id)%fy(1:nch, nc+1, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fy(       1:nch,  nc+1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
        c_id = boxes(id)%children(a2_ch_hxhy)
-       boxes(id)%fy(nch+1:, nc+1, f_ixs) = 0.5_dp * ( &
+       boxes(id)%fy(       nch+1:, nc+1, f_ixs) = 0.5_dp * ( &
             boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
             boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
     end select
   end subroutine a2_flux_from_children
+
+  ! The neighbor nb has no children and id does, so set flux on children for
+  ! consisency at refinement boundary. TODO: TEST
+  subroutine a2_flux_to_children(boxes, id, nb, f_ixs)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, f_ixs(:)
+    integer                     :: nc, nch, c_id
+
+    nc  = boxes(id)%n_cell
+    nch = ishft(nc, -1) ! nc/2
+
+    select case (nb)
+    case (a2_nb_lx)
+       c_id = boxes(id)%children(a2_ch_lxly)
+       boxes(c_id)%fx(1, 1:nc:2, f_ixs) = boxes(id)%fx(1, 1:nch,  f_ixs)
+       boxes(c_id)%fx(1, 2:nc:2, f_ixs) = boxes(id)%fx(1, 1:nch,  f_ixs)
+       c_id = boxes(id)%children(a2_ch_lxhy)
+       boxes(c_id)%fx(1, 1:nc:2, f_ixs) = boxes(id)%fx(1, nch+1:,  f_ixs)
+       boxes(c_id)%fx(1, 2:nc:2, f_ixs) = boxes(id)%fx(1, nch+1:,  f_ixs)
+    case (a2_nb_hx)
+       c_id = boxes(id)%children(a2_ch_hxly)
+       boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) = boxes(id)%fx(nc+1, 1:nch,  f_ixs)
+       boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs) = boxes(id)%fx(nc+1, 1:nch,  f_ixs)
+       c_id = boxes(id)%children(a2_ch_hxhy)
+       boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) = boxes(id)%fx(nc+1, nch+1:,  f_ixs)
+       boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs) = boxes(id)%fx(nc+1, nch+1:,  f_ixs)
+    case (a2_nb_ly)
+       c_id = boxes(id)%children(a2_ch_lxly)
+       boxes(c_id)%fy(1:nc:2, 1, f_ixs) = boxes(id)%fy(1:nch, 1, f_ixs)
+       boxes(c_id)%fy(2:nc:2, 1, f_ixs) = boxes(id)%fy(1:nch, 1, f_ixs)
+       c_id = boxes(id)%children(a2_ch_hxly)
+       boxes(c_id)%fy(1:nc:2, 1, f_ixs) = boxes(id)%fy(nch+1:, 1, f_ixs)
+       boxes(c_id)%fy(2:nc:2, 1, f_ixs) = boxes(id)%fy(nch+1:, 1, f_ixs)
+    case (a2_nb_hy)
+       c_id = boxes(id)%children(a2_ch_lxhy)
+       boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) = boxes(id)%fy(1:nch, nc+1, f_ixs)
+       boxes(c_id)%fy(2:nc:2, nc+1, f_ixs) = boxes(id)%fy(1:nch, nc+1, f_ixs)
+       c_id = boxes(id)%children(a2_ch_hxhy)
+       boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) = boxes(id)%fy(nch+1:, nc+1, f_ixs)
+       boxes(c_id)%fy(2:nc:2, nc+1, f_ixs) = boxes(id)%fy(nch+1:, nc+1, f_ixs)
+    end select
+  end subroutine a2_flux_to_children
 
   ! Write the cell centered data of a tree to a vtk file
   subroutine a2_write_tree(tree, filename, cc_names, n_cycle, time)
@@ -1306,6 +1359,7 @@ contains
     integer, allocatable   :: offsets(:), connects(:), cell_types(:)
     type(vtk_t)            :: vtkf
 
+    !$omp single
     bc = tree%n_cell         ! number of Box Cells
     bn = tree%n_cell + 1     ! number of Box Nodes
     nodes_per_box = bn**2
@@ -1369,6 +1423,7 @@ contains
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
     print *, "Written ", trim(filename), ", n_grids", n_grids
+    !$omp end single
   end subroutine a2_write_tree
 
   ! subroutine a2_write_tree(tree, filename, cc_names, cc_units, n_cycle, time)

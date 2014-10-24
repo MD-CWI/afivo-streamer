@@ -17,7 +17,8 @@ LIBS	:=
 .PHONY: all clean
 
 all: test_morton test_base test_unstr_vtk test_drift_diff test_mg \
-	test_gmres test_mg_elec test_omp test_base_3d
+	test_gmres test_mg_elec test_omp test_base_3d \
+	test_drift_diff_limiter
 
 clean:
 	$(RM) *.o *.mod test_m_morton
@@ -30,6 +31,7 @@ test_morton:		m_morton.o
 test_base:		m_afivo_2d.o m_vtk.o m_morton.o
 test_base_3d:		m_afivo_3d.o m_vtk.o m_morton.o
 test_drift_diff:	m_afivo_2d.o m_vtk.o m_morton.o
+test_drift_diff_limiter:	m_afivo_2d.o m_vtk.o m_morton.o
 test_mg:		m_afivo_2d.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
 test_mg_elec:		m_afivo_2d.o m_vtk.o m_morton.o m_mg2d.o m_gmres.o
 test_gmres:		m_gmres.o

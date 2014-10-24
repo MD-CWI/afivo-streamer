@@ -6,7 +6,7 @@ program test_drift_diff
 
   integer, parameter :: dp = kind(0.0d0)
   type(a2_t)         :: tree
-  integer            :: i, id
+  integer            :: i, n, n_steps, id, lvl
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
   integer, parameter :: box_size    = 8
@@ -30,7 +30,7 @@ program test_drift_diff
   ix_list(:, id) = [1,1] ! Set index of box
   nb_list(:, id) = id    ! Box is periodic, so its own neighbor
 
-  ! Set up the initial conditions
+  ! Set up the initial conditions. First adapt mesh.
   call a2_set_base(tree, ix_list, nb_list)
   do i = 1, 20
      call a2_adjust_refinement(tree, ref_func_init, n_changes)
@@ -44,65 +44,60 @@ program test_drift_diff
   do i = 1, 20
      call a2_adjust_refinement(tree, ref_func, n_changes)
      call a2_loop_boxes(tree, prolong_to_new_children)
+
      if (n_changes == 0) exit
   end do
 
+  ! Set final initial condition
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, [i_phi], a2_sides_prolong1, have_no_bc)
-  call a2_gc_corners(tree, [i_phi], a2_corners_prolong1, have_no_bc)
+  call a2_restrict_tree(tree, [i_phi])
+  call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
+  call a2_gc_corners(tree, [i_phi], a2_corners_extrap, have_no_bc)
 
   i              = 0
   time           = 0
   time_per_adapt = 0.02_dp
   end_time       = 1.0_dp
-  diff_coeff     = 0.01_dp
+  diff_coeff     = 0.0_dp
   vel_x          = 1.0_dp
   vel_y          = 2.0_dp
 
-  !$omp parallel
-  do while (time < end_time)
+  !$omp parallel private(n)
+  do
      !$omp single
      i = i + 1
      print *, "i = ", i, "n_boxes", tree%max_id, time
-     ! write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
-     ! call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
+     write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
+
+     dr_min  = a2_min_dr(tree)
+     dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
+          sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
+     n_steps = ceiling(time_per_adapt/dt)
+     dt      = time_per_adapt / n_steps
+     time    = time + time_per_adapt
      !$omp end single
 
-     ! Advance time_per_adapt
-     done_with_loop = .false.
-     time_in_loop   = 0
+     call a2_write_tree(tree, trim(fname), (/"my_var"/), i, time)
 
-     do
-        ! Set diffusion and CFL limit for timestep
-        !$omp barrier
-        !$omp single
-        dr_min = a2_min_dr(tree)
-        dt     = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
-             sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
+     !$omp barrier
+     if (time > end_time) exit
 
-        if (time_in_loop + dt > time_per_adapt) then
-           dt             = time_per_adapt - time_in_loop
-           done_with_loop = .true.
-        end if
-
-        time         = time + dt
-        time_in_loop = time_in_loop + dt
-        !$omp end single
-
+     do n = 1, n_steps
         call a2_loop_box_arg(tree, calculate_fluxes, [diff_coeff, vel_x, vel_y])
         call a2_consistent_fluxes(tree, [i_phi])
         call a2_loop_box_arg(tree, update_solution, [dt])
-        call a2_gc_sides(tree, [i_phi], a2_sides_prolong1, have_no_bc)
-        call a2_gc_corners(tree, [i_phi], a2_corners_prolong1, have_no_bc)
-
-        if (done_with_loop) exit
+        call a2_restrict_tree(tree, [i_phi])
+        call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
+        ! call a2_gc_corners(tree, [i_phi], a2_corners_extrap, have_no_bc)
      end do
 
-     call a2_loop_boxes(tree, restrict_from_children)
-     call a2_adjust_refinement(tree, ref_func)
-     ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
-     call a2_loop_boxes(tree, prolong_to_new_children)
+     ! call a2_loop_boxes(tree, restrict_from_children)
+     ! call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
+     ! call a2_gc_corners(tree, [i_phi], a2_corners_extrap, have_no_bc)
 
+     ! call a2_adjust_refinement(tree, ref_func)
+     ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
+     ! call a2_loop_boxes(tree, prolong_to_new_children)
   end do
   !$omp end parallel
 
@@ -219,15 +214,6 @@ contains
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children
-
-  subroutine restrict_from_children(boxes, id)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id
-
-    if (a2_has_children(boxes(id))) then
-       call a2_restrict_to_box(boxes, id, [1])
-    end if
-  end subroutine restrict_from_children
 
   subroutine have_no_bc(boxes, id, i, ivs)
     type(box2_t), intent(inout) :: boxes(:)
