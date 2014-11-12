@@ -104,6 +104,13 @@ module m_afivo_2d
        integer, intent(in)         :: id
      end subroutine a2_subr_boxes
 
+     subroutine a2_subr_boxes_arg(boxes, id, rarg)
+       import
+       type(box2_t), intent(inout) :: boxes(:)
+       integer, intent(in)         :: id
+       real(dp), intent(in)        :: rarg(:)
+     end subroutine a2_subr_boxes_arg
+
      subroutine a2_subr_gc(boxes, id, i, ivs)
        import
        type(box2_t), intent(inout) :: boxes(:)
@@ -217,6 +224,24 @@ contains
     end do
     !$omp barrier
   end subroutine a2_loop_boxes
+
+  ! Call procedure for each id in tree, giving the list of boxes
+  subroutine a2_loop_boxes_arg(tree, my_procedure, rarg)
+    type(a2_t), intent(inout)    :: tree
+    procedure(a2_subr_boxes_arg) :: my_procedure
+    real(dp), intent(in)         :: rarg(:)
+    integer                      :: lvl, i, id
+
+    do lvl = 1, tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call my_procedure(tree%boxes, id, rarg)
+       end do
+       !$omp end do nowait
+    end do
+    !$omp barrier
+  end subroutine a2_loop_boxes_arg
 
   ! Clear the bit from all the tags in the tree
   subroutine a2_clear_tagbit(tree, bit)
@@ -808,6 +833,17 @@ contains
     !$omp end do
   end subroutine a2_boxes_copy_cc
 
+  ! Copy cc(:,:, iv_from) to box%cc(:,:, iv_to) for full tree
+  subroutine a2_tree_copy_cc(tree, iv_from, iv_to)
+    type(a2_t), intent(inout) :: tree
+    integer, intent(in)       :: iv_from, iv_to
+    integer                   :: lvl
+
+    do lvl = 1, tree%n_lvls
+       call a2_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
+    end do
+  end subroutine a2_tree_copy_cc
+
   ! Injection to children (zero order)
   subroutine a2_prolong0_from(boxes, id, ivs, fill_gc)
     type(box2_t), intent(inout) :: boxes(:)
@@ -1360,6 +1396,10 @@ contains
     type(vtk_t)            :: vtkf
 
     !$omp single
+
+    if (size(cc_names) /= tree%n_var_cell) &
+         stop "a2_write_tree: size(cc_names) /= n_var_cell"
+
     bc = tree%n_cell         ! number of Box Cells
     bn = tree%n_cell + 1     ! number of Box Nodes
     nodes_per_box = bn**2
