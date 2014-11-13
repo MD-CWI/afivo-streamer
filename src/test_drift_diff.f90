@@ -9,7 +9,7 @@ program test_drift_diff
   integer            :: i, n, n_steps, id, lvl
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
-  integer, parameter :: box_size    = 8
+  integer, parameter :: box_size    = 16
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old = 2
   integer            :: n_boxes_max = 10*1000
@@ -349,7 +349,7 @@ contains
     integer, intent(in) :: id
 
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
-       call a2_prolong1_from(boxes, id, [1], .true.)
+       call a2_prolong1_from(boxes, id, [i_phi], .true.)
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children
