@@ -182,35 +182,36 @@ contains
     end do
   end subroutine set_init_cond
 
-  subroutine calculate_fluxes(box, flux_args)
-    type(box2_t), intent(inout) :: box
+  subroutine calculate_fluxes(boxes, id, flux_args)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
     real(dp)                    :: inv_dr
     integer                     :: nc
 
-    nc     = box%n_cell
-    inv_dr = 1/box%dr
+    nc     = boxes(id)%n_cell
+    inv_dr = 1/boxes(id)%dr
 
     ! Diffusion
-    box%fx(:,:,i_phi) = box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi)
-    box%fx(:,:,i_phi) = box%fx(:,:,i_phi) * flux_args(1) * inv_dr
-    box%fy(:,:,i_phi) = box%cc(1:nc, 0:nc, 1) - box%cc(1:nc, 1:nc+1, 1)
-    box%fy(:,:,i_phi) = box%fy(:,:,i_phi) * flux_args(1) * inv_dr
+    boxes(id)%fx(:,:,i_phi) = boxes(id)%cc(0:nc, 1:nc, i_phi) - boxes(id)%cc(1:nc+1, 1:nc, i_phi)
+    boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) * flux_args(1) * inv_dr
+    boxes(id)%fy(:,:,i_phi) = boxes(id)%cc(1:nc, 0:nc, 1) - boxes(id)%cc(1:nc, 1:nc+1, 1)
+    boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) * flux_args(1) * inv_dr
 
     ! Drift (1st order upwind, which is very diffusive!)
     if (flux_args(2) > 0) then
-       box%fx(:,:,i_phi) = box%fx(:,:,i_phi) + &
-            flux_args(2) * box%cc(0:nc, 1:nc, 1)
+       boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) + &
+            flux_args(2) * boxes(id)%cc(0:nc, 1:nc, 1)
     else
-       box%fx(:,:,i_phi) = box%fx(:,:,i_phi) + &
-            flux_args(2) * box%cc(1:nc+1, 1:nc, 1)
+       boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) + &
+            flux_args(2) * boxes(id)%cc(1:nc+1, 1:nc, 1)
     end if
     if (flux_args(3) > 0) then
-       box%fy(:,:,i_phi) = box%fy(:,:,i_phi) + &
-            flux_args(3) * box%cc(1:nc, 0:nc, 1)
+       boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) + &
+            flux_args(3) * boxes(id)%cc(1:nc, 0:nc, 1)
     else
-       box%fy(:,:,i_phi) = box%fy(:,:,i_phi) + &
-            flux_args(3) * box%cc(1:nc, 1:nc+1, 1)
+       boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) + &
+            flux_args(3) * boxes(id)%cc(1:nc, 1:nc+1, 1)
     end if
   end subroutine calculate_fluxes
 
@@ -234,6 +235,8 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
+    real(dp)                    :: buf_lo(boxes(id)%n_cell)
+    real(dp)                    :: buf_hi(boxes(id)%n_cell)
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
     integer                     :: i, j, nc, nb_id
@@ -241,20 +244,40 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    ! x-fluxes interior
+    ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
-       do i = 2, nc
-          ! Advective part with flux limiter
+       do i = 1, nc+1
+          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
           if (flux_args(2) < 0.0_dp) then
-             gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
-             gradn = boxes(id)%cc(i+1, j, i_phi) - boxes(id)%cc(i, j, i_phi)
-             theta     = limiter_grad_ratio(gradc, gradn)
+
+             if (i == nc+1) then
+                nb_id = boxes(id)%neighbors(a2_nb_hx)
+                if (nb_id > a5_no_box) then
+                   gradn = boxes(nb_id)%cc(2, j, i_phi) - boxes(id)%cc(i, j, i_phi)
+                else
+                   gradn = 0
+                end if
+             else
+                gradn = boxes(id)%cc(i+1, j, i_phi) - boxes(id)%cc(i, j, i_phi)
+             end if
+
+             theta = limiter_grad_ratio(gradc, gradn)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
                   (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
-          else
-             gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(id)%cc(i-2, j, i_phi)
-             gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
-             theta     = limiter_grad_ratio(gradc, gradp)
+          else                  ! flux_args(2) > 0
+
+             if (i == 1) then
+                nb_id = boxes(id)%neighbors(a2_nb_lx)
+                if (nb_id > a5_no_box) then
+                   gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(nb_id)%cc(nc-1, j, i_phi)
+                else
+                   gradp = 0
+                end if
+             else
+                gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(id)%cc(i-2, j, i_phi)
+             end if
+
+             theta = limiter_grad_ratio(gradc, gradp)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
                   (boxes(id)%cc(i-1, j, i_phi) + limiter_koren(theta) * gradp)
           end if
@@ -264,134 +287,48 @@ contains
        end do
     end do
 
-    ! x-lo side
-    i = 1
-    nb_id = boxes(id)%neighbors(a2_nb_lx)
-
-    do j = 1, nc
-       if (flux_args(2) < 0.0_dp) then ! flux towards boundary
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
-          gradn = boxes(id)%cc(i+1, j, i_phi) - boxes(id)%cc(i, j, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradn)
-          boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
-               (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
-       else if (nb_id > a5_no_box) then
-          gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(nb_id)%cc(nc-1, j, i_phi)
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradp)
-          boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
-               (boxes(id)%cc(i-1, j, i_phi) + limiter_koren(theta) * gradp)
-       else
-          ! First order upwind
-          boxes(id)%fx(i, j, i_phi) = flux_args(2) * boxes(id)%cc(i-1, j, i_phi)
-       end if
-
-       boxes(id)%fx(i, j, i_phi) = boxes(id)%fx(i, j, i_phi) - flux_args(1) * gradc
-    end do
-
-    ! x-hi side
-    i = nc+1
-    nb_id = boxes(id)%neighbors(a2_nb_hx)
-
-    do j = 1, nc
-       if (flux_args(2) > 0.0_dp) then ! flux towards boundary
-          gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(id)%cc(i-2, j, i_phi)
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradp)
-          boxes(id)%fx(i, j, i_phi) = flux_args(2) * (boxes(id)%cc(i-1, j, i_phi) + limiter_koren(theta) * gradp)
-       else if (nb_id > a5_no_box) then
-          gradn = boxes(nb_id)%cc(2, j, i_phi) - boxes(id)%cc(i, j, i_phi)
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradn)
-          boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
-               (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
-       else
-          ! First order upwind
-          boxes(id)%fx(i, j, i_phi) = flux_args(2) * boxes(id)%cc(i, j, i_phi)
-       end if
-
-       boxes(id)%fx(i, j, i_phi) = boxes(id)%fx(i, j, i_phi) - flux_args(1) * gradc
-    end do
-
-    ! y-fluxes interior
-    do j = 2, nc
+    ! y-fluxes interior, advective part with flux limiter
+    do j = 1, nc+1
        do i = 1, nc
-          ! Advective part with flux limiter
           gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
           if (flux_args(3) < 0.0_dp) then
-             gradn = boxes(id)%cc(i, j+1, i_phi) - boxes(id)%cc(i, j, i_phi)
-             theta     = limiter_grad_ratio(gradc, gradn)
+
+             if (j == nc+1) then
+                nb_id = boxes(id)%neighbors(a2_nb_hy)
+                if (nb_id > a5_no_box) then
+                   gradp = boxes(nb_id)%cc(i, 2, i_phi) - boxes(id)%cc(i, j, i_phi)
+                else
+                   gradp = 0
+                end if
+             else
+                gradn = boxes(id)%cc(i, j+1, i_phi) - boxes(id)%cc(i, j, i_phi)
+             end if
+
+             theta = limiter_grad_ratio(gradc, gradn)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
                   (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
-          else
-             gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(id)%cc(i, j-2, i_phi)
-             theta     = limiter_grad_ratio(gradc, gradp)
+          else                  ! flux_args(3) > 0
+
+             if (j == 1) then
+                nb_id = boxes(id)%neighbors(a2_nb_ly)
+                if (nb_id > a5_no_box) then
+                   gradn = boxes(id)%cc(i, j-1, i_phi) - boxes(nb_id)%cc(i, nc-1, i_phi)
+                else
+                   gradn = 0
+                end if
+             else
+                gradn = boxes(id)%cc(i, j-1, i_phi) - boxes(id)%cc(i, j-2, i_phi)
+             end if
+
+             theta = limiter_grad_ratio(gradc, gradn)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
-                  (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
+                  (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradn)
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
           boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - flux_args(1) * gradc
        end do
     end do
-
-    ! y-lo side
-    j = 1
-    nb_id = boxes(id)%neighbors(a2_nb_ly)
-
-    do i = 1, nc
-       if (flux_args(3) < 0.0_dp) then ! flux towards boundary
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
-          gradn = boxes(id)%cc(i, j+1, i_phi) - boxes(id)%cc(i, j, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradn)
-          boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
-               (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
-       else if (nb_id > a5_no_box) then
-          gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(nb_id)%cc(i, nc-1, i_phi)
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradp)
-          boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
-               (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
-       else
-          ! First order upwind
-          boxes(id)%fy(i, j, i_phi) = flux_args(3) * boxes(id)%cc(i, j-1, i_phi)
-       end if
-
-       boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - flux_args(1) * gradc
-    end do
-
-    ! y-hi side
-    j = nc+1
-    nb_id = boxes(id)%neighbors(a2_nb_hy)
-
-    do i = 1, nc
-       if (flux_args(3) > 0.0_dp) then ! flux towards boundary
-          gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(id)%cc(i, j-2, i_phi)
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradp)
-          boxes(id)%fy(i, j, i_phi) = flux_args(3) * (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
-       else if (nb_id > a5_no_box) then
-          gradn = boxes(nb_id)%cc(i, 2, i_phi) - boxes(id)%cc(i, j, i_phi)
-          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
-
-          theta     = limiter_grad_ratio(gradc, gradn)
-          boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
-               (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
-       else
-          ! First order upwind
-          boxes(id)%fy(i, j, i_phi) = flux_args(3) * boxes(id)%cc(i, j, i_phi)
-       end if
-
-       boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - flux_args(1) * gradc
-    end do
-
   end subroutine calculate_fluxes_limiter
 
   subroutine update_solution(box, dt)
