@@ -62,7 +62,7 @@ program test_drift_diff
   end_time       = 1.0_dp
   diff_coeff     = 0.0_dp
   vel_x          = 1.0_dp
-  vel_y          = 0.0_dp
+  vel_y          = 1.0_dp
 
   !$omp parallel private(n)
   do
@@ -317,29 +317,80 @@ contains
        boxes(id)%fx(i, j, i_phi) = boxes(id)%fx(i, j, i_phi) - flux_args(1) * gradc
     end do
 
-    boxes(id)%fy = 0
+    ! y-fluxes interior
+    do j = 2, nc
+       do i = 1, nc
+          ! Advective part with flux limiter
+          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
+          if (flux_args(3) < 0.0_dp) then
+             gradn = boxes(id)%cc(i, j+1, i_phi) - boxes(id)%cc(i, j, i_phi)
+             theta     = limiter_grad_ratio(gradc, gradn)
+             boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
+                  (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
+          else
+             gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(id)%cc(i, j-2, i_phi)
+             theta     = limiter_grad_ratio(gradc, gradp)
+             boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
+                  (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
+          end if
 
-    ! ! y-fluxes
-    ! do i = 1, nc
-    !    do j = 2, nc
+          ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
+          boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - flux_args(1) * gradc
+       end do
+    end do
 
-    !       gradp = box%cc(i, j-1, i_phi) - box%cc(i, j-2, i_phi)
-    !       gradc = box%cc(i, j, i_phi) - box%cc(i, j-1, i_phi)
-    !       gradn = box%cc(i, j+1, i_phi) - box%cc(i, j, i_phi)
+    ! y-lo side
+    j = 1
+    nb_id = boxes(id)%neighbors(a2_nb_ly)
 
-    !       ! Advective part with flux limiter
-    !       if (flux_args(3) < 0.0_dp) then
-    !          theta     = limiter_grad_ratio(gradc, gradn)
-    !          box%fy(i, j, i_phi) = flux_args(3) * (box%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
-    !       else
-    !          theta     = limiter_grad_ratio(gradc, gradp)
-    !          box%fy(i, j, i_phi) = flux_args(3) * (box%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
-    !       end if
+    do i = 1, nc
+       if (flux_args(3) < 0.0_dp) then ! flux towards boundary
+          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
+          gradn = boxes(id)%cc(i, j+1, i_phi) - boxes(id)%cc(i, j, i_phi)
 
-    !       ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
-    !       box%fy(i, j, i_phi) = box%fy(i, j, i_phi) - flux_args(1) * gradc
-    !    end do
-    ! end do
+          theta     = limiter_grad_ratio(gradc, gradn)
+          boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
+               (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
+       else if (nb_id > a5_no_box) then
+          gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(nb_id)%cc(i, nc-1, i_phi)
+          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
+
+          theta     = limiter_grad_ratio(gradc, gradp)
+          boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
+               (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
+       else
+          ! First order upwind
+          boxes(id)%fy(i, j, i_phi) = flux_args(3) * boxes(id)%cc(i, j-1, i_phi)
+       end if
+
+       boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - flux_args(1) * gradc
+    end do
+
+    ! y-hi side
+    j = nc+1
+    nb_id = boxes(id)%neighbors(a2_nb_hy)
+
+    do i = 1, nc
+       if (flux_args(3) > 0.0_dp) then ! flux towards boundary
+          gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(id)%cc(i, j-2, i_phi)
+          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
+
+          theta     = limiter_grad_ratio(gradc, gradp)
+          boxes(id)%fy(i, j, i_phi) = flux_args(3) * (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
+       else if (nb_id > a5_no_box) then
+          gradn = boxes(nb_id)%cc(i, 2, i_phi) - boxes(id)%cc(i, j, i_phi)
+          gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
+
+          theta     = limiter_grad_ratio(gradc, gradn)
+          boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
+               (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
+       else
+          ! First order upwind
+          boxes(id)%fy(i, j, i_phi) = flux_args(3) * boxes(id)%cc(i, j, i_phi)
+       end if
+
+       boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - flux_args(1) * gradc
+    end do
 
   end subroutine calculate_fluxes_limiter
 
