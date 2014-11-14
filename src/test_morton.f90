@@ -1,10 +1,10 @@
 program test_m_morton
   use m_morton
-  
+
   implicit none
 
   integer(morton_k) :: m_ix
-  integer        :: ix(2)
+  integer           :: ix(2)
 
   ix = (/15, 2047/)
   print *, "index       ", ix

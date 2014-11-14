@@ -5,7 +5,7 @@ program test_mg
   implicit none
 
   integer, parameter :: dp           = kind(0.0d0)
-  integer, parameter :: box_size     = 32
+  integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 3
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_res = 4
@@ -14,12 +14,11 @@ program test_mg
   integer            :: i, id, n_changes
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  integer            :: n_boxes_max  = 10*1000
+  integer            :: n_boxes_max  = 20*1000
   integer            :: n_lvls_max   = 20
   real(dp)           :: dr
   character(len=40)  :: fname, var_names(4)
   type(mg2_t)        :: mg
-  type(mg2_subt_t)   :: subtree
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
@@ -59,21 +58,27 @@ program test_mg
 
   ! Set the multigrid options
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, a2_corners_extrap, mg2d_lpl_cyl_box, mg2d_gsrb_lpl_cyl_box)
+       sides_bc, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
 
   ! Create a "subtree" with coarser levels than tree
-  call mg2d_create_subtree(tree, subtree)
+  ! call mg2d_create_subtree(tree)
 
   ! Restrict from children recursively
-  call mg2d_restrict_trees(tree, subtree, [i_rhs, i_phi], mg, &
-       use_subtree=.true.)
+  call mg2d_restrict_trees(tree, [i_rhs, i_phi], mg)
 
-  do i = 1, 10
-     ! call mg2d_fas_vcycle(tree, subtree, mg, .true., tree%n_lvls)
-     call mg2d_fas_fmg(tree, subtree, mg, use_subtree=.true.)
-     write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
+  !$omp parallel
+  do i = 1, 100
+     ! call mg2d_fas_vcycle(tree, mg, tree%n_lvls)
+     call mg2d_fas_fmg(tree, mg)
+     !$omp single
+     ! write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
+     !$omp end single
   end do
+  !$omp end parallel
+
+  ! write(fname, "(A,I0,A)") "test_mg_", 1, ".vtu"
+  ! call a2_write_tree(tree, trim(fname), var_names, 1, 0.0_dp)
 
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**2
@@ -84,8 +89,8 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 3 .or. &
-         (box%lvl < 7)) then ! .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
+    if (box%lvl < 6 .or. &
+         (box%lvl < 8 .and. (norm2(a2_r_center(box)-2) < 0.75_dp))) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref
@@ -98,6 +103,7 @@ contains
     real(dp)                    :: xy(2)
 
     nc = box%n_cell
+    box%cc(:, :, i_phi) = 0
 
     do j = 1, nc
        do i = 1, nc
@@ -121,14 +127,14 @@ contains
           ! Dirichlet zero
           boxes(id)%cc(0, 1:nc, ivs) = -boxes(id)%cc(1, 1:nc, ivs)
        case (a2_nb_hx)
-          ! Dirichlet one
-          boxes(id)%cc(nc+1, 1:nc, ivs) = 2-boxes(id)%cc(nc, 1:nc, ivs)
+          ! Dirichlet zero
+          boxes(id)%cc(nc+1, 1:nc, ivs) = -boxes(id)%cc(nc, 1:nc, ivs)
        case (a2_nb_ly)
-          ! Neumann zero
-          boxes(id)%cc(1:nc, 0, ivs) = boxes(id)%cc(1:nc, 1, ivs)
+          ! Dirichlet zero
+          boxes(id)%cc(1:nc, 0, ivs) = -boxes(id)%cc(1:nc, 1, ivs)
        case (a2_nb_hy)
           ! Neumann zero
-          boxes(id)%cc(1:nc, nc+1, ivs) = boxes(id)%cc(1:nc, nc, ivs)
+          boxes(id)%cc(1:nc, nc+1, ivs) = -boxes(id)%cc(1:nc, nc, ivs)
        end select
     end if
   end subroutine sides_bc
