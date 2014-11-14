@@ -143,16 +143,16 @@ contains
   end subroutine mg2d_create_subtree
 
   ! Restrict cell centered variables ivs(:) on the trees
-  subroutine mg2d_restrict_trees(tree, ivs, mg)
+  subroutine mg2d_restrict_trees(tree, iv, mg)
     type(a2_t), intent(inout)       :: tree
-    integer, intent(in)             :: ivs(:)
+    integer, intent(in)             :: iv
     type(mg2_t), intent(in)         :: mg
     integer                         :: lvl
 
     ! Restrict phi and rhs on tree
     do lvl = tree%n_lvls-1, lbound(tree%lvls, 1), -1
-       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, ivs)
-       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, ivs, &
+       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv)
+       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, iv, &
                mg%sides_bc, mg%corners_bc)
     end do
   end subroutine mg2d_restrict_trees
@@ -176,7 +176,7 @@ contains
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
-          call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, [mg%i_phi], &
+          call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
                mg%sides_bc, mg%corners_bc)
        end if
 
@@ -203,10 +203,10 @@ contains
        ! Calculate residual at current lvl
        call residual_boxes(tree%boxes, tree%lvls(lvl)%ids, mg)
 
-       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, &
-            [mg%i_phi, mg%i_res])
+       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_phi)
+       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
 
-       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl-1)%ids, [mg%i_phi], &
+       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
             mg%sides_bc, mg%corners_bc)
 
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
@@ -231,7 +231,7 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells again (todo: not everywhere?)
-       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, [mg%i_phi], &
+       call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
             mg%sides_bc, mg%corners_bc)
 
        ! Upwards relaxation
@@ -239,21 +239,21 @@ contains
     end do
   end subroutine mg2d_fas_vcycle
 
-  subroutine mg2d_fill_gc(boxes, ids, ivs, sides_bc, corners_bc)
+  subroutine mg2d_fill_gc(boxes, ids, iv, sides_bc, corners_bc)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: ids(:), ivs(:)
+    integer, intent(in)         :: ids(:), iv
     procedure(a2_subr_gc)       :: sides_bc, corners_bc
     integer                     :: i
 
     !$omp do
     do i = 1, size(ids)
-       call a2_gc_box_sides(boxes, ids(i), ivs, &
+       call a2_gc_box_sides(boxes, ids(i), iv, &
             a2_sides_extrap, sides_bc)
     end do
     !$omp end do
     !$omp do
     do i = 1, size(ids)
-       call a2_gc_box_corners(boxes, ids(i), ivs, &
+       call a2_gc_box_corners(boxes, ids(i), iv, &
             a2_corners_extrap, corners_bc)
     end do
     !$omp end do
@@ -330,14 +330,14 @@ contains
 
        !$omp do
        do i = 1, size(ids)
-          call a2_gc_box_sides(boxes, ids(i), [mg%i_phi], &
+          call a2_gc_box_sides(boxes, ids(i), mg%i_phi, &
                a2_sides_extrap, mg%sides_bc)
        end do
        !$omp end do
 
        !$omp do
        do i = 1, size(ids)
-          call a2_gc_box_corners(boxes, ids(i), [mg%i_phi], &
+          call a2_gc_box_corners(boxes, ids(i), mg%i_phi, &
                a2_corners_extrap, mg%corners_bc)
        end do
        !$omp end do

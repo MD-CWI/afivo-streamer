@@ -40,8 +40,8 @@ program test_drift_diff
   end do
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, [i_phi], a2_sides_prolong1, have_no_bc)
-  call a2_gc_corners(tree, [i_phi], a2_corners_prolong1, have_no_bc)
+  call a2_gc_sides(tree, i_phi, a2_sides_prolong1, have_no_bc)
+  call a2_gc_corners(tree, i_phi, a2_corners_prolong1, have_no_bc)
 
   do i = 1, 20
      call a2_adjust_refinement(tree, ref_func, n_changes)
@@ -52,9 +52,9 @@ program test_drift_diff
 
   ! Set final initial condition
   call a2_loop_box(tree, set_init_cond)
-  call a2_restrict_tree(tree, [i_phi])
-  call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
-  call a2_gc_corners(tree, [i_phi], a2_corners_extrap, have_no_bc)
+  call a2_restrict_tree(tree, i_phi)
+  call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+  call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
   i              = 0
   time           = 0
@@ -88,8 +88,8 @@ program test_drift_diff
         do n = 1, n_steps
            call a2_loop_boxes_arg(tree, calculate_fluxes_limiter, [diff_coeff, vel_x, vel_y])
            call a2_loop_box_arg(tree, update_solution, [dt])
-           call a2_restrict_tree(tree, [i_phi])
-           call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
+           call a2_restrict_tree(tree, i_phi)
+           call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
         end do
      else                    ! Modified midpoint
         do n = 1, n_steps
@@ -99,8 +99,8 @@ program test_drift_diff
            ! Take a half time step
            call a2_loop_boxes_arg(tree, calculate_fluxes_limiter, [diff_coeff, vel_x, vel_y])
            call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
-           call a2_restrict_tree(tree, [i_phi])
-           call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
+           call a2_restrict_tree(tree, i_phi)
+           call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
 
            ! Calculate fluxes
            call a2_loop_boxes_arg(tree, calculate_fluxes_limiter, [diff_coeff, vel_x, vel_y])
@@ -108,14 +108,14 @@ program test_drift_diff
            ! Copy back old phi, and take full time step
            call a2_tree_copy_cc(tree, i_phi_old, i_phi)
            call a2_loop_box_arg(tree, update_solution, [dt])
-           call a2_restrict_tree(tree, [i_phi])
-           call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
+           call a2_restrict_tree(tree, i_phi)
+           call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
         end do
      end if
 
-     call a2_restrict_tree(tree, [i_phi])
-     call a2_gc_sides(tree, [i_phi], a2_sides_extrap, have_no_bc)
-     call a2_gc_corners(tree, [i_phi], a2_corners_extrap, have_no_bc)
+     call a2_restrict_tree(tree, i_phi)
+     call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+     call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
      call a2_adjust_refinement(tree, ref_func)
      ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
@@ -349,14 +349,14 @@ contains
     integer, intent(in) :: id
 
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
-       call a2_prolong1_from(boxes, id, [i_phi], .true.)
+       call a2_prolong1_from(boxes, id, i_phi, .true.)
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children
 
-  subroutine have_no_bc(boxes, id, i, ivs)
+  subroutine have_no_bc(boxes, id, i, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i, ivs(:)
+    integer, intent(in)         :: id, i, iv
     stop "We have no boundary conditions in this example"
   end subroutine have_no_bc
 

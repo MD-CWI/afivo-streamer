@@ -64,7 +64,8 @@ program test_mg
   ! call mg2d_create_subtree(tree)
 
   ! Restrict from children recursively
-  call mg2d_restrict_trees(tree, [i_rhs, i_phi], mg)
+  call mg2d_restrict_trees(tree, i_rhs, mg)
+  call mg2d_restrict_trees(tree, i_phi, mg)
 
   !$omp parallel
   do i = 1, 100
@@ -113,9 +114,9 @@ contains
     end do
   end subroutine set_init_cond
 
-  subroutine sides_bc(boxes, id, nb, ivs)
+  subroutine sides_bc(boxes, id, nb, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, ivs(:)
+    integer, intent(in)         :: id, nb, iv
     integer                     :: nc
     real(dp)                    :: dr
 
@@ -125,16 +126,16 @@ contains
        select case (nb)
        case (a2_nb_lx)
           ! Dirichlet zero
-          boxes(id)%cc(0, 1:nc, ivs) = -boxes(id)%cc(1, 1:nc, ivs)
+          boxes(id)%cc(0, 1:nc, iv) = -boxes(id)%cc(1, 1:nc, iv)
        case (a2_nb_hx)
           ! Dirichlet zero
-          boxes(id)%cc(nc+1, 1:nc, ivs) = -boxes(id)%cc(nc, 1:nc, ivs)
+          boxes(id)%cc(nc+1, 1:nc, iv) = -boxes(id)%cc(nc, 1:nc, iv)
        case (a2_nb_ly)
           ! Dirichlet zero
-          boxes(id)%cc(1:nc, 0, ivs) = -boxes(id)%cc(1:nc, 1, ivs)
+          boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
        case (a2_nb_hy)
           ! Neumann zero
-          boxes(id)%cc(1:nc, nc+1, ivs) = -boxes(id)%cc(1:nc, nc, ivs)
+          boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
        end select
     end if
   end subroutine sides_bc

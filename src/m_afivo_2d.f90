@@ -111,10 +111,10 @@ module m_afivo_2d
        real(dp), intent(in)        :: rarg(:)
      end subroutine a2_subr_boxes_arg
 
-     subroutine a2_subr_gc(boxes, id, i, ivs)
+     subroutine a2_subr_gc(boxes, id, i, iv)
        import
        type(box2_t), intent(inout) :: boxes(:)
-       integer, intent(in)         :: id, i, ivs(:)
+       integer, intent(in)         :: id, i, iv
      end subroutine a2_subr_gc
   end interface
 
@@ -392,8 +392,8 @@ contains
   ! Set the neighbors of id (using their parent)
   subroutine set_nbs_2d(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)          :: id
-    integer                      :: nb, nb_id
+    integer, intent(in)         :: id
+    integer                     :: nb, nb_id
 
     do nb = 1, 4
        if (boxes(id)%neighbors(nb) == a5_no_box) then
@@ -845,38 +845,34 @@ contains
   end subroutine a2_tree_copy_cc
 
   ! Injection to children (zero order)
-  subroutine a2_prolong0_from(boxes, id, ivs, fill_gc)
+  subroutine a2_prolong0_from(boxes, id, iv, fill_gc)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, ivs(:)
+    integer, intent(in)         :: id, iv
     logical, intent(in)         :: fill_gc
     integer                     :: nc, i_c, c_id, ix_offset(2)
-    integer                     :: i, j, i_c1, j_c1, iv, v
+    integer                     :: i, j, i_c1, j_c1
 
     nc = boxes(id)%n_cell
     do i_c = 1, 4
        c_id = boxes(id)%children(i_c)
        ix_offset = a2_ch_dix(:, i_c) * ishft(nc, -1) ! Offset child
-
-       do v = 1, size(ivs)
-          iv = ivs(v)
-          do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
-                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-                boxes(c_id)%cc(i, j, iv) = boxes(id)%cc(i_c1, j_c1, iv)
-             end do
+       do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             boxes(c_id)%cc(i, j, iv) = boxes(id)%cc(i_c1, j_c1, iv)
           end do
        end do
     end do
   end subroutine a2_prolong0_from
 
   ! Bilinear prolongation to children. Uses ghost cells and corners.
-  subroutine a2_prolong1_from(boxes, id, ivs, fill_gc)
+  subroutine a2_prolong1_from(boxes, id, iv, fill_gc)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, ivs(:)
+    integer, intent(in)         :: id, iv
     logical, intent(in)         :: fill_gc
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-    integer                     :: v, iv, nc, i_c, c_id, ix_offset(2)
+    integer                     :: nc, i_c, c_id, ix_offset(2)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 
     nc = boxes(id)%n_cell
@@ -888,31 +884,28 @@ contains
 
        ! In these loops, we calculate the closest coarse index (_c1), and the
        ! one-but-closest (_c2). The fine cell lies in between.
-       do v = 1, size(ivs)
-          iv = ivs(v)
-          do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
-                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-                i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+       do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+          do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
-                boxes(c_id)%cc(i, j, iv) = &
-                     f9 * boxes(id)%cc(i_c1, j_c1, iv) + &
-                     f3 * boxes(id)%cc(i_c2, j_c1, iv) + &
-                     f3 * boxes(id)%cc(i_c1, j_c2, iv) + &
-                     f1 * boxes(id)%cc(i_c2, j_c2, iv)
-             end do
+             boxes(c_id)%cc(i, j, iv) = &
+                  f9 * boxes(id)%cc(i_c1, j_c1, iv) + &
+                  f3 * boxes(id)%cc(i_c2, j_c1, iv) + &
+                  f3 * boxes(id)%cc(i_c1, j_c2, iv) + &
+                  f1 * boxes(id)%cc(i_c2, j_c2, iv)
           end do
        end do
     end do
   end subroutine a2_prolong1_from
 
   ! Partial prolongation from parent using injection.
-  subroutine a2_prolong0_to(boxes, id, lo, hi, ivs)
+  subroutine a2_prolong0_to(boxes, id, lo, hi, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, lo(2), hi(2), ivs(:)
-    integer                     :: v, iv, nc, p_id, ix_offset(2)
+    integer, intent(in)         :: id, lo(2), hi(2), iv
+    integer                     :: nc, p_id, ix_offset(2)
     integer                     :: i, j, i_c1, j_c1
 
     nc        = boxes(id)%n_cell
@@ -920,24 +913,21 @@ contains
     ! Offset of child w.r.t. parent
     ix_offset = (boxes(id)%ix - 2*boxes(p_id)%ix + 1) * ishft(nc, -1)
 
-    do v = 1, size(ivs)
-       iv = ivs(v)
-       do j = lo(2), hi(2)
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          do i = lo(1), hi(1)
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             boxes(id)%cc(i, j, iv) = boxes(p_id)%cc(i_c1, j_c1, iv)
-          end do
+    do j = lo(2), hi(2)
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+       do i = lo(1), hi(1)
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          boxes(id)%cc(i, j, iv) = boxes(p_id)%cc(i_c1, j_c1, iv)
        end do
     end do
   end subroutine a2_prolong0_to
 
   ! Partial bilinear prolongation from parent.
-  subroutine a2_prolong1_to(boxes, id, lo, hi, ivs)
+  subroutine a2_prolong1_to(boxes, id, lo, hi, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, lo(2), hi(2), ivs(:)
+    integer, intent(in)         :: id, lo(2), hi(2), iv
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-    integer                     :: v, iv, nc, p_id, ix_offset(2)
+    integer                     :: nc, p_id, ix_offset(2)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 
     nc        = boxes(id)%n_cell
@@ -947,28 +937,25 @@ contains
 
     ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
     ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
-    do v = 1, size(ivs)
-       iv = ivs(v)
-       do j = lo(2), hi(2)
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = lo(1), hi(1)
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, iv) = &
-                  f9 * boxes(p_id)%cc(i_c1, j_c1, iv) + &
-                  f3 * boxes(p_id)%cc(i_c2, j_c1, iv) + &
-                  f3 * boxes(p_id)%cc(i_c1, j_c2, iv) + &
-                  f1 * boxes(p_id)%cc(i_c2, j_c2, iv)
-          end do
+    do j = lo(2), hi(2)
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+       j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+       do i = lo(1), hi(1)
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+          boxes(id)%cc(i, j, iv) = &
+               f9 * boxes(p_id)%cc(i_c1, j_c1, iv) + &
+               f3 * boxes(p_id)%cc(i_c2, j_c1, iv) + &
+               f3 * boxes(p_id)%cc(i_c1, j_c2, iv) + &
+               f1 * boxes(p_id)%cc(i_c2, j_c2, iv)
        end do
     end do
   end subroutine a2_prolong1_to
 
   ! Conservative restriction. 4 fine cells to one parent cell
-  subroutine a2_restrict_to_box(boxes, id, ivs)
+  subroutine a2_restrict_to_box(boxes, id, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, ivs(:)
+    integer, intent(in)         :: id, iv
     integer                     :: nc, i_c, c_id, ix_offset(2)
 
     nc = boxes(id)%n_cell
@@ -977,65 +964,62 @@ contains
        if (c_id == a5_no_box) cycle
        ! Offset of child w.r.t. parent
        ix_offset = a2_ch_dix(:, i_c) * ishft(nc, -1)
-       call a2_restrict_box(boxes(c_id), boxes(id), ix_offset, ivs)
+       call a2_restrict_box(boxes(c_id), boxes(id), ix_offset, iv)
     end do
   end subroutine a2_restrict_to_box
 
-  ! Restrict variables ivs(:) to parent boxes ids(:)
-  subroutine a2_restrict_to_boxes(boxes, ids, ivs)
+  ! Restrict variables iv to parent boxes ids(:)
+  subroutine a2_restrict_to_boxes(boxes, ids, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: ids(:), ivs(:)
+    integer, intent(in)         :: ids(:), iv
     integer                     :: i
 
     !$omp do
     do i = 1, size(ids)
-       call a2_restrict_to_box(boxes, ids(i), ivs)
+       call a2_restrict_to_box(boxes, ids(i), iv)
     end do
     !$omp end do
   end subroutine a2_restrict_to_boxes
 
-  ! Restrict variables ivs(:) to all parent boxes
-  subroutine a2_restrict_tree(tree, ivs)
+  ! Restrict variables iv to all parent boxes
+  subroutine a2_restrict_tree(tree, iv)
     type(a2_t), intent(inout) :: tree
-    integer, intent(in)       :: ivs(:)
+    integer, intent(in)       :: iv
     integer                   :: lvl
 
     do lvl = tree%max_lvl-1, 1, -1
-       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, ivs)
+       call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv)
     end do
   end subroutine a2_restrict_tree
 
   ! Conservative restriction. 4 fine cells to one parent cell
-  subroutine a2_restrict_box(box_c, box_p, ix_offset, ivs)
+  subroutine a2_restrict_box(box_c, box_p, ix_offset, iv)
     type(box2_t), intent(in)    :: box_c
     type(box2_t), intent(inout) :: box_p
-    integer, intent(in)         :: ix_offset(2), ivs(:)
-    integer                     :: nc, v, iv, i, j, i_c1, j_c1
+    integer, intent(in)         :: ix_offset(2), iv
+    integer                     :: nc, v, i, j, i_c1, j_c1
 
     nc = box_c%n_cell
 
-    do v = 1, size(ivs)
-       iv = ivs(v)
-       do j = 1, nc, 2
-          j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
-          do i = 1, nc, 2
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+    do j = 1, nc, 2
+       j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
+       do i = 1, nc, 2
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
 
-             box_p%cc(i_c1, j_c1, iv) = 0.25_dp * (&
-                  box_c%cc(i,   j,   iv) + &
-                  box_c%cc(i+1, j,   iv) + &
-                  box_c%cc(i,   j+1, iv) + &
-                  box_c%cc(i+1, j+1, iv) )
-          end do
+          box_p%cc(i_c1, j_c1, iv) = 0.25_dp * (&
+               box_c%cc(i,   j,   iv) + &
+               box_c%cc(i+1, j,   iv) + &
+               box_c%cc(i,   j+1, iv) + &
+               box_c%cc(i+1, j+1, iv) )
        end do
     end do
   end subroutine a2_restrict_box
 
-  ! Fill ghost cells for variables ivs(:) on the sides of all boxes, using
+  ! Fill ghost cells for variables iv on the sides of all boxes, using
   ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a2_gc_sides(tree, ivs, subr_no_nb, subr_bc)
+  subroutine a2_gc_sides(tree, iv, subr_no_nb, subr_bc)
     type(a2_t), intent(inout) :: tree
-    integer, intent(in)       :: ivs(:)
+    integer, intent(in)       :: iv
     procedure(a2_subr_gc)     :: subr_no_nb, subr_bc
     integer                   :: lvl, i, id
 
@@ -1043,102 +1027,87 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          call a2_gc_box_sides(tree%boxes, id, ivs, subr_no_nb, subr_bc)
+          call a2_gc_box_sides(tree%boxes, id, iv, subr_no_nb, subr_bc)
        end do
        !$omp end do
     end do
   end subroutine a2_gc_sides
 
-  ! Fill ghost cells for variables ivs(:) on the sides of a boxes, using
+  ! Fill ghost cells for variables iv on the sides of a boxes, using
   ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a2_gc_box_sides(boxes, id, ivs, subr_no_nb, subr_bc)
+  subroutine a2_gc_box_sides(boxes, id, iv, subr_no_nb, subr_bc)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, ivs(:)
+    integer, intent(in)         :: id, iv
     procedure(a2_subr_gc)       :: subr_no_nb, subr_bc
     integer                     :: nb
 
     do nb = 1, 4
        if (boxes(id)%neighbors(nb) > a5_no_box) then
-          call a2_gc_side_from_nb(boxes, id, nb, ivs)
+          call a2_gc_side_from_nb(boxes, id, nb, iv)
        else if (boxes(id)%neighbors(nb) == a5_no_box) then
-          call subr_no_nb(boxes, id, nb, ivs)
+          call subr_no_nb(boxes, id, nb, iv)
        else
-          call subr_bc(boxes, id, nb, ivs)
+          call subr_bc(boxes, id, nb, iv)
        end if
     end do
   end subroutine a2_gc_box_sides
 
   ! Bilinear interpolation from parent to fill ghost cells on sides
-  subroutine a2_sides_prolong1(boxes, id, nb, ivs)
+  subroutine a2_sides_prolong1(boxes, id, nb, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, ivs(:)
+    integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
     case (a2_nb_lx)
-       call a2_prolong1_to(boxes, id, [0, 1], [0, nc], ivs)
+       call a2_prolong1_to(boxes, id, [0, 1], [0, nc], iv)
     case (a2_nb_hx)
-       call a2_prolong1_to(boxes, id, [nc+1, 1], [nc+1, nc], ivs)
+       call a2_prolong1_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
     case (a2_nb_ly)
-       call a2_prolong1_to(boxes, id, [1, 0], [nc, 0], ivs)
+       call a2_prolong1_to(boxes, id, [1, 0], [nc, 0], iv)
     case (a2_nb_hy)
-       call a2_prolong1_to(boxes, id, [1, nc+1], [nc, nc+1], ivs)
+       call a2_prolong1_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
     end select
   end subroutine a2_sides_prolong1
 
   ! Special interpolation on sides which preserves diffusive fluxes
-  subroutine a2_sides_extrap(boxes, id, nb, ivs)
+  subroutine a2_sides_extrap(boxes, id, nb, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, ivs(:)
+    integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
     case (a2_nb_lx)
-       call a2_prolong0_to(boxes, id, [0, 1], [0, nc], ivs)
-       boxes(id)%cc(0, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(0, 1:nc, ivs) &
-            + 0.75_dp * boxes(id)%cc(1, 1:nc, ivs) &
-            - 0.25_dp * boxes(id)%cc(2, 1:nc, ivs)
+       call a2_prolong0_to(boxes, id, [0, 1], [0, nc], iv)
+       boxes(id)%cc(0, 1:nc, iv) = 0.5_dp * boxes(id)%cc(0, 1:nc, iv) &
+            + 0.75_dp * boxes(id)%cc(1, 1:nc, iv) &
+            - 0.25_dp * boxes(id)%cc(2, 1:nc, iv)
     case (a2_nb_hx)
-       call a2_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], ivs)
-       boxes(id)%cc(nc+1, 1:nc, ivs) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, ivs) &
-            + 0.75_dp * boxes(id)%cc(nc, 1:nc, ivs) &
-            - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, ivs)
+       call a2_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
+       boxes(id)%cc(nc+1, 1:nc, iv) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, iv) &
+            + 0.75_dp * boxes(id)%cc(nc, 1:nc, iv) &
+            - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, iv)
     case (a2_nb_ly)
-       call a2_prolong0_to(boxes, id, [1, 0], [nc, 0], ivs)
-       boxes(id)%cc(1:nc, 0, ivs) = 0.5_dp * boxes(id)%cc(1:nc, 0, ivs) &
-            + 0.75_dp * boxes(id)%cc(1:nc, 1, ivs) &
-            - 0.25_dp * boxes(id)%cc(1:nc, 2, ivs)
+       call a2_prolong0_to(boxes, id, [1, 0], [nc, 0], iv)
+       boxes(id)%cc(1:nc, 0, iv) = 0.5_dp * boxes(id)%cc(1:nc, 0, iv) &
+            + 0.75_dp * boxes(id)%cc(1:nc, 1, iv) &
+            - 0.25_dp * boxes(id)%cc(1:nc, 2, iv)
     case (a2_nb_hy)
-       call a2_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], ivs)
-       boxes(id)%cc(1:nc, nc+1, ivs) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, ivs) &
-            + 0.75_dp * boxes(id)%cc(1:nc, nc, ivs) &
-            - 0.25_dp * boxes(id)%cc(1:nc, nc-1, ivs)
+       call a2_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
+       boxes(id)%cc(1:nc, nc+1, iv) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, iv) &
+            + 0.75_dp * boxes(id)%cc(1:nc, nc, iv) &
+            - 0.25_dp * boxes(id)%cc(1:nc, nc-1, iv)
     end select
   end subroutine a2_sides_extrap
 
-  ! Get cell centered data in an index range outside boxes(id), but inside one
-  ! of its neighbors (nb).
-  subroutine a2_get_cc_from_nb(boxes, id, nb, ivs, lo, hi, cc)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, ivs(:), lo(2), hi(2)
-    real(dp), intent(out)       :: cc(:,:,:)
-    integer                     :: nc, nb_id, lo_nb(2), hi_nb(2)
-
-    nc    = boxes(id)%n_cell
-    lo_nb = lo + a2_nb_dix(:, nb) * nc
-    hi_nb = hi + a2_nb_dix(:, nb) * nc
-    nb_id = boxes(id)%neighbors(nb)
-    cc    = boxes(nb_id)%cc(lo_nb(1):hi_nb(1), lo_nb(2):hi_nb(2), ivs)
-  end subroutine a2_get_cc_from_nb
-
   ! Fill values on side from a neighbor
-  subroutine a2_gc_side_from_nb(boxes, id, nb, ivs)
+  subroutine a2_gc_side_from_nb(boxes, id, nb, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, ivs(:)
+    integer, intent(in)         :: id, nb, iv
     integer                     :: nc, nb_id
 
     nc    = boxes(id)%n_cell
@@ -1146,21 +1115,21 @@ contains
 
     select case (nb)
     case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, ivs)    = boxes(nb_id)%cc(nc, 1:nc, ivs)
+       boxes(id)%cc(0, 1:nc, iv)    = boxes(nb_id)%cc(nc, 1:nc, iv)
     case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, ivs) = boxes(nb_id)%cc(1, 1:nc, ivs)
+       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(nb_id)%cc(1, 1:nc, iv)
     case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, ivs)    = boxes(nb_id)%cc(1:nc, nc, ivs)
+       boxes(id)%cc(1:nc, 0, iv)    = boxes(nb_id)%cc(1:nc, nc, iv)
     case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, ivs) = boxes(nb_id)%cc(1:nc, 1, ivs)
+       boxes(id)%cc(1:nc, nc+1, iv) = boxes(nb_id)%cc(1:nc, 1, iv)
     end select
   end subroutine a2_gc_side_from_nb
 
-  ! Fill ghost cells for variables ivs(:) on the corners of all boxes, using
+  ! Fill ghost cells for variables iv on the corners of all boxes, using
   ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a2_gc_corners(tree, ivs, subr_no_nb, subr_bc)
+  subroutine a2_gc_corners(tree, iv, subr_no_nb, subr_bc)
     type(a2_t), intent(inout) :: tree
-    integer, intent(in)       :: ivs(:)
+    integer, intent(in)       :: iv
     procedure(a2_subr_gc)     :: subr_no_nb, subr_bc
     integer                   :: lvl, i, id
 
@@ -1168,91 +1137,91 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          call a2_gc_box_corners(tree%boxes, id, ivs, subr_no_nb, subr_bc)
+          call a2_gc_box_corners(tree%boxes, id, iv, subr_no_nb, subr_bc)
        end do
        !$omp end do
     end do
   end subroutine a2_gc_corners
 
-  ! Fill ghost cells for variables ivs(:) on the corners of a boxes, using
+  ! Fill ghost cells for variables iv on the corners of a boxes, using
   ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a2_gc_box_corners(boxes, id, ivs, subr_no_nb, subr_bc)
+  subroutine a2_gc_box_corners(boxes, id, iv, subr_no_nb, subr_bc)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, ivs(:)
+    integer, intent(in)         :: id, iv
     procedure(a2_subr_gc)       :: subr_no_nb, subr_bc
     integer                     :: cn, nbs(2)
 
     do cn = 1, 4
        nbs = a2_ch_nbs(:, cn)
        if (boxes(id)%neighbors(nbs(1)) > a5_no_box) then
-          call a2_gc_corner_from_nb(boxes, id, cn, nbs(1), ivs)
+          call a2_gc_corner_from_nb(boxes, id, cn, nbs(1), iv)
        else if (boxes(id)%neighbors(nbs(2)) > a5_no_box) then
-          call a2_gc_corner_from_nb(boxes, id, cn, nbs(2), ivs)
+          call a2_gc_corner_from_nb(boxes, id, cn, nbs(2), iv)
        else if (all(boxes(id)%neighbors(nbs) == a5_no_box)) then
-          call subr_no_nb(boxes, id, cn, ivs)
+          call subr_no_nb(boxes, id, cn, iv)
        else
           ! There is a boundary condition here
-          call subr_bc(boxes, id, cn, ivs)
+          call subr_bc(boxes, id, cn, iv)
        end if
     end do
   end subroutine a2_gc_box_corners
 
   ! Bilinear interpolation from a parent to fill a corner ghost cell
-  subroutine a2_corners_prolong1(boxes, id, cn, ivs)
+  subroutine a2_corners_prolong1(boxes, id, cn, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, cn, ivs(:)
+    integer, intent(in)         :: id, cn, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (cn)
     case (a2_ch_lxly)
-       call a2_prolong1_to(boxes, id, [0,0], [0,0], ivs)
+       call a2_prolong1_to(boxes, id, [0,0], [0,0], iv)
     case (a2_ch_hxly)
-       call a2_prolong1_to(boxes, id, [nc+1, 0], [nc+1,0], ivs)
+       call a2_prolong1_to(boxes, id, [nc+1, 0], [nc+1,0], iv)
     case (a2_ch_lxhy)
-       call a2_prolong1_to(boxes, id, [0, nc+1], [0, nc+1], ivs)
+       call a2_prolong1_to(boxes, id, [0, nc+1], [0, nc+1], iv)
     case (a2_ch_hxhy)
-       call a2_prolong1_to(boxes, id, [nc+1, nc+1], [nc+1, nc+1], ivs)
+       call a2_prolong1_to(boxes, id, [nc+1, nc+1], [nc+1, nc+1], iv)
     end select
   end subroutine a2_corners_prolong1
 
   ! Extrapolate corner ghost cell from side ghost cells
-  subroutine a2_corners_extrap(boxes, id, cn, ivs)
+  subroutine a2_corners_extrap(boxes, id, cn, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, cn, ivs(:)
+    integer, intent(in)         :: id, cn, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (cn)
     case (a2_ch_lxly)
-       boxes(id)%cc(0, 0, ivs) = boxes(id)%cc(1, 0, ivs) &
-            - 0.5_dp * boxes(id)%cc(2, 0, ivs) &
-            + boxes(id)%cc(0, 1, ivs) &
-            - 0.5_dp * boxes(id)%cc(0, 2, ivs)
+       boxes(id)%cc(0, 0, iv) = boxes(id)%cc(1, 0, iv) &
+            - 0.5_dp * boxes(id)%cc(2, 0, iv) &
+            + boxes(id)%cc(0, 1, iv) &
+            - 0.5_dp * boxes(id)%cc(0, 2, iv)
     case (a2_ch_hxly)
-       boxes(id)%cc(nc+1, 0, ivs) = boxes(id)%cc(nc, 0, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc-1, 0, ivs) &
-            + boxes(id)%cc(nc+1, 1, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc+1, 2, ivs)
+       boxes(id)%cc(nc+1, 0, iv) = boxes(id)%cc(nc, 0, iv) &
+            - 0.5_dp * boxes(id)%cc(nc-1, 0, iv) &
+            + boxes(id)%cc(nc+1, 1, iv) &
+            - 0.5_dp * boxes(id)%cc(nc+1, 2, iv)
     case (a2_ch_lxhy)
-       boxes(id)%cc(0, nc+1, ivs) = boxes(id)%cc(0, nc, ivs) &
-            - 0.5_dp * boxes(id)%cc(0, nc-1, ivs) &
-            + boxes(id)%cc(1, nc+1, ivs) &
-            - 0.5_dp * boxes(id)%cc(2, nc+1, ivs)
+       boxes(id)%cc(0, nc+1, iv) = boxes(id)%cc(0, nc, iv) &
+            - 0.5_dp * boxes(id)%cc(0, nc-1, iv) &
+            + boxes(id)%cc(1, nc+1, iv) &
+            - 0.5_dp * boxes(id)%cc(2, nc+1, iv)
     case (a2_ch_hxhy)
-       boxes(id)%cc(nc+1, nc+1, ivs) = boxes(id)%cc(nc, nc+1, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc-1, nc+1, ivs) &
-            + boxes(id)%cc(nc+1, nc, ivs) &
-            - 0.5_dp * boxes(id)%cc(nc+1, nc-1, ivs)
+       boxes(id)%cc(nc+1, nc+1, iv) = boxes(id)%cc(nc, nc+1, iv) &
+            - 0.5_dp * boxes(id)%cc(nc-1, nc+1, iv) &
+            + boxes(id)%cc(nc+1, nc, iv) &
+            - 0.5_dp * boxes(id)%cc(nc+1, nc-1, iv)
     end select
   end subroutine a2_corners_extrap
 
   ! Fill corner ghost cell from side ghost cells on neighbor
-  subroutine a2_gc_corner_from_nb(boxes, id, cn, nb, ivs)
+  subroutine a2_gc_corner_from_nb(boxes, id, cn, nb, iv)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, cn, nb, ivs(:)
+    integer, intent(in)         :: id, cn, nb, iv
     integer                     :: nc, nb_id, ij(2), ij_nb(2), d
 
     nb_id    = boxes(id)%neighbors(nb)
@@ -1262,7 +1231,7 @@ contains
     d        = a2_nb_dim(nb)
     ij_nb(d) = mod(ij(d) + nc, 2*nc) ! 0 -> nc and nc+1 -> 1
 
-    boxes(id)%cc(ij(1), ij(2), ivs) = boxes(nb_id)%cc(ij_nb(1), ij_nb(2), ivs)
+    boxes(id)%cc(ij(1), ij(2), iv) = boxes(nb_id)%cc(ij_nb(1), ij_nb(2), iv)
   end subroutine a2_gc_corner_from_nb
 
   ! Restrict fluxes from children to parents on refinement boundaries
@@ -1337,48 +1306,6 @@ contains
             boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
     end select
   end subroutine a2_flux_from_children
-
-  ! The neighbor nb has no children and id does, so set flux on children for
-  ! consisency at refinement boundary. TODO: TEST
-  subroutine a2_flux_to_children(boxes, id, nb, f_ixs)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, f_ixs(:)
-    integer                     :: nc, nch, c_id
-
-    nc  = boxes(id)%n_cell
-    nch = ishft(nc, -1) ! nc/2
-
-    select case (nb)
-    case (a2_nb_lx)
-       c_id = boxes(id)%children(a2_ch_lxly)
-       boxes(c_id)%fx(1, 1:nc:2, f_ixs) = boxes(id)%fx(1, 1:nch,  f_ixs)
-       boxes(c_id)%fx(1, 2:nc:2, f_ixs) = boxes(id)%fx(1, 1:nch,  f_ixs)
-       c_id = boxes(id)%children(a2_ch_lxhy)
-       boxes(c_id)%fx(1, 1:nc:2, f_ixs) = boxes(id)%fx(1, nch+1:,  f_ixs)
-       boxes(c_id)%fx(1, 2:nc:2, f_ixs) = boxes(id)%fx(1, nch+1:,  f_ixs)
-    case (a2_nb_hx)
-       c_id = boxes(id)%children(a2_ch_hxly)
-       boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) = boxes(id)%fx(nc+1, 1:nch,  f_ixs)
-       boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs) = boxes(id)%fx(nc+1, 1:nch,  f_ixs)
-       c_id = boxes(id)%children(a2_ch_hxhy)
-       boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) = boxes(id)%fx(nc+1, nch+1:,  f_ixs)
-       boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs) = boxes(id)%fx(nc+1, nch+1:,  f_ixs)
-    case (a2_nb_ly)
-       c_id = boxes(id)%children(a2_ch_lxly)
-       boxes(c_id)%fy(1:nc:2, 1, f_ixs) = boxes(id)%fy(1:nch, 1, f_ixs)
-       boxes(c_id)%fy(2:nc:2, 1, f_ixs) = boxes(id)%fy(1:nch, 1, f_ixs)
-       c_id = boxes(id)%children(a2_ch_hxly)
-       boxes(c_id)%fy(1:nc:2, 1, f_ixs) = boxes(id)%fy(nch+1:, 1, f_ixs)
-       boxes(c_id)%fy(2:nc:2, 1, f_ixs) = boxes(id)%fy(nch+1:, 1, f_ixs)
-    case (a2_nb_hy)
-       c_id = boxes(id)%children(a2_ch_lxhy)
-       boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) = boxes(id)%fy(1:nch, nc+1, f_ixs)
-       boxes(c_id)%fy(2:nc:2, nc+1, f_ixs) = boxes(id)%fy(1:nch, nc+1, f_ixs)
-       c_id = boxes(id)%children(a2_ch_hxhy)
-       boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) = boxes(id)%fy(nch+1:, nc+1, f_ixs)
-       boxes(c_id)%fy(2:nc:2, nc+1, f_ixs) = boxes(id)%fy(nch+1:, nc+1, f_ixs)
-    end select
-  end subroutine a2_flux_to_children
 
   ! Write the cell centered data of a tree to a vtk file
   subroutine a2_write_tree(tree, filename, cc_names, n_cycle, time)
