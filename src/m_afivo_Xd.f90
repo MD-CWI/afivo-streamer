@@ -1,7 +1,7 @@
 ! AFiVO code for Xd simulations. The following replacements take place on this code:
-! $D -> 2 or 3 (dimension of code)
-! preprocess file with cpp
-! Change multiple blank lines to one blank line
+! 1. $ D -> 2 or 3 (dimension of code)
+! 2. preprocess file with cpp
+! 3. cat -s (merge multiple blank lines)
 module m_afivo_$D
   use m_afivo_constants
   use m_afivo_hdr_$Dd
@@ -303,8 +303,9 @@ contains
     ! Second index odd: -2, first ix odd: -1
 #if $D == 2
     a$D_ix_to_cix = 4 - 2 * iand(ix(2), 1) - iand(ix(1), 1)
-#elif $D
-    arst
+#elif $D == 3
+    a3_ix_to_cix = 8 - 4 * iand(ix(3), 1) - 2 * iand(ix(2), 1) - iand(ix(1), 1)
+#endif
   end function a$D_ix_to_cix
 
   ! Get neighbor nb of id, through its parent
@@ -335,7 +336,7 @@ contains
     integer, intent(inout)    :: nb_list(:, :)
     integer                   :: n_boxes, i, id, nb, nb_id
 
-    if (any(ix_list < 1))          stop "a$D_set_base: need all ix_list > 0"
+    if (any(ix_list < 1)) stop "a$D_set_base: need all ix_list > 0"
 
     ! Neighbors only have to be specified from one side, mirror them
     n_boxes = size(ix_list, 2)
@@ -739,20 +740,21 @@ contains
   end subroutine a$D_tree_copy_cc
 
   ! Bilinear prolongation to children. Uses ghost cells and corners.
-  subroutine a$D_prolong1_from(boxes, id, iv, fill_gc)
-    type(box$D_t), intent(inout) :: boxes(:)
+#if $D == 2
+  subroutine a2_prolong1_from(boxes, id, iv, fill_gc)
+    type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
     logical, intent(in)         :: fill_gc
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-    integer                     :: nc, i_c, c_id, ix_offset($D)
+    integer                     :: nc, i_c, c_id, ix_offset(2)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 
     nc = boxes(id)%n_cell
-    do i_c = 1, a$D_num_children
+    do i_c = 1, a2_num_children
        c_id = boxes(id)%children(i_c)
 
        ! Offset of child w.r.t. parent
-       ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
+       ix_offset = a2_ch_dix(:, i_c) * ishft(nc, -1)
 
        ! In these loops, we calculate the closest coarse index (_c1), and the
        ! one-but-closest (_c2). The fine cell lies in between.
@@ -771,9 +773,57 @@ contains
           end do
        end do
     end do
-  end subroutine a$D_prolong1_from
+  end subroutine a2_prolong1_from
+#elif $D == 3
+  subroutine a3_prolong1_from(boxes, id, ivs, fill_gc)
+    type(box3_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, ivs(:)
+    logical, intent(in)         :: fill_gc
+    real(dp), parameter         :: f1=1/64.0_dp, f3=3/64.0_dp
+    real(dp), parameter         :: f9=9/64.0_dp, f27=27/64.0_dp
+    integer                     :: v, iv, nc, i_c, c_id, ix_offset(3)
+    integer                     :: i, j, k, i_c1, i_c2, j_c1, j_c2, k_c1, k_c2
+
+    nc = boxes(id)%n_cell
+    do i_c = 1, 8
+       c_id = boxes(id)%children(i_c)
+
+       ! Offset of child w.r.t. parent
+       ix_offset = a3_ch_dix(:, i_c) * ishft(nc, -1)
+
+       ! In these loops, we calculate the closest coarse index (_c1), and the
+       ! one-but-closest (_c2). The fine cell lies in between.
+       do v = 1, size(ivs)
+          iv = ivs(v)
+          do k = 1-l2i(fill_gc), nc+l2i(fill_gc)
+             k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+             k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+             do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
+                j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+                j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+                do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
+                   i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                   i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+
+                   boxes(c_id)%cc(i, j, k, iv) = &
+                        f27 * boxes(id)%cc(i_c1, j_c1, k_c1, iv) + &
+                        f9 * boxes(id)%cc(i_c2, j_c1, k_c1, iv) + &
+                        f9 * boxes(id)%cc(i_c1, j_c2, k_c1, iv) + &
+                        f9 * boxes(id)%cc(i_c1, j_c1, k_c2, iv) + &
+                        f3 * boxes(id)%cc(i_c1, j_c2, k_c2, iv) + &
+                        f3 * boxes(id)%cc(i_c2, j_c1, k_c2, iv) + &
+                        f3 * boxes(id)%cc(i_c2, j_c2, k_c1, iv) + &
+                        f1 * boxes(id)%cc(i_c2, j_c2, k_c2, iv)
+                end do
+             end do
+          end do
+       end do
+    end do
+  end subroutine a3_prolong1_from
+#endif
 
   ! Partial prolongation from parent using injection.
+#if $D == 2
   subroutine a$D_prolong0_to(boxes, id, lo, hi, iv)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, lo($D), hi($D), iv
@@ -793,8 +843,36 @@ contains
        end do
     end do
   end subroutine a$D_prolong0_to
+#elif $D == 3
+  subroutine a3_prolong0_to(boxes, id, lo, hi, ivs)
+    type(box3_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, lo(3), hi(3), ivs(:)
+    integer                     :: v, iv, nc, p_id, ix_offset(3)
+    integer                     :: i, j, k, i_c1, j_c1, k_c1
+
+    nc        = boxes(id)%n_cell
+    p_id      = boxes(id)%parent
+    ! Offset of child w.r.t. parent
+    ix_offset = (boxes(id)%ix - 2*boxes(p_id)%ix + 1) * ishft(nc, -1)
+
+    do v = 1, size(ivs)
+       iv = ivs(v)
+       do k = lo(3), hi(3)
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          do j = lo(2), hi(2)
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             do i = lo(1), hi(1)
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                boxes(id)%cc(i, j, k, iv) = boxes(p_id)%cc(i_c1, j_c1, k_c1, iv)
+             end do
+          end do
+       end do
+    end do
+  end subroutine a3_prolong0_to
+#endif
 
   ! Partial bilinear prolongation from parent.
+#if $D == 2
   subroutine a$D_prolong1_to(boxes, id, lo, hi, iv)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, lo(2), hi(2), iv
@@ -823,12 +901,55 @@ contains
        end do
     end do
   end subroutine a$D_prolong1_to
+#elif $D == 3
+  subroutine a3_prolong1_to(boxes, id, lo, hi, ivs)
+    type(box3_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, lo(3), hi(3), ivs(:)
+    real(dp), parameter         :: f1=1/64.0_dp, f3=3/64.0_dp
+    real(dp), parameter         :: f9=9/64.0_dp, f27=27/64.0_dp
+    integer                     :: v, iv, nc, p_id, ix_offset(3)
+    integer                     :: i, j, k
+    integer                     :: i_c1, i_c2, j_c1, j_c2, k_c1, k_c2
+
+    nc        = boxes(id)%n_cell
+    p_id      = boxes(id)%parent
+    ! Offset of child w.r.t. parent
+    ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
+
+    ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
+    ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
+    do v = 1, size(ivs)
+       iv = ivs(v)
+       do k = lo(3), hi(3)
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do j = lo(2), hi(2)
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+             do i = lo(1), hi(1)
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+                boxes(id)%cc(i, j, k, iv) = &
+                     f27 * boxes(p_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                     f9 * boxes(p_id)%cc(i_c2, j_c1, k_c1, iv) + &
+                     f9 * boxes(p_id)%cc(i_c1, j_c2, k_c1, iv) + &
+                     f9 * boxes(p_id)%cc(i_c1, j_c1, k_c2, iv) + &
+                     f3 * boxes(p_id)%cc(i_c1, j_c2, k_c2, iv) + &
+                     f3 * boxes(p_id)%cc(i_c2, j_c1, k_c2, iv) + &
+                     f3 * boxes(p_id)%cc(i_c2, j_c2, k_c1, iv) + &
+                     f1 * boxes(p_id)%cc(i_c2, j_c2, k_c2, iv)
+             end do
+          end do
+       end do
+    end do
+  end subroutine a3_prolong1_to
+#endif
 
   ! Conservative restriction. a$D_num_children fine cells to one parent cell
   subroutine a$D_restrict_to_box(boxes, id, iv)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
-    integer                     :: nc, i_c, c_id, ix_offset(2)
+    integer                     :: nc, i_c, c_id, ix_offset($D)
 
     nc = boxes(id)%n_cell
     do i_c = 1, a$D_num_children
@@ -865,9 +986,10 @@ contains
   end subroutine a$D_restrict_tree
 
   ! Conservative restriction. a$D_num_children fine cells to one parent cell
-  subroutine a$D_restrict_box(box_c, box_p, ix_offset, iv)
-    type(box$D_t), intent(in)    :: box_c
-    type(box$D_t), intent(inout) :: box_p
+#if $D == 2
+  subroutine a2_restrict_box(box_c, box_p, ix_offset, iv)
+    type(box2_t), intent(in)    :: box_c
+    type(box2_t), intent(inout) :: box_p
     integer, intent(in)         :: ix_offset(2), iv
     integer                     :: nc, v, i, j, i_c1, j_c1
 
@@ -885,7 +1007,41 @@ contains
                box_c%cc(i+1, j+1, iv) )
        end do
     end do
-  end subroutine a$D_restrict_box
+  end subroutine a2_restrict_box
+#elif $D == 3
+  subroutine a3_restrict_box(box_c, box_p, ix_offset, ivs)
+    type(box3_t), intent(in)    :: box_c
+    type(box3_t), intent(inout) :: box_p
+    integer, intent(in)         :: ix_offset(3), ivs(:)
+    integer                     :: nc, v, iv, i, j, k
+    integer                     :: i_c1, j_c1, k_c1
+
+    nc = box_c%n_cell
+
+    do v = 1, size(ivs)
+       iv = ivs(v)
+       do k = 1, nc, 2
+          k_c1 = ix_offset(3) + ishft(k+1, -1)  ! (k+1)/2
+          do j = 1, nc, 2
+             j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
+             do i = 1, nc, 2
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+                box_p%cc(i_c1, j_c1, k_c1, iv) = 0.125_dp * ( &
+                     box_c%cc(i,   j,   k,   iv) + &
+                     box_c%cc(i+1, j,   k,   iv) + &
+                     box_c%cc(i,   j+1, k,   iv) + &
+                     box_c%cc(i+1, j+1, k,   iv) + &
+                     box_c%cc(i,   j,   k+1, iv) + &
+                     box_c%cc(i+1, j,   k+1, iv) + &
+                     box_c%cc(i,   j+1, k+1, iv) + &
+                     box_c%cc(i+1, j+1, k+1, iv))
+             end do
+          end do
+       end do
+    end do
+  end subroutine a3_restrict_box
+#endif
 
   ! Fill ghost cells for variables iv on the sides of all boxes, using
   ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
@@ -925,56 +1081,130 @@ contains
   end subroutine a$D_gc_box_sides
 
   ! Bilinear interpolation from parent to fill ghost cells on sides
-  subroutine a$D_sides_prolong1(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
+#if $D == 2
+  subroutine a2_sides_prolong1(boxes, id, nb, iv)
+    type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
-    case (a$D_nb_lx)
-       call a$D_prolong1_to(boxes, id, [0, 1], [0, nc], iv)
-    case (a$D_nb_hx)
-       call a$D_prolong1_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
-    case (a$D_nb_ly)
-       call a$D_prolong1_to(boxes, id, [1, 0], [nc, 0], iv)
-    case (a$D_nb_hy)
-       call a$D_prolong1_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
+    case (a2_nb_lx)
+       call a2_prolong1_to(boxes, id, [0, 1], [0, nc], iv)
+    case (a2_nb_hx)
+       call a2_prolong1_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
+    case (a2_nb_ly)
+       call a2_prolong1_to(boxes, id, [1, 0], [nc, 0], iv)
+    case (a2_nb_hy)
+       call a2_prolong1_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
     end select
-  end subroutine a$D_sides_prolong1
+  end subroutine a2_sides_prolong1
+#elif $D == 3
+  subroutine a3_sides_prolong1(boxes, id, nb, ivs)
+    type(box3_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, ivs(:)
+    integer                     :: nc
+
+    nc = boxes(id)%n_cell
+
+    select case (nb)
+    case (a3_nb_lx)
+       call a3_prolong1_to(boxes, id, [0, 1, 1], [0, nc, nc], ivs)
+    case (a3_nb_hx)
+       call a3_prolong1_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], ivs)
+    case (a3_nb_ly)
+       call a3_prolong1_to(boxes, id, [1, 0, 1], [nc, 0, nc], ivs)
+    case (a3_nb_hy)
+       call a3_prolong1_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], ivs)
+    case (a3_nb_lz)
+       call a3_prolong1_to(boxes, id, [1, 1, 0], [nc, nc, 0], ivs)
+    case (a3_nb_hz)
+       call a3_prolong1_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], ivs)
+    end select
+  end subroutine a3_sides_prolong1
+#endif
 
   ! Special interpolation on sides which preserves diffusive fluxes
-  subroutine a$D_sides_extrap(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
+#if $D == 2
+  subroutine a2_sides_extrap(boxes, id, nb, iv)
+    type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
-    case (a$D_nb_lx)
-       call a$D_prolong0_to(boxes, id, [0, 1], [0, nc], iv)
+    case (a2_nb_lx)
+       call a2_prolong0_to(boxes, id, [0, 1], [0, nc], iv)
        boxes(id)%cc(0, 1:nc, iv) = 0.5_dp * boxes(id)%cc(0, 1:nc, iv) &
             + 0.75_dp * boxes(id)%cc(1, 1:nc, iv) &
             - 0.25_dp * boxes(id)%cc(2, 1:nc, iv)
-    case (a$D_nb_hx)
-       call a$D_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
+    case (a2_nb_hx)
+       call a2_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
        boxes(id)%cc(nc+1, 1:nc, iv) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, iv) &
             + 0.75_dp * boxes(id)%cc(nc, 1:nc, iv) &
             - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, iv)
-    case (a$D_nb_ly)
-       call a$D_prolong0_to(boxes, id, [1, 0], [nc, 0], iv)
+    case (a2_nb_ly)
+       call a2_prolong0_to(boxes, id, [1, 0], [nc, 0], iv)
        boxes(id)%cc(1:nc, 0, iv) = 0.5_dp * boxes(id)%cc(1:nc, 0, iv) &
             + 0.75_dp * boxes(id)%cc(1:nc, 1, iv) &
             - 0.25_dp * boxes(id)%cc(1:nc, 2, iv)
-    case (a$D_nb_hy)
-       call a$D_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
+    case (a2_nb_hy)
+       call a2_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
        boxes(id)%cc(1:nc, nc+1, iv) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, iv) &
             + 0.75_dp * boxes(id)%cc(1:nc, nc, iv) &
             - 0.25_dp * boxes(id)%cc(1:nc, nc-1, iv)
     end select
-  end subroutine a$D_sides_extrap
+  end subroutine a2_sides_extrap
+#elif $D == 3
+  subroutine a3_sides_extrap(boxes, id, nb, ivs)
+    type(box3_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, ivs(:)
+    integer                     :: nc
+
+    nc = boxes(id)%n_cell
+
+    select case (nb)
+    case (a3_nb_lx)
+       call a3_prolong0_to(boxes, id, [0, 1, 1], [0, nc, nc], ivs)
+       boxes(id)%cc(0, 1:nc, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(0, 1:nc, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(1, 1:nc, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(2, 1:nc, 1:nc, ivs)
+    case (a3_nb_hx)
+       call a3_prolong0_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], ivs)
+       boxes(id)%cc(nc+1, 1:nc, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(nc+1, 1:nc, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(nc, 1:nc, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, 1:nc, ivs)
+    case (a3_nb_ly)
+       call a3_prolong0_to(boxes, id, [1, 0, 1], [nc, 0, nc], ivs)
+       boxes(id)%cc(1:nc, 0, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, 0, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, 1, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, 2, 1:nc, ivs)
+    case (a3_nb_hy)
+       call a3_prolong0_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], ivs)
+       boxes(id)%cc(1:nc, nc+1, 1:nc, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, nc+1, 1:nc, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, nc, 1:nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, nc-1, 1:nc, ivs)
+    case (a3_nb_lz)
+       call a3_prolong0_to(boxes, id, [1, 1, 0], [nc, nc, 0], ivs)
+       boxes(id)%cc(1:nc, 1:nc, 0, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, 1:nc, 0, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, 1, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, 2, ivs)
+    case (a3_nb_hz)
+       call a3_prolong0_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], ivs)
+       boxes(id)%cc(1:nc, 1:nc, nc+1, ivs) = &
+            0.5_dp * boxes(id)%cc(1:nc, 1:nc, nc+1, ivs) &
+            + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, nc, ivs) &
+            - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, nc-1, ivs)
+    end select
+  end subroutine a3_sides_extrap
+#endif
 
   ! Fill values on side from a neighbor
   subroutine a$D_gc_side_from_nb(boxes, id, nb, iv)
@@ -986,14 +1216,29 @@ contains
     nb_id = boxes(id)%neighbors(nb)
 
     select case (nb)
-    case (a$D_nb_lx)
+#if $D == 2
+    case (a2_nb_lx)
        boxes(id)%cc(0, 1:nc, iv)    = boxes(nb_id)%cc(nc, 1:nc, iv)
-    case (a$D_nb_hx)
+    case (a2_nb_hx)
        boxes(id)%cc(nc+1, 1:nc, iv) = boxes(nb_id)%cc(1, 1:nc, iv)
-    case (a$D_nb_ly)
+    case (a2_nb_ly)
        boxes(id)%cc(1:nc, 0, iv)    = boxes(nb_id)%cc(1:nc, nc, iv)
-    case (a$D_nb_hy)
+    case (a2_nb_hy)
        boxes(id)%cc(1:nc, nc+1, iv) = boxes(nb_id)%cc(1:nc, 1, iv)
+#elif $D == 3
+    case (a3_nb_lx)
+       boxes(id)%cc(0, 1:nc, 1:nc, ivs)    = boxes(nb_id)%cc(nc, 1:nc, 1:nc, ivs)
+    case (a3_nb_hx)
+       boxes(id)%cc(nc+1, 1:nc, 1:nc, ivs) = boxes(nb_id)%cc(1, 1:nc, 1:nc, ivs)
+    case (a3_nb_ly)
+       boxes(id)%cc(1:nc, 0, 1:nc, ivs)    = boxes(nb_id)%cc(1:nc, nc, 1:nc, ivs)
+    case (a3_nb_hy)
+       boxes(id)%cc(1:nc, nc+1, 1:nc, ivs) = boxes(nb_id)%cc(1:nc, 1, 1:nc, ivs)
+    case (a3_nb_lz)
+       boxes(id)%cc(1:nc, 1:nc, 0, ivs)    = boxes(nb_id)%cc(1:nc, 1:nc, nc, ivs)
+    case (a3_nb_hz)
+       boxes(id)%cc(1:nc, 1:nc, nc+1, ivs) = boxes(nb_id)%cc(1:nc, 1:nc, 1, ivs)
+#endif
     end select
   end subroutine a$D_gc_side_from_nb
 
@@ -1021,299 +1266,321 @@ contains
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
     procedure(a$D_subr_gc)       :: subr_no_nb, subr_bc
-    integer                     :: cn, nbs($D)
+    integer                     :: cn, nbs($D), nb
 
     do cn = 1, a$D_num_children
-       nbs = a$D_ch_nbs(:, cn)
-       do ...
-       if (boxes(id)%neighbors(nbs(1)) > a5_no_box) then
-          call a$D_gc_corner_from_nb(boxes, id, cn, nbs(1), iv)
-       else if (boxes(id)%neighbors(nbs(2)) > a5_no_box) then
-          call a$D_gc_corner_from_nb(boxes, id, cn, nbs(2), iv)
-       else if (all(boxes(id)%neighbors(nbs) == a5_no_box)) then
-          call subr_no_nb(boxes, id, cn, iv)
-       else
-          ! There is a boundary condition here
-          call subr_bc(boxes, id, cn, iv)
-       end if
-    end do
-  end subroutine a$D_gc_box_corners
+       nbs     = a$D_ch_nbs(:, cn)
+       have_nb = .false.
 
-  ! Bilinear interpolation from a parent to fill a corner ghost cell
-  subroutine a$D_corners_prolong1(boxes, id, cn, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, cn, iv
-    integer                     :: nc
+       do nb = 1, $D
+          if (boxes(id)%neighbors(nbs(nb)) > a5_no_box) then
+             call a$D_gc_corner_from_nb(boxes, id, cn, nbs(1), iv)
+             cycle
+          end if
 
-    nc = boxes(id)%n_cell
-
-    select case (cn)
-    case (a$D_ch_lxly)
-       call a$D_prolong1_to(boxes, id, [0,0], [0,0], iv)
-    case (a$D_ch_hxly)
-       call a$D_prolong1_to(boxes, id, [nc+1, 0], [nc+1,0], iv)
-    case (a$D_ch_lxhy)
-       call a$D_prolong1_to(boxes, id, [0, nc+1], [0, nc+1], iv)
-    case (a$D_ch_hxhy)
-       call a$D_prolong1_to(boxes, id, [nc+1, nc+1], [nc+1, nc+1], iv)
-    end select
-  end subroutine a$D_corners_prolong1
-
-  ! Extrapolate corner ghost cell from side ghost cells
-  subroutine a$D_corners_extrap(boxes, id, cn, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, cn, iv
-    integer                     :: nc
-
-    nc = boxes(id)%n_cell
-
-    select case (cn)
-    case (a$D_ch_lxly)
-       boxes(id)%cc(0, 0, iv) = boxes(id)%cc(1, 0, iv) &
-            - 0.5_dp * boxes(id)%cc(2, 0, iv) &
-            + boxes(id)%cc(0, 1, iv) &
-            - 0.5_dp * boxes(id)%cc(0, 2, iv)
-    case (a$D_ch_hxly)
-       boxes(id)%cc(nc+1, 0, iv) = boxes(id)%cc(nc, 0, iv) &
-            - 0.5_dp * boxes(id)%cc(nc-1, 0, iv) &
-            + boxes(id)%cc(nc+1, 1, iv) &
-            - 0.5_dp * boxes(id)%cc(nc+1, 2, iv)
-    case (a$D_ch_lxhy)
-       boxes(id)%cc(0, nc+1, iv) = boxes(id)%cc(0, nc, iv) &
-            - 0.5_dp * boxes(id)%cc(0, nc-1, iv) &
-            + boxes(id)%cc(1, nc+1, iv) &
-            - 0.5_dp * boxes(id)%cc(2, nc+1, iv)
-    case (a$D_ch_hxhy)
-       boxes(id)%cc(nc+1, nc+1, iv) = boxes(id)%cc(nc, nc+1, iv) &
-            - 0.5_dp * boxes(id)%cc(nc-1, nc+1, iv) &
-            + boxes(id)%cc(nc+1, nc, iv) &
-            - 0.5_dp * boxes(id)%cc(nc+1, nc-1, iv)
-    end select
-  end subroutine a$D_corners_extrap
-
-  ! Fill corner ghost cell from side ghost cells on neighbor
-  subroutine a$D_gc_corner_from_nb(boxes, id, cn, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, cn, nb, iv
-    integer                     :: nc, nb_id, ij(2), ij_nb(2), d
-
-    nb_id    = boxes(id)%neighbors(nb)
-    nc       = boxes(id)%n_cell
-    ij       = a$D_ch_dix(:, cn) * (nc+1)
-    ij_nb    = ij
-    d        = a$D_nb_dim(nb)
-    ij_nb(d) = mod(ij(d) + nc, 2*nc) ! 0 -> nc and nc+1 -> 1
-
-    boxes(id)%cc(ij(1), ij(2), iv) = boxes(nb_id)%cc(ij_nb(1), ij_nb(2), iv)
-  end subroutine a$D_gc_corner_from_nb
-
-  ! Restrict fluxes from children to parents on refinement boundaries
-  subroutine a$D_consistent_fluxes(tree, f_ixs)
-    use omp_lib
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: f_ixs(:)
-    integer                   :: lvl, i, id, nb, nb_id
-
-    do lvl = 1, tree%n_lvls-1
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%parents)
-          id = tree%lvls(lvl)%parents(i)
-          do nb = 1, a$D_num_neighbors
-             nb_id = tree%boxes(id)%neighbors(nb)
-             if (nb_id < a5_no_box) cycle ! Boundary condition
-             if (.not. a$D_has_children(tree%boxes(nb_id))) &
-                  call a$D_flux_from_children(tree%boxes, id, nb, f_ixs)
-          end do
+          if (all(boxes(id)%neighbors(nbs) == a5_no_box)) then
+             call subr_no_nb(boxes, id, cn, iv)
+          else
+             ! There is a boundary condition here
+             call subr_bc(boxes, id, cn, iv)
+          end if
        end do
-       !$omp end do nowait
-    end do
-    !$omp barrier
-  end subroutine a$D_consistent_fluxes
+     end subroutine a$D_gc_box_corners
 
-  ! The neighbor nb has no children and id does, so get flux from children for
-  ! consisency at refinement boundary. TODO: TEST
-  subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, f_ixs(:)
-    integer                     :: nc, nch, c_id
+     ! Bilinear interpolation from a parent to fill a corner ghost cell
+     subroutine a$D_corners_prolong1(boxes, id, cn, iv)
+       type(box$D_t), intent(inout) :: boxes(:)
+       integer, intent(in)         :: id, cn, iv
+       integer                     :: nc
 
-    nc  = boxes(id)%n_cell
-    nch = ishft(nc, -1) ! nc/2
+       nc = boxes(id)%n_cell
 
-    select case (nb)
-    case (a$D_nb_lx)
-       c_id = boxes(id)%children(a$D_ch_lxly)
-       boxes(id)%fx(       1, 1:nch,  f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(1, 2:nc:2, f_ixs))
-       c_id = boxes(id)%children(a$D_ch_lxhy)
-       boxes(id)%fx(       1, nch+1:, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(1, 2:nc:2, f_ixs))
-    case (a$D_nb_hx)
-       c_id = boxes(id)%children(a$D_ch_hxly)
-       boxes(id)%fx(       nc+1, 1:nch,  f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
-       c_id = boxes(id)%children(a$D_ch_hxhy)
-       boxes(id)%fx(       nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
-            boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
-    case (a$D_nb_ly)
-       c_id = boxes(id)%children(a$D_ch_lxly)
-       boxes(id)%fy(       1:nch,  1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, 1, f_ixs))
-       c_id = boxes(id)%children(a$D_ch_hxly)
-       boxes(id)%fy(       nch+1:, 1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, 1, f_ixs))
-    case (a$D_nb_hy)
-       c_id = boxes(id)%children(a$D_ch_lxhy)
-       boxes(id)%fy(       1:nch,  nc+1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
-       c_id = boxes(id)%children(a$D_ch_hxhy)
-       boxes(id)%fy(       nch+1:, nc+1, f_ixs) = 0.5_dp * ( &
-            boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
-            boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
-    end select
-  end subroutine a$D_flux_from_children
+       select case (cn)
+#if $D == 2
+       case (a$D_ch_lxly)
+          call a2_prolong1_to(boxes, id, [0,0], [0,0], iv)
+       case (a2_ch_hxly)
+          call a2_prolong1_to(boxes, id, [nc+1, 0], [nc+1,0], iv)
+       case (a2_ch_lxhy)
+          call a2_prolong1_to(boxes, id, [0, nc+1], [0, nc+1], iv)
+       case (a2_ch_hxhy)
+          call a2_prolong1_to(boxes, id, [nc+1, nc+1], [nc+1, nc+1], iv)
+#elif $D == 3
+       case (a3_ch_lxlylz)
+          call a3_prolong1_to(boxes, id, [0,0,0], [0,0,0], ivs)
+       case (a3_ch_hxlylz)
+          call a3_prolong1_to(boxes, id, [nc+1,0,0], [nc+1,0,0], ivs)
+       case (a3_ch_lxhylz)
+          call a3_prolong1_to(boxes, id, [0,nc+1,0], [0,nc+1,0], ivs)
+       case (a3_ch_hxhylz)
+          call a3_prolong1_to(boxes, id, [nc+1,nc+1,0], [nc+1,nc+1,0], ivs)
+       case (a3_ch_lxlyhz)
+          call a3_prolong1_to(boxes, id, [0,0,nc+1], [0,0,nc+1], ivs)
+       case (a3_ch_hxlyhz)
+          call a3_prolong1_to(boxes, id, [nc+1,0,nc+1], [nc+1,0,nc+1], ivs)
+       case (a3_ch_lxhyhz)
+          call a3_prolong1_to(boxes, id, [0,nc+1,nc+1], [0,nc+1,nc+1], ivs)
+       case (a3_ch_hxhyhz)
+          call a3_prolong1_to(boxes, id, [nc+1,nc+1,nc+1], [nc+1,nc+1,nc+1], ivs)
+#endif
+       end select
+     end subroutine a$D_corners_prolong1
 
-  ! Write the cell centered data of a tree to a vtk file
-  subroutine a$D_write_tree(tree, filename, cc_names, n_cycle, time)
-    use m_vtk
-    type(a$D_t), intent(in) :: tree
-    character(len=*)        :: filename, cc_names(:)
-    integer, intent(in)     :: n_cycle
-    real(dp), intent(in)    :: time
-    integer                 :: lvl, bc, bn, n, n_cells, n_nodes, n_grids
-    integer                 :: ig, i, j, id, n_ix, c_ix
-    integer                 :: cell_ix, node_ix
-    integer, parameter      :: n_ch = a$D_num_children
-    integer                 :: nodes_per_box, cells_per_box
-    real(dp), allocatable   :: coords(:), cc_vars(:,:)
-    integer, allocatable    :: offsets(:), connects(:), cell_types(:)
-    type(vtk_t)             :: vtkf
+     ! Extrapolate corner ghost cell from side ghost cells
+     subroutine a$D_corners_extrap(boxes, id, cn, iv)
+       type(box$D_t), intent(inout) :: boxes(:)
+       integer, intent(in)         :: id, cn, iv
+       integer                     :: nc
 
-    !$omp single
+       nc = boxes(id)%n_cell
 
-    if (size(cc_names) /= tree%n_var_cell) &
-         stop "a$D_write_tree: size(cc_names) /= n_var_cell"
+       select case (cn)
+       case (a$D_ch_lxly)
+          boxes(id)%cc(0, 0, iv) = boxes(id)%cc(1, 0, iv) &
+               - 0.5_dp * boxes(id)%cc(2, 0, iv) &
+               + boxes(id)%cc(0, 1, iv) &
+               - 0.5_dp * boxes(id)%cc(0, 2, iv)
+       case (a$D_ch_hxly)
+          boxes(id)%cc(nc+1, 0, iv) = boxes(id)%cc(nc, 0, iv) &
+               - 0.5_dp * boxes(id)%cc(nc-1, 0, iv) &
+               + boxes(id)%cc(nc+1, 1, iv) &
+               - 0.5_dp * boxes(id)%cc(nc+1, 2, iv)
+       case (a$D_ch_lxhy)
+          boxes(id)%cc(0, nc+1, iv) = boxes(id)%cc(0, nc, iv) &
+               - 0.5_dp * boxes(id)%cc(0, nc-1, iv) &
+               + boxes(id)%cc(1, nc+1, iv) &
+               - 0.5_dp * boxes(id)%cc(2, nc+1, iv)
+       case (a$D_ch_hxhy)
+          boxes(id)%cc(nc+1, nc+1, iv) = boxes(id)%cc(nc, nc+1, iv) &
+               - 0.5_dp * boxes(id)%cc(nc-1, nc+1, iv) &
+               + boxes(id)%cc(nc+1, nc, iv) &
+               - 0.5_dp * boxes(id)%cc(nc+1, nc-1, iv)
+       end select
+     end subroutine a$D_corners_extrap
 
-    bc = tree%n_cell         ! number of Box Cells
-    bn = tree%n_cell + 1     ! number of Box Nodes
-    nodes_per_box = bn**2
-    cells_per_box = bc**2
+     ! Fill corner ghost cell from side ghost cells on neighbor
+     subroutine a$D_gc_corner_from_nb(boxes, id, cn, nb, iv)
+       type(box$D_t), intent(inout) :: boxes(:)
+       integer, intent(in)         :: id, cn, nb, iv
+       integer                     :: nc, nb_id, ij(2), ij_nb(2), d
 
-    n_grids = 0
-    do lvl = 1, tree%n_lvls
-       n_grids = n_grids + size(tree%lvls(lvl)%leaves)
-    end do
-    n_nodes = nodes_per_box * n_grids
-    n_cells = cells_per_box * n_grids
+       nb_id    = boxes(id)%neighbors(nb)
+       nc       = boxes(id)%n_cell
+       ij       = a$D_ch_dix(:, cn) * (nc+1)
+       ij_nb    = ij
+       d        = a$D_nb_dim(nb)
+       ij_nb(d) = mod(ij(d) + nc, 2*nc) ! 0 -> nc and nc+1 -> 1
 
-    allocate(coords(2 * n_nodes))
-    allocate(cc_vars(n_cells, tree%n_var_cell))
-    allocate(offsets(cells_per_box * n_grids))
-    allocate(cell_types(cells_per_box * n_grids))
-    allocate(connects(n_ch * cells_per_box * n_grids))
+       boxes(id)%cc(ij(1), ij(2), iv) = boxes(nb_id)%cc(ij_nb(1), ij_nb(2), iv)
+     end subroutine a$D_gc_corner_from_nb
 
-    cell_types = 8              ! VTK pixel type
+     ! Restrict fluxes from children to parents on refinement boundaries
+     subroutine a$D_consistent_fluxes(tree, f_ixs)
+       use omp_lib
+       type(a$D_t), intent(inout) :: tree
+       integer, intent(in)       :: f_ixs(:)
+       integer                   :: lvl, i, id, nb, nb_id
 
-    ig = 0
-    do lvl = 1, tree%n_lvls
-       do n = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(n)
-
-          ig = ig + 1
-          cell_ix = (ig-1) * cells_per_box
-          node_ix = (ig-1) * nodes_per_box
-
-          do j = 1, bn
-             do i = 1, bn
-                n_ix = 2 * (node_ix + (j-1) * bn + i)
-                coords(n_ix-1:n_ix) = tree%boxes(id)%r_min + &
-                     [i-1,j-1] * tree%boxes(id)%dr
+       do lvl = 1, tree%n_lvls-1
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%parents)
+             id = tree%lvls(lvl)%parents(i)
+             do nb = 1, a$D_num_neighbors
+                nb_id = tree%boxes(id)%neighbors(nb)
+                if (nb_id < a5_no_box) cycle ! Boundary condition
+                if (.not. a$D_has_children(tree%boxes(nb_id))) &
+                     call a$D_flux_from_children(tree%boxes, id, nb, f_ixs)
              end do
           end do
+          !$omp end do nowait
+       end do
+       !$omp barrier
+     end subroutine a$D_consistent_fluxes
 
-          do j = 1, bc
-             do i = 1, bc
-                ! In vtk, indexing starts at 0, so subtract 1
-                n_ix                      = node_ix + (j-1) * bn + i - 1
-                c_ix                      = cell_ix + (j-1) * bc + i
-                cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, :)
-                offsets(c_ix)             = a$D_num_children * c_ix
-                connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1]
+     ! The neighbor nb has no children and id does, so get flux from children for
+     ! consisency at refinement boundary. TODO: TEST
+     subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
+       type(box$D_t), intent(inout) :: boxes(:)
+       integer, intent(in)         :: id, nb, f_ixs(:)
+       integer                     :: nc, nch, c_id
+
+       nc  = boxes(id)%n_cell
+       nch = ishft(nc, -1) ! nc/2
+
+       select case (nb)
+       case (a$D_nb_lx)
+          c_id = boxes(id)%children(a$D_ch_lxly)
+          boxes(id)%fx(       1, 1:nch,  f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(1, 2:nc:2, f_ixs))
+          c_id = boxes(id)%children(a$D_ch_lxhy)
+          boxes(id)%fx(       1, nch+1:, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(1, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(1, 2:nc:2, f_ixs))
+       case (a$D_nb_hx)
+          c_id = boxes(id)%children(a$D_ch_hxly)
+          boxes(id)%fx(       nc+1, 1:nch,  f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
+          c_id = boxes(id)%children(a$D_ch_hxhy)
+          boxes(id)%fx(       nc+1, nch+1:, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(nc+1, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(nc+1, 2:nc:2, f_ixs))
+       case (a$D_nb_ly)
+          c_id = boxes(id)%children(a$D_ch_lxly)
+          boxes(id)%fy(       1:nch,  1, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, 1, f_ixs))
+          c_id = boxes(id)%children(a$D_ch_hxly)
+          boxes(id)%fy(       nch+1:, 1, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fy(1:nc:2, 1, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, 1, f_ixs))
+       case (a$D_nb_hy)
+          c_id = boxes(id)%children(a$D_ch_lxhy)
+          boxes(id)%fy(       1:nch,  nc+1, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
+          c_id = boxes(id)%children(a$D_ch_hxhy)
+          boxes(id)%fy(       nch+1:, nc+1, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fy(1:nc:2, nc+1, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, nc+1, f_ixs))
+       end select
+     end subroutine a$D_flux_from_children
+
+     ! Write the cell centered data of a tree to a vtk file
+     subroutine a$D_write_tree(tree, filename, cc_names, n_cycle, time)
+       use m_vtk
+       type(a$D_t), intent(in) :: tree
+       character(len=*)        :: filename, cc_names(:)
+       integer, intent(in)     :: n_cycle
+       real(dp), intent(in)    :: time
+       integer                 :: lvl, bc, bn, n, n_cells, n_nodes, n_grids
+       integer                 :: ig, i, j, id, n_ix, c_ix
+       integer                 :: cell_ix, node_ix
+       integer, parameter      :: n_ch = a$D_num_children
+       integer                 :: nodes_per_box, cells_per_box
+       real(dp), allocatable   :: coords(:), cc_vars(:,:)
+       integer, allocatable    :: offsets(:), connects(:), cell_types(:)
+       type(vtk_t)             :: vtkf
+
+       !$omp single
+
+       if (size(cc_names) /= tree%n_var_cell) &
+            stop "a$D_write_tree: size(cc_names) /= n_var_cell"
+
+       bc = tree%n_cell         ! number of Box Cells
+       bn = tree%n_cell + 1     ! number of Box Nodes
+       nodes_per_box = bn**2
+       cells_per_box = bc**2
+
+       n_grids = 0
+       do lvl = 1, tree%n_lvls
+          n_grids = n_grids + size(tree%lvls(lvl)%leaves)
+       end do
+       n_nodes = nodes_per_box * n_grids
+       n_cells = cells_per_box * n_grids
+
+       allocate(coords(2 * n_nodes))
+       allocate(cc_vars(n_cells, tree%n_var_cell))
+       allocate(offsets(cells_per_box * n_grids))
+       allocate(cell_types(cells_per_box * n_grids))
+       allocate(connects(n_ch * cells_per_box * n_grids))
+
+       cell_types = 8              ! VTK pixel type
+
+       ig = 0
+       do lvl = 1, tree%n_lvls
+          do n = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(n)
+
+             ig = ig + 1
+             cell_ix = (ig-1) * cells_per_box
+             node_ix = (ig-1) * nodes_per_box
+
+             do j = 1, bn
+                do i = 1, bn
+                   n_ix = 2 * (node_ix + (j-1) * bn + i)
+                   coords(n_ix-1:n_ix) = tree%boxes(id)%r_min + &
+                        [i-1,j-1] * tree%boxes(id)%dr
+                end do
+             end do
+
+             do j = 1, bc
+                do i = 1, bc
+                   ! In vtk, indexing starts at 0, so subtract 1
+                   n_ix                      = node_ix + (j-1) * bn + i - 1
+                   c_ix                      = cell_ix + (j-1) * bc + i
+                   cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, :)
+                   offsets(c_ix)             = a$D_num_children * c_ix
+                   connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1]
+                end do
              end do
           end do
        end do
-    end do
 
-    call vtk_ini_xml(vtkf, trim(filename), 'UnstructuredGrid')
-    call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
-    call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, 2, n_cycle, time)
-    call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
-    call vtk_dat_xml(vtkf, "CellData", .true.)
-    do n = 1, tree%n_var_cell
-       call vtk_var_r8_xml(vtkf, trim(cc_names(n)), cc_vars(:, n), n_cells)
-    end do
-    call vtk_dat_xml(vtkf, "CellData", .false.)
-    call vtk_geo_xml_close(vtkf)
-    call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
-    call vtk_end_xml(vtkf)
-    print *, "Written ", trim(filename), ", n_grids", n_grids
-    !$omp end single
-  end subroutine a$D_write_tree
+       call vtk_ini_xml(vtkf, trim(filename), 'UnstructuredGrid')
+       call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
+       call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, 2, n_cycle, time)
+       call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
+       call vtk_dat_xml(vtkf, "CellData", .true.)
+       do n = 1, tree%n_var_cell
+          call vtk_var_r8_xml(vtkf, trim(cc_names(n)), cc_vars(:, n), n_cells)
+       end do
+       call vtk_dat_xml(vtkf, "CellData", .false.)
+       call vtk_geo_xml_close(vtkf)
+       call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
+       call vtk_end_xml(vtkf)
+       print *, "Written ", trim(filename), ", n_grids", n_grids
+       !$omp end single
+     end subroutine a$D_write_tree
 
-  ! subroutine a$D_write_tree(tree, filename, cc_names, cc_units, n_cycle, time)
-  !   use m_write_silo
-  !   type(a$D_t), intent(in)          :: tree
-  !   character(len=*)                :: filename, cc_names(:), cc_units(:)
-  !   integer, intent(in)             :: n_cycle
-  !   real(dp), intent(in)            :: time
-  !   character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
-  !   character(len=*), parameter     :: amr_name  = "amr"
-  !   character(len=100), allocatable :: grid_list(:), var_list(:, :)
-  !   integer                         :: lvl, i, id, ig, iv, bs, n_grids, dbix
+     ! subroutine a$D_write_tree(tree, filename, cc_names, cc_units, n_cycle, time)
+     !   use m_write_silo
+     !   type(a$D_t), intent(in)          :: tree
+     !   character(len=*)                :: filename, cc_names(:), cc_units(:)
+     !   integer, intent(in)             :: n_cycle
+     !   real(dp), intent(in)            :: time
+     !   character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
+     !   character(len=*), parameter     :: amr_name  = "amr"
+     !   character(len=100), allocatable :: grid_list(:), var_list(:, :)
+     !   integer                         :: lvl, i, id, ig, iv, bs, n_grids, dbix
 
-  !   bs = tree%box_cells
-  !   n_grids = 0
-  !   do lvl = 1, tree%n_lvls
-  !      n_grids = n_grids + size(tree%lvls(lvl)%ids)
-  !   end do
+     !   bs = tree%box_cells
+     !   n_grids = 0
+     !   do lvl = 1, tree%n_lvls
+     !      n_grids = n_grids + size(tree%lvls(lvl)%ids)
+     !   end do
 
-  !   allocate(grid_list(n_grids))
-  !   allocate(var_list(tree%n_var_cell, n_grids))
+     !   allocate(grid_list(n_grids))
+     !   allocate(var_list(tree%n_var_cell, n_grids))
 
-  !   call SILO_create_file(filename, dbix)
-  !   ig = 0
+     !   call SILO_create_file(filename, dbix)
+     !   ig = 0
 
-  !   do lvl = 1, tree%n_lvls
-  !      do i = 1, size(tree%lvls(lvl)%ids)
-  !         id = tree%lvls(lvl)%ids(i)
-  !         ig = ig + 1
-  !         write(grid_list(ig), "(A,I0)") grid_name, ig
-  !         call SILO_add_grid(dbix, grid_list(ig), 2, &
-  !              [bs+1, bs+1], tree%boxes(id)%r_min, tree%boxes(id)%dr)
-  !         print *, id, tree%boxes(id)%r_min, tree%boxes(id)%dr
-  !         do iv = 1, tree%n_var_cell
-  !            write(var_list(iv, ig), "(A,I0)") trim(cc_names(iv)) // "_", ig
-  !            call SILO_add_var(dbix, var_list(iv, ig), grid_list(ig), &
-  !                 pack(tree%boxes(id)%cc(1:bs, 1:bs, iv), .true.), [bs, bs], &
-  !                 trim(cc_units(iv)))
-  !         end do
-  !      end do
-  !   end do
+     !   do lvl = 1, tree%n_lvls
+     !      do i = 1, size(tree%lvls(lvl)%ids)
+     !         id = tree%lvls(lvl)%ids(i)
+     !         ig = ig + 1
+     !         write(grid_list(ig), "(A,I0)") grid_name, ig
+     !         call SILO_add_grid(dbix, grid_list(ig), 2, &
+     !              [bs+1, bs+1], tree%boxes(id)%r_min, tree%boxes(id)%dr)
+     !         print *, id, tree%boxes(id)%r_min, tree%boxes(id)%dr
+     !         do iv = 1, tree%n_var_cell
+     !            write(var_list(iv, ig), "(A,I0)") trim(cc_names(iv)) // "_", ig
+     !            call SILO_add_var(dbix, var_list(iv, ig), grid_list(ig), &
+     !                 pack(tree%boxes(id)%cc(1:bs, 1:bs, iv), .true.), [bs, bs], &
+     !                 trim(cc_units(iv)))
+     !         end do
+     !      end do
+     !   end do
 
-  !   call SILO_set_mmesh_grid(dbix, amr_name, grid_list, n_cycle, time)
-  !   do iv = 1, tree%n_var_cell
-  !      call SILO_set_mmesh_var(dbix, trim(cc_names(iv)), amr_name, &
-  !           var_list(iv, :), n_cycle, time)
-  !   end do
-  !   call SILO_close_file(dbix)
-  !   print *, "Number of grids", ig
-  ! end subroutine a$D_write_tree
+     !   call SILO_set_mmesh_grid(dbix, amr_name, grid_list, n_cycle, time)
+     !   do iv = 1, tree%n_var_cell
+     !      call SILO_set_mmesh_var(dbix, trim(cc_names(iv)), amr_name, &
+     !           var_list(iv, :), n_cycle, time)
+     !   end do
+     !   call SILO_close_file(dbix)
+     !   print *, "Number of grids", ig
+     ! end subroutine a$D_write_tree
 
-end module m_afivo_$D
+   end module m_afivo_$D
