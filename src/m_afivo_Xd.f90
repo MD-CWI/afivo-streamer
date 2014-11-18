@@ -1,6 +1,7 @@
 ! AFiVO code for Xd simulations. The following replacements take place on this code:
 ! $D -> 2 or 3 (dimension of code)
-
+! preprocess file with cpp
+! Change multiple blank lines to one blank line
 module m_afivo_$D
   use m_afivo_constants
   use m_afivo_hdr_$Dd
@@ -152,7 +153,7 @@ contains
     integer                        :: n, lvl, id, old_size, new_size, n_clean
     integer                        :: max_id, n_used, n_stored, n_used_lvl
     integer, allocatable           :: ixs_sort(:), ixs_map(:)
-    type(box2_t), allocatable      :: boxes_cpy(:)
+    type(box$D_t), allocatable      :: boxes_cpy(:)
     integer(morton_k), allocatable :: mortons(:)
 
     !$omp single
@@ -243,8 +244,8 @@ contains
 
   ! Create a list of leaves and a list of parents for level
   subroutine set_leaves_parents(boxes, level)
-    type(box2_t), intent(in)    :: boxes(:)
-    type(lvl2_t), intent(inout) :: level
+    type(box$D_t), intent(in)    :: boxes(:)
+    type(lvl$D_t), intent(inout) :: level
     integer                     :: i, id, i_leaf, i_parent
 
     i_leaf   = 0
@@ -263,7 +264,7 @@ contains
 
   ! Allocate the data storage for a box
   subroutine alloc_box(box, n_cell, n_cc, n_fc)
-    type(box2_t), intent(inout) :: box
+    type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: n_cell, n_cc, n_fc
 
     allocate(box%cc(0:n_cell+1, 0:n_cell+1, n_cc))
@@ -273,7 +274,7 @@ contains
 
   ! Deallocate the data storage for a box
   subroutine dealloc_box(box)
-    type(box2_t), intent(inout) :: box
+    type(box$D_t), intent(inout) :: box
     deallocate(box%cc)
     deallocate(box%fx)
     deallocate(box%fy)
@@ -281,7 +282,7 @@ contains
 
   ! Set the neighbors of id (using their parent)
   subroutine set_nbs_$Dd(boxes, id)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     integer                     :: nb, nb_id
 
@@ -308,7 +309,7 @@ contains
 
   ! Get neighbor nb of id, through its parent
   function find_nb_$Dd(boxes, id, nb) result(nb_id)
-    type(box2_t), intent(in) :: boxes(:)
+    type(box$D_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id, nb
     integer                  :: nb_id, p_id, c_ix, d, old_pid
 
@@ -378,7 +379,7 @@ contains
   subroutine a$D_resize_box_storage(tree, new_size)
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)       :: new_size
-    type(box2_t), allocatable :: boxes_cpy(:)
+    type(box$D_t), allocatable :: boxes_cpy(:)
 
     allocate(boxes_cpy(new_size))
     boxes_cpy(1:tree%max_id)      = tree%boxes(1:tree%max_id)
@@ -485,8 +486,8 @@ contains
 
   ! Given the refinement function, return consistent refinement flags
   subroutine a$D_set_ref_flags(lvls, n_lvls, max_lvl, boxes, ref_flags, ref_func)
-    type(lvl2_t), intent(in)    :: lvls(:)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(lvl$D_t), intent(in)    :: lvls(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: n_lvls, max_lvl
     integer, intent(inout)      :: ref_flags(:)
     procedure(a$D_to_int_f)      :: ref_func
@@ -570,7 +571,7 @@ contains
 
   ! Remove the children of box id
   subroutine a$D_remove_children(boxes, id)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     integer                     :: ic, c_id, nb_id, nb_rev, nb
 
@@ -592,7 +593,7 @@ contains
 
   ! Add children to box id, using the indices in c_ids
   subroutine a$D_add_children(boxes, id, c_ids)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, c_ids(a$D_num_children)
     integer                     :: i, ch_nb(2), c_id, c_ix_base(2)
 
@@ -630,7 +631,7 @@ contains
   subroutine set_child_ids(p_ids, c_ids, boxes)
     integer, intent(in)                 :: p_ids(:)
     integer, allocatable, intent(inout) :: c_ids(:)
-    type(box2_t), intent(in)            :: boxes(:)
+    type(box$D_t), intent(in)            :: boxes(:)
     integer                             :: i, ip, i_c, n_children
 
     ! Count a$D_num_children times the number of refined parent blocks
@@ -648,37 +649,37 @@ contains
   end subroutine set_child_ids
 
   elemental logical function a$D_has_children(box)
-    type(box2_t), intent(in) :: box
+    type(box$D_t), intent(in) :: box
     a$D_has_children = (box%children(1) /= a5_no_box)
   end function a$D_has_children
 
   ! Return minimum dr that is used in the tree
   pure function a$D_min_dr(tree) result(dr)
     type(a$D_t), intent(in) :: tree
-    real(dp)               :: dr(2)
+    real(dp)               :: dr($D)
     dr = tree%dr_base * 0.5_dp**(tree%n_lvls-1)
   end function a$D_min_dr
 
   ! Return the coordinate of the center of a box
   pure function a$D_r_center(box) result(r_center)
-    type(box2_t), intent(in) :: box
-    real(dp)                 :: r_center(2)
+    type(box$D_t), intent(in) :: box
+    real(dp)                 :: r_center($D)
     r_center = box%r_min + 0.5_dp * box%n_cell * box%dr
   end function a$D_r_center
 
   ! Location of cell center with index cc_ix
   pure function a$D_r_cc(box, cc_ix) result(r)
-    type(box2_t), intent(in) :: box
-    integer, intent(in)      :: cc_ix(2)
-    real(dp)                 :: r(2)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)      :: cc_ix($D)
+    real(dp)                 :: r($D)
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_r_cc
 
   ! Location of node with index nd_ix
   pure function a$D_r_node(box, nd_ix) result(r)
-    type(box2_t), intent(in) :: box
-    integer, intent(in)      :: nd_ix(2)
-    real(dp)                 :: r(2)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)      :: nd_ix($D)
+    real(dp)                 :: r($D)
     r = box%r_min + (nd_ix-1) * box%dr
   end function a$D_r_node
 
@@ -694,28 +695,28 @@ contains
 
   ! Add cc(:,:, iv_from) to box%cc(:,:, iv_to)
   subroutine a$D_box_add_cc(box, iv_from, iv_to)
-    type(box2_t), intent(inout) :: box
+    type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
     box%cc(:,:, iv_to) = box%cc(:,:, iv_to) + box%cc(:,:, iv_from)
   end subroutine a$D_box_add_cc
 
   ! Subtract cc(:,:, iv_from) from box%cc(:,:, iv_to)
   subroutine a$D_box_sub_cc(box, iv_from, iv_to)
-    type(box2_t), intent(inout) :: box
+    type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
     box%cc(:,:, iv_to) = box%cc(:,:, iv_to) - box%cc(:,:, iv_from)
   end subroutine a$D_box_sub_cc
 
   ! Copy cc(:,:, iv_from) to box%cc(:,:, iv_to)
   subroutine a$D_box_copy_cc(box, iv_from, iv_to)
-    type(box2_t), intent(inout) :: box
+    type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
     box%cc(:,:, iv_to) = box%cc(:,:, iv_from)
   end subroutine a$D_box_copy_cc
 
   ! Copy cc(:,:, iv_from) to box%cc(:,:, iv_to) for all ids
   subroutine a$D_boxes_copy_cc(boxes, ids, iv_from, iv_to)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:), iv_from, iv_to
     integer                     :: i
 
@@ -739,11 +740,11 @@ contains
 
   ! Bilinear prolongation to children. Uses ghost cells and corners.
   subroutine a$D_prolong1_from(boxes, id, iv, fill_gc)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
     logical, intent(in)         :: fill_gc
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-    integer                     :: nc, i_c, c_id, ix_offset(2)
+    integer                     :: nc, i_c, c_id, ix_offset($D)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 
     nc = boxes(id)%n_cell
@@ -774,9 +775,9 @@ contains
 
   ! Partial prolongation from parent using injection.
   subroutine a$D_prolong0_to(boxes, id, lo, hi, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, lo(2), hi(2), iv
-    integer                     :: nc, p_id, ix_offset(2)
+    type(box$D_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, lo($D), hi($D), iv
+    integer                     :: nc, p_id, ix_offset($D)
     integer                     :: i, j, i_c1, j_c1
 
     nc        = boxes(id)%n_cell
@@ -795,7 +796,7 @@ contains
 
   ! Partial bilinear prolongation from parent.
   subroutine a$D_prolong1_to(boxes, id, lo, hi, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, lo(2), hi(2), iv
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
     integer                     :: nc, p_id, ix_offset(2)
@@ -825,7 +826,7 @@ contains
 
   ! Conservative restriction. a$D_num_children fine cells to one parent cell
   subroutine a$D_restrict_to_box(boxes, id, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
     integer                     :: nc, i_c, c_id, ix_offset(2)
 
@@ -841,7 +842,7 @@ contains
 
   ! Restrict variables iv to parent boxes ids(:)
   subroutine a$D_restrict_to_boxes(boxes, ids, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:), iv
     integer                     :: i
 
@@ -865,8 +866,8 @@ contains
 
   ! Conservative restriction. a$D_num_children fine cells to one parent cell
   subroutine a$D_restrict_box(box_c, box_p, ix_offset, iv)
-    type(box2_t), intent(in)    :: box_c
-    type(box2_t), intent(inout) :: box_p
+    type(box$D_t), intent(in)    :: box_c
+    type(box$D_t), intent(inout) :: box_p
     integer, intent(in)         :: ix_offset(2), iv
     integer                     :: nc, v, i, j, i_c1, j_c1
 
@@ -907,7 +908,7 @@ contains
   ! Fill ghost cells for variables iv on the sides of a boxes, using
   ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
   subroutine a$D_gc_box_sides(boxes, id, iv, subr_no_nb, subr_bc)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
     procedure(a$D_subr_gc)       :: subr_no_nb, subr_bc
     integer                     :: nb
@@ -925,7 +926,7 @@ contains
 
   ! Bilinear interpolation from parent to fill ghost cells on sides
   subroutine a$D_sides_prolong1(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
@@ -945,7 +946,7 @@ contains
 
   ! Special interpolation on sides which preserves diffusive fluxes
   subroutine a$D_sides_extrap(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
@@ -977,7 +978,7 @@ contains
 
   ! Fill values on side from a neighbor
   subroutine a$D_gc_side_from_nb(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc, nb_id
 
@@ -1017,13 +1018,14 @@ contains
   ! Fill ghost cells for variables iv on the corners of a boxes, using
   ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
   subroutine a$D_gc_box_corners(boxes, id, iv, subr_no_nb, subr_bc)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
     procedure(a$D_subr_gc)       :: subr_no_nb, subr_bc
-    integer                     :: cn, nbs(2)
+    integer                     :: cn, nbs($D)
 
     do cn = 1, a$D_num_children
        nbs = a$D_ch_nbs(:, cn)
+       do ...
        if (boxes(id)%neighbors(nbs(1)) > a5_no_box) then
           call a$D_gc_corner_from_nb(boxes, id, cn, nbs(1), iv)
        else if (boxes(id)%neighbors(nbs(2)) > a5_no_box) then
@@ -1039,7 +1041,7 @@ contains
 
   ! Bilinear interpolation from a parent to fill a corner ghost cell
   subroutine a$D_corners_prolong1(boxes, id, cn, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, cn, iv
     integer                     :: nc
 
@@ -1059,7 +1061,7 @@ contains
 
   ! Extrapolate corner ghost cell from side ghost cells
   subroutine a$D_corners_extrap(boxes, id, cn, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, cn, iv
     integer                     :: nc
 
@@ -1091,7 +1093,7 @@ contains
 
   ! Fill corner ghost cell from side ghost cells on neighbor
   subroutine a$D_gc_corner_from_nb(boxes, id, cn, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, cn, nb, iv
     integer                     :: nc, nb_id, ij(2), ij_nb(2), d
 
@@ -1131,7 +1133,7 @@ contains
   ! The neighbor nb has no children and id does, so get flux from children for
   ! consisency at refinement boundary. TODO: TEST
   subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, f_ixs(:)
     integer                     :: nc, nch, c_id
 
