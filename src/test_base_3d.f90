@@ -33,8 +33,8 @@ program test_base
   call a3_loop_boxes(tree, set_morton_variable)
 
   ! Fill ghost cells for phi
-  call a3_gc_sides(tree, [i_phi], a3_sides_prolong1, have_no_bc)
-  call a3_gc_corners(tree, [i_phi], a3_corners_prolong1, have_no_bc)
+  call a3_gc_sides(tree, i_phi, a3_sides_prolong1, have_no_bc)
+  call a3_gc_corners(tree, i_phi, a3_corners_prolong1, have_no_bc)
 
   do i = 1, 13
      print *, "i = ", i, "max_id", tree%max_id
@@ -86,7 +86,7 @@ contains
     integer, intent(in)         :: id
 
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
-       call a3_prolong1_from(boxes, id, [i_phi], .true.)
+       call a3_prolong1_from(boxes, id, i_phi, .true.)
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children
@@ -97,9 +97,9 @@ contains
     boxes(id)%cc(:,:,:,i_mrtn) = id
   end subroutine set_morton_variable
 
-  subroutine have_no_bc(boxes, id, i, ivs)
+  subroutine have_no_bc(boxes, id, i, iv)
     type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i, ivs(:)
+    integer, intent(in)         :: id, i, iv
     stop "We have no boundary conditions in this example"
   end subroutine have_no_bc
 

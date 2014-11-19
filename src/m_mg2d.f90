@@ -82,7 +82,7 @@ contains
 
     integer :: id, c_id, n, lvl, n_lvls
     integer :: min_lvl, boxes_per_lvl, offset
-    type(lvl2_t), allocatable :: tmp_lvls(:)
+    type(lvl_t), allocatable :: tmp_lvls(:)
 
     ! Determine number of lvls for subtree
     n = tree%n_cell

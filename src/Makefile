@@ -1,7 +1,7 @@
 FC 	:= gfortran
 FFLAGS	:= -Wall -O2 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow\
 	-pedantic -finit-real=nan -std=f2008 -fopenmp -cpp
-FFLAGS	:= -Ofast -fopenmp -cpp
+# FFLAGS	:= -Ofast -fopenmp -cpp
 OBJS	:= m_morton.f90 m_afivo_constants.f90 m_afivo_2d.f90 m_vtk.f90 m_mg2d.f90 m_gmres.f90
 
 INCDIRS	:=
@@ -24,13 +24,17 @@ clean:
 	$(RM) *.o *.mod test_m_morton m_afivo_2d.f90 m_afivo_3d.f90
 
 m_afivo_2d.f90: m_afivo_Xd.f90
-	sed 's/$$D/2/' < $< | cpp -traditional-cpp -P | cat -s > $@
+	sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+
+m_afivo_3d.f90: m_afivo_Xd.f90
+	sed 's|$$D|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+
 
 # Dependency information
 m_afivo_2d.f90:		m_afivo_Xd.f90
 m_afivo_3d.f90:		m_afivo_Xd.f90
-m_afivo_2d.o:		m_afivo_hdr_2d.o m_vtk.o m_morton.o m_afivo_constants.o
-m_afivo_3d.o:		m_afivo_hdr_3d.o m_vtk.o m_morton.o m_afivo_constants.o
+m_afivo_2d.o:		m_vtk.o m_morton.o m_afivo_constants.o
+m_afivo_3d.o:		m_vtk.o m_morton.o m_afivo_constants.o
 m_mg2d.o:		m_afivo_2d.o
 test_morton:		m_morton.o
 test_base:		m_afivo_2d.o m_vtk.o m_morton.o
