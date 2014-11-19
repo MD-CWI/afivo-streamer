@@ -35,7 +35,8 @@ To keep the code lean & fast, we restrict the framework in the following way:
 * Parallellization is provided only for shared memory systems (using OpenMP).
 
 ### Todo
-* Reorganize 2D code and start writing 3D code
+* Add more tests, especially for the 3D code
+* Look for "pretty" examples, generate some animations, and put them online.
 
 ### Features
 * I'll write about them soon
@@ -44,7 +45,8 @@ To keep the code lean & fast, we restrict the framework in the following way:
 
 #### Why use Fortran (2003+)?
 
-I'm planning to write a little piece on this in the future.
+I'm planning to write a little piece on this in the future. This will appear on
+my personal webpage (teunissen.net).
 
 #### Why don't you use MPI?
 
