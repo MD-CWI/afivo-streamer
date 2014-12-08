@@ -161,7 +161,7 @@ contains
   subroutine mg2d_fas_fmg(tree, mg)
     type(a2_t), intent(inout)       :: tree
     type(mg2_t), intent(in)         :: mg
-    integer                         :: i, id, lvl, min_lvl
+    integer                         :: lvl, min_lvl
 
     min_lvl = lbound(tree%lvls, 1)
 

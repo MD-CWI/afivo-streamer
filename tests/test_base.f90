@@ -22,10 +22,12 @@ program test_base
   call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
        n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp])
 
+  ! Set up geometry
   id             = 1
   ix_list(:, id) = [1,1] ! Set index of box
   nb_list(:, id) = id    ! Box is periodic, so its own neighbor
 
+  ! Create the base mesh
   call a2_set_base(tree, ix_list, nb_list)
 
   ! Set variables on base
@@ -36,15 +38,15 @@ program test_base
   call a2_gc_sides(tree, i_phi, a2_sides_prolong1, have_no_bc)
   call a2_gc_corners(tree, i_phi, a2_corners_prolong1, have_no_bc)
 
-  do i = 1, 20
+  do i = 1, 10
      print *, "i = ", i, "max_id", tree%max_id
 
      write(fname, "(A,I0,A)") "test_base_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
+     ! call a2_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
 
      call a2_adjust_refinement(tree, ref_func)
-     call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
-          n_clean_min=10000, only_reorder=.true.)
+     ! call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
+          ! n_clean_min=10000, only_reorder=.true.)
      call a2_loop_boxes(tree, prolong_to_new_children)
      call a2_loop_boxes(tree, set_morton_variable)
   end do

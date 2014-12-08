@@ -400,6 +400,9 @@ contains
              tree%boxes(n)%tag = 0
           end do
        else
+          do n = 1, max_id
+             call dealloc_box(tree%boxes(n))
+          end do
           call move_alloc(boxes_cpy, tree%boxes)
           tree%boxes(n_used+1:)%tag = 0
        end if
@@ -558,10 +561,19 @@ contains
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)       :: new_size
     type(box$D_t), allocatable :: boxes_cpy(:)
+    integer                   :: n
 
+    ! Store boxes in larger array boxes_cpy
     allocate(boxes_cpy(new_size))
     boxes_cpy(1:tree%max_id)      = tree%boxes(1:tree%max_id)
     boxes_cpy(tree%max_id+1:)%tag = 0 ! empty tag
+
+    ! Deallocate current storage
+    do n = 1, tree%max_id
+       call dealloc_box(tree%boxes(n))
+    end do
+
+    ! Use new array
     call move_alloc(boxes_cpy, tree%boxes)
   end subroutine a$D_resize_box_storage
 
@@ -1258,15 +1270,15 @@ contains
   end subroutine a$D_gc_box_sides
 
   ! Bilinear interpolation from parent to fill ghost cells on sides
-#if $D == 2
-  subroutine a2_sides_prolong1(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+  subroutine a$D_sides_prolong1(boxes, id, nb, iv)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
+#if $D == 2
     case (a2_nb_lx)
        call a2_prolong1_to(boxes, id, [0, 1], [0, nc], iv)
     case (a2_nb_hx)
@@ -1275,17 +1287,7 @@ contains
        call a2_prolong1_to(boxes, id, [1, 0], [nc, 0], iv)
     case (a2_nb_hy)
        call a2_prolong1_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
-    end select
-  end subroutine a2_sides_prolong1
 #elif $D == 3
-  subroutine a3_sides_prolong1(boxes, id, nb, iv)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
-
-    nc = boxes(id)%n_cell
-
-    select case (nb)
     case (a3_nb_lx)
        call a3_prolong1_to(boxes, id, [0, 1, 1], [0, nc, nc], iv)
     case (a3_nb_hx)
@@ -1298,20 +1300,20 @@ contains
        call a3_prolong1_to(boxes, id, [1, 1, 0], [nc, nc, 0], iv)
     case (a3_nb_hz)
        call a3_prolong1_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], iv)
-    end select
-  end subroutine a3_sides_prolong1
 #endif
+    end select
+  end subroutine a$D_sides_prolong1
 
   ! Special interpolation on sides which preserves diffusive fluxes
-#if $D == 2
-  subroutine a2_sides_extrap(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+  subroutine a$D_sides_extrap(boxes, id, nb, iv)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
+#if $D == 2
     case (a2_nb_lx)
        call a2_prolong0_to(boxes, id, [0, 1], [0, nc], iv)
        boxes(id)%cc(0, 1:nc, iv) = 0.5_dp * boxes(id)%cc(0, 1:nc, iv) &
@@ -1332,17 +1334,7 @@ contains
        boxes(id)%cc(1:nc, nc+1, iv) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, iv) &
             + 0.75_dp * boxes(id)%cc(1:nc, nc, iv) &
             - 0.25_dp * boxes(id)%cc(1:nc, nc-1, iv)
-    end select
-  end subroutine a2_sides_extrap
 #elif $D == 3
-  subroutine a3_sides_extrap(boxes, id, nb, iv)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
-
-    nc = boxes(id)%n_cell
-
-    select case (nb)
     case (a3_nb_lx)
        call a3_prolong0_to(boxes, id, [0, 1, 1], [0, nc, nc], iv)
        boxes(id)%cc(0, 1:nc, 1:nc, iv) = &
@@ -1379,9 +1371,9 @@ contains
             0.5_dp * boxes(id)%cc(1:nc, 1:nc, nc+1, iv) &
             + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, nc, iv) &
             - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
-    end select
-  end subroutine a3_sides_extrap
 #endif
+    end select
+  end subroutine a$D_sides_extrap
 
   ! Fill values on side from a neighbor
   subroutine a$D_gc_side_from_nb(boxes, id, nb, iv)

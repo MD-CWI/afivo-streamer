@@ -1,60 +1,52 @@
 program test_drift_diff
-  use omp_lib
   use m_afivo_2d
 
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
-  type(a2_t)         :: tree
-  integer            :: i, n, n_steps, id, lvl
-  integer            :: ix_list(2, 1)
-  integer            :: nb_list(4, 1)
   integer, parameter :: box_size    = 16
   integer, parameter :: i_phi       = 1
-  integer, parameter :: i_phi_old = 2
-  integer            :: n_boxes_max = 10*1000
+  integer, parameter :: i_phi_old   = 2
+
+  type(a2_t)         :: tree
+  integer            :: i, n, n_steps, id
+  integer            :: ix_list(2, 1)
+  integer            :: nb_list(4, 1)
+  integer            :: n_boxes_init = 10*1000
   integer            :: n_lvls_max  = 20
   integer            :: n_changes
   real(dp)           :: dr, dt, time, end_time
-  real(dp)           :: time_per_adapt, time_in_loop
+  real(dp)           :: time_per_adapt
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=40)  :: fname
-  logical            :: done_with_loop
-  logical :: forward_euler = .false.
+  logical            :: forward_euler = .false.
 
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
+  call a2_init(tree, n_lvls_max, n_boxes_init, box_size, n_var_cell=2, &
        n_var_face=1, dr = dr, r_min = [0.0_dp, 0.0_dp])
 
+  ! Set up geometry
   id             = 1
   ix_list(:, id) = [1,1] ! Set index of box
   nb_list(:, id) = id    ! Box is periodic, so its own neighbor
 
-  ! Set up the initial conditions. First adapt mesh.
+  ! Create the base mesh
   call a2_set_base(tree, ix_list, nb_list)
+
+  ! Set up the initial conditions
   do i = 1, 20
+     ! We should only set the finest level, but this also works
+     call a2_loop_box(tree, set_init_cond)
+     call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+     call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
      call a2_adjust_refinement(tree, ref_func_init, n_changes)
      if (n_changes == 0) exit
   end do
 
-  call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, i_phi, a2_sides_prolong1, have_no_bc)
-  call a2_gc_corners(tree, i_phi, a2_corners_prolong1, have_no_bc)
-
-  do i = 1, 20
-     call a2_adjust_refinement(tree, ref_func, n_changes)
-     call a2_loop_boxes(tree, prolong_to_new_children)
-
-     if (n_changes == 0) exit
-  end do
-
-  ! Set final initial condition
-  call a2_loop_box(tree, set_init_cond)
+  ! Restrict the initial conditions
   call a2_restrict_tree(tree, i_phi)
-  call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
-  call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
   i              = 0
   time           = 0
@@ -79,7 +71,7 @@ program test_drift_diff
      time    = time + time_per_adapt
      !$omp end single
 
-     call a2_write_tree(tree, trim(fname), (/"phi", "old"/), i, time)
+     call a2_write_tree(tree, trim(fname), (/"phi", "tmp"/), i, time)
 
      !$omp barrier
      if (time > end_time) exit
@@ -91,7 +83,7 @@ program test_drift_diff
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
         end do
-     else                    ! Modified midpoint
+     else                    ! Midpoint method
         do n = 1, n_steps
            ! Copy previous solution
            call a2_tree_copy_cc(tree, i_phi, i_phi_old)
@@ -118,7 +110,6 @@ program test_drift_diff
      call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
      call a2_adjust_refinement(tree, ref_func)
-     ! call a2_tidy_up(tree, 0.5_dp, 0.25_dp, 100*1000, .false.)
      call a2_loop_boxes(tree, prolong_to_new_children)
   end do
   !$omp end parallel
@@ -165,11 +156,9 @@ contains
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
 
-    box%cc(i, j, i_phi) = 0
-
     nc = box%n_cell
-    do j = 1, nc
-       do i = 1, nc
+    do j = 0, nc+1
+       do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
           if (norm2(xy - 2) < 1) then
              box%cc(i, j, i_phi) = 1
@@ -235,8 +224,6 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
-    real(dp)                    :: buf_lo(boxes(id)%n_cell)
-    real(dp)                    :: buf_hi(boxes(id)%n_cell)
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
     integer                     :: i, j, nc, nb_id
