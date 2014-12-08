@@ -10,11 +10,11 @@ all: 		$(SRC_DIRS) | $(CREATE_DIRS)
 clean: 		$(CLEANSRC)
 
 $(SRC_DIRS):
-		@echo -e "\n*********** Build information ***********"
-		@echo -e "  Debug is set to: [$(DEBUG)],"
-		@echo -e "  Set it to 1 to enable a debug build."
-		@echo -e "  For example: make clean; make DEBUG=1"
-		@echo -e "*****************************************\n"
+		@echo "\n*********** Build information ***********"
+		@echo "  Debug is set to: [$(DEBUG)],"
+		@echo "  Set it to 1 to enable a debug build."
+		@echo "  For example: make clean; make DEBUG=1"
+		@echo "*****************************************\n"
 		$(MAKE) -C $@
 $(CLEANSRC):
 		$(MAKE) -C $(@:clean-%=%) clean
