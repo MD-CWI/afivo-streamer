@@ -865,6 +865,14 @@ contains
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_r_cc
 
+  ! Location of cell center with real index cc_ix
+  pure function a$D_rr_cc(box, cc_ix) result(r)
+    type(box$D_t), intent(in) :: box
+    real(dp), intent(in)     :: cc_ix($D)
+    real(dp)                 :: r($D)
+    r = box%r_min + (cc_ix-0.5_dp) * box%dr
+  end function a$D_rr_cc
+
   ! Location of node with index nd_ix
   pure function a$D_r_node(box, nd_ix) result(r)
     type(box$D_t), intent(in) :: box

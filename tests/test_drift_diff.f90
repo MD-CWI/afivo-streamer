@@ -14,12 +14,14 @@ program test_drift_diff
   integer            :: nb_list(4, 1)
   integer            :: n_boxes_init = 10*1000
   integer            :: n_lvls_max  = 20
-  integer            :: n_changes
+  integer            :: n_changes, output_cnt
   real(dp)           :: dr, dt, time, end_time
-  real(dp)           :: time_per_adapt
+  real(dp)           :: dt_adapt, dt_output
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=40)  :: fname
-  logical            :: forward_euler = .false.
+
+  logical            :: write_out
+  logical            :: midpoint_method = .true.
 
   dr = 4.0_dp / box_size
 
@@ -48,54 +50,63 @@ program test_drift_diff
   ! Restrict the initial conditions
   call a2_restrict_tree(tree, i_phi)
 
-  i              = 0
-  time           = 0
-  time_per_adapt = 0.02_dp
-  end_time       = 1.0_dp
-  diff_coeff     = 0.0_dp
-  vel_x          = 1.0_dp
-  vel_y          = 1.0_dp
+  i          = 0
+  output_cnt = 0
+  time       = 0
+  dt_adapt   = 0.01_dp
+  dt_output  = 0.05_dp
+  end_time   = 5.0_dp
+  diff_coeff = 0.1_dp
+  vel_x      = 2.0_dp
+  vel_y      = 1.0_dp
 
   !$omp parallel private(n)
   do
      !$omp single
-     i = i + 1
-     print *, "i = ", i, "n_boxes", tree%max_id, time
-     write(fname, "(A,I0,A)") "test_drift_diff_", i, ".vtu"
-
+     i       = i + 1
      dr_min  = a2_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
-     n_steps = ceiling(time_per_adapt/dt)
-     dt      = time_per_adapt / n_steps
-     time    = time + time_per_adapt
+     n_steps = ceiling(dt_adapt/dt)
+     dt      = dt_adapt / n_steps
+     time    = time + dt_adapt
+
+     if (output_cnt * dt_output < time) then
+        write_out = .true.
+        output_cnt = output_cnt + 1
+        write(fname, "(A,I0,A)") "test_drift_diff_", output_cnt, ".vtu"
+     else
+        write_out = .false.
+     end if
      !$omp end single
 
-     call a2_write_tree(tree, trim(fname), (/"phi", "tmp"/), i, time)
+     if (write_out) call a2_write_tree(tree, trim(fname), &
+          (/"phi", "tmp"/), output_cnt, time)
 
-     !$omp barrier
+     !!$omp barrier
      if (time > end_time) exit
 
-     if (forward_euler) then
+     if (.not. midpoint_method) then
+        ! Forward Euler
         do n = 1, n_steps
-           call a2_loop_boxes_arg(tree, calculate_fluxes_limiter, [diff_coeff, vel_x, vel_y])
+           call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
         end do
-     else                    ! Midpoint method
+     else if (midpoint_method) then
         do n = 1, n_steps
            ! Copy previous solution
            call a2_tree_copy_cc(tree, i_phi, i_phi_old)
 
            ! Take a half time step
-           call a2_loop_boxes_arg(tree, calculate_fluxes_limiter, [diff_coeff, vel_x, vel_y])
+           call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
            call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
 
            ! Calculate fluxes
-           call a2_loop_boxes_arg(tree, calculate_fluxes_limiter, [diff_coeff, vel_x, vel_y])
+           call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
 
            ! Copy back old phi, and take full time step
            call a2_tree_copy_cc(tree, i_phi_old, i_phi)
@@ -171,7 +182,7 @@ contains
     end do
   end subroutine set_init_cond
 
-  subroutine calculate_fluxes(boxes, id, flux_args)
+  subroutine fluxes_upwind1(boxes, id, flux_args)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
@@ -202,7 +213,7 @@ contains
        boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) + &
             flux_args(3) * boxes(id)%cc(1:nc, 1:nc+1, 1)
     end if
-  end subroutine calculate_fluxes
+  end subroutine fluxes_upwind1
 
   elemental function limiter_koren(theta)
     real(dp), intent(in) :: theta
@@ -211,16 +222,16 @@ contains
     limiter_koren = max(0.0d0, min(1.0_dp, theta, (1.0_dp + 2.0_dp * theta) * one_sixth))
   end function limiter_koren
 
-  elemental function limiter_grad_ratio(numerator, denominator)
+  elemental function ratio(numerator, denominator)
     real(dp), intent(in) :: numerator, denominator
-    real(dp)             :: limiter_grad_ratio
+    real(dp)             :: ratio
     real(dp), parameter  :: eps = epsilon(1.0d0)
     ! Avoid division by zero, and ensure that at zero gradients we have a ratio of 1
-    limiter_grad_ratio = (sign(eps, numerator) + numerator) / &
+    ratio = (sign(eps, numerator) + numerator) / &
          (denominator + sign(eps, denominator))
-  end function limiter_grad_ratio
+  end function ratio
 
-  subroutine calculate_fluxes_limiter(boxes, id, flux_args)
+  subroutine fluxes_koren(boxes, id, flux_args)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
@@ -248,7 +259,7 @@ contains
                 gradn = boxes(id)%cc(i+1, j, i_phi) - boxes(id)%cc(i, j, i_phi)
              end if
 
-             theta = limiter_grad_ratio(gradc, gradn)
+             theta = ratio(gradc, gradn)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
                   (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
           else                  ! flux_args(2) > 0
@@ -264,13 +275,14 @@ contains
                 gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(id)%cc(i-2, j, i_phi)
              end if
 
-             theta = limiter_grad_ratio(gradc, gradp)
+             theta = ratio(gradc, gradp)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
                   (boxes(id)%cc(i-1, j, i_phi) + limiter_koren(theta) * gradp)
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
-          boxes(id)%fx(i, j, i_phi) = boxes(id)%fx(i, j, i_phi) - flux_args(1) * gradc
+          boxes(id)%fx(i, j, i_phi) = boxes(id)%fx(i, j, i_phi) - &
+               flux_args(1) * gradc * inv_dr
        end do
     end do
 
@@ -291,7 +303,7 @@ contains
                 gradn = boxes(id)%cc(i, j+1, i_phi) - boxes(id)%cc(i, j, i_phi)
              end if
 
-             theta = limiter_grad_ratio(gradc, gradn)
+             theta = ratio(gradc, gradn)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
                   (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
           else                  ! flux_args(3) > 0
@@ -307,16 +319,17 @@ contains
                 gradn = boxes(id)%cc(i, j-1, i_phi) - boxes(id)%cc(i, j-2, i_phi)
              end if
 
-             theta = limiter_grad_ratio(gradc, gradn)
+             theta = ratio(gradc, gradn)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
                   (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradn)
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
-          boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - flux_args(1) * gradc
+          boxes(id)%fy(i, j, i_phi) = boxes(id)%fy(i, j, i_phi) - &
+               flux_args(1) * gradc * inv_dr
        end do
     end do
-  end subroutine calculate_fluxes_limiter
+  end subroutine fluxes_koren
 
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box

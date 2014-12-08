@@ -42,11 +42,11 @@ program test_base
      print *, "i = ", i, "max_id", tree%max_id
 
      write(fname, "(A,I0,A)") "test_base_", i, ".vtu"
-     ! call a2_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
+     call a2_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
 
      call a2_adjust_refinement(tree, ref_func)
-     ! call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
-          ! n_clean_min=10000, only_reorder=.true.)
+     call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
+          n_clean_min=10000, only_reorder=.true.)
      call a2_loop_boxes(tree, prolong_to_new_children)
      call a2_loop_boxes(tree, set_morton_variable)
   end do
