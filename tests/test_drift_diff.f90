@@ -43,7 +43,7 @@ program test_drift_diff
      call a2_loop_box(tree, set_init_cond)
      call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
      call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
-     call a2_adjust_refinement(tree, ref_func_init, n_changes)
+     call a2_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
   end do
 
@@ -56,7 +56,7 @@ program test_drift_diff
   dt_adapt   = 0.01_dp
   dt_output  = 0.05_dp
   end_time   = 5.0_dp
-  diff_coeff = 0.1_dp
+  diff_coeff = 0.01_dp
   vel_x      = 2.0_dp
   vel_y      = 1.0_dp
 
@@ -128,15 +128,6 @@ program test_drift_diff
   call a2_destroy(tree)
 
 contains
-
-  integer function ref_func_init(box)
-    type(box2_t), intent(in) :: box
-    if (box%lvl < 5) then
-       ref_func_init = a5_do_ref
-    else
-       ref_func_init = a5_rm_ref
-    end if
-  end function ref_func_init
 
   integer function ref_func(box)
     type(box2_t), intent(in) :: box
