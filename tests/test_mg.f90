@@ -134,7 +134,7 @@ contains
           ! Dirichlet zero
           boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
        case (a2_nb_hy)
-          ! Neumann zero
+          ! Dirichlet zero
           boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
        end select
     end if
