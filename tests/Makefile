@@ -27,3 +27,4 @@ clean:
 	$(RM) $(TESTS) *.o *.mod
 
 # Dependency information
+$(TESTS): ../src/libafivo.a

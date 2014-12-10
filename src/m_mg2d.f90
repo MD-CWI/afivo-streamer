@@ -103,6 +103,7 @@ contains
     ! Allocate subtree levels
     allocate(tmp_lvls(min_lvl:ubound(tree%lvls, 1)))
     tmp_lvls(1:) = tree%lvls
+    deallocate(tree%lvls)
     call move_alloc(tmp_lvls, tree%lvls)
 
     ! Create coarser levels which are copies of lvl 1
@@ -152,6 +153,7 @@ contains
     ! Restrict phi and rhs on tree
     do lvl = tree%n_lvls-1, lbound(tree%lvls, 1), -1
        call a2_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv)
+       ! TODO: doesn't make sense to set gc for rhs
        call mg2d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, iv, &
                mg%sides_bc, mg%corners_bc)
     end do

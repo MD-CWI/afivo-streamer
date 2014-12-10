@@ -400,9 +400,7 @@ contains
              tree%boxes(n)%tag = 0
           end do
        else
-          do n = 1, max_id
-             call dealloc_box(tree%boxes(n))
-          end do
+          deallocate(tree%boxes)
           call move_alloc(boxes_cpy, tree%boxes)
           tree%boxes(n_used+1:)%tag = 0
        end if
@@ -569,9 +567,7 @@ contains
     boxes_cpy(tree%max_id+1:)%tag = 0 ! empty tag
 
     ! Deallocate current storage
-    do n = 1, tree%max_id
-       call dealloc_box(tree%boxes(n))
-    end do
+    deallocate(tree%boxes)
 
     ! Use new array
     call move_alloc(boxes_cpy, tree%boxes)
@@ -597,8 +593,7 @@ contains
     call a$D_clear_tagbit(tree, a5_bit_new_children)
 
     ! Set refinement values for all boxes
-    call a$D_set_ref_flags(tree%lvls, tree%n_lvls, tree%max_lvl, tree%boxes, &
-         ref_flags, ref_func)
+    call a$D_set_ref_flags(tree, ref_flags, ref_func)
 
     if (present(n_changes)) n_changes = count(ref_flags /= a5_kp_ref)
 
@@ -676,59 +671,59 @@ contains
   end subroutine a$D_get_free_ids
 
   ! Given the refinement function, return consistent refinement flags
-  subroutine a$D_set_ref_flags(lvls, n_lvls, max_lvl, boxes, ref_flags, ref_func)
-    type(lvl_t), intent(in)    :: lvls(:)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: n_lvls, max_lvl
+  subroutine a$D_set_ref_flags(tree, ref_flags, ref_func)
+    type(a$D_t), intent(inout) :: tree
     integer, intent(inout)      :: ref_flags(:)
     procedure(a$D_to_int_f)      :: ref_func
     integer                     :: lvl, i, id, c_ids(a$D_num_children)
     integer                     :: nb, p_id, nb_id, p_nb_id
+    integer :: max_lvl
 
+    max_lvl = tree%max_lvl
     ref_flags(:) = a5_kp_ref      ! Used indices are overwritten
 
     ! Set refinement flags for all boxes using ref_func
-    do lvl = 1, n_lvls
-       do i = 1, size(lvls(lvl)%ids)
-          id            = lvls(lvl)%ids(i)
-          ref_flags(id) = ref_func(boxes(id))
+    do lvl = 1, tree%n_lvls
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id            = tree%lvls(lvl)%ids(i)
+          ref_flags(id) = ref_func(tree%boxes(id))
        end do
     end do
 
     ! Cannot derefine lvl 1
-    do i = 1, size(lvls(1)%ids)
-       id = lvls(1)%ids(i)
+    do i = 1, size(tree%lvls(1)%ids)
+       id = tree%lvls(1)%ids(i)
        if (ref_flags(id) == a5_rm_ref) ref_flags(id) = a5_kp_ref
     end do
 
     ! Cannot refine beyond max level
-    do i = 1, size(lvls(max_lvl)%ids)
-       id = lvls(max_lvl)%ids(i)
+    do i = 1, size(tree%lvls(max_lvl)%ids)
+       id = tree%lvls(max_lvl)%ids(i)
        if (ref_flags(id) == a5_do_ref) ref_flags(id) = a5_kp_ref
     end do
 
     ! Ensure 2-1 balance.
-    do lvl = n_lvls, 2, -1
-       do i = 1, size(lvls(lvl)%leaves) ! We only check leaf boxes
-          id = lvls(lvl)%leaves(i)
+    do lvl = tree%n_lvls, 2, -1
+       do i = 1, size(tree%lvls(lvl)%leaves) ! We only check leaf tree%boxes
+          id = tree%lvls(lvl)%leaves(i)
 
           if (ref_flags(id) == a5_do_ref) then
              ! Ensure we will have the necessary neighbors
              do nb = 1, a$D_num_neighbors
-                nb_id = boxes(id)%neighbors(nb)
+                nb_id = tree%boxes(id)%neighbors(nb)
                 if (nb_id == a5_no_box) then
                    ! Mark the parent containing neighbor for refinement
-                   p_id = boxes(id)%parent
-                   p_nb_id = boxes(p_id)%neighbors(nb)
+                   p_id = tree%boxes(id)%parent
+                   p_nb_id = tree%boxes(p_id)%neighbors(nb)
                    ref_flags(p_nb_id) = a5_do_ref
                 end if
              end do
           else if (ref_flags(id) == a5_rm_ref) then
              ! Ensure we do not remove a required neighbor
              do nb = 1, a$D_num_neighbors
-                nb_id = boxes(id)%neighbors(nb)
+                nb_id = tree%boxes(id)%neighbors(nb)
                 if (nb_id > a5_no_box) then
-                   if (a$D_has_children(boxes(nb_id)) .or. &
+                   if (a$D_has_children(tree%boxes(nb_id)) .or. &
                         ref_flags(nb_id) == a5_do_ref) then
                       ref_flags(id) = a5_kp_ref
                    end if
@@ -739,13 +734,13 @@ contains
     end do
 
     ! Make the (de)refinement flags consistent for blocks with children.
-    do lvl = n_lvls-1, 1, -1
-       do i = 1, size(lvls(lvl)%parents)
-          id = lvls(lvl)%parents(i)
+    do lvl = tree%n_lvls-1, 1, -1
+       do i = 1, size(tree%lvls(lvl)%parents)
+          id = tree%lvls(lvl)%parents(i)
 
           ! Can only remove children if they are all marked for
           ! derefinement, and the box itself not for refinement.
-          c_ids = boxes(id)%children
+          c_ids = tree%boxes(id)%children
           if (all(ref_flags(c_ids) == a5_rm_ref) .and. &
                ref_flags(id) /= a5_do_ref) then
              ref_flags(id) = a5_rm_children
