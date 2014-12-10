@@ -42,7 +42,7 @@ program test_drift_diff
 
   real(dp), parameter :: diff_coeff = 0.1_dp
   real(dp), parameter :: mobility = -0.03_dp
-  real(dp), parameter :: domain_len = 4.0_dp
+  real(dp), parameter :: domain_len = 16.0e-3_dp
 
   dr = domain_len / box_size
 
@@ -60,6 +60,7 @@ program test_drift_diff
 
   ! Set up the initial conditions
   do i = 1, 10
+     call a2_loop_box(tree, set_init_cond)
      call a2_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
   end do
@@ -83,8 +84,8 @@ program test_drift_diff
   output_cnt       = 0
   time             = 0
   dt_adapt         = 1.0e-11_dp
-  dt_output        = 1.0e-11_dp
-  end_time         = 1.0e-10_dp
+  dt_output        = 2.0e-10_dp
+  end_time         = 1.0e-9_dp
 
   !$omp parallel private(n)
   do
@@ -110,32 +111,32 @@ program test_drift_diff
 
      if (time > end_time) exit
 
-     do n = 1, 1
-        ! ! Copy previous solution
-        ! call a2_tree_copy_cc(tree, i_elec, i_elec_old)
-        ! call a2_tree_copy_cc(tree, i_pion, i_pion_old)
+     do n = 1, n_steps
+        ! Copy previous solution
+        call a2_tree_copy_cc(tree, i_elec, i_elec_old)
+        call a2_tree_copy_cc(tree, i_pion, i_pion_old)
 
-        ! ! Take a half time step
-        ! call a2_loop_boxes(tree, fluxes_koren)
+        ! Take a half time step
+        call a2_loop_boxes(tree, fluxes_koren)
         call compute_fld(tree, 1)
-        ! call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
-        ! call a2_restrict_tree(tree, i_elec)
-        ! call a2_restrict_tree(tree, i_pion)
-        ! call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
-        ! call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
+        call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
+        call a2_restrict_tree(tree, i_elec)
+        call a2_restrict_tree(tree, i_pion)
+        call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
+        call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
 
-        ! ! Calculate fluxes
-        ! call a2_loop_boxes(tree, fluxes_koren)
+        ! Calculate fluxes
+        call a2_loop_boxes(tree, fluxes_koren)
 
-        ! ! Copy back old elec/pion, and take full time step
-        ! call a2_tree_copy_cc(tree, i_elec_old, i_elec)
-        ! call a2_tree_copy_cc(tree, i_pion_old, i_pion)
-        ! call compute_fld(tree, 1)
-        ! call a2_loop_box_arg(tree, update_solution, [dt])
-        ! call a2_restrict_tree(tree, i_elec)
-        ! call a2_restrict_tree(tree, i_pion)
-        ! call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
-        ! call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
+        ! Copy back old elec/pion, and take full time step
+        call a2_tree_copy_cc(tree, i_elec_old, i_elec)
+        call a2_tree_copy_cc(tree, i_pion_old, i_pion)
+        call compute_fld(tree, 1)
+        call a2_loop_box_arg(tree, update_solution, [dt])
+        call a2_restrict_tree(tree, i_elec)
+        call a2_restrict_tree(tree, i_pion)
+        call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
+        call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
      end do
 
      ! call a2_restrict_tree(tree, i_elec)
@@ -156,7 +157,10 @@ contains
 
   integer function ref_func(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 5) then
+    integer :: nc
+    nc = box%n_cell
+    if (box%lvl < 7 .and. &
+         maxval(box%cc(1:nc, 1:nc, i_elec)) > 1.0e10_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -218,15 +222,14 @@ contains
     end do
 
     ! Solve Poisson's eq. using multigrid
-    ! call mg2d_restrict_trees(tree, i_rhs, mg)
-    ! call mg2d_restrict_trees(tree, i_phi, mg)
-
+    call mg2d_restrict_trees(tree, i_rhs, mg)
     call a2_gc_sides(tree, i_phi, a2_sides_extrap, sides_bc_pot)
 
     do i = 1, n_fmg
-       ! call mg2d_fas_vcycle(tree, mg, tree%n_lvls)
        call mg2d_fas_fmg(tree, mg)
     end do
+
+    ! call a2_gc_sides(tree, i_phi, a2_sides_extrap, sides_bc_pot)
 
     ! Compute field from potential
     call a2_loop_box(tree, fld_from_pot)
@@ -366,15 +369,29 @@ contains
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
-    real(dp)                    :: inv_dr
-    integer                     :: nc
+    real(dp)                    :: inv_dr, src
+    integer                     :: i, j, nc
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr
-    box%cc(1:nc, 1:nc, 1) = box%cc(1:nc, 1:nc, 1) + dt(1) * ( &
-         (box%fx(1:nc, :, 1) - box%fx(2:nc+1, :, 1)) * inv_dr + &
-         (box%fy(:, 1:nc, 1) - box%fy(:, 2:nc+1, 1)) * inv_dr)
+    do j = 1, nc
+       do i = 1, nc
+          src = source_rate(box%cc(i,j, i_tmp)) * &
+               dt(1) * box%cc(i, j, i_elec)
+          box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + src
+          box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src
+       end do
+    end do
+
+    box%cc(1:nc, 1:nc, i_elec) = box%cc(1:nc, 1:nc, i_elec) + dt(1) * ( &
+         (box%fx(1:nc, :, i_elec) - box%fx(2:nc+1, :, i_elec)) * inv_dr + &
+         (box%fy(:, 1:nc, i_elec) - box%fy(:, 2:nc+1, i_elec)) * inv_dr)
   end subroutine update_solution
+
+  real(dp) function source_rate(fld)
+    real(dp), intent(in) :: fld
+    source_rate = 0
+  end function source_rate
 
   subroutine prolong_to_new_children(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
@@ -407,7 +424,7 @@ contains
           boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
        case (a2_nb_hy)
           ! Dirichlet
-          boxes(id)%cc(1:nc, nc+1, iv) = 2 * 1e0_dp * domain_len &
+          boxes(id)%cc(1:nc, nc+1, iv) = 2 * 5e6_dp * domain_len &
                - boxes(id)%cc(1:nc, nc, iv)
        end select
     end if
