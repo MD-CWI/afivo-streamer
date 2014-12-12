@@ -559,7 +559,6 @@ contains
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)       :: new_size
     type(box$D_t), allocatable :: boxes_cpy(:)
-    integer                   :: n
 
     ! Store boxes in larger array boxes_cpy
     allocate(boxes_cpy(new_size))
@@ -1175,7 +1174,7 @@ contains
     integer, intent(in)       :: iv
     integer                   :: lvl
 
-    do lvl = tree%n_lvls/-1, 1, -1
+    do lvl = tree%n_lvls-1, 1, -1
        call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv)
     end do
   end subroutine a$D_restrict_tree
@@ -1311,69 +1310,100 @@ contains
   subroutine a$D_sides_extrap(boxes, id, nb, iv)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
+    integer                     :: n, nc, ix, di
 
     nc = boxes(id)%n_cell
 
-    select case (nb)
+    if (a$D_nb_low(nb)) then
+       ix = 0
+       di = 1
+    else
+       ix = nc+1
+       di = -1
+    end if
+
+    select case (a$D_nb_dim(nb))
 #if $D == 2
-    case (a2_nb_lx)
-       call a2_prolong0_to(boxes, id, [0, 1], [0, nc], iv)
-       boxes(id)%cc(0, 1:nc, iv) = 0.5_dp * boxes(id)%cc(0, 1:nc, iv) &
-            + 0.75_dp * boxes(id)%cc(1, 1:nc, iv) &
-            - 0.25_dp * boxes(id)%cc(2, 1:nc, iv)
-    case (a2_nb_hx)
-       call a2_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
-       boxes(id)%cc(nc+1, 1:nc, iv) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, iv) &
-            + 0.75_dp * boxes(id)%cc(nc, 1:nc, iv) &
-            - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, iv)
-    case (a2_nb_ly)
-       call a2_prolong0_to(boxes, id, [1, 0], [nc, 0], iv)
-       boxes(id)%cc(1:nc, 0, iv) = 0.5_dp * boxes(id)%cc(1:nc, 0, iv) &
-            + 0.75_dp * boxes(id)%cc(1:nc, 1, iv) &
-            - 0.25_dp * boxes(id)%cc(1:nc, 2, iv)
-    case (a2_nb_hy)
-       call a2_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
-       boxes(id)%cc(1:nc, nc+1, iv) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, iv) &
-            + 0.75_dp * boxes(id)%cc(1:nc, nc, iv) &
-            - 0.25_dp * boxes(id)%cc(1:nc, nc-1, iv)
+    case (1)
+       call a2_prolong0_to(boxes, id, [ix, 1], [ix, nc], iv)
+       do n = 1, nc, 2
+          boxes(id)%cc(ix, n, iv) = 0.5_dp * boxes(id)%cc(ix, n, iv) + 0.125_dp * &
+               (9 * boxes(id)%cc(ix+di, n, iv) - 3 * boxes(id)%cc(ix+2*di, n, iv) &
+               - 3 * boxes(id)%cc(ix+di, n+1, iv) + boxes(id)%cc(ix+2*di, n+1, iv))
+          boxes(id)%cc(ix, n+1, iv) = 0.5_dp * boxes(id)%cc(ix, n+1, iv) + 0.125_dp * &
+               (9 * boxes(id)%cc(ix+di, n+1, iv) - 3 * boxes(id)%cc(ix+2*di, n+1, iv) &
+               - 3 * boxes(id)%cc(ix+di, n, iv) + boxes(id)%cc(ix+2*di, n, iv))
+       end do
+    case (2)
+       call a2_prolong0_to(boxes, id, [1, ix], [nc, ix], iv)
+       do n = 1, nc, 2
+          boxes(id)%cc(n, ix, iv) = 0.5_dp * boxes(id)%cc(n, ix, iv) + 0.125_dp * &
+               (9 * boxes(id)%cc(n, ix+di, iv) - 3 * boxes(id)%cc(n, ix+2*di, iv) &
+               - 3 * boxes(id)%cc(n+1, ix+di, iv) + boxes(id)%cc(n+1, ix+2*di, iv))
+          boxes(id)%cc(n+1, ix, iv) = 0.5_dp * boxes(id)%cc(n+1, ix, iv) + 0.125_dp * &
+               (9 * boxes(id)%cc(n+1, ix+di, iv) - 3 * boxes(id)%cc(n+1, ix+2*di, iv) &
+               - 3 * boxes(id)%cc(n, ix+di, iv) + boxes(id)%cc(n, ix+2*di, iv))
+       end do
 #elif $D == 3
-    case (a3_nb_lx)
-       call a3_prolong0_to(boxes, id, [0, 1, 1], [0, nc, nc], iv)
-       boxes(id)%cc(0, 1:nc, 1:nc, iv) = &
-            0.5_dp * boxes(id)%cc(0, 1:nc, 1:nc, iv) &
-            + 0.75_dp * boxes(id)%cc(1, 1:nc, 1:nc, iv) &
-            - 0.25_dp * boxes(id)%cc(2, 1:nc, 1:nc, iv)
-    case (a3_nb_hx)
-       call a3_prolong0_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], iv)
-       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = &
-            0.5_dp * boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) &
-            + 0.75_dp * boxes(id)%cc(nc, 1:nc, 1:nc, iv) &
-            - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
-    case (a3_nb_ly)
-       call a3_prolong0_to(boxes, id, [1, 0, 1], [nc, 0, nc], iv)
-       boxes(id)%cc(1:nc, 0, 1:nc, iv) = &
-            0.5_dp * boxes(id)%cc(1:nc, 0, 1:nc, iv) &
-            + 0.75_dp * boxes(id)%cc(1:nc, 1, 1:nc, iv) &
-            - 0.25_dp * boxes(id)%cc(1:nc, 2, 1:nc, iv)
-    case (a3_nb_hy)
-       call a3_prolong0_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], iv)
-       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = &
-            0.5_dp * boxes(id)%cc(1:nc, nc+1, 1:nc, iv) &
-            + 0.75_dp * boxes(id)%cc(1:nc, nc, 1:nc, iv) &
-            - 0.25_dp * boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
-    case (a3_nb_lz)
-       call a3_prolong0_to(boxes, id, [1, 1, 0], [nc, nc, 0], iv)
-       boxes(id)%cc(1:nc, 1:nc, 0, iv) = &
-            0.5_dp * boxes(id)%cc(1:nc, 1:nc, 0, iv) &
-            + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, 1, iv) &
-            - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, 2, iv)
-    case (a3_nb_hz)
-       call a3_prolong0_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], iv)
-       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = &
-            0.5_dp * boxes(id)%cc(1:nc, 1:nc, nc+1, iv) &
-            + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, nc, iv) &
-            - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
+       ! TODO
+    case default
+       stop
+       ! case (a2_nb_lx)
+       !    call a2_prolong0_to(boxes, id, [0, 1], [0, nc], iv)
+       !    boxes(id)%cc(0, 1:nc, iv) = 0.5_dp * boxes(id)%cc(0, 1:nc, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1, 1:nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(2, 1:nc, iv)
+       ! case (a2_nb_hx)
+       !    call a2_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
+       !    boxes(id)%cc(nc+1, 1:nc, iv) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, iv) &
+       !         + 0.75_dp * boxes(id)%cc(nc, 1:nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, iv)
+       ! case (a2_nb_ly)
+       !    call a2_prolong0_to(boxes, id, [1, 0], [nc, 0], iv)
+       !    boxes(id)%cc(1:nc, 0, iv) = 0.5_dp * boxes(id)%cc(1:nc, 0, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1:nc, 1, iv) &
+       !         - 0.25_dp * boxes(id)%cc(1:nc, 2, iv)
+       ! case (a2_nb_hy)
+       !    call a2_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
+       !    boxes(id)%cc(1:nc, nc+1, iv) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1:nc, nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(1:nc, nc-1, iv)
+       ! case (a3_nb_lx)
+       !    call a3_prolong0_to(boxes, id, [0, 1, 1], [0, nc, nc], iv)
+       !    boxes(id)%cc(0, 1:nc, 1:nc, iv) = &
+       !         0.5_dp * boxes(id)%cc(0, 1:nc, 1:nc, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1, 1:nc, 1:nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(2, 1:nc, 1:nc, iv)
+       ! case (a3_nb_hx)
+       !    call a3_prolong0_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], iv)
+       !    boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = &
+       !         0.5_dp * boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) &
+       !         + 0.75_dp * boxes(id)%cc(nc, 1:nc, 1:nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
+       ! case (a3_nb_ly)
+       !    call a3_prolong0_to(boxes, id, [1, 0, 1], [nc, 0, nc], iv)
+       !    boxes(id)%cc(1:nc, 0, 1:nc, iv) = &
+       !         0.5_dp * boxes(id)%cc(1:nc, 0, 1:nc, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1:nc, 1, 1:nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(1:nc, 2, 1:nc, iv)
+       ! case (a3_nb_hy)
+       !    call a3_prolong0_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], iv)
+       !    boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = &
+       !         0.5_dp * boxes(id)%cc(1:nc, nc+1, 1:nc, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1:nc, nc, 1:nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
+       ! case (a3_nb_lz)
+       !    call a3_prolong0_to(boxes, id, [1, 1, 0], [nc, nc, 0], iv)
+       !    boxes(id)%cc(1:nc, 1:nc, 0, iv) = &
+       !         0.5_dp * boxes(id)%cc(1:nc, 1:nc, 0, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, 1, iv) &
+       !         - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, 2, iv)
+       ! case (a3_nb_hz)
+       !    call a3_prolong0_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], iv)
+       !    boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = &
+       !         0.5_dp * boxes(id)%cc(1:nc, 1:nc, nc+1, iv) &
+       !         + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, nc, iv) &
+       !         - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
 #endif
     end select
   end subroutine a$D_sides_extrap

@@ -15,8 +15,8 @@ program test_mg
   ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
   integer, parameter :: n_gaussians = 2
   real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
-       [1.0_dp, 0.25_dp, 0.25_dp, 0.03_dp, &
-       1.0_dp, 0.75_dp, 0.75_dp, 0.03_dp], [4,2])
+       [1.0_dp, 0.25_dp, 0.25_dp, 0.05_dp, &
+       1.0_dp, 0.75_dp, 0.75_dp, 0.05_dp], [4,2])
 
   type(a2_t)         :: tree
   integer            :: i, id, n_changes
