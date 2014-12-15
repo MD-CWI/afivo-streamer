@@ -1306,104 +1306,110 @@ contains
     end select
   end subroutine a$D_sides_prolong1
 
-  ! Special interpolation on sides which preserves diffusive fluxes
+  ! Fill ghost cells near refinement boundaries which preserves fluxes.
+  ! Basically, we extrapolate from the fine cells to a corner point, and then
+  ! take the average between this corner point and a coarse neighbor to fill
+  ! ghost cells for the fine cells.
   subroutine a$D_sides_extrap(boxes, id, nb, iv)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
-    integer                     :: n, nc, ix, di
+    integer                     :: nc, ix, dix, i, di, j, dj
+#if $D == 3
+    integer                     :: k, dk
+#endif
 
     nc = boxes(id)%n_cell
 
     if (a$D_nb_low(nb)) then
-       ix = 0
-       di = 1
+       ix = 1
+       dix = 1
     else
-       ix = nc+1
-       di = -1
+       ix = nc
+       dix = -1
     end if
 
     select case (a$D_nb_dim(nb))
 #if $D == 2
     case (1)
-       call a2_prolong0_to(boxes, id, [ix, 1], [ix, nc], iv)
-       do n = 1, nc, 2
-          boxes(id)%cc(ix, n, iv) = 0.5_dp * boxes(id)%cc(ix, n, iv) + 0.125_dp * &
-               (9 * boxes(id)%cc(ix+di, n, iv) - 3 * boxes(id)%cc(ix+2*di, n, iv) &
-               - 3 * boxes(id)%cc(ix+di, n+1, iv) + boxes(id)%cc(ix+2*di, n+1, iv))
-          boxes(id)%cc(ix, n+1, iv) = 0.5_dp * boxes(id)%cc(ix, n+1, iv) + 0.125_dp * &
-               (9 * boxes(id)%cc(ix+di, n+1, iv) - 3 * boxes(id)%cc(ix+2*di, n+1, iv) &
-               - 3 * boxes(id)%cc(ix+di, n, iv) + boxes(id)%cc(ix+2*di, n, iv))
+       i = ix
+       di = dix
+       call a2_prolong0_to(boxes, id, [i-di, 1], [i-di, nc], iv)
+
+       do j = 1, nc
+          dj = -1 + 2 * iand(j, 1)
+          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + 0.125_dp * &
+               (9 * boxes(id)%cc(i, j, iv) - 3 * boxes(id)%cc(i+di, j, iv) &
+               - 3 * boxes(id)%cc(i, j+dj, iv) + boxes(id)%cc(i+di, j+dj, iv))
        end do
+
     case (2)
-       call a2_prolong0_to(boxes, id, [1, ix], [nc, ix], iv)
-       do n = 1, nc, 2
-          boxes(id)%cc(n, ix, iv) = 0.5_dp * boxes(id)%cc(n, ix, iv) + 0.125_dp * &
-               (9 * boxes(id)%cc(n, ix+di, iv) - 3 * boxes(id)%cc(n, ix+2*di, iv) &
-               - 3 * boxes(id)%cc(n+1, ix+di, iv) + boxes(id)%cc(n+1, ix+2*di, iv))
-          boxes(id)%cc(n+1, ix, iv) = 0.5_dp * boxes(id)%cc(n+1, ix, iv) + 0.125_dp * &
-               (9 * boxes(id)%cc(n+1, ix+di, iv) - 3 * boxes(id)%cc(n+1, ix+2*di, iv) &
-               - 3 * boxes(id)%cc(n, ix+di, iv) + boxes(id)%cc(n, ix+2*di, iv))
+       j = ix
+       dj = dix
+       call a2_prolong0_to(boxes, id, [1, j-dj], [nc, j-dj], iv)
+
+       do i = 1, nc
+          di = -1 + 2 * iand(i, 1)
+          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + 0.125_dp * &
+               (9 * boxes(id)%cc(i, j, iv) - 3 * boxes(id)%cc(i+di, j, iv) &
+               - 3 * boxes(id)%cc(i, j+dj, iv) + boxes(id)%cc(i+di, j+dj, iv))
        end do
 #elif $D == 3
-       ! TODO
-    case default
-       stop
-       ! case (a2_nb_lx)
-       !    call a2_prolong0_to(boxes, id, [0, 1], [0, nc], iv)
-       !    boxes(id)%cc(0, 1:nc, iv) = 0.5_dp * boxes(id)%cc(0, 1:nc, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1, 1:nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(2, 1:nc, iv)
-       ! case (a2_nb_hx)
-       !    call a2_prolong0_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
-       !    boxes(id)%cc(nc+1, 1:nc, iv) = 0.5_dp * boxes(id)%cc(nc+1, 1:nc, iv) &
-       !         + 0.75_dp * boxes(id)%cc(nc, 1:nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, iv)
-       ! case (a2_nb_ly)
-       !    call a2_prolong0_to(boxes, id, [1, 0], [nc, 0], iv)
-       !    boxes(id)%cc(1:nc, 0, iv) = 0.5_dp * boxes(id)%cc(1:nc, 0, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1:nc, 1, iv) &
-       !         - 0.25_dp * boxes(id)%cc(1:nc, 2, iv)
-       ! case (a2_nb_hy)
-       !    call a2_prolong0_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
-       !    boxes(id)%cc(1:nc, nc+1, iv) = 0.5_dp * boxes(id)%cc(1:nc, nc+1, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1:nc, nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(1:nc, nc-1, iv)
-       ! case (a3_nb_lx)
-       !    call a3_prolong0_to(boxes, id, [0, 1, 1], [0, nc, nc], iv)
-       !    boxes(id)%cc(0, 1:nc, 1:nc, iv) = &
-       !         0.5_dp * boxes(id)%cc(0, 1:nc, 1:nc, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1, 1:nc, 1:nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(2, 1:nc, 1:nc, iv)
-       ! case (a3_nb_hx)
-       !    call a3_prolong0_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], iv)
-       !    boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = &
-       !         0.5_dp * boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) &
-       !         + 0.75_dp * boxes(id)%cc(nc, 1:nc, 1:nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
-       ! case (a3_nb_ly)
-       !    call a3_prolong0_to(boxes, id, [1, 0, 1], [nc, 0, nc], iv)
-       !    boxes(id)%cc(1:nc, 0, 1:nc, iv) = &
-       !         0.5_dp * boxes(id)%cc(1:nc, 0, 1:nc, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1:nc, 1, 1:nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(1:nc, 2, 1:nc, iv)
-       ! case (a3_nb_hy)
-       !    call a3_prolong0_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], iv)
-       !    boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = &
-       !         0.5_dp * boxes(id)%cc(1:nc, nc+1, 1:nc, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1:nc, nc, 1:nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
-       ! case (a3_nb_lz)
-       !    call a3_prolong0_to(boxes, id, [1, 1, 0], [nc, nc, 0], iv)
-       !    boxes(id)%cc(1:nc, 1:nc, 0, iv) = &
-       !         0.5_dp * boxes(id)%cc(1:nc, 1:nc, 0, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, 1, iv) &
-       !         - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, 2, iv)
-       ! case (a3_nb_hz)
-       !    call a3_prolong0_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], iv)
-       !    boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = &
-       !         0.5_dp * boxes(id)%cc(1:nc, 1:nc, nc+1, iv) &
-       !         + 0.75_dp * boxes(id)%cc(1:nc, 1:nc, nc, iv) &
-       !         - 0.25_dp * boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
+    case (1)
+       i = ix
+       di = dix
+       call a3_prolong0_to(boxes, id, [i-di, 1, 1], [i-di, nc, nc], iv)
+
+       do k = 1, nc
+          dk = -1 + 2 * iand(k, 1)
+          do j = 1, nc
+             dj = -1 + 2 * iand(j, 1)
+
+             boxes(id)%cc(i-di, j, k, iv) = &
+                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 0.0625_dp * &
+                  (27 * boxes(id)%cc(i, j, k, iv) - 9 * boxes(id)%cc(i+di, j, k, iv) &
+                  - 9 * boxes(id)%cc(i, j+dj, k, iv) - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+                  + 3 * boxes(id)%cc(i+di, j+dj, k, iv) + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+                  + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) - boxes(id)%cc(i+di, j+dj, k+dk, iv))
+          end do
+       end do
+
+    case (2)
+       j = ix
+       dj = dix
+       call a3_prolong0_to(boxes, id, [1, j-dj, 1], [nc, j-dj, nc], iv)
+
+       do k = 1, nc
+          dk = -1 + 2 * iand(k, 1)
+          do i = 1, nc
+             di = -1 + 2 * iand(i, 1)
+
+             boxes(id)%cc(i, j-dj, k, iv) = &
+                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 0.0625_dp * &
+                  (27 * boxes(id)%cc(i, j, k, iv) - 9 * boxes(id)%cc(i+di, j, k, iv) &
+                  - 9 * boxes(id)%cc(i, j+dj, k, iv) - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+                  + 3 * boxes(id)%cc(i+di, j+dj, k, iv) + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+                  + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) - boxes(id)%cc(i+di, j+dj, k+dk, iv))
+          end do
+       end do
+
+    case (3)
+       k = ix
+       dk = dix
+       call a3_prolong0_to(boxes, id, [1, 1, k-dk], [nc, nc, k-dk], iv)
+
+       do j = 1, nc
+          dj = -1 + 2 * iand(j, 1)
+          do i = 1, nc
+             di = -1 + 2 * iand(i, 1)
+
+             boxes(id)%cc(i, j, k-dk, iv) = &
+                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 0.0625_dp * &
+                  (27 * boxes(id)%cc(i, j, k, iv) - 9 * boxes(id)%cc(i+di, j, k, iv) &
+                  - 9 * boxes(id)%cc(i, j+dj, k, iv) - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+                  + 3 * boxes(id)%cc(i+di, j+dj, k, iv) + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+                  + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) - boxes(id)%cc(i+di, j+dj, k+dk, iv))
+          end do
+       end do
 #endif
     end select
   end subroutine a$D_sides_extrap
