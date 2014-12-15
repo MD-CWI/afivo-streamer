@@ -56,7 +56,7 @@ program test_drift_diff
   dt_adapt   = 0.01_dp
   dt_output  = 0.05_dp
   end_time   = 5.0_dp
-  diff_coeff = 0.01_dp
+  diff_coeff = 0.0_dp
   vel_x      = 2.0_dp
   vel_y      = 1.0_dp
 

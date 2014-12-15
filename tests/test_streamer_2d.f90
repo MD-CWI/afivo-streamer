@@ -85,7 +85,7 @@ program test_drift_diff
   time             = 0
   dt_adapt         = 1.0e-11_dp
   dt_output        = 2.0e-10_dp
-  end_time         = 1.0e-9_dp
+  end_time         = 2.0e-9_dp
 
   !$omp parallel private(n)
   do
@@ -139,15 +139,15 @@ program test_drift_diff
         call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
      end do
 
-     ! call a2_restrict_tree(tree, i_elec)
-     ! call a2_restrict_tree(tree, i_pion)
-     ! call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
-     ! call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
-     ! call a2_gc_corners(tree, i_elec, a2_corners_extrap, sides_bc_dens)
-     ! call a2_gc_corners(tree, i_pion, a2_corners_extrap, sides_bc_dens)
+     call a2_restrict_tree(tree, i_elec)
+     call a2_restrict_tree(tree, i_pion)
+     call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
+     call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
+     call a2_gc_corners(tree, i_elec, a2_corners_extrap, sides_bc_dens)
+     call a2_gc_corners(tree, i_pion, a2_corners_extrap, sides_bc_dens)
 
-     ! call a2_adjust_refinement(tree, ref_func)
-     ! call a2_loop_boxes(tree, prolong_to_new_children)
+     call a2_adjust_refinement(tree, ref_func)
+     call a2_loop_boxes(tree, prolong_to_new_children)
   end do
   !$omp end parallel
 
@@ -159,7 +159,7 @@ contains
     type(box2_t), intent(in) :: box
     integer :: nc
     nc = box%n_cell
-    if (box%lvl < 7 .and. &
+    if (box%lvl < 5 .and. &
          maxval(box%cc(1:nc, 1:nc, i_elec)) > 1.0e10_dp) then
        ref_func = a5_do_ref
     else
@@ -169,7 +169,7 @@ contains
 
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
-    get_max_dt = 1.0e-12_dp
+    get_max_dt = 3.0e-13_dp
   end function get_max_dt
 
   subroutine set_init_cond(box)
@@ -179,7 +179,7 @@ contains
 
     nc = box%n_cell
     xy0 = 0.5_dp * domain_len
-    sigma = 0.03_dp * domain_len
+    sigma = 5e-4_dp
 
     do j = 0, nc+1
        do i = 0, nc+1
@@ -195,8 +195,7 @@ contains
 
   real(dp) function gaussian_2d(x, x0, sigma)
     real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp), parameter  :: fac = sqrt(acos(-1.0_dp))
-    gaussian_2d = exp(-0.5_dp/sigma**2 * sum((x-x0)**2)) / (sigma*fac)
+    gaussian_2d = exp(-0.5_dp/sigma**2 * sum((x-x0)**2))
   end function gaussian_2d
 
   subroutine compute_fld(tree, n_fmg)
@@ -228,8 +227,6 @@ contains
     do i = 1, n_fmg
        call mg2d_fas_fmg(tree, mg)
     end do
-
-    ! call a2_gc_sides(tree, i_phi, a2_sides_extrap, sides_bc_pot)
 
     ! Compute field from potential
     call a2_loop_box(tree, fld_from_pot)
@@ -390,7 +387,7 @@ contains
 
   real(dp) function source_rate(fld)
     real(dp), intent(in) :: fld
-    source_rate = 0
+    source_rate = 1e4_dp * max(0.0_dp, abs(fld)-3e6_dp)
   end function source_rate
 
   subroutine prolong_to_new_children(boxes, id)
