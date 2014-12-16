@@ -50,6 +50,10 @@ program test_drift_diff
   call a2_init(tree, n_lvls_max, n_boxes_init, box_size, n_var_cell=n_var_cell, &
        n_var_face=n_var_face, dr = dr, r_min = [0.0_dp, 0.0_dp])
 
+  ! Set the multigrid options
+  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
+       sides_bc_pot, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
+
   ! Set up geometry
   id             = 1
   ix_list(:, id) = [1,1] ! Set index of box
@@ -58,34 +62,27 @@ program test_drift_diff
   ! Create the base mesh
   call a2_set_base(tree, ix_list, nb_list)
 
+  ! Create a "subtree" with coarser levels than tree
+  call mg2d_create_subtree(tree)
+
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
+     call mg2d_restrict_trees(tree, i_rhs, mg)
+     call mg2d_restrict_trees(tree, i_phi, mg)
+     call compute_fld(tree, 2)
      call a2_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
   end do
 
   call a2_loop_box(tree, set_init_cond)
 
-  ! Set the multigrid options
-  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc_pot, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
-
-  ! Create a "subtree" with coarser levels than tree
-  call mg2d_create_subtree(tree)
-
-  ! Restrict from children recursively
-  call mg2d_restrict_trees(tree, i_rhs, mg)
-  call mg2d_restrict_trees(tree, i_phi, mg)
-
-  call compute_fld(tree, 5)
-
   i                = 0
   output_cnt       = 0
   time             = 0
   dt_adapt         = 1.0e-11_dp
-  dt_output        = 2.0e-10_dp
-  end_time         = 2.0e-9_dp
+  dt_output        = 1.0e-10_dp
+  end_time         = 10.0e-9_dp
 
   !$omp parallel private(n)
   do
@@ -122,8 +119,8 @@ program test_drift_diff
         call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
         call a2_restrict_tree(tree, i_elec)
         call a2_restrict_tree(tree, i_pion)
-        call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
-        call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
+        call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
+        call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
 
         ! Calculate fluxes
         call a2_loop_boxes(tree, fluxes_koren)
@@ -135,19 +132,20 @@ program test_drift_diff
         call a2_loop_box_arg(tree, update_solution, [dt])
         call a2_restrict_tree(tree, i_elec)
         call a2_restrict_tree(tree, i_pion)
-        call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
-        call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
+        call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
+        call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
      end do
 
      call a2_restrict_tree(tree, i_elec)
      call a2_restrict_tree(tree, i_pion)
-     call a2_gc_sides(tree, i_elec, a2_sides_extrap, sides_bc_dens)
-     call a2_gc_sides(tree, i_pion, a2_sides_extrap, sides_bc_dens)
+     call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
+     call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
      call a2_gc_corners(tree, i_elec, a2_corners_extrap, sides_bc_dens)
      call a2_gc_corners(tree, i_pion, a2_corners_extrap, sides_bc_dens)
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
+     call compute_fld(tree, 1)
   end do
   !$omp end parallel
 
@@ -158,9 +156,19 @@ contains
   integer function ref_func(box)
     type(box2_t), intent(in) :: box
     integer :: nc
+    real(dp) :: max_fld, max_dns, dr, alpha
     nc = box%n_cell
-    if (box%lvl < 5 .and. &
-         maxval(box%cc(1:nc, 1:nc, i_elec)) > 1.0e10_dp) then
+    max_fld = maxval(abs(box%cc(1:nc, 1:nc, i_tmp)))
+    max_dns = maxval(box%cc(1:nc, 1:nc, i_elec))
+    dr = box%dr
+    alpha = get_alpha(max_fld)
+    ! print *, alpha, 1/alpha, dr
+
+    if (box%lvl < 4) then
+       ref_func = a5_do_ref
+    else if (box%lvl > 8) then
+       ref_func = a5_rm_ref
+    else if (max_dns > 1.0e14_dp .and. alpha * dr > 1) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -169,7 +177,7 @@ contains
 
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
-    get_max_dt = 3.0e-13_dp
+    get_max_dt = 5.0e-13_dp
   end function get_max_dt
 
   subroutine set_init_cond(box)
@@ -179,14 +187,14 @@ contains
 
     nc = box%n_cell
     xy0 = 0.5_dp * domain_len
-    sigma = 5e-4_dp
+    sigma = 1e-4_dp
 
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
 
-          box%cc(i, j, i_elec) = 1e15_dp * gaussian_2d(xy, xy0, sigma)
-          box%cc(i, j, i_pion) = 1e15_dp * gaussian_2d(xy, xy0, sigma)
+          box%cc(i, j, i_elec) = 1e17_dp * gaussian_2d(xy, xy0, sigma)
+          box%cc(i, j, i_pion) = 1e17_dp * gaussian_2d(xy, xy0, sigma)
        end do
     end do
 
@@ -366,14 +374,15 @@ contains
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
-    real(dp)                    :: inv_dr, src
+    real(dp)                    :: inv_dr, src, fld
     integer                     :: i, j, nc
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr
     do j = 1, nc
        do i = 1, nc
-          src = source_rate(box%cc(i,j, i_tmp)) * &
+          fld = box%cc(i,j, i_tmp)
+          src = abs(mobility * fld) * get_alpha(fld) * &
                dt(1) * box%cc(i, j, i_elec)
           box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + src
           box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src
@@ -385,10 +394,10 @@ contains
          (box%fy(:, 1:nc, i_elec) - box%fy(:, 2:nc+1, i_elec)) * inv_dr)
   end subroutine update_solution
 
-  real(dp) function source_rate(fld)
+  real(dp) function get_alpha(fld)
     real(dp), intent(in) :: fld
-    source_rate = 1e4_dp * max(0.0_dp, abs(fld)-3e6_dp)
-  end function source_rate
+    get_alpha = 1e5_dp * exp(1 - 1e7_dp/(abs(fld)+epsilon(1.0_dp)))
+  end function get_alpha
 
   subroutine prolong_to_new_children(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
@@ -397,6 +406,7 @@ contains
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
        call a2_prolong1_from(boxes, id, i_elec, .true.)
        call a2_prolong1_from(boxes, id, i_pion, .true.)
+       call a2_prolong1_from(boxes, id, i_phi, .true.)
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children

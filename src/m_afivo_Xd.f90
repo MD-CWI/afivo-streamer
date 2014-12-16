@@ -942,6 +942,44 @@ contains
     end do
   end subroutine a$D_tree_copy_cc
 
+  ! Copy flux(..., iv_from) to box%flux(..., iv_to)
+  subroutine a$D_box_copy_fc(box, iv_from, iv_to)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: iv_from, iv_to
+#if $D == 2
+    box%fx(:,:, iv_to) = box%fx(:,:, iv_from)
+    box%fy(:,:, iv_to) = box%fy(:,:, iv_from)
+#elif $D == 3
+    box%fx(:,:,:, iv_to) = box%fx(:,:,:, iv_from)
+    box%fy(:,:,:, iv_to) = box%fy(:,:,:, iv_from)
+    box%fz(:,:,:, iv_to) = box%fz(:,:,:, iv_from)
+#endif
+  end subroutine a$D_box_copy_fc
+
+  ! Copy flux(..., iv_from) to box%flux(..., iv_to) for all ids
+  subroutine a$D_boxes_copy_fc(boxes, ids, iv_from, iv_to)
+    type(box$D_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: ids(:), iv_from, iv_to
+    integer                     :: i
+
+    !$omp do
+    do i = 1, size(ids)
+       call a$D_box_copy_fc(boxes(ids(i)), iv_from, iv_to)
+    end do
+    !$omp end do
+  end subroutine a$D_boxes_copy_fc
+
+  ! Copy flux(..., iv_from) to box%flux(..., iv_to) for full tree
+  subroutine a$D_tree_copy_fc(tree, iv_from, iv_to)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)       :: iv_from, iv_to
+    integer                   :: lvl
+
+    do lvl = 1, tree%n_lvls
+       call a$D_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
+    end do
+  end subroutine a$D_tree_copy_fc
+
   ! Bilinear prolongation to children. Uses ghost cells and corners.
 #if $D == 2
   subroutine a2_prolong1_from(boxes, id, iv, fill_gc)
@@ -1305,6 +1343,65 @@ contains
 #endif
     end select
   end subroutine a$D_sides_prolong1
+
+  subroutine a$D_sides_interp(boxes, id, nb, iv)
+    type(box$D_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, iv
+    integer                     :: nc, ix, dix, i, di, j, dj
+    integer :: i_c1, i_c2, j_c1, j_c2, ix_offset($D)
+    integer :: p_id
+#if $D == 3
+    integer                     :: k, dk
+#endif
+
+    nc = boxes(id)%n_cell
+    p_id      = boxes(id)%parent
+    ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
+
+    if (a$D_nb_low(nb)) then
+       ix = 0
+       dix = 1
+    else
+       ix = nc+1
+       dix = -1
+    end if
+
+    select case (a$D_nb_dim(nb))
+#if $D == 2
+    case (1)
+       i = ix
+       di = dix
+       i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+          boxes(id)%cc(i, j, iv) = &
+               0.375_dp * boxes(p_id)%cc(i_c1, j_c1, iv) + &
+               0.125_dp * boxes(p_id)%cc(i_c1, j_c2, iv) + &
+               0.5_dp * boxes(id)%cc(i+di, j, iv)
+       end do
+    case (2)
+       j = ix
+       dj = dix
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+          boxes(id)%cc(i, j, iv) = &
+               0.375_dp * boxes(p_id)%cc(i_c1, j_c1, iv) + &
+               0.125_dp * boxes(p_id)%cc(i_c2, j_c1, iv) + &
+               0.5_dp * boxes(id)%cc(i, j+dj, iv)
+       end do
+#elif $D==3
+    case default
+       stop
+#endif
+    end select
+
+  end subroutine a$D_sides_interp
+
 
   ! Fill ghost cells near refinement boundaries which preserves fluxes.
   ! Basically, we extrapolate from the fine cells to a corner point, and then
@@ -1686,10 +1783,12 @@ contains
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, f_ixs(:)
     integer                     :: nc, nch, c_id, i_ch, i, ic, d, ioff($D)
+    integer                     :: n_chnb
 
-    nc  = boxes(id)%n_cell
-    nch = ishft(nc, -1) ! nc/2
-    d   = a$D_nb_dim(nb)
+    nc     = boxes(id)%n_cell
+    nch    = ishft(nc, -1) ! nc/2
+    d      = a$D_nb_dim(nb)
+    n_chnb = 2**($D-1)
 
     if (a$D_nb_low(nb)) then
        i = 1
@@ -1700,7 +1799,7 @@ contains
     select case (d)
 #if $D == 2
     case (1)
-       do ic = 1, a2_num_children
+       do ic = 1, n_chnb
           i_ch = a2_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a2_ch_dix(:, i_ch)
@@ -1709,7 +1808,7 @@ contains
                boxes(c_id)%fx(i, 2:nc:2, f_ixs))
        end do
     case (2)
-       do ic = 1, a$D_num_children
+       do ic = 1, n_chnb
           i_ch = a2_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a2_ch_dix(:, i_ch)
@@ -1719,7 +1818,7 @@ contains
        end do
 #elif $D == 3
     case (1)
-       do ic = 1, a$D_num_children
+       do ic = 1, n_chnb
           i_ch = a3_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a3_ch_dix(:, i_ch)
@@ -1731,7 +1830,7 @@ contains
                boxes(c_id)%fx(i, 2:nc:2, 2:nc:2, f_ixs))
        end do
     case (2)
-       do ic = 1, a$D_num_children
+       do ic = 1, n_chnb
           i_ch = a3_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a3_ch_dix(:, i_ch)
@@ -1743,7 +1842,7 @@ contains
                boxes(c_id)%fx(2:nc:2, i, 2:nc:2, f_ixs))
        end do
     case (3)
-       do ic = 1, a$D_num_children
+       do ic = 1, n_chnb
           i_ch = a3_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a3_ch_dix(:, i_ch)

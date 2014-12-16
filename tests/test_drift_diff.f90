@@ -7,6 +7,8 @@ program test_drift_diff
   integer, parameter :: box_size    = 16
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
+  integer, parameter :: i_flux      = 1
+  integer, parameter :: i_flux_old  = 2
 
   type(a2_t)         :: tree
   integer            :: i, n, n_steps, id
@@ -21,13 +23,13 @@ program test_drift_diff
   character(len=40)  :: fname
 
   logical            :: write_out
-  logical            :: midpoint_method = .true.
+  integer :: time_step_method = 3
 
   dr = 4.0_dp / box_size
 
   ! Initialize tree
   call a2_init(tree, n_lvls_max, n_boxes_init, box_size, n_var_cell=2, &
-       n_var_face=1, dr = dr, r_min = [0.0_dp, 0.0_dp])
+       n_var_face=2, dr = dr, r_min = [0.0_dp, 0.0_dp])
 
   ! Set up geometry
   id             = 1
@@ -41,7 +43,7 @@ program test_drift_diff
   do i = 1, 20
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
-     call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+     call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
      call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
      call a2_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
@@ -57,8 +59,8 @@ program test_drift_diff
   dt_output  = 0.05_dp
   end_time   = 5.0_dp
   diff_coeff = 0.0_dp
-  vel_x      = 2.0_dp
-  vel_y      = 1.0_dp
+  vel_x      = -2.0_dp
+  vel_y      = 0.5_dp
 
   !$omp parallel private(n)
   do
@@ -83,45 +85,77 @@ program test_drift_diff
      if (write_out) call a2_write_tree(tree, trim(fname), &
           (/"phi", "tmp"/), output_cnt, time)
 
-     !!$omp barrier
+!!$omp barrier
      if (time > end_time) exit
 
-     if (.not. midpoint_method) then
+     select case (time_step_method)
+     case (1)
         ! Forward Euler
         do n = 1, n_steps
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+           call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
-           call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+           call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
         end do
-     else if (midpoint_method) then
+     case (2)
         do n = 1, n_steps
            ! Copy previous solution
            call a2_tree_copy_cc(tree, i_phi, i_phi_old)
 
            ! Take a half time step
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+           call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
            call a2_restrict_tree(tree, i_phi)
-           call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+           call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
 
            ! Calculate fluxes
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+           call a2_consistent_fluxes(tree, [1])
 
            ! Copy back old phi, and take full time step
            call a2_tree_copy_cc(tree, i_phi_old, i_phi)
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
-           call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+           call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
         end do
-     end if
+     case (3)
+        do n = 1, n_steps
+           ! Copy previous solution
+           call a2_tree_copy_cc(tree, i_phi, i_phi_old)
+
+           ! Forward Euler step
+           call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+           call a2_consistent_fluxes(tree, [1])
+           call a2_loop_box_arg(tree, update_solution, [dt])
+           call a2_restrict_tree(tree, i_phi)
+           call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+
+           ! Store fluxes
+           call a2_tree_copy_fc(tree, i_flux, i_flux_old)
+
+           ! Calculate fluxes at t+dt
+           call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+           call a2_consistent_fluxes(tree, [1])
+
+           ! Take average of fluxes
+           call a2_loop_box(tree, average_fluxes)
+
+           ! Copy back old phi, and take full time step
+           call a2_tree_copy_cc(tree, i_phi_old, i_phi)
+           call a2_loop_box_arg(tree, update_solution, [dt])
+           call a2_restrict_tree(tree, i_phi)
+           call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+        end do
+     end select
 
      call a2_restrict_tree(tree, i_phi)
-     call a2_gc_sides(tree, i_phi, a2_sides_extrap, have_no_bc)
+     call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
      call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
-     call a2_adjust_refinement(tree, ref_func)
-     call a2_loop_boxes(tree, prolong_to_new_children)
+     ! call a2_adjust_refinement(tree, ref_func)
+     ! call a2_loop_boxes(tree, prolong_to_new_children)
   end do
   !$omp end parallel
 
@@ -146,7 +180,7 @@ contains
     end do
     diff = sqrt(0.5_dp * diff)
 
-    if (diff > 0.05_dp .and. box%lvl < 6) then
+    if (box%lvl < 6) then       !diff > 0.05_dp .and.
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -335,6 +369,12 @@ contains
          (box%fy(:, 1:nc, 1) - box%fy(:, 2:nc+1, 1)) * inv_dr)
   end subroutine update_solution
 
+  subroutine average_fluxes(box)
+    type(box2_t), intent(inout) :: box
+
+    box%fx(:, :, i_flux) = 0.5_dp * (box%fx(:, :, i_flux) + box%fx(:, :, i_flux_old))
+  end subroutine average_fluxes
+
   subroutine prolong_to_new_children(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in) :: id
@@ -351,4 +391,4 @@ contains
     stop "We have no boundary conditions in this example"
   end subroutine have_no_bc
 
-end program test_drift_diff
+end program
