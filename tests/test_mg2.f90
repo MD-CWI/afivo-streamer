@@ -88,9 +88,9 @@ contains
 
     ref_func_init = a5_rm_ref
 
-    if (box%lvl < 4) then
+    if (box%lvl < 5) then
        ref_func_init = a5_do_ref
-    else if (box%lvl < 8) then
+    else if (box%lvl < 7) then
        do n = 1, n_gaussians
           if (norm2(a2_r_center(box) - g_params(2:3, n)) < 0.1_dp) then
              ref_func_init = a5_do_ref
