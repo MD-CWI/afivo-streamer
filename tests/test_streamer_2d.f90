@@ -44,7 +44,7 @@ program test_drift_diff
 
   real(dp), parameter :: diff_coeff = 0.1_dp
   real(dp), parameter :: mobility = -0.03_dp
-  real(dp), parameter :: domain_len = 16.0e-3_dp
+  real(dp), parameter :: domain_len = 32.0e-3_dp
 
   dr = domain_len / box_size
 
@@ -80,8 +80,8 @@ program test_drift_diff
   output_cnt       = 0
   time             = 0
   dt_adapt         = 1.0e-11_dp
-  dt_output        = 1.0e-10_dp
-  end_time         = 10.0e-9_dp
+  dt_output        = 2.5e-10_dp
+  end_time         = 25.0e-9_dp
 
   !$omp parallel private(n)
   do
@@ -114,6 +114,7 @@ program test_drift_diff
 
         ! Take a half time step
         call a2_loop_boxes(tree, fluxes_koren)
+        call a2_consistent_fluxes(tree, [i_flux])
         call compute_fld(tree, n_fmg_cycles)
         call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
         call a2_restrict_tree(tree, i_elec)
@@ -123,6 +124,7 @@ program test_drift_diff
 
         ! Calculate fluxes
         call a2_loop_boxes(tree, fluxes_koren)
+        call a2_consistent_fluxes(tree, [i_flux])
 
         ! Copy back old elec/pion, and take full time step
         call a2_tree_copy_cc(tree, i_elec_old, i_elec)
@@ -167,7 +169,9 @@ contains
        ref_func = a5_do_ref
     else if (box%lvl > 10) then
        ref_func = a5_rm_ref
-    else if (max_dns > 1.0e12_dp .and. alpha * dr > 1) then
+    else if (max_dns > 1.0e15_dp .and. alpha * dr > 1) then
+       ref_func = a5_do_ref
+    else if (max_dns > 1.0e15_dp .and. dr > 1e-4_dp .and. max_fld > 1e6_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -176,29 +180,71 @@ contains
 
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
-    get_max_dt = 5.0e-13_dp
+    get_max_dt = 1.0e-12_dp
   end function get_max_dt
 
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), xy0(2), sigma
+    real(dp)                    :: xy(2), xy0(2), xy1(2), sigma
+    real(dp) :: bg_dens, dns
 
     nc = box%n_cell
     xy0 = 0.5_dp * domain_len
-    sigma = 1e-4_dp
+    xy1 = xy0
+    xy1(2) = xy1(2) + 2e-3_dp   ! 2 mm
+    sigma = 2e-4_dp
+    bg_dens = 5e13
 
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
+          dns = 1e20_dp * rod_dens(xy, xy0, xy1, sigma, 3)
 
-          box%cc(i, j, i_elec) = 1e17_dp * gaussian_2d(xy, xy0, sigma)
-          box%cc(i, j, i_pion) = 1e17_dp * gaussian_2d(xy, xy0, sigma)
+          box%cc(i, j, i_elec) = bg_dens + dns
+          box%cc(i, j, i_pion) = bg_dens + dns
        end do
     end do
 
     box%cc(:, :, i_phi) = 0
   end subroutine set_init_cond
+
+  real(dp) function rod_dens(xy, xy0, xy1, sigma, falloff_type)
+    real(dp), intent(in) :: xy(2), xy0(2), xy1(2), sigma
+    integer, intent(in) :: falloff_type
+    real(dp) :: line_len2, distance, temp
+    real(dp) :: projection(2)
+
+    line_len2 = sum((xy1 - xy0)**2)
+    temp = sum((xy - xy0) * (xy1 - xy0)) / line_len2
+
+    if (temp < 0.0_dp) then
+       distance = sqrt(sum((xy-xy0)**2))
+    else if (temp > 1.0_dp) then
+       distance = sqrt(sum((xy-xy1)**2))
+    else
+       projection = xy0 + temp * (xy1 - xy0)
+       distance = sqrt(sum((xy-projection)**2))
+    end if
+
+    select case (falloff_type)
+    case (1)                    ! Sigmoid
+       rod_dens    = 2 / (1 + exp(distance / sigma))
+    case (2)                    ! Gaussian
+       rod_dens    = exp(-(distance/sigma)**2)
+    case (3)   ! Smooth-step
+       if (distance < sigma) then
+          rod_dens = 1
+       else if (distance < 2 * sigma) then
+          temp = distance/sigma - 1
+          rod_dens = (1- (3 * temp**2 - 2 * temp**3))
+       else
+          rod_dens = 0.0_dp
+       end if
+    case default
+       rod_dens = 0.0_dp
+    end select
+  end function rod_dens
 
   real(dp) function gaussian_2d(x, x0, sigma)
     real(dp), intent(in) :: x(2), x0(2), sigma
@@ -398,7 +444,8 @@ contains
 
   real(dp) function get_alpha(fld)
     real(dp), intent(in) :: fld
-    get_alpha = 1e5_dp * exp(1 - 1e7_dp/(abs(fld)+epsilon(1.0_dp)))
+    ! Breakdown fld of 3 MV/m
+    get_alpha = max(0.0_dp, 1e5_dp * exp(1 - 1e7_dp/(abs(fld)+epsilon(1.0_dp))) - 9697.2_dp)
   end function get_alpha
 
   subroutine prolong_to_new_children(boxes, id)
@@ -433,7 +480,7 @@ contains
           boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
        case (a2_nb_hy)
           ! Dirichlet
-          boxes(id)%cc(1:nc, nc+1, iv) = 2 * 5e6_dp * domain_len &
+          boxes(id)%cc(1:nc, nc+1, iv) = 2 * 2.5e6_dp * domain_len &
                - boxes(id)%cc(1:nc, nc, iv)
        end select
     end if
