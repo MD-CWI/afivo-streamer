@@ -29,7 +29,7 @@ program test_mg
 
   ! Initialize tree
   call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=4, &
-       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp])
+       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
@@ -59,9 +59,6 @@ program test_mg
   ! Set the multigrid options
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
        sides_bc, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
-
-  ! Create a "subtree" with coarser levels than tree
-  ! call mg2d_create_subtree(tree)
 
   ! Restrict from children recursively
   call mg2d_restrict_trees(tree, i_rhs, mg)

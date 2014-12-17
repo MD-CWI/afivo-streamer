@@ -180,27 +180,40 @@ contains
 
   ! Initialize a $Dd tree type
   subroutine a$D_init(tree, max_lvl, n_boxes, n_cell, n_var_cell, n_var_face, &
-       dr, r_min)
+       dr, r_min, coarsen_to)
     type(a$D_t), intent(out) :: tree       ! The tree to initialize
     integer, intent(in)     :: max_lvl    ! Maximum number of levels
     integer, intent(in)     :: n_boxes    ! Allocate initial storage for n_boxes
     integer, intent(in)     :: n_cell     ! Boxes have n_cell^dim cells
     integer, intent(in)     :: n_var_cell ! Number of cell-centered variables
     integer, intent(in)     :: n_var_face ! Number of face-centered variables
-    real(dp), intent(in)    :: dr         ! spacing of a cell
+    real(dp), intent(in)    :: dr         ! spacing of a cell at lvl 1
     real(dp), intent(in)    :: r_min($D)   ! Lower left coordinate of box 1,1
-    integer                 :: lvl
+    integer, intent(in)     :: coarsen_to
+    integer                 :: lvl, min_lvl
 
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a$D_init: n_cell should be even"
     if (n_var_cell <= 0)  stop "a$D_init: n_var_cell should be > 0"
     if (n_boxes <= 0)     stop "a$D_init: n_boxes should be > 0"
+    if (max_lvl <= 0)     stop "a$D_init: max_lvl should be > 0"
 
     allocate(tree%boxes(n_boxes))
-    allocate(tree%lvls(max_lvl+1))
+
+    if (coarsen_to > 0) then
+       ! Determine number of lvls for subtree
+       min_lvl = 1 - nint(log(real(n_cell, dp)/coarsen_to)/log(2.0_dp))
+
+       if (2**(1-min_lvl) * coarsen_to /= n_cell) &
+            stop "a$D_set_base: cannot coarsen to given value"
+    else
+       min_lvl = 1
+    end if
 
     ! up to max_lvl+1 to add dummies that are always of size zero
-    do lvl = 1, max_lvl+1
+    allocate(tree%lvls(min_lvl:max_lvl+1))
+
+    do lvl = min_lvl, max_lvl+1
        allocate(tree%lvls(lvl)%ids(0))
        allocate(tree%lvls(lvl)%leaves(0))
        allocate(tree%lvls(lvl)%parents(0))
@@ -223,7 +236,7 @@ contains
     integer                   :: lvl
 
     deallocate(tree%boxes)
-    do lvl = 1, tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        deallocate(tree%lvls(lvl)%ids)
        deallocate(tree%lvls(lvl)%leaves)
        deallocate(tree%lvls(lvl)%parents)
@@ -231,13 +244,89 @@ contains
     tree%max_id = 0
   end subroutine a$D_destroy
 
+    ! Create the base level of the tree, ix_list(:, id) stores the index of box
+  ! id, nb_list(:, id) stores the neighbors of box id
+  subroutine a$D_set_base(tree, ix_list, nb_list)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)       :: ix_list(:, :)
+    integer, intent(inout)    :: nb_list(:, :)
+    integer                   :: n_boxes, i, id, nb, nb_id
+    integer                   :: ix($D), lvl, offset
+
+    if (any(ix_list < 1)) stop "a$D_set_base: need all ix_list > 0"
+
+    ! Neighbors only have to be specified from one side, mirror them
+    n_boxes = size(ix_list, 2)
+    do i = 1, n_boxes
+       do nb = 1, a$D_num_neighbors
+          nb_id = nb_list(nb, i)
+          if (nb_id > a5_no_box) nb_list(a$D_nb_rev(nb), nb_id) = i
+       end do
+    end do
+
+    if (any(nb_list == a5_no_box)) stop "a$D_set_base: unresolved neighbors"
+
+    ! Create coarser levels which are copies of lvl 1
+    do lvl = lbound(tree%lvls, 1), 1
+       deallocate(tree%lvls(lvl)%ids)
+       allocate(tree%lvls(lvl)%ids(n_boxes))
+
+       call a$D_get_free_ids(tree, tree%lvls(lvl)%ids)
+       offset = tree%lvls(lvl)%ids(1)
+
+       do i = 1, n_boxes
+          id                         = tree%lvls(lvl)%ids(i)
+          ix                         = ix_list(:, i)
+          tree%boxes(id)%lvl         = lvl
+          tree%boxes(id)%ix          = ix
+          tree%boxes(id)%tag         = ibset(0, a5_bit_in_use)
+          tree%boxes(id)%dr          = tree%dr_base * 0.5_dp**(lvl-1)
+          tree%boxes(id)%r_min       = (ix - 1) * tree%dr_base * tree%n_cell
+          tree%boxes(id)%n_cell      = tree%n_cell / (2**(1-lvl))
+
+          tree%boxes(id)%parent      = a5_no_box
+          tree%boxes(id)%children(:) = a5_no_box ! Gets overwritten, see below
+
+          ! Connectivity is the same for all lvls
+          where (tree%boxes(id)%neighbors > a5_no_box)
+             tree%boxes(id)%neighbors = nb_list(:, i) + offset
+          elsewhere
+             tree%boxes(id)%neighbors = nb_list(:, i)
+          end where
+
+          call alloc_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+               tree%n_var_cell, tree%n_var_face)
+       end do
+
+       if (lvl == 1) then
+          deallocate(tree%lvls(lvl)%leaves)
+          allocate(tree%lvls(lvl)%leaves(n_boxes))
+          tree%lvls(lvl)%leaves = tree%lvls(lvl)%ids
+       else
+          deallocate(tree%lvls(lvl)%parents)
+          allocate(tree%lvls(lvl)%parents(n_boxes))
+          tree%lvls(lvl)%parents = tree%lvls(lvl)%ids
+       end if
+
+       if (lvl > lbound(tree%lvls, 1)) then
+          tree%boxes(tree%lvls(lvl-1)%ids)%children(1) = &
+               tree%lvls(lvl)%ids
+          tree%boxes(tree%lvls(lvl)%ids)%parent = &
+               tree%lvls(lvl-1)%ids
+       end if
+    end do
+
+    tree%n_lvls = 1
+
+  end subroutine a$D_set_base
+
   ! Call procedure for each box in tree
   subroutine a$D_loop_box(tree, my_procedure)
     type(a$D_t), intent(inout) :: tree
     procedure(a$D_subr)        :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -255,7 +344,7 @@ contains
     real(dp), intent(in)      :: rarg(:)
     integer                   :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -272,7 +361,7 @@ contains
     procedure(a$D_subr_boxes)  :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -290,7 +379,7 @@ contains
     real(dp), intent(in)         :: rarg(:)
     integer                      :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -357,7 +446,7 @@ contains
        ixs_map(0)       = 0
        n_stored         = 0
 
-       do lvl = 1, tree%n_lvls
+       do lvl = lbound(tree%lvls, 1), tree%n_lvls
           n_used_lvl = size(tree%lvls(lvl)%ids)
           allocate(mortons(n_used_lvl))
           allocate(ixs_sort(n_used_lvl))
@@ -505,54 +594,6 @@ contains
     ! The child ix of the neighbor is reversed in direction d
     nb_id = boxes(p_id)%children(a$D_ch_rev(c_ix, d))
   end function find_nb_$Dd
-
-  ! Create the base level of the tree, ix_list(:, id) stores the index of box
-  ! id, nb_list(:, id) stores the neighbors of box id
-  subroutine a$D_set_base(tree, ix_list, nb_list)
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: ix_list(:, :)
-    integer, intent(inout)    :: nb_list(:, :)
-    integer                   :: n_boxes, i, id, nb, nb_id
-
-    if (any(ix_list < 1)) stop "a$D_set_base: need all ix_list > 0"
-
-    ! Neighbors only have to be specified from one side, mirror them
-    n_boxes = size(ix_list, 2)
-    do i = 1, n_boxes
-       do nb = 1, a$D_num_neighbors
-          nb_id = nb_list(nb, i)
-          if (nb_id > a5_no_box) nb_list(a$D_nb_rev(nb), nb_id) = i
-       end do
-    end do
-
-    if (any(nb_list == a5_no_box)) stop "a$D_set_base: unresolved neighbors"
-
-    deallocate(tree%lvls(1)%ids)
-    deallocate(tree%lvls(1)%leaves)
-    allocate(tree%lvls(1)%ids(n_boxes))
-    allocate(tree%lvls(1)%leaves(n_boxes))
-
-    call a$D_get_free_ids(tree, tree%lvls(1)%ids)
-    tree%n_lvls = 1
-    tree%lvls(1)%leaves = tree%lvls(1)%ids
-
-    do i = 1, n_boxes
-       id                       = tree%lvls(1)%ids(i)
-       tree%boxes(id)%ix        = ix_list(:, i)
-       tree%boxes(id)%lvl       = 1
-       tree%boxes(id)%parent    = 0
-       tree%boxes(id)%children  = 0
-       tree%boxes(id)%neighbors = nb_list(:, i)
-       tree%boxes(id)%n_cell    = tree%n_cell
-       tree%boxes(id)%dr        = tree%dr_base
-       tree%boxes(id)%r_min     = tree%r_base + &
-            (ix_list(:, i) - 1) * tree%dr_base * tree%n_cell
-       tree%boxes(id)%tag       = ibset(0, a5_bit_in_use)
-
-       call alloc_box(tree%boxes(id), tree%n_cell, &
-            tree%n_var_cell, tree%n_var_face)
-    end do
-  end subroutine a$D_set_base
 
   ! Resize the box storage to new_size
   subroutine a$D_resize_box_storage(tree, new_size)
@@ -937,7 +978,7 @@ contains
     integer, intent(in)       :: iv_from, iv_to
     integer                   :: lvl
 
-    do lvl = 1, tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%n_lvls
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_cc
@@ -975,7 +1016,7 @@ contains
     integer, intent(in)       :: iv_from, iv_to
     integer                   :: lvl
 
-    do lvl = 1, tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%n_lvls
        call a$D_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_fc
@@ -1280,7 +1321,7 @@ contains
     procedure(a$D_subr_gc)     :: subr_no_nb, subr_bc
     integer                   :: lvl, i, id
 
-    do lvl = 1, tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%n_lvls
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -1555,7 +1596,7 @@ contains
     procedure(a$D_subr_gc)     :: subr_no_nb, subr_bc
     integer                   :: lvl, i, id
 
-    do lvl = 1, tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%n_lvls
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -1761,7 +1802,7 @@ contains
     integer, intent(in)       :: f_ixs(:)
     integer                   :: lvl, i, id, nb, nb_id
 
-    do lvl = 1, tree%n_lvls-1
+    do lvl = lbound(tree%lvls, 1), tree%n_lvls-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)

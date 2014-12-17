@@ -27,6 +27,8 @@ program test_drift_diff
   integer, parameter :: i_fld      = 2
   integer, parameter :: i_fld_old  = 3
 
+  integer, parameter :: n_fmg_cycles = 1
+
   type(a2_t)         :: tree
   type(mg2_t)        :: mg
   integer            :: i, n, n_steps, id
@@ -48,7 +50,7 @@ program test_drift_diff
 
   ! Initialize tree
   call a2_init(tree, n_lvls_max, n_boxes_init, box_size, n_var_cell=n_var_cell, &
-       n_var_face=n_var_face, dr = dr, r_min = [0.0_dp, 0.0_dp])
+       n_var_face=n_var_face, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=2)
 
   ! Set the multigrid options
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
@@ -62,15 +64,12 @@ program test_drift_diff
   ! Create the base mesh
   call a2_set_base(tree, ix_list, nb_list)
 
-  ! Create a "subtree" with coarser levels than tree
-  call mg2d_create_subtree(tree)
-
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
      call mg2d_restrict_trees(tree, i_rhs, mg)
      call mg2d_restrict_trees(tree, i_phi, mg)
-     call compute_fld(tree, 2)
+     call compute_fld(tree, n_fmg_cycles)
      call a2_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
   end do
@@ -115,7 +114,7 @@ program test_drift_diff
 
         ! Take a half time step
         call a2_loop_boxes(tree, fluxes_koren)
-        call compute_fld(tree, 1)
+        call compute_fld(tree, n_fmg_cycles)
         call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
         call a2_restrict_tree(tree, i_elec)
         call a2_restrict_tree(tree, i_pion)
@@ -128,7 +127,7 @@ program test_drift_diff
         ! Copy back old elec/pion, and take full time step
         call a2_tree_copy_cc(tree, i_elec_old, i_elec)
         call a2_tree_copy_cc(tree, i_pion_old, i_pion)
-        call compute_fld(tree, 1)
+        call compute_fld(tree, n_fmg_cycles)
         call a2_loop_box_arg(tree, update_solution, [dt])
         call a2_restrict_tree(tree, i_elec)
         call a2_restrict_tree(tree, i_pion)
@@ -145,7 +144,7 @@ program test_drift_diff
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
-     call compute_fld(tree, 1)
+     call compute_fld(tree, n_fmg_cycles)
   end do
   !$omp end parallel
 
@@ -166,9 +165,9 @@ contains
 
     if (box%lvl < 4) then
        ref_func = a5_do_ref
-    else if (box%lvl > 8) then
+    else if (box%lvl > 10) then
        ref_func = a5_rm_ref
-    else if (max_dns > 1.0e14_dp .and. alpha * dr > 1) then
+    else if (max_dns > 1.0e12_dp .and. alpha * dr > 1) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -228,9 +227,8 @@ contains
        !$omp end do nowait
     end do
 
-    ! Solve Poisson's eq. using multigrid
+    ! Restrict the rhs
     call mg2d_restrict_trees(tree, i_rhs, mg)
-    call a2_gc_sides(tree, i_phi, a2_sides_extrap, sides_bc_pot)
 
     do i = 1, n_fmg
        call mg2d_fas_fmg(tree, mg)
@@ -392,6 +390,10 @@ contains
     box%cc(1:nc, 1:nc, i_elec) = box%cc(1:nc, 1:nc, i_elec) + dt(1) * ( &
          (box%fx(1:nc, :, i_elec) - box%fx(2:nc+1, :, i_elec)) * inv_dr + &
          (box%fy(:, 1:nc, i_elec) - box%fy(:, 2:nc+1, i_elec)) * inv_dr)
+
+    where (box%cc(1:nc, 1:nc, i_elec) < 0)
+       box%cc(1:nc, 1:nc, i_elec) = 0
+    end where
   end subroutine update_solution
 
   real(dp) function get_alpha(fld)

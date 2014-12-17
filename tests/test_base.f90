@@ -20,7 +20,7 @@ program test_base
 
   ! Initialize tree
   call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
-       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp])
+       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
 
   ! Set up geometry
   id             = 1

@@ -43,7 +43,6 @@ module m_mg2d
 
   ! Public methods
   public :: mg2d_set
-  public :: mg2d_create_subtree
   public :: mg2d_restrict_trees
   public :: mg2d_fas_fmg
   public :: mg2d_fas_vcycle
@@ -76,72 +75,6 @@ contains
     mg%box_op       => my_operator
     mg%box_gsrb     => my_gsrb
   end subroutine mg2d_set
-
-  subroutine mg2d_create_subtree(tree)
-    type(a2_t), intent(inout) :: tree
-
-    integer :: id, c_id, n, lvl, n_lvls
-    integer :: min_lvl, boxes_per_lvl, offset
-    type(lvl_t), allocatable :: tmp_lvls(:)
-
-    ! Determine number of lvls for subtree
-    n = tree%n_cell
-    n_lvls = 0
-    do
-       n = ishft(n, -1)
-       if (btest(n, 0)) exit     ! Exit if n is odd
-       n_lvls = n_lvls + 1
-    end do
-
-    if (n_lvls == 0) stop "mg2d_create_subtree: the subtree has no levels"
-
-    min_lvl = 1 - n_lvls
-
-    ! Will always have this many boxes per level
-    boxes_per_lvl = size(tree%lvls(1)%ids)
-
-    ! Allocate subtree levels
-    allocate(tmp_lvls(min_lvl:ubound(tree%lvls, 1)))
-    tmp_lvls(1:) = tree%lvls
-    deallocate(tree%lvls)
-    call move_alloc(tmp_lvls, tree%lvls)
-
-    ! Create coarser levels which are copies of lvl 1
-    do lvl = 0, min_lvl, -1
-       allocate(tree%lvls(lvl)%ids(boxes_per_lvl))
-       allocate(tree%lvls(lvl)%parents(boxes_per_lvl))
-       allocate(tree%lvls(lvl)%leaves(0))
-
-       call a2_get_free_ids(tree, tree%lvls(lvl)%ids)
-       tree%lvls(lvl)%parents = tree%lvls(lvl)%ids
-       offset = tree%lvls(lvl)%ids(1) - tree%lvls(lvl+1)%ids(1)
-
-       do n = 1, boxes_per_lvl
-          c_id                        = tree%lvls(lvl+1)%ids(n)
-          id                          = tree%lvls(lvl)%ids(n)
-          tree%boxes(id)%lvl          = lvl
-          tree%boxes(id)%ix           = tree%boxes(c_id)%ix
-          tree%boxes(id)%tag          = ibset(0, a5_bit_in_use)
-          tree%boxes(id)%dr           = tree%boxes(c_id)%dr * 2
-          tree%boxes(id)%r_min        = tree%boxes(c_id)%r_min
-          tree%boxes(id)%n_cell       = tree%boxes(c_id)%n_cell / 2
-
-          tree%boxes(id)%parent       = a5_no_box
-          tree%boxes(id)%children(1)  = c_id
-          tree%boxes(id)%children(2:) = a5_no_box
-
-          ! Connectivity stays the same
-          tree%boxes(id)%neighbors = tree%boxes(c_id)%neighbors
-          where (tree%boxes(id)%neighbors > a5_no_box)
-             tree%boxes(id)%neighbors = &
-                  tree%boxes(id)%neighbors + offset
-          end where
-
-          call alloc_box(tree%boxes(id), tree%boxes(id)%n_cell, &
-               tree%n_var_cell, tree%n_var_face)
-       end do
-    end do
-  end subroutine mg2d_create_subtree
 
   ! Restrict cell centered variables ivs(:) on the trees
   subroutine mg2d_restrict_trees(tree, iv, mg)
