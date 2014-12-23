@@ -310,10 +310,11 @@ contains
   elemental function ratio(numerator, denominator)
     real(dp), intent(in) :: numerator, denominator
     real(dp)             :: ratio
-    real(dp), parameter  :: eps = epsilon(1.0d0)
-    ! Avoid division by zero, and ensure that at zero gradients we have a ratio of 1
-    ratio = (sign(eps, numerator) + numerator) / &
-         (denominator + sign(eps, denominator))
+    if (denominator /= 0.0_dp) then
+       ratio = numerator / denominator
+    else
+       ratio = numerator * huge(1.0_dp)
+    end if
   end function ratio
 
   subroutine fluxes_koren(boxes, id)
@@ -379,9 +380,9 @@ contains
              if (j == nc+1) then
                 nb_id = boxes(id)%neighbors(a2_nb_hy)
                 if (nb_id > a5_no_box) then
-                   gradp = boxes(nb_id)%cc(i, 2, i_elec) - boxes(id)%cc(i, j, i_elec)
+                   gradn = boxes(nb_id)%cc(i, 2, i_elec) - boxes(id)%cc(i, j, i_elec)
                 else
-                   gradp = 0
+                   gradn = 0
                 end if
              else
                 gradn = boxes(id)%cc(i, j+1, i_elec) - boxes(id)%cc(i, j, i_elec)
@@ -395,17 +396,17 @@ contains
              if (j == 1) then
                 nb_id = boxes(id)%neighbors(a2_nb_ly)
                 if (nb_id > a5_no_box) then
-                   gradn = boxes(id)%cc(i, j-1, i_elec) - boxes(nb_id)%cc(i, nc-1, i_elec)
+                   gradp = boxes(id)%cc(i, j-1, i_elec) - boxes(nb_id)%cc(i, nc-1, i_elec)
                 else
-                   gradn = 0
+                   gradp = 0
                 end if
              else
-                gradn = boxes(id)%cc(i, j-1, i_elec) - boxes(id)%cc(i, j-2, i_elec)
+                gradp = boxes(id)%cc(i, j-1, i_elec) - boxes(id)%cc(i, j-2, i_elec)
              end if
 
-             theta = ratio(gradc, gradn)
+             theta = ratio(gradc, gradp)
              boxes(id)%fy(i, j, i_elec) = boxes(id)%fy(i, j, i_fld) * mobility * &
-                  (boxes(id)%cc(i, j-1, i_elec) + limiter_koren(theta) * gradn)
+                  (boxes(id)%cc(i, j-1, i_elec) + limiter_koren(theta) * gradp)
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
@@ -437,9 +438,6 @@ contains
          (box%fx(1:nc, :, i_elec) - box%fx(2:nc+1, :, i_elec)) * inv_dr + &
          (box%fy(:, 1:nc, i_elec) - box%fy(:, 2:nc+1, i_elec)) * inv_dr)
 
-    where (box%cc(1:nc, 1:nc, i_elec) < 0)
-       box%cc(1:nc, 1:nc, i_elec) = 0
-    end where
   end subroutine update_solution
 
   real(dp) function get_alpha(fld)

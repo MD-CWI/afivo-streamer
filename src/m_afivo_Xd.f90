@@ -426,7 +426,7 @@ contains
     new_size    = old_size
 
     if (.not. only_reorder) then
-       if (frac_in_use > max_frac_used .or. &
+       if (max_id > old_size * max_frac_used .or. &
             (frac_in_use < goal_frac_used .and. &
             n_clean > n_clean_min)) then
           new_size = max(1, nint(n_used/goal_frac_used))
@@ -947,6 +947,18 @@ contains
     box%cc(:,:,:, iv_to) = box%cc(:,:,:, iv_to) - box%cc(:,:,:, iv_from)
 #endif
   end subroutine a$D_box_sub_cc
+
+  ! Set cc(..., iv_to) = a * cc(..., iv_a) + b * cc(..., iv_b)
+  subroutine a$D_box_lincomb_cc(box, a, iv_a, b, iv_b, iv_to)
+    type(box$D_t), intent(inout) :: box
+    real(dp), intent(in)        :: a, b
+    integer, intent(in)         :: iv_a, iv_b, iv_to
+#if $D == 2
+    box%cc(:,:, iv_to) = a * box%cc(:,:, iv_a) + b * box%cc(:,:, iv_b)
+#elif $D == 3
+    box%cc(:,:,:, iv_to) = a * box%cc(:,:,:, iv_a) + b * box%cc(:,:,:, iv_b)
+#endif
+  end subroutine a$D_box_lincomb_cc
 
   ! Copy cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_copy_cc(box, iv_from, iv_to)
