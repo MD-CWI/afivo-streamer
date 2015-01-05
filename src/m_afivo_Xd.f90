@@ -1265,7 +1265,7 @@ contains
     integer, intent(in)       :: iv
     integer                   :: lvl
 
-    do lvl = tree%n_lvls-1, 1, -1
+    do lvl = tree%n_lvls-1, lbound(tree%lvls, 1), -1
        call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv)
     end do
   end subroutine a$D_restrict_tree
