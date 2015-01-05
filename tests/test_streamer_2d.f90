@@ -112,35 +112,22 @@ program test_drift_diff
         call a2_tree_copy_cc(tree, i_elec, i_elec_old)
         call a2_tree_copy_cc(tree, i_pion, i_pion_old)
 
-        ! Take a half time step
-        call a2_loop_boxes(tree, fluxes_koren)
-        call a2_consistent_fluxes(tree, [i_flux])
-        call compute_fld(tree, n_fmg_cycles)
-        call a2_loop_box_arg(tree, update_solution, [0.5_dp * dt])
-        call a2_restrict_tree(tree, i_elec)
-        call a2_restrict_tree(tree, i_pion)
-        call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
-        call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
+        ! Two forward Euler steps over dt
+        do i = 1, 2
+           call a2_loop_boxes(tree, fluxes_koren)
+           call a2_consistent_fluxes(tree, [i_flux])
+           call compute_fld(tree, n_fmg_cycles)
+           call a2_loop_box_arg(tree, update_solution, [dt])
+           call a2_restrict_tree(tree, i_elec)
+           call a2_restrict_tree(tree, i_pion)
+           call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
+           call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
+        end do
 
-        ! Calculate fluxes
-        call a2_loop_boxes(tree, fluxes_koren)
-        call a2_consistent_fluxes(tree, [i_flux])
-
-        ! Copy back old elec/pion, and take full time step
-        call a2_tree_copy_cc(tree, i_elec_old, i_elec)
-        call a2_tree_copy_cc(tree, i_pion_old, i_pion)
-        call compute_fld(tree, n_fmg_cycles)
-        call a2_loop_box_arg(tree, update_solution, [dt])
-        call a2_restrict_tree(tree, i_elec)
-        call a2_restrict_tree(tree, i_pion)
-        call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
-        call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
+        ! Take average of phi_old and phi
+        call a2_loop_box(tree, average_dens)
      end do
 
-     call a2_restrict_tree(tree, i_elec)
-     call a2_restrict_tree(tree, i_pion)
-     call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
-     call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
      call a2_gc_corners(tree, i_elec, a2_corners_extrap, sides_bc_dens)
      call a2_gc_corners(tree, i_pion, a2_corners_extrap, sides_bc_dens)
 
@@ -180,7 +167,30 @@ contains
 
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
-    get_max_dt = 1.0e-12_dp
+    real(dp), parameter :: UC_eps0 = 8.8541878176d-12
+    real(dp), parameter :: UC_elem_charge = 1.6022d-19
+    real(dp) :: max_fld, max_dns, dr_min(2)
+    real(dp) :: dt_cfl, dt_dif, dt_drt
+    integer :: lvl, i, id
+
+    max_fld = -huge(1.0_dp)
+    max_dns = -huge(1.0_dp)
+    do lvl = lbound(tree%lvls, 1), tree%n_lvls
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          max_fld = max(max_fld, maxval(tree%boxes(id)%cc(:,:, i_tmp)))
+          max_dns = max(max_dns, maxval(tree%boxes(id)%cc(:,:, i_elec)))
+       end do
+    end do
+
+    dr_min = a2_min_dr(tree)
+    ! CFL condition
+    dt_cfl = dr_min(1) / (abs(mobility) * max_fld)
+    ! Diffusion condition
+    dt_dif = dr_min(1)**2 / (diff_coeff)
+    ! Dielectric relaxation time
+    dt_drt = UC_eps0 / (UC_elem_charge * abs(mobility) * max_dns)
+    get_max_dt = 0.5_dp * min(dt_cfl, dt_dif, dt_drt)
   end function get_max_dt
 
   subroutine set_init_cond(box)
@@ -199,7 +209,7 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
-          dns = 1e20_dp * rod_dens(xy, xy0, xy1, sigma, 3)
+          dns = 5e19_dp * rod_dens(xy, xy0, xy1, sigma, 3)
 
           box%cc(i, j, i_elec) = bg_dens + dns
           box%cc(i, j, i_pion) = bg_dens + dns
@@ -415,6 +425,12 @@ contains
        end do
     end do
   end subroutine fluxes_koren
+
+  subroutine average_dens(box)
+    type(box2_t), intent(inout) :: box
+    box%cc(:, :, i_elec) = 0.5_dp * (box%cc(:, :, i_elec) + box%cc(:, :, i_elec_old))
+    box%cc(:, :, i_pion) = 0.5_dp * (box%cc(:, :, i_pion) + box%cc(:, :, i_pion_old))
+  end subroutine average_dens
 
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
