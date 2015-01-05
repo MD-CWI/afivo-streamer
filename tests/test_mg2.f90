@@ -1,6 +1,6 @@
 program test_mg
   use m_afivo_2d
-  use m_mg2d
+  use m_mg_2d
 
   implicit none
 
@@ -59,8 +59,8 @@ program test_mg
        sides_bc, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
 
   ! Restrict from children recursively
-  call mg2d_restrict_trees(tree, i_rhs, mg)
-  call mg2d_restrict_trees(tree, i_phi, mg)
+  call a2_restrict_tree(tree, i_rhs)
+  call a2_restrict_tree(tree, i_phi)
 
   !$omp parallel
   do i = 1, 10

@@ -1,6 +1,6 @@
 program test_drift_diff
   use m_afivo_2d
-  use m_mg2d
+  use m_mg_2d
 
   implicit none
 
@@ -67,8 +67,8 @@ program test_drift_diff
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
-     call mg2d_restrict_trees(tree, i_rhs, mg)
-     call mg2d_restrict_trees(tree, i_phi, mg)
+     call a2_restrict_tree(tree, i_rhs)
+     call a2_restrict_tree(tree, i_phi)
      call compute_fld(tree, n_fmg_cycles)
      call a2_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
@@ -284,7 +284,7 @@ contains
     end do
 
     ! Restrict the rhs
-    call mg2d_restrict_trees(tree, i_rhs, mg)
+    call a2_restrict_tree(tree, i_rhs)
 
     do i = 1, n_fmg
        call mg2d_fas_fmg(tree, mg)
