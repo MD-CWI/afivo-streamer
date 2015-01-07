@@ -288,6 +288,7 @@ contains
           tree%boxes(id)%children(:) = a5_no_box ! Gets overwritten, see below
 
           ! Connectivity is the same for all lvls
+          tree%boxes(id)%neighbors = nb_list(:, i)
           where (tree%boxes(id)%neighbors > a5_no_box)
              tree%boxes(id)%neighbors = nb_list(:, i) + offset
           elsewhere
@@ -1284,12 +1285,7 @@ contains
        j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
        do i = 1, nc, 2
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-
-          box_p%cc(i_c1, j_c1, iv) = 0.25_dp * (&
-               box_c%cc(i,   j,   iv) + &
-               box_c%cc(i+1, j,   iv) + &
-               box_c%cc(i,   j+1, iv) + &
-               box_c%cc(i+1, j+1, iv) )
+          box_p%cc(i_c1, j_c1, iv) = 0.25_dp * sum(box_c%cc(i:i+1, j:j+1, iv))
        end do
     end do
   end subroutine a2_restrict_box
@@ -1309,16 +1305,8 @@ contains
           j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
           do i = 1, nc, 2
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-
-             box_p%cc(i_c1, j_c1, k_c1, iv) = 0.125_dp * ( &
-                  box_c%cc(i,   j,   k,   iv) + &
-                  box_c%cc(i+1, j,   k,   iv) + &
-                  box_c%cc(i,   j+1, k,   iv) + &
-                  box_c%cc(i+1, j+1, k,   iv) + &
-                  box_c%cc(i,   j,   k+1, iv) + &
-                  box_c%cc(i+1, j,   k+1, iv) + &
-                  box_c%cc(i,   j+1, k+1, iv) + &
-                  box_c%cc(i+1, j+1, k+1, iv))
+             box_p%cc(i_c1, j_c1, k_c1, iv) = 0.125_dp * &
+                  sum(box_c%cc(i:i+1, j:j+1, k:k+1, iv))
           end do
        end do
     end do
@@ -1407,7 +1395,7 @@ contains
     integer                     :: k, dk
 #endif
 
-    nc = boxes(id)%n_cell
+    nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
     ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
 
@@ -1454,7 +1442,6 @@ contains
     end select
 
   end subroutine a$D_sides_interp
-
 
   ! Fill ghost cells near refinement boundaries which preserves fluxes.
   ! Basically, we extrapolate from the fine cells to a corner point, and then

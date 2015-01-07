@@ -183,13 +183,13 @@ contains
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:)
     type(mg$D_t), intent(in)     :: mg
-    integer                     :: i, nc, i_c, c_id, ix_offset(2)
+    integer                     :: i, nc, i_c, c_id, ix_offset($D)
 
     !$omp do private(nc, i_c, c_id, ix_offset)
     do i = 1, size(ids)
-
        nc = boxes(ids(i))%n_cell
-       do i_c = 1, 4
+
+       do i_c = 1, a$D_num_children
           c_id = boxes(ids(i))%children(i_c)
           if (c_id == a5_no_box) cycle
 
@@ -206,7 +206,7 @@ contains
   subroutine correct_child_box(box_p, box_c, ix_offset, i_phi, i_phi_old)
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
-    integer, intent(in)         :: i_phi, i_phi_old, ix_offset(2)
+    integer, intent(in)         :: i_phi, i_phi_old, ix_offset($D)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
 #if $D == 2
     real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
@@ -229,13 +229,13 @@ contains
 
           box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) &
                + f9 * (box_p%cc(i_c1, j_c1, i_phi) &
-               - box_p%cc(i_c1, j_c1, i_phi_old)) &
+               -      box_p%cc(i_c1, j_c1, i_phi_old)) &
                + f3 * (box_p%cc(i_c2, j_c1, i_phi) &
-               - box_p%cc(i_c2, j_c1, i_phi_old) &
-               + box_p%cc(i_c1, j_c2, i_phi) &
-               - box_p%cc(i_c1, j_c2, i_phi_old)) &
+               -       box_p%cc(i_c2, j_c1, i_phi_old) &
+               +       box_p%cc(i_c1, j_c2, i_phi) &
+               -       box_p%cc(i_c1, j_c2, i_phi_old)) &
                + f1 * (box_p%cc(i_c2, j_c2, i_phi) &
-               - box_p%cc(i_c2, j_c2, i_phi_old))
+               -       box_p%cc(i_c2, j_c2, i_phi_old))
        end do
     end do
 #elif $D == 3
@@ -250,22 +250,22 @@ contains
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
              box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) &
-                  + f27 * (box_c%cc(i_c1, j_c1, k_c1, i_phi) &
-                  - box_c%cc(i_c1, j_c1, k_c1, i_phi_old)) &
-                  + f9 * (box_c%cc(i_c2, j_c1, k_c1, i_phi) &
-                  - box_c%cc(i_c2, j_c1, k_c1, i_phi_old)) &
-                  + f9 * (box_c%cc(i_c1, j_c2, k_c1, i_phi) &
-                  - box_c%cc(i_c1, j_c2, k_c1, i_phi_old)) &
-                  + f9 * (box_c%cc(i_c1, j_c1, k_c2, i_phi) &
-                  - box_c%cc(i_c1, j_c1, k_c2, i_phi_old)) &
-                  + f3 * (box_c%cc(i_c1, j_c2, k_c2, i_phi) &
-                  - box_c%cc(i_c1, j_c2, k_c2, i_phi_old)) &
-                  + f3 * (box_c%cc(i_c2, j_c1, k_c2, i_phi) &
-                  - box_c%cc(i_c2, j_c1, k_c2, i_phi_old)) &
-                  + f3 * (box_c%cc(i_c2, j_c2, k_c1, i_phi) &
-                  - box_c%cc(i_c2, j_c2, k_c1, i_phi_old)) &
-                  + f1 * (box_c%cc(i_c2, j_c2, k_c2, i_phi) &
-                  - box_c%cc(i_c2, j_c2, k_c2, i_phi_old))
+                  + f27 * (box_p%cc(i_c1, j_c1, k_c1, i_phi) &
+                  -        box_p%cc(i_c1, j_c1, k_c1, i_phi_old)) &
+                  + f9 * (box_p%cc(i_c2, j_c1, k_c1, i_phi) &
+                  -       box_p%cc(i_c2, j_c1, k_c1, i_phi_old)) &
+                  + f9 * (box_p%cc(i_c1, j_c2, k_c1, i_phi) &
+                  -       box_p%cc(i_c1, j_c2, k_c1, i_phi_old)) &
+                  + f9 * (box_p%cc(i_c1, j_c1, k_c2, i_phi) &
+                  -       box_p%cc(i_c1, j_c1, k_c2, i_phi_old)) &
+                  + f3 * (box_p%cc(i_c1, j_c2, k_c2, i_phi) &
+                  -       box_p%cc(i_c1, j_c2, k_c2, i_phi_old)) &
+                  + f3 * (box_p%cc(i_c2, j_c1, k_c2, i_phi) &
+                  -       box_p%cc(i_c2, j_c1, k_c2, i_phi_old)) &
+                  + f3 * (box_p%cc(i_c2, j_c2, k_c1, i_phi) &
+                  -       box_p%cc(i_c2, j_c2, k_c1, i_phi_old)) &
+                  + f1 * (box_p%cc(i_c2, j_c2, k_c2, i_phi) &
+                  -       box_p%cc(i_c2, j_c2, k_c2, i_phi_old))
           end do
        end do
     end do
@@ -273,7 +273,6 @@ contains
   end subroutine correct_child_box
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
-    use omp_lib
     type(box$D_t), intent(inout) :: boxes(:)
     type(mg$D_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:), n_cycle
@@ -300,65 +299,43 @@ contains
        end do
        !$omp end do
     end do
-
   end subroutine gsrb_boxes
 
   subroutine mg$Dd_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
-    integer                     :: i, j, nc, di(2)
-    real(dp)                    :: dvol
+    integer                     :: i, i0, j, nc
+    real(dp)                    :: dx2
 #if $D == 3
     integer                     :: k
     real(dp), parameter         :: sixth = 1/6.0_dp
 #endif
 
-    dvol = box%dr**$D
-    nc   = box%n_cell
+    dx2 = box%dr**2
+    nc  = box%n_cell
 
-    ! The parity of redblack_cntr determines which cells we use
-    di(1) = iand(redblack_cntr, 1)
-    di(2) = ieor(di(1), 1)
-
+    ! The parity of redblack_cntr determines which cells we use. If
+    ! redblack_cntr is even, we use the even cells and vice versa.
 #if $D == 2
-    do j = 1, nc, 2
-       do i = 1+di(1), nc, 2
+    do j = 1, nc
+       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
+       do i = i0, nc, 2
           box%cc(i, j, i_phi) = 0.25_dp * ( &
                box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
                box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
-               dvol * box%cc(i, j, i_rhs))
-       end do
-    end do
-
-    do j = 2, nc, 2
-       do i = 1+di(2), nc, 2
-          box%cc(i, j, i_phi) = 0.25_dp * ( &
-               box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
-               dvol * box%cc(i, j, i_rhs))
+               dx2 * box%cc(i, j, i_rhs))
        end do
     end do
 #elif $D == 3
-    do k = 1, nc, 2
-       do j = 1+di(1), nc, 2
-          do i = 1+di(2), nc, 2
+    do k = 1, nc
+       do j = 1, nc
+          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
+          do i = i0, nc, 2
              box%cc(i, j, k, i_phi) = sixth * ( &
                   box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
                   box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
                   box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &
-                  dvol * box%cc(i, j, i_rhs))
-          end do
-       end do
-    end do
-
-    do k = 2, nc, 2
-       do j = 1+di(2), nc, 2
-          do i = 1+di(1), nc, 2
-             box%cc(i, j, k, i_phi) = sixth * ( &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &
-                  dvol * box%cc(i, j, i_rhs))
+                  dx2 * box%cc(i, j, k, i_rhs))
           end do
        end do
     end do
