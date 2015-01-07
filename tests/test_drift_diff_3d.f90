@@ -4,7 +4,7 @@ program test_drift_diff
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
-  integer, parameter :: box_size    = 8
+  integer, parameter :: box_size    = 16
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
   integer, parameter :: i_flux      = 1
@@ -59,7 +59,7 @@ program test_drift_diff
   time       = 0
   dt_adapt   = 0.01_dp
   dt_output  = 0.05_dp
-  end_time   = 1.0_dp
+  end_time   = 1.5_dp
   diff_coeff = 0.0_dp
   vel_x      = 1.0_dp
   vel_y      = 0.0_dp
@@ -69,7 +69,6 @@ program test_drift_diff
   !$omp parallel private(n)
   do
      !$omp single
-     i       = i + 1
      dr_min  = a3_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y, vel_z]) / dr_min ) + epsilon(1.0_dp))
@@ -129,7 +128,7 @@ program test_drift_diff
      call a3_adjust_refinement(tree, ref_func)
      call a3_loop_boxes(tree, prolong_to_new_children)
      call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
-     call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
+     ! call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
   !$omp end parallel
 
@@ -148,8 +147,7 @@ contains
          maxval(abs(box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - box%cc(1:nc, 0:nc, 1:nc, i_phi))), &
          maxval(abs(box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-
-    if (box%lvl < 3 .or. diff > 0.25_dp) then
+    if (box%lvl < 3 .and. diff > 0.1_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -163,19 +161,19 @@ contains
 
     nc = box%n_cell
     do k = 0, nc+1
-    do j = 0, nc+1
-       do i = 0, nc+1
-          xyz = a3_r_cc(box, [i,j,k])
-          if (norm2(xyz - 2) < 1) then
-             box%cc(i, j, k, i_phi) = 1
-          else if (norm2(xyz - 2) < 1.2_dp) then
-             box%cc(i, j, k, i_phi) = (1.2_dp - norm2(xyz - 2)) * 5
-          else
-             box%cc(i, j, k, i_phi) = 0
-          end if
+       do j = 0, nc+1
+          do i = 0, nc+1
+             xyz = a3_r_cc(box, [i,j,k])
+             if (norm2(xyz - 2) < 0.5) then
+                box%cc(i, j, k, i_phi) = 1
+             else if (norm2(xyz - 2) < 0.7_dp) then
+                box%cc(i, j, k, i_phi) = (0.7_dp - norm2(xyz - 2)) * 5
+             else
+                box%cc(i, j, k, i_phi) = 0
+             end if
+          end do
        end do
     end do
- end do
   end subroutine set_init_cond
 
   subroutine fluxes_upwind1(boxes, id, flux_args)

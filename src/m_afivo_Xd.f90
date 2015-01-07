@@ -1079,7 +1079,7 @@ contains
     integer                     :: i, j, k, i_c1, i_c2, j_c1, j_c2, k_c1, k_c2
 
     nc = boxes(id)%n_cell
-    do i_c = 1, 8
+    do i_c = 1, a3_num_children
        c_id = boxes(id)%children(i_c)
 
        ! Offset of child w.r.t. parent
