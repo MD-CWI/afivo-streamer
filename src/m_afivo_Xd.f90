@@ -272,7 +272,7 @@ contains
        allocate(tree%lvls(lvl)%ids(n_boxes))
 
        call a$D_get_free_ids(tree, tree%lvls(lvl)%ids)
-       offset = tree%lvls(lvl)%ids(1)
+       offset = tree%lvls(lvl)%ids(1) - 1
 
        do i = 1, n_boxes
           id                         = tree%lvls(lvl)%ids(i)
@@ -288,8 +288,7 @@ contains
           tree%boxes(id)%children(:) = a5_no_box ! Gets overwritten, see below
 
           ! Connectivity is the same for all lvls
-          tree%boxes(id)%neighbors = nb_list(:, i)
-          where (tree%boxes(id)%neighbors > a5_no_box)
+          where (nb_list(:, i) > a5_no_box)
              tree%boxes(id)%neighbors = nb_list(:, i) + offset
           elsewhere
              tree%boxes(id)%neighbors = nb_list(:, i)
