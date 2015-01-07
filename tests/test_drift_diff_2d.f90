@@ -8,7 +8,6 @@ program test_drift_diff
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
   integer, parameter :: i_flux      = 1
-  integer, parameter :: i_flux_old  = 2
 
   type(a2_t)         :: tree
   integer            :: i, n, n_steps, id
@@ -23,11 +22,11 @@ program test_drift_diff
   character(len=40)  :: fname
 
   logical            :: write_out
-  integer :: time_step_method = 2
+  integer            :: time_step_method = 2
 
   dr = 4.0_dp / box_size
 
-  ! Initialize tree
+  print *, "Initialize tree"
   call a2_init(tree, n_lvls_max, n_boxes_init, box_size, n_var_cell=2, &
        n_var_face=2, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
 
@@ -36,10 +35,10 @@ program test_drift_diff
   ix_list(:, id) = [1,1] ! Set index of box
   nb_list(:, id) = id    ! Box is periodic, so its own neighbor
 
-  ! Create the base mesh
+  print *, "Create the base mesh"
   call a2_set_base(tree, ix_list, nb_list)
 
-  ! Set up the initial conditions
+  print *, "Set up the initial conditions"
   do i = 1, 20
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
@@ -49,18 +48,20 @@ program test_drift_diff
      if (n_changes == 0) exit
   end do
 
-  ! Restrict the initial conditions
+  print *, "Restrict the initial conditions"
   call a2_restrict_tree(tree, i_phi)
+  call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+  call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
   i          = 0
   output_cnt = 0
   time       = 0
   dt_adapt   = 0.01_dp
   dt_output  = 0.05_dp
-  end_time   = 5.0_dp
+  end_time   = 2.0_dp
   diff_coeff = 0.0_dp
   vel_x      = 2.0_dp
-  vel_y      = 0.5_dp
+  vel_y      = 0.0_dp
 
   !$omp parallel private(n)
   do
@@ -76,7 +77,7 @@ program test_drift_diff
      if (output_cnt * dt_output < time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0,A)") "test_drift_diff_", output_cnt, ".vtu"
+        write(fname, "(A,I0,A)") "test_drift_diff_2d_", output_cnt, ".vtu"
      else
         write_out = .false.
      end if
@@ -85,7 +86,6 @@ program test_drift_diff
      if (write_out) call a2_write_tree(tree, trim(fname), &
           (/"phi", "tmp"/), output_cnt, time)
 
-!!$omp barrier
      if (time > end_time) exit
 
      select case (time_step_method)
@@ -103,7 +103,7 @@ program test_drift_diff
            ! Copy previous solution
            call a2_tree_copy_cc(tree, i_phi, i_phi_old)
 
-           ! Two forward Euler step over dt
+           ! Two forward Euler steps over dt
            do i = 1, 2
               call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
               call a2_consistent_fluxes(tree, [1])
@@ -138,18 +138,11 @@ contains
     integer                  :: i, j, nc
 
     nc   = box%n_cell
-    diff = 0
-    do j = 1, nc
-       do i = 1, nc
-          diff = max(diff, (box%cc(i+1, j, i_phi) - box%cc(i, j, i_phi))**2 + &
-               (box%cc(i, j+1, i_phi) - box%cc(i, j, i_phi))**2 + &
-               (box%cc(i, j, i_phi) - box%cc(i-1, j, i_phi))**2 + &
-               (box%cc(i, j, i_phi) - box%cc(i, j-1, i_phi))**2)
-       end do
-    end do
-    diff = sqrt(0.5_dp * diff)
+    diff = max( &
+         maxval(abs(box%cc(1:nc+1, 1:nc, i_phi) - box%cc(0:nc, 1:nc, i_phi))), &
+         maxval(abs(box%cc(1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 0:nc, i_phi))))
 
-    if (box%lvl < 3 .or. diff > 0.15_dp) then
+    if (box%lvl < 4 .or. diff > 0.15_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -339,13 +332,6 @@ contains
          (box%fx(1:nc, :, i_phi) - box%fx(2:nc+1, :, i_phi)) * inv_dr + &
          (box%fy(:, 1:nc, i_phi) - box%fy(:, 2:nc+1, i_phi)) * inv_dr)
   end subroutine update_solution
-
-  subroutine average_fluxes(box)
-    type(box2_t), intent(inout) :: box
-
-    box%fx(:, :, i_flux) = 0.5_dp * (box%fx(:, :, i_flux) + box%fx(:, :, i_flux_old))
-    box%fy(:, :, i_flux) = 0.5_dp * (box%fy(:, :, i_flux) + box%fy(:, :, i_flux_old))
-  end subroutine average_fluxes
 
   subroutine average_phi(box)
     type(box2_t), intent(inout) :: box

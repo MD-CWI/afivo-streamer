@@ -1384,14 +1384,16 @@ contains
     end select
   end subroutine a$D_sides_prolong1
 
+  ! Interpolate between fine points and coarse neighbors to fill ghost cells
   subroutine a$D_sides_interp(boxes, id, nb, iv)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc, ix, dix, i, di, j, dj
-    integer :: i_c1, i_c2, j_c1, j_c2, ix_offset($D)
-    integer :: p_id
+    integer                     :: i_c1, i_c2, j_c1, j_c2
+    integer                     :: p_id, ix_offset($D)
 #if $D == 3
-    integer                     :: k, dk
+    integer                     :: k_c1, k_c2, k, dk
+    real(dp), parameter         :: f1=1/32.0_dp, f3=3*f1, f9=9*f1
 #endif
 
     nc        = boxes(id)%n_cell
@@ -1435,8 +1437,63 @@ contains
                0.5_dp * boxes(id)%cc(i, j+dj, iv)
        end do
 #elif $D==3
-    case default
-       stop
+    case (1)
+       i = ix
+       di = dix
+       i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+             boxes(id)%cc(i, j, k, iv) = &
+                  f9 * boxes(p_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                  f3 * boxes(p_id)%cc(i_c1, j_c2, k_c1, iv) + &
+                  f3 * boxes(p_id)%cc(i_c1, j_c1, k_c2, iv) + &
+                  f1 * boxes(p_id)%cc(i_c1, j_c2, k_c2, iv) + &
+                  0.5_dp * boxes(id)%cc(i+di, j, k, iv)
+          end do
+       end do
+    case (2)
+       j = ix
+       dj = dix
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+             boxes(id)%cc(i, j, k, iv) = &
+                  f9 * boxes(p_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                  f3 * boxes(p_id)%cc(i_c2, j_c1, k_c1, iv) + &
+                  f3 * boxes(p_id)%cc(i_c1, j_c1, k_c2, iv) + &
+                  f1 * boxes(p_id)%cc(i_c2, j_c1, k_c2, iv) + &
+                  0.5_dp * boxes(id)%cc(i, j+dj, k, iv)
+          end do
+       end do
+    case (3)
+       k = ix
+       dk = dix
+       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+             boxes(id)%cc(i, j, k, iv) = &
+                  f9 * boxes(p_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                  f3 * boxes(p_id)%cc(i_c1, j_c2, k_c1, iv) + &
+                  f3 * boxes(p_id)%cc(i_c2, j_c1, k_c1, iv) + &
+                  f1 * boxes(p_id)%cc(i_c2, j_c2, k_c1, iv) + &
+                  0.5_dp * boxes(id)%cc(i, j, k+dk, iv)
+          end do
+       end do
 #endif
     end select
 

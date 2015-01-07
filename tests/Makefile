@@ -10,8 +10,9 @@ INCDIRS	:= ../src
 LIBDIRS := ../src
 LIBS	:= afivo
 
-TESTS	:= test_morton test_base_2d test_unstr_vtk test_drift_diff_2d test_mg_2d \
-	test_base_3d test_mg2_2d test_mg2_3d test_streamer_2d
+TESTS	:= test_morton test_base_2d test_unstr_vtk test_drift_diff_2d \
+	test_mg_2d test_base_3d test_mg2_2d test_mg2_3d test_streamer_2d \
+	test_drift_diff_3d
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
