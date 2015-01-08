@@ -56,7 +56,7 @@ program test_mg2_2d
 
   ! Set the multigrid options
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
+       sides_bc, mg2d_lpl_box, mg2d_gsrb_lpl_box)
 
   ! Restrict from children recursively
   call a2_restrict_tree(tree, i_rhs)

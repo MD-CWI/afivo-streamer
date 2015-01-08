@@ -54,7 +54,7 @@ program test_drift_diff
 
   ! Set the multigrid options
   call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc_pot, a2_corners_extrap, mg2d_lpl_box, mg2d_gsrb_lpl_box)
+       sides_bc_pot, mg2d_lpl_box, mg2d_gsrb_lpl_box)
 
   ! Set up geometry
   id             = 1
@@ -127,9 +127,6 @@ program test_drift_diff
         ! Take average of phi_old and phi
         call a2_loop_box(tree, average_dens)
      end do
-
-     call a2_gc_corners(tree, i_elec, a2_corners_extrap, sides_bc_dens)
-     call a2_gc_corners(tree, i_pion, a2_corners_extrap, sides_bc_dens)
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)

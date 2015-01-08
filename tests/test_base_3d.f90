@@ -34,7 +34,6 @@ program test_base
 
   ! Fill ghost cells for phi
   call a3_gc_sides(tree, i_phi, a3_sides_prolong1, have_no_bc)
-  call a3_gc_corners(tree, i_phi, a3_corners_prolong1, have_no_bc)
 
   do i = 1, 13
      print *, "i = ", i, "max_id", tree%max_id

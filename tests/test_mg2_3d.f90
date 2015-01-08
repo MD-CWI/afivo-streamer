@@ -58,7 +58,7 @@ program test_mg2_3d
 
   print *, "Set the multigrid options"
   call mg3d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, a3_corners_extrap, mg3d_lpl_box, mg3d_gsrb_lpl_box)
+       sides_bc, mg3d_lpl_box, mg3d_gsrb_lpl_box)
 
   print *, "Restrict from children recursively"
   call a3_restrict_tree(tree, i_rhs)

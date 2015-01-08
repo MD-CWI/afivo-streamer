@@ -44,7 +44,6 @@ program test_drift_diff
      ! We should only set the finest level, but this also works
      call a3_loop_box(tree, set_init_cond)
      call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
-     call a3_gc_corners(tree, i_phi, a3_corners_extrap, have_no_bc)
      call a3_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
   end do
@@ -52,7 +51,6 @@ program test_drift_diff
   ! Restrict the initial conditions
   call a3_restrict_tree(tree, i_phi)
   call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
-  call a3_gc_corners(tree, i_phi, a3_corners_extrap, have_no_bc)
 
   i          = 0
   output_cnt = 0
@@ -100,7 +98,6 @@ program test_drift_diff
            call a3_loop_box_arg(tree, update_solution, [dt])
            call a3_restrict_tree(tree, i_phi)
            call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
-           call a3_gc_corners(tree, i_phi, a3_corners_extrap, have_no_bc)
         end do
      case (2)
         do n = 1, n_steps
@@ -115,7 +112,6 @@ program test_drift_diff
               call a3_loop_box_arg(tree, update_solution, [dt])
               call a3_restrict_tree(tree, i_phi)
               call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
-              call a3_gc_corners(tree, i_phi, a3_corners_extrap, have_no_bc)
            end do
 
            ! Take average of phi_old and phi
@@ -125,7 +121,6 @@ program test_drift_diff
 
      call a3_restrict_tree(tree, i_phi)
      call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
-     call a3_gc_corners(tree, i_phi, a3_corners_extrap, have_no_bc)
 
      call a3_adjust_refinement(tree, ref_func)
      call a3_loop_boxes(tree, prolong_to_new_children)
@@ -149,8 +144,7 @@ contains
          maxval(abs(box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - box%cc(1:nc, 0:nc, 1:nc, i_phi))), &
          maxval(abs(box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    ! if (box%lvl < 3 .and. diff > 0.1_dp) then
-    if (box%lvl < 3 .and. box%ix(1) == 1) then
+    if (box%lvl < 4 .and. diff > 0.1_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref

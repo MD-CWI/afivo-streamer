@@ -21,7 +21,6 @@ module m_mg_$Dd
      integer :: n_cycle_up
      integer :: n_cycle_base
      procedure(a$D_subr_gc), pointer, nopass    :: sides_bc
-     procedure(a$D_subr_gc), pointer, nopass    :: corners_bc
      procedure(mg$Dd_box_op), pointer, nopass   :: box_op
      procedure(mg$Dd_box_gsrb), pointer, nopass :: box_gsrb
   end type mg$D_t
@@ -55,11 +54,11 @@ contains
 
   subroutine mg$Dd_set(mg, i_phi, i_phi_old, i_rhs, i_res, &
        n_cycle_down, n_cycle_up, n_cycle_base, &
-       sides_bc, corners_bc, my_operator, my_gsrb)
+       sides_bc, my_operator, my_gsrb)
     type(mg$D_t), intent(out) :: mg
     integer, intent(in)      :: i_phi, i_phi_old, i_rhs, i_res
     integer, intent(in)      :: n_cycle_down, n_cycle_up, n_cycle_base
-    procedure(a$D_subr_gc)    :: sides_bc, corners_bc
+    procedure(a$D_subr_gc)    :: sides_bc
     procedure(mg$Dd_box_op)   :: my_operator
     procedure(mg$Dd_box_gsrb)   :: my_gsrb
 
@@ -71,7 +70,6 @@ contains
     mg%n_cycle_up   = n_cycle_up
     mg%n_cycle_base = n_cycle_base
     mg%sides_bc     => sides_bc
-    mg%corners_bc   => corners_bc
     mg%box_op       => my_operator
     mg%box_gsrb     => my_gsrb
   end subroutine mg$Dd_set
@@ -96,7 +94,7 @@ contains
 
           ! Update ghost cells
           call mg$Dd_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
-               mg%sides_bc, mg%corners_bc)
+               mg%sides_bc)
        end if
 
        ! Perform V-cycle
@@ -126,7 +124,7 @@ contains
        call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
 
        call mg$Dd_fill_gc(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
-            mg%sides_bc, mg%corners_bc)
+            mg%sides_bc)
 
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
        ! store current coarse phi in phi_old
@@ -151,29 +149,23 @@ contains
 
        ! Have to fill ghost cells again (todo: not everywhere?)
        call mg$Dd_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
-            mg%sides_bc, mg%corners_bc)
+            mg%sides_bc)
 
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
   end subroutine mg$Dd_fas_vcycle
 
-  subroutine mg$Dd_fill_gc(boxes, ids, iv, sides_bc, corners_bc)
+  subroutine mg$Dd_fill_gc(boxes, ids, iv, sides_bc)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:), iv
-    procedure(a$D_subr_gc)       :: sides_bc, corners_bc
+    procedure(a$D_subr_gc)       :: sides_bc
     integer                     :: i
 
     !$omp do
     do i = 1, size(ids)
        call a$D_gc_box_sides(boxes, ids(i), iv, &
             a$D_sides_extrap, sides_bc)
-    end do
-    !$omp end do
-    !$omp do
-    do i = 1, size(ids)
-       call a$D_gc_box_corners(boxes, ids(i), iv, &
-            a$D_corners_extrap, corners_bc)
     end do
     !$omp end do
   end subroutine mg$Dd_fill_gc
@@ -208,12 +200,8 @@ contains
     type(box$D_t), intent(in)    :: box_p
     integer, intent(in)         :: i_phi, i_phi_old, ix_offset($D)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-#if $D == 2
-    real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-#elif $D == 3
+#if $D == 3
     integer                     :: k, k_c1, k_c2
-    real(dp), parameter         :: f1=1/64.0_dp, f3=3/64.0_dp
-    real(dp), parameter         :: f9=9/64.0_dp, f27=27/64.0_dp
 #endif
 
     nc = box_c%n_cell
@@ -228,14 +216,12 @@ contains
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
           box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) &
-               + f9 * (box_p%cc(i_c1, j_c1, i_phi) &
+               + 0.5_dp * (box_p%cc(i_c1, j_c1, i_phi) &
                -      box_p%cc(i_c1, j_c1, i_phi_old)) &
-               + f3 * (box_p%cc(i_c2, j_c1, i_phi) &
+               + 0.25_dp * (box_p%cc(i_c2, j_c1, i_phi) &
                -       box_p%cc(i_c2, j_c1, i_phi_old) &
                +       box_p%cc(i_c1, j_c2, i_phi) &
-               -       box_p%cc(i_c1, j_c2, i_phi_old)) &
-               + f1 * (box_p%cc(i_c2, j_c2, i_phi) &
-               -       box_p%cc(i_c2, j_c2, i_phi_old))
+               -       box_p%cc(i_c1, j_c2, i_phi_old))
        end do
     end do
 #elif $D == 3
@@ -249,23 +235,15 @@ contains
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
-             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) &
-                  + f27 * (box_p%cc(i_c1, j_c1, k_c1, i_phi) &
-                  -        box_p%cc(i_c1, j_c1, k_c1, i_phi_old)) &
-                  + f9 * (box_p%cc(i_c2, j_c1, k_c1, i_phi) &
-                  -       box_p%cc(i_c2, j_c1, k_c1, i_phi_old)) &
-                  + f9 * (box_p%cc(i_c1, j_c2, k_c1, i_phi) &
-                  -       box_p%cc(i_c1, j_c2, k_c1, i_phi_old)) &
-                  + f9 * (box_p%cc(i_c1, j_c1, k_c2, i_phi) &
-                  -       box_p%cc(i_c1, j_c1, k_c2, i_phi_old)) &
-                  + f3 * (box_p%cc(i_c1, j_c2, k_c2, i_phi) &
-                  -       box_p%cc(i_c1, j_c2, k_c2, i_phi_old)) &
-                  + f3 * (box_p%cc(i_c2, j_c1, k_c2, i_phi) &
-                  -       box_p%cc(i_c2, j_c1, k_c2, i_phi_old)) &
-                  + f3 * (box_p%cc(i_c2, j_c2, k_c1, i_phi) &
-                  -       box_p%cc(i_c2, j_c2, k_c1, i_phi_old)) &
-                  + f1 * (box_p%cc(i_c2, j_c2, k_c2, i_phi) &
-                  -       box_p%cc(i_c2, j_c2, k_c2, i_phi_old))
+             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + 0.25_dp * ( &
+                  box_p%cc(i_c1, j_c1, k_c1, i_phi) &
+                  - box_p%cc(i_c1, j_c1, k_c1, i_phi_old) &
+                  + box_p%cc(i_c2, j_c1, k_c1, i_phi) &
+                  - box_p%cc(i_c2, j_c1, k_c1, i_phi_old) &
+                  + box_p%cc(i_c1, j_c2, k_c1, i_phi) &
+                  - box_p%cc(i_c1, j_c2, k_c1, i_phi_old) &
+                  + box_p%cc(i_c1, j_c1, k_c2, i_phi) &
+                  - box_p%cc(i_c1, j_c1, k_c2, i_phi_old))
           end do
        end do
     end do
@@ -289,13 +267,6 @@ contains
        do i = 1, size(ids)
           call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
                a$D_sides_extrap, mg%sides_bc)
-       end do
-       !$omp end do
-
-       !$omp do
-       do i = 1, size(ids)
-          call a$D_gc_box_corners(boxes, ids(i), mg%i_phi, &
-               a$D_corners_extrap, mg%corners_bc)
        end do
        !$omp end do
     end do

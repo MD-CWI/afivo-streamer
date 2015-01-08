@@ -43,7 +43,6 @@ program test_drift_diff
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
-     call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
      call a2_adjust_refinement(tree, ref_func, n_changes)
      if (n_changes == 0) exit
   end do
@@ -51,7 +50,6 @@ program test_drift_diff
   print *, "Restrict the initial conditions"
   call a2_restrict_tree(tree, i_phi)
   call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
-  call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
   i          = 0
   output_cnt = 0
@@ -119,7 +117,6 @@ program test_drift_diff
 
      call a2_restrict_tree(tree, i_phi)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
-     call a2_gc_corners(tree, i_phi, a2_corners_extrap, have_no_bc)
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
