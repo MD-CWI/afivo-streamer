@@ -4,7 +4,7 @@ program test_drift_diff
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
-  integer, parameter :: box_size    = 16
+  integer, parameter :: box_size    = 8
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
   integer, parameter :: i_flux      = 1
@@ -23,7 +23,7 @@ program test_drift_diff
   character(len=40) :: fname
 
   logical           :: write_out
-  integer           :: time_step_method = 2
+  integer           :: time_step_method = 1
 
   dr = 4.0_dp / box_size
 
@@ -61,7 +61,7 @@ program test_drift_diff
   dt_output  = 0.05_dp
   end_time   = 1.5_dp
   diff_coeff = 0.0_dp
-  vel_x      = 1.0_dp
+  vel_x      = -1.0_dp
   vel_y      = 0.0_dp
   vel_z      = 0.0_dp
 
@@ -100,6 +100,7 @@ program test_drift_diff
            call a3_loop_box_arg(tree, update_solution, [dt])
            call a3_restrict_tree(tree, i_phi)
            call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+           call a3_gc_corners(tree, i_phi, a3_corners_extrap, have_no_bc)
         end do
      case (2)
         do n = 1, n_steps
@@ -114,6 +115,7 @@ program test_drift_diff
               call a3_loop_box_arg(tree, update_solution, [dt])
               call a3_restrict_tree(tree, i_phi)
               call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+              call a3_gc_corners(tree, i_phi, a3_corners_extrap, have_no_bc)
            end do
 
            ! Take average of phi_old and phi
@@ -147,7 +149,8 @@ contains
          maxval(abs(box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - box%cc(1:nc, 0:nc, 1:nc, i_phi))), &
          maxval(abs(box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    if (box%lvl < 3 .and. diff > 0.1_dp) then
+    ! if (box%lvl < 3 .and. diff > 0.1_dp) then
+    if (box%lvl < 3 .and. box%ix(1) == 1) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
