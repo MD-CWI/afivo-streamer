@@ -27,15 +27,15 @@ To keep the code lean & fast, we restrict the framework in the following way:
 * The refinement ratio is always 2.
 * There is always a layer of width 1 of ghost cells (however you can always get
   more data from neighbors)
-* Corner ghost cells can be optionally filled.
+* Corner ghost cells are not automatically filled.
 * Quantities are either cell-centered or face-centered.
 * We use one type of conservative restriction.
-* We implement bi/tri-linear prolongation and injection.
+* We implement linear prolongation and injection.
 * Boundary conditions are provided by the user.
 * Parallellization is provided only for shared memory systems (using OpenMP).
 
 ### Todo
-* Add more tests, especially for the 3D code
+* Add more streamer example for 3D code
 * Look for "pretty" examples, generate some animations, and put them online.
 
 ### Features
@@ -43,10 +43,16 @@ To keep the code lean & fast, we restrict the framework in the following way:
 
 ### Design considerations
 
+#### Why don't you fill corner ghost cells by default?
+
+Filling these is relatively easy in 2D, but quite a pain in 3D. There you have to
+consider 8 corner points and 12 edges between these corners. These edges can be
+shared by multiple neighbors, and filling them in a consistent way is quite
+difficult.
+
 #### Why use Fortran (2003+)?
 
-I'm planning to write a little piece on this in the future. This will appear on
-my personal webpage (teunissen.net).
+Because it is one of the more convenient languages for scientific computing.
 
 #### Why don't you use MPI?
 
