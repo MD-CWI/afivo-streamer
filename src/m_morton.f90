@@ -1,13 +1,15 @@
-! This module contains methods to convert indices to morton numbers.
-!
-! Because fortran does not support unsigned integers, you can only use these
-! routines for positive integers.
+!> This module contains methods to convert indices to morton numbers.
+!>
+!> Because fortran does not support unsigned integers, you can only use these
+!> routines for positive integers.
 module m_morton
 
   implicit none
   private
 
   integer, parameter :: dp = kind(0.0d0)
+
+  !> Integer kind for morton number
   integer, parameter :: morton_k = selected_int_kind(15)
 
   ! Public types
@@ -25,15 +27,17 @@ module m_morton
 
 contains
 
+  !> Get morton number from ix(1:2)
   function morton_from_ix2(ix) result(m_ix)
     integer, intent(in) :: ix(2)
-    integer(morton_k)      :: m_ix
-    integer(morton_k) :: a, b
+    integer(morton_k)   :: m_ix
+    integer(morton_k)   :: a, b
     a = bit_space_1(ix(1))
     b = bit_space_1(ix(2))
     m_ix = ior(a, ishft(b, 1))
   end function morton_from_ix2
 
+  !> From morton number to ix(1:2)
   function morton_to_ix2(m_ix) result(ix)
     integer(morton_k), intent(in) :: m_ix
     integer                       :: ix(2)
@@ -41,6 +45,7 @@ contains
     ix(2) = bit_despace_1(ishft(m_ix, -1))
   end function morton_to_ix2
 
+  !> Get morton number from ix(1:3)
   function morton_from_ix3(ix) result(m_ix)
     integer, intent(in) :: ix(3)
     integer(morton_k)      :: m_ix
@@ -51,6 +56,7 @@ contains
     m_ix = ior(ior(a, ishft(b, 1)), ishft(c, 2))
   end function morton_from_ix3
 
+  !> Morton number to ix(1:3)
   function morton_to_ix3(m_ix) result(ix)
     integer(morton_k), intent(in) :: m_ix
     integer                       :: ix(3)
@@ -59,6 +65,8 @@ contains
     ix(3) = bit_despace_2(ishft(m_ix, -2))
   end function morton_to_ix3
 
+  !> Binary search for a morton number in a list. Returns the index of val in
+  !> list, or -1 if val is not found.
   function morton_bsearch(list, val) result(ix)
     integer(morton_k), intent(in) :: list(:)
     integer(morton_k), intent(in) :: val

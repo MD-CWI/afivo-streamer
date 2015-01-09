@@ -192,6 +192,18 @@ module m_afivo_$Dd
      end subroutine a$D_subr_gc
   end interface
 
+  private :: set_leaves_parents
+  private :: alloc_box
+  private :: dealloc_box
+  private :: set_nbs_$Dd
+  private :: find_nb_$Dd
+  private :: get_free_ids
+  private :: set_ref_flags
+  private :: remove_children
+  private :: add_children
+  private :: set_child_ids
+  private :: l2i
+
 contains
 
   !> Initialize a $Dd tree type.
@@ -1069,9 +1081,10 @@ contains
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
   subroutine a$D_prolong1_from(boxes, id, iv, fill_gc)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, iv
-    logical, intent(in)         :: fill_gc
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Box whose children we will fill
+    integer, intent(in)         :: iv        !< Variable that is filled
+    logical, intent(in)         :: fill_gc   !< Also fill ghost cells?
     integer                     :: dgc, nc, i_c, c_id, ix_offset($D)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 #if $D == 3
@@ -1127,10 +1140,13 @@ contains
     end do
   end subroutine a$D_prolong1_from
 
-  !> Partial prolongation from parent using injection (simply copy value)
+  !> Partial prolongation to a child (from parent) using injection (simply copy value)
   subroutine a$D_prolong0_to(boxes, id, lo, hi, iv)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id, lo($D), hi($D), iv
+    integer, intent(in)         :: id        !< Id of child
+    integer, intent(in)         :: lo($D)    !< Min cell index at child
+    integer, intent(in)         :: hi($D)    !< Max cell index at child
+    integer, intent(in)         :: iv        !< Variable to fill
     integer                     :: nc, p_id, ix_offset($D)
     integer                     :: i, j, i_c1, j_c1
 #if $D == 3
@@ -1164,14 +1180,20 @@ contains
 #endif
   end subroutine a$D_prolong0_to
 
-  ! Partial bilinear prolongation from parent.
-#if $D == 2
+  !> Partial prolongation to a child (from parent) using linear interpolation.
+  !> We use 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not
+  !> need corner ghost cells.
   subroutine a$D_prolong1_to(boxes, id, lo, hi, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, lo(2), hi(2), iv
-    real(dp), parameter         :: f1=1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
-    integer                     :: nc, p_id, ix_offset(2)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of child
+    integer, intent(in)         :: lo($D)    !< Min cell index at child
+    integer, intent(in)         :: hi($D)    !< Max cell index at child
+    integer, intent(in)         :: iv        !< Variable to fill
+    integer                     :: nc, p_id, ix_offset($D)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
+#if $D == 3
+    integer                     :: k, k_c1, k_c2
+#endif
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
@@ -1180,6 +1202,7 @@ contains
 
     ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
     ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
+#if $D == 2
     do j = lo(2), hi(2)
        j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
        j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
@@ -1192,22 +1215,7 @@ contains
                0.25_dp * boxes(p_id)%cc(i_c1, j_c2, iv)
        end do
     end do
-  end subroutine a$D_prolong1_to
 #elif $D == 3
-  subroutine a3_prolong1_to(boxes, id, lo, hi, iv)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, lo(3), hi(3), iv
-    integer                     :: nc, p_id, ix_offset(3)
-    integer                     :: i, j, k
-    integer                     :: i_c1, i_c2, j_c1, j_c2, k_c1, k_c2
-
-    nc        = boxes(id)%n_cell
-    p_id      = boxes(id)%parent
-    ! Offset of child w.r.t. parent
-    ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
-
-    ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
-    ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
     do k = lo(3), hi(3)
        k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
        k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
@@ -1225,13 +1233,15 @@ contains
           end do
        end do
     end do
-  end subroutine a3_prolong1_to
 #endif
+  end subroutine a$D_prolong1_to
 
-  ! Conservative restriction. a$D_num_children fine cells to one parent cell
+  !> Restrict the children of a box to the box (e.g., in 2D, average the values
+  !> at the four children to get the value for the parent)
   subroutine a$D_restrict_to_box(boxes, id, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, iv
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
+    integer, intent(in)         :: id        !< Box whose children will be restricted to it
+    integer, intent(in)         :: iv        !< Variable to restrict
     integer                     :: nc, i_c, c_id, ix_offset($D)
 
     nc = boxes(id)%n_cell
@@ -1244,10 +1254,11 @@ contains
     end do
   end subroutine a$D_restrict_to_box
 
-  ! Restrict variables iv to parent boxes ids(:)
+  !> Restrict the children of boxes ids(:) to them.
   subroutine a$D_restrict_to_boxes(boxes, ids, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: ids(:), iv
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
+    integer, intent(in)         :: ids(:)    !< Boxes whose children will be restricted to it
+    integer, intent(in)         :: iv        !< Variable to restrict
     integer                     :: i
 
     !$omp do
@@ -1257,10 +1268,10 @@ contains
     !$omp end do
   end subroutine a$D_restrict_to_boxes
 
-  ! Restrict variables iv to all parent boxes
+  !> Restrict variables iv to all parent boxes, from the highest to the lowest level
   subroutine a$D_restrict_tree(tree, iv)
     type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: iv
+    integer, intent(in)       :: iv    !< Variable to restrict
     integer                   :: lvl
 
     do lvl = tree%n_lvls-1, lbound(tree%lvls, 1), -1
@@ -1268,16 +1279,22 @@ contains
     end do
   end subroutine a$D_restrict_tree
 
-  ! Conservative restriction. a$D_num_children fine cells to one parent cell
-#if $D == 2
-  subroutine a2_restrict_box(box_c, box_p, ix_offset, iv)
-    type(box2_t), intent(in)    :: box_c
-    type(box2_t), intent(inout) :: box_p
-    integer, intent(in)         :: ix_offset(2), iv
+  !> Restriction of child box (box_c) to another box (box_p), typically its
+  !> parent. Note that ix_offset is used to specify to which part of box_p we
+  !> should restrict box_c.
+  subroutine a$D_restrict_box(box_c, box_p, ix_offset, iv)
+    type(box$D_t), intent(in)    :: box_c !< Child box to restrict
+    type(box$D_t), intent(inout) :: box_p !< Parent box to restrict to
+    integer, intent(in)         :: ix_offset($D) !< Index offset of the child w.r.t. the parent
+    integer, intent(in)         :: iv            !< Variable to restrict
     integer                     :: nc, i, j, i_c1, j_c1
+#if $D == 3
+    integer                     :: k, k_c1
+#endif
 
     nc = box_c%n_cell
 
+#if $D == 2
     do j = 1, nc, 2
        j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
        do i = 1, nc, 2
@@ -1285,17 +1302,7 @@ contains
           box_p%cc(i_c1, j_c1, iv) = 0.25_dp * sum(box_c%cc(i:i+1, j:j+1, iv))
        end do
     end do
-  end subroutine a2_restrict_box
 #elif $D == 3
-  subroutine a3_restrict_box(box_c, box_p, ix_offset, iv)
-    type(box3_t), intent(in)    :: box_c
-    type(box3_t), intent(inout) :: box_p
-    integer, intent(in)         :: ix_offset(3), iv
-    integer                     :: nc, i, j, k
-    integer                     :: i_c1, j_c1, k_c1
-
-    nc = box_c%n_cell
-
     do k = 1, nc, 2
        k_c1 = ix_offset(3) + ishft(k+1, -1)  ! (k+1)/2
        do j = 1, nc, 2
@@ -1307,15 +1314,16 @@ contains
           end do
        end do
     end do
-  end subroutine a3_restrict_box
 #endif
+  end subroutine a$D_restrict_box
 
-  ! Fill ghost cells for variables iv on the sides of all boxes, using
-  ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
+  !> Fill ghost cells for variables iv on the sides of all boxes, using
+  !> subr_no_nb on refinement boundaries and subr_bc on physical boundaries
   subroutine a$D_gc_sides(tree, iv, subr_no_nb, subr_bc)
     type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: iv
-    procedure(a$D_subr_gc)     :: subr_no_nb, subr_bc
+    integer, intent(in)       :: iv !< Variable for which ghost cells are set
+    procedure(a$D_subr_gc)     :: subr_no_nb !< Procedure called at refinement boundaries
+    procedure(a$D_subr_gc)     :: subr_bc    !< Procedure called at physical boundaries
     integer                   :: lvl, i, id
 
     do lvl = lbound(tree%lvls, 1), tree%n_lvls
@@ -1328,12 +1336,14 @@ contains
     end do
   end subroutine a$D_gc_sides
 
-  ! Fill ghost cells for variables iv on the sides of a boxes, using
-  ! subr_no_nb on refinement boundaries and subr_bc on physical boundaries
+  !> Fill ghost cells for variables iv on the sides of a box, using
+  !> subr_no_nb on refinement boundaries and subr_bc on physical boundaries
   subroutine a$D_gc_box_sides(boxes, id, iv, subr_no_nb, subr_bc)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, iv
-    procedure(a$D_subr_gc)       :: subr_no_nb, subr_bc
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
+    integer, intent(in)         :: id !< Id of box for which we set ghost cells
+    integer, intent(in)         :: iv !< Variable for which ghost cells are set
+    procedure(a$D_subr_gc)      :: subr_no_nb !< Procedure called at refinement boundaries
+    procedure(a$D_subr_gc)      :: subr_bc    !< Procedure called at physical boundaries
     integer                     :: nb
 
     do nb = 1, a$D_num_neighbors
@@ -1347,10 +1357,13 @@ contains
     end do
   end subroutine a$D_gc_box_sides
 
-  ! Bilinear interpolation from parent to fill ghost cells on sides
+  !> Linear interpolation (2-1-1 type) from parent to fill ghost cells on the
+  !> side of a box
   subroutine a$D_sides_prolong1(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
     integer                     :: nc
 
     nc = boxes(id)%n_cell
@@ -1382,11 +1395,13 @@ contains
     end select
   end subroutine a$D_sides_prolong1
 
-  ! Interpolate between fine points and coarse neighbors to fill ghost cells
-  ! near refinement boundaries
+  !> Interpolate between fine points and coarse neighbors to fill ghost cells
+  !> near refinement boundaries
   subroutine a$D_sides_interp(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
     integer                     :: nc, ix, ix_c, dix, i, di, j, dj
     integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
     integer                     :: p_id, ix_offset($D)
@@ -1498,13 +1513,16 @@ contains
 
   end subroutine a$D_sides_interp
 
-  ! Fill ghost cells near refinement boundaries which preserves fluxes.
-  ! Basically, we extrapolate from the fine cells to a corner point, and then
-  ! take the average between this corner point and a coarse neighbor to fill
-  ! ghost cells for the fine cells.
+  !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
+  !>
+  !> Basically, we extrapolate from the fine cells to a corner point, and then
+  !> take the average between this corner point and a coarse neighbor to fill
+  !> ghost cells for the fine cells.
   subroutine a$D_sides_extrap(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
     integer                     :: nc, ix, dix, i, di, j, dj
 #if $D == 3
     integer                     :: k, dk
@@ -1606,10 +1624,12 @@ contains
     end select
   end subroutine a$D_sides_extrap
 
-  ! Fill values on side from a neighbor
+  !> Fill values on the side of a box from a neighbor nb
   subroutine a$D_gc_side_from_nb(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell / neighbor direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
     integer                     :: nc, nb_id
 
     nc    = boxes(id)%n_cell
@@ -1642,11 +1662,11 @@ contains
     end select
   end subroutine a$D_gc_side_from_nb
 
-  ! Restrict fluxes from children to parents on refinement boundaries
+  !> Restrict fluxes from children to parents on refinement boundaries
   subroutine a$D_consistent_fluxes(tree, f_ixs)
     use omp_lib
     type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: f_ixs(:)
+    integer, intent(in)       :: f_ixs(:) !< Indices of the fluxes
     integer                   :: lvl, i, id, nb, nb_id
 
     do lvl = lbound(tree%lvls, 1), tree%n_lvls-1
@@ -1665,11 +1685,14 @@ contains
     !$omp barrier
   end subroutine a$D_consistent_fluxes
 
-  ! The neighbor nb has no children and id does, so get flux from children for
-  ! consisency at refinement boundary. TODO: TEST
+  !> The neighbor nb has no children and id does, so get flux from children for
+  !> consisency at refinement boundary.
+  !> @todo: TEST
   subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, f_ixs(:)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
+    integer, intent(in)         :: id        !< Id of box for which we set fluxes
+    integer, intent(in)         :: nb        !< Direction in which fluxes are set
+    integer, intent(in)         :: f_ixs(:)  !< Indices of the fluxes
     integer                     :: nc, nch, c_id, i_ch, i, ic, d, ioff($D)
     integer                     :: n_chnb
 
@@ -1745,13 +1768,14 @@ contains
     end select
   end subroutine a$D_flux_from_children
 
-  ! Write the cell centered data of a tree to a vtk file
+  !> Write the cell centered data of a tree to a vtk unstructured file
   subroutine a$D_write_tree(tree, filename, cc_names, n_cycle, time)
     use m_vtk
-    type(a$D_t), intent(in) :: tree
-    character(len=*)        :: filename, cc_names(:)
-    integer, intent(in)     :: n_cycle
-    real(dp), intent(in)    :: time
+    type(a$D_t), intent(in) :: tree !< Tree to write out
+    character(len=*)        :: filename !< Filename for the vtk file
+    character(len=*)        :: cc_names(:) !< Names of the cell-centered variables
+    integer, intent(in)     :: n_cycle     !< Cycle-number for vtk file (counter)
+    real(dp), intent(in)    :: time        !< Time for output file
     integer                 :: lvl, bc, bn, n, n_cells, n_nodes, n_grids
     integer                 :: ig, i, j, id, n_ix, c_ix
     integer                 :: cell_ix, node_ix
