@@ -3,9 +3,12 @@ SRC_DIRS	:= src tests
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
-.PHONY:	all clean $(SRC_DIRS) $(EXT_LIBS) $(CLEANSRC)
+.PHONY:	all doc clean $(SRC_DIRS) $(EXT_LIBS) $(CLEANSRC)
 
 all: 		$(SRC_DIRS) | $(CREATE_DIRS)
+
+doc:		$(SRC_DIRS)
+		doxygen
 
 clean: 		$(CLEANSRC)
 

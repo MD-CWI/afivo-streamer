@@ -1,5 +1,5 @@
 ! AFiVO code for Xd simulations. The following replacements take place on this code:
-! 1. $ D -> 2 or 3 (dimension of code)
+! 1. $D -> 2 or 3 (dimension of code)
 ! 2. preprocess file with cpp
 ! 3. cat -s (merge multiple blank lines)
 module m_afivo_$Dd
@@ -98,70 +98,81 @@ module m_afivo_$Dd
   integer, parameter :: a3_nb_dim(6) = [1, 1, 2, 2, 3, 3]
 #endif
 
+  !> The basic building block of afivo: a box with cell-centered and face
+  !> centered data, and information about its position, neighbors, children etc.
   type box$D_t
-     integer               :: lvl          ! level of the box
-     integer               :: tag          ! for setting tag bits
-     integer               :: ix($D)        ! index in the domain
-     integer               :: parent       ! index of parent in box list
-     integer               :: children(a$D_num_children)   ! index of children in box list
-     integer               :: neighbors(a$D_num_neighbors) ! index of neighbors in box list
-     integer               :: n_cell       ! number of cells per dimension
-     real(dp)              :: dr           ! width/height of a cell
-     real(dp)              :: r_min($D)     ! min coords. of box
-#if $D == 2
-     real(dp), allocatable :: cc(:, :, :)  ! cell centered variables
-     real(dp), allocatable :: fx(:, :, :)  ! x-face centered variables
-     real(dp), allocatable :: fy(:, :, :)  ! y-face centered variables
+     integer               :: lvl                         !< level of the box
+     integer               :: tag                         !< for setting tag bits
+     integer               :: ix($D)                       !< index in the domain
+     integer               :: parent                      !< index of parent in box list
+     integer               :: children(a$D_num_children)   !< index of children in box list
+     integer               :: neighbors(a$D_num_neighbors) !< index of neighbors in box list
+     integer               :: n_cell                      !< number of cells per dimension
+     real(dp)              :: dr                          !< width/height of a cell
+     real(dp)              :: r_min($D)                    !< min coords. of box
+#if $D   == 2
+     real(dp), allocatable :: cc(:, :, :)                 !< cell centered variables
+     real(dp), allocatable :: fx(:, :, :)                 !< x-face centered variables
+     real(dp), allocatable :: fy(:, :, :)                 !< y-face centered variables
 #elif $D == 3
-     real(dp), allocatable :: cc(:, :, :, :) ! cell centered variables
-     real(dp), allocatable :: fx(:, :, :, :) ! x-face centered variables
-     real(dp), allocatable :: fy(:, :, :, :) ! y-face centered variables
-     real(dp), allocatable :: fz(:, :, :, :) ! z-face centered variables
+     real(dp), allocatable :: cc(:, :, :, :)              !< cell centered variables
+     real(dp), allocatable :: fx(:, :, :, :)              !< x-face centered variables
+     real(dp), allocatable :: fy(:, :, :, :)              !< y-face centered variables
+     real(dp), allocatable :: fz(:, :, :, :)              !< z-face centered variables
 #endif
   end type box$D_t
 
+  !> Type which contains the indices of all boxes at a refinement level, as well
+  !> as a list with all the "leaf" boxes and non-leaf (parent) boxes
   type lvl_t
-     integer, allocatable      :: ids(:)       ! indices of boxes of level
-     integer, allocatable      :: leaves(:)     ! all ids(:) that are leaves
-     integer, allocatable      :: parents(:)   ! all ids(:) that have children
+     integer, allocatable :: ids(:)     !< indices of boxes of level
+     integer, allocatable :: leaves(:)  !< all ids(:) that are leaves
+     integer, allocatable :: parents(:) !< all ids(:) that have children
   end type lvl_t
 
+  !> Type which stores all the boxes and levels, as well as some information
+  !> about the number of boxes, variables and levels.
   type a$D_t
-     integer                   :: max_lvl    ! maximum allowed level
-     integer                   :: n_lvls     ! current maximum level
-     integer                   :: max_id     ! max index in box list
-     integer                   :: n_cell     ! number of cells per dimension
-     integer                   :: n_var_cell ! number of cc variables
-     integer                   :: n_var_face ! number of fc variables
-     real(dp)                  :: r_base($D)  ! coords of box at index (1,1)
-     real(dp)                  :: dr_base    ! cell spacing at lvl 1
-     type(lvl_t), allocatable  :: lvls(:)    ! list storing the tree levels
-     type(box$D_t), allocatable :: boxes(:)   ! list of all boxes
+     integer                   :: max_lvl    !< maximum allowed level
+     integer                   :: n_lvls     !< current maximum level
+     integer                   :: max_id     !< max index in box list
+     integer                   :: n_cell     !< number of cells per dimension
+     integer                   :: n_var_cell !< number of cc variables
+     integer                   :: n_var_face !< number of fc variables
+     real(dp)                  :: r_base($D)  !< coords of box at index (1,1)
+     real(dp)                  :: dr_base    !< cell spacing at lvl 1
+     type(lvl_t), allocatable  :: lvls(:)    !< list storing the tree levels
+     type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
   end type a$D_t
 
   abstract interface
+     !> Function that gets a box and returns an int
      integer function a$D_to_int_f(box)
        import
        type(box$D_t), intent(in) :: box
      end function a$D_to_int_f
 
+     !> Subroutine that gets a box
      subroutine a$D_subr(box)
        import
        type(box$D_t), intent(inout) :: box
      end subroutine a$D_subr
 
+     !> Subroutine that gets a box and an array of reals
      subroutine a$D_subr_arg(box, rarg)
        import
        type(box$D_t), intent(inout) :: box
        real(dp), intent(in)        :: rarg(:)
      end subroutine a$D_subr_arg
 
+     !> Subroutine that gets a list of boxes and a box id
      subroutine a$D_subr_boxes(boxes, id)
        import
        type(box$D_t), intent(inout) :: boxes(:)
        integer, intent(in)         :: id
      end subroutine a$D_subr_boxes
 
+     !> Subroutine that gets a list of boxes, an id and an array of reals
      subroutine a$D_subr_boxes_arg(boxes, id, rarg)
        import
        type(box$D_t), intent(inout) :: boxes(:)
@@ -169,27 +180,32 @@ module m_afivo_$Dd
        real(dp), intent(in)        :: rarg(:)
      end subroutine a$D_subr_boxes_arg
 
-     subroutine a$D_subr_gc(boxes, id, i, iv)
+     !> Subroutine for filling ghost cells on the sides of boxes, near
+     !> refinement or physical boundaries.
+     subroutine a$D_subr_gc(boxes, id, nb, iv)
        import
-       type(box$D_t), intent(inout) :: boxes(:)
-       integer, intent(in)         :: id, i, iv
+       type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
+       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled,
+                                               !< see a$D_nb_lx etc.
+       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
      end subroutine a$D_subr_gc
   end interface
 
 contains
 
-  ! Initialize a $Dd tree type
+  !> Initialize a $Dd tree type.
   subroutine a$D_init(tree, max_lvl, n_boxes, n_cell, n_var_cell, n_var_face, &
        dr, r_min, coarsen_to)
-    type(a$D_t), intent(out) :: tree       ! The tree to initialize
-    integer, intent(in)     :: max_lvl    ! Maximum number of levels
-    integer, intent(in)     :: n_boxes    ! Allocate initial storage for n_boxes
-    integer, intent(in)     :: n_cell     ! Boxes have n_cell^dim cells
-    integer, intent(in)     :: n_var_cell ! Number of cell-centered variables
-    integer, intent(in)     :: n_var_face ! Number of face-centered variables
-    real(dp), intent(in)    :: dr         ! spacing of a cell at lvl 1
-    real(dp), intent(in)    :: r_min($D)   ! Lower left coordinate of box 1,1
-    integer, intent(in)     :: coarsen_to
+    type(a$D_t), intent(out) :: tree       !< The tree to initialize
+    integer, intent(in)     :: max_lvl    !< Maximum number of levels
+    integer, intent(in)     :: n_boxes    !< Allocate initial storage for n_boxes
+    integer, intent(in)     :: n_cell     !< Boxes have n_cell^dim cells
+    integer, intent(in)     :: n_var_cell !< Number of cell-centered variables
+    integer, intent(in)     :: n_var_face !< Number of face-centered variables
+    real(dp), intent(in)    :: dr         !< spacing of a cell at lvl 1
+    real(dp), intent(in)    :: r_min($D)   !< Lower left coordinate of box 1,1
+    integer, intent(in)     :: coarsen_to !< Create additional coarse grids down to this size
     integer                 :: lvl, min_lvl
 
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
@@ -230,7 +246,8 @@ contains
     tree%n_lvls       = 0
   end subroutine a$D_init
 
-  ! Since we use no pointers, you can also just let a tree get out of scope
+  !> "Destroy" the data in a tree. Since we don't use pointers, you can also
+  !> just let a tree get out of scope
   subroutine a$D_destroy(tree)
     type(a$D_t), intent(inout) :: tree
     integer                   :: lvl
@@ -244,12 +261,12 @@ contains
     tree%max_id = 0
   end subroutine a$D_destroy
 
-    ! Create the base level of the tree, ix_list(:, id) stores the index of box
-  ! id, nb_list(:, id) stores the neighbors of box id
+  !> Create the base level of the tree, ix_list(:, id) stores the index of box
+  !> id, nb_list(:, id) stores the neighbors of box id
   subroutine a$D_set_base(tree, ix_list, nb_list)
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: ix_list(:, :)
-    integer, intent(inout)    :: nb_list(:, :)
+    type(a$D_t), intent(inout) :: tree !< Tree for which we set the base
+    integer, intent(in)       :: ix_list(:, :) !< List of spatial indices for the initial boxes
+    integer, intent(inout)    :: nb_list(:, :) !< Neighbors for the initial boxes
     integer                   :: n_boxes, i, id, nb, nb_id
     integer                   :: ix($D), lvl, offset
 
@@ -271,7 +288,7 @@ contains
        deallocate(tree%lvls(lvl)%ids)
        allocate(tree%lvls(lvl)%ids(n_boxes))
 
-       call a$D_get_free_ids(tree, tree%lvls(lvl)%ids)
+       call get_free_ids(tree, tree%lvls(lvl)%ids)
        offset = tree%lvls(lvl)%ids(1) - 1
 
        do i = 1, n_boxes
@@ -320,7 +337,7 @@ contains
 
   end subroutine a$D_set_base
 
-  ! Call procedure for each box in tree
+  !> Call procedure for each box in tree
   subroutine a$D_loop_box(tree, my_procedure)
     type(a$D_t), intent(inout) :: tree
     procedure(a$D_subr)        :: my_procedure
@@ -337,7 +354,7 @@ contains
     !$omp barrier
   end subroutine a$D_loop_box
 
-  ! Call procedure for each box in tree, with argument rarg
+  !> Call procedure for each box in tree, with argument rarg
   subroutine a$D_loop_box_arg(tree, my_procedure, rarg)
     type(a$D_t), intent(inout) :: tree
     procedure(a$D_subr_arg)    :: my_procedure
@@ -355,7 +372,7 @@ contains
     !$omp barrier
   end subroutine a$D_loop_box_arg
 
-  ! Call procedure for each id in tree, giving the list of boxes
+  !> Call procedure for each id in tree, giving the list of boxes
   subroutine a$D_loop_boxes(tree, my_procedure)
     type(a$D_t), intent(inout) :: tree
     procedure(a$D_subr_boxes)  :: my_procedure
@@ -372,7 +389,7 @@ contains
     !$omp barrier
   end subroutine a$D_loop_boxes
 
-  ! Call procedure for each id in tree, giving the list of boxes
+  !> Call procedure for each id in tree, giving the list of boxes
   subroutine a$D_loop_boxes_arg(tree, my_procedure, rarg)
     type(a$D_t), intent(inout)    :: tree
     procedure(a$D_subr_boxes_arg) :: my_procedure
@@ -390,21 +407,22 @@ contains
     !$omp barrier
   end subroutine a$D_loop_boxes_arg
 
-  ! Clear the bit from all the tags in the tree
+  !> Clear "bit" from all the tags in the tree
   subroutine a$D_clear_tagbit(tree, bit)
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)       :: bit
     tree%boxes(1:tree%max_id)%tag = ibclr(tree%boxes(1:tree%max_id)%tag, bit)
   end subroutine a$D_clear_tagbit
 
-  ! Resize and reorder the list of boxes.
+  !> Reorder and resize the list of boxes. If the argument only_reorder is true, only reorder the boxes.
   subroutine a$D_tidy_up(tree, max_frac_used, goal_frac_used, &
        n_clean_min, only_reorder)
     use m_morton
-    type(a$D_t), intent(inout)      :: tree
-    real(dp), intent(in)           :: max_frac_used, goal_frac_used
-    integer, intent(in)            :: n_clean_min
-    logical, intent(in)            :: only_reorder
+    type(a$D_t), intent(inout)      :: tree          !< Tree for the list of boxes is reordered/resized
+    real(dp), intent(in)           :: max_frac_used !< Maximum fraction of box-memory used
+    real(dp), intent(in)           :: goal_frac_used !< If resizing, what fraction should be in use?
+    integer, intent(in)            :: n_clean_min    !< Free up memory if at least this many boxes can be cleaned up
+    logical, intent(in)            :: only_reorder   !< Do not resize the box list; only reorder it
     real(dp)                       :: frac_in_use
     integer                        :: n, lvl, id, old_size, new_size, n_clean
     integer                        :: max_id, n_used, n_stored, n_used_lvl
@@ -499,11 +517,11 @@ contains
     !$omp end single
   end subroutine a$D_tidy_up
 
-  ! Create a list of leaves and a list of parents for level
+  !> Create a list of leaves and a list of parents for a level
   subroutine set_leaves_parents(boxes, level)
-    type(box$D_t), intent(in)    :: boxes(:)
-    type(lvl_t), intent(inout) :: level
-    integer                     :: i, id, i_leaf, i_parent
+    type(box$D_t), intent(in)   :: boxes(:) !< List of boxes
+    type(lvl_t), intent(inout) :: level    !< Level type which contains the indices of boxes
+    integer                    :: i, id, i_leaf, i_parent
 
     i_leaf   = 0
     i_parent = 0
@@ -519,10 +537,12 @@ contains
     end do
   end subroutine set_leaves_parents
 
-  ! Allocate the data storage for a box
+  !> Allocate data storage for a box, for its cell- and face-centered data
   subroutine alloc_box(box, n_cell, n_cc, n_fc)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: n_cell, n_cc, n_fc
+    type(box$D_t), intent(inout) :: box !< Box for which we allocate memory
+    integer, intent(in)         :: n_cell !< Number of cells per dimension in the box
+    integer, intent(in)         :: n_cc   !< Number of cell-centered variables
+    integer, intent(in)         :: n_fc   !< Number of face-centered variables
 
 #if $D == 2
     allocate(box%cc(0:n_cell+1, 0:n_cell+1, n_cc))
@@ -536,7 +556,7 @@ contains
 #endif
   end subroutine alloc_box
 
-  ! Deallocate the data storage for a box
+  !> Deallocate data storage for a box
   subroutine dealloc_box(box)
     type(box$D_t), intent(inout) :: box
     deallocate(box%cc)
@@ -564,10 +584,10 @@ contains
     end do
   end subroutine set_nbs_$Dd
 
-  ! Compute the child index of ix
+  !> Compute the child index for a box with spatial index ix.
   integer function a$D_ix_to_cix(ix)
-    integer, intent(in) :: ix($D)
-    ! Second index odd: -2, first ix odd: -1
+    integer, intent(in) :: ix($D) !< Spatial index of the box
+    ! The index can range from 1 (all ix odd) and 2**$D (all ix even)
 #if $D == 2
     a$D_ix_to_cix = 4 - 2 * iand(ix(2), 1) - iand(ix(1), 1)
 #elif $D == 3
@@ -575,10 +595,11 @@ contains
 #endif
   end function a$D_ix_to_cix
 
-  ! Get neighbor nb of id, through its parent
+  !> Get the id of neighbor nb of boxes(id), through its parent
   function find_nb_$Dd(boxes, id, nb) result(nb_id)
-    type(box$D_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id, nb
+    type(box$D_t), intent(in) :: boxes(:) !< List with all the boxes
+    integer, intent(in)      :: id       !< Box whose neighbor we are looking for
+    integer, intent(in)      :: nb       !< Neighbor index
     integer                  :: nb_id, p_id, c_ix, d, old_pid
 
     p_id    = boxes(id)%parent
@@ -595,10 +616,10 @@ contains
     nb_id = boxes(p_id)%children(a$D_ch_rev(c_ix, d))
   end function find_nb_$Dd
 
-  ! Resize the box storage to new_size
+  !> Resize box storage to new_size
   subroutine a$D_resize_box_storage(tree, new_size)
     type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: new_size
+    integer, intent(in)       :: new_size !< New size for the array boxes(:)
     type(box$D_t), allocatable :: boxes_cpy(:)
 
     ! Store boxes in larger array boxes_cpy
@@ -613,13 +634,17 @@ contains
     call move_alloc(boxes_cpy, tree%boxes)
   end subroutine a$D_resize_box_storage
 
-  ! On input, tree should be balanced. On output, tree is still balanced, and
-  ! its refinement is updated (with at most one level per call).
-  ! Sets bit: a5_bit_new_children
+  !> Adjust the refinement of a tree using the user-supplied ref_func. If the
+  !> argument n_changes is present, it contains the number of boxes that were
+  !> (de)refined.
+  !>
+  !> This routine sets the bit a5_bit_new_children for each box that is refined.
+  !> On input, the tree should be balanced. On output, the tree is still
+  !> balanced, and its refinement is updated (with at most one level per call).
   subroutine a$D_adjust_refinement(tree, ref_func, n_changes)
-    type(a$D_t), intent(inout)      :: tree
-    procedure(a$D_to_int_f)         :: ref_func
-    integer, intent(out), optional :: n_changes
+    type(a$D_t), intent(inout)      :: tree !< Tree whose refinement will be adjusted
+    procedure(a$D_to_int_f)         :: ref_func !< User supplied refinement function
+    integer, intent(out), optional :: n_changes !< Number of (de)refined boxes
     integer                        :: lvl, id, i, c_ids(a$D_num_children), i_c
     integer                        :: max_id_prev, max_id_req
     integer                        :: n_leaves, n_parents
@@ -633,7 +658,7 @@ contains
     call a$D_clear_tagbit(tree, a5_bit_new_children)
 
     ! Set refinement values for all boxes
-    call a$D_set_ref_flags(tree, ref_flags, ref_func)
+    call set_ref_flags(tree, ref_flags, ref_func)
 
     if (present(n_changes)) n_changes = count(ref_flags /= a5_kp_ref)
 
@@ -652,12 +677,12 @@ contains
              cycle              ! This is a newly added box
           else if (ref_flags(id) == a5_do_ref) then
              ! Add children. First need to get num_children free id's
-             call a$D_get_free_ids(tree, c_ids)
-             call a$D_add_children(tree%boxes, id, c_ids, &
+             call get_free_ids(tree, c_ids)
+             call add_children(tree%boxes, id, c_ids, &
                   tree%n_var_cell, tree%n_var_face)
           else if (ref_flags(id) == a5_rm_children) then
              ! Remove children
-             call a$D_remove_children(tree%boxes, id)
+             call remove_children(tree%boxes, id)
           end if
        end do
 
@@ -695,10 +720,11 @@ contains
     !$omp end single
   end subroutine a$D_adjust_refinement
 
-  ! Get free ids to store new boxes in
-  subroutine a$D_get_free_ids(tree, ids)
+  !> Get free ids from the boxes(:) array to store new boxes in. These ids are
+  !> always consecutive.
+  subroutine get_free_ids(tree, ids)
     type(a$D_t), intent(inout) :: tree
-    integer, intent(out)      :: ids(:)
+    integer, intent(out)      :: ids(:) !< Array which will be filled with free box ids
     integer                   :: i, max_id_prev, n_ids
 
     n_ids = size(ids)
@@ -708,16 +734,18 @@ contains
     !$omp end critical
 
     ids = [(max_id_prev + i, i=1,n_ids)]
-  end subroutine a$D_get_free_ids
+  end subroutine get_free_ids
 
-  ! Given the refinement function, return consistent refinement flags
-  subroutine a$D_set_ref_flags(tree, ref_flags, ref_func)
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(inout)      :: ref_flags(:)
-    procedure(a$D_to_int_f)      :: ref_func
-    integer                     :: lvl, i, id, c_ids(a$D_num_children)
-    integer                     :: nb, p_id, nb_id, p_nb_id
-    integer :: max_lvl
+  !> Given the refinement function, return consistent refinement flags, that
+  !> ensure that the tree is still balanced. Furthermore, it cannot derefine the
+  !> base level, and it cannot refine above tree%max_lvl.
+  subroutine set_ref_flags(tree, ref_flags, ref_func)
+    type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
+    integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
+    procedure(a$D_to_int_f)    :: ref_func     !< User-supplied refinement function.
+    integer                   :: lvl, i, id, c_ids(a$D_num_children)
+    integer                   :: nb, p_id, nb_id, p_nb_id
+    integer                   :: max_lvl
 
     max_lvl = tree%max_lvl
     ref_flags(:) = a5_kp_ref      ! Used indices are overwritten
@@ -793,12 +821,12 @@ contains
        end do
     end do
 
-  end subroutine a$D_set_ref_flags
+  end subroutine set_ref_flags
 
-  ! Remove the children of box id
-  subroutine a$D_remove_children(boxes, id)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id
+  !> Remove the children of box id
+  subroutine remove_children(boxes, id)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id       !< Id of box whose children will be removed
     integer                     :: ic, c_id, nb_id, nb_rev, nb
 
     do ic = 1, a$D_num_children
@@ -815,12 +843,15 @@ contains
     end do
 
     boxes(id)%children = a5_no_box
-  end subroutine a$D_remove_children
+  end subroutine remove_children
 
-  ! Add children to box id, using the indices in c_ids
-  subroutine a$D_add_children(boxes, id, c_ids, n_cc, n_fc)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, c_ids(a$D_num_children), n_cc, n_fc
+  !> Add children to box id, using the indices in c_ids
+  subroutine add_children(boxes, id, c_ids, n_cc, n_fc)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id       !< Id of box that gets children
+    integer, intent(in)         :: c_ids(a$D_num_children) !< Free ids for the children
+    integer, intent(in)         :: n_cc                   !< Number of cell-centered variables
+    integer, intent(in)         :: n_fc                   !< Number of face-centered variables
     integer                     :: i, nb, ch_nb(2**($D-1)), c_id, c_ix_base($D)
 
     boxes(id)%children = c_ids
@@ -850,13 +881,14 @@ contains
           boxes(ch_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
        end if
     end do
-  end subroutine a$D_add_children
+  end subroutine add_children
 
-  ! Create a list c_ids of all the children of p_ids
+  !> Create a list c_ids(:) of all the children of p_ids(:). This is used after
+  !> a level has been refined.
   subroutine set_child_ids(p_ids, c_ids, boxes)
-    integer, intent(in)                 :: p_ids(:)
-    integer, allocatable, intent(inout) :: c_ids(:)
-    type(box$D_t), intent(in)            :: boxes(:)
+    integer, intent(in)                 :: p_ids(:) !< All the parents ids
+    integer, allocatable, intent(inout) :: c_ids(:) !< Output: all the children's ids
+    type(box$D_t), intent(in)            :: boxes(:) !< List of all the boxes
     integer                             :: i, ip, i_c, n_children
 
     ! Count a$D_num_children times the number of refined parent blocks
@@ -873,26 +905,27 @@ contains
     end do
   end subroutine set_child_ids
 
+  !> Test if a box has children
   elemental logical function a$D_has_children(box)
     type(box$D_t), intent(in) :: box
     a$D_has_children = (box%children(1) /= a5_no_box)
   end function a$D_has_children
 
-  ! Return minimum dr that is used in the tree
+  !> Return finest dr that is used in the tree
   pure function a$D_min_dr(tree) result(dr)
     type(a$D_t), intent(in) :: tree
-    real(dp)               :: dr($D)
+    real(dp)               :: dr($D) !< Output: dr at the finest lvl of the tree
     dr = tree%dr_base * 0.5_dp**(tree%n_lvls-1)
   end function a$D_min_dr
 
-  ! Return the coordinate of the center of a box
+  !> Return the coordinate of the center of a box
   pure function a$D_r_center(box) result(r_center)
     type(box$D_t), intent(in) :: box
     real(dp)                 :: r_center($D)
     r_center = box%r_min + 0.5_dp * box%n_cell * box%dr
   end function a$D_r_center
 
-  ! Location of cell center with index cc_ix
+  !> Get the location of the cell center with index cc_ix
   pure function a$D_r_cc(box, cc_ix) result(r)
     type(box$D_t), intent(in) :: box
     integer, intent(in)      :: cc_ix($D)
@@ -900,7 +933,7 @@ contains
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_r_cc
 
-  ! Location of cell center with real index cc_ix
+  !> Get a general location with real index cc_ix (like a$D_r_cc).
   pure function a$D_rr_cc(box, cc_ix) result(r)
     type(box$D_t), intent(in) :: box
     real(dp), intent(in)     :: cc_ix($D)
@@ -908,7 +941,7 @@ contains
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_rr_cc
 
-  ! Location of node with index nd_ix
+  !> Get the location of a node (cell-corner) with index nd_ix
   pure function a$D_r_node(box, nd_ix) result(r)
     type(box$D_t), intent(in) :: box
     integer, intent(in)      :: nd_ix($D)
@@ -916,7 +949,7 @@ contains
     r = box%r_min + (nd_ix-1) * box%dr
   end function a$D_r_node
 
-  ! True -> 1, false -> 0
+  !> Map true -> 1, false -> 0
   elemental integer function l2i(my_bool)
     logical, intent(in) :: my_bool
     if (my_bool) then
@@ -926,7 +959,7 @@ contains
     end if
   end function l2i
 
-  ! Add cc(..., iv_from) to box%cc(..., iv_to)
+  !> Add cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_add_cc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
@@ -937,7 +970,7 @@ contains
 #endif
   end subroutine a$D_box_add_cc
 
-  ! Subtract cc(..., iv_from) from box%cc(..., iv_to)
+  !> Subtract cc(..., iv_from) from box%cc(..., iv_to)
   subroutine a$D_box_sub_cc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
@@ -948,7 +981,7 @@ contains
 #endif
   end subroutine a$D_box_sub_cc
 
-  ! Set cc(..., iv_to) = a * cc(..., iv_a) + b * cc(..., iv_b)
+  !> Set cc(..., iv_to) = a * cc(..., iv_a) + b * cc(..., iv_b)
   subroutine a$D_box_lincomb_cc(box, a, iv_a, b, iv_b, iv_to)
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)        :: a, b
@@ -960,7 +993,7 @@ contains
 #endif
   end subroutine a$D_box_lincomb_cc
 
-  ! Copy cc(..., iv_from) to box%cc(..., iv_to)
+  !> Copy cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_copy_cc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
@@ -971,7 +1004,7 @@ contains
 #endif
   end subroutine a$D_box_copy_cc
 
-  ! Copy cc(..., iv_from) to box%cc(..., iv_to) for all ids
+  !> Copy cc(..., iv_from) to box%cc(..., iv_to) for all ids
   subroutine a$D_boxes_copy_cc(boxes, ids, iv_from, iv_to)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:), iv_from, iv_to
@@ -984,7 +1017,7 @@ contains
     !$omp end do
   end subroutine a$D_boxes_copy_cc
 
-  ! Copy cc(..., iv_from) to box%cc(..., iv_to) for full tree
+  !> Copy cc(..., iv_from) to box%cc(..., iv_to) for full tree
   subroutine a$D_tree_copy_cc(tree, iv_from, iv_to)
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)       :: iv_from, iv_to
@@ -995,7 +1028,7 @@ contains
     end do
   end subroutine a$D_tree_copy_cc
 
-  ! Copy flux(..., iv_from) to box%flux(..., iv_to)
+  !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
@@ -1009,7 +1042,7 @@ contains
 #endif
   end subroutine a$D_box_copy_fc
 
-  ! Copy flux(..., iv_from) to box%flux(..., iv_to) for all ids
+  !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to) for all ids
   subroutine a$D_boxes_copy_fc(boxes, ids, iv_from, iv_to)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:), iv_from, iv_to
@@ -1022,7 +1055,7 @@ contains
     !$omp end do
   end subroutine a$D_boxes_copy_fc
 
-  ! Copy flux(..., iv_from) to box%flux(..., iv_to) for full tree
+  !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to) for full tree
   subroutine a$D_tree_copy_fc(tree, iv_from, iv_to)
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)       :: iv_from, iv_to
@@ -1033,28 +1066,35 @@ contains
     end do
   end subroutine a$D_tree_copy_fc
 
-  ! Bilinear prolongation to children. Uses ghost cells and corners.
-#if $D == 2
-  subroutine a2_prolong1_from(boxes, id, iv, fill_gc)
-    type(box2_t), intent(inout) :: boxes(:)
+  !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
+  !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
+  subroutine a$D_prolong1_from(boxes, id, iv, fill_gc)
+    type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, iv
     logical, intent(in)         :: fill_gc
-    integer                     :: nc, i_c, c_id, ix_offset(2)
+    integer                     :: dgc, nc, i_c, c_id, ix_offset($D)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
+#if $D == 3
+    integer                     :: k, k_c1, k_c2
+#endif
 
-    nc = boxes(id)%n_cell
-    do i_c = 1, a2_num_children
+    nc  = boxes(id)%n_cell
+    dgc = l2i(fill_gc)
+
+
+    do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
 
        ! Offset of child w.r.t. parent
-       ix_offset = a2_ch_dix(:, i_c) * ishft(nc, -1)
+       ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
 
        ! In these loops, we calculate the closest coarse index (_c1), and the
        ! one-but-closest (_c2). The fine cell lies in between.
-       do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
+#if $D == 2
+       do j = 1-dgc, nc+dgc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
+          do i = 1-dgc, nc+dgc
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
@@ -1064,32 +1104,14 @@ contains
                   0.25_dp * boxes(id)%cc(i_c1, j_c2, iv)
           end do
        end do
-    end do
-  end subroutine a2_prolong1_from
 #elif $D == 3
-  subroutine a3_prolong1_from(boxes, id, iv, fill_gc)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, iv
-    logical, intent(in)         :: fill_gc
-    integer                     :: nc, i_c, c_id, ix_offset(3)
-    integer                     :: i, j, k, i_c1, i_c2, j_c1, j_c2, k_c1, k_c2
-
-    nc = boxes(id)%n_cell
-    do i_c = 1, a3_num_children
-       c_id = boxes(id)%children(i_c)
-
-       ! Offset of child w.r.t. parent
-       ix_offset = a3_ch_dix(:, i_c) * ishft(nc, -1)
-
-       ! In these loops, we calculate the closest coarse index (_c1), and the
-       ! one-but-closest (_c2). The fine cell lies in between.
-       do k = 1-l2i(fill_gc), nc+l2i(fill_gc)
+       do k = 1-dgc, nc+dgc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
           k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-          do j = 1-l2i(fill_gc), nc+l2i(fill_gc)
+          do j = 1-dgc, nc+dgc
              j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
              j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             do i = 1-l2i(fill_gc), nc+l2i(fill_gc)
+             do i = 1-dgc, nc+dgc
                 i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
                 i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
@@ -1101,23 +1123,26 @@ contains
              end do
           end do
        end do
-    end do
-  end subroutine a3_prolong1_from
 #endif
+    end do
+  end subroutine a$D_prolong1_from
 
-  ! Partial prolongation from parent using injection.
-#if $D == 2
+  !> Partial prolongation from parent using injection (simply copy value)
   subroutine a$D_prolong0_to(boxes, id, lo, hi, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id, lo($D), hi($D), iv
     integer                     :: nc, p_id, ix_offset($D)
     integer                     :: i, j, i_c1, j_c1
+#if $D == 3
+    integer                     :: k, k_c1
+#endif
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
     ! Offset of child w.r.t. parent
     ix_offset = (boxes(id)%ix - 2*boxes(p_id)%ix + 1) * ishft(nc, -1)
 
+#if $D == 2
     do j = lo(2), hi(2)
        j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
        do i = lo(1), hi(1)
@@ -1125,19 +1150,7 @@ contains
           boxes(id)%cc(i, j, iv) = boxes(p_id)%cc(i_c1, j_c1, iv)
        end do
     end do
-  end subroutine a$D_prolong0_to
 #elif $D == 3
-  subroutine a3_prolong0_to(boxes, id, lo, hi, iv)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, lo(3), hi(3), iv
-    integer                     :: nc, p_id, ix_offset(3)
-    integer                     :: i, j, k, i_c1, j_c1, k_c1
-
-    nc        = boxes(id)%n_cell
-    p_id      = boxes(id)%parent
-    ! Offset of child w.r.t. parent
-    ix_offset = (boxes(id)%ix - 2*boxes(p_id)%ix + 1) * ishft(nc, -1)
-
     do k = lo(3), hi(3)
        k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
        do j = lo(2), hi(2)
@@ -1148,8 +1161,8 @@ contains
           end do
        end do
     end do
-  end subroutine a3_prolong0_to
 #endif
+  end subroutine a$D_prolong0_to
 
   ! Partial bilinear prolongation from parent.
 #if $D == 2

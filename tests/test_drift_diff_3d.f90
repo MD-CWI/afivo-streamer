@@ -58,10 +58,10 @@ program test_drift_diff
   dt_adapt   = 0.01_dp
   dt_output  = 0.05_dp
   end_time   = 1.5_dp
-  diff_coeff = 0.0_dp
+  diff_coeff = 0.5_dp
   vel_x      = -1.0_dp
-  vel_y      = 0.0_dp
-  vel_z      = 0.0_dp
+  vel_y      = 1.0_dp
+  vel_z      = 1.0_dp
 
   print *, "Starting simulation"
   !$omp parallel private(n)
@@ -144,7 +144,7 @@ contains
          maxval(abs(box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - box%cc(1:nc, 0:nc, 1:nc, i_phi))), &
          maxval(abs(box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    if (box%lvl < 4 .and. diff > 0.1_dp) then
+    if (box%lvl < 5 .and. diff > 0.1_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref

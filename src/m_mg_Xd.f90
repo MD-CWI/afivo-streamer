@@ -1,17 +1,17 @@
 ! Multigrid code for Xd simulations. The following replacements take place on
 ! this code:
-! 1. $ D -> 2 or 3 (dimension of code)
+! 1. @ -> 2 or 3 (dimension of code)
 ! 2. preprocess file with cpp
 ! 3. cat -s (merge multiple blank lines)
-module m_mg_$Dd
-  use m_afivo_$Dd
+module m_mg_@d
+  use m_afivo_@d
 
   implicit none
   private
 
   integer, parameter :: dp = kind(0.0d0)
 
-  type mg$D_t
+  type mg@_t
      private
      integer :: i_phi
      integer :: i_phi_old
@@ -20,47 +20,47 @@ module m_mg_$Dd
      integer :: n_cycle_down
      integer :: n_cycle_up
      integer :: n_cycle_base
-     procedure(a$D_subr_gc), pointer, nopass    :: sides_bc
-     procedure(mg$Dd_box_op), pointer, nopass   :: box_op
-     procedure(mg$Dd_box_gsrb), pointer, nopass :: box_gsrb
-  end type mg$D_t
+     procedure(a@_subr_gc), pointer, nopass    :: sides_bc
+     procedure(mg@d_box_op), pointer, nopass   :: box_op
+     procedure(mg@d_box_gsrb), pointer, nopass :: box_gsrb
+  end type mg@_t
 
   abstract interface
-     subroutine mg$Dd_box_op(box, i_in, i_out)
+     subroutine mg@d_box_op(box, i_in, i_out)
        import
-       type(box$D_t), intent(inout) :: box
+       type(box@_t), intent(inout) :: box
        integer, intent(in)         :: i_in, i_out
-     end subroutine mg$Dd_box_op
+     end subroutine mg@d_box_op
 
-     subroutine mg$Dd_box_gsrb(box, i_phi, i_rhs, redblack_cntr)
+     subroutine mg@d_box_gsrb(box, i_phi, i_rhs, redblack_cntr)
        import
-       type(box$D_t), intent(inout) :: box
+       type(box@_t), intent(inout) :: box
        integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
-     end subroutine mg$Dd_box_gsrb
+     end subroutine mg@d_box_gsrb
   end interface
 
   ! Public types
-  public :: mg$Dd_box_op
-  public :: mg$D_t
+  public :: mg@d_box_op
+  public :: mg@_t
 
   ! Public methods
-  public :: mg$Dd_set
-  public :: mg$Dd_fas_fmg
-  public :: mg$Dd_fas_vcycle
-  public :: mg$Dd_lpl_box
-  public :: mg$Dd_gsrb_lpl_box
+  public :: mg@d_set
+  public :: mg@d_fas_fmg
+  public :: mg@d_fas_vcycle
+  public :: mg@d_lpl_box
+  public :: mg@d_gsrb_lpl_box
 
 contains
 
-  subroutine mg$Dd_set(mg, i_phi, i_phi_old, i_rhs, i_res, &
+  subroutine mg@d_set(mg, i_phi, i_phi_old, i_rhs, i_res, &
        n_cycle_down, n_cycle_up, n_cycle_base, &
        sides_bc, my_operator, my_gsrb)
-    type(mg$D_t), intent(out) :: mg
+    type(mg@_t), intent(out) :: mg
     integer, intent(in)      :: i_phi, i_phi_old, i_rhs, i_res
     integer, intent(in)      :: n_cycle_down, n_cycle_up, n_cycle_base
-    procedure(a$D_subr_gc)    :: sides_bc
-    procedure(mg$Dd_box_op)   :: my_operator
-    procedure(mg$Dd_box_gsrb)   :: my_gsrb
+    procedure(a@_subr_gc)    :: sides_bc
+    procedure(mg@d_box_op)   :: my_operator
+    procedure(mg@d_box_gsrb)   :: my_gsrb
 
     mg%i_phi        = i_phi
     mg%i_phi_old    = i_phi_old
@@ -72,19 +72,19 @@ contains
     mg%sides_bc     => sides_bc
     mg%box_op       => my_operator
     mg%box_gsrb     => my_gsrb
-  end subroutine mg$Dd_set
+  end subroutine mg@d_set
 
   ! Need valid ghost cells on input, has valid gc on output
-  subroutine mg$Dd_fas_fmg(tree, mg)
-    type(a$D_t), intent(inout)       :: tree
-    type(mg$D_t), intent(in)         :: mg
+  subroutine mg@d_fas_fmg(tree, mg)
+    type(a@_t), intent(inout)       :: tree
+    type(mg@_t), intent(in)         :: mg
     integer                         :: lvl, min_lvl
 
     min_lvl = lbound(tree%lvls, 1)
 
     do lvl = min_lvl, tree%n_lvls
        ! Store phi in phi_old
-       call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
+       call a@_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_phi_old)
 
        if (lvl > min_lvl) then
@@ -93,21 +93,21 @@ contains
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
-          call mg$Dd_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+          call mg@d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
                mg%sides_bc)
        end if
 
        ! Perform V-cycle
-       call mg$Dd_fas_vcycle(tree, mg, lvl)
+       call mg@d_fas_vcycle(tree, mg, lvl)
     end do
 
-  end subroutine mg$Dd_fas_fmg
+  end subroutine mg@d_fas_fmg
 
   ! On entrance, need valid ghost cell data. On exit, leave valid ghost cell
   ! data
-  subroutine mg$Dd_fas_vcycle(tree, mg, max_lvl)
-    type(a$D_t), intent(inout)          :: tree
-    type(mg$D_t), intent(in)            :: mg
+  subroutine mg@d_fas_vcycle(tree, mg, max_lvl)
+    type(a@_t), intent(inout)          :: tree
+    type(mg@_t), intent(in)            :: mg
     integer, intent(in)                :: max_lvl
     integer                            :: i, id, lvl, min_lvl
 
@@ -120,10 +120,10 @@ contains
        ! Calculate residual at current lvl
        call residual_boxes(tree%boxes, tree%lvls(lvl)%ids, mg)
 
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_phi)
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
+       call a@_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_phi)
+       call a@_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
 
-       call mg$Dd_fill_gc(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
+       call mg@d_fill_gc(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
             mg%sides_bc)
 
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
@@ -132,8 +132,8 @@ contains
        do i = 1, size(tree%lvls(lvl-1)%parents)
           id = tree%lvls(lvl-1)%parents(i)
           call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs)
-          call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
-          call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_phi_old)
+          call a@_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
+          call a@_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_phi_old)
        end do
        !$omp end do
     end do
@@ -148,45 +148,45 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells again (todo: not everywhere?)
-       call mg$Dd_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+       call mg@d_fill_gc(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
             mg%sides_bc)
 
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
-  end subroutine mg$Dd_fas_vcycle
+  end subroutine mg@d_fas_vcycle
 
-  subroutine mg$Dd_fill_gc(boxes, ids, iv, sides_bc)
-    type(box$D_t), intent(inout) :: boxes(:)
+  subroutine mg@d_fill_gc(boxes, ids, iv, sides_bc)
+    type(box@_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:), iv
-    procedure(a$D_subr_gc)       :: sides_bc
+    procedure(a@_subr_gc)       :: sides_bc
     integer                     :: i
 
     !$omp do
     do i = 1, size(ids)
-       call a$D_gc_box_sides(boxes, ids(i), iv, &
-            a$D_sides_extrap, sides_bc)
+       call a@_gc_box_sides(boxes, ids(i), iv, &
+            a@_sides_extrap, sides_bc)
     end do
     !$omp end do
-  end subroutine mg$Dd_fill_gc
+  end subroutine mg@d_fill_gc
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
   subroutine correct_children(boxes, ids, mg)
-    type(box$D_t), intent(inout) :: boxes(:)
+    type(box@_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:)
-    type(mg$D_t), intent(in)     :: mg
-    integer                     :: i, nc, i_c, c_id, ix_offset($D)
+    type(mg@_t), intent(in)     :: mg
+    integer                     :: i, nc, i_c, c_id, ix_offset(@)
 
     !$omp do private(nc, i_c, c_id, ix_offset)
     do i = 1, size(ids)
        nc = boxes(ids(i))%n_cell
 
-       do i_c = 1, a$D_num_children
+       do i_c = 1, a@_num_children
           c_id = boxes(ids(i))%children(i_c)
           if (c_id == a5_no_box) cycle
 
           ! Offset of child w.r.t. parent
-          ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
+          ix_offset = a@_ch_dix(:, i_c) * ishft(nc, -1)
 
           call correct_child_box(boxes(ids(i)), boxes(c_id), &
                ix_offset, mg%i_phi, mg%i_phi_old)
@@ -196,18 +196,18 @@ contains
   end subroutine correct_children
 
   subroutine correct_child_box(box_p, box_c, ix_offset, i_phi, i_phi_old)
-    type(box$D_t), intent(inout) :: box_c
-    type(box$D_t), intent(in)    :: box_p
-    integer, intent(in)         :: i_phi, i_phi_old, ix_offset($D)
+    type(box@_t), intent(inout) :: box_c
+    type(box@_t), intent(in)    :: box_p
+    integer, intent(in)         :: i_phi, i_phi_old, ix_offset(@)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-#if $D == 3
+#if @ == 3
     integer                     :: k, k_c1, k_c2
 #endif
 
     nc = box_c%n_cell
     ! In these loops, we calculate the closest coarse index (_c1), and the
     ! one-but-closest (_c2). The fine cell lies in between.
-#if $D == 2
+#if @ == 2
     do j = 1, nc
        j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
        j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
@@ -224,7 +224,7 @@ contains
                -       box_p%cc(i_c1, j_c2, i_phi_old))
        end do
     end do
-#elif $D == 3
+#elif @ == 3
     do k = 1, nc
        k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
        k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
@@ -251,8 +251,8 @@ contains
   end subroutine correct_child_box
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
-    type(box$D_t), intent(inout) :: boxes(:)
-    type(mg$D_t), intent(in)     :: mg
+    type(box@_t), intent(inout) :: boxes(:)
+    type(mg@_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:), n_cycle
     integer                     :: n, i
 
@@ -265,19 +265,19 @@ contains
 
        !$omp do
        do i = 1, size(ids)
-          call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
-               a$D_sides_extrap, mg%sides_bc)
+          call a@_gc_box_sides(boxes, ids(i), mg%i_phi, &
+               a@_sides_extrap, mg%sides_bc)
        end do
        !$omp end do
     end do
   end subroutine gsrb_boxes
 
-  subroutine mg$Dd_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr)
-    type(box$D_t), intent(inout) :: box
+  subroutine mg@d_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr)
+    type(box@_t), intent(inout) :: box
     integer, intent(in)         :: i_phi, i_rhs, redblack_cntr
     integer                     :: i, i0, j, nc
     real(dp)                    :: dx2
-#if $D == 3
+#if @ == 3
     integer                     :: k
     real(dp), parameter         :: sixth = 1/6.0_dp
 #endif
@@ -287,7 +287,7 @@ contains
 
     ! The parity of redblack_cntr determines which cells we use. If
     ! redblack_cntr is even, we use the even cells and vice versa.
-#if $D == 2
+#if @ == 2
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
@@ -297,7 +297,7 @@ contains
                dx2 * box%cc(i, j, i_rhs))
        end do
     end do
-#elif $D == 3
+#elif @ == 3
     do k = 1, nc
        do j = 1, nc
           i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
@@ -311,21 +311,21 @@ contains
        end do
     end do
 #endif
-  end subroutine mg$Dd_gsrb_lpl_box
+  end subroutine mg@d_gsrb_lpl_box
 
-  subroutine mg$Dd_lpl_box(box, i_in, i_out)
-    type(box$D_t), intent(inout) :: box
+  subroutine mg@d_lpl_box(box, i_in, i_out)
+    type(box@_t), intent(inout) :: box
     integer, intent(in)         :: i_in, i_out
     integer                     :: i, j, nc
     real(dp)                    :: inv_dr_sq
-#if $D == 3
+#if @ == 3
     integer                     :: k
 #endif
 
     nc = box%n_cell
     inv_dr_sq = 1 / box%dr**2
 
-#if $D == 2
+#if @ == 2
     do j = 1, nc
        do i = 1, nc
           box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_in) + &
@@ -333,7 +333,7 @@ contains
                box%cc(i, j+1, i_in) - 4 * box%cc(i, j, i_in))
        end do
     end do
-#elif $D == 3
+#elif @ == 3
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
@@ -345,11 +345,11 @@ contains
        end do
     end do
 #endif
-  end subroutine mg$Dd_lpl_box
+  end subroutine mg@d_lpl_box
 
   subroutine residual_boxes(boxes, ids, mg)
-    type(box$D_t), intent(inout) :: boxes(:)
-    type(mg$D_t), intent(in)     :: mg
+    type(box@_t), intent(inout) :: boxes(:)
+    type(mg@_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:)
     integer                     :: i
 
@@ -361,19 +361,19 @@ contains
   end subroutine residual_boxes
 
   subroutine residual_box(box, mg)
-    type(box$D_t), intent(inout) :: box
-    type(mg$D_t), intent(in)     :: mg
+    type(box@_t), intent(inout) :: box
+    type(mg@_t), intent(in)     :: mg
     integer                     :: nc
 
     call mg%box_op(box, mg%i_phi, mg%i_res)
     nc = box%n_cell
-#if $D == 2
+#if @ == 2
     box%cc(1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, mg%i_rhs) &
          - box%cc(1:nc, 1:nc, mg%i_res)
-#elif $D == 3
+#elif @ == 3
     box%cc(1:nc, 1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
          - box%cc(1:nc, 1:nc, 1:nc, mg%i_res)
 #endif
   end subroutine residual_box
 
-end module m_mg_$Dd
+end module m_mg_@d
