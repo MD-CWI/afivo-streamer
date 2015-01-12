@@ -1,5 +1,5 @@
 !> \example test_base_2d.f90
-!> Shows the basic functionality of m_afivo_2d
+!> This example shows the basic functionality of m_afivo_2d.
 program test_base
   use m_afivo_2d
 

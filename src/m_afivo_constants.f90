@@ -1,3 +1,4 @@
+!> Module with constants used in AFiVO that are relevant for users
 module m_afivo_constants
 
   implicit none
@@ -12,8 +13,8 @@ module m_afivo_constants
   !> Value indicating a box should keep its refinement
   integer, parameter :: a5_kp_ref = 3
 
-  !> Value indicating that the children of a box can be removed.
-  integer, parameter :: a5_rm_children = 4 ! For internal use
+  !> Value indicating that the children of a box can be removed (for internal use)
+  integer, parameter :: a5_rm_children = 4
 
   !> Special value indicating there is no box
   integer, parameter :: a5_no_box = 0

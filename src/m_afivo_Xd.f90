@@ -1,8 +1,6 @@
-!> \class m_afivo_$Dd
-!> AFiVO code for $Dd simulations.
-
-!> \example test_streamer_2d.f90
-!> A "streamer" example for m_afivo_2d
+!> AFiVO code for $D-dimensional simulations
+!> \author Jannis Teunissen
+!> \copyright GPLv3
 
 ! The following replacements take place on this code:
 ! 1. $D -> 2 or 3 (dimension of code)
@@ -636,7 +634,7 @@ contains
 
   !> Resize box storage to new_size
   subroutine a$D_resize_box_storage(tree, new_size)
-    type(a$D_t), intent(inout) :: tree
+    type(a$D_t), intent(inout) :: tree    !< Tree to resize
     integer, intent(in)       :: new_size !< New size for the array boxes(:)
     type(box$D_t), allocatable :: boxes_cpy(:)
 
@@ -1276,7 +1274,7 @@ contains
 
   !> Restrict variables iv to all parent boxes, from the highest to the lowest level
   subroutine a$D_restrict_tree(tree, iv)
-    type(a$D_t), intent(inout) :: tree
+    type(a$D_t), intent(inout) :: tree !< Tree to restrict on
     integer, intent(in)       :: iv    !< Variable to restrict
     integer                   :: lvl
 
@@ -1326,7 +1324,7 @@ contains
   !> Fill ghost cells for variables iv on the sides of all boxes, using
   !> subr_no_nb on refinement boundaries and subr_bc on physical boundaries
   subroutine a$D_gc_sides(tree, iv, subr_no_nb, subr_bc)
-    type(a$D_t), intent(inout) :: tree
+    type(a$D_t), intent(inout) :: tree !< Tree to fill ghost cells on
     integer, intent(in)       :: iv !< Variable for which ghost cells are set
     procedure(a$D_subr_gc)     :: subr_no_nb !< Procedure called at refinement boundaries
     procedure(a$D_subr_gc)     :: subr_bc    !< Procedure called at physical boundaries
@@ -1671,7 +1669,7 @@ contains
   !> Restrict fluxes from children to parents on refinement boundaries
   subroutine a$D_consistent_fluxes(tree, f_ixs)
     use omp_lib
-    type(a$D_t), intent(inout) :: tree
+    type(a$D_t), intent(inout) :: tree    !< Tree to operate on
     integer, intent(in)       :: f_ixs(:) !< Indices of the fluxes
     integer                   :: lvl, i, id, nb, nb_id
 

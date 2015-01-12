@@ -1,6 +1,8 @@
 !> This module contains methods to convert indices to morton numbers.
+!> \author Jannis Teunissen
+!> \copyright GPLv3
 !>
-!> Because fortran does not support unsigned integers, you can only use these
+!> \warning Because fortran does not support unsigned integers, you can only use these
 !> routines for positive integers.
 module m_morton
 
