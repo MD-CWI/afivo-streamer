@@ -172,7 +172,7 @@ contains
 
     max_fld = -huge(1.0_dp)
     max_dns = -huge(1.0_dp)
-    do lvl = lbound(tree%lvls, 1), tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           max_fld = max(max_fld, maxval(tree%boxes(id)%cc(:,:, i_tmp)))

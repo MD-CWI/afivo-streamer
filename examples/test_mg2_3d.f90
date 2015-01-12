@@ -1,3 +1,5 @@
+!> \example test_mg2_3d.f90
+!> Example showing how to use m_mg_3d, and compare with an analytic solution.
 program test_mg2_3d
   use m_afivo_3d
   use m_mg_3d

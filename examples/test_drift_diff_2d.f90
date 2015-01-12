@@ -1,3 +1,5 @@
+!> \example test_drift_diff_2d.f90
+!> A drift-diffusion example for m_afivo_2d
 program test_drift_diff
   use m_afivo_2d
 

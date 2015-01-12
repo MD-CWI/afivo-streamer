@@ -1,4 +1,10 @@
-! AFiVO code for Xd simulations. The following replacements take place on this code:
+!> \class m_afivo_$Dd
+!> AFiVO code for $Dd simulations.
+
+!> \example test_streamer_2d.f90
+!> A "streamer" example for m_afivo_2d
+
+! The following replacements take place on this code:
 ! 1. $D -> 2 or 3 (dimension of code)
 ! 2. preprocess file with cpp
 ! 3. cat -s (merge multiple blank lines)
@@ -133,15 +139,15 @@ module m_afivo_$Dd
   !> Type which stores all the boxes and levels, as well as some information
   !> about the number of boxes, variables and levels.
   type a$D_t
-     integer                   :: max_lvl    !< maximum allowed level
-     integer                   :: n_lvls     !< current maximum level
-     integer                   :: max_id     !< max index in box list
-     integer                   :: n_cell     !< number of cells per dimension
-     integer                   :: n_var_cell !< number of cc variables
-     integer                   :: n_var_face !< number of fc variables
-     real(dp)                  :: r_base($D)  !< coords of box at index (1,1)
-     real(dp)                  :: dr_base    !< cell spacing at lvl 1
-     type(lvl_t), allocatable  :: lvls(:)    !< list storing the tree levels
+     integer                    :: lvls_max   !< maximum allowed level
+     integer                    :: max_lvl    !< current maximum level
+     integer                    :: max_id     !< max index in box list
+     integer                    :: n_cell     !< number of cells per dimension
+     integer                    :: n_var_cell !< number of cc variables
+     integer                    :: n_var_face !< number of fc variables
+     real(dp)                   :: r_base($D) !< coords of box at index (1,1)
+     real(dp)                   :: dr_base    !< cell spacing at lvl 1
+     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
   end type a$D_t
 
@@ -207,10 +213,10 @@ module m_afivo_$Dd
 contains
 
   !> Initialize a $Dd tree type.
-  subroutine a$D_init(tree, max_lvl, n_boxes, n_cell, n_var_cell, n_var_face, &
+  subroutine a$D_init(tree, lvls_max, n_boxes, n_cell, n_var_cell, n_var_face, &
        dr, r_min, coarsen_to)
     type(a$D_t), intent(out) :: tree       !< The tree to initialize
-    integer, intent(in)     :: max_lvl    !< Maximum number of levels
+    integer, intent(in)     :: lvls_max    !< Maximum number of levels
     integer, intent(in)     :: n_boxes    !< Allocate initial storage for n_boxes
     integer, intent(in)     :: n_cell     !< Boxes have n_cell^dim cells
     integer, intent(in)     :: n_var_cell !< Number of cell-centered variables
@@ -224,7 +230,7 @@ contains
     if (btest(n_cell, 0)) stop "a$D_init: n_cell should be even"
     if (n_var_cell <= 0)  stop "a$D_init: n_var_cell should be > 0"
     if (n_boxes <= 0)     stop "a$D_init: n_boxes should be > 0"
-    if (max_lvl <= 0)     stop "a$D_init: max_lvl should be > 0"
+    if (lvls_max <= 0)     stop "a$D_init: lvls_max should be > 0"
 
     allocate(tree%boxes(n_boxes))
 
@@ -238,10 +244,10 @@ contains
        min_lvl = 1
     end if
 
-    ! up to max_lvl+1 to add dummies that are always of size zero
-    allocate(tree%lvls(min_lvl:max_lvl+1))
+    ! up to lvls_max+1 to add dummies that are always of size zero
+    allocate(tree%lvls(min_lvl:lvls_max+1))
 
-    do lvl = min_lvl, max_lvl+1
+    do lvl = min_lvl, lvls_max+1
        allocate(tree%lvls(lvl)%ids(0))
        allocate(tree%lvls(lvl)%leaves(0))
        allocate(tree%lvls(lvl)%parents(0))
@@ -253,9 +259,9 @@ contains
     tree%n_var_face   = n_var_face
     tree%r_base       = r_min
     tree%dr_base      = dr
-    tree%max_lvl      = max_lvl
+    tree%lvls_max      = lvls_max
     tree%max_id       = 0
-    tree%n_lvls       = 0
+    tree%max_lvl       = 0
   end subroutine a$D_init
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
@@ -265,7 +271,7 @@ contains
     integer                   :: lvl
 
     deallocate(tree%boxes)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%lvls_max
        deallocate(tree%lvls(lvl)%ids)
        deallocate(tree%lvls(lvl)%leaves)
        deallocate(tree%lvls(lvl)%parents)
@@ -345,7 +351,7 @@ contains
        end if
     end do
 
-    tree%n_lvls = 1
+    tree%max_lvl = 1
 
   end subroutine a$D_set_base
 
@@ -355,7 +361,7 @@ contains
     procedure(a$D_subr)        :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%lvls_max
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -373,7 +379,7 @@ contains
     real(dp), intent(in)      :: rarg(:)
     integer                   :: lvl, i, id
 
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%lvls_max
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -390,7 +396,7 @@ contains
     procedure(a$D_subr_boxes)  :: my_procedure
     integer                   :: lvl, i, id
 
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%lvls_max
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -408,7 +414,7 @@ contains
     real(dp), intent(in)         :: rarg(:)
     integer                      :: lvl, i, id
 
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%lvls_max
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -476,7 +482,7 @@ contains
        ixs_map(0)       = 0
        n_stored         = 0
 
-       do lvl = lbound(tree%lvls, 1), tree%n_lvls
+       do lvl = lbound(tree%lvls, 1), tree%max_lvl
           n_used_lvl = size(tree%lvls(lvl)%ids)
           allocate(mortons(n_used_lvl))
           allocate(ixs_sort(n_used_lvl))
@@ -681,7 +687,7 @@ contains
        call a$D_resize_box_storage(tree, max_id_req)
     end if
 
-    do lvl = 1, tree%max_lvl-1
+    do lvl = 1, tree%lvls_max-1
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
 
@@ -716,10 +722,10 @@ contains
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
     end do
 
-    tree%n_lvls = lvl
+    tree%max_lvl = lvl
 
     ! Update leaves and parents
-    do lvl = 1, tree%n_lvls
+    do lvl = 1, tree%max_lvl
        n_parents = size(tree%lvls(lvl+1)%ids)/a$D_num_children
        n_leaves = size(tree%lvls(lvl)%ids) - n_parents
 
@@ -750,20 +756,20 @@ contains
 
   !> Given the refinement function, return consistent refinement flags, that
   !> ensure that the tree is still balanced. Furthermore, it cannot derefine the
-  !> base level, and it cannot refine above tree%max_lvl.
+  !> base level, and it cannot refine above tree%lvls_max.
   subroutine set_ref_flags(tree, ref_flags, ref_func)
     type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
     procedure(a$D_to_int_f)    :: ref_func     !< User-supplied refinement function.
     integer                   :: lvl, i, id, c_ids(a$D_num_children)
     integer                   :: nb, p_id, nb_id, p_nb_id
-    integer                   :: max_lvl
+    integer                   :: lvls_max
 
-    max_lvl = tree%max_lvl
+    lvls_max = tree%lvls_max
     ref_flags(:) = a5_kp_ref      ! Used indices are overwritten
 
     ! Set refinement flags for all boxes using ref_func
-    do lvl = 1, tree%n_lvls
+    do lvl = 1, tree%max_lvl
        do i = 1, size(tree%lvls(lvl)%ids)
           id            = tree%lvls(lvl)%ids(i)
           ref_flags(id) = ref_func(tree%boxes(id))
@@ -777,13 +783,13 @@ contains
     end do
 
     ! Cannot refine beyond max level
-    do i = 1, size(tree%lvls(max_lvl)%ids)
-       id = tree%lvls(max_lvl)%ids(i)
+    do i = 1, size(tree%lvls(lvls_max)%ids)
+       id = tree%lvls(lvls_max)%ids(i)
        if (ref_flags(id) == a5_do_ref) ref_flags(id) = a5_kp_ref
     end do
 
     ! Ensure 2-1 balance.
-    do lvl = tree%n_lvls, 2, -1
+    do lvl = tree%max_lvl, 2, -1
        do i = 1, size(tree%lvls(lvl)%leaves) ! We only check leaf tree%boxes
           id = tree%lvls(lvl)%leaves(i)
 
@@ -814,7 +820,7 @@ contains
     end do
 
     ! Make the (de)refinement flags consistent for blocks with children.
-    do lvl = tree%n_lvls-1, 1, -1
+    do lvl = tree%max_lvl-1, 1, -1
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
 
@@ -927,7 +933,7 @@ contains
   pure function a$D_min_dr(tree) result(dr)
     type(a$D_t), intent(in) :: tree
     real(dp)               :: dr($D) !< Output: dr at the finest lvl of the tree
-    dr = tree%dr_base * 0.5_dp**(tree%n_lvls-1)
+    dr = tree%dr_base * 0.5_dp**(tree%max_lvl-1)
   end function a$D_min_dr
 
   !> Return the coordinate of the center of a box
@@ -1035,7 +1041,7 @@ contains
     integer, intent(in)       :: iv_from, iv_to
     integer                   :: lvl
 
-    do lvl = lbound(tree%lvls, 1), tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_cc
@@ -1073,7 +1079,7 @@ contains
     integer, intent(in)       :: iv_from, iv_to
     integer                   :: lvl
 
-    do lvl = lbound(tree%lvls, 1), tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        call a$D_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_fc
@@ -1274,7 +1280,7 @@ contains
     integer, intent(in)       :: iv    !< Variable to restrict
     integer                   :: lvl
 
-    do lvl = tree%n_lvls-1, lbound(tree%lvls, 1), -1
+    do lvl = tree%max_lvl-1, lbound(tree%lvls, 1), -1
        call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv)
     end do
   end subroutine a$D_restrict_tree
@@ -1326,7 +1332,7 @@ contains
     procedure(a$D_subr_gc)     :: subr_bc    !< Procedure called at physical boundaries
     integer                   :: lvl, i, id
 
-    do lvl = lbound(tree%lvls, 1), tree%n_lvls
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -1669,7 +1675,7 @@ contains
     integer, intent(in)       :: f_ixs(:) !< Indices of the fluxes
     integer                   :: lvl, i, id, nb, nb_id
 
-    do lvl = lbound(tree%lvls, 1), tree%n_lvls-1
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
@@ -1799,7 +1805,7 @@ contains
     cells_per_box = bc**$D
 
     n_grids = 0
-    do lvl = 1, tree%n_lvls
+    do lvl = 1, tree%max_lvl
        n_grids = n_grids + size(tree%lvls(lvl)%leaves)
     end do
     n_nodes = nodes_per_box * n_grids
@@ -1819,7 +1825,7 @@ contains
 #endif
 
     ig = 0
-    do lvl = 1, tree%n_lvls
+    do lvl = 1, tree%max_lvl
        do n = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(n)
 

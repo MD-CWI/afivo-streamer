@@ -1,13 +1,15 @@
+!> \example test_base_2d.f90
+!> Shows the basic functionality of m_afivo_2d
 program test_base
-  use m_afivo_3d
+  use m_afivo_2d
 
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
-  type(a3_t)         :: tree
+  type(a2_t)         :: tree
   integer            :: i, id
-  integer            :: ix_list(3, 1)
-  integer            :: nb_list(6, 1)
+  integer            :: ix_list(2, 1)
+  integer            :: nb_list(4, 1)
   integer, parameter :: box_size    = 8
   integer, parameter :: i_phi = 1, i_mrtn = 2
   character(len=40)  :: var_names(2) = ["phi ", "mrtn"]
@@ -19,41 +21,43 @@ program test_base
   dr = 2 * acos(-1.0_dp) / box_size
 
   ! Initialize tree
-  call a3_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
-       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp, 0.0_dp], coarsen_to=-1)
+  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
+       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
 
+  ! Set up geometry
   id             = 1
-  ix_list(:, id) = [1,1,1] ! Set index of box
+  ix_list(:, id) = [1,1] ! Set index of box
   nb_list(:, id) = id    ! Box is periodic, so its own neighbor
 
-  call a3_set_base(tree, ix_list, nb_list)
+  ! Create the base mesh
+  call a2_set_base(tree, ix_list, nb_list)
 
   ! Set variables on base
-  call a3_loop_box(tree, set_init_cond)
-  call a3_loop_boxes(tree, set_morton_variable)
+  call a2_loop_box(tree, set_init_cond)
+  call a2_loop_boxes(tree, set_morton_variable)
 
   ! Fill ghost cells for phi
-  call a3_gc_sides(tree, i_phi, a3_sides_prolong1, have_no_bc)
+  call a2_gc_sides(tree, i_phi, a2_sides_prolong1, have_no_bc)
 
-  do i = 1, 13
+  do i = 1, 15
      print *, "i = ", i, "max_id", tree%max_id
 
-     write(fname, "(A,I0,A)") "test_base_3d_", i, ".vtu"
-     call a3_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
+     write(fname, "(A,I0,A)") "test_base_2d_", i, ".vtu"
+     call a2_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
 
-     call a3_adjust_refinement(tree, ref_func)
-     call a3_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
+     call a2_adjust_refinement(tree, ref_func)
+     call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
           n_clean_min=10000, only_reorder=.true.)
-     call a3_loop_boxes(tree, prolong_to_new_children)
-     call a3_loop_boxes(tree, set_morton_variable)
+     call a2_loop_boxes(tree, prolong_to_new_children)
+     call a2_loop_boxes(tree, set_morton_variable)
   end do
 
-  call a3_destroy(tree)
+  call a2_destroy(tree)
 
 contains
 
   integer function ref_func(box)
-    type(box3_t), intent(in) :: box
+    type(box2_t), intent(in) :: box
     real(dp)                 :: rr
 
     call random_number(rr)
@@ -65,39 +69,37 @@ contains
   end function ref_func
 
   subroutine set_init_cond(box)
-    type(box3_t), intent(inout) :: box
-    integer                     :: i, j, k, nc
-    real(dp)                    :: xyz(3)
+    type(box2_t), intent(inout) :: box
+    integer                     :: i, j, nc
+    real(dp)                    :: xy(2)
 
     nc = box%n_cell
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             xyz = a3_r_cc(box, [i,j,k])
-             box%cc(i, j, k, i_phi) = sin(xyz(1)) * sin(xyz(2)) * sin(xyz(3))
-          end do
+    do j = 1, nc
+       do i = 1, nc
+          xy = a2_r_cc(box, [i,j])
+          box%cc(i, j, i_phi) = sin(xy(1)) * cos(xy(2))
        end do
     end do
   end subroutine set_init_cond
 
   subroutine prolong_to_new_children(boxes, id)
-    type(box3_t), intent(inout) :: boxes(:)
+    type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
 
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
-       call a3_prolong1_from(boxes, id, i_phi, .true.)
+       call a2_prolong1_from(boxes, id, i_phi, .true.)
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children
 
   subroutine set_morton_variable(boxes, id)
-    type(box3_t), intent(inout) :: boxes(:)
+    type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    boxes(id)%cc(:,:,:,i_mrtn) = id
+    boxes(id)%cc(:,:,i_mrtn) = id
   end subroutine set_morton_variable
 
   subroutine have_no_bc(boxes, id, i, iv)
-    type(box3_t), intent(inout) :: boxes(:)
+    type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, i, iv
     stop "We have no boundary conditions in this example"
   end subroutine have_no_bc

@@ -1,4 +1,4 @@
-SRC_DIRS	:= src tests
+SRC_DIRS	:= src examples
 
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
@@ -7,7 +7,8 @@ CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
 all: 		$(SRC_DIRS) | $(CREATE_DIRS)
 
-doc:		$(SRC_DIRS)
+doc:
+		$(MAKE) srcs -C src
 		doxygen
 
 clean: 		$(CLEANSRC)

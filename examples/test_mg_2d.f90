@@ -1,3 +1,5 @@
+!> \example test_mg_2d.f90
+!> Example showing how to use m_mg_2d
 program test_mg
   use m_afivo_2d
   use m_mg_2d
