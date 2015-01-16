@@ -1522,6 +1522,7 @@ contains
   !> Basically, we extrapolate from the fine cells to a corner point, and then
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
+  !> @todo Remove corner points in 3D
   subroutine a$D_sides_extrap(boxes, id, nb, iv)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
@@ -1551,9 +1552,9 @@ contains
 
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
-          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + 0.125_dp * &
-               (9 * boxes(id)%cc(i, j, iv) - 3 * boxes(id)%cc(i+di, j, iv) &
-               - 3 * boxes(id)%cc(i, j+dj, iv) + boxes(id)%cc(i+di, j+dj, iv))
+          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
+               + boxes(id)%cc(i, j+dj, iv))
        end do
 
     case (2)
@@ -1563,9 +1564,9 @@ contains
 
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
-          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + 0.125_dp * &
-               (9 * boxes(id)%cc(i, j, iv) - 3 * boxes(id)%cc(i+di, j, iv) &
-               - 3 * boxes(id)%cc(i, j+dj, iv) + boxes(id)%cc(i+di, j+dj, iv))
+          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
+               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
+               + boxes(id)%cc(i, j+dj, iv))
        end do
 #elif $D == 3
     case (1)
