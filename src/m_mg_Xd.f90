@@ -196,20 +196,30 @@ contains
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:)
     type(mg$D_t), intent(in)     :: mg
-    integer                     :: i, nc, i_c, c_id, ix_offset($D)
+    integer                     :: i, id, nc, i_c, c_id, ix_offset($D)
 
     !$omp do private(nc, i_c, c_id, ix_offset)
     do i = 1, size(ids)
-       nc = boxes(ids(i))%n_cell
+       id = ids(i)
+       nc = boxes(id)%n_cell
+
+       ! Store the correction in i_phi_old
+#if $D == 2
+       boxes(id)%cc(:, :, mg%i_phi_old) = boxes(id)%cc(:, :, mg%i_phi) - &
+            boxes(id)%cc(:, :, mg%i_phi_old)
+#elif $D == 3
+       boxes(id)%cc(:, :, :, mg%i_phi_old) = boxes(id)%cc(:, :, :, mg%i_phi) - &
+            boxes(id)%cc(:, :, :, mg%i_phi_old)
+#endif
 
        do i_c = 1, a$D_num_children
-          c_id = boxes(ids(i))%children(i_c)
+          c_id = boxes(id)%children(i_c)
           if (c_id == a5_no_box) cycle
 
           ! Offset of child w.r.t. parent
           ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
 
-          call correct_child_box(boxes(ids(i)), boxes(c_id), &
+          call correct_child_box(boxes(id), boxes(c_id), &
                ix_offset, mg%i_phi, mg%i_phi_old)
        end do
     end do
@@ -237,12 +247,9 @@ contains
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
           box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) &
-               + 0.5_dp * (box_p%cc(i_c1, j_c1, i_phi) &
-               -      box_p%cc(i_c1, j_c1, i_phi_old)) &
-               + 0.25_dp * (box_p%cc(i_c2, j_c1, i_phi) &
-               -       box_p%cc(i_c2, j_c1, i_phi_old) &
-               +       box_p%cc(i_c1, j_c2, i_phi) &
-               -       box_p%cc(i_c1, j_c2, i_phi_old))
+               + 0.5_dp * box_p%cc(i_c1, j_c1, i_phi_old) &
+               + 0.25_dp * (box_p%cc(i_c2, j_c1, i_phi_old) &
+               +       box_p%cc(i_c1, j_c2, i_phi_old))
        end do
     end do
 #elif $D == 3
@@ -257,14 +264,10 @@ contains
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
              box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + 0.25_dp * ( &
-                  box_p%cc(i_c1, j_c1, k_c1, i_phi) &
-                  - box_p%cc(i_c1, j_c1, k_c1, i_phi_old) &
-                  + box_p%cc(i_c2, j_c1, k_c1, i_phi) &
-                  - box_p%cc(i_c2, j_c1, k_c1, i_phi_old) &
-                  + box_p%cc(i_c1, j_c2, k_c1, i_phi) &
-                  - box_p%cc(i_c1, j_c2, k_c1, i_phi_old) &
-                  + box_p%cc(i_c1, j_c1, k_c2, i_phi) &
-                  - box_p%cc(i_c1, j_c1, k_c2, i_phi_old))
+                  box_p%cc(i_c1, j_c1, k_c1, i_phi_old) &
+                  + box_p%cc(i_c2, j_c1, k_c1, i_phi_old) &
+                  + box_p%cc(i_c1, j_c2, k_c1, i_phi_old) &
+                  + box_p%cc(i_c1, j_c1, k_c2, i_phi_old))
           end do
        end do
     end do
