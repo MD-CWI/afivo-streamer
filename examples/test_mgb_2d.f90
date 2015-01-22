@@ -21,7 +21,7 @@ program test_mgb
   integer            :: n_lvls_max   = 20
   real(dp)           :: dr
   character(len=40)  :: fname, var_names(5)
-  type(mgb2_t)       :: mg
+  type(mg2_t)       :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
@@ -32,7 +32,7 @@ program test_mgb
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=4, &
+  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=5, &
        n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
 
   id = 1
@@ -50,7 +50,7 @@ program test_mgb
   call a2_loop_box(tree, set_init_cond)
 
   ! Set the multigrid options
-  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, i_lsf, 2, 2, 2, &
+  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, i_lsf, 2, 2, 3, &
        sides_bc, mg2d_lpl_box, mg2d_gsrb_lpl_box)
 
   ! Restrict from children recursively
@@ -58,13 +58,13 @@ program test_mgb
   call a2_restrict_tree(tree, i_phi)
 
   !$omp parallel
-  do i = 1, 100
-     ! call mg2d_fas_vcycle(tree, mg, tree%n_lvls)
+  do i = 1, 20
+     ! call mg2d_fas_vcycle(tree, mg, tree%max_lvl)
      call mg2d_fas_fmg(tree, mg)
      !$omp single
-     ! write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
-     ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
+     write(fname, "(A,I0,A)") "test_mgb_2d_", i, ".vtu"
      !$omp end single
+     call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
   !$omp end parallel
 
@@ -80,7 +80,7 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    if (box%lvl < 4) then
+    if (box%lvl < 6) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_rm_ref
@@ -98,8 +98,8 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_rhs) = exp(-sum((xy - 2)**2))
-          box%cc(i, j, i_lsf) = xy(1) - 2.238947128128347324_dp
+          box%cc(i, j, i_rhs) = 0 * exp(-sum((xy - 2)**2))
+          box%cc(i, j, i_lsf) = norm2(xy-2) - 1.0_dp
        end do
     end do
   end subroutine set_init_cond
@@ -115,17 +115,13 @@ contains
     if (boxes(id)%neighbors(nb) == -1) then
        select case (nb)
        case (a2_nb_lx)
-          ! Dirichlet zero
-          boxes(id)%cc(0, 1:nc, iv) = -boxes(id)%cc(1, 1:nc, iv)
+          boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
        case (a2_nb_hx)
-          ! Dirichlet zero
-          boxes(id)%cc(nc+1, 1:nc, iv) = -boxes(id)%cc(nc, 1:nc, iv)
+          boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
        case (a2_nb_ly)
-          ! Dirichlet zero
-          boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
+          boxes(id)%cc(1:nc, 0, iv) = 2-boxes(id)%cc(1:nc, 1, iv)
        case (a2_nb_hy)
-          ! Dirichlet zero
-          boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
+          boxes(id)%cc(1:nc, nc+1, iv) = 2-boxes(id)%cc(1:nc, nc, iv)
        end select
     end if
   end subroutine sides_bc

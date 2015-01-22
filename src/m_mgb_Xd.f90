@@ -16,7 +16,7 @@ module m_mgb_$Dd
   integer, parameter :: dp = kind(0.0d0)
 
   !> Type to store multigrid options in
-  type, public :: mgb$D_t
+  type, public :: mg$D_t
      integer :: i_phi           !< Variable holding solution
      integer :: i_phi_old       !< Internal variable (holding prev. solution)
      integer :: i_rhs           !< Variable holding right-hand side
@@ -157,7 +157,7 @@ contains
        !$omp do private(id)
        do i = 1, size(tree%lvls(lvl-1)%parents)
           id = tree%lvls(lvl-1)%parents(i)
-          call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs)
+          call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs, mg%i_lsf)
           call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
           call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_phi_old)
        end do
@@ -225,20 +225,21 @@ contains
           ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
 
           call correct_child_box(boxes(id), boxes(c_id), &
-               ix_offset, mg%i_phi, mg%i_phi_old)
+               ix_offset, mg%i_phi, mg%i_phi_old, mg%i_lsf)
        end do
     end do
     !$omp end do
   end subroutine correct_children
 
-  subroutine correct_child_box(box_p, box_c, ix_offset, i_phi, i_corr)
+  subroutine correct_child_box(box_p, box_c, ix_offset, i_phi, i_corr, i_lsf)
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
-    integer, intent(in)         :: i_phi, i_corr, ix_offset($D)
+    integer, intent(in)         :: i_phi, i_corr, i_lsf, ix_offset($D)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
 #if $D == 3
     integer                     :: k, k_c1, k_c2
 #endif
+    real(dp) :: lsf, val(3), dist(3), tmp
 
     nc = box_c%n_cell
     ! In these loops, we calculate the closest coarse index (_c1), and the
@@ -251,9 +252,18 @@ contains
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + 0.25_dp * ( &
-               interp_lsf(box_p, i_corr, i_lsf, [i_c1, j_c1], [i_c2, j_c1], 0.5_dp) + &
-               interp_lsf(box_p, i_corr, i_lsf, [i_c1, j_c1], [i_c1, j_c2], 0.5_dp))
+          call lsf_dist_val(box_c%cc(i, j, i_lsf), &
+               box_p%cc(i_c1, j_c1, [i_corr, i_lsf]), 0.0_dp, dist(1), val(1))
+          call lsf_dist_val(box_c%cc(i, j, i_lsf), &
+               box_p%cc(i_c2, j_c1, [i_corr, i_lsf]), 0.0_dp, dist(2), val(2))
+          call lsf_dist_val(box_c%cc(i, j, i_lsf), &
+               box_p%cc(i_c1, j_c2, [i_corr, i_lsf]), 0.0_dp, dist(3), val(3))
+
+          tmp = 1 / (dist(1) * dist(2) + dist(1) * dist(3) + 2 * dist(2) * dist(3))
+          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + &
+               2 * dist(2) * dist(3) * tmp * val(1) + &
+               dist(1) * dist(3) * tmp * val(2) + &
+               dist(1) * dist(2) * tmp * val(3)
        end do
     end do
 #elif $D == 3
@@ -278,62 +288,20 @@ contains
 #endif
   end subroutine correct_child_box
 
-  ! Interpolate between two adjacent points (lo and hi) while taking into
-  ! account internal boundary conditions (using the level set method)
-  function interp_lsf(box, iv, i_lsf, lo, hi, frac) result(val)
-    type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: iv, i_lsf, lo($D), hi($D)
-    real(dp), intent(in)     :: frac
-    real(dp)                 :: val, tmp
-    logical :: bndry
+  subroutine lsf_dist_val(lsf_a, v_b, b_value, dist, val)
+    real(dp), intent(in)  :: lsf_a, v_b(2), b_value
+    real(dp), intent(out) :: dist, val
+    real(dp)              :: tmp
 
-#if $D == 3
-    stop
-#endif
-    ! Determine whether there is a boundary between lo and hi
-    bndry = (box%cc(lo(1), lo(2), i_lsf) * box%cc(hi(1), hi(2), i_lsf) < 0)
-    if (bndry) then
-       ! Determine location of boundary
-       bnd_frac = box%cc(hi(1), hi(2), i_lsf) / &
-            (box%cc(hi(1), hi(2), i_lsf) - box%cc(lo(1), lo(2), i_lsf))
-
-       if (frac < bnd_frac) then
-          tmp = frac / bnd_frac
-          val = tmp * box%cc(lo(1), lo(2), iv) + (1-tmp) * 0 ! TODO: b.c. value
-       else
-          tmp = (frac - bnd_frac) / (1 - bnd_frac)
-          val = tmp * 0 + (1-tmp) * box%cc(hi(1), hi(2), iv) ! TODO: b.c. value
-       end if
+    ! Determine whether there is a boundary
+    if (lsf_a * v_b(2) < 0) then
+       dist = lsf_a / (lsf_a - v_b(2))
+       val  = b_value
     else
-       ! Linear interpolation
-       val = frac * box%cc(lo(1), lo(2), iv) + (1-frac) * box%cc(hi(1), hi(2), iv)
+       dist = 1
+       val  = v_b(1)
     end if
-  end function interp_lsf
-
-  ! Extrapolate to a neighboring point (from lo to hi) while taking into account
-  ! internal boundary conditions (using the level set method)
-  function extrap_lsf(box, iv, i_lsf, lo, hi) result(val)
-    type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: iv, i_lsf, lo($D), hi($D)
-    real(dp)                 :: val, tmp
-    logical :: bndry
-
-#if $D == 3
-    stop
-#endif
-    ! Determine whether there is a boundary between lo and hi
-    bndry = (box%cc(lo(1), lo(2), i_lsf) * box%cc(hi(1), hi(2), i_lsf) < 0)
-    if (bndry) then
-       ! Determine location of boundary
-       bnd_frac = box%cc(hi(1), hi(2), i_lsf) / &
-            (box%cc(hi(1), hi(2), i_lsf) - box%cc(lo(1), lo(2), i_lsf))
-
-          val = box%cc(lo(1), lo(2), iv) + (0 - box%cc(lo(1), lo(2), iv)) / bnd_frac ! TODO: b.c. value
-       end if
-    else
-       val = box%cc(hi(1), hi(2), iv)
-    end if
-  end function extrap_lsf
+  end subroutine lsf_dist_val
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
     type(box$D_t), intent(inout) :: boxes(:)
@@ -344,7 +312,7 @@ contains
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
-          call mg%box_gsrb(boxes(ids(i)), mg%i_phi, mg%i_rhs, n)
+          call mg%box_gsrb(boxes(ids(i)), mg%i_phi, mg%i_rhs, mg%i_lsf, n)
        end do
        !$omp end do
 
@@ -358,13 +326,14 @@ contains
   end subroutine gsrb_boxes
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
-  subroutine mg$Dd_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr)
+  subroutine mg$Dd_gsrb_lpl_box(box, i_phi, i_rhs, i_lsf, redblack_cntr)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_phi !< Index of solution variable
     integer, intent(in)         :: i_rhs !< Index of right-hand side
+    integer, intent(in)         :: i_lsf
     integer, intent(in)         :: redblack_cntr !< Iteration counter
     integer                     :: i, i0, j, nc
-    real(dp)                    :: dx2
+    real(dp)                    :: dx2, dist(4), val(4)
 #if $D == 3
     integer                     :: k
     real(dp), parameter         :: sixth = 1/6.0_dp
@@ -379,12 +348,22 @@ contains
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 0.25_dp * ( &
-               extrap_lsf(box, i_phi, i_lsf, [i, j], [i-1, j]) + &
-               extrap_lsf(box, i_phi, i_lsf, [i, j], [i+1, j]) + &
-               extrap_lsf(box, i_phi, i_lsf, [i, j], [i, j-1]) + &
-               extrap_lsf(box, i_phi, i_lsf, [i, j], [i, j+1]) - &
-               dx2 * box%cc(i, j, i_rhs))
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i-1, j, [i_phi, i_lsf]), 0.0_dp, dist(1), val(1))
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i+1, j, [i_phi, i_lsf]), 0.0_dp, dist(2), val(2))
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i, j-1, [i_phi, i_lsf]), 0.0_dp, dist(3), val(3))
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i, j+1, [i_phi, i_lsf]), 0.0_dp, dist(4), val(4))
+
+          box%cc(i, j, i_phi) = 0.5_dp / &
+               (dist(1) * dist(2) + dist(3) * dist(4)) * ( &
+               (dist(2) * val(1) + dist(1) * val(2)) * &
+               dist(3) * dist(4) / (0.5 * (dist(1) + dist(2))) + &
+               (dist(4) * val(3) + dist(3) * val(4)) * &
+               dist(1) * dist(2) / (0.5 * (dist(3) + dist(4))) - &
+               product(dist) * dx2 * box%cc(i, j, i_rhs))
        end do
     end do
 #elif $D == 3
@@ -393,12 +372,13 @@ contains
   end subroutine mg$Dd_gsrb_lpl_box
 
   !> Perform Laplacian operator on a box
-  subroutine mg$Dd_lpl_box(box, i_in, i_out)
+  subroutine mg$Dd_lpl_box(box, i_in, i_out, i_lsf)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_in !< Index of variable to take Laplacian of
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
+    integer, intent(in)         :: i_lsf
     integer                     :: i, j, nc
-    real(dp)                    :: inv_dr_sq
+    real(dp)                    :: inv_dr_sq, dist(4), val(4), f0
 #if $D == 3
     integer                     :: k
 #endif
@@ -409,12 +389,21 @@ contains
 #if $D == 2
     do j = 1, nc
        do i = 1, nc
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i-1, j, [i_in, i_lsf]), 0.0_dp, dist(1), val(1))
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i+1, j, [i_in, i_lsf]), 0.0_dp, dist(2), val(2))
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i, j-1, [i_in, i_lsf]), 0.0_dp, dist(3), val(3))
+          call lsf_dist_val(box%cc(i, j, i_lsf), &
+               box%cc(i, j+1, [i_in, i_lsf]), 0.0_dp, dist(4), val(4))
+
+          f0 = box%cc(i, j, i_in)
           box%cc(i, j, i_out) = inv_dr_sq * ( &
-               extrap_lsf(box, i_in, i_lsf, [i, j], [i-1, j]) + &
-               extrap_lsf(box, i_in, i_lsf, [i, j], [i+1, j]) + &
-               extrap_lsf(box, i_in, i_lsf, [i, j], [i, j-1]) + &
-               extrap_lsf(box, i_in, i_lsf, [i, j], [i, j+1]) - &
-               4 * box%cc(i, j, i_in))
+               (dist(2) * val(1) + dist(1) * val(2) - (dist(1)+dist(2)) * f0) / &
+               (0.5_dp * (dist(1) + dist(2)) * dist(1) * dist(2)) + &
+               (dist(4) * val(3) + dist(3) * val(4) - (dist(3)+dist(4)) * f0) / &
+               (0.5_dp * (dist(3) + dist(4)) * dist(3) * dist(4)))
        end do
     end do
 #elif $D == 3
@@ -440,7 +429,7 @@ contains
     type(mg$D_t), intent(in)     :: mg
     integer                     :: nc
 
-    call mg%box_op(box, mg%i_phi, mg%i_res)
+    call mg%box_op(box, mg%i_phi, mg%i_res, mg%i_lsf)
     nc = box%n_cell
 #if $D == 2
     box%cc(1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, mg%i_rhs) &

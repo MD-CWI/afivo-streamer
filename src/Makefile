@@ -7,7 +7,7 @@ ifeq ($(DEBUG), 1)
 endif
 
 SRCS	:= m_morton.f90 m_afivo_constants.f90 m_afivo_2d.f90 \
-	m_afivo_3d.f90 m_vtk.f90 m_mg_2d.f90 m_mg_3d.f90
+	m_afivo_3d.f90 m_vtk.f90 m_mg_2d.f90 m_mg_3d.f90 m_mgb_2d.f90
 OBJS	:= $(SRCS:%.f90=%.o)
 
 INCDIRS	:=
@@ -36,6 +36,9 @@ m_afivo_3d.f90: m_afivo_Xd.f90
 	sed 's|$$D|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@
 
 m_mg_2d.f90: m_mg_Xd.f90
+	sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+
+m_mgb_2d.f90: m_mgb_Xd.f90
 	sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
 
 m_mg_3d.f90: m_mg_Xd.f90
