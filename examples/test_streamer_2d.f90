@@ -283,6 +283,7 @@ contains
     ! Restrict the rhs
     call a2_restrict_tree(tree, i_rhs)
 
+    ! Perform n_fmg full-multigrid cycles
     do i = 1, n_fmg
        call mg2d_fas_fmg(tree, mg)
     end do

@@ -18,7 +18,7 @@ module m_mgb_$Dd
   !> Type to store multigrid options in
   type, public :: mg$D_t
      integer :: i_phi           !< Variable holding solution
-     integer :: i_phi_old       !< Internal variable (holding prev. solution)
+     integer :: i_phi_old       !< Internal variable (buffer for prev. solution)
      integer :: i_rhs           !< Variable holding right-hand side
      integer :: i_res           !< Variable holding residual
      integer :: i_lsf           !< Variable holding level set function
