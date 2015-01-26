@@ -38,6 +38,8 @@ module m_lookup_table
   public :: LT_get_data
   public :: LT_get_xdata
   public :: LT_lin_interp_list
+  public :: LT_to_file
+  public :: LT_from_file
 
 contains
 
@@ -217,5 +219,37 @@ contains
        y_value = (1 - temp) * y_list(ix-1) + temp * y_list(ix)
     end if
   end subroutine LT_lin_interp_list
+
+  subroutine LT_to_file(my_lt, filename)
+    type(LT_table_t), intent(in) :: my_lt
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit
+
+    open(newunit=my_unit, file=trim(filename), form='UNFORMATTED', &
+         access='STREAM', status='REPLACE')
+    write(my_unit) my_lt%n_rows, my_lt%n_cols
+    write(my_unit) my_lt%x_min, my_lt%inv_dx
+    write(my_unit) my_lt%cols_rows
+    close(my_unit)
+  end subroutine LT_to_file
+
+  subroutine LT_from_file(my_lt, filename)
+    type(LT_table_t), intent(inout) :: my_lt
+    character(len=*), intent(in)    :: filename
+    integer                         :: my_unit
+
+    open(newunit=my_unit, file=trim(filename), form='UNFORMATTED', &
+         access='STREAM', status='OLD')
+    read(my_unit) my_lt%n_rows, my_lt%n_cols
+    read(my_unit) my_lt%x_min, my_lt%inv_dx
+
+    allocate(my_lt%cols_rows(my_lt%n_cols, my_lt%n_rows))
+    allocate(my_lt%rows_cols(my_lt%n_rows, my_lt%n_cols))
+
+    read(my_unit) my_lt%cols_rows
+    my_lt%rows_cols = transpose(my_lt%cols_rows)
+
+    close(my_unit)
+  end subroutine LT_from_file
 
 end module m_lookup_table
