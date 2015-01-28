@@ -59,8 +59,17 @@ program test_mg2_3d
   call a3_loop_box(tree, set_init_cond)
 
   print *, "Set the multigrid options"
-  call mg3d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, mg3d_lpl_box, mg3d_gsrb_lpl_box)
+  mg%i_phi        = i_phi
+  mg%i_tmp        = i_tmp
+  mg%i_rhs        = i_rhs
+  mg%i_res        = i_res
+  mg%n_cycle_down = 2
+  mg%n_cycle_up   = 2
+  mg%n_cycle_base = 2
+  mg%sides_bc     => sides_bc
+  mg%box_op       => mg3_lpl_box
+  mg%box_gsrb     => mg3_gsrb_lpl_box
+  mg%box_corr     => mg3_corr_lpl_box
 
   print *, "Restrict from children recursively"
   call a3_restrict_tree(tree, i_rhs)
@@ -69,8 +78,8 @@ program test_mg2_3d
   print *, "Do multigrid"
   !$omp parallel
   do i = 1, 10
-     ! call mg3d_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg3d_fas_fmg(tree, mg)
+     ! call mg3_fas_vcycle(tree, mg, tree%n_lvls)
+     call mg3_fas_fmg(tree, mg)
      call a3_loop_box(tree, set_err)
      write(fname, "(A,I0,A)") "test_mg2_3d_", i, ".vtu"
      call a3_write_tree(tree, trim(fname), var_names, i, 0.0_dp)

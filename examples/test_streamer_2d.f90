@@ -53,8 +53,17 @@ program test_drift_diff
        n_var_face=n_var_face, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=2)
 
   ! Set the multigrid options
-  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc_pot, mg2d_lpl_box, mg2d_gsrb_lpl_box)
+    ! Set the multigrid options
+  mg%i_phi        = i_phi
+  mg%i_tmp        = i_tmp
+  mg%i_rhs        = i_rhs
+  mg%i_res        = i_res
+  mg%n_cycle_down = 2
+  mg%n_cycle_up   = 2
+  mg%n_cycle_base = 2
+  mg%sides_bc     => sides_bc_pot
+  mg%box_op       => mg2_lpl_box
+  mg%box_gsrb     => mg2_gsrb_lpl_box
 
   ! Set up geometry
   id             = 1
@@ -285,7 +294,7 @@ contains
 
     ! Perform n_fmg full-multigrid cycles
     do i = 1, n_fmg
-       call mg2d_fas_fmg(tree, mg)
+       call mg2_fas_fmg(tree, mg)
     end do
 
     ! Compute field from potential

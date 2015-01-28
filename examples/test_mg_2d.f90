@@ -59,8 +59,17 @@ program test_mg
   call a2_loop_box(tree, set_init_cond)
 
   ! Set the multigrid options
-  call mg2d_set(mg, i_phi, i_tmp, i_rhs, i_res, 2, 2, 2, &
-       sides_bc, mg2d_lpl_box, mg2d_gsrb_lpl_box)
+  mg%i_phi        = i_phi
+  mg%i_tmp        = i_tmp
+  mg%i_rhs        = i_rhs
+  mg%i_res        = i_res
+  mg%n_cycle_down = 2
+  mg%n_cycle_up   = 2
+  mg%n_cycle_base = 2
+  mg%sides_bc     => sides_bc
+  mg%box_op       => mg2_lpl_box
+  mg%box_gsrb     => mg2_gsrb_lpl_box
+  mg%box_corr     => mg2_corr_lpl_box
 
   ! Restrict from children recursively
   call a2_restrict_tree(tree, i_rhs)
@@ -68,8 +77,8 @@ program test_mg
 
   !$omp parallel
   do i = 1, 100
-     ! call mg2d_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg2d_fas_fmg(tree, mg)
+     ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
+     call mg2_fas_fmg(tree, mg)
      !$omp single
      ! write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
      ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)

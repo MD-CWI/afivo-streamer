@@ -17,95 +17,95 @@ module m_mg_$Dd
 
   !> Type to store multigrid options in
   type, public :: mg$D_t
-     integer :: i_phi           !< Variable holding solution
-     integer :: i_phi_old       !< Internal variable (holding prev. solution)
-     integer :: i_rhs           !< Variable holding right-hand side
-     integer :: i_res           !< Variable holding residual
-     integer :: n_cycle_down    !< Number of relaxation cycles in downward sweep
-     integer :: n_cycle_up      !< Number of relaxation cycles in upward sweep
-     integer :: n_cycle_base    !< Number of relaxation cycles at bottom level
+     integer :: i_phi        = -1 !< Variable holding solution
+     integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
+     integer :: i_rhs        = -1 !< Variable holding right-hand side
+     integer :: i_res        = -1 !< Variable holding residual
+     integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
+     integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
+     integer :: n_cycle_base = -1 !< Number of relaxation cycles at bottom level
+
      !> Routine to call for filling ghost cells near physical boundaries
-     procedure(a$D_subr_gc), pointer, nopass    :: sides_bc
+     procedure(a$D_subr_gc), pointer, nopass    :: sides_bc => null()
+
      !> Subroutine that performs the (non)linear operator
-     procedure(mg$Dd_box_op), pointer, nopass   :: box_op
+     procedure(mg$D_box_op), pointer, nopass   :: box_op => null()
+
      !> Subroutine that performs Gauss-Seidel relaxation on a box
-     procedure(mg$Dd_box_gsrb), pointer, nopass :: box_gsrb
+     procedure(mg$D_box_gsrb), pointer, nopass :: box_gsrb => null()
+
+     !> Subroutine that corrects the children of a box
+     procedure(mg$D_box_corr), pointer, nopass :: box_corr => null()
   end type mg$D_t
 
   abstract interface
      !> Subroutine that performs A * cc(..., i_in) = cc(..., i_out)
-     subroutine mg$Dd_box_op(box, i_in, i_out)
+     subroutine mg$D_box_op(box, i_in, i_out)
        import
        type(box$D_t), intent(inout) :: box !< The box to operate on
        integer, intent(in)         :: i_in !< Index of input variable
        integer, intent(in)         :: i_out !< Index of output variable
-     end subroutine mg$Dd_box_op
+     end subroutine mg$D_box_op
 
      !> Subroutine that performs Gauss-Seidel relaxation
-     subroutine mg$Dd_box_gsrb(box, i_phi, i_rhs, redblack_cntr)
+     subroutine mg$D_box_gsrb(box, i_phi, i_rhs, redblack_cntr)
        import
        type(box$D_t), intent(inout) :: box !< The box to operate on
        integer, intent(in)         :: i_phi !< Index of solution variable
        integer, intent(in)         :: i_rhs !< Index of right-hand side variable
        integer, intent(in)         :: redblack_cntr !< Iteration counter
-     end subroutine mg$Dd_box_gsrb
+     end subroutine mg$D_box_gsrb
+
+     subroutine mg$D_box_corr(box_p, box_c, ix_offset, i_phi, i_corr)
+       import
+       type(box$D_t), intent(inout) :: box_c
+       type(box$D_t), intent(in)    :: box_p
+       integer, intent(in)         :: i_phi, i_corr, ix_offset($D)
+     end subroutine mg$D_box_corr
   end interface
 
-  public :: mg$Dd_box_op
-  public :: mg$Dd_box_gsrb
-  public :: mg$Dd_set
-  public :: mg$Dd_fas_fmg
-  public :: mg$Dd_fas_vcycle
-  public :: mg$Dd_lpl_box
-  public :: mg$Dd_gsrb_lpl_box
+  public :: mg$D_box_op
+  public :: mg$D_box_gsrb
+  public :: mg$D_fas_fmg
+  public :: mg$D_fas_vcycle
+  public :: mg$D_lpl_box
+  public :: mg$D_gsrb_lpl_box
+  public :: mg$D_corr_lpl_box
 
 contains
 
   !> Store multigrid options in a mg type
-  subroutine mg$Dd_set(mg, i_phi, i_phi_old, i_rhs, i_res, &
-       n_cycle_down, n_cycle_up, n_cycle_base, &
-       sides_bc, my_operator, my_gsrb)
-    type(mg$D_t), intent(out) :: mg           !< Store multigrid options in this variable
-    integer, intent(in)       :: i_phi        !< Variable holding solution
-    integer, intent(in)       :: i_phi_old    !< Internal variable (holding prev. solution)
-    integer, intent(in)       :: i_rhs        !< Variable holding right-hand side
-    integer, intent(in)       :: i_res        !< Variable holding residual
-    integer, intent(in)       :: n_cycle_down !< Number of relaxation cycles in downward sweep
-    integer, intent(in)       :: n_cycle_up   !< Number of relaxation cycles in upward sweep
-    integer, intent(in)       :: n_cycle_base !< Number of relaxation cycles at bottom level
-    !> Routine to call for filling ghost cells near physical boundaries
-    procedure(a$D_subr_gc)    :: sides_bc
-    !> Subroutine that performs the (non)linear operator
-    procedure(mg$Dd_box_op)   :: my_operator
-    !> Subroutine that performs Gauss-Seidel relaxation on a box
-    procedure(mg$Dd_box_gsrb) :: my_gsrb
+  subroutine check_mg(mg)
+    type(mg$D_t), intent(in) :: mg           !< Multigrid options
 
-    mg%i_phi        = i_phi
-    mg%i_phi_old    = i_phi_old
-    mg%i_rhs        = i_rhs
-    mg%i_res        = i_res
-    mg%n_cycle_down = n_cycle_down
-    mg%n_cycle_up   = n_cycle_up
-    mg%n_cycle_base = n_cycle_base
-    mg%sides_bc     => sides_bc
-    mg%box_op       => my_operator
-    mg%box_gsrb     => my_gsrb
-  end subroutine mg$Dd_set
+    if (mg%i_phi < 0)                  stop "check_mg: i_phi not set"
+    if (mg%i_tmp < 0)                  stop "check_mg: i_tmp not set"
+    if (mg%i_rhs < 0)                  stop "check_mg: i_rhs not set"
+    if (mg%i_res < 0)                  stop "check_mg: i_res not set"
+    if (mg%n_cycle_down < 0)           stop "check_mg: n_cycle_down not set"
+    if (mg%n_cycle_up < 0)             stop "check_mg: n_cycle_up not set"
+    if (mg%n_cycle_base < 0)           stop "check_mg: n_cycle_base not set"
+    if (.not. associated(mg%sides_bc)) stop "check_mg: sides_bc not set"
+    if (.not. associated(mg%box_op))   stop "check_mg: box_op not set"
+    if (.not. associated(mg%box_gsrb)) stop "check_mg: box_gsrb not set"
+    if (.not. associated(mg%box_corr)) stop "check_mg: box_corr not set"
+  end subroutine check_mg
 
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
-  subroutine mg$Dd_fas_fmg(tree, mg)
+  subroutine mg$D_fas_fmg(tree, mg)
     type(a$D_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)         :: mg   !< Multigrid options
     integer                         :: lvl, min_lvl
 
+    call check_mg(mg)           ! Check whether mg options are set
     min_lvl = lbound(tree%lvls, 1)
 
     do lvl = min_lvl, tree%max_lvl
        ! Store phi in phi_old
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
-            mg%i_phi, mg%i_phi_old)
+            mg%i_phi, mg%i_tmp)
 
        if (lvl > min_lvl) then
           ! Correct solution at this lvl using lvl-1 data
@@ -118,20 +118,21 @@ contains
        end if
 
        ! Perform V-cycle
-       call mg$Dd_fas_vcycle(tree, mg, lvl)
+       call mg$D_fas_vcycle(tree, mg, lvl)
     end do
 
-  end subroutine mg$Dd_fas_fmg
+  end subroutine mg$D_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
-  subroutine mg$Dd_fas_vcycle(tree, mg, max_lvl)
+  subroutine mg$D_fas_vcycle(tree, mg, max_lvl)
     type(a$D_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)   :: mg   !< Multigrid options
     integer, intent(in)        :: max_lvl !< Maximum level for V-cycle
     integer                    :: i, id, lvl, min_lvl
 
+    call check_mg(mg)           ! Check whether mg options are set
     min_lvl = lbound(tree%lvls, 1)
 
     do lvl = max_lvl,  min_lvl+1, -1
@@ -154,7 +155,7 @@ contains
           id = tree%lvls(lvl-1)%parents(i)
           call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs)
           call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
-          call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_phi_old)
+          call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
        end do
        !$omp end do
     end do
@@ -175,7 +176,7 @@ contains
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
-  end subroutine mg$Dd_fas_vcycle
+  end subroutine mg$D_fas_vcycle
 
   subroutine fill_gc(boxes, ids, iv, sides_bc)
     type(box$D_t), intent(inout) :: boxes(:)
@@ -203,13 +204,13 @@ contains
        id = ids(i)
        nc = boxes(id)%n_cell
 
-       ! Store the correction in i_phi_old
+       ! Store the correction in i_tmp
 #if $D == 2
-       boxes(id)%cc(:, :, mg%i_phi_old) = boxes(id)%cc(:, :, mg%i_phi) - &
-            boxes(id)%cc(:, :, mg%i_phi_old)
+       boxes(id)%cc(:, :, mg%i_tmp) = boxes(id)%cc(:, :, mg%i_phi) - &
+            boxes(id)%cc(:, :, mg%i_tmp)
 #elif $D == 3
-       boxes(id)%cc(:, :, :, mg%i_phi_old) = boxes(id)%cc(:, :, :, mg%i_phi) - &
-            boxes(id)%cc(:, :, :, mg%i_phi_old)
+       boxes(id)%cc(:, :, :, mg%i_tmp) = boxes(id)%cc(:, :, :, mg%i_phi) - &
+            boxes(id)%cc(:, :, :, mg%i_tmp)
 #endif
 
        do i_c = 1, a$D_num_children
@@ -219,17 +220,17 @@ contains
           ! Offset of child w.r.t. parent
           ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
 
-          call correct_child_box(boxes(id), boxes(c_id), &
-               ix_offset, mg%i_phi, mg%i_phi_old)
+          call mg%box_corr(boxes(id), boxes(c_id), &
+               ix_offset, mg%i_phi, mg%i_tmp)
        end do
     end do
     !$omp end do
   end subroutine correct_children
 
-  subroutine correct_child_box(box_p, box_c, ix_offset, i_phi, i_phi_old)
+  subroutine mg$D_corr_lpl_box(box_p, box_c, ix_offset, i_phi, i_corr)
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
-    integer, intent(in)         :: i_phi, i_phi_old, ix_offset($D)
+    integer, intent(in)         :: i_phi, i_corr, ix_offset($D)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
 #if $D == 3
     integer                     :: k, k_c1, k_c2
@@ -247,9 +248,9 @@ contains
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
           box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) &
-               + 0.5_dp * box_p%cc(i_c1, j_c1, i_phi_old) &
-               + 0.25_dp * (box_p%cc(i_c2, j_c1, i_phi_old) &
-               +       box_p%cc(i_c1, j_c2, i_phi_old))
+               + 0.5_dp * box_p%cc(i_c1, j_c1, i_corr) &
+               + 0.25_dp * (box_p%cc(i_c2, j_c1, i_corr) &
+               +       box_p%cc(i_c1, j_c2, i_corr))
        end do
     end do
 #elif $D == 3
@@ -264,15 +265,15 @@ contains
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
              box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + 0.25_dp * ( &
-                  box_p%cc(i_c1, j_c1, k_c1, i_phi_old) &
-                  + box_p%cc(i_c2, j_c1, k_c1, i_phi_old) &
-                  + box_p%cc(i_c1, j_c2, k_c1, i_phi_old) &
-                  + box_p%cc(i_c1, j_c1, k_c2, i_phi_old))
+                  box_p%cc(i_c1, j_c1, k_c1, i_corr) &
+                  + box_p%cc(i_c2, j_c1, k_c1, i_corr) &
+                  + box_p%cc(i_c1, j_c2, k_c1, i_corr) &
+                  + box_p%cc(i_c1, j_c1, k_c2, i_corr))
           end do
        end do
     end do
 #endif
-  end subroutine correct_child_box
+  end subroutine mg$D_corr_lpl_box
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
     type(box$D_t), intent(inout) :: boxes(:)
@@ -297,7 +298,7 @@ contains
   end subroutine gsrb_boxes
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
-  subroutine mg$Dd_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr)
+  subroutine mg$D_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_phi !< Index of solution variable
     integer, intent(in)         :: i_rhs !< Index of right-hand side
@@ -338,10 +339,10 @@ contains
        end do
     end do
 #endif
-  end subroutine mg$Dd_gsrb_lpl_box
+  end subroutine mg$D_gsrb_lpl_box
 
   !> Perform Laplacian operator on a box
-  subroutine mg$Dd_lpl_box(box, i_in, i_out)
+  subroutine mg$D_lpl_box(box, i_in, i_out)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_in !< Index of variable to take Laplacian of
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
@@ -374,7 +375,7 @@ contains
        end do
     end do
 #endif
-  end subroutine mg$Dd_lpl_box
+  end subroutine mg$D_lpl_box
 
   subroutine residual_boxes(boxes, ids, mg)
     type(box$D_t), intent(inout) :: boxes(:)
