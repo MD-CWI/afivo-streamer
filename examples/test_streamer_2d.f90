@@ -64,6 +64,7 @@ program test_drift_diff
   mg%sides_bc     => sides_bc_pot
   mg%box_op       => mg2_lpl_box
   mg%box_gsrb     => mg2_gsrb_lpl_box
+  mg%box_corr     => mg2_corr_lpl_box
 
   ! Set up geometry
   id             = 1
