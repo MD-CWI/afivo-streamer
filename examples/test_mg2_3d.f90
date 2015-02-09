@@ -67,9 +67,8 @@ program test_mg2_3d
   mg%n_cycle_up   = 2
   mg%n_cycle_base = 2
   mg%sides_bc     => sides_bc
-  mg%box_op       => mg3_lpl_box
-  mg%box_gsrb     => mg3_gsrb_lpl_box
-  mg%box_corr     => mg3_corr_lpl_box
+
+  call mg3_init_mg(mg)
 
   print *, "Restrict from children recursively"
   call a3_restrict_tree(tree, i_rhs)

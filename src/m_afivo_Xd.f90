@@ -611,6 +611,16 @@ contains
 #endif
   end function a$D_ix_to_cix
 
+  !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
+  !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 etc.)
+  function a$D_get_child_offset(box) result(ix_offset)
+    type(box$D_t), intent(in) :: box !< A child box
+    integer                  :: ix_offset($D)
+
+    ! Where the box index is even, set offset to n_cell/2, elsewhere set to 0
+    ix_offset =  iand(box%ix-1, 1) * ishft(box%n_cell, -1)
+  end function a$D_get_child_offset
+
   !> Get the id of neighbor nb of boxes(id), through its parent
   function find_nb_$Dd(boxes, id, nb) result(nb_id)
     type(box$D_t), intent(in) :: boxes(:) !< List with all the boxes
@@ -1322,11 +1332,11 @@ contains
   end subroutine a$D_restrict_box
 
   !> Fill ghost cells for variables iv on the sides of all boxes, using
-  !> subr_no_nb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a$D_gc_sides(tree, iv, subr_no_nb, subr_bc)
+  !> subr_rb on refinement boundaries and subr_bc on physical boundaries
+  subroutine a$D_gc_sides(tree, iv, subr_rb, subr_bc)
     type(a$D_t), intent(inout) :: tree !< Tree to fill ghost cells on
     integer, intent(in)       :: iv !< Variable for which ghost cells are set
-    procedure(a$D_subr_gc)     :: subr_no_nb !< Procedure called at refinement boundaries
+    procedure(a$D_subr_gc)     :: subr_rb !< Procedure called at refinement boundaries
     procedure(a$D_subr_gc)     :: subr_bc    !< Procedure called at physical boundaries
     integer                   :: lvl, i, id
 
@@ -1334,19 +1344,19 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          call a$D_gc_box_sides(tree%boxes, id, iv, subr_no_nb, subr_bc)
+          call a$D_gc_box_sides(tree%boxes, id, iv, subr_rb, subr_bc)
        end do
        !$omp end do
     end do
   end subroutine a$D_gc_sides
 
   !> Fill ghost cells for variables iv on the sides of a box, using
-  !> subr_no_nb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a$D_gc_box_sides(boxes, id, iv, subr_no_nb, subr_bc)
+  !> subr_rb on refinement boundaries and subr_bc on physical boundaries
+  subroutine a$D_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)         :: id !< Id of box for which we set ghost cells
     integer, intent(in)         :: iv !< Variable for which ghost cells are set
-    procedure(a$D_subr_gc)      :: subr_no_nb !< Procedure called at refinement boundaries
+    procedure(a$D_subr_gc)      :: subr_rb !< Procedure called at refinement boundaries
     procedure(a$D_subr_gc)      :: subr_bc    !< Procedure called at physical boundaries
     integer                     :: nb
 
@@ -1354,7 +1364,7 @@ contains
        if (boxes(id)%neighbors(nb) > a5_no_box) then
           call a$D_gc_side_from_nb(boxes, id, nb, iv)
        else if (boxes(id)%neighbors(nb) == a5_no_box) then
-          call subr_no_nb(boxes, id, nb, iv)
+          call subr_rb(boxes, id, nb, iv)
        else
           call subr_bc(boxes, id, nb, iv)
        end if
