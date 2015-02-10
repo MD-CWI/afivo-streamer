@@ -1,6 +1,7 @@
 program test_drift_diff
   use m_afivo_2d
   use m_mg_2d
+  use m_mg_diel
 
   implicit none
 
@@ -8,7 +9,7 @@ program test_drift_diff
   integer, parameter :: box_size    = 8
 
   ! Cell-centered variables
-  integer, parameter :: n_var_cell = 8
+  integer, parameter :: n_var_cell = 9
   integer, parameter :: i_elec     = 1
   integer, parameter :: i_pion     = 2
   integer, parameter :: i_elec_old = 3
@@ -17,15 +18,15 @@ program test_drift_diff
   integer, parameter :: i_tmp      = 6
   integer, parameter :: i_rhs      = 7
   integer, parameter :: i_res      = 8
+  integer, parameter :: i_eps      = 9
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "res"]
+       "pion_old", "phi", "fld", "rhs", "res", "eps"]
 
   ! Face-centered variables
-  integer, parameter :: n_var_face = 3
+  integer, parameter :: n_var_face = 2
   integer, parameter :: i_flux     = 1
   integer, parameter :: i_fld      = 2
-  integer, parameter :: i_fld_old  = 3
 
   integer, parameter :: n_fmg_cycles = 1
 
@@ -50,18 +51,20 @@ program test_drift_diff
 
   ! Initialize tree
   call a2_init(tree, n_lvls_max, n_boxes_init, box_size, n_var_cell=n_var_cell, &
-       n_var_face=n_var_face, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=2)
+       n_var_face=n_var_face, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=4)
 
   ! Set the multigrid options
-    ! Set the multigrid options
   mg%i_phi        = i_phi
   mg%i_tmp        = i_tmp
   mg%i_rhs        = i_rhs
   mg%i_res        = i_res
-  mg%n_cycle_down = 2
-  mg%n_cycle_up   = 2
-  mg%n_cycle_base = 2
+  mg%i_eps        = i_eps
+  mg%n_cycle_base = 8
+
   mg%sides_bc     => sides_bc_pot
+  mg%box_op       => lpl_box_diel
+  mg%box_gsrb     => gsrb_lpl_box_diel
+  mg%box_corr     => corr_lpl_box_diel
 
   call mg2_init_mg(mg)
 
@@ -171,13 +174,47 @@ contains
     end if
   end function ref_func
 
+  subroutine set_init_cond(box)
+    type(box2_t), intent(inout) :: box
+    integer                     :: i, j, nc
+    real(dp)                    :: xy(2), xy0(2), xy1(2), sigma
+    real(dp)                    :: bg_dens, dns
+
+    nc = box%n_cell
+    xy0 = [0.3_dp, 0.5_dp] * domain_len
+    xy1 = xy0
+    xy1(2) = xy1(2) + 2e-3_dp   ! 2 mm
+    sigma = 2e-4_dp
+    bg_dens = 5e13
+
+    do j = 0, nc+1
+       do i = 0, nc+1
+          xy = a2_r_cc(box, [i,j])
+          dns = 5e19_dp * rod_dens(xy, xy0, xy1, sigma, 3)
+
+          if (xy(2) > 0.75_dp * domain_len) then
+             box%cc(i, j, i_eps) = 5.0_dp
+             box%cc(i, j, i_elec) = 0
+             box%cc(i, j, i_pion) = 0
+          else
+             box%cc(i, j, i_eps) = 1.0_dp
+             box%cc(i, j, i_elec) = bg_dens + dns
+             box%cc(i, j, i_pion) = bg_dens + dns
+          end if
+
+       end do
+    end do
+
+    box%cc(:, :, i_phi) = 0
+  end subroutine set_init_cond
+
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
-    real(dp), parameter :: UC_eps0 = 8.8541878176d-12
-    real(dp), parameter :: UC_elem_charge = 1.6022d-19
-    real(dp) :: max_fld, max_dns, dr_min(2)
-    real(dp) :: dt_cfl, dt_dif, dt_drt
-    integer :: lvl, i, id
+    real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
+    real(dp), parameter    :: UC_elem_charge = 1.6022d-19
+    real(dp)               :: max_fld, max_dns, dr_min(2)
+    real(dp)               :: dt_cfl, dt_dif, dt_drt
+    integer                :: lvl, i, id
 
     max_fld = -huge(1.0_dp)
     max_dns = -huge(1.0_dp)
@@ -198,32 +235,6 @@ contains
     dt_drt = UC_eps0 / (UC_elem_charge * abs(mobility) * max_dns)
     get_max_dt = 0.5_dp * min(dt_cfl, dt_dif, dt_drt)
   end function get_max_dt
-
-  subroutine set_init_cond(box)
-    type(box2_t), intent(inout) :: box
-    integer                     :: i, j, nc
-    real(dp)                    :: xy(2), xy0(2), xy1(2), sigma
-    real(dp) :: bg_dens, dns
-
-    nc = box%n_cell
-    xy0 = 0.5_dp * domain_len
-    xy1 = xy0
-    xy1(2) = xy1(2) + 2e-3_dp   ! 2 mm
-    sigma = 2e-4_dp
-    bg_dens = 5e13
-
-    do j = 0, nc+1
-       do i = 0, nc+1
-          xy = a2_r_cc(box, [i,j])
-          dns = 5e19_dp * rod_dens(xy, xy0, xy1, sigma, 3)
-
-          box%cc(i, j, i_elec) = bg_dens + dns
-          box%cc(i, j, i_pion) = bg_dens + dns
-       end do
-    end do
-
-    box%cc(:, :, i_phi) = 0
-  end subroutine set_init_cond
 
   real(dp) function rod_dens(xy, xy0, xy1, sigma, falloff_type)
     real(dp), intent(in) :: xy(2), xy0(2), xy1(2), sigma
@@ -248,7 +259,7 @@ contains
        rod_dens    = 2 / (1 + exp(distance / sigma))
     case (2)                    ! Gaussian
        rod_dens    = exp(-(distance/sigma)**2)
-    case (3)   ! Smooth-step
+    case (3)                    ! Smooth-step
        if (distance < sigma) then
           rod_dens = 1
        else if (distance < 2 * sigma) then
@@ -304,7 +315,7 @@ contains
   subroutine fld_from_pot(box)
     type(box2_t), intent(inout) :: box
     integer                     :: nc
-    real(dp) :: inv_dr
+    real(dp)                    :: inv_dr
 
     nc = box%n_cell
     inv_dr = 1 / box%dr
@@ -312,6 +323,25 @@ contains
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
     box%fy(:, :, i_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
+
+    ! Compute fields at the boundaries of the box, where eps can change
+    box%fx(1, :, i_fld) = 2 * inv_dr * &
+         (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
+         box%cc(0, 1:nc, i_eps) / &
+         (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
+    box%fx(nc+1, :, i_fld) = 2 * inv_dr * &
+         (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
+         box%cc(nc+1, 1:nc, i_eps) / &
+         (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
+    box%fy(:, 1, i_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
+         box%cc(1:nc, 0, i_eps) / &
+         (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
+    box%fy(:, nc+1, i_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
+         box%cc(1:nc, nc+1, i_eps) / &
+         (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
+
     box%cc(1:nc, 1:nc, i_tmp) = sqrt(&
          0.25_dp * (box%fx(1:nc, 1:nc, i_fld) + box%fx(2:nc+1, 1:nc, i_fld))**2 + &
          0.25_dp * (box%fy(1:nc, 1:nc, i_fld) + box%fy(1:nc, 2:nc+1, i_fld))**2)
@@ -321,7 +351,8 @@ contains
     real(dp), intent(in) :: theta
     real(dp)             :: limiter_koren
     real(dp), parameter  :: one_sixth = 1.0_dp / 6.0_dp
-    limiter_koren = max(0.0d0, min(1.0_dp, theta, (1.0_dp + 2.0_dp * theta) * one_sixth))
+    limiter_koren = max(0.0d0, min(1.0_dp, theta, &
+         (1.0_dp + 2.0_dp * theta) * one_sixth))
   end function limiter_koren
 
   elemental function ratio(numerator, denominator)
@@ -477,6 +508,7 @@ contains
        call a2_prolong1_from(boxes, id, i_elec, .true.)
        call a2_prolong1_from(boxes, id, i_pion, .true.)
        call a2_prolong1_from(boxes, id, i_phi, .true.)
+       call a2_prolong0_from(boxes, id, i_eps, .true.)
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
     end if
   end subroutine prolong_to_new_children
@@ -532,4 +564,4 @@ contains
     end if
   end subroutine sides_bc_dens
 
-end program test_drift_diff
+end program

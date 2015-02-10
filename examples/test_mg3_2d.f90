@@ -4,6 +4,7 @@
 program test_mg3_2d
   use m_afivo_2d
   use m_mg_2d
+  use m_mg_diel
 
   implicit none
 
@@ -12,7 +13,7 @@ program test_mg3_2d
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_res = 4
-  integer, parameter :: i_eps = 5
+  integer, parameter :: i_fld = 5, i_eps = 6
 
   type(a2_t)         :: tree
   integer            :: i, id, n_changes
@@ -21,19 +22,20 @@ program test_mg3_2d
   integer            :: n_boxes_max  = 20*1000
   integer            :: n_lvls_max   = 20
   real(dp)           :: dr
-  character(len=40)  :: fname, var_names(5)
+  character(len=40)  :: fname, var_names(6)
   type(mg2_t)        :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
   var_names(i_res) = "res"
+  var_names(i_fld) = "fld"
   var_names(i_eps) = "eps"
 
   dr = 1.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=5, &
+  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=6, &
        n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
 
   id = 1
@@ -51,17 +53,15 @@ program test_mg3_2d
   call a2_loop_box(tree, set_init_cond)
 
   ! Set the multigrid options
-  mg%i_phi        = i_phi
-  mg%i_tmp        = i_tmp
-  mg%i_rhs        = i_rhs
-  mg%i_res        = i_res
-  mg%n_cycle_down = 2
-  mg%n_cycle_up   = 2
-  mg%n_cycle_base = 2
-  mg%sides_bc     => sides_bc
-  mg%box_op       => my_lpl_box
-  mg%box_gsrb     => my_gsrb_lpl_box
-  mg%box_corr     => my_corr_lpl_box
+  mg%i_phi    = i_phi
+  mg%i_tmp    = i_tmp
+  mg%i_rhs    = i_rhs
+  mg%i_res    = i_res
+  mg%i_eps    = i_eps
+  mg%sides_bc => sides_bc
+  mg%box_op   => lpl_box_diel
+  mg%box_gsrb => gsrb_lpl_box_diel
+  mg%box_corr => corr_lpl_box_diel
 
   call mg2_init_mg(mg)
 
@@ -73,6 +73,7 @@ program test_mg3_2d
   do i = 1, 10
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
      call mg2_fas_fmg(tree, mg)
+     call a2_loop_box(tree, fld_from_pot)
      write(fname, "(A,I0,A)") "test_mg3_2d_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
@@ -91,7 +92,8 @@ contains
 
     ref_func_init = a5_rm_ref
 
-    if (box%lvl < 6) then
+    if (box%lvl < 3 .or. (box%lvl < 5 .and. &
+         a2_r_inside(box, [0.5_dp, 0.5_dp], 5*box%dr))) then
        ref_func_init = a5_do_ref
     else
        ref_func_init = a5_kp_ref
@@ -110,10 +112,10 @@ contains
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
           box%cc(i, j, i_rhs) = 0.0_dp
-          if (all(xy > 0.5) .or. all(xy < 0.5)) then
+          if (xy(2) < 0.5) then
              box%cc(i, j, i_eps) = 1.0_dp
           else
-             box%cc(i, j, i_eps) = 1000.0_dp
+             box%cc(i, j, i_eps) = 2.0_dp
           end if
        end do
     end do
@@ -143,94 +145,16 @@ contains
     end select
   end subroutine sides_bc
 
-  subroutine my_gsrb_lpl_box(box, i_phi, i_rhs, redblack_cntr)
-    type(box2_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_phi !< Index of solution variable
-    integer, intent(in)         :: i_rhs !< Index of right-hand side
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    integer                     :: i, i0, j, nc
-    real(dp)                    :: dx2, u(5), a(5), c(4)
-
-    dx2 = box%dr**2
-    nc  = box%n_cell
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          u(1) = box%cc(i, j, i_phi)
-          u(2:3) = box%cc(i-1:i+2:2, j, i_phi)
-          u(4:5) = box%cc(i, j-1:j+2:2, i_phi)
-          a(1) = box%cc(i, j, i_eps)
-          a(2:3) = box%cc(i-1:i+2:2, j, i_eps)
-          a(4:5) = box%cc(i, j-1:j+2:2, i_eps)
-          c(:) = 2 * a(1) * a(2:) / (a(1) + a(2:))
-
-          box%cc(i, j, i_phi) = &
-               (sum(c(:) * u(2:)) - dx2 * box%cc(i, j, i_rhs)) / sum(c)
-       end do
-    end do
-  end subroutine my_gsrb_lpl_box
-
-  !> Perform Laplacian operator on a box
-  subroutine my_lpl_box(box, i_in, i_out)
-    type(box2_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_in !< Index of variable to take Laplacian of
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    integer                     :: i, j, nc
-    real(dp)                    :: inv_dr_sq, u(5), a(5)
+  subroutine fld_from_pot(box)
+    type(box2_t), intent(inout) :: box
+    integer                     :: nc
+    real(dp) :: inv_dr
 
     nc = box%n_cell
-    inv_dr_sq = 1 / box%dr**2
+    inv_dr = 0.5_dp / box%dr
+    box%cc(1:nc, 1:nc, i_fld) = sqrt(inv_dr**2 * ( &
+         (box%cc(2:nc+1, 1:nc, i_phi) - box%cc(0:nc-1, 1:nc, i_phi))**2 + &
+         (box%cc(1:nc, 2:nc+1, i_phi) - box%cc(1:nc, 0:nc-1, i_phi))**2))
+  end subroutine fld_from_pot
 
-    do j = 1, nc
-       do i = 1, nc
-          u(1) = box%cc(i, j, i_in)
-          u(2:3) = box%cc(i-1:i+2:2, j, i_in)
-          u(4:5) = box%cc(i, j-1:j+2:2, i_in)
-          a(1) = box%cc(i, j, i_eps)
-          a(2:3) = box%cc(i-1:i+2:2, j, i_eps)
-          a(4:5) = box%cc(i, j-1:j+2:2, i_eps)
-
-          box%cc(i, j, i_out) = inv_dr_sq * 2 * &
-               sum(a(1)*a(2:)/(a(1) + a(2:)) * (u(2:) - u(1)))
-       end do
-    end do
-  end subroutine my_lpl_box
-
-  subroutine my_corr_lpl_box(box_p, box_c, i_phi, i_corr)
-    type(box2_t), intent(inout) :: box_c
-    type(box2_t), intent(in)    :: box_p
-    integer, intent(in)         :: i_phi, i_corr
-    integer                     :: ix_offset(2)
-    integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-    real(dp) :: u(3), a(3)
-
-    nc = box_c%n_cell
-    ix_offset = a2_get_child_offset(box_c)
-
-    ! In these loops, we calculate the closest coarse index (_c1), and the
-    ! one-but-closest (_c2). The fine cell lies in between.
-    do j = 1, nc
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-          u(1) = box_p%cc(i_c1, j_c1, i_corr)
-          u(2) = box_p%cc(i_c2, j_c1, i_corr)
-          u(3) = box_p%cc(i_c1, j_c2, i_corr)
-          a(1) = box_p%cc(i_c1, j_c1, i_eps)
-          a(2) = box_p%cc(i_c2, j_c1, i_eps)
-          a(3) = box_p%cc(i_c1, j_c2, i_eps)
-
-          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + 0.5_dp * ( &
-               (a(1)*u(1)+a(2)*u(2)) / (a(1) + a(2)) + &
-               (a(1)*u(1)+a(3)*u(3)) / (a(1) + a(3)))
-       end do
-    end do
-  end subroutine my_corr_lpl_box
-
-end program test_mg3_2d
+end program

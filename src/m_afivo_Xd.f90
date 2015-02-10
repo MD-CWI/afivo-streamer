@@ -944,6 +944,22 @@ contains
     dr = tree%dr_base * 0.5_dp**(tree%max_lvl-1)
   end function a$D_min_dr
 
+  !> Returns whether r is inside or within a distance d from box
+  pure function a$D_r_inside(box, r, d) result(inside)
+    type(box$D_t), intent(in)       :: box
+    real(dp), intent(in)           :: r($D)
+    real(dp), intent(in), optional :: d
+    real(dp)                       :: r_max($D)
+    logical                        :: inside
+
+    r_max = box%r_min + box%dr * box%n_cell
+    if (present(d)) then
+       inside = all(r+d >= box%r_min) .and. all(r-d <= r_max)
+    else
+       inside = all(r >= box%r_min) .and. all(r <= r_max)
+    end if
+  end function a$D_r_inside
+
   !> Return the coordinate of the center of a box
   pure function a$D_r_center(box) result(r_center)
     type(box$D_t), intent(in) :: box
@@ -985,6 +1001,17 @@ contains
     end if
   end function l2i
 
+  !> Set cc(..., iv) = 0
+  subroutine a$D_box_clear_cc(box, iv)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: iv
+#if $D == 2
+    box%cc(:,:, iv) = 0
+#elif $D == 3
+    box%cc(:,:,:, iv) = 0
+#endif
+  end subroutine a$D_box_clear_cc
+
   !> Add cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_add_cc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box
@@ -1007,15 +1034,15 @@ contains
 #endif
   end subroutine a$D_box_sub_cc
 
-  !> Set cc(..., iv_to) = a * cc(..., iv_a) + b * cc(..., iv_b)
-  subroutine a$D_box_lincomb_cc(box, a, iv_a, b, iv_b, iv_to)
+  !> Set cc(..., iv_b) = a * cc(..., iv_a) + b * cc(..., iv_b)
+  subroutine a$D_box_lincomb_cc(box, a, iv_a, b, iv_b)
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)        :: a, b
-    integer, intent(in)         :: iv_a, iv_b, iv_to
+    integer, intent(in)         :: iv_a, iv_b
 #if $D == 2
-    box%cc(:,:, iv_to) = a * box%cc(:,:, iv_a) + b * box%cc(:,:, iv_b)
+    box%cc(:,:, iv_b) = a * box%cc(:,:, iv_a) + b * box%cc(:,:, iv_b)
 #elif $D == 3
-    box%cc(:,:,:, iv_to) = a * box%cc(:,:,:, iv_a) + b * box%cc(:,:,:, iv_b)
+    box%cc(:,:,:, iv_b) = a * box%cc(:,:,:, iv_a) + b * box%cc(:,:,:, iv_b)
 #endif
   end subroutine a$D_box_lincomb_cc
 
@@ -1091,6 +1118,55 @@ contains
        call a$D_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_fc
+
+  !> Zeroth-order prolongation to children.
+  subroutine a$D_prolong0_from(boxes, id, iv, fill_gc)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Box whose children we will fill
+    integer, intent(in)         :: iv        !< Variable that is filled
+    logical, intent(in)         :: fill_gc   !< Also fill ghost cells?
+    integer                     :: dgc, nc, i_c, c_id, ix_offset($D)
+    integer                     :: i, j, i_c1, j_c1
+#if $D == 3
+    integer                     :: k, k_c1
+#endif
+
+    nc  = boxes(id)%n_cell
+    dgc = l2i(fill_gc)
+
+    do i_c = 1, a$D_num_children
+       c_id = boxes(id)%children(i_c)
+       if (c_id == a5_no_box) cycle
+
+       ! Offset of child w.r.t. parent
+       ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
+
+       ! In these loops, we calculate the closest coarse index (_c1)
+#if $D == 2
+       do j = 1-dgc, nc+dgc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          do i = 1-dgc, nc+dgc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+             boxes(c_id)%cc(i, j, iv) = boxes(id)%cc(i_c1, j_c1, iv)
+          end do
+       end do
+#elif $D == 3
+       do k = 1-dgc, nc+dgc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          do j = 1-dgc, nc+dgc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             do i = 1-dgc, nc+dgc
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+                boxes(c_id)%cc(i, j, k, iv) = &
+                     boxes(id)%cc(i_c1, j_c1, k_c1, iv)
+             end do
+          end do
+       end do
+#endif
+    end do
+  end subroutine a$D_prolong0_from
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
@@ -1252,11 +1328,12 @@ contains
 
   !> Restrict the children of a box to the box (e.g., in 2D, average the values
   !> at the four children to get the value for the parent)
-  subroutine a$D_restrict_to_box(boxes, id, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
-    integer, intent(in)         :: id        !< Box whose children will be restricted to it
-    integer, intent(in)         :: iv        !< Variable to restrict
-    integer                     :: nc, i_c, c_id, ix_offset($D)
+  subroutine a$D_restrict_to_box(boxes, id, iv, i_to)
+    type(box$D_t), intent(inout)   :: boxes(:) !< List of all the boxes
+    integer, intent(in)           :: id       !< Box whose children will be restricted to it
+    integer, intent(in)           :: iv       !< Variable to restrict
+    integer, intent(in), optional :: i_to    !< Destination (if /= iv)
+    integer                       :: nc, i_c, c_id, ix_offset($D)
 
     nc = boxes(id)%n_cell
     do i_c = 1, a$D_num_children
@@ -1264,56 +1341,64 @@ contains
        if (c_id == a5_no_box) cycle
        ! Offset of child w.r.t. parent
        ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
-       call a$D_restrict_box(boxes(c_id), boxes(id), ix_offset, iv)
+       call a$D_restrict_box(boxes(c_id), boxes(id), ix_offset, iv, i_to)
     end do
   end subroutine a$D_restrict_to_box
 
   !> Restrict the children of boxes ids(:) to them.
-  subroutine a$D_restrict_to_boxes(boxes, ids, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
-    integer, intent(in)         :: ids(:)    !< Boxes whose children will be restricted to it
-    integer, intent(in)         :: iv        !< Variable to restrict
-    integer                     :: i
+  subroutine a$D_restrict_to_boxes(boxes, ids, iv, i_to)
+    type(box$D_t), intent(inout)   :: boxes(:) !< List of all the boxes
+    integer, intent(in)           :: ids(:)   !< Boxes whose children will be restricted to it
+    integer, intent(in)           :: iv       !< Variable to restrict
+    integer, intent(in), optional :: i_to    !< Destination (if /= iv)
+    integer                       :: i
 
     !$omp do
     do i = 1, size(ids)
-       call a$D_restrict_to_box(boxes, ids(i), iv)
+       call a$D_restrict_to_box(boxes, ids(i), iv, i_to)
     end do
     !$omp end do
   end subroutine a$D_restrict_to_boxes
 
   !> Restrict variables iv to all parent boxes, from the highest to the lowest level
-  subroutine a$D_restrict_tree(tree, iv)
-    type(a$D_t), intent(inout) :: tree !< Tree to restrict on
-    integer, intent(in)       :: iv    !< Variable to restrict
-    integer                   :: lvl
+  subroutine a$D_restrict_tree(tree, iv, i_to)
+    type(a$D_t), intent(inout)     :: tree  !< Tree to restrict on
+    integer, intent(in)           :: iv    !< Variable to restrict
+    integer, intent(in), optional :: i_to !< Destination (if /= iv)
+    integer                       :: lvl
 
     do lvl = tree%max_lvl-1, lbound(tree%lvls, 1), -1
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv)
+       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv, i_to)
     end do
   end subroutine a$D_restrict_tree
 
   !> Restriction of child box (box_c) to another box (box_p), typically its
   !> parent. Note that ix_offset is used to specify to which part of box_p we
   !> should restrict box_c.
-  subroutine a$D_restrict_box(box_c, box_p, ix_offset, iv)
-    type(box$D_t), intent(in)    :: box_c !< Child box to restrict
-    type(box$D_t), intent(inout) :: box_p !< Parent box to restrict to
-    integer, intent(in)         :: ix_offset($D) !< Index offset of the child w.r.t. the parent
-    integer, intent(in)         :: iv            !< Variable to restrict
-    integer                     :: nc, i, j, i_c1, j_c1
+  subroutine a$D_restrict_box(box_c, box_p, ix_offset, iv, i_to)
+    type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
+    type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
+    integer, intent(in)           :: ix_offset($D) !< Index offset of the child w.r.t. the parent
+    integer, intent(in)           :: iv            !< Variable to restrict
+    integer, intent(in), optional :: i_to         !< Destination (if /= iv)
+    integer                       :: nc, i, j, i_c1, j_c1, i_dest
 #if $D == 3
-    integer                     :: k, k_c1
+    integer                       :: k, k_c1
 #endif
 
     nc = box_c%n_cell
+    if (present(i_to)) then
+       i_dest = i_to
+    else
+       i_dest = iv
+    end if
 
 #if $D == 2
     do j = 1, nc, 2
        j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
        do i = 1, nc, 2
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          box_p%cc(i_c1, j_c1, iv) = 0.25_dp * sum(box_c%cc(i:i+1, j:j+1, iv))
+          box_p%cc(i_c1, j_c1, i_dest) = 0.25_dp * sum(box_c%cc(i:i+1, j:j+1, iv))
        end do
     end do
 #elif $D == 3
@@ -1323,7 +1408,7 @@ contains
           j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
           do i = 1, nc, 2
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             box_p%cc(i_c1, j_c1, k_c1, iv) = 0.125_dp * &
+             box_p%cc(i_c1, j_c1, k_c1, i_dest) = 0.125_dp * &
                   sum(box_c%cc(i:i+1, j:j+1, k:k+1, iv))
           end do
        end do

@@ -28,4 +28,7 @@ clean:
 	$(RM) $(TESTS) *.o *.mod
 
 # Dependency information
-$(TESTS): ../src/libafivo.a
+$(TESTS): 		../src/libafivo.a
+test_mg3_2d:		m_mg_diel.o
+test_streamer_2d: 	m_mg_diel.o
+test_mg3_2d.o:		m_mg_diel.o

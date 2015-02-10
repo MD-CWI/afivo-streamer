@@ -21,6 +21,10 @@ module m_mg_$Dd
      integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
      integer :: i_rhs        = -1 !< Variable holding right-hand side
      integer :: i_res        = -1 !< Variable holding residual
+
+     integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
+     integer :: i_lsf        = -1 !< Optional variable for level set function
+
      integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
      integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
      integer :: n_cycle_base = -1 !< Number of relaxation cycles at bottom level
@@ -40,37 +44,39 @@ module m_mg_$Dd
 
      !> Subroutine that corrects the children of a box
      procedure(mg$D_box_corr), pointer, nopass :: box_corr => null()
+
+     !> Todo: restriction method
   end type mg$D_t
 
   abstract interface
      !> Subroutine that performs A * cc(..., i_in) = cc(..., i_out)
-     subroutine mg$D_box_op(box, i_in, i_out)
+     subroutine mg$D_box_op(box, i_out, mg)
        import
        type(box$D_t), intent(inout) :: box !< The box to operate on
-       integer, intent(in)         :: i_in !< Index of input variable
+       type(mg$D_t), intent(in)     :: mg
        integer, intent(in)         :: i_out !< Index of output variable
      end subroutine mg$D_box_op
 
      !> Subroutine that performs Gauss-Seidel relaxation
-     subroutine mg$D_box_gsrb(box, i_phi, i_rhs, redblack_cntr)
+     subroutine mg$D_box_gsrb(box, redblack_cntr, mg)
        import
        type(box$D_t), intent(inout) :: box !< The box to operate on
-       integer, intent(in)         :: i_phi !< Index of solution variable
-       integer, intent(in)         :: i_rhs !< Index of right-hand side variable
+       type(mg$D_t), intent(in)     :: mg
        integer, intent(in)         :: redblack_cntr !< Iteration counter
      end subroutine mg$D_box_gsrb
 
-     subroutine mg$D_box_corr(box_p, box_c, i_phi, i_corr)
+     subroutine mg$D_box_corr(box_p, box_c, mg)
        import
        type(box$D_t), intent(inout) :: box_c
        type(box$D_t), intent(in)    :: box_p
-       integer, intent(in)         :: i_phi, i_corr
+       type(mg$D_t), intent(in)     :: mg
      end subroutine mg$D_box_corr
   end interface
 
   public :: mg$D_init_mg
   public :: mg$D_fas_fmg
   public :: mg$D_fas_vcycle
+  public :: mg$D_set_tau
   public :: mg$D_box_op
   public :: mg$D_box_gsrb
   public :: mg$D_box_corr
@@ -88,11 +94,13 @@ contains
     if (mg%i_tmp < 0)                  stop "mg$D_init_mg: i_tmp not set"
     if (mg%i_rhs < 0)                  stop "mg$D_init_mg: i_rhs not set"
     if (mg%i_res < 0)                  stop "mg$D_init_mg: i_res not set"
-    if (mg%n_cycle_down < 0)           stop "mg$D_init_mg: n_cycle_down not set"
-    if (mg%n_cycle_up < 0)             stop "mg$D_init_mg: n_cycle_up not set"
-    if (mg%n_cycle_base < 0)           stop "mg$D_init_mg: n_cycle_base not set"
 
     if (.not. associated(mg%sides_bc)) stop "mg$D_init_mg: sides_bc not set"
+
+    ! Check whether these are set, otherwise use default
+    if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
+    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
+    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 2
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => a$D_sides_extrap
@@ -120,7 +128,7 @@ contains
     min_lvl = lbound(tree%lvls, 1)
 
     do lvl = min_lvl, tree%max_lvl
-       ! Store phi in phi_old
+       ! Store phi_old in tmp
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_tmp)
 
@@ -164,11 +172,12 @@ contains
        call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
 
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
-       ! store current coarse phi in phi_old
+       ! store current coarse phi in tmp.
+
        !$omp do private(id)
        do i = 1, size(tree%lvls(lvl-1)%parents)
           id = tree%lvls(lvl-1)%parents(i)
-          call mg%box_op(tree%boxes(id), mg%i_phi, mg%i_rhs)
+          call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
           call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
           call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
        end do
@@ -191,6 +200,30 @@ contains
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
   end subroutine mg$D_fas_vcycle
+
+  !> In FAS terminology, we have tau_cf = rhs_c - restrict(rhs_f) after a
+  !> V-cycle or FMG-cycle. This routine sets the temporary variable to tau.
+  subroutine mg$D_set_tau(tree, mg)
+    type(a$D_t), intent(inout)  :: tree !< Tree to do multigrid on
+    type(mg$D_t), intent(in)    :: mg   !< Multigrid options
+    integer                    :: i, id, lvl, min_lvl
+
+    min_lvl = lbound(tree%lvls, 1)
+
+    do lvl = 1, tree%max_lvl-1
+       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, &
+            mg%i_rhs, mg%i_tmp)
+
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%parents)
+          id = tree%lvls(lvl)%parents(i)
+          call a$D_box_lincomb_cc(tree%boxes(id), &
+               1.0_dp, mg%i_rhs, -1.0_dp, mg%i_tmp)
+          call a$D_prolong0_from(tree%boxes, id, mg%i_tmp, .false.)
+       end do
+       !$omp end do
+    end do
+  end subroutine mg$D_set_tau
 
   subroutine fill_gc_phi(boxes, ids, mg)
     type(box$D_t), intent(inout) :: boxes(:)
@@ -230,24 +263,26 @@ contains
        do i_c = 1, a$D_num_children
           c_id = boxes(id)%children(i_c)
           if (c_id == a5_no_box) cycle
-          call mg%box_corr(boxes(id), boxes(c_id), mg%i_phi, mg%i_tmp)
+          call mg%box_corr(boxes(id), boxes(c_id), mg)
        end do
     end do
     !$omp end do
   end subroutine correct_children
 
-  subroutine mg$D_box_corr_lpl(box_p, box_c, i_phi, i_corr)
+  subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
-    integer, intent(in)         :: i_phi, i_corr
-    integer                     :: ix_offset($D)
+    type(mg$D_t), intent(in)     :: mg
+    integer                     :: ix_offset($D), i_phi, i_corr
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
 #if $D == 3
     integer                     :: k, k_c1, k_c2
 #endif
 
-    nc = box_c%n_cell
+    nc        = box_c%n_cell
     ix_offset = a$D_get_child_offset(box_c)
+    i_phi     = mg%i_phi
+    i_corr    = mg%i_tmp
 
     ! In these loops, we calculate the closest coarse index (_c1), and the
     ! one-but-closest (_c2). The fine cell lies in between.
@@ -296,7 +331,7 @@ contains
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
-          call mg%box_gsrb(boxes(ids(i)), mg%i_phi, mg%i_rhs, n)
+          call mg%box_gsrb(boxes(ids(i)), n, mg)
        end do
        !$omp end do
 
@@ -310,20 +345,21 @@ contains
   end subroutine gsrb_boxes
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
-  subroutine mg$D_box_gsrb_lpl(box, i_phi, i_rhs, redblack_cntr)
+  subroutine mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_phi !< Index of solution variable
-    integer, intent(in)         :: i_rhs !< Index of right-hand side
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    integer                     :: i, i0, j, nc
+    type(mg$D_t), intent(in)     :: mg
+    integer                     :: i, i0, j, nc, i_phi, i_rhs
     real(dp)                    :: dx2
 #if $D == 3
     integer                     :: k
     real(dp), parameter         :: sixth = 1/6.0_dp
 #endif
 
-    dx2 = box%dr**2
-    nc  = box%n_cell
+    dx2   = box%dr**2
+    nc    = box%n_cell
+    i_phi = mg%i_phi
+    i_rhs = mg%i_rhs
 
     ! The parity of redblack_cntr determines which cells we use. If
     ! redblack_cntr is even, we use the even cells and vice versa.
@@ -354,11 +390,11 @@ contains
   end subroutine mg$D_box_gsrb_lpl
 
   !> Perform Laplacian operator on a box
-  subroutine mg$D_box_lpl(box, i_in, i_out)
+  subroutine mg$D_box_lpl(box, i_out, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_in !< Index of variable to take Laplacian of
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    integer                     :: i, j, nc
+    type(mg$D_t), intent(in)     :: mg
+    integer                     :: i, j, nc, i_phi
     real(dp)                    :: inv_dr_sq
 #if $D == 3
     integer                     :: k
@@ -366,23 +402,24 @@ contains
 
     nc = box%n_cell
     inv_dr_sq = 1 / box%dr**2
+    i_phi = mg%i_phi
 
 #if $D == 2
     do j = 1, nc
        do i = 1, nc
-          box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_in) + &
-               box%cc(i+1, j, i_in) + box%cc(i, j-1, i_in) + &
-               box%cc(i, j+1, i_in) - 4 * box%cc(i, j, i_in))
+          box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
+               box%cc(i+1, j, i_phi) + box%cc(i, j-1, i_phi) + &
+               box%cc(i, j+1, i_phi) - 4 * box%cc(i, j, i_phi))
        end do
     end do
 #elif $D == 3
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
-             box%cc(i, j, k, i_out) = inv_dr_sq * (box%cc(i-1, j, k, i_in) + &
-                  box%cc(i+1, j, k, i_in) + box%cc(i, j-1, k, i_in) + &
-                  box%cc(i, j+1, k, i_in) + box%cc(i, j, k-1, i_in) + &
-                  box%cc(i, j, k+1, i_in) - 6 * box%cc(i, j, k, i_in))
+             box%cc(i, j, k, i_out) = inv_dr_sq * (box%cc(i-1, j, k, i_phi) + &
+                  box%cc(i+1, j, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
+                  box%cc(i, j+1, k, i_phi) + box%cc(i, j, k-1, i_phi) + &
+                  box%cc(i, j, k+1, i_phi) - 6 * box%cc(i, j, k, i_phi))
           end do
        end do
     end do
@@ -407,7 +444,7 @@ contains
     type(mg$D_t), intent(in)     :: mg
     integer                     :: nc
 
-    call mg%box_op(box, mg%i_phi, mg%i_res)
+    call mg%box_op(box, mg%i_res, mg)
     nc = box%n_cell
 #if $D == 2
     box%cc(1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, mg%i_rhs) &
