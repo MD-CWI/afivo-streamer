@@ -17,7 +17,7 @@ contains
     integer, intent(in)         :: redblack_cntr !< Iteration counter
     type(mg2_t), intent(in)     :: mg
     integer                     :: i, i0, j, nc, i_phi, i_eps, i_rhs
-    real(dp)                    :: dx2, u0, u(4), a0, a(4), c(4)
+    real(dp)                    :: dx2, u(4), a0, a(4), c(4)
 
     dx2   = box%dr**2
     nc    = box%n_cell
@@ -30,7 +30,6 @@ contains
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
-          u0 = box%cc(i, j, i_phi) ! value of phi at i,j
           a0 = box%cc(i, j, i_eps) ! value of eps at i,j
           u(1:2) = box%cc(i-1:i+2:2, j, i_phi) ! values at neighbors
           a(1:2) = box%cc(i-1:i+2:2, j, i_eps)
@@ -39,7 +38,7 @@ contains
           c(:) = 2 * a0 * a(:) / (a0 + a(:))
 
           box%cc(i, j, i_phi) = &
-               (sum(c(:) * u(:)) - dx2 * box%cc(i, j, i_rhs)) / sum(c)
+               (sum(c(:) * u(:)) - dx2 * box%cc(i, j, i_rhs)) / sum(c(:))
        end do
     end do
   end subroutine gsrb_lpl_box_diel
