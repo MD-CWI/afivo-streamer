@@ -84,6 +84,7 @@ program test_drift_diff
      call a2_restrict_tree(tree, i_phi)
      call compute_fld(tree, n_fmg_cycles)
      call a2_adjust_refinement(tree, ref_func, n_changes)
+     print *, i, n_changes
      if (n_changes == 0) exit
   end do
 
@@ -94,13 +95,11 @@ program test_drift_diff
   time             = 0
   dt_adapt         = 1.0e-11_dp
   dt_output        = 1.0e-10_dp
-  end_time         = 10.0e-9_dp
+  end_time         = 1.0e-9_dp
 
-  !$omp parallel private(n)
   do
      dt            = 1.0e-12 !get_max_dt(tree)
 
-     !$omp single
      i       = i + 1
      n_steps = ceiling(dt_adapt/dt)
      dt      = dt_adapt / n_steps
@@ -118,7 +117,6 @@ program test_drift_diff
      else
         write_out = .false.
      end if
-     !$omp end single
 
      if (write_out) call a2_write_tree(tree, trim(fname), &
           cc_names, output_cnt, time)
@@ -151,7 +149,6 @@ program test_drift_diff
      call a2_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
      call compute_fld(tree, n_fmg_cycles)
   end do
-  !$omp end parallel
 
   call a2_destroy(tree)
 
@@ -163,6 +160,7 @@ contains
 
     crv_elec = get_max_curvature(box, i_elec, .false.)
     crv_phi = maxval(abs(box%cc(:,:, i_res)))
+    print *, box%lvl, crv_elec, crv_phi, maxval(box%cc(:, :, i_phi))
 
     if (box%lvl < 4) then
        ref_func = a5_do_ref
@@ -304,16 +302,15 @@ contains
     nc = tree%n_cell
     ! Set rhs
     do lvl = 1, tree%max_lvl
-       !$omp do
+       !$omp parallel do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           tree%boxes(id)%cc(:, :, i_rhs) = fac * (&
                tree%boxes(id)%cc(:, :, i_elec) - &
                tree%boxes(id)%cc(:, :, i_pion))
        end do
-       !$omp end do nowait
+       !$omp end parallel do
     end do
-    !$omp barrier
 
     ! Restrict the rhs
     call a2_restrict_tree(tree, i_rhs)

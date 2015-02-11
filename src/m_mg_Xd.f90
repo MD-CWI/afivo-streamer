@@ -173,14 +173,14 @@ contains
        ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
        ! store current coarse phi in tmp.
 
-       !$omp do private(id)
+       !$omp parallel do private(id)
        do i = 1, size(tree%lvls(lvl-1)%parents)
           id = tree%lvls(lvl-1)%parents(i)
           call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
           call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
           call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
        end do
-       !$omp end do
+       !$omp end parallel do
     end do
 
     lvl = min_lvl
@@ -212,16 +212,15 @@ contains
     min_lvl = lbound(tree%lvls, 1)
 
     do lvl = min_lvl, tree%max_lvl
-       !$omp do
+       !$omp parallel do private(id, dr2)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           dr2 = tree%boxes(id)%dr**2
           call mg%box_op(tree%boxes(id), i_crv, mg)
           call a$D_box_times_cc(tree%boxes(id), dr2, i_crv)
        end do
-       !$omp end do nowait
+       !$omp end parallel do
     end do
-    !$omp barrier
   end subroutine mg$D_set_curvature
 
   subroutine fill_gc_phi(boxes, ids, mg)
@@ -230,12 +229,12 @@ contains
     type(mg$D_t), intent(in)     :: mg
     integer                     :: i
 
-    !$omp do
+    !$omp parallel do
     do i = 1, size(ids)
        call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
             mg%sides_rb, mg%sides_bc)
     end do
-    !$omp end do
+    !$omp end parallel do
   end subroutine fill_gc_phi
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
@@ -243,9 +242,9 @@ contains
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:)
     type(mg$D_t), intent(in)     :: mg
-    integer                     :: i, id, nc, i_c, c_id, ix_offset($D)
+    integer                     :: i, id, nc, i_c, c_id
 
-    !$omp do private(nc, i_c, c_id, ix_offset)
+    !$omp parallel do private(id, nc, i_c, c_id)
     do i = 1, size(ids)
        id = ids(i)
        nc = boxes(id)%n_cell
@@ -265,7 +264,7 @@ contains
           call mg%box_corr(boxes(id), boxes(c_id), mg)
        end do
     end do
-    !$omp end do
+    !$omp end parallel do
   end subroutine correct_children
 
   subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
@@ -328,18 +327,18 @@ contains
     integer                     :: n, i
 
     do n = 1, 2 * n_cycle
-       !$omp do
+       !$omp parallel do
        do i = 1, size(ids)
           call mg%box_gsrb(boxes(ids(i)), n, mg)
        end do
-       !$omp end do
+       !$omp end parallel do
 
-       !$omp do
+       !$omp parallel do
        do i = 1, size(ids)
           call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
                mg%sides_rb, mg%sides_bc)
        end do
-       !$omp end do
+       !$omp end parallel do
     end do
   end subroutine gsrb_boxes
 
@@ -431,11 +430,11 @@ contains
     integer, intent(in)         :: ids(:)
     integer                     :: i
 
-    !$omp do
+    !$omp parallel do
     do i = 1, size(ids)
        call residual_box(boxes(ids(i)), mg)
     end do
-    !$omp end do
+    !$omp end parallel do
   end subroutine residual_boxes
 
   subroutine residual_box(box, mg)

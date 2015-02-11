@@ -57,15 +57,13 @@ program test_drift_diff
   output_cnt = 0
   time       = 0
   dt_adapt   = 0.01_dp
-  dt_output  = 0.05_dp
+  dt_output  = 1.05_dp
   end_time   = 2.0_dp
   diff_coeff = 0.0_dp
   vel_x      = 2.0_dp
   vel_y      = 0.0_dp
 
-  !$omp parallel private(n)
   do
-     !$omp single
      i       = i + 1
      dr_min  = a2_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
@@ -81,7 +79,6 @@ program test_drift_diff
      else
         write_out = .false.
      end if
-     !$omp end single
 
      if (write_out) call a2_write_tree(tree, trim(fname), &
           (/"phi", "tmp"/), output_cnt, time)
@@ -125,7 +122,6 @@ program test_drift_diff
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
-  !$omp end parallel
 
   call a2_destroy(tree)
 
