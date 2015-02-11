@@ -1151,7 +1151,6 @@ contains
     integer                :: i, id, lvl, nc
 
     my_max = -huge(1.0_dp)
-    shared_val = -huge(1.0_dp)
     !$omp single
     cc_max = 0
     !$omp end single
