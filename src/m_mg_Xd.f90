@@ -76,7 +76,7 @@ module m_mg_$Dd
   public :: mg$D_init_mg
   public :: mg$D_fas_fmg
   public :: mg$D_fas_vcycle
-  public :: mg$D_set_tau
+  public :: mg$D_set_curvature
   public :: mg$D_box_op
   public :: mg$D_box_gsrb
   public :: mg$D_box_corr
@@ -144,7 +144,6 @@ contains
        ! Perform V-cycle
        call mg$D_fas_vcycle(tree, mg, lvl)
     end do
-
   end subroutine mg$D_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
@@ -199,31 +198,31 @@ contains
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
+    !$omp barrier
   end subroutine mg$D_fas_vcycle
 
-  !> In FAS terminology, we have tau_cf = rhs_c - restrict(rhs_f) after a
-  !> V-cycle or FMG-cycle. This routine sets the temporary variable to tau.
-  subroutine mg$D_set_tau(tree, mg)
+  !> Set variable i_crv to an estimate of the curvature of i_phi
+  subroutine mg$D_set_curvature(tree, i_crv, mg)
     type(a$D_t), intent(inout)  :: tree !< Tree to do multigrid on
+    integer, intent(in)        :: i_crv
     type(mg$D_t), intent(in)    :: mg   !< Multigrid options
     integer                    :: i, id, lvl, min_lvl
+    real(dp)                   :: dr2
 
     min_lvl = lbound(tree%lvls, 1)
 
-    do lvl = 1, tree%max_lvl-1
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, &
-            mg%i_rhs, mg%i_tmp)
-
+    do lvl = min_lvl, tree%max_lvl
        !$omp do
-       do i = 1, size(tree%lvls(lvl)%parents)
-          id = tree%lvls(lvl)%parents(i)
-          call a$D_box_lincomb_cc(tree%boxes(id), &
-               1.0_dp, mg%i_rhs, -1.0_dp, mg%i_tmp)
-          call a$D_prolong0_from(tree%boxes, id, mg%i_tmp, .false.)
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          dr2 = tree%boxes(id)%dr**2
+          call mg%box_op(tree%boxes(id), i_crv, mg)
+          call a$D_box_times_cc(tree%boxes(id), dr2, i_crv)
        end do
-       !$omp end do
+       !$omp end do nowait
     end do
-  end subroutine mg$D_set_tau
+    !$omp barrier
+  end subroutine mg$D_set_curvature
 
   subroutine fill_gc_phi(boxes, ids, mg)
     type(box$D_t), intent(inout) :: boxes(:)

@@ -354,53 +354,92 @@ contains
   end subroutine a$D_set_base
 
   !> Call procedure for each box in tree
-  subroutine a$D_loop_box(tree, my_procedure)
-    type(a$D_t), intent(inout) :: tree
-    procedure(a$D_subr)        :: my_procedure
-    integer                   :: lvl, i, id
+  subroutine a$D_loop_box(tree, my_procedure, leaves_only)
+    type(a$D_t), intent(inout)     :: tree
+    procedure(a$D_subr)           :: my_procedure
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
+    integer                       :: lvl, i, id
+
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call my_procedure(tree%boxes(id))
-       end do
-       !$omp end do nowait
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             call my_procedure(tree%boxes(id))
+          end do
+          !$omp end do nowait
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             call my_procedure(tree%boxes(id))
+          end do
+          !$omp end do nowait
+       end if
     end do
     !$omp barrier
   end subroutine a$D_loop_box
 
   !> Call procedure for each box in tree, with argument rarg
-  subroutine a$D_loop_box_arg(tree, my_procedure, rarg)
-    type(a$D_t), intent(inout) :: tree
-    procedure(a$D_subr_arg)    :: my_procedure
-    real(dp), intent(in)      :: rarg(:)
-    integer                   :: lvl, i, id
+  subroutine a$D_loop_box_arg(tree, my_procedure, rarg, leaves_only)
+    type(a$D_t), intent(inout)     :: tree
+    procedure(a$D_subr_arg)        :: my_procedure
+    real(dp), intent(in)          :: rarg(:)
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
+    integer                       :: lvl, i, id
+
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call my_procedure(tree%boxes(id), rarg)
-       end do
-       !$omp end do nowait
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             call my_procedure(tree%boxes(id), rarg)
+          end do
+          !$omp end do nowait
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             call my_procedure(tree%boxes(id), rarg)
+          end do
+          !$omp end do nowait
+       end if
     end do
     !$omp barrier
   end subroutine a$D_loop_box_arg
 
   !> Call procedure for each id in tree, giving the list of boxes
-  subroutine a$D_loop_boxes(tree, my_procedure)
-    type(a$D_t), intent(inout) :: tree
-    procedure(a$D_subr_boxes)  :: my_procedure
-    integer                   :: lvl, i, id
+  subroutine a$D_loop_boxes(tree, my_procedure, leaves_only)
+    type(a$D_t), intent(inout)     :: tree
+    procedure(a$D_subr_boxes)      :: my_procedure
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
+    integer                       :: lvl, i, id
+
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call my_procedure(tree%boxes, id)
-       end do
-       !$omp end do nowait
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             call my_procedure(tree%boxes, id)
+          end do
+          !$omp end do nowait
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             call my_procedure(tree%boxes, id)
+          end do
+          !$omp end do nowait
+       end if
     end do
     !$omp barrier
   end subroutine a$D_loop_boxes
@@ -446,7 +485,7 @@ contains
     type(box$D_t), allocatable      :: boxes_cpy(:)
     integer(morton_k), allocatable :: mortons(:)
 
-    !$omp single
+    !$omp master
     if (goal_frac_used > max_frac_used) &
          stop "a$D_tidy_up: need goal_frac_used < max_frac_used"
     if (max_frac_used > 1.0_dp) stop "a$D_tidy_up: need max_frac_used < 1"
@@ -468,7 +507,7 @@ contains
     end if
 
     if (new_size /= old_size .or. only_reorder) then
-       print *, "a$D_tidy_up:", old_size, new_size, only_reorder
+       print *, "a$D_tidy_up: new size = ", new_size
 
        if (only_reorder) then
           allocate(boxes_cpy(n_used))  ! Need just enough space
@@ -530,7 +569,8 @@ contains
 
        tree%max_id = n_used
     end if
-    !$omp end single
+    !$omp end master
+    !$omp barrier
   end subroutine a$D_tidy_up
 
   !> Create a list of leaves and a list of parents for a level
@@ -676,7 +716,7 @@ contains
     integer                        :: n_leaves, n_parents
     integer, allocatable           :: ref_flags(:)
 
-    !$omp single
+    !$omp master
     max_id_prev = tree%max_id
     allocate(ref_flags(max_id_prev))
 
@@ -743,7 +783,8 @@ contains
        allocate(tree%lvls(lvl)%parents(n_parents))
        call set_leaves_parents(tree%boxes, tree%lvls(lvl))
     end do
-    !$omp end single
+    !$omp end master
+    !$omp barrier
   end subroutine a$D_adjust_refinement
 
   !> Get free ids from the boxes(:) array to store new boxes in. These ids are
@@ -937,11 +978,19 @@ contains
     a$D_has_children = (box%children(1) /= a5_no_box)
   end function a$D_has_children
 
+  !> Return dr at lvl
+  pure function a$D_lvl_dr(tree, lvl) result(dr)
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: lvl
+    real(dp)               :: dr !< Output: dr at the finest lvl of the tree
+    dr = tree%dr_base * 0.5_dp**(lvl-1)
+  end function a$D_lvl_dr
+
   !> Return finest dr that is used in the tree
   pure function a$D_min_dr(tree) result(dr)
     type(a$D_t), intent(in) :: tree
-    real(dp)               :: dr($D) !< Output: dr at the finest lvl of the tree
-    dr = tree%dr_base * 0.5_dp**(tree%max_lvl-1)
+    real(dp)               :: dr !< Output: dr at the finest lvl of the tree
+    dr = a$D_lvl_dr(tree, tree%max_lvl)
   end function a$D_min_dr
 
   !> Returns whether r is inside or within a distance d from box
@@ -1033,6 +1082,18 @@ contains
     box%cc(:,:,:, iv_to) = box%cc(:,:,:, iv_to) - box%cc(:,:,:, iv_from)
 #endif
   end subroutine a$D_box_sub_cc
+
+  !> Multipy cc(..., iv) with a
+  subroutine a$D_box_times_cc(box, a, iv)
+    type(box$D_t), intent(inout) :: box
+    real(dp), intent(in)        :: a
+    integer, intent(in)         :: iv
+#if $D == 2
+    box%cc(:,:, iv) = a * box%cc(:,:, iv)
+#elif $D == 3
+    box%cc(:,:,:, iv) = a * box%cc(:,:,:, iv)
+#endif
+  end subroutine a$D_box_times_cc
 
   !> Set cc(..., iv_b) = a * cc(..., iv_a) + b * cc(..., iv_b)
   subroutine a$D_box_lincomb_cc(box, a, iv_a, b, iv_b)
@@ -1231,20 +1292,23 @@ contains
   end subroutine a$D_prolong1_from
 
   !> Partial prolongation to a child (from parent) using injection (simply copy value)
-  subroutine a$D_prolong0_to(boxes, id, lo, hi, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of child
-    integer, intent(in)         :: lo($D)    !< Min cell index at child
-    integer, intent(in)         :: hi($D)    !< Max cell index at child
-    integer, intent(in)         :: iv        !< Variable to fill
-    integer                     :: nc, p_id, ix_offset($D)
-    integer                     :: i, j, i_c1, j_c1
+  subroutine a$D_prolong0_to(boxes, id, iv, lo_a, hi_a)
+    type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
+    integer, intent(in)           :: id       !< Id of child
+    integer, intent(in)           :: iv       !< Variable to fill
+    integer, intent(in), optional :: lo_a($D) !< Min cell index at child
+    integer, intent(in), optional :: hi_a($D) !< Max cell index at child
+    integer                       :: nc, p_id, ix_offset($D)
+    integer                       :: i, j, i_c1, j_c1, lo($D), hi($D)
 #if $D == 3
-    integer                     :: k, k_c1
+    integer                       :: k, k_c1
 #endif
 
-    nc        = boxes(id)%n_cell
-    p_id      = boxes(id)%parent
+    nc   = boxes(id)%n_cell
+    p_id = boxes(id)%parent
+    lo   = 1; if (present(lo_a)) lo = lo_a
+    hi   = nc; if (present(hi_a)) hi = hi_a
+
     ! Offset of child w.r.t. parent
     ix_offset = (boxes(id)%ix - 2*boxes(p_id)%ix + 1) * ishft(nc, -1)
 
@@ -1273,20 +1337,23 @@ contains
   !> Partial prolongation to a child (from parent) using linear interpolation.
   !> We use 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not
   !> need corner ghost cells.
-  subroutine a$D_prolong1_to(boxes, id, lo, hi, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of child
-    integer, intent(in)         :: lo($D)    !< Min cell index at child
-    integer, intent(in)         :: hi($D)    !< Max cell index at child
-    integer, intent(in)         :: iv        !< Variable to fill
-    integer                     :: nc, p_id, ix_offset($D)
-    integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
+  subroutine a$D_prolong1_to(boxes, id, iv, lo_a, hi_a)
+    type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
+    integer, intent(in)           :: id       !< Id of child
+    integer, intent(in), optional :: lo_a($D) !< Min cell index at child
+    integer, intent(in), optional :: hi_a($D) !< Max cell index at child
+    integer, intent(in)           :: iv       !< Variable to fill
+    integer                       :: nc, p_id, ix_offset($D), lo($D), hi($D)
+    integer                       :: i, j, i_c1, i_c2, j_c1, j_c2
 #if $D == 3
-    integer                     :: k, k_c1, k_c2
+    integer                       :: k, k_c1, k_c2
 #endif
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
+    lo   = 1; if (present(lo_a)) lo = lo_a
+    hi   = nc; if (present(hi_a)) hi = hi_a
+
     ! Offset of child w.r.t. parent
     ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
 
@@ -1470,26 +1537,26 @@ contains
     select case (nb)
 #if $D == 2
     case (a2_nb_lx)
-       call a2_prolong1_to(boxes, id, [0, 1], [0, nc], iv)
+       call a2_prolong1_to(boxes, id, iv, [0, 1], [0, nc])
     case (a2_nb_hx)
-       call a2_prolong1_to(boxes, id, [nc+1, 1], [nc+1, nc], iv)
+       call a2_prolong1_to(boxes, id, iv, [nc+1, 1], [nc+1, nc])
     case (a2_nb_ly)
-       call a2_prolong1_to(boxes, id, [1, 0], [nc, 0], iv)
+       call a2_prolong1_to(boxes, id, iv, [1, 0], [nc, 0])
     case (a2_nb_hy)
-       call a2_prolong1_to(boxes, id, [1, nc+1], [nc, nc+1], iv)
+       call a2_prolong1_to(boxes, id, iv, [1, nc+1], [nc, nc+1])
 #elif $D == 3
     case (a3_nb_lx)
-       call a3_prolong1_to(boxes, id, [0, 1, 1], [0, nc, nc], iv)
+       call a3_prolong1_to(boxes, id, iv, [0, 1, 1], [0, nc, nc])
     case (a3_nb_hx)
-       call a3_prolong1_to(boxes, id, [nc+1, 1, 1], [nc+1, nc, nc], iv)
+       call a3_prolong1_to(boxes, id, iv, [nc+1, 1, 1], [nc+1, nc, nc])
     case (a3_nb_ly)
-       call a3_prolong1_to(boxes, id, [1, 0, 1], [nc, 0, nc], iv)
+       call a3_prolong1_to(boxes, id, iv, [1, 0, 1], [nc, 0, nc])
     case (a3_nb_hy)
-       call a3_prolong1_to(boxes, id, [1, nc+1, 1], [nc, nc+1, nc], iv)
+       call a3_prolong1_to(boxes, id, iv, [1, nc+1, 1], [nc, nc+1, nc])
     case (a3_nb_lz)
-       call a3_prolong1_to(boxes, id, [1, 1, 0], [nc, nc, 0], iv)
+       call a3_prolong1_to(boxes, id, iv, [1, 1, 0], [nc, nc, 0])
     case (a3_nb_hz)
-       call a3_prolong1_to(boxes, id, [1, 1, nc+1], [nc, nc, nc+1], iv)
+       call a3_prolong1_to(boxes, id, iv, [1, 1, nc+1], [nc, nc, nc+1])
 #endif
     end select
   end subroutine a$D_sides_prolong1
@@ -1643,7 +1710,7 @@ contains
     case (1)
        i = ix
        di = dix
-       call a2_prolong0_to(boxes, id, [i-di, 1], [i-di, nc], iv)
+       call a2_prolong0_to(boxes, id, iv, [i-di, 1], [i-di, nc])
 
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
@@ -1655,7 +1722,7 @@ contains
     case (2)
        j = ix
        dj = dix
-       call a2_prolong0_to(boxes, id, [1, j-dj], [nc, j-dj], iv)
+       call a2_prolong0_to(boxes, id, iv, [1, j-dj], [nc, j-dj])
 
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
@@ -1667,7 +1734,7 @@ contains
     case (1)
        i = ix
        di = dix
-       call a3_prolong0_to(boxes, id, [i-di, 1, 1], [i-di, nc, nc], iv)
+       call a3_prolong0_to(boxes, id, iv, [i-di, 1, 1], [i-di, nc, nc])
 
        do k = 1, nc
           dk = -1 + 2 * iand(k, 1)
@@ -1686,7 +1753,7 @@ contains
     case (2)
        j = ix
        dj = dix
-       call a3_prolong0_to(boxes, id, [1, j-dj, 1], [nc, j-dj, nc], iv)
+       call a3_prolong0_to(boxes, id, iv, [1, j-dj, 1], [nc, j-dj, nc])
 
        do k = 1, nc
           dk = -1 + 2 * iand(k, 1)
@@ -1705,7 +1772,7 @@ contains
     case (3)
        k = ix
        dk = dix
-       call a3_prolong0_to(boxes, id, [1, 1, k-dk], [nc, nc, k-dk], iv)
+       call a3_prolong0_to(boxes, id, iv, [1, 1, k-dk], [nc, nc, k-dk])
 
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
@@ -1888,7 +1955,7 @@ contains
     integer                 :: k, bn2
 #endif
 
-    !$omp single
+    !$omp master
 
     if (size(cc_names) /= tree%n_var_cell) &
          stop "a$D_write_tree: size(cc_names) /= n_var_cell"
@@ -1990,7 +2057,8 @@ contains
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
     print *, "Written ", trim(filename), ", n_grids", n_grids
-    !$omp end single
+    !$omp end master
+    !$omp barrier
   end subroutine a$D_write_tree
 
 end module m_afivo_$Dd
