@@ -75,7 +75,6 @@ program test_mg2_3d
   call a3_restrict_tree(tree, i_phi)
 
   print *, "Do multigrid"
-  !$omp parallel
   do i = 1, 10
      ! call mg3_fas_vcycle(tree, mg, tree%n_lvls)
      call mg3_fas_fmg(tree, mg)
@@ -83,7 +82,6 @@ program test_mg2_3d
      write(fname, "(A,I0,A)") "test_mg2_3d_", i, ".vtu"
      call a3_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
-  !$omp end parallel
 
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**3

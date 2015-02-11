@@ -66,9 +66,7 @@ program test_drift_diff
   vel_z      = 1.0_dp
 
   print *, "Starting simulation"
-  !$omp parallel private(n)
   do
-     !$omp single
      dr_min  = a3_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y, vel_z]) / dr_min ) + epsilon(1.0_dp))
@@ -83,7 +81,6 @@ program test_drift_diff
      else
         write_out = .false.
      end if
-     !$omp end single
 
      if (write_out) call a3_write_tree(tree, trim(fname), &
           (/"phi", "tmp"/), output_cnt, time)
@@ -129,7 +126,6 @@ program test_drift_diff
      call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
      ! call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
-  !$omp end parallel
 
   call a3_destroy(tree)
 

@@ -84,7 +84,6 @@ program test_drift_diff
      call a2_restrict_tree(tree, i_phi)
      call compute_fld(tree, n_fmg_cycles)
      call a2_adjust_refinement(tree, ref_func, n_changes)
-     print *, i, n_changes
      if (n_changes == 0) exit
   end do
 
@@ -160,7 +159,6 @@ contains
 
     crv_elec = get_max_curvature(box, i_elec, .false.)
     crv_phi = maxval(abs(box%cc(:,:, i_res)))
-    print *, box%lvl, crv_elec, crv_phi, maxval(box%cc(:, :, i_phi))
 
     if (box%lvl < 4) then
        ref_func = a5_do_ref
@@ -215,7 +213,6 @@ contains
 
     call a2_tree_max_cc(tree, i_tmp, max_fld)
     call a2_tree_max_cc(tree, i_elec, max_dns)
-    print *, max_fld, max_dns
 
     dr_min = a2_min_dr(tree)
     ! CFL condition

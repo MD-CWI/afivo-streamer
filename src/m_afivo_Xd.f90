@@ -363,24 +363,25 @@ contains
 
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
+    !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
        if (leaves) then
-          !$omp parallel do private(id)
+          !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
              id = tree%lvls(lvl)%leaves(i)
              call my_procedure(tree%boxes(id))
           end do
-          !$omp end parallel do
+          !$omp end do
        else
-          !$omp parallel do private(id)
+          !$omp do
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
              call my_procedure(tree%boxes(id))
           end do
-          !$omp end parallel do
+          !$omp end do
        end if
     end do
-    !$omp barrier
+    !$omp end parallel
   end subroutine a$D_loop_box
 
   !> Call procedure for each box in tree, with argument rarg
@@ -394,24 +395,25 @@ contains
 
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
+    !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
        if (leaves) then
-          !$omp parallel do private(id)
+          !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
              id = tree%lvls(lvl)%leaves(i)
              call my_procedure(tree%boxes(id), rarg)
           end do
-          !$omp end parallel do
+          !$omp end do
        else
-          !$omp parallel do private(id)
+          !$omp do
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
              call my_procedure(tree%boxes(id), rarg)
           end do
-          !$omp end parallel do
+          !$omp end do
        end if
     end do
-    !$omp barrier
+    !$omp end parallel
   end subroutine a$D_loop_box_arg
 
   !> Call procedure for each id in tree, giving the list of boxes
@@ -424,24 +426,25 @@ contains
 
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
+    !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
        if (leaves) then
-          !$omp parallel do private(id)
+          !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
              id = tree%lvls(lvl)%leaves(i)
              call my_procedure(tree%boxes, id)
           end do
-          !$omp end parallel do
+          !$omp end do
        else
-          !$omp parallel do private(id)
+          !$omp do
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
              call my_procedure(tree%boxes, id)
           end do
-          !$omp end parallel do
+          !$omp end do
        end if
     end do
-    !$omp barrier
+    !$omp end parallel
   end subroutine a$D_loop_boxes
 
   !> Call procedure for each id in tree, giving the list of boxes
@@ -451,15 +454,16 @@ contains
     real(dp), intent(in)         :: rarg(:)
     integer                      :: lvl, i, id
 
+    !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
-       !$omp parallel do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call my_procedure(tree%boxes, id, rarg)
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
-    !$omp barrier
+    !$omp end parallel
   end subroutine a$D_loop_boxes_arg
 
   !> Clear "bit" from all the tags in the tree
@@ -485,7 +489,6 @@ contains
     type(box$D_t), allocatable      :: boxes_cpy(:)
     integer(morton_k), allocatable :: mortons(:)
 
-    !$omp master
     if (goal_frac_used > max_frac_used) &
          stop "a$D_tidy_up: need goal_frac_used < max_frac_used"
     if (max_frac_used > 1.0_dp) stop "a$D_tidy_up: need max_frac_used < 1"
@@ -569,8 +572,6 @@ contains
 
        tree%max_id = n_used
     end if
-    !$omp end master
-    !$omp barrier
   end subroutine a$D_tidy_up
 
   !> Create a list of leaves and a list of parents for a level
@@ -716,7 +717,6 @@ contains
     integer                        :: n_leaves, n_parents
     integer, allocatable           :: ref_flags(:)
 
-    !$omp master
     max_id_prev = tree%max_id
     allocate(ref_flags(max_id_prev))
 
@@ -783,8 +783,6 @@ contains
        allocate(tree%lvls(lvl)%parents(n_parents))
        call set_leaves_parents(tree%boxes, tree%lvls(lvl))
     end do
-    !$omp end master
-    !$omp barrier
   end subroutine a$D_adjust_refinement
 
   !> Get free ids from the boxes(:) array to store new boxes in. These ids are
@@ -1151,12 +1149,9 @@ contains
     integer                :: i, id, lvl, nc
 
     my_max = -huge(1.0_dp)
-    !$omp single
     cc_max = 0
-    !$omp end single
 
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
-       !$omp parallel do private(id, nc, tmp)
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           nc = tree%boxes(id)%n_cell
@@ -1167,13 +1162,9 @@ contains
 #endif
           if (tmp > my_max) my_max = tmp
        end do
-       !$omp end parallel do
     end do
 
-    !$omp barrier
-    !$omp critical
     cc_max = max(cc_max, my_max)
-    !$omp end critical
     print *, my_max, cc_max
   end subroutine a$D_tree_max_cc
 
@@ -1527,14 +1518,16 @@ contains
     procedure(a$D_subr_gc)     :: subr_bc    !< Procedure called at physical boundaries
     integer                   :: lvl, i, id
 
+    !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
-       !$omp parallel do private(id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a$D_gc_box_sides(tree%boxes, id, iv, subr_rb, subr_bc)
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine a$D_gc_sides
 
   !> Fill ghost cells for variables iv on the sides of a box, using
@@ -1871,8 +1864,9 @@ contains
     integer, intent(in)       :: f_ixs(:) !< Indices of the fluxes
     integer                   :: lvl, i, id, nb, nb_id
 
+    !$omp parallel private(lvl, i, id, nb, nb_id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl-1
-       !$omp parallel do private(id, nb, nb_id)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           do nb = 1, a$D_num_neighbors
@@ -1882,9 +1876,9 @@ contains
                   call a$D_flux_from_children(tree%boxes, id, nb, f_ixs)
           end do
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
-    !$omp barrier
+    !$omp end parallel
   end subroutine a$D_consistent_fluxes
 
   !> The neighbor nb has no children and id does, so get flux from children for
@@ -1990,8 +1984,6 @@ contains
     integer                 :: k, bn2
 #endif
 
-    !$omp master
-
     if (size(cc_names) /= tree%n_var_cell) &
          stop "a$D_write_tree: size(cc_names) /= n_var_cell"
 
@@ -2092,8 +2084,6 @@ contains
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
     print *, "Written ", trim(filename), ", n_grids", n_grids
-    !$omp end master
-    !$omp barrier
   end subroutine a$D_write_tree
 
 end module m_afivo_$Dd

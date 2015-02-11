@@ -69,7 +69,6 @@ program test_mg3_2d
   call a2_restrict_tree(tree, i_rhs)
   call a2_restrict_tree(tree, i_phi)
 
-  !$omp parallel
   do i = 1, 10
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
      call mg2_fas_fmg(tree, mg)
@@ -77,7 +76,6 @@ program test_mg3_2d
      write(fname, "(A,I0,A)") "test_mg3_2d_", i, ".vtu"
      call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
-  !$omp end parallel
 
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**2
@@ -92,7 +90,7 @@ contains
 
     ref_func_init = a5_rm_ref
 
-    if (box%lvl < 3 .or. (box%lvl < 5 .and. &
+    if (box%lvl < 4 .or. (box%lvl < 7 .and. &
          a2_r_inside(box, [0.5_dp, 0.5_dp], 5*box%dr))) then
        ref_func_init = a5_do_ref
     else
@@ -115,7 +113,7 @@ contains
           if (xy(2) < 0.5) then
              box%cc(i, j, i_eps) = 1.0_dp
           else
-             box%cc(i, j, i_eps) = 2.0_dp
+             box%cc(i, j, i_eps) = 4.0_dp
           end if
        end do
     end do

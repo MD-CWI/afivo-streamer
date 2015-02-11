@@ -57,16 +57,12 @@ program test_mgb
   call a2_restrict_tree(tree, i_rhs)
   call a2_restrict_tree(tree, i_phi)
 
-  !$omp parallel
   do i = 1, 20
      ! call mg2_fas_vcycle(tree, mg, tree%max_lvl)
      call mg2_fas_fmg(tree, mg)
-     !$omp single
      write(fname, "(A,I0,A)") "test_mgb_2d_", i, ".vtu"
-     !$omp end single
      call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
   end do
-  !$omp end parallel
 
   ! write(fname, "(A,I0,A)") "test_mg_", 1, ".vtu"
   ! call a2_write_tree(tree, trim(fname), var_names, 1, 0.0_dp)

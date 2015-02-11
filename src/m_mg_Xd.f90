@@ -198,7 +198,6 @@ contains
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
-    !$omp barrier
   end subroutine mg$D_fas_vcycle
 
   !> Set variable i_crv to an estimate of the curvature of i_phi
@@ -211,16 +210,18 @@ contains
 
     min_lvl = lbound(tree%lvls, 1)
 
+    !$omp parallel private(i, id, dr2)
     do lvl = min_lvl, tree%max_lvl
-       !$omp parallel do private(id, dr2)
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           dr2 = tree%boxes(id)%dr**2
           call mg%box_op(tree%boxes(id), i_crv, mg)
           call a$D_box_times_cc(tree%boxes(id), dr2, i_crv)
        end do
-       !$omp end parallel do
+       !$omp end do nowait
     end do
+    !$omp end parallel
   end subroutine mg$D_set_curvature
 
   subroutine fill_gc_phi(boxes, ids, mg)
@@ -326,20 +327,22 @@ contains
     integer, intent(in)         :: ids(:), n_cycle
     integer                     :: n, i
 
+    !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
-       !$omp parallel do
+       !$omp do
        do i = 1, size(ids)
           call mg%box_gsrb(boxes(ids(i)), n, mg)
        end do
-       !$omp end parallel do
+       !$omp end do
 
-       !$omp parallel do
+       !$omp do
        do i = 1, size(ids)
           call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
                mg%sides_rb, mg%sides_bc)
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine gsrb_boxes
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
