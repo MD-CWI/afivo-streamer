@@ -1142,6 +1142,42 @@ contains
     end do
   end subroutine a$D_tree_copy_cc
 
+  !> Find maximum value of cc(..., iv). Ghost cells are not used.
+  subroutine a$D_tree_max_cc(tree, iv, cc_max)
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: iv
+    real(dp), intent(out)  :: cc_max
+    real(dp)               :: tmp, my_max
+    integer                :: i, id, lvl, nc
+
+    my_max = -huge(1.0_dp)
+    shared_val = -huge(1.0_dp)
+    !$omp single
+    cc_max = 0
+    !$omp end single
+
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          nc = tree%boxes(id)%n_cell
+#if $D == 2
+          tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+#elif $D == 3
+          tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+#endif
+          if (tmp > my_max) my_max = tmp
+       end do
+       !$omp end do nowait
+    end do
+
+    !$omp barrier
+    !$omp critical
+    cc_max = max(cc_max, my_max)
+    !$omp end critical
+    print *, my_max, cc_max
+  end subroutine a$D_tree_max_cc
+
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box

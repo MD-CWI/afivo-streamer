@@ -2,6 +2,7 @@ program test_drift_diff
   use m_afivo_2d
   use m_mg_2d
   use m_mg_diel
+  use omp_lib
 
   implicit none
 
@@ -39,7 +40,7 @@ program test_drift_diff
   integer            :: n_lvls_max  = 20
   integer            :: n_changes, output_cnt
   real(dp)           :: dr, dt, time, end_time
-  real(dp)           :: dt_adapt, dt_output
+  real(dp)           :: dt_adapt, dt_output, tmp
   character(len=40)  :: fname
   logical            :: write_out
 
@@ -92,18 +93,23 @@ program test_drift_diff
   output_cnt       = 0
   time             = 0
   dt_adapt         = 1.0e-11_dp
-  dt_output        = 2.5e-10_dp
-  end_time         = 25.0e-9_dp
+  dt_output        = 1.0e-10_dp
+  end_time         = 10.0e-9_dp
 
   !$omp parallel private(n)
   do
-     !$omp single
-     i             = i + 1
-     dt            = 0.5_dp * get_max_dt(tree)
+     dt            = 1.0e-12 !get_max_dt(tree)
 
+     !$omp single
+     i       = i + 1
      n_steps = ceiling(dt_adapt/dt)
      dt      = dt_adapt / n_steps
      time    = time + dt_adapt
+
+     if (dt < 1e-14) then
+        print *, "dt getting too small, instability?"
+        time       = end_time + 1.0_dp
+     end if
 
      if (output_cnt * dt_output < time) then
         write_out = .true.
@@ -126,10 +132,10 @@ program test_drift_diff
 
         ! Two forward Euler steps over dt
         do i = 1, 2
-           call a2_loop_boxes(tree, fluxes_koren)
+           call a2_loop_boxes(tree, fluxes_koren, .true.)
            call a2_consistent_fluxes(tree, [i_flux])
            call compute_fld(tree, n_fmg_cycles)
-           call a2_loop_box_arg(tree, update_solution, [dt])
+           call a2_loop_box_arg(tree, update_solution, [dt], .true.)
            call a2_restrict_tree(tree, i_elec)
            call a2_restrict_tree(tree, i_pion)
            call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
@@ -137,11 +143,12 @@ program test_drift_diff
         end do
 
         ! Take average of phi_old and phi
-        call a2_loop_box(tree, average_dens)
+        call a2_loop_box(tree, average_dens, .true.)
      end do
 
      call a2_adjust_refinement(tree, ref_func)
      call a2_loop_boxes(tree, prolong_to_new_children)
+     call a2_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
      call compute_fld(tree, n_fmg_cycles)
   end do
   !$omp end parallel
@@ -152,22 +159,14 @@ contains
 
   integer function ref_func(box)
     type(box2_t), intent(in) :: box
-    integer :: nc
-    real(dp) :: max_fld, max_dns, dr, alpha
-    nc = box%n_cell
-    max_fld = maxval(abs(box%cc(1:nc, 1:nc, i_tmp)))
-    max_dns = maxval(box%cc(1:nc, 1:nc, i_elec))
-    dr = box%dr
-    alpha = get_alpha(max_fld)
-    ! print *, alpha, 1/alpha, dr
+    real(dp) :: crv_elec, crv_phi
+
+    crv_elec = get_max_curvature(box, i_elec, .false.)
+    crv_phi = maxval(abs(box%cc(:,:, i_res)))
 
     if (box%lvl < 4) then
        ref_func = a5_do_ref
-    else if (box%lvl > 10) then
-       ref_func = a5_rm_ref
-    else if (max_dns > 1.0e15_dp .and. alpha * dr > 1) then
-       ref_func = a5_do_ref
-    else if (max_dns > 1.0e15_dp .and. dr > 1e-4_dp .and. max_fld > 1e6_dp) then
+    else if (crv_elec > 5e18_dp .or. crv_phi > 1.0e1_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -181,7 +180,7 @@ contains
     real(dp)                    :: bg_dens, dns
 
     nc = box%n_cell
-    xy0 = [0.3_dp, 0.5_dp] * domain_len
+    xy0 = [0.5_dp, 0.5_dp] * domain_len
     xy1 = xy0
     xy1(2) = xy1(2) + 2e-3_dp   ! 2 mm
     sigma = 2e-4_dp
@@ -212,25 +211,19 @@ contains
     type(a2_t), intent(in) :: tree
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
     real(dp), parameter    :: UC_elem_charge = 1.6022d-19
-    real(dp)               :: max_fld, max_dns, dr_min(2)
+    real(dp)               :: max_fld, max_dns, dr_min
     real(dp)               :: dt_cfl, dt_dif, dt_drt
     integer                :: lvl, i, id
 
-    max_fld = -huge(1.0_dp)
-    max_dns = -huge(1.0_dp)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          max_fld = max(max_fld, maxval(tree%boxes(id)%cc(:,:, i_tmp)))
-          max_dns = max(max_dns, maxval(tree%boxes(id)%cc(:,:, i_elec)))
-       end do
-    end do
+    call a2_tree_max_cc(tree, i_tmp, max_fld)
+    call a2_tree_max_cc(tree, i_elec, max_dns)
+    print *, max_fld, max_dns
 
     dr_min = a2_min_dr(tree)
     ! CFL condition
-    dt_cfl = dr_min(1) / (abs(mobility) * max_fld)
+    dt_cfl = dr_min / abs(mobility) * max_fld
     ! Diffusion condition
-    dt_dif = dr_min(1)**2 / (diff_coeff)
+    dt_dif = dr_min**2 / (diff_coeff)
     ! Dielectric relaxation time
     dt_drt = UC_eps0 / (UC_elem_charge * abs(mobility) * max_dns)
     get_max_dt = 0.5_dp * min(dt_cfl, dt_dif, dt_drt)
@@ -273,6 +266,27 @@ contains
     end select
   end function rod_dens
 
+  function get_max_curvature(box, iv, use_gc) result(cmax)
+    type(box2_t), intent(in) :: box
+    integer, intent(in)      :: iv
+    logical, intent(in)      :: use_gc
+    integer                  :: i, j, dgc
+    real(dp)                 :: cmax, tmp
+
+    cmax = 0
+    dgc = 1
+    if (use_gc) dgc = 0
+
+    do j = 1+dgc, box%n_cell-dgc
+       do i = 1+dgc, box%n_cell-dgc
+          tmp = abs(box%cc(i-1, j, iv) + &
+               box%cc(i+1, j, iv) + box%cc(i, j-1, iv) + &
+               box%cc(i, j+1, iv) - 4 * box%cc(i, j, iv))
+          if (tmp > cmax) cmax = tmp
+       end do
+    end do
+  end function get_max_curvature
+
   real(dp) function gaussian_2d(x, x0, sigma)
     real(dp), intent(in) :: x(2), x0(2), sigma
     gaussian_2d = exp(-0.5_dp/sigma**2 * sum((x-x0)**2))
@@ -291,14 +305,15 @@ contains
     ! Set rhs
     do lvl = 1, tree%max_lvl
        !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          tree%boxes(id)%cc(1:nc, 1:nc, i_rhs) = fac * (&
-               tree%boxes(id)%cc(1:nc, 1:nc, i_elec) - &
-               tree%boxes(id)%cc(1:nc, 1:nc, i_pion))
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          tree%boxes(id)%cc(:, :, i_rhs) = fac * (&
+               tree%boxes(id)%cc(:, :, i_elec) - &
+               tree%boxes(id)%cc(:, :, i_pion))
        end do
        !$omp end do nowait
     end do
+    !$omp barrier
 
     ! Restrict the rhs
     call a2_restrict_tree(tree, i_rhs)
@@ -307,6 +322,8 @@ contains
     do i = 1, n_fmg
        call mg2_fas_fmg(tree, mg)
     end do
+
+    call mg2_set_curvature(tree, i_res, mg)
 
     ! Compute field from potential
     call a2_loop_box(tree, fld_from_pot)
@@ -317,8 +334,9 @@ contains
     integer                     :: nc
     real(dp)                    :: inv_dr
 
-    nc = box%n_cell
+    nc     = box%n_cell
     inv_dr = 1 / box%dr
+
     box%fx(:, :, i_fld) = inv_dr * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
     box%fy(:, :, i_fld) = inv_dr * &
@@ -361,7 +379,7 @@ contains
     if (denominator /= 0.0_dp) then
        ratio = numerator / denominator
     else
-       ratio = numerator * huge(1.0_dp)
+       ratio = 1 / epsilon(1.0_dp)
     end if
   end function ratio
 
