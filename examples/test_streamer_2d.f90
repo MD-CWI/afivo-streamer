@@ -93,11 +93,11 @@ program test_drift_diff
   output_cnt       = 0
   time             = 0
   dt_adapt         = 1.0e-11_dp
-  dt_output        = 1.0e-10_dp
-  end_time         = 1.0e-9_dp
+  dt_output        = 2.5e-10_dp
+  end_time         = 10.0e-9_dp
 
   do
-     dt            = 1.0e-12 !get_max_dt(tree)
+     dt            = get_max_dt(tree)
 
      i       = i + 1
      n_steps = ceiling(dt_adapt/dt)
@@ -155,10 +155,13 @@ contains
 
   integer function ref_func(box)
     type(box2_t), intent(in) :: box
-    real(dp) :: crv_elec, crv_phi
+    integer                  :: nc
+    real(dp)                 :: crv_elec, crv_phi, dr2
 
+    nc       = box%n_cell
+    dr2      = box%dr**2
     crv_elec = get_max_curvature(box, i_elec, .false.)
-    crv_phi = maxval(abs(box%cc(:,:, i_res)))
+    crv_phi  = dr2 * maxval(abs(box%cc(1:nc, 1:nc, i_rhs)))
 
     if (box%lvl < 4) then
        ref_func = a5_do_ref
@@ -316,8 +319,6 @@ contains
     do i = 1, n_fmg
        call mg2_fas_fmg(tree, mg)
     end do
-
-    call mg2_set_curvature(tree, i_res, mg)
 
     ! Compute field from potential
     call a2_loop_box(tree, fld_from_pot)

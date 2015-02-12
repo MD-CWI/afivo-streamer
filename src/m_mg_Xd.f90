@@ -76,7 +76,6 @@ module m_mg_$Dd
   public :: mg$D_init_mg
   public :: mg$D_fas_fmg
   public :: mg$D_fas_vcycle
-  public :: mg$D_set_curvature
   public :: mg$D_box_op
   public :: mg$D_box_gsrb
   public :: mg$D_box_corr
@@ -199,30 +198,6 @@ contains
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
   end subroutine mg$D_fas_vcycle
-
-  !> Set variable i_crv to an estimate of the curvature of i_phi
-  subroutine mg$D_set_curvature(tree, i_crv, mg)
-    type(a$D_t), intent(inout)  :: tree !< Tree to do multigrid on
-    integer, intent(in)        :: i_crv
-    type(mg$D_t), intent(in)    :: mg   !< Multigrid options
-    integer                    :: i, id, lvl, min_lvl
-    real(dp)                   :: dr2
-
-    min_lvl = lbound(tree%lvls, 1)
-
-    !$omp parallel private(i, id, dr2)
-    do lvl = min_lvl, tree%max_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          dr2 = tree%boxes(id)%dr**2
-          call mg%box_op(tree%boxes(id), i_crv, mg)
-          call a$D_box_times_cc(tree%boxes(id), dr2, i_crv)
-       end do
-       !$omp end do nowait
-    end do
-    !$omp end parallel
-  end subroutine mg$D_set_curvature
 
   subroutine fill_gc_phi(boxes, ids, mg)
     type(box$D_t), intent(inout) :: boxes(:)
