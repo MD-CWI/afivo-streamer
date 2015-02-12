@@ -1149,9 +1149,10 @@ contains
     integer                :: i, id, lvl, nc
 
     my_max = -huge(1.0_dp)
-    cc_max = 0
 
+    !$omp parallel reduction(max: my_max) private(lvl, i, id, nc, tmp)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           nc = tree%boxes(id)%n_cell
@@ -1162,10 +1163,11 @@ contains
 #endif
           if (tmp > my_max) my_max = tmp
        end do
+       !$omp end do
     end do
+    !$omp end parallel
 
-    cc_max = max(cc_max, my_max)
-    print *, my_max, cc_max
+    cc_max = my_max
   end subroutine a$D_tree_max_cc
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
