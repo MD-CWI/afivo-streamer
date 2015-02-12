@@ -1,3 +1,6 @@
+!> @TODO: explain general purpose, units
+! ix_list, nb_list
+! introduce variables, separate
 program test_drift_diff
   use m_afivo_2d
   use m_mg_2d
@@ -8,6 +11,11 @@ program test_drift_diff
 
   integer, parameter :: dp = kind(0.0d0)
   integer, parameter :: box_size    = 8
+
+  ! Box types (why)
+  integer, parameter :: full_diel_box = 1
+  integer, parameter :: part_diel_box = 2
+  integer, parameter :: full_gas_box = 3
 
   ! Cell-centered variables
   integer, parameter :: n_var_cell = 9
@@ -48,6 +56,10 @@ program test_drift_diff
   real(dp), parameter :: mobility = -0.03_dp
   real(dp), parameter :: domain_len = 32.0e-3_dp
 
+  type :: my_data
+     integer :: box_type
+  end type my_data
+
   dr = domain_len / box_size
 
   ! Initialize tree
@@ -63,9 +75,12 @@ program test_drift_diff
   mg%n_cycle_base = 8
 
   mg%sides_bc     => sides_bc_pot
-  mg%box_op       => lpl_box_diel
-  mg%box_gsrb     => gsrb_lpl_box_diel
-  mg%box_corr     => corr_lpl_box_diel
+  ! mg%box_op       => lpl_box_diel
+  ! mg%box_gsrb     => gsrb_lpl_box_diel
+  ! mg%box_corr     => corr_lpl_box_diel
+  mg%box_op       => auto_box_op
+  mg%box_gsrb     => auto_box_gsrb
+  mg%box_corr     => auto_box_corr
 
   call mg2_init_mg(mg)
 
@@ -80,6 +95,7 @@ program test_drift_diff
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
+     call a2_loop_box(tree, set_box_type)
      call a2_restrict_tree(tree, i_rhs)
      call a2_restrict_tree(tree, i_phi)
      call compute_fld(tree, n_fmg_cycles)
@@ -93,7 +109,7 @@ program test_drift_diff
   output_cnt       = 0
   time             = 0
   dt_adapt         = 1.0e-11_dp
-  dt_output        = 2.5e-10_dp
+  dt_output        = 1.0e-10_dp
   end_time         = 10.0e-9_dp
 
   do
@@ -126,7 +142,6 @@ program test_drift_diff
         ! Copy previous solution
         call a2_tree_copy_cc(tree, i_elec, i_elec_old)
         call a2_tree_copy_cc(tree, i_pion, i_pion_old)
-
         ! Two forward Euler steps over dt
         do i = 1, 2
            call a2_loop_boxes(tree, fluxes_koren, .true.)
@@ -160,12 +175,12 @@ contains
 
     nc       = box%n_cell
     dr2      = box%dr**2
-    crv_elec = get_max_curvature(box, i_elec, .false.)
+    ! crv_elec = get_max_curvature(box, i_elec, .false.)
     crv_phi  = dr2 * maxval(abs(box%cc(1:nc, 1:nc, i_rhs)))
 
     if (box%lvl < 4) then
        ref_func = a5_do_ref
-    else if (crv_elec > 5e18_dp .or. crv_phi > 1.0e1_dp) then
+    else if (crv_phi > 1.0e1_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -178,11 +193,11 @@ contains
     real(dp)                    :: xy(2), xy0(2), xy1(2), sigma
     real(dp)                    :: bg_dens, dns
 
-    nc = box%n_cell
-    xy0 = [0.5_dp, 0.5_dp] * domain_len
-    xy1 = xy0
-    xy1(2) = xy1(2) + 2e-3_dp   ! 2 mm
-    sigma = 2e-4_dp
+    nc      = box%n_cell
+    xy0     = [0.5_dp, 0.6_dp] * domain_len
+    xy1     = xy0
+    xy1(2)  = xy1(2) + 2e-3_dp ! 2 mm
+    sigma   = 2e-4_dp
     bg_dens = 5e13
 
     do j = 0, nc+1
@@ -205,6 +220,32 @@ contains
 
     box%cc(:, :, i_phi) = 0
   end subroutine set_init_cond
+
+  subroutine set_box_type(box)
+    type(box2_t), intent(inout) :: box
+    real(dp)                    :: max_eps, min_eps
+    integer                     :: dsize
+    type(my_data)               :: md
+
+    if (allocated(box%ud)) return
+
+    max_eps = maxval(box%cc(:,:, i_eps))
+    min_eps = minval(box%cc(:,:, i_eps))
+
+    if (max_eps > 1.0_dp) then
+       if (min_eps > 1.0_dp) then
+          md%box_type = full_diel_box
+       else
+          md%box_type = part_diel_box
+       end if
+    else
+       md%box_type = full_gas_box
+    end if
+
+    ! dsize = size(transfer(md, box%ud))
+    ! allocate(box%ud(dsize))
+    box%ud = transfer(md, box%ud)
+  end subroutine set_box_type
 
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
@@ -384,13 +425,22 @@ contains
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
     integer                     :: i, j, nc, nb_id
+    type(my_data) :: md
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+    md     = transfer(boxes(id)%ud, md)
+
+    if (md%box_type == full_diel_box) then
+       boxes(id)%fx(:, :, i_elec) = 0
+       boxes(id)%fy(:, :, i_elec) = 0
+       return
+    end if
 
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
        do i = 1, nc+1
+
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
           if (boxes(id)%fx(i, j, i_fld) * mobility < 0.0_dp) then
 
@@ -435,7 +485,9 @@ contains
     ! y-fluxes interior, advective part with flux limiter
     do j = 1, nc+1
        do i = 1, nc
+
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i, j-1, i_elec)
+
           if (boxes(id)%fy(i, j, i_fld) * mobility < 0.0_dp) then
 
              if (j == nc+1) then
@@ -475,6 +527,25 @@ contains
                diff_coeff * gradc * inv_dr
        end do
     end do
+
+    if (md%box_type == part_diel_box) then
+       do j = 1, nc
+          do i = 1, nc
+             if (boxes(id)%cc(i, j, i_eps) > 1.0_dp) then
+                ! If there's a dielectric, there is no outflux
+                if (boxes(id)%fx(i, j, i_elec) < 0) &
+                     boxes(id)%fx(i, j, i_elec) = 0
+                if (boxes(id)%fx(i+1, j, i_elec) > 0) &
+                     boxes(id)%fx(i+1, j, i_elec) = 0
+                if (boxes(id)%fy(i, j, i_elec) < 0) &
+                     boxes(id)%fy(i, j, i_elec) = 0
+                if (boxes(id)%fy(i, j+1, i_elec) > 0) &
+                     boxes(id)%fy(i, j+1, i_elec) = 0
+             end if
+          end do
+       end do
+    end if
+
   end subroutine fluxes_koren
 
   subroutine average_dens(box)
@@ -515,14 +586,21 @@ contains
 
   subroutine prolong_to_new_children(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in) :: id
+    integer, intent(in)         :: id
+    integer                     :: ic, c_id
 
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
+       boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
+
        call a2_prolong1_from(boxes, id, i_elec, .true.)
        call a2_prolong1_from(boxes, id, i_pion, .true.)
        call a2_prolong1_from(boxes, id, i_phi, .true.)
        call a2_prolong0_from(boxes, id, i_eps, .true.)
-       boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
+
+       do ic = 1, a2_num_children
+          c_id = boxes(id)%children(ic)
+          call set_box_type(boxes(c_id))
+       end do
     end if
   end subroutine prolong_to_new_children
 
@@ -576,5 +654,50 @@ contains
        end select
     end if
   end subroutine sides_bc_dens
+
+  subroutine auto_box_gsrb(box, redblack_cntr, mg)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: redblack_cntr
+    type(mg2_t), intent(in)     :: mg
+    type(my_data) :: md
+
+    md = transfer(box%ud, md)
+    select case(md%box_type)
+    case (full_diel_box, part_diel_box)
+       call gsrb_lpl_box_diel(box, redblack_cntr, mg)
+    case (full_gas_box)
+       call mg2_box_gsrb_lpl(box, redblack_cntr, mg)
+    end select
+  end subroutine auto_box_gsrb
+
+  subroutine auto_box_op(box, i_out, mg)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: i_out
+    type(mg2_t), intent(in)     :: mg
+    type(my_data) :: md
+
+    md = transfer(box%ud, md)
+    select case(md%box_type)
+    case (full_diel_box, part_diel_box)
+       call lpl_box_diel(box, i_out, mg)
+    case (full_gas_box)
+       call mg2_box_lpl(box, i_out, mg)
+    end select
+  end subroutine auto_box_op
+
+  subroutine auto_box_corr(box_p, box_c, mg)
+    type(box2_t), intent(inout) :: box_c
+    type(box2_t), intent(in)    :: box_p
+    type(mg2_t), intent(in)     :: mg
+    type(my_data) :: md
+
+    md = transfer(box_p%ud, md)
+    select case(md%box_type)
+    case (full_diel_box, part_diel_box)
+       call corr_lpl_box_diel(box_p, box_c, mg)
+    case (full_gas_box)
+       call mg2_box_corr_lpl(box_p, box_c, mg)
+    end select
+  end subroutine auto_box_corr
 
 end program
