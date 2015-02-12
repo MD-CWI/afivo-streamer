@@ -105,28 +105,29 @@ module m_afivo_$Dd
   !> The basic building block of afivo: a box with cell-centered and face
   !> centered data, and information about its position, neighbors, children etc.
   type box$D_t
-     integer               :: lvl                         !< level of the box
-     integer               :: tag                         !< for setting tag bits
-     integer               :: ix($D)                       !< index in the domain
-     integer               :: parent                      !< index of parent in box list
-     integer               :: children(a$D_num_children)   !< index of children in box list
-     integer               :: neighbors(a$D_num_neighbors) !< index of neighbors in box list
-     integer               :: n_cell                      !< number of cells per dimension
-     real(dp)              :: dr                          !< width/height of a cell
-     real(dp)              :: r_min($D)                    !< min coords. of box
+     integer               :: lvl    !< level of the box
+     integer               :: tag    !< for setting tag bits
+     integer               :: ix($D) !< index in the domain
+     integer               :: parent !< index of parent in box list
+     integer               :: children(a$D_num_children) !> index of children in box list
+     integer               :: neighbors(a$D_num_neighbors) !> index of neighbors in box list
+     integer               :: n_cell    !< number of cells per dimension
+     real(dp)              :: dr        !< width/height of a cell
+     real(dp)              :: r_min($D) !< min coords. of box
+     integer, allocatable  :: ud(:)     !< User data (can be anything)
 #if $D   == 2
-     real(dp), allocatable :: cc(:, :, :)                 !< cell centered variables
-     real(dp), allocatable :: fx(:, :, :)                 !< x-face centered variables
-     real(dp), allocatable :: fy(:, :, :)                 !< y-face centered variables
+     real(dp), allocatable :: cc(:, :, :) !< cell centered variables
+     real(dp), allocatable :: fx(:, :, :) !< x-face centered variables
+     real(dp), allocatable :: fy(:, :, :) !< y-face centered variables
 #elif $D == 3
-     real(dp), allocatable :: cc(:, :, :, :)              !< cell centered variables
-     real(dp), allocatable :: fx(:, :, :, :)              !< x-face centered variables
-     real(dp), allocatable :: fy(:, :, :, :)              !< y-face centered variables
-     real(dp), allocatable :: fz(:, :, :, :)              !< z-face centered variables
+     real(dp), allocatable :: cc(:, :, :, :) !< cell centered variables
+     real(dp), allocatable :: fx(:, :, :, :) !< x-face centered variables
+     real(dp), allocatable :: fy(:, :, :, :) !< y-face centered variables
+     real(dp), allocatable :: fz(:, :, :, :) !< z-face centered variables
 #endif
   end type box$D_t
 
-  !> Type which contains the indices of all boxes at a refinement level, as well
+                                                           !> Type which contains the indices of all boxes at a refinement level, as well
   !> as a list with all the "leaf" boxes and non-leaf (parent) boxes
   type lvl_t
      integer, allocatable :: ids(:)     !< indices of boxes of level
@@ -364,7 +365,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%lvls_max
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -396,7 +397,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%lvls_max
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -427,7 +428,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%lvls_max
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -455,7 +456,7 @@ contains
     integer                      :: lvl, i, id
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%lvls_max
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -572,13 +573,23 @@ contains
 
        tree%max_id = n_used
     end if
+
   end subroutine a$D_tidy_up
 
   !> Create a list of leaves and a list of parents for a level
   subroutine set_leaves_parents(boxes, level)
     type(box$D_t), intent(in)   :: boxes(:) !< List of boxes
-    type(lvl_t), intent(inout) :: level    !< Level type which contains the indices of boxes
+    type(lvl_t), intent(inout) :: level !< Level type which contains the indices of boxes
     integer                    :: i, id, i_leaf, i_parent
+    integer                    :: n_parents, n_leaves
+
+    n_parents = count(a$D_has_children(boxes(level%ids)))
+    n_leaves = size(level%ids) - n_parents
+
+    deallocate(level%leaves)
+    deallocate(level%parents)
+    allocate(level%leaves(n_leaves))
+    allocate(level%parents(n_parents))
 
     i_leaf   = 0
     i_parent = 0
@@ -622,6 +633,7 @@ contains
 #if $D == 3
     deallocate(box%fz)
 #endif
+    if (allocated(box%ud)) deallocate(box%ud)
   end subroutine dealloc_box
 
   ! Set the neighbors of id (using their parent)
@@ -714,7 +726,6 @@ contains
     integer, intent(out), optional :: n_changes !< Number of (de)refined boxes
     integer                        :: lvl, id, i, c_ids(a$D_num_children), i_c
     integer                        :: max_id_prev, max_id_req
-    integer                        :: n_leaves, n_parents
     integer, allocatable           :: ref_flags(:)
 
     max_id_prev = tree%max_id
@@ -772,15 +783,9 @@ contains
 
     tree%max_lvl = lvl
 
-    ! Update leaves and parents
-    do lvl = 1, tree%max_lvl
-       n_parents = size(tree%lvls(lvl+1)%ids)/a$D_num_children
-       n_leaves = size(tree%lvls(lvl)%ids) - n_parents
-
-       deallocate(tree%lvls(lvl)%leaves)
-       deallocate(tree%lvls(lvl)%parents)
-       allocate(tree%lvls(lvl)%leaves(n_leaves))
-       allocate(tree%lvls(lvl)%parents(n_parents))
+    ! Update leaves and parents. max_lvl+1 because we might have removed a
+    ! refinement lvl.
+    do lvl = 1, tree%max_lvl+1
        call set_leaves_parents(tree%boxes, tree%lvls(lvl))
     end do
   end subroutine a$D_adjust_refinement
