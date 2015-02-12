@@ -1,15 +1,22 @@
-!> @TODO: explain general purpose, units
-! ix_list, nb_list
-! introduce variables, separate
-program test_drift_diff
+!> \example This example shows how one can do a more complicated simulation of
+!> streamer discharges. This involves advection, diffusion and reaction
+!> coupled to a Poisson equation. Furthermore, a dielectric material can be
+!> placed in the domain.
+
+!> @TODO: explain general purpose, units ix_list, nb_list introduce variables,
+!> separate
+program test_streamer_2d
+
+  ! We need to import afivo, multigrid, and extra routines for dielectrics
   use m_afivo_2d
   use m_mg_2d
   use m_mg_diel
-  use omp_lib
 
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
+
+  ! This determines the dimension of the basic
   integer, parameter :: box_size    = 8
 
   ! Box types (why)
