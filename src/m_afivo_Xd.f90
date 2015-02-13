@@ -278,8 +278,8 @@ contains
     tree%max_id = 0
   end subroutine a$D_destroy
 
-  !> Create the base level of the tree, ix_list(:, id) stores the index of box
-  !> id, nb_list(:, id) stores the neighbors of box id
+  !> Create the base level of the tree, ix_list(:, id) stores the spatial index
+  !> of box(id), nb_list(:, id) stores the neighbors of box(id)
   subroutine a$D_set_base(tree, ix_list, nb_list)
     type(a$D_t), intent(inout) :: tree !< Tree for which we set the base
     integer, intent(in)       :: ix_list(:, :) !< List of spatial indices for the initial boxes
@@ -288,6 +288,7 @@ contains
     integer                   :: ix($D), lvl, offset
 
     if (any(ix_list < 1)) stop "a$D_set_base: need all ix_list > 0"
+    if (tree%max_id > 0)  stop "a$D_set_base: this tree already has boxes"
 
     ! Neighbors only have to be specified from one side, mirror them
     n_boxes = size(ix_list, 2)
@@ -586,10 +587,15 @@ contains
     n_parents = count(a$D_has_children(boxes(level%ids)))
     n_leaves = size(level%ids) - n_parents
 
-    deallocate(level%leaves)
-    deallocate(level%parents)
-    allocate(level%leaves(n_leaves))
-    allocate(level%parents(n_parents))
+    if (n_parents /= size(level%parents)) then
+       deallocate(level%parents)
+       allocate(level%parents(n_parents))
+    end if
+
+    if (n_leaves /= size(level%leaves)) then
+       deallocate(level%leaves)
+       allocate(level%leaves(n_leaves))
+    end if
 
     i_leaf   = 0
     i_parent = 0
@@ -764,7 +770,6 @@ contains
        end do
 
        ! Set next level ids to children of this level
-       deallocate(tree%lvls(lvl+1)%ids)
        call set_child_ids(tree%lvls(lvl)%ids, &
             tree%lvls(lvl+1)%ids, tree%boxes)
 
@@ -963,7 +968,10 @@ contains
 
     ! Count a$D_num_children times the number of refined parent blocks
     n_children = a$D_num_children * count(a$D_has_children(boxes(p_ids)))
-    allocate(c_ids(n_children))
+    if (n_children /= size(c_ids)) then
+       deallocate(c_ids)
+       allocate(c_ids(n_children))
+    end if
 
     i_c = 0
     do i = 1, size(p_ids)
