@@ -1,11 +1,3 @@
-FC 	:= gfortran
-FFLAGS	:= -Wall -O2 -std=f2008 -fopenmp -frealloc-lhs
-
-ifeq ($(DEBUG), 1)
-	FFLAGS += -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
-	-pedantic -finit-real=nan
-endif
-
 SRCS	:= m_morton.f90 m_afivo_constants.f90 m_afivo_2d.f90 \
 	m_afivo_3d.f90 m_vtk.f90 m_mg_2d.f90 m_mg_3d.f90 m_mgb_2d.f90
 OBJS	:= $(SRCS:%.f90=%.o)
@@ -14,8 +6,7 @@ INCDIRS	:=
 LIBDIRS :=
 LIBS	:=
 
-%.o: 	%.f90
-	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
+include ../makerules.make
 
 .PHONY: srcs clean
 
