@@ -18,7 +18,7 @@ program test_base
   real(dp)           :: dr
   character(len=40)  :: fname
 
-  dr = 2 * acos(-1.0_dp) / box_size
+  dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
 
   ! Initialize tree
   call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
@@ -26,8 +26,8 @@ program test_base
 
   ! Set up geometry
   id             = 1
-  ix_list(:, id) = [1,1] ! Set index of box
-  nb_list(:, id) = id    ! Box is periodic, so its own neighbor
+  ix_list(:, id) = [1,1]        ! Set spatial index of box
+  nb_list(:, id) = id           ! Box is periodic, so its own neighbor
 
   ! Create the base mesh
   call a2_set_base(tree, ix_list, nb_list)
@@ -46,8 +46,10 @@ program test_base
      call a2_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
 
      call a2_adjust_refinement(tree, ref_func)
+
+     ! Tidy up will reorder all the boxes if reorder = .true.
      call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
-          n_clean_min=10000, only_reorder=.true.)
+          n_clean_min=10000, reorder=.true.)
      call a2_loop_boxes(tree, prolong_to_new_children)
      call a2_loop_boxes(tree, set_morton_variable)
   end do
@@ -61,7 +63,7 @@ contains
     real(dp)                 :: rr
 
     call random_number(rr)
-    if (rr < 0.2_dp) then
+    if (rr < 0.2_dp .and. box%lvl < 10) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -102,6 +104,7 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, i, iv
     stop "We have no boundary conditions in this example"
+    boxes(id)%cc(1, i, iv) = 0    ! Prevent warning
   end subroutine have_no_bc
 
 end program test_base

@@ -86,7 +86,6 @@ contains
 
   integer function ref_func_init(box)
     type(box2_t), intent(in) :: box
-    integer                  :: n
 
     ref_func_init = a5_rm_ref
 
@@ -122,8 +121,7 @@ contains
   subroutine sides_bc(boxes, id, nb, iv)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
-    real(dp)                    :: xy(2)
-    integer                     :: n, nc
+    integer                     :: nc
 
     nc = boxes(id)%n_cell
 

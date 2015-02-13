@@ -25,8 +25,8 @@ program test_base
        n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp, 0.0_dp], coarsen_to=-1)
 
   id             = 1
-  ix_list(:, id) = [1,1,1] ! Set index of box
-  nb_list(:, id) = id    ! Box is periodic, so its own neighbor
+  ix_list(:, id) = [1,1,1]      ! Set spatial index of box
+  nb_list(:, id) = id           ! Box is periodic, so its own neighbor
 
   call a3_set_base(tree, ix_list, nb_list)
 
@@ -45,7 +45,7 @@ program test_base
 
      call a3_adjust_refinement(tree, ref_func)
      call a3_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
-          n_clean_min=10000, only_reorder=.true.)
+          n_clean_min=10000, reorder=.true.)
      call a3_loop_boxes(tree, prolong_to_new_children)
      call a3_loop_boxes(tree, set_morton_variable)
   end do
@@ -59,7 +59,7 @@ contains
     real(dp)                 :: rr
 
     call random_number(rr)
-    if (rr < 0.2_dp) then
+    if (rr < 0.2_dp .and. box%lvl < 8) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -102,6 +102,7 @@ contains
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, i, iv
     stop "We have no boundary conditions in this example"
+    boxes(id)%cc(1, 1, i, iv) = 0    ! Prevent warning unused
   end subroutine have_no_bc
 
 end program test_base

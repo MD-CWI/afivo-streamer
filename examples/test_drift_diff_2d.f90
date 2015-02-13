@@ -130,7 +130,7 @@ contains
   integer function ref_func(box)
     type(box2_t), intent(in) :: box
     real(dp)                 :: diff
-    integer                  :: i, j, nc
+    integer                  :: nc
 
     nc   = box%n_cell
     diff = max( &
@@ -318,7 +318,7 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr
-    integer                     :: nc, i, j
+    integer                     :: nc
     real(dp), parameter :: eps = epsilon(1.0_dp)
 
     nc                    = box%n_cell
@@ -347,6 +347,7 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, i, iv
     stop "We have no boundary conditions in this example"
+    boxes(id)%cc(1, i, iv) = 0    ! Prevent warning unused
   end subroutine have_no_bc
 
 end program test_drift_diff

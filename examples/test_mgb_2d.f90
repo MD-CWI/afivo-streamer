@@ -104,7 +104,6 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
-    real(dp)                    :: dr
 
     nc = boxes(id)%n_cell
 
