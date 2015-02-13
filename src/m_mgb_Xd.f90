@@ -236,10 +236,7 @@ contains
     type(box$D_t), intent(in)    :: box_p
     integer, intent(in)         :: i_phi, i_corr, i_lsf, ix_offset($D)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-#if $D == 3
-    integer                     :: k, k_c1, k_c2
-#endif
-    real(dp) :: lsf, val(3), dist(3), tmp
+    real(dp)                    :: val(3), dist(3), tmp
 
     nc = box_c%n_cell
     ! In these loops, we calculate the closest coarse index (_c1), and the
@@ -267,31 +264,13 @@ contains
        end do
     end do
 #elif $D == 3
-    do k = 1, nc
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-
-             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + 0.25_dp * ( &
-                  box_p%cc(i_c1, j_c1, k_c1, i_corr) &
-                  + box_p%cc(i_c2, j_c1, k_c1, i_corr) &
-                  + box_p%cc(i_c1, j_c2, k_c1, i_corr) &
-                  + box_p%cc(i_c1, j_c1, k_c2, i_corr))
-          end do
-       end do
-    end do
+    stop "not implemented yet"
 #endif
   end subroutine correct_child_box
 
   subroutine lsf_dist_val(lsf_a, v_b, b_value, dist, val)
     real(dp), intent(in)  :: lsf_a, v_b(2), b_value
     real(dp), intent(out) :: dist, val
-    real(dp)              :: tmp
 
     ! Determine whether there is a boundary
     if (lsf_a * v_b(2) < 0) then

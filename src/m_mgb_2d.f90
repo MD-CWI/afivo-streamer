@@ -232,7 +232,7 @@ contains
     type(box2_t), intent(in)    :: box_p
     integer, intent(in)         :: i_phi, i_corr, i_lsf, ix_offset(2)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-    real(dp) :: lsf, val(3), dist(3), tmp
+    real(dp)                    :: val(3), dist(3), tmp
 
     nc = box_c%n_cell
     ! In these loops, we calculate the closest coarse index (_c1), and the
@@ -263,7 +263,6 @@ contains
   subroutine lsf_dist_val(lsf_a, v_b, b_value, dist, val)
     real(dp), intent(in)  :: lsf_a, v_b(2), b_value
     real(dp), intent(out) :: dist, val
-    real(dp)              :: tmp
 
     ! Determine whether there is a boundary
     if (lsf_a * v_b(2) < 0) then
