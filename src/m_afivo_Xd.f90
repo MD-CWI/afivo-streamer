@@ -475,15 +475,16 @@ contains
     tree%boxes(1:tree%max_id)%tag = ibclr(tree%boxes(1:tree%max_id)%tag, bit)
   end subroutine a$D_clear_tagbit
 
-  !> Reorder and resize the list of boxes. If the argument only_reorder is true, only reorder the boxes.
+  !> Reorder and resize the list of boxes. If the argument reorder is true,
+  !> reorder the boxes but do not resize.
   subroutine a$D_tidy_up(tree, max_frac_used, goal_frac_used, &
-       n_clean_min, only_reorder)
+       n_clean_min, reorder)
     use m_morton
     type(a$D_t), intent(inout)      :: tree          !< Tree for the list of boxes is reordered/resized
     real(dp), intent(in)           :: max_frac_used !< Maximum fraction of box-memory used
     real(dp), intent(in)           :: goal_frac_used !< If resizing, what fraction should be in use?
     integer, intent(in)            :: n_clean_min    !< Free up memory if at least this many boxes can be cleaned up
-    logical, intent(in)            :: only_reorder   !< Do not resize the box list; only reorder it
+    logical, intent(in)            :: reorder   !< Do not resize the box list; only reorder it
     real(dp)                       :: frac_in_use
     integer                        :: n, lvl, id, old_size, new_size, n_clean
     integer                        :: max_id, n_used, n_stored, n_used_lvl
@@ -503,7 +504,7 @@ contains
     n_clean     = nint((goal_frac_used - frac_in_use) * old_size)
     new_size    = old_size
 
-    if (.not. only_reorder) then
+    if (.not. reorder) then
        if (max_id > old_size * max_frac_used .or. &
             (frac_in_use < goal_frac_used .and. &
             n_clean > n_clean_min)) then
@@ -511,10 +512,10 @@ contains
        end if
     end if
 
-    if (new_size /= old_size .or. only_reorder) then
+    if (new_size /= old_size .or. reorder) then
        print *, "a$D_tidy_up: new size = ", new_size
 
-       if (only_reorder) then
+       if (reorder) then
           allocate(boxes_cpy(n_used))  ! Need just enough space
        else
           allocate(boxes_cpy(new_size))
@@ -560,7 +561,7 @@ contains
           end where
        end do
 
-       if (only_reorder) then
+       if (reorder) then
           tree%boxes(1:n_used) = boxes_cpy ! Copy ordered data
           do n = n_used+1, max_id
              call dealloc_box(tree%boxes(n)) ! Remove unused data
