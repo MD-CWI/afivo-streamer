@@ -10,7 +10,7 @@ ifeq ($(COMPILER), gfortran)
 
 else ifeq ($(COMPILER), ifort)
 	FC 	:= ifort
-	FFLAGS	:= -warn-all -O2 -stand f2008 -openmp -assume realloc-lhs
+	FFLAGS	:= -warn all -O2 -stand f08 -openmp -assume realloc-lhs
 	ifeq ($(DEBUG), 1)
 		FFLAGS += -check all -g -p -debug all
 	endif

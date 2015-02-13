@@ -109,8 +109,10 @@ module m_afivo_$Dd
      integer               :: tag    !< for setting tag bits
      integer               :: ix($D) !< index in the domain
      integer               :: parent !< index of parent in box list
-     integer               :: children(a$D_num_children) !> index of children in box list
-     integer               :: neighbors(a$D_num_neighbors) !> index of neighbors in box list
+     !> index of children in box list
+     integer               :: children(a$D_num_children)
+     !> index of neighbors in box list
+     integer               :: neighbors(a$D_num_neighbors)
      integer               :: n_cell    !< number of cells per dimension
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box

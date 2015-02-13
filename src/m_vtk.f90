@@ -12,7 +12,8 @@ module m_vtk
   integer, parameter   :: dp            = kind(0.0d0)
   integer, parameter   :: sp            = kind(0.0)
   integer, parameter   :: buf_len       = 200
-  character, parameter :: endl          = new_line("a")
+  ! Ifort does not yet support new_line("c"), so for now...
+  character, parameter :: endl          = char(10)
   integer, parameter   :: indent_spaces = 2
   integer, parameter   :: bytes_i4      = 4
   integer, parameter   :: bytes_r4      = 4
