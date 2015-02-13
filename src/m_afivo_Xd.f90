@@ -129,7 +129,7 @@ module m_afivo_$Dd
 #endif
   end type box$D_t
 
-                                                           !> Type which contains the indices of all boxes at a refinement level, as well
+  !> Type which contains the indices of all boxes at a refinement level, as well
   !> as a list with all the "leaf" boxes and non-leaf (parent) boxes
   type lvl_t
      integer, allocatable :: ids(:)     !< indices of boxes of level
