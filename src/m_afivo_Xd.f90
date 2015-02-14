@@ -1444,15 +1444,13 @@ contains
     integer, intent(in)           :: id       !< Box whose children will be restricted to it
     integer, intent(in)           :: iv       !< Variable to restrict
     integer, intent(in), optional :: i_to    !< Destination (if /= iv)
-    integer                       :: nc, i_c, c_id, ix_offset($D)
+    integer                       :: nc, i_c, c_id
 
     nc = boxes(id)%n_cell
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == a5_no_box) cycle
-       ! Offset of child w.r.t. parent
-       ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
-       call a$D_restrict_box(boxes(c_id), boxes(id), ix_offset, iv, i_to)
+       call a$D_restrict_box(boxes(c_id), boxes(id), iv, i_to)
     end do
   end subroutine a$D_restrict_to_box
 
@@ -1486,18 +1484,20 @@ contains
   !> Restriction of child box (box_c) to another box (box_p), typically its
   !> parent. Note that ix_offset is used to specify to which part of box_p we
   !> should restrict box_c.
-  subroutine a$D_restrict_box(box_c, box_p, ix_offset, iv, i_to)
+  subroutine a$D_restrict_box(box_c, box_p, iv, i_to)
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
-    integer, intent(in)           :: ix_offset($D) !< Index offset of the child w.r.t. the parent
     integer, intent(in)           :: iv            !< Variable to restrict
     integer, intent(in), optional :: i_to         !< Destination (if /= iv)
-    integer                       :: nc, i, j, i_c1, j_c1, i_dest
+    integer                       :: i, j, i_c1, j_c1, i_dest
+    integer                       :: nc, ix_offset($D)
 #if $D == 3
     integer                       :: k, k_c1
 #endif
 
-    nc = box_c%n_cell
+    nc        = box_c%n_cell
+    ix_offset = a$D_get_child_offset(box_c)
+
     if (present(i_to)) then
        i_dest = i_to
     else
