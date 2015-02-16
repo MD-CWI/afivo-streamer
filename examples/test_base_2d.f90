@@ -7,10 +7,11 @@ program test_base
 
   integer, parameter  :: dp           = kind(0.0d0)
   type(a2_t)          :: tree
-  integer             :: i, id
-  integer             :: ix_list(2, 1)
-  integer             :: nb_list(4, 1)
-  integer, parameter  :: box_size     = 2
+  integer             :: i
+  integer, parameter  :: n_boxes_base = 2
+  integer             :: ix_list(2, n_boxes_base)
+  integer             :: nb_list(4, n_boxes_base)
+  integer, parameter  :: box_size     = 8
   integer, parameter  :: i_phi        = 1, i_mrtn = 2
   integer, parameter  :: n_var_cell   = 2
   integer, parameter  :: n_var_face   = 0
@@ -30,9 +31,17 @@ program test_base
        dr)             ! Distance between cells on base level
 
   ! Set up geometry
-  id             = 1
-  ix_list(:, id) = [1,1]        ! Set spatial index of box
-  nb_list(:, id) = id           ! Box is periodic, so its own neighbor
+  ix_list(:, 1) = [1,1] ! One box at 1,1
+  ix_list(:, 2) = [2,1] ! One box at 2,1
+
+  ! Set neighbors for box one
+  nb_list(a2_nb_lx, 1) = 2
+  nb_list(a2_nb_hx, 1) = 2
+  nb_list(a2_nb_ly, 1) = 1
+  nb_list(a2_nb_hy, 1) = 1
+
+  ! Set neighbors for box two
+  nb_list(:, 2) = 2
 
   ! Create the base mesh
   call a2_set_base(tree, ix_list, nb_list)
@@ -84,7 +93,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_phi) = sin(xy(1)) * cos(xy(2))
+          box%cc(i, j, i_phi) = sin(0.5_dp * xy(1)) * cos(xy(2))
        end do
     end do
   end subroutine set_init_cond
