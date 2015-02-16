@@ -649,23 +649,21 @@ contains
 
     nc = boxes(id)%n_cell
 
-    if (boxes(id)%neighbors(nb) == -1) then
-       select case (nb)
-       case (a2_nb_lx)
-          ! Neumann zero
-          boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-       case (a2_nb_hx)
-          ! Neumann zero
-          boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-       case (a2_nb_ly)
-          ! Dirichlet zero
-          boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
-       case (a2_nb_hy)
-          ! Dirichlet
-          boxes(id)%cc(1:nc, nc+1, iv) = 2 * 2.5e6_dp * domain_len &
-               - boxes(id)%cc(1:nc, nc, iv)
-       end select
-    end if
+    select case (nb)
+    case (a2_nb_lx)
+       ! Neumann zero
+       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
+    case (a2_nb_hx)
+       ! Neumann zero
+       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
+    case (a2_nb_ly)
+       ! Dirichlet zero
+       boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
+    case (a2_nb_hy)
+       ! Dirichlet
+       boxes(id)%cc(1:nc, nc+1, iv) = 2 * 2.5e6_dp * domain_len &
+            - boxes(id)%cc(1:nc, nc, iv)
+    end select
   end subroutine sides_bc_pot
 
   ! This fills ghost cells near physical boundaries for the electron density
@@ -676,22 +674,20 @@ contains
 
     nc = boxes(id)%n_cell
 
-    if (boxes(id)%neighbors(nb) == -1) then
-       select case (nb)
-       case (a2_nb_lx)
-          ! Neumann zero
-          boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-       case (a2_nb_hx)
-          ! Neumann zero
-          boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-       case (a2_nb_ly)
-          ! Neumann zero
-          boxes(id)%cc(1:nc, 0, iv) = boxes(id)%cc(1:nc, 1, iv)
-       case (a2_nb_hy)
-          ! Neumann zero
-          boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
-       end select
-    end if
+    select case (nb)
+    case (a2_nb_lx)
+       ! Neumann zero
+       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
+    case (a2_nb_hx)
+       ! Neumann zero
+       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
+    case (a2_nb_ly)
+       ! Neumann zero
+       boxes(id)%cc(1:nc, 0, iv) = boxes(id)%cc(1:nc, 1, iv)
+    case (a2_nb_hy)
+       ! Neumann zero
+       boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
+    end select
   end subroutine sides_bc_dens
 
   ! Based on the box type, apply a Gauss-Seidel relaxation scheme
@@ -742,4 +738,4 @@ contains
     end select
   end subroutine auto_box_corr
 
-end program test_streamer_2d
+end program
