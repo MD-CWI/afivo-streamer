@@ -77,8 +77,24 @@ program test_streamer_2d
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
 
-  ! And initialize the multigrid options
-  call init_multigrid(mg)
+  ! Set the multigrid options. First define the variables to use
+  mg%i_phi        = i_phi
+  mg%i_tmp        = i_fld
+  mg%i_rhs        = i_rhs
+  mg%i_res        = i_res
+  mg%i_eps        = i_eps
+
+  ! The number of cycles at the lowest level
+  mg%n_cycle_base = 8
+
+  ! Routines to use for ...
+  mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
+  mg%box_op       => auto_box_op  ! Performing the Laplacian
+  mg%box_gsrb     => auto_box_gsrb ! Performing Gauss-Seidel relaxation
+  mg%box_corr     => auto_box_corr ! Correcting the children of a grid
+
+  ! This routine always needs to be called when using multigrid
+  call mg2_init_mg(mg)
 
   ! Set up the initial conditions
   do i = 1, 10
@@ -195,37 +211,12 @@ contains
     ! Set up geometry
     id             = 1          ! One box ...
     ix_list(:, id) = [1,1]      ! With index 1,1 ...
-    nb_list(:, id) = -1         ! And neighbors -1 (negative numbers indicate a
-    ! physical boundary)
+    nb_list(:, id) = -1         ! And neighbors -1 (physical boundary)
 
     ! Create the base mesh
     call a2_set_base(tree, ix_list, nb_list)
 
   end subroutine init_tree
-
-  ! Set the multigrid options
-  subroutine init_multigrid(mg)
-    type(mg2_t), intent(inout) :: mg
-
-    ! Define the variables to use
-    mg%i_phi        = i_phi
-    mg%i_tmp        = i_fld
-    mg%i_rhs        = i_rhs
-    mg%i_res        = i_res
-    mg%i_eps        = i_eps
-
-    ! The number of cycles at the lowest level
-    mg%n_cycle_base = 8
-
-    ! Routines to use for ...
-    mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
-    mg%box_op       => auto_box_op  ! Performing the Laplacian
-    mg%box_gsrb     => auto_box_gsrb ! Performing Gauss-Seidel relaxation
-    mg%box_corr     => auto_box_corr ! Correcting the children of a grid
-
-    ! This routine always needs to be called when using multigrid
-    call mg2_init_mg(mg)
-  end subroutine init_multigrid
 
   ! Refinement function
   integer function ref_func(box)
