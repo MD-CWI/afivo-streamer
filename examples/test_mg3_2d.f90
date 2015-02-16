@@ -19,8 +19,6 @@ program test_mg3_2d
   integer            :: i, id, n_changes
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  integer            :: n_boxes_max  = 20*1000
-  integer            :: n_lvls_max   = 20
   real(dp)           :: dr
   character(len=40)  :: fname, var_names(6)
   type(mg2_t)        :: mg
@@ -35,8 +33,7 @@ program test_mg3_2d
   dr = 1.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=6, &
-       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
+  call a2_init(tree, box_size, n_var_cell=6, n_var_face=0, dr = dr)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
