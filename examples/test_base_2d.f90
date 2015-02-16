@@ -5,24 +5,29 @@ program test_base
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
-  type(a2_t)         :: tree
-  integer            :: i, id
-  integer            :: ix_list(2, 1)
-  integer            :: nb_list(4, 1)
-  integer, parameter :: box_size    = 8
-  integer, parameter :: i_phi = 1, i_mrtn = 2
-  character(len=40)  :: var_names(2) = ["phi ", "mrtn"]
-  integer            :: n_boxes_max = 100
-  integer            :: n_lvls_max = 20
-  real(dp)           :: dr
-  character(len=40)  :: fname
+  integer, parameter  :: dp           = kind(0.0d0)
+  type(a2_t)          :: tree
+  integer             :: i, id
+  integer             :: ix_list(2, 1)
+  integer             :: nb_list(4, 1)
+  integer, parameter  :: box_size     = 2
+  integer, parameter  :: i_phi        = 1, i_mrtn = 2
+  integer, parameter  :: n_var_cell   = 2
+  integer, parameter  :: n_var_face   = 0
+  integer, parameter  :: coarsen_to   = -1
+  real(dp), parameter :: r_min(2)     = [0.0_dp, 0.0_dp]
+  character(len=40)   :: var_names(2) = ["phi ", "mrtn"]
+  real(dp)            :: dr
+  character(len=40)   :: fname
 
   dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
 
   ! Initialize tree
-  call a2_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
-       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=-1)
+  call a2_init(tree, & ! Tree to initialize
+       box_size, &     ! Number of cells per coordinate in a box
+       n_var_cell, &   ! Number of face-centered variables
+       n_var_face, &   ! Number of cell-centered variables
+       dr)             ! Distance between cells on base level
 
   ! Set up geometry
   id             = 1

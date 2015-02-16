@@ -13,16 +13,13 @@ program test_base
   integer, parameter :: box_size    = 8
   integer, parameter :: i_phi = 1, i_mrtn = 2
   character(len=40)  :: var_names(2) = ["phi ", "mrtn"]
-  integer            :: n_boxes_max = 100
-  integer            :: n_lvls_max = 20
   real(dp)           :: dr
   character(len=40)  :: fname
 
   dr = 2 * acos(-1.0_dp) / box_size
 
   ! Initialize tree
-  call a3_init(tree, n_lvls_max, n_boxes_max, box_size, n_var_cell=2, &
-       n_var_face=0, dr = dr, r_min = [0.0_dp, 0.0_dp, 0.0_dp], coarsen_to=-1)
+  call a3_init(tree, box_size, n_var_cell=2, n_var_face=0, dr = dr)
 
   id             = 1
   ix_list(:, id) = [1,1,1]      ! Set spatial index of box

@@ -16,8 +16,6 @@ program test_drift_diff
   integer           :: i, n, n_steps, id
   integer           :: ix_list(3, 1)
   integer           :: nb_list(6, 1)
-  integer           :: n_boxes_init     = 10*1000
-  integer           :: n_lvls_max       = 20
   integer           :: n_changes, output_cnt
   real(dp)          :: dr, dt, time, end_time
   real(dp)          :: dt_adapt, dt_output
@@ -30,8 +28,7 @@ program test_drift_diff
   dr = 4.0_dp / box_size
 
   print *, "Initialize tree"
-  call a3_init(tree, n_lvls_max, n_boxes_init, box_size, n_var_cell=2, &
-       n_var_face=2, dr = dr, r_min = [0.0_dp, 0.0_dp, 0.0_dp], coarsen_to=-1)
+  call a3_init(tree, box_size, n_var_cell=2, n_var_face=2, dr = dr)
 
   print *, "Set up geometry"
   id             = 1

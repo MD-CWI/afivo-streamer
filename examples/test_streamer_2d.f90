@@ -189,8 +189,8 @@ contains
     dr = domain_len / box_size
 
     ! Initialize tree
-    call a2_init(tree, n_lvls_max, n_boxes_init, box_size, &
-         n_var_cell, n_var_face, dr, r_min = [0.0_dp, 0.0_dp], coarsen_to=4)
+    call a2_init(tree, box_size, n_var_cell, n_var_face, dr, &
+         coarsen_to=4, n_boxes = n_boxes_init)
 
     ! Set up geometry
     id             = 1          ! One box ...

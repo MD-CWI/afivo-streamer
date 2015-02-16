@@ -214,41 +214,55 @@ module m_afivo_$Dd
 contains
 
   !> Initialize a $Dd tree type.
-  subroutine a$D_init(tree, lvls_max, n_boxes, n_cell, n_var_cell, n_var_face, &
-       dr, r_min, coarsen_to)
-    type(a$D_t), intent(out) :: tree       !< The tree to initialize
-    integer, intent(in)     :: lvls_max    !< Maximum number of levels
-    integer, intent(in)     :: n_boxes    !< Allocate initial storage for n_boxes
-    integer, intent(in)     :: n_cell     !< Boxes have n_cell^dim cells
-    integer, intent(in)     :: n_var_cell !< Number of cell-centered variables
-    integer, intent(in)     :: n_var_face !< Number of face-centered variables
-    real(dp), intent(in)    :: dr         !< spacing of a cell at lvl 1
-    real(dp), intent(in)    :: r_min($D)   !< Lower left coordinate of box 1,1
-    integer, intent(in)     :: coarsen_to !< Create additional coarse grids down to this size
-    integer                 :: lvl, min_lvl
+  subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, &
+       dr, r_min, lvls_max, n_boxes, coarsen_to)
+    type(a$D_t), intent(out)        :: tree       !< The tree to initialize
+    integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
+    integer, intent(in)            :: n_var_cell !< Number of cell-centered variables
+    integer, intent(in)            :: n_var_face !< Number of face-centered variables
+    real(dp), intent(in)           :: dr         !< spacing of a cell at lvl 1
+    !> Lowest coordinate of box at 1,1. Default is (0, 0)
+    real(dp), intent(in), optional :: r_min($D)
+    !> Create additional coarse grids down to this size. Default is -1 (which
+    !> means don't do this)
+    integer, intent(in), optional  :: coarsen_to
+    !> Maximum number of levels. Default is 30
+    integer, intent(in), optional  :: lvls_max
+    !> Allocate initial storage for n_boxes. Default is 100
+    integer, intent(in), optional  :: n_boxes
+
+    integer                        :: lvls_max_a, n_boxes_a, coarsen_to_a
+    real(dp)                       :: r_min_a($D)
+    integer                        :: lvl, min_lvl
+
+    ! Set default arguments if not present
+    lvls_max_a = 30;   if (present(lvls_max)) lvls_max_a = lvls_max
+    n_boxes_a = 100;   if (present(n_boxes)) n_boxes_a = n_boxes
+    coarsen_to_a = -1; if (present(coarsen_to)) coarsen_to_a = coarsen_to
+    r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
 
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a$D_init: n_cell should be even"
     if (n_var_cell <= 0)  stop "a$D_init: n_var_cell should be > 0"
-    if (n_boxes <= 0)     stop "a$D_init: n_boxes should be > 0"
-    if (lvls_max <= 0)     stop "a$D_init: lvls_max should be > 0"
+    if (n_boxes_a <= 0)     stop "a$D_init: n_boxes should be > 0"
+    if (lvls_max_a <= 0)     stop "a$D_init: lvls_max should be > 0"
 
-    allocate(tree%boxes(n_boxes))
+    allocate(tree%boxes(n_boxes_a))
 
-    if (coarsen_to > 0) then
+    if (coarsen_to_a > 0) then
        ! Determine number of lvls for subtree
-       min_lvl = 1 - nint(log(real(n_cell, dp)/coarsen_to)/log(2.0_dp))
+       min_lvl = 1 - nint(log(real(n_cell, dp)/coarsen_to_a)/log(2.0_dp))
 
-       if (2**(1-min_lvl) * coarsen_to /= n_cell) &
+       if (2**(1-min_lvl) * coarsen_to_a /= n_cell) &
             stop "a$D_set_base: cannot coarsen to given value"
     else
        min_lvl = 1
     end if
 
-    ! up to lvls_max+1 to add dummies that are always of size zero
-    allocate(tree%lvls(min_lvl:lvls_max+1))
+    ! up to lvls_max_a+1 to add dummies that are always of size zero
+    allocate(tree%lvls(min_lvl:lvls_max_a+1))
 
-    do lvl = min_lvl, lvls_max+1
+    do lvl = min_lvl, lvls_max_a+1
        allocate(tree%lvls(lvl)%ids(0))
        allocate(tree%lvls(lvl)%leaves(0))
        allocate(tree%lvls(lvl)%parents(0))
@@ -258,11 +272,11 @@ contains
     tree%n_cell       = n_cell
     tree%n_var_cell   = n_var_cell
     tree%n_var_face   = n_var_face
-    tree%r_base       = r_min
+    tree%r_base       = r_min_a
     tree%dr_base      = dr
-    tree%lvls_max      = lvls_max
+    tree%lvls_max     = lvls_max_a
     tree%max_id       = 0
-    tree%max_lvl       = 0
+    tree%max_lvl      = 0
   end subroutine a$D_init
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
@@ -302,6 +316,11 @@ contains
     end do
 
     if (any(nb_list == a5_no_box)) stop "a$D_set_base: unresolved neighbors"
+
+    ! Check if we have enough space, if not, increase space
+    if (n_boxes > size(tree%boxes(:))) then
+       call a$D_resize_box_storage(tree, n_boxes)
+    end if
 
     ! Create coarser levels which are copies of lvl 1
     do lvl = lbound(tree%lvls, 1), 1
