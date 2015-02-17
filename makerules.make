@@ -4,7 +4,7 @@ ifeq ($(COMPILER), gfortran)
 	FC 	:= gfortran
 	FFLAGS	:= -Wall -O2 -std=f2008 -fopenmp -frealloc-lhs
 	ifeq ($(DEBUG), 1)
-		FFLAGS += -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
+		FFLAGS += -O0 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
 		-pedantic -finit-real=nan
 	endif
 
