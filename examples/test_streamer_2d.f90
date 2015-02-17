@@ -3,8 +3,6 @@
 !> coupled to a Poisson equation. Furthermore, a dielectric material can be
 !> placed in the domain.
 
-!> @TODO: explain general purpose, units ix_list, nb_list introduce variables,
-!> separate
 program test_streamer_2d
 
   ! We need to import afivo, multigrid, and extra routines for dielectrics
@@ -18,9 +16,6 @@ program test_streamer_2d
 
   ! The size of the boxes that we use to construct our mesh
   integer, parameter :: box_size   = 8
-
-  ! The maximum number of levels in the AMR grid
-  integer, parameter :: n_lvls_max = 20
 
   ! Box types, these are used to distinguish between different regions
   integer, parameter :: full_diel_box = 1
@@ -111,8 +106,8 @@ program test_streamer_2d
   output_cnt       = 0          ! Number of output files written
   time             = 0          ! Simulation time (all times are in s)
   dt_adapt         = 1.0e-11_dp ! Time per adaptation of the grid
-  dt_output        = 1.0e-10_dp ! Time between writing output
-  end_time         = 10.0e-9_dp ! Time to stop the simulation
+  dt_output        = 2.5e-10_dp ! Time between writing output
+  end_time         = 25.0e-9_dp ! Time to stop the simulation
 
   do
      ! Get a new time step, which is at most dt_adapt
@@ -229,9 +224,9 @@ contains
     crv_phi   = dr2 * maxval(abs(box%cc(1:nc, 1:nc, i_rhs)))
     max_edens = maxval(box%cc(1:nc, 1:nc, i_elec))
 
-    if (box%lvl < 4 .or. box%lvl < 6 .and. max_edens > 1e19) then
+    if (box%lvl < 4 .or. box%lvl < 6 .and. max_edens > 5e18) then
        ref_func = a5_do_ref
-    else if (crv_phi > 1.0e1_dp) then
+    else if (crv_phi > 1.5e1_dp) then
        ref_func = a5_do_ref
     else
        ref_func = a5_rm_ref
@@ -304,19 +299,27 @@ contains
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
     real(dp), parameter    :: UC_elem_charge = 1.6022d-19
     real(dp)               :: max_fld, max_dns, dr_min
-    real(dp)               :: dt_cfl, dt_dif, dt_drt
+    real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
 
     call a2_tree_max_cc(tree, i_fld, max_fld)
     call a2_tree_max_cc(tree, i_elec, max_dns)
 
     dr_min = a2_min_dr(tree)
+
     ! CFL condition
-    dt_cfl = dr_min / abs(mobility) * max_fld
+    dt_cfl = dr_min / (abs(mobility) * max_fld)
+
     ! Diffusion condition
-    dt_dif = dr_min**2 / (diff_coeff)
+    dt_dif = dr_min**2 / diff_coeff
+
     ! Dielectric relaxation time
     dt_drt = UC_eps0 / (UC_elem_charge * abs(mobility) * max_dns)
-    get_max_dt = 0.5_dp * min(dt_cfl, dt_dif, dt_drt)
+
+    ! Ionization limit
+    dt_alpha =  1 / (abs(mobility) * max_fld * &
+         max(epsilon(1.0_dp), get_alpha(max_fld)))
+
+    get_max_dt = 0.5_dp * min(dt_cfl, dt_dif, dt_drt, dt_alpha)
   end function get_max_dt
 
   ! Used to create initial electron/ion seed
@@ -371,16 +374,18 @@ contains
     nc = tree%n_cell
 
     ! Set the source term (rhs)
+    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
-       !$omp parallel do
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           tree%boxes(id)%cc(:, :, i_rhs) = fac * (&
                tree%boxes(id)%cc(:, :, i_elec) - &
                tree%boxes(id)%cc(:, :, i_pion))
        end do
-       !$omp end parallel do
+       !$omp end do nowait
     end do
+    !$omp end parallel
 
     ! Restrict the rhs
     call a2_restrict_tree(tree, i_rhs)
