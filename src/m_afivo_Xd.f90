@@ -2002,27 +2002,38 @@ contains
   end subroutine a$D_flux_from_children
 
   !> Write the cell centered data of a tree to a vtk unstructured file
-  subroutine a$D_write_tree(tree, filename, cc_names, n_cycle, time)
+  subroutine a$D_write_tree(tree, filename, cc_names, n_cycle, time, ivs)
     use m_vtk
-    type(a$D_t), intent(in) :: tree !< Tree to write out
-    character(len=*)        :: filename !< Filename for the vtk file
-    character(len=*)        :: cc_names(:) !< Names of the cell-centered variables
-    integer, intent(in)     :: n_cycle     !< Cycle-number for vtk file (counter)
-    real(dp), intent(in)    :: time        !< Time for output file
-    integer                 :: lvl, bc, bn, n, n_cells, n_nodes, n_grids
-    integer                 :: ig, i, j, id, n_ix, c_ix
-    integer                 :: cell_ix, node_ix
-    integer, parameter      :: n_ch = a$D_num_children
-    integer                 :: nodes_per_box, cells_per_box
-    real(dp), allocatable   :: coords(:), cc_vars(:,:)
-    integer, allocatable    :: offsets(:), connects(:), cell_types(:)
-    type(vtk_t)             :: vtkf
+    type(a$D_t), intent(in)       :: tree        !< Tree to write out
+    character(len=*)              :: filename    !< Filename for the vtk file
+    character(len=*)              :: cc_names(:) !< Names of the cell-centered variables
+    integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
+    real(dp), intent(in)          :: time        !< Time for output file
+    integer, intent(in), optional :: ivs(:)      !< Oncly include these variables
+    integer                       :: lvl, bc, bn, n, n_cells, n_nodes
+    integer                       :: ig, i, j, id, n_ix, c_ix, n_grids
+    integer                       :: cell_ix, node_ix
+    integer, parameter            :: n_ch = a$D_num_children
+    integer                       :: nodes_per_box, cells_per_box
+    real(dp), allocatable         :: coords(:), cc_vars(:,:)
+    integer, allocatable          :: offsets(:), connects(:)
+    integer, allocatable          :: cell_types(:), ivs_used(:)
+    type(vtk_t)                   :: vtkf
 #if $D == 3
-    integer                 :: k, bn2
+    integer                       :: k, bn2
 #endif
 
-    if (size(cc_names) /= tree%n_var_cell) &
-         stop "a$D_write_tree: size(cc_names) /= n_var_cell"
+    if (present(ivs)) then
+       if (maxval(ivs) > tree%n_var_cell .or. &
+            minval(ivs) < 1) stop "a$D_write_tree: wrong indices given (ivs)"
+       if (size(ivs) /= size(cc_names)) &
+            stop "a$D_write_tree: size(cc_names) /= size(ivs)"
+       ivs_used = ivs
+    else
+       if (size(cc_names) /= tree%n_var_cell) &
+            stop "a$D_write_tree: size(cc_names) /= n_var_cell"
+       ivs_used = [(i, i = 1, tree%n_var_cell)]
+    end if
 
     bc            = tree%n_cell     ! number of Box Cells
     bn            = tree%n_cell + 1 ! number of Box Nodes
@@ -2037,7 +2048,7 @@ contains
     n_cells = cells_per_box * n_grids
 
     allocate(coords($D * n_nodes))
-    allocate(cc_vars(n_cells, tree%n_var_cell))
+    allocate(cc_vars(n_cells, size(ivs_used)))
     allocate(offsets(cells_per_box * n_grids))
     allocate(cell_types(cells_per_box * n_grids))
     allocate(connects(n_ch * cells_per_box * n_grids))
@@ -2072,7 +2083,7 @@ contains
                 ! In vtk, indexing starts at 0, so subtract 1
                 n_ix                      = node_ix + (j-1) * bn + i - 1
                 c_ix                      = cell_ix + (j-1) * bc + i
-                cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, :)
+                cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, ivs_used)
                 offsets(c_ix)             = a$D_num_children * c_ix
                 connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1]
              end do
@@ -2096,7 +2107,7 @@ contains
                         (j-1) * bn + i - 1
                    c_ix                      = cell_ix + (k-1) * bc**2 + &
                         (j-1) * bc + i
-                   cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, k, :)
+                   cc_vars(c_ix, :)          = tree%boxes(id)%cc(i, j, k, ivs_used)
                    offsets(c_ix)             = 8 * c_ix
                    connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = &
                         [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1, &
@@ -2113,9 +2124,11 @@ contains
     call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, $D, n_cycle, time)
     call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
     call vtk_dat_xml(vtkf, "CellData", .true.)
-    do n = 1, tree%n_var_cell
+
+    do n = 1, size(ivs_used)
        call vtk_var_r8_xml(vtkf, trim(cc_names(n)), cc_vars(:, n), n_cells)
     end do
+
     call vtk_dat_xml(vtkf, "CellData", .false.)
     call vtk_geo_xml_close(vtkf)
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
