@@ -9,6 +9,7 @@ program test_streamer_2d
   use m_afivo_2d
   use m_mg_2d
   use m_mg_diel
+  use m_write_silo
 
   implicit none
 
@@ -64,6 +65,12 @@ program test_streamer_2d
   ! The length of the domain in each direction
   real(dp), parameter :: domain_len = 32.0e-3_dp ! m
 
+  ! The location of the initial seed
+  real(dp), parameter :: seed_r0(2) = &
+       [0.5_dp, 0.5_dp] * domain_len - [0, 1] * 1e-3_dp
+  real(dp), parameter :: seed_r1(2) = &
+       [0.5_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
+
   ! We store some extra data per box (its type)
   type :: my_data
      integer :: box_type
@@ -107,7 +114,7 @@ program test_streamer_2d
   time             = 0          ! Simulation time (all times are in s)
   dt_adapt         = 1.0e-11_dp ! Time per adaptation of the grid
   dt_output        = 2.5e-10_dp ! Time between writing output
-  end_time         = 25.0e-9_dp ! Time to stop the simulation
+  end_time         = 15.0e-9_dp ! Time to stop the simulation
 
   do
      ! Get a new time step, which is at most dt_adapt
@@ -124,13 +131,15 @@ program test_streamer_2d
      if (output_cnt * dt_output < time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0,A)") "test_str2d_", output_cnt, ".vtu"
+        write(fname, "(A,I0,A)") "test_str2d_", output_cnt, ".silo"
      else
         write_out = .false.
      end if
 
-     if (write_out) call a2_write_tree(tree, trim(fname), &
-          cc_names, output_cnt, time)
+     ! if (write_out) call a2_write_tree(tree, trim(fname), &
+     !      cc_names, output_cnt, time)
+     if (write_out) call SILO_write_tree_2d(tree, trim(fname), &
+          cc_names([i_fld]), output_cnt, time, ivs = [i_fld])
 
      if (time > end_time) exit
 
@@ -224,7 +233,9 @@ contains
     crv_phi   = dr2 * maxval(abs(box%cc(1:nc, 1:nc, i_rhs)))
     max_edens = maxval(box%cc(1:nc, 1:nc, i_elec))
 
-    if (box%lvl < 4 .or. box%lvl < 6 .and. max_edens > 5e18) then
+    if (box%dr > 2e-3_dp .or. (box%dr > 1e-4_dp .and. &
+         (a2_r_inside(box, seed_r0, 1.0e-3_dp) .or. &
+         a2_r_inside(box, seed_r1, 1.0e-3_dp)))) then
        ref_func = a5_do_ref
     else if (crv_phi > 1.5e1_dp) then
        ref_func = a5_do_ref
@@ -236,14 +247,11 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), xy0(2), xy1(2), sigma
+    real(dp)                    :: xy(2), sigma
     real(dp)                    :: seed_dens, bg_dens, dens
 
     nc        = box%n_cell
     ! The initial electron/ion seed lies between xy0 and xy1
-    xy0       = [0.5_dp, 0.6_dp] * domain_len
-    xy1       = xy0
-    xy1(2)    = xy1(2) + 2e-3_dp ! 2 mm
     sigma     = 2e-4_dp          ! Width of the inital seed
     bg_dens   = 5e13             ! Background density
     seed_dens = 5e19
@@ -251,9 +259,9 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy   = a2_r_cc(box, [i,j])
-          dens = seed_dens * rod_dens(xy, xy0, xy1, sigma, 3)
+          dens = seed_dens * rod_dens(xy, seed_r0, seed_r1, sigma, 3)
 
-          if (xy(2) > 0.75_dp * domain_len) then
+          if (xy(2) < 0.25_dp * domain_len) then
              box%cc(i, j, i_eps) = 5.0_dp
              box%cc(i, j, i_elec) = 0
              box%cc(i, j, i_pion) = 0
@@ -325,21 +333,10 @@ contains
   ! Used to create initial electron/ion seed
   real(dp) function rod_dens(xy, xy0, xy1, sigma, falloff_type)
     real(dp), intent(in) :: xy(2), xy0(2), xy1(2), sigma
-    integer, intent(in) :: falloff_type
-    real(dp) :: line_len2, distance, temp
-    real(dp) :: projection(2)
+    integer, intent(in)  :: falloff_type
+    real(dp)             :: distance, temp
 
-    line_len2 = sum((xy1 - xy0)**2)
-    temp = sum((xy - xy0) * (xy1 - xy0)) / line_len2
-
-    if (temp < 0.0_dp) then
-       distance = sqrt(sum((xy-xy0)**2))
-    else if (temp > 1.0_dp) then
-       distance = sqrt(sum((xy-xy1)**2))
-    else
-       projection = xy0 + temp * (xy1 - xy0)
-       distance = sqrt(sum((xy-projection)**2))
-    end if
+    distance = dist_line(xy, xy0, xy1)
 
     select case (falloff_type)
     case (1)                    ! Sigmoid
@@ -359,6 +356,24 @@ contains
        rod_dens = 0.0_dp
     end select
   end function rod_dens
+
+  real(dp) function dist_line(xy, xy0, xy1)
+    real(dp), intent(in) :: xy(2), xy0(2), xy1(2)
+    real(dp) :: line_len2, temp
+    real(dp) :: projection(2)
+
+    line_len2 = sum((xy1 - xy0)**2)
+    temp = sum((xy - xy0) * (xy1 - xy0)) / line_len2
+
+    if (temp < 0.0_dp) then
+       dist_line = sqrt(sum((xy-xy0)**2))
+    else if (temp > 1.0_dp) then
+       dist_line = sqrt(sum((xy-xy1)**2))
+    else
+       projection = xy0 + temp * (xy1 - xy0)
+       dist_line = sqrt(sum((xy-projection)**2))
+    end if
+  end function dist_line
 
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.

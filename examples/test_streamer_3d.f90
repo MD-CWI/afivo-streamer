@@ -9,6 +9,7 @@ program test_streamer_3d
   use m_afivo_3d
   use m_mg_3d
   use m_mg_diel
+  use m_write_silo
 
   implicit none
 
@@ -130,12 +131,14 @@ program test_streamer_3d
      if (output_cnt * dt_output < time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0,A)") "test_str3d_", output_cnt, ".vtu"
+        write(fname, "(A,I0,A)") "test_str3d_", output_cnt, ".silo"
      else
         write_out = .false.
      end if
 
-     if (write_out) call a3_write_tree(tree, trim(fname), &
+     ! if (write_out) call a3_write_tree(tree, trim(fname), &
+     !      cc_names([i_fld, i_rhs, i_elec]), output_cnt, time, [i_fld, i_rhs, i_elec])
+     if (write_out) call SILO_write_tree_3d(tree, trim(fname), &
           cc_names([i_fld, i_rhs, i_elec]), output_cnt, time, [i_fld, i_rhs, i_elec])
 
      if (time > end_time) exit
@@ -232,7 +235,7 @@ contains
 
     if (box%dr > 2e-3_dp .or. (box%dr > 1e-4_dp .and. &
          (a3_r_inside(box, seed_r0, 1.0e-3_dp) .or. &
-         (a3_r_inside(box, seed_r0, 1.0e-3_dp))))) then
+         a3_r_inside(box, seed_r1, 1.0e-3_dp)))) then
        ref_func = a5_do_ref
     else if (crv_phi > 1.5e1_dp) then
        ref_func = a5_do_ref
