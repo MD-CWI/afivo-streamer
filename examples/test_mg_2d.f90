@@ -76,12 +76,12 @@ program test_mg
      call mg2_fas_fmg(tree, mg)
      !$omp single
      ! write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
-     ! call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
+     ! call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
      !$omp end single
   end do
 
   write(fname, "(A,I0,A)") "test_mg_2d_", 1, ".vtu"
-  call a2_write_tree(tree, trim(fname), var_names, 1, 0.0_dp)
+  call a2_write_vtk(tree, trim(fname), var_names, 1, 0.0_dp)
 
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**2

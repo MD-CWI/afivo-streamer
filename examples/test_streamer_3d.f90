@@ -136,9 +136,9 @@ program test_streamer_3d
         write_out = .false.
      end if
 
-     ! if (write_out) call a3_write_tree(tree, trim(fname), &
+     ! if (write_out) call a3_write_vtk(tree, trim(fname), &
      !      cc_names([i_fld, i_rhs, i_elec]), output_cnt, time, [i_fld, i_rhs, i_elec])
-     if (write_out) call SILO_write_tree_3d(tree, trim(fname), &
+     if (write_out) call a3_write_silo(tree, trim(fname), &
           cc_names([i_fld, i_rhs, i_elec]), output_cnt, time, [i_fld, i_rhs, i_elec])
 
      if (time > end_time) exit

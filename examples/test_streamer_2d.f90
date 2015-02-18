@@ -136,9 +136,9 @@ program test_streamer_2d
         write_out = .false.
      end if
 
-     ! if (write_out) call a2_write_tree(tree, trim(fname), &
+     ! if (write_out) call a2_write_vtk(tree, trim(fname), &
      !      cc_names, output_cnt, time)
-     if (write_out) call SILO_write_tree_2d(tree, trim(fname), &
+     if (write_out) call a2_write_silo(tree, trim(fname), &
           cc_names([i_fld]), output_cnt, time, ivs = [i_fld])
 
      if (time > end_time) exit

@@ -1,6 +1,6 @@
 INCDIRS	:= ../src
-LIBDIRS := ../src
-LIBS	:= afivo
+LIBDIRS := ../src ../silo/lib
+LIBS	:= afivo silo
 
 include ../makerules.make
 

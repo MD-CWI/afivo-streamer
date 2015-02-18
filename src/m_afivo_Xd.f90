@@ -2001,7 +2001,8 @@ contains
     end select
   end subroutine a$D_flux_from_children
 
-  !> Write the cell centered data of a tree to a vtk unstructured file
+  !> Write the cell centered data of a tree to a vtk unstructured file. Only the
+  !> leaves of the tree are used
   subroutine a$D_write_vtk(tree, filename, cc_names, n_cycle, time, ivs)
     use m_vtk
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
@@ -2136,13 +2137,17 @@ contains
     print *, "Written ", trim(filename), ", n_grids", n_grids
   end subroutine a$D_write_vtk
 
+  !> Write the cell centered data of a tree to a Silo file. Only the
+  !> leaves of the tree are used
   subroutine a$D_write_silo(tree, filename, cc_names, n_cycle, time, ivs)
     use m_write_silo
-    type(a$D_t), intent(inout)       :: tree
-    character(len=*)                :: filename, cc_names(:)
-    integer, intent(in)             :: n_cycle
-    real(dp), intent(in)            :: time
-    integer, intent(in), optional   :: ivs(:)
+    type(a$D_t), intent(in)       :: tree        !< Tree to write out
+    character(len=*)              :: filename    !< Filename for the vtk file
+    character(len=*)              :: cc_names(:) !< Names of the cell-centered variables
+    integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
+    real(dp), intent(in)          :: time        !< Time for output file
+    integer, intent(in), optional :: ivs(:)      !< Oncly include these variables
+
     character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
     character(len=*), parameter     :: amr_name  = "amr", dir_name = "data"
     character(len=100), allocatable :: grid_list(:), var_list(:, :)

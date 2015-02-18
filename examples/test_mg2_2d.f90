@@ -74,7 +74,7 @@ program test_mg2_2d
      call mg2_fas_fmg(tree, mg)
      call a2_loop_box(tree, set_err)
      write(fname, "(A,I0,A)") "test_mg2_2d_", i, ".vtu"
-     call a2_write_tree(tree, trim(fname), var_names, i, 0.0_dp)
+     call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
   print *, "max_id", tree%max_id

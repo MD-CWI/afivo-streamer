@@ -77,7 +77,7 @@ program test_drift_diff
         write_out = .false.
      end if
 
-     if (write_out) call a2_write_tree(tree, trim(fname), &
+     if (write_out) call a2_write_vtk(tree, trim(fname), &
           (/"phi", "tmp"/), output_cnt, time)
 
      if (time > end_time) exit

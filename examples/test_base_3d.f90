@@ -38,7 +38,7 @@ program test_base
      print *, "i = ", i, "max_id", tree%max_id
 
      write(fname, "(A,I0,A)") "test_base_3d_", i, ".vtu"
-     call a3_write_tree(tree, trim(fname), var_names, i, i * 1.0_dp)
+     call a3_write_vtk(tree, trim(fname), var_names, i, i * 1.0_dp)
 
      call a3_adjust_refinement(tree, ref_func)
      call a3_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
