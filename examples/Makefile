@@ -23,12 +23,3 @@ clean:
 
 # Dependency information
 $(TESTS): 		../src/libafivo.a
-test_mg3_2d:		m_mg_diel.o
-test_mg3_2d.o:		m_mg_diel.o
-
-test_streamer_2d: 	m_mg_diel.o
-test_streamer_2d: 	LIBDIRS += ../silo/lib
-test_streamer_2d: 	LIBS += silo
-
-test_streamer_3d: 	LIBDIRS += ../silo/lib
-test_streamer_3d: 	LIBS += silo

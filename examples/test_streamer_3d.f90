@@ -8,7 +8,6 @@ program test_streamer_3d
   ! We need to import afivo, multigrid, and extra routines for dielectrics
   use m_afivo_3d
   use m_mg_3d
-  use m_mg_diel
   use m_write_silo
 
   implicit none
@@ -91,9 +90,9 @@ program test_streamer_3d
 
   ! Routines to use for ...
   mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
-  ! mg%box_op       => auto_box_op  ! Performing the Laplacian
-  ! mg%box_gsrb     => auto_box_gsrb ! Performing Gauss-Seidel relaxation
-  ! mg%box_corr     => auto_box_corr ! Correcting the children of a grid
+  mg%box_op       => auto_box_op  ! Performing the Laplacian
+  mg%box_gsrb     => auto_box_gsrb ! Performing Gauss-Seidel relaxation
+  mg%box_corr     => auto_box_corr ! Correcting the children of a grid
 
   ! This routine always needs to be called when using multigrid
   call mg3_init_mg(mg)
@@ -101,7 +100,7 @@ program test_streamer_3d
   ! Set up the initial conditions
   do i = 1, 10
      call a3_loop_box(tree, set_init_cond)
-     ! call a3_loop_box(tree, set_box_type)
+     call a3_loop_box(tree, set_box_type)
      call a3_restrict_tree(tree, i_rhs)
      call compute_fld(tree, n_fmg_cycles)
      call a3_adjust_refinement(tree, ref_func, n_changes)
@@ -139,7 +138,7 @@ program test_streamer_3d
      ! if (write_out) call a3_write_vtk(tree, trim(fname), &
      !      cc_names([i_fld, i_rhs, i_elec]), output_cnt, time, [i_fld, i_rhs, i_elec])
      if (write_out) call a3_write_silo(tree, trim(fname), &
-          cc_names([i_fld, i_rhs, i_elec]), output_cnt, time, [i_fld, i_rhs, i_elec])
+          cc_names, output_cnt, time)
 
      if (time > end_time) exit
 
@@ -237,10 +236,12 @@ contains
          (a3_r_inside(box, seed_r0, 1.0e-3_dp) .or. &
          a3_r_inside(box, seed_r1, 1.0e-3_dp)))) then
        ref_func = a5_do_ref
-    else if (crv_phi > 1.5e1_dp) then
+    else if (crv_phi > 1.0e1_dp .and. box%dr > 4e-6_dp) then
        ref_func = a5_do_ref
-    else
+    else if (crv_phi < 2.0_dp) then
        ref_func = a5_rm_ref
+    else
+       ref_func = a5_kp_ref
     end if
   end function ref_func
 
@@ -261,8 +262,8 @@ contains
              xy   = a3_r_cc(box, [i,j,k])
              dens = seed_dens * rod_dens(xy, seed_r0, seed_r1, sigma, 3)
 
-             if (xy(3) > 1.75_dp * domain_len) then
-                box%cc(i, j, k, i_eps) = 5.0_dp
+             if (xy(3) < 0.25_dp * domain_len) then
+                box%cc(i, j, k, i_eps) = 1000.0_dp
                 box%cc(i, j, k, i_elec) = 0
                 box%cc(i, j, k, i_pion) = 0
              else
@@ -278,28 +279,28 @@ contains
   end subroutine set_init_cond
 
   ! Store my_data (which contains the box type) for a box
-  ! subroutine set_box_type(box)
-  !   type(box3_t), intent(inout) :: box
-  !   real(dp)                    :: max_eps, min_eps
-  !   type(my_data)               :: md
+  subroutine set_box_type(box)
+    type(box3_t), intent(inout) :: box
+    real(dp)                    :: max_eps, min_eps
+    type(my_data)               :: md
 
-  !   if (allocated(box%ud)) return ! Already set
+    if (allocated(box%ud)) return ! Already set
 
-  !   max_eps = maxval(box%cc(:,:,:, i_eps))
-  !   min_eps = minval(box%cc(:,:,:, i_eps))
+    max_eps = maxval(box%cc(:,:,:, i_eps))
+    min_eps = minval(box%cc(:,:,:, i_eps))
 
-  !   if (max_eps > 1.0_dp) then
-  !      if (min_eps > 1.0_dp) then
-  !         md%box_type = full_diel_box
-  !      else
-  !         md%box_type = part_diel_box
-  !      end if
-  !   else
-  !      md%box_type = full_gas_box
-  !   end if
+    if (max_eps > 1.0_dp) then
+       if (min_eps > 1.0_dp) then
+          md%box_type = full_diel_box
+       else
+          md%box_type = part_diel_box
+       end if
+    else
+       md%box_type = full_gas_box
+    end if
 
-  !   box%ud = transfer(md, box%ud)
-  ! end subroutine set_box_type
+    box%ud = transfer(md, box%ud)
+  end subroutine set_box_type
 
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
@@ -381,12 +382,12 @@ contains
   ! potential, then take numerical gradient to geld field.
   subroutine compute_fld(tree, n_fmg)
     type(a3_t), intent(inout) :: tree
-    integer, intent(in) :: n_fmg
+    integer, intent(in)       :: n_fmg
 
-    real(dp), parameter :: UC_eps0 = 8.8541878176d-12
-    real(dp), parameter :: UC_elem_charge = 1.6022d-19
-    real(dp), parameter :: fac = UC_elem_charge / UC_eps0
-    integer :: lvl, i, id, nc
+    real(dp), parameter       :: UC_eps0        = 8.8541878176d-12
+    real(dp), parameter       :: UC_elem_charge = 1.6022d-19
+    real(dp), parameter       :: fac            = UC_elem_charge / UC_eps0
+    integer                   :: lvl, i, id, nc
 
     nc = tree%n_cell
 
@@ -433,22 +434,30 @@ contains
          (box%cc(1:nc, 1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
 
     ! Compute fields at the boundaries of the box, where eps can change
-    ! box%fx(1, :, f_fld) = 2 * inv_dr * &
-    !      (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
-    !      box%cc(0, 1:nc, i_eps) / &
-    !      (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-    ! box%fx(nc+1, :, f_fld) = 2 * inv_dr * &
-    !      (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
-    !      box%cc(nc+1, 1:nc, i_eps) / &
-    !      (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-    ! box%fy(:, 1, f_fld) = 2 * inv_dr * &
-    !      (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
-    !      box%cc(1:nc, 0, i_eps) / &
-    !      (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-    ! box%fy(:, nc+1, f_fld) = 2 * inv_dr * &
-    !      (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
-    !      box%cc(1:nc, nc+1, i_eps) / &
-    !      (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
+    box%fx(1, :, :, f_fld) = 2 * inv_dr * &
+         (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
+         box%cc(0, 1:nc, 1:nc, i_eps) / &
+         (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
+    box%fx(nc+1, :, :, f_fld) = 2 * inv_dr * &
+         (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+         box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
+         (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
+    box%fy(:, 1, :, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
+         box%cc(1:nc, 0, 1:nc, i_eps) / &
+         (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
+    box%fy(:, nc+1, :, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
+         box%cc(1:nc, nc+1, 1:nc, i_eps) / &
+         (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
+    box%fz(:, :, 1, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
+         box%cc(1:nc, 1:nc, 0, i_eps) / &
+         (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
+    box%fz(:, :, nc+1, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
+         box%cc(1:nc, 1:nc, nc+1, i_eps) / &
+         (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
 
     box%cc(1:nc, 1:nc, 1:nc, i_fld) = 0.5_dp * sqrt(&
          (box%fx(1:nc, 1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, 1:nc, f_fld))**2 + &
@@ -716,10 +725,10 @@ contains
        call a3_prolong1_from(boxes, id, i_phi, .true.)
        call a3_prolong0_from(boxes, id, i_eps, .true.)
 
-       ! do ic = 1, a3_num_children
-       !    c_id = boxes(id)%children(ic)
-       !    call set_box_type(boxes(c_id))
-       ! end do
+       do ic = 1, a3_num_children
+          c_id = boxes(id)%children(ic)
+          call set_box_type(boxes(c_id))
+       end do
     end if
   end subroutine prolong_to_new_children
 
@@ -783,5 +792,53 @@ contains
        boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = boxes(id)%cc(1:nc, 1:nc, nc, iv)
     end select
   end subroutine sides_bc_dens
+
+  ! Based on the box type, apply a Gauss-Seidel relaxation scheme
+  subroutine auto_box_gsrb(box, redblack_cntr, mg)
+    type(box3_t), intent(inout) :: box
+    integer, intent(in)         :: redblack_cntr
+    type(mg3_t), intent(in)     :: mg
+    type(my_data) :: md
+
+    md = transfer(box%ud, md)
+    select case(md%box_type)
+    case (full_diel_box, part_diel_box)
+       call mg3_box_gsrb_lpld(box, redblack_cntr, mg)
+    case (full_gas_box)
+       call mg3_box_gsrb_lpl(box, redblack_cntr, mg)
+    end select
+  end subroutine auto_box_gsrb
+
+  ! Based on the box type, apply the Poisson operator
+  subroutine auto_box_op(box, i_out, mg)
+    type(box3_t), intent(inout) :: box
+    integer, intent(in)         :: i_out
+    type(mg3_t), intent(in)     :: mg
+    type(my_data) :: md
+
+    md = transfer(box%ud, md)
+    select case(md%box_type)
+    case (full_diel_box, part_diel_box)
+       call mg3_box_lpld(box, i_out, mg)
+    case (full_gas_box)
+       call mg3_box_lpl(box, i_out, mg)
+    end select
+  end subroutine auto_box_op
+
+  ! Based on the box type, correct the solution of the children
+  subroutine auto_box_corr(box_p, box_c, mg)
+    type(box3_t), intent(inout) :: box_c
+    type(box3_t), intent(in)    :: box_p
+    type(mg3_t), intent(in)     :: mg
+    type(my_data) :: md
+
+    md = transfer(box_p%ud, md)
+    select case(md%box_type)
+    case (full_diel_box, part_diel_box)
+       call mg3_box_corr_lpld(box_p, box_c, mg)
+    case (full_gas_box)
+       call mg3_box_corr_lpl(box_p, box_c, mg)
+    end select
+  end subroutine auto_box_corr
 
 end program test_streamer_3d

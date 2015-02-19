@@ -4,7 +4,6 @@
 program test_mg3_2d
   use m_afivo_2d
   use m_mg_2d
-  use m_mg_diel
 
   implicit none
 
@@ -56,9 +55,9 @@ program test_mg3_2d
   mg%i_res    = i_res
   mg%i_eps    = i_eps
   mg%sides_bc => sides_bc
-  mg%box_op   => lpl_box_diel
-  mg%box_gsrb => gsrb_lpl_box_diel
-  mg%box_corr => corr_lpl_box_diel
+  mg%box_op   => mg2_box_lpld
+  mg%box_gsrb => mg2_box_gsrb_lpld
+  mg%box_corr => mg2_box_corr_lpld
 
   call mg2_init_mg(mg)
 

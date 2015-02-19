@@ -1749,7 +1749,6 @@ contains
   !> Basically, we extrapolate from the fine cells to a corner point, and then
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
-  !> @todo Remove corner points in 3D
   subroutine a$D_sides_extrap(boxes, id, nb, iv)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
@@ -1807,11 +1806,9 @@ contains
              dj = -1 + 2 * iand(j, 1)
 
              boxes(id)%cc(i-di, j, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 0.0625_dp * &
-                  (27 * boxes(id)%cc(i, j, k, iv) - 9 * boxes(id)%cc(i+di, j, k, iv) &
-                  - 9 * boxes(id)%cc(i, j+dj, k, iv) - 9 * boxes(id)%cc(i, j, k+dk, iv) &
-                  + 3 * boxes(id)%cc(i+di, j+dj, k, iv) + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
-                  + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) - boxes(id)%cc(i+di, j+dj, k+dk, iv))
+                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 1.25_dp * &
+                  boxes(id)%cc(i, j, k, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, k, iv) &
+                  + boxes(id)%cc(i, j+dj, k, iv) + boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
 
@@ -1826,11 +1823,9 @@ contains
              di = -1 + 2 * iand(i, 1)
 
              boxes(id)%cc(i, j-dj, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 0.0625_dp * &
-                  (27 * boxes(id)%cc(i, j, k, iv) - 9 * boxes(id)%cc(i+di, j, k, iv) &
-                  - 9 * boxes(id)%cc(i, j+dj, k, iv) - 9 * boxes(id)%cc(i, j, k+dk, iv) &
-                  + 3 * boxes(id)%cc(i+di, j+dj, k, iv) + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
-                  + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) - boxes(id)%cc(i+di, j+dj, k+dk, iv))
+                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 1.25_dp * &
+                  boxes(id)%cc(i, j, k, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, k, iv) &
+                  + boxes(id)%cc(i, j+dj, k, iv) + boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
 
@@ -1845,11 +1840,9 @@ contains
              di = -1 + 2 * iand(i, 1)
 
              boxes(id)%cc(i, j, k-dk, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 0.0625_dp * &
-                  (27 * boxes(id)%cc(i, j, k, iv) - 9 * boxes(id)%cc(i+di, j, k, iv) &
-                  - 9 * boxes(id)%cc(i, j+dj, k, iv) - 9 * boxes(id)%cc(i, j, k+dk, iv) &
-                  + 3 * boxes(id)%cc(i+di, j+dj, k, iv) + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
-                  + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) - boxes(id)%cc(i+di, j+dj, k+dk, iv))
+                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 1.25_dp * &
+                  boxes(id)%cc(i, j, k, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, k, iv) &
+                  + boxes(id)%cc(i, j+dj, k, iv) + boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
 #endif

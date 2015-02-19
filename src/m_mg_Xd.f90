@@ -45,7 +45,7 @@ module m_mg_$Dd
      !> Subroutine that corrects the children of a box
      procedure(mg$D_box_corr), pointer, nopass :: box_corr => null()
 
-     !> Todo: restriction method
+     !> @TODO: restriction method
   end type mg$D_t
 
   abstract interface
@@ -82,6 +82,10 @@ module m_mg_$Dd
   public :: mg$D_box_lpl
   public :: mg$D_box_gsrb_lpl
   public :: mg$D_box_corr_lpl
+  public :: mg$D_box_lpld
+  public :: mg$D_box_gsrb_lpld
+  public :: mg$D_box_corr_lpld
+
 
 contains
 
@@ -430,5 +434,182 @@ contains
          - box%cc(1:nc, 1:nc, 1:nc, mg%i_res)
 #endif
   end subroutine residual_box
+
+  subroutine mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
+    type(box$D_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: redblack_cntr !< Iteration counter
+    type(mg$D_t), intent(in)     :: mg
+    integer                     :: i, i0, j, nc, i_phi, i_eps, i_rhs
+    real(dp)                    :: dx2, u(2*$D), a0, a(2*$D), c(2*$D)
+#if $D == 3
+    integer                     :: k
+#endif
+
+    dx2   = box%dr**2
+    nc    = box%n_cell
+    i_phi = mg%i_phi
+    i_eps = mg%i_eps
+    i_rhs = mg%i_rhs
+
+    ! The parity of redblack_cntr determines which cells we use. If
+    ! redblack_cntr is even, we use the even cells and vice versa.
+#if $D == 2
+    do j = 1, nc
+       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
+       do i = i0, nc, 2
+          a0 = box%cc(i, j, i_eps) ! value of eps at i,j
+          u(1:2) = box%cc(i-1:i+1:2, j, i_phi) ! values at neighbors
+          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+          u(3:4) = box%cc(i, j-1:j+1:2, i_phi)
+          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+          c(:) = 2 * a0 * a(:) / (a0 + a(:))
+
+          box%cc(i, j, i_phi) = &
+               (sum(c(:) * u(:)) - dx2 * box%cc(i, j, i_rhs)) / sum(c(:))
+       end do
+    end do
+#elif $D == 3
+    do k = 1, nc
+       do j = 1, nc
+          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
+          do i = i0, nc, 2
+             a0 = box%cc(i, j, k, i_eps) ! value of eps at i,j
+             u(1:2) = box%cc(i-1:i+1:2, j, k, i_phi) ! values at neighbors
+             a(1:2) = box%cc(i-1:i+1:2, j, k, i_eps)
+             u(3:4) = box%cc(i, j-1:j+1:2, k, i_phi)
+             a(3:4) = box%cc(i, j-1:j+1:2, k, i_eps)
+             u(5:6) = box%cc(i, j, k-1:k+1:2, i_phi)
+             a(5:6) = box%cc(i, j, k-1:k+1:2, i_eps)
+             c(:) = 2 * a0 * a(:) / (a0 + a(:))
+
+             box%cc(i, j, k, i_phi) = &
+                  (sum(c(:) * u(:)) - dx2 * box%cc(i, j, k, i_rhs)) / sum(c(:))
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg$D_box_gsrb_lpld
+
+  !> Perform Laplacian operator on a box
+  subroutine mg$D_box_lpld(box, i_out, mg)
+    type(box$D_t), intent(inout) :: box   !< Box to operate on
+    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
+    type(mg$D_t), intent(in)     :: mg
+    integer                     :: i, j, nc, i_phi, i_eps
+    real(dp)                    :: inv_dr_sq, a0, u0, u(2*$D), a(2*$D)
+#if $D == 3
+    integer                     :: k
+#endif
+
+
+    nc        = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    i_phi     = mg%i_phi
+    i_eps     = mg%i_eps
+
+#if $D == 2
+    do j = 1, nc
+       do i = 1, nc
+          u0 = box%cc(i, j, i_phi)
+          a0 = box%cc(i, j, i_eps)
+          u(1:2) = box%cc(i-1:i+1:2, j, i_phi)
+          u(3:4) = box%cc(i, j-1:j+1:2, i_phi)
+          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+
+          box%cc(i, j, i_out) = inv_dr_sq * 2 * &
+               sum(a0*a(:)/(a0 + a(:)) * (u(:) - u0))
+       end do
+    end do
+#elif $D == 3
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             u0 = box%cc(i, j, k, i_phi)
+             a0 = box%cc(i, j, k, i_eps)
+             u(1:2) = box%cc(i-1:i+1:2, j, k, i_phi)
+             u(3:4) = box%cc(i, j-1:j+1:2, k, i_phi)
+             u(5:6) = box%cc(i, j, k-1:k+1:2, i_phi)
+             a(1:2) = box%cc(i-1:i+1:2, j, k, i_eps)
+             a(3:4) = box%cc(i, j-1:j+1:2, k, i_eps)
+             a(5:6) = box%cc(i, j, k-1:k+1:2, i_eps)
+
+             box%cc(i, j, k, i_out) = inv_dr_sq * 2 * &
+                  sum(a0*a(:)/(a0 + a(:)) * (u(:) - u0))
+          end do
+       end do
+    end do
+#endif
+
+  end subroutine mg$D_box_lpld
+
+  subroutine mg$D_box_corr_lpld(box_p, box_c, mg)
+    type(box$D_t), intent(inout)  :: box_c
+    type(box$D_t), intent(in)     :: box_p
+    type(mg$D_t), intent(in)      :: mg
+    integer                      :: ix_offset($D), i_phi, i_corr, i_eps
+    integer                      :: nc, i, j, i_c1, i_c2, j_c1, j_c2
+    real(dp)                     :: u0, u($D), a0, a($D)
+#if $D == 3
+    integer                      :: k, k_c1, k_c2
+    real(dp), parameter          :: third = 1/3.0_dp, fourth = 0.25_dp
+#endif
+
+
+    nc = box_c%n_cell
+    ix_offset = a$D_get_child_offset(box_c)
+    i_phi = mg%i_phi
+    i_corr = mg%i_tmp
+    i_eps = mg%i_eps
+
+    ! In these loops, we calculate the closest coarse index (_c1), and the
+    ! one-but-closest (_c2). The fine cell lies in between.
+#if $D == 2
+    do j = 1, nc
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+       j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+          u0 = box_p%cc(i_c1, j_c1, i_corr)
+          a0 = box_p%cc(i_c1, j_c1, i_eps)
+          u(1) = box_p%cc(i_c2, j_c1, i_corr)
+          u(2) = box_p%cc(i_c1, j_c2, i_corr)
+          a(1) = box_p%cc(i_c2, j_c1, i_eps)
+          a(2) = box_p%cc(i_c1, j_c2, i_eps)
+
+          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + 0.5_dp * &
+               sum( (a0*u0 + a(:)*u(:)) / (a0 + a(:)) )
+       end do
+    end do
+#elif $D == 3
+    do k = 1, nc
+       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+             u0 = box_p%cc(i_c1, j_c1, k_c1, i_corr)
+             u(1) = box_p%cc(i_c2, j_c1, k_c1, i_corr)
+             u(2) = box_p%cc(i_c1, j_c2, k_c1, i_corr)
+             u(3) = box_p%cc(i_c1, j_c1, k_c2, i_corr)
+             a0 = box_p%cc(i_c1, j_c1, k_c1, i_eps)
+             a(1) = box_p%cc(i_c2, j_c1, k_c1, i_eps)
+             a(2) = box_p%cc(i_c1, j_c2, k_c1, i_eps)
+             a(3) = box_p%cc(i_c1, j_c1, k_c2, i_eps)
+
+             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + third * &
+                  sum((a0*u0 + a(:) * (1.5_dp * u(:) - 0.5_dp * u0)) / &
+                  (a0 + a(:)))
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg$D_box_corr_lpld
 
 end module m_mg_$Dd

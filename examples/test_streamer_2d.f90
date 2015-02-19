@@ -8,7 +8,6 @@ program test_streamer_2d
   ! We need to import afivo, multigrid, and extra routines for dielectrics
   use m_afivo_2d
   use m_mg_2d
-  use m_mg_diel
   use m_write_silo
 
   implicit none
@@ -139,7 +138,7 @@ program test_streamer_2d
      ! if (write_out) call a2_write_vtk(tree, trim(fname), &
      !      cc_names, output_cnt, time)
      if (write_out) call a2_write_silo(tree, trim(fname), &
-          cc_names([i_fld]), output_cnt, time, ivs = [i_fld])
+          cc_names, output_cnt, time)
 
      if (time > end_time) exit
 
@@ -237,10 +236,12 @@ contains
          (a2_r_inside(box, seed_r0, 1.0e-3_dp) .or. &
          a2_r_inside(box, seed_r1, 1.0e-3_dp)))) then
        ref_func = a5_do_ref
-    else if (crv_phi > 1.5e1_dp) then
+    else if (crv_phi > 1.0e1_dp .and. box%dr > 4e-6_dp) then
        ref_func = a5_do_ref
-    else
+    else if (crv_phi < 2.0_dp) then
        ref_func = a5_rm_ref
+    else
+       ref_func = a5_kp_ref
     end if
   end function ref_func
 
@@ -720,7 +721,7 @@ contains
     md = transfer(box%ud, md)
     select case(md%box_type)
     case (full_diel_box, part_diel_box)
-       call gsrb_lpl_box_diel(box, redblack_cntr, mg)
+       call mg2_box_gsrb_lpld(box, redblack_cntr, mg)
     case (full_gas_box)
        call mg2_box_gsrb_lpl(box, redblack_cntr, mg)
     end select
@@ -736,7 +737,7 @@ contains
     md = transfer(box%ud, md)
     select case(md%box_type)
     case (full_diel_box, part_diel_box)
-       call lpl_box_diel(box, i_out, mg)
+       call mg2_box_lpld(box, i_out, mg)
     case (full_gas_box)
        call mg2_box_lpl(box, i_out, mg)
     end select
@@ -752,7 +753,7 @@ contains
     md = transfer(box_p%ud, md)
     select case(md%box_type)
     case (full_diel_box, part_diel_box)
-       call corr_lpl_box_diel(box_p, box_c, mg)
+       call mg2_box_corr_lpld(box_p, box_c, mg)
     case (full_gas_box)
        call mg2_box_corr_lpl(box_p, box_c, mg)
     end select
