@@ -6,6 +6,8 @@
 ! 1. $D -> 2 or 3 (dimension of code)
 ! 2. preprocess file with cpp
 ! 3. cat -s (merge multiple blank lines)
+
+!> @TODO: Refinement function should be able to suggest neighbors
 module m_afivo_$Dd
   use m_afivo_constants
 
@@ -825,10 +827,10 @@ contains
     integer                   :: i, max_id_prev, n_ids
 
     n_ids = size(ids)
-    !$omp critical
+    !$omp critical (get_free_ids)
     max_id_prev = tree%max_id
     tree%max_id = tree%max_id + n_ids
-    !$omp end critical
+    !$omp end critical (get_free_ids)
 
     ids = [(max_id_prev + i, i=1,n_ids)]
   end subroutine get_free_ids
@@ -2142,7 +2144,7 @@ contains
     integer, intent(in), optional :: ivs(:)      !< Oncly include these variables
 
     character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
-    character(len=*), parameter     :: amr_name  = "amr", dir_name = "data"
+    character(len=*), parameter     :: amr_name  = "mesh", dir_name = "data"
     character(len=100), allocatable :: grid_list(:), var_list(:, :)
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
     integer                         :: n_vars, i0, j0, dbix

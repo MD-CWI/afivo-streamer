@@ -66,9 +66,9 @@ program test_streamer_3d
 
   ! The location of the initial seed
   real(dp), parameter :: seed_r0(3) = &
-       [0.5_dp, 0.5_dp, 0.5_dp] * domain_len - [0, 0, 1] * 1e-3_dp
+       [0.4_dp, 0.5_dp, 0.5_dp] * domain_len - [0, 0, 1] * 1e-3_dp
   real(dp), parameter :: seed_r1(3) = &
-       [0.5_dp, 0.5_dp, 0.5_dp] * domain_len + [0, 0, 1] * 1e-3_dp
+       [0.4_dp, 0.5_dp, 0.5_dp] * domain_len + [0, 0, 1] * 1e-3_dp
 
   ! We store some extra data per box (its type)
   type :: my_data
@@ -225,20 +225,22 @@ contains
   integer function ref_func(box)
     type(box3_t), intent(in) :: box
     integer                  :: nc
-    real(dp)                 :: crv_phi, dr2, max_edens
+    real(dp)                 :: crv_phi, dr2, max_edens, max_fld
 
     nc        = box%n_cell
     dr2       = box%dr**2
     crv_phi   = dr2 * maxval(abs(box%cc(1:nc, 1:nc, 1:nc, i_rhs)))
     max_edens = maxval(box%cc(1:nc, 1:nc, 1:nc, i_elec))
+    max_fld   = maxval(box%cc(1:nc, 1:nc, 1:nc, i_fld))
 
     if (box%dr > 2e-3_dp .or. (box%dr > 1e-4_dp .and. &
          (a3_r_inside(box, seed_r0, 1.0e-3_dp) .or. &
          a3_r_inside(box, seed_r1, 1.0e-3_dp)))) then
        ref_func = a5_do_ref
-    else if (crv_phi > 1.0e1_dp .and. box%dr > 4e-6_dp) then
+    else if (crv_phi > 1.0e1_dp .and. max_fld > 3e6_dp &
+         .and. box%dr > 5e-6_dp) then
        ref_func = a5_do_ref
-    else if (crv_phi < 2.0_dp) then
+    else if (crv_phi < 2.0_dp .or. max_fld < 3e6_dp) then
        ref_func = a5_rm_ref
     else
        ref_func = a5_kp_ref
@@ -262,8 +264,8 @@ contains
              xy   = a3_r_cc(box, [i,j,k])
              dens = seed_dens * rod_dens(xy, seed_r0, seed_r1, sigma, 3)
 
-             if (xy(3) < 0.25_dp * domain_len) then
-                box%cc(i, j, k, i_eps) = 1000.0_dp
+             if (xy(1) < 0.25_dp * domain_len) then
+                box%cc(i, j, k, i_eps) = 5.0_dp
                 box%cc(i, j, k, i_elec) = 0
                 box%cc(i, j, k, i_pion) = 0
              else
@@ -328,7 +330,7 @@ contains
     dt_alpha =  1 / (abs(mobility) * max_fld * &
          max(epsilon(1.0_dp), get_alpha(max_fld)))
 
-    get_max_dt = 0.5_dp * min(dt_cfl, dt_dif, dt_drt, dt_alpha)
+    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
 
     ! print *, "new dt", get_max_dt, dt_cfl, dt_dif, dt_drt, dt_alpha
   end function get_max_dt
