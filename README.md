@@ -2,7 +2,7 @@ afivo
 =====
 
 For instructions on compiling the code, have a look at
-[Compiling the code](compiling.md).
+[Compiling the code](COMPILING.md).
 
 <b>A</b>daptive <b>Fi</b>nite <b>V</b>olume <b>O</b>ctree
 
