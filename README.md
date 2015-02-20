@@ -1,6 +1,9 @@
 afivo
 =====
 
+For instructions on compiling the code, have a look at
+[Compiling the code](compiling.md).
+
 <b>A</b>daptive <b>Fi</b>nite <b>V</b>olume <b>O</b>ctree
 
 The goal of this project is to provide a framework for adaptive finite volume
