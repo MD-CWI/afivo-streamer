@@ -139,8 +139,10 @@ contains
          maxval(abs(box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - box%cc(1:nc, 0:nc, 1:nc, i_phi))), &
          maxval(abs(box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    if (box%lvl < 5 .and. diff > 0.1_dp) then
+    if (box%lvl < 4 .or. diff > 0.1_dp) then
        ref_func = a5_do_ref
+    else if (diff > 0.2_dp) then
+       ref_func = a5_kp_ref
     else
        ref_func = a5_rm_ref
     end if

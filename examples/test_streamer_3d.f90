@@ -237,7 +237,7 @@ contains
          (a3_r_inside(box, seed_r0, 1.0e-3_dp) .or. &
          a3_r_inside(box, seed_r1, 1.0e-3_dp)))) then
        ref_func = a5_do_ref
-    else if (crv_phi > 1.0e1_dp .and. max_fld > 3e6_dp &
+    else if (crv_phi > 2.0e1_dp .and. max_fld > 3e6_dp &
          .and. box%dr > 5e-6_dp) then
        ref_func = a5_do_ref
     else if (crv_phi < 2.0_dp .or. max_fld < 3e6_dp) then

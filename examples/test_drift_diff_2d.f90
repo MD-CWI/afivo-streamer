@@ -136,6 +136,8 @@ contains
 
     if (box%lvl < 4 .or. diff > 0.15_dp) then
        ref_func = a5_do_ref
+    else if (diff > 0.2_dp * 0.15_dp) then
+       ref_func = a5_kp_ref
     else
        ref_func = a5_rm_ref
     end if
