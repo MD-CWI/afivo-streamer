@@ -6,7 +6,9 @@ Afivo directory to compile afivo and the examples.
 
 If you want to compile with runtime checks (useful for debugging) and profiling
 options, then do:
+
 $ make clean
+
 $ make DEBUG=1
 
 More information
@@ -19,6 +21,7 @@ Afivo requirements:
 A recent version of the Intel compiler ifort *should* in also work, however, I've
 had some problems with them (reporting wrong error message, not being up-to-date
 with the F2008 standard, crashes). You can try this with
+
 $ make COMPILER=ifort
 
 Afivo has one dependency: Silo. The script build_silo.sh automatically
