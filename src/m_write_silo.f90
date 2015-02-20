@@ -177,7 +177,7 @@ contains
     integer                        :: dboptix, iostat, old_str_len
     integer                        :: n_grids, name_len, total_len
     integer, allocatable           :: m_types(:), name_lengths(:)
-    character(:), allocatable      :: mnames
+    character(len=:), allocatable  :: mnames
 
     interface
        function dbputmmesh(dbid, name, lname, nmesh, meshnames, lmeshnames, &
