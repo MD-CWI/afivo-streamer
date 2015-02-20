@@ -866,9 +866,10 @@ contains
 
     ! Now set refinement flags to the maximum (refine > keep ref > derefine)
     !$omp critical
-    where(my_ref_flags > ref_flags)
-       ref_flags = my_ref_flags
-    end where
+    do i = 1, size(ref_flags)
+       if (my_ref_flags(i) > ref_flags(i)) &
+            ref_flags(i) = my_ref_flags(i)
+    end do
     !$omp end critical
     !$omp end parallel
     deallocate(my_ref_flags)
