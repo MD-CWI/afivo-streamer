@@ -41,7 +41,7 @@ program test_mg3_2d
   call a2_set_base(tree, ix_list, nb_list)
 
   do i = 1, 20
-     call a2_adjust_refinement(tree, ref_func_init, n_changes)
+     call a2_adjust_refinement(tree, set_ref_flags, n_changes)
      if (n_changes == 0) exit
   end do
 
@@ -80,18 +80,20 @@ program test_mg3_2d
 
 contains
 
-  integer function ref_func_init(box)
-    type(box2_t), intent(in) :: box
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box2_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
 
-    ref_func_init = a5_rm_ref
+    ref_flags(id) = a5_rm_ref
 
-    if (box%lvl < 4 .or. (box%lvl < 7 .and. &
-         a2_r_inside(box, [0.5_dp, 0.5_dp], 5*box%dr))) then
-       ref_func_init = a5_do_ref
+    if (boxes(id)%lvl < 4 .or. (boxes(id)%lvl < 7 .and. &
+         a2_r_inside(boxes(id), [0.5_dp, 0.5_dp], 5*boxes(id)%dr))) then
+       ref_flags(id) = a5_do_ref
     else
-       ref_func_init = a5_kp_ref
+       ref_flags(id) = a5_kp_ref
     end if
-  end function ref_func_init
+  end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box

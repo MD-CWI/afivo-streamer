@@ -59,7 +59,7 @@ program test_base
      write(fname, "(A,I0,A)") "test_base_2d_", i, ".vtu"
      call a2_write_vtk(tree, trim(fname), var_names, i, i * 1.0_dp)
 
-     call a2_adjust_refinement(tree, ref_func)
+     call a2_adjust_refinement(tree, set_ref_flags)
 
      ! Tidy up will reorder all the boxes if reorder = .true.
      call a2_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
@@ -72,17 +72,19 @@ program test_base
 
 contains
 
-  integer function ref_func(box)
-    type(box2_t), intent(in) :: box
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box2_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
     real(dp)                 :: rr
 
     call random_number(rr)
-    if (rr < 0.2_dp .and. box%lvl < 10) then
-       ref_func = a5_do_ref
+    if (rr < 0.2_dp .and. boxes(id)%lvl < 10) then
+       ref_flags(id) = a5_do_ref
     else
-       ref_func = a5_rm_ref
+       ref_flags(id) = a5_rm_ref
     end if
-  end function ref_func
+  end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box

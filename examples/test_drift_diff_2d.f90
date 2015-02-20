@@ -42,7 +42,7 @@ program test_drift_diff
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
-     call a2_adjust_refinement(tree, ref_func, n_changes)
+     call a2_adjust_refinement(tree, set_ref_flags, n_changes)
      if (n_changes == 0) exit
   end do
 
@@ -114,7 +114,7 @@ program test_drift_diff
      call a2_restrict_tree(tree, i_phi)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
 
-     call a2_adjust_refinement(tree, ref_func)
+     call a2_adjust_refinement(tree, set_ref_flags)
      call a2_loop_boxes(tree, prolong_to_new_children)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
@@ -124,24 +124,28 @@ program test_drift_diff
 
 contains
 
-  integer function ref_func(box)
-    type(box2_t), intent(in) :: box
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box2_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
     real(dp)                 :: diff
     integer                  :: nc
 
-    nc   = box%n_cell
+    nc   = boxes(id)%n_cell
     diff = max( &
-         maxval(abs(box%cc(1:nc+1, 1:nc, i_phi) - box%cc(0:nc, 1:nc, i_phi))), &
-         maxval(abs(box%cc(1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 0:nc, i_phi))))
+         maxval(abs(boxes(id)%cc(1:nc+1, 1:nc, i_phi) - &
+         boxes(id)%cc(0:nc, 1:nc, i_phi))), &
+         maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, i_phi) - &
+         boxes(id)%cc(1:nc, 0:nc, i_phi))))
 
-    if (box%lvl < 4 .or. diff > 0.15_dp) then
-       ref_func = a5_do_ref
+    if (boxes(id)%lvl < 4 .or. diff > 0.15_dp) then
+       ref_flags(id) = a5_do_ref
     else if (diff > 0.2_dp * 0.15_dp) then
-       ref_func = a5_kp_ref
+       ref_flags(id) = a5_kp_ref
     else
-       ref_func = a5_rm_ref
+       ref_flags(id) = a5_rm_ref
     end if
-  end function ref_func
+  end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box

@@ -40,7 +40,7 @@ program test_base
      write(fname, "(A,I0,A)") "test_base_3d_", i, ".vtu"
      call a3_write_vtk(tree, trim(fname), var_names, i, i * 1.0_dp)
 
-     call a3_adjust_refinement(tree, ref_func)
+     call a3_adjust_refinement(tree, set_ref_flags)
      call a3_tidy_up(tree, max_frac_used=0.75_dp, goal_frac_used=0.5_dp, &
           n_clean_min=10000, reorder=.true.)
      call a3_loop_boxes(tree, prolong_to_new_children)
@@ -51,17 +51,19 @@ program test_base
 
 contains
 
-  integer function ref_func(box)
-    type(box3_t), intent(in) :: box
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box3_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
     real(dp)                 :: rr
 
     call random_number(rr)
-    if (rr < 0.2_dp .and. box%lvl < 8) then
-       ref_func = a5_do_ref
+    if (rr < 0.2_dp .and. boxes(id)%lvl < 10) then
+       ref_flags(id) = a5_do_ref
     else
-       ref_func = a5_rm_ref
+       ref_flags(id) = a5_rm_ref
     end if
-  end function ref_func
+  end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
     type(box3_t), intent(inout) :: box

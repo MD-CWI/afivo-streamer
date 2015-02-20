@@ -103,7 +103,7 @@ program test_streamer_3d
      call a3_loop_box(tree, set_box_type)
      call a3_restrict_tree(tree, i_rhs)
      call compute_fld(tree, n_fmg_cycles)
-     call a3_adjust_refinement(tree, ref_func, n_changes)
+     call a3_adjust_refinement(tree, set_ref_flags, n_changes)
      if (n_changes == 0) exit
   end do
 
@@ -176,7 +176,7 @@ program test_streamer_3d
         call a3_loop_box(tree, average_dens, .true.)
      end do
 
-     call a3_adjust_refinement(tree, ref_func, n_changes)
+     call a3_adjust_refinement(tree, set_ref_flags, n_changes)
 
      if (n_changes > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -222,30 +222,32 @@ contains
   end subroutine init_tree
 
   ! Refinement function
-  integer function ref_func(box)
-    type(box3_t), intent(in) :: box
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box3_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
     integer                  :: nc
     real(dp)                 :: crv_phi, dr2, max_edens, max_fld
 
-    nc        = box%n_cell
-    dr2       = box%dr**2
-    crv_phi   = dr2 * maxval(abs(box%cc(1:nc, 1:nc, 1:nc, i_rhs)))
-    max_edens = maxval(box%cc(1:nc, 1:nc, 1:nc, i_elec))
-    max_fld   = maxval(box%cc(1:nc, 1:nc, 1:nc, i_fld))
+    nc        = boxes(id)%n_cell
+    dr2       = boxes(id)%dr**2
+    crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
+    max_edens = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_elec))
+    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_fld))
 
-    if (box%dr > 2e-3_dp .or. (box%dr > 1e-4_dp .and. &
-         (a3_r_inside(box, seed_r0, 1.0e-3_dp) .or. &
-         a3_r_inside(box, seed_r1, 1.0e-3_dp)))) then
-       ref_func = a5_do_ref
+    if (boxes(id)%dr > 2e-3_dp .or. (boxes(id)%dr > 1e-4_dp .and. &
+         (a3_r_inside(boxes(id), seed_r0, 1.0e-3_dp) .or. &
+         a3_r_inside(boxes(id), seed_r1, 1.0e-3_dp)))) then
+       ref_flags(id) = a5_do_ref
     else if (crv_phi > 2.0e1_dp .and. max_fld > 3e6_dp &
-         .and. box%dr > 5e-6_dp) then
-       ref_func = a5_do_ref
+         .and. boxes(id)%dr > 5e-6_dp) then
+       ref_flags(id) = a5_do_ref
     else if (crv_phi < 2.0_dp .or. max_fld < 3e6_dp) then
-       ref_func = a5_rm_ref
+       ref_flags(id) = a5_rm_ref
     else
-       ref_func = a5_kp_ref
+       ref_flags(id) = a5_kp_ref
     end if
-  end function ref_func
+  end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
     type(box3_t), intent(inout) :: box

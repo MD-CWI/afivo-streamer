@@ -7,7 +7,6 @@
 ! 2. preprocess file with cpp
 ! 3. cat -s (merge multiple blank lines)
 
-!> @TODO: Refinement function should be able to suggest neighbors
 module m_afivo_$Dd
   use m_afivo_constants
 
@@ -155,11 +154,13 @@ module m_afivo_$Dd
   end type a$D_t
 
   abstract interface
-     !> Function that gets a box and returns an int
-     integer function a$D_to_int_f(box)
+     !> Function for setting refinement flags
+     subroutine a$D_subr_ref(boxes, id, ref_flags)
        import
-       type(box$D_t), intent(in) :: box
-     end function a$D_to_int_f
+       type(box$D_t), intent(in) :: boxes(:) ! List of boxes
+       integer, intent(in)       :: id  ! Id (index) of box
+       integer, intent(inout)    :: ref_flags(:) ! Refinement flags
+     end subroutine a$D_subr_ref
 
      !> Subroutine that gets a box
      subroutine a$D_subr(box)
@@ -207,7 +208,7 @@ module m_afivo_$Dd
   private :: set_nbs_$Dd
   private :: find_nb_$Dd
   private :: get_free_ids
-  private :: set_ref_flags
+  private :: consistent_ref_flags
   private :: remove_children
   private :: add_children
   private :: set_child_ids
@@ -743,16 +744,16 @@ contains
     call move_alloc(boxes_cpy, tree%boxes)
   end subroutine a$D_resize_box_storage
 
-  !> Adjust the refinement of a tree using the user-supplied ref_func. If the
+  !> Adjust the refinement of a tree using the user-supplied set_ref_flags. If the
   !> argument n_changes is present, it contains the number of boxes that were
   !> (de)refined.
   !>
   !> This routine sets the bit a5_bit_new_children for each box that is refined.
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
-  subroutine a$D_adjust_refinement(tree, ref_func, n_changes)
+  subroutine a$D_adjust_refinement(tree, set_ref_flags, n_changes)
     type(a$D_t), intent(inout)      :: tree !< Tree whose refinement will be adjusted
-    procedure(a$D_to_int_f)         :: ref_func !< User supplied refinement function
+    procedure(a$D_subr_ref)         :: set_ref_flags !< User supplied refinement function
     integer, intent(out), optional :: n_changes !< Number of (de)refined boxes
     integer                        :: lvl, id, i, c_ids(a$D_num_children), i_c
     integer                        :: max_id_prev, max_id_req
@@ -765,7 +766,7 @@ contains
     call a$D_clear_tagbit(tree, a5_bit_new_children)
 
     ! Set refinement values for all boxes
-    call set_ref_flags(tree, ref_flags, ref_func)
+    call consistent_ref_flags(tree, ref_flags, set_ref_flags)
 
     if (present(n_changes)) n_changes = count(ref_flags /= a5_kp_ref)
 
@@ -827,10 +828,10 @@ contains
     integer                   :: i, max_id_prev, n_ids
 
     n_ids = size(ids)
-    !$omp critical (get_free_ids)
+    !$omp critical (crit_free_ids)
     max_id_prev = tree%max_id
     tree%max_id = tree%max_id + n_ids
-    !$omp end critical (get_free_ids)
+    !$omp end critical (crit_free_ids)
 
     ids = [(max_id_prev + i, i=1,n_ids)]
   end subroutine get_free_ids
@@ -838,24 +839,39 @@ contains
   !> Given the refinement function, return consistent refinement flags, that
   !> ensure that the tree is still balanced. Furthermore, it cannot derefine the
   !> base level, and it cannot refine above tree%lvls_max.
-  subroutine set_ref_flags(tree, ref_flags, ref_func)
+  subroutine consistent_ref_flags(tree, ref_flags, set_ref_flags)
     type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
-    procedure(a$D_to_int_f)    :: ref_func     !< User-supplied refinement function.
+    procedure(a$D_subr_ref)    :: set_ref_flags     !< User-supplied refinement function.
     integer                   :: lvl, i, id, c_ids(a$D_num_children)
     integer                   :: nb, p_id, nb_id, p_nb_id
     integer                   :: lvls_max
+    integer, allocatable      :: my_ref_flags(:)
 
     lvls_max = tree%lvls_max
-    ref_flags(:) = a5_kp_ref      ! Used indices are overwritten
+    ref_flags(:) = -HUGE(1)
+    my_ref_flags = ref_flags
 
-    ! Set refinement flags for all boxes using ref_func
+    ! Set refinement flags for all boxes using set_ref_flags. Each thread first sets
+    ! the flags on its own copy
+    !$omp parallel private(lvl, i, id) firstprivate(my_ref_flags) shared(ref_flags)
     do lvl = 1, tree%max_lvl
+       !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
-          id            = tree%lvls(lvl)%ids(i)
-          ref_flags(id) = ref_func(tree%boxes(id))
+          id = tree%lvls(lvl)%ids(i)
+          call set_ref_flags(tree%boxes, id, my_ref_flags)
        end do
+       !$omp end do nowait
     end do
+
+    ! Now set refinement flags to the maximum (refine > keep ref > derefine)
+    !$omp critical
+    where(my_ref_flags > ref_flags)
+       ref_flags = my_ref_flags
+    end where
+    !$omp end critical
+    !$omp end parallel
+    deallocate(my_ref_flags)
 
     ! Cannot derefine lvl 1
     do i = 1, size(tree%lvls(1)%ids)
@@ -920,7 +936,7 @@ contains
        end do
     end do
 
-  end subroutine set_ref_flags
+  end subroutine consistent_ref_flags
 
   !> Remove the children of box id
   subroutine remove_children(boxes, id)
@@ -1915,7 +1931,6 @@ contains
 
   !> The neighbor nb has no children and id does, so get flux from children for
   !> consisency at refinement boundary.
-  !> @todo: TEST
   subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)         :: id        !< Id of box for which we set fluxes

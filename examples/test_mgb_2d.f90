@@ -39,7 +39,7 @@ program test_mgb
   call a2_set_base(tree, ix_list, nb_list)
 
   do i = 1, 20
-     call a2_adjust_refinement(tree, ref_func_init, n_changes)
+     call a2_adjust_refinement(tree, set_ref_flags, n_changes)
      if (n_changes == 0) exit
   end do
 
@@ -71,14 +71,17 @@ program test_mgb
 
 contains
 
-  integer function ref_func_init(box)
-    type(box2_t), intent(in) :: box
-    if (box%lvl < 6) then
-       ref_func_init = a5_do_ref
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box2_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
+
+    if (boxes(id)%lvl < 6) then
+       ref_flags(id) = a5_do_ref
     else
-       ref_func_init = a5_rm_ref
+       ref_flags(id) = a5_rm_ref
     end if
-  end function ref_func_init
+  end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box

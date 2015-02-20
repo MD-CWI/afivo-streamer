@@ -49,7 +49,7 @@ program test_mg2_3d
 
   print *, "Doing initial refinement"
   do i = 1, 20
-     call a3_adjust_refinement(tree, ref_func_init, n_changes)
+     call a3_adjust_refinement(tree, set_ref_flags, n_changes)
      if (n_changes == 0) exit
   end do
 
@@ -88,23 +88,25 @@ program test_mg2_3d
 
 contains
 
-  integer function ref_func_init(box)
-    type(box3_t), intent(in) :: box
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box3_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
     integer                  :: n
 
-    ref_func_init = a5_rm_ref
+    ref_flags(id) = a5_rm_ref
 
-    if (box%lvl < 3) then
-       ref_func_init = a5_do_ref
-    else if (box%lvl < 5) then
+    if (boxes(id)%lvl < 3) then
+       ref_flags(id) = a5_do_ref
+    else if (boxes(id)%lvl < 5) then
        do n = 1, n_gaussians
-          if (norm2(a3_r_center(box) - g_params(2:4, n)) < 0.25_dp) then
-             ref_func_init = a5_do_ref
+          if (norm2(a3_r_center(boxes(id)) - g_params(2:4, n)) < 0.25_dp) then
+             ref_flags(id) = a5_do_ref
              exit
           end if
        end do
     end if
-  end function ref_func_init
+  end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
     type(box3_t), intent(inout) :: box
