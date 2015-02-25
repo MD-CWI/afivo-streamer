@@ -874,6 +874,10 @@ contains
     !$omp end parallel
     deallocate(my_ref_flags)
 
+    ! Set flags with unknown values to default (keep refinement)
+    where (ref_flags > a5_do_ref) ref_flags = a5_kp_ref
+    where (ref_flags < a5_rm_ref) ref_flags = a5_kp_ref
+
     ! Cannot derefine lvl 1
     do i = 1, size(tree%lvls(1)%ids)
        id = tree%lvls(1)%ids(i)

@@ -213,11 +213,14 @@ In order to refine it, we do the following:
 The user's refinement routine is called for each box.
 The routine gets a list of all boxes, the id of the current box, and a list with
 all the refinement flags.
-In this way, you can for example specify that the current box and its left neighbor
-should be refined\footnote{This can become a bit tricky in parallel, because
-  different flags might be specified for the same box.
-  In that case, Afivo picks the \emph{highest} flag (refine $>$ keep refinement $>$
-  derefine).}.
+In this way, you can for example specify that the current box and its left
+neighbor should be refined\footnote{This can become a bit tricky in parallel,
+  because different flags might be specified for the same box.
+  In that case, Afivo picks the \emph{highest} flag (refine $>$ keep refinement
+  $>$ derefine).
+  If you don't set refinement flags for a box, it will keep its refinement.}, or
+you can use data at a neighbor when deciding whether or not to refine the
+current box.
 
 A refinement flag can have three values:
 \begin{itemize}
@@ -244,7 +247,7 @@ refines or derefines based on a random number:
 \end{lstlisting}
 
 It is important to understand two things about \texttt{a2\_adjust\_refinement}:
-First, it will change the refinement level in some location by at most one.
+First, it will change the refinement level at some location by at most one.
 So sometimes, you will need to call it multiple times.
 Second, it will sometimes refine areas that you did not specify for refinement,
 to ensure 2:1 balance (no jumps in refinement level).
