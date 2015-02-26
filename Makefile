@@ -1,23 +1,24 @@
-INCDIRS	:= ../src
-LIBDIRS := ../src ../silo/lib
-LIBS	:= afivo silo
+SRC_DIRS	:= src fosito afivo
 
-include ../makerules.make
+# Directories with altered names (useful for cleaning)
+CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
-PROGS	:= streamer_2d
+.PHONY:	all clean $(SRC_DIRS) $(CLEANSRC)
 
-%.o: 	%.f90
-	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
+all: 		$(SRC_DIRS)
 
-%:	%.o
-	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
+clean: 		$(CLEANSRC)
 
-.PHONY: all clean
+$(SRC_DIRS):
+		@echo "\n*********** Build information ***********"
+		@echo "  Debug is set to: [$(DEBUG)],"
+		@echo "  Set it to 1 to enable a debug build."
+		@echo "  For example: make clean; make DEBUG=1"
+		@echo "*****************************************\n"
+		$(MAKE) -C $@
 
-all:	$(PROGS)
+$(CLEANSRC):
+		$(MAKE) -C $(@:clean-%=%) clean
 
-clean:
-	$(RM) $(PROGS) *.o *.mod
-
-# Dependency information
-$(PROGS): 		../src/libafivo.a
+# Dependecy information
+src:		fosito afivo
