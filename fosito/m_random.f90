@@ -18,6 +18,7 @@ module m_random
      procedure, non_overridable :: uni_ab
      procedure, non_overridable :: two_normals
      procedure, non_overridable :: poisson
+     procedure, non_overridable :: sphere
   end type RNG_t
 
 contains
@@ -95,5 +96,26 @@ contains
        p = p * self%uni_01()
     end do
   end function poisson
+
+  ! Sample point on a sphere with given radius
+  function sphere(self, radius) result(xyz)
+    class(RNG_t), intent(inout) :: self
+    real(dp), intent(in)        :: radius
+    real(dp)                    :: rands(2), xyz(3)
+    real(dp)                    :: sum_sq, tmp_sqrt
+
+    ! Marsaglia method for uniform sampling on sphere
+    do
+       rands(1) = self%uni_ab(-1.0_dp, 1.0_dp)
+       rands(2) = self%uni_ab(-1.0_dp, 1.0_dp)
+       sum_sq   = rands(1)**2 + rands(2)**2
+       if (sum_sq <= 1) exit
+    end do
+
+    tmp_sqrt = sqrt(1 - sum_sq)
+    xyz(1:2) = 2 * rands(1:2) * tmp_sqrt
+    xyz(3)   = 1 - 2 * sum_sq
+    xyz      = xyz * radius
+  end function sphere
 
 end module m_random
