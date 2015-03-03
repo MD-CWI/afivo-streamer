@@ -11,50 +11,58 @@ module m_photons
 
 contains
 
-  function PH_get_tbl_air(p_O2, max_dist) result(tbl)
+  function PH_get_tbl_air(p_O2) result(tbl)
     use m_lookup_table
     real(dp), intent(in) :: p_O2     !< Partial pressure of oxygen (bar)
-    real(dp), intent(in) :: max_dist !< How far should we track photons
     type(LT_table_t)     :: tbl      !< The lookup table
 
-    integer, parameter   :: tbl_size  = 500
+    integer, parameter   :: tbl_size  = 1000
     integer              :: n
-    real(dp), parameter  :: huge_dist = 1e9_dp
-    real(dp)             :: fsum(tbl_size), dist(tbl_size)
-    real(dp)             :: dr, rc, r_prev, incr
+    real(dp), parameter  :: huge_dist = 1e9_dp, sixth = 1/6.0_dp
+    real(dp), allocatable :: fsum(:), dist(:)
+    real(dp)             :: dr, r_prev, incr
 
+    allocate(fsum(tbl_size))
+    allocate(dist(tbl_size))
     tbl     = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
     dr      = 1e-10_dp
     dist(1) = 0
     fsum(1) = 0
-    r_prev = 0
+    r_prev = epsilon(1.0_dp)
 
+    ! Use Simpson's rule for integration
     do n = 2, tbl_size
-       rc = r_prev + 0.5_dp * dr
-       incr = dr * absfunc_air(rc, p_O2)
+       incr = dr * sixth * (absfunc_air(r_prev, p_O2) + &
+            4 * absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
+            absfunc_air(r_prev+dr, p_O2))
 
        do while (incr > 2.0_dp / tbl_size)
           dr = dr * 0.5_dp
-          rc = r_prev + 0.5_dp * dr
-          incr = dr * absfunc_air(rc, p_O2)
+          incr = dr * sixth * (absfunc_air(r_prev, p_O2) + &
+               4 * absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
+               absfunc_air(r_prev+dr, p_O2))
        end do
 
-       do while (incr < 1.0_dp / (tbl_size-1) .and. &
-            dr < huge_dist)
+       do while (incr < 1.0_dp / (tbl_size-1) .and. dr < huge_dist)
           dr = dr * 2
-          rc = r_prev + 0.5_dp * dr
-          incr = dr * absfunc_air(rc, p_O2)
+          incr = dr * sixth * (absfunc_air(r_prev, p_O2) + &
+               4 * absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
+               absfunc_air(r_prev+dr, p_O2))
        end do
 
        dist(n) = r_prev + dr
        fsum(n) = fsum(n-1) + incr
+
+       ! The integral will not be completely accurate, and small errors can lead
+       ! to big problems (dr -> infinity). So, stop when dr gets too large.
+       if ((n > 2 .and. dr > 10 * r_prev) .or. fsum(n) > 1)  then
+          fsum(n:) = 1
+          dist(n:) = dist(n-1)
+          exit
+       end if
+
        r_prev = r_prev + dr
     end do
-
-    where (dist > max_dist)
-       dist = max_dist
-       fsum = 1
-    end where
 
     call LT_set_col(tbl, 1, fsum, dist)
   end function PH_get_tbl_air

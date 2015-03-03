@@ -16,7 +16,7 @@ program test_m_photons
   allocate(xyz_in(3, n_photons))
   allocate(xyz_out(3, n_photons))
 
-  tbl = PH_get_tbl_air(0.2_dp, 1e-2_dp)
+  tbl = PH_get_tbl_air(0.2_dp)
   xyz_in = 0
 
   call cpu_time(t1)
