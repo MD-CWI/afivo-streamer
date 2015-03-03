@@ -43,12 +43,6 @@ program streamer_2d
   ! How many multigrid FMG cycles we perform per time step
   integer, parameter :: n_fmg_cycles = 1
 
-  ! The (constant) diffusion coefficient for the electron density
-  real(dp), parameter :: diff_coeff = 0.1_dp ! m^2/s
-
-  ! The (constant) mobility of the electron density
-  real(dp), parameter :: mobility = -0.03_dp ! m^2/(Vs)
-
   ! The length of the domain in each direction
   real(dp), parameter :: domain_len = 32.0e-3_dp ! m
 
@@ -217,10 +211,8 @@ contains
     else if (crv_phi > 2.0e1_dp .and. max_fld > 3e6_dp &
          .and. boxes(id)%dr > 5e-6_dp) then
        ref_flags(id) = a5_do_ref
-    else if (crv_phi < 2.0_dp .or. max_fld < 3e6_dp) then
+    else if (crv_phi < 4.0_dp) then
        ref_flags(id) = a5_rm_ref
-    else
-       ref_flags(id) = a5_kp_ref
     end if
   end subroutine set_ref_flags
 
@@ -366,6 +358,9 @@ contains
 
     ! Compute field from potential
     call a2_loop_box(tree, fld_from_pot)
+
+    ! Set the field norm also in ghost cells
+    call a2_gc_sides(tree, i_fld, a2_sides_interp, sides_bc_dens)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
@@ -421,9 +416,15 @@ contains
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
        do i = 1, nc+1
+          fld_norm   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) - &
+               boxes(id)%cc(i-1, j, i_fld))
+          loc        = LT_get_loc(td_tbl, fld_norm)
+          mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+          diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+          v_drift    = -mobility * boxes(id)%fx(i, j, f_fld)
 
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
-          if (boxes(id)%fx(i, j, f_fld) * mobility < 0.0_dp) then
+          if (v_drift < 0.0_dp) then
 
              if (i == nc+1) then
                 nb_id = boxes(id)%neighbors(a2_nb_hx)
@@ -437,9 +438,9 @@ contains
              end if
 
              theta = ratio(gradc, gradn)
-             boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_fld) * mobility * &
+             boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - limiter_koren(theta) * gradn)
-          else                  ! boxes(id)%fx(i, j, f_fld) * mobility > 0
+          else                  ! v_drift > 0
 
              if (i == 1) then
                 nb_id = boxes(id)%neighbors(a2_nb_lx)
@@ -453,7 +454,7 @@ contains
              end if
 
              theta = ratio(gradc, gradp)
-             boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_fld) * mobility * &
+             boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i-1, j, i_elec) + limiter_koren(theta) * gradp)
           end if
 
@@ -466,11 +467,16 @@ contains
     ! y-fluxes interior, advective part with flux limiter
     do j = 1, nc+1
        do i = 1, nc
+          fld_norm   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) - &
+               boxes(id)%cc(i, j-1, i_fld))
+          loc        = LT_get_loc(td_tbl, fld_norm)
+          mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+          diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+          v_drift    = -mobility * boxes(id)%fy(i, j, f_fld)
 
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i, j-1, i_elec)
 
-          if (boxes(id)%fy(i, j, f_fld) * mobility < 0.0_dp) then
-
+          if (v_drift < 0.0_dp) then
              if (j == nc+1) then
                 nb_id = boxes(id)%neighbors(a2_nb_hy)
                 if (nb_id > a5_no_box) then
@@ -483,9 +489,9 @@ contains
              end if
 
              theta = ratio(gradc, gradn)
-             boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_fld) * mobility * &
+             boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - limiter_koren(theta) * gradn)
-          else                  ! boxes(id)%fy(i, j, f_fld) * mobility > 0
+          else                  ! v_drift > 0
 
              if (j == 1) then
                 nb_id = boxes(id)%neighbors(a2_nb_ly)
@@ -499,7 +505,7 @@ contains
              end if
 
              theta = ratio(gradc, gradp)
-             boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_fld) * mobility * &
+             boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j-1, i_elec) + limiter_koren(theta) * gradp)
           end if
 
@@ -612,5 +618,107 @@ contains
        boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_dens
+
+  subroutine
+
+  subroutine initialize(cfg)
+    use m_transport_data
+    use m_config
+
+    type(CFG_t), intent(inout) :: cfg
+    integer, parameter      :: name_len = 100
+    character(len=name_len) :: input_file, gas_name
+    integer                 :: n, table_size
+    real(dp)                :: max_fld
+    real(dp), allocatable   :: x_data(:), y_data(:)
+    character(len=100)      :: data_name
+
+    call CFG_add(cfg, "end_time", 10.0d-9, &
+         "The desired endtime in seconds of the simulation")
+    call CFG_add(cfg, "sim_name", "sim", &
+         "The name of the simulation")
+    call CFG_add(cfg, "n_cells_box", 8, &
+         "The number of grid cells per coordinate in a box")
+    call CFG_add(cfg, "domain_len", 32e-3_dp, &
+         "The length of the (square) domain")
+    call CFG_add(cfg, "gas_name", "N2", &
+         "The name of the gas mixture used")
+    call CFG_add(cfg, "sim_applied_efield", 1.0d7, &
+         "The applied electric field")
+    call CFG_add(cfg, "init_dens", 1.0d15 , &
+         "The number of initial ion pairs")
+    call CFG_add(cfg, "init_rel_pos", 0.5d0, &
+         "The relative position of the initial seed")
+    call CFG_add(cfg, "init_width", 25.0d-6, &
+         "The standard deviation used for Gaussian initial profiles")
+    call CFG_add(cfg, "init_background_density", 0.0d0, &
+         "The background ion and electron density in 1/m^3")
+    call CFG_add(cfg, "output_interval", 1.0d-10, &
+         "The timestep for writing output")
+    call CFG_add(cfg, "lkptbl_size", 1000, &
+         "The transport data table size in the fluid model")
+    call CFG_add(cfg, "lkptbl_max_efield", 3.0d7, &
+         "The maximum electric field in the fluid model coefficients")
+    call CFG_add(cfg, "fld_mob", "efield[V/m]_vs_mu[m2/Vs]", &
+         "The name of the mobility coefficient")
+    call CFG_add(cfg, "fld_en", "efield[V/m]_vs_energy[eV]", &
+         "The name of the energy(fld) coefficient")
+    call CFG_add(cfg, "fld_dif", "efield[V/m]_vs_dif[m2/s]", &
+         "The name of the diffusion coefficient")
+    call CFG_add(cfg, "fld_alpha", "efield[V/m]_vs_alpha[1/m]", &
+         "The name of the eff. ionization coeff.")
+    call CFG_add(cfg, "fld_eta", "efield[V/m]_vs_eta[1/m]", &
+         "The name of the eff. attachment coeff.")
+    call CFG_add(cfg, "fld_loss", "efield[V/m]_vs_loss[eV/s]", &
+         "The name of the energy loss coeff.")
+    call CFG_add(cfg, "fld_det", "efield[V/m]_vs_det[1/s]", &
+         "The name of the detachment rate coeff.")
+
+    sim_name = ""
+    prev_name = ""
+    do ix = 1, command_argument_count(i)
+       call get_command_argument(ix, cfg_name)
+       call CFG_read_file(cfg, trim(cfg_name))
+
+       call CFG_get(cfg, "sim_name", tmp_name)
+       if (sim_name == "") then
+          sim_name = tmp_name
+       else if (tmp_name /= "" .and. tmp_name /= prev_name) then
+          sim_name = trim(sim_name) // "_" // trim(tmp_name)
+       end if
+       prev_name = tmp_name
+    end do
+
+    call CFG_get(cfg, "input_file", input_file)
+    call CFG_get(cfg, "gas_name", gas_name)
+
+    call CFG_get(cfg, "lkptbl_size", table_size)
+    call CFG_get(cfg, "lkptbl_max_fld", max_fld)
+
+    ! Create a lookup table for the model coefficients
+    td_tbl = LT_create(0.0_dp, max_fld, table_size, 3)
+
+    ! Fill table with data
+    call CFG_get(cfg, "td_mobility_name", data_name)
+    call TD_get_td_from_file(input_file, gas_name, &
+         trim(data_name), x_data, y_data)
+    call LT_set_col(td_tbl, i_mobility, x_data, y_data)
+
+    call CFG_get(cfg, "td_diffusion_name", data_name)
+    call TD_get_td_from_file(input_file, gas_name, &
+         trim(data_name), x_data, y_data)
+    call LT_set_col(td_tbl, i_diffusion, x_data, y_data)
+
+    call CFG_get(cfg, "td_alpha_name", data_name)
+    call TD_get_td_from_file(input_file, gas_name, &
+         trim(data_name), x_data, y_data)
+    call LT_set_col(td_tbl, i_alpha, x_data, y_data)
+
+    call CFG_get(cfg, "td_eta_name", data_name)
+    call TD_get_td_from_file(input_file, gas_name, &
+         trim(data_name), x_data, y_data)
+    call LT_set_col(td_tbl, i_eta, x_data, y_data)
+
+  end subroutine initialize
 
 end program streamer_2d
