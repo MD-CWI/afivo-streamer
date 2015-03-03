@@ -9,14 +9,18 @@ program test_drift_diff
   integer, parameter :: box_size    = 8
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
+  integer, parameter :: i_err       = 3
   integer, parameter :: i_flux      = 1
+
+  real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
+  real(dp), parameter :: dr = domain_len / box_size
 
   type(a2_t)         :: tree
   integer            :: i, n, n_steps, id
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
   integer            :: n_changes, output_cnt
-  real(dp)           :: dr, dt, time, end_time
+  real(dp)           :: dt, time, end_time
   real(dp)           :: dt_adapt, dt_output
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=40)  :: fname
@@ -24,10 +28,8 @@ program test_drift_diff
   logical            :: write_out
   integer            :: time_step_method = 2
 
-  dr = 4.0_dp / box_size
-
   print *, "Initialize tree"
-  call a2_init(tree, box_size, n_var_cell=2, n_var_face=2, dr = dr)
+  call a2_init(tree, box_size, n_var_cell=3, n_var_face=2, dr = dr)
 
   ! Set up geometry
   id             = 1
@@ -36,6 +38,16 @@ program test_drift_diff
 
   print *, "Create the base mesh"
   call a2_set_base(tree, ix_list, nb_list)
+
+  i          = 0
+  output_cnt = 0
+  time       = 0
+  dt_adapt   = 0.01_dp
+  dt_output  = 0.05_dp
+  end_time   = 2.0_dp
+  diff_coeff = 0.0_dp
+  vel_x      = 1.0_dp
+  vel_y      = 1.0_dp
 
   print *, "Set up the initial conditions"
   do i = 1, 20
@@ -50,16 +62,6 @@ program test_drift_diff
   call a2_restrict_tree(tree, i_phi)
   call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
 
-  i          = 0
-  output_cnt = 0
-  time       = 0
-  dt_adapt   = 0.01_dp
-  dt_output  = 0.05_dp
-  end_time   = 2.0_dp
-  diff_coeff = 0.0_dp
-  vel_x      = 2.0_dp
-  vel_y      = 0.0_dp
-
   do
      i       = i + 1
      dr_min  = a2_min_dr(tree)
@@ -67,9 +69,8 @@ program test_drift_diff
           sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
      n_steps = ceiling(dt_adapt/dt)
      dt      = dt_adapt / n_steps
-     time    = time + dt_adapt
 
-     if (output_cnt * dt_output < time) then
+     if (output_cnt * dt_output <= time) then
         write_out = .true.
         output_cnt = output_cnt + 1
         write(fname, "(A,I0,A)") "test_drift_diff_2d_", output_cnt, ".vtu"
@@ -77,8 +78,11 @@ program test_drift_diff
         write_out = .false.
      end if
 
-     if (write_out) call a2_write_vtk(tree, trim(fname), &
-          (/"phi", "tmp"/), output_cnt, time)
+     if (write_out) then
+        call a2_loop_box_arg(tree, set_error, [time])
+        call a2_write_vtk(tree, trim(fname), &
+             (/"phi", "tmp", "err"/), output_cnt, time)
+     end if
 
      if (time > end_time) exit
 
@@ -87,10 +91,11 @@ program test_drift_diff
         ! Forward Euler
         do n = 1, n_steps
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-           call a2_consistent_fluxes(tree, [1])
+           ! call a2_consistent_fluxes(tree, [i_flux])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+           time = time + dt
         end do
      case (2)
         do n = 1, n_steps
@@ -100,7 +105,7 @@ program test_drift_diff
            ! Two forward Euler steps over dt
            do i = 1, 2
               call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-              call a2_consistent_fluxes(tree, [1])
+              ! call a2_consistent_fluxes(tree, [i_flux])
               call a2_loop_box_arg(tree, update_solution, [dt])
               call a2_restrict_tree(tree, i_phi)
               call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -108,6 +113,7 @@ program test_drift_diff
 
            ! Take average of phi_old and phi
            call a2_loop_box(tree, average_phi)
+           time = time + dt
         end do
      end select
 
@@ -138,11 +144,11 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 0:nc, i_phi))))
 
-    if (boxes(id)%lvl < 4 .or. diff > 0.15_dp) then
+    if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
        ref_flags(id) = a5_do_ref
-    else if (diff > 0.2_dp * 0.15_dp) then
+    else if (diff > 0.2_dp * 0.05_dp) then
        ref_flags(id) = a5_kp_ref
-    else
+    else if (boxes(id)%lvl > 4) then
        ref_flags(id) = a5_rm_ref
     end if
   end subroutine set_ref_flags
@@ -156,16 +162,36 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
-          if (norm2(xy - 2) < 1) then
-             box%cc(i, j, i_phi) = 1
-          else if (norm2(xy - 2) < 1.1_dp) then
-             box%cc(i, j, i_phi) = (1.1_dp - norm2(xy - 2)) * 10
-          else
-             box%cc(i, j, i_phi) = 0
-          end if
+          box%cc(i, j, i_phi) = solution(xy, 0.0_dp)
        end do
     end do
   end subroutine set_init_cond
+
+  subroutine set_error(box, time)
+    type(box2_t), intent(inout) :: box
+    real(dp), intent(in)        :: time(:)
+    integer                     :: i, j, nc
+    real(dp)                    :: xy(2)
+
+    nc = box%n_cell
+    do j = 1, nc
+       do i = 1, nc
+          xy = a2_r_cc(box, [i,j])
+          box%cc(i, j, i_err) = &
+               box%cc(i, j, i_phi) - solution(xy, time(1))
+       end do
+    end do
+  end subroutine set_error
+
+  function solution(xy, t) result(sol)
+    real(dp), intent(in) :: xy(2), t
+    real(dp) :: sol, xy_t(2)
+
+    xy_t = xy - [vel_x, vel_y] * t
+    xy_t = modulo(xy_t, domain_len)
+
+    sol = sin(xy_t(1))**10 * cos(xy_t(2))**10
+  end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)
     type(box2_t), intent(inout) :: boxes(:)

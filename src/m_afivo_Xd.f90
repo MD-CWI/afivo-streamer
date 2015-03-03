@@ -1924,9 +1924,13 @@ contains
           id = tree%lvls(lvl)%parents(i)
           do nb = 1, a$D_num_neighbors
              nb_id = tree%boxes(id)%neighbors(nb)
-             if (nb_id < a5_no_box) cycle ! Boundary condition
-             if (.not. a$D_has_children(tree%boxes(nb_id))) &
-                  call a$D_flux_from_children(tree%boxes, id, nb, f_ixs)
+
+             ! If the neighbor exists and has no children, set flux
+             if (nb_id > a5_no_box) then
+                if (.not. a$D_has_children(tree%boxes(nb_id))) then
+                   call a$D_flux_from_children(tree%boxes, id, nb, f_ixs)
+                end if
+             end if
           end do
        end do
        !$omp end do
@@ -1934,25 +1938,28 @@ contains
     !$omp end parallel
   end subroutine a$D_consistent_fluxes
 
-  !> The neighbor nb has no children and id does, so get flux from children for
-  !> consisency at refinement boundary.
+  !> The neighbor nb has no children and id does, so set flux on the neighbor
+  !> from our children. This ensures flux consistency at refinement boundary.
   subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)         :: id        !< Id of box for which we set fluxes
     integer, intent(in)         :: nb        !< Direction in which fluxes are set
     integer, intent(in)         :: f_ixs(:)  !< Indices of the fluxes
     integer                     :: nc, nch, c_id, i_ch, i, ic, d, ioff($D)
-    integer                     :: n_chnb
+    integer                     :: n_chnb, nb_id, i_nb
 
     nc     = boxes(id)%n_cell
     nch    = ishft(nc, -1) ! nc/2
     d      = a$D_nb_dim(nb)
     n_chnb = 2**($D-1)
+    nb_id  = boxes(id)%neighbors(nb)
 
     if (a$D_nb_low(nb)) then
        i = 1
+       i_nb = nc+1
     else
-       i = nc
+       i = nc+1
+       i_nb = 1
     end if
 
     select case (d)
@@ -1962,7 +1969,7 @@ contains
           i_ch = a2_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a2_ch_dix(:, i_ch)
-          boxes(id)%fx(i, ioff(2)+1:ioff(2)+nch, f_ixs) = 0.5_dp * ( &
+          boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) = 0.5_dp * ( &
                boxes(c_id)%fx(i, 1:nc:2, f_ixs) + &
                boxes(c_id)%fx(i, 2:nc:2, f_ixs))
        end do
@@ -1971,9 +1978,9 @@ contains
           i_ch = a2_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a2_ch_dix(:, i_ch)
-          boxes(id)%fx(ioff(1)+1:ioff(1)+nch, i, f_ixs) = 0.5_dp * ( &
-               boxes(c_id)%fx(1:nc:2, i, f_ixs) + &
-               boxes(c_id)%fx(2:nc:2, i, f_ixs))
+          boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fy(1:nc:2, i, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, i, f_ixs))
        end do
 #elif $D == 3
     case (1)
@@ -1981,7 +1988,7 @@ contains
           i_ch = a3_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a3_ch_dix(:, i_ch)
-          boxes(id)%fx(i, ioff(2)+1:ioff(2)+nch, &
+          boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, &
                ioff(3)+1:ioff(3)+nch, f_ixs) = 0.25_dp * ( &
                boxes(c_id)%fx(i, 1:nc:2, 1:nc:2, f_ixs) + &
                boxes(c_id)%fx(i, 2:nc:2, 1:nc:2, f_ixs) + &
@@ -1993,24 +2000,24 @@ contains
           i_ch = a3_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a3_ch_dix(:, i_ch)
-          boxes(id)%fx(ioff(1)+1:ioff(1)+nch, i, &
+          boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, &
                ioff(3)+1:ioff(3)+nch, f_ixs) = 0.25_dp * ( &
-               boxes(c_id)%fx(1:nc:2, i, 1:nc:2, f_ixs) + &
-               boxes(c_id)%fx(2:nc:2, i, 1:nc:2, f_ixs) + &
-               boxes(c_id)%fx(1:nc:2, i, 2:nc:2, f_ixs) + &
-               boxes(c_id)%fx(2:nc:2, i, 2:nc:2, f_ixs))
+               boxes(c_id)%fy(1:nc:2, i, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, i, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fy(1:nc:2, i, 2:nc:2, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, i, 2:nc:2, f_ixs))
        end do
     case (3)
        do ic = 1, n_chnb
           i_ch = a3_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a3_ch_dix(:, i_ch)
-          boxes(id)%fx(ioff(1)+1:ioff(1)+nch, &
-               ioff(2)+1:ioff(2)+nch, i, f_ixs) = 0.25_dp * ( &
-               boxes(c_id)%fx(1:nc:2, 1:nc:2, i, f_ixs) + &
-               boxes(c_id)%fx(2:nc:2, 1:nc:2, i, f_ixs) + &
-               boxes(c_id)%fx(1:nc:2, 2:nc:2, i, f_ixs) + &
-               boxes(c_id)%fx(2:nc:2, 2:nc:2, i, f_ixs))
+          boxes(nb_id)%fz(ioff(1)+1:ioff(1)+nch, &
+               ioff(2)+1:ioff(2)+nch, i_nb, f_ixs) = 0.25_dp * ( &
+               boxes(c_id)%fz(1:nc:2, 1:nc:2, i, f_ixs) + &
+               boxes(c_id)%fz(2:nc:2, 1:nc:2, i, f_ixs) + &
+               boxes(c_id)%fz(1:nc:2, 2:nc:2, i, f_ixs) + &
+               boxes(c_id)%fz(2:nc:2, 2:nc:2, i, f_ixs))
        end do
 #endif
     end select
