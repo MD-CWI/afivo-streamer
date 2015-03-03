@@ -1,11 +1,5 @@
-!> \example This example shows how one can do a more complicated simulation of
-!> streamer discharges. This involves advection, diffusion and reaction
-!> coupled to a Poisson equation. Furthermore, a dielectric material can be
-!> placed in the domain.
+program streamer_2d
 
-program test_streamer_2d
-
-  ! We need to import afivo, multigrid, and extra routines for dielectrics
   use m_afivo_2d
   use m_mg_2d
   use m_write_silo
@@ -17,13 +11,8 @@ program test_streamer_2d
   ! The size of the boxes that we use to construct our mesh
   integer, parameter :: box_size   = 8
 
-  ! Box types, these are used to distinguish between different regions
-  integer, parameter :: full_diel_box = 1
-  integer, parameter :: part_diel_box = 2
-  integer, parameter :: full_gas_box = 3
-
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 9
+  integer, parameter :: n_var_cell = 8
   integer, parameter :: i_elec     = 1 ! Electron density
   integer, parameter :: i_pion     = 2 ! Positive ion density
   integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
@@ -32,10 +21,9 @@ program test_streamer_2d
   integer, parameter :: i_fld      = 6 ! Electric field norm
   integer, parameter :: i_rhs      = 7 ! Source term Poisson
   integer, parameter :: i_res      = 8 ! Residual (multigrid)
-  integer, parameter :: i_eps      = 9 ! Dielectric permittivity
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "res", "eps"]
+       "pion_old", "phi", "fld", "rhs", "res"]
 
   ! Indices of face-centered variables
   integer, parameter :: n_var_face = 2
@@ -70,11 +58,6 @@ program test_streamer_2d
   real(dp), parameter :: seed_r1(2) = &
        [0.4_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
 
-  ! We store some extra data per box (its type)
-  type :: my_data
-     integer :: box_type
-  end type my_data
-
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
 
@@ -83,16 +66,12 @@ program test_streamer_2d
   mg%i_tmp        = i_fld
   mg%i_rhs        = i_rhs
   mg%i_res        = i_res
-  mg%i_eps        = i_eps
 
   ! The number of cycles at the lowest level
   mg%n_cycle_base = 8
 
   ! Routines to use for ...
   mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
-  mg%box_op       => auto_box_op  ! Performing the Laplacian
-  mg%box_gsrb     => auto_box_gsrb ! Performing Gauss-Seidel relaxation
-  mg%box_corr     => auto_box_corr ! Correcting the children of a grid
 
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
@@ -100,7 +79,6 @@ program test_streamer_2d
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
-     call a2_loop_box(tree, set_box_type)
      call a2_restrict_tree(tree, i_rhs)
      call compute_fld(tree, n_fmg_cycles)
      call a2_adjust_refinement(tree, set_ref_flags, n_changes)
@@ -154,9 +132,6 @@ program test_streamer_2d
         do i = 1, 2
            ! First calculate fluxes
            call a2_loop_boxes(tree, fluxes_koren, .true.)
-
-           ! Ensure consistency of fluxes at refinement boundaries
-           call a2_consistent_fluxes(tree, [f_elec])
 
            call compute_fld(tree, n_fmg_cycles)
 
@@ -267,11 +242,9 @@ contains
           dens = seed_dens * rod_dens(xy, seed_r0, seed_r1, sigma, 3)
 
           if (xy(1) < 0.25_dp * domain_len) then
-             box%cc(i, j, i_eps) = 5.0_dp
              box%cc(i, j, i_elec) = 0
              box%cc(i, j, i_pion) = 0
           else
-             box%cc(i, j, i_eps) = 1.0_dp
              box%cc(i, j, i_elec) = bg_dens + dens
              box%cc(i, j, i_pion) = bg_dens + dens
           end if
@@ -281,30 +254,6 @@ contains
 
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
   end subroutine set_init_cond
-
-  ! Store my_data (which contains the box type) for a box
-  subroutine set_box_type(box)
-    type(box2_t), intent(inout) :: box
-    real(dp)                    :: max_eps, min_eps
-    type(my_data)               :: md
-
-    if (allocated(box%ud)) return ! Already set
-
-    max_eps = maxval(box%cc(:,:, i_eps))
-    min_eps = minval(box%cc(:,:, i_eps))
-
-    if (max_eps > 1.0_dp) then
-       if (min_eps > 1.0_dp) then
-          md%box_type = full_diel_box
-       else
-          md%box_type = part_diel_box
-       end if
-    else
-       md%box_type = full_gas_box
-    end if
-
-    box%ud = transfer(md, box%ud)
-  end subroutine set_box_type
 
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
@@ -433,24 +382,6 @@ contains
     box%fy(:, :, f_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
 
-    ! Compute fields at the boundaries of the box, where eps can change
-    box%fx(1, :, f_fld) = 2 * inv_dr * &
-         (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
-         box%cc(0, 1:nc, i_eps) / &
-         (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-    box%fx(nc+1, :, f_fld) = 2 * inv_dr * &
-         (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
-         box%cc(nc+1, 1:nc, i_eps) / &
-         (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-    box%fy(:, 1, f_fld) = 2 * inv_dr * &
-         (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
-         box%cc(1:nc, 0, i_eps) / &
-         (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-    box%fy(:, nc+1, f_fld) = 2 * inv_dr * &
-         (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
-         box%cc(1:nc, nc+1, i_eps) / &
-         (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
-
     box%cc(1:nc, 1:nc, i_fld) = sqrt(&
          0.25_dp * (box%fx(1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, f_fld))**2 + &
          0.25_dp * (box%fy(1:nc, 1:nc, f_fld) + box%fy(1:nc, 2:nc+1, f_fld))**2)
@@ -483,17 +414,9 @@ contains
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
     integer                     :: i, j, nc, nb_id
-    type(my_data) :: md
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    md     = transfer(boxes(id)%ud, md)
-
-    if (md%box_type == full_diel_box) then
-       boxes(id)%fx(:, :, f_elec) = 0
-       boxes(id)%fy(:, :, f_elec) = 0
-       return
-    end if
 
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
@@ -586,24 +509,6 @@ contains
        end do
     end do
 
-    if (md%box_type == part_diel_box) then
-       do j = 1, nc
-          do i = 1, nc
-             if (boxes(id)%cc(i, j, i_eps) > 1.0_dp) then
-                ! If there's a dielectric, there is no outflux
-                if (boxes(id)%fx(i, j, f_elec) < 0) &
-                     boxes(id)%fx(i, j, f_elec) = 0
-                if (boxes(id)%fx(i+1, j, f_elec) > 0) &
-                     boxes(id)%fx(i+1, j, f_elec) = 0
-                if (boxes(id)%fy(i, j, f_elec) < 0) &
-                     boxes(id)%fy(i, j, f_elec) = 0
-                if (boxes(id)%fy(i, j+1, f_elec) > 0) &
-                     boxes(id)%fy(i, j+1, f_elec) = 0
-             end if
-          end do
-       end do
-    end if
-
   end subroutine fluxes_koren
 
   ! Take average of new and old electron/ion density for explicit trapezoidal rule
@@ -649,7 +554,6 @@ contains
   subroutine prolong_to_new_children(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    integer                     :: ic, c_id
 
     if (btest(boxes(id)%tag, a5_bit_new_children)) then
        boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
@@ -657,12 +561,6 @@ contains
        call a2_prolong1_from(boxes, id, i_elec, .true.)
        call a2_prolong1_from(boxes, id, i_pion, .true.)
        call a2_prolong1_from(boxes, id, i_phi, .true.)
-       call a2_prolong0_from(boxes, id, i_eps, .true.)
-
-       do ic = 1, a2_num_children
-          c_id = boxes(id)%children(ic)
-          call set_box_type(boxes(c_id))
-       end do
     end if
   end subroutine prolong_to_new_children
 
@@ -715,52 +613,4 @@ contains
     end select
   end subroutine sides_bc_dens
 
-  ! Based on the box type, apply a Gauss-Seidel relaxation scheme
-  subroutine auto_box_gsrb(box, redblack_cntr, mg)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: redblack_cntr
-    type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
-
-    md = transfer(box%ud, md)
-    select case(md%box_type)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_gsrb_lpld(box, redblack_cntr, mg)
-    case (full_gas_box)
-       call mg2_box_gsrb_lpl(box, redblack_cntr, mg)
-    end select
-  end subroutine auto_box_gsrb
-
-  ! Based on the box type, apply the Poisson operator
-  subroutine auto_box_op(box, i_out, mg)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: i_out
-    type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
-
-    md = transfer(box%ud, md)
-    select case(md%box_type)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_lpld(box, i_out, mg)
-    case (full_gas_box)
-       call mg2_box_lpl(box, i_out, mg)
-    end select
-  end subroutine auto_box_op
-
-  ! Based on the box type, correct the solution of the children
-  subroutine auto_box_corr(box_p, box_c, mg)
-    type(box2_t), intent(inout) :: box_c
-    type(box2_t), intent(in)    :: box_p
-    type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
-
-    md = transfer(box_p%ud, md)
-    select case(md%box_type)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_corr_lpld(box_p, box_c, mg)
-    case (full_gas_box)
-       call mg2_box_corr_lpl(box_p, box_c, mg)
-    end select
-  end subroutine auto_box_corr
-
-end program
+end program streamer_2d
