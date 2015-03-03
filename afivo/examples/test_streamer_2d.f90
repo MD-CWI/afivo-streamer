@@ -155,9 +155,6 @@ program test_streamer_2d
            ! First calculate fluxes
            call a2_loop_boxes(tree, fluxes_koren, .true.)
 
-           ! Ensure consistency of fluxes at refinement boundaries
-           call a2_consistent_fluxes(tree, [f_elec])
-
            call compute_fld(tree, n_fmg_cycles)
 
            ! Update the solution
@@ -242,7 +239,7 @@ contains
     else if (crv_phi > 2.0e1_dp .and. max_fld > 3e6_dp &
          .and. boxes(id)%dr > 5e-6_dp) then
        ref_flags(id) = a5_do_ref
-    else if (crv_phi < 2.0_dp .or. max_fld < 3e6_dp) then
+    else if (crv_phi < 2.0_dp) then
        ref_flags(id) = a5_rm_ref
     else
        ref_flags(id) = a5_kp_ref
