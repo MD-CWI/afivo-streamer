@@ -140,7 +140,6 @@ program streamer_2d
      dt      = get_max_dt(tree)
      n_steps = ceiling(dt_amr/dt)
      dt      = dt_amr / n_steps
-     print *, "dt = ", dt, dt_amr
 
      if (dt < 1e-14) then
         print *, "dt getting too small, instability?"
@@ -317,8 +316,6 @@ contains
     ! Ionization limit
     dt_alpha =  1 / (mobility * max_fld * alpha)
 
-    print *, max_dns, mobility
-    print *, dt_cfl, dt_dif, dt_drt, dt_alpha
     get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
     get_max_dt = 1e-12_dp
   end function get_max_dt
