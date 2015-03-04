@@ -27,7 +27,7 @@ program test_m_random
    variance = sum((rand_results - mean)**2) / n_samples
 
    print *, ""
-   print *, "For uniform random numbers (random_number), the result is:"
+   print *, "For uniform random numbers (built-in), the result is:"
    print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
    print *, "mean/<mean>", mean/0.5_dp
    print *, "std dev/<std dev>", sqrt(variance)*sqrt(12.0_dp)
@@ -43,7 +43,7 @@ program test_m_random
    variance = sum((rand_results - mean)**2) / n_samples
 
    print *, ""
-   print *, "For uniform random numbers (random_number), the result is:"
+   print *, "For uniform random numbers (uni_01), the result is:"
    print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
    print *, "mean/<mean>", mean/0.5_dp
    print *, "std dev/<std dev>", sqrt(variance)*sqrt(12.0_dp)
