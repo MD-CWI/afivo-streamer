@@ -3,13 +3,13 @@ program streamer_2d
   use m_afivo_2d
   use m_mg_2d
   use m_write_silo
+  use m_lookup_table
+  use m_config
 
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
-
-  ! The size of the boxes that we use to construct our mesh
-  integer, parameter :: box_size   = 8
+  integer, parameter      :: name_len = 200
 
   ! Indices of cell-centered variables
   integer, parameter :: n_var_cell = 8
@@ -30,27 +30,78 @@ program streamer_2d
   integer, parameter :: f_elec     = 1 ! Electron flux
   integer, parameter :: f_fld      = 2 ! Electric field vector
 
+  ! Indices of transport data
+  integer, parameter :: n_var_td = 4
+  integer, parameter :: i_mobility = 1
+  integer, parameter :: i_diffusion = 2
+  integer, parameter :: i_alpha = 3
+  integer, parameter :: i_eta = 4
+
+  character(len=name_len) :: sim_name
+  character(len=name_len) :: cfg_name, tmp_name, prev_name
+
+  type initcnd_t
+     real(dp) :: seed_r0(2)
+     real(dp) :: seed_r1(2)
+     real(dp) :: seed_dens
+     real(dp) :: bg_dens
+     real(dp) :: sigma
+  end type initcnd_t
+
+  type(initcnd_t) :: init_cond
+
+  type(LT_table_t)   :: td_tbl  ! Table with transport data vs fld
+  type(CFG_t)        :: sim_cfg ! The configuration for the simulation
   type(a2_t)         :: tree    ! This contains the full grid information
   type(mg2_t)        :: mg      ! Multigrid option struct
 
   integer            :: i, n, n_steps
   integer            :: n_changes, output_cnt
   real(dp)           :: dt, time, end_time
-  real(dp)           :: dt_adapt, dt_output
+  real(dp)           :: dt_amr, dt_output
   character(len=40)  :: fname
   logical            :: write_out
 
   ! How many multigrid FMG cycles we perform per time step
   integer, parameter :: n_fmg_cycles = 1
 
-  ! The length of the domain in each direction
-  real(dp), parameter :: domain_len = 32.0e-3_dp ! m
+  ! The size of the boxes that we use to construct our mesh
+  integer :: box_size
 
-  ! The location of the initial seed
-  real(dp), parameter :: seed_r0(2) = &
-       [0.4_dp, 0.5_dp] * domain_len - [0, 1] * 1e-3_dp
-  real(dp), parameter :: seed_r1(2) = &
-       [0.4_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
+  ! The length of the (square) domain
+  real(dp) :: domain_len
+
+  ! The applied electric field
+  real(dp) :: applied_fld
+
+  call create_cfg(sim_cfg)
+
+  sim_name = ""
+  prev_name = ""
+  do n = 1, command_argument_count()
+     call get_command_argument(n, cfg_name)
+     call CFG_read_file(sim_cfg, trim(cfg_name))
+
+     call CFG_get(sim_cfg, "sim_name", tmp_name)
+     if (sim_name == "") then
+        sim_name = tmp_name
+     else if (tmp_name /= "" .and. tmp_name /= prev_name) then
+        sim_name = trim(sim_name) // "_" // trim(tmp_name)
+     end if
+     prev_name = tmp_name
+  end do
+
+  call initialize(sim_cfg)
+
+  call CFG_get(sim_cfg, "end_time", end_time)
+  call CFG_get(sim_cfg, "sim_name", sim_name)
+  call CFG_get(sim_cfg, "box_size", box_size)
+  call CFG_get(sim_cfg, "domain_len", domain_len)
+  call CFG_get(sim_cfg, "applied_fld", applied_fld)
+  call CFG_get(sim_cfg, "dt_output", dt_output)
+  call CFG_get(sim_cfg, "dt_amr", dt_amr)
+
+  call get_init_cond(sim_cfg, init_cond)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -81,17 +132,15 @@ program streamer_2d
 
   call a2_loop_box(tree, set_init_cond)
 
-  output_cnt       = 0          ! Number of output files written
-  time             = 0          ! Simulation time (all times are in s)
-  dt_adapt         = 1.0e-11_dp ! Time per adaptation of the grid
-  dt_output        = 2.5e-10_dp ! Time between writing output
-  end_time         = 20.0e-9_dp ! Time to stop the simulation
+  output_cnt = 0          ! Number of output files written
+  time       = 0          ! Simulation time (all times are in s)
 
   do
-     ! Get a new time step, which is at most dt_adapt
+     ! Get a new time step, which is at most dt_amr
      dt      = get_max_dt(tree)
-     n_steps = ceiling(dt_adapt/dt)
-     dt      = dt_adapt / n_steps
+     n_steps = ceiling(dt_amr/dt)
+     dt      = dt_amr / n_steps
+     print *, "dt = ", dt, dt_amr
 
      if (dt < 1e-14) then
         print *, "dt getting too small, instability?"
@@ -102,13 +151,12 @@ program streamer_2d
      if (output_cnt * dt_output < time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0,A)") "test_str2d_", output_cnt, ".silo"
+        write(fname, "(A,I0,A)") trim(sim_name) // "_", &
+             output_cnt, ".silo"
      else
         write_out = .false.
      end if
 
-     ! if (write_out) call a2_write_vtk(tree, trim(fname), &
-     !      cc_names, output_cnt, time)
      if (write_out) call a2_write_silo(tree, trim(fname), &
           cc_names, output_cnt, time)
 
@@ -205,8 +253,8 @@ contains
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
 
     if (boxes(id)%dr > 2e-3_dp .or. (boxes(id)%dr > 1e-4_dp .and. &
-         (a2_r_inside(boxes(id), seed_r0, 1.0e-3_dp) .or. &
-         a2_r_inside(boxes(id), seed_r1, 1.0e-3_dp)))) then
+         (a2_r_inside(boxes(id), init_cond%seed_r0, 1.0e-3_dp) .or. &
+         a2_r_inside(boxes(id), init_cond%seed_r1, 1.0e-3_dp)))) then
        ref_flags(id) = a5_do_ref
     else if (crv_phi > 2.0e1_dp .and. max_fld > 3e6_dp &
          .and. boxes(id)%dr > 5e-6_dp) then
@@ -219,28 +267,19 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), sigma
-    real(dp)                    :: seed_dens, bg_dens, dens
+    real(dp)                    :: xy(2)
+    real(dp)                    :: dens
 
     nc        = box%n_cell
-    ! The initial electron/ion seed lies between xy0 and xy1
-    sigma     = 2e-4_dp          ! Width of the inital seed
-    bg_dens   = 5e13             ! Background density
-    seed_dens = 5e19
 
     do j = 0, nc+1
        do i = 0, nc+1
           xy   = a2_r_cc(box, [i,j])
-          dens = seed_dens * rod_dens(xy, seed_r0, seed_r1, sigma, 3)
+          dens = init_cond%seed_dens * rod_dens(xy, init_cond%seed_r0, &
+               init_cond%seed_r1, init_cond%sigma, 3)
 
-          if (xy(1) < 0.25_dp * domain_len) then
-             box%cc(i, j, i_elec) = 0
-             box%cc(i, j, i_pion) = 0
-          else
-             box%cc(i, j, i_elec) = bg_dens + dens
-             box%cc(i, j, i_pion) = bg_dens + dens
-          end if
-
+          box%cc(i, j, i_elec) = init_cond%bg_dens + dens
+          box%cc(i, j, i_pion) = init_cond%bg_dens + dens
        end do
     end do
 
@@ -252,28 +291,36 @@ contains
     type(a2_t), intent(in) :: tree
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
     real(dp), parameter    :: UC_elem_charge = 1.6022d-19
-    real(dp)               :: max_fld, max_dns, dr_min
+    real(dp)               :: max_fld, min_fld, max_dns, dr_min
+    real(dp)               :: mobility, diff_coeff, alpha, max_mobility
     real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
 
     call a2_tree_max_cc(tree, i_fld, max_fld)
+    call a2_tree_min_cc(tree, i_fld, min_fld)
     call a2_tree_max_cc(tree, i_elec, max_dns)
 
-    dr_min = a2_min_dr(tree)
+    dr_min       = a2_min_dr(tree)
+    mobility     = LT_get_col(td_tbl, i_mobility, max_fld)
+    max_mobility = LT_get_col(td_tbl, i_mobility, min_fld)
+    diff_coeff   = LT_get_col(td_tbl, i_diffusion, max_fld)
+    alpha        = LT_get_col(td_tbl, i_alpha, max_fld)
 
     ! CFL condition
-    dt_cfl = dr_min / (abs(mobility) * max_fld)
+    dt_cfl = dr_min / (mobility * max_fld)
 
     ! Diffusion condition
     dt_dif = dr_min**2 / diff_coeff
 
     ! Dielectric relaxation time
-    dt_drt = UC_eps0 / (UC_elem_charge * abs(mobility) * max_dns)
+    dt_drt = UC_eps0 / (UC_elem_charge * max_mobility * max_dns)
 
     ! Ionization limit
-    dt_alpha =  1 / (abs(mobility) * max_fld * &
-         max(epsilon(1.0_dp), get_alpha(max_fld)))
+    dt_alpha =  1 / (mobility * max_fld * alpha)
 
-    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
+    print *, max_dns, mobility
+    print *, dt_cfl, dt_dif, dt_drt, dt_alpha
+    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
+    get_max_dt = 1e-12_dp
   end function get_max_dt
 
   ! Used to create initial electron/ion seed
@@ -324,11 +371,9 @@ contains
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
   subroutine compute_fld(tree, n_fmg)
+    use m_units_constants
     type(a2_t), intent(inout) :: tree
     integer, intent(in) :: n_fmg
-
-    real(dp), parameter :: UC_eps0 = 8.8541878176d-12
-    real(dp), parameter :: UC_elem_charge = 1.6022d-19
     real(dp), parameter :: fac = UC_elem_charge / UC_eps0
     integer :: lvl, i, id, nc
 
@@ -408,7 +453,9 @@ contains
     integer, intent(in)         :: id
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
+    real(dp) :: fld_avg, mobility, diff_coeff, v_drift
     integer                     :: i, j, nc, nb_id
+    type(LT_loc_t) :: loc
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
@@ -416,9 +463,9 @@ contains
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
        do i = 1, nc+1
-          fld_norm   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) - &
+          fld_avg   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) + &
                boxes(id)%cc(i-1, j, i_fld))
-          loc        = LT_get_loc(td_tbl, fld_norm)
+          loc        = LT_get_loc(td_tbl, fld_avg)
           mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
           diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
           v_drift    = -mobility * boxes(id)%fx(i, j, f_fld)
@@ -467,9 +514,9 @@ contains
     ! y-fluxes interior, advective part with flux limiter
     do j = 1, nc+1
        do i = 1, nc
-          fld_norm   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) - &
+          fld_avg   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) + &
                boxes(id)%cc(i, j-1, i_fld))
-          loc        = LT_get_loc(td_tbl, fld_norm)
+          loc        = LT_get_loc(td_tbl, fld_avg)
           mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
           diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
           v_drift    = -mobility * boxes(id)%fy(i, j, f_fld)
@@ -529,14 +576,21 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, fld
+    real(dp)                    :: alpha, eta, mobility
     integer                     :: i, j, nc
+    type(LT_loc_t) :: loc
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr
     do j = 1, nc
        do i = 1, nc
-          fld = box%cc(i,j, i_fld)
-          src = abs(mobility * fld) * get_alpha(fld) * &
+          fld      = box%cc(i,j, i_fld)
+          loc      = LT_get_loc(td_tbl, fld)
+          alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
+          eta      = LT_get_col_at_loc(td_tbl, i_eta, loc)
+          mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+
+          src = abs(mobility * fld) * (alpha-eta) * &
                dt(1) * box%cc(i, j, i_elec)
           box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + src
           box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src
@@ -548,13 +602,6 @@ contains
          (box%fy(:, 1:nc, f_elec) - box%fy(:, 2:nc+1, f_elec)) * inv_dr)
 
   end subroutine update_solution
-
-  ! Get ionization coefficient (1/m) for a given field strenght
-  real(dp) function get_alpha(fld)
-    real(dp), intent(in) :: fld
-    ! Breakdown fld of 3 MV/m
-    get_alpha = max(0.0_dp, 1e5_dp * exp(1 - 1e7_dp/(abs(fld)+epsilon(1.0_dp))) - 9697.2_dp)
-  end function get_alpha
 
   ! For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_children(boxes, id)
@@ -590,7 +637,7 @@ contains
        boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
     case (a2_nb_hy)
        ! Dirichlet
-       boxes(id)%cc(1:nc, nc+1, iv) = 2 * 2.5e6_dp * domain_len &
+       boxes(id)%cc(1:nc, nc+1, iv) = 2 * applied_fld * domain_len &
             - boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
@@ -619,75 +666,78 @@ contains
     end select
   end subroutine sides_bc_dens
 
-  subroutine
+  subroutine get_init_cond(cfg, cond)
+    type(CFG_t), intent(in) :: cfg
+    type(initcnd_t), intent(inout) :: cond
+    real(dp) :: dlen
 
-  subroutine initialize(cfg)
-    use m_transport_data
-    use m_config
+    call CFG_get(cfg, "init_seed_dens", cond%seed_dens)
+    call CFG_get(cfg, "init_bg_dens", cond%bg_dens)
+    call CFG_get(cfg, "init_rel_r0", cond%seed_r0)
+    call CFG_get(cfg, "init_rel_r1", cond%seed_r1)
+    call CFG_get(cfg, "init_sigma", cond%sigma)
 
+    call CFG_get(cfg, "domain_len", dlen)
+    cond%seed_r0 = cond%seed_r0 * dlen
+    cond%seed_r1 = cond%seed_r1 * dlen
+  end subroutine get_init_cond
+
+  subroutine create_cfg(cfg)
     type(CFG_t), intent(inout) :: cfg
-    integer, parameter      :: name_len = 100
-    character(len=name_len) :: input_file, gas_name
-    integer                 :: n, table_size
-    real(dp)                :: max_fld
-    real(dp), allocatable   :: x_data(:), y_data(:)
-    character(len=100)      :: data_name
 
     call CFG_add(cfg, "end_time", 10.0d-9, &
          "The desired endtime in seconds of the simulation")
     call CFG_add(cfg, "sim_name", "sim", &
          "The name of the simulation")
-    call CFG_add(cfg, "n_cells_box", 8, &
+    call CFG_add(cfg, "box_size", 8, &
          "The number of grid cells per coordinate in a box")
     call CFG_add(cfg, "domain_len", 32e-3_dp, &
          "The length of the (square) domain")
     call CFG_add(cfg, "gas_name", "N2", &
          "The name of the gas mixture used")
-    call CFG_add(cfg, "sim_applied_efield", 1.0d7, &
+    call CFG_add(cfg, "applied_fld", 1.0d7, &
          "The applied electric field")
-    call CFG_add(cfg, "init_dens", 1.0d15 , &
+    call CFG_add(cfg, "init_seed_dens", 1.0d15 , &
          "The number of initial ion pairs")
-    call CFG_add(cfg, "init_rel_pos", 0.5d0, &
-         "The relative position of the initial seed")
-    call CFG_add(cfg, "init_width", 25.0d-6, &
+    call CFG_add(cfg, "init_rel_r0", [0.5d0, 0.5d0], &
+         "The relative start position of the initial seed")
+    call CFG_add(cfg, "init_rel_r1", [0.5d0, 0.6d0], &
+         "The relative end position of the initial seed")
+    call CFG_add(cfg, "init_sigma", 0.2d-3, &
          "The standard deviation used for Gaussian initial profiles")
-    call CFG_add(cfg, "init_background_density", 0.0d0, &
+    call CFG_add(cfg, "init_bg_dens", 0.0d0, &
          "The background ion and electron density in 1/m^3")
-    call CFG_add(cfg, "output_interval", 1.0d-10, &
+    call CFG_add(cfg, "dt_output", 1.0d-10, &
          "The timestep for writing output")
+    call CFG_add(cfg, "dt_amr", 1.0d-11, &
+         "The timestep for adaptively refining the grid")
+
+    call CFG_add(cfg, "input_file", "transport_data_file.txt", &
+         "Input file with transport data")
     call CFG_add(cfg, "lkptbl_size", 1000, &
          "The transport data table size in the fluid model")
-    call CFG_add(cfg, "lkptbl_max_efield", 3.0d7, &
+    call CFG_add(cfg, "lkptbl_max_fld", 3.0d7, &
          "The maximum electric field in the fluid model coefficients")
-    call CFG_add(cfg, "fld_mob", "efield[V/m]_vs_mu[m2/Vs]", &
+    call CFG_add(cfg, "td_mobility_name", "efield[V/m]_vs_mu[m2/Vs]", &
          "The name of the mobility coefficient")
-    call CFG_add(cfg, "fld_en", "efield[V/m]_vs_energy[eV]", &
-         "The name of the energy(fld) coefficient")
-    call CFG_add(cfg, "fld_dif", "efield[V/m]_vs_dif[m2/s]", &
+    call CFG_add(cfg, "td_diffusion_name", "efield[V/m]_vs_dif[m2/s]", &
          "The name of the diffusion coefficient")
-    call CFG_add(cfg, "fld_alpha", "efield[V/m]_vs_alpha[1/m]", &
+    call CFG_add(cfg, "td_alpha_name", "efield[V/m]_vs_alpha[1/m]", &
          "The name of the eff. ionization coeff.")
-    call CFG_add(cfg, "fld_eta", "efield[V/m]_vs_eta[1/m]", &
+    call CFG_add(cfg, "td_eta_name", "efield[V/m]_vs_eta[1/m]", &
          "The name of the eff. attachment coeff.")
-    call CFG_add(cfg, "fld_loss", "efield[V/m]_vs_loss[eV/s]", &
-         "The name of the energy loss coeff.")
-    call CFG_add(cfg, "fld_det", "efield[V/m]_vs_det[1/s]", &
-         "The name of the detachment rate coeff.")
+  end subroutine create_cfg
 
-    sim_name = ""
-    prev_name = ""
-    do ix = 1, command_argument_count(i)
-       call get_command_argument(ix, cfg_name)
-       call CFG_read_file(cfg, trim(cfg_name))
+  subroutine initialize(cfg)
+    use m_transport_data
+    use m_config
 
-       call CFG_get(cfg, "sim_name", tmp_name)
-       if (sim_name == "") then
-          sim_name = tmp_name
-       else if (tmp_name /= "" .and. tmp_name /= prev_name) then
-          sim_name = trim(sim_name) // "_" // trim(tmp_name)
-       end if
-       prev_name = tmp_name
-    end do
+    type(CFG_t), intent(in) :: cfg
+    character(len=name_len) :: input_file, gas_name
+    integer                 :: table_size
+    real(dp)                :: max_fld
+    real(dp), allocatable   :: x_data(:), y_data(:)
+    character(len=name_len) :: data_name
 
     call CFG_get(cfg, "input_file", input_file)
     call CFG_get(cfg, "gas_name", gas_name)
@@ -696,7 +746,7 @@ contains
     call CFG_get(cfg, "lkptbl_max_fld", max_fld)
 
     ! Create a lookup table for the model coefficients
-    td_tbl = LT_create(0.0_dp, max_fld, table_size, 3)
+    td_tbl = LT_create(0.0_dp, max_fld, table_size, n_var_td)
 
     ! Fill table with data
     call CFG_get(cfg, "td_mobility_name", data_name)

@@ -24,3 +24,4 @@ clean:
 # Dependency information
 $(PROGS): ../afivo/src/libafivo.a ../fosito/libfosito.a
 test_m_photons:	m_photons.o
+../streamer_2d: m_transport_data.o

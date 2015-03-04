@@ -1228,6 +1228,36 @@ contains
     cc_max = my_max
   end subroutine a$D_tree_max_cc
 
+  !> Find minimum value of cc(..., iv). Ghost cells are not used.
+  subroutine a$D_tree_min_cc(tree, iv, cc_min)
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: iv
+    real(dp), intent(out)  :: cc_min
+    real(dp)               :: tmp, my_min
+    integer                :: i, id, lvl, nc
+
+    my_min = huge(1.0_dp)
+
+    !$omp parallel reduction(min: my_min) private(lvl, i, id, nc, tmp)
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          nc = tree%boxes(id)%n_cell
+#if $D == 2
+          tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+#elif $D == 3
+          tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+#endif
+          if (tmp < my_min) my_min = tmp
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    cc_min = my_min
+  end subroutine a$D_tree_min_cc
+
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box
@@ -2327,7 +2357,7 @@ contains
           deallocate(var_data)
           deallocate(box_list)
 #elif $D == 3
-                    allocate(box_list(1,1,1))
+          allocate(box_list(1,1,1))
           box_list(1,1,1) = id
           nx = 1
           ny = 1
