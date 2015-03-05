@@ -600,6 +600,91 @@ contains
 
   end subroutine update_solution
 
+  subroutine set_photoionization(tree, eta, n_photons)
+    use m_random
+    use m_photons
+
+    type(a2_t), intent(inout) :: tree
+
+    integer :: lvl, ix, id
+    integer :: i, j, n, n_create
+    integer :: pho_lvl
+    real(dp) :: r_create
+    real(dp), allocatable :: xyz_src(:, :)
+    real(dp), allocatable :: xyz_dst(:, :)
+    type(RNG_t) :: rng
+    type(a2_loc_t), allocatable :: ph_loc(:)
+
+    ! First, set current photoionization rate, which is proportional to the
+    ! ionization rate.
+    call a2_loop_box_arg(tree, set_photoi_rate, .true.)
+
+    ! Compute the sum of these rates.
+    call a2_tree_sum_cc(tree, i_res, sum_rate)
+
+    ! Create ~ n_photons
+    fac = n_photons/sum_rate
+    do lvl = 1, tree%max_lvl
+       do ix = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(ix)
+
+          do j = 1, nc
+             do i = 1, nc
+                r_create = fac * tree%boxes(id)%cc(i, j, i_res)
+                n_create = floor(n_create)
+
+                if (rng%uni_01() < r_create - n_create) &
+                     n_create = n_create + 1
+
+                if (n_create > 0) then
+                   !$omp critical
+                   do n = 1, n_create
+                      i_ph = i_ph + 1
+                      xyz_src(1:2, i_ph) = a2_r_cc(tree%boxes(id), [i, j])
+                      xyz_src(3) = 0
+                   end do
+                   !$omp end critical
+                end if
+             end do
+          end do
+       end do
+    end do
+
+    ! Get location of absorbption
+    call PH_do_absorp(xyz_src, xyz_dst, i_ph, pi_tbl, rng)
+
+    !$omp parallel do
+    do n = 1, i_ph
+       ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), pho_lvl)
+    end do
+    !$omp end parallel do
+
+    ! Reset photon production rate
+    do lvl = 1, tree%max_lvl
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          call a2_box_clear_cc(tree%boxes(id), i_pho)
+       end do
+    end do
+
+    ! Add photons to production rate
+    do n = 1, i_ph
+       id = ph_loc(n)%id
+       i = ph_loc(n)%ix(1)
+       j = ph_loc(n)%ix(2)
+       dr = tree%boxes(id)%dr
+       tree%boxes(id)%cc(i, j, i_pho) = tree%boxes(id)%cc(i, j, i_pho) + 1/dr**2
+    end do
+
+    ! Prolong to finer grids
+    do lvl = pho_lvl, tree%max_lvl-1
+       do i = 1, size(tree%lvls(lvl)%parents)
+          i = tree%lvls(lvl)%parents(i)
+          call a2_prolong1_from(boxes, id, i_pho, .false.)
+       end do
+    end do
+  end subroutine set_photoionization
+
   ! For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_children(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
