@@ -1272,7 +1272,8 @@ contains
     end do
   end subroutine a$D_tree_copy_cc
 
-  !> Find maximum value of cc(..., iv). Ghost cells are not used.
+  !> Find maximum value of cc(..., iv). Only loop over leaves, and ghost cells
+  !> are not used.
   subroutine a$D_tree_max_cc(tree, iv, cc_max)
     type(a$D_t), intent(in) :: tree
     integer, intent(in)    :: iv
@@ -1285,8 +1286,8 @@ contains
     !$omp parallel reduction(max: my_max) private(lvl, i, id, nc, tmp)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
           nc = tree%boxes(id)%n_cell
 #if $D == 2
           tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
@@ -1302,7 +1303,8 @@ contains
     cc_max = my_max
   end subroutine a$D_tree_max_cc
 
-  !> Find minimum value of cc(..., iv). Ghost cells are not used.
+  !> Find minimum value of cc(..., iv). Only loop over leaves, and ghost cells
+  !> are not used.
   subroutine a$D_tree_min_cc(tree, iv, cc_min)
     type(a$D_t), intent(in) :: tree
     integer, intent(in)    :: iv
@@ -1315,8 +1317,8 @@ contains
     !$omp parallel reduction(min: my_min) private(lvl, i, id, nc, tmp)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
           nc = tree%boxes(id)%n_cell
 #if $D == 2
           tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
@@ -1331,6 +1333,37 @@ contains
 
     cc_min = my_min
   end subroutine a$D_tree_min_cc
+
+  !> Find sum of cc(..., iv). Only loop over leaves, and ghost cells
+  !> are not used.
+  subroutine a$D_tree_sum_cc(tree, iv, cc_sum)
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: iv
+    real(dp), intent(out)  :: cc_sum
+    real(dp)               :: tmp, my_sum
+    integer                :: i, id, lvl, nc
+
+    my_sum = 0
+
+    !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp)
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          nc = tree%boxes(id)%n_cell
+#if $D == 2
+          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+#elif $D == 3
+          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+#endif
+          my_sum = my_sum + tmp
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    cc_sum = my_sum
+  end subroutine a$D_tree_sum_cc
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
