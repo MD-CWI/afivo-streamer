@@ -153,6 +153,12 @@ module m_afivo_$Dd
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
   end type a$D_t
 
+  !> Type specifying the location of a cell
+  type a$D_loc_t
+     integer :: id              !< Id of the box that the cell is in
+     integer :: ix($D)          !< Index inside the box
+  end type a$D_loc_t
+
   abstract interface
      !> Function for setting refinement flags
      subroutine a$D_subr_ref(boxes, id, ref_flags)
@@ -205,6 +211,7 @@ module m_afivo_$Dd
   private :: set_leaves_parents
   private :: alloc_box
   private :: dealloc_box
+  private :: child_that_contains
   private :: set_nbs_$Dd
   private :: find_nb_$Dd
   private :: get_free_ids
@@ -409,6 +416,65 @@ contains
     end do
     !$omp end parallel
   end subroutine a$D_loop_box
+
+  !> Get the location of the finest cell containing rr. If max_lvl is present,
+  !> do not go to a finer level than max_lvl. If there is no box containing rr,
+  !> return a location of -1
+  pure function a$D_get_loc(tree, rr, max_lvl) result(loc)
+    type(a$D_t), intent(in)       :: tree   !< Tree
+    real(dp), intent(in)          :: rr($D) !< Coordinate
+    integer, intent(in), optional :: max_lvl !< Maximum level of box
+    type(a$D_loc_t)               :: loc    !< Location of cell
+
+    integer :: i, id, i_ch, lvl_max
+
+    lvl_max = tree%lvls_max
+    if (present(max_lvl)) lvl_max = max_lvl
+
+    ! Find lvl 1 box that includes rr
+    do i = 1, size(tree%lvls(1)%ids)
+       id = tree%lvls(1)%ids(i)
+       if (a$D_r_inside(tree%boxes(id), rr)) exit
+    end do
+
+    ! If not inside any box, return
+    if (i > size(tree%lvls(1)%ids)) then
+       loc%id = -1
+       loc%ix = -1
+       return
+    end if
+
+    ! Jump into children for as long as possible
+    do
+       if (tree%boxes(id)%lvl < lvl_max .and. &
+            a$D_has_children(tree%boxes(id))) then
+          i_ch = child_that_contains(tree%boxes(id), rr)
+          id = tree%boxes(id)%children(i_ch)
+       else
+          exit
+       end if
+    end do
+
+    loc%id = id
+    loc%ix = a$D_cc_ix(tree%boxes(id), rr)
+  end function a$D_get_loc
+
+  !> For a box with children that contains rr, find in which child rr lies
+  pure function child_that_contains(box, rr) result(i_ch)
+    type(box$D_t), intent(in) :: box    !< A box with children
+    real(dp), intent(in)      :: rr($D) !< Location inside the box
+    integer                   :: i_ch   !< Index of child containing rr
+    real(dp)                  :: cntr($D)
+
+    i_ch = 1
+    cntr = box%r_min + box%dr * ishft(box%n_cell, -1)
+
+    if (rr(1) > cntr(1)) i_ch = i_ch + 1
+    if (rr(2) > cntr(2)) i_ch = i_ch + 2
+#if $D==3
+    if (rr(3) > cntr(3)) i_ch = i_ch + 4
+#endif
+  end function child_that_contains
 
   !> Call procedure for each box in tree, with argument rarg
   subroutine a$D_loop_box_arg(tree, my_procedure, rarg, leaves_only)
@@ -1071,6 +1137,14 @@ contains
     real(dp)                 :: r_center($D)
     r_center = box%r_min + 0.5_dp * box%n_cell * box%dr
   end function a$D_r_center
+
+  !> Get the index of the cell that includes point r
+  pure function a$D_cc_ix(box, r) result(cc_ix)
+    type(box$D_t), intent(in) :: box
+    real(dp), intent(in)     :: r($D)
+    integer                  :: cc_ix($D)
+    cc_ix = ceiling((r - box%r_min) / box%dr)
+  end function a$D_cc_ix
 
   !> Get the location of the cell center with index cc_ix
   pure function a$D_r_cc(box, cc_ix) result(r)
