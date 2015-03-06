@@ -109,18 +109,21 @@ contains
     !$omp end parallel
   end subroutine PH_do_absorp
 
-  subroutine PH_set_src(tree, pi_tbl, num_photons, i_pho)
+  subroutine PH_set_src(tree, pi_tbl, rng, num_photons, i_src, i_pho)
     use m_random
     use m_afivo_2d
     use m_lookup_table
     use omp_lib
 
-    type(a2_t), intent(inout) :: tree   !< Tree
-    type(LT_table_t)          :: pi_tbl !< Table to sample abs. lenghts
+    type(a2_t), intent(inout)  :: tree   !< Tree
+    type(LT_table_t)           :: pi_tbl !< Table to sample abs. lenghts
+    type(RNG_t), intent(inout) :: rng    !< Random number generator
     !> How many discrete photons to use
-    integer, intent(in)       :: num_photons
-    !> Index of variable that contains photon production per cell
-    integer, intent(in)       :: i_pho
+    integer, intent(in)        :: num_photons
+    !> Input variable that contains photon production per cell
+    integer, intent(in)        :: i_src
+    !> Output variable that contains photoionization source rate
+    integer, intent(in)        :: i_pho
 
     integer :: lvl, ix, id, nc
     integer :: i, j, n, n_create, n_used, i_ph
@@ -129,14 +132,13 @@ contains
     real(dp) :: r_create, dr, fac, sum_production, pi_lengthscale
     real(dp), allocatable :: xyz_src(:, :)
     real(dp), allocatable :: xyz_dst(:, :)
-    type(RNG_t) :: rng
     type(PRNG_t) :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
 
     ! Get a typical length scale for the absorption of photons
-    pi_lengthscale = LT_get_col(pi_tbl, 1, 0.5_dp)
+    pi_lengthscale = LT_get_col(pi_tbl, 1, 0.25_dp)
 
     ! Determine at which level we estimate the photoionization source term. This
     ! depends on the typical lenght scale for absorption.
@@ -145,11 +147,14 @@ contains
     end do
     pho_lvl = lvl
 
+    ! print *, "length scale", pi_lengthscale
+    ! print *, a2_lvl_dr(tree, pho_lvl)
+
     ! Allocate a bit more space because of stochastic production
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
 
     ! Compute the sum of photon production
-    call a2_tree_sum_cc(tree, i_pho, sum_production)
+    call a2_tree_sum_cc(tree, i_src, sum_production)
 
     ! Create approximately num_photons
     fac = num_photons/sum_production
@@ -159,7 +164,7 @@ contains
 
     ! Now loop over all leaves and create photons using random numbers
 
-    !$omp parallel private(lvl, ix, id, i, j, i_ph, r_create, n_create)
+    !$omp parallel private(lvl, ix, id, i, j, i_ph, proc_id, r_create, n_create)
 
     !$omp single
     n_procs = omp_get_num_threads()
@@ -175,7 +180,7 @@ contains
 
           do j = 1, nc
              do i = 1, nc
-                r_create = fac * tree%boxes(id)%cc(i, j, i_pho)
+                r_create = fac * tree%boxes(id)%cc(i, j, i_src)
                 n_create = floor(r_create)
 
                 if (prng%rngs(proc_id)%uni_01() < r_create - n_create) &
@@ -239,11 +244,13 @@ contains
     ! Set ghost cells on highest level with photon source
 
     !$omp parallel private(lvl, i, id)
+
     !$omp do
-    do i = 1, size(tree%lvls(pho_lvl)%ids)
-       id = tree%lvls(pho_lvl)%ids(i)
+    do i = 1, size(tree%lvls(pho_lvl)%parents)
+       id = tree%lvls(pho_lvl)%parents(i)
+       ! print *, id
        call a2_gc_box_sides(tree%boxes, id, i_pho, &
-            a2_sides_extrap, sides_neumann)
+            a2_sides_interp, sides_neumann)
     end do
     !$omp end do
 
@@ -252,7 +259,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong1_from(tree%boxes, id, i_pho, .false.)
+          call a2_prolong1_from(tree%boxes, id, i_pho, .true.)
        end do
        !$omp end do
     end do

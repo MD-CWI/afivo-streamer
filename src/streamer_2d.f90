@@ -5,11 +5,12 @@ program streamer_2d
   use m_write_silo
   use m_lookup_table
   use m_config
+  use m_random
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
-  integer, parameter      :: name_len = 200
+  integer, parameter :: dp       = kind(0.0d0)
+  integer, parameter :: name_len = 200
 
   ! Indices of cell-centered variables
   integer, parameter :: n_var_cell = 9
@@ -55,6 +56,7 @@ program streamer_2d
   type(CFG_t)        :: sim_cfg ! The configuration for the simulation
   type(a2_t)         :: tree    ! This contains the full grid information
   type(mg2_t)        :: mg      ! Multigrid option struct
+  type(RNG_t)        :: sim_rng ! Random number generator
 
   logical          :: photoi_enabled     ! Whether we use phototionization
   real(dp)         :: photoi_frac_O2     ! Oxygen fraction
@@ -623,11 +625,10 @@ contains
     use m_units_constants
 
     type(a2_t), intent(inout) :: tree
-    real(dp), intent(in) :: eta
-    integer, intent(in) :: num_photons
-
-    real(dp), parameter :: p_quench = 30.0D0 * UC_torr_to_bar
-real(dp) :: quench_fac
+    real(dp), intent(in)      :: eta
+    integer, intent(in)       :: num_photons
+    real(dp), parameter       :: p_quench = 30.0D0 * UC_torr_to_bar
+    real(dp)                  :: quench_fac
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
@@ -637,7 +638,7 @@ real(dp) :: quench_fac
     ! ionization rate.
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
-    call PH_set_src(tree, photoi_tbl, num_photons, i_pho)
+    call PH_set_src(tree, photoi_tbl, sim_rng, num_photons, i_pho, i_pho)
 
   end subroutine set_photoionization
 
