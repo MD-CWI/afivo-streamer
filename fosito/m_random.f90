@@ -7,9 +7,10 @@ module m_random
   integer, parameter :: dp = kind(0.0d0)
   integer, parameter :: i4 = selected_int_kind(9)
 
-  type, public :: RNG_t
+  type RNG_t
      integer(i4), private :: state(4) = (/521288629, &
           362436069, 16163801, 1131199299/)
+     integer              :: separator(32) ! Separate cache lines
    contains
      procedure, non_overridable :: set_seed
      procedure, non_overridable :: int4
@@ -21,6 +22,15 @@ module m_random
      procedure, non_overridable :: sphere
   end type RNG_t
 
+  type PRNG_t
+     type(RNG_t), allocatable :: rngs(:)
+   contains
+     procedure, non_overridable :: init
+  end type PRNG_t
+
+  public :: RNG_t
+  public :: PRNG_t
+
 contains
 
   subroutine set_seed(self, seed)
@@ -28,6 +38,21 @@ contains
     integer(i4), intent(in)   :: seed(4)
     self%state = seed
   end subroutine set_seed
+
+  subroutine init(self, n_proc, rng)
+    class(PRNG_t), intent(inout) :: self
+    class(RNG_t), intent(inout)  :: rng
+    integer, intent(in)          :: n_proc
+    integer                      :: i, n
+
+    allocate(self%rngs(n_proc))
+
+    do n = 1, n_proc
+       do i = 1, size(self%rngs(n)%state)
+          self%rngs(n)%state(i) = rng%int4()
+       end do
+    end do
+  end subroutine init
 
   ! Method mzran (Marsaglia), see http://jblevins.org/log/openmp
   function int4(self) result(rr)
