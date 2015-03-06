@@ -141,6 +141,8 @@ program streamer_2d
   end do
 
   call a2_loop_box(tree, set_init_cond)
+  if (photoi_enabled) &
+       call set_photoionization(tree, photoi_eta, photoi_num_photons)
 
   output_cnt = 0          ! Number of output files written
   time       = 0          ! Simulation time (all times are in s)
@@ -157,7 +159,7 @@ program streamer_2d
      end if
 
      ! Every dt_output, write output
-     if (output_cnt * dt_output < time) then
+     if (output_cnt * dt_output <= time) then
         write_out = .true.
         output_cnt = output_cnt + 1
         write(fname, "(A,I0,A)") trim(sim_name) // "_", &
@@ -602,6 +604,9 @@ contains
 
           src = abs(mobility * fld) * (alpha-eta) * &
                dt(1) * box%cc(i, j, i_elec)
+          if (photoi_enabled) &
+               src = src + dt(1) * box%cc(i,j, i_pho)
+
           box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + src
           box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src
        end do

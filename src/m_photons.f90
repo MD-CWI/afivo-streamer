@@ -89,13 +89,13 @@ contains
     integer                      :: n
     real(dp)                     :: rr, dist
 
-    !$omp parallel do private(rr, dist) firstprivate(rng)
+    !!$omp parallel do private(rr, dist) firstprivate(rng)
     do n = 1, n_photons
        rr = rng%uni_01()
        dist = LT_get_col(tbl, 1, rr)
        xyz_out(:, n) =  xyz_in(:, n) + rng%sphere(dist)
     end do
-    !$omp end parallel do
+    !!$omp end parallel do
   end subroutine PH_do_absorp
 
   subroutine PH_set_src(tree, pi_tbl, num_photons, i_pho)
@@ -145,7 +145,7 @@ contains
 
     ! Now loop over all leaves and create photons using random numbers
 
-    !$omp parallel private(lvl, ix, id, i, j, r_create, n_create) &
+    !$omp parallel private(lvl, ix, id, i, j, i_ph, r_create, n_create) &
     !$omp & firstprivate(rng)
     do lvl = 1, tree%max_lvl
        !$omp do
@@ -203,7 +203,7 @@ contains
     end do
     !$omp end parallel
 
-    ! Add photons to production rate
+    ! Add photons to production rate. Currently, this is done sequentially.
     do n = 1, n_used
        id = ph_loc(n)%id
        if (id > a5_no_box) then
@@ -216,24 +216,24 @@ contains
     end do
 
     ! Set ghost cells on highest level with photon source
+
     !$omp parallel private(lvl, i, id)
-    !$omp do
-    do i = 1, size(tree%lvls(pho_lvl)%ids)
-       id = tree%lvls(pho_lvl)%ids(i)
-       call a2_gc_box_sides(tree%boxes, id, i_pho, &
-            a2_sides_interp, sides_neumann)
-    end do
-    !$omp end do
+    ! !$omp do
+    ! do i = 1, size(tree%lvls(pho_lvl)%ids)
+    !    id = tree%lvls(pho_lvl)%ids(i)
+    !    call a2_gc_box_sides(tree%boxes, id, i_pho, &
+    !         a2_sides_extrap, sides_neumann)
+    ! end do
+    ! !$omp end do
 
     ! Prolong to finer grids
-
     do lvl = pho_lvl, tree%max_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong1_from(tree%boxes, id, i_pho, .true.)
+          call a2_prolong0_from(tree%boxes, id, i_pho, .false.)
        end do
-       !$omp end do nowait
+       !$omp end do
     end do
     !$omp end parallel
   end subroutine PH_set_src
