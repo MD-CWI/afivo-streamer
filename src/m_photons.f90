@@ -81,27 +81,39 @@ contains
   subroutine PH_do_absorp(xyz_in, xyz_out, n_photons, tbl, rng)
     use m_lookup_table
     use m_random
+    use omp_lib
     integer, intent(in)          :: n_photons
     real(dp), intent(in)         :: xyz_in(3, n_photons)
     real(dp), intent(out)        :: xyz_out(3, n_photons)
     type(LT_table_t), intent(in) :: tbl
     type(RNG_t), intent(inout)   :: rng
-    integer                      :: n
+    integer                      :: n, n_procs, proc_id
     real(dp)                     :: rr, dist
+    type(PRNG_t)                 :: prng
 
-    !!$omp parallel do private(rr, dist) firstprivate(rng)
+    !$omp parallel private(n, rr, dist, proc_id)
+    !$omp single
+    n_procs = omp_get_num_threads()
+    call prng%init(n_procs, rng)
+    !$omp end single
+
+    proc_id = 1+omp_get_thread_num()
+
+    !$omp do
     do n = 1, n_photons
        rr = rng%uni_01()
        dist = LT_get_col(tbl, 1, rr)
-       xyz_out(:, n) =  xyz_in(:, n) + rng%sphere(dist)
+       xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
     end do
-    !!$omp end parallel do
+    !$omp end do
+    !$omp end parallel
   end subroutine PH_do_absorp
 
   subroutine PH_set_src(tree, pi_tbl, num_photons, i_pho)
     use m_random
     use m_afivo_2d
     use m_lookup_table
+    use omp_lib
 
     type(a2_t), intent(inout) :: tree   !< Tree
     type(LT_table_t)          :: pi_tbl !< Table to sample abs. lenghts
@@ -112,11 +124,13 @@ contains
 
     integer :: lvl, ix, id, nc
     integer :: i, j, n, n_create, n_used, i_ph
+    integer :: proc_id, n_procs
     integer :: pho_lvl
     real(dp) :: r_create, dr, fac, sum_production, pi_lengthscale
     real(dp), allocatable :: xyz_src(:, :)
     real(dp), allocatable :: xyz_dst(:, :)
     type(RNG_t) :: rng
+    type(PRNG_t) :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
@@ -145,8 +159,15 @@ contains
 
     ! Now loop over all leaves and create photons using random numbers
 
-    !$omp parallel private(lvl, ix, id, i, j, i_ph, r_create, n_create) &
-    !$omp & firstprivate(rng)
+    !$omp parallel private(lvl, ix, id, i, j, i_ph, r_create, n_create)
+
+    !$omp single
+    n_procs = omp_get_num_threads()
+    call prng%init(n_procs, rng)
+    !$omp end single
+
+    proc_id = 1+omp_get_thread_num()
+
     do lvl = 1, tree%max_lvl
        !$omp do
        do ix = 1, size(tree%lvls(lvl)%leaves)
@@ -157,7 +178,7 @@ contains
                 r_create = fac * tree%boxes(id)%cc(i, j, i_pho)
                 n_create = floor(r_create)
 
-                if (rng%uni_01() < r_create - n_create) &
+                if (prng%rngs(proc_id)%uni_01() < r_create - n_create) &
                      n_create = n_create + 1
 
                 if (n_create > 0) then
@@ -218,20 +239,20 @@ contains
     ! Set ghost cells on highest level with photon source
 
     !$omp parallel private(lvl, i, id)
-    ! !$omp do
-    ! do i = 1, size(tree%lvls(pho_lvl)%ids)
-    !    id = tree%lvls(pho_lvl)%ids(i)
-    !    call a2_gc_box_sides(tree%boxes, id, i_pho, &
-    !         a2_sides_extrap, sides_neumann)
-    ! end do
-    ! !$omp end do
+    !$omp do
+    do i = 1, size(tree%lvls(pho_lvl)%ids)
+       id = tree%lvls(pho_lvl)%ids(i)
+       call a2_gc_box_sides(tree%boxes, id, i_pho, &
+            a2_sides_extrap, sides_neumann)
+    end do
+    !$omp end do
 
     ! Prolong to finer grids
     do lvl = pho_lvl, tree%max_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong0_from(tree%boxes, id, i_pho, .false.)
+          call a2_prolong1_from(tree%boxes, id, i_pho, .false.)
        end do
        !$omp end do
     end do
