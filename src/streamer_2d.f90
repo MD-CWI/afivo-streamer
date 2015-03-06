@@ -56,6 +56,12 @@ program streamer_2d
   type(a2_t)         :: tree    ! This contains the full grid information
   type(mg2_t)        :: mg      ! Multigrid option struct
 
+  logical          :: photoi_enabled     ! Whether we use phototionization
+  real(dp)         :: photoi_frac_O2     ! Oxygen fraction
+  real(dp)         :: photoi_eta         ! Photoionization efficiency
+  integer          :: photoi_num_photons ! Number of photons to use
+  type(LT_table_t) :: photoi_tbl         ! Table for photoionization
+
   integer            :: i, n, n_steps
   integer            :: n_changes, output_cnt
   real(dp)           :: dt, time, end_time
@@ -74,6 +80,9 @@ program streamer_2d
 
   ! The applied electric field
   real(dp) :: applied_fld
+
+  ! Pressure of the gas in bar
+  real(dp) :: gas_pressure
 
   call create_cfg(sim_cfg)
 
@@ -206,8 +215,8 @@ program streamer_2d
         call a2_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
      end if
 
-     call set_photoionization(tree, 0.05_dp, 1000)
-
+     if (photoi_enabled) &
+          call set_photoionization(tree, photoi_eta, photoi_num_photons)
   end do
 
   call a2_destroy(tree)
@@ -604,134 +613,48 @@ contains
 
   end subroutine update_solution
 
-  subroutine set_photoionization(tree, eta, n_photons_arg)
-    use m_random
+  subroutine set_photoionization(tree, eta, num_photons)
     use m_photons
+    use m_units_constants
 
     type(a2_t), intent(inout) :: tree
     real(dp), intent(in) :: eta
-    integer, intent(in) :: n_photons_arg
+    integer, intent(in) :: num_photons
 
-    integer :: lvl, ix, id, nc
-    integer :: i, j, n, n_create, n_photons, i_ph
-    integer :: pho_lvl
-    real(dp) :: r_create, dr, fac, sum_rate
-    real(dp), allocatable :: xyz_src(:, :)
-    real(dp), allocatable :: xyz_dst(:, :)
-    type(RNG_t) :: rng
-    type(a2_loc_t), allocatable :: ph_loc(:)
-    type(LT_table_t) :: pi_tbl
+    real(dp), parameter :: p_quench = 30.0D0 * UC_torr_to_bar
+real(dp) :: quench_fac
 
-    nc = tree%n_cell
-    pho_lvl = 6
-    pi_tbl = PH_get_tbl_air(0.2_dp)
-    allocate(xyz_src(3, nint(1.5_dp * n_photons_arg)))
+    ! Compute quench factor, because some excited species will be quenched by
+    ! collisions, preventing the emission of a UV photon
+    quench_fac = p_quench / (gas_pressure + p_quench)
 
-    ! First, set current photoionization rate, which is proportional to the
+    ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
-    call a2_loop_box_arg(tree, set_photoi_rate, [eta], .true.)
+    call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
-    ! Compute the sum of these rates.
-    call a2_tree_sum_cc(tree, i_pho, sum_rate)
+    call PH_set_src(tree, photoi_tbl, num_photons, i_pho)
 
-    ! Create ~ n_photons
-    fac = n_photons_arg/sum_rate
-    i_ph = 0
-    print *, "n_photons_arg", n_photons_arg
-    print *, "sum_rate", sum_rate
-
-    do lvl = 1, tree%max_lvl
-       do ix = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(ix)
-
-          do j = 1, nc
-             do i = 1, nc
-                r_create = fac * tree%boxes(id)%cc(i, j, i_pho)
-                n_create = floor(r_create)
-
-                if (rng%uni_01() < r_create - n_create) &
-                     n_create = n_create + 1
-
-                if (n_create > 0) then
-                   !$omp critical
-                   do n = 1, n_create
-                      i_ph = i_ph + 1
-                      xyz_src(1:2, i_ph) = a2_r_cc(tree%boxes(id), [i, j])
-                      xyz_src(3, i_ph) = 0
-                   end do
-                   !$omp end critical
-                end if
-             end do
-          end do
-       end do
-    end do
-
-    n_photons = i_ph
-    print *, "n_photons", n_photons
-    allocate(xyz_dst(3, n_photons))
-    allocate(ph_loc(n_photons))
-
-    ! Get location of absorbption
-    call PH_do_absorp(xyz_src, xyz_dst, n_photons, pi_tbl, rng)
-
-    !$omp parallel do
-    do n = 1, n_photons
-       ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), pho_lvl)
-    end do
-    !$omp end parallel do
-
-    ! Reset photon production rate
-    do lvl = 1, tree%max_lvl
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call a2_box_clear_cc(tree%boxes(id), i_pho)
-       end do
-    end do
-
-    ! Add photons to production rate
-    do n = 1, n_photons
-       id = ph_loc(n)%id
-       if (id > a5_no_box) then
-          i = ph_loc(n)%ix(1)
-          j = ph_loc(n)%ix(2)
-          dr = tree%boxes(id)%dr
-          tree%boxes(id)%cc(i, j, i_pho) = tree%boxes(id)%cc(i, j, i_pho) + 1/dr**2
-       end if
-    end do
-
-    do i = 1, size(tree%lvls(pho_lvl)%ids)
-       id = tree%lvls(pho_lvl)%ids(i)
-       call a2_gc_box_sides(tree%boxes, id, i_pho, &
-            a2_sides_interp, sides_bc_dens)
-    end do
-
-    ! Prolong to finer grids
-    do lvl = pho_lvl, tree%max_lvl-1
-       do i = 1, size(tree%lvls(lvl)%parents)
-          id = tree%lvls(lvl)%parents(i)
-          call a2_prolong1_from(tree%boxes, id, i_pho, .true.)
-       end do
-    end do
   end subroutine set_photoionization
 
   subroutine set_photoi_rate(box, coeff)
     type(box2_t), intent(inout) :: box
-    real(dp), intent(in) :: coeff(:)
-
-    integer :: i, j, nc
-    real(dp) :: fld, alpha, mobility
-    type(LT_loc_t) :: loc
+    real(dp), intent(in)        :: coeff(:)
+    integer                     :: i, j, nc
+    real(dp)                    :: fld, alpha, mobility, dr
+    type(LT_loc_t)              :: loc
 
     nc = box%n_cell
 
     do j = 1, nc
        do i = 1, nc
-          fld = box%cc(i, j, i_fld)
-          loc = LT_get_loc(td_tbl, fld)
-          alpha = LT_get_col_at_loc(td_tbl, i_alpha, loc)
+          dr       = box%dr
+          fld      = box%cc(i, j, i_fld)
+          loc      = LT_get_loc(td_tbl, fld)
+          alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
           mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
-          box%cc(i, j, i_pho) = fld * mobility * alpha * coeff(1)
+          box%cc(i, j, i_pho) = fld * mobility * alpha * &
+               box%cc(i, j, i_elec) * coeff(1) * dr**2
        end do
     end do
   end subroutine set_photoi_rate
@@ -828,6 +751,8 @@ contains
          "The length of the (square) domain")
     call CFG_add(cfg, "gas_name", "N2", &
          "The name of the gas mixture used")
+    call CFG_add(cfg, "gas_pressure", 1.0_dp, &
+         "The gas pressure in bar (used for photoionization)")
     call CFG_add(cfg, "applied_fld", 1.0d7, &
          "The applied electric field")
     call CFG_add(cfg, "init_seed_dens", 1.0d15 , &
@@ -844,6 +769,15 @@ contains
          "The timestep for writing output")
     call CFG_add(cfg, "dt_amr", 1.0d-11, &
          "The timestep for adaptively refining the grid")
+
+    call CFG_add(cfg, "photoi_enabled", .true., &
+         "Whether photoionization is enabled")
+    call CFG_add(cfg, "photoi_frac_O2", 0.2_dp, &
+         "Fraction of oxygen")
+    call CFG_add(cfg, "photoi_eta", 0.05_dp, &
+         "Photoionization efficiency factor")
+    call CFG_add(cfg, "photoi_num_photons", 10*1000, &
+         "Number of discrete photons to use for photoionization")
 
     call CFG_add(cfg, "input_file", "transport_data_file.txt", &
          "Input file with transport data")
@@ -863,6 +797,7 @@ contains
 
   subroutine initialize(cfg)
     use m_transport_data
+    use m_photons
     use m_config
 
     type(CFG_t), intent(in) :: cfg
@@ -901,6 +836,16 @@ contains
     call TD_get_td_from_file(input_file, gas_name, &
          trim(data_name), x_data, y_data)
     call LT_set_col(td_tbl, i_eta, x_data, y_data)
+
+    ! Create table for photoionization
+    call CFG_get(cfg, "gas_pressure", gas_pressure)
+    call CFG_get(cfg, "photoi_enabled", photoi_enabled)
+    call CFG_get(cfg, "photoi_frac_O2", photoi_frac_O2)
+    call CFG_get(cfg, "photoi_eta", photoi_eta)
+    call CFG_get(cfg, "photoi_num_photons", photoi_num_photons)
+
+    if (photoi_enabled) &
+       photoi_tbl = PH_get_tbl_air(photoi_frac_O2 * gas_pressure)
 
   end subroutine initialize
 
