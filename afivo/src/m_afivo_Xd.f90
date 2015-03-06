@@ -203,7 +203,7 @@ module m_afivo_$Dd
        type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
        integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
        integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled,
-                                               !< see a$D_nb_lx etc.
+       !< see a$D_nb_lx etc.
        integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
      end subroutine a$D_subr_gc
   end interface
@@ -763,12 +763,18 @@ contains
 
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 etc.)
-  function a$D_get_child_offset(box) result(ix_offset)
-    type(box$D_t), intent(in) :: box !< A child box
-    integer                  :: ix_offset($D)
+  function a$D_get_child_offset(box, box_p) result(ix_offset)
+    type(box$D_t), intent(in)           :: box   !< A child box
+    type(box$D_t), intent(in), optional :: box_p !< Optional: parent box
+    integer                            :: ix_offset($D)
 
-    ! Where the box index is even, set offset to n_cell/2, elsewhere set to 0
-    ix_offset =  iand(box%ix-1, 1) * ishft(box%n_cell, -1)
+    if (present(box_p)) then
+       ix_offset = (box%ix - 2 * box_p%ix + 1)
+    else
+       ix_offset = iand(box%ix-1, 1)
+    end if
+
+    ix_offset = ix_offset * ishft(box%n_cell, -1) ! * n_cell / 2
   end function a$D_get_child_offset
 
   !> Get the id of neighbor nb of boxes(id), through its parent
@@ -1423,7 +1429,7 @@ contains
        if (c_id == a5_no_box) cycle
 
        ! Offset of child w.r.t. parent
-       ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
+       ix_offset = a$D_get_child_offset(boxes(c_id))
 
        ! In these loops, we calculate the closest coarse index (_c1)
 #if $D == 2
@@ -1473,7 +1479,7 @@ contains
        c_id = boxes(id)%children(i_c)
 
        ! Offset of child w.r.t. parent
-       ix_offset = a$D_ch_dix(:, i_c) * ishft(nc, -1)
+       ix_offset = a$D_get_child_offset(boxes(c_id))
 
        ! In these loops, we calculate the closest coarse index (_c1), and the
        ! one-but-closest (_c2). The fine cell lies in between.
@@ -1533,7 +1539,7 @@ contains
     hi   = nc; if (present(hi_a)) hi = hi_a
 
     ! Offset of child w.r.t. parent
-    ix_offset = (boxes(id)%ix - 2*boxes(p_id)%ix + 1) * ishft(nc, -1)
+    ix_offset = a$D_get_child_offset(boxes(id))
 
 #if $D == 2
     do j = lo(2), hi(2)
@@ -1556,6 +1562,59 @@ contains
     end do
 #endif
   end subroutine a$D_prolong0_to
+
+  !> Partial prolongation to the ghost cells of box id from parent neighbor nb
+  subroutine a$D_prolong0_to_gc(boxes, id, iv, nb)
+    type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
+    integer, intent(in)           :: id       !< Id of child
+    integer, intent(in)           :: iv       !< Variable to fill
+    integer, intent(in)           :: nb       !< Neighbor to get data from
+
+    integer                       :: nc, p_id, p_nb_id, nb_dim, ix_offset($D)
+    integer                       :: i, j, i_c1, j_c1, lo($D), hi($D)
+#if $D == 3
+    integer                       :: k, k_c1
+#endif
+
+    nc      = boxes(id)%n_cell
+    p_id    = boxes(id)%parent
+    p_nb_id = boxes(p_id)%neighbors(nb)
+    nb_dim  = a$D_nb_dim(nb)
+    lo      = 1
+    hi      = nc
+
+    ! Offset of child w.r.t. parent
+    ix_offset = a$D_get_child_offset(boxes(id), boxes(p_nb_id))
+
+    if (a$D_nb_low(nb)) then
+       lo(nb_dim) = 0
+       hi(nb_dim) = 0
+    else
+       lo(nb_dim) = nc+1
+       hi(nb_dim) = nc+1
+    end if
+
+#if $D == 2
+    do j = lo(2), hi(2)
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+       do i = lo(1), hi(1)
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          boxes(id)%cc(i, j, iv) = boxes(p_nb_id)%cc(i_c1, j_c1, iv)
+       end do
+    end do
+#elif $D == 3
+    do k = lo(3), hi(3)
+       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+       do j = lo(2), hi(2)
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          do i = lo(1), hi(1)
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             boxes(id)%cc(i, j, k, iv) = boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv)
+          end do
+       end do
+    end do
+#endif
+  end subroutine a$D_prolong0_to_gc
 
   !> Partial prolongation to a child (from parent) using linear interpolation.
   !> We use 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not
@@ -1804,7 +1863,7 @@ contains
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
     p_nb_id   = boxes(p_id)%neighbors(nb)
-    ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
+    ix_offset = a$D_get_child_offset(boxes(id))
 
     if (a$D_nb_low(nb)) then
        ix = 0
@@ -1934,7 +1993,7 @@ contains
     case (1)
        i = ix
        di = dix
-       call a2_prolong0_to(boxes, id, iv, [i-di, 1], [i-di, nc])
+       call a2_prolong0_to_gc(boxes, id, iv, nb)
 
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
@@ -1946,7 +2005,7 @@ contains
     case (2)
        j = ix
        dj = dix
-       call a2_prolong0_to(boxes, id, iv, [1, j-dj], [nc, j-dj])
+       call a2_prolong0_to_gc(boxes, id, iv, nb)
 
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
@@ -1958,7 +2017,7 @@ contains
     case (1)
        i = ix
        di = dix
-       call a3_prolong0_to(boxes, id, iv, [i-di, 1, 1], [i-di, nc, nc])
+       call a3_prolong0_to_gc(boxes, id, iv, nb)
 
        do k = 1, nc
           dk = -1 + 2 * iand(k, 1)
@@ -1975,7 +2034,7 @@ contains
     case (2)
        j = ix
        dj = dix
-       call a3_prolong0_to(boxes, id, iv, [1, j-dj, 1], [nc, j-dj, nc])
+       call a3_prolong0_to_gc(boxes, id, iv, nb)
 
        do k = 1, nc
           dk = -1 + 2 * iand(k, 1)
@@ -1992,7 +2051,7 @@ contains
     case (3)
        k = ix
        dk = dix
-       call a3_prolong0_to(boxes, id, iv, [1, 1, k-dk], [nc, nc, k-dk])
+       call a3_prolong0_to_gc(boxes, id, iv, nb)
 
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
