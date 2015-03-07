@@ -5,17 +5,20 @@ module m_afivo_constants
   public
 
   ! Be aware: the code assumes that rm < kp < do
-  !> Value indicating a box should be derefined
+  !> Value indicating you want to derefine a box
   integer, parameter :: a5_rm_ref = -1
 
-  !> Value indicating a box should keep its refinement
+  !> Value indicating you want to keep a box's refinement
   integer, parameter :: a5_kp_ref = 0
 
-  !> Value indicating a box should be refined
+  !> Value indicating you want to refine a box
   integer, parameter :: a5_do_ref = 1
 
-  !> Value indicating that the children of a box can be removed (for internal use)
-  integer, parameter :: a5_rm_children = -2
+  !> The children of a box are removed (for internal use)
+  integer, parameter :: a5_derefine = -2
+
+  !> A box will be refined (for internal use)
+  integer, parameter :: a5_refine = 2
 
   !> Special value indicating there is no box
   integer, parameter :: a5_no_box = 0
@@ -24,8 +27,5 @@ module m_afivo_constants
 
   !> Bit that indicates that the box is in use
   integer, parameter :: a5_bit_in_use = 1
-
-  !> Bit that indicates that a box has gotten new children
-  integer, parameter :: a5_bit_new_children = 2
 
 end module m_afivo_constants

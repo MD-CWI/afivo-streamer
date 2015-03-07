@@ -21,7 +21,8 @@ program test_mg2_2d
        1.0_dp, 0.75_dp, 0.75_dp, 0.05_dp], [4,2])
 
   type(a2_t)         :: tree
-  integer            :: i, id, n_changes
+  type(ref_info_t)   :: ref_info
+  integer            :: i, id
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
@@ -46,8 +47,8 @@ program test_mg2_2d
   call a2_set_base(tree, ix_list, nb_list)
 
   do i = 1, 20
-     call a2_adjust_refinement(tree, set_ref_flags, n_changes)
-     if (n_changes == 0) exit
+     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     if (ref_info%n_add == 0) exit
   end do
 
   ! Set rhs and initial guess for phi

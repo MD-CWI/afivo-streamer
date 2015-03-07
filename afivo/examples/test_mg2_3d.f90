@@ -21,7 +21,8 @@ program test_mg2_3d
        1.0_dp, 0.75_dp, 0.75_dp, 0.75_dp, 0.05_dp], [5,2])
 
   type(a3_t)         :: tree
-  integer            :: i, id, n_changes
+  type(ref_info_t)   :: ref_info
+  integer            :: i, id
   integer            :: ix_list(3, n_boxes_base)
   integer            :: nb_list(6, n_boxes_base)
   real(dp)           :: dr
@@ -49,8 +50,8 @@ program test_mg2_3d
 
   print *, "Doing initial refinement"
   do i = 1, 20
-     call a3_adjust_refinement(tree, set_ref_flags, n_changes)
-     if (n_changes == 0) exit
+     call a3_adjust_refinement(tree, set_ref_flags, ref_info)
+     if (ref_info%n_add == 0) exit
   end do
 
   print *, "Set rhs and initial guess for phi"

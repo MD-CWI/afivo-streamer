@@ -159,6 +159,19 @@ module m_afivo_$Dd
      integer :: ix($D)          !< Index inside the box
   end type a$D_loc_t
 
+  !> Type that contains the refinement changes in a level
+  type ref_lvl_t
+     integer, allocatable :: add(:) !< Id's of newly added boxes
+     integer, allocatable :: rm(:) !< Id's of removed boxes
+  end type ref_lvl_t
+
+  !> Type that contains the refinement changes in a tree
+  type ref_info_t
+     integer :: n_add                        !< Total number of added boxes
+     integer :: n_rm                         !< Total number removed boxes
+     type(ref_lvl_t), allocatable :: lvls(:) !< Information per level
+  end type ref_info_t
+
   abstract interface
      !> Function for setting refinement flags
      subroutine a$D_subr_ref(boxes, id, ref_flags)
@@ -215,6 +228,7 @@ module m_afivo_$Dd
   private :: set_nbs_$Dd
   private :: find_nb_$Dd
   private :: get_free_ids
+  private :: set_ref_info
   private :: consistent_ref_flags
   private :: remove_children
   private :: add_children
@@ -823,27 +837,22 @@ contains
   !> This routine sets the bit a5_bit_new_children for each box that is refined.
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
-  subroutine a$D_adjust_refinement(tree, set_ref_flags, n_changes)
-    type(a$D_t), intent(inout)      :: tree !< Tree whose refinement will be adjusted
-    procedure(a$D_subr_ref)         :: set_ref_flags !< User supplied refinement function
-    integer, intent(out), optional :: n_changes !< Number of (de)refined boxes
-    integer                        :: lvl, id, i, c_ids(a$D_num_children), i_c
-    integer                        :: max_id_prev, max_id_req
-    integer, allocatable           :: ref_flags(:)
+  subroutine a$D_adjust_refinement(tree, set_ref_flags, ref_info)
+    type(a$D_t), intent(inout)           :: tree          !< Tree
+    procedure(a$D_subr_ref)              :: set_ref_flags !< Refinement function
+    type(ref_info_t), intent(inout)     :: ref_info !< Information about refinement
+    integer                             :: lvl, id, i, c_ids(a$D_num_children)
+    integer                             :: max_id_prev, max_id_req, i_c
+    integer, allocatable                :: ref_flags(:)
 
     max_id_prev = tree%max_id
     allocate(ref_flags(max_id_prev))
 
-    ! Clear refinement tags from previous calls
-    call a$D_clear_tagbit(tree, a5_bit_new_children)
-
     ! Set refinement values for all boxes
     call consistent_ref_flags(tree, ref_flags, set_ref_flags)
 
-    if (present(n_changes)) n_changes = count(ref_flags /= a5_kp_ref)
-
     ! Check whether there is enough free space, otherwise extend the list
-    max_id_req = max_id_prev + a$D_num_children * count(ref_flags == a5_do_ref)
+    max_id_req = max_id_prev + a$D_num_children * count(ref_flags == a5_refine)
     if (max_id_req > size(tree%boxes)) then
        print *, "Resizing box storage for refinement", max_id_req
        call a$D_resize_box_storage(tree, max_id_req)
@@ -855,12 +864,12 @@ contains
 
           if (id > max_id_prev) then
              cycle              ! This is a newly added box
-          else if (ref_flags(id) == a5_do_ref) then
+          else if (ref_flags(id) == a5_refine) then
              ! Add children. First need to get num_children free id's
              call get_free_ids(tree, c_ids)
              call add_children(tree%boxes, id, c_ids, &
                   tree%n_var_cell, tree%n_var_face)
-          else if (ref_flags(id) == a5_rm_children) then
+          else if (ref_flags(id) == a5_derefine) then
              ! Remove children
              call remove_children(tree%boxes, id)
           end if
@@ -890,7 +899,75 @@ contains
     do lvl = 1, tree%max_lvl+1
        call set_leaves_parents(tree%boxes, tree%lvls(lvl))
     end do
+
+    ! Set information about the refinement
+    call set_ref_info(tree, ref_flags, ref_info)
+
   end subroutine a$D_adjust_refinement
+
+  !> Set information about the refinement for all "normal" levels (>= 1)
+  subroutine set_ref_info(tree, ref_flags, ref_info)
+    type(a$D_t), intent(in)         :: tree
+    integer, intent(in)             :: ref_flags(:)
+    type(ref_info_t), intent(inout) :: ref_info
+    integer                         :: id, lvl, n, n_ch
+    integer, allocatable            :: ref_count(:), drf_count(:)
+
+    n_ch           = a$D_num_children
+    ref_info%n_add = n_ch * count(ref_flags == a5_refine)
+    ref_info%n_rm  = n_ch * count(ref_flags == a5_derefine)
+
+    ! Use max_lvl+1 here because this lvl might have been completely removed
+    if (allocated(ref_info%lvls)) deallocate(ref_info%lvls)
+    allocate(ref_info%lvls(tree%max_lvl+1))
+    allocate(ref_count(tree%max_lvl+1))
+    allocate(drf_count(tree%max_lvl+1))
+
+    ! Find the number of (de)refined boxes per level
+    ref_count = 0
+    drf_count = 0
+
+    do id = 1, size(ref_flags)
+       lvl = tree%boxes(id)%lvl
+
+       if (ref_flags(id) == a5_refine) then
+          ref_count(lvl) = ref_count(lvl) + 1
+       else if (ref_flags(id) == a5_derefine) then
+          drf_count(lvl) = drf_count(lvl) + 1
+       end if
+    end do
+
+    ! Allocate storage per level
+    ! There can be no new children at level 1
+    allocate(ref_info%lvls(1)%add(0))
+    allocate(ref_info%lvls(1)%rm(0))
+
+    do lvl = 2, tree%max_lvl+1
+       n = ref_count(lvl-1) * n_ch
+       allocate(ref_info%lvls(lvl)%add(n))
+       n = drf_count(lvl-1) * n_ch
+       allocate(ref_info%lvls(lvl)%rm(n))
+    end do
+
+    ! Set the added and removed id's per level, these are the children of the
+    ! (de)refined boxes
+    ref_count = 0
+    drf_count = 0
+
+    do id = 1, size(ref_flags)
+       lvl = tree%boxes(id)%lvl
+
+       if (ref_flags(id) == a5_refine) then
+          ref_count(lvl) = ref_count(lvl) + 1
+          n = n_ch * (ref_count(lvl)-1) + 1
+          ref_info%lvls(lvl+1)%add(n:n+n_ch-1) = tree%boxes(id)%children
+       else if (ref_flags(id) == a5_derefine) then
+          drf_count(lvl) = drf_count(lvl) + 1
+          n = n_ch * (drf_count(lvl)-1) + 1
+          ref_info%lvls(lvl+1)%rm(n:n+n_ch-1) = tree%boxes(id)%children
+       end if
+    end do
+  end subroutine set_ref_info
 
   !> Get free ids from the boxes(:) array to store new boxes in. These ids are
   !> always consecutive.
@@ -910,7 +987,9 @@ contains
 
   !> Given the refinement function, return consistent refinement flags, that
   !> ensure that the tree is still balanced. Furthermore, it cannot derefine the
-  !> base level, and it cannot refine above tree%lvls_max.
+  !> base level, and it cannot refine above tree%lvls_max. The argument
+  !> ref_flags is changed: for boxes that will be refined it holds a5_refine,
+  !> for boxes that will be derefined it holds a5_derefine
   subroutine consistent_ref_flags(tree, ref_flags, set_ref_flags)
     type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
@@ -926,6 +1005,7 @@ contains
 
     ! Set refinement flags for all boxes using set_ref_flags. Each thread first sets
     ! the flags on its own copy
+
     !$omp parallel private(lvl, i, id) firstprivate(my_ref_flags) shared(ref_flags)
     do lvl = 1, tree%max_lvl
        !$omp do
@@ -937,6 +1017,7 @@ contains
     end do
 
     ! Now set refinement flags to the maximum (refine > keep ref > derefine)
+
     !$omp critical
     do i = 1, size(ref_flags)
        if (my_ref_flags(i) > ref_flags(i)) &
@@ -944,17 +1025,12 @@ contains
     end do
     !$omp end critical
     !$omp end parallel
+
     deallocate(my_ref_flags)
 
     ! Set flags with unknown values to default (keep refinement)
     where (ref_flags > a5_do_ref) ref_flags = a5_kp_ref
     where (ref_flags < a5_rm_ref) ref_flags = a5_kp_ref
-
-    ! Cannot derefine lvl 1
-    do i = 1, size(tree%lvls(1)%ids)
-       id = tree%lvls(1)%ids(i)
-       if (ref_flags(id) == a5_rm_ref) ref_flags(id) = a5_kp_ref
-    end do
 
     ! Cannot refine beyond max level
     do i = 1, size(tree%lvls(lvls_max)%ids)
@@ -962,12 +1038,12 @@ contains
        if (ref_flags(id) == a5_do_ref) ref_flags(id) = a5_kp_ref
     end do
 
-    ! Ensure 2-1 balance.
-    do lvl = tree%max_lvl, 2, -1
+    ! Ensure 2-1 balance
+    do lvl = tree%max_lvl, 1, -1
        do i = 1, size(tree%lvls(lvl)%leaves) ! We only check leaf tree%boxes
           id = tree%lvls(lvl)%leaves(i)
 
-          if (ref_flags(id) == a5_do_ref) then
+          if (ref_flags(id) > a5_kp_ref) then ! This means refine
              ! Ensure we will have the necessary neighbors
              do nb = 1, a$D_num_neighbors
                 nb_id = tree%boxes(id)%neighbors(nb)
@@ -975,25 +1051,29 @@ contains
                    ! Mark the parent containing neighbor for refinement
                    p_id = tree%boxes(id)%parent
                    p_nb_id = tree%boxes(p_id)%neighbors(nb)
-                   ref_flags(p_nb_id) = a5_do_ref
+                   ref_flags(p_nb_id) = a5_refine ! Mark for actual refinement
                 end if
              end do
+             ref_flags(id) = a5_refine ! Mark for actual refinement
+
           else if (ref_flags(id) == a5_rm_ref) then
              ! Ensure we do not remove a required neighbor
              do nb = 1, a$D_num_neighbors
                 nb_id = tree%boxes(id)%neighbors(nb)
                 if (nb_id > a5_no_box) then
                    if (a$D_has_children(tree%boxes(nb_id)) .or. &
-                        ref_flags(nb_id) == a5_do_ref) then
+                        ref_flags(nb_id) > a5_kp_ref) then
                       ref_flags(id) = a5_kp_ref
                    end if
                 end if
              end do
           end if
+
        end do
     end do
 
-    ! Make the (de)refinement flags consistent for blocks with children.
+    ! Make the (de)refinement flags consistent for blocks with children. Also
+    ! ensure that at most one level can be removed at a time.
     do lvl = tree%max_lvl-1, 1, -1
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
@@ -1001,14 +1081,11 @@ contains
           ! Can only remove children if they are all marked for
           ! derefinement, and the box itself not for refinement.
           c_ids = tree%boxes(id)%children
-          if (all(ref_flags(c_ids) == a5_rm_ref) .and. &
-               ref_flags(id) /= a5_do_ref) then
-             ref_flags(id) = a5_rm_children
+          if (all(ref_flags(c_ids) < a5_kp_ref) .and. &
+               ref_flags(id) <= a5_kp_ref) then
+             ref_flags(id) = a5_derefine
           else
              ref_flags(id) = a5_kp_ref
-             where (ref_flags(c_ids) == a5_rm_ref)
-                ref_flags(c_ids) = a5_kp_ref
-             end where
           end if
        end do
     end do
@@ -1048,7 +1125,6 @@ contains
 
     boxes(id)%children = c_ids
     c_ix_base          = 2 * boxes(id)%ix - 1
-    boxes(id)%tag      = ibset(boxes(id)%tag, a5_bit_new_children)
 
     do i = 1, a$D_num_children
        c_id                  = c_ids(i)
@@ -1460,34 +1536,29 @@ contains
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
-  subroutine a$D_prolong1_from(boxes, id, iv, fill_gc)
+  subroutine a$D_prolong1_from(boxes, id, iv)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Box whose children we will fill
     integer, intent(in)         :: iv        !< Variable that is filled
-    logical, intent(in)         :: fill_gc   !< Also fill ghost cells?
-    integer                     :: dgc, nc, i_c, c_id, ix_offset($D)
+    integer                     :: nc, i_c, c_id, ix_offset($D)
     integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
 #if $D == 3
     integer                     :: k, k_c1, k_c2
 #endif
 
     nc  = boxes(id)%n_cell
-    dgc = l2i(fill_gc)
-
 
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
-
-       ! Offset of child w.r.t. parent
        ix_offset = a$D_get_child_offset(boxes(c_id))
 
        ! In these loops, we calculate the closest coarse index (_c1), and the
        ! one-but-closest (_c2). The fine cell lies in between.
 #if $D == 2
-       do j = 1-dgc, nc+dgc
+       do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = 1-dgc, nc+dgc
+          do i = 1, nc
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
@@ -1498,13 +1569,13 @@ contains
           end do
        end do
 #elif $D == 3
-       do k = 1-dgc, nc+dgc
+       do k = 1, nc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
           k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-          do j = 1-dgc, nc+dgc
+          do j = 1, nc
              j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
              j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             do i = 1-dgc, nc+dgc
+             do i = 1, nc
                 i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
                 i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
 
@@ -1806,44 +1877,6 @@ contains
        end if
     end do
   end subroutine a$D_gc_box_sides
-
-  !> Linear interpolation (2-1-1 type) from parent to fill ghost cells on the
-  !> side of a box
-  subroutine a$D_sides_prolong1(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc
-
-    nc = boxes(id)%n_cell
-
-    select case (nb)
-#if $D == 2
-    case (a2_nb_lx)
-       call a2_prolong1_to(boxes, id, iv, [0, 1], [0, nc])
-    case (a2_nb_hx)
-       call a2_prolong1_to(boxes, id, iv, [nc+1, 1], [nc+1, nc])
-    case (a2_nb_ly)
-       call a2_prolong1_to(boxes, id, iv, [1, 0], [nc, 0])
-    case (a2_nb_hy)
-       call a2_prolong1_to(boxes, id, iv, [1, nc+1], [nc, nc+1])
-#elif $D == 3
-    case (a3_nb_lx)
-       call a3_prolong1_to(boxes, id, iv, [0, 1, 1], [0, nc, nc])
-    case (a3_nb_hx)
-       call a3_prolong1_to(boxes, id, iv, [nc+1, 1, 1], [nc+1, nc, nc])
-    case (a3_nb_ly)
-       call a3_prolong1_to(boxes, id, iv, [1, 0, 1], [nc, 0, nc])
-    case (a3_nb_hy)
-       call a3_prolong1_to(boxes, id, iv, [1, nc+1, 1], [nc, nc+1, nc])
-    case (a3_nb_lz)
-       call a3_prolong1_to(boxes, id, iv, [1, 1, 0], [nc, nc, 0])
-    case (a3_nb_hz)
-       call a3_prolong1_to(boxes, id, iv, [1, 1, nc+1], [nc, nc, nc+1])
-#endif
-    end select
-  end subroutine a$D_sides_prolong1
 
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries

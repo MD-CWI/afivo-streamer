@@ -16,10 +16,11 @@ program test_drift_diff
   real(dp), parameter :: dr = domain_len / box_size
 
   type(a2_t)         :: tree
+  type(ref_info_t)   :: ref_info
   integer            :: i, n, n_steps, id
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
-  integer            :: n_changes, output_cnt
+  integer            :: output_cnt
   real(dp)           :: dt, time, end_time
   real(dp)           :: dt_adapt, dt_output
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
@@ -54,8 +55,8 @@ program test_drift_diff
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
-     call a2_adjust_refinement(tree, set_ref_flags, n_changes)
-     if (n_changes == 0) exit
+     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     if (ref_info%n_add == 0) exit
   end do
 
   print *, "Restrict the initial conditions"
@@ -120,8 +121,8 @@ program test_drift_diff
      call a2_restrict_tree(tree, i_phi)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
 
-     call a2_adjust_refinement(tree, set_ref_flags)
-     call a2_loop_boxes(tree, prolong_to_new_children)
+     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call prolong_to_new_children(tree, ref_info)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
@@ -362,14 +363,23 @@ contains
     box%cc(:, :, i_phi) = 0.5_dp * (box%cc(:, :, i_phi) + box%cc(:, :, i_phi_old))
   end subroutine average_phi
 
-  subroutine prolong_to_new_children(boxes, id)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in) :: id
+  subroutine prolong_to_new_children(tree, ref_info)
+    type(a2_t), intent(inout)    :: tree
+    type(ref_info_t), intent(in) :: ref_info
+    integer                      :: lvl, i, id
 
-    if (btest(boxes(id)%tag, a5_bit_new_children)) then
-       call a2_prolong1_from(boxes, id, i_phi, .true.)
-       boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
-    end if
+    do lvl = 1, tree%max_lvl
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          call a2_prolong1_to(tree%boxes, id, i_phi)
+       end do
+
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          call a2_gc_box_sides(tree%boxes, id, i_phi, &
+               a2_sides_interp, have_no_bc)
+       end do
+    end do
   end subroutine prolong_to_new_children
 
   subroutine have_no_bc(boxes, id, i, iv)
