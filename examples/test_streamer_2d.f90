@@ -44,9 +44,10 @@ program test_streamer_2d
 
   type(a2_t)         :: tree    ! This contains the full grid information
   type(mg2_t)        :: mg      ! Multigrid option struct
+  type(ref_info_t)   :: ref_info
 
   integer            :: i, n, n_steps
-  integer            :: n_changes, output_cnt
+  integer            :: output_cnt
   real(dp)           :: dt, time, end_time
   real(dp)           :: dt_adapt, dt_output
   character(len=40)  :: fname
@@ -103,8 +104,8 @@ program test_streamer_2d
      call a2_loop_box(tree, set_box_type)
      call a2_restrict_tree(tree, i_rhs)
      call compute_fld(tree, n_fmg_cycles)
-     call a2_adjust_refinement(tree, set_ref_flags, n_changes)
-     if (n_changes == 0) exit
+     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     if (ref_info%n_add == 0) exit
   end do
 
   call a2_loop_box(tree, set_init_cond)
@@ -173,11 +174,11 @@ program test_streamer_2d
         call a2_loop_box(tree, average_dens, .true.)
      end do
 
-     call a2_adjust_refinement(tree, set_ref_flags, n_changes)
+     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
 
-     if (n_changes > 0) then
+     if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
-        call a2_loop_boxes(tree, prolong_to_new_children)
+        call prolong_to_new_children(tree, ref_info)
 
         ! Compute the field on the
         call compute_fld(tree, n_fmg_cycles)
@@ -643,24 +644,33 @@ contains
   end function get_alpha
 
   ! For each box that gets refined, set data on its children using this routine
-  subroutine prolong_to_new_children(boxes, id)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id
-    integer                     :: ic, c_id
+  subroutine prolong_to_new_children(tree, ref_info)
+    type(a2_t), intent(inout)    :: tree
+    type(ref_info_t), intent(in) :: ref_info
+    integer                      :: lvl, i, id, nc
 
-    if (btest(boxes(id)%tag, a5_bit_new_children)) then
-       boxes(id)%tag = ibclr(boxes(id)%tag, a5_bit_new_children)
+    nc = tree%n_cell
 
-       call a2_prolong1_from(boxes, id, i_elec, .true.)
-       call a2_prolong1_from(boxes, id, i_pion, .true.)
-       call a2_prolong1_from(boxes, id, i_phi, .true.)
-       call a2_prolong0_from(boxes, id, i_eps, .true.)
-
-       do ic = 1, a2_num_children
-          c_id = boxes(id)%children(ic)
-          call set_box_type(boxes(c_id))
+    do lvl = 1, tree%max_lvl
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          call set_box_type(tree%boxes(id))
+          call a2_prolong1_to(tree%boxes, id, i_elec)
+          call a2_prolong1_to(tree%boxes, id, i_pion)
+          call a2_prolong1_to(tree%boxes, id, i_phi)
+          ! Immediately fill i_eps ghost cells
+          call a2_prolong0_to(tree%boxes, id, i_eps, &
+               [0,0], [nc+1, nc+1])
        end do
-    end if
+
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          call a2_gc_box_sides(tree%boxes, id, i_elec, &
+               a2_sides_interp, sides_bc_dens)
+          call a2_gc_box_sides(tree%boxes, id, i_pion, &
+               a2_sides_interp, sides_bc_dens)
+       end do
+    end do
   end subroutine prolong_to_new_children
 
   ! This fills ghost cells near physical boundaries for the potential
@@ -760,4 +770,4 @@ contains
     end select
   end subroutine auto_box_corr
 
-end program
+end program test_streamer_2d
