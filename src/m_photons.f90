@@ -224,6 +224,10 @@ contains
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call a2_box_clear_cc(tree%boxes(id), i_pho)
+          tree%boxes(id)%cc(0, :, i_pho) = 1e100_dp
+          tree%boxes(id)%cc(nc+1, :, i_pho) = 1e100_dp
+          tree%boxes(id)%cc(:, 0, i_pho) = 1e100_dp
+          tree%boxes(id)%cc(:, nc+1, i_pho) = 1e100_dp
        end do
        !$omp end do nowait
     end do
@@ -251,6 +255,10 @@ contains
        ! print *, id
        call a2_gc_box_sides(tree%boxes, id, i_pho, &
             a2_sides_interp, sides_neumann)
+       if (maxval(tree%boxes(id)%cc(1:nc, 1:nc, i_pho)) > 1e99_dp) then
+          print *, id
+          stop
+       end if
     end do
     !$omp end do
 
