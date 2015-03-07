@@ -1,0 +1,9 @@
+applied_fld = 2.5e6
+dt_output = 25e-11
+dt_amr = 1e-11
+sim_name = test
+end_time = 25e-9
+init_seed_dens = 1e19
+photoi_enabled = t
+photoi_frac_O2 = 0.01
+photoi_num_photons = 100000
