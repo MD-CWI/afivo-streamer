@@ -1707,8 +1707,7 @@ contains
     lo   = 1; if (present(lo_a)) lo = lo_a
     hi   = nc; if (present(hi_a)) hi = hi_a
 
-    ! Offset of child w.r.t. parent
-    ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
+    ix_offset = a$D_get_child_offset(boxes(id))
 
     ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
     ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
