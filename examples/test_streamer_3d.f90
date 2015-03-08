@@ -727,13 +727,13 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
+          ! Immediately fill i_eps ghost cells
+          call a3_prolong0_to(tree%boxes, id, i_eps, &
+               [0, 0, 0], [nc+1, nc+1, nc+1])
           call set_box_type(tree%boxes(id))
           call a3_prolong1_to(tree%boxes, id, i_elec)
           call a3_prolong1_to(tree%boxes, id, i_pion)
           call a3_prolong1_to(tree%boxes, id, i_phi)
-          ! Immediately fill i_eps ghost cells
-          call a3_prolong0_to(tree%boxes, id, i_eps, &
-               [0, 0, 0], [nc+1, nc+1, nc+1])
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
@@ -742,6 +742,8 @@ contains
                a3_sides_interp, sides_bc_dens)
           call a3_gc_box_sides(tree%boxes, id, i_pion, &
                a3_sides_interp, sides_bc_dens)
+          call a3_gc_box_sides(tree%boxes, id, i_phi, &
+               a3_sides_extrap, sides_bc_pot)
        end do
     end do
   end subroutine prolong_to_new_children

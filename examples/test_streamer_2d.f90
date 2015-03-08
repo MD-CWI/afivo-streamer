@@ -67,9 +67,9 @@ program test_streamer_2d
 
   ! The location of the initial seed
   real(dp), parameter :: seed_r0(2) = &
-       [0.4_dp, 0.5_dp] * domain_len - [0, 1] * 1e-3_dp
+       [0.35_dp, 0.5_dp] * domain_len - [0, 1] * 1e-3_dp
   real(dp), parameter :: seed_r1(2) = &
-       [0.4_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
+       [0.35_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
 
   ! We store some extra data per box (its type)
   type :: my_data
@@ -264,7 +264,7 @@ contains
           xy   = a2_r_cc(box, [i,j])
           dens = seed_dens * rod_dens(xy, seed_r0, seed_r1, sigma, 3)
 
-          if (xy(1) < 0.25_dp * domain_len) then
+          if (xy(2) < 0.25_dp * domain_len) then
              box%cc(i, j, i_eps) = 5.0_dp
              box%cc(i, j, i_elec) = 0
              box%cc(i, j, i_pion) = 0
@@ -330,7 +330,7 @@ contains
     dt_alpha =  1 / (abs(mobility) * max_fld * &
          max(epsilon(1.0_dp), get_alpha(max_fld)))
 
-    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
+    get_max_dt = 0.75_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
   end function get_max_dt
 
   ! Used to create initial electron/ion seed
@@ -654,13 +654,13 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
+          ! Immediately fill i_eps ghost cells
+          call a2_prolong0_to(tree%boxes, id, i_eps, &
+               [0,0], [nc+1, nc+1])
           call set_box_type(tree%boxes(id))
           call a2_prolong1_to(tree%boxes, id, i_elec)
           call a2_prolong1_to(tree%boxes, id, i_pion)
           call a2_prolong1_to(tree%boxes, id, i_phi)
-          ! Immediately fill i_eps ghost cells
-          call a2_prolong0_to(tree%boxes, id, i_eps, &
-               [0,0], [nc+1, nc+1])
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
@@ -669,6 +669,8 @@ contains
                a2_sides_interp, sides_bc_dens)
           call a2_gc_box_sides(tree%boxes, id, i_pion, &
                a2_sides_interp, sides_bc_dens)
+          call a2_gc_box_sides(tree%boxes, id, i_phi, &
+               a2_sides_extrap, sides_bc_pot)
        end do
     end do
   end subroutine prolong_to_new_children
