@@ -43,11 +43,17 @@ program streamer_2d
   character(len=name_len) :: cfg_name, tmp_name, prev_name
 
   type initcnd_t
+     real(dp) :: bg_dens
+
      real(dp) :: seed_r0(2)
      real(dp) :: seed_r1(2)
      real(dp) :: seed_dens
-     real(dp) :: bg_dens
-     real(dp) :: sigma
+     real(dp) :: swidth
+
+     real(dp) :: line_r0(2)
+     real(dp) :: line_r1(2)
+     real(dp) :: line_dens
+     real(dp) :: lwidth
   end type initcnd_t
 
   type(initcnd_t) :: init_cond
@@ -134,6 +140,9 @@ program streamer_2d
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
 
+  output_cnt = 0          ! Number of output files written
+  time       = 0          ! Simulation time (all times are in s)
+
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
@@ -143,12 +152,8 @@ program streamer_2d
      if (ref_info%n_add == 0) exit
   end do
 
-  call a2_loop_box(tree, set_init_cond)
   if (photoi_enabled) &
        call set_photoionization(tree, photoi_eta, photoi_num_photons)
-
-  output_cnt = 0          ! Number of output files written
-  time       = 0          ! Simulation time (all times are in s)
 
   do
      ! Get a new time step, which is at most dt_amr
@@ -269,16 +274,25 @@ contains
     max_edens = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
 
-    if (boxes(id)%dr > 2e-3_dp .or. (boxes(id)%dr > 1e-4_dp .and. &
-         (a2_r_inside(boxes(id), init_cond%seed_r0, 1.0e-3_dp) .or. &
-         a2_r_inside(boxes(id), init_cond%seed_r1, 1.0e-3_dp)))) then
-       ref_flags(id) = a5_do_ref
-    else if (crv_phi > 2.0e1_dp .and. max_fld > 3e6_dp &
-         .and. boxes(id)%dr > 5e-6_dp) then
-       ref_flags(id) = a5_do_ref
-    else if (crv_phi < 4.0_dp) then
-       ref_flags(id) = a5_rm_ref
-    end if
+    if (crv_phi < 4.0_dp) &
+         ref_flags(id) = a5_rm_ref
+
+    if (max_edens > 100 * init_cond%bg_dens .and. &
+         boxes(id)%dr > 0.2e-3_dp) &
+         ref_flags(id) = a5_do_ref
+
+    if (max_edens > 100 * init_cond%bg_dens .and. &
+         boxes(id)%dr > 0.1e-3_dp) &
+         ref_flags(id) = max(ref_flags(id), a5_kp_ref)
+
+    if (boxes(id)%dr > 0.75e-3_dp .or. (boxes(id)%dr > 1e-4_dp .and. &
+         a2_r_inside(boxes(id), init_cond%seed_r1, 1.0e-3_dp))) &
+         ref_flags(id) = a5_do_ref
+
+    if (crv_phi > 2.0e1_dp .and. max_fld > 2e6_dp &
+         .and. boxes(id)%dr > 5e-6_dp) &
+         ref_flags(id) = a5_do_ref
+
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -287,13 +301,15 @@ contains
     real(dp)                    :: xy(2)
     real(dp)                    :: dens
 
-    nc        = box%n_cell
+    nc = box%n_cell
 
     do j = 0, nc+1
        do i = 0, nc+1
           xy   = a2_r_cc(box, [i,j])
           dens = init_cond%seed_dens * rod_dens(xy, init_cond%seed_r0, &
-               init_cond%seed_r1, init_cond%sigma, 3)
+               init_cond%seed_r1, init_cond%swidth, 3)
+          dens = dens + init_cond%line_dens * rod_dens(xy, init_cond%line_r0, &
+               init_cond%line_r1, init_cond%lwidth, 4)
 
           box%cc(i, j, i_elec) = init_cond%bg_dens + dens
           box%cc(i, j, i_pion) = init_cond%bg_dens + dens
@@ -334,8 +350,7 @@ contains
     ! Ionization limit
     dt_alpha =  1 / (mobility * max_fld * alpha)
 
-    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
-    get_max_dt = 1e-12_dp
+    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
   end function get_max_dt
 
   ! Used to create initial electron/ion seed
@@ -359,6 +374,12 @@ contains
           rod_dens = (1- (3 * temp**2 - 2 * temp**3))
        else
           rod_dens = 0.0_dp
+       end if
+    case (4)                    ! Hard boundary
+       if (distance < sigma) then
+          rod_dens = 1
+       else
+          rod_dens = 0
        end if
     case default
        rod_dens = 0.0_dp
@@ -686,6 +707,8 @@ contains
                a2_sides_interp, sides_bc_dens)
           call a2_gc_box_sides(tree%boxes, id, i_pion, &
                a2_sides_interp, sides_bc_dens)
+          call a2_gc_box_sides(tree%boxes, id, i_phi, &
+               a2_sides_extrap, sides_bc_pot)
        end do
     end do
   end subroutine prolong_to_new_children
@@ -695,23 +718,20 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
+    real(dp)                    :: v0
 
     nc = boxes(id)%n_cell
+    v0 = applied_fld * domain_len
 
     select case (nb)
     case (a2_nb_lx)
-       ! Neumann zero
        boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
     case (a2_nb_hx)
-       ! Neumann zero
        boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
     case (a2_nb_ly)
-       ! Dirichlet zero
-       boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
+       boxes(id)%cc(1:nc, 0, iv) = -2 * v0 - boxes(id)%cc(1:nc, 1, iv)
     case (a2_nb_hy)
-       ! Dirichlet
-       boxes(id)%cc(1:nc, nc+1, iv) = 2 * applied_fld * domain_len &
-            - boxes(id)%cc(1:nc, nc, iv)
+       boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
 
@@ -740,19 +760,26 @@ contains
   end subroutine sides_bc_dens
 
   subroutine get_init_cond(cfg, cond)
-    type(CFG_t), intent(in) :: cfg
+    type(CFG_t), intent(in)        :: cfg
     type(initcnd_t), intent(inout) :: cond
-    real(dp) :: dlen
+    real(dp)                       :: dlen
+
+    call CFG_get(cfg, "init_bg_dens", cond%bg_dens)
+    call CFG_get(cfg, "domain_len", dlen)
 
     call CFG_get(cfg, "init_seed_dens", cond%seed_dens)
-    call CFG_get(cfg, "init_bg_dens", cond%bg_dens)
-    call CFG_get(cfg, "init_rel_r0", cond%seed_r0)
-    call CFG_get(cfg, "init_rel_r1", cond%seed_r1)
-    call CFG_get(cfg, "init_sigma", cond%sigma)
-
-    call CFG_get(cfg, "domain_len", dlen)
+    call CFG_get(cfg, "init_seed_rel_r0", cond%seed_r0)
+    call CFG_get(cfg, "init_seed_rel_r1", cond%seed_r1)
+    call CFG_get(cfg, "init_seed_width", cond%swidth)
     cond%seed_r0 = cond%seed_r0 * dlen
     cond%seed_r1 = cond%seed_r1 * dlen
+
+    call CFG_get(cfg, "init_line_dens", cond%line_dens)
+    call CFG_get(cfg, "init_line_rel_r0", cond%line_r0)
+    call CFG_get(cfg, "init_line_rel_r1", cond%line_r1)
+    call CFG_get(cfg, "init_line_width", cond%lwidth)
+    cond%line_r0 = cond%line_r0 * dlen
+    cond%line_r1 = cond%line_r1 * dlen
   end subroutine get_init_cond
 
   subroutine create_cfg(cfg)
@@ -772,16 +799,26 @@ contains
          "The gas pressure in bar (used for photoionization)")
     call CFG_add(cfg, "applied_fld", 1.0d7, &
          "The applied electric field")
-    call CFG_add(cfg, "init_seed_dens", 1.0d15 , &
-         "The number of initial ion pairs")
-    call CFG_add(cfg, "init_rel_r0", [0.5d0, 0.5d0], &
-         "The relative start position of the initial seed")
-    call CFG_add(cfg, "init_rel_r1", [0.5d0, 0.6d0], &
-         "The relative end position of the initial seed")
-    call CFG_add(cfg, "init_sigma", 0.2d-3, &
-         "The standard deviation used for Gaussian initial profiles")
-    call CFG_add(cfg, "init_bg_dens", 0.0d0, &
+
+    call CFG_add(cfg, "init_bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")
+    call CFG_add(cfg, "init_seed_dens", 5.0d19 , &
+         "Initial density of the seed")
+    call CFG_add(cfg, "init_seed_rel_r0", [0.5d0, 0.0d0], &
+         "The relative start position of the initial seed")
+    call CFG_add(cfg, "init_seed_rel_r1", [0.5d0, 0.4d0], &
+         "The relative end position of the initial seed")
+    call CFG_add(cfg, "init_seed_width", 0.5d-3, &
+         "Seed width")
+    call CFG_add(cfg, "init_line_dens", 5.0d15 , &
+         "Initial density of the line")
+    call CFG_add(cfg, "init_line_rel_r0", [0.0d0, 0.7d0], &
+         "The relative start position of the initial line")
+    call CFG_add(cfg, "init_line_rel_r1", [1.0d0, 0.7d0], &
+         "The relative end position of the initial line")
+    call CFG_add(cfg, "init_line_width", 0.5d-3, &
+         "Line width")
+
     call CFG_add(cfg, "dt_output", 1.0d-10, &
          "The timestep for writing output")
     call CFG_add(cfg, "dt_amr", 1.0d-11, &
