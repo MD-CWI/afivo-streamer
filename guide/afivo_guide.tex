@@ -207,15 +207,17 @@ that should also be true vice-versa.
 The mesh that we've constructed thus far is shown in figure \ref{fig:two-boxes}.
 In order to refine it, we do the following:
 \begin{lstlisting}
-  call a2_adjust_refinement(tree, set_ref_flags)
+  call a2_adjust_refinement(tree, set_ref_flags, ref_info)
 \end{lstlisting}
+After the call, \texttt{ref\_info} contains the total number of new and removed
+boxes, as well as the indices of the new and removed boxes per refinement level.
 
 The user's refinement routine is called for each box.
 The routine gets a list of all boxes, the id of the current box, and a list with
 all the refinement flags.
 In this way, you can for example specify that the current box and its left
-neighbor should be refined\footnote{This can become a bit tricky in parallel,
-  because different flags might be specified for the same box.
+neighbor should be refined\footnote{In parallel different flags might be
+  specified for the same box.
   In that case, Afivo picks the \emph{highest} flag (refine $>$ keep refinement
   $>$ derefine).
   If you don't set refinement flags for a box, it will keep its refinement.}, or
@@ -279,7 +281,7 @@ First there is the box type, which contains the following information:
 \begin{itemize}
   \item lvl: the refinement level of the box
   \item tag: Afivo (and you) can set bits in this integer to store information
-  about the box
+  about the box.
   \item ix: the spatial index of the box
   \item parent: the parent of the box
   \item children: the children of the box
