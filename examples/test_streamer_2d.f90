@@ -71,11 +71,6 @@ program test_streamer_2d
   real(dp), parameter :: seed_r1(2) = &
        [0.35_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
 
-  ! We store some extra data per box (its type)
-  type :: my_data
-     integer :: box_type
-  end type my_data
-
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
 
@@ -264,7 +259,7 @@ contains
           xy   = a2_r_cc(box, [i,j])
           dens = seed_dens * rod_dens(xy, seed_r0, seed_r1, sigma, 3)
 
-          if (xy(2) < 0.25_dp * domain_len) then
+          if (xy(1) < 0.25_dp * domain_len) then
              box%cc(i, j, i_eps) = 5.0_dp
              box%cc(i, j, i_elec) = 0
              box%cc(i, j, i_pion) = 0
@@ -284,24 +279,21 @@ contains
   subroutine set_box_type(box)
     type(box2_t), intent(inout) :: box
     real(dp)                    :: max_eps, min_eps
-    type(my_data)               :: md
 
-    if (allocated(box%ud)) return ! Already set
+    if (box%tag /= a5_init_tag) return ! Already set
 
     max_eps = maxval(box%cc(:,:, i_eps))
     min_eps = minval(box%cc(:,:, i_eps))
 
     if (max_eps > 1.0_dp) then
        if (min_eps > 1.0_dp) then
-          md%box_type = full_diel_box
+          box%tag = full_diel_box
        else
-          md%box_type = part_diel_box
+          box%tag = part_diel_box
        end if
     else
-       md%box_type = full_gas_box
+       box%tag = full_gas_box
     end if
-
-    box%ud = transfer(md, box%ud)
   end subroutine set_box_type
 
   ! Get maximum time step based on e.g. CFL criteria
@@ -481,13 +473,11 @@ contains
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
     integer                     :: i, j, nc, nb_id
-    type(my_data) :: md
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    md     = transfer(boxes(id)%ud, md)
 
-    if (md%box_type == full_diel_box) then
+    if (boxes(id)%tag == full_diel_box) then
        boxes(id)%fx(:, :, f_elec) = 0
        boxes(id)%fy(:, :, f_elec) = 0
        return
@@ -584,7 +574,7 @@ contains
        end do
     end do
 
-    if (md%box_type == part_diel_box) then
+    if (boxes(id)%tag == part_diel_box) then
        do j = 1, nc
           do i = 1, nc
              if (boxes(id)%cc(i, j, i_eps) > 1.0_dp) then
@@ -729,10 +719,8 @@ contains
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: redblack_cntr
     type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
 
-    md = transfer(box%ud, md)
-    select case(md%box_type)
+    select case(box%tag)
     case (full_diel_box, part_diel_box)
        call mg2_box_gsrb_lpld(box, redblack_cntr, mg)
     case (full_gas_box)
@@ -745,10 +733,8 @@ contains
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: i_out
     type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
 
-    md = transfer(box%ud, md)
-    select case(md%box_type)
+    select case(box%tag)
     case (full_diel_box, part_diel_box)
        call mg2_box_lpld(box, i_out, mg)
     case (full_gas_box)
@@ -761,10 +747,8 @@ contains
     type(box2_t), intent(inout) :: box_c
     type(box2_t), intent(in)    :: box_p
     type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
 
-    md = transfer(box_p%ud, md)
-    select case(md%box_type)
+    select case(box_p%tag)
     case (full_diel_box, part_diel_box)
        call mg2_box_corr_lpld(box_p, box_c, mg)
     case (full_gas_box)

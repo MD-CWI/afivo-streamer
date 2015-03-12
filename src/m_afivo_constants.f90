@@ -23,9 +23,8 @@ module m_afivo_constants
   !> Special value indicating there is no box
   integer, parameter :: a5_no_box = 0
 
-  ! Each box contains a tag, for which bits can be set.
-
-  !> Bit that indicates that the box is in use
-  integer, parameter :: a5_bit_in_use = 1
+  ! Each box contains a tag, for which bits can be set. This is the initial
+  ! value, which should not be used by the user
+  integer, parameter :: a5_init_tag = -huge(1)
 
 end module m_afivo_constants
