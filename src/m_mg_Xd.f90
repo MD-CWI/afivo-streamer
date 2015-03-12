@@ -45,7 +45,8 @@ module m_mg_$Dd
      !> Subroutine that corrects the children of a box
      procedure(mg$D_box_corr), pointer, nopass :: box_corr => null()
 
-     !> @TODO: restriction method
+     !> Subroutine for restriction
+     procedure(mg$D_box_rstr), pointer, nopass :: box_rstr => null()
   end type mg$D_t
 
   abstract interface
@@ -71,6 +72,14 @@ module m_mg_$Dd
        type(box$D_t), intent(in)    :: box_p
        type(mg$D_t), intent(in)     :: mg
      end subroutine mg$D_box_corr
+
+     subroutine mg$D_box_rstr(boxes, id, iv, i_to)
+       import
+       type(box$D_t), intent(inout)   :: boxes(:) !< List of all the boxes
+       integer, intent(in)           :: id       !< Box whose children will be restricted to it
+       integer, intent(in)           :: iv       !< Variable to restrict
+       integer, intent(in), optional :: i_to    !< Destination (if /= iv)
+     end subroutine mg$D_box_rstr
   end interface
 
   public :: mg$D_init_mg
@@ -110,6 +119,7 @@ contains
     if (.not. associated(mg%box_op))   mg%box_op => mg$D_box_lpl
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg$D_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg$D_box_corr_lpl
+    if (.not. associated(mg%box_rstr)) mg%box_rstr => a$D_restrict_to_box
 
     mg%initialized = .true.
   end subroutine mg$D_init_mg
@@ -165,25 +175,8 @@ contains
        ! Downwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
-       ! Calculate residual at current lvl
-       call residual_boxes(tree%boxes, tree%lvls(lvl)%ids, mg)
-
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_phi)
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
-
-       call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
-
-       ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
-       ! store current coarse phi in tmp.
-
-       !$omp parallel do private(id)
-       do i = 1, size(tree%lvls(lvl-1)%parents)
-          id = tree%lvls(lvl-1)%parents(i)
-          call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
-          call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
-          call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
-       end do
-       !$omp end parallel do
+       !
+       call update_coarse(tree, lvl, mg)%boxes, tree%lvls(lvl)%ids, mg)
     end do
 
     lvl = min_lvl
@@ -406,18 +399,36 @@ contains
 #endif
   end subroutine mg$D_box_lpl
 
-  subroutine residual_boxes(boxes, ids, mg)
+  subroutine update_coarse(boxes, ids, mg)
     type(box$D_t), intent(inout) :: boxes(:)
     type(mg$D_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:)
-    integer                     :: i
+    integer                     :: i, id
 
     !$omp parallel do
-    do i = 1, size(ids)
+    do i = 1, size(tree%lvls(lvl)%ids)
+       id = tree%lvls(lvl)%ids(i)
        call residual_box(boxes(ids(i)), mg)
     end do
     !$omp end parallel do
-  end subroutine residual_boxes
+
+    call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_phi)
+    call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
+
+    call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
+
+    ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
+    ! store current coarse phi in tmp.
+
+    !$omp parallel do private(id)
+    do i = 1, size(tree%lvls(lvl-1)%parents)
+       id = tree%lvls(lvl-1)%parents(i)
+       call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
+       call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
+       call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
+    end do
+    !$omp end parallel do
+  end subroutine update_coarse
 
   subroutine residual_box(box, mg)
     type(box$D_t), intent(inout) :: box
