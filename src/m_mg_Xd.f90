@@ -190,7 +190,7 @@ contains
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
-       ! Have to fill ghost cells again (todo: not everywhere?)
+       ! Have to fill ghost cells again
        call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
 
        ! Upwards relaxation
