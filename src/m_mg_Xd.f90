@@ -73,12 +73,12 @@ module m_mg_$Dd
        type(mg$D_t), intent(in)     :: mg
      end subroutine mg$D_box_corr
 
-     subroutine mg$D_box_rstr(boxes, id, iv, i_to)
+     subroutine mg$D_box_rstr(box_c, box_p, iv, i_to)
        import
-       type(box$D_t), intent(inout)   :: boxes(:) !< List of all the boxes
-       integer, intent(in)           :: id       !< Box whose children will be restricted to it
-       integer, intent(in)           :: iv       !< Variable to restrict
-       integer, intent(in), optional :: i_to    !< Destination (if /= iv)
+       type(box$D_t), intent(in)     :: box_c !< Child box to restrict
+       type(box$D_t), intent(inout)  :: box_p !< Parent box to restrict to
+       integer, intent(in)           :: iv    !< Variable to restrict
+       integer, intent(in), optional :: i_to  !< Destination (if /= iv)
      end subroutine mg$D_box_rstr
   end interface
 
@@ -119,7 +119,7 @@ contains
     if (.not. associated(mg%box_op))   mg%box_op => mg$D_box_lpl
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg$D_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg$D_box_corr_lpl
-    if (.not. associated(mg%box_rstr)) mg%box_rstr => a$D_restrict_to_box
+    if (.not. associated(mg%box_rstr)) mg%box_rstr => a$D_restrict_box
 
     mg%initialized = .true.
   end subroutine mg$D_init_mg
@@ -145,17 +145,17 @@ contains
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_tmp)
 
-       if (lvl > min_lvl) then
-          ! Correct solution at this lvl using lvl-1 data
-          ! phi = phi + prolong(phi_coarse - phi_old_coarse)
-          call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
-
-          ! Update ghost cells
-          call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
-       end if
-
        ! Perform V-cycle
        call mg$D_fas_vcycle(tree, mg, lvl)
+
+       if (lvl < tree%max_lvl) then
+          ! Correct solution of children
+          ! phi = phi + prolong(phi_coarse - phi_old_coarse)
+          call correct_children(tree%boxes, tree%lvls(lvl)%parents, mg)
+
+          ! Update ghost cells
+          call fill_gc_phi(tree%boxes, tree%lvls(lvl+1)%ids, mg)
+       end if
     end do
   end subroutine mg$D_fas_fmg
 
@@ -176,7 +176,7 @@ contains
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
        !
-       call update_coarse(tree, lvl, mg)%boxes, tree%lvls(lvl)%ids, mg)
+       call update_coarse(tree, lvl, mg)
     end do
 
     lvl = min_lvl
@@ -399,21 +399,40 @@ contains
 #endif
   end subroutine mg$D_box_lpl
 
-  subroutine update_coarse(boxes, ids, mg)
-    type(box$D_t), intent(inout) :: boxes(:)
-    type(mg$D_t), intent(in)     :: mg
-    integer, intent(in)         :: ids(:)
-    integer                     :: i, id
+  subroutine update_coarse(tree, lvl, mg)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: lvl
+    type(mg$D_t), intent(in)   :: mg
+    integer                    :: i, id, p_id, nc
+#if $D == 2
+    real(dp), allocatable :: tmp(:,:)
+#elif $D == 3
+    real(dp), allocatable :: tmp(:,:,:)
+#endif
 
-    !$omp parallel do
+    id = tree%lvls(lvl)%ids(1)
+    nc = tree%boxes(id)%n_cell
+#if $D == 2
+    allocate(tmp(0:nc+1, 0:nc+1))
+#elif $D == 3
+    allocate(tmp(0:nc+1, 0:nc+1, 0:nc+1))
+#endif
+
+    !$omp parallel do private(id, p_id, tmp)
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
-       call residual_box(boxes(ids(i)), mg)
+       p_id = tree%boxes(id)%parent
+#if $D == 2
+       tmp = tree%boxes(id)%cc(:, :, mg%i_tmp)
+#endif
+       call residual_box(tree%boxes(id), mg)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp)
+#if $D == 2
+       tree%boxes(id)%cc(:, :, mg%i_tmp) = tmp
+#endif
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
     end do
     !$omp end parallel do
-
-    call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_phi)
-    call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
 
     call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
 
@@ -424,7 +443,7 @@ contains
     do i = 1, size(tree%lvls(lvl-1)%parents)
        id = tree%lvls(lvl-1)%parents(i)
        call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
-       call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
+       call a$D_box_add_cc(tree%boxes(id), mg%i_tmp, mg%i_rhs)
        call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
     end do
     !$omp end parallel do
@@ -435,14 +454,14 @@ contains
     type(mg$D_t), intent(in)     :: mg
     integer                     :: nc
 
-    call mg%box_op(box, mg%i_res, mg)
+    call mg%box_op(box, mg%i_tmp, mg)
     nc = box%n_cell
 #if $D == 2
-    box%cc(1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, mg%i_res)
+    box%cc(1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, mg%i_rhs) &
+         - box%cc(1:nc, 1:nc, mg%i_tmp)
 #elif $D == 3
-    box%cc(1:nc, 1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, 1:nc, mg%i_res)
+    box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
+         - box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
 #endif
   end subroutine residual_box
 
