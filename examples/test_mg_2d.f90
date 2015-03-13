@@ -7,7 +7,7 @@ program test_mg
   implicit none
 
   integer, parameter :: dp           = kind(0.0d0)
-  integer, parameter :: box_size     = 8
+  integer, parameter :: box_size     = 16
   integer, parameter :: n_boxes_base = 3
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_res = 4
@@ -29,7 +29,8 @@ program test_mg
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, dr = dr)
+  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, dr = dr, &
+       n_boxes = 10*1000)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
