@@ -425,9 +425,10 @@ contains
 
     id = tree%lvls(lvl)%ids(1)
     nc = a$D_n_cell(tree, lvl)
-    call a$D_init_box(box, nc, 1, 0) ! This box is used to store temporary data
 
-    !$omp parallel do private(id, p_id, box)
+    !$omp parallel private(i, id, p_id) firstprivate(box)
+    call a$D_init_box(box, nc, 1, 0) ! This box is used to store temporary data
+    !$omp do
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
        p_id = tree%boxes(id)%parent
@@ -440,7 +441,9 @@ contains
        call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
        call a$D_box_copy_cc_to(box, 1, tree%boxes(id), mg%i_tmp)
     end do
-    !$omp end parallel do
+    !$omp end do
+    call a$D_clear_box(box)
+    !$omp end parallel
 
     call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
 
