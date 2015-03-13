@@ -38,7 +38,8 @@ program test_mg2_2d
   dr = 1.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, dr = dr)
+  call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, &
+       dr = dr, coarsen_to = 2)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
