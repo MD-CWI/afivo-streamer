@@ -421,29 +421,42 @@ contains
     integer, intent(in)        :: lvl
     type(mg$D_t), intent(in)   :: mg
     integer                    :: i, id, p_id, nc
-    type(box$D_t)              :: box
+#if $D == 2
+    real(dp), allocatable :: tmp(:,:)
+#elif $D == 3
+    real(dp), allocatable :: tmp(:,:,:)
+#endif
 
     id = tree%lvls(lvl)%ids(1)
     nc = a$D_n_cell(tree, lvl)
+#if $D == 2
+    allocate(tmp(1:nc, 1:nc))
+#elif $D == 3
+    allocate(tmp(1:nc, 1:nc, 1:nc))
+#endif
 
-    !$omp parallel private(i, id, p_id) firstprivate(box)
-    call a$D_init_box(box, nc, 1, 0) ! This box is used to store temporary data
-    !$omp do
+    !$omp parallel do private(id, p_id, tmp)
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
        p_id = tree%boxes(id)%parent
 
        ! Save the data in i_tmp, and restore it later (i_tmp already holds the
        ! previous state of i_phi)
-       call a$D_box_copy_cc_to(tree%boxes(id), mg%i_tmp, box, 1)
+#if $D == 2
+       tmp = tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp)
+#elif $D == 3
+       tmp = tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
+#endif
        call residual_box(tree%boxes(id), mg)
        call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp)
        call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
-       call a$D_box_copy_cc_to(box, 1, tree%boxes(id), mg%i_tmp)
+#if $D == 2
+       tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp) = tmp
+#elif $D == 3
+       tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = tmp
+#endif
     end do
-    !$omp end do
-    call a$D_clear_box(box)
-    !$omp end parallel
+    !$omp end parallel do
 
     call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
 
