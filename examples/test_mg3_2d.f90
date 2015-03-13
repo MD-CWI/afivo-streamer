@@ -11,8 +11,8 @@ program test_mg3_2d
   integer, parameter :: box_size     = 2
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2
-  integer, parameter :: i_rhs = 3, i_res = 4
-  integer, parameter :: i_fld = 5, i_eps = 6
+  integer, parameter :: i_rhs = 3, i_eps = 4
+  integer, parameter :: i_fld = 5
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -20,20 +20,19 @@ program test_mg3_2d
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
-  character(len=40)  :: fname, var_names(6)
+  character(len=40)  :: fname, var_names(5)
   type(mg2_t)        :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
-  var_names(i_res) = "res"
   var_names(i_fld) = "fld"
   var_names(i_eps) = "eps"
 
   dr = 1.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=6, n_var_face=0, dr = dr)
+  call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, dr = dr)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
@@ -53,7 +52,6 @@ program test_mg3_2d
   mg%i_phi    = i_phi
   mg%i_tmp    = i_tmp
   mg%i_rhs    = i_rhs
-  mg%i_res    = i_res
   mg%i_eps    = i_eps
   mg%sides_bc => sides_bc
   mg%box_op   => mg2_box_lpld
@@ -68,7 +66,7 @@ program test_mg3_2d
 
   do i = 1, 10
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg2_fas_fmg(tree, mg)
+     call mg2_fas_fmg(tree, mg, .true.)
      call a2_loop_box(tree, fld_from_pot)
      write(fname, "(A,I0,A)") "test_mg3_2d_", i, ".vtu"
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)

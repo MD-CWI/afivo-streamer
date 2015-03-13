@@ -223,8 +223,6 @@ module m_afivo_$Dd
   end interface
 
   private :: set_leaves_parents
-  private :: init_box
-  private :: clear_box
   private :: child_that_contains
   private :: set_nbs_$Dd
   private :: find_nb_$Dd
@@ -372,7 +370,7 @@ contains
              tree%boxes(id)%neighbors = nb_list(:, i)
           end where
 
-          call init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+          call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
 
@@ -661,7 +659,7 @@ contains
           do n = n_used+1, max_id
              if (tree%boxes(n)%in_use) then
                 ! Remove moved data
-                call clear_box(tree%boxes(n))
+                call a$D_clear_box(tree%boxes(n))
              end if
           end do
        else
@@ -710,7 +708,7 @@ contains
 
   !> Mark box as active and allocate data storage for a box, for its cell- and
   !> face-centered data
-  subroutine init_box(box, n_cell, n_cc, n_fc)
+  subroutine a$D_init_box(box, n_cell, n_cc, n_fc)
     type(box$D_t), intent(inout) :: box !< Box for which we allocate memory
     integer, intent(in)         :: n_cell !< Number of cells per dimension in the box
     integer, intent(in)         :: n_cc   !< Number of cell-centered variables
@@ -728,10 +726,10 @@ contains
     allocate(box%fy(n_cell,     n_cell+1,   n_cell,     n_fc))
     allocate(box%fz(n_cell,     n_cell,     n_cell+1,   n_fc))
 #endif
-  end subroutine init_box
+  end subroutine a$D_init_box
 
   !> Deallocate data storage for a box and mark inactive
-  subroutine clear_box(box)
+  subroutine a$D_clear_box(box)
     type(box$D_t), intent(inout) :: box
 
     box%in_use = .false.
@@ -743,7 +741,7 @@ contains
     deallocate(box%fz)
 #endif
     if (associated(box%ud)) deallocate(box%ud)
-  end subroutine clear_box
+  end subroutine a$D_clear_box
 
   ! Set the neighbors of id (using their parent)
   subroutine set_nbs_$Dd(boxes, id)
@@ -1107,7 +1105,7 @@ contains
           end if
        end do
 
-       call clear_box(boxes(c_id))
+       call a$D_clear_box(boxes(c_id))
     end do
 
     boxes(id)%children = a5_no_box
@@ -1138,7 +1136,7 @@ contains
        boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
             a$D_ch_dix(:,i) * boxes(id)%n_cell
 
-       call init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
+       call a$D_init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
     end do
 
     ! Set boundary conditions at children
@@ -1180,6 +1178,20 @@ contains
     type(box$D_t), intent(in) :: box
     a$D_has_children = (box%children(1) /= a5_no_box)
   end function a$D_has_children
+
+  !> Return n_cell at lvl. For all lvls >= 1, n_cell has the same value, but
+  !> for lvls <= 0, n_cell changes.
+  pure function a$D_n_cell(tree, lvl) result(n_cell)
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: lvl
+    integer                :: n_cell !< Output: n_cell at lvl
+
+    if (lvl >= 1) then
+       n_cell = tree%n_cell
+    else
+       n_cell = tree%n_cell / (2**(1-lvl))
+    end if
+  end function a$D_n_cell
 
   !> Return dr at lvl
   pure function a$D_lvl_dr(tree, lvl) result(dr)
@@ -1307,6 +1319,18 @@ contains
     box%cc(:,:,:, iv_b) = a * box%cc(:,:,:, iv_a) + b * box%cc(:,:,:, iv_b)
 #endif
   end subroutine a$D_box_lincomb_cc
+
+  !> Copy cc(..., iv_from) from box_in to cc(..., iv_to) on box_out
+  subroutine a$D_box_copy_cc_to(box_from, iv_from, box_to, iv_to)
+    type(box$D_t), intent(in)    :: box_from
+    type(box$D_t), intent(inout) :: box_to
+    integer, intent(in)         :: iv_from, iv_to
+#if $D == 2
+    box_to%cc(:,:, iv_to) = box_from%cc(:,:, iv_from)
+#elif $D == 3
+    box_to%cc(:,:,:, iv_to) = box_from%cc(:,:,:, iv_from)
+#endif
+  end subroutine a$D_box_copy_cc_to
 
   !> Copy cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_copy_cc(box, iv_from, iv_to)

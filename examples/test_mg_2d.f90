@@ -10,7 +10,7 @@ program test_mg
   integer, parameter :: box_size     = 16
   integer, parameter :: n_boxes_base = 3
   integer, parameter :: i_phi = 1, i_tmp = 2
-  integer, parameter :: i_rhs = 3, i_res = 4
+  integer, parameter :: i_rhs = 3
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -18,18 +18,17 @@ program test_mg
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
-  character(len=40)  :: fname, var_names(4)
+  character(len=40)  :: fname, var_names(3)
   type(mg2_t)        :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
-  var_names(i_res) = "res"
 
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, dr = dr, &
+  call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, dr = dr, &
        n_boxes = 10*1000)
 
   id = 1
@@ -61,10 +60,6 @@ program test_mg
   mg%i_phi        = i_phi
   mg%i_tmp        = i_tmp
   mg%i_rhs        = i_rhs
-  mg%i_res        = i_res
-  mg%n_cycle_down = 2
-  mg%n_cycle_up   = 2
-  mg%n_cycle_base = 2
   mg%sides_bc     => sides_bc
 
   call mg2_init_mg(mg)
@@ -75,15 +70,11 @@ program test_mg
 
   do i = 1, 100
      ! call mg2_fas_vcycle(tree, mg, tree%max_lvl)
-     call mg2_fas_fmg(tree, mg)
-     !$omp single
-     ! write(fname, "(A,I0,A)") "test_mg_", i, ".vtu"
-     ! call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
-     !$omp end single
+     call mg2_fas_fmg(tree, mg, .false.)
   end do
 
-  write(fname, "(A,I0,A)") "test_mg_2d_", 1, ".vtu"
-  call a2_write_vtk(tree, trim(fname), var_names, 1, 0.0_dp)
+  ! write(fname, "(A,I0,A)") "test_mg_2d_", 1, ".silo"
+  ! call a2_write_silo(tree, trim(fname), var_names, 1, 0.0_dp)
 
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**2

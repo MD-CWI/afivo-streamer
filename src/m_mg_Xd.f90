@@ -18,9 +18,8 @@ module m_mg_$Dd
   !> Type to store multigrid options in
   type, public :: mg$D_t
      integer :: i_phi        = -1 !< Variable holding solution
-     integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
      integer :: i_rhs        = -1 !< Variable holding right-hand side
-     integer :: i_res        = -1 !< Variable holding residual
+     integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
 
      integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
      integer :: i_lsf        = -1 !< Optional variable for level set function
@@ -45,7 +44,8 @@ module m_mg_$Dd
      !> Subroutine that corrects the children of a box
      procedure(mg$D_box_corr), pointer, nopass :: box_corr => null()
 
-     !> @TODO: restriction method
+     !> Subroutine for restriction
+     procedure(mg$D_box_rstr), pointer, nopass :: box_rstr => null()
   end type mg$D_t
 
   abstract interface
@@ -71,6 +71,14 @@ module m_mg_$Dd
        type(box$D_t), intent(in)    :: box_p
        type(mg$D_t), intent(in)     :: mg
      end subroutine mg$D_box_corr
+
+     subroutine mg$D_box_rstr(box_c, box_p, iv, i_to)
+       import
+       type(box$D_t), intent(in)     :: box_c !< Child box to restrict
+       type(box$D_t), intent(inout)  :: box_p !< Parent box to restrict to
+       integer, intent(in)           :: iv    !< Variable to restrict
+       integer, intent(in), optional :: i_to  !< Destination (if /= iv)
+     end subroutine mg$D_box_rstr
   end interface
 
   public :: mg$D_init_mg
@@ -96,7 +104,6 @@ contains
     if (mg%i_phi < 0)                  stop "mg$D_init_mg: i_phi not set"
     if (mg%i_tmp < 0)                  stop "mg$D_init_mg: i_tmp not set"
     if (mg%i_rhs < 0)                  stop "mg$D_init_mg: i_rhs not set"
-    if (mg%i_res < 0)                  stop "mg$D_init_mg: i_res not set"
 
     if (.not. associated(mg%sides_bc)) stop "mg$D_init_mg: sides_bc not set"
 
@@ -110,6 +117,7 @@ contains
     if (.not. associated(mg%box_op))   mg%box_op => mg$D_box_lpl
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg$D_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg$D_box_corr_lpl
+    if (.not. associated(mg%box_rstr)) mg%box_rstr => a$D_restrict_box
 
     mg%initialized = .true.
   end subroutine mg$D_init_mg
@@ -122,9 +130,10 @@ contains
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
-  subroutine mg$D_fas_fmg(tree, mg)
+  subroutine mg$D_fas_fmg(tree, mg, set_residual)
     type(a$D_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)         :: mg   !< Multigrid options
+    logical, intent(in)             :: set_residual !< If true, store residual in i_tmp
     integer                         :: lvl, min_lvl
 
     call check_mg(mg)           ! Check whether mg options are set
@@ -145,18 +154,20 @@ contains
        end if
 
        ! Perform V-cycle
-       call mg$D_fas_vcycle(tree, mg, lvl)
+       call mg$D_fas_vcycle(tree, mg, lvl, &
+            set_residual .and. lvl == tree%max_lvl) ! Only set residual on last iteration
     end do
   end subroutine mg$D_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
-  subroutine mg$D_fas_vcycle(tree, mg, max_lvl)
+  subroutine mg$D_fas_vcycle(tree, mg, max_lvl, set_residual)
     type(a$D_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)   :: mg   !< Multigrid options
     integer, intent(in)        :: max_lvl !< Maximum level for V-cycle
-    integer                    :: i, id, lvl, min_lvl
+    logical, intent(in)        :: set_residual !< If true, store residual in i_tmp
+    integer                    :: lvl, min_lvl, i, id
 
     call check_mg(mg)           ! Check whether mg options are set
     min_lvl = lbound(tree%lvls, 1)
@@ -165,25 +176,9 @@ contains
        ! Downwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
-       ! Calculate residual at current lvl
-       call residual_boxes(tree%boxes, tree%lvls(lvl)%ids, mg)
-
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_phi)
-       call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl-1)%parents, mg%i_res)
-
-       call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
-
-       ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
-       ! store current coarse phi in tmp.
-
-       !$omp parallel do private(id)
-       do i = 1, size(tree%lvls(lvl-1)%parents)
-          id = tree%lvls(lvl-1)%parents(i)
-          call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
-          call a$D_box_add_cc(tree%boxes(id), mg%i_res, mg%i_rhs)
-          call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
-       end do
-       !$omp end parallel do
+       ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
+       ! correction later
+       call update_coarse(tree, lvl, mg)
     end do
 
     lvl = min_lvl
@@ -201,6 +196,19 @@ contains
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
+
+    if (set_residual) then
+       !$omp parallel private(lvl, i, id)
+       do lvl = min_lvl, max_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             call residual_box(tree%boxes(id), mg)
+          end do
+          !$omd end do nowait
+       end do
+       !$omp end parallel
+    end if
   end subroutine mg$D_fas_vcycle
 
   subroutine fill_gc_phi(boxes, ids, mg)
@@ -406,32 +414,62 @@ contains
 #endif
   end subroutine mg$D_box_lpl
 
-  subroutine residual_boxes(boxes, ids, mg)
-    type(box$D_t), intent(inout) :: boxes(:)
-    type(mg$D_t), intent(in)     :: mg
-    integer, intent(in)         :: ids(:)
-    integer                     :: i
+  ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
+  ! correction later
+  subroutine update_coarse(tree, lvl, mg)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: lvl
+    type(mg$D_t), intent(in)   :: mg
+    integer                    :: i, id, p_id, nc
+    type(box$D_t)              :: box
 
-    !$omp parallel do
-    do i = 1, size(ids)
-       call residual_box(boxes(ids(i)), mg)
+    id = tree%lvls(lvl)%ids(1)
+    nc = a$D_n_cell(tree, lvl)
+    call a$D_init_box(box, nc, 1, 0) ! This box is used to store temporary data
+
+    !$omp parallel do private(id, p_id, box)
+    do i = 1, size(tree%lvls(lvl)%ids)
+       id = tree%lvls(lvl)%ids(i)
+       p_id = tree%boxes(id)%parent
+
+       ! Save the data in i_tmp, and restore it later (i_tmp already holds the
+       ! previous state of i_phi)
+       call a$D_box_copy_cc_to(tree%boxes(id), mg%i_tmp, box, 1)
+       call residual_box(tree%boxes(id), mg)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
+       call a$D_box_copy_cc_to(box, 1, tree%boxes(id), mg%i_tmp)
     end do
     !$omp end parallel do
-  end subroutine residual_boxes
+
+    call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
+
+    ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
+    ! store current coarse phi in tmp.
+
+    !$omp parallel do private(id)
+    do i = 1, size(tree%lvls(lvl-1)%parents)
+       id = tree%lvls(lvl-1)%parents(i)
+       call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
+       call a$D_box_add_cc(tree%boxes(id), mg%i_tmp, mg%i_rhs)
+       call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
+    end do
+    !$omp end parallel do
+  end subroutine update_coarse
 
   subroutine residual_box(box, mg)
     type(box$D_t), intent(inout) :: box
     type(mg$D_t), intent(in)     :: mg
     integer                     :: nc
 
-    call mg%box_op(box, mg%i_res, mg)
+    call mg%box_op(box, mg%i_tmp, mg)
     nc = box%n_cell
 #if $D == 2
-    box%cc(1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, mg%i_res)
+    box%cc(1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, mg%i_rhs) &
+         - box%cc(1:nc, 1:nc, mg%i_tmp)
 #elif $D == 3
-    box%cc(1:nc, 1:nc, 1:nc, mg%i_res) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, 1:nc, mg%i_res)
+    box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
+         - box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
 #endif
   end subroutine residual_box
 
