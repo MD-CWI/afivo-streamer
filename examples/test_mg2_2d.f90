@@ -10,8 +10,7 @@ program test_mg2_2d
   integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2
-  integer, parameter :: i_rhs = 3, i_res = 4
-  integer, parameter :: i_err = 5
+  integer, parameter :: i_rhs = 3, i_err = 4
 
   ! The manufactured solution exists of two Gaussians here.
   ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
@@ -26,19 +25,18 @@ program test_mg2_2d
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
-  character(len=40)  :: fname, var_names(5)
+  character(len=40)  :: fname, var_names(4)
   type(mg2_t)        :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
-  var_names(i_res) = "res"
   var_names(i_err) = "err"
 
   dr = 1.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, &
+  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, &
        dr = dr, coarsen_to = 2)
 
   id = 1
@@ -59,7 +57,6 @@ program test_mg2_2d
   mg%i_phi        = i_phi
   mg%i_tmp        = i_tmp
   mg%i_rhs        = i_rhs
-  mg%i_res        = i_res
   mg%n_cycle_down = 2
   mg%n_cycle_up   = 2
   mg%n_cycle_base = 2
@@ -73,7 +70,7 @@ program test_mg2_2d
 
   do i = 1, 10
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg2_fas_fmg(tree, mg)
+     call mg2_fas_fmg(tree, mg, .true.)
      call a2_loop_box(tree, set_err)
      write(fname, "(A,I0,A)") "test_mg2_2d_", i, ".vtu"
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)

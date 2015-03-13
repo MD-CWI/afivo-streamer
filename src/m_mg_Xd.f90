@@ -18,9 +18,8 @@ module m_mg_$Dd
   !> Type to store multigrid options in
   type, public :: mg$D_t
      integer :: i_phi        = -1 !< Variable holding solution
-     integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
      integer :: i_rhs        = -1 !< Variable holding right-hand side
-     integer :: i_res        = -1 !< Variable holding residual
+     integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
 
      integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
      integer :: i_lsf        = -1 !< Optional variable for level set function
@@ -105,7 +104,6 @@ contains
     if (mg%i_phi < 0)                  stop "mg$D_init_mg: i_phi not set"
     if (mg%i_tmp < 0)                  stop "mg$D_init_mg: i_tmp not set"
     if (mg%i_rhs < 0)                  stop "mg$D_init_mg: i_rhs not set"
-    if (mg%i_res < 0)                  stop "mg$D_init_mg: i_res not set"
 
     if (.not. associated(mg%sides_bc)) stop "mg$D_init_mg: sides_bc not set"
 
@@ -132,9 +130,10 @@ contains
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
-  subroutine mg$D_fas_fmg(tree, mg)
+  subroutine mg$D_fas_fmg(tree, mg, set_residual)
     type(a$D_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)         :: mg   !< Multigrid options
+    logical, intent(in)             :: set_residual !< If true, store residual in i_tmp
     integer                         :: lvl, min_lvl
 
     call check_mg(mg)           ! Check whether mg options are set
@@ -145,28 +144,30 @@ contains
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_tmp)
 
-       ! Perform V-cycle
-       call mg$D_fas_vcycle(tree, mg, lvl)
-
-       if (lvl < tree%max_lvl) then
-          ! Correct solution of children
+       if (lvl > min_lvl) then
+          ! Correct solution at this lvl using lvl-1 data
           ! phi = phi + prolong(phi_coarse - phi_old_coarse)
-          call correct_children(tree%boxes, tree%lvls(lvl)%parents, mg)
+          call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
-          call fill_gc_phi(tree%boxes, tree%lvls(lvl+1)%ids, mg)
+          call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
        end if
+
+       ! Perform V-cycle
+       call mg$D_fas_vcycle(tree, mg, lvl, &
+            set_residual .and. lvl == tree%max_lvl) ! Only set residual on last iteration
     end do
   end subroutine mg$D_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
-  subroutine mg$D_fas_vcycle(tree, mg, max_lvl)
+  subroutine mg$D_fas_vcycle(tree, mg, max_lvl, set_residual)
     type(a$D_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)   :: mg   !< Multigrid options
     integer, intent(in)        :: max_lvl !< Maximum level for V-cycle
-    integer                    :: i, id, lvl, min_lvl
+    logical, intent(in)        :: set_residual !< If true, store residual in i_tmp
+    integer                    :: lvl, min_lvl, i, id
 
     call check_mg(mg)           ! Check whether mg options are set
     min_lvl = lbound(tree%lvls, 1)
@@ -175,7 +176,8 @@ contains
        ! Downwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
-       !
+       ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
+       ! correction later
        call update_coarse(tree, lvl, mg)
     end do
 
@@ -194,6 +196,19 @@ contains
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
+
+    if (set_residual) then
+       !$omp parallel private(lvl, i, id)
+       do lvl = min_lvl, max_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             call residual_box(tree%boxes(id), mg)
+          end do
+          !$omd end do nowait
+       end do
+       !$omp end parallel
+    end if
   end subroutine mg$D_fas_vcycle
 
   subroutine fill_gc_phi(boxes, ids, mg)
@@ -399,38 +414,31 @@ contains
 #endif
   end subroutine mg$D_box_lpl
 
+  ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
+  ! correction later
   subroutine update_coarse(tree, lvl, mg)
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)        :: lvl
     type(mg$D_t), intent(in)   :: mg
     integer                    :: i, id, p_id, nc
-#if $D == 2
-    real(dp), allocatable :: tmp(:,:)
-#elif $D == 3
-    real(dp), allocatable :: tmp(:,:,:)
-#endif
+    type(box$D_t)              :: box
 
     id = tree%lvls(lvl)%ids(1)
-    nc = tree%boxes(id)%n_cell
-#if $D == 2
-    allocate(tmp(0:nc+1, 0:nc+1))
-#elif $D == 3
-    allocate(tmp(0:nc+1, 0:nc+1, 0:nc+1))
-#endif
+    nc = a$D_n_cell(tree, lvl)
+    call a$D_init_box(box, nc, 1, 0) ! This box is used to store temporary data
 
-    !$omp parallel do private(id, p_id, tmp)
+    !$omp parallel do private(id, p_id, box)
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
        p_id = tree%boxes(id)%parent
-#if $D == 2
-       tmp = tree%boxes(id)%cc(:, :, mg%i_tmp)
-#endif
+
+       ! Save the data in i_tmp, and restore it later (i_tmp already holds the
+       ! previous state of i_phi)
+       call a$D_box_copy_cc_to(tree%boxes(id), mg%i_tmp, box, 1)
        call residual_box(tree%boxes(id), mg)
        call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp)
-#if $D == 2
-       tree%boxes(id)%cc(:, :, mg%i_tmp) = tmp
-#endif
        call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
+       call a$D_box_copy_cc_to(box, 1, tree%boxes(id), mg%i_tmp)
     end do
     !$omp end parallel do
 
