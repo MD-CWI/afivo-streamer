@@ -7,7 +7,7 @@ program test_mg
   implicit none
 
   integer, parameter :: dp           = kind(0.0d0)
-  integer, parameter :: box_size     = 16
+  integer, parameter :: box_size     = 4
   integer, parameter :: n_boxes_base = 3
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3

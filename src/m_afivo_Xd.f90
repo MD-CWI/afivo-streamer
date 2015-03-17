@@ -1876,13 +1876,14 @@ contains
     integer, intent(in)         :: id !< Id of box for which we set ghost cells
     integer, intent(in)         :: iv !< Variable for which ghost cells are set
     procedure(a$D_subr_gc)      :: subr_rb !< Procedure called at refinement boundaries
-    procedure(a$D_subr_gc)      :: subr_bc    !< Procedure called at physical boundaries
-    integer                     :: nb
+    procedure(a$D_subr_gc)      :: subr_bc !< Procedure called at physical boundaries
+    integer                     :: nb, nb_id
 
     do nb = 1, a$D_num_neighbors
-       if (boxes(id)%neighbors(nb) > a5_no_box) then
-          call a$D_gc_side_from_nb(boxes, id, nb, iv)
-       else if (boxes(id)%neighbors(nb) == a5_no_box) then
+       nb_id = boxes(id)%neighbors(nb)
+       if (nb_id > a5_no_box) then
+          call a$D_gc_side_from_nb(boxes(id), boxes(nb_id), nb, iv)
+       else if (nb_id == a5_no_box) then
           call subr_rb(boxes, id, nb, iv)
        else
           call subr_bc(boxes, id, nb, iv)
@@ -2114,39 +2115,38 @@ contains
   end subroutine a$D_sides_extrap
 
   !> Fill values on the side of a box from a neighbor nb
-  subroutine a$D_gc_side_from_nb(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
+  subroutine a$D_gc_side_from_nb(box, box_nb, nb, iv)
+    type(box$D_t), intent(inout) :: box    !< Box on which to fill ghost cells
+    type(box$D_t), intent(in)    :: box_nb !< Neighbouring box
     integer, intent(in)         :: nb        !< Ghost cell / neighbor direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, nb_id
+    integer                     :: nc
 
-    nc    = boxes(id)%n_cell
-    nb_id = boxes(id)%neighbors(nb)
+    nc = box%n_cell
 
     select case (nb)
 #if $D == 2
     case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv)    = boxes(nb_id)%cc(nc, 1:nc, iv)
+       box%cc(0, 1:nc, iv)    = box_nb%cc(nc, 1:nc, iv)
     case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(nb_id)%cc(1, 1:nc, iv)
+       box%cc(nc+1, 1:nc, iv) = box_nb%cc(1, 1:nc, iv)
     case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv)    = boxes(nb_id)%cc(1:nc, nc, iv)
+       box%cc(1:nc, 0, iv)    = box_nb%cc(1:nc, nc, iv)
     case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = boxes(nb_id)%cc(1:nc, 1, iv)
+       box%cc(1:nc, nc+1, iv) = box_nb%cc(1:nc, 1, iv)
 #elif $D == 3
     case (a3_nb_lx)
-       boxes(id)%cc(0, 1:nc, 1:nc, iv)    = boxes(nb_id)%cc(nc, 1:nc, 1:nc, iv)
+       box%cc(0, 1:nc, 1:nc, iv)    = box_nb%cc(nc, 1:nc, 1:nc, iv)
     case (a3_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = boxes(nb_id)%cc(1, 1:nc, 1:nc, iv)
+       box%cc(nc+1, 1:nc, 1:nc, iv) = box_nb%cc(1, 1:nc, 1:nc, iv)
     case (a3_nb_ly)
-       boxes(id)%cc(1:nc, 0, 1:nc, iv)    = boxes(nb_id)%cc(1:nc, nc, 1:nc, iv)
+       box%cc(1:nc, 0, 1:nc, iv)    = box_nb%cc(1:nc, nc, 1:nc, iv)
     case (a3_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = boxes(nb_id)%cc(1:nc, 1, 1:nc, iv)
+       box%cc(1:nc, nc+1, 1:nc, iv) = box_nb%cc(1:nc, 1, 1:nc, iv)
     case (a3_nb_lz)
-       boxes(id)%cc(1:nc, 1:nc, 0, iv)    = boxes(nb_id)%cc(1:nc, 1:nc, nc, iv)
+       box%cc(1:nc, 1:nc, 0, iv)    = box_nb%cc(1:nc, 1:nc, nc, iv)
     case (a3_nb_hz)
-       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = boxes(nb_id)%cc(1:nc, 1:nc, 1, iv)
+       box%cc(1:nc, 1:nc, nc+1, iv) = box_nb%cc(1:nc, 1:nc, 1, iv)
 #endif
     end select
   end subroutine a$D_gc_side_from_nb

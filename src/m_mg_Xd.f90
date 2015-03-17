@@ -190,7 +190,7 @@ contains
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
-       ! Have to fill ghost cells again (todo: not everywhere?)
+       ! Have to fill ghost cells after correction
        call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
 
        ! Upwards relaxation
@@ -255,6 +255,105 @@ contains
     !$omp end parallel do
   end subroutine correct_children
 
+  subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
+    type(box$D_t), intent(inout) :: boxes(:)
+    type(mg$D_t), intent(in)     :: mg
+    integer, intent(in)         :: ids(:), n_cycle
+    integer                     :: n, i
+
+    !$omp parallel private(n, i)
+    do n = 1, 2 * n_cycle
+       !$omp do
+       do i = 1, size(ids)
+          call mg%box_gsrb(boxes(ids(i)), n, mg)
+       end do
+       !$omp end do
+
+       !$omp do
+       do i = 1, size(ids)
+          call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
+               mg%sides_rb, mg%sides_bc)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine gsrb_boxes
+
+  ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
+  ! correction later
+  subroutine update_coarse(tree, lvl, mg)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: lvl
+    type(mg$D_t), intent(in)   :: mg
+    integer                    :: i, id, p_id, nc
+#if $D == 2
+    real(dp), allocatable :: tmp(:,:)
+#elif $D == 3
+    real(dp), allocatable :: tmp(:,:,:)
+#endif
+
+    id = tree%lvls(lvl)%ids(1)
+    nc = a$D_n_cell(tree, lvl)
+#if $D == 2
+    allocate(tmp(1:nc, 1:nc))
+#elif $D == 3
+    allocate(tmp(1:nc, 1:nc, 1:nc))
+#endif
+
+    !$omp parallel do private(id, p_id, tmp)
+    do i = 1, size(tree%lvls(lvl)%ids)
+       id = tree%lvls(lvl)%ids(i)
+       p_id = tree%boxes(id)%parent
+
+       ! Copy the data currently in i_tmp, and restore it later (i_tmp holds the
+       ! previous state of i_phi)
+#if $D == 2
+       tmp = tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp)
+#elif $D == 3
+       tmp = tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
+#endif
+       call residual_box(tree%boxes(id), mg)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
+#if $D == 2
+       tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp) = tmp
+#elif $D == 3
+       tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = tmp
+#endif
+    end do
+    !$omp end parallel do
+
+    call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
+
+    ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
+    ! store current coarse phi in tmp.
+
+    !$omp parallel do private(id)
+    do i = 1, size(tree%lvls(lvl-1)%parents)
+       id = tree%lvls(lvl-1)%parents(i)
+       call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
+       call a$D_box_add_cc(tree%boxes(id), mg%i_tmp, mg%i_rhs)
+       call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
+    end do
+    !$omp end parallel do
+  end subroutine update_coarse
+
+  subroutine residual_box(box, mg)
+    type(box$D_t), intent(inout) :: box
+    type(mg$D_t), intent(in)     :: mg
+    integer                     :: nc
+
+    call mg%box_op(box, mg%i_tmp, mg)
+    nc = box%n_cell
+#if $D == 2
+    box%cc(1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, mg%i_rhs) &
+         - box%cc(1:nc, 1:nc, mg%i_tmp)
+#elif $D == 3
+    box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
+         - box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
+#endif
+  end subroutine residual_box
+
   subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
@@ -307,30 +406,6 @@ contains
     end do
 #endif
   end subroutine mg$D_box_corr_lpl
-
-  subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
-    type(box$D_t), intent(inout) :: boxes(:)
-    type(mg$D_t), intent(in)     :: mg
-    integer, intent(in)         :: ids(:), n_cycle
-    integer                     :: n, i
-
-    !$omp parallel private(n, i)
-    do n = 1, 2 * n_cycle
-       !$omp do
-       do i = 1, size(ids)
-          call mg%box_gsrb(boxes(ids(i)), n, mg)
-       end do
-       !$omp end do
-
-       !$omp do
-       do i = 1, size(ids)
-          call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
-               mg%sides_rb, mg%sides_bc)
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
-  end subroutine gsrb_boxes
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
   subroutine mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
@@ -413,81 +488,6 @@ contains
     end do
 #endif
   end subroutine mg$D_box_lpl
-
-  ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
-  ! correction later
-  subroutine update_coarse(tree, lvl, mg)
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)        :: lvl
-    type(mg$D_t), intent(in)   :: mg
-    integer                    :: i, id, p_id, nc
-#if $D == 2
-    real(dp), allocatable :: tmp(:,:)
-#elif $D == 3
-    real(dp), allocatable :: tmp(:,:,:)
-#endif
-
-    id = tree%lvls(lvl)%ids(1)
-    nc = a$D_n_cell(tree, lvl)
-#if $D == 2
-    allocate(tmp(1:nc, 1:nc))
-#elif $D == 3
-    allocate(tmp(1:nc, 1:nc, 1:nc))
-#endif
-
-    !$omp parallel do private(id, p_id, tmp)
-    do i = 1, size(tree%lvls(lvl)%ids)
-       id = tree%lvls(lvl)%ids(i)
-       p_id = tree%boxes(id)%parent
-
-       ! Save the data in i_tmp, and restore it later (i_tmp already holds the
-       ! previous state of i_phi)
-#if $D == 2
-       tmp = tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp)
-#elif $D == 3
-       tmp = tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
-#endif
-       call residual_box(tree%boxes(id), mg)
-       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp)
-       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
-#if $D == 2
-       tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp) = tmp
-#elif $D == 3
-       tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = tmp
-#endif
-    end do
-    !$omp end parallel do
-
-    call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
-
-    ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
-    ! store current coarse phi in tmp.
-
-    !$omp parallel do private(id)
-    do i = 1, size(tree%lvls(lvl-1)%parents)
-       id = tree%lvls(lvl-1)%parents(i)
-       call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
-       call a$D_box_add_cc(tree%boxes(id), mg%i_tmp, mg%i_rhs)
-       call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
-    end do
-    !$omp end parallel do
-  end subroutine update_coarse
-
-  subroutine residual_box(box, mg)
-    type(box$D_t), intent(inout) :: box
-    type(mg$D_t), intent(in)     :: mg
-    integer                     :: nc
-
-    call mg%box_op(box, mg%i_tmp, mg)
-    nc = box%n_cell
-#if $D == 2
-    box%cc(1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, mg%i_tmp)
-#elif $D == 3
-    box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
-#endif
-  end subroutine residual_box
 
   subroutine mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on

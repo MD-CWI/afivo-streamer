@@ -7,6 +7,9 @@ ifeq ($(COMPILER), gfortran)
 		FFLAGS += -O0 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
 		-pedantic -finit-real=nan
 	endif
+	ifeq ($(PROF), 1)
+		FFLAGS += -pg
+	endif
 
 else ifeq ($(COMPILER), ifort)
 	FC 	:= ifort
