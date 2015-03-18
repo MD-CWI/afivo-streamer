@@ -10,7 +10,6 @@ program test_drift_diff
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
   integer, parameter :: i_err       = 3
-  integer, parameter :: i_flux      = 1
 
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr = domain_len / box_size
@@ -231,7 +230,8 @@ contains
     real(dp), intent(in) :: theta
     real(dp)             :: limiter_koren
     real(dp), parameter  :: one_sixth = 1.0_dp / 6.0_dp
-    limiter_koren = max(0.0d0, min(1.0_dp, theta, (1.0_dp + 2.0_dp * theta) * one_sixth))
+    limiter_koren = max(0.0d0, min(1.0_dp, theta, &
+         (1.0_dp + 2.0_dp * theta) * one_sixth))
   end function limiter_koren
 
   elemental function ratio(numerator, denominator)
@@ -349,7 +349,6 @@ contains
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr
     integer                     :: nc
-    real(dp), parameter :: eps = epsilon(1.0_dp)
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr

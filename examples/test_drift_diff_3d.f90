@@ -9,8 +9,6 @@ program test_drift_diff
   integer, parameter :: box_size    = 8
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
-  integer, parameter :: i_flux      = 1
-  integer, parameter :: i_flux_old  = 2
 
   type(a3_t)        :: tree
   type(ref_info_t)  :: ref_info
@@ -395,7 +393,6 @@ contains
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr
     integer                     :: nc
-    real(dp), parameter :: eps = epsilon(1.0_dp)
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr

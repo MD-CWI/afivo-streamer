@@ -2,10 +2,10 @@ COMPILER ?= gfortran
 
 ifeq ($(COMPILER), gfortran)
 	FC 	:= gfortran
-	FFLAGS	:= -Wall -O2 -std=f2008 -fopenmp -frealloc-lhs
+	FFLAGS	:= -Wall -Wextra -O2 -march=native -std=f2008 -fopenmp -frealloc-lhs
 	ifeq ($(DEBUG), 1)
 		FFLAGS += -O0 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
-		-pedantic -finit-real=nan
+		-pedantic -finit-real=snan
 	endif
 	ifeq ($(PROF), 1)
 		FFLAGS += -pg

@@ -1,8 +1,6 @@
 program test_unstr_vtk
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
-
   call test_unst()
 
   contains
