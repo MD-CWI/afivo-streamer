@@ -1903,7 +1903,6 @@ contains
     integer                     :: p_id, ix_offset($D)
 #if $D == 3
     integer                     :: k_c1, k_c2, k, dk
-    real(dp), parameter         :: f1=1/32.0_dp, f3=3*f1, f9=9*f1
 #endif
 
     nc        = boxes(id)%n_cell
@@ -2411,7 +2410,7 @@ contains
     real(dp), intent(in)          :: time        !< Time for output file
     integer, intent(in), optional :: ivs(:)      !< Oncly include these variables
 
-    character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
+    character(len=*), parameter     :: grid_name = "gg"
     character(len=*), parameter     :: amr_name  = "mesh", dir_name = "data"
     character(len=100), allocatable :: grid_list(:), var_list(:, :)
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
