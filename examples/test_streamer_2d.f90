@@ -17,11 +17,6 @@ program test_streamer_2d
   ! The size of the boxes that we use to construct our mesh
   integer, parameter :: box_size   = 8
 
-  ! Box types, these are used to distinguish between different regions
-  integer, parameter :: full_diel_box = 1
-  integer, parameter :: part_diel_box = 2
-  integer, parameter :: full_gas_box = 3
-
   ! Indices of cell-centered variables
   integer, parameter :: n_var_cell = 8
   integer, parameter :: i_elec     = 1 ! Electron density
@@ -84,9 +79,9 @@ program test_streamer_2d
 
   ! Routines to use for ...
   mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
-  mg%box_op       => auto_box_op  ! Performing the Laplacian
-  mg%box_gsrb     => auto_box_gsrb ! Performing Gauss-Seidel relaxation
-  mg%box_corr     => auto_box_corr ! Correcting the children of a grid
+  mg%box_op       => mg2_auto_op  ! Performing the Laplacian
+  mg%box_gsrb     => mg2_auto_gsrb ! Performing Gauss-Seidel relaxation
+  mg%box_corr     => mg2_auto_corr ! Correcting the children of a grid
 
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
@@ -94,7 +89,6 @@ program test_streamer_2d
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
-     call a2_loop_box(tree, set_box_type)
      call a2_restrict_tree(tree, i_rhs)
      call compute_fld(tree, n_fmg_cycles)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
@@ -272,27 +266,6 @@ contains
 
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
   end subroutine set_init_cond
-
-  ! Store my_data (which contains the box type) for a box
-  subroutine set_box_type(box)
-    type(box2_t), intent(inout) :: box
-    real(dp)                    :: max_eps, min_eps
-
-    if (box%tag /= a5_init_tag) return ! Already set
-
-    max_eps = maxval(box%cc(:,:, i_eps))
-    min_eps = minval(box%cc(:,:, i_eps))
-
-    if (max_eps > 1.0_dp) then
-       if (min_eps > 1.0_dp) then
-          box%tag = full_diel_box
-       else
-          box%tag = part_diel_box
-       end if
-    else
-       box%tag = full_gas_box
-    end if
-  end subroutine set_box_type
 
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
@@ -475,7 +448,7 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    if (boxes(id)%tag == full_diel_box) then
+    if (boxes(id)%tag == mg_ceps_box) then
        boxes(id)%fx(:, :, f_elec) = 0
        boxes(id)%fy(:, :, f_elec) = 0
        return
@@ -572,7 +545,7 @@ contains
        end do
     end do
 
-    if (boxes(id)%tag == part_diel_box) then
+    if (boxes(id)%tag == mg_veps_box) then
        do j = 1, nc
           do i = 1, nc
              if (boxes(id)%cc(i, j, i_eps) > 1.0_dp) then
@@ -642,10 +615,9 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          ! Immediately fill i_eps ghost cells
+          ! First fill i_eps (with ghost cells)
           call a2_prolong0_to(tree%boxes, id, i_eps, &
                [0,0], [nc+1, nc+1])
-          call set_box_type(tree%boxes(id))
           call a2_prolong1_to(tree%boxes, id, i_elec)
           call a2_prolong1_to(tree%boxes, id, i_pion)
           call a2_prolong1_to(tree%boxes, id, i_phi)
@@ -711,47 +683,5 @@ contains
        boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_dens
-
-  ! Based on the box type, apply a Gauss-Seidel relaxation scheme
-  subroutine auto_box_gsrb(box, redblack_cntr, mg)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: redblack_cntr
-    type(mg2_t), intent(in)     :: mg
-
-    select case(box%tag)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_gsrb_lpld(box, redblack_cntr, mg)
-    case (full_gas_box)
-       call mg2_box_gsrb_lpl(box, redblack_cntr, mg)
-    end select
-  end subroutine auto_box_gsrb
-
-  ! Based on the box type, apply the Poisson operator
-  subroutine auto_box_op(box, i_out, mg)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: i_out
-    type(mg2_t), intent(in)     :: mg
-
-    select case(box%tag)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_lpld(box, i_out, mg)
-    case (full_gas_box)
-       call mg2_box_lpl(box, i_out, mg)
-    end select
-  end subroutine auto_box_op
-
-  ! Based on the box type, correct the solution of the children
-  subroutine auto_box_corr(box_p, box_c, mg)
-    type(box2_t), intent(inout) :: box_c
-    type(box2_t), intent(in)    :: box_p
-    type(mg2_t), intent(in)     :: mg
-
-    select case(box_p%tag)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_corr_lpld(box_p, box_c, mg)
-    case (full_gas_box)
-       call mg2_box_corr_lpl(box_p, box_c, mg)
-    end select
-  end subroutine auto_box_corr
 
 end program test_streamer_2d

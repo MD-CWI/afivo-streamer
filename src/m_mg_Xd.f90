@@ -15,6 +15,13 @@ module m_mg_$Dd
 
   integer, parameter :: dp = kind(0.0d0)
 
+  ! The mg module supports different multigrid operators, and uses these tags to
+  ! identify boxes / operators
+  integer, parameter, public :: mg_normal_box = 1 !< Normal box
+  integer, parameter, public :: mg_lsf_box = 2    !< Box with an internal boundary
+  integer, parameter, public :: mg_ceps_box = 3   !< Box with constant eps /= 1
+  integer, parameter, public :: mg_veps_box = 4   !< Box with varying eps (on face)
+
   !> Type to store multigrid options in
   type, public :: mg$D_t
      integer :: i_phi        = -1 !< Variable holding solution
@@ -90,6 +97,11 @@ module m_mg_$Dd
   public :: mg$D_box_op
   public :: mg$D_box_gsrb
   public :: mg$D_box_corr
+
+  ! Automatic selection of operators
+  public :: mg$D_auto_op
+  public :: mg$D_auto_gsrb
+  public :: mg$D_auto_corr
 
   ! Methods for normal Laplacian
   public :: mg$D_box_lpl
@@ -364,6 +376,101 @@ contains
          - box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
 #endif
   end subroutine residual_box
+
+  !> Based on the box type, apply a Gauss-Seidel relaxation scheme
+  subroutine mg$D_auto_gsrb(box, redblack_cntr, mg)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: redblack_cntr
+    type(mg$D_t), intent(in)     :: mg
+
+    if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
+
+    select case(box%tag)
+    case (mg_normal_box)
+       call mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
+    case (mg_lsf_box)
+       call mg$D_box_gsrb_lpllsf(box, redblack_cntr, mg)
+    case (mg_veps_box, mg_ceps_box)
+       call mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
+    end select
+  end subroutine mg$D_auto_gsrb
+
+  !> Based on the box type, apply the approriate Laplace operator
+  subroutine mg$D_auto_op(box, i_out, mg)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: i_out
+    type(mg$D_t), intent(in)     :: mg
+
+    if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
+
+    select case(box%tag)
+    case (mg_normal_box)
+       call mg$D_box_lpl(box, i_out, mg)
+    case (mg_lsf_box)
+       call mg$D_box_lpllsf(box, i_out, mg)
+    case (mg_veps_box, mg_ceps_box)
+       call mg$D_box_lpld(box, i_out, mg)
+    end select
+  end subroutine mg$D_auto_op
+
+  !> Based on the box type, correct the solution of the children
+  subroutine mg$D_auto_corr(box_p, box_c, mg)
+    type(box$D_t), intent(inout) :: box_c
+    type(box$D_t), intent(in)    :: box_p
+    type(mg$D_t), intent(in)     :: mg
+
+    if (box_c%tag == a5_init_tag) call mg$D_set_box_tag(box_c, mg)
+
+    select case(box_p%tag)
+    case (mg_normal_box)
+       call mg$D_box_corr_lpl(box_p, box_c, mg)
+    case (mg_lsf_box)
+       call mg$D_box_corr_lpllsf(box_p, box_c, mg)
+    case (mg_veps_box, mg_ceps_box)
+       call mg$D_box_corr_lpld(box_p, box_c, mg)
+    end select
+  end subroutine mg$D_auto_corr
+
+  subroutine mg$D_set_box_tag(box, mg)
+    type(box$D_t), intent(inout) :: box
+    type(mg$D_t), intent(in)     :: mg
+    real(dp) :: a, b
+    logical :: is_lsf, is_deps, is_eps
+
+    is_lsf = .false.
+    is_eps = .false.
+    is_deps = .false.
+
+    if (mg%i_lsf /= -1) then
+#if $D == 2
+       is_lsf = minval(box%cc(:, :, mg%i_lsf)) * &
+            maxval(box%cc(:, :, mg%i_eps)) < 0
+#elif $D == 3
+       is_lsf = minval(box%cc(:, :, :, mg%i_lsf)) * &
+            maxval(box%cc(:, :, :, mg%i_lsf)) < 0
+#endif
+    end if
+
+    if (mg%i_eps /= -1) then
+#if $D == 2
+       a = minval(box%cc(:, :, mg%i_lsf))
+       b = maxval(box%cc(:, :, mg%i_lsf))
+#elif $D == 3
+       a = minval(box%cc(:, :, :, mg%i_lsf))
+       b = maxval(box%cc(:, :, :, mg%i_lsf))
+#endif
+       is_deps = (a /= b)
+       is_eps = .not. is_deps .and. (a /= 1.0_dp .or. b /= 1.0_dp)
+    end if
+
+    if (count([is_lsf, is_eps, is_deps]) > 1) &
+         stop "mg$D_set_box_tag: Cannot set lsf and eps tag for same box"
+
+    box%tag = mg_normal_box
+    if (is_lsf) box%tag = mg_lsf_box
+    if (is_eps) box%tag = mg_ceps_box
+    if (is_deps) box%tag = mg_veps_box
+  end subroutine mg$D_set_box_tag
 
   subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
     type(box$D_t), intent(inout) :: box_c
@@ -897,19 +1004,19 @@ contains
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
-          lsf = box%cc(i, j, k, i_lsf)
-          call lsf_dist_val(lsf, box%cc(i-1, j, k, [i_phi, i_lsf]), &
-               bval, dd(1), val(1))
-          call lsf_dist_val(lsf, box%cc(i+1, j, k, [i_phi, i_lsf]), &
-               bval, dd(2), val(2))
-          call lsf_dist_val(lsf, box%cc(i, j-1, k, [i_phi, i_lsf]), &
-               bval, dd(3), val(3))
-          call lsf_dist_val(lsf, box%cc(i, j+1, k, [i_phi, i_lsf]), &
-               bval, dd(4), val(4))
-          call lsf_dist_val(lsf, box%cc(i, j, k-1, [i_phi, i_lsf]), &
-               bval, dd(5), val(5))
-          call lsf_dist_val(lsf, box%cc(i, j, k+1, [i_phi, i_lsf]), &
-               bval, dd(6), val(6))
+             lsf = box%cc(i, j, k, i_lsf)
+             call lsf_dist_val(lsf, box%cc(i-1, j, k, [i_phi, i_lsf]), &
+                  bval, dd(1), val(1))
+             call lsf_dist_val(lsf, box%cc(i+1, j, k, [i_phi, i_lsf]), &
+                  bval, dd(2), val(2))
+             call lsf_dist_val(lsf, box%cc(i, j-1, k, [i_phi, i_lsf]), &
+                  bval, dd(3), val(3))
+             call lsf_dist_val(lsf, box%cc(i, j+1, k, [i_phi, i_lsf]), &
+                  bval, dd(4), val(4))
+             call lsf_dist_val(lsf, box%cc(i, j, k-1, [i_phi, i_lsf]), &
+                  bval, dd(5), val(5))
+             call lsf_dist_val(lsf, box%cc(i, j, k+1, [i_phi, i_lsf]), &
+                  bval, dd(6), val(6))
 
              ! Generalized Laplacian for neighbors at distance dd * dx
              f0 = box%cc(i, j, k, i_phi)

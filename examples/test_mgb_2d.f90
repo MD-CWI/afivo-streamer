@@ -53,9 +53,9 @@ program test_mgb
   mg%i_lsf       = i_lsf
   mg%lsf_bnd_val = 1.0e3_dp
   mg%sides_bc    => sides_bc
-  mg%box_op      => mg2_box_lpllsf
-  mg%box_corr    => mg2_box_corr_lpllsf
-  mg%box_gsrb    => mg2_box_gsrb_lpllsf
+  mg%box_op      => mg2_auto_op
+  mg%box_corr    => mg2_auto_corr
+  mg%box_gsrb    => mg2_auto_gsrb
 
   call mg2_init_mg(mg)
 
@@ -82,7 +82,7 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
 
-    if (boxes(id)%lvl < 6 .and. boxes(id)%r_min(2) < 2.1_dp) &
+    if (boxes(id)%lvl < 6)&! .and. boxes(id)%r_min(2) < 2.1_dp) &
          ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
