@@ -11,6 +11,7 @@ program test_mgb
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_lsf = 4
+  real(dp), parameter :: phi0 = 1e3_dp
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -51,11 +52,14 @@ program test_mgb
   mg%i_tmp       = i_tmp
   mg%i_rhs       = i_rhs
   mg%i_lsf       = i_lsf
-  mg%lsf_bnd_val = 1.0e3_dp
+  mg%lsf_bnd_val = phi0
   mg%sides_bc    => sides_bc
   mg%box_op      => mg2_auto_op
   mg%box_corr    => mg2_auto_corr
   mg%box_gsrb    => mg2_auto_gsrb
+  ! mg%box_op      => mg2_box_lpllsf
+  ! mg%box_corr    => mg2_box_corr_lpllsf
+  ! mg%box_gsrb    => mg2_box_gsrb_lpllsf
 
   call mg2_init_mg(mg)
 
@@ -82,7 +86,7 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
 
-    if (boxes(id)%lvl < 6)&! .and. boxes(id)%r_min(2) < 2.1_dp) &
+    if (boxes(id)%lvl < 6) & ! .and. boxes(id)%r_min(2) < 2.1_dp) &
          ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
@@ -97,9 +101,9 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j]) - [2, 2]
-          box%cc(i, j, i_rhs) = 1000 * exp(-sum((xy)**2))
-          ! box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3
-          box%cc(i, j, i_lsf) = sum(xy**2)-0.5_dp
+          box%cc(i, j, i_rhs) = 1000
+          ! box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3 ! Heart
+          box%cc(i, j, i_lsf) = sum(xy**2)-0.51_dp ! Circle
        end do
     end do
   end subroutine set_init_cond
@@ -117,9 +121,9 @@ contains
     case (a2_nb_hx)
        boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
     case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv) = 4-boxes(id)%cc(1:nc, 1, iv)
+       boxes(id)%cc(1:nc, 0, iv) = - boxes(id)%cc(1:nc, 1, iv)
     case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = 2-boxes(id)%cc(1:nc, nc, iv)
+       boxes(id)%cc(1:nc, nc+1, iv) = - boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc
 
