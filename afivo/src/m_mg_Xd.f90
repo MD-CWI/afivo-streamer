@@ -454,11 +454,11 @@ contains
 
     if (mg%i_eps /= -1) then
 #if $D == 2
-       a = minval(box%cc(:, :, mg%i_lsf))
-       b = maxval(box%cc(:, :, mg%i_lsf))
+       a = minval(box%cc(:, :, mg%i_eps))
+       b = maxval(box%cc(:, :, mg%i_eps))
 #elif $D == 3
-       a = minval(box%cc(:, :, :, mg%i_lsf))
-       b = maxval(box%cc(:, :, :, mg%i_lsf))
+       a = minval(box%cc(:, :, :, mg%i_eps))
+       b = maxval(box%cc(:, :, :, mg%i_eps))
 #endif
        is_deps = (b > a)
        if (.not. is_deps) is_eps = (a < 1 .or. a > 1)
