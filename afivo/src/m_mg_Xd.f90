@@ -445,7 +445,7 @@ contains
     if (mg%i_lsf /= -1) then
 #if $D == 2
        is_lsf = minval(box%cc(:, :, mg%i_lsf)) * &
-            maxval(box%cc(:, :, mg%i_eps)) < 0
+            maxval(box%cc(:, :, mg%i_lsf)) < 0
 #elif $D == 3
        is_lsf = minval(box%cc(:, :, :, mg%i_lsf)) * &
             maxval(box%cc(:, :, :, mg%i_lsf)) < 0
