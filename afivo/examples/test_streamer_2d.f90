@@ -17,13 +17,8 @@ program test_streamer_2d
   ! The size of the boxes that we use to construct our mesh
   integer, parameter :: box_size   = 8
 
-  ! Box types, these are used to distinguish between different regions
-  integer, parameter :: full_diel_box = 1
-  integer, parameter :: part_diel_box = 2
-  integer, parameter :: full_gas_box = 3
-
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 9
+  integer, parameter :: n_var_cell = 8
   integer, parameter :: i_elec     = 1 ! Electron density
   integer, parameter :: i_pion     = 2 ! Positive ion density
   integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
@@ -31,11 +26,10 @@ program test_streamer_2d
   integer, parameter :: i_phi      = 5 ! Electrical potential
   integer, parameter :: i_fld      = 6 ! Electric field norm
   integer, parameter :: i_rhs      = 7 ! Source term Poisson
-  integer, parameter :: i_res      = 8 ! Residual (multigrid)
-  integer, parameter :: i_eps      = 9 ! Dielectric permittivity
+  integer, parameter :: i_eps      = 8 ! Dielectric permittivity
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "res", "eps"]
+       "pion_old", "phi", "fld", "rhs", "eps"]
 
   ! Indices of face-centered variables
   integer, parameter :: n_var_face = 2
@@ -67,14 +61,9 @@ program test_streamer_2d
 
   ! The location of the initial seed
   real(dp), parameter :: seed_r0(2) = &
-       [0.4_dp, 0.5_dp] * domain_len - [0, 1] * 1e-3_dp
+       [0.35_dp, 0.5_dp] * domain_len - [0, 1] * 1e-3_dp
   real(dp), parameter :: seed_r1(2) = &
-       [0.4_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
-
-  ! We store some extra data per box (its type)
-  type :: my_data
-     integer :: box_type
-  end type my_data
+       [0.35_dp, 0.5_dp] * domain_len + [0, 1] * 1e-3_dp
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -83,7 +72,6 @@ program test_streamer_2d
   mg%i_phi        = i_phi
   mg%i_tmp        = i_fld
   mg%i_rhs        = i_rhs
-  mg%i_res        = i_res
   mg%i_eps        = i_eps
 
   ! The number of cycles at the lowest level
@@ -91,9 +79,9 @@ program test_streamer_2d
 
   ! Routines to use for ...
   mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
-  mg%box_op       => auto_box_op  ! Performing the Laplacian
-  mg%box_gsrb     => auto_box_gsrb ! Performing Gauss-Seidel relaxation
-  mg%box_corr     => auto_box_corr ! Correcting the children of a grid
+  mg%box_op       => mg2_auto_op  ! Performing the Laplacian
+  mg%box_gsrb     => mg2_auto_gsrb ! Performing Gauss-Seidel relaxation
+  mg%box_corr     => mg2_auto_corr ! Correcting the children of a grid
 
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
@@ -101,7 +89,6 @@ program test_streamer_2d
   ! Set up the initial conditions
   do i = 1, 10
      call a2_loop_box(tree, set_init_cond)
-     call a2_loop_box(tree, set_box_type)
      call a2_restrict_tree(tree, i_rhs)
      call compute_fld(tree, n_fmg_cycles)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
@@ -280,30 +267,6 @@ contains
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
   end subroutine set_init_cond
 
-  ! Store my_data (which contains the box type) for a box
-  subroutine set_box_type(box)
-    type(box2_t), intent(inout) :: box
-    real(dp)                    :: max_eps, min_eps
-    type(my_data)               :: md
-
-    if (allocated(box%ud)) return ! Already set
-
-    max_eps = maxval(box%cc(:,:, i_eps))
-    min_eps = minval(box%cc(:,:, i_eps))
-
-    if (max_eps > 1.0_dp) then
-       if (min_eps > 1.0_dp) then
-          md%box_type = full_diel_box
-       else
-          md%box_type = part_diel_box
-       end if
-    else
-       md%box_type = full_gas_box
-    end if
-
-    box%ud = transfer(md, box%ud)
-  end subroutine set_box_type
-
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
@@ -330,7 +293,7 @@ contains
     dt_alpha =  1 / (abs(mobility) * max_fld * &
          max(epsilon(1.0_dp), get_alpha(max_fld)))
 
-    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
+    get_max_dt = 0.75_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
   end function get_max_dt
 
   ! Used to create initial electron/ion seed
@@ -410,7 +373,7 @@ contains
 
     ! Perform n_fmg full-multigrid cycles
     do i = 1, n_fmg
-       call mg2_fas_fmg(tree, mg)
+       call mg2_fas_fmg(tree, mg, .false.)
     end do
 
     ! Compute field from potential
@@ -481,13 +444,11 @@ contains
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
     integer                     :: i, j, nc, nb_id
-    type(my_data) :: md
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    md     = transfer(boxes(id)%ud, md)
 
-    if (md%box_type == full_diel_box) then
+    if (boxes(id)%tag == mg_ceps_box) then
        boxes(id)%fx(:, :, f_elec) = 0
        boxes(id)%fy(:, :, f_elec) = 0
        return
@@ -584,7 +545,7 @@ contains
        end do
     end do
 
-    if (md%box_type == part_diel_box) then
+    if (boxes(id)%tag == mg_veps_box) then
        do j = 1, nc
           do i = 1, nc
              if (boxes(id)%cc(i, j, i_eps) > 1.0_dp) then
@@ -654,13 +615,12 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call set_box_type(tree%boxes(id))
+          ! First fill i_eps (with ghost cells)
+          call a2_prolong0_to(tree%boxes, id, i_eps, &
+               [0,0], [nc+1, nc+1])
           call a2_prolong1_to(tree%boxes, id, i_elec)
           call a2_prolong1_to(tree%boxes, id, i_pion)
           call a2_prolong1_to(tree%boxes, id, i_phi)
-          ! Immediately fill i_eps ghost cells
-          call a2_prolong0_to(tree%boxes, id, i_eps, &
-               [0,0], [nc+1, nc+1])
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
@@ -669,6 +629,8 @@ contains
                a2_sides_interp, sides_bc_dens)
           call a2_gc_box_sides(tree%boxes, id, i_pion, &
                a2_sides_interp, sides_bc_dens)
+          call a2_gc_box_sides(tree%boxes, id, i_phi, &
+               a2_sides_extrap, sides_bc_pot)
        end do
     end do
   end subroutine prolong_to_new_children
@@ -721,53 +683,5 @@ contains
        boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_dens
-
-  ! Based on the box type, apply a Gauss-Seidel relaxation scheme
-  subroutine auto_box_gsrb(box, redblack_cntr, mg)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: redblack_cntr
-    type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
-
-    md = transfer(box%ud, md)
-    select case(md%box_type)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_gsrb_lpld(box, redblack_cntr, mg)
-    case (full_gas_box)
-       call mg2_box_gsrb_lpl(box, redblack_cntr, mg)
-    end select
-  end subroutine auto_box_gsrb
-
-  ! Based on the box type, apply the Poisson operator
-  subroutine auto_box_op(box, i_out, mg)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: i_out
-    type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
-
-    md = transfer(box%ud, md)
-    select case(md%box_type)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_lpld(box, i_out, mg)
-    case (full_gas_box)
-       call mg2_box_lpl(box, i_out, mg)
-    end select
-  end subroutine auto_box_op
-
-  ! Based on the box type, correct the solution of the children
-  subroutine auto_box_corr(box_p, box_c, mg)
-    type(box2_t), intent(inout) :: box_c
-    type(box2_t), intent(in)    :: box_p
-    type(mg2_t), intent(in)     :: mg
-    type(my_data) :: md
-
-    md = transfer(box_p%ud, md)
-    select case(md%box_type)
-    case (full_diel_box, part_diel_box)
-       call mg2_box_corr_lpld(box_p, box_c, mg)
-    case (full_gas_box)
-       call mg2_box_corr_lpl(box_p, box_c, mg)
-    end select
-  end subroutine auto_box_corr
 
 end program test_streamer_2d

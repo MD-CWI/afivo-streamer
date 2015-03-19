@@ -1,8 +1,8 @@
 !> \example test_mgb_2d.f90
-!> Example showing how to use m_mgb_2d
+!> Example showing how to use a level set function for boundary conditions
 program test_mgb
   use m_afivo_2d
-  use m_mgb_2d
+  use m_mg_2d
 
   implicit none
 
@@ -10,8 +10,7 @@ program test_mgb
   integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2
-  integer, parameter :: i_rhs = 3, i_res = 4
-  integer, parameter :: i_lsf = 5
+  integer, parameter :: i_rhs = 3, i_lsf = 4
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -19,19 +18,19 @@ program test_mgb
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
-  character(len=40)  :: fname, var_names(5)
+  character(len=40)  :: fname, var_names(4)
   type(mg2_t)       :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
-  var_names(i_res) = "res"
   var_names(i_lsf) = "lsf"
 
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, dr = dr)
+  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, &
+       dr = dr, coarsen_to = 2, n_boxes = 10*1000)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of box
@@ -48,8 +47,17 @@ program test_mgb
   call a2_loop_box(tree, set_init_cond)
 
   ! Set the multigrid options
-  call mg2_set(mg, i_phi, i_tmp, i_rhs, i_res, i_lsf, 2, 2, 3, &
-       sides_bc, mg2_lpl_box, mg2_gsrb_lpl_box)
+  mg%i_phi       = i_phi
+  mg%i_tmp       = i_tmp
+  mg%i_rhs       = i_rhs
+  mg%i_lsf       = i_lsf
+  mg%lsf_bnd_val = 1.0e3_dp
+  mg%sides_bc    => sides_bc
+  mg%box_op      => mg2_auto_op
+  mg%box_corr    => mg2_auto_corr
+  mg%box_gsrb    => mg2_auto_gsrb
+
+  call mg2_init_mg(mg)
 
   ! Restrict from children recursively
   call a2_restrict_tree(tree, i_rhs)
@@ -57,13 +65,10 @@ program test_mgb
 
   do i = 1, 20
      ! call mg2_fas_vcycle(tree, mg, tree%max_lvl)
-     call mg2_fas_fmg(tree, mg)
+     call mg2_fas_fmg(tree, mg, .true.)
      write(fname, "(A,I0,A)") "test_mgb_2d_", i, ".vtu"
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
   end do
-
-  ! write(fname, "(A,I0,A)") "test_mg_", 1, ".vtu"
-  ! call a2_write_vtk(tree, trim(fname), var_names, 1, 0.0_dp)
 
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**2
@@ -77,11 +82,8 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
 
-    if (boxes(id)%lvl < 6) then
-       ref_flags(id) = a5_do_ref
-    else
-       ref_flags(id) = a5_rm_ref
-    end if
+    if (boxes(id)%lvl < 6)&! .and. boxes(id)%r_min(2) < 2.1_dp) &
+         ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -94,9 +96,10 @@ contains
 
     do j = 0, nc+1
        do i = 0, nc+1
-          xy = a2_r_cc(box, [i,j]) - 2
-          box%cc(i, j, i_rhs) = 0 * exp(-sum((xy)**2))
-          box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3
+          xy = a2_r_cc(box, [i,j]) - [2, 2]
+          box%cc(i, j, i_rhs) = 1000 * exp(-sum((xy)**2))
+          ! box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3
+          box%cc(i, j, i_lsf) = sum(xy**2)-0.5_dp
        end do
     end do
   end subroutine set_init_cond
@@ -108,18 +111,16 @@ contains
 
     nc = boxes(id)%n_cell
 
-    if (boxes(id)%neighbors(nb) == -1) then
-       select case (nb)
-       case (a2_nb_lx)
-          boxes(id)%cc(0, 1:nc, iv) = 2-boxes(id)%cc(1, 1:nc, iv)
-       case (a2_nb_hx)
-          boxes(id)%cc(nc+1, 1:nc, iv) = 2-boxes(id)%cc(nc, 1:nc, iv)
-       case (a2_nb_ly)
-          boxes(id)%cc(1:nc, 0, iv) = 2-boxes(id)%cc(1:nc, 1, iv)
-       case (a2_nb_hy)
-          boxes(id)%cc(1:nc, nc+1, iv) = 2-boxes(id)%cc(1:nc, nc, iv)
-       end select
-    end if
+    select case (nb)
+    case (a2_nb_lx)
+       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
+    case (a2_nb_hx)
+       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
+    case (a2_nb_ly)
+       boxes(id)%cc(1:nc, 0, iv) = 4-boxes(id)%cc(1:nc, 1, iv)
+    case (a2_nb_hy)
+       boxes(id)%cc(1:nc, nc+1, iv) = 2-boxes(id)%cc(1:nc, nc, iv)
+    end select
   end subroutine sides_bc
 
-end program test_mgb
+end program

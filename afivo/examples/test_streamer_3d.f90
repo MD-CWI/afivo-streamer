@@ -23,7 +23,7 @@ program test_streamer_3d
   integer, parameter :: full_gas_box = 3
 
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 9
+  integer, parameter :: n_var_cell = 8
   integer, parameter :: i_elec     = 1 ! Electron density
   integer, parameter :: i_pion     = 2 ! Positive ion density
   integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
@@ -31,11 +31,10 @@ program test_streamer_3d
   integer, parameter :: i_phi      = 5 ! Electrical potential
   integer, parameter :: i_fld      = 6 ! Electric field norm
   integer, parameter :: i_rhs      = 7 ! Source term Poisson
-  integer, parameter :: i_res      = 8 ! Residual (multigrid)
-  integer, parameter :: i_eps      = 9 ! Dielectric permittivity
+  integer, parameter :: i_eps      = 8 ! Dielectric permittivity
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "res", "eps"]
+       "pion_old", "phi", "fld", "rhs", "eps"]
 
   ! Indices of face-centered variables
   integer, parameter :: n_var_face = 2
@@ -71,11 +70,6 @@ program test_streamer_3d
   real(dp), parameter :: seed_r1(3) = &
        [0.4_dp, 0.5_dp, 0.5_dp] * domain_len + [0, 0, 1] * 1e-3_dp
 
-  ! We store some extra data per box (its type)
-  type :: my_data
-     integer :: box_type
-  end type my_data
-
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
 
@@ -83,7 +77,6 @@ program test_streamer_3d
   mg%i_phi        = i_phi
   mg%i_tmp        = i_fld
   mg%i_rhs        = i_rhs
-  mg%i_res        = i_res
   mg%i_eps        = i_eps
 
   ! The number of cycles at the lowest level
@@ -287,24 +280,21 @@ contains
   subroutine set_box_type(box)
     type(box3_t), intent(inout) :: box
     real(dp)                    :: max_eps, min_eps
-    type(my_data)               :: md
 
-    if (allocated(box%ud)) return ! Already set
+    if (box%tag /= a5_init_tag) return ! Already set
 
     max_eps = maxval(box%cc(:,:,:, i_eps))
     min_eps = minval(box%cc(:,:,:, i_eps))
 
     if (max_eps > 1.0_dp) then
        if (min_eps > 1.0_dp) then
-          md%box_type = full_diel_box
+          box%tag = full_diel_box
        else
-          md%box_type = part_diel_box
+          box%tag = part_diel_box
        end if
     else
-       md%box_type = full_gas_box
+       box%tag = full_gas_box
     end if
-
-    box%ud = transfer(md, box%ud)
   end subroutine set_box_type
 
   ! Get maximum time step based on e.g. CFL criteria
@@ -415,7 +405,7 @@ contains
 
     ! Perform n_fmg full-multigrid cycles
     do i = 1, n_fmg
-       call mg3_fas_fmg(tree, mg)
+       call mg3_fas_fmg(tree, mg, .false.)
     end do
 
     ! Compute field from potential
@@ -497,18 +487,16 @@ contains
     real(dp)                    :: inv_dr, theta
     real(dp)                    :: gradp, gradc, gradn
     integer                     :: i, j, k, nc, nb_id
-    ! type(my_data) :: md
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    ! md     = transfer(boxes(id)%ud, md)
 
-    ! if (md%box_type == full_diel_box) then
-    !    boxes(id)%fx(:, :, :, f_elec) = 0
-    !    boxes(id)%fy(:, :, :, f_elec) = 0
-    !    boxes(id)%fz(:, :, :, f_elec) = 0
-    !    return
-    ! end if
+    if (boxes(id)%tag == full_diel_box) then
+       boxes(id)%fx(:, :, :, f_elec) = 0
+       boxes(id)%fy(:, :, :, f_elec) = 0
+       boxes(id)%fz(:, :, :, f_elec) = 0
+       return
+    end if
 
     ! x-fluxes interior, advective part with flux limiter
     do k = 1, nc
@@ -653,7 +641,8 @@ contains
        end do
     end do
 
-    ! if (md%box_type == part_diel_box) then
+    ! Todo
+    ! if (box%tag == part_diel_box) then
     !    do j = 1, nc
     !       do i = 1, nc
     !          if (boxes(id)%cc(i, j, k, i_eps) > 1.0_dp) then
@@ -727,13 +716,13 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
+          ! Immediately fill i_eps ghost cells
+          call a3_prolong0_to(tree%boxes, id, i_eps, &
+               [0, 0, 0], [nc+1, nc+1, nc+1])
           call set_box_type(tree%boxes(id))
           call a3_prolong1_to(tree%boxes, id, i_elec)
           call a3_prolong1_to(tree%boxes, id, i_pion)
           call a3_prolong1_to(tree%boxes, id, i_phi)
-          ! Immediately fill i_eps ghost cells
-          call a3_prolong0_to(tree%boxes, id, i_eps, &
-               [0, 0, 0], [nc+1, nc+1, nc+1])
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
@@ -742,6 +731,8 @@ contains
                a3_sides_interp, sides_bc_dens)
           call a3_gc_box_sides(tree%boxes, id, i_pion, &
                a3_sides_interp, sides_bc_dens)
+          call a3_gc_box_sides(tree%boxes, id, i_phi, &
+               a3_sides_extrap, sides_bc_pot)
        end do
     end do
   end subroutine prolong_to_new_children
@@ -812,10 +803,8 @@ contains
     type(box3_t), intent(inout) :: box
     integer, intent(in)         :: redblack_cntr
     type(mg3_t), intent(in)     :: mg
-    type(my_data) :: md
 
-    md = transfer(box%ud, md)
-    select case(md%box_type)
+    select case(box%tag)
     case (full_diel_box, part_diel_box)
        call mg3_box_gsrb_lpld(box, redblack_cntr, mg)
     case (full_gas_box)
@@ -828,10 +817,8 @@ contains
     type(box3_t), intent(inout) :: box
     integer, intent(in)         :: i_out
     type(mg3_t), intent(in)     :: mg
-    type(my_data) :: md
 
-    md = transfer(box%ud, md)
-    select case(md%box_type)
+    select case(box%tag)
     case (full_diel_box, part_diel_box)
        call mg3_box_lpld(box, i_out, mg)
     case (full_gas_box)
@@ -844,10 +831,8 @@ contains
     type(box3_t), intent(inout) :: box_c
     type(box3_t), intent(in)    :: box_p
     type(mg3_t), intent(in)     :: mg
-    type(my_data) :: md
 
-    md = transfer(box_p%ud, md)
-    select case(md%box_type)
+    select case(box_p%tag)
     case (full_diel_box, part_diel_box)
        call mg3_box_corr_lpld(box_p, box_c, mg)
     case (full_gas_box)

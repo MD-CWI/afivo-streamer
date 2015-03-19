@@ -107,7 +107,8 @@ module m_afivo_$Dd
   !> centered data, and information about its position, neighbors, children etc.
   type box$D_t
      integer               :: lvl    !< level of the box
-     integer               :: tag    !< for setting tag bits
+     logical               :: in_use=.false.  !< is the box in use?
+     integer               :: tag=a5_init_tag !< for the user
      integer               :: ix($D) !< index in the domain
      integer               :: parent !< index of parent in box list
      !> index of children in box list
@@ -117,7 +118,7 @@ module m_afivo_$Dd
      integer               :: n_cell    !< number of cells per dimension
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box
-     integer, allocatable  :: ud(:)     !< User data (can be anything)
+     class(*), pointer     :: ud=>null() !< User data (can be anything)
 #if $D   == 2
      real(dp), allocatable :: cc(:, :, :) !< cell centered variables
      real(dp), allocatable :: fx(:, :, :) !< x-face centered variables
@@ -222,8 +223,6 @@ module m_afivo_$Dd
   end interface
 
   private :: set_leaves_parents
-  private :: alloc_box
-  private :: dealloc_box
   private :: child_that_contains
   private :: set_nbs_$Dd
   private :: find_nb_$Dd
@@ -233,7 +232,6 @@ module m_afivo_$Dd
   private :: remove_children
   private :: add_children
   private :: set_child_ids
-  private :: l2i
 
 contains
 
@@ -292,15 +290,14 @@ contains
        allocate(tree%lvls(lvl)%parents(0))
     end do
 
-    tree%boxes(:)%tag = 0
-    tree%n_cell       = n_cell
-    tree%n_var_cell   = n_var_cell
-    tree%n_var_face   = n_var_face
-    tree%r_base       = r_min_a
-    tree%dr_base      = dr
-    tree%lvls_max     = lvls_max_a
-    tree%max_id       = 0
-    tree%max_lvl      = 0
+    tree%n_cell          = n_cell
+    tree%n_var_cell      = n_var_cell
+    tree%n_var_face      = n_var_face
+    tree%r_base          = r_min_a
+    tree%dr_base         = dr
+    tree%lvls_max        = lvls_max_a
+    tree%max_id          = 0
+    tree%max_lvl         = 0
   end subroutine a$D_init
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
@@ -359,7 +356,6 @@ contains
           ix                         = ix_list(:, i)
           tree%boxes(id)%lvl         = lvl
           tree%boxes(id)%ix          = ix
-          tree%boxes(id)%tag         = ibset(0, a5_bit_in_use)
           tree%boxes(id)%dr          = tree%dr_base * 0.5_dp**(lvl-1)
           tree%boxes(id)%r_min       = (ix - 1) * tree%dr_base * tree%n_cell
           tree%boxes(id)%n_cell      = tree%n_cell / (2**(1-lvl))
@@ -374,7 +370,7 @@ contains
              tree%boxes(id)%neighbors = nb_list(:, i)
           end where
 
-          call alloc_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+          call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
 
@@ -572,13 +568,6 @@ contains
     !$omp end parallel
   end subroutine a$D_loop_boxes_arg
 
-  !> Clear "bit" from all the tags in the tree
-  subroutine a$D_clear_tagbit(tree, bit)
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: bit
-    tree%boxes(1:tree%max_id)%tag = ibclr(tree%boxes(1:tree%max_id)%tag, bit)
-  end subroutine a$D_clear_tagbit
-
   !> Reorder and resize the list of boxes. If the argument reorder is true,
   !> reorder the boxes but do not resize.
   subroutine a$D_tidy_up(tree, max_frac_used, goal_frac_used, &
@@ -602,7 +591,7 @@ contains
     if (n_clean_min < 1)        stop "a$D_tidy_up: need n_clean_min > 0"
 
     max_id      = tree%max_id
-    n_used      = count(btest(tree%boxes(1:max_id)%tag, a5_bit_in_use))
+    n_used      = count(tree%boxes(1:max_id)%in_use)
     old_size    = size(tree%boxes)
     frac_in_use = n_used / real(old_size, dp)
     n_clean     = nint((goal_frac_used - frac_in_use) * old_size)
@@ -668,13 +657,14 @@ contains
        if (reorder) then
           tree%boxes(1:n_used) = boxes_cpy ! Copy ordered data
           do n = n_used+1, max_id
-             call dealloc_box(tree%boxes(n)) ! Remove unused data
-             tree%boxes(n)%tag = 0
+             if (tree%boxes(n)%in_use) then
+                ! Remove moved data
+                call a$D_clear_box(tree%boxes(n))
+             end if
           end do
        else
           deallocate(tree%boxes)
           call move_alloc(boxes_cpy, tree%boxes)
-          tree%boxes(n_used+1:)%tag = 0
        end if
 
        tree%max_id = n_used
@@ -716,12 +706,15 @@ contains
     end do
   end subroutine set_leaves_parents
 
-  !> Allocate data storage for a box, for its cell- and face-centered data
-  subroutine alloc_box(box, n_cell, n_cc, n_fc)
+  !> Mark box as active and allocate data storage for a box, for its cell- and
+  !> face-centered data
+  subroutine a$D_init_box(box, n_cell, n_cc, n_fc)
     type(box$D_t), intent(inout) :: box !< Box for which we allocate memory
     integer, intent(in)         :: n_cell !< Number of cells per dimension in the box
     integer, intent(in)         :: n_cc   !< Number of cell-centered variables
     integer, intent(in)         :: n_fc   !< Number of face-centered variables
+
+    box%in_use = .true.
 
 #if $D == 2
     allocate(box%cc(0:n_cell+1, 0:n_cell+1, n_cc))
@@ -733,19 +726,22 @@ contains
     allocate(box%fy(n_cell,     n_cell+1,   n_cell,     n_fc))
     allocate(box%fz(n_cell,     n_cell,     n_cell+1,   n_fc))
 #endif
-  end subroutine alloc_box
+  end subroutine a$D_init_box
 
-  !> Deallocate data storage for a box
-  subroutine dealloc_box(box)
+  !> Deallocate data storage for a box and mark inactive
+  subroutine a$D_clear_box(box)
     type(box$D_t), intent(inout) :: box
+
+    box%in_use = .false.
+
     deallocate(box%cc)
     deallocate(box%fx)
     deallocate(box%fy)
 #if $D == 3
     deallocate(box%fz)
 #endif
-    if (allocated(box%ud)) deallocate(box%ud)
-  end subroutine dealloc_box
+    if (associated(box%ud)) deallocate(box%ud)
+  end subroutine a$D_clear_box
 
   ! Set the neighbors of id (using their parent)
   subroutine set_nbs_$Dd(boxes, id)
@@ -820,8 +816,7 @@ contains
 
     ! Store boxes in larger array boxes_cpy
     allocate(boxes_cpy(new_size))
-    boxes_cpy(1:tree%max_id)      = tree%boxes(1:tree%max_id)
-    boxes_cpy(tree%max_id+1:)%tag = 0 ! empty tag
+    boxes_cpy(1:tree%max_id) = tree%boxes(1:tree%max_id)
 
     ! Deallocate current storage
     deallocate(tree%boxes)
@@ -1099,16 +1094,18 @@ contains
     integer                     :: ic, c_id, nb_id, nb_rev, nb
 
     do ic = 1, a$D_num_children
-       c_id            = boxes(id)%children(ic)
-       boxes(c_id)%tag = 0      ! clear tag
+       c_id               = boxes(id)%children(ic)
 
-       do nb = 1, a$D_num_neighbors             ! Remove from neighbors
+       ! Remove from neighbors
+       do nb = 1, a$D_num_neighbors
           nb_id = boxes(c_id)%neighbors(nb)
           if (nb_id > a5_no_box) then
              nb_rev = a$D_nb_rev(nb)
              boxes(nb_id)%neighbors(nb_rev) = a5_no_box
           end if
        end do
+
+       call a$D_clear_box(boxes(c_id))
     end do
 
     boxes(id)%children = a5_no_box
@@ -1131,15 +1128,15 @@ contains
        boxes(c_id)%ix        = c_ix_base + a$D_ch_dix(:,i)
        boxes(c_id)%lvl       = boxes(id)%lvl+1
        boxes(c_id)%parent    = id
+       boxes(c_id)%tag       = a5_init_tag
        boxes(c_id)%children  = a5_no_box
        boxes(c_id)%neighbors = a5_no_box
        boxes(c_id)%n_cell    = boxes(id)%n_cell
        boxes(c_id)%dr        = 0.5_dp * boxes(id)%dr
        boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
             a$D_ch_dix(:,i) * boxes(id)%n_cell
-       boxes(c_id)%tag       = ibset(0, a5_bit_in_use)
 
-       call alloc_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
+       call a$D_init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
     end do
 
     ! Set boundary conditions at children
@@ -1181,6 +1178,20 @@ contains
     type(box$D_t), intent(in) :: box
     a$D_has_children = (box%children(1) /= a5_no_box)
   end function a$D_has_children
+
+  !> Return n_cell at lvl. For all lvls >= 1, n_cell has the same value, but
+  !> for lvls <= 0, n_cell changes.
+  pure function a$D_n_cell(tree, lvl) result(n_cell)
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: lvl
+    integer                :: n_cell !< Output: n_cell at lvl
+
+    if (lvl >= 1) then
+       n_cell = tree%n_cell
+    else
+       n_cell = tree%n_cell / (2**(1-lvl))
+    end if
+  end function a$D_n_cell
 
   !> Return dr at lvl
   pure function a$D_lvl_dr(tree, lvl) result(dr)
@@ -1252,16 +1263,6 @@ contains
     r = box%r_min + (nd_ix-1) * box%dr
   end function a$D_r_node
 
-  !> Map true -> 1, false -> 0
-  elemental integer function l2i(my_bool)
-    logical, intent(in) :: my_bool
-    if (my_bool) then
-       l2i = 1
-    else
-       l2i = 0
-    end if
-  end function l2i
-
   !> Set cc(..., iv) = 0
   subroutine a$D_box_clear_cc(box, iv)
     type(box$D_t), intent(inout) :: box
@@ -1318,6 +1319,18 @@ contains
     box%cc(:,:,:, iv_b) = a * box%cc(:,:,:, iv_a) + b * box%cc(:,:,:, iv_b)
 #endif
   end subroutine a$D_box_lincomb_cc
+
+  !> Copy cc(..., iv_from) from box_in to cc(..., iv_to) on box_out
+  subroutine a$D_box_copy_cc_to(box_from, iv_from, box_to, iv_to)
+    type(box$D_t), intent(in)    :: box_from
+    type(box$D_t), intent(inout) :: box_to
+    integer, intent(in)         :: iv_from, iv_to
+#if $D == 2
+    box_to%cc(:,:, iv_to) = box_from%cc(:,:, iv_from)
+#elif $D == 3
+    box_to%cc(:,:,:, iv_to) = box_from%cc(:,:,:, iv_from)
+#endif
+  end subroutine a$D_box_copy_cc_to
 
   !> Copy cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_copy_cc(box, iv_from, iv_to)
@@ -1498,7 +1511,7 @@ contains
 #endif
 
     nc  = boxes(id)%n_cell
-    dgc = l2i(fill_gc)
+    dgc = 0; if (fill_gc) dgc = 1
 
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
@@ -1707,8 +1720,7 @@ contains
     lo   = 1; if (present(lo_a)) lo = lo_a
     hi   = nc; if (present(hi_a)) hi = hi_a
 
-    ! Offset of child w.r.t. parent
-    ix_offset = (boxes(id)%ix - 2 * boxes(p_id)%ix + 1) * ishft(nc, -1)
+    ix_offset = a$D_get_child_offset(boxes(id))
 
     ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
     ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
@@ -1864,13 +1876,14 @@ contains
     integer, intent(in)         :: id !< Id of box for which we set ghost cells
     integer, intent(in)         :: iv !< Variable for which ghost cells are set
     procedure(a$D_subr_gc)      :: subr_rb !< Procedure called at refinement boundaries
-    procedure(a$D_subr_gc)      :: subr_bc    !< Procedure called at physical boundaries
-    integer                     :: nb
+    procedure(a$D_subr_gc)      :: subr_bc !< Procedure called at physical boundaries
+    integer                     :: nb, nb_id
 
     do nb = 1, a$D_num_neighbors
-       if (boxes(id)%neighbors(nb) > a5_no_box) then
-          call a$D_gc_side_from_nb(boxes, id, nb, iv)
-       else if (boxes(id)%neighbors(nb) == a5_no_box) then
+       nb_id = boxes(id)%neighbors(nb)
+       if (nb_id > a5_no_box) then
+          call a$D_gc_side_from_nb(boxes(id), boxes(nb_id), nb, iv)
+       else if (nb_id == a5_no_box) then
           call subr_rb(boxes, id, nb, iv)
        else
           call subr_bc(boxes, id, nb, iv)
@@ -1890,7 +1903,6 @@ contains
     integer                     :: p_id, ix_offset($D)
 #if $D == 3
     integer                     :: k_c1, k_c2, k, dk
-    real(dp), parameter         :: f1=1/32.0_dp, f3=3*f1, f9=9*f1
 #endif
 
     nc        = boxes(id)%n_cell
@@ -2058,9 +2070,11 @@ contains
              dj = -1 + 2 * iand(j, 1)
 
              boxes(id)%cc(i-di, j, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 1.25_dp * &
-                  boxes(id)%cc(i, j, k, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, k, iv) &
-                  + boxes(id)%cc(i, j+dj, k, iv) + boxes(id)%cc(i, j, k+dk, iv))
+                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j+dj, k, iv) + &
+                  boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
 
@@ -2075,9 +2089,11 @@ contains
              di = -1 + 2 * iand(i, 1)
 
              boxes(id)%cc(i, j-dj, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 1.25_dp * &
-                  boxes(id)%cc(i, j, k, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, k, iv) &
-                  + boxes(id)%cc(i, j+dj, k, iv) + boxes(id)%cc(i, j, k+dk, iv))
+                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j+dj, k, iv) + &
+                  boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
 
@@ -2092,9 +2108,11 @@ contains
              di = -1 + 2 * iand(i, 1)
 
              boxes(id)%cc(i, j, k-dk, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 1.25_dp * &
-                  boxes(id)%cc(i, j, k, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, k, iv) &
-                  + boxes(id)%cc(i, j+dj, k, iv) + boxes(id)%cc(i, j, k+dk, iv))
+                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j+dj, k, iv) + &
+                  boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
 #endif
@@ -2102,39 +2120,38 @@ contains
   end subroutine a$D_sides_extrap
 
   !> Fill values on the side of a box from a neighbor nb
-  subroutine a$D_gc_side_from_nb(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
+  subroutine a$D_gc_side_from_nb(box, box_nb, nb, iv)
+    type(box$D_t), intent(inout) :: box    !< Box on which to fill ghost cells
+    type(box$D_t), intent(in)    :: box_nb !< Neighbouring box
     integer, intent(in)         :: nb        !< Ghost cell / neighbor direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, nb_id
+    integer                     :: nc
 
-    nc    = boxes(id)%n_cell
-    nb_id = boxes(id)%neighbors(nb)
+    nc = box%n_cell
 
     select case (nb)
 #if $D == 2
     case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv)    = boxes(nb_id)%cc(nc, 1:nc, iv)
+       box%cc(0, 1:nc, iv)    = box_nb%cc(nc, 1:nc, iv)
     case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(nb_id)%cc(1, 1:nc, iv)
+       box%cc(nc+1, 1:nc, iv) = box_nb%cc(1, 1:nc, iv)
     case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv)    = boxes(nb_id)%cc(1:nc, nc, iv)
+       box%cc(1:nc, 0, iv)    = box_nb%cc(1:nc, nc, iv)
     case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = boxes(nb_id)%cc(1:nc, 1, iv)
+       box%cc(1:nc, nc+1, iv) = box_nb%cc(1:nc, 1, iv)
 #elif $D == 3
     case (a3_nb_lx)
-       boxes(id)%cc(0, 1:nc, 1:nc, iv)    = boxes(nb_id)%cc(nc, 1:nc, 1:nc, iv)
+       box%cc(0, 1:nc, 1:nc, iv)    = box_nb%cc(nc, 1:nc, 1:nc, iv)
     case (a3_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = boxes(nb_id)%cc(1, 1:nc, 1:nc, iv)
+       box%cc(nc+1, 1:nc, 1:nc, iv) = box_nb%cc(1, 1:nc, 1:nc, iv)
     case (a3_nb_ly)
-       boxes(id)%cc(1:nc, 0, 1:nc, iv)    = boxes(nb_id)%cc(1:nc, nc, 1:nc, iv)
+       box%cc(1:nc, 0, 1:nc, iv)    = box_nb%cc(1:nc, nc, 1:nc, iv)
     case (a3_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = boxes(nb_id)%cc(1:nc, 1, 1:nc, iv)
+       box%cc(1:nc, nc+1, 1:nc, iv) = box_nb%cc(1:nc, 1, 1:nc, iv)
     case (a3_nb_lz)
-       boxes(id)%cc(1:nc, 1:nc, 0, iv)    = boxes(nb_id)%cc(1:nc, 1:nc, nc, iv)
+       box%cc(1:nc, 1:nc, 0, iv)    = box_nb%cc(1:nc, 1:nc, nc, iv)
     case (a3_nb_hz)
-       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = boxes(nb_id)%cc(1:nc, 1:nc, 1, iv)
+       box%cc(1:nc, 1:nc, nc+1, iv) = box_nb%cc(1:nc, 1:nc, 1, iv)
 #endif
     end select
   end subroutine a$D_gc_side_from_nb
@@ -2399,7 +2416,7 @@ contains
     real(dp), intent(in)          :: time        !< Time for output file
     integer, intent(in), optional :: ivs(:)      !< Oncly include these variables
 
-    character(len=*), parameter     :: grid_name = "gg", var_name  = "vv"
+    character(len=*), parameter     :: grid_name = "gg"
     character(len=*), parameter     :: amr_name  = "mesh", dir_name = "data"
     character(len=100), allocatable :: grid_list(:), var_list(:, :)
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max

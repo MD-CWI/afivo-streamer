@@ -15,8 +15,6 @@ program test_base
   integer, parameter   :: i_phi        = 1, i_mrtn = 2
   integer, parameter   :: n_var_cell   = 2
   integer, parameter   :: n_var_face   = 0
-  integer, parameter   :: coarsen_to   = -1
-  real(dp), parameter  :: r_min(2)     = [0.0_dp, 0.0_dp]
   type(ref_info_t)     :: ref_info
   character(len=40)    :: var_names(2) = ["phi ", "mrtn"]
   real(dp)             :: dr

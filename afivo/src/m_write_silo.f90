@@ -172,7 +172,6 @@ contains
     integer, intent(in), optional  :: n_cycle
     real(dp), intent(in), optional :: time
 
-    integer, parameter             :: long_len = 5000
     integer                        :: i, ierr
     integer                        :: dboptix, iostat, old_str_len
     integer                        :: n_grids, name_len, total_len
@@ -228,7 +227,6 @@ contains
     integer, intent(in), optional  :: n_cycle
     real(dp), intent(in), optional :: time
 
-    integer, parameter             :: long_len = 5000
     integer                        :: i, ierr, dboptix, iostat
     integer                        :: old_str_len, n_grids, name_len, total_len
     integer, allocatable           :: m_types(:), name_lengths(:)
