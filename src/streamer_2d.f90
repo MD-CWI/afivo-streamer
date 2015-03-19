@@ -13,7 +13,7 @@ program streamer_2d
   integer, parameter :: name_len = 200
 
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 9
+  integer, parameter :: n_var_cell = 8
   integer, parameter :: i_elec     = 1 ! Electron density
   integer, parameter :: i_pion     = 2 ! Positive ion density
   integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
@@ -21,11 +21,10 @@ program streamer_2d
   integer, parameter :: i_phi      = 5 ! Electrical potential
   integer, parameter :: i_fld      = 6 ! Electric field norm
   integer, parameter :: i_rhs      = 7 ! Source term Poisson
-  integer, parameter :: i_res      = 8 ! Residual (multigrid)
-  integer, parameter :: i_pho      = 9 ! Phototionization rate
+  integer, parameter :: i_pho      = 8 ! Phototionization rate
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "res", "pho"]
+       "pion_old", "phi", "fld", "rhs", "pho"]
 
   ! Indices of face-centered variables
   integer, parameter :: n_var_face = 2
@@ -129,7 +128,6 @@ program streamer_2d
   mg%i_phi        = i_phi
   mg%i_tmp        = i_fld
   mg%i_rhs        = i_rhs
-  mg%i_res        = i_res
 
   ! The number of cycles at the lowest level
   mg%n_cycle_base = 8
@@ -434,7 +432,7 @@ contains
 
     ! Perform n_fmg full-multigrid cycles
     do i = 1, n_fmg
-       call mg2_fas_fmg(tree, mg)
+       call mg2_fas_fmg(tree, mg, .false.)
     end do
 
     ! Compute field from potential
