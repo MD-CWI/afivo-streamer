@@ -13,7 +13,7 @@ program streamer_2d
   integer, parameter :: name_len = 200
 
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 8
+  integer, parameter :: n_var_cell = 9
   integer, parameter :: i_elec     = 1 ! Electron density
   integer, parameter :: i_pion     = 2 ! Positive ion density
   integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
@@ -22,9 +22,10 @@ program streamer_2d
   integer, parameter :: i_fld      = 6 ! Electric field norm
   integer, parameter :: i_rhs      = 7 ! Source term Poisson
   integer, parameter :: i_pho      = 8 ! Phototionization rate
+  integer, parameter :: i_lsf      = 9 ! Phototionization rate
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "pho"]
+       "pion_old", "phi", "fld", "rhs", "pho", "lsf"]
 
   ! Indices of face-centered variables
   integer, parameter :: n_var_face = 2
@@ -128,12 +129,19 @@ program streamer_2d
   mg%i_phi        = i_phi
   mg%i_tmp        = i_fld
   mg%i_rhs        = i_rhs
+  mg%i_lsf        = i_lsf
 
   ! The number of cycles at the lowest level
   mg%n_cycle_base = 8
 
   ! Routines to use for ...
   mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
+  mg%box_op      => mg2_auto_op
+  mg%box_corr    => mg2_auto_corr
+  mg%box_gsrb    => mg2_auto_gsrb
+  ! mg%box_op      => mg2_box_lpllsf
+  ! mg%box_corr    => mg2_box_corr_lpllsf
+  ! mg%box_gsrb    => mg2_box_gsrb_lpllsf
 
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
@@ -214,7 +222,7 @@ program streamer_2d
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
-        call prolong_to_new_children(tree, ref_info)
+        call prolong_to_new_boxes(tree, ref_info)
 
         ! Compute the field on the
         call compute_fld(tree, n_fmg_cycles)
@@ -315,7 +323,25 @@ contains
     end do
 
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
+
+    call set_box_lsf(box)
   end subroutine set_init_cond
+
+  subroutine set_box_lsf(box)
+    type(box2_t), intent(inout) :: box
+    integer                     :: i, j, nc
+    real(dp)                    :: xy(2)
+
+    nc = box%n_cell
+
+    do j = 0, nc+1
+       do i = 0, nc+1
+          xy = a2_r_cc(box, [i,j])
+          box%cc(i, j, i_lsf) = norm2(xy-0.5_dp * domain_len) - &
+               0.1_dp * domain_len
+       end do
+    end do
+  end subroutine set_box_lsf
 
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
@@ -686,7 +712,7 @@ contains
   end subroutine set_photoi_rate
 
   ! For each box that gets refined, set data on its children using this routine
-  subroutine prolong_to_new_children(tree, ref_info)
+  subroutine prolong_to_new_boxes(tree, ref_info)
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
@@ -697,6 +723,7 @@ contains
           call a2_prolong1_to(tree%boxes, id, i_elec)
           call a2_prolong1_to(tree%boxes, id, i_pion)
           call a2_prolong1_to(tree%boxes, id, i_phi)
+          call set_box_lsf(tree%boxes(id))
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
@@ -709,7 +736,7 @@ contains
                a2_sides_extrap, sides_bc_pot)
        end do
     end do
-  end subroutine prolong_to_new_children
+  end subroutine prolong_to_new_boxes
 
   ! This fills ghost cells near physical boundaries for the potential
   subroutine sides_bc_pot(boxes, id, nb, iv)
@@ -897,8 +924,8 @@ contains
     call CFG_get(cfg, "photoi_num_photons", photoi_num_photons)
 
     if (photoi_enabled) &
-       photoi_tbl = PH_get_tbl_air(photoi_frac_O2 * gas_pressure)
+         photoi_tbl = PH_get_tbl_air(photoi_frac_O2 * gas_pressure)
 
   end subroutine initialize
 
-end program streamer_2d
+end program
