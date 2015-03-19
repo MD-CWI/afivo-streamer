@@ -419,7 +419,8 @@ contains
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
 
-    if (box_c%tag == a5_init_tag) call mg$D_set_box_tag(box_c, mg)
+    ! We can only correct after gsrb, so tag should always be set
+    if (box_p%tag == a5_init_tag) stop "mg$D_auto_corr: box tag not set"
 
     select case(box_p%tag)
     case (mg_normal_box)
@@ -459,8 +460,8 @@ contains
        a = minval(box%cc(:, :, :, mg%i_lsf))
        b = maxval(box%cc(:, :, :, mg%i_lsf))
 #endif
-       is_deps = (a /= b)
-       is_eps = .not. is_deps .and. (a /= 1.0_dp .or. b /= 1.0_dp)
+       is_deps = (b > a)
+       if (.not. is_deps) is_eps = (a < 1 .or. a > 1)
     end if
 
     if (count([is_lsf, is_eps, is_deps]) > 1) &
