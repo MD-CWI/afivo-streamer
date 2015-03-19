@@ -51,7 +51,7 @@ program test_mgb
   mg%i_tmp       = i_tmp
   mg%i_rhs       = i_rhs
   mg%i_lsf       = i_lsf
-  mg%lsf_bnd_val = 2.0_dp
+  mg%lsf_bnd_val = 1.0e3_dp
   mg%sides_bc    => sides_bc
   mg%box_op      => mg2_box_lpllsf
   mg%box_corr    => mg2_box_corr_lpllsf
@@ -82,7 +82,7 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
 
-    if (boxes(id)%lvl < 6) &
+    if (boxes(id)%lvl < 6 .and. boxes(id)%r_min(2) < 2.1_dp) &
          ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
@@ -96,9 +96,10 @@ contains
 
     do j = 0, nc+1
        do i = 0, nc+1
-          xy = a2_r_cc(box, [i,j]) - 2
-          box%cc(i, j, i_rhs) = 0 * exp(-sum((xy)**2))
-          box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3
+          xy = a2_r_cc(box, [i,j]) - [2, 2]
+          box%cc(i, j, i_rhs) = 1000 * exp(-sum((xy)**2))
+          ! box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3
+          box%cc(i, j, i_lsf) = sum(xy**2)-0.5_dp
        end do
     end do
   end subroutine set_init_cond
@@ -110,18 +111,16 @@ contains
 
     nc = boxes(id)%n_cell
 
-    if (boxes(id)%neighbors(nb) == -1) then
-       select case (nb)
-       case (a2_nb_lx)
-          boxes(id)%cc(0, 1:nc, iv) = 2-boxes(id)%cc(1, 1:nc, iv)
-       case (a2_nb_hx)
-          boxes(id)%cc(nc+1, 1:nc, iv) = 2-boxes(id)%cc(nc, 1:nc, iv)
-       case (a2_nb_ly)
-          boxes(id)%cc(1:nc, 0, iv) = 2-boxes(id)%cc(1:nc, 1, iv)
-       case (a2_nb_hy)
-          boxes(id)%cc(1:nc, nc+1, iv) = 2-boxes(id)%cc(1:nc, nc, iv)
-       end select
-    end if
+    select case (nb)
+    case (a2_nb_lx)
+       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
+    case (a2_nb_hx)
+       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
+    case (a2_nb_ly)
+       boxes(id)%cc(1:nc, 0, iv) = 4-boxes(id)%cc(1:nc, 1, iv)
+    case (a2_nb_hy)
+       boxes(id)%cc(1:nc, nc+1, iv) = 2-boxes(id)%cc(1:nc, nc, iv)
+    end select
   end subroutine sides_bc
 
-end program test_mgb
+end program
