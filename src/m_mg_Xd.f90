@@ -833,7 +833,7 @@ contains
                   bval, dd(4), val(4))
              call lsf_dist_val(lsf, box%cc(i, j, k-1, [i_phi, i_lsf]), &
                   bval, dd(5), val(5))
-             call lsf_dd_val(lsf, box%cc(i, j, k+1, [i_phi, i_lsf]), &
+             call lsf_dist_val(lsf, box%cc(i, j, k+1, [i_phi, i_lsf]), &
                   bval, dd(6), val(6))
 
              ! Solve for generalized Laplacian (see routine mg$D_box_lpllsf)
