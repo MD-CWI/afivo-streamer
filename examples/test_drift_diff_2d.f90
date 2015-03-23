@@ -106,7 +106,7 @@ program test_drift_diff
 
            ! Two forward Euler steps over dt
            do i = 1, 2
-              call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+              call a2_loop_boxes_arg(tree, fluxes_centdif, [diff_coeff, vel_x, vel_y])
               call a2_loop_box_arg(tree, update_solution, [dt])
               call a2_restrict_tree(tree, i_phi)
               call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -142,11 +142,6 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 0:nc, i_phi))))
 
-    ! if (boxes(id)%lvl < 6 .and. all(boxes(id)%r_min < 4.0_dp)) then
-    !    ref_flags(id) = a5_do_ref
-    ! else if (boxes(id)%lvl < 5) then
-    !    ref_flags(id) = a5_do_ref
-    ! end if
     if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
        ref_flags(id) = a5_do_ref
     else if (diff > 0.2_dp * 0.05_dp) then
@@ -228,6 +223,28 @@ contains
             flux_args(3) * boxes(id)%cc(1:nc, 1:nc+1, 1)
     end if
   end subroutine fluxes_upwind1
+
+  subroutine fluxes_centdif(boxes, id, flux_args)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id
+    real(dp), intent(in)        :: flux_args(:)
+    real(dp)                    :: inv_dr
+    integer                     :: nc
+
+    nc     = boxes(id)%n_cell
+    inv_dr = 1/boxes(id)%dr
+
+    ! Diffusion
+    boxes(id)%fx(:,:,i_phi) = boxes(id)%cc(0:nc, 1:nc, i_phi) - boxes(id)%cc(1:nc+1, 1:nc, i_phi)
+    boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) * flux_args(1) * inv_dr
+    boxes(id)%fy(:,:,i_phi) = boxes(id)%cc(1:nc, 0:nc, 1) - boxes(id)%cc(1:nc, 1:nc+1, 1)
+    boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) * flux_args(1) * inv_dr
+
+    boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) + flux_args(2) * 0.5_dp * &
+         (boxes(id)%cc(0:nc, 1:nc, 1) + boxes(id)%cc(1:nc+1, 1:nc, 1))
+    boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) + flux_args(3) * 0.5_dp * &
+         (boxes(id)%cc(1:nc, 0:nc, 1) + boxes(id)%cc(1:nc, 1:nc+1, 1))
+  end subroutine fluxes_centdif
 
   elemental function limiter_koren(theta)
     real(dp), intent(in) :: theta
@@ -391,4 +408,4 @@ contains
     boxes(id)%cc(1, i, iv) = 0    ! Prevent warning unused
   end subroutine have_no_bc
 
-end program test_drift_diff
+end program
