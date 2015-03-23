@@ -142,18 +142,18 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 0:nc, i_phi))))
 
-    if (boxes(id)%lvl < 6 .and. all(boxes(id)%r_min < 4.0_dp)) then
-       ref_flags(id) = a5_do_ref
-    else if (boxes(id)%lvl < 5) then
-       ref_flags(id) = a5_do_ref
-    end if
-    ! if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
+    ! if (boxes(id)%lvl < 6 .and. all(boxes(id)%r_min < 4.0_dp)) then
     !    ref_flags(id) = a5_do_ref
-    ! else if (diff > 0.2_dp * 0.05_dp) then
-    !    ref_flags(id) = a5_kp_ref
-    ! else if (boxes(id)%lvl > 4) then
-    !    ref_flags(id) = a5_rm_ref
+    ! else if (boxes(id)%lvl < 5) then
+    !    ref_flags(id) = a5_do_ref
     ! end if
+    if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
+       ref_flags(id) = a5_do_ref
+    else if (diff > 0.2_dp * 0.05_dp) then
+       ref_flags(id) = a5_kp_ref
+    else if (boxes(id)%lvl > 4) then
+       ref_flags(id) = a5_rm_ref
+    end if
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -193,7 +193,7 @@ contains
     xy_t = xy - [vel_x, vel_y] * t
     xy_t = modulo(xy_t, domain_len)
 
-    sol = sin(xy_t(1))**2 * cos(xy_t(2))**2
+    sol = sin(xy_t(1))**10 * cos(xy_t(2))**10
   end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)
