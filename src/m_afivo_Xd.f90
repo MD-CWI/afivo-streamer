@@ -869,18 +869,17 @@ contains
           end if
        end do
 
+       ! Update leaves / parents
+       call set_leaves_parents(tree%boxes, tree%lvls(lvl))
+
        ! Set next level ids to children of this level
-       call set_child_ids(tree%lvls(lvl)%ids, &
+       call set_child_ids(tree%lvls(lvl)%parents, &
             tree%lvls(lvl+1)%ids, tree%boxes)
 
-       ! Update connectivity of children
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          if (a$D_has_children(tree%boxes(id))) then
-             do i_c = 1, a$D_num_children
-                call set_nbs_$Dd(tree%boxes, tree%boxes(id)%children(i_c))
-             end do
-          end if
+       ! Update connectivity of new children (id > max_id_prev)
+       do i = 1, size(tree%lvls(lvl+1)%ids)
+          id = tree%lvls(lvl+1)%ids(i)
+          if (id > max_id_prev) call set_nbs_$Dd(tree%boxes, id)
        end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
@@ -888,11 +887,9 @@ contains
 
     tree%max_lvl = lvl
 
-    ! Update leaves and parents. max_lvl+1 because we might have removed a
-    ! refinement lvl.
-    do lvl = 1, tree%max_lvl+1
-       call set_leaves_parents(tree%boxes, tree%lvls(lvl))
-    end do
+    ! Update leaves and parents for the last level, because we might have
+    ! removed a refinement lvl.
+    call set_leaves_parents(tree%boxes, tree%lvls(tree%max_lvl+1))
 
     ! Set information about the refinement
     call set_ref_info(tree, ref_flags, ref_info)
@@ -1007,7 +1004,7 @@ contains
           id = tree%lvls(lvl)%ids(i)
           call set_ref_flags(tree%boxes, id, my_ref_flags)
        end do
-       !$omp end do nowait
+       !$omp end do
     end do
 
     ! Now set refinement flags to the maximum (refine > keep ref > derefine)
@@ -1038,6 +1035,8 @@ contains
           id = tree%lvls(lvl)%leaves(i)
 
           if (ref_flags(id) > a5_kp_ref) then ! This means refine
+             ref_flags(id) = a5_refine ! Mark for actual refinement
+
              ! Ensure we will have the necessary neighbors
              do nb = 1, a$D_num_neighbors
                 nb_id = tree%boxes(id)%neighbors(nb)
@@ -1048,7 +1047,6 @@ contains
                    ref_flags(p_nb_id) = a5_refine ! Mark for actual refinement
                 end if
              end do
-             ref_flags(id) = a5_refine ! Mark for actual refinement
 
           else if (ref_flags(id) == a5_rm_ref) then
              ! Ensure we do not remove a required neighbor
@@ -1058,6 +1056,7 @@ contains
                    if (a$D_has_children(tree%boxes(nb_id)) .or. &
                         ref_flags(nb_id) > a5_kp_ref) then
                       ref_flags(id) = a5_kp_ref
+                      exit
                    end if
                 end if
              end do
@@ -1075,7 +1074,7 @@ contains
           ! Can only remove children if they are all marked for
           ! derefinement, and the box itself not for refinement.
           c_ids = tree%boxes(id)%children
-          if (all(ref_flags(c_ids) < a5_kp_ref) .and. &
+          if (all(ref_flags(c_ids) == a5_rm_ref) .and. &
                ref_flags(id) <= a5_kp_ref) then
              ref_flags(id) = a5_derefine
           else
@@ -1153,22 +1152,18 @@ contains
     integer, intent(in)                 :: p_ids(:) !< All the parents ids
     integer, allocatable, intent(inout) :: c_ids(:) !< Output: all the children's ids
     type(box$D_t), intent(in)            :: boxes(:) !< List of all the boxes
-    integer                             :: i, ip, i_c, n_children
+    integer                             :: i, i0, i1, n_children
 
-    ! Count a$D_num_children times the number of refined parent blocks
-    n_children = a$D_num_children * count(a$D_has_children(boxes(p_ids)))
+    n_children = a$D_num_children * size(p_ids)
     if (n_children /= size(c_ids)) then
        deallocate(c_ids)
        allocate(c_ids(n_children))
     end if
 
-    i_c = 0
     do i = 1, size(p_ids)
-       ip = p_ids(i)
-       if (a$D_has_children(boxes(ip))) then
-          c_ids(i_c+1:i_c+a$D_num_children) = boxes(ip)%children
-          i_c = i_c + a$D_num_children
-       end if
+       i1 = i * a$D_num_children
+       i0 = i1 - a$D_num_children + 1
+       c_ids(i0:i1) = boxes(p_ids(i))%children
     end do
   end subroutine set_child_ids
 
