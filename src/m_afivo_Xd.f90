@@ -222,9 +222,20 @@ module m_afivo_$Dd
        type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
        integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
        integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled,
-       !< see a$D_nb_lx etc.
        integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
      end subroutine a$D_subr_gc
+
+     !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries
+     subroutine a$D_subr_egc(boxes, id, nb, iv, gc_dist, gc_data, nc)
+       import
+       type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
+       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled
+       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
+       integer, intent(in)         :: gc_dist  !< Ghost cell distance (shoud be > 1)
+       real(dp), intent(out)       :: gc_data(nc) !< Output: the filled ghost cells
+       integer, intent(in)         :: nc       !< Number of cells (i.e., box%n_cell)
+     end subroutine a$D_subr_egc
   end interface
 
   private :: set_leaves_parents
@@ -1607,6 +1618,7 @@ contains
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+
           boxes(id)%cc(i, j, iv) = &
                0.5_dp * boxes(p_id)%cc(i_c1, j_c1, iv) + &
                0.25_dp * boxes(p_id)%cc(i_c2, j_c1, iv) + &
@@ -1797,73 +1809,31 @@ contains
 #endif
   end subroutine a$D_prolong2_to
 
-  !> Quadratic interpolation (using data from neighbor) to fill ghost cells
-  subroutine a$D_sides_prolong2(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, hnc, ix, i, j, i_f, j_f
-    integer                     :: i_c, j_c, p_nb_id, dsign
-    integer                     :: p_id, ix_offset($D)
-    real(dp) :: f0, fx, fy, fxx, fyy, f2
+  !> Get extra ghost cell data for boxes(id), at ghost cell index igc (>1). If
+  !> possible, get this from a neighbor, otherwise use linear interpolation.
+  subroutine a$D_extra_gc(boxes, id, iv, nb, igc, bc_method, gc_data, nc)
+    type(box$D_t), intent(inout)   :: boxes(:) !< List of all the boxes
+    integer, intent(in)           :: id       !< Box that needs extra ghost cells
+    integer, intent(in)           :: iv       !< Index of variable
+    integer, intent(in)           :: nb       !< Neighbor direction
+    integer, intent(in)           :: igc      !< Ghost cell index (> 1)
+    integer, intent(in)           :: nc       !< Number of cells of the box
+    real(dp), intent(out) :: gc_data(nc)
+    procedure(a$D_subr_egc) :: bc_method
+    ! TODO
+    ! nb_id = boxes(id)%neighbors(nb)
 
-    nc        = boxes(id)%n_cell
-    hnc       = ishft(nc, -1)
-    p_id      = boxes(id)%parent
-    p_nb_id   = boxes(p_id)%neighbors(nb)
-    ix_offset = a$D_get_child_offset(boxes(id), nb)
-    ix        = a$D_nb_hi01(nb) * (nc+1)
-    dsign     = 1 - 2 * a$D_nb_hi01(nb)
-
-    select case (a$D_nb_dim(nb))
-    case (1)
-#if $D == 2
-       i_c = ix_offset(1) + ishft(ix+1, -1) ! (ix+1)/2
-       do j = 1, hnc
-          j_c = j + ix_offset(2)
-          j_f = 2 * j - 1
-
-          f0 = boxes(p_nb_id)%cc(i_c, j_c, iv)
-          fx = 0.125_dp * (boxes(p_nb_id)%cc(i_c+1, j_c, iv) - &
-               boxes(p_nb_id)%cc(i_c-1, j_c, iv))
-          fy = 0.125_dp * (boxes(p_nb_id)%cc(i_c, j_c+1, iv) - &
-               boxes(p_nb_id)%cc(i_c, j_c-1, iv))
-          fxx = 0.03125_dp * (boxes(p_nb_id)%cc(i_c-1, j_c, iv) - &
-               2 * f0 + boxes(p_nb_id)%cc(i_c+1, j_c, iv))
-          fyy = 0.03125_dp * (boxes(p_nb_id)%cc(i_c, j_c-1, iv) - &
-               2 * f0 + boxes(p_nb_id)%cc(i_c, j_c+1, iv))
-          f2 = fxx + fyy
-
-          boxes(id)%cc(ix, j_f, iv) = f0 + dsign * fx - fy + f2
-          boxes(id)%cc(ix, j_f+1, iv) = f0 + dsign * fx + fy + f2
-       end do
-    case (2)
-       j_c = ix_offset(2) + ishft(ix+1, -1) ! (ix+1)/2
-       do i = 1, hnc
-          i_c = i + ix_offset(1)
-          i_f = 2 * i - 1
-
-          f0 = boxes(p_nb_id)%cc(i_c, j_c, iv)
-          fx = 0.125_dp * (boxes(p_nb_id)%cc(i_c+1, j_c, iv) - &
-               boxes(p_nb_id)%cc(i_c-1, j_c, iv))
-          fy = 0.125_dp * (boxes(p_nb_id)%cc(i_c, j_c+1, iv) - &
-               boxes(p_nb_id)%cc(i_c, j_c-1, iv))
-          fxx = 0.03125_dp * (boxes(p_nb_id)%cc(i_c-1, j_c, iv) - &
-               2 * f0 + boxes(p_nb_id)%cc(i_c+1, j_c, iv))
-          fyy = 0.03125_dp * (boxes(p_nb_id)%cc(i_c, j_c-1, iv) - &
-               2 * f0 + boxes(p_nb_id)%cc(i_c, j_c+1, iv))
-          f2 = fxx + fyy
-
-          boxes(id)%cc(i_f, ix, iv) = f0 - fx + dsign * fy + f2
-          boxes(id)%cc(i_f+1, ix, iv) = f0 + fx + dsign * fy + f2
-       end do
-#elif $D == 3
-    case default
-       stop
-#endif
-    end select
-  end subroutine a$D_sides_prolong2
+    ! j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+    ! j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+    ! do i = 1, nc
+    !    i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+    !    i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+    !    boxes(id)%cc(i, j, iv) = &
+    !         0.5_dp * boxes(p_id)%cc(i_c1, j_c1, iv) + &
+    !         0.25_dp * boxes(p_id)%cc(i_c2, j_c1, iv) + &
+    !         0.25_dp * boxes(p_id)%cc(i_c1, j_c2, iv)
+    ! end do
+  end subroutine a$D_extra_gc
 
   !> Restrict the children of a box to the box (e.g., in 2D, average the values
   !> at the four children to get the value for the parent)

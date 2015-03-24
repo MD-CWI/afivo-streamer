@@ -50,7 +50,7 @@ program test_base
   call a2_loop_boxes(tree, set_morton_variable)
 
   ! Fill ghost cells for phi
-  call a2_gc_sides(tree, i_phi, a2_sides_prolong2, have_no_bc)
+  call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
 
   do i = 1, 12
      print *, "i = ", i, "max_id", tree%max_id
@@ -115,7 +115,7 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
-               a2_sides_prolong2, have_no_bc)
+               a2_sides_interp, have_no_bc)
        end do
     end do
   end subroutine prolong_to_new_children
