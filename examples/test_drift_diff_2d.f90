@@ -106,7 +106,7 @@ program test_drift_diff
 
            ! Two forward Euler steps over dt
            do i = 1, 2
-              call a2_loop_boxes_arg(tree, fluxes_centdif, [diff_coeff, vel_x, vel_y])
+              call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
               call a2_loop_box_arg(tree, update_solution, [dt])
               call a2_restrict_tree(tree, i_phi)
               call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -269,45 +269,40 @@ contains
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
     real(dp)                    :: inv_dr, theta
-    real(dp)                    :: gradp, gradc, gradn
-    integer                     :: i, j, nc, nb_id
+    real(dp)                    :: tmp, gradp, gradc, gradn
+    real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
+    integer                     :: i, j, nc
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+
+    call a2_gc2_box_sides(boxes, id, i_phi, a2_sides2_prolong1, &
+         have_no_bc2, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
        do i = 1, nc+1
           gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
           if (flux_args(2) < 0.0_dp) then
-
              if (i == nc+1) then
-                nb_id = boxes(id)%neighbors(a2_nb_hx)
-                if (nb_id > a5_no_box) then
-                   gradn = boxes(nb_id)%cc(2, j, i_phi) - boxes(id)%cc(i, j, i_phi)
-                else
-                   gradn = 0
-                end if
+                tmp = gc_data(j, a2_nb_hx)
              else
-                gradn = boxes(id)%cc(i+1, j, i_phi) - boxes(id)%cc(i, j, i_phi)
+                tmp = boxes(id)%cc(i+1, j, i_phi)
              end if
 
+             gradn = tmp - boxes(id)%cc(i, j, i_phi)
              theta = ratio(gradc, gradn)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
                   (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
           else                  ! flux_args(2) > 0
 
              if (i == 1) then
-                nb_id = boxes(id)%neighbors(a2_nb_lx)
-                if (nb_id > a5_no_box) then
-                   gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(nb_id)%cc(nc-1, j, i_phi)
-                else
-                   gradp = 0
-                end if
+                tmp = gc_data(j, a2_nb_lx)
              else
-                gradp = boxes(id)%cc(i-1, j, i_phi) - boxes(id)%cc(i-2, j, i_phi)
+                tmp = boxes(id)%cc(i-2, j, i_phi)
              end if
 
+             gradp = boxes(id)%cc(i-1, j, i_phi) - tmp
              theta = ratio(gradc, gradp)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
                   (boxes(id)%cc(i-1, j, i_phi) + limiter_koren(theta) * gradp)
@@ -324,34 +319,24 @@ contains
        do i = 1, nc
           gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
           if (flux_args(3) < 0.0_dp) then
-
              if (j == nc+1) then
-                nb_id = boxes(id)%neighbors(a2_nb_hy)
-                if (nb_id > a5_no_box) then
-                   gradn = boxes(nb_id)%cc(i, 2, i_phi) - boxes(id)%cc(i, j, i_phi)
-                else
-                   gradn = 0
-                end if
+                tmp = gc_data(i, a2_nb_hy)
              else
-                gradn = boxes(id)%cc(i, j+1, i_phi) - boxes(id)%cc(i, j, i_phi)
+                tmp = boxes(id)%cc(i, j+1, i_phi)
              end if
 
+             gradn = tmp - boxes(id)%cc(i, j, i_phi)
              theta = ratio(gradc, gradn)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
                   (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
           else                  ! flux_args(3) > 0
-
              if (j == 1) then
-                nb_id = boxes(id)%neighbors(a2_nb_ly)
-                if (nb_id > a5_no_box) then
-                   gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(nb_id)%cc(i, nc-1, i_phi)
-                else
-                   gradp = 0
-                end if
+                tmp = gc_data(i, a2_nb_ly)
              else
-                gradp = boxes(id)%cc(i, j-1, i_phi) - boxes(id)%cc(i, j-2, i_phi)
+                tmp = boxes(id)%cc(i, j-2, i_phi)
              end if
 
+             gradp = boxes(id)%cc(i, j-1, i_phi) - tmp
              theta = ratio(gradc, gradp)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
                   (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
@@ -407,5 +392,14 @@ contains
     stop "We have no boundary conditions in this example"
     boxes(id)%cc(1, i, iv) = 0    ! Prevent warning unused
   end subroutine have_no_bc
+
+  subroutine have_no_bc2(boxes, id, nb, iv, gc_data, nc)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, iv, nc
+    real(dp), intent(out)       :: gc_data(nc)
+    stop "We have no boundary conditions in this example"
+    boxes(id)%cc(1, i, iv) = 0    ! Prevent warning unused
+    gc_data = nb                  ! idem
+  end subroutine have_no_bc2
 
 end program
