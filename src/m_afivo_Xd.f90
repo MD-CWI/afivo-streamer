@@ -136,15 +136,6 @@ module m_afivo_$Dd
 #endif
   end type box$D_t
 
-  !> Type for storing additional (besides the standard one) ghost cells
-  type gc$D_t
-#if $D == 2
-     real(dp), allocatable :: gc2(:, :) !< Extra ghost cell data
-#elif $D == 3
-     real(dp), allocatable :: gc2(:, :, :) !< Extra ghost cell data
-#endif
-  end type gc$D_t
-
   !> Type which contains the indices of all boxes at a refinement level, as well
   !> as a list with all the "leaf" boxes and non-leaf (parent) boxes
   type lvl_t
@@ -1895,8 +1886,9 @@ contains
     end do
   end subroutine a$D_gc_box_sides
 
-  !> Fill ghost cells for variables iv on the sides of a box, using
-  !> subr_rb on refinement boundaries and subr_bc on physical boundaries
+  !> Get a second layer of ghost cell data (the 'normal' routines give just one
+  !> layer of ghost cells). Use subr_rb > on refinement boundaries and subr_bc
+  !> on physical boundaries.
   subroutine a$D_gc2_box_sides(boxes, id, iv, subr_rb, subr_bc, gc_data, nc)
     type(box$D_t), intent(inout) :: boxes(:)        !< List of all the boxes
     integer, intent(in)          :: id              !< Id of box for which we set ghost cells
