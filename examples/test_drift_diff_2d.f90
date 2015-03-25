@@ -39,7 +39,6 @@ program test_drift_diff
   print *, "Create the base mesh"
   call a2_set_base(tree, ix_list, nb_list)
 
-  i          = 0
   output_cnt = 0
   time       = 0
   dt_adapt   = 0.01_dp
@@ -63,7 +62,6 @@ program test_drift_diff
   call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
 
   do
-     i       = i + 1
      dr_min  = a2_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
@@ -94,6 +92,7 @@ program test_drift_diff
         ! Forward Euler
         do n = 1, n_steps
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+           call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -107,6 +106,7 @@ program test_drift_diff
            ! Two forward Euler steps over dt
            do i = 1, 2
               call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+              call a2_consistent_fluxes(tree, [1])
               call a2_loop_box_arg(tree, update_solution, [dt])
               call a2_restrict_tree(tree, i_phi)
               call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -186,8 +186,6 @@ contains
     real(dp) :: sol, xy_t(2)
 
     xy_t = xy - [vel_x, vel_y] * t
-    xy_t = modulo(xy_t, domain_len)
-
     sol = sin(xy_t(1))**10 * cos(xy_t(2))**10
   end function solution
 
@@ -246,29 +244,39 @@ contains
          (boxes(id)%cc(1:nc, 0:nc, 1) + boxes(id)%cc(1:nc, 1:nc+1, 1))
   end subroutine fluxes_centdif
 
-  elemental function limiter_koren(theta)
-    real(dp), intent(in) :: theta
-    real(dp)             :: limiter_koren
-    real(dp), parameter  :: one_sixth = 1.0_dp / 6.0_dp
-    limiter_koren = max(0.0d0, min(1.0_dp, theta, &
-         (1.0_dp + 2.0_dp * theta) * one_sixth))
-  end function limiter_koren
+  !> Modified implementation of Koren limiter, to avoid division or the min/max
+  !> functions, which can be problematic / expensive. In most literature, you
+  !> have r = ga / gb (ratio of gradients). Then the limiter phi(r) is
+  !> multiplied with gb. With this implementation, you get phi(r) * gb
+  elemental function koren_mlim(ga, gb)
+    real(dp), intent(in) :: ga  ! Density gradient (numerator)
+    real(dp), intent(in) :: gb  ! Density gradient (denominator)
+    real(dp), parameter  :: sixth = 1/6.0_dp
+    real(dp)             :: koren_mlim, t1, t2
 
-  elemental function ratio(numerator, denominator)
-    real(dp), intent(in) :: numerator, denominator
-    real(dp)             :: ratio
-    if (denominator /= 0.0_dp) then
-       ratio = numerator / denominator
+    t1 = ga * ga                ! Two temporary variables,
+    t2 = ga * gb                ! so that we do not need sign()
+
+    if (t2 <= 0) then
+       ! ga and gb have different sign: local minimum/maximum
+       koren_mlim = 0
+    else if (t1 >= 2.5_dp * t2) then
+       ! (1+2*ga/gb)/6 => 1, limiter has value 1
+       koren_mlim = gb
+    else if (t1 > 0.25_dp * t2) then
+       ! 1 > ga/gb > 1/4, limiter has value (1+2*ga/gb)/6
+       koren_mlim = sixth * (gb + 2*ga)
     else
-       ratio = numerator * huge(1.0_dp)
+       ! 0 < ga/gb < 1/4, limiter has value ga/gb
+       koren_mlim = ga
     end if
-  end function ratio
+  end function koren_mlim
 
   subroutine fluxes_koren(boxes, id, flux_args)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
-    real(dp)                    :: inv_dr, theta
+    real(dp)                    :: inv_dr
     real(dp)                    :: tmp, gradp, gradc, gradn
     real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
     integer                     :: i, j, nc
@@ -291,11 +299,9 @@ contains
              end if
 
              gradn = tmp - boxes(id)%cc(i, j, i_phi)
-             theta = ratio(gradc, gradn)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
-                  (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
+                  (boxes(id)%cc(i, j, i_phi) - koren_mlim(gradc, gradn))
           else                  ! flux_args(2) > 0
-
              if (i == 1) then
                 tmp = gc_data(j, a2_nb_lx)
              else
@@ -303,9 +309,8 @@ contains
              end if
 
              gradp = boxes(id)%cc(i-1, j, i_phi) - tmp
-             theta = ratio(gradc, gradp)
              boxes(id)%fx(i, j, i_phi) = flux_args(2) * &
-                  (boxes(id)%cc(i-1, j, i_phi) + limiter_koren(theta) * gradp)
+                  (boxes(id)%cc(i-1, j, i_phi) + koren_mlim(gradc, gradp))
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
@@ -326,9 +331,8 @@ contains
              end if
 
              gradn = tmp - boxes(id)%cc(i, j, i_phi)
-             theta = ratio(gradc, gradn)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
-                  (boxes(id)%cc(i, j, i_phi) - limiter_koren(theta) * gradn)
+                  (boxes(id)%cc(i, j, i_phi) - koren_mlim(gradc, gradn))
           else                  ! flux_args(3) > 0
              if (j == 1) then
                 tmp = gc_data(i, a2_nb_ly)
@@ -337,9 +341,8 @@ contains
              end if
 
              gradp = boxes(id)%cc(i, j-1, i_phi) - tmp
-             theta = ratio(gradc, gradp)
              boxes(id)%fy(i, j, i_phi) = flux_args(3) * &
-                  (boxes(id)%cc(i, j-1, i_phi) + limiter_koren(theta) * gradp)
+                  (boxes(id)%cc(i, j-1, i_phi) + koren_mlim(gradc, gradp))
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
@@ -398,7 +401,7 @@ contains
     integer, intent(in)         :: id, nb, iv, nc
     real(dp), intent(out)       :: gc_data(nc)
     stop "We have no boundary conditions in this example"
-    boxes(id)%cc(1, i, iv) = 0    ! Prevent warning unused
+    boxes(id)%cc(1, nb, iv) = 0    ! Prevent warning unused
     gc_data = nb                  ! idem
   end subroutine have_no_bc2
 

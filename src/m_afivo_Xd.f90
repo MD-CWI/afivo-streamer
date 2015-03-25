@@ -173,8 +173,8 @@ module m_afivo_$Dd
 
   !> Type that contains the refinement changes in a tree
   type ref_info_t
-     integer :: n_add                        !< Total number of added boxes
-     integer :: n_rm                         !< Total number removed boxes
+     integer :: n_add = 0                    !< Total number of added boxes
+     integer :: n_rm = 0                     !< Total number removed boxes
      type(ref_lvl_t), allocatable :: lvls(:) !< Information per level
   end type ref_info_t
 
@@ -1601,50 +1601,69 @@ contains
   !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
   !> corner ghost cells.
   subroutine a$D_prolong1_to(boxes, id, iv)
-    type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
-    integer, intent(in)           :: id       !< Id of child
-    integer, intent(in)           :: iv       !< Variable to fill
-    integer                       :: nc, p_id, ix_offset($D)
-    integer                       :: i, j, i_c1, i_c2, j_c1, j_c2
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)          :: id       !< Id of child
+    integer, intent(in)          :: iv       !< Variable to fill
+    integer                      :: hnc, nc, p_id, ix_offset($D)
+    integer                      :: i, j, i_c, i_f, j_c, j_f
+    real(dp)                     :: f0, flx, fhx, fly, fhy
 #if $D == 3
-    integer                       :: k, k_c1, k_c2
+    real(dp)                     :: flz, fhz
+    integer                      :: k, k_c, k_f
 #endif
 
     nc        = boxes(id)%n_cell
+    hnc = ishft(boxes(id)%n_cell, -1)
     p_id      = boxes(id)%parent
     ix_offset = a$D_get_child_offset(boxes(id))
 
-    ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
-    ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
 #if $D == 2
-    do j = 1, nc
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
 
-          boxes(id)%cc(i, j, iv) = &
-               0.5_dp * boxes(p_id)%cc(i_c1, j_c1, iv) + &
-               0.25_dp * boxes(p_id)%cc(i_c2, j_c1, iv) + &
-               0.25_dp * boxes(p_id)%cc(i_c1, j_c2, iv)
+          f0 = 0.5_dp * boxes(p_id)%cc(i_c, j_c, iv)
+          flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c, iv)
+          fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c, iv)
+          fly = 0.25_dp * boxes(p_id)%cc(i_c, j_c-1, iv)
+          fhy = 0.25_dp * boxes(p_id)%cc(i_c, j_c+1, iv)
+
+          boxes(id)%cc(i_f,   j_f,   iv) = f0 + flx + fly
+          boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fhx + fly
+          boxes(id)%cc(i_f,   j_f+1, iv) = f0 + flx + fhy
+          boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fhx + fhy
        end do
     end do
 #elif $D == 3
-    do k = 1, nc
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = 0.25_dp * ( &
-                  boxes(p_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  boxes(p_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  boxes(p_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  boxes(p_id)%cc(i_c1, j_c1, k_c2, iv))
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f0  = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c,   iv)
+             flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c,   k_c,   iv)
+             fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c,   k_c,   iv)
+             fly = 0.25_dp * boxes(p_id)%cc(i_c,   j_c-1, k_c,   iv)
+             fhy = 0.25_dp * boxes(p_id)%cc(i_c,   j_c+1, k_c,   iv)
+             flz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c-1, iv)
+             fhz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c+1, iv)
+
+             boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 + flx + fly + flz
+             boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fhx + fly + flz
+             boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 + flx + fhy + flz
+             boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fhx + fhy + flz
+             boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 + flx + fly + fhz
+             boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fhx + fly + fhz
+             boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 + flx + fhy + fhz
+             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fhx + fhy + fhz
           end do
        end do
     end do
@@ -1686,8 +1705,6 @@ contains
     p_id      = boxes(id)%parent
     ix_offset = a$D_get_child_offset(boxes(id))
 
-    ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
-    ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
 #if $D == 2
     do j = 1, hnc
        j_c = j + ix_offset(2)
@@ -1707,9 +1724,9 @@ contains
                2 * f0 + boxes(p_id)%cc(i_c, j_c+1, iv))
           f2 = fxx + fyy
 
-          boxes(id)%cc(i_f, j_f, iv)     = f0 - fx - fy + f2
-          boxes(id)%cc(i_f+1, j_f, iv)   = f0 + fx - fy + f2
-          boxes(id)%cc(i_f, j_f+1, iv)   = f0 - fx + fy + f2
+          boxes(id)%cc(i_f,   j_f,   iv) = f0 - fx - fy + f2
+          boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fx - fy + f2
+          boxes(id)%cc(i_f,   j_f+1, iv) = f0 - fx + fy + f2
           boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fx + fy + f2
        end do
     end do
@@ -1739,14 +1756,14 @@ contains
                   2 * f0 + boxes(p_id)%cc(i_c, j_c, k_c+1, iv))
              f2 = fxx + fyy + fzz
 
-             boxes(id)%cc(i_f, j_f, k_f, iv)       = f0 - fx - fy - fz + f2
-             boxes(id)%cc(i_f+1, j_f, k_f, iv)     = f0 + fx - fy - fz + f2
-             boxes(id)%cc(i_f, j_f+1, k_f, iv)     = f0 - fx + fy - fz + f2
-             boxes(id)%cc(i_f+1, j_f+1, k_f, iv)   = f0 + fx + fy - fz + f2
-             boxes(id)%cc(i_f, j_f, k_f+1, iv)     = f0 - fx - fy - fz + f2
-             boxes(id)%cc(i_f+1, j_f, k_f+1, iv)   = f0 + fx - fy - fz + f2
-             boxes(id)%cc(i_f, j_f+1, k_f+1, iv)   = f0 - fx + fy - fz + f2
-             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fx + fy - fz + f2
+             boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 - fx - fy - fz + f2
+             boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fx - fy - fz + f2
+             boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 - fx + fy - fz + f2
+             boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fx + fy - fz + f2
+             boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 - fx - fy + fz + f2
+             boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fx - fy + fz + f2
+             boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 - fx + fy + fz + f2
+             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fx + fy + fz + f2
           end do
        end do
     end do
@@ -2640,6 +2657,7 @@ contains
 #if $D == 2
           allocate(box_list(1,1))
           box_list(1,1) = id
+          box_done(id) = .true.
           nx = 1
           ny = 1
 
@@ -2652,12 +2670,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_lx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny))
                    new_box_list(1, :) = nb_ids
                    new_box_list(2:, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2667,12 +2687,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_hx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny))
-                   new_box_list(1:nx-1, :) = box_list
                    new_box_list(nx, :) = nb_ids
+                   new_box_list(1:nx-1, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2682,12 +2704,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_ly)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny))
                    new_box_list(:, 1) = nb_ids
                    new_box_list(:, 2:) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2697,12 +2721,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_hy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny))
-                   new_box_list(:, 1:ny-1) = box_list
                    new_box_list(:, ny) = nb_ids
+                   new_box_list(:, 1:ny-1) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2714,7 +2740,6 @@ contains
           do ix = 1, nx
              do iy = 1, ny
                 id = box_list(ix, iy)
-                box_done(id) = .true.
                 i0 = 1 + (ix-1) * nc
                 j0 = 1 + (iy-1) * nc
                 var_data(i0:i0+nc-1, j0:j0+nc-1, :) = &
@@ -2752,16 +2777,17 @@ contains
 
              ! Check whether we can extend to the -x direction
              ids = pack(box_list(1, :, :), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_lx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny, nz))
                    new_box_list(1, :, :) = reshape(nb_ids, [ny, nz])
                    new_box_list(2:, :, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2771,76 +2797,82 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_hx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny, nz))
-                   new_box_list(1:nx-1, :, :) = box_list
                    new_box_list(nx, :, :) = reshape(nb_ids, [ny, nz])
+                   new_box_list(1:nx-1, :, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the -y direction
              ids = pack(box_list(:, 1, :), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_ly)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny, nz))
                    new_box_list(:, 1, :) = reshape(nb_ids, [nx, nz])
                    new_box_list(:, 2:, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the +y direction
              ids = pack(box_list(:, ny, :), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_hy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny, nz))
-                   new_box_list(:, 1:ny-1, :) = box_list
                    new_box_list(:, ny, :) = reshape(nb_ids, [nx, nz])
+                   new_box_list(:, 1:ny-1, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the -z direction
              ids = pack(box_list(:, :, 1), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_lz)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(3) < tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nz = nz + 1
                    allocate(new_box_list(nx, ny, nz))
                    new_box_list(:, :, 1) = reshape(nb_ids, [nx, ny])
                    new_box_list(:, :, 2:) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the +z direction
              ids = pack(box_list(:, :, nz), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_hz)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(3) > tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nz = nz + 1
                    allocate(new_box_list(nx, ny, nz))
-                   new_box_list(:, :, 1:nz-1) = box_list
                    new_box_list(:, :, nz) = reshape(nb_ids, [nx, ny])
+                   new_box_list(:, :, 1:nz-1) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2853,7 +2885,6 @@ contains
              do ix = 1, nx
                 do iy = 1, ny
                    id = box_list(ix, iy, iz)
-                   box_done(id) = .true.
                    i0 = 1 + (ix-1) * nc
                    j0 = 1 + (iy-1) * nc
                    k0 = 1 + (iz-1) * nc
