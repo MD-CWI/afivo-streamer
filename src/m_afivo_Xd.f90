@@ -1441,17 +1441,22 @@ contains
 
   !> Find sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
-  subroutine a$D_tree_sum_cc(tree, iv, cc_sum)
+  subroutine a$D_tree_sum_cc(tree, iv, cc_sum, times_dv)
     type(a$D_t), intent(in) :: tree
     integer, intent(in)    :: iv
     real(dp), intent(out)  :: cc_sum
-    real(dp)               :: tmp, my_sum
+    logical, intent(in)    :: times_dv
+    real(dp)               :: tmp, my_sum, fac
     integer                :: i, id, lvl, nc
 
     my_sum = 0
+    fac = 1
 
-    !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp)
+    !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp) &
+    !$omp firstprivate(fac)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       if (times_dv) fac = a$D_lvl_dr(tree, lvl)**$D
+
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -1461,7 +1466,7 @@ contains
 #elif $D == 3
           tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
 #endif
-          my_sum = my_sum + tmp
+          my_sum = my_sum + fac * tmp
        end do
        !$omp end do
     end do
@@ -1951,109 +1956,90 @@ contains
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, ix_c, dix, i, di, j, dj
+    integer                     :: nc, ix, ix_c, ix_f, i, j
     integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
     integer                     :: p_id, ix_offset($D)
     real(dp), parameter         :: sixth=1/6.0_dp, third=1/3.0_dp
 #if $D == 3
-    integer                     :: k_c1, k_c2, k, dk
+    integer                     :: k_c1, k_c2, k
 #endif
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
     p_nb_id   = boxes(p_id)%neighbors(nb)
-    ix_offset = a$D_get_child_offset(boxes(id))
-    ix        = a$D_nb_hi01(nb) * (nc+1)
+    ix_offset = a$D_get_child_offset(boxes(id), nb)
 
     if (a$D_nb_low(nb)) then
-       dix = 1
+       ix = 0
+       ix_f = 1
        ix_c = nc
     else
-       dix = -1
+       ix = nc+1
+       ix_f = nc
        ix_c = 1
     end if
 
     select case (a$D_nb_dim(nb))
 #if $D == 2
     case (1)
-       i = ix
-       di = dix
-       i_c1 = ix_c
-
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          boxes(id)%cc(i, j, iv) = &
-               0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
-               sixth * boxes(p_nb_id)%cc(i_c1, j_c2, iv) + &
-               third * boxes(id)%cc(i+di, j, iv)
+          boxes(id)%cc(ix, j, iv) = &
+               0.5_dp * boxes(p_nb_id)%cc(ix_c, j_c1, iv) + &
+               sixth * boxes(p_nb_id)%cc(ix_c, j_c2, iv) + &
+               third * boxes(id)%cc(ix_f, j, iv)
        end do
     case (2)
-       j = ix
-       dj = dix
-       j_c1 = ix_c
-
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          boxes(id)%cc(i, j, iv) = &
-               0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
-               sixth * boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
-               third * boxes(id)%cc(i, j+dj, iv)
+          boxes(id)%cc(i, ix, iv) = &
+               0.5_dp * boxes(p_nb_id)%cc(i_c1, ix_c, iv) + &
+               sixth * boxes(p_nb_id)%cc(i_c2, ix_c, iv) + &
+               third * boxes(id)%cc(i, ix_f, iv)
        end do
 #elif $D==3
     case (1)
-       i = ix
-       di = dix
-       i_c1 = ix_c
-
        do k = 1, nc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
           k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
           do j = 1, nc
              j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
              j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = &
-                  third * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  sixth * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  sixth * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv) + &
-                  third * boxes(id)%cc(i+di, j, k, iv)
+             boxes(id)%cc(ix, j, k, iv) = &
+                  third * boxes(p_nb_id)%cc(ix_c, j_c1, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(ix_c, j_c2, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(ix_c, j_c1, k_c2, iv) + &
+                  third * boxes(id)%cc(ix_f, j, k, iv)
           end do
        end do
     case (2)
-       j = ix
-       dj = dix
-       j_c1 = ix_c
-
        do k = 1, nc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
           k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
           do i = 1, nc
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = &
-                  third * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  sixth * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  sixth * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv) + &
-                  third * boxes(id)%cc(i, j+dj, k, iv)
+             boxes(id)%cc(i, ix, k, iv) = &
+                  third * boxes(p_nb_id)%cc(i_c1, ix_c, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c2, ix_c, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c1, ix_c, k_c2, iv) + &
+                  third * boxes(id)%cc(i, ix_f, k, iv)
           end do
        end do
     case (3)
-       k = ix
-       dk = dix
-       k_c1 = ix_c
-
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
           do i = 1, nc
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = &
-                  third * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  sixth * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  sixth * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  third * boxes(id)%cc(i, j, k+dk, iv)
+             boxes(id)%cc(i, j, ix, iv) = &
+                  third * boxes(p_nb_id)%cc(i_c1, j_c1, ix_c, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c1, j_c2, ix_c, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c2, j_c1, ix_c, iv) + &
+                  third * boxes(id)%cc(i, j, ix_f, iv)
           end do
        end do
 #endif
