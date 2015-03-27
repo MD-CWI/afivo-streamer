@@ -705,8 +705,8 @@ contains
           alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
           mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
-          box%cc(i, j, i_pho) = fld * mobility * alpha * &
-               box%cc(i, j, i_elec) * coeff(1) * dr**2
+          box%cc(i, j, i_phos) = fld * mobility * alpha * &
+               box%cc(i, j, i_elec) * coeff(1)
        end do
     end do
   end subroutine set_photoi_rate
