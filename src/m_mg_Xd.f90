@@ -99,6 +99,7 @@ module m_mg_$Dd
   public :: mg$D_box_corr
 
   ! Automatic selection of operators
+  public :: mg$D_set_box_tag
   public :: mg$D_auto_op
   public :: mg$D_auto_gsrb
   public :: mg$D_auto_corr
