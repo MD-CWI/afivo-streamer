@@ -46,6 +46,9 @@ module m_afivo_$Dd
   integer, parameter :: a2_nb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
   ! Which neighbors have a lower index
   logical, parameter :: a2_nb_low(4) = [.true., .false., .true., .false.]
+  ! Opposite of nb_low, but now as integers
+  integer, parameter :: a2_nb_hi01(4) = [0, 1, 0, 1]
+
   ! Reverse neighbors
   integer, parameter :: a2_nb_rev(4) = [2, 1, 4, 3]
   ! Direction (dimension) for a neighbor
@@ -97,6 +100,8 @@ module m_afivo_$Dd
   ! Which neighbors have a lower index
   logical, parameter :: a3_nb_low(6) = &
        [.true., .false., .true., .false., .true., .false.]
+  ! Opposite of nb_low, but now as integers
+  integer, parameter :: a3_nb_hi01(6) = [0, 1, 0, 1, 0, 1]
   ! Reverse neighbors
   integer, parameter :: a3_nb_rev(6) = [2, 1, 4, 3, 6, 5]
   ! Direction (dimension) for a neighbor
@@ -168,8 +173,8 @@ module m_afivo_$Dd
 
   !> Type that contains the refinement changes in a tree
   type ref_info_t
-     integer :: n_add                        !< Total number of added boxes
-     integer :: n_rm                         !< Total number removed boxes
+     integer :: n_add = 0                    !< Total number of added boxes
+     integer :: n_rm = 0                     !< Total number removed boxes
      type(ref_lvl_t), allocatable :: lvls(:) !< Information per level
   end type ref_info_t
 
@@ -217,9 +222,23 @@ module m_afivo_$Dd
        type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
        integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
        integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled,
-       !< see a$D_nb_lx etc.
        integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
      end subroutine a$D_subr_gc
+
+     !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries
+     subroutine a$D_subr_egc(boxes, id, nb, iv, gc_data, nc)
+       import
+       type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
+       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)         :: nb       !< Neighbor direction
+       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
+#if $D == 2
+       real(dp), intent(out)       :: gc_data(nc) !< The requested ghost cells
+#elif $D == 3
+       real(dp), intent(out)       :: gc_data(nc, nc) !< The requested ghost cells
+#endif
+       integer, intent(in)         :: nc       !< box%n_cell (this is purely for convenience)
+     end subroutine a$D_subr_egc
   end interface
 
   private :: set_leaves_parents
@@ -232,6 +251,8 @@ module m_afivo_$Dd
   private :: remove_children
   private :: add_children
   private :: set_child_ids
+  private :: sides_from_nb
+  private :: sides2_from_nb
 
 contains
 
@@ -773,18 +794,12 @@ contains
 
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 etc.)
-  function a$D_get_child_offset(box, box_p) result(ix_offset)
+  function a$D_get_child_offset(box, nb) result(ix_offset)
     type(box$D_t), intent(in)           :: box   !< A child box
-    type(box$D_t), intent(in), optional :: box_p !< Optional: parent box
+    integer, intent(in), optional      :: nb     !< Optional: get index on neighbor
     integer                            :: ix_offset($D)
-
-    if (present(box_p)) then
-       ix_offset = (box%ix - 2 * box_p%ix + 1)
-    else
-       ix_offset = iand(box%ix-1, 1)
-    end if
-
-    ix_offset = ix_offset * ishft(box%n_cell, -1) ! * n_cell / 2
+    ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
+    if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
   end function a$D_get_child_offset
 
   !> Get the id of neighbor nb of boxes(id), through its parent
@@ -837,7 +852,7 @@ contains
     procedure(a$D_subr_ref)              :: set_ref_flags !< Refinement function
     type(ref_info_t), intent(inout)     :: ref_info !< Information about refinement
     integer                             :: lvl, id, i, c_ids(a$D_num_children)
-    integer                             :: max_id_prev, max_id_req, i_c
+    integer                             :: max_id_prev, max_id_req
     integer, allocatable                :: ref_flags(:)
 
     max_id_prev = tree%max_id
@@ -870,18 +885,17 @@ contains
           end if
        end do
 
+       ! Update leaves / parents
+       call set_leaves_parents(tree%boxes, tree%lvls(lvl))
+
        ! Set next level ids to children of this level
-       call set_child_ids(tree%lvls(lvl)%ids, &
+       call set_child_ids(tree%lvls(lvl)%parents, &
             tree%lvls(lvl+1)%ids, tree%boxes)
 
-       ! Update connectivity of children
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          if (a$D_has_children(tree%boxes(id))) then
-             do i_c = 1, a$D_num_children
-                call set_nbs_$Dd(tree%boxes, tree%boxes(id)%children(i_c))
-             end do
-          end if
+       ! Update connectivity of new children (id > max_id_prev)
+       do i = 1, size(tree%lvls(lvl+1)%ids)
+          id = tree%lvls(lvl+1)%ids(i)
+          if (id > max_id_prev) call set_nbs_$Dd(tree%boxes, id)
        end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
@@ -889,11 +903,9 @@ contains
 
     tree%max_lvl = lvl
 
-    ! Update leaves and parents. max_lvl+1 because we might have removed a
-    ! refinement lvl.
-    do lvl = 1, tree%max_lvl+1
-       call set_leaves_parents(tree%boxes, tree%lvls(lvl))
-    end do
+    ! Update leaves and parents for the last level, because we might have
+    ! removed a refinement lvl.
+    call set_leaves_parents(tree%boxes, tree%lvls(tree%max_lvl+1))
 
     ! Set information about the refinement
     call set_ref_info(tree, ref_flags, ref_info)
@@ -1008,7 +1020,7 @@ contains
           id = tree%lvls(lvl)%ids(i)
           call set_ref_flags(tree%boxes, id, my_ref_flags)
        end do
-       !$omp end do nowait
+       !$omp end do
     end do
 
     ! Now set refinement flags to the maximum (refine > keep ref > derefine)
@@ -1039,6 +1051,8 @@ contains
           id = tree%lvls(lvl)%leaves(i)
 
           if (ref_flags(id) > a5_kp_ref) then ! This means refine
+             ref_flags(id) = a5_refine ! Mark for actual refinement
+
              ! Ensure we will have the necessary neighbors
              do nb = 1, a$D_num_neighbors
                 nb_id = tree%boxes(id)%neighbors(nb)
@@ -1049,7 +1063,6 @@ contains
                    ref_flags(p_nb_id) = a5_refine ! Mark for actual refinement
                 end if
              end do
-             ref_flags(id) = a5_refine ! Mark for actual refinement
 
           else if (ref_flags(id) == a5_rm_ref) then
              ! Ensure we do not remove a required neighbor
@@ -1059,6 +1072,7 @@ contains
                    if (a$D_has_children(tree%boxes(nb_id)) .or. &
                         ref_flags(nb_id) > a5_kp_ref) then
                       ref_flags(id) = a5_kp_ref
+                      exit
                    end if
                 end if
              end do
@@ -1076,7 +1090,7 @@ contains
           ! Can only remove children if they are all marked for
           ! derefinement, and the box itself not for refinement.
           c_ids = tree%boxes(id)%children
-          if (all(ref_flags(c_ids) < a5_kp_ref) .and. &
+          if (all(ref_flags(c_ids) == a5_rm_ref) .and. &
                ref_flags(id) <= a5_kp_ref) then
              ref_flags(id) = a5_derefine
           else
@@ -1154,22 +1168,18 @@ contains
     integer, intent(in)                 :: p_ids(:) !< All the parents ids
     integer, allocatable, intent(inout) :: c_ids(:) !< Output: all the children's ids
     type(box$D_t), intent(in)            :: boxes(:) !< List of all the boxes
-    integer                             :: i, ip, i_c, n_children
+    integer                             :: i, i0, i1, n_children
 
-    ! Count a$D_num_children times the number of refined parent blocks
-    n_children = a$D_num_children * count(a$D_has_children(boxes(p_ids)))
+    n_children = a$D_num_children * size(p_ids)
     if (n_children /= size(c_ids)) then
        deallocate(c_ids)
        allocate(c_ids(n_children))
     end if
 
-    i_c = 0
     do i = 1, size(p_ids)
-       ip = p_ids(i)
-       if (a$D_has_children(boxes(ip))) then
-          c_ids(i_c+1:i_c+a$D_num_children) = boxes(ip)%children
-          i_c = i_c + a$D_num_children
-       end if
+       i1 = i * a$D_num_children
+       i0 = i1 - a$D_num_children + 1
+       c_ids(i0:i1) = boxes(p_ids(i))%children
     end do
   end subroutine set_child_ids
 
@@ -1431,17 +1441,22 @@ contains
 
   !> Find sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
-  subroutine a$D_tree_sum_cc(tree, iv, cc_sum)
+  subroutine a$D_tree_sum_cc(tree, iv, cc_sum, times_dv)
     type(a$D_t), intent(in) :: tree
     integer, intent(in)    :: iv
     real(dp), intent(out)  :: cc_sum
-    real(dp)               :: tmp, my_sum
+    logical, intent(in)    :: times_dv
+    real(dp)               :: tmp, my_sum, fac
     integer                :: i, id, lvl, nc
 
     my_sum = 0
+    fac = 1
 
-    !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp)
+    !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp) &
+    !$omp firstprivate(fac)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       if (times_dv) fac = a$D_lvl_dr(tree, lvl)**$D
+
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -1451,7 +1466,7 @@ contains
 #elif $D == 3
           tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
 #endif
-          my_sum = my_sum + tmp
+          my_sum = my_sum + fac * tmp
        end do
        !$omp end do
     end do
@@ -1499,110 +1514,18 @@ contains
   end subroutine a$D_tree_copy_fc
 
   !> Zeroth-order prolongation to children.
-  subroutine a$D_prolong0_from(boxes, id, iv, fill_gc)
+  subroutine a$D_prolong0_from(boxes, id, iv)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Box whose children we will fill
     integer, intent(in)         :: iv        !< Variable that is filled
-    logical, intent(in)         :: fill_gc   !< Also fill ghost cells?
-    integer                     :: dgc, nc, i_c, c_id, ix_offset($D)
-    integer                     :: i, j, i_c1, j_c1
-#if $D == 3
-    integer                     :: k, k_c1
-#endif
-
-    nc  = boxes(id)%n_cell
-    dgc = 0; if (fill_gc) dgc = 1
+    integer                     :: i_c, c_id
 
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == a5_no_box) cycle
-
-       ! Offset of child w.r.t. parent
-       ix_offset = a$D_get_child_offset(boxes(c_id))
-
-       ! In these loops, we calculate the closest coarse index (_c1)
-#if $D == 2
-       do j = 1-dgc, nc+dgc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          do i = 1-dgc, nc+dgc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-
-             boxes(c_id)%cc(i, j, iv) = boxes(id)%cc(i_c1, j_c1, iv)
-          end do
-       end do
-#elif $D == 3
-       do k = 1-dgc, nc+dgc
-          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-          do j = 1-dgc, nc+dgc
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             do i = 1-dgc, nc+dgc
-                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-
-                boxes(c_id)%cc(i, j, k, iv) = &
-                     boxes(id)%cc(i_c1, j_c1, k_c1, iv)
-             end do
-          end do
-       end do
-#endif
+       call a$D_prolong0_to(boxes, c_id, iv)
     end do
   end subroutine a$D_prolong0_from
-
-  !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
-  !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
-  subroutine a$D_prolong1_from(boxes, id, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Box whose children we will fill
-    integer, intent(in)         :: iv        !< Variable that is filled
-    integer                     :: nc, i_c, c_id, ix_offset($D)
-    integer                     :: i, j, i_c1, i_c2, j_c1, j_c2
-#if $D == 3
-    integer                     :: k, k_c1, k_c2
-#endif
-
-    nc  = boxes(id)%n_cell
-
-    do i_c = 1, a$D_num_children
-       c_id = boxes(id)%children(i_c)
-       ix_offset = a$D_get_child_offset(boxes(c_id))
-
-       ! In these loops, we calculate the closest coarse index (_c1), and the
-       ! one-but-closest (_c2). The fine cell lies in between.
-#if $D == 2
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-
-             boxes(c_id)%cc(i, j, iv) = &
-                  0.5_dp * boxes(id)%cc(i_c1, j_c1, iv) + &
-                  0.25_dp * boxes(id)%cc(i_c2, j_c1, iv) + &
-                  0.25_dp * boxes(id)%cc(i_c1, j_c2, iv)
-          end do
-       end do
-#elif $D == 3
-       do k = 1, nc
-          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-          do j = 1, nc
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             do i = 1, nc
-                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-                i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-
-                boxes(c_id)%cc(i, j, k, iv) = 0.25_dp * ( &
-                     boxes(id)%cc(i_c1, j_c1, k_c1, iv) + &
-                     boxes(id)%cc(i_c2, j_c1, k_c1, iv) + &
-                     boxes(id)%cc(i_c1, j_c2, k_c1, iv) + &
-                     boxes(id)%cc(i_c1, j_c1, k_c2, iv))
-             end do
-          end do
-       end do
-#endif
-    end do
-  end subroutine a$D_prolong1_from
 
   !> Partial prolongation to a child (from parent) using injection (simply copy value)
   subroutine a$D_prolong0_to(boxes, id, iv, lo_a, hi_a)
@@ -1647,116 +1570,210 @@ contains
 #endif
   end subroutine a$D_prolong0_to
 
-  !> Partial prolongation to the ghost cells of box id from parent neighbor nb
+  !> Partial prolongation to the ghost cells of box id from parent
   subroutine a$D_prolong0_to_gc(boxes, id, iv, nb)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
     integer, intent(in)           :: nb       !< Neighbor to get data from
+    integer                       :: nb_dim, lo($D), hi($D)
 
-    integer                       :: nc, p_id, p_nb_id, nb_dim, ix_offset($D)
-    integer                       :: i, j, i_c1, j_c1, lo($D), hi($D)
-#if $D == 3
-    integer                       :: k, k_c1
-#endif
+    nb_dim     = a$D_nb_dim(nb)
+    lo(:)      = 1
+    hi(:)      = boxes(id)%n_cell
+    lo(nb_dim) = a$D_nb_hi01(nb) * (boxes(id)%n_cell+1)
+    hi(nb_dim) = a$D_nb_hi01(nb) * (boxes(id)%n_cell+1)
 
-    nc      = boxes(id)%n_cell
-    p_id    = boxes(id)%parent
-    p_nb_id = boxes(p_id)%neighbors(nb)
-    nb_dim  = a$D_nb_dim(nb)
-    lo      = 1
-    hi      = nc
-
-    ! Offset of child w.r.t. parent
-    ix_offset = a$D_get_child_offset(boxes(id), boxes(p_nb_id))
-
-    if (a$D_nb_low(nb)) then
-       lo(nb_dim) = 0
-       hi(nb_dim) = 0
-    else
-       lo(nb_dim) = nc+1
-       hi(nb_dim) = nc+1
-    end if
-
-#if $D == 2
-    do j = lo(2), hi(2)
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       do i = lo(1), hi(1)
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          boxes(id)%cc(i, j, iv) = boxes(p_nb_id)%cc(i_c1, j_c1, iv)
-       end do
-    end do
-#elif $D == 3
-    do k = lo(3), hi(3)
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       do j = lo(2), hi(2)
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          do i = lo(1), hi(1)
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             boxes(id)%cc(i, j, k, iv) = boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv)
-          end do
-       end do
-    end do
-#endif
+    call a$D_prolong0_to(boxes, id, iv, lo, hi)
   end subroutine a$D_prolong0_to_gc
 
-  !> Partial prolongation to a child (from parent) using linear interpolation.
-  !> We use 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not
-  !> need corner ghost cells.
-  subroutine a$D_prolong1_to(boxes, id, iv, lo_a, hi_a)
-    type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
-    integer, intent(in)           :: id       !< Id of child
-    integer, intent(in), optional :: lo_a($D) !< Min cell index at child
-    integer, intent(in), optional :: hi_a($D) !< Max cell index at child
-    integer, intent(in)           :: iv       !< Variable to fill
-    integer                       :: nc, p_id, ix_offset($D), lo($D), hi($D)
-    integer                       :: i, j, i_c1, i_c2, j_c1, j_c2
+  !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
+  !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
+  subroutine a$D_prolong1_from(boxes, id, iv)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Box whose children we will fill
+    integer, intent(in)         :: iv        !< Variable that is filled
+    integer                     :: i_c, c_id
+
+    do i_c = 1, a$D_num_children
+       c_id = boxes(id)%children(i_c)
+       if (c_id == a5_no_box) cycle
+       call a$D_prolong1_to(boxes, c_id, iv)
+    end do
+  end subroutine a$D_prolong1_from
+
+  !> Prolongation to a child (from parent) using linear interpolation. We use
+  !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
+  !> corner ghost cells.
+  subroutine a$D_prolong1_to(boxes, id, iv)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)          :: id       !< Id of child
+    integer, intent(in)          :: iv       !< Variable to fill
+    integer                      :: hnc, nc, p_id, ix_offset($D)
+    integer                      :: i, j, i_c, i_f, j_c, j_f
+    real(dp)                     :: f0, flx, fhx, fly, fhy
 #if $D == 3
-    integer                       :: k, k_c1, k_c2
+    real(dp)                     :: flz, fhz
+    integer                      :: k, k_c, k_f
 #endif
 
     nc        = boxes(id)%n_cell
+    hnc = ishft(boxes(id)%n_cell, -1)
     p_id      = boxes(id)%parent
-    lo   = 1; if (present(lo_a)) lo = lo_a
-    hi   = nc; if (present(hi_a)) hi = hi_a
-
     ix_offset = a$D_get_child_offset(boxes(id))
 
-    ! In these loops, we calculate the closest coarse index (i_c1, j_c1), and
-    ! the one-but-closest (i_c2, j_c2). The fine cell lies in between.
 #if $D == 2
-    do j = lo(2), hi(2)
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-       do i = lo(1), hi(1)
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          boxes(id)%cc(i, j, iv) = &
-               0.5_dp * boxes(p_id)%cc(i_c1, j_c1, iv) + &
-               0.25_dp * boxes(p_id)%cc(i_c2, j_c1, iv) + &
-               0.25_dp * boxes(p_id)%cc(i_c1, j_c2, iv)
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
+
+          f0 = 0.5_dp * boxes(p_id)%cc(i_c, j_c, iv)
+          flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c, iv)
+          fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c, iv)
+          fly = 0.25_dp * boxes(p_id)%cc(i_c, j_c-1, iv)
+          fhy = 0.25_dp * boxes(p_id)%cc(i_c, j_c+1, iv)
+
+          boxes(id)%cc(i_f,   j_f,   iv) = f0 + flx + fly
+          boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fhx + fly
+          boxes(id)%cc(i_f,   j_f+1, iv) = f0 + flx + fhy
+          boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fhx + fhy
        end do
     end do
 #elif $D == 3
-    do k = lo(3), hi(3)
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-       do j = lo(2), hi(2)
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = lo(1), hi(1)
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = 0.25_dp * ( &
-                  boxes(p_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  boxes(p_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  boxes(p_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  boxes(p_id)%cc(i_c1, j_c1, k_c2, iv))
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f0  = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c,   iv)
+             flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c,   k_c,   iv)
+             fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c,   k_c,   iv)
+             fly = 0.25_dp * boxes(p_id)%cc(i_c,   j_c-1, k_c,   iv)
+             fhy = 0.25_dp * boxes(p_id)%cc(i_c,   j_c+1, k_c,   iv)
+             flz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c-1, iv)
+             fhz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c+1, iv)
+
+             boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 + flx + fly + flz
+             boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fhx + fly + flz
+             boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 + flx + fhy + flz
+             boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fhx + fhy + flz
+             boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 + flx + fly + fhz
+             boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fhx + fly + fhz
+             boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 + flx + fhy + fhz
+             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fhx + fhy + fhz
           end do
        end do
     end do
 #endif
   end subroutine a$D_prolong1_to
+
+  !> Quadratic prolongation to children. We use stencils that do not require
+  !> corner ghost cells.
+  subroutine a$D_prolong2_from(boxes, id, iv)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Box whose children we will fill
+    integer, intent(in)         :: iv        !< Variable that is filled
+    integer                     :: i_c, c_id
+
+    do i_c = 1, a$D_num_children
+       c_id = boxes(id)%children(i_c)
+       if (c_id == a5_no_box) cycle
+       call a$D_prolong2_to(boxes, c_id, iv)
+    end do
+  end subroutine a$D_prolong2_from
+
+  !> Prolongation to a child (from parent) using quadratic interpolation. We use
+  !> 5 / 7 point stencils which do not need corner ghost cells.
+  !> @TODO 3D version
+  subroutine a$D_prolong2_to(boxes, id, iv)
+    type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
+    integer, intent(in)          :: id       !< Id of child
+    integer, intent(in)          :: iv       !< Variable to fill
+    integer                      :: hnc, p_id, ix_offset($D)
+    integer                      :: i, j
+    integer                      :: i_c, i_f, j_c, j_f
+    real(dp)                     :: f0, fx, fy, fxx, fyy, f2
+#if $D == 3
+    real(dp)                     :: fz, fzz
+    integer                      :: k, k_c, k_f
+#endif
+
+    hnc       = ishft(boxes(id)%n_cell, -1)
+    p_id      = boxes(id)%parent
+    ix_offset = a$D_get_child_offset(boxes(id))
+
+#if $D == 2
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
+
+          f0 = boxes(p_id)%cc(i_c, j_c, iv)
+          fx = 0.125_dp * (boxes(p_id)%cc(i_c+1, j_c, iv) - &
+               boxes(p_id)%cc(i_c-1, j_c, iv))
+          fy = 0.125_dp * (boxes(p_id)%cc(i_c, j_c+1, iv) - &
+               boxes(p_id)%cc(i_c, j_c-1, iv))
+          fxx = 0.03125_dp * (boxes(p_id)%cc(i_c-1, j_c, iv) - &
+               2 * f0 + boxes(p_id)%cc(i_c+1, j_c, iv))
+          fyy = 0.03125_dp * (boxes(p_id)%cc(i_c, j_c-1, iv) - &
+               2 * f0 + boxes(p_id)%cc(i_c, j_c+1, iv))
+          f2 = fxx + fyy
+
+          boxes(id)%cc(i_f,   j_f,   iv) = f0 - fx - fy + f2
+          boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fx - fy + f2
+          boxes(id)%cc(i_f,   j_f+1, iv) = f0 - fx + fy + f2
+          boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fx + fy + f2
+       end do
+    end do
+#elif $D == 3
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f0 = boxes(p_id)%cc(i_c, j_c, k_c, iv)
+             fx = 0.125_dp * (boxes(p_id)%cc(i_c+1, j_c, k_c, iv) - &
+                  boxes(p_id)%cc(i_c-1, j_c, k_c, iv))
+             fy = 0.125_dp * (boxes(p_id)%cc(i_c, j_c+1, k_c, iv) - &
+                  boxes(p_id)%cc(i_c, j_c-1, k_c, iv))
+             fz = 0.125_dp * (boxes(p_id)%cc(i_c, j_c, k_c+1, iv) - &
+                  boxes(p_id)%cc(i_c, j_c, k_c-1, iv))
+             fxx = 0.03125_dp * (boxes(p_id)%cc(i_c-1, j_c, k_c, iv) - &
+                  2 * f0 + boxes(p_id)%cc(i_c+1, j_c, k_c, iv))
+             fyy = 0.03125_dp * (boxes(p_id)%cc(i_c, j_c-1, k_c, iv) - &
+                  2 * f0 + boxes(p_id)%cc(i_c, j_c+1, k_c, iv))
+             fzz = 0.03125_dp * (boxes(p_id)%cc(i_c, j_c, k_c-1, iv) - &
+                  2 * f0 + boxes(p_id)%cc(i_c, j_c, k_c+1, iv))
+             f2 = fxx + fyy + fzz
+
+             boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 - fx - fy - fz + f2
+             boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fx - fy - fz + f2
+             boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 - fx + fy - fz + f2
+             boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fx + fy - fz + f2
+             boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 - fx - fy + fz + f2
+             boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fx - fy + fz + f2
+             boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 - fx + fy + fz + f2
+             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fx + fy + fz + f2
+          end do
+       end do
+    end do
+#endif
+  end subroutine a$D_prolong2_to
 
   !> Restrict the children of a box to the box (e.g., in 2D, average the values
   !> at the four children to get the value for the parent)
@@ -1882,7 +1899,7 @@ contains
     do nb = 1, a$D_num_neighbors
        nb_id = boxes(id)%neighbors(nb)
        if (nb_id > a5_no_box) then
-          call a$D_gc_side_from_nb(boxes(id), boxes(nb_id), nb, iv)
+          call sides_from_nb(boxes(id), boxes(nb_id), nb, iv)
        else if (nb_id == a5_no_box) then
           call subr_rb(boxes, id, nb, iv)
        else
@@ -1891,6 +1908,47 @@ contains
     end do
   end subroutine a$D_gc_box_sides
 
+  !> Get a second layer of ghost cell data (the 'normal' routines give just one
+  !> layer of ghost cells). Use subr_rb > on refinement boundaries and subr_bc
+  !> on physical boundaries.
+  subroutine a$D_gc2_box_sides(boxes, id, iv, subr_rb, subr_bc, gc_data, nc)
+    type(box$D_t), intent(inout) :: boxes(:)        !< List of all the boxes
+    integer, intent(in)          :: id              !< Id of box for which we set ghost cells
+    integer, intent(in)          :: iv              !< Variable for which ghost cells are set
+    procedure(a$D_subr_egc)      :: subr_rb         !< Procedure called at refinement boundaries
+    procedure(a$D_subr_egc)      :: subr_bc         !< Procedure called at physical boundaries
+    integer, intent(in)          :: nc              !< box%n_cell
+#if $D   == 2
+    real(dp), intent(out)        :: gc_data(nc, 2*$D)     !< The requested ghost cells
+#elif $D == 3
+    real(dp), intent(out)        :: gc_data(nc, nc, 2*$D) !< The requested ghost cells
+#endif
+    integer                      :: nb, nb_id
+
+    do nb = 1, a$D_num_neighbors
+       nb_id = boxes(id)%neighbors(nb)
+       if (nb_id > a5_no_box) then
+#if $D == 2
+          call sides2_from_nb(boxes(nb_id), nb, iv, gc_data(:, nb), nc)
+#elif $D == 3
+          call sides2_from_nb(boxes(nb_id), nb, iv, gc_data(:, :, nb), nc)
+#endif
+       else if (nb_id == a5_no_box) then
+#if $D == 2
+          call subr_rb(boxes, id, nb, iv, gc_data(:, nb), nc)
+#elif $D == 3
+          call subr_rb(boxes, id, nb, iv, gc_data(:, :, nb), nc)
+#endif
+       else
+#if $D == 2
+          call subr_bc(boxes, id, nb, iv, gc_data(:, nb), nc)
+#elif $D == 3
+          call subr_bc(boxes, id, nb, iv, gc_data(:, :, nb), nc)
+#endif
+       end if
+    end do
+  end subroutine a$D_gc2_box_sides
+
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries
   subroutine a$D_sides_interp(boxes, id, nb, iv)
@@ -1898,109 +1956,90 @@ contains
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, ix_c, dix, i, di, j, dj
+    integer                     :: nc, ix, ix_c, ix_f, i, j
     integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
     integer                     :: p_id, ix_offset($D)
+    real(dp), parameter         :: sixth=1/6.0_dp, third=1/3.0_dp
 #if $D == 3
-    integer                     :: k_c1, k_c2, k, dk
+    integer                     :: k_c1, k_c2, k
 #endif
 
     nc        = boxes(id)%n_cell
     p_id      = boxes(id)%parent
     p_nb_id   = boxes(p_id)%neighbors(nb)
-    ix_offset = a$D_get_child_offset(boxes(id))
+    ix_offset = a$D_get_child_offset(boxes(id), nb)
 
     if (a$D_nb_low(nb)) then
        ix = 0
-       dix = 1
+       ix_f = 1
        ix_c = nc
     else
        ix = nc+1
-       dix = -1
+       ix_f = nc
        ix_c = 1
     end if
 
     select case (a$D_nb_dim(nb))
 #if $D == 2
     case (1)
-       i = ix
-       di = dix
-       i_c1 = ix_c
-
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          boxes(id)%cc(i, j, iv) = &
-               0.375_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
-               0.125_dp * boxes(p_nb_id)%cc(i_c1, j_c2, iv) + &
-               0.5_dp * boxes(id)%cc(i+di, j, iv)
+          boxes(id)%cc(ix, j, iv) = &
+               0.5_dp * boxes(p_nb_id)%cc(ix_c, j_c1, iv) + &
+               sixth * boxes(p_nb_id)%cc(ix_c, j_c2, iv) + &
+               third * boxes(id)%cc(ix_f, j, iv)
        end do
     case (2)
-       j = ix
-       dj = dix
-       j_c1 = ix_c
-
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          boxes(id)%cc(i, j, iv) = &
-               0.375_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
-               0.125_dp * boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
-               0.5_dp * boxes(id)%cc(i, j+dj, iv)
+          boxes(id)%cc(i, ix, iv) = &
+               0.5_dp * boxes(p_nb_id)%cc(i_c1, ix_c, iv) + &
+               sixth * boxes(p_nb_id)%cc(i_c2, ix_c, iv) + &
+               third * boxes(id)%cc(i, ix_f, iv)
        end do
 #elif $D==3
     case (1)
-       i = ix
-       di = dix
-       i_c1 = ix_c
-
        do k = 1, nc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
           k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
           do j = 1, nc
              j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
              j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  0.125_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  0.125_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv) + &
-                  0.5_dp * boxes(id)%cc(i+di, j, k, iv)
+             boxes(id)%cc(ix, j, k, iv) = &
+                  third * boxes(p_nb_id)%cc(ix_c, j_c1, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(ix_c, j_c2, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(ix_c, j_c1, k_c2, iv) + &
+                  third * boxes(id)%cc(ix_f, j, k, iv)
           end do
        end do
     case (2)
-       j = ix
-       dj = dix
-       j_c1 = ix_c
-
        do k = 1, nc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
           k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
           do i = 1, nc
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  0.125_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  0.125_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv) + &
-                  0.5_dp * boxes(id)%cc(i, j+dj, k, iv)
+             boxes(id)%cc(i, ix, k, iv) = &
+                  third * boxes(p_nb_id)%cc(i_c1, ix_c, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c2, ix_c, k_c1, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c1, ix_c, k_c2, iv) + &
+                  third * boxes(id)%cc(i, ix_f, k, iv)
           end do
        end do
     case (3)
-       k = ix
-       dk = dix
-       k_c1 = ix_c
-
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
           do i = 1, nc
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             boxes(id)%cc(i, j, k, iv) = &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  0.125_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  0.125_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  0.5_dp * boxes(id)%cc(i, j, k+dk, iv)
+             boxes(id)%cc(i, j, ix, iv) = &
+                  third * boxes(p_nb_id)%cc(i_c1, j_c1, ix_c, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c1, j_c2, ix_c, iv) + &
+                  sixth * boxes(p_nb_id)%cc(i_c2, j_c1, ix_c, iv) + &
+                  third * boxes(id)%cc(i, j, ix_f, iv)
           end do
        end do
 #endif
@@ -2033,25 +2072,22 @@ contains
        dix = -1
     end if
 
+    call a$D_prolong0_to_gc(boxes, id, iv, nb)
+
     select case (a$D_nb_dim(nb))
 #if $D == 2
     case (1)
        i = ix
        di = dix
-       call a2_prolong0_to_gc(boxes, id, iv, nb)
-
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
           boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
                boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
                + boxes(id)%cc(i, j+dj, iv))
        end do
-
     case (2)
        j = ix
        dj = dix
-       call a2_prolong0_to_gc(boxes, id, iv, nb)
-
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
           boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
@@ -2062,8 +2098,6 @@ contains
     case (1)
        i = ix
        di = dix
-       call a3_prolong0_to_gc(boxes, id, iv, nb)
-
        do k = 1, nc
           dk = -1 + 2 * iand(k, 1)
           do j = 1, nc
@@ -2077,12 +2111,9 @@ contains
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
-
     case (2)
        j = ix
        dj = dix
-       call a3_prolong0_to_gc(boxes, id, iv, nb)
-
        do k = 1, nc
           dk = -1 + 2 * iand(k, 1)
           do i = 1, nc
@@ -2096,12 +2127,9 @@ contains
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
        end do
-
     case (3)
        k = ix
        dk = dix
-       call a3_prolong0_to_gc(boxes, id, iv, nb)
-
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
           do i = 1, nc
@@ -2120,7 +2148,7 @@ contains
   end subroutine a$D_sides_extrap
 
   !> Fill values on the side of a box from a neighbor nb
-  subroutine a$D_gc_side_from_nb(box, box_nb, nb, iv)
+  subroutine sides_from_nb(box, box_nb, nb, iv)
     type(box$D_t), intent(inout) :: box    !< Box on which to fill ghost cells
     type(box$D_t), intent(in)    :: box_nb !< Neighbouring box
     integer, intent(in)         :: nb        !< Ghost cell / neighbor direction
@@ -2154,7 +2182,148 @@ contains
        box%cc(1:nc, 1:nc, nc+1, iv) = box_nb%cc(1:nc, 1:nc, 1, iv)
 #endif
     end select
-  end subroutine a$D_gc_side_from_nb
+  end subroutine sides_from_nb
+
+  !> Fill values on the side of a box from a neighbor nb
+  subroutine sides2_from_nb(box_nb, nb, iv, gc_side, nc)
+    type(box$D_t), intent(in) :: box_nb !< Neighbouring box
+    integer, intent(in)       :: nb     !< Ghost cell / neighbor direction
+    integer, intent(in)       :: iv     !< Ghost cell variable
+    integer, intent(in)       :: nc
+#if $D == 2
+    real(dp), intent(out)     :: gc_side(nc)
+#elif $D == 3
+    real(dp), intent(out)     :: gc_side(nc, nc)
+#endif
+
+    select case (nb)
+#if $D == 2
+    case (a2_nb_lx)
+       gc_side = box_nb%cc(nc-1, 1:nc, iv)
+    case (a2_nb_hx)
+       gc_side = box_nb%cc(2, 1:nc, iv)
+    case (a2_nb_ly)
+       gc_side = box_nb%cc(1:nc, nc-1, iv)
+    case (a2_nb_hy)
+       gc_side = box_nb%cc(1:nc, 2, iv)
+#elif $D == 3
+    case (a3_nb_lx)
+       gc_side = box_nb%cc(nc-1, 1:nc, 1:nc, iv)
+    case (a3_nb_hx)
+       gc_side = box_nb%cc(2, 1:nc, 1:nc, iv)
+    case (a3_nb_ly)
+       gc_side = box_nb%cc(1:nc, nc-1, 1:nc, iv)
+    case (a3_nb_hy)
+       gc_side = box_nb%cc(1:nc, 2, 1:nc, iv)
+    case (a3_nb_lz)
+       gc_side = box_nb%cc(1:nc, 1:nc, nc-1, iv)
+    case (a3_nb_hz)
+       gc_side = box_nb%cc(1:nc, 1:nc, 2, iv)
+#endif
+    end select
+  end subroutine sides2_from_nb
+
+  !> Linear interpolation (using data from neighbor) to fill ghost cells
+  subroutine a$D_sides2_prolong1(boxes, id, nb, iv, gc_side, nc)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
+    integer, intent(in)         :: nc
+#if $D == 2
+    real(dp), intent(out)       :: gc_side(nc)
+#elif $D == 3
+    real(dp), intent(out)       :: gc_side(nc, nc)
+#endif
+    integer                     :: ix, i, j
+    integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
+    integer                     :: p_id, ix_offset($D)
+#if $D == 3
+    integer                     :: k, k_c1, k_c2
+#endif
+
+    p_id      = boxes(id)%parent
+    p_nb_id   = boxes(p_id)%neighbors(nb)
+    ix_offset = a$D_get_child_offset(boxes(id), nb)
+    ix        = a$D_nb_hi01(nb) * (nc+3) - 1 ! -1 or nc+2
+
+    select case (a$D_nb_dim(nb))
+#if $D == 2
+    case (1)
+       i_c1 = ix_offset(1) + ishft(ix+1, -1) ! (ix+1)/2
+       i_c2 = i_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          gc_side(j) = &
+               0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
+               0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
+               0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, iv)
+       end do
+    case (2)
+       j_c1 = ix_offset(2) + ishft(ix+1, -1) ! (j+1)/2
+       j_c2 = j_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+          gc_side(i) = &
+               0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
+               0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
+               0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, iv)
+       end do
+#elif $D==3
+    case (1)
+       i_c1 = ix_offset(1) + ishft(ix+1, -1) ! (ix+1)/2
+       i_c2 = i_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+             gc_side(j, k) = &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv)
+          end do
+       end do
+    case (2)
+       j_c1 = ix_offset(2) + ishft(ix+1, -1) ! (j+1)/2
+       j_c2 = j_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+             gc_side(i, k) = &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv)
+          end do
+       end do
+    case (3)
+       k_c1 = ix_offset(3) + ishft(ix+1, -1) ! (k+1)/2
+       k_c2 = k_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+             gc_side(i, j) = &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
+                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv)
+          end do
+       end do
+#endif
+    end select
+
+  end subroutine a$D_sides2_prolong1
 
   !> Restrict fluxes from children to parents on refinement boundaries
   subroutine a$D_consistent_fluxes(tree, f_ixs)
@@ -2474,6 +2643,7 @@ contains
 #if $D == 2
           allocate(box_list(1,1))
           box_list(1,1) = id
+          box_done(id) = .true.
           nx = 1
           ny = 1
 
@@ -2486,12 +2656,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_lx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny))
                    new_box_list(1, :) = nb_ids
                    new_box_list(2:, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2501,12 +2673,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_hx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny))
-                   new_box_list(1:nx-1, :) = box_list
                    new_box_list(nx, :) = nb_ids
+                   new_box_list(1:nx-1, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2516,12 +2690,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_ly)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny))
                    new_box_list(:, 1) = nb_ids
                    new_box_list(:, 2:) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2531,12 +2707,14 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a2_nb_hy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny))
-                   new_box_list(:, 1:ny-1) = box_list
                    new_box_list(:, ny) = nb_ids
+                   new_box_list(:, 1:ny-1) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2548,7 +2726,6 @@ contains
           do ix = 1, nx
              do iy = 1, ny
                 id = box_list(ix, iy)
-                box_done(id) = .true.
                 i0 = 1 + (ix-1) * nc
                 j0 = 1 + (iy-1) * nc
                 var_data(i0:i0+nc-1, j0:j0+nc-1, :) = &
@@ -2586,16 +2763,17 @@ contains
 
              ! Check whether we can extend to the -x direction
              ids = pack(box_list(1, :, :), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_lx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny, nz))
                    new_box_list(1, :, :) = reshape(nb_ids, [ny, nz])
                    new_box_list(2:, :, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2605,76 +2783,82 @@ contains
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_hx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nx = nx + 1
                    allocate(new_box_list(nx, ny, nz))
-                   new_box_list(1:nx-1, :, :) = box_list
                    new_box_list(nx, :, :) = reshape(nb_ids, [ny, nz])
+                   new_box_list(1:nx-1, :, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the -y direction
              ids = pack(box_list(:, 1, :), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_ly)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny, nz))
                    new_box_list(:, 1, :) = reshape(nb_ids, [nx, nz])
                    new_box_list(:, 2:, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the +y direction
              ids = pack(box_list(:, ny, :), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_hy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    ny = ny + 1
                    allocate(new_box_list(nx, ny, nz))
-                   new_box_list(:, 1:ny-1, :) = box_list
                    new_box_list(:, ny, :) = reshape(nb_ids, [nx, nz])
+                   new_box_list(:, 1:ny-1, :) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the -z direction
              ids = pack(box_list(:, :, 1), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_lz)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(3) < tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nz = nz + 1
                    allocate(new_box_list(nx, ny, nz))
                    new_box_list(:, :, 1) = reshape(nb_ids, [nx, ny])
                    new_box_list(:, :, 2:) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
 
              ! Check whether we can extend to the +z direction
              ids = pack(box_list(:, :, nz), .true.)
-
              nb_ids = tree%boxes(ids)%neighbors(a3_nb_hz)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(3) > tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
                    nz = nz + 1
                    allocate(new_box_list(nx, ny, nz))
-                   new_box_list(:, :, 1:nz-1) = box_list
                    new_box_list(:, :, nz) = reshape(nb_ids, [nx, ny])
+                   new_box_list(:, :, 1:nz-1) = box_list
                    box_list = new_box_list
+                   box_done(nb_ids) = .true.
                    deallocate(new_box_list)
                 end if
              end if
@@ -2687,7 +2871,6 @@ contains
              do ix = 1, nx
                 do iy = 1, ny
                    id = box_list(ix, iy, iz)
-                   box_done(id) = .true.
                    i0 = 1 + (ix-1) * nc
                    j0 = 1 + (iy-1) * nc
                    k0 = 1 + (iz-1) * nc

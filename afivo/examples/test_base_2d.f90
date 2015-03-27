@@ -109,7 +109,7 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_prolong1_to(tree%boxes, id, i_phi)
+          call a2_prolong2_to(tree%boxes, id, i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)

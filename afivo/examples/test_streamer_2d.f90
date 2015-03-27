@@ -417,36 +417,42 @@ contains
          0.25_dp * (box%fy(1:nc, 1:nc, f_fld) + box%fy(1:nc, 2:nc+1, f_fld))**2)
   end subroutine fld_from_pot
 
-  ! Koren limiter for use in advection scheme
-  elemental function limiter_koren(theta)
-    real(dp), intent(in) :: theta
-    real(dp)             :: limiter_koren
-    real(dp), parameter  :: one_sixth = 1.0_dp / 6.0_dp
-    limiter_koren = max(0.0d0, min(1.0_dp, theta, &
-         (1.0_dp + 2.0_dp * theta) * one_sixth))
-  end function limiter_koren
+  !> Modified implementation of Koren limiter, to avoid division or the min/max
+  !> functions, which can be problematic / expensive. In most literature, you
+  !> have r = ga / gb (ratio of gradients). Then the limiter phi(r) is
+  !> multiplied with gb. With this implementation, you get phi(r) * gb
+  elemental function koren_mlim(ga, gb)
+    real(dp), intent(in) :: ga  ! Density gradient (numerator)
+    real(dp), intent(in) :: gb  ! Density gradient (denominator)
+    real(dp), parameter  :: sixth = 1/6.0_dp
+    real(dp)             :: koren_mlim, t1, t2
 
-  ! Safe division for use in Koren limiter
-  elemental function ratio(numerator, denominator)
-    real(dp), intent(in) :: numerator, denominator
-    real(dp)             :: ratio
-    if (denominator /= 0.0_dp) then
-       ratio = numerator / denominator
+    t1 = ga * ga                ! Two temporary variables,
+    t2 = ga * gb                ! so that we do not need sign()
+
+    if (t2 <= 0) then
+       ! ga and gb have different sign: local minimum/maximum
+       koren_mlim = 0
+    else if (t1 >= 2.5_dp * t2) then
+       ! (1+2*ga/gb)/6 => 1, limiter has value 1
+       koren_mlim = gb
+    else if (t1 > 0.25_dp * t2) then
+       ! 1 > ga/gb > 1/4, limiter has value (1+2*ga/gb)/6
+       koren_mlim = sixth * (gb + 2*ga)
     else
-       ratio = 1 / epsilon(1.0_dp)
+       ! 0 < ga/gb < 1/4, limiter has value ga/gb
+       koren_mlim = ga
     end if
-  end function ratio
+  end function koren_mlim
 
   ! Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp)                    :: inv_dr, theta
+    real(dp)                    :: inv_dr, vel, tmp
     real(dp)                    :: gradp, gradc, gradn
-    integer                     :: i, j, nc, nb_id
-
-    nc     = boxes(id)%n_cell
-    inv_dr = 1/boxes(id)%dr
+    real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
+    integer                     :: i, j, nc
 
     if (boxes(id)%tag == mg_ceps_box) then
        boxes(id)%fx(:, :, f_elec) = 0
@@ -454,43 +460,38 @@ contains
        return
     end if
 
+    nc     = boxes(id)%n_cell
+    inv_dr = 1/boxes(id)%dr
+
+    call a2_gc2_box_sides(boxes, id, i_elec, a2_sides2_prolong1, &
+         sides_bc2_dens, gc_data, nc)
+
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
        do i = 1, nc+1
-
+          vel = boxes(id)%fx(i, j, f_fld) * mobility
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
-          if (boxes(id)%fx(i, j, f_fld) * mobility < 0.0_dp) then
-
+          if (vel < 0.0_dp) then
              if (i == nc+1) then
-                nb_id = boxes(id)%neighbors(a2_nb_hx)
-                if (nb_id > a5_no_box) then
-                   gradn = boxes(nb_id)%cc(2, j, i_elec) - boxes(id)%cc(i, j, i_elec)
-                else
-                   gradn = 0
-                end if
+                tmp = gc_data(j, a2_nb_hx)
              else
-                gradn = boxes(id)%cc(i+1, j, i_elec) - boxes(id)%cc(i, j, i_elec)
+                tmp = boxes(id)%cc(i+1, j, i_elec)
              end if
 
-             theta = ratio(gradc, gradn)
-             boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_fld) * mobility * &
-                  (boxes(id)%cc(i, j, i_elec) - limiter_koren(theta) * gradn)
-          else                  ! boxes(id)%fx(i, j, f_fld) * mobility > 0
+             gradn = tmp - boxes(id)%cc(i, j, i_elec)
+             boxes(id)%fx(i, j, f_elec) = vel * &
+                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
+          else                  ! vel > 0
 
              if (i == 1) then
-                nb_id = boxes(id)%neighbors(a2_nb_lx)
-                if (nb_id > a5_no_box) then
-                   gradp = boxes(id)%cc(i-1, j, i_elec) - boxes(nb_id)%cc(nc-1, j, i_elec)
-                else
-                   gradp = 0
-                end if
+                tmp = gc_data(j, a2_nb_lx)
              else
-                gradp = boxes(id)%cc(i-1, j, i_elec) - boxes(id)%cc(i-2, j, i_elec)
+                tmp = boxes(id)%cc(i-2, j, i_elec)
              end if
 
-             theta = ratio(gradc, gradp)
-             boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_fld) * mobility * &
-                  (boxes(id)%cc(i-1, j, i_elec) + limiter_koren(theta) * gradp)
+             gradp = boxes(id)%cc(i-1, j, i_elec) - tmp
+             boxes(id)%fx(i, j, f_elec) = vel * &
+                  (boxes(id)%cc(i-1, j, i_elec) + koren_mlim(gradc, gradp))
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
@@ -502,41 +503,29 @@ contains
     ! y-fluxes interior, advective part with flux limiter
     do j = 1, nc+1
        do i = 1, nc
-
+          vel = boxes(id)%fy(i, j, f_fld) * mobility
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i, j-1, i_elec)
 
-          if (boxes(id)%fy(i, j, f_fld) * mobility < 0.0_dp) then
-
+          if (vel < 0.0_dp) then
              if (j == nc+1) then
-                nb_id = boxes(id)%neighbors(a2_nb_hy)
-                if (nb_id > a5_no_box) then
-                   gradn = boxes(nb_id)%cc(i, 2, i_elec) - boxes(id)%cc(i, j, i_elec)
-                else
-                   gradn = 0
-                end if
+                tmp = gc_data(i, a2_nb_hy)
              else
-                gradn = boxes(id)%cc(i, j+1, i_elec) - boxes(id)%cc(i, j, i_elec)
+                tmp = boxes(id)%cc(i, j+1, i_elec)
              end if
 
-             theta = ratio(gradc, gradn)
-             boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_fld) * mobility * &
-                  (boxes(id)%cc(i, j, i_elec) - limiter_koren(theta) * gradn)
-          else                  ! boxes(id)%fy(i, j, f_fld) * mobility > 0
-
+             gradn = tmp - boxes(id)%cc(i, j, i_elec)
+             boxes(id)%fy(i, j, f_elec) = vel * &
+                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
+          else                  ! vel > 0
              if (j == 1) then
-                nb_id = boxes(id)%neighbors(a2_nb_ly)
-                if (nb_id > a5_no_box) then
-                   gradp = boxes(id)%cc(i, j-1, i_elec) - boxes(nb_id)%cc(i, nc-1, i_elec)
-                else
-                   gradp = 0
-                end if
+                tmp = gc_data(i, a2_nb_ly)
              else
-                gradp = boxes(id)%cc(i, j-1, i_elec) - boxes(id)%cc(i, j-2, i_elec)
+                tmp = boxes(id)%cc(i, j-2, i_elec)
              end if
 
-             theta = ratio(gradc, gradp)
-             boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_fld) * mobility * &
-                  (boxes(id)%cc(i, j-1, i_elec) + limiter_koren(theta) * gradp)
+             gradp = boxes(id)%cc(i, j-1, i_elec) - tmp
+             boxes(id)%fy(i, j, f_elec) = vel * &
+                  (boxes(id)%cc(i, j-1, i_elec) + koren_mlim(gradc, gradp))
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
@@ -601,7 +590,8 @@ contains
   real(dp) function get_alpha(fld)
     real(dp), intent(in) :: fld
     ! Breakdown fld of 3 MV/m
-    get_alpha = max(0.0_dp, 1e5_dp * exp(1 - 1e7_dp/(abs(fld)+epsilon(1.0_dp))) - 9697.2_dp)
+    get_alpha = max(0.0_dp, 1e5_dp * &
+         exp(1 - 1e7_dp/(abs(fld)+epsilon(1.0_dp))) - 9697.2_dp)
   end function get_alpha
 
   ! For each box that gets refined, set data on its children using this routine
@@ -683,5 +673,28 @@ contains
        boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_dens
+
+  ! This fills a second layer of ghost cells near physical boundaries for the
+  ! electron density
+  subroutine sides_bc2_dens(boxes, id, nb, iv, bc_side, nc)
+    type(box2_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, iv, nc
+    real(dp), intent(out)       :: bc_side(nc)
+
+    select case (nb)
+    case (a2_nb_lx)
+       ! Neumann zero
+       bc_side = boxes(id)%cc(2, 1:nc, iv)
+    case (a2_nb_hx)
+       ! Neumann zero
+       bc_side = boxes(id)%cc(nc-1, 1:nc, iv)
+    case (a2_nb_ly)
+       ! Neumann zero
+       bc_side = boxes(id)%cc(1:nc, 2, iv)
+    case (a2_nb_hy)
+       ! Neumann zero
+       bc_side = boxes(id)%cc(1:nc, nc-1, iv)
+    end select
+  end subroutine sides_bc2_dens
 
 end program test_streamer_2d
