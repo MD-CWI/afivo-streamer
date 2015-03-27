@@ -139,6 +139,9 @@ program streamer_2d
   mg%box_op      => mg2_auto_op
   mg%box_corr    => mg2_auto_corr
   mg%box_gsrb    => mg2_auto_gsrb
+
+  ! Electrode voltage
+  mg%lsf_bnd_val = -domain_len * applied_fld
   ! mg%box_op      => mg2_box_lpllsf
   ! mg%box_corr    => mg2_box_corr_lpllsf
   ! mg%box_gsrb    => mg2_box_gsrb_lpllsf
@@ -636,7 +639,7 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, fld
-    real(dp)                    :: alpha, eta, mobility
+    real(dp)                    :: alpha, eta, mobility, min_lsf
     integer                     :: i, j, nc
     type(LT_loc_t) :: loc
 
@@ -657,6 +660,14 @@ contains
 
           box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + src
           box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src
+
+          min_lsf = min(box%cc(i-1, j, i_lsf), box%cc(i+1, j, i_lsf), &
+               box%cc(i, j-1, i_lsf), box%cc(i, j+1, i_lsf), &
+               box%cc(i, j, i_lsf))
+          if (min_lsf <= 0) then
+             box%cc(i, j, i_elec) = 0
+             box%cc(i, j, i_pion) = 0
+          end if
        end do
     end do
 

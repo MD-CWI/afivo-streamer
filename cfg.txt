@@ -4,7 +4,7 @@ dt_amr = 1e-11
 sim_name = test
 end_time = 50e-9
 photoi_enabled = t
-photoi_frac_O2 = 0.001
+photoi_frac_O2 = 0.1
 photoi_eta = 5e-2
 photoi_num_photons = 10000
 
@@ -12,7 +12,7 @@ init_seed_rel_r0 = 0.5 0.0
 init_seed_rel_r1 = 0.5 0.3
 init_line_rel_r0 = 0.3 0.0
 init_line_rel_r1 = 0.7 1.0
-init_bg_dens = 5e12
+init_bg_dens = 0e12
 init_seed_dens = 0 2e19
 init_seed_width = 0.25e-3
 init_line_dens = 1e15
