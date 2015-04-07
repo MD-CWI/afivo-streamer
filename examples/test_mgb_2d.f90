@@ -57,9 +57,6 @@ program test_mgb
   mg%box_op      => mg2_auto_op
   mg%box_corr    => mg2_auto_corr
   mg%box_gsrb    => mg2_auto_gsrb
-  ! mg%box_op      => mg2_box_lpllsf
-  ! mg%box_corr    => mg2_box_corr_lpllsf
-  ! mg%box_gsrb    => mg2_box_gsrb_lpllsf
 
   call mg2_init_mg(mg)
 
@@ -68,7 +65,7 @@ program test_mgb
   call a2_restrict_tree(tree, i_phi)
 
   do i = 1, 20
-     ! call mg2_fas_vcycle(tree, mg, tree%max_lvl)
+     ! call mg2_fas_vcycle(tree, mg, tree%max_lvl, .true.)
      call mg2_fas_fmg(tree, mg, .true.)
      write(fname, "(A,I0,A)") "test_mgb_2d_", i, ".vtu"
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
