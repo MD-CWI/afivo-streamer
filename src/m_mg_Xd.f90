@@ -82,12 +82,12 @@ module m_mg_$Dd
        type(mg$D_t), intent(in)     :: mg
      end subroutine mg$D_box_corr
 
-     subroutine mg$D_box_rstr(box_c, box_p, iv, i_to)
+     subroutine mg$D_box_rstr(box_c, box_p, iv, mg)
        import
-       type(box$D_t), intent(in)     :: box_c !< Child box to restrict
-       type(box$D_t), intent(inout)  :: box_p !< Parent box to restrict to
-       integer, intent(in)           :: iv    !< Variable to restrict
-       integer, intent(in), optional :: i_to  !< Destination (if /= iv)
+       type(box$D_t), intent(in)    :: box_c !< Child box to restrict
+       type(box$D_t), intent(inout) :: box_p !< Parent box to restrict to
+       integer, intent(in)         :: iv    !< Variable to restrict
+       type(mg$D_t), intent(in)     :: mg
      end subroutine mg$D_box_rstr
   end interface
 
@@ -97,17 +97,20 @@ module m_mg_$Dd
   public :: mg$D_box_op
   public :: mg$D_box_gsrb
   public :: mg$D_box_corr
+  public :: mg$D_box_rstr
 
   ! Automatic selection of operators
   public :: mg$D_set_box_tag
   public :: mg$D_auto_op
   public :: mg$D_auto_gsrb
   public :: mg$D_auto_corr
+  public :: mg$D_auto_rstr
 
   ! Methods for normal Laplacian
   public :: mg$D_box_lpl
   public :: mg$D_box_gsrb_lpl
   public :: mg$D_box_corr_lpl
+  public :: mg$D_box_rstr_lpl
 
   ! Methods for Laplacian with jump in coefficient between boxes
   public :: mg$D_box_lpld
@@ -118,6 +121,7 @@ module m_mg_$Dd
   public :: mg$D_box_lpllsf
   public :: mg$D_box_gsrb_lpllsf
   public :: mg$D_box_corr_lpllsf
+  public :: mg$D_box_rstr_lpllsf
 
 contains
 
@@ -141,7 +145,7 @@ contains
     if (.not. associated(mg%box_op))   mg%box_op => mg$D_box_lpl
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg$D_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg$D_box_corr_lpl
-    if (.not. associated(mg%box_rstr)) mg%box_rstr => a$D_restrict_box
+    if (.not. associated(mg%box_rstr)) mg%box_rstr => mg$D_box_rstr_lpl
 
     mg%initialized = .true.
   end subroutine mg$D_init_mg
@@ -177,9 +181,9 @@ contains
           call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
        end if
 
-       ! Perform V-cycle
+       ! Perform V-cycle, only set residual on last iteration
        call mg$D_fas_vcycle(tree, mg, lvl, &
-            set_residual .and. lvl == tree%max_lvl) ! Only set residual on last iteration
+            set_residual .and. lvl == tree%max_lvl)
     end do
   end subroutine mg$D_fas_fmg
 
@@ -337,8 +341,8 @@ contains
        tmp = tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
 #endif
        call residual_box(tree%boxes(id), mg)
-       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp)
-       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp, mg)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi, mg)
 #if $D == 2
        tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp) = tmp
 #elif $D == 3
@@ -414,6 +418,24 @@ contains
     end select
   end subroutine mg$D_auto_op
 
+  !> Based on the box type, apply the approriate Laplace operator
+  subroutine mg$D_auto_rstr(box_c, box_p, iv, mg)
+    type(box$D_t), intent(in)    :: box_c
+    type(box$D_t), intent(inout) :: box_p
+    integer, intent(in)         :: iv
+    type(mg$D_t), intent(in)     :: mg
+
+    ! We can only restrict after gsrb, so tag should always be set
+    if (box_c%tag == a5_init_tag) stop "mg$D_auto_rstr: box_c tag not set"
+
+    select case(box_c%tag)
+    case (mg_normal_box, mg_veps_box, mg_ceps_box)
+       call mg$D_box_rstr_lpl(box_c, box_p, iv, mg)
+    case (mg_lsf_box)
+       call mg$D_box_rstr_lpllsf(box_c, box_p, iv, mg)
+    end select
+  end subroutine mg$D_auto_rstr
+
   !> Based on the box type, correct the solution of the children
   subroutine mg$D_auto_corr(box_p, box_c, mg)
     type(box$D_t), intent(inout) :: box_c
@@ -421,7 +443,7 @@ contains
     type(mg$D_t), intent(in)     :: mg
 
     ! We can only correct after gsrb, so tag should always be set
-    if (box_p%tag == a5_init_tag) stop "mg$D_auto_corr: box tag not set"
+    if (box_p%tag == a5_init_tag) stop "mg$D_auto_corr: box_p tag not set"
 
     select case(box_p%tag)
     case (mg_normal_box)
@@ -608,6 +630,50 @@ contains
     end do
 #endif
   end subroutine mg$D_box_lpl
+
+  !> Restriction of child box (box_c) to its parent (box_p)
+  subroutine mg$D_box_rstr_lpl(box_c, box_p, iv, mg)
+    type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
+    type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
+    integer, intent(in)           :: iv            !< Variable to restrict
+    type(mg$D_t), intent(in)       :: mg
+    integer                       :: i, j, i_f, j_f, i_c, j_c
+    integer                       :: hnc, ix_offset($D)
+#if $D == 3
+    integer                       :: k, k_f, k_c
+#endif
+
+    hnc       = ishft(box_c%n_cell, -1) ! n_cell / 2
+    ix_offset = a$D_get_child_offset(box_c)
+
+#if $D == 2
+    do j = 1, hnc
+       j_c = ix_offset(2) + j
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = ix_offset(1) + i
+          i_f = 2 * i - 1
+          box_p%cc(i_c, j_c, iv) = 0.25_dp * &
+               sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
+       end do
+    end do
+#elif $D == 3
+    do k = 1, hnc
+       k_c = ix_offset(3) + k
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = ix_offset(2) + j
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = ix_offset(1) + i
+             i_f = 2 * i - 1
+             box_p%cc(i_c, j_c, k_c, iv) = 0.125_dp * &
+                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, iv))
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg$D_box_rstr_lpl
 
   subroutine mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
@@ -1034,5 +1100,73 @@ contains
     end do
 #endif
   end subroutine mg$D_box_lpllsf
+
+  !> Restriction of child box (box_c) to its parent (box_p)
+  subroutine mg$D_box_rstr_lpllsf(box_c, box_p, iv, mg)
+    type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
+    type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
+    integer, intent(in)           :: iv            !< Variable to restrict
+    type(mg$D_t), intent(in)       :: mg
+    integer                       :: i, j, i_f, j_f, i_c, j_c
+    integer                       :: hnc, ix_offset($D), n_ch
+#if $D == 2
+    logical                       :: ch_mask(2, 2)
+#elif $D == 3
+    logical                       :: ch_mask(2, 2, 2)
+    integer                       :: k, k_f, k_c
+#endif
+
+    hnc       = ishft(box_c%n_cell, -1) ! n_cell / 2
+    ix_offset = a$D_get_child_offset(box_c)
+
+#if $D == 2
+    do j = 1, hnc
+       j_c = ix_offset(2) + j
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = ix_offset(1) + i
+          i_f = 2 * i - 1
+
+          ch_mask = (box_p%cc(i_c, j_c, mg%i_lsf) * &
+               box_c%cc(i_f:i_f+1, j_f:j_f+1, mg%i_lsf) > 0)
+          n_ch = count(ch_mask)
+
+          if (n_ch < a$D_num_children .and. n_ch > 0) then
+             box_p%cc(i_c, j_c, iv) = 1 / n_ch * &
+                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv), mask=ch_mask)
+          else                  ! Take average of children
+             box_p%cc(i_c, j_c, iv) = 0.25_dp * &
+                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
+          end if
+       end do
+    end do
+#elif $D == 3
+    do k = 1, hnc
+       k_c = ix_offset(3) + k
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = ix_offset(2) + j
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = ix_offset(1) + i
+             i_f = 2 * i - 1
+
+             ch_mask = (box_p%cc(i_c, j_c, k_c, mg%i_lsf) * &
+                  box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, mg%i_lsf) > 0)
+             n_ch = count(ch_mask)
+
+             if (n_ch < a$D_num_children .and. n_ch > 0) then
+                box_p%cc(i_c, j_c, k_c, iv) = 1 / n_ch * &
+                     sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, iv), &
+                     mask=ch_mask)
+             else                  ! Take average of children
+                box_p%cc(i_c, j_c, k_c, iv) = 0.125_dp * &
+                     sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, iv))
+             end if
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg$D_box_rstr_lpllsf
 
 end module m_mg_$Dd
