@@ -1819,21 +1819,19 @@ contains
     end do
   end subroutine a$D_restrict_tree
 
-  !> Restriction of child box (box_c) to another box (box_p), typically its
-  !> parent. Note that ix_offset is used to specify to which part of box_p we
-  !> should restrict box_c.
+  !> Restriction of child box (box_c) to its parent (box_p)
   subroutine a$D_restrict_box(box_c, box_p, iv, i_to)
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
     integer, intent(in), optional :: i_to         !< Destination (if /= iv)
-    integer                       :: i, j, i_c1, j_c1, i_dest
-    integer                       :: nc, ix_offset($D)
+    integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
+    integer                       :: hnc, ix_offset($D)
 #if $D == 3
-    integer                       :: k, k_c1
+    integer                       :: k, k_f, k_c
 #endif
 
-    nc        = box_c%n_cell
+    hnc       = ishft(box_c%n_cell, -1) ! n_cell / 2
     ix_offset = a$D_get_child_offset(box_c)
 
     if (present(i_to)) then
@@ -1843,22 +1841,28 @@ contains
     end if
 
 #if $D == 2
-    do j = 1, nc, 2
-       j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
-       do i = 1, nc, 2
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          box_p%cc(i_c1, j_c1, i_dest) = 0.25_dp * sum(box_c%cc(i:i+1, j:j+1, iv))
+    do j = 1, hnc
+       j_c = ix_offset(2) + j
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = ix_offset(1) + i
+          i_f = 2 * i - 1
+          box_p%cc(i_c, j_c, i_dest) = 0.25_dp * &
+               sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
        end do
     end do
 #elif $D == 3
-    do k = 1, nc, 2
-       k_c1 = ix_offset(3) + ishft(k+1, -1)  ! (k+1)/2
-       do j = 1, nc, 2
-          j_c1 = ix_offset(2) + ishft(j+1, -1)  ! (j+1)/2
-          do i = 1, nc, 2
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             box_p%cc(i_c1, j_c1, k_c1, i_dest) = 0.125_dp * &
-                  sum(box_c%cc(i:i+1, j:j+1, k:k+1, iv))
+    do k = 1, hnc
+       k_c = ix_offset(3) + k
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = ix_offset(2) + j
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = ix_offset(1) + i
+             i_f = 2 * i - 1
+             box_p%cc(i_c, j_c, k_c, i_dest) = 0.125_dp * &
+                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, iv))
           end do
        end do
     end do
