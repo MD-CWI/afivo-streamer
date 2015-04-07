@@ -449,7 +449,7 @@ contains
   subroutine fluxes_koren(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp)                    :: inv_dr, vel, tmp
+    real(dp)                    :: inv_dr, v_drift, tmp
     real(dp)                    :: gradp, gradc, gradn
     real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
     integer                     :: i, j, nc
@@ -469,32 +469,32 @@ contains
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
        do i = 1, nc+1
-          vel = boxes(id)%fx(i, j, f_fld) * mobility
+          v_drift = boxes(id)%fx(i, j, f_fld) * mobility
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
-          if (vel < 0.0_dp) then
+
+          if (v_drift < 0.0_dp) then
              if (i == nc+1) then
                 tmp = gc_data(j, a2_nb_hx)
              else
                 tmp = boxes(id)%cc(i+1, j, i_elec)
              end if
-
              gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fx(i, j, f_elec) = vel * &
+             boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-          else                  ! vel > 0
+          else                  ! v_drift > 0
 
              if (i == 1) then
                 tmp = gc_data(j, a2_nb_lx)
              else
                 tmp = boxes(id)%cc(i-2, j, i_elec)
              end if
-
              gradp = boxes(id)%cc(i-1, j, i_elec) - tmp
-             boxes(id)%fx(i, j, f_elec) = vel * &
+             boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i-1, j, i_elec) + koren_mlim(gradc, gradp))
           end if
 
-          ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
+          ! Diffusive part with 2-nd order explicit method. dif_f has to be
+          ! scaled by 1/dx
           boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_elec) - &
                diff_coeff * gradc * inv_dr
        end do
@@ -503,32 +503,31 @@ contains
     ! y-fluxes interior, advective part with flux limiter
     do j = 1, nc+1
        do i = 1, nc
-          vel = boxes(id)%fy(i, j, f_fld) * mobility
+          v_drift = boxes(id)%fy(i, j, f_fld) * mobility
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i, j-1, i_elec)
 
-          if (vel < 0.0_dp) then
+          if (v_drift < 0.0_dp) then
              if (j == nc+1) then
                 tmp = gc_data(i, a2_nb_hy)
              else
                 tmp = boxes(id)%cc(i, j+1, i_elec)
              end if
-
              gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fy(i, j, f_elec) = vel * &
+             boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-          else                  ! vel > 0
+          else                  ! v_drift > 0
              if (j == 1) then
                 tmp = gc_data(i, a2_nb_ly)
              else
                 tmp = boxes(id)%cc(i, j-2, i_elec)
              end if
-
              gradp = boxes(id)%cc(i, j-1, i_elec) - tmp
-             boxes(id)%fy(i, j, f_elec) = vel * &
+             boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j-1, i_elec) + koren_mlim(gradc, gradp))
           end if
 
-          ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
+          ! Diffusive part with 2-nd order explicit method. dif_f has to be
+          ! scaled by 1/dx
           boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_elec) - &
                diff_coeff * gradc * inv_dr
        end do
