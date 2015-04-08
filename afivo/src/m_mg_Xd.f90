@@ -166,6 +166,7 @@ contains
     integer                         :: lvl, min_lvl
 
     call check_mg(mg)           ! Check whether mg options are set
+
     min_lvl = lbound(tree%lvls, 1)
 
     do lvl = min_lvl, tree%max_lvl
@@ -443,10 +444,9 @@ contains
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
 
-    ! We can only correct after gsrb, so tag should always be set
-    if (box_p%tag == a5_init_tag) stop "mg$D_auto_corr: box_p tag not set"
+    if (box_c%tag == a5_init_tag) call mg$D_set_box_tag(box_c, mg)
 
-    select case(box_p%tag)
+    select case(box_c%tag)
     case (mg_normal_box)
        call mg$D_box_corr_lpl(box_p, box_c, mg)
     case (mg_lsf_box)
@@ -914,7 +914,7 @@ contains
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
           v_a(1:2) = box_c%cc(i, j, [i_lsf, i_corr])
-          v_a(3) = 0.0_dp       ! Boundary value for correctin is 0
+          v_a(3) = 0.0_dp       ! Boundary value for correction is 0
           v_b(3) = 0.0_dp       ! Idem
           v_b(1:2) = box_p%cc(i_c1, j_c1, [i_lsf, i_corr])
           call lsf_dist_val(v_a, v_b, dist(1), val(1))
@@ -943,7 +943,7 @@ contains
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
              v_a(1:2) = box_c%cc(i, j, k, [i_lsf, i_corr])
-             v_a(3) = 0.0_dp       ! Boundary value for correctin is 0
+             v_a(3) = 0.0_dp       ! Boundary value for correction is 0
              v_b(3) = 0.0_dp       ! Idem
              v_b(1:2) = box_p%cc(i_c1, j_c1, k_c1, [i_lsf, i_corr])
              call lsf_dist_val(v_a, v_b, dist(1), val(1))

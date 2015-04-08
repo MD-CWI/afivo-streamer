@@ -33,7 +33,7 @@ program test_mgb
 
   ! Initialize tree
   call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, &
-       dr = dr, coarsen_to = 2, n_boxes = 10*1000)
+       dr = dr, coarsen_to = 8, n_boxes = 10*1000)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of box
@@ -85,7 +85,7 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
 
-    if (boxes(id)%lvl < 6) & ! .and. boxes(id)%r_min(2) < 2.1_dp) &
+    if (boxes(id)%lvl < 6) &
          ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
@@ -102,7 +102,8 @@ contains
           xy = a2_r_cc(box, [i,j]) - [2, 2]
           box%cc(i, j, i_rhs) = 0
           ! box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3 ! Heart
-          box%cc(i, j, i_lsf) = sum(xy**2)-0.51_dp ! Circle
+          ! box%cc(i, j, i_lsf) = norm2(xy)-1.0_dp ! Circle
+          box%cc(i, j, i_lsf) = sqrt(100 * xy(1)**2 + xy(2)**2) - 1.8_dp
           box%cc(i, j, i_bval) = phi0
        end do
     end do
