@@ -30,12 +30,11 @@ module m_mg_$Dd
 
      integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
      integer :: i_lsf        = -1 !< Optional variable for level set function
+     integer :: i_bval       = -1 !< Optional variable for boundary value
 
      integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
      integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
      integer :: n_cycle_base = -1 !< Number of relaxation cycles at bottom level
-
-     real(dp) :: lsf_bnd_val = 0.0_dp !< Boundary value used for the LSF method
 
      logical :: initialized  = .false.
 
@@ -132,6 +131,8 @@ contains
     if (mg%i_phi < 0)                  stop "mg$D_init_mg: i_phi not set"
     if (mg%i_tmp < 0)                  stop "mg$D_init_mg: i_tmp not set"
     if (mg%i_rhs < 0)                  stop "mg$D_init_mg: i_rhs not set"
+    if (mg%i_lsf * mg%i_bval < 0) &
+         stop "mg$D_init_mg: you have to set both i_lsf and i_bval"
 
     if (.not. associated(mg%sides_bc)) stop "mg$D_init_mg: sides_bc not set"
 
@@ -855,17 +856,33 @@ contains
   ! Below: multigrid operators for internal boundary conditions. A level set
   ! function defines the location of the interface(s).
 
-  subroutine lsf_dist_val(lsf_a, v_b, b_value, dist, val)
-    real(dp), intent(in)  :: lsf_a, v_b(2), b_value
-    real(dp), intent(out) :: dist, val
+  !> For a point a, compute value and distance (between 0, 1) of a neighbor b.
+  subroutine lsf_dist_val(lsf_val_bval_a, lsf_val_bval_b, dist, val)
+    !> Level set function at a, value at a, boundary value at a
+    real(dp), intent(in)  :: lsf_val_bval_a(3)
+    !> Level set function at b, value at b, boundary value at b
+    real(dp), intent(in)  :: lsf_val_bval_b(3)
+    !> Distance to neighbor point (value between 0 and 1)
+    real(dp), intent(out) :: dist
+    !> Value at neighbor point
+    real(dp), intent(out) :: val
+    real(dp)              :: lsf_a, lsf_b, bval_a, bval_b
 
-    ! Determine whether there is a boundary
-    if (lsf_a * v_b(2) < 0) then
-       dist = lsf_a / (lsf_a - v_b(2))
-       val  = b_value
+    lsf_a = lsf_val_bval_a(1)
+    lsf_b = lsf_val_bval_b(1)
+
+    if (lsf_a * lsf_b < 0) then
+       ! There is a boundary between the points
+       dist = lsf_a / (lsf_a - lsf_b)
+       bval_a = lsf_val_bval_a(3)
+       bval_b = lsf_val_bval_b(3)
+
+       ! Interpolate between boundary values
+       val  = bval_a * (1-dist) + bval_b * dist
     else
+       ! Simply use the value at b
        dist = 1
-       val  = v_b(1)
+       val  = lsf_val_bval_b(2)
     end if
   end subroutine lsf_dist_val
 
@@ -875,9 +892,9 @@ contains
     type(mg$D_t), intent(in)     :: mg
     integer                     :: i_phi, i_corr, i_lsf, ix_offset($D)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-    real(dp)                    :: bval, val($D+1), dist($D+1), lsf, c($D+1)
+    real(dp)                    :: v_a(3), v_b(3), val($D+1), dist($D+1), c($D+1)
 #if $D == 3
-    integer :: k, k_c1, k_c2
+    integer                     :: k, k_c1, k_c2
 #endif
 
     nc        = box_c%n_cell
@@ -885,7 +902,6 @@ contains
     i_phi     = mg%i_phi
     i_corr    = mg%i_tmp
     i_lsf     = mg%i_lsf
-    bval      = 0.0_dp          ! For the correction, boundaries are zero
 
     ! In these loops, we calculate the closest coarse index (_c1), and the
     ! one-but-closest (_c2). The fine cell lies in between.
@@ -897,13 +913,15 @@ contains
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-          lsf = box_c%cc(i, j, i_lsf)
-          call lsf_dist_val(lsf, box_p%cc(i_c1, j_c1, [i_corr, i_lsf]), &
-               bval, dist(1), val(1))
-          call lsf_dist_val(lsf, box_p%cc(i_c2, j_c1, [i_corr, i_lsf]), &
-               bval, dist(2), val(2))
-          call lsf_dist_val(lsf, box_p%cc(i_c1, j_c2, [i_corr, i_lsf]), &
-               bval, dist(3), val(3))
+          v_a(1:2) = box_c%cc(i, j, [i_lsf, i_corr])
+          v_a(3) = 0.0_dp       ! Boundary value for correctin is 0
+          v_b(3) = 0.0_dp       ! Idem
+          v_b(1:2) = box_p%cc(i_c1, j_c1, [i_lsf, i_corr])
+          call lsf_dist_val(v_a, v_b, dist(1), val(1))
+          v_b(1:2) = box_p%cc(i_c2, j_c1, [i_lsf, i_corr])
+          call lsf_dist_val(v_a, v_b, dist(2), val(2))
+          v_b(1:2) = box_p%cc(i_c1, j_c2, [i_lsf, i_corr])
+          call lsf_dist_val(v_a, v_b, dist(3), val(3))
 
           ! This expresses general interpolation between 3 points (on the lines
           ! between the fine and the 3 coarse values).
@@ -924,15 +942,17 @@ contains
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-             lsf = box_c%cc(i, j, k, i_lsf)
-             call lsf_dist_val(lsf, box_p%cc(i_c1, j_c1, k_c1, [i_corr, i_lsf]), &
-                  bval, dist(1), val(1))
-             call lsf_dist_val(lsf, box_p%cc(i_c2, j_c1, k_c1, [i_corr, i_lsf]), &
-                  bval, dist(2), val(2))
-             call lsf_dist_val(lsf, box_p%cc(i_c1, j_c2, k_c1, [i_corr, i_lsf]), &
-                  bval, dist(3), val(3))
-             call lsf_dist_val(lsf, box_p%cc(i_c1, j_c1, k_c2, [i_corr, i_lsf]), &
-                  bval, dist(4), val(4))
+             v_a(1:2) = box_c%cc(i, j, k, [i_lsf, i_corr])
+             v_a(3) = 0.0_dp       ! Boundary value for correctin is 0
+             v_b(3) = 0.0_dp       ! Idem
+             v_b(1:2) = box_p%cc(i_c1, j_c1, k_c1, [i_lsf, i_corr])
+             call lsf_dist_val(v_a, v_b, dist(1), val(1))
+             v_b(1:2) = box_p%cc(i_c2, j_c1, k_c1, [i_lsf, i_corr])
+             call lsf_dist_val(v_a, v_b, dist(2), val(2))
+             v_b(1:2) = box_p%cc(i_c1, j_c2, k_c1, [i_lsf, i_corr])
+             call lsf_dist_val(v_a, v_b, dist(3), val(3))
+             v_b(1:2) = box_p%cc(i_c1, j_c1, k_c2, [i_lsf, i_corr])
+             call lsf_dist_val(v_a, v_b, dist(4), val(4))
 
              ! This expresses general interpolation between 4 points (on the lines
              ! between the fine and the 4 coarse values).
@@ -953,18 +973,18 @@ contains
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
     type(mg$D_t), intent(in)     :: mg
-    integer                     :: i, i0, j, nc, i_phi, i_rhs, i_lsf
-    real(dp)                    :: bval, dx2, dd(2*$D), val(2*$D), lsf
+    integer                     :: i, i0, j, nc, i_phi, i_rhs, i_lsf, i_bval
+    real(dp)                    :: dx2, dd(2*$D), val(2*$D), v_a(3), v_b(3)
 #if $D == 3
     integer                     :: k
 #endif
 
-    dx2   = box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-    i_lsf = mg%i_lsf
-    bval  = mg%lsf_bnd_val
+    dx2    = box%dr**2
+    nc     = box%n_cell
+    i_phi  = mg%i_phi
+    i_rhs  = mg%i_rhs
+    i_lsf  = mg%i_lsf
+    i_bval = mg%i_bval
 
     ! The parity of redblack_cntr determines which cells we use. If
     ! redblack_cntr is even, we use the even cells and vice versa.
@@ -972,15 +992,15 @@ contains
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
-          lsf = box%cc(i, j, i_lsf)
-          call lsf_dist_val(lsf, box%cc(i-1, j, [i_phi, i_lsf]), &
-               bval, dd(1), val(1))
-          call lsf_dist_val(lsf, box%cc(i+1, j, [i_phi, i_lsf]), &
-               bval, dd(2), val(2))
-          call lsf_dist_val(lsf, box%cc(i, j-1, [i_phi, i_lsf]), &
-               bval, dd(3), val(3))
-          call lsf_dist_val(lsf, box%cc(i, j+1, [i_phi, i_lsf]), &
-               bval, dd(4), val(4))
+          v_a = box%cc(i, j, [i_lsf, i_phi, i_bval])
+          v_b = box%cc(i-1, j, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(1), val(1))
+          v_b = box%cc(i+1, j, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(2), val(2))
+          v_b = box%cc(i, j-1, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(3), val(3))
+          v_b = box%cc(i, j+1, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(4), val(4))
 
           ! Solve for generalized Laplacian (see routine mg$D_box_lpllsf)
           box%cc(i, j, i_phi) = 1 / &
@@ -997,19 +1017,19 @@ contains
        do j = 1, nc
           i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
           do i = i0, nc, 2
-             lsf = box%cc(i, j, k, i_lsf)
-             call lsf_dist_val(lsf, box%cc(i-1, j, k, [i_phi, i_lsf]), &
-                  bval, dd(1), val(1))
-             call lsf_dist_val(lsf, box%cc(i+1, j, k, [i_phi, i_lsf]), &
-                  bval, dd(2), val(2))
-             call lsf_dist_val(lsf, box%cc(i, j-1, k, [i_phi, i_lsf]), &
-                  bval, dd(3), val(3))
-             call lsf_dist_val(lsf, box%cc(i, j+1, k, [i_phi, i_lsf]), &
-                  bval, dd(4), val(4))
-             call lsf_dist_val(lsf, box%cc(i, j, k-1, [i_phi, i_lsf]), &
-                  bval, dd(5), val(5))
-             call lsf_dist_val(lsf, box%cc(i, j, k+1, [i_phi, i_lsf]), &
-                  bval, dd(6), val(6))
+             v_a = box%cc(i, j, k, [i_lsf, i_phi, i_bval])
+             v_b = box%cc(i-1, j, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(1), val(1))
+             v_b = box%cc(i+1, j, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(2), val(2))
+             v_b = box%cc(i, j-1, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(3), val(3))
+             v_b = box%cc(i, j+1, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(4), val(4))
+             v_b = box%cc(i, j, k-1, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(5), val(5))
+             v_b = box%cc(i, j, k+1, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(6), val(6))
 
              ! Solve for generalized Laplacian (see routine mg$D_box_lpllsf)
              box%cc(i, j, k, i_phi) = 1 / (1/(dd(1)*dd(2)) + &
@@ -1033,9 +1053,9 @@ contains
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
     type(mg$D_t), intent(in)     :: mg
-    integer                     :: i, j, nc, i_phi, i_lsf
+    integer                     :: i, j, nc, i_phi, i_lsf, i_bval
     real(dp)                    :: inv_dr_sq, dd(2*$D), val(2*$D)
-    real(dp)                    :: bval, f0, lsf
+    real(dp)                    :: f0, v_a(3), v_b(3)
 #if $D == 3
     integer                     :: k
 #endif
@@ -1044,20 +1064,20 @@ contains
     inv_dr_sq = 1 / box%dr**2
     i_phi     = mg%i_phi
     i_lsf     = mg%i_lsf
-    bval      = mg%lsf_bnd_val
+    i_bval    = mg%i_bval
 
 #if $D == 2
     do j = 1, nc
        do i = 1, nc
-          lsf = box%cc(i, j, i_lsf)
-          call lsf_dist_val(lsf, box%cc(i-1, j, [i_phi, i_lsf]), &
-               bval, dd(1), val(1))
-          call lsf_dist_val(lsf, box%cc(i+1, j, [i_phi, i_lsf]), &
-               bval, dd(2), val(2))
-          call lsf_dist_val(lsf, box%cc(i, j-1, [i_phi, i_lsf]), &
-               bval, dd(3), val(3))
-          call lsf_dist_val(lsf, box%cc(i, j+1, [i_phi, i_lsf]), &
-               bval, dd(4), val(4))
+          v_a = box%cc(i, j, [i_lsf, i_phi, i_bval])
+          v_b = box%cc(i-1, j, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(1), val(1))
+          v_b = box%cc(i+1, j, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(2), val(2))
+          v_b = box%cc(i, j-1, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(3), val(3))
+          v_b = box%cc(i, j+1, [i_lsf, i_phi, i_bval])
+          call lsf_dist_val(v_a, v_b, dd(4), val(4))
 
           ! Generalized Laplacian for neighbors at distance dd * dx
           f0 = box%cc(i, j, i_phi)
@@ -1072,19 +1092,19 @@ contains
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
-             lsf = box%cc(i, j, k, i_lsf)
-             call lsf_dist_val(lsf, box%cc(i-1, j, k, [i_phi, i_lsf]), &
-                  bval, dd(1), val(1))
-             call lsf_dist_val(lsf, box%cc(i+1, j, k, [i_phi, i_lsf]), &
-                  bval, dd(2), val(2))
-             call lsf_dist_val(lsf, box%cc(i, j-1, k, [i_phi, i_lsf]), &
-                  bval, dd(3), val(3))
-             call lsf_dist_val(lsf, box%cc(i, j+1, k, [i_phi, i_lsf]), &
-                  bval, dd(4), val(4))
-             call lsf_dist_val(lsf, box%cc(i, j, k-1, [i_phi, i_lsf]), &
-                  bval, dd(5), val(5))
-             call lsf_dist_val(lsf, box%cc(i, j, k+1, [i_phi, i_lsf]), &
-                  bval, dd(6), val(6))
+             v_a = box%cc(i, j, k, [i_lsf, i_phi, i_bval])
+             v_b = box%cc(i-1, j, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(1), val(1))
+             v_b = box%cc(i+1, j, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(2), val(2))
+             v_b = box%cc(i, j-1, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(3), val(3))
+             v_b = box%cc(i, j+1, k, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(4), val(4))
+             v_b = box%cc(i, j, k-1, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(5), val(5))
+             v_b = box%cc(i, j, k+1, [i_lsf, i_phi, i_bval])
+             call lsf_dist_val(v_a, v_b, dd(6), val(6))
 
              ! Generalized Laplacian for neighbors at distance dd * dx
              f0 = box%cc(i, j, k, i_phi)
