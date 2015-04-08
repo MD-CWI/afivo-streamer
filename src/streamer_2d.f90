@@ -134,6 +134,7 @@ program streamer_2d
   call CFG_get(sim_cfg, "dt_amr", dt_amr)
 
   call get_init_cond(sim_cfg, init_cond)
+  call get_elec_cfg(sim_cfg, elec)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -143,6 +144,7 @@ program streamer_2d
   mg%i_tmp        = i_fld
   mg%i_rhs        = i_rhs
   mg%i_lsf        = i_lsf
+  mg%i_bval       = i_bval
 
   ! The number of cycles at the lowest level
   mg%n_cycle_base = 8
@@ -152,9 +154,6 @@ program streamer_2d
   mg%box_op      => mg2_auto_op
   mg%box_corr    => mg2_auto_corr
   mg%box_gsrb    => mg2_auto_gsrb
-
-  ! Electrode voltage
-  mg%lsf_bnd_val = -domain_len * applied_fld
 
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
@@ -296,16 +295,7 @@ contains
     if (crv_phi < 4.0_dp) &
          ref_flags(id) = a5_rm_ref
 
-    if (max_edens > 100 * init_cond%bg_dens .and. &
-         boxes(id)%dr > 0.2e-3_dp) &
-         ref_flags(id) = a5_do_ref
-
-    if (max_edens > 100 * init_cond%bg_dens .and. &
-         boxes(id)%dr > 0.1e-3_dp) &
-         ref_flags(id) = max(ref_flags(id), a5_kp_ref)
-
-    if (boxes(id)%dr > 0.75e-3_dp .or. (boxes(id)%dr > 1e-4_dp .and. &
-         a2_r_inside(boxes(id), init_cond%seed_r1, 1.0e-3_dp))) &
+    if (boxes(id)%dr > 0.75e-3_dp) &
          ref_flags(id) = a5_do_ref
 
     if (crv_phi > 2.0e1_dp .and. max_fld > 2e6_dp &
@@ -407,7 +397,7 @@ contains
     dt_drt = UC_eps0 / (UC_elem_charge * max_mobility * max_dns)
 
     ! Ionization limit
-    dt_alpha =  1 / (mobility * max_fld * alpha)
+    dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
     get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
   end function get_max_dt
@@ -729,10 +719,8 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
-    real(dp)                    :: v0
 
     nc = boxes(id)%n_cell
-    v0 = applied_fld * domain_len
 
     select case (nb)
     case (a2_nb_lx)
@@ -740,9 +728,11 @@ contains
     case (a2_nb_hx)
        boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
     case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv) = -2 * v0 - boxes(id)%cc(1:nc, 1, iv)
+       boxes(id)%cc(1:nc, 0, iv) = 2 * elec%bot_voltage &
+            - boxes(id)%cc(1:nc, 1, iv)
     case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
+       boxes(id)%cc(1:nc, nc+1, iv) = 2 * elec%top_voltage &
+            - boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
 
@@ -800,7 +790,7 @@ contains
     real(dp)                       :: dlen
     real(dp), allocatable          :: tmp_vec(:)
 
-    call CFG_get(cfg, "init_bg_dens", cond%bg_dens)
+    call CFG_get(cfg, "bg_dens", cond%bg_dens)
     call CFG_get(cfg, "domain_len", dlen)
 
     call CFG_get_size(cfg, "seed_dens", n_cond)
@@ -813,7 +803,7 @@ contains
     if (varsize /= 2 * n_cond) &
          stop "seed_... variables have incompatible size"
 
-    call CFG_get_size(cfg, "seed_rel_width", varsize)
+    call CFG_get_size(cfg, "seed_width", varsize)
     if (varsize /= n_cond) &
          stop "seed_... variables have incompatible size"
 
@@ -835,6 +825,30 @@ contains
     call CFG_get(cfg, "seed_falloff", cond%seed_falloff)
   end subroutine get_init_cond
 
+  subroutine get_elec_cfg(cfg, elec)
+    type(CFG_t), intent(in)   :: cfg
+    type(elec_t), intent(out) :: elec
+    real(dp)                  :: dlen
+
+    call CFG_get(cfg, "domain_len", dlen)
+
+    call CFG_get(cfg, "elec_use_top", elec%use_top)
+    call CFG_get(cfg, "elec_top_voltage", elec%top_voltage)
+    call CFG_get(cfg, "elec_top_rel_r0", elec%top_r0)
+    call CFG_get(cfg, "elec_top_rel_r1", elec%top_r1)
+    call CFG_get(cfg, "elec_top_radius", elec%top_radius)
+    elec%top_r0 = elec%top_r0 * dlen
+    elec%top_r1 = elec%top_r1 * dlen
+
+    call CFG_get(cfg, "elec_use_bot", elec%use_bot)
+    call CFG_get(cfg, "elec_bot_voltage", elec%bot_voltage)
+    call CFG_get(cfg, "elec_bot_rel_r0", elec%bot_r0)
+    call CFG_get(cfg, "elec_bot_rel_r1", elec%bot_r1)
+    call CFG_get(cfg, "elec_bot_radius", elec%bot_radius)
+    elec%bot_r0 = elec%bot_r0 * dlen
+    elec%bot_r1 = elec%bot_r1 * dlen
+  end subroutine get_elec_cfg
+
   subroutine create_cfg(cfg)
     type(CFG_t), intent(inout) :: cfg
 
@@ -853,6 +867,27 @@ contains
     call CFG_add(cfg, "applied_fld", 1.0d7, &
          "The applied electric field")
 
+    call CFG_add(cfg, "elec_use_top", .true., &
+         "Use top electrode")
+    call CFG_add(cfg, "elec_top_voltage", 5e3_dp, &
+         "Voltage top electrode")
+    call CFG_add(cfg, "elec_top_rel_r0", [0.5d0, 0.8d0], &
+         "The relative start position of the top electrode")
+    call CFG_add(cfg, "elec_top_rel_r1", [0.5d0, 1.0d0], &
+         "The relative end position of the top electrode")
+    call CFG_add(cfg, "elec_top_radius", 1.0d-3, &
+         "The radius of the top electrode")
+    call CFG_add(cfg, "elec_use_bot", .false., &
+         "Use bot electrode")
+    call CFG_add(cfg, "elec_bot_voltage", 0e0_dp, &
+         "Voltage bot electrode")
+    call CFG_add(cfg, "elec_bot_rel_r0", [0.5d0, 0.0d0], &
+         "The relative start position of the bot electrode")
+    call CFG_add(cfg, "elec_bot_rel_r1", [0.5d0, 0.2d0], &
+         "The relative end position of the bot electrode")
+    call CFG_add(cfg, "elec_bot_radius", 1.0d-3, &
+         "The radius of the bot electrode")
+
     call CFG_add(cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")
     call CFG_add(cfg, "seed_dens", 5.0d19 , &
@@ -863,7 +898,7 @@ contains
          "The relative end position of the initial seed")
     call CFG_add(cfg, "seed_width", 0.5d-3, &
          "Seed width")
-    call CFG_add(cfg, "seed_fallof", 1, &
+    call CFG_add(cfg, "seed_falloff", 1, &
          "Fallof type for seed, see m_geom.f90")
 
     call CFG_add(cfg, "dt_output", 1.0d-10, &

@@ -115,25 +115,24 @@ contains
     use m_lookup_table
     use omp_lib
 
-    type(a2_t), intent(inout)  :: tree   !< Tree
-    type(LT_table_t)           :: pi_tbl !< Table to sample abs. lenghts
-    type(RNG_t), intent(inout) :: rng    !< Random number generator
+    type(a2_t), intent(inout)   :: tree   !< Tree
+    type(LT_table_t)            :: pi_tbl !< Table to sample abs. lenghts
+    type(RNG_t), intent(inout)  :: rng    !< Random number generator
     !> How many discrete photons to use
-    integer, intent(in)        :: num_photons
+    integer, intent(in)         :: num_photons
     !> Input variable that contains photon production per cell
-    integer, intent(in)        :: i_src
+    integer, intent(in)         :: i_src
     !> Output variable that contains photoionization source rate
-    integer, intent(in)        :: i_pho
+    integer, intent(in)         :: i_pho
 
-    integer :: lvl, ix, id, nc
-    integer :: i, j, n, n_create, n_used, i_ph
-    integer :: proc_id, n_procs
-    integer :: pho_lvl
-    real(dp) :: r_create, dr, fac, sum_production, pi_lengthscale
-
-    real(dp), allocatable :: xyz_src(:, :)
-    real(dp), allocatable :: xyz_dst(:, :)
-    type(PRNG_t) :: prng
+    integer                     :: lvl, ix, id, nc
+    integer                     :: i, j, n, n_create, n_used, i_ph
+    integer                     :: proc_id, n_procs
+    integer                     :: pho_lvl
+    real(dp)                    :: r_create, dr, fac, sum_production, pi_lengthscale
+    real(dp), allocatable       :: xyz_src(:, :)
+    real(dp), allocatable       :: xyz_dst(:, :)
+    type(PRNG_t)                :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
@@ -158,10 +157,10 @@ contains
     call a2_tree_sum_cc(tree, i_src, sum_production, .true.)
 
     ! Create approximately num_photons
-    fac = num_photons/sum_production
-    n_used = 0
     ! print *, "num_photons", num_photons
     ! print *, "sum_production", sum_production
+    fac = num_photons / max(sum_production, epsilon(1.0_dp))
+    n_used = 0
 
     ! Now loop over all leaves and create photons using random numbers
 
