@@ -1,21 +1,22 @@
 applied_fld = -2.0e6
-dt_output = 10e-11
+dt_output = 25e-11
 dt_amr = 1e-11
-sim_name = test
-end_time = 50e-9
+sim_name = test3d
+end_time = 20e-9
 photoi_enabled = t
 photoi_frac_O2 = 0.1
 photoi_eta = 5e-2
 photoi_num_photons = 10000
 
-seed_rel_r0 = 0.5 0.0
-seed_rel_r1 = 0.5 0.3
-bg_dens = 1e10
-seed_dens = 0
-seed_width = 0.25e-3
+bg_dens = 0e0
+seed_dens = 1e14
+seed_rel_r0 = 0.5 0.5 0.0
+seed_rel_r1 = 0.5 0.5 1.0
+seed_width = 1.0e-3
+seed_falloff = 4
 
 elec_use_top = t
 elec_top_radius = 2.0e-3
-elec_top_voltage = 9e4
+elec_top_voltage = 4e4
 elec_use_bot = f
 elec_bot_voltage = 0

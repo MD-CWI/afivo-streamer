@@ -1,7 +1,7 @@
-program streamer_2d
+program streamer_3d
 
-  use m_afivo_2d
-  use m_mg_2d
+  use m_afivo_3d
+  use m_mg_3d
   use m_write_silo
   use m_lookup_table
   use m_config
@@ -57,14 +57,14 @@ program streamer_2d
   type elec_t
      logical  :: use_top
      real(dp) :: top_voltage
-     real(dp) :: top_r0(2)
-     real(dp) :: top_r1(2)
+     real(dp) :: top_r0(3)
+     real(dp) :: top_r1(3)
      real(dp) :: top_radius
 
      logical  :: use_bot
      real(dp) :: bot_voltage
-     real(dp) :: bot_r0(2)
-     real(dp) :: bot_r1(2)
+     real(dp) :: bot_r0(3)
+     real(dp) :: bot_r1(3)
      real(dp) :: bot_radius
   end type elec_t
 
@@ -73,8 +73,8 @@ program streamer_2d
 
   type(LT_table_t)   :: td_tbl  ! Table with transport data vs fld
   type(CFG_t)        :: sim_cfg ! The configuration for the simulation
-  type(a2_t)         :: tree    ! This contains the full grid information
-  type(mg2_t)        :: mg      ! Multigrid option struct
+  type(a3_t)         :: tree    ! This contains the full grid information
+  type(mg3_t)        :: mg      ! Multigrid option struct
   type(RNG_t)        :: sim_rng ! Random number generator
   type(ref_info_t)   :: ref_info
 
@@ -151,27 +151,27 @@ program streamer_2d
 
   ! Routines to use for ...
   mg%sides_bc    => sides_bc_pot ! Filling ghost cell on physical boundaries
-  mg%box_op      => mg2_auto_op
-  mg%box_corr    => mg2_auto_corr
-  mg%box_gsrb    => mg2_auto_gsrb
+  mg%box_op      => mg3_auto_op
+  mg%box_corr    => mg3_auto_corr
+  mg%box_gsrb    => mg3_auto_gsrb
 
   ! This routine always needs to be called when using multigrid
-  call mg2_init_mg(mg)
+  call mg3_init_mg(mg)
 
   output_cnt = 0          ! Number of output files written
   time       = 0          ! Simulation time (all times are in s)
 
   ! Set up the initial conditions
   do i = 1, 10
-     call a2_loop_box(tree, set_init_cond)
-     call a2_restrict_tree(tree, i_rhs)
+     call a3_loop_box(tree, set_init_cond)
+     call a3_restrict_tree(tree, i_rhs)
      call compute_fld(tree, n_fmg_cycles)
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a3_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
-  if (photoi_enabled) &
-       call set_photoionization(tree, photoi_eta, photoi_num_photons)
+  ! if (photoi_enabled) &
+  !      call set_photoionization(tree, photoi_eta, photoi_num_photons)
 
   do
      ! Get a new time step, which is at most dt_amr
@@ -194,7 +194,7 @@ program streamer_2d
         write_out = .false.
      end if
 
-     if (write_out) call a2_write_silo(tree, trim(fname), &
+     if (write_out) call a3_write_silo(tree, trim(fname), &
           cc_names, output_cnt, time)
 
      if (time > end_time) exit
@@ -204,33 +204,33 @@ program streamer_2d
         time = time + dt
 
         ! Copy previous solution
-        call a2_tree_copy_cc(tree, i_elec, i_elec_old)
-        call a2_tree_copy_cc(tree, i_pion, i_pion_old)
+        call a3_tree_copy_cc(tree, i_elec, i_elec_old)
+        call a3_tree_copy_cc(tree, i_pion, i_pion_old)
 
         ! Two forward Euler steps over dt
         do i = 1, 2
            ! First calculate fluxes
-           call a2_loop_boxes(tree, fluxes_koren, .true.)
+           call a3_loop_boxes(tree, fluxes_koren, .true.)
 
            call compute_fld(tree, n_fmg_cycles)
 
            ! Update the solution
-           call a2_loop_box_arg(tree, update_solution, [dt], .true.)
+           call a3_loop_box_arg(tree, update_solution, [dt], .true.)
 
            ! Restrict the electron and ion densities to lower levels
-           call a2_restrict_tree(tree, i_elec)
-           call a2_restrict_tree(tree, i_pion)
+           call a3_restrict_tree(tree, i_elec)
+           call a3_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
-           call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
+           call a3_gc_sides(tree, i_elec, a3_sides_interp, sides_bc_dens)
+           call a3_gc_sides(tree, i_pion, a3_sides_interp, sides_bc_dens)
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
-        call a2_loop_box(tree, average_dens, .true.)
+        call a3_loop_box(tree, average_dens, .true.)
      end do
 
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a3_adjust_refinement(tree, set_ref_flags, ref_info)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -240,62 +240,64 @@ program streamer_2d
         call compute_fld(tree, n_fmg_cycles)
 
         ! This will every now-and-then clean up the data in the tree
-        call a2_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
+        call a3_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
      end if
 
-     if (photoi_enabled) &
-          call set_photoionization(tree, photoi_eta, photoi_num_photons)
+     ! if (photoi_enabled) &
+     !      call set_photoionization(tree, photoi_eta, photoi_num_photons)
   end do
 
-  call a2_destroy(tree)
+  call a3_destroy(tree)
 
 contains
 
   ! Initialize the AMR tree
   subroutine init_tree(tree)
-    type(a2_t), intent(inout) :: tree
+    type(a3_t), intent(inout) :: tree
 
     ! Variables used below to initialize tree
     real(dp)                  :: dr
     integer                   :: id
-    integer                   :: ix_list(2, 1) ! Spatial indices of initial boxes
-    integer                   :: nb_list(4, 1) ! Neighbors of initial boxes
-    integer                   :: n_boxes_init = 10*1000
+    integer                   :: ix_list(3, 1) ! Spatial indices of initial boxes
+    integer                   :: nb_list(6, 1) ! Neighbors of initial boxes
+    integer                   :: n_boxes_init = 5*1000
 
     dr = domain_len / box_size
 
     ! Initialize tree
-    call a2_init(tree, box_size, n_var_cell, n_var_face, dr, &
+    call a3_init(tree, box_size, n_var_cell, n_var_face, dr, &
          coarsen_to=8, n_boxes = n_boxes_init)
 
     ! Set up geometry
     id             = 1          ! One box ...
-    ix_list(:, id) = [1,1]      ! With index 1,1 ...
+    ix_list(:, id) = [1,1,1]    ! With index 1,1,1 ...
     nb_list(:, id) = -1         ! And neighbors -1 (physical boundary)
 
     ! Create the base mesh
-    call a2_set_base(tree, ix_list, nb_list)
+    call a3_set_base(tree, ix_list, nb_list)
 
   end subroutine init_tree
 
   ! Refinement function
   subroutine set_ref_flags(boxes, id, ref_flags)
-    type(box2_t), intent(in) :: boxes(:)
+    type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
     integer                  :: nc
-    real(dp)                 :: crv_phi, dr2, max_edens, max_fld
+    real(dp)                 :: crv_phi, dr2, max_fld
 
     nc        = boxes(id)%n_cell
     dr2       = boxes(id)%dr**2
-    crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-    max_edens = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
-    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
+    crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
+    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_fld))
 
     if (crv_phi < 4.0_dp) &
          ref_flags(id) = a5_rm_ref
 
-    if (boxes(id)%dr > 0.35e-3_dp) &
+    if (boxes(id)%dr > 0.7e-3_dp) &
+         ref_flags(id) = a5_do_ref
+
+    if (max_fld > 6e6_dp .and. boxes(id)%dr > 0.2e-3_dp) &
          ref_flags(id) = a5_do_ref
 
     if (crv_phi > 2.0e1_dp .and. max_fld > 2e6_dp &
@@ -306,83 +308,87 @@ contains
 
   subroutine set_init_cond(box)
     use m_geom
-    type(box2_t), intent(inout) :: box
-    integer                     :: i, j, n, nc
-    real(dp)                    :: xy(2)
+    type(box3_t), intent(inout) :: box
+    integer                     :: i, j, k, n, nc
+    real(dp)                    :: xy(3)
     real(dp)                    :: dens
 
     nc = box%n_cell
-    box%cc(:, :, i_elec) = init_cond%bg_dens
+    box%cc(:, :, :, i_elec) = init_cond%bg_dens
 
 
-    do j = 0, nc+1
-       do i = 0, nc+1
-          xy   = a2_r_cc(box, [i,j])
+    do k = 0, nc+1
+       do j = 0, nc+1
+          do i = 0, nc+1
+             xy   = a3_r_cc(box, [i,j,k])
 
-          do n = 1, init_cond%n_cond
-             dens = init_cond%seed_dens(n) * &
-                  GM_dens_line(xy, init_cond%seed_r0(:, n), &
-                  init_cond%seed_r1(:, n), 2, &
-                  init_cond%seed_width(n), &
-                  init_cond%seed_falloff(n))
-             box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + dens
+             do n = 1, init_cond%n_cond
+                dens = init_cond%seed_dens(n) * &
+                     GM_dens_line(xy, init_cond%seed_r0(:, n), &
+                     init_cond%seed_r1(:, n), 3, &
+                     init_cond%seed_width(n), &
+                     init_cond%seed_falloff(n))
+                box%cc(i, j, k, i_elec) = box%cc(i, j, k, i_elec) + dens
+             end do
           end do
        end do
     end do
 
-    box%cc(:, :, i_pion) = box%cc(:, :, i_elec)
-    box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
+    box%cc(:, :, :, i_pion) = box%cc(:, :, :, i_elec)
+    box%cc(:, :, :, i_phi) = 0     ! Inital potential set to zero
 
     call set_box_lsf(box)
   end subroutine set_init_cond
 
   subroutine set_box_lsf(box)
     use m_geom
-    type(box2_t), intent(inout) :: box
-    integer                     :: i, j, nc
+    type(box3_t), intent(inout) :: box
+    integer                     :: i, j, k, nc
     real(dp), parameter         :: high_lsf_value = 1e10_dp
-    real(dp)                    :: xy(2), lsf
+    real(dp)                    :: xy(3), lsf
 
     nc = box%n_cell
 
-    do j = 0, nc+1
-       do i = 0, nc+1
-          xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_lsf) = high_lsf_value
+    do k = 0, nc+1
+       do j = 0, nc+1
+          do i = 0, nc+1
+             xy = a3_r_cc(box, [i,j,k])
+             box%cc(i, j, k, i_lsf) = high_lsf_value
 
-          if (elec%use_top) then
-             lsf = GM_dist_line(xy, elec%top_r0, elec%top_r1, 2) - &
-                  elec%top_radius
-             box%cc(i, j, i_bval) = elec%top_voltage
-             box%cc(i, j, i_lsf) = lsf
-          end if
-
-          if (elec%use_bot) then
-             lsf = GM_dist_line(xy, elec%bot_r0, elec%bot_r1, 2) - &
-                  elec%bot_radius
-             if (lsf < box%cc(i, j, i_lsf)) then
-                box%cc(i, j, i_bval) = elec%bot_voltage
-                box%cc(i, j, i_lsf) = lsf
+             if (elec%use_top) then
+                lsf = GM_dist_line(xy, elec%top_r0, elec%top_r1, 3) - &
+                     elec%top_radius
+                box%cc(i, j, k, i_bval) = elec%top_voltage
+                box%cc(i, j, k, i_lsf) = lsf
              end if
-          end if
+
+             if (elec%use_bot) then
+                lsf = GM_dist_line(xy, elec%bot_r0, elec%bot_r1, 3) - &
+                     elec%bot_radius
+                if (lsf < box%cc(i, j, k, i_lsf)) then
+                   box%cc(i, j, k, i_bval) = elec%bot_voltage
+                   box%cc(i, j, k, i_lsf) = lsf
+                end if
+             end if
+          end do
        end do
     end do
   end subroutine set_box_lsf
 
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
-    type(a2_t), intent(in) :: tree
+    type(a3_t), intent(in) :: tree
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
     real(dp), parameter    :: UC_elem_charge = 1.6022d-19
     real(dp)               :: max_fld, min_fld, max_dns, dr_min
     real(dp)               :: mobility, diff_coeff, alpha, max_mobility
     real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
 
-    call a2_tree_max_cc(tree, i_fld, max_fld)
-    call a2_tree_min_cc(tree, i_fld, min_fld)
-    call a2_tree_max_cc(tree, i_elec, max_dns)
+    call a3_tree_max_cc(tree, i_fld, max_fld)
+    call a3_tree_min_cc(tree, i_fld, min_fld)
+    call a3_tree_max_cc(tree, i_elec, max_dns)
 
-    dr_min       = a2_min_dr(tree)
+    dr_min       = a3_min_dr(tree)
     mobility     = LT_get_col(td_tbl, i_mobility, max_fld)
     max_mobility = LT_get_col(td_tbl, i_mobility, min_fld)
     diff_coeff   = LT_get_col(td_tbl, i_diffusion, max_fld)
@@ -407,7 +413,7 @@ contains
   ! potential, then take numerical gradient to geld field.
   subroutine compute_fld(tree, n_fmg)
     use m_units_constants
-    type(a2_t), intent(inout) :: tree
+    type(a3_t), intent(inout) :: tree
     integer, intent(in) :: n_fmg
     real(dp), parameter :: fac = UC_elem_charge / UC_eps0
     integer :: lvl, i, id, nc
@@ -420,46 +426,49 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          tree%boxes(id)%cc(:, :, i_rhs) = fac * (&
-               tree%boxes(id)%cc(:, :, i_elec) - &
-               tree%boxes(id)%cc(:, :, i_pion))
+          tree%boxes(id)%cc(:, :, :, i_rhs) = fac * (&
+               tree%boxes(id)%cc(:, :, :, i_elec) - &
+               tree%boxes(id)%cc(:, :, :, i_pion))
        end do
        !$omp end do nowait
     end do
     !$omp end parallel
 
     ! Restrict the rhs
-    call a2_restrict_tree(tree, i_rhs)
+    call a3_restrict_tree(tree, i_rhs)
 
     ! Perform n_fmg full-multigrid cycles
     do i = 1, n_fmg
-       call mg2_fas_fmg(tree, mg, .false.)
+       call mg3_fas_fmg(tree, mg, .false.)
     end do
 
     ! Compute field from potential
-    call a2_loop_box(tree, fld_from_pot)
+    call a3_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_sides(tree, i_fld, a2_sides_interp, sides_bc_dens)
+    call a3_gc_sides(tree, i_fld, a3_sides_interp, sides_bc_dens)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
   subroutine fld_from_pot(box)
-    type(box2_t), intent(inout) :: box
+    type(box3_t), intent(inout) :: box
     integer                     :: nc
     real(dp)                    :: inv_dr
 
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-    box%fx(:, :, f_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fy(:, :, f_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
+    box%fx(:, :, :, f_fld) = inv_dr * &
+         (box%cc(0:nc, 1:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, 1:nc, i_phi))
+    box%fy(:, :, :, f_fld) = inv_dr * &
+         (box%cc(1:nc, 0:nc, 1:nc, i_phi) - box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
+    box%fz(:, :, :, f_fld) = inv_dr * &
+         (box%cc(1:nc, 1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
 
-    box%cc(1:nc, 1:nc, i_fld) = sqrt(&
-         0.25_dp * (box%fx(1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, f_fld))**2 + &
-         0.25_dp * (box%fy(1:nc, 1:nc, f_fld) + box%fy(1:nc, 2:nc+1, f_fld))**2)
+    box%cc(1:nc, 1:nc, 1:nc, i_fld) = 0.5_dp * sqrt(&
+         (box%fx(1:nc, 1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, 1:nc, f_fld))**2 + &
+         (box%fy(1:nc, 1:nc, 1:nc, f_fld) + box%fy(1:nc, 2:nc+1, 1:nc, f_fld))**2 + &
+         (box%fz(1:nc, 1:nc, 1:nc, f_fld) + box%fz(1:nc, 1:nc, 2:nc+1, f_fld))**2)
   end subroutine fld_from_pot
 
   !> Modified implementation of Koren limiter, to avoid division or the min/max
@@ -492,94 +501,142 @@ contains
 
   ! Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp)                    :: inv_dr, tmp, gradp, gradc, gradn
     real(dp)                    :: fld_avg, mobility, diff_coeff, v_drift
-    real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
-    integer                     :: i, j, nc
+    real(dp)                    :: gc_data(boxes(id)%n_cell, &
+         boxes(id)%n_cell, a3_num_neighbors)
+    integer                     :: i, j, k, nc
     type(LT_loc_t) :: loc
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    call a2_gc2_box_sides(boxes, id, i_elec, a2_sides2_prolong1, &
+    call a3_gc2_box_sides(boxes, id, i_elec, a3_sides2_prolong1, &
          sides_bc2_dens, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
-    do j = 1, nc
-       do i = 1, nc+1
-          fld_avg   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) + &
-               boxes(id)%cc(i-1, j, i_fld))
-          loc        = LT_get_loc(td_tbl, fld_avg)
-          mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
-          diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
-          v_drift    = -mobility * boxes(id)%fx(i, j, f_fld)
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc+1
+             fld_avg   = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
+                  boxes(id)%cc(i-1, j, k, i_fld))
+             loc        = LT_get_loc(td_tbl, fld_avg)
+             mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+             diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+             v_drift    = -mobility * boxes(id)%fx(i, j, k, f_fld)
 
-          gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
+             gradc = boxes(id)%cc(i, j, k, i_elec) - &
+                  boxes(id)%cc(i-1, j, k, i_elec)
 
-          if (v_drift < 0.0_dp) then
-             if (i == nc+1) then
-                tmp = gc_data(j, a2_nb_hx)
-             else
-                tmp = boxes(id)%cc(i+1, j, i_elec)
+             if (v_drift < 0.0_dp) then
+                if (i == nc+1) then
+                   tmp = gc_data(j, k, a3_nb_hx)
+                else
+                   tmp = boxes(id)%cc(i+1, j, k, i_elec)
+                end if
+                gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
+                boxes(id)%fx(i, j, k, f_elec) = v_drift * &
+                     (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
+             else                  ! v_drift > 0
+                if (i == 1) then
+                   tmp = gc_data(j, k, a3_nb_lx)
+                else
+                   tmp = boxes(id)%cc(i-2, j, k, i_elec)
+                end if
+                gradp = boxes(id)%cc(i-1, j, k, i_elec) - tmp
+                boxes(id)%fx(i, j, k, f_elec) = v_drift * &
+                     (boxes(id)%cc(i-1, j, k, i_elec) + koren_mlim(gradc, gradp))
              end if
-             gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fx(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-          else                  ! v_drift > 0
-             if (i == 1) then
-                tmp = gc_data(j, a2_nb_lx)
-             else
-                tmp = boxes(id)%cc(i-2, j, i_elec)
-             end if
-             gradp = boxes(id)%cc(i-1, j, i_elec) - tmp
-             boxes(id)%fx(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i-1, j, i_elec) + koren_mlim(gradc, gradp))
-          end if
 
-          ! Diffusive part with 2-nd order explicit method. dif_f has to be
-          ! scaled by 1/dx
-          boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_elec) - &
-               diff_coeff * gradc * inv_dr
+             ! Diffusive part with 2-nd order explicit method. dif_f has to be
+             ! scaled by 1/dx
+             boxes(id)%fx(i, j, k, f_elec) = boxes(id)%fx(i, j, k, f_elec) - &
+                  diff_coeff * gradc * inv_dr
+          end do
        end do
     end do
 
     ! y-fluxes interior, advective part with flux limiter
-    do j = 1, nc+1
-       do i = 1, nc
-          fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, i_fld) + &
-               boxes(id)%cc(i, j-1, i_fld))
-          loc        = LT_get_loc(td_tbl, fld_avg)
-          mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
-          diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
-          v_drift    = -mobility * boxes(id)%fy(i, j, f_fld)
-          gradc      = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i, j-1, i_elec)
+    do k = 1, nc
+       do j = 1, nc+1
+          do i = 1, nc
+             fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
+                  boxes(id)%cc(i, j-1, k, i_fld))
+             loc        = LT_get_loc(td_tbl, fld_avg)
+             mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+             diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+             v_drift    = -mobility * boxes(id)%fy(i, j, k, f_fld)
+             gradc      = boxes(id)%cc(i, j, k, i_elec) - &
+                  boxes(id)%cc(i, j-1, k, i_elec)
 
-          if (v_drift < 0.0_dp) then
-             if (j == nc+1) then
-                tmp = gc_data(i, a2_nb_hy)
-             else
-                tmp = boxes(id)%cc(i, j+1, i_elec)
+             if (v_drift < 0.0_dp) then
+                if (j == nc+1) then
+                   tmp = gc_data(i, k, a3_nb_hy)
+                else
+                   tmp = boxes(id)%cc(i, j+1, k, i_elec)
+                end if
+                gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
+                boxes(id)%fy(i, j, k, f_elec) = v_drift * &
+                     (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
+             else                  ! v_drift > 0
+                if (j == 1) then
+                   tmp = gc_data(i, k, a3_nb_ly)
+                else
+                   tmp = boxes(id)%cc(i, j-2, k, i_elec)
+                end if
+                gradp = boxes(id)%cc(i, j-1, k, i_elec) - tmp
+                boxes(id)%fy(i, j, k, f_elec) = v_drift * &
+                     (boxes(id)%cc(i, j-1, k, i_elec) + koren_mlim(gradc, gradp))
              end if
-             gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fy(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-          else                  ! v_drift > 0
-             if (j == 1) then
-                tmp = gc_data(i, a2_nb_ly)
-             else
-                tmp = boxes(id)%cc(i, j-2, i_elec)
-             end if
-             gradp = boxes(id)%cc(i, j-1, i_elec) - tmp
-             boxes(id)%fy(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j-1, i_elec) + koren_mlim(gradc, gradp))
-          end if
 
-          ! Diffusive part with 2-nd order explicit method. dif_f has to be
-          ! scaled by 1/dx
-          boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_elec) - &
-               diff_coeff * gradc * inv_dr
+             ! Diffusive part with 2-nd order explicit method. dif_f has to be
+             ! scaled by 1/dx
+             boxes(id)%fy(i, j, k, f_elec) = boxes(id)%fy(i, j, k, f_elec) - &
+                  diff_coeff * gradc * inv_dr
+          end do
+       end do
+    end do
+
+    ! z-fluxes interior, advective part with flux limiter
+    do k = 1, nc+1
+       do j = 1, nc
+          do i = 1, nc
+             fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
+                  boxes(id)%cc(i, j, k-1, i_fld))
+             loc        = LT_get_loc(td_tbl, fld_avg)
+             mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+             diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+             v_drift    = -mobility * boxes(id)%fz(i, j, k, f_fld)
+             gradc      = boxes(id)%cc(i, j, k, i_elec) - &
+                  boxes(id)%cc(i, j, k-1, i_elec)
+
+             if (v_drift < 0.0_dp) then
+                if (k == nc+1) then
+                   tmp = gc_data(i, j, a3_nb_hz)
+                else
+                   tmp = boxes(id)%cc(i, j, k+1, i_elec)
+                end if
+                gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
+                boxes(id)%fz(i, j, k, f_elec) = v_drift * &
+                     (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
+             else                  ! v_drift > 0
+                if (k == 1) then
+                   tmp = gc_data(i, j, a3_nb_lz)
+                else
+                   tmp = boxes(id)%cc(i, j, k-2, i_elec)
+                end if
+                gradp = boxes(id)%cc(i, j, k-1, i_elec) - tmp
+                boxes(id)%fz(i, j, k, f_elec) = v_drift * &
+                     (boxes(id)%cc(i, j, k-1, i_elec) + koren_mlim(gradc, gradp))
+             end if
+
+             ! Diffusive part with 2-nd order explicit method. dif_f has to be
+             ! scaled by 1/dx
+             boxes(id)%fz(i, j, k, f_elec) = boxes(id)%fz(i, j, k, f_elec) - &
+                  diff_coeff * gradc * inv_dr
+          end do
        end do
     end do
 
@@ -587,52 +644,60 @@ contains
 
   ! Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_dens(box)
-    type(box2_t), intent(inout) :: box
-    box%cc(:, :, i_elec) = 0.5_dp * (box%cc(:, :, i_elec) + box%cc(:, :, i_elec_old))
-    box%cc(:, :, i_pion) = 0.5_dp * (box%cc(:, :, i_pion) + box%cc(:, :, i_pion_old))
+    type(box3_t), intent(inout) :: box
+    box%cc(:, :, :, i_elec) = 0.5_dp * &
+         (box%cc(:, :, :, i_elec) + box%cc(:, :, :, i_elec_old))
+    box%cc(:, :, :, i_pion) = 0.5_dp * &
+         (box%cc(:, :, :, i_pion) + box%cc(:, :, :, i_pion_old))
   end subroutine average_dens
 
   ! Advance solution over dt based on the fluxes / source term, using forward Euler
   subroutine update_solution(box, dt)
-    type(box2_t), intent(inout) :: box
+    type(box3_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, fld
     real(dp)                    :: alpha, eta, mobility
-    integer                     :: i, j, nc
+    integer                     :: i, j, k, nc
     type(LT_loc_t) :: loc
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr
-    do j = 1, nc
-       do i = 1, nc
-          fld      = box%cc(i,j, i_fld)
-          loc      = LT_get_loc(td_tbl, fld)
-          alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
-          eta      = LT_get_col_at_loc(td_tbl, i_eta, loc)
-          mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             fld      = box%cc(i, j, k, i_fld)
+             loc      = LT_get_loc(td_tbl, fld)
+             alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
+             eta      = LT_get_col_at_loc(td_tbl, i_eta, loc)
+             mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
-          src = abs(mobility * fld) * (alpha-eta) * &
-               dt(1) * box%cc(i, j, i_elec)
-          if (photoi_enabled) &
-               src = src + dt(1) * box%cc(i,j, i_pho)
+             src = abs(mobility * fld) * (alpha-eta) * &
+                  dt(1) * box%cc(i, j, k, i_elec)
+             ! if (photoi_enabled) &
+             !      src = src + dt(1) * box%cc(i, j, k, i_pho)
 
-          box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + src
-          box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src
+             box%cc(i, j, k, i_elec) = box%cc(i, j, k, i_elec) + src
+             box%cc(i, j, k, i_pion) = box%cc(i, j, k, i_pion) + src
+          end do
        end do
     end do
 
-    box%cc(1:nc, 1:nc, i_elec) = box%cc(1:nc, 1:nc, i_elec) + dt(1) * ( &
-         (box%fx(1:nc, :, f_elec) - box%fx(2:nc+1, :, f_elec)) * inv_dr + &
-         (box%fy(:, 1:nc, f_elec) - box%fy(:, 2:nc+1, f_elec)) * inv_dr)
+    box%cc(1:nc, 1:nc, 1:nc, i_elec) = box%cc(1:nc, 1:nc, 1:nc, i_elec) + dt(1) * ( &
+         (box%fx(1:nc, :, 1:nc, f_elec) - box%fx(2:nc+1, :, 1:nc, f_elec)) * inv_dr + &
+         (box%fy(:, 1:nc, 1:nc, f_elec) - box%fy(:, 2:nc+1, 1:nc, f_elec)) * inv_dr + &
+         (box%fz(:, :, 1:nc, f_elec) - box%fz(:, :, 2:nc+1, f_elec)) * inv_dr)
 
-    do j = 1, nc
-       do i = 1, nc
-          if (any([box%cc(i-1, j, i_lsf), box%cc(i+1, j, i_lsf), &
-               box%cc(i, j-1, i_lsf), box%cc(i, j+1, i_lsf), &
-               box%cc(i, j, i_lsf)] < 0)) then
-             box%cc(i, j, i_elec) = 0
-             box%cc(i, j, i_pion) = 0
-          end if
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             if (any([box%cc(i-1, j, k, i_lsf), box%cc(i+1, j, k, i_lsf), &
+                  box%cc(i, j-1, k, i_lsf), box%cc(i, j+1, k, i_lsf), &
+                  box%cc(i, j, k-1, i_lsf), box%cc(i, j, k+1, i_lsf), &
+                  box%cc(i, j, k, i_lsf)] < 0)) then
+                box%cc(i, j, k, i_elec) = 0
+                box%cc(i, j, k, i_pion) = 0
+             end if
+          end do
        end do
     end do
   end subroutine update_solution
@@ -641,7 +706,7 @@ contains
     use m_photons
     use m_units_constants
 
-    type(a2_t), intent(inout) :: tree
+    type(a3_t), intent(inout) :: tree
     real(dp), intent(in)      :: eta
     integer, intent(in)       :: num_photons
     real(dp), parameter       :: p_quench = 30.0D0 * UC_torr_to_bar
@@ -653,38 +718,40 @@ contains
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
-    call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
+    ! call a3_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
-    call PH_set_src(tree, photoi_tbl, sim_rng, num_photons, i_pho, i_pho)
+    ! call PH_set_src(tree, photoi_tbl, sim_rng, num_photons, i_pho, i_pho)
 
   end subroutine set_photoionization
 
-  subroutine set_photoi_rate(box, coeff)
-    type(box2_t), intent(inout) :: box
-    real(dp), intent(in)        :: coeff(:)
-    integer                     :: i, j, nc
-    real(dp)                    :: fld, alpha, mobility, dr
-    type(LT_loc_t)              :: loc
+  ! subroutine set_photoi_rate(box, coeff)
+  !   type(box3_t), intent(inout) :: box
+  !   real(dp), intent(in)        :: coeff(:)
+  !   integer                     :: i, j, k, nc
+  !   real(dp)                    :: fld, alpha, mobility, dr
+  !   type(LT_loc_t)              :: loc
 
-    nc = box%n_cell
+  !   nc = box%n_cell
 
-    do j = 1, nc
-       do i = 1, nc
-          dr       = box%dr
-          fld      = box%cc(i, j, i_fld)
-          loc      = LT_get_loc(td_tbl, fld)
-          alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
-          mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+  !   do k = 1, nc
+  !      do j = 1, nc
+  !         do i = 1, nc
+  !            dr       = box%dr
+  !            fld      = box%cc(i, j, k, i_fld)
+  !            loc      = LT_get_loc(td_tbl, fld)
+  !            alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
+  !            mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
-          box%cc(i, j, i_pho) = fld * mobility * alpha * &
-               box%cc(i, j, i_elec) * coeff(1)
-       end do
-    end do
-  end subroutine set_photoi_rate
+  !            box%cc(i, j, k, i_pho) = fld * mobility * alpha * &
+  !                 box%cc(i, j, k, i_elec) * coeff(1)
+  !         end do
+  !      end do
+  !   end do
+  ! end subroutine set_photoi_rate
 
   ! For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
-    type(a2_t), intent(inout)    :: tree
+    type(a3_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
 
@@ -693,9 +760,9 @@ contains
        !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_prolong1_to(tree%boxes, id, i_elec)
-          call a2_prolong1_to(tree%boxes, id, i_pion)
-          call a2_prolong1_to(tree%boxes, id, i_phi)
+          call a3_prolong1_to(tree%boxes, id, i_elec)
+          call a3_prolong1_to(tree%boxes, id, i_pion)
+          call a3_prolong1_to(tree%boxes, id, i_phi)
           call set_box_lsf(tree%boxes(id))
        end do
        !$omp end do
@@ -703,12 +770,12 @@ contains
        !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box_sides(tree%boxes, id, i_elec, &
-               a2_sides_interp, sides_bc_dens)
-          call a2_gc_box_sides(tree%boxes, id, i_pion, &
-               a2_sides_interp, sides_bc_dens)
-          call a2_gc_box_sides(tree%boxes, id, i_phi, &
-               a2_sides_extrap, sides_bc_pot)
+          call a3_gc_box_sides(tree%boxes, id, i_elec, &
+               a3_sides_interp, sides_bc_dens)
+          call a3_gc_box_sides(tree%boxes, id, i_pion, &
+               a3_sides_interp, sides_bc_dens)
+          call a3_gc_box_sides(tree%boxes, id, i_phi, &
+               a3_sides_extrap, sides_bc_pot)
        end do
        !$omp end do
     end do
@@ -717,70 +784,86 @@ contains
 
   ! This fills ghost cells near physical boundaries for the potential
   subroutine sides_bc_pot(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
-    case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv) = 2 * elec%bot_voltage &
-            - boxes(id)%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = 2 * elec%top_voltage &
-            - boxes(id)%cc(1:nc, nc, iv)
+    case (a3_nb_lx)
+       boxes(id)%cc(0, 1:nc, 1:nc, iv) = boxes(id)%cc(1, 1:nc, 1:nc, iv)
+    case (a3_nb_hx)
+       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, 1:nc, iv)
+    case (a3_nb_ly)
+       boxes(id)%cc(1:nc, 0, 1:nc, iv) = boxes(id)%cc(1:nc, 1, 1:nc, iv)
+    case (a3_nb_hy)
+       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = boxes(id)%cc(1:nc, nc, 1:nc, iv)
+    case (a3_nb_lz)
+       boxes(id)%cc(1:nc, 1:nc, 0, iv) = 2 * elec%bot_voltage &
+            - boxes(id)%cc(1:nc, 1:nc, 1, iv)
+    case (a3_nb_hz)
+       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = 2 * elec%top_voltage &
+            - boxes(id)%cc(1:nc, 1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
 
   ! This fills ghost cells near physical boundaries for the electron density
   subroutine sides_bc_dens(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv
     integer                     :: nc
 
     nc = boxes(id)%n_cell
 
     select case (nb)
-    case (a2_nb_lx)
+    case (a3_nb_lx)
        ! Neumann zero
-       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
+       boxes(id)%cc(0, 1:nc, 1:nc, iv) = boxes(id)%cc(1, 1:nc, 1:nc, iv)
+    case (a3_nb_hx)
        ! Neumann zero
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
+       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, 1:nc, iv)
+    case (a3_nb_ly)
        ! Neumann zero
-       boxes(id)%cc(1:nc, 0, iv) = boxes(id)%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
+       boxes(id)%cc(1:nc, 0, 1:nc, iv) = boxes(id)%cc(1:nc, 1, 1:nc, iv)
+    case (a3_nb_hy)
        ! Neumann zero
-       boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
+       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = boxes(id)%cc(1:nc, nc, 1:nc, iv)
+    case (a3_nb_lz)
+       ! Neumann zero
+       boxes(id)%cc(1:nc, 1:nc, 0, iv) = boxes(id)%cc(1:nc, 1:nc, 1, iv)
+    case (a3_nb_hz)
+       ! Neumann zero
+       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = boxes(id)%cc(1:nc, 1:nc, nc, iv)
     end select
   end subroutine sides_bc_dens
 
   ! This fills a second layer of ghost cells near physical boundaries for the
   ! electron density
   subroutine sides_bc2_dens(boxes, id, nb, iv, bc_side, nc)
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv, nc
-    real(dp), intent(out)       :: bc_side(nc)
+    real(dp), intent(out)       :: bc_side(nc, nc)
 
     select case (nb)
-    case (a2_nb_lx)
+    case (a3_nb_lx)
        ! Neumann zero
-       bc_side = boxes(id)%cc(2, 1:nc, iv)
-    case (a2_nb_hx)
+       bc_side = boxes(id)%cc(2, 1:nc, 1:nc, iv)
+    case (a3_nb_hx)
        ! Neumann zero
-       bc_side = boxes(id)%cc(nc-1, 1:nc, iv)
-    case (a2_nb_ly)
+       bc_side = boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
+    case (a3_nb_ly)
        ! Neumann zero
-       bc_side = boxes(id)%cc(1:nc, 2, iv)
-    case (a2_nb_hy)
+       bc_side = boxes(id)%cc(1:nc, 2, 1:nc, iv)
+    case (a3_nb_hy)
        ! Neumann zero
-       bc_side = boxes(id)%cc(1:nc, nc-1, iv)
+       bc_side = boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
+    case (a3_nb_lz)
+       ! Neumann zero
+       bc_side = boxes(id)%cc(1:nc, 1:nc, 2, iv)
+    case (a3_nb_hz)
+       ! Neumann zero
+       bc_side = boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
     end select
   end subroutine sides_bc2_dens
 
@@ -797,11 +880,11 @@ contains
     call CFG_get_size(cfg, "seed_dens", n_cond)
 
     call CFG_get_size(cfg, "seed_rel_r0", varsize)
-    if (varsize /= 2 * n_cond) &
+    if (varsize /= 3 * n_cond) &
          stop "seed_... variables have incompatible size"
 
     call CFG_get_size(cfg, "seed_rel_r1", varsize)
-    if (varsize /= 2 * n_cond) &
+    if (varsize /= 3 * n_cond) &
          stop "seed_... variables have incompatible size"
 
     call CFG_get_size(cfg, "seed_width", varsize)
@@ -810,16 +893,16 @@ contains
 
     cond%n_cond = n_cond
     allocate(cond%seed_dens(n_cond))
-    allocate(cond%seed_r0(2, n_cond))
-    allocate(cond%seed_r1(2, n_cond))
+    allocate(cond%seed_r0(3, n_cond))
+    allocate(cond%seed_r1(3, n_cond))
     allocate(cond%seed_width(n_cond))
     allocate(cond%seed_falloff(n_cond))
 
-    allocate(tmp_vec(2 * n_cond))
+    allocate(tmp_vec(3 * n_cond))
     call CFG_get(cfg, "seed_rel_r0", tmp_vec)
-    cond%seed_r0 = dlen * reshape(tmp_vec, [2, n_cond])
+    cond%seed_r0 = dlen * reshape(tmp_vec, [3, n_cond])
     call CFG_get(cfg, "seed_rel_r1", tmp_vec)
-    cond%seed_r1 = dlen * reshape(tmp_vec, [2, n_cond])
+    cond%seed_r1 = dlen * reshape(tmp_vec, [3, n_cond])
 
     call CFG_get(cfg, "seed_dens", cond%seed_dens)
     call CFG_get(cfg, "seed_width", cond%seed_width)
@@ -872,9 +955,9 @@ contains
          "Use top electrode")
     call CFG_add(cfg, "elec_top_voltage", 5e3_dp, &
          "Voltage top electrode")
-    call CFG_add(cfg, "elec_top_rel_r0", [0.5d0, 0.8d0], &
+    call CFG_add(cfg, "elec_top_rel_r0", [0.5d0, 0.5d0, 0.8d0], &
          "The relative start position of the top electrode")
-    call CFG_add(cfg, "elec_top_rel_r1", [0.5d0, 1.0d0], &
+    call CFG_add(cfg, "elec_top_rel_r1", [0.5d0, 0.5d0, 1.0d0], &
          "The relative end position of the top electrode")
     call CFG_add(cfg, "elec_top_radius", 4.0d-3, &
          "The radius of the top electrode")
@@ -882,9 +965,9 @@ contains
          "Use bot electrode")
     call CFG_add(cfg, "elec_bot_voltage", 0e0_dp, &
          "Voltage bot electrode")
-    call CFG_add(cfg, "elec_bot_rel_r0", [0.5d0, 0.0d0], &
+    call CFG_add(cfg, "elec_bot_rel_r0", [0.5d0, 0.5d0, 0.0d0], &
          "The relative start position of the bot electrode")
-    call CFG_add(cfg, "elec_bot_rel_r1", [0.5d0, 0.2d0], &
+    call CFG_add(cfg, "elec_bot_rel_r1", [0.5d0, 0.5d0, 0.2d0], &
          "The relative end position of the bot electrode")
     call CFG_add(cfg, "elec_bot_radius", 4.0d-3, &
          "The radius of the bot electrode")
@@ -893,9 +976,9 @@ contains
          "The background ion and electron density in 1/m^3")
     call CFG_add(cfg, "seed_dens", 5.0d19 , &
          "Initial density of the seed")
-    call CFG_add(cfg, "seed_rel_r0", [0.5d0, 0.4d0], &
+    call CFG_add(cfg, "seed_rel_r0", [0.5d0, 0.5d0, 0.4d0], &
          "The relative start position of the initial seed")
-    call CFG_add(cfg, "seed_rel_r1", [0.5d0, 0.6d0], &
+    call CFG_add(cfg, "seed_rel_r1", [0.5d0, 0.5d0, 0.6d0], &
          "The relative end position of the initial seed")
     call CFG_add(cfg, "seed_width", 0.5d-3, &
          "Seed width")
@@ -986,4 +1069,4 @@ contains
 
   end subroutine initialize
 
-end program streamer_2d
+end program streamer_3d
