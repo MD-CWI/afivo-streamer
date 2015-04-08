@@ -11,6 +11,7 @@ program test_mgb
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_lsf = 4
+  integer, parameter :: i_bval = 5
   real(dp), parameter :: phi0 = 1e3_dp
 
   type(a2_t)         :: tree
@@ -19,18 +20,19 @@ program test_mgb
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
-  character(len=40)  :: fname, var_names(4)
+  character(len=40)  :: fname, var_names(5)
   type(mg2_t)       :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
   var_names(i_lsf) = "lsf"
+  var_names(i_bval) = "bval"
 
   dr = 4.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, &
+  call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, &
        dr = dr, coarsen_to = 2, n_boxes = 10*1000)
 
   id = 1
@@ -52,7 +54,7 @@ program test_mgb
   mg%i_tmp       = i_tmp
   mg%i_rhs       = i_rhs
   mg%i_lsf       = i_lsf
-  mg%lsf_bnd_val = phi0
+  mg%i_bval      = i_bval
   mg%sides_bc    => sides_bc
   mg%box_op      => mg2_auto_op
   mg%box_corr    => mg2_auto_corr
@@ -98,9 +100,10 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j]) - [2, 2]
-          box%cc(i, j, i_rhs) = 1000
+          box%cc(i, j, i_rhs) = 0
           ! box%cc(i, j, i_lsf) = (sum(xy**2)-1)**3 - xy(1)**2 * xy(2)**3 ! Heart
           box%cc(i, j, i_lsf) = sum(xy**2)-0.51_dp ! Circle
+          box%cc(i, j, i_bval) = phi0
        end do
     end do
   end subroutine set_init_cond
