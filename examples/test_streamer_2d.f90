@@ -593,7 +593,7 @@ contains
          exp(1 - 1e7_dp/(abs(fld)+epsilon(1.0_dp))) - 9697.2_dp)
   end function get_alpha
 
-  ! For each box that gets refined, set data on its children using this routine
+  ! For each new box, set data using this routine
   subroutine prolong_to_new_children(tree, ref_info)
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
@@ -601,7 +601,9 @@ contains
 
     nc = tree%n_cell
 
+    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           ! First fill i_eps (with ghost cells)
@@ -611,7 +613,9 @@ contains
           call a2_prolong1_to(tree%boxes, id, i_pion)
           call a2_prolong1_to(tree%boxes, id, i_phi)
        end do
+       !$omp end do
 
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_elec, &
@@ -621,7 +625,9 @@ contains
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
                a2_sides_extrap, sides_bc_pot)
        end do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine prolong_to_new_children
 
   ! This fills ghost cells near physical boundaries for the potential
