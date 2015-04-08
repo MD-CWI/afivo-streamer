@@ -13,7 +13,7 @@ program streamer_2d
   integer, parameter :: name_len = 200
 
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 9
+  integer, parameter :: n_var_cell = 10
   integer, parameter :: i_elec     = 1 ! Electron density
   integer, parameter :: i_pion     = 2 ! Positive ion density
   integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
@@ -22,10 +22,11 @@ program streamer_2d
   integer, parameter :: i_fld      = 6 ! Electric field norm
   integer, parameter :: i_rhs      = 7 ! Source term Poisson
   integer, parameter :: i_pho      = 8 ! Phototionization rate
-  integer, parameter :: i_lsf      = 9 ! Phototionization rate
+  integer, parameter :: i_lsf      = 9 ! Level set function
+  integer, parameter :: i_bval     = 10 ! Boundary value
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "pho", "lsf"]
+       "pion_old", "phi", "fld", "rhs", "pho", "lsf", "bval"]
 
   ! Indices of face-centered variables
   integer, parameter :: n_var_face = 2
@@ -43,20 +44,32 @@ program streamer_2d
   character(len=name_len) :: cfg_name, tmp_name, prev_name
 
   type initcnd_t
-     real(dp) :: bg_dens
+     real(dp)              :: bg_dens
 
-     real(dp) :: seed_r0(2)
-     real(dp) :: seed_r1(2)
-     real(dp) :: seed_dens
-     real(dp) :: swidth
-
-     real(dp) :: line_r0(2)
-     real(dp) :: line_r1(2)
-     real(dp) :: line_dens
-     real(dp) :: lwidth
+     integer               :: n_cond
+     real(dp), allocatable :: seed_r0(:, :)
+     real(dp), allocatable :: seed_r1(:, :)
+     real(dp), allocatable :: seed_dens(:)
+     real(dp), allocatable :: seed_width(:)
+     integer, allocatable  :: seed_falloff(:)
   end type initcnd_t
 
+  type elec_t
+     logical  :: use_top
+     real(dp) :: top_voltage
+     real(dp) :: top_r0(2)
+     real(dp) :: top_r1(2)
+     real(dp) :: top_radius
+
+     logical  :: use_bot
+     real(dp) :: bot_voltage
+     real(dp) :: bot_r0(2)
+     real(dp) :: bot_r1(2)
+     real(dp) :: bot_radius
+  end type elec_t
+
   type(initcnd_t) :: init_cond
+  type(elec_t) :: elec
 
   type(LT_table_t)   :: td_tbl  ! Table with transport data vs fld
   type(CFG_t)        :: sim_cfg ! The configuration for the simulation
@@ -135,7 +148,7 @@ program streamer_2d
   mg%n_cycle_base = 8
 
   ! Routines to use for ...
-  mg%sides_bc     => sides_bc_pot ! Filling ghost cell on physical boundaries
+  mg%sides_bc    => sides_bc_pot ! Filling ghost cell on physical boundaries
   mg%box_op      => mg2_auto_op
   mg%box_corr    => mg2_auto_corr
   mg%box_gsrb    => mg2_auto_gsrb
@@ -224,7 +237,7 @@ program streamer_2d
         ! For boxes which just have been refined, set data on their children
         call prolong_to_new_boxes(tree, ref_info)
 
-        ! Compute the field on the
+        ! Compute the field on the new mesh
         call compute_fld(tree, n_fmg_cycles)
 
         ! This will every now-and-then clean up the data in the tree
@@ -302,43 +315,65 @@ contains
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
+    use m_geom
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
     real(dp)                    :: dens
 
     nc = box%n_cell
+    box%cc(:, :, i_elec) = init_cond%bg_dens
+
 
     do j = 0, nc+1
        do i = 0, nc+1
           xy   = a2_r_cc(box, [i,j])
-          dens = init_cond%seed_dens * rod_dens(xy, init_cond%seed_r0, &
-               init_cond%seed_r1, init_cond%swidth, 3)
-          dens = dens + init_cond%line_dens * rod_dens(xy, init_cond%line_r0, &
-               init_cond%line_r1, init_cond%lwidth, 4)
 
-          box%cc(i, j, i_elec) = init_cond%bg_dens + dens
-          box%cc(i, j, i_pion) = init_cond%bg_dens + dens
+          do n = 1, init_cond%n_cond
+             dens = GM_dens_line(xy, init_cond%seed_r0(:, n), &
+                  init_cond%seed_r1(:, n), 2, &
+                  init_cond%seed_width(n), &
+                  init_cond%seed_falloff(n))
+             box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + dens
+          end do
        end do
     end do
 
+    box%cc(:, :, i_pion) = box%cc(:, :, i_elec)
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
 
     call set_box_lsf(box)
   end subroutine set_init_cond
 
   subroutine set_box_lsf(box)
+    use m_geom
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
+    real(dp), parameter         :: high_lsf_value = 1e10_dp
+    real(dp)                    :: xy(2), lsf
 
     nc = box%n_cell
 
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_lsf) = norm2(xy-0.5_dp * domain_len) - &
-               0.1_dp * domain_len
+          box%cc(i, j, i_lsf) = high_lsf_value
+
+          if (elec%use_top) then
+             lsf = GM_dist_line(xy, elec%top_r0, elec%top_r1, 2) - &
+                  elec%top_radius
+             box%cc(i, j, i_bval) = elec%top_voltage
+             box%cc(i, j, i_lsf) = lsf
+          end if
+
+          if (elec%use_bot) then
+             lsf = GM_dist_line(xy, elec%bot_r0, elec%bot_r1, 2) - &
+                  elec%bot_radius
+             if (lsf < box%cc(i, j, i_lsf)) then
+                box%cc(i, j, i_bval) = elec%bot_voltage
+                box%cc(i, j, i_lsf) = lsf
+             end if
+          end if
        end do
     end do
   end subroutine set_box_lsf
@@ -376,57 +411,6 @@ contains
 
     get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
   end function get_max_dt
-
-  ! Used to create initial electron/ion seed
-  real(dp) function rod_dens(xy, xy0, xy1, sigma, falloff_type)
-    real(dp), intent(in) :: xy(2), xy0(2), xy1(2), sigma
-    integer, intent(in)  :: falloff_type
-    real(dp)             :: distance, temp
-
-    distance = dist_line(xy, xy0, xy1)
-
-    select case (falloff_type)
-    case (1)                    ! Sigmoid
-       rod_dens    = 2 / (1 + exp(distance / sigma))
-    case (2)                    ! Gaussian
-       rod_dens    = exp(-(distance/sigma)**2)
-    case (3)                    ! Smooth-step
-       if (distance < sigma) then
-          rod_dens = 1
-       else if (distance < 2 * sigma) then
-          temp = distance/sigma - 1
-          rod_dens = (1- (3 * temp**2 - 2 * temp**3))
-       else
-          rod_dens = 0.0_dp
-       end if
-    case (4)                    ! Hard boundary
-       if (distance < sigma) then
-          rod_dens = 1
-       else
-          rod_dens = 0
-       end if
-    case default
-       rod_dens = 0.0_dp
-    end select
-  end function rod_dens
-
-  real(dp) function dist_line(xy, xy0, xy1)
-    real(dp), intent(in) :: xy(2), xy0(2), xy1(2)
-    real(dp) :: line_len2, temp
-    real(dp) :: projection(2)
-
-    line_len2 = sum((xy1 - xy0)**2)
-    temp = sum((xy - xy0) * (xy1 - xy0)) / line_len2
-
-    if (temp < 0.0_dp) then
-       dist_line = sqrt(sum((xy-xy0)**2))
-    else if (temp > 1.0_dp) then
-       dist_line = sqrt(sum((xy-xy1)**2))
-    else
-       projection = xy0 + temp * (xy1 - xy0)
-       dist_line = sqrt(sum((xy-projection)**2))
-    end if
-  end function dist_line
 
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
@@ -713,7 +697,9 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
 
+    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_prolong1_to(tree%boxes, id, i_elec)
@@ -721,7 +707,9 @@ contains
           call a2_prolong1_to(tree%boxes, id, i_phi)
           call set_box_lsf(tree%boxes(id))
        end do
+       !$omp end do
 
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_elec, &
@@ -731,7 +719,9 @@ contains
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
                a2_sides_extrap, sides_bc_pot)
        end do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine prolong_to_new_boxes
 
   ! This fills ghost cells near physical boundaries for the potential
@@ -806,24 +796,43 @@ contains
   subroutine get_init_cond(cfg, cond)
     type(CFG_t), intent(in)        :: cfg
     type(initcnd_t), intent(inout) :: cond
+    integer                        :: n_cond, varsize
     real(dp)                       :: dlen
+    real(dp), allocatable          :: tmp_vec(:)
 
     call CFG_get(cfg, "init_bg_dens", cond%bg_dens)
     call CFG_get(cfg, "domain_len", dlen)
 
-    call CFG_get(cfg, "init_seed_dens", cond%seed_dens)
-    call CFG_get(cfg, "init_seed_rel_r0", cond%seed_r0)
-    call CFG_get(cfg, "init_seed_rel_r1", cond%seed_r1)
-    call CFG_get(cfg, "init_seed_width", cond%swidth)
-    cond%seed_r0 = cond%seed_r0 * dlen
-    cond%seed_r1 = cond%seed_r1 * dlen
+    call CFG_get_size(cfg, "seed_dens", n_cond)
 
-    call CFG_get(cfg, "init_line_dens", cond%line_dens)
-    call CFG_get(cfg, "init_line_rel_r0", cond%line_r0)
-    call CFG_get(cfg, "init_line_rel_r1", cond%line_r1)
-    call CFG_get(cfg, "init_line_width", cond%lwidth)
-    cond%line_r0 = cond%line_r0 * dlen
-    cond%line_r1 = cond%line_r1 * dlen
+    call CFG_get_size(cfg, "seed_rel_r0", varsize)
+    if (varsize /= 2 * n_cond) &
+         stop "seed_... variables have incompatible size"
+
+    call CFG_get_size(cfg, "seed_rel_r1", varsize)
+    if (varsize /= 2 * n_cond) &
+         stop "seed_... variables have incompatible size"
+
+    call CFG_get_size(cfg, "seed_rel_width", varsize)
+    if (varsize /= n_cond) &
+         stop "seed_... variables have incompatible size"
+
+    cond%n_cond = n_cond
+    allocate(cond%seed_dens(n_cond))
+    allocate(cond%seed_r0(2, n_cond))
+    allocate(cond%seed_r1(2, n_cond))
+    allocate(cond%seed_width(n_cond))
+    allocate(cond%seed_falloff(n_cond))
+
+    allocate(tmp_vec(2 * n_cond))
+    call CFG_get(cfg, "seed_rel_r0", tmp_vec)
+    cond%seed_r0 = dlen * reshape(tmp_vec, [2, n_cond])
+    call CFG_get(cfg, "seed_rel_r1", tmp_vec)
+    cond%seed_r1 = dlen * reshape(tmp_vec, [2, n_cond])
+
+    call CFG_get(cfg, "seed_dens", cond%seed_dens)
+    call CFG_get(cfg, "seed_width", cond%seed_width)
+    call CFG_get(cfg, "seed_falloff", cond%seed_falloff)
   end subroutine get_init_cond
 
   subroutine create_cfg(cfg)
@@ -844,24 +853,18 @@ contains
     call CFG_add(cfg, "applied_fld", 1.0d7, &
          "The applied electric field")
 
-    call CFG_add(cfg, "init_bg_dens", 1.0d12, &
+    call CFG_add(cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")
-    call CFG_add(cfg, "init_seed_dens", 5.0d19 , &
+    call CFG_add(cfg, "seed_dens", 5.0d19 , &
          "Initial density of the seed")
-    call CFG_add(cfg, "init_seed_rel_r0", [0.5d0, 0.0d0], &
+    call CFG_add(cfg, "seed_rel_r0", [0.5d0, 0.4d0], &
          "The relative start position of the initial seed")
-    call CFG_add(cfg, "init_seed_rel_r1", [0.5d0, 0.4d0], &
+    call CFG_add(cfg, "seed_rel_r1", [0.5d0, 0.6d0], &
          "The relative end position of the initial seed")
-    call CFG_add(cfg, "init_seed_width", 0.5d-3, &
+    call CFG_add(cfg, "seed_width", 0.5d-3, &
          "Seed width")
-    call CFG_add(cfg, "init_line_dens", 5.0d15 , &
-         "Initial density of the line")
-    call CFG_add(cfg, "init_line_rel_r0", [0.0d0, 0.7d0], &
-         "The relative start position of the initial line")
-    call CFG_add(cfg, "init_line_rel_r1", [1.0d0, 0.7d0], &
-         "The relative end position of the initial line")
-    call CFG_add(cfg, "init_line_width", 0.5d-3, &
-         "Line width")
+    call CFG_add(cfg, "seed_fallof", 1, &
+         "Fallof type for seed, see m_geom.f90")
 
     call CFG_add(cfg, "dt_output", 1.0d-10, &
          "The timestep for writing output")
