@@ -222,8 +222,8 @@ program streamer_2d
            call a2_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a2_gc_sides(tree, i_elec, a2_sides_interp, sides_bc_dens)
-           call a2_gc_sides(tree, i_pion, a2_sides_interp, sides_bc_dens)
+           call a2_gc_sides(tree, i_elec, a2_sides_interp, a2_bc_neumann)
+           call a2_gc_sides(tree, i_pion, a2_sides_interp, a2_bc_neumann)
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
@@ -280,27 +280,46 @@ contains
 
   ! Refinement function
   subroutine set_ref_flags(boxes, id, ref_flags)
+    use m_geom
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
-    integer                  :: nc
-    real(dp)                 :: crv_phi, dr2, max_edens, max_fld
+    integer                  :: nc, n
+    real(dp)                 :: crv_phi, dr2, max_fld
+    real(dp)                 :: boxlen, dist, alpha
 
     nc        = boxes(id)%n_cell
     dr2       = boxes(id)%dr**2
     crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-    max_edens = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
+    alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
 
-    if (crv_phi < 4.0_dp) &
+    ! if (crv_phi < 4.0_dp) &
+    !      ref_flags(id) = a5_rm_ref
+
+    if (boxes(id)%dr * alpha < 0.1_dp) &
          ref_flags(id) = a5_rm_ref
 
-    if (boxes(id)%dr > 0.35e-3_dp) &
-         ref_flags(id) = a5_do_ref
+    if (time < 1.0e-9_dp) then
+       boxlen = boxes(id)%n_cell * boxes(id)%dr
 
-    if (crv_phi > 2.0e1_dp .and. max_fld > 2e6_dp &
-         .and. boxes(id)%dr > 5e-6_dp) &
-         ref_flags(id) = a5_do_ref
+       do n = 1, init_cond%n_cond
+          dist = GM_dist_line(a2_r_center(boxes(id)), &
+               init_cond%seed_r0(:, n), &
+               init_cond%seed_r1(:, n), 2)
+          if (dist - init_cond%seed_width(n) < boxlen &
+               .and. boxes(id)%dr > 5.0e-5) then
+             ref_flags(id) = a5_do_ref
+          end if
+       end do
+    end if
+
+    if (boxes(id)%dr > 5e-6_dp) then
+       if (boxes(id)%dr * alpha > 1.0_dp) ref_flags(id) = a5_do_ref
+       ! if (crv_phi > 2.0e1_dp) ref_flags(id) = a5_do_ref
+    else
+       if (boxes(id)%dr * alpha > 1.0_dp) ref_flags(id) = a5_kp_ref
+    end if
 
   end subroutine set_ref_flags
 
@@ -440,7 +459,7 @@ contains
     call a2_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_sides(tree, i_fld, a2_sides_interp, sides_bc_dens)
+    call a2_gc_sides(tree, i_fld, a2_sides_interp, a2_bc_neumann)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
@@ -655,7 +674,7 @@ contains
     ! ionization rate.
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
-    call PH_set_src(tree, photoi_tbl, sim_rng, num_photons, i_pho, i_pho)
+    call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, i_pho, i_pho)
 
   end subroutine set_photoionization
 
@@ -704,9 +723,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_elec, &
-               a2_sides_interp, sides_bc_dens)
+               a2_sides_interp, a2_bc_neumann)
           call a2_gc_box_sides(tree%boxes, id, i_pion, &
-               a2_sides_interp, sides_bc_dens)
+               a2_sides_interp, a2_bc_neumann)
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
                a2_sides_extrap, sides_bc_pot)
        end do
@@ -736,30 +755,6 @@ contains
             - boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
-
-  ! This fills ghost cells near physical boundaries for the electron density
-  subroutine sides_bc_dens(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
-
-    nc = boxes(id)%n_cell
-
-    select case (nb)
-    case (a2_nb_lx)
-       ! Neumann zero
-       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
-       ! Neumann zero
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
-       ! Neumann zero
-       boxes(id)%cc(1:nc, 0, iv) = boxes(id)%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
-       ! Neumann zero
-       boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
-    end select
-  end subroutine sides_bc_dens
 
   ! This fills a second layer of ghost cells near physical boundaries for the
   ! electron density
@@ -829,9 +824,10 @@ contains
   subroutine get_elec_cfg(cfg, elec)
     type(CFG_t), intent(in)   :: cfg
     type(elec_t), intent(out) :: elec
-    real(dp)                  :: dlen
+    real(dp)                  :: dlen, fld
 
     call CFG_get(cfg, "domain_len", dlen)
+    call CFG_get(cfg, "applied_fld", fld)
 
     call CFG_get(cfg, "elec_use_top", elec%use_top)
     call CFG_get(cfg, "elec_top_voltage", elec%top_voltage)
@@ -848,6 +844,12 @@ contains
     call CFG_get(cfg, "elec_bot_radius", elec%bot_radius)
     elec%bot_r0 = elec%bot_r0 * dlen
     elec%bot_r1 = elec%bot_r1 * dlen
+
+    ! Without electrodes, use the applied field
+    if (.not. (elec%use_top .or. elec%use_bot)) then
+       elec%top_voltage = -dlen * fld
+       elec%bot_voltage = 0
+    end if
   end subroutine get_elec_cfg
 
   subroutine create_cfg(cfg)
