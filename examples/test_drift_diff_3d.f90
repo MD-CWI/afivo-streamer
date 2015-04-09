@@ -48,7 +48,7 @@ program test_drift_diff
   diff_coeff = 0.0_dp
   vel_x      = 1.0_dp
   vel_y      = 0.0_dp
-  vel_z      = 0.0_dp
+  vel_z      = 1.0_dp
 
   print *, "Set up the initial conditions"
   do i = 1, 20
@@ -94,9 +94,9 @@ program test_drift_diff
      case (1)
         ! Forward Euler
         do n = 1, n_steps
-           call a3_loop_boxes_arg(tree, fluxes_koren, &
+           call a3_loop_boxes_arg(tree, fluxes_centdif, &
                 [diff_coeff, vel_x, vel_y, vel_z])
-           call a3_consistent_fluxes(tree, [1])
+           ! call a3_consistent_fluxes(tree, [1])
            call a3_loop_box_arg(tree, update_solution, [dt])
            call a3_restrict_tree(tree, i_phi)
            call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
@@ -111,7 +111,7 @@ program test_drift_diff
            do i = 1, 2
               call a3_loop_boxes_arg(tree, fluxes_koren, &
                    [diff_coeff, vel_x, vel_y, vel_z])
-              call a3_consistent_fluxes(tree, [1])
+              ! call a3_consistent_fluxes(tree, [1])
               call a3_loop_box_arg(tree, update_solution, [dt])
               call a3_restrict_tree(tree, i_phi)
               call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
@@ -199,7 +199,7 @@ contains
     real(dp) :: sol, xyz_t(3)
 
     xyz_t = xyz - [vel_x, vel_y, vel_z] * t
-    sol = sin(xyz_t(1))**4 * cos(xyz_t(2))**4 * cos(xyz_t(3))**4
+    sol = sin(xyz_t(1))**4 * cos(xyz_t(3))**4 ! * cos(xyz_t(3))**4
   end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)
@@ -460,7 +460,7 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a3_prolong2_to(tree%boxes, id, i_phi)
+          call a3_prolong1_to(tree%boxes, id, i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
