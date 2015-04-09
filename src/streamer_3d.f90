@@ -227,7 +227,7 @@ program streamer_3d
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
-        call a3_loop_box(tree, average_dens, .true.)
+        call a3_loop_box(tree, average_dens)
      end do
 
      call a3_adjust_refinement(tree, set_ref_flags, ref_info)
@@ -701,8 +701,8 @@ contains
     end do
 
     box%cc(1:nc, 1:nc, 1:nc, i_elec) = box%cc(1:nc, 1:nc, 1:nc, i_elec) + dt(1) * ( &
-         (box%fx(1:nc, :, 1:nc, f_elec) - box%fx(2:nc+1, :, 1:nc, f_elec)) * inv_dr + &
-         (box%fy(:, 1:nc, 1:nc, f_elec) - box%fy(:, 2:nc+1, 1:nc, f_elec)) * inv_dr + &
+         (box%fx(1:nc, :, :, f_elec) - box%fx(2:nc+1, :, :, f_elec)) * inv_dr + &
+         (box%fy(:, 1:nc, :, f_elec) - box%fy(:, 2:nc+1, :, f_elec)) * inv_dr + &
          (box%fz(:, :, 1:nc, f_elec) - box%fz(:, :, 2:nc+1, f_elec)) * inv_dr)
 
     do k = 1, nc
@@ -779,7 +779,7 @@ contains
           id = ref_info%lvls(lvl)%add(i)
           call a3_prolong1_to(tree%boxes, id, i_elec)
           call a3_prolong1_to(tree%boxes, id, i_pion)
-          call maarten a3_prolong1_to(tree%boxes, id, i_phi)
+          call a3_prolong1_to(tree%boxes, id, i_phi)
           call set_box_lsf(tree%boxes(id))
        end do
        !$omp end do

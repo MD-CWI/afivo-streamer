@@ -227,7 +227,7 @@ program streamer_2d
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
-        call a2_loop_box(tree, average_dens, .true.)
+        call a2_loop_box(tree, average_dens)
      end do
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
