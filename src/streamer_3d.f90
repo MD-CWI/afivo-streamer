@@ -40,7 +40,7 @@ program streamer_3d
   integer, parameter :: i_alpha = 3
   integer, parameter :: i_eta = 4
 
-  character(len=name_len) :: sim_name
+  character(len=name_len) :: sim_name, output_dir
   character(len=name_len) :: cfg_name, tmp_name, prev_name
 
   type initcnd_t
@@ -126,8 +126,8 @@ program streamer_3d
   call initialize(sim_cfg)
 
   call CFG_get(sim_cfg, "end_time", end_time)
-  call CFG_get(sim_cfg, "sim_name", sim_name)
   call CFG_get(sim_cfg, "box_size", box_size)
+  call CFG_get(sim_cfg, "output_dir", output_dir)
   call CFG_get(sim_cfg, "domain_len", domain_len)
   call CFG_get(sim_cfg, "applied_fld", applied_fld)
   call CFG_get(sim_cfg, "dt_output", dt_output)
@@ -195,7 +195,7 @@ program streamer_3d
      end if
 
      if (write_out) call a3_write_silo(tree, trim(fname), &
-          cc_names, output_cnt, time)
+          cc_names, output_cnt, time, dir=trim(output_dir))
 
      if (time > end_time) exit
 
