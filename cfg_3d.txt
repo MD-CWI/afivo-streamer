@@ -1,4 +1,5 @@
 applied_fld = -2.0e6
+output_dir = "output"
 dt_output = 25e-11
 dt_amr = 1e-11
 sim_name = test3d

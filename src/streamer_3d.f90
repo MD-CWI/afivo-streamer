@@ -194,8 +194,8 @@ program streamer_3d
         write_out = .false.
      end if
 
-     if (write_out) call a3_write_silo(tree, trim(fname), &
-          cc_names, output_cnt, time, dir=trim(output_dir))
+     if (write_out) call a3_write_silo(tree, fname, &
+          cc_names, output_cnt, time, dir=output_dir)
 
      if (time > end_time) exit
 
@@ -297,7 +297,7 @@ contains
     ! if (crv_phi < 4.0_dp) &
     !      ref_flags(id) = a5_rm_ref
 
-    if (boxes(id)%dr * alpha < 0.1_dp) &
+    if (boxes(id)%dr * alpha < 0.1_dp .and. boxes(id)%dr < 5.0e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
     if (time < 1.0e-9_dp) then
@@ -934,6 +934,8 @@ contains
          "The desired endtime in seconds of the simulation")
     call CFG_add(cfg, "sim_name", "sim", &
          "The name of the simulation")
+    call CFG_add(cfg, "output_dir", "", &
+         "Directory where the output should be written")
     call CFG_add(cfg, "box_size", 8, &
          "The number of grid cells per coordinate in a box")
     call CFG_add(cfg, "domain_len", 32e-3_dp, &

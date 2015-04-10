@@ -1,8 +1,9 @@
 applied_fld = -2.0e6
+output_dir = "output"
 dt_output = 25e-11
 dt_amr = 1e-11
 sim_name = test
-end_time = 50e-9
+end_time = 37.5e-9
 photoi_enabled = t
 photoi_frac_O2 = 0.1
 photoi_eta = 5e-2
@@ -10,7 +11,7 @@ photoi_num_photons = 10000
 
 bg_dens = 1e10
 seed_dens = 1e19
-seed_rel_r0 = 0.5 0.4
+seed_rel_r0 = 0.5 0.45
 seed_rel_r1 = 0.5 0.6
 seed_width = 0.2e-3
 seed_falloff = 3

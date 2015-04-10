@@ -194,8 +194,8 @@ program streamer_2d
         write_out = .false.
      end if
 
-     if (write_out) call a2_write_silo(tree, trim(fname), &
-          cc_names, output_cnt, time, dir=trim(output_dir))
+     if (write_out) call a2_write_silo(tree, fname, &
+          cc_names, output_cnt, time, dir=output_dir)
 
      if (time > end_time) exit
 
@@ -294,10 +294,7 @@ contains
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
 
-    ! if (crv_phi < 4.0_dp) &
-    !      ref_flags(id) = a5_rm_ref
-
-    if (boxes(id)%dr * alpha < 0.1_dp) &
+    if (boxes(id)%dr * alpha < 0.1_dp .and. boxes(id)%dr < 5.0e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
     if (time < 1.0e-9_dp) then
