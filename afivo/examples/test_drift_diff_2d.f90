@@ -92,7 +92,7 @@ program test_drift_diff
         ! Forward Euler
         do n = 1, n_steps
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-           call a2_consistent_fluxes(tree, [1])
+           ! call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -106,7 +106,7 @@ program test_drift_diff
            ! Two forward Euler steps over dt
            do i = 1, 2
               call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-              call a2_consistent_fluxes(tree, [1])
+              ! call a2_consistent_fluxes(tree, [1])
               call a2_loop_box_arg(tree, update_solution, [dt])
               call a2_restrict_tree(tree, i_phi)
               call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -186,7 +186,7 @@ contains
     real(dp) :: sol, xy_t(2)
 
     xy_t = xy - [vel_x, vel_y] * t
-    sol = sin(xy_t(1))**10 * cos(xy_t(2))**10
+    sol = sin(xy_t(1))**4 * cos(xy_t(2))**4
   end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)
@@ -378,7 +378,7 @@ contains
     do lvl = 1, tree%max_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_prolong2_to(tree%boxes, id, i_phi)
+          call a2_prolong1_to(tree%boxes, id, i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)

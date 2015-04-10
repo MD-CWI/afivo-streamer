@@ -2479,7 +2479,7 @@ contains
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
   !> leaves of the tree are used
-  subroutine a$D_write_vtk(tree, filename, cc_names, n_cycle, time, ivs)
+  subroutine a$D_write_vtk(tree, filename, cc_names, n_cycle, time, ivs, dir)
     use m_vtk
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*)              :: filename    !< Filename for the vtk file
@@ -2487,6 +2487,8 @@ contains
     integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
     real(dp), intent(in)          :: time        !< Time for output file
     integer, intent(in), optional :: ivs(:)      !< Oncly include these variables
+    character(len=*), optional, intent(in) :: dir !< Directory to place files in
+
     integer                       :: lvl, bc, bn, n, n_cells, n_nodes
     integer                       :: ig, i, j, id, n_ix, c_ix, n_grids
     integer                       :: cell_ix, node_ix
@@ -2496,6 +2498,7 @@ contains
     integer, allocatable          :: offsets(:), connects(:)
     integer, allocatable          :: cell_types(:), ivs_used(:)
     type(vtk_t)                   :: vtkf
+    character(len=200)            :: fname
 #if $D == 3
     integer                       :: k, bn2
 #endif
@@ -2596,7 +2599,20 @@ contains
        end do
     end do
 
-    call vtk_ini_xml(vtkf, trim(filename), 'UnstructuredGrid')
+    fname = trim(filename)
+
+    if (present(dir)) then
+       i = len_trim(dir)
+       if (i > 0) then
+          if (dir(i:i) == "/") then ! Dir has trailing slash
+             fname = trim(dir) // trim(fname)
+          else
+             fname = trim(dir) // "/" // trim(fname)
+          end if
+       end if
+    end if
+
+    call vtk_ini_xml(vtkf, trim(fname), 'UnstructuredGrid')
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
     call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, $D, n_cycle, time)
     call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
@@ -2610,12 +2626,12 @@ contains
     call vtk_geo_xml_close(vtkf)
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
-    print *, "Written ", trim(filename), ", n_grids", n_grids
+    print *, "Written ", trim(fname), ", n_grids", n_grids
   end subroutine a$D_write_vtk
 
   !> Write the cell centered data of a tree to a Silo file. Only the
   !> leaves of the tree are used
-  subroutine a$D_write_silo(tree, filename, cc_names, n_cycle, time, ivs)
+  subroutine a$D_write_silo(tree, filename, cc_names, n_cycle, time, ivs, dir)
     use m_write_silo
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*)              :: filename    !< Filename for the vtk file
@@ -2623,10 +2639,12 @@ contains
     integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
     real(dp), intent(in)          :: time        !< Time for output file
     integer, intent(in), optional :: ivs(:)      !< Oncly include these variables
+    character(len=*), optional, intent(in) :: dir !< Directory to place files in
 
     character(len=*), parameter     :: grid_name = "gg"
-    character(len=*), parameter     :: amr_name  = "mesh", dir_name = "data"
+    character(len=*), parameter     :: amr_name  = "mesh", meshdir = "data"
     character(len=100), allocatable :: grid_list(:), var_list(:, :)
+    character(len=200)              :: fname
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
     integer                         :: n_vars, i0, j0, dbix
     integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
@@ -2666,8 +2684,21 @@ contains
     allocate(box_done(tree%max_id))
     box_done = .false.
 
-    call SILO_create_file(filename, dbix)
-    call SILO_mkdir(dbix, dir_name)
+    fname = trim(filename)
+
+    if (present(dir)) then
+       i = len_trim(dir)
+       if (i > 0) then
+          if (dir(i:i) == "/") then ! Dir has trailing slash
+             fname = trim(dir) // trim(fname)
+          else
+             fname = trim(dir) // "/" // trim(fname)
+          end if
+       end if
+    end if
+
+    call SILO_create_file(trim(fname), dbix)
+    call SILO_mkdir(dbix, meshdir)
     i_grid = 0
 
     do lvl = 1, tree%max_lvl
@@ -2776,11 +2807,11 @@ contains
           dr = tree%boxes(id)%dr
           r_min = tree%boxes(id)%r_min
 
-          write(grid_list(i_grid), "(A,I0)") dir_name // '/' // grid_name, i_grid
+          write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 2, &
                [nx*nc + 1, ny*nc + 1], r_min, dr)
           do iv = 1, n_vars
-             write(var_list(iv, i_grid), "(A,I0)") dir_name // '/' // &
+             write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(cc_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
                   pack(var_data(:, :, iv), .true.), [nx*nc, ny*nc])
@@ -2923,11 +2954,11 @@ contains
           dr = tree%boxes(id)%dr
           r_min = tree%boxes(id)%r_min
 
-          write(grid_list(i_grid), "(A,I0)") dir_name // '/' // grid_name, i_grid
+          write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 3, &
                [nx*nc + 1, ny*nc + 1, nz*nc + 1], r_min, dr)
           do iv = 1, n_vars
-             write(var_list(iv, i_grid), "(A,I0)") dir_name // '/' // &
+             write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(cc_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
                   pack(var_data(:, :, :, iv), .true.), [nx*nc, ny*nc, nz*nc])
@@ -2947,7 +2978,7 @@ contains
     end do
     call SILO_close_file(dbix)
 
-    print *, "SILO: Number of grids", i_grid
+    print *, "Written ", trim(fname), ", n_grids", i_grid
   end subroutine a$D_write_silo
 
 end module m_afivo_$Dd
