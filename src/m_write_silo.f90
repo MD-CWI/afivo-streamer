@@ -30,7 +30,6 @@ contains
     ierr = dbcreate(trim(filename), len_trim(filename), DB_CLOBBER, &
          DB_LOCAL, fileinfo, len_trim(fileinfo), DB_TYPE, dbix)
     if (ierr /= 0) print *, "Error creating file", trim(filename)
-    print *, "Created file ", trim(filename)
   end subroutine SILO_create_file
 
   subroutine SILO_open_file(filename, dbix)
