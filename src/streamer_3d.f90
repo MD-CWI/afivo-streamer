@@ -188,7 +188,7 @@ program streamer_3d
      if (output_cnt * dt_output <= time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0,A)") trim(sim_name) // "_", &
+        write(fname, "(A,I6.6,A)") trim(sim_name) // "_", &
              output_cnt, ".silo"
      else
         write_out = .false.
@@ -759,6 +759,7 @@ contains
              alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
              mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
+             if (alpha < 0) alpha = 0 ! Only use positive source
              box%cc(i, j, k, i_pho) = fld * mobility * alpha * &
                   box%cc(i, j, k, i_elec) * coeff(1)
           end do

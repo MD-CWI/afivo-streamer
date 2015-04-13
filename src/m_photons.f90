@@ -313,7 +313,6 @@ contains
     ! Now loop over all leaves and create photons using random numbers
 
     !$omp parallel private(lvl, ix, id, i, j, dr, i_ph, proc_id, r_create, n_create)
-
     !$omp single
     n_procs = omp_get_num_threads()
     call prng%init(n_procs, rng)
