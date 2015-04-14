@@ -1,12 +1,13 @@
-applied_fld = -2.0e6
+applied_fld = -2.5e6
 gas_name = AIR
-input_file = td_air_siglo.txt
+input_file = td_air_phelps_bolsig.txt
 
 output_dir = "output"
-dt_output = 25e-11
+dt_output = 25.0e-11
 
+dt_max = 5e-11
 dt_amr = 1e-11
-sim_name = seed_3d
+sim_name = test3d
 end_time = 20e-9
 photoi_enabled = t
 photoi_frac_O2 = 0.2
@@ -14,11 +15,11 @@ photoi_eta = 5e-2
 photoi_num_photons = 200000
 
 bg_dens = 1e10
-seed_dens = 1e19
-seed_rel_r0 = 0.5 0.5 0.5
-seed_rel_r1 = 0.5 0.5 0.6
-seed_width = 0.2e-3
-seed_falloff = 3
+seed_dens = 5e18 1e16
+seed_rel_r0 = 0.5 0.5 0.5 0.5 0.5 0.45
+seed_rel_r1 = 0.5 0.5 0.55 0.5 0.5 0.5
+seed_width = 0.1e-3 0.4e-3
+seed_falloff = 3 1
 
 elec_use_top = f
 elec_use_bot = f

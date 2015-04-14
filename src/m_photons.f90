@@ -287,6 +287,7 @@ contains
     real(dp), allocatable       :: xyz_dst(:, :)
     type(PRNG_t)                :: prng
     type(a3_loc_t), allocatable :: ph_loc(:)
+    real(dp) :: tmp
 
     nc = tree%n_cell
 
@@ -319,7 +320,7 @@ contains
     !$omp end single
 
     proc_id = 1+omp_get_thread_num()
-
+    tmp = 0
     do lvl = 1, tree%max_lvl
        dr = a3_lvl_dr(tree, lvl)
        !$omp do
@@ -329,6 +330,7 @@ contains
           do k = 1, nc
              do j = 1, nc
                 do i = 1, nc
+                   tmp = tmp + fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
                    r_create = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
                    n_create = floor(r_create)
 
@@ -394,6 +396,7 @@ contains
 
     ! Set ghost cells on highest level with photon source
 
+
     !$omp parallel private(lvl, i, id)
 
     ! Prolong to finer grids
@@ -414,6 +417,8 @@ contains
        !$omp end do
     end do
     !$omp end parallel
+
+
   end subroutine PH_set_src_3d
 
 end module m_photons

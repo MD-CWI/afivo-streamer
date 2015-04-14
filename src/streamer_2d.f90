@@ -87,7 +87,7 @@ program streamer_2d
   integer            :: i, n, n_steps
   integer            :: output_cnt
   real(dp)           :: dt, time, end_time
-  real(dp)           :: dt_amr, dt_output
+  real(dp)           :: dt_amr, dt_output, dt_max
   character(len=40)  :: fname
   logical            :: write_out
 
@@ -132,6 +132,7 @@ program streamer_2d
   call CFG_get(sim_cfg, "applied_fld", applied_fld)
   call CFG_get(sim_cfg, "dt_output", dt_output)
   call CFG_get(sim_cfg, "dt_amr", dt_amr)
+  call CFG_get(sim_cfg, "dt_max", dt_max)
 
   call get_init_cond(sim_cfg, init_cond)
   call get_elec_cfg(sim_cfg, elec)
@@ -285,19 +286,25 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
     integer                  :: nc, n
-    real(dp)                 :: crv_phi, dr2, max_fld
+    real(dp)                 :: crv_phi, dr2, max_fld, max_dns
     real(dp)                 :: boxlen, dist, alpha
 
     nc        = boxes(id)%n_cell
     dr2       = boxes(id)%dr**2
     crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
+    max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
 
-    if (boxes(id)%dr * alpha < 0.1_dp .and. boxes(id)%dr < 5.0e-5_dp) &
-         ref_flags(id) = a5_rm_ref
+    if (boxes(id)%dr * alpha < 0.1_dp) then
+       if (max_dns > 1e17_dp) then
+          if (boxes(id)%dr < 1.0e-5_dp) ref_flags(id) = a5_rm_ref
+       else
+          if (boxes(id)%dr < 2.5e-5_dp) ref_flags(id) = a5_rm_ref
+       end if
+    end if
 
-    if (time < 1.0e-9_dp) then
+    if (time < 2.0e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
        do n = 1, init_cond%n_cond
@@ -305,18 +312,13 @@ contains
                init_cond%seed_r0(:, n), &
                init_cond%seed_r1(:, n), 2)
           if (dist - init_cond%seed_width(n) < boxlen &
-               .and. boxes(id)%dr > 5.0e-5) then
+               .and. boxes(id)%dr > 0.2_dp * init_cond%seed_width(n)) then
              ref_flags(id) = a5_do_ref
           end if
        end do
     end if
 
-    if (boxes(id)%dr > 5e-6_dp) then
-       if (boxes(id)%dr * alpha > 1.0_dp) ref_flags(id) = a5_do_ref
-       ! if (crv_phi > 2.0e1_dp) ref_flags(id) = a5_do_ref
-    else
-       if (boxes(id)%dr * alpha > 1.0_dp) ref_flags(id) = a5_kp_ref
-    end if
+    if (boxes(id)%dr * alpha > 1.0_dp) ref_flags(id) = a5_do_ref
 
   end subroutine set_ref_flags
 
@@ -416,7 +418,8 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha)
+    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), &
+         dt_drt, dt_alpha, dt_max)
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -679,7 +682,7 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, nc
-    real(dp)                    :: fld, alpha, mobility, dr
+    real(dp)                    :: fld, alpha, mobility, dr, tmp
     type(LT_loc_t)              :: loc
 
     nc = box%n_cell
@@ -692,9 +695,9 @@ contains
           alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
           mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
-          if (alpha < 0) alpha = 0 ! Only use positive source
-          box%cc(i, j, i_pho) = fld * mobility * alpha * &
-               box%cc(i, j, i_elec) * coeff(1)
+          tmp = fld * mobility * alpha * box%cc(i, j, i_elec) * coeff(1)
+          if (tmp < 0) tmp = 0
+          box%cc(i, j, i_pho) = tmp
        end do
     end do
   end subroutine set_photoi_rate
@@ -893,19 +896,21 @@ contains
 
     call CFG_add(cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")
-    call CFG_add(cfg, "seed_dens", 5.0d19 , &
-         "Initial density of the seed")
+    call CFG_add(cfg, "seed_dens", [5.0d19], &
+         "Initial density of the seed", .true.)
     call CFG_add(cfg, "seed_rel_r0", [0.5d0, 0.4d0], &
-         "The relative start position of the initial seed")
+         "The relative start position of the initial seed", .true.)
     call CFG_add(cfg, "seed_rel_r1", [0.5d0, 0.6d0], &
-         "The relative end position of the initial seed")
-    call CFG_add(cfg, "seed_width", 0.5d-3, &
-         "Seed width")
-    call CFG_add(cfg, "seed_falloff", 1, &
-         "Fallof type for seed, see m_geom.f90")
+         "The relative end position of the initial seed", .true.)
+    call CFG_add(cfg, "seed_width", [0.5d-3], &
+         "Seed width", .true.)
+    call CFG_add(cfg, "seed_falloff", [1], &
+         "Fallof type for seed, see m_geom.f90", .true.)
 
     call CFG_add(cfg, "dt_output", 1.0d-10, &
          "The timestep for writing output")
+    call CFG_add(cfg, "dt_max", 1.0d-11, &
+         "The maximum timestep")
     call CFG_add(cfg, "dt_amr", 1.0d-11, &
          "The timestep for adaptively refining the grid")
 

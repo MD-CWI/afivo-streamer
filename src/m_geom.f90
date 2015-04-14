@@ -33,14 +33,14 @@ contains
     real(dp)             :: projection(ndim)
 
     line_len2 = sum((r1 - r0)**2)
-    temp = sum((r - r0) * (r1 - r0)) / line_len2
+    temp = sum((r - r0) * (r1 - r0))
 
-    if (temp < 0.0_dp) then
+    if (temp <= 0.0_dp) then
        dist = norm2(r-r0)
-    else if (temp > 1.0_dp) then
+    else if (temp >= line_len2) then
        dist = norm2(r-r1)
     else
-       projection = r0 + temp * (r1 - r0)
+       projection = r0 + temp/line_len2 * (r1 - r0)
        dist = norm2(r-projection)
     end if
   end function GM_dist_line
@@ -62,6 +62,8 @@ contains
        val  = GM_smoothstep(dist, width)
     case (GM_step_t)
        val  = GM_step(dist, width)
+    case default
+       val  = 0
     end select
   end function GM_dens_line
 
