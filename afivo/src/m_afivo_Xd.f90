@@ -1589,38 +1589,42 @@ contains
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
-  subroutine a$D_prolong1_from(boxes, id, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Box whose children we will fill
-    integer, intent(in)         :: iv        !< Variable that is filled
-    integer                     :: i_c, c_id
+  subroutine a$D_prolong1_from(boxes, id, iv, f_add)
+    type(box$D_t), intent(inout)   :: boxes(:) !< List of all boxes
+    integer, intent(in)            :: id       !< Box whose children we will fill
+    integer, intent(in)            :: iv       !< Variable that is filled
+    real(dp), intent(in), optional :: f_add    !< Add to old values * f_add
+    integer                        :: i_c, c_id
 
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == a5_no_box) cycle
-       call a$D_prolong1_to(boxes, c_id, iv)
+       call a$D_prolong1_to(boxes, c_id, iv, f_add)
     end do
   end subroutine a$D_prolong1_from
 
   !> Prolongation to a child (from parent) using linear interpolation. We use
   !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
   !> corner ghost cells.
-  subroutine a$D_prolong1_to(boxes, id, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)          :: id       !< Id of child
-    integer, intent(in)          :: iv       !< Variable to fill
-    integer                      :: hnc, nc, p_id, ix_offset($D)
-    integer                      :: i, j, i_c, i_f, j_c, j_f
-    real(dp)                     :: f0, flx, fhx, fly, fhy
+  subroutine a$D_prolong1_to(boxes, id, iv, f_add)
+    type(box$D_t), intent(inout)   :: boxes(:) !< List of all boxes
+    integer, intent(in)            :: id       !< Id of child
+    integer, intent(in)            :: iv       !< Variable to fill
+    real(dp), intent(in), optional :: f_add    !< Add to old values * f_add
+    integer                        :: hnc, nc, p_id, ix_offset($D)
+    integer                        :: i, j, i_c, i_f, j_c, j_f
+    real(dp)                       :: f0, flx, fhx, fly, fhy, fadd
 #if $D == 3
-    real(dp)                     :: flz, fhz
-    integer                      :: k, k_c, k_f
+    real(dp)                       :: flz, fhz
+    integer                        :: k, k_c, k_f
 #endif
 
     nc        = boxes(id)%n_cell
     hnc = ishft(boxes(id)%n_cell, -1)
     p_id      = boxes(id)%parent
     ix_offset = a$D_get_child_offset(boxes(id))
+    fadd      = 0
+    if (present(f_add)) fadd = f_add
 
 #if $D == 2
     do j = 1, hnc
@@ -1636,10 +1640,14 @@ contains
           fly = 0.25_dp * boxes(p_id)%cc(i_c, j_c-1, iv)
           fhy = 0.25_dp * boxes(p_id)%cc(i_c, j_c+1, iv)
 
-          boxes(id)%cc(i_f,   j_f,   iv) = f0 + flx + fly
-          boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fhx + fly
-          boxes(id)%cc(i_f,   j_f+1, iv) = f0 + flx + fhy
-          boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fhx + fhy
+          boxes(id)%cc(i_f,   j_f,   iv) = f0 + flx + fly &
+               + fadd * boxes(id)%cc(i_f,   j_f,   iv)
+          boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fhx + fly &
+               + fadd * boxes(id)%cc(i_f+1, j_f,   iv)
+          boxes(id)%cc(i_f,   j_f+1, iv) = f0 + flx + fhy &
+               + fadd * boxes(id)%cc(i_f,   j_f+1, iv)
+          boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fhx + fhy &
+               + fadd * boxes(id)%cc(i_f+1, j_f+1, iv)
        end do
     end do
 #elif $D == 3
@@ -1661,14 +1669,22 @@ contains
              flz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c-1, iv)
              fhz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c+1, iv)
 
-             boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 + flx + fly + flz
-             boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fhx + fly + flz
-             boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 + flx + fhy + flz
-             boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fhx + fhy + flz
-             boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 + flx + fly + fhz
-             boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fhx + fly + fhz
-             boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 + flx + fhy + fhz
-             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fhx + fhy + fhz
+             boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 + flx + fly + flz &
+                  + fadd * boxes(id)%cc(i_f,   j_f,   k_f,   iv)
+             boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fhx + fly + flz &
+                  + fadd * boxes(id)%cc(i_f+1, j_f,   k_f,   iv)
+             boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 + flx + fhy + flz &
+                  + fadd * boxes(id)%cc(i_f,   j_f+1, k_f,   iv)
+             boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fhx + fhy + flz &
+                  + fadd * boxes(id)%cc(i_f+1, j_f+1, k_f,   iv)
+             boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 + flx + fly + fhz &
+                  + fadd * boxes(id)%cc(i_f,   j_f,   k_f+1, iv)
+             boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fhx + fly + fhz &
+                  + fadd * boxes(id)%cc(i_f+1, j_f,   k_f+1, iv)
+             boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 + flx + fhy + fhz &
+                  + fadd * boxes(id)%cc(i_f,   j_f+1, k_f+1, iv)
+             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fhx + fhy + fhz &
+                  + fadd * boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv)
           end do
        end do
     end do
