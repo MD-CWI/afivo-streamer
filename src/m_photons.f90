@@ -80,13 +80,36 @@ contains
          exp(-chi_max * p_O2 * dist)) / (dist * log(chi_max/chi_min))
   end function PH_absfunc_air
 
-  integer function get_lvl_lengthscale(dr_base, length)
+  integer function get_lvl_length(dr_base, length)
     real(dp), intent(in) :: dr_base, length
     real(dp), parameter :: invlog2 = 1 / log(2.0_dp)
+    real(dp) :: ratio
 
-    ! 1 + ceiling of 2log(dr_base / pi_lengthscale)
-    get_lvl_lengthscale = 1 + ceiling(log(dr_base / length) * invlog2)
-  end function get_lvl_lengthscale
+    ratio = dr_base / length
+    if (ratio <= 1) then
+       get_lvl_length = 1
+    else
+       get_lvl_length = 1 + ceiling(log(ratio) * invlog2)
+    end if
+  end function get_lvl_length
+
+  integer function get_rlvl_length(dr_base, length, rng)
+    use m_random
+    real(dp), intent(in) :: dr_base, length
+    real(dp), parameter :: invlog2 = 1 / log(2.0_dp)
+    type(RNG_t), intent(inout) :: rng
+    real(dp) :: ratio, tmp
+
+    ratio = dr_base / length
+    if (ratio <= 1) then
+       get_rlvl_length = 1
+    else
+       tmp = log(ratio) * invlog2
+       get_rlvl_length = floor(tmp)
+       if (rng%uni_01() < tmp - get_rlvl_length) &
+            get_rlvl_length = get_rlvl_length + 1
+    end if
+  end function get_rlvl_length
 
   subroutine PH_do_absorp(xyz_in, xyz_out, n_photons, tbl, rng)
     use m_lookup_table
@@ -142,23 +165,14 @@ contains
     integer                     :: i, j, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
-    real(dp)                    :: r_create, dr, fac
-    real(dp)                    :: sum_production, pi_lengthscale
+    real(dp)                    :: r_create, dr, fac, dist
+    real(dp)                    :: sum_production
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
     type(PRNG_t)                :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
-
-    ! Get a typical length scale for the absorption of photons
-    pi_lengthscale = LT_get_col(pi_tbl, 1, rel_length)
-    print *, "Photoionization length scale", pi_lengthscale
-
-    ! Determine at which level we estimate the photoionization source term. This
-    ! depends on the typical lenght scale for absorption.
-    pho_lvl = get_lvl_lengthscale(tree%dr_base, pi_lengthscale)
-    print *, "pho_lvl", pho_lvl, a2_lvl_dr(tree, pho_lvl)
 
     ! Allocate a bit more space because of stochastic production
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
@@ -169,7 +183,7 @@ contains
     ! Create approximately num_photons
     fac    = num_photons / max(sum_production, epsilon(1.0_dp))
     n_used = 0
-    print *, "num photons / sum", num_photons, sum_production
+    ! print *, "num photons / sum", num_photons, sum_production
 
     ! Now loop over all leaves and create photons using random numbers
 
@@ -220,11 +234,14 @@ contains
     ! Get location of absorbption
     call PH_do_absorp(xyz_src, xyz_dst, n_used, pi_tbl, rng)
 
-    !$omp parallel do
+    ! TODO
+    !x$omp parallel do private(dist, lvl)
     do n = 1, n_used
-       ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), pho_lvl)
+       dist = norm2(xyz_dst(1:2, n) - xyz_src(1:2, n))
+       lvl = get_rlvl_length(tree%dr_base, 0.6_dp * dist, rng)
+       ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), lvl)
     end do
-    !$omp end parallel do
+    !x$omp end parallel do
 
     ! Clear variable i_pho, in which we will store the photoionization source term
 
@@ -256,7 +273,7 @@ contains
     !$omp parallel private(lvl, i, id)
 
     ! Prolong to finer grids
-    do lvl = pho_lvl, tree%max_lvl-1
+    do lvl = 1, tree%max_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
@@ -268,7 +285,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong1_from(tree%boxes, id, i_pho)
+          call a2_prolong1_from(tree%boxes, id, i_pho, f_add=1.0_dp)
        end do
        !$omp end do
     end do
@@ -309,7 +326,7 @@ contains
 
     ! Determine at which level we estimate the photoionization source term. This
     ! depends on the typical lenght scale for absorption.
-    pho_lvl = get_lvl_lengthscale(tree%dr_base, pi_lengthscale)
+    pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
 
     ! Allocate a bit more space because of stochastic production
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))

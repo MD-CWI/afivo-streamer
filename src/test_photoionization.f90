@@ -11,9 +11,9 @@ program test_photoionization
   real(dp), parameter :: domain_len = 4e-3_dp
   real(dp), parameter :: dr = domain_len / box_size
   real(dp), parameter :: eta = 0.05_dp
-  real(dp), parameter :: frac_O2 = 0.2_dp
+  real(dp), parameter :: frac_O2 = 1e-0_dp
   real(dp), parameter :: gas_pressure = 1.0_dp
-  integer, parameter :: num_photons = 100*1000
+  integer, parameter :: num_photons = 10*1000
 
   integer, parameter :: i_src = 1
   integer, parameter :: i_pho = 2
