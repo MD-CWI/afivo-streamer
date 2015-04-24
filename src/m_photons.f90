@@ -166,13 +166,20 @@ contains
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
     real(dp)                    :: r_create, dr, fac, dist
-    real(dp)                    :: sum_production
+    real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
     type(PRNG_t)                :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
+
+    ! Get a typical length scale for the absorption of photons
+    pi_lengthscale = LT_get_col(pi_tbl, 1, rel_length)
+
+    ! Determine at which level we estimate the photoionization source term. This
+    ! depends on the typical lenght scale for absorption.
+    pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
 
     ! Allocate a bit more space because of stochastic production
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
@@ -237,8 +244,8 @@ contains
     ! TODO
     !x$omp parallel do private(dist, lvl)
     do n = 1, n_used
-       dist = norm2(xyz_dst(1:2, n) - xyz_src(1:2, n))
-       lvl = get_rlvl_length(tree%dr_base, 0.6_dp * dist, rng)
+       ! dist = norm2(xyz_dst(1:2, n) - xyz_src(1:2, n))
+       lvl = pho_lvl !get_rlvl_length(tree%dr_base, 0.6_dp * dist, rng)
        ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), lvl)
     end do
     !x$omp end parallel do
@@ -273,7 +280,7 @@ contains
     !$omp parallel private(lvl, i, id)
 
     ! Prolong to finer grids
-    do lvl = 1, tree%max_lvl-1
+    do lvl = pho_lvl, tree%max_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
@@ -285,7 +292,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong1_from(tree%boxes, id, i_pho, f_add=1.0_dp)
+          call a2_prolong1_from(tree%boxes, id, i_pho)
        end do
        !$omp end do
     end do
