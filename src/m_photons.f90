@@ -3,11 +3,12 @@ module m_photons
   implicit none
   private
 
-  integer, parameter                     :: dp = kind(0.0d0)
+  integer, parameter :: dp = kind(0.0d0)
 
   ! Public methods
   public :: PH_get_tbl_air
   public :: PH_do_absorp
+  public :: PH_absfunc_air
   public :: PH_set_src_2d
   public :: PH_set_src_3d
 
@@ -34,22 +35,22 @@ contains
 
     ! Use Simpson's rule for integration
     do n = 2, tbl_size
-       incr = dr * sixth * (absfunc_air(r_prev, p_O2) + &
-            4 * absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
-            absfunc_air(r_prev+dr, p_O2))
+       incr = dr * sixth * (PH_absfunc_air(r_prev, p_O2) + &
+            4 * PH_absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
+            PH_absfunc_air(r_prev+dr, p_O2))
 
        do while (incr > 2.0_dp / tbl_size)
           dr = dr * 0.5_dp
-          incr = dr * sixth * (absfunc_air(r_prev, p_O2) + &
-               4 * absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
-               absfunc_air(r_prev+dr, p_O2))
+          incr = dr * sixth * (PH_absfunc_air(r_prev, p_O2) + &
+               4 * PH_absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
+               PH_absfunc_air(r_prev+dr, p_O2))
        end do
 
        do while (incr < 1.0_dp / (tbl_size-1) .and. dr < huge_dist)
           dr = dr * 2
-          incr = dr * sixth * (absfunc_air(r_prev, p_O2) + &
-               4 * absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
-               absfunc_air(r_prev+dr, p_O2))
+          incr = dr * sixth * (PH_absfunc_air(r_prev, p_O2) + &
+               4 * PH_absfunc_air(r_prev+0.5_dp*dr, p_O2) + &
+               PH_absfunc_air(r_prev+dr, p_O2))
        end do
 
        dist(n) = r_prev + dr
@@ -69,15 +70,23 @@ contains
     call LT_set_col(tbl, 1, fsum, dist)
   end function PH_get_tbl_air
 
-  real(dp) function absfunc_air(dist, p_O2)
+  real(dp) function PH_absfunc_air(dist, p_O2)
     use m_units_constants
     real(dp), intent(in) :: dist, p_O2
     real(dp), parameter  :: chi_min  = 3.5_dp / UC_torr_to_bar
     real(dp), parameter  :: chi_max  = 200 / UC_torr_to_bar
 
-    absfunc_air = (exp(-chi_min * p_O2 * dist) - &
+    PH_absfunc_air = (exp(-chi_min * p_O2 * dist) - &
          exp(-chi_max * p_O2 * dist)) / (dist * log(chi_max/chi_min))
-  end function absfunc_air
+  end function PH_absfunc_air
+
+  integer function get_lvl_lengthscale(dr_base, length)
+    real(dp), intent(in) :: dr_base, length
+    real(dp), parameter :: invlog2 = 1 / log(2.0_dp)
+
+    ! 1 + ceiling of 2log(dr_base / pi_lengthscale)
+    get_lvl_lengthscale = 1 + ceiling(log(dr_base / length) * invlog2)
+  end function get_lvl_lengthscale
 
   subroutine PH_do_absorp(xyz_in, xyz_out, n_photons, tbl, rng)
     use m_lookup_table
@@ -110,7 +119,8 @@ contains
     !$omp end parallel
   end subroutine PH_do_absorp
 
-  subroutine PH_set_src_2d(tree, pi_tbl, rng, num_photons, i_src, i_pho)
+  subroutine PH_set_src_2d(tree, pi_tbl, rng, rel_length, &
+       num_photons, i_src, i_pho)
     use m_random
     use m_afivo_2d
     use m_lookup_table
@@ -119,6 +129,8 @@ contains
     type(a2_t), intent(inout)   :: tree   !< Tree
     type(LT_table_t)            :: pi_tbl !< Table to sample abs. lenghts
     type(RNG_t), intent(inout)  :: rng    !< Random number generator
+    !> Use dx smaller than pi_tbl at this value
+    real(dp), intent(in) :: rel_length
     !> How many discrete photons to use
     integer, intent(in)         :: num_photons
     !> Input variable that contains photon production per cell
@@ -130,7 +142,8 @@ contains
     integer                     :: i, j, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
-    real(dp)                    :: r_create, dr, fac, sum_production, pi_lengthscale
+    real(dp)                    :: r_create, dr, fac
+    real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
     type(PRNG_t)                :: prng
@@ -139,14 +152,13 @@ contains
     nc = tree%n_cell
 
     ! Get a typical length scale for the absorption of photons
-    pi_lengthscale = LT_get_col(pi_tbl, 1, 0.5_dp)
+    pi_lengthscale = LT_get_col(pi_tbl, 1, rel_length)
+    print *, "Photoionization length scale", pi_lengthscale
 
     ! Determine at which level we estimate the photoionization source term. This
     ! depends on the typical lenght scale for absorption.
-    do lvl = 1, tree%lvls_max
-       if (a2_lvl_dr(tree, lvl) < pi_lengthscale) exit
-    end do
-    pho_lvl = lvl
+    pho_lvl = get_lvl_lengthscale(tree%dr_base, pi_lengthscale)
+    print *, "pho_lvl", pho_lvl, a2_lvl_dr(tree, pho_lvl)
 
     ! Allocate a bit more space because of stochastic production
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
@@ -157,6 +169,7 @@ contains
     ! Create approximately num_photons
     fac    = num_photons / max(sum_production, epsilon(1.0_dp))
     n_used = 0
+    print *, "num photons / sum", num_photons, sum_production
 
     ! Now loop over all leaves and create photons using random numbers
 
@@ -296,10 +309,7 @@ contains
 
     ! Determine at which level we estimate the photoionization source term. This
     ! depends on the typical lenght scale for absorption.
-    do lvl = 1, tree%lvls_max
-       if (a3_lvl_dr(tree, lvl) < pi_lengthscale) exit
-    end do
-    pho_lvl = lvl
+    pho_lvl = get_lvl_lengthscale(tree%dr_base, pi_lengthscale)
 
     ! Allocate a bit more space because of stochastic production
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))

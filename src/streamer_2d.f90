@@ -68,28 +68,28 @@ program streamer_2d
      real(dp) :: bot_radius
   end type elec_t
 
-  type(initcnd_t) :: init_cond
-  type(elec_t) :: elec
+  type(initcnd_t)   :: init_cond
+  type(elec_t)      :: elec
 
-  type(LT_table_t)   :: td_tbl  ! Table with transport data vs fld
-  type(CFG_t)        :: sim_cfg ! The configuration for the simulation
-  type(a2_t)         :: tree    ! This contains the full grid information
-  type(mg2_t)        :: mg      ! Multigrid option struct
-  type(RNG_t)        :: sim_rng ! Random number generator
-  type(ref_info_t)   :: ref_info
+  type(LT_table_t)  :: td_tbl             ! Table with transport data vs fld
+  type(CFG_t)       :: sim_cfg            ! The configuration for the simulation
+  type(a2_t)        :: tree               ! This contains the full grid information
+  type(mg2_t)       :: mg                 ! Multigrid option struct
+  type(RNG_t)       :: sim_rng            ! Random number generator
+  type(ref_info_t)  :: ref_info
 
-  logical          :: photoi_enabled     ! Whether we use phototionization
-  real(dp)         :: photoi_frac_O2     ! Oxygen fraction
-  real(dp)         :: photoi_eta         ! Photoionization efficiency
-  integer          :: photoi_num_photons ! Number of photons to use
-  type(LT_table_t) :: photoi_tbl         ! Table for photoionization
+  logical           :: photoi_enabled     ! Whether we use phototionization
+  real(dp)          :: photoi_frac_O2     ! Oxygen fraction
+  real(dp)          :: photoi_eta         ! Photoionization efficiency
+  integer           :: photoi_num_photons ! Number of photons to use
+  type(LT_table_t)  :: photoi_tbl         ! Table for photoionization
 
-  integer            :: i, n, n_steps
-  integer            :: output_cnt
-  real(dp)           :: dt, time, end_time
-  real(dp)           :: dt_amr, dt_output, dt_max
-  character(len=40)  :: fname
-  logical            :: write_out
+  integer           :: i, n, n_steps
+  integer           :: output_cnt
+  real(dp)          :: dt, time, end_time
+  real(dp)          :: dt_amr, dt_output, dt_max
+  character(len=40) :: fname
+  logical           :: write_out
 
   ! How many multigrid FMG cycles we perform per time step
   integer, parameter :: n_fmg_cycles = 1
@@ -674,7 +674,8 @@ contains
     ! ionization rate.
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
-    call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, i_pho, i_pho)
+    call PH_set_src_2d(tree, photoi_tbl, sim_rng, 0.5_dp, &
+         num_photons, i_pho, i_pho)
 
   end subroutine set_photoionization
 
