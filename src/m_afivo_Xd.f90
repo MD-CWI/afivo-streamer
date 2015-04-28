@@ -1621,127 +1621,81 @@ contains
 #endif
 
     nc        = boxes(id)%n_cell
-    hnc = ishft(boxes(id)%n_cell, -1)
+    hnc       = ishft(boxes(id)%n_cell, -1)
     p_id      = boxes(id)%parent
     ix_offset = a$D_get_child_offset(boxes(id))
-    add_to = .false.; if (present(add)) add_to = add
+    add_to    = .false.; if (present(add)) add_to = add
+
+    if (.not. add_to) then
+#if $D == 2
+       boxes(id)%cc(1:nc, 1:nc, iv) = 0
+#elif $D == 3
+       boxes(id)%cc(1:nc, 1:nc, 1:nc, iv) = 0
+#endif
+    end if
 
 #if $D == 2
-    if (add_to) then
-       do j = 1, hnc
-          j_c = j + ix_offset(2)
-          j_f = 2 * j - 1
-          do i = 1, hnc
-             i_c = i + ix_offset(1)
-             i_f = 2 * i - 1
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
 
-             f0 = 0.5_dp * boxes(p_id)%cc(i_c, j_c, iv)
-             flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c, iv)
-             fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c, iv)
-             fly = 0.25_dp * boxes(p_id)%cc(i_c, j_c-1, iv)
-             fhy = 0.25_dp * boxes(p_id)%cc(i_c, j_c+1, iv)
+          f0 = 0.5_dp * boxes(p_id)%cc(i_c, j_c, iv)
+          flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c, iv)
+          fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c, iv)
+          fly = 0.25_dp * boxes(p_id)%cc(i_c, j_c-1, iv)
+          fhy = 0.25_dp * boxes(p_id)%cc(i_c, j_c+1, iv)
 
-             boxes(id)%cc(i_f,   j_f,   iv) = f0 + flx + fly &
-                  + boxes(id)%cc(i_f,   j_f,   iv)
-             boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fhx + fly &
-                  + boxes(id)%cc(i_f+1, j_f,   iv)
-             boxes(id)%cc(i_f,   j_f+1, iv) = f0 + flx + fhy &
-                  + boxes(id)%cc(i_f,   j_f+1, iv)
-             boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fhx + fhy &
-                  + boxes(id)%cc(i_f+1, j_f+1, iv)
-          end do
+          boxes(id)%cc(i_f,   j_f,   iv) = f0 + flx + fly &
+               + boxes(id)%cc(i_f,   j_f,   iv)
+          boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fhx + fly &
+               + boxes(id)%cc(i_f+1, j_f,   iv)
+          boxes(id)%cc(i_f,   j_f+1, iv) = f0 + flx + fhy &
+               + boxes(id)%cc(i_f,   j_f+1, iv)
+          boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fhx + fhy &
+               + boxes(id)%cc(i_f+1, j_f+1, iv)
        end do
-    else                        ! Do not add
-       do j = 1, hnc
-          j_c = j + ix_offset(2)
-          j_f = 2 * j - 1
-          do i = 1, hnc
-             i_c = i + ix_offset(1)
-             i_f = 2 * i - 1
-
-             f0 = 0.5_dp * boxes(p_id)%cc(i_c, j_c, iv)
-             flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c, iv)
-             fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c, iv)
-             fly = 0.25_dp * boxes(p_id)%cc(i_c, j_c-1, iv)
-             fhy = 0.25_dp * boxes(p_id)%cc(i_c, j_c+1, iv)
-
-             boxes(id)%cc(i_f,   j_f,   iv) = f0 + flx + fly
-             boxes(id)%cc(i_f+1, j_f,   iv) = f0 + fhx + fly
-             boxes(id)%cc(i_f,   j_f+1, iv) = f0 + flx + fhy
-             boxes(id)%cc(i_f+1, j_f+1, iv) = f0 + fhx + fhy
-          end do
-       end do
-    end if
+    end do
 #elif $D == 3
-    if (add_to) then
-       do k = 1, hnc
-          k_c = k + ix_offset(3)
-          k_f = 2 * k - 1
-          do j = 1, hnc
-             j_c = j + ix_offset(2)
-             j_f = 2 * j - 1
-             do i = 1, hnc
-                i_c = i + ix_offset(1)
-                i_f = 2 * i - 1
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
 
-                f0  = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c,   iv)
-                flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c,   k_c,   iv)
-                fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c,   k_c,   iv)
-                fly = 0.25_dp * boxes(p_id)%cc(i_c,   j_c-1, k_c,   iv)
-                fhy = 0.25_dp * boxes(p_id)%cc(i_c,   j_c+1, k_c,   iv)
-                flz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c-1, iv)
-                fhz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c+1, iv)
+             f0  = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c,   iv)
+             flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c,   k_c,   iv)
+             fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c,   k_c,   iv)
+             fly = 0.25_dp * boxes(p_id)%cc(i_c,   j_c-1, k_c,   iv)
+             fhy = 0.25_dp * boxes(p_id)%cc(i_c,   j_c+1, k_c,   iv)
+             flz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c-1, iv)
+             fhz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c+1, iv)
 
-                boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 + flx + &
-                     fly + flz + boxes(id)%cc(i_f,   j_f,   k_f,   iv)
-                boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fhx + &
-                     fly + flz + boxes(id)%cc(i_f+1, j_f,   k_f,   iv)
-                boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 + flx + &
-                     fhy + flz + boxes(id)%cc(i_f,   j_f+1, k_f,   iv)
-                boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fhx + &
-                     fhy + flz + boxes(id)%cc(i_f+1, j_f+1, k_f,   iv)
-                boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 + flx + &
-                     fly + fhz + boxes(id)%cc(i_f,   j_f,   k_f+1, iv)
-                boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fhx + &
-                     fly + fhz + boxes(id)%cc(i_f+1, j_f,   k_f+1, iv)
-                boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 + flx + &
-                     fhy + fhz + boxes(id)%cc(i_f,   j_f+1, k_f+1, iv)
-                boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fhx + &
-                     fhy + fhz + boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv)
-             end do
+             boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 + flx + &
+                  fly + flz + boxes(id)%cc(i_f,   j_f,   k_f,   iv)
+             boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fhx + &
+                  fly + flz + boxes(id)%cc(i_f+1, j_f,   k_f,   iv)
+             boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 + flx + &
+                  fhy + flz + boxes(id)%cc(i_f,   j_f+1, k_f,   iv)
+             boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fhx + &
+                  fhy + flz + boxes(id)%cc(i_f+1, j_f+1, k_f,   iv)
+             boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 + flx + &
+                  fly + fhz + boxes(id)%cc(i_f,   j_f,   k_f+1, iv)
+             boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fhx + &
+                  fly + fhz + boxes(id)%cc(i_f+1, j_f,   k_f+1, iv)
+             boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 + flx + &
+                  fhy + fhz + boxes(id)%cc(i_f,   j_f+1, k_f+1, iv)
+             boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fhx + &
+                  fhy + fhz + boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv)
           end do
        end do
-    else                        ! Do not add
-       do k = 1, hnc
-          k_c = k + ix_offset(3)
-          k_f = 2 * k - 1
-          do j = 1, hnc
-             j_c = j + ix_offset(2)
-             j_f = 2 * j - 1
-             do i = 1, hnc
-                i_c = i + ix_offset(1)
-                i_f = 2 * i - 1
-
-                f0  = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c,   iv)
-                flx = 0.25_dp * boxes(p_id)%cc(i_c-1, j_c,   k_c,   iv)
-                fhx = 0.25_dp * boxes(p_id)%cc(i_c+1, j_c,   k_c,   iv)
-                fly = 0.25_dp * boxes(p_id)%cc(i_c,   j_c-1, k_c,   iv)
-                fhy = 0.25_dp * boxes(p_id)%cc(i_c,   j_c+1, k_c,   iv)
-                flz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c-1, iv)
-                fhz = 0.25_dp * boxes(p_id)%cc(i_c,   j_c,   k_c+1, iv)
-
-                boxes(id)%cc(i_f,   j_f,   k_f,   iv) = f0 + flx + fly + flz
-                boxes(id)%cc(i_f+1, j_f,   k_f,   iv) = f0 + fhx + fly + flz
-                boxes(id)%cc(i_f,   j_f+1, k_f,   iv) = f0 + flx + fhy + flz
-                boxes(id)%cc(i_f+1, j_f+1, k_f,   iv) = f0 + fhx + fhy + flz
-                boxes(id)%cc(i_f,   j_f,   k_f+1, iv) = f0 + flx + fly + fhz
-                boxes(id)%cc(i_f+1, j_f,   k_f+1, iv) = f0 + fhx + fly + fhz
-                boxes(id)%cc(i_f,   j_f+1, k_f+1, iv) = f0 + flx + fhy + fhz
-                boxes(id)%cc(i_f+1, j_f+1, k_f+1, iv) = f0 + fhx + fhy + fhz
-             end do
-          end do
-       end do
-    endif
+    end do
 #endif
   end subroutine a$D_prolong1_to
 
