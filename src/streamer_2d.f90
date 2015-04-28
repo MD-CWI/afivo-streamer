@@ -267,7 +267,7 @@ contains
 
     ! Initialize tree
     call a2_init(tree, box_size, n_var_cell, n_var_face, dr, &
-         coarsen_to=8, n_boxes = n_boxes_init)
+         coarsen_to=2, n_boxes = n_boxes_init)
 
     ! Set up geometry
     id             = 1          ! One box ...
@@ -407,10 +407,10 @@ contains
     alpha        = LT_get_col(td_tbl, i_alpha, max_fld)
 
     ! CFL condition
-    dt_cfl = dr_min / (mobility * max_fld)
+    dt_cfl = 0.7_dp * dr_min / (mobility * max_fld) ! Factor ~ sqrt(0.5)
 
     ! Diffusion condition
-    dt_dif = dr_min**2 / diff_coeff
+    dt_dif = 0.25_dp * dr_min**2 / diff_coeff
 
     ! Dielectric relaxation time
     dt_drt = UC_eps0 / (UC_elem_charge * max_mobility * max_dns)
@@ -420,6 +420,7 @@ contains
 
     get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), &
          dt_drt, dt_alpha, dt_max)
+
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -534,7 +535,6 @@ contains
           mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
           diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
           v_drift    = -mobility * boxes(id)%fx(i, j, f_fld)
-
           gradc = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
 
           if (v_drift < 0.0_dp) then
@@ -615,7 +615,7 @@ contains
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
-    real(dp)                    :: inv_dr, src, fld
+    real(dp)                    :: inv_dr, src, sflux, fld
     real(dp)                    :: alpha, eta, mobility
     integer                     :: i, j, nc
     type(LT_loc_t) :: loc
@@ -631,29 +631,28 @@ contains
           mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
           src = abs(mobility * fld) * (alpha-eta) * &
-               dt(1) * box%cc(i, j, i_elec)
+               box%cc(i, j, i_elec)
           if (photoi_enabled) &
-               src = src + dt(1) * box%cc(i,j, i_pho)
+               src = src + box%cc(i,j, i_pho)
 
-          box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + src
-          box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src
+          sflux = (box%fx(i, j, f_elec) - box%fx(i+1, j, f_elec) + &
+               box%fy(i, j, f_elec) - box%fy(i, j+1, f_elec)) * inv_dr
+
+          box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + (src + sflux) * dt(1)
+          box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src * dt(1)
        end do
     end do
 
-    box%cc(1:nc, 1:nc, i_elec) = box%cc(1:nc, 1:nc, i_elec) + dt(1) * ( &
-         (box%fx(1:nc, :, f_elec) - box%fx(2:nc+1, :, f_elec)) * inv_dr + &
-         (box%fy(:, 1:nc, f_elec) - box%fy(:, 2:nc+1, f_elec)) * inv_dr)
-
-    do j = 1, nc
-       do i = 1, nc
-          if (any([box%cc(i-1, j, i_lsf), box%cc(i+1, j, i_lsf), &
-               box%cc(i, j-1, i_lsf), box%cc(i, j+1, i_lsf), &
-               box%cc(i, j, i_lsf)] < 0)) then
-             box%cc(i, j, i_elec) = 0
-             box%cc(i, j, i_pion) = 0
-          end if
-       end do
-    end do
+    ! do j = 1, nc
+    !    do i = 1, nc
+    !       if (any([box%cc(i-1, j, i_lsf), box%cc(i+1, j, i_lsf), &
+    !            box%cc(i, j-1, i_lsf), box%cc(i, j+1, i_lsf), &
+    !            box%cc(i, j, i_lsf)] < 0)) then
+    !          box%cc(i, j, i_elec) = 0
+    !          box%cc(i, j, i_pion) = 0
+    !       end if
+    !    end do
+    ! end do
   end subroutine update_solution
 
   subroutine set_photoionization(tree, eta, num_photons)

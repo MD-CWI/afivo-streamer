@@ -410,10 +410,10 @@ contains
     alpha        = LT_get_col(td_tbl, i_alpha, max_fld)
 
     ! CFL condition
-    dt_cfl = dr_min / (mobility * max_fld)
+    dt_cfl = 0.7_dp * dr_min / (mobility * max_fld) ! factor ~ sqrt(0.5)
 
     ! Diffusion condition
-    dt_dif = dr_min**2 / diff_coeff
+    dt_dif = 0.25_dp * dr_min**2 / diff_coeff
 
     ! Dielectric relaxation time
     dt_drt = UC_eps0 / (UC_elem_charge * max_mobility * max_dns)
