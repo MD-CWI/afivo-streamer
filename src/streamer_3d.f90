@@ -6,6 +6,7 @@ program streamer_3d
   use m_lookup_table
   use m_config
   use m_random
+  use m_photons
 
   implicit none
 
@@ -82,7 +83,7 @@ program streamer_3d
   real(dp)         :: photoi_frac_O2     ! Oxygen fraction
   real(dp)         :: photoi_eta         ! Photoionization efficiency
   integer          :: photoi_num_photons ! Number of photons to use
-  type(LT_table_t) :: photoi_tbl         ! Table for photoionization
+  type(PH_tbl_t) :: photoi_tbl         ! Table for photoionization
 
   integer            :: i, n, n_steps
   integer            :: output_cnt
@@ -719,7 +720,6 @@ contains
   end subroutine update_solution
 
   subroutine set_photoionization(tree, eta, num_photons)
-    use m_photons
     use m_units_constants
 
     type(a3_t), intent(inout) :: tree
@@ -1013,7 +1013,6 @@ contains
 
   subroutine initialize(cfg)
     use m_transport_data
-    use m_photons
     use m_config
 
     type(CFG_t), intent(in) :: cfg
@@ -1060,8 +1059,10 @@ contains
     call CFG_get(cfg, "photoi_eta", photoi_eta)
     call CFG_get(cfg, "photoi_num_photons", photoi_num_photons)
 
-    if (photoi_enabled) &
-         photoi_tbl = PH_get_tbl_air(photoi_frac_O2 * gas_pressure)
+    if (photoi_enabled) then
+       call PH_get_tbl_air(photoi_tbl, photoi_frac_O2 * gas_pressure, &
+            2 * domain_len)
+    end if
 
   end subroutine initialize
 

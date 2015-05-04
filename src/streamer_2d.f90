@@ -6,6 +6,7 @@ program streamer_2d
   use m_lookup_table
   use m_config
   use m_random
+  use m_photons
 
   implicit none
 
@@ -82,7 +83,7 @@ program streamer_2d
   real(dp)          :: photoi_frac_O2     ! Oxygen fraction
   real(dp)          :: photoi_eta         ! Photoionization efficiency
   integer           :: photoi_num_photons ! Number of photons to use
-  type(LT_table_t)  :: photoi_tbl         ! Table for photoionization
+  type(PH_tbl_t)  :: photoi_tbl         ! Table for photoionization
 
   integer           :: i, n, n_steps
   integer           :: output_cnt
@@ -656,7 +657,6 @@ contains
   end subroutine update_solution
 
   subroutine set_photoionization(tree, eta, num_photons)
-    use m_photons
     use m_units_constants
 
     type(a2_t), intent(inout) :: tree
@@ -673,8 +673,8 @@ contains
     ! ionization rate.
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
-    call PH_set_src_2d(tree, photoi_tbl, sim_rng, 0.5_dp, &
-         num_photons, i_pho, i_pho)
+    call PH_set_src_2d(tree, photoi_tbl, sim_rng, &
+         num_photons, i_pho, i_pho, 0.6_dp, .false.)
 
   end subroutine set_photoionization
 
@@ -941,7 +941,6 @@ contains
 
   subroutine initialize(cfg)
     use m_transport_data
-    use m_photons
     use m_config
 
     type(CFG_t), intent(in) :: cfg
@@ -988,8 +987,10 @@ contains
     call CFG_get(cfg, "photoi_eta", photoi_eta)
     call CFG_get(cfg, "photoi_num_photons", photoi_num_photons)
 
-    if (photoi_enabled) &
-         photoi_tbl = PH_get_tbl_air(photoi_frac_O2 * gas_pressure)
+    if (photoi_enabled) then
+       call PH_get_tbl_air(photoi_tbl, photoi_frac_O2 * gas_pressure, &
+            2 * domain_len)
+    end if
 
   end subroutine initialize
 

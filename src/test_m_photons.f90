@@ -12,16 +12,16 @@ program test_m_photons
   real(dp) :: t1, t2
 
   type(RNG_t) :: rng
-  type(LT_table_t) :: tbl
+  type(PH_tbl_t) :: phtbl
 
   allocate(xyz_in(3, n_photons))
   allocate(xyz_out(3, n_photons))
 
-  tbl = PH_get_tbl_air(0.2_dp)
+  call PH_get_tbl_air(phtbl, 0.2_dp, 10e-3_dp)
   xyz_in = 0
 
   t1 = omp_get_wtime()
-  call PH_do_absorp(xyz_in, xyz_out, n_photons, tbl, rng)
+  call PH_do_absorp(xyz_in, xyz_out, n_photons, phtbl%tbl, rng)
   t2 = omp_get_wtime()
 
   print *, "time per photon", (t2-t1)/n_photons * 1e9_dp, "ns"
