@@ -9,16 +9,16 @@ program test_photoionization
   integer, parameter  :: dp           = kind(0.0d0)
   integer, parameter  :: box_size     = 8
   real(dp), parameter :: frac_O2      = 0.2_dp
-  real(dp), parameter :: gas_pressure = 1.0e-6_dp
+  real(dp), parameter :: gas_pressure = 1.0e0_dp
   real(dp), parameter :: domain_len   = 8e-3_dp
   real(dp), parameter :: dr           = domain_len / box_size
-  integer, parameter  :: num_photons  = 1000*1000
+  integer, parameter  :: num_photons  = 10*1000
 
   integer, parameter  :: i_src        = 1
   integer, parameter  :: i_pho        = 2
   integer, parameter  :: i_sol        = 3
 
-  real(dp), parameter :: grid_factor  = 0.6_dp
+  real(dp), parameter :: grid_factor  = 0.75_dp
   logical, parameter  :: use_const_dx = .false.
 
   type(a2_t)          :: tree

@@ -21,7 +21,7 @@ program test_m_photons
   xyz_in = 0
 
   t1 = omp_get_wtime()
-  call PH_do_absorp(xyz_in, xyz_out, n_photons, phtbl%tbl, rng)
+  call PH_do_absorp(xyz_in, xyz_out, 3, n_photons, phtbl%tbl, rng)
   t2 = omp_get_wtime()
 
   print *, "time per photon", (t2-t1)/n_photons * 1e9_dp, "ns"

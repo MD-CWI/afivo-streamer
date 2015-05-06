@@ -68,7 +68,6 @@ contains
        fsum(n) = fsum(n-1) + dF
        dist(n) = dist(n-1) + dF * drdF
        if (dist(n) > max_dist) exit
-       print *, n, dist(n), fsum(n)
     end do
 
     if (n > tbl_size + 10) &
@@ -167,7 +166,7 @@ contains
     type(LT_table_t), intent(in) :: tbl
     type(RNG_t), intent(inout)   :: rng
     integer                      :: n, n_procs, proc_id
-    real(dp)                     :: rr, dist, rsphere(3)
+    real(dp)                     :: rr, dist
     type(PRNG_t)                 :: prng
 
     !$omp parallel private(n, rr, dist, proc_id)
@@ -178,14 +177,27 @@ contains
 
     proc_id = 1+omp_get_thread_num()
 
-    !$omp do
-    do n = 1, n_photons
-       rr = prng%rngs(proc_id)%uni_01()
-       dist = LT_get_col(tbl, 1, rr)
-       rsphere = prng%rngs(proc_id)%sphere(dist)
-       xyz_out(1:n_dim, n) =  xyz_in(1:n_dim, n) + rsphere(1:n_dim)
-    end do
-    !$omp end do
+    if (n_dim == 2) then
+       !$omp do
+       do n = 1, n_photons
+          rr = prng%rngs(proc_id)%uni_01()
+          dist = LT_get_col(tbl, 1, rr)
+          xyz_out(1:n_dim, n) =  xyz_in(1:n_dim, n) + &
+               prng%rngs(proc_id)%circle(dist)
+       end do
+       !$omp end do
+    else if (n_dim == 3) then
+       !$omp do
+       do n = 1, n_photons
+          rr = prng%rngs(proc_id)%uni_01()
+          dist = LT_get_col(tbl, 1, rr)
+          xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
+       end do
+       !$omp end do
+    else
+       print *, "PH_do_absorp: unknown n_dim", n_dim
+       stop
+    end if
     !$omp end parallel
   end subroutine PH_do_absorp
 
