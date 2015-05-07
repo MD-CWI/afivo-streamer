@@ -122,7 +122,7 @@ contains
 
           if (cfg%vars(ix)%dyn_size) then
              ! Get the start and end positions of the line content, and the number of entries
-             call split_line_by_delims(line, " ,'"""//char(9), max_var_len, nEntries, startIxs, endIxs)
+             call get_fields_string(line, " ,'"""//char(9), max_var_len, nEntries, startIxs, endIxs)
 
              if (cfg%vars(ix)%p_size /= nEntries) then
                 call resize_storage(cfg, ix, cfg%vars(ix)%p_type, nEntries)
@@ -610,49 +610,48 @@ contains
 
   end subroutine ensure_free_storage
 
-  !> Routine to help read a variable number of entries from a line.
-  ! In arguments:
-  !  line           The line from which we want to read
-  !  delims         A string with delimiters. For example delims = " ,'"""//char(9)
-  !                 " ,'"""//char(9) = space, comma, single/real quotation marks, tab
-  !  nEntriesMax    Maximum number of entries to read in
-  !
-  ! Out arguments:
-  !  nEntries       Number of entries found
-  !  startIxs       On return, startIxs(i) holds the starting point of entry i
-  !  endIxs         On return, endIxs(i) holds the end point of entry i
-  subroutine split_line_by_delims(line, delims, nEntriesMax, nEntries, startIxs, endIxs)
-    character(len=*), intent(in)  :: line, delims
-    integer, intent(in)           :: nEntriesMax
-    integer, intent(inout)        :: nEntries, startIxs(nEntriesMax), endIxs(nEntriesMax)
+  !> Routine to find the indices of entries in a string
+  subroutine get_fields_string(line, delims, n_max, n_found, ixs_start, ixs_end)
+    !> The line from which we want to read
+    character(len=*), intent(in)  :: line
+    !> A string with delimiters. For example delims = " ,'"""//char(9)
+    character(len=*), intent(in)  :: delims
+    !> Maximum number of entries to read in
+    integer, intent(in)           :: n_max
+    !> Number of entries found
+    integer, intent(inout)        :: n_found
+    !> On return, startIxs(i) holds the starting point of entry i
+    integer, intent(inout)        :: ixs_start(n_max)
+    !> On return, endIxs(i) holds the end point of entry i
+    integer, intent(inout)        :: ixs_end(n_max)
 
-    integer                       :: ix, prevIx
+    integer                       :: ix, ix_prev
 
-    prevIx   = 0
-    nEntries = 0
+    ix_prev = 0
+    n_found = 0
 
-    do while (nEntries < nEntriesMax)
+    do while (n_found < n_max)
 
        ! Find the starting point of the next entry (a non-delimiter value)
-       ix                   = verify(line(prevIx+1:), delims)
-       if (ix == 0) exit                      ! No more entries
+       ix = verify(line(ix_prev+1:), delims)
+       if (ix == 0) exit
 
-       nEntries             = nEntries + 1
-       startIxs(nEntries)   = prevIx + ix     ! This is the absolute position in 'line'
+       n_found            = n_found + 1
+       ixs_start(n_found) = ix_prev + ix ! This is the absolute position in 'line'
 
        ! Get the end point of the current entry (next delimiter index minus one)
-       ix = scan(line(startIxs(nEntries)+1:), delims) - 1
+       ix = scan(line(ixs_start(n_found)+1:), delims) - 1
 
-       if (ix == -1) then                     ! If there is no last delimiter,
-          endIxs(nEntries)  = len(line)       ! the end of the line is the endpoint
+       if (ix == -1) then              ! If there is no last delimiter,
+          ixs_end(n_found) = len(line) ! the end of the line is the endpoint
        else
-          endIxs(nEntries)  = startIxs(nEntries) + ix
+          ixs_end(n_found) = ixs_start(n_found) + ix
        end if
 
-       prevIx = endIxs(nEntries)              ! We continue to search from here
+       ix_prev = ixs_end(n_found) ! We continue to search from here
     end do
 
-  end subroutine split_line_by_delims
+  end subroutine get_fields_string
 
   !> Sort the variables for faster lookup
   subroutine CFG_sort(cfg)
