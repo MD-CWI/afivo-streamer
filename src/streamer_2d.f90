@@ -483,31 +483,32 @@ contains
          0.25_dp * (box%fy(1:nc, 1:nc, f_fld) + box%fy(1:nc, 2:nc+1, f_fld))**2)
   end subroutine fld_from_pot
 
-  !> Modified implementation of Koren limiter, to avoid division or the min/max
+  !> Modified implementation of Koren limiter, to avoid division and the min/max
   !> functions, which can be problematic / expensive. In most literature, you
-  !> have r = ga / gb (ratio of gradients). Then the limiter phi(r) is
-  !> multiplied with gb. With this implementation, you get phi(r) * gb
-  elemental function koren_mlim(ga, gb)
-    real(dp), intent(in) :: ga  ! Density gradient (numerator)
-    real(dp), intent(in) :: gb  ! Density gradient (denominator)
+  !> have r = a / b (ratio of gradients). Then the limiter phi(r) is multiplied
+  !> with b. With this implementation, you get phi(r) * b
+  elemental function koren_mlim(a, b) result(bphi)
+    real(dp), intent(in) :: a  !< Density gradient (numerator)
+    real(dp), intent(in) :: b  !< Density gradient (denominator)
     real(dp), parameter  :: sixth = 1/6.0_dp
-    real(dp)             :: koren_mlim, t1, t2
+    real(dp)             :: bphi, aa, ab
 
-    t1 = ga * ga                ! Two temporary variables,
-    t2 = ga * gb                ! so that we do not need sign()
+    aa = a * a
+    ab = a * b
 
-    if (t2 <= 0) then
-       ! ga and gb have different sign: local minimum/maximum
-       koren_mlim = 0
-    else if (t1 >= 2.5_dp * t2) then
-       ! (1+2*ga/gb)/6 => 1, limiter has value 1
-       koren_mlim = gb
-    else if (t1 > 0.25_dp * t2) then
-       ! 1 > ga/gb > 1/4, limiter has value (1+2*ga/gb)/6
-       koren_mlim = sixth * (gb + 2*ga)
+    if (ab <= 0) then
+       ! a and b have different sign or one of them is zero, so r is either 0,
+       ! inf or negative (special case a == b == 0 is ignored)
+       bphi = 0
+    else if (aa <= 0.25_dp * ab) then
+       ! 0 < a/b <= 1/4, limiter has value a/b
+       bphi = a
+    else if (aa <= 2.5_dp * ab) then
+       ! 1/4 < a/b <= 2.5, limiter has value (1+2*a/b)/6
+       bphi = sixth * (b + 2*a)
     else
-       ! 0 < ga/gb < 1/4, limiter has value ga/gb
-       koren_mlim = ga
+       ! (1+2*a/b)/6 >= 1, limiter has value 1
+       bphi = b
     end if
   end function koren_mlim
 
@@ -674,7 +675,7 @@ contains
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
     call PH_set_src_2d(tree, photoi_tbl, sim_rng, &
-         num_photons, i_pho, i_pho, 0.6_dp, .false.)
+         num_photons, i_pho, i_pho, 0.6_dp, .false., .false.)
 
   end subroutine set_photoionization
 

@@ -9,17 +9,19 @@ program test_photoionization
   integer, parameter  :: dp           = kind(0.0d0)
   integer, parameter  :: box_size     = 8
   real(dp), parameter :: frac_O2      = 0.2_dp
-  real(dp), parameter :: gas_pressure = 1.0e0_dp
   real(dp), parameter :: domain_len   = 8e-3_dp
   real(dp), parameter :: dr           = domain_len / box_size
-  integer, parameter  :: num_photons  = 10*1000
+  integer, parameter  :: num_photons  = 50*1000
 
   integer, parameter  :: i_src        = 1
   integer, parameter  :: i_pho        = 2
   integer, parameter  :: i_sol        = 3
 
-  real(dp), parameter :: grid_factor  = 0.75_dp
-  logical, parameter  :: use_const_dx = .false.
+  real(dp) :: gas_pressure = 1.0e-3_dp
+  real(dp) :: grid_factor  = 0.3_dp
+  logical  :: use_const_dx = .false.
+  logical  :: use_cyl      = .false.
+  integer  :: rng_seed(4)  = [234, 45, 843, 234]
 
   type(a2_t)          :: tree
   type(ref_info_t)    :: ref_info
@@ -31,9 +33,25 @@ program test_photoionization
   integer             :: nb_list(4, 1) ! Neighbors of initial boxes
   real(dp)            :: sum_pho
 
-  character(len=100) :: fname
+  character(len=100) :: fname, tmp
   character(len=10)  :: cc_names(3) = &
        [character(len=10) :: "src", "pho", "sol"]
+
+  if (command_argument_count() < 4) &
+       stop "Need 4 arguments: pressure grid_fac const_dx cylindrical"
+  call get_command_argument(1, tmp)
+  read(tmp, *) gas_pressure
+  call get_command_argument(2, tmp)
+  read(tmp, *) grid_factor
+  call get_command_argument(3, tmp)
+  read(tmp, *) use_const_dx
+  call get_command_argument(4, tmp)
+  read(tmp, *) use_cyl
+
+  if (command_argument_count() > 4) then
+     call get_command_argument(5, tmp)
+     read(tmp, *) rng_seed(1)
+  end if
 
   call PH_get_tbl_air(photoi_tbl, frac_O2 * gas_pressure, 2 * domain_len)
 
@@ -54,9 +72,10 @@ program test_photoionization
      if (ref_info%n_add == 0) exit
   end do
 
+  call sim_rng%set_seed(rng_seed)
   call set_photoionization(tree, num_photons)
-  write(fname, "(A,I0,A,L1,I0,A)") "pho_", nint(1e6_dp * gas_pressure), "_", &
-       use_const_dx, nint(100 * grid_factor), ".silo"
+  write(fname, "(A,I0,A,L1,L1,I0,A)") "pho_", nint(1e3_dp * gas_pressure), "_", &
+       use_const_dx, use_cyl, nint(100 * grid_factor), ".silo"
   call a2_write_silo(tree, fname, &
        cc_names, 0, 0.0_dp)
   call a2_tree_sum_cc(tree, i_pho, sum_pho, .true.)
@@ -87,7 +106,7 @@ contains
 
     call a2_loop_box_arg(tree, set_photoi_rate, [1.0_dp], .true.)
     call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_src, i_pho, grid_factor, use_const_dx)
+         i_src, i_pho, grid_factor, use_const_dx, use_cyl)
 
   end subroutine set_photoionization
 
@@ -104,15 +123,20 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
-          xy_rel = xy - 0.5_dp * domain_len
+          xy_rel = xy - [0.0_dp, 0.5_dp * domain_len]
           r = norm2(xy_rel)
           if (r < box%dr) then
-             box%cc(i, j, i_src) = 0.25_dp * coeff(1) / box%dr**2
+             box%cc(i, j, i_src) = 0.5_dp * coeff(1) / box%dr**2
           else
              box%cc(i, j, i_src) = 0.0_dp
           end if
-          box%cc(i, j, i_sol) = coeff(1) / (2 * pi * r) * &
-               PH_absfunc_air(r, gas_pressure * frac_O2)
+          if (use_cyl) then
+             box%cc(i, j, i_sol) = coeff(1) / (4 * pi * r**2) * &
+                  PH_absfunc_air(r, gas_pressure * frac_O2)
+          else
+             box%cc(i, j, i_sol) = coeff(1) / (2 * pi * r) * &
+                  PH_absfunc_air(r, gas_pressure * frac_O2)
+          end if
        end do
     end do
   end subroutine set_photoi_rate

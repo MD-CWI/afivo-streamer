@@ -202,7 +202,7 @@ contains
   end subroutine PH_do_absorp
 
   subroutine PH_set_src_2d(tree, pi_tbl, rng, num_photons, &
-       i_src, i_pho, fac_dx, const_dx)
+       i_src, i_pho, fac_dx, const_dx, use_cyl)
     use m_random
     use m_afivo_2d
     use m_lookup_table
@@ -221,15 +221,18 @@ contains
     real(dp), intent(in)       :: fac_dx
     !> Use constant grid spacing or variable
     logical, intent(in)        :: const_dx
+    !> Use cylindrical coordinates
+    logical, intent(in)        :: use_cyl
 
     integer                     :: lvl, ix, id, nc, min_lvl
     integer                     :: i, j, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
-    real(dp)                    :: r_create, dr, fac, dist
+    real(dp)                    :: n_float, dr, fac, dist, r(3)
     real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
+    real(dp), parameter :: pi = acos(-1.0_dp)
     type(PRNG_t)                :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
 
@@ -248,7 +251,8 @@ contains
 
     ! Now loop over all leaves and create photons using random numbers
 
-    !$omp parallel private(lvl, ix, id, i, j, dr, i_ph, proc_id, r_create, n_create)
+    !$omp parallel private(lvl, ix, id, i, j, n, r, dr, i_ph, proc_id, &
+    !$omp n_float, n_create)
 
     !$omp single
     n_procs = omp_get_num_threads()
@@ -265,10 +269,10 @@ contains
 
           do j = 1, nc
              do i = 1, nc
-                r_create = fac * tree%boxes(id)%cc(i, j, i_src) * dr**2
-                n_create = floor(r_create)
+                n_float = fac * tree%boxes(id)%cc(i, j, i_src) * dr**2
+                n_create = floor(n_float)
 
-                if (prng%rngs(proc_id)%uni_01() < r_create - n_create) &
+                if (prng%rngs(proc_id)%uni_01() < n_float - n_create) &
                      n_create = n_create + 1
 
                 if (n_create > 0) then
@@ -277,9 +281,12 @@ contains
                    n_used = n_used + n_create
                    !$omp end critical
 
+                   ! Location of production
+                   r(1:2) = a2_r_cc(tree%boxes(id), [i, j])
+                   r(3) = 0
+
                    do n = 1, n_create
-                      xyz_src(1:2, i_ph+n) = a2_r_cc(tree%boxes(id), [i, j])
-                      xyz_src(3, i_ph+n) = 0
+                      xyz_src(:, i_ph+n) = r
                    end do
                 end if
              end do
@@ -292,8 +299,21 @@ contains
     allocate(xyz_dst(3, n_used))
     allocate(ph_loc(n_used))
 
-    ! Get location of absorbption
-    call PH_do_absorp(xyz_src, xyz_dst, 2, n_used, pi_tbl%tbl, rng)
+
+    if (use_cyl) then
+       ! Get location of absorbption
+       call PH_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
+
+       !$omp do
+       do n = 1, n_used
+          ! Set x coordinate to radius (norm of 1st and 3rd coord.)
+          xyz_dst(1, n) = sqrt(xyz_dst(1, n)**2 + xyz_dst(3, n)**2)
+       end do
+       !$omp end do
+    else
+       ! Get location of absorbption
+       call PH_do_absorp(xyz_src, xyz_dst, 2, n_used, pi_tbl%tbl, rng)
+    end if
 
     if (const_dx) then
        ! Get a typical length scale for the absorption of photons
@@ -337,17 +357,32 @@ contains
     !$omp end parallel
 
     ! Add photons to production rate. Currently, this is done sequentially.
-    do n = 1, n_used
-       id = ph_loc(n)%id
-       if (id > a5_no_box) then
-          i = ph_loc(n)%ix(1)
-          j = ph_loc(n)%ix(2)
-          dr = tree%boxes(id)%dr
-          tree%boxes(id)%cc(i, j, i_pho) = &
-               tree%boxes(id)%cc(i, j, i_pho) + &
-               pi_tbl%frac_in_tbl/(fac * dr**2)
-       end if
-    end do
+    if (use_cyl) then
+       do n = 1, n_used
+          id = ph_loc(n)%id
+          if (id > a5_no_box) then
+             i = ph_loc(n)%ix(1)
+             j = ph_loc(n)%ix(2)
+             dr = tree%boxes(id)%dr
+             r(1:2) = a2_r_cc(tree%boxes(id), [i, j])
+             tree%boxes(id)%cc(i, j, i_pho) = &
+                  tree%boxes(id)%cc(i, j, i_pho) + &
+                  pi_tbl%frac_in_tbl/(fac * dr**2 * 2 * pi * r(1))
+          end if
+       end do
+    else
+       do n = 1, n_used
+          id = ph_loc(n)%id
+          if (id > a5_no_box) then
+             i = ph_loc(n)%ix(1)
+             j = ph_loc(n)%ix(2)
+             dr = tree%boxes(id)%dr
+             tree%boxes(id)%cc(i, j, i_pho) = &
+                  tree%boxes(id)%cc(i, j, i_pho) + &
+                  pi_tbl%frac_in_tbl/(fac * dr**2)
+          end if
+       end do
+    end if
 
     ! Set ghost cells on highest level with photon source
 
@@ -399,7 +434,7 @@ contains
     integer                     :: i, j, k, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
-    real(dp)                    :: r_create, dr, fac, sum_production, pi_lengthscale
+    real(dp)                    :: n_float, dr, fac, sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
     type(PRNG_t)                :: prng
@@ -427,7 +462,7 @@ contains
 
     ! Now loop over all leaves and create photons using random numbers
 
-    !$omp parallel private(lvl, ix, id, i, j, dr, i_ph, proc_id, r_create, n_create)
+    !$omp parallel private(lvl, ix, id, i, j, dr, i_ph, proc_id, n_float, n_create)
     !$omp single
     n_procs = omp_get_num_threads()
     call prng%init(n_procs, rng)
@@ -445,10 +480,10 @@ contains
              do j = 1, nc
                 do i = 1, nc
                    tmp = tmp + fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
-                   r_create = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
-                   n_create = floor(r_create)
+                   n_float = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
+                   n_create = floor(n_float)
 
-                   if (prng%rngs(proc_id)%uni_01() < r_create - n_create) &
+                   if (prng%rngs(proc_id)%uni_01() < n_float - n_create) &
                         n_create = n_create + 1
 
                    if (n_create > 0) then
