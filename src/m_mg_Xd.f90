@@ -110,6 +110,7 @@ module m_mg_$Dd
   public :: mg$D_box_gsrb_lpl
   public :: mg$D_box_corr_lpl
   public :: mg$D_box_rstr_lpl
+  public :: mg$D_sides_rb
 
   ! Methods for Laplacian with jump in coefficient between boxes
   public :: mg$D_box_lpld
@@ -142,7 +143,7 @@ contains
     if (mg%n_cycle_base < 0)           mg%n_cycle_base = 2
 
     ! Check whether methods are set, otherwise use default (for laplacian)
-    if (.not. associated(mg%sides_rb)) mg%sides_rb => a$D_sides_extrap
+    if (.not. associated(mg%sides_rb)) mg%sides_rb => mg$D_sides_rb
     if (.not. associated(mg%box_op))   mg%box_op => mg$D_box_lpl
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg$D_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg$D_box_corr_lpl
@@ -240,6 +241,106 @@ contains
        !$omp end parallel
     end if
   end subroutine mg$D_fas_vcycle
+
+  !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
+  !>
+  !> Basically, we extrapolate from the fine cells to a corner point, and then
+  !> take the average between this corner point and a coarse neighbor to fill
+  !> ghost cells for the fine cells.
+  subroutine mg$D_sides_rb(boxes, id, nb, iv)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
+    integer                     :: nc, ix, dix, i, di, j, dj
+#if $D == 3
+    integer                     :: k, dk
+#endif
+
+    nc = boxes(id)%n_cell
+
+    if (a$D_nb_low(nb)) then
+       ix = 1
+       dix = 1
+    else
+       ix = nc
+       dix = -1
+    end if
+
+    call a$D_prolong0_to_gc(boxes, id, iv, nb)
+
+    select case (a$D_nb_dim(nb))
+#if $D == 2
+    case (1)
+       i = ix
+       di = dix
+       do j = 1, nc
+          dj = -1 + 2 * iand(j, 1)
+          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
+               + boxes(id)%cc(i, j+dj, iv))
+       end do
+    case (2)
+       j = ix
+       dj = dix
+       do i = 1, nc
+          di = -1 + 2 * iand(i, 1)
+          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
+               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
+               + boxes(id)%cc(i, j+dj, iv))
+       end do
+#elif $D == 3
+    case (1)
+       i = ix
+       di = dix
+       do k = 1, nc
+          dk = -1 + 2 * iand(k, 1)
+          do j = 1, nc
+             dj = -1 + 2 * iand(j, 1)
+
+             boxes(id)%cc(i-di, j, k, iv) = &
+                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j+dj, k, iv) + &
+                  boxes(id)%cc(i, j, k+dk, iv))
+          end do
+       end do
+    case (2)
+       j = ix
+       dj = dix
+       do k = 1, nc
+          dk = -1 + 2 * iand(k, 1)
+          do i = 1, nc
+             di = -1 + 2 * iand(i, 1)
+
+             boxes(id)%cc(i, j-dj, k, iv) = &
+                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j+dj, k, iv) + &
+                  boxes(id)%cc(i, j, k+dk, iv))
+          end do
+       end do
+    case (3)
+       k = ix
+       dk = dix
+       do j = 1, nc
+          dj = -1 + 2 * iand(j, 1)
+          do i = 1, nc
+             di = -1 + 2 * iand(i, 1)
+
+             boxes(id)%cc(i, j, k-dk, iv) = &
+                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j+dj, k, iv) + &
+                  boxes(id)%cc(i, j, k+dk, iv))
+          end do
+       end do
+#endif
+    end select
+  end subroutine mg$D_sides_rb
 
   subroutine fill_gc_phi(boxes, ids, mg)
     type(box$D_t), intent(inout) :: boxes(:)

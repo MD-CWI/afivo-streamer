@@ -123,8 +123,9 @@ module m_afivo_$Dd
      integer               :: n_cell    !< number of cells per dimension
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box
+     integer               :: coord_t   !< Coordinate type (e.g. Cartesian)
      class(*), pointer     :: ud=>null() !< User data (can be anything)
-#if $D   == 2
+#if $D == 2
      real(dp), allocatable :: cc(:, :, :) !< cell centered variables
      real(dp), allocatable :: fx(:, :, :) !< x-face centered variables
      real(dp), allocatable :: fy(:, :, :) !< y-face centered variables
@@ -153,6 +154,7 @@ module m_afivo_$Dd
      integer                    :: n_cell     !< number of cells per dimension
      integer                    :: n_var_cell !< number of cc variables
      integer                    :: n_var_face !< number of fc variables
+     integer                    :: coord_t    !< Type of coordinates
      real(dp)                   :: r_base($D) !< coords of box at index (1,1)
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
@@ -258,7 +260,7 @@ contains
 
   !> Initialize a $Dd tree type.
   subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, &
-       dr, r_min, lvls_max, n_boxes, coarsen_to)
+       dr, r_min, lvls_max, n_boxes, coarsen_to, coord)
     type(a$D_t), intent(out)        :: tree       !< The tree to initialize
     integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
     integer, intent(in)            :: n_var_cell !< Number of cell-centered variables
@@ -273,22 +275,27 @@ contains
     integer, intent(in), optional  :: lvls_max
     !> Allocate initial storage for n_boxes. Default is 100
     integer, intent(in), optional  :: n_boxes
+    integer, intent(in), optional  :: coord
 
     integer                        :: lvls_max_a, n_boxes_a, coarsen_to_a
     real(dp)                       :: r_min_a($D)
-    integer                        :: lvl, min_lvl
+    integer                        :: lvl, min_lvl, coord_a
 
     ! Set default arguments if not present
     lvls_max_a = 30;   if (present(lvls_max)) lvls_max_a = lvls_max
     n_boxes_a = 100;   if (present(n_boxes)) n_boxes_a = n_boxes
     coarsen_to_a = -1; if (present(coarsen_to)) coarsen_to_a = coarsen_to
     r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
+    coord_a = a5_xyz;  if (present(coord)) coord_a = coord
 
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a$D_init: n_cell should be even"
     if (n_var_cell <= 0)  stop "a$D_init: n_var_cell should be > 0"
-    if (n_boxes_a <= 0)     stop "a$D_init: n_boxes should be > 0"
-    if (lvls_max_a <= 0)     stop "a$D_init: lvls_max should be > 0"
+    if (n_boxes_a <= 0)   stop "a$D_init: n_boxes should be > 0"
+    if (lvls_max_a <= 0)  stop "a$D_init: lvls_max should be > 0"
+#if $D == 3
+    if (coord_a == a5_cyl) stop "a$D_init: cannot have 3d cyl coords"
+#endif
 
     allocate(tree%boxes(n_boxes_a))
 
@@ -319,6 +326,7 @@ contains
     tree%lvls_max        = lvls_max_a
     tree%max_id          = 0
     tree%max_lvl         = 0
+    tree%coord_t         = coord_a
   end subroutine a$D_init
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
@@ -380,6 +388,7 @@ contains
           tree%boxes(id)%dr          = tree%dr_base * 0.5_dp**(lvl-1)
           tree%boxes(id)%r_min       = (ix - 1) * tree%dr_base * tree%n_cell
           tree%boxes(id)%n_cell      = tree%n_cell / (2**(1-lvl))
+          tree%boxes(id)%coord_t     = tree%coord_t
 
           tree%boxes(id)%parent      = a5_no_box
           tree%boxes(id)%children(:) = a5_no_box ! Gets overwritten, see below
@@ -1146,6 +1155,7 @@ contains
        boxes(c_id)%children  = a5_no_box
        boxes(c_id)%neighbors = a5_no_box
        boxes(c_id)%n_cell    = boxes(id)%n_cell
+       boxes(c_id)%coord_t   = boxes(id)%coord_t
        boxes(c_id)%dr        = 0.5_dp * boxes(id)%dr
        boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
             a$D_ch_dix(:,i) * boxes(id)%n_cell
@@ -1256,6 +1266,15 @@ contains
     real(dp)                 :: r($D)
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_r_cc
+
+  !> Get the coordinate i_dim of the cell center with index cc_ix
+  pure function a$D_coord_cc(box, cc_ix, i_dim) result(r)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)      :: cc_ix
+    integer, intent(in)      :: i_dim
+    real(dp)                 :: r
+    r = box%r_min(i_dim) + (cc_ix-0.5_dp) * box%dr
+  end function a$D_coord_cc
 
   !> Get a general location with real index cc_ix (like a$D_r_cc).
   pure function a$D_rr_cc(box, cc_ix) result(r)
@@ -1439,41 +1458,63 @@ contains
     cc_min = my_min
   end subroutine a$D_tree_min_cc
 
-  !> Find sum of cc(..., iv). Only loop over leaves, and ghost cells
+  !> Find weighted sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
-  subroutine a$D_tree_sum_cc(tree, iv, cc_sum, times_dv)
-    type(a$D_t), intent(in) :: tree
-    integer, intent(in)    :: iv
-    real(dp), intent(out)  :: cc_sum
-    logical, intent(in)    :: times_dv
-    real(dp)               :: tmp, my_sum, fac
-    integer                :: i, id, lvl, nc
+  subroutine a$D_tree_sum_cc(tree, iv, cc_sum)
+      type(a$D_t), intent(in) :: tree
+      integer, intent(in)    :: iv
+      real(dp), intent(out)  :: cc_sum
+      real(dp)               :: tmp, my_sum, fac
+      integer                :: i, id, lvl, nc
 
-    my_sum = 0
-    fac = 1
+      my_sum = 0
 
-    !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp) &
-    !$omp firstprivate(fac)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
-       if (times_dv) fac = a$D_lvl_dr(tree, lvl)**$D
+      !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp, fac)
+      do lvl = lbound(tree%lvls, 1), tree%max_lvl
+         fac = a$D_lvl_dr(tree, lvl)**$D
 
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          nc = tree%boxes(id)%n_cell
+         !$omp do
+         do i = 1, size(tree%lvls(lvl)%leaves)
+            id = tree%lvls(lvl)%leaves(i)
+            nc = tree%boxes(id)%n_cell
 #if $D == 2
-          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+            if (tree%coord_t == a5_cyl) then
+               tmp = sum_2pr_box(tree%boxes(id), iv)
+            else
+               tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+            end if
 #elif $D == 3
-          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+            tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
 #endif
-          my_sum = my_sum + fac * tmp
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
+            my_sum = my_sum + fac * tmp
+         end do
+         !$omp end do
+      end do
+      !$omp end parallel
 
-    cc_sum = my_sum
-  end subroutine a$D_tree_sum_cc
+      cc_sum = my_sum
+
+#if $D == 2
+    contains
+
+      ! Sum of 2 * pi * r * values
+      pure function sum_2pr_box(box, iv) result(res)
+        type(box2_t), intent(in) :: box
+        integer, intent(in)      :: iv
+        real(dp), parameter      :: twopi = 2 * acos(-1.0_dp)
+        real(dp)                 :: res
+        integer                  :: j, nc
+
+        res = 0
+        nc  = box%n_cell
+
+        do j = 1, nc
+           res = res + sum(box%cc(1:nc, j, iv)) * a2_coord_cc(box, j, 2)
+        end do
+        res = res * twopi
+      end function sum_2pr_box
+#endif
+    end subroutine a$D_tree_sum_cc
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
@@ -1851,7 +1892,9 @@ contains
     integer, intent(in), optional :: i_to         !< Destination (if /= iv)
     integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
     integer                       :: hnc, ix_offset($D)
-#if $D == 3
+#if $D == 2
+    real(dp)                      :: r, dr16, rfac
+#elif $D == 3
     integer                       :: k, k_f, k_c
 #endif
 
@@ -1865,16 +1908,36 @@ contains
     end if
 
 #if $D == 2
-    do j = 1, hnc
-       j_c = ix_offset(2) + j
-       j_f = 2 * j - 1
-       do i = 1, hnc
-          i_c = ix_offset(1) + i
-          i_f = 2 * i - 1
-          box_p%cc(i_c, j_c, i_dest) = 0.25_dp * &
-               sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
+    if (box_p%coord_t == a5_cyl) then
+       dr16 = 0.0625_dp * box_p%dr   ! (dr / 4) / 4
+       do j = 1, hnc
+          j_c = ix_offset(2) + j
+          j_f = 2 * j - 1
+
+          ! The weight of cells is proportional to their radius.
+          r = a$D_coord_cc(box_p, j_c, 2)
+          rfac = dr16 / r
+
+          do i = 1, hnc
+             i_c = ix_offset(1) + i
+             i_f = 2 * i - 1
+             box_p%cc(i_c, j_c, i_dest) = &
+                  (0.25_dp - rfac) * sum(box_c%cc(i_f, j_f:j_f+1, iv)) + &
+                  (0.25_dp + rfac) * sum(box_c%cc(i_f+1, j_f:j_f+1, iv))
+          end do
        end do
-    end do
+    else
+       do j = 1, hnc
+          j_c = ix_offset(2) + j
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = ix_offset(1) + i
+             i_f = 2 * i - 1
+             box_p%cc(i_c, j_c, i_dest) = 0.25_dp * &
+                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
+          end do
+       end do
+    endif
 #elif $D == 3
     do k = 1, hnc
        k_c = ix_offset(3) + k
@@ -2074,106 +2137,6 @@ contains
     end select
 
   end subroutine a$D_sides_interp
-
-  !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
-  !>
-  !> Basically, we extrapolate from the fine cells to a corner point, and then
-  !> take the average between this corner point and a coarse neighbor to fill
-  !> ghost cells for the fine cells.
-  subroutine a$D_sides_extrap(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, dix, i, di, j, dj
-#if $D == 3
-    integer                     :: k, dk
-#endif
-
-    nc = boxes(id)%n_cell
-
-    if (a$D_nb_low(nb)) then
-       ix = 1
-       dix = 1
-    else
-       ix = nc
-       dix = -1
-    end if
-
-    call a$D_prolong0_to_gc(boxes, id, iv, nb)
-
-    select case (a$D_nb_dim(nb))
-#if $D == 2
-    case (1)
-       i = ix
-       di = dix
-       do j = 1, nc
-          dj = -1 + 2 * iand(j, 1)
-          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
-               + boxes(id)%cc(i, j+dj, iv))
-       end do
-    case (2)
-       j = ix
-       dj = dix
-       do i = 1, nc
-          di = -1 + 2 * iand(i, 1)
-          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
-               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
-               + boxes(id)%cc(i, j+dj, iv))
-       end do
-#elif $D == 3
-    case (1)
-       i = ix
-       di = dix
-       do k = 1, nc
-          dk = -1 + 2 * iand(k, 1)
-          do j = 1, nc
-             dj = -1 + 2 * iand(j, 1)
-
-             boxes(id)%cc(i-di, j, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
-                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
-                  boxes(id)%cc(i, j+dj, k, iv) + &
-                  boxes(id)%cc(i, j, k+dk, iv))
-          end do
-       end do
-    case (2)
-       j = ix
-       dj = dix
-       do k = 1, nc
-          dk = -1 + 2 * iand(k, 1)
-          do i = 1, nc
-             di = -1 + 2 * iand(i, 1)
-
-             boxes(id)%cc(i, j-dj, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
-                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
-                  boxes(id)%cc(i, j+dj, k, iv) + &
-                  boxes(id)%cc(i, j, k+dk, iv))
-          end do
-       end do
-    case (3)
-       k = ix
-       dk = dix
-       do j = 1, nc
-          dj = -1 + 2 * iand(j, 1)
-          do i = 1, nc
-             di = -1 + 2 * iand(i, 1)
-
-             boxes(id)%cc(i, j, k-dk, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
-                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
-                  boxes(id)%cc(i, j+dj, k, iv) + &
-                  boxes(id)%cc(i, j, k+dk, iv))
-          end do
-       end do
-#endif
-    end select
-  end subroutine a$D_sides_extrap
 
   ! This fills ghost cells near physical boundaries using Neumann zero
   subroutine a$D_bc_neumann(boxes, id, nb, iv)

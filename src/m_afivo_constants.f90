@@ -23,8 +23,14 @@ module m_afivo_constants
   !> Special value indicating there is no box
   integer, parameter :: a5_no_box = 0
 
-  ! Each box contains a tag, for which bits can be set. This is the initial
-  ! value, which should not be used by the user
+  !> Each box contains a tag, for which bits can be set. This is the initial
+  !> value, which should not be used by the user
   integer, parameter :: a5_init_tag = -huge(1)
+
+  !> Default coordinate system
+  integer, parameter :: a5_xyz = 0
+
+  !> Cylindrical coordinate system
+  integer, parameter :: a5_cyl = 1
 
 end module m_afivo_constants
