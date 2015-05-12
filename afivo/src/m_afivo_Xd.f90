@@ -16,6 +16,10 @@ module m_afivo_$Dd
   integer, parameter, private :: dp = kind(0.0d0)
 
 #if $D == 2
+  ! For cylindrical coordinates
+  integer, parameter :: a2_r_dim = 1
+  integer, parameter :: a2_z_dim = 2
+
   ! Children (same location as **corners**)
   integer, parameter :: a2_num_children = 4
   integer, parameter :: a2_ch_lxly = 1
@@ -1267,14 +1271,15 @@ contains
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_r_cc
 
-  !> Get the coordinate i_dim of the cell center with index cc_ix
-  pure function a$D_coord_cc(box, cc_ix, i_dim) result(r)
+#if $D == 2
+  !> Get the radius of the cell center with index cc_ix
+  pure function a$D_cyl_radius_cc(box, cc_ix) result(r)
     type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: cc_ix
-    integer, intent(in)      :: i_dim
+    integer, intent(in)      :: cc_ix($D)
     real(dp)                 :: r
-    r = box%r_min(i_dim) + (cc_ix-0.5_dp) * box%dr
-  end function a$D_coord_cc
+    r = box%r_min(a2_r_dim) + (cc_ix(a2_r_dim)-0.5_dp) * box%dr
+  end function a$D_cyl_radius_cc
+#endif
 
   !> Get a general location with real index cc_ix (like a$D_r_cc).
   pure function a$D_rr_cc(box, cc_ix) result(r)
@@ -1461,60 +1466,62 @@ contains
   !> Find weighted sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
   subroutine a$D_tree_sum_cc(tree, iv, cc_sum)
-      type(a$D_t), intent(in) :: tree
-      integer, intent(in)    :: iv
-      real(dp), intent(out)  :: cc_sum
-      real(dp)               :: tmp, my_sum, fac
-      integer                :: i, id, lvl, nc
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: iv
+    real(dp), intent(out)  :: cc_sum
+    real(dp)               :: tmp, my_sum, fac
+    integer                :: i, id, lvl, nc
 
-      my_sum = 0
+    my_sum = 0
 
-      !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp, fac)
-      do lvl = lbound(tree%lvls, 1), tree%max_lvl
-         fac = a$D_lvl_dr(tree, lvl)**$D
+    !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp, fac)
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       fac = a$D_lvl_dr(tree, lvl)**$D
 
-         !$omp do
-         do i = 1, size(tree%lvls(lvl)%leaves)
-            id = tree%lvls(lvl)%leaves(i)
-            nc = tree%boxes(id)%n_cell
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          nc = tree%boxes(id)%n_cell
 #if $D == 2
-            if (tree%coord_t == a5_cyl) then
-               tmp = sum_2pr_box(tree%boxes(id), iv)
-            else
-               tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
-            end if
+          if (tree%coord_t == a5_cyl) then
+             tmp = sum_2pr_box(tree%boxes(id), iv)
+          else
+             tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+          end if
 #elif $D == 3
-            tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
 #endif
-            my_sum = my_sum + fac * tmp
-         end do
-         !$omp end do
-      end do
-      !$omp end parallel
+          my_sum = my_sum + fac * tmp
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
 
-      cc_sum = my_sum
+    cc_sum = my_sum
 
 #if $D == 2
-    contains
+  contains
 
-      ! Sum of 2 * pi * r * values
-      pure function sum_2pr_box(box, iv) result(res)
-        type(box2_t), intent(in) :: box
-        integer, intent(in)      :: iv
-        real(dp), parameter      :: twopi = 2 * acos(-1.0_dp)
-        real(dp)                 :: res
-        integer                  :: j, nc
+    ! Sum of 2 * pi * r * values
+    pure function sum_2pr_box(box, iv) result(res)
+      type(box2_t), intent(in) :: box
+      integer, intent(in)      :: iv
+      real(dp), parameter      :: twopi = 2 * acos(-1.0_dp)
+      real(dp)                 :: res
+      integer                  :: i, j, nc
 
-        res = 0
-        nc  = box%n_cell
+      res = 0
+      nc  = box%n_cell
 
-        do j = 1, nc
-           res = res + sum(box%cc(1:nc, j, iv)) * a2_coord_cc(box, j, 2)
-        end do
-        res = res * twopi
-      end function sum_2pr_box
+      do j = 1, nc
+         do i = 1, nc
+            res = res + box%cc(i, j, iv) * a2_cyl_radius_cc(box, [i, j])
+         end do
+      end do
+      res = res * twopi
+    end function sum_2pr_box
 #endif
-    end subroutine a$D_tree_sum_cc
+  end subroutine a$D_tree_sum_cc
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
@@ -1910,17 +1917,18 @@ contains
 #if $D == 2
     if (box_p%coord_t == a5_cyl) then
        dr16 = 0.0625_dp * box_p%dr   ! (dr / 4) / 4
+
        do j = 1, hnc
           j_c = ix_offset(2) + j
           j_f = 2 * j - 1
-
-          ! The weight of cells is proportional to their radius.
-          r = a$D_coord_cc(box_p, j_c, 2)
-          rfac = dr16 / r
-
           do i = 1, hnc
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
+
+             ! The weight of cells is proportional to their radius.
+             r = a2_cyl_radius_cc(box_p, [i, j])
+             rfac = dr16 / r
+
              box_p%cc(i_c, j_c, i_dest) = &
                   (0.25_dp - rfac) * sum(box_c%cc(i_f, j_f:j_f+1, iv)) + &
                   (0.25_dp + rfac) * sum(box_c%cc(i_f+1, j_f:j_f+1, iv))
@@ -2969,3 +2977,4 @@ contains
   end subroutine a$D_write_silo
 
 end module m_afivo_$Dd
+
