@@ -2181,6 +2181,41 @@ contains
     end select
   end subroutine a$D_bc_neumann
 
+    !> This fills ghost cells near physical boundaries using Dirichlet zero
+  subroutine a$D_bc_dirichlet(boxes, id, nb, iv)
+    type(box$D_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, iv
+    integer                     :: nc
+
+    nc = boxes(id)%n_cell
+
+    select case (nb)
+#if $D == 2
+    case (a2_nb_lx)
+       boxes(id)%cc(0, 1:nc, iv) = -boxes(id)%cc(1, 1:nc, iv)
+    case (a2_nb_hx)
+       boxes(id)%cc(nc+1, 1:nc, iv) = -boxes(id)%cc(nc, 1:nc, iv)
+    case (a2_nb_ly)
+       boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
+    case (a2_nb_hy)
+       boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
+#elif $D == 3
+    case (a3_nb_lx)
+       boxes(id)%cc(0, 1:nc, 1:nc, iv) = -boxes(id)%cc(1, 1:nc, 1:nc, iv)
+    case (a3_nb_hx)
+       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = -boxes(id)%cc(nc, 1:nc, 1:nc, iv)
+    case (a3_nb_ly)
+       boxes(id)%cc(1:nc, 0, 1:nc, iv) = -boxes(id)%cc(1:nc, 1, 1:nc, iv)
+    case (a3_nb_hy)
+       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = -boxes(id)%cc(1:nc, nc, 1:nc, iv)
+    case (a3_nb_lz)
+       boxes(id)%cc(1:nc, 1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1:nc, 1, iv)
+    case (a3_nb_hz)
+       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, 1:nc, nc, iv)
+#endif
+    end select
+  end subroutine a$D_bc_dirichlet
+
   !> Fill values on the side of a box from a neighbor nb
   subroutine sides_from_nb(box, box_nb, nb, iv)
     type(box$D_t), intent(inout) :: box    !< Box on which to fill ghost cells
