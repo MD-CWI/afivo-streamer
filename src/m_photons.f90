@@ -75,7 +75,7 @@ contains
 
     ! Scale table to lie between 0 and 1
     phtbl%frac_in_tbl = fsum(n-1)
-    fsum(1:n) = fsum(1:n-1) / fsum(n-1)
+    fsum(1:n-1) = fsum(1:n-1) / fsum(n-1)
 
     phtbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
     call LT_set_col(phtbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
@@ -113,12 +113,15 @@ contains
     real(dp)             :: r
     real(dp), parameter  :: c0 = 3.5_dp / UC_torr_to_bar
     real(dp), parameter  :: c1 = 200 / UC_torr_to_bar
+    real(dp), parameter  :: eps = epsilon(1.0_dp)
 
     r = p_O2 * dist
-    if (r * (c0 + c1) < epsilon(1.0_dp)) then
+    if (r * (c0 + c1) < eps) then
        ! Use limit
        PH_absfunc_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
             * p_O2 / log(c1/c0)
+    else if (r * c0 > -log(eps)) then
+       PH_absfunc_air = eps
     else
        PH_absfunc_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
     end if
@@ -228,11 +231,11 @@ contains
     integer                     :: i, j, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
-    real(dp)                    :: n_float, dr, fac, dist, r(3)
+    real(dp)                    :: tmp, dr, fac, dist, r(3)
     real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
-    real(dp), parameter :: pi = acos(-1.0_dp)
+    real(dp), parameter         :: pi = acos(-1.0_dp)
     type(PRNG_t)                :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
 
@@ -242,17 +245,17 @@ contains
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
 
     ! Compute the sum of photon production
-    call a2_tree_sum_cc(tree, i_src, sum_production, .true.)
+    call a2_tree_sum_cc(tree, i_src, sum_production)
 
     ! Create approximately num_photons
     fac    = num_photons / max(sum_production, epsilon(1.0_dp))
     n_used = 0
-    ! print *, "num photons / sum", num_photons, sum_production
+    print *, "num photons / sum", num_photons, sum_production
 
     ! Now loop over all leaves and create photons using random numbers
 
     !$omp parallel private(lvl, ix, id, i, j, n, r, dr, i_ph, proc_id, &
-    !$omp n_float, n_create)
+    !$omp tmp, n_create)
 
     !$omp single
     n_procs = omp_get_num_threads()
@@ -269,10 +272,17 @@ contains
 
           do j = 1, nc
              do i = 1, nc
-                n_float = fac * tree%boxes(id)%cc(i, j, i_src) * dr**2
-                n_create = floor(n_float)
+                if (tree%boxes(id)%coord_t == a5_cyl) then
+                   tmp = a2_coord_cc(tree%boxes(id), j, 2)
+                   tmp = fac * 2 * pi * tmp * &
+                        tree%boxes(id)%cc(i, j, i_src) * dr**2
+                else
+                   tmp = fac * tree%boxes(id)%cc(i, j, i_src) * dr**2
+                end if
 
-                if (prng%rngs(proc_id)%uni_01() < n_float - n_create) &
+                n_create = floor(tmp)
+
+                if (prng%rngs(proc_id)%uni_01() < tmp - n_create) &
                      n_create = n_create + 1
 
                 if (n_create > 0) then
@@ -434,12 +444,11 @@ contains
     integer                     :: i, j, k, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
-    real(dp)                    :: n_float, dr, fac, sum_production, pi_lengthscale
+    real(dp)                    :: tmp, dr, fac, sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
     type(PRNG_t)                :: prng
     type(a3_loc_t), allocatable :: ph_loc(:)
-    real(dp) :: tmp
 
     nc = tree%n_cell
 
@@ -454,7 +463,7 @@ contains
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
 
     ! Compute the sum of photon production
-    call a3_tree_sum_cc(tree, i_src, sum_production, .true.)
+    call a3_tree_sum_cc(tree, i_src, sum_production)
 
     ! Create approximately num_photons
     fac    = num_photons / max(sum_production, epsilon(1.0_dp))
@@ -462,7 +471,7 @@ contains
 
     ! Now loop over all leaves and create photons using random numbers
 
-    !$omp parallel private(lvl, ix, id, i, j, dr, i_ph, proc_id, n_float, n_create)
+    !$omp parallel private(lvl, ix, id, i, j, dr, i_ph, proc_id, tmp, n_create)
     !$omp single
     n_procs = omp_get_num_threads()
     call prng%init(n_procs, rng)
@@ -480,10 +489,10 @@ contains
              do j = 1, nc
                 do i = 1, nc
                    tmp = tmp + fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
-                   n_float = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
-                   n_create = floor(n_float)
+                   tmp = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
+                   n_create = floor(tmp)
 
-                   if (prng%rngs(proc_id)%uni_01() < n_float - n_create) &
+                   if (prng%rngs(proc_id)%uni_01() < tmp - n_create) &
                         n_create = n_create + 1
 
                    if (n_create > 0) then

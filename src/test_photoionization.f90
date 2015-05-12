@@ -53,11 +53,19 @@ program test_photoionization
      read(tmp, *) rng_seed(1)
   end if
 
+  print *, "Gas pressure (bar):", gas_pressure
+  print *, "Fraction oxygen:   ", frac_O2
+  
   call PH_get_tbl_air(photoi_tbl, frac_O2 * gas_pressure, 2 * domain_len)
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, &
-       dr=dr, n_boxes = 25*1000)
+  if (use_cyl) then
+     call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, &
+          dr=dr, n_boxes=25*1000, coord=a5_cyl)
+  else
+     call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, &
+          dr=dr, n_boxes=25*1000)
+  end if
 
   ! Set up geometry
   id             = 1          ! One box ...
@@ -78,9 +86,9 @@ program test_photoionization
        use_const_dx, use_cyl, nint(100 * grid_factor), ".silo"
   call a2_write_silo(tree, fname, &
        cc_names, 0, 0.0_dp)
-  call a2_tree_sum_cc(tree, i_pho, sum_pho, .true.)
+  call a2_tree_sum_cc(tree, i_pho, sum_pho)
   print *, "Sum photoionization", sum_pho
-  call a2_tree_sum_cc(tree, i_sol, sum_pho, .true.)
+  call a2_tree_sum_cc(tree, i_sol, sum_pho)
   print *, "Sum solution", sum_pho
 
 contains
@@ -125,17 +133,26 @@ contains
           xy = a2_r_cc(box, [i,j])
           xy_rel = xy - [0.0_dp, 0.5_dp * domain_len]
           r = norm2(xy_rel)
-          if (r < box%dr) then
-             box%cc(i, j, i_src) = 0.5_dp * coeff(1) / box%dr**2
-          else
-             box%cc(i, j, i_src) = 0.0_dp
-          end if
+
           if (use_cyl) then
              box%cc(i, j, i_sol) = coeff(1) / (4 * pi * r**2) * &
                   PH_absfunc_air(r, gas_pressure * frac_O2)
+
+             if (r < box%dr) then
+                box%cc(i, j, i_src) = 0.5_dp * coeff(1) / &
+                     (2 * pi * (0.5_dp * box%dr) * box%dr**2)
+             else
+                box%cc(i, j, i_src) = 0.0_dp
+             end if
           else
              box%cc(i, j, i_sol) = coeff(1) / (2 * pi * r) * &
                   PH_absfunc_air(r, gas_pressure * frac_O2)
+
+             if (r < box%dr) then
+                box%cc(i, j, i_src) = 0.5_dp * coeff(1) / box%dr**2
+             else
+                box%cc(i, j, i_src) = 0.0_dp
+             end if
           end if
        end do
     end do

@@ -790,7 +790,7 @@ contains
           call a3_gc_box_sides(tree%boxes, id, i_pion, &
                a3_sides_interp, a3_bc_neumann)
           call a3_gc_box_sides(tree%boxes, id, i_phi, &
-               a3_sides_extrap, sides_bc_pot)
+               mg3_sides_rb, sides_bc_pot)
        end do
        !$omp end do
     end do

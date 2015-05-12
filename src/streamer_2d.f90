@@ -729,7 +729,7 @@ contains
           call a2_gc_box_sides(tree%boxes, id, i_pion, &
                a2_sides_interp, a2_bc_neumann)
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
-               a2_sides_extrap, sides_bc_pot)
+               mg2_sides_rb, sides_bc_pot)
        end do
        !$omp end do
     end do
