@@ -159,7 +159,7 @@ module m_afivo_$Dd
      integer                    :: n_var_cell !< number of cc variables
      integer                    :: n_var_face !< number of fc variables
      integer                    :: coord_t    !< Type of coordinates
-     real(dp)                   :: r_base($D) !< coords of box at index (1,1)
+     real(dp)                   :: r_base($D) !< min. coords of box at index (1,1)
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
