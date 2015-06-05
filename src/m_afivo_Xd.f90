@@ -1619,7 +1619,7 @@ contains
   end subroutine a$D_prolong0_to
 
   !> Partial prolongation to the ghost cells of box id from parent
-  subroutine a$D_prolong0_to_gc(boxes, id, iv, nb)
+  subroutine a$D_sides_prolong0(boxes, id, nb, iv)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
@@ -1633,7 +1633,7 @@ contains
     hi(nb_dim) = a$D_nb_hi01(nb) * (boxes(id)%n_cell+1)
 
     call a$D_prolong0_to(boxes, id, iv, lo, hi)
-  end subroutine a$D_prolong0_to_gc
+  end subroutine a$D_sides_prolong0
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
@@ -2450,8 +2450,10 @@ contains
 #if $D == 2
     case (1)
        do ic = 1, n_chnb
+          ! Get index of child adjacent to neighbor
           i_ch = a2_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
+          ! Index offset of child w.r.t. parent
           ioff = nch*a2_ch_dix(:, i_ch)
           boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) = 0.5_dp * ( &
                boxes(c_id)%fx(i, 1:nc:2, f_ixs) + &

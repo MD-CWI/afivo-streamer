@@ -267,7 +267,7 @@ contains
        dix = -1
     end if
 
-    call a$D_prolong0_to_gc(boxes, id, iv, nb)
+    call a$D_sides_prolong0(boxes, id, nb, iv)
 
     select case (a$D_nb_dim(nb))
 #if $D == 2

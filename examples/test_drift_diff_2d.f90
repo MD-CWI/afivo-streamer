@@ -83,6 +83,8 @@ program test_drift_diff
         call a2_tree_max_cc(tree, i_err, p_err)
         call a2_tree_min_cc(tree, i_err, n_err)
         print *, "max error", max(p_err, abs(n_err))
+        call a2_tree_sum_cc(tree, i_phi, p_err)
+        print *, "sum phi", p_err
      end if
 
      if (time > end_time) exit
@@ -92,7 +94,7 @@ program test_drift_diff
         ! Forward Euler
         do n = 1, n_steps
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-           ! call a2_consistent_fluxes(tree, [1])
+           call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
@@ -106,7 +108,7 @@ program test_drift_diff
            ! Two forward Euler steps over dt
            do i = 1, 2
               call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-              ! call a2_consistent_fluxes(tree, [1])
+              call a2_consistent_fluxes(tree, [1])
               call a2_loop_box_arg(tree, update_solution, [dt])
               call a2_restrict_tree(tree, i_phi)
               call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
