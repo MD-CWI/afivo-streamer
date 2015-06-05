@@ -10,7 +10,7 @@ dt_amr = 1e-11
 sim_name = test2d
 end_time = 40e-9
 photoi_enabled = t
-photoi_frac_O2 = 0.2
+photoi_frac_O2 = 0.05
 photoi_eta = 5e-2
 photoi_num_photons = 20000
 

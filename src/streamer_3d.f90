@@ -161,7 +161,7 @@ program streamer_3d
   time       = 0          ! Simulation time (all times are in s)
 
   ! Set up the initial conditions
-  do i = 1, 20
+  do
      call a3_loop_box(tree, set_init_cond)
      call a3_restrict_tree(tree, i_rhs)
      call compute_fld(tree, 2 * n_fmg_cycles)
@@ -209,7 +209,7 @@ program streamer_3d
         ! Two forward Euler steps over dt
         do i = 1, 2
            ! First calculate fluxes
-           call a3_loop_boxes(tree, fluxes_koren, .true.)
+           call a3_loop_boxes_arg(tree, fluxes_koren, [dt], .true.)
 
            call compute_fld(tree, n_fmg_cycles)
 
@@ -367,7 +367,7 @@ contains
              ! if (xyz(1) < 0.25_dp .or. &
              !      (xyz(3) > 0.875_dp .or. xyz(3) < 0.125_dp)) then
              if (xyz(1) < 0.5_dp .and. xyz(1) > 0.375_dp) then
-                box%cc(i, j, k, i_eps) = 10.0_dp
+                box%cc(i, j, k, i_eps) = 1.5_dp
              else
                 box%cc(i, j, k, i_eps) = 1.0_dp
              end if
@@ -564,10 +564,12 @@ contains
   end function koren_mlim
 
   ! Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_koren(boxes, id)
+  subroutine fluxes_koren(boxes, id, dt_vec)
+    use m_units_constants
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp)                    :: inv_dr, tmp, gradp, gradc, gradn
+    real(dp), intent(in)        :: dt_vec(:)
+    real(dp)                    :: fac, inv_dr, tmp, gradp, gradc, gradn
     real(dp)                    :: fld_avg, mobility, diff_coeff, v_drift
     real(dp)                    :: gc_data(boxes(id)%n_cell, &
          boxes(id)%n_cell, a3_num_neighbors)
@@ -576,6 +578,7 @@ contains
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+    fac    = 0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
     call a3_gc2_box_sides(boxes, id, i_elec, a3_sides2_prolong1, &
          sides_bc2_dens, gc_data, nc)
@@ -603,6 +606,8 @@ contains
                 gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
                 boxes(id)%fx(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
+                if (boxes(id)%fx(i, j, k, f_elec) < -fac * fld_avg) &
+                     boxes(id)%fx(i, j, k, f_elec) = -fac * fld_avg
              else                  ! v_drift > 0
                 if (i == 1) then
                    tmp = gc_data(j, k, a3_nb_lx)
@@ -612,6 +617,8 @@ contains
                 gradp = boxes(id)%cc(i-1, j, k, i_elec) - tmp
                 boxes(id)%fx(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i-1, j, k, i_elec) + koren_mlim(gradc, gradp))
+                if (boxes(id)%fx(i, j, k, f_elec) > fac * fld_avg) &
+                     boxes(id)%fx(i, j, k, f_elec) = fac * fld_avg
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -644,6 +651,8 @@ contains
                 gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
                 boxes(id)%fy(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
+                if (boxes(id)%fy(i, j, k, f_elec) < -fac * fld_avg) &
+                     boxes(id)%fy(i, j, k, f_elec) = -fac * fld_avg
              else                  ! v_drift > 0
                 if (j == 1) then
                    tmp = gc_data(i, k, a3_nb_ly)
@@ -653,6 +662,8 @@ contains
                 gradp = boxes(id)%cc(i, j-1, k, i_elec) - tmp
                 boxes(id)%fy(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j-1, k, i_elec) + koren_mlim(gradc, gradp))
+                if (boxes(id)%fy(i, j, k, f_elec) > fac * fld_avg) &
+                     boxes(id)%fy(i, j, k, f_elec) = fac * fld_avg
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -685,6 +696,8 @@ contains
                 gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
                 boxes(id)%fz(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
+                if (boxes(id)%fz(i, j, k, f_elec) < -fac * fld_avg) &
+                     boxes(id)%fz(i, j, k, f_elec) = -fac * fld_avg
              else                  ! v_drift > 0
                 if (k == 1) then
                    tmp = gc_data(i, j, a3_nb_lz)
@@ -694,6 +707,8 @@ contains
                 gradp = boxes(id)%cc(i, j, k-1, i_elec) - tmp
                 boxes(id)%fz(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k-1, i_elec) + koren_mlim(gradc, gradp))
+                if (boxes(id)%fz(i, j, k, f_elec) > fac * fld_avg) &
+                     boxes(id)%fz(i, j, k, f_elec) = fac * fld_avg
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -720,7 +735,7 @@ contains
     type(box3_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, fld
-    real(dp)                    :: alpha, eta, mobility
+    real(dp)                    :: alpha, eta, sflux, dflux(3)
     integer                     :: i, j, k, nc
     type(LT_loc_t) :: loc
 
@@ -733,15 +748,23 @@ contains
              loc      = LT_get_loc(td_tbl, fld)
              alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
              eta      = LT_get_col_at_loc(td_tbl, i_eta, loc)
-             mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
 
-             src = abs(mobility * fld) * (alpha-eta) * &
-                  dt(1) * box%cc(i, j, k, i_elec)
+             dflux(1) = box%fx(i, j, k, f_elec) + box%fx(i+1, j, k, f_elec)
+             dflux(2) = box%fy(i, j, k, f_elec) + box%fy(i, j+1, k, f_elec)
+             dflux(3) = box%fz(i, j, k, f_elec) + box%fz(i, j, k+1, f_elec)
+             src = 0.5_dp * norm2(dflux) * (alpha - eta)
+
              if (photoi_enabled) &
-                  src = src + dt(1) * box%cc(i, j, k, i_pho)
+                  src = src + box%cc(i, j, k, i_pho)
 
-             box%cc(i, j, k, i_elec) = box%cc(i, j, k, i_elec) + src
-             box%cc(i, j, k, i_pion) = box%cc(i, j, k, i_pion) + src
+             sflux = (box%fx(i, j, k, f_elec) - box%fx(i+1, j, k, f_elec) + &
+                  box%fy(i, j, k, f_elec) - box%fy(i, j+1, k, f_elec) + &
+                  box%fz(i, j, k, f_elec) - box%fz(i, j, k+1, f_elec)) * inv_dr
+
+             box%cc(i, j, k, i_elec) = &
+                  box%cc(i, j, k, i_elec) + (src + sflux) * dt(1)
+             box%cc(i, j, k, i_pion) = &
+                  box%cc(i, j, k, i_pion) + src * dt(1)
           end do
        end do
     end do
@@ -751,19 +774,17 @@ contains
          (box%fy(:, 1:nc, :, f_elec) - box%fy(:, 2:nc+1, :, f_elec)) * inv_dr + &
          (box%fz(:, :, 1:nc, f_elec) - box%fz(:, :, 2:nc+1, f_elec)) * inv_dr)
 
-    ! do k = 1, nc
-    !    do j = 1, nc
-    !       do i = 1, nc
-    !          if (any([box%cc(i-1, j, k, i_lsf), box%cc(i+1, j, k, i_lsf), &
-    !               box%cc(i, j-1, k, i_lsf), box%cc(i, j+1, k, i_lsf), &
-    !               box%cc(i, j, k-1, i_lsf), box%cc(i, j, k+1, i_lsf), &
-    !               box%cc(i, j, k, i_lsf)] < 0)) then
-    !             box%cc(i, j, k, i_elec) = 0
-    !             box%cc(i, j, k, i_pion) = 0
-    !          end if
-    !       end do
-    !    end do
-    ! end do
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             if (box%cc(i, j, k, i_eps) > 1.0_dp) then
+                box%cc(i, j, k, i_pion) = box%cc(i, j, k, i_pion) - &
+                     box%cc(i, j, k, i_elec)
+                box%cc(i, j, k, i_elec) = 0
+             end if
+          end do
+       end do
+    end do
   end subroutine update_solution
 
   subroutine set_photoionization(tree, eta, num_photons)
@@ -783,7 +804,7 @@ contains
     ! ionization rate.
     call a3_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
     call PH_set_src_3d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_pho, i_pho, 0.4_dp, .true.)
+         i_pho, i_pho, 0.6_dp, .false.)
 
   end subroutine set_photoionization
 

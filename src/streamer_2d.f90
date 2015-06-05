@@ -365,7 +365,7 @@ contains
           xy = a2_r_cc(box, [i,j]) / domain_len
 
           if (xy(1) < 0.5_dp .and. xy(1) > 0.375_dp) then
-             box%cc(i, j, i_eps) = 1.5_dp
+             box%cc(i, j, i_eps) = 2.0_dp
           else
              box%cc(i, j, i_eps) = 1.0_dp
           end if
@@ -438,7 +438,7 @@ contains
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
     get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), &
-         dt_drt, dt_alpha, dt_max)
+         dt_alpha, dt_max)
     print *, max_fld, dt_cfl, dt_drt, dt_alpha
   end function get_max_dt
 
@@ -544,7 +544,7 @@ contains
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    fac    = UC_eps0 / (UC_elem_charge * dt_vec(1))
+    fac    = 0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
     call a2_gc2_box_sides(boxes, id, i_elec, a2_sides2_prolong1, &
          sides_bc2_dens, gc_data, nc)
@@ -569,7 +569,8 @@ contains
              gradn = tmp - boxes(id)%cc(i, j, i_elec)
              boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-             ! if (boxes(id)%fx(i, j, f_elec) > 
+             if (boxes(id)%fx(i, j, f_elec) < -fac * fld_avg) &
+                  boxes(id)%fx(i, j, f_elec) = -fac * fld_avg
           else                  ! v_drift > 0
              if (i == 1) then
                 tmp = gc_data(j, a2_nb_lx)
@@ -579,6 +580,8 @@ contains
              gradp = boxes(id)%cc(i-1, j, i_elec) - tmp
              boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i-1, j, i_elec) + koren_mlim(gradc, gradp))
+             if (boxes(id)%fx(i, j, f_elec) > fac * fld_avg) &
+                  boxes(id)%fx(i, j, f_elec) = fac * fld_avg
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -608,6 +611,8 @@ contains
              gradn = tmp - boxes(id)%cc(i, j, i_elec)
              boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
+             if (boxes(id)%fy(i, j, f_elec) < -fac * fld_avg) &
+                  boxes(id)%fy(i, j, f_elec) = -fac * fld_avg
           else                  ! v_drift > 0
              if (j == 1) then
                 tmp = gc_data(i, a2_nb_ly)
@@ -617,6 +622,8 @@ contains
              gradp = boxes(id)%cc(i, j-1, i_elec) - tmp
              boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j-1, i_elec) + koren_mlim(gradc, gradp))
+             if (boxes(id)%fy(i, j, f_elec) > fac * fld_avg) &
+                  boxes(id)%fy(i, j, f_elec) = fac * fld_avg
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -640,7 +647,7 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, sflux, fld
-    real(dp)                    :: alpha, eta, mobility, avg_flux(2)
+    real(dp)                    :: alpha, eta, dflux(2)
     integer                     :: i, j, nc
     type(LT_loc_t) :: loc
 
@@ -653,12 +660,12 @@ contains
           alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
           eta      = LT_get_col_at_loc(td_tbl, i_eta, loc)
           ! mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
-
           ! src = abs(mobility * fld) * (alpha-eta) * &
           !      box%cc(i, j, i_elec)
-          avg_flux(1) = 0.5_dp * (box%fx(i, j, f_elec) + box%fx(i+1, j, f_elec))
-          avg_flux(2) = 0.5_dp * (box%fy(i, j, f_elec) + box%fy(i, j+1, f_elec))
-          src = norm2(avg_flux) * (alpha - eta)
+
+          dflux(1) = box%fx(i, j, f_elec) + box%fx(i+1, j, f_elec)
+          dflux(2) = box%fy(i, j, f_elec) + box%fy(i, j+1, f_elec)
+          src = 0.5_dp * norm2(dflux) * (alpha - eta)
 
           if (photoi_enabled) &
                src = src + box%cc(i,j, i_pho)
