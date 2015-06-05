@@ -584,20 +584,33 @@ contains
   end subroutine a$D_loop_boxes
 
   !> Call procedure for each id in tree, giving the list of boxes
-  subroutine a$D_loop_boxes_arg(tree, my_procedure, rarg)
+  subroutine a$D_loop_boxes_arg(tree, my_procedure, rarg, leaves_only)
     type(a$D_t), intent(inout)    :: tree
     procedure(a$D_subr_boxes_arg) :: my_procedure
     real(dp), intent(in)         :: rarg(:)
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
     integer                      :: lvl, i, id
+
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call my_procedure(tree%boxes, id, rarg)
-       end do
-       !$omp end do
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             call my_procedure(tree%boxes, id, rarg)
+          end do
+          !$omp end do
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             call my_procedure(tree%boxes, id, rarg)
+          end do
+          !$omp end do
+       end if
     end do
     !$omp end parallel
   end subroutine a$D_loop_boxes_arg
