@@ -220,7 +220,7 @@ contains
     integer, intent(in)        :: i_src
     !> Output variable that contains photoionization source rate
     integer, intent(in)        :: i_pho
-    !> Use dx smaller than pi_tbl at this value
+    !> Use dx proportional to this value
     real(dp), intent(in)       :: fac_dx
     !> Use constant grid spacing or variable
     logical, intent(in)        :: const_dx
@@ -250,7 +250,6 @@ contains
     ! Create approximately num_photons
     fac    = num_photons / max(sum_production, epsilon(1.0_dp))
     n_used = 0
-    print *, "num photons / sum", num_photons, sum_production
 
     ! Now loop over all leaves and create photons using random numbers
 
@@ -395,15 +394,13 @@ contains
     end if
 
     ! Set ghost cells on highest level with photon source
-
-    !$omp parallel private(lvl, i, id)
-
     if (const_dx) then
        min_lvl = pho_lvl
     else
        min_lvl = 1
     end if
 
+    !$omp parallel private(lvl, i, id)
     ! Prolong to finer grids
     do lvl = min_lvl, tree%max_lvl-1
        !$omp do
@@ -424,14 +421,15 @@ contains
     !$omp end parallel
   end subroutine PH_set_src_2d
 
-  subroutine PH_set_src_3d(tree, pi_tbl, rng, num_photons, i_src, i_pho)
+  subroutine PH_set_src_3d(tree, pi_tbl, rng, num_photons, &
+       i_src, i_pho, fac_dx, const_dx)
     use m_random
     use m_afivo_3d
     use m_lookup_table
     use omp_lib
 
     type(a3_t), intent(inout)   :: tree   !< Tree
-    type(PH_tbl_t)            :: pi_tbl !< Table to sample abs. lenghts
+    type(PH_tbl_t)              :: pi_tbl !< Table to sample abs. lenghts
     type(RNG_t), intent(inout)  :: rng    !< Random number generator
     !> How many discrete photons to use
     integer, intent(in)         :: num_photons
@@ -439,25 +437,23 @@ contains
     integer, intent(in)         :: i_src
     !> Output variable that contains photoionization source rate
     integer, intent(in)         :: i_pho
+    !> Use dx proportional to this value
+    real(dp), intent(in)        :: fac_dx
+    !> Use constant grid spacing or variable
+    logical, intent(in)         :: const_dx
 
     integer                     :: lvl, ix, id, nc
     integer                     :: i, j, k, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
-    integer                     :: pho_lvl
-    real(dp)                    :: tmp, dr, fac, sum_production, pi_lengthscale
+    integer                     :: pho_lvl, min_lvl
+    real(dp)                    :: tmp, dr, fac, dist
+    real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_dst(:, :)
     type(PRNG_t)                :: prng
     type(a3_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
-
-    ! Get a typical length scale for the absorption of photons
-    pi_lengthscale = LT_get_col(pi_tbl%tbl, 1, 0.5_dp)
-
-    ! Determine at which level we estimate the photoionization source term. This
-    ! depends on the typical lenght scale for absorption.
-    pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
 
     ! Allocate a bit more space because of stochastic production
     allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
@@ -471,7 +467,8 @@ contains
 
     ! Now loop over all leaves and create photons using random numbers
 
-    !$omp parallel private(lvl, ix, id, i, j, dr, i_ph, proc_id, tmp, n_create)
+    !$omp parallel private(lvl, ix, id, i, j, k, n, dr, i_ph, &
+    !$omp proc_id, tmp, n_create)
     !$omp single
     n_procs = omp_get_num_threads()
     call prng%init(n_procs, rng)
@@ -520,11 +517,31 @@ contains
     ! Get location of absorbption
     call PH_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
 
-    !$omp parallel do
-    do n = 1, n_used
-       ph_loc(n) = a3_get_loc(tree, xyz_dst(1:2, n), pho_lvl)
-    end do
-    !$omp end parallel do
+    if (const_dx) then
+       ! Get a typical length scale for the absorption of photons
+       pi_lengthscale = LT_get_col(pi_tbl%tbl, 1, fac_dx)
+
+       ! Determine at which level we estimate the photoionization source term. This
+       ! depends on the typical lenght scale for absorption.
+       pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
+
+       !$omp parallel do
+       do n = 1, n_used
+          ph_loc(n) = a3_get_loc(tree, xyz_dst(:, n), pho_lvl)
+       end do
+       !$omp end parallel do
+    else
+       !$omp parallel private(n, dist, lvl, proc_id)
+       proc_id = 1+omp_get_thread_num()
+       !$omp do
+       do n = 1, n_used
+          dist = norm2(xyz_dst(:, n) - xyz_src(:, n))
+          lvl = get_rlvl_length(tree%dr_base, fac_dx * dist, prng%rngs(proc_id))
+          ph_loc(n) = a3_get_loc(tree, xyz_dst(:, n), lvl)
+       end do
+       !$omp end do
+       !$omp end parallel
+    end if
 
     ! Clear variable i_pho, in which we will store the photoionization source term
 
@@ -548,17 +565,21 @@ contains
           k = ph_loc(n)%ix(3)
           dr = tree%boxes(id)%dr
           tree%boxes(id)%cc(i, j, k, i_pho) = &
-               tree%boxes(id)%cc(i, j, k, i_pho) + 1/(fac * dr**3)
+               tree%boxes(id)%cc(i, j, k, i_pho) + &
+               pi_tbl%frac_in_tbl/(fac * dr**3)
        end if
     end do
 
     ! Set ghost cells on highest level with photon source
-
+    if (const_dx) then
+       min_lvl = pho_lvl
+    else
+       min_lvl = 1
+    end if
 
     !$omp parallel private(lvl, i, id)
-
     ! Prolong to finer grids
-    do lvl = pho_lvl, tree%max_lvl-1
+    do lvl = min_lvl, tree%max_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
@@ -570,13 +591,11 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_prolong1_from(tree%boxes, id, i_pho)
+          call a3_prolong1_from(tree%boxes, id, i_pho, add=.true.)
        end do
        !$omp end do
     end do
     !$omp end parallel
-
-
   end subroutine PH_set_src_3d
 
 end module m_photons

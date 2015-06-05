@@ -14,7 +14,7 @@ program streamer_3d
   integer, parameter :: name_len = 200
 
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 10
+  integer, parameter :: n_var_cell = 9
   integer, parameter :: i_elec     = 1 ! Electron density
   integer, parameter :: i_pion     = 2 ! Positive ion density
   integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
@@ -23,11 +23,10 @@ program streamer_3d
   integer, parameter :: i_fld      = 6 ! Electric field norm
   integer, parameter :: i_rhs      = 7 ! Source term Poisson
   integer, parameter :: i_pho      = 8 ! Phototionization rate
-  integer, parameter :: i_lsf      = 9 ! Level set function
-  integer, parameter :: i_bval     = 10 ! Boundary value
+  integer, parameter :: i_eps      = 9 ! Dielectric perm.
   character(len=10)  :: cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "pho", "lsf", "bval"]
+       "pion_old", "phi", "fld", "rhs", "pho", "eps"]
 
   ! Indices of face-centered variables
   integer, parameter :: n_var_face = 2
@@ -124,8 +123,6 @@ program streamer_3d
      prev_name = tmp_name
   end do
 
-  call initialize(sim_cfg)
-
   call CFG_get(sim_cfg, "end_time", end_time)
   call CFG_get(sim_cfg, "box_size", box_size)
   call CFG_get(sim_cfg, "output_dir", output_dir)
@@ -135,6 +132,7 @@ program streamer_3d
   call CFG_get(sim_cfg, "dt_amr", dt_amr)
   call CFG_get(sim_cfg, "dt_max", dt_max)
 
+  call initialize(sim_cfg)
   call get_init_cond(sim_cfg, init_cond)
   call get_elec_cfg(sim_cfg, elec)
 
@@ -145,8 +143,7 @@ program streamer_3d
   mg%i_phi        = i_phi
   mg%i_tmp        = i_fld
   mg%i_rhs        = i_rhs
-  mg%i_lsf        = i_lsf
-  mg%i_bval       = i_bval
+  mg%i_eps        = i_eps
 
   ! The number of cycles at the lowest level
   mg%n_cycle_base = 8
@@ -298,13 +295,13 @@ contains
 
     if (boxes(id)%dr * alpha < 0.1_dp) then
        if (max_dns > 1e17_dp) then
-          if (boxes(id)%dr < 1.0e-5_dp) ref_flags(id) = a5_rm_ref
+          if (boxes(id)%dr < 1.0e-4_dp) ref_flags(id) = a5_rm_ref
        else
-          if (boxes(id)%dr < 2.5e-5_dp) ref_flags(id) = a5_rm_ref
+          if (boxes(id)%dr < 2.5e-4_dp) ref_flags(id) = a5_rm_ref
        end if
     end if
 
-    if (time < 2.0e-9_dp) then
+    if (time < 5.0e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
        do n = 1, init_cond%n_cond
@@ -318,7 +315,8 @@ contains
        end do
     end if
 
-    if (boxes(id)%dr * alpha > 1.0_dp) ref_flags(id) = a5_do_ref
+    if (boxes(id)%dr * alpha > 1.0_dp .and. max_dns > 1e12_dp) &
+         ref_flags(id) = a5_do_ref
 
   end subroutine set_ref_flags
 
@@ -331,7 +329,6 @@ contains
 
     nc = box%n_cell
     box%cc(:, :, :, i_elec) = init_cond%bg_dens
-
 
     do k = 0, nc+1
        do j = 0, nc+1
@@ -353,43 +350,66 @@ contains
     box%cc(:, :, :, i_pion) = box%cc(:, :, :, i_elec)
     box%cc(:, :, :, i_phi) = 0     ! Inital potential set to zero
 
-    call set_box_lsf(box)
+    call set_box_eps(box)
   end subroutine set_init_cond
 
-  subroutine set_box_lsf(box)
-    use m_geom
+  subroutine set_box_eps(box)
     type(box3_t), intent(inout) :: box
     integer                     :: i, j, k, nc
-    real(dp), parameter         :: high_lsf_value = 1e10_dp
-    real(dp)                    :: xy(3), lsf
+    real(dp)                    :: xyz(3)
 
     nc = box%n_cell
 
     do k = 0, nc+1
        do j = 0, nc+1
           do i = 0, nc+1
-             xy = a3_r_cc(box, [i,j,k])
-             box%cc(i, j, k, i_lsf) = high_lsf_value
-
-             if (elec%use_top) then
-                lsf = GM_dist_line(xy, elec%top_r0, elec%top_r1, 3) - &
-                     elec%top_radius
-                box%cc(i, j, k, i_bval) = elec%top_voltage
-                box%cc(i, j, k, i_lsf) = lsf
-             end if
-
-             if (elec%use_bot) then
-                lsf = GM_dist_line(xy, elec%bot_r0, elec%bot_r1, 3) - &
-                     elec%bot_radius
-                if (lsf < box%cc(i, j, k, i_lsf)) then
-                   box%cc(i, j, k, i_bval) = elec%bot_voltage
-                   box%cc(i, j, k, i_lsf) = lsf
-                end if
+             xyz = a3_r_cc(box, [i,j,k]) / domain_len
+             ! if (xyz(1) < 0.25_dp .or. &
+             !      (xyz(3) > 0.875_dp .or. xyz(3) < 0.125_dp)) then
+             if (xyz(1) < 0.5_dp .and. xyz(1) > 0.375_dp) then
+                box%cc(i, j, k, i_eps) = 10.0_dp
+             else
+                box%cc(i, j, k, i_eps) = 1.0_dp
              end if
           end do
        end do
     end do
-  end subroutine set_box_lsf
+  end subroutine set_box_eps
+
+  ! subroutine set_box_lsf(box)
+  !   use m_geom
+  !   type(box3_t), intent(inout) :: box
+  !   integer                     :: i, j, k, nc
+  !   real(dp), parameter         :: high_lsf_value = 1e10_dp
+  !   real(dp)                    :: xy(3), lsf
+
+  !   nc = box%n_cell
+
+  !   do k = 0, nc+1
+  !      do j = 0, nc+1
+  !         do i = 0, nc+1
+  !            xy = a3_r_cc(box, [i,j,k])
+  !            box%cc(i, j, k, i_lsf) = high_lsf_value
+
+  !            if (elec%use_top) then
+  !               lsf = GM_dist_line(xy, elec%top_r0, elec%top_r1, 3) - &
+  !                    elec%top_radius
+  !               box%cc(i, j, k, i_bval) = elec%top_voltage
+  !               box%cc(i, j, k, i_lsf) = lsf
+  !            end if
+
+  !            if (elec%use_bot) then
+  !               lsf = GM_dist_line(xy, elec%bot_r0, elec%bot_r1, 3) - &
+  !                    elec%bot_radius
+  !               if (lsf < box%cc(i, j, k, i_lsf)) then
+  !                  box%cc(i, j, k, i_bval) = elec%bot_voltage
+  !                  box%cc(i, j, k, i_lsf) = lsf
+  !               end if
+  !            end if
+  !         end do
+  !      end do
+  !   end do
+  ! end subroutine set_box_lsf
 
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
@@ -422,6 +442,7 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
+    print *, max_fld, dt_cfl, dt_dif, dt_drt, dt_alpha
     get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), &
          dt_drt, dt_alpha, dt_max)
   end function get_max_dt
@@ -481,6 +502,32 @@ contains
          (box%cc(1:nc, 0:nc, 1:nc, i_phi) - box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
     box%fz(:, :, :, f_fld) = inv_dr * &
          (box%cc(1:nc, 1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
+
+    ! Compute fields at the boundaries of the box, where eps can change
+    box%fx(1, :, :, f_fld) = 2 * inv_dr * &
+         (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
+         box%cc(0, 1:nc, 1:nc, i_eps) / &
+         (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
+    box%fx(nc+1, :, :, f_fld) = 2 * inv_dr * &
+         (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+         box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
+         (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
+    box%fy(:, 1, :, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
+         box%cc(1:nc, 0, 1:nc, i_eps) / &
+         (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
+    box%fy(:, nc+1, :, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
+         box%cc(1:nc, nc+1, 1:nc, i_eps) / &
+         (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
+    box%fz(:, :, 1, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
+         box%cc(1:nc, 1:nc, 0, i_eps) / &
+         (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
+    box%fz(:, :, nc+1, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
+         box%cc(1:nc, 1:nc, nc+1, i_eps) / &
+         (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
 
     box%cc(1:nc, 1:nc, 1:nc, i_fld) = 0.5_dp * sqrt(&
          (box%fx(1:nc, 1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, 1:nc, f_fld))**2 + &
@@ -704,19 +751,19 @@ contains
          (box%fy(:, 1:nc, :, f_elec) - box%fy(:, 2:nc+1, :, f_elec)) * inv_dr + &
          (box%fz(:, :, 1:nc, f_elec) - box%fz(:, :, 2:nc+1, f_elec)) * inv_dr)
 
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             if (any([box%cc(i-1, j, k, i_lsf), box%cc(i+1, j, k, i_lsf), &
-                  box%cc(i, j-1, k, i_lsf), box%cc(i, j+1, k, i_lsf), &
-                  box%cc(i, j, k-1, i_lsf), box%cc(i, j, k+1, i_lsf), &
-                  box%cc(i, j, k, i_lsf)] < 0)) then
-                box%cc(i, j, k, i_elec) = 0
-                box%cc(i, j, k, i_pion) = 0
-             end if
-          end do
-       end do
-    end do
+    ! do k = 1, nc
+    !    do j = 1, nc
+    !       do i = 1, nc
+    !          if (any([box%cc(i-1, j, k, i_lsf), box%cc(i+1, j, k, i_lsf), &
+    !               box%cc(i, j-1, k, i_lsf), box%cc(i, j+1, k, i_lsf), &
+    !               box%cc(i, j, k-1, i_lsf), box%cc(i, j, k+1, i_lsf), &
+    !               box%cc(i, j, k, i_lsf)] < 0)) then
+    !             box%cc(i, j, k, i_elec) = 0
+    !             box%cc(i, j, k, i_pion) = 0
+    !          end if
+    !       end do
+    !    end do
+    ! end do
   end subroutine update_solution
 
   subroutine set_photoionization(tree, eta, num_photons)
@@ -735,7 +782,8 @@ contains
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
     call a3_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
-    call PH_set_src_3d(tree, photoi_tbl, sim_rng, num_photons, i_pho, i_pho)
+    call PH_set_src_3d(tree, photoi_tbl, sim_rng, num_photons, &
+         i_pho, i_pho, 0.4_dp, .true.)
 
   end subroutine set_photoionization
 
@@ -778,7 +826,7 @@ contains
           call a3_prolong1_to(tree%boxes, id, i_elec)
           call a3_prolong1_to(tree%boxes, id, i_pion)
           call a3_prolong1_to(tree%boxes, id, i_phi)
-          call set_box_lsf(tree%boxes(id))
+          call set_box_eps(tree%boxes(id))
        end do
        !$omp end do
 
@@ -992,7 +1040,7 @@ contains
          "Fraction of oxygen")
     call CFG_add(cfg, "photoi_eta", 0.05_dp, &
          "Photoionization efficiency factor")
-    call CFG_add(cfg, "photoi_num_photons", 10*1000, &
+    call CFG_add(cfg, "photoi_num_photons", 100*1000, &
          "Number of discrete photons to use for photoionization")
 
     call CFG_add(cfg, "input_file", "transport_data_file.txt", &
