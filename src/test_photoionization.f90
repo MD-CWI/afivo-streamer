@@ -114,7 +114,7 @@ contains
 
     call a2_loop_box_arg(tree, set_photoi_rate, [1.0_dp], .true.)
     call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_src, i_pho, grid_factor, use_const_dx, use_cyl)
+         i_src, i_pho, grid_factor, use_const_dx, use_cyl, 0.05e-3_dp)
 
   end subroutine set_photoionization
 

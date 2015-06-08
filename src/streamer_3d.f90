@@ -84,10 +84,10 @@ program streamer_3d
   integer          :: photoi_num_photons ! Number of photons to use
   type(PH_tbl_t) :: photoi_tbl         ! Table for photoionization
 
-  integer            :: i, n, n_steps
+  integer            :: i, n, n_steps_amr
   integer            :: output_cnt
   real(dp)           :: dt, time, end_time
-  real(dp)           :: dt_amr, dt_output, dt_max
+  real(dp)           :: dt_output, dt_max
   character(len=40)  :: fname
   logical            :: write_out
 
@@ -105,6 +105,9 @@ program streamer_3d
 
   ! Pressure of the gas in bar
   real(dp) :: gas_pressure
+
+  ! Dielectric constant
+  real(dp) :: epsilon_diel
 
   call create_cfg(sim_cfg)
 
@@ -129,8 +132,9 @@ program streamer_3d
   call CFG_get(sim_cfg, "domain_len", domain_len)
   call CFG_get(sim_cfg, "applied_fld", applied_fld)
   call CFG_get(sim_cfg, "dt_output", dt_output)
-  call CFG_get(sim_cfg, "dt_amr", dt_amr)
+  call CFG_get(sim_cfg, "num_steps_amr", n_steps_amr)
   call CFG_get(sim_cfg, "dt_max", dt_max)
+  call CFG_get(sim_cfg, "epsilon_diel", epsilon_diel)
 
   call initialize(sim_cfg)
   call get_init_cond(sim_cfg, init_cond)
@@ -173,10 +177,7 @@ program streamer_3d
        call set_photoionization(tree, photoi_eta, photoi_num_photons)
 
   do
-     ! Get a new time step, which is at most dt_amr
-     dt      = get_max_dt(tree)
-     n_steps = ceiling(dt_amr/dt)
-     dt      = dt_amr / n_steps
+     dt = get_max_dt(tree)
 
      if (dt < 1e-14) then
         print *, "dt getting too small, instability?"
@@ -199,7 +200,7 @@ program streamer_3d
      if (time > end_time) exit
 
      ! We perform n_steps between mesh-refinements
-     do n = 1, n_steps
+     do n = 1, n_steps_amr
         time = time + dt
 
         ! Copy previous solution
@@ -210,6 +211,7 @@ program streamer_3d
         do i = 1, 2
            ! First calculate fluxes
            call a3_loop_boxes_arg(tree, fluxes_koren, [dt], .true.)
+           call a3_consistent_fluxes(tree, [f_elec])
 
            call compute_fld(tree, n_fmg_cycles)
 
@@ -443,8 +445,7 @@ contains
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
     print *, max_fld, dt_cfl, dt_dif, dt_drt, dt_alpha
-    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), &
-         dt_drt, dt_alpha, dt_max)
+    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, dt_max)
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -570,7 +571,8 @@ contains
     integer, intent(in)         :: id
     real(dp), intent(in)        :: dt_vec(:)
     real(dp)                    :: fac, inv_dr, tmp, gradp, gradc, gradn
-    real(dp)                    :: fld_avg, mobility, diff_coeff, v_drift
+    real(dp)                    :: mobility, diff_coeff, v_drift
+    real(dp)                    :: fld_avg, fld
     real(dp)                    :: gc_data(boxes(id)%n_cell, &
          boxes(id)%n_cell, a3_num_neighbors)
     integer                     :: i, j, k, nc
@@ -578,7 +580,7 @@ contains
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    fac    = 0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
+    fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
     call a3_gc2_box_sides(boxes, id, i_elec, a3_sides2_prolong1, &
          sides_bc2_dens, gc_data, nc)
@@ -587,14 +589,14 @@ contains
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc+1
-             fld_avg   = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
+             fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
                   boxes(id)%cc(i-1, j, k, i_fld))
              loc        = LT_get_loc(td_tbl, fld_avg)
              mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
              diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
-             v_drift    = -mobility * boxes(id)%fx(i, j, k, f_fld)
-
-             gradc = boxes(id)%cc(i, j, k, i_elec) - &
+             fld        = boxes(id)%fx(i, j, k, f_fld)
+             v_drift    = -mobility * fld
+             gradc      = boxes(id)%cc(i, j, k, i_elec) - &
                   boxes(id)%cc(i-1, j, k, i_elec)
 
              if (v_drift < 0.0_dp) then
@@ -606,8 +608,8 @@ contains
                 gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
                 boxes(id)%fx(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
-                if (boxes(id)%fx(i, j, k, f_elec) < -fac * fld_avg) &
-                     boxes(id)%fx(i, j, k, f_elec) = -fac * fld_avg
+                if (boxes(id)%fx(i, j, k, f_elec) < fac * fld) &
+                     boxes(id)%fx(i, j, k, f_elec) = fac * fld
              else                  ! v_drift > 0
                 if (i == 1) then
                    tmp = gc_data(j, k, a3_nb_lx)
@@ -617,8 +619,8 @@ contains
                 gradp = boxes(id)%cc(i-1, j, k, i_elec) - tmp
                 boxes(id)%fx(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i-1, j, k, i_elec) + koren_mlim(gradc, gradp))
-                if (boxes(id)%fx(i, j, k, f_elec) > fac * fld_avg) &
-                     boxes(id)%fx(i, j, k, f_elec) = fac * fld_avg
+                if (boxes(id)%fx(i, j, k, f_elec) > fac * fld) &
+                     boxes(id)%fx(i, j, k, f_elec) = fac * fld
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -638,7 +640,8 @@ contains
              loc        = LT_get_loc(td_tbl, fld_avg)
              mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
              diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
-             v_drift    = -mobility * boxes(id)%fy(i, j, k, f_fld)
+             fld        = boxes(id)%fy(i, j, k, f_fld)
+             v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_elec) - &
                   boxes(id)%cc(i, j-1, k, i_elec)
 
@@ -651,8 +654,8 @@ contains
                 gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
                 boxes(id)%fy(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
-                if (boxes(id)%fy(i, j, k, f_elec) < -fac * fld_avg) &
-                     boxes(id)%fy(i, j, k, f_elec) = -fac * fld_avg
+                if (boxes(id)%fy(i, j, k, f_elec) < fac * fld) &
+                     boxes(id)%fy(i, j, k, f_elec) = fac * fld
              else                  ! v_drift > 0
                 if (j == 1) then
                    tmp = gc_data(i, k, a3_nb_ly)
@@ -662,8 +665,8 @@ contains
                 gradp = boxes(id)%cc(i, j-1, k, i_elec) - tmp
                 boxes(id)%fy(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j-1, k, i_elec) + koren_mlim(gradc, gradp))
-                if (boxes(id)%fy(i, j, k, f_elec) > fac * fld_avg) &
-                     boxes(id)%fy(i, j, k, f_elec) = fac * fld_avg
+                if (boxes(id)%fy(i, j, k, f_elec) > fac * fld) &
+                     boxes(id)%fy(i, j, k, f_elec) = fac * fld
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -683,7 +686,8 @@ contains
              loc        = LT_get_loc(td_tbl, fld_avg)
              mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
              diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
-             v_drift    = -mobility * boxes(id)%fz(i, j, k, f_fld)
+             fld        = boxes(id)%fz(i, j, k, f_fld)
+             v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_elec) - &
                   boxes(id)%cc(i, j, k-1, i_elec)
 
@@ -696,8 +700,8 @@ contains
                 gradn = tmp - boxes(id)%cc(i, j, k, i_elec)
                 boxes(id)%fz(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_elec) - koren_mlim(gradc, gradn))
-                if (boxes(id)%fz(i, j, k, f_elec) < -fac * fld_avg) &
-                     boxes(id)%fz(i, j, k, f_elec) = -fac * fld_avg
+                if (boxes(id)%fz(i, j, k, f_elec) < fac * fld) &
+                     boxes(id)%fz(i, j, k, f_elec) = fac * fld
              else                  ! v_drift > 0
                 if (k == 1) then
                    tmp = gc_data(i, j, a3_nb_lz)
@@ -707,8 +711,8 @@ contains
                 gradp = boxes(id)%cc(i, j, k-1, i_elec) - tmp
                 boxes(id)%fz(i, j, k, f_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k-1, i_elec) + koren_mlim(gradc, gradp))
-                if (boxes(id)%fz(i, j, k, f_elec) > fac * fld_avg) &
-                     boxes(id)%fz(i, j, k, f_elec) = fac * fld_avg
+                if (boxes(id)%fz(i, j, k, f_elec) > fac * fld) &
+                     boxes(id)%fz(i, j, k, f_elec) = fac * fld
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -769,11 +773,6 @@ contains
        end do
     end do
 
-    box%cc(1:nc, 1:nc, 1:nc, i_elec) = box%cc(1:nc, 1:nc, 1:nc, i_elec) + dt(1) * ( &
-         (box%fx(1:nc, :, :, f_elec) - box%fx(2:nc+1, :, :, f_elec)) * inv_dr + &
-         (box%fy(:, 1:nc, :, f_elec) - box%fy(:, 2:nc+1, :, f_elec)) * inv_dr + &
-         (box%fz(:, :, 1:nc, f_elec) - box%fz(:, :, 2:nc+1, f_elec)) * inv_dr)
-
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
@@ -804,7 +803,7 @@ contains
     ! ionization rate.
     call a3_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
     call PH_set_src_3d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_pho, i_pho, 0.6_dp, .false.)
+         i_pho, i_pho, 0.6_dp, .false., 0.05e-3_dp)
 
   end subroutine set_photoionization
 
@@ -1013,6 +1012,8 @@ contains
          "The gas pressure in bar (used for photoionization)")
     call CFG_add(cfg, "applied_fld", 1.0d7, &
          "The applied electric field if there are no electrodes")
+    call CFG_add(cfg, "epsilon_diel", 1.5_dp, &
+         "The dielectric constant of the dielectric")
 
     call CFG_add(cfg, "elec_use_top", .true., &
          "Use top electrode")
@@ -1052,8 +1053,8 @@ contains
          "The timestep for writing output")
     call CFG_add(cfg, "dt_max", 1.0d-11, &
          "The maximum timestep")
-    call CFG_add(cfg, "dt_amr", 1.0d-11, &
-         "The timestep for adaptively refining the grid")
+    call CFG_add(cfg, "num_steps_amr", 2, &
+         "The number of steps after which the mesh is updated")
 
     call CFG_add(cfg, "photoi_enabled", .true., &
          "Whether photoionization is enabled")

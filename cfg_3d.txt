@@ -6,7 +6,6 @@ output_dir = "output"
 dt_output = 25.0e-11
 
 dt_max = 5e-11
-dt_amr = 1e-11
 sim_name = test3d
 end_time = 40e-9
 photoi_enabled = t
@@ -15,11 +14,11 @@ photoi_eta = 5e-2
 photoi_num_photons = 200000
 
 bg_dens = 0
-seed_dens = 5e18
-seed_rel_r0 = 0.51 0.5 0.7
-seed_rel_r1 = 0.51 0.5 0.75
-seed_width = 0.2e-3
-seed_falloff = 3
+seed_dens = 5e18 1e15
+seed_rel_r0 = 0.51 0.5 0.7 0.5 0.5 0.65
+seed_rel_r1 = 0.51 0.5 0.75 0.5 0.5 0.65
+seed_width = 0.2e-3 1.0e-3
+seed_falloff = 3 1
 
 elec_use_top = f
 elec_use_bot = f

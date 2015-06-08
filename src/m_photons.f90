@@ -205,7 +205,7 @@ contains
   end subroutine PH_do_absorp
 
   subroutine PH_set_src_2d(tree, pi_tbl, rng, num_photons, &
-       i_src, i_pho, fac_dx, const_dx, use_cyl)
+       i_src, i_pho, fac_dx, const_dx, use_cyl, min_dx)
     use m_random
     use m_afivo_2d
     use m_lookup_table
@@ -226,8 +226,10 @@ contains
     logical, intent(in)        :: const_dx
     !> Use cylindrical coordinates
     logical, intent(in)        :: use_cyl
+    !> Minimum spacing for absorption
+    real(dp), intent(in)        :: min_dx
 
-    integer                     :: lvl, ix, id, nc, min_lvl
+    integer                     :: lvl, ix, id, nc, min_lvl, max_lvl
     integer                     :: i, j, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
@@ -340,12 +342,14 @@ contains
        end do
        !$omp end parallel do
     else
+       max_lvl = get_lvl_length(tree%dr_base, min_dx)
        !$omp parallel private(n, dist, lvl, proc_id)
        proc_id = 1+omp_get_thread_num()
        !$omp do
        do n = 1, n_used
           dist = norm2(xyz_dst(1:2, n) - xyz_src(1:2, n))
           lvl = get_rlvl_length(tree%dr_base, fac_dx * dist, prng%rngs(proc_id))
+          if (lvl > max_lvl) lvl = max_lvl
           ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), lvl)
        end do
        !$omp end do
@@ -422,7 +426,7 @@ contains
   end subroutine PH_set_src_2d
 
   subroutine PH_set_src_3d(tree, pi_tbl, rng, num_photons, &
-       i_src, i_pho, fac_dx, const_dx)
+       i_src, i_pho, fac_dx, const_dx, min_dx)
     use m_random
     use m_afivo_3d
     use m_lookup_table
@@ -441,11 +445,13 @@ contains
     real(dp), intent(in)        :: fac_dx
     !> Use constant grid spacing or variable
     logical, intent(in)         :: const_dx
+    !> Minimum spacing for absorption
+    real(dp), intent(in)        :: min_dx
 
     integer                     :: lvl, ix, id, nc
     integer                     :: i, j, k, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
-    integer                     :: pho_lvl, min_lvl
+    integer                     :: pho_lvl, max_lvl, min_lvl
     real(dp)                    :: tmp, dr, fac, dist
     real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
@@ -531,12 +537,14 @@ contains
        end do
        !$omp end parallel do
     else
+       max_lvl = get_lvl_length(tree%dr_base, min_dx)
        !$omp parallel private(n, dist, lvl, proc_id)
        proc_id = 1+omp_get_thread_num()
        !$omp do
        do n = 1, n_used
           dist = norm2(xyz_dst(:, n) - xyz_src(:, n))
           lvl = get_rlvl_length(tree%dr_base, fac_dx * dist, prng%rngs(proc_id))
+          if (lvl > max_lvl) lvl = max_lvl
           ph_loc(n) = a3_get_loc(tree, xyz_dst(:, n), lvl)
        end do
        !$omp end do
