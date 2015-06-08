@@ -369,7 +369,7 @@ contains
              ! if (xyz(1) < 0.25_dp .or. &
              !      (xyz(3) > 0.875_dp .or. xyz(3) < 0.125_dp)) then
              if (xyz(1) < 0.5_dp .and. xyz(1) > 0.375_dp) then
-                box%cc(i, j, k, i_eps) = 1.5_dp
+                box%cc(i, j, k, i_eps) = epsilon_diel
              else
                 box%cc(i, j, k, i_eps) = 1.0_dp
              end if
