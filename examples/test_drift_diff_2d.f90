@@ -49,7 +49,7 @@ program test_drift_diff
   vel_y      = 1.0_dp
 
   print *, "Set up the initial conditions"
-  do i = 1, 20
+  do
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
