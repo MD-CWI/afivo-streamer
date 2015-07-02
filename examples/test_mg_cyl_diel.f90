@@ -1,6 +1,9 @@
-!> \example test_mg2_2d.f90
-!> Example showing how to use m_mg_2d, and compare with an analytic solution.
-program test_mg2_2d
+!> \example test_mg_cyl_diel.f90
+!>
+!> Example showing how to use m_mg_2d in cylindrical
+!> coordinates with a change in eps, and compare with an
+!> analytic solution.
+program test_mg_cyl_diel
   use m_afivo_2d
   use m_mg_2d
 
@@ -11,13 +14,14 @@ program test_mg2_2d
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_err = 4
+  integer, parameter :: i_eps = 5, i_sol = 6
 
   ! The manufactured solution exists of two Gaussians here.
   ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
   integer, parameter :: n_gaussians = 2
   real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
        [1.0_dp, 0.1_dp, 0.25_dp, 0.15_dp, &
-       1.0_dp, 0.75_dp, 0.75_dp, 0.05_dp], [4,2])
+       1.0e-3_dp, 0.75_dp, 0.75_dp, 0.05_dp], [4,2])
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -25,19 +29,21 @@ program test_mg2_2d
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
-  character(len=40)  :: fname, var_names(4)
+  character(len=40)  :: fname, var_names(6)
   type(mg2_t)        :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
   var_names(i_err) = "err"
+  var_names(i_eps) = "eps"
+  var_names(i_sol) = "sol"
 
   dr = 1.0_dp / box_size
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, &
-       dr = dr, coarsen_to = 2)
+  call a2_init(tree, box_size, n_var_cell=6, n_var_face=0, &
+       dr = dr, coarsen_to = 2, coord=a5_cyl)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
@@ -57,10 +63,14 @@ program test_mg2_2d
   mg%i_phi        = i_phi
   mg%i_tmp        = i_tmp
   mg%i_rhs        = i_rhs
+  mg%i_eps        = i_eps
   mg%n_cycle_down = 2
   mg%n_cycle_up   = 2
   mg%n_cycle_base = 2
   mg%sides_bc     => sides_bc
+  mg%box_op       => mg2_auto_op
+  mg%box_gsrb     => mg2_auto_gsrb
+  mg%box_corr     => mg2_auto_corr
 
   call mg2_init_mg(mg)
 
@@ -72,7 +82,7 @@ program test_mg2_2d
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
      call mg2_fas_fmg(tree, mg, .true.)
      call a2_loop_box(tree, set_err)
-     write(fname, "(A,I0,A)") "test_mg2_2d_", i, ".vtu"
+     write(fname, "(A,I0,A)") "test_mg_cyl_diel_", i, ".vtu"
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
@@ -106,15 +116,55 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
+    real(dp)                    :: xy(2), grad(2), dr, qbnd, tmp
 
-    nc = box%n_cell
+    nc                  = box%n_cell
     box%cc(:, :, i_phi) = 0
+    dr                  = box%dr
 
-    do j = 1, nc
-       do i = 1, nc
+    do j = 0, nc+1
+       do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_rhs) = rhs(xy)
+
+          if (xy(1) < 0.5_dp .and. xy(2) < 0.5_dp) then
+             box%cc(i, j, i_eps) = 100000.0_dp
+          else
+             box%cc(i, j, i_eps) = 1.0_dp
+          end if
+          box%cc(i, j, i_rhs) = rhs(xy) * box%cc(i, j, i_eps)
+          box%cc(i, j, i_sol) = phi_sol(xy)
+       end do
+    end do
+
+    ! Set surface charge in r-direction
+    do j = 1, nc
+       do i = 0, nc
+          xy = a2_rr_cc(box, [i + 0.5_dp, real(j, dp)])
+          grad = phi_grad(xy)
+          qbnd = (box%cc(i+1, j, i_eps) - box%cc(i, j, i_eps)) * &
+               grad(1) / dr
+
+          ! Place surface charge weighted with eps
+          tmp = box%cc(i+1, j, i_eps) / &
+               (box%cc(i, j, i_eps) + box%cc(i+1, j, i_eps))
+          box%cc(i+1, j, i_rhs) = box%cc(i+1, j, i_rhs) + tmp * qbnd
+          box%cc(i, j, i_rhs) = box%cc(i, j, i_rhs) + (1-tmp) * qbnd
+       end do
+    end do
+
+    ! Set surface charge in z-direction
+    do j = 0, nc
+       do i = 1, nc
+          xy = a2_rr_cc(box, [real(i, dp), j + 0.5_dp])
+          grad = phi_grad(xy)
+          qbnd = (box%cc(i, j+1, i_eps) - box%cc(i, j, i_eps)) * &
+               grad(2) / dr
+
+          ! Place surface charge weighted with eps
+          tmp = box%cc(i, j+1, i_eps) / &
+               (box%cc(i, j, i_eps) + box%cc(i, j+1, i_eps))
+          box%cc(i, j+1, i_rhs) = box%cc(i, j+1, i_rhs) + tmp * qbnd
+          box%cc(i, j, i_rhs) = box%cc(i, j, i_rhs) + (1-tmp) * qbnd
        end do
     end do
   end subroutine set_init_cond
@@ -128,7 +178,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - phi_sol(xy)
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - box%cc(i, j, i_sol)
        end do
     end do
   end subroutine set_err
@@ -143,10 +193,7 @@ contains
 
     select case (nb)
     case (a2_nb_lx)
-       do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [0.5_dp, real(n, dp)])
-          boxes(id)%cc(0, n, iv) = 2 * phi_sol(xy) - boxes(id)%cc(1, n, iv)
-       end do
+       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
     case (a2_nb_hx)
        do n = 1, nc
           xy = a2_rr_cc(boxes(id), [nc+0.5_dp, real(n, dp)])
@@ -176,6 +223,18 @@ contains
     end do
   end function phi_sol
 
+  function phi_grad(x) result(grad)
+    real(dp), intent(in) :: x(2)
+    real(dp) :: grad(2)
+    integer :: n
+
+    grad = 0
+    do n = 1, n_gaussians
+       grad = grad + g_params(1, n) * &
+            grad_gaussian_2d(x, g_params(2:3, n), g_params(4, n))
+    end do
+  end function phi_grad
+
   real(dp) function rhs(x)
     real(dp), intent(in) :: x(2)
     integer :: n
@@ -194,12 +253,20 @@ contains
     gaussian_2d = exp(-sum(xrel**2))
   end function gaussian_2d
 
+  function grad_gaussian_2d(x, x0, sigma) result(grad)
+    real(dp), intent(in) :: x(2), x0(2), sigma
+    real(dp) :: xrel(2), grad(2)
+    xrel = (x-x0)/sigma
+    grad = -2 * xrel/sigma * gaussian_2d(x, x0, sigma)
+  end function grad_gaussian_2d
+
   real(dp) function lpl_gaussian_2d(x, x0, sigma)
     real(dp), intent(in) :: x(2), x0(2), sigma
     real(dp) :: xrel(2)
     xrel = (x-x0)/sigma
-    lpl_gaussian_2d = 4/sigma**2 * (sum(xrel**2) - 1) * &
-         gaussian_2d(x, x0, sigma)
+
+    lpl_gaussian_2d = 4/sigma**2 * (sum(xrel**2) - 1.0_dp - &
+         0.5_dp * (x(1)-x0(1))/x(1)) * gaussian_2d(x, x0, sigma)
   end function lpl_gaussian_2d
 
-end program test_mg2_2d
+end program test_mg_cyl_diel

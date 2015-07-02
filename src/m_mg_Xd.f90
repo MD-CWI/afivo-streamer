@@ -123,6 +123,13 @@ module m_mg_$Dd
   public :: mg$D_box_corr_lpllsf
   public :: mg$D_box_rstr_lpllsf
 
+#if $D == 2
+  public :: mg$D_box_clpl
+  public :: mg$D_box_gsrb_clpl
+  public :: mg$D_box_clpld
+  public :: mg$D_box_gsrb_clpld
+#endif
+
 contains
 
   !> Check multigrid options or set them to default
@@ -494,12 +501,29 @@ contains
     if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
 
     select case(box%tag)
+#if $D == 2
+    case (mg_normal_box)
+       if (box%coord_t == a5_cyl) then
+          call mg$D_box_gsrb_clpl(box, redblack_cntr, mg)
+       else
+          call mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
+       end if
+    case (mg_lsf_box)
+       call mg$D_box_gsrb_lpllsf(box, redblack_cntr, mg)
+    case (mg_veps_box, mg_ceps_box)
+       if (box%coord_t == a5_cyl) then
+          call mg$D_box_gsrb_clpld(box, redblack_cntr, mg)
+       else
+          call mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
+       end if
+#elif $D == 3
     case (mg_normal_box)
        call mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
     case (mg_lsf_box)
        call mg$D_box_gsrb_lpllsf(box, redblack_cntr, mg)
     case (mg_veps_box, mg_ceps_box)
        call mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
+#endif
     end select
   end subroutine mg$D_auto_gsrb
 
@@ -512,12 +536,29 @@ contains
     if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
 
     select case(box%tag)
+#if $D == 2
+    case (mg_normal_box)
+       if (box%coord_t == a5_cyl) then
+          call mg$D_box_clpl(box, i_out, mg)
+       else
+          call mg$D_box_lpl(box, i_out, mg)
+       end if
+    case (mg_lsf_box)
+       call mg$D_box_lpllsf(box, i_out, mg)
+    case (mg_veps_box, mg_ceps_box)
+       if (box%coord_t == a5_cyl) then
+          call mg$D_box_clpld(box, i_out, mg)
+       else
+          call mg$D_box_lpld(box, i_out, mg)
+       end if
+#elif $D == 3
     case (mg_normal_box)
        call mg$D_box_lpl(box, i_out, mg)
     case (mg_lsf_box)
        call mg$D_box_lpllsf(box, i_out, mg)
     case (mg_veps_box, mg_ceps_box)
        call mg$D_box_lpld(box, i_out, mg)
+#endif
     end select
   end subroutine mg$D_auto_op
 
@@ -1289,5 +1330,128 @@ contains
     end do
 #endif
   end subroutine mg$D_box_rstr_lpllsf
+
+#if $D == 2
+  !> Perform Gauss-Seidel relaxation on box for a cylindrical Laplacian operator
+  subroutine mg2_box_gsrb_clpl(box, redblack_cntr, mg)
+    type(box2_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: redblack_cntr !< Iteration counter
+    type(mg2_t), intent(in)     :: mg
+    integer                     :: i, i0, j, nc, i_phi, i_rhs, ioff
+    real(dp)                    :: dx2, rfac(2)
+
+    dx2   = box%dr**2
+    nc    = box%n_cell
+    i_phi = mg%i_phi
+    i_rhs = mg%i_rhs
+    ioff  = (box%ix(1)-1) * nc
+
+    ! The parity of redblack_cntr determines which cells we use. If
+    ! redblack_cntr is even, we use the even cells and vice versa.
+    do j = 1, nc
+       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
+       do i = i0, nc, 2
+          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          box%cc(i, j, i_phi) = 0.25_dp * ( &
+               rfac(1) * box%cc(i-1, j, i_phi) + &
+               rfac(2) * box%cc(i+1, j, i_phi) + &
+               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
+               dx2 * box%cc(i, j, i_rhs))
+       end do
+    end do
+  end subroutine mg2_box_gsrb_clpl
+
+  !> Perform cylindrical Laplacian operator on a box
+  subroutine mg2_box_clpl(box, i_out, mg)
+    type(box2_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
+    type(mg2_t), intent(in)     :: mg
+    integer                     :: i, j, nc, i_phi, ioff
+    real(dp)                    :: inv_dr_sq, rfac(2)
+
+    nc        = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    i_phi     = mg%i_phi
+    ioff      = (box%ix(1)-1) * nc
+
+    do j = 1, nc
+       do i = 1, nc
+          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          box%cc(i, j, i_out) = ( &
+               rfac(1) * box%cc(i-1, j, i_phi) + &
+               rfac(2) * box%cc(i+1, j, i_phi) + &
+               box%cc(i, j-1, i_phi) + box%cc(i, j+1, i_phi) - &
+               4 * box%cc(i, j, i_phi)) * inv_dr_sq
+       end do
+    end do
+  end subroutine mg2_box_clpl
+
+  !> Perform cylindrical Laplacian operator on a box with varying eps
+  subroutine mg2_box_clpld(box, i_out, mg)
+    type(box2_t), intent(inout) :: box   !< Box to operate on
+    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
+    type(mg2_t), intent(in)     :: mg
+    integer                     :: i, j, nc, i_phi, i_eps, ioff
+    real(dp)                    :: inv_dr_sq, a0, u0, u(4), a(4), rfac(4)
+
+    nc        = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    i_phi     = mg%i_phi
+    i_eps     = mg%i_eps
+    ioff      = (box%ix(1)-1) * nc
+
+    do j = 1, nc
+       do i = 1, nc
+          rfac(1:2) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          rfac(3:4) = 1
+          u0 = box%cc(i, j, i_phi)
+          a0 = box%cc(i, j, i_eps)
+          u(1:2) = box%cc(i-1:i+1:2, j, i_phi)
+          u(3:4) = box%cc(i, j-1:j+1:2, i_phi)
+          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+
+          box%cc(i, j, i_out) = inv_dr_sq * 2 * &
+               sum(rfac*a0*a(:)/(a0 + a(:)) * (u(:) - u0))
+       end do
+    end do
+  end subroutine mg2_box_clpld
+
+  !> Perform Gauss-Seidel relaxation on box for a cylindrical Laplacian operator
+  !> with a changing eps
+  subroutine mg2_box_gsrb_clpld(box, redblack_cntr, mg)
+    type(box2_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: redblack_cntr !< Iteration counter
+    type(mg2_t), intent(in)     :: mg
+    integer                     :: i, i0, j, nc, i_phi, i_eps, i_rhs, ioff
+    real(dp)                    :: dx2, u(4), a0, a(4), c(4), rfac(4)
+
+    dx2   = box%dr**2
+    nc    = box%n_cell
+    i_phi = mg%i_phi
+    i_eps = mg%i_eps
+    i_rhs = mg%i_rhs
+    ioff  = (box%ix(1)-1) * nc
+
+    ! The parity of redblack_cntr determines which cells we use. If
+    ! redblack_cntr is even, we use the even cells and vice versa.
+    do j = 1, nc
+       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
+       do i = i0, nc, 2
+          rfac(1:2) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          rfac(3:4) = 1
+          a0 = box%cc(i, j, i_eps) ! value of eps at i,j
+          u(1:2) = box%cc(i-1:i+1:2, j, i_phi) ! values at neighbors
+          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+          u(3:4) = box%cc(i, j-1:j+1:2, i_phi)
+          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+          c(:) = 2 * a0 * a(:) / (a0 + a(:))
+
+          box%cc(i, j, i_phi) = (sum(c(:) * rfac * u(:)) &
+               - dx2 * box%cc(i, j, i_rhs)) / sum(c(:) * rfac)
+       end do
+    end do
+  end subroutine mg2_box_gsrb_clpld
+#endif
 
 end module m_mg_$Dd

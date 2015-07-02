@@ -40,7 +40,10 @@ program test_base
   nb_list(a2_nb_hy, 1) = 1
 
   ! Set neighbors for box two
-  nb_list(:, 2) = 2
+  nb_list(a2_nb_lx, 2) = 1
+  nb_list(a2_nb_hx, 2) = 1
+  nb_list(a2_nb_ly, 2) = 2
+  nb_list(a2_nb_hy, 2) = 2
 
   ! Create the base mesh
   call a2_set_base(tree, ix_list, nb_list)
