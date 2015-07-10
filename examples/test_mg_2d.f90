@@ -64,13 +64,9 @@ program test_mg
 
   call mg2_init_mg(mg)
 
-  ! Restrict from children recursively
-  call a2_restrict_tree(tree, i_rhs)
-  call a2_restrict_tree(tree, i_phi)
-
   do i = 1, 100
      ! call mg2_fas_vcycle(tree, mg, tree%max_lvl)
-     call mg2_fas_fmg(tree, mg, .false.)
+     call mg2_fas_fmg(tree, mg, .false., i == 1)
   end do
 
   ! write(fname, "(A,I0,A)") "test_mg_2d_", 1, ".silo"

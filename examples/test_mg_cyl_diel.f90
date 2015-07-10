@@ -74,13 +74,9 @@ program test_mg_cyl_diel
 
   call mg2_init_mg(mg)
 
-  ! Restrict from children recursively
-  call a2_restrict_tree(tree, i_rhs)
-  call a2_restrict_tree(tree, i_phi)
-
   do i = 1, 10
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg2_fas_fmg(tree, mg, .true.)
+     call mg2_fas_fmg(tree, mg, .true., i == 1)
      call a2_loop_box(tree, set_err)
      write(fname, "(A,I0,A)") "test_mg_cyl_diel_", i, ".vtu"
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
@@ -127,7 +123,7 @@ contains
           xy = a2_r_cc(box, [i,j])
 
           if (xy(1) < 0.5_dp .and. xy(2) < 0.5_dp) then
-             box%cc(i, j, i_eps) = 100000.0_dp
+             box%cc(i, j, i_eps) = 100.0_dp
           else
              box%cc(i, j, i_eps) = 1.0_dp
           end if

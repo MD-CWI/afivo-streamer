@@ -167,15 +167,25 @@ contains
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
-  subroutine mg$D_fas_fmg(tree, mg, set_residual)
+  subroutine mg$D_fas_fmg(tree, mg, set_residual, first_call)
     type(a$D_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)         :: mg   !< Multigrid options
     logical, intent(in)             :: set_residual !< If true, store residual in i_tmp
+    logical, intent(in)             :: first_call   !< If true, start from phi = 0
     integer                         :: lvl, min_lvl
 
     call check_mg(mg)           ! Check whether mg options are set
 
     min_lvl = lbound(tree%lvls, 1)
+
+    if (first_call) then
+       call init_phi_rhs(tree, mg)
+    else
+       do lvl = tree%max_lvl,  min_lvl+1, -1
+          ! Set rhs on coarse grid and restrict phi
+          call set_coarse_phi_rhs(tree, lvl, mg)
+       end do
+    end if
 
     do lvl = min_lvl, tree%max_lvl
        ! Store phi_old in tmp
@@ -475,6 +485,67 @@ contains
     end do
     !$omp end parallel do
   end subroutine update_coarse
+
+  !> This routine performs the same as update_coarse, but it ignores the tmp
+  !> variable
+  subroutine set_coarse_phi_rhs(tree, lvl, mg)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: lvl
+    type(mg$D_t), intent(in)   :: mg
+    integer                    :: i, id, p_id
+
+    ! In case ghost cells are not filled, fill them here to be sure
+    if (lvl == tree%max_lvl) &
+         call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
+
+    !$omp parallel do private(id, p_id)
+    do i = 1, size(tree%lvls(lvl)%ids)
+       id = tree%lvls(lvl)%ids(i)
+       p_id = tree%boxes(id)%parent
+
+       call residual_box(tree%boxes(id), mg)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp, mg)
+       call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi, mg)
+    end do
+    !$omp end parallel do
+
+    call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
+
+    ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
+
+    !$omp parallel do private(id)
+    do i = 1, size(tree%lvls(lvl-1)%parents)
+       id = tree%lvls(lvl-1)%parents(i)
+       call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
+       call a$D_box_add_cc(tree%boxes(id), mg%i_tmp, mg%i_rhs)
+    end do
+    !$omp end parallel do
+  end subroutine set_coarse_phi_rhs
+
+  !> Set the initial guess for phi and restrict the rhs
+  subroutine init_phi_rhs(tree, mg)
+    type(a$D_t), intent(inout) :: tree
+    type(mg$D_t), intent(in)   :: mg
+    integer                    :: i, id, p_id, lvl, min_lvl
+
+    ! Start from phi = 0 and restrict rhs
+    min_lvl = lbound(tree%lvls, 1)
+
+    !$omp parallel private(lvl, i, id, p_id)
+    do lvl = tree%max_lvl,  min_lvl+1, -1
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call a$D_box_clear_cc(tree%boxes(id), mg%i_phi)
+          if (lvl > min_lvl) then
+             p_id = tree%boxes(id)%parent
+             call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_rhs, mg)
+          end if
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine init_phi_rhs
 
   subroutine residual_box(box, mg)
     type(box$D_t), intent(inout) :: box
