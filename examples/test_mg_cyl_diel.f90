@@ -20,15 +20,15 @@ program test_mg_cyl_diel
   ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
   integer, parameter :: n_gaussians = 2
   real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
-       [1.0_dp, 0.1_dp, 0.25_dp, 0.15_dp, &
-       1.0e-3_dp, 0.75_dp, 0.75_dp, 0.05_dp], [4,2])
+       [1.0_dp, 0.25_dp, 0.25_dp, 0.04_dp, &
+       1.0_dp, 0.75_dp, 0.75_dp, 0.04_dp], [4,2])
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: i, id
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr
+  real(dp)           :: dr, max_res, min_res
   character(len=40)  :: fname, var_names(6)
   type(mg2_t)        :: mg
 
@@ -43,7 +43,7 @@ program test_mg_cyl_diel
 
   ! Initialize tree
   call a2_init(tree, box_size, n_var_cell=6, n_var_face=0, &
-       dr = dr, coarsen_to = 2, coord=a5_cyl)
+       dr = dr, coarsen_to = 2, coord=a5_cyl, n_boxes=10*1000)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
@@ -51,7 +51,8 @@ program test_mg_cyl_diel
 
   call a2_set_base(tree, ix_list, nb_list)
 
-  do i = 1, 20
+  do
+     call a2_loop_box(tree, set_init_cond)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
@@ -74,12 +75,15 @@ program test_mg_cyl_diel
 
   call mg2_init_mg(mg)
 
-  do i = 1, 10
+  do i = 1, 12
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
      call mg2_fas_fmg(tree, mg, .true., i == 1)
      call a2_loop_box(tree, set_err)
-     write(fname, "(A,I0,A)") "test_mg_cyl_diel_", i, ".vtu"
-     call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
+     call a2_tree_min_cc(tree, i_tmp, min_res)
+     call a2_tree_max_cc(tree, i_tmp, max_res)
+     print *, i, max(abs(min_res), abs(max_res))
+     write(fname, "(A,I0,A)") "test_mg_cyl_diel_", i, ".silo"
+     ! call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
   print *, "max_id", tree%max_id
@@ -93,19 +97,15 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
-    integer                  :: n
+    integer                  :: nc
+    real(dp)                 :: max_crv
 
-    ref_flags(id) = a5_rm_ref
+    nc = boxes(id)%n_cell
+    max_crv = boxes(id)%dr**2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs) / &
+         boxes(id)%cc(1:nc, 1:nc, i_eps)))
 
-    if (boxes(id)%lvl < 6) then
+    if (max_crv > 5.0e-4_dp) then
        ref_flags(id) = a5_do_ref
-    else if (boxes(id)%lvl < 8) then
-       do n = 1, n_gaussians
-          if (norm2(a2_r_center(boxes(id)) - g_params(2:3, n)) < 0.1_dp) then
-             ref_flags(id) = a5_do_ref
-             exit
-          end if
-       end do
     end if
   end subroutine set_ref_flags
 
