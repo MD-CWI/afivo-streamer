@@ -156,29 +156,25 @@ contains
              read(line, *, ERR = 999, end = 998) cfg%vars(ix)%logic_data
           end select
        end if
-    end if
-
-    ! Go to the next iteration
-    cycle
- end do
+    end do
 
 666 continue ! Routine ends here if the end of "filename" is reached
- close(UNIT = 1, STATUS = "KEEP", ERR = 999, IOSTAT = ioState)
- return
+    close(UNIT = 1, STATUS = "KEEP", ERR = 999, IOSTAT = ioState)
+    return
 
- ! The routine only ends up here through an error
+    ! The routine only ends up here through an error
 998 continue
- call handle_error("CFG_read_file: Not enough values for variable [" &
-      // p_name // "] in " // filename)
- return
+    call handle_error("CFG_read_file: Not enough values for variable [" &
+         // p_name // "] in " // filename)
+    return
 
 999 continue
- write(err_string, *) "ioState = ", ioState, " while reading from ", &
-      filename, " at line ", nL
- call handle_error("CFG_read_file:" // err_string)
- return
+    write(err_string, *) "ioState = ", ioState, " while reading from ", &
+         filename, " at line ", nL
+    call handle_error("CFG_read_file:" // err_string)
+    return
 
-end subroutine CFG_read_file
+  end subroutine CFG_read_file
 
   subroutine resize_storage(cfg, ix, p_type, p_size)
     type(CFG_t), intent(inout) :: cfg
