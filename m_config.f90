@@ -118,68 +118,67 @@ contains
        ! Find variable corresponding to name in file
        call get_var_index(cfg, p_name, ix)
 
-       if (ix > 0) then
-
-          if (cfg%vars(ix)%dyn_size) then
-             ! Get the start and end positions of the line content, and the number of entries
-             call get_fields_string(line, " ,'"""//char(9), max_var_len, nEntries, startIxs, endIxs)
-
-             if (cfg%vars(ix)%p_size /= nEntries) then
-                call resize_storage(cfg, ix, cfg%vars(ix)%p_type, nEntries)
-                cfg%vars(ix)%p_size = nEntries
-             end if
-
-             do n = 1, nEntries
-                select case (cfg%vars(ix)%p_type)
-                case (CFG_int_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%int_data(n)
-                case (CFG_real_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%real_data(n)
-                case (CFG_char_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%char_data(n)
-                case (CFG_logic_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%logic_data(n)
-                end select
-             end do
-          else                  ! Fixed size parameter
-             select case (cfg%vars(ix)%p_type)
-             case (CFG_int_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%int_data
-             case (CFG_real_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%real_data
-             case (CFG_char_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%char_data
-             case (CFG_logic_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%logic_data
-             end select
-          end if
-
-       else
+       if (ix <= 0) then
           call handle_error("CFG_read_file: variable [" // trim(p_name) // &
                "] from [" //  filename // "] could not be updated")
+          return
        end if
 
-       ! Go to the next iteration
-       cycle
-    end do
+       if (cfg%vars(ix)%dyn_size) then
+          ! Get the start and end positions of the line content, and the number of entries
+          call get_fields_string(line, " ,'"""//char(9), max_var_len, nEntries, startIxs, endIxs)
+          if (cfg%vars(ix)%p_size /= nEntries) then
+             call resize_storage(cfg, ix, cfg%vars(ix)%p_type, nEntries)
+             cfg%vars(ix)%p_size = nEntries
+          end if
+
+          do n = 1, nEntries
+             select case (cfg%vars(ix)%p_type)
+             case (CFG_int_type)
+                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%int_data(n)
+             case (CFG_real_type)
+                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%real_data(n)
+             case (CFG_char_type)
+                cfg%vars(ix)%char_data(n) = trim(line(startIxs(n):endIxs(n)))
+             case (CFG_logic_type)
+                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%logic_data(n)
+             end select
+          end do
+       else                  ! Fixed size parameter
+          select case (cfg%vars(ix)%p_type)
+          case (CFG_int_type)
+             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%int_data
+          case (CFG_real_type)
+             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%real_data
+          case (CFG_char_type)
+             cfg%vars(ix)%char_data = trim(line)
+          case (CFG_logic_type)
+             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%logic_data
+          end select
+       end if
+    end if
+
+    ! Go to the next iteration
+    cycle
+ end do
 
 666 continue ! Routine ends here if the end of "filename" is reached
-    close(UNIT = 1, STATUS = "KEEP", ERR = 999, IOSTAT = ioState)
-    return
+ close(UNIT = 1, STATUS = "KEEP", ERR = 999, IOSTAT = ioState)
+ return
 
-    ! The routine only ends up here through an error
+ ! The routine only ends up here through an error
 998 continue
-    call handle_error("CFG_read_file: Not enough values for variable [" &
-         // p_name // "] in " // filename)
-    return
+ call handle_error("CFG_read_file: Not enough values for variable [" &
+      // p_name // "] in " // filename)
+ return
 
 999 continue
-    write(err_string, *) "ioState = ", ioState, " while reading from ", &
-         filename, " at line ", nL
-    call handle_error("CFG_read_file:" // err_string)
-    return
+ write(err_string, *) "ioState = ", ioState, " while reading from ", &
+      filename, " at line ", nL
+ call handle_error("CFG_read_file:" // err_string)
+ return
 
-  end subroutine CFG_read_file
+end subroutine CFG_read_file
 
   subroutine resize_storage(cfg, ix, p_type, p_size)
     type(CFG_t), intent(inout) :: cfg
