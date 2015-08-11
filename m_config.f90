@@ -15,7 +15,7 @@ module m_config
 
   ! String lengths
   integer, parameter :: tiny_len = 20
-  integer, parameter :: name_len = 40
+  integer, parameter :: name_len = 80
   integer, parameter :: line_len = 400
 
   ! Maximum length of a variable
@@ -30,7 +30,7 @@ module m_config
 
      real(dp), allocatable                :: real_data(:)
      integer, allocatable                 :: int_data(:)
-     character(len=name_len), allocatable :: char_data(:)
+     character(len=line_len), allocatable :: char_data(:)
      logical, allocatable                 :: logic_data(:)
   end type CFG_var_t
 
@@ -485,7 +485,7 @@ contains
     CFG_fget_logic = cfg%vars(ix)%logic_data(1)
   end function CFG_fget_logic
 
-  character(len=name_len) function CFG_fget_string(cfg, p_name)
+  character(len=line_len) function CFG_fget_string(cfg, p_name)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
     integer                      :: ix
