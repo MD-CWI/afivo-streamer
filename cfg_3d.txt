@@ -2,7 +2,7 @@ applied_fld = -1.5e6
 gas_name = AIR
 input_file = td_air_phelps_bolsig.txt
 
-output_dir = "output"
+output_dir = output
 dt_output = 25.0e-11
 
 dt_max = 5e-11
