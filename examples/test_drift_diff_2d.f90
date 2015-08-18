@@ -16,12 +16,12 @@ program test_drift_diff
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i, n, n_steps, id
+  integer            :: i, id
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
   integer            :: output_cnt
   real(dp)           :: dt, time, end_time, p_err, n_err
-  real(dp)           :: dt_adapt, dt_output
+  real(dp)           :: dt_output
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=40)  :: fname
 
@@ -41,9 +41,8 @@ program test_drift_diff
 
   output_cnt = 0
   time       = 0
-  dt_adapt   = 0.01_dp
-  dt_output  = 0.05_dp
-  end_time   = 2.0_dp
+  dt_output  = 0.1_dp
+  end_time   = 5.0_dp
   diff_coeff = 0.0_dp
   vel_x      = 1.0_dp
   vel_y      = 1.0_dp
@@ -65,8 +64,6 @@ program test_drift_diff
      dr_min  = a2_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
-     n_steps = ceiling(dt_adapt/dt)
-     dt      = dt_adapt / n_steps
 
      if (output_cnt * dt_output <= time) then
         write_out = .true.
@@ -92,32 +89,28 @@ program test_drift_diff
      select case (time_step_method)
      case (1)
         ! Forward Euler
-        do n = 1, n_steps
+        call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
+        call a2_consistent_fluxes(tree, [1])
+        call a2_loop_box_arg(tree, update_solution, [dt])
+        call a2_restrict_tree(tree, i_phi)
+        call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+        time = time + dt
+     case (2)
+        ! Copy previous solution
+        call a2_tree_copy_cc(tree, i_phi, i_phi_old)
+
+        ! Two forward Euler steps over dt
+        do i = 1, 2
            call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
            call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
            call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
-           time = time + dt
         end do
-     case (2)
-        do n = 1, n_steps
-           ! Copy previous solution
-           call a2_tree_copy_cc(tree, i_phi, i_phi_old)
 
-           ! Two forward Euler steps over dt
-           do i = 1, 2
-              call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-              call a2_consistent_fluxes(tree, [1])
-              call a2_loop_box_arg(tree, update_solution, [dt])
-              call a2_restrict_tree(tree, i_phi)
-              call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
-           end do
-
-           ! Take average of phi_old and phi
-           call a2_loop_box(tree, average_phi)
-           time = time + dt
-        end do
+        ! Take average of phi_old and phi
+        call a2_loop_box(tree, average_phi)
+        time = time + dt
      end select
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
@@ -144,13 +137,16 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 0:nc, i_phi))))
 
-    if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
-       ref_flags(id) = a5_do_ref
-    else if (diff > 0.2_dp * 0.05_dp) then
-       ref_flags(id) = a5_kp_ref
-    else if (boxes(id)%lvl > 4) then
-       ref_flags(id) = a5_rm_ref
-    end if
+    ! if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
+    !    ref_flags(id) = a5_do_ref
+    ! else if (diff > 0.2_dp * 0.05_dp) then
+    !    ref_flags(id) = a5_kp_ref
+    ! else if (boxes(id)%lvl > 4) then
+    !    ref_flags(id) = a5_rm_ref
+    ! end if
+
+    if (boxes(id)%lvl < 5) ref_flags(id) = a5_do_ref
+    if (boxes(id)%lvl < 6 .and. boxes(id)%r_min(1) < 4) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -188,7 +184,14 @@ contains
     real(dp) :: sol, xy_t(2)
 
     xy_t = xy - [vel_x, vel_y] * t
-    sol = sin(xy_t(1))**4 * cos(xy_t(2))**4
+    xy_t = modulo(xy_t, domain_len) / domain_len
+
+    if (norm2(xy_t - [0.5_dp, 0.5_dp]) < 0.25_dp) then
+       sol = 1
+    else
+       sol = 0
+    end if
+    ! sol = sin(xy_t(1))**4 * cos(xy_t(2))**4
   end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)
@@ -407,4 +410,4 @@ contains
     gc_data = nb                  ! idem
   end subroutine have_no_bc2
 
-end program
+end program test_drift_diff
