@@ -2407,12 +2407,19 @@ contains
 
   end subroutine a$D_sides2_prolong1
 
-  !> Restrict fluxes from children to parents on refinement boundaries
-  subroutine a$D_consistent_fluxes(tree, f_ixs)
+  !> Restrict fluxes from children to parents on refinement boundaries. If the
+  !> argument only_outflux is true, then: restrict fine 'out' fluxes, and use
+  !> coarse 'in' fluxes. Note that this assumes densities are positive!
+  !> TODO: test this outflux option
+  subroutine a$D_consistent_fluxes(tree, f_ixs, only_outflux)
     use omp_lib
-    type(a$D_t), intent(inout) :: tree    !< Tree to operate on
-    integer, intent(in)       :: f_ixs(:) !< Indices of the fluxes
-    integer                   :: lvl, i, id, nb, nb_id
+    type(a$D_t), intent(inout)     :: tree         !< Tree to operate on
+    integer, intent(in)           :: f_ixs(:)     !< Indices of the fluxes
+    logical, intent(in), optional :: only_outflux !< See function description
+    integer                       :: lvl, i, id, nb, nb_id
+    logical                       :: only_out
+
+    only_out = .false.; if (present(only_outflux)) only_out = only_outflux
 
     !$omp parallel private(lvl, i, id, nb, nb_id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl-1
@@ -2425,7 +2432,8 @@ contains
              ! If the neighbor exists and has no children, set flux
              if (nb_id > a5_no_box) then
                 if (.not. a$D_has_children(tree%boxes(nb_id))) then
-                   call a$D_flux_from_children(tree%boxes, id, nb, f_ixs)
+                   call a$D_flux_from_children(tree%boxes, id, nb, &
+                        f_ixs, only_out)
                 end if
              end if
           end do
@@ -2437,11 +2445,12 @@ contains
 
   !> The neighbor nb has no children and id does, so set flux on the neighbor
   !> from our children. This ensures flux consistency at refinement boundary.
-  subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
+  subroutine a$D_flux_from_children(boxes, id, nb, f_ixs, only_outflux)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)         :: id        !< Id of box for which we set fluxes
     integer, intent(in)         :: nb        !< Direction in which fluxes are set
     integer, intent(in)         :: f_ixs(:)  !< Indices of the fluxes
+    logical, intent(in)         :: only_outflux !< See function description
     integer                     :: nc, nch, c_id, i_ch, i, ic, d, ioff($D)
     integer                     :: n_chnb, nb_id, i_nb
 
@@ -2468,18 +2477,35 @@ contains
           c_id = boxes(id)%children(i_ch)
           ! Index offset of child w.r.t. parent
           ioff = nch*a2_ch_dix(:, i_ch)
-          boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) = 0.5_dp * ( &
-               boxes(c_id)%fx(i, 1:nc:2, f_ixs) + &
-               boxes(c_id)%fx(i, 2:nc:2, f_ixs))
+
+          where (only_outflux .and. (a$D_nb_low(nb) .eqv. &
+               boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) > 0))
+             boxes(c_id)%fx(i, 1:nc:2, f_ixs) = &
+                  boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs)
+             boxes(c_id)%fx(i, 1:nc:2, f_ixs) = &
+                  boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs)
+          elsewhere
+             boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) = 0.5_dp * ( &
+                  boxes(c_id)%fx(i, 1:nc:2, f_ixs) + &
+                  boxes(c_id)%fx(i, 2:nc:2, f_ixs))
+          end where
        end do
     case (2)
        do ic = 1, n_chnb
           i_ch = a2_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a2_ch_dix(:, i_ch)
-          boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) = 0.5_dp * ( &
-               boxes(c_id)%fy(1:nc:2, i, f_ixs) + &
-               boxes(c_id)%fy(2:nc:2, i, f_ixs))
+          where (only_outflux .and. (a$D_nb_low(nb) .eqv. &
+               boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) > 0))
+             boxes(c_id)%fy(1:nc:2, i, f_ixs) = &
+                  boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs)
+             boxes(c_id)%fy(2:nc:2, i, f_ixs) = &
+                  boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs)
+          elsewhere
+             boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) = 0.5_dp * ( &
+                  boxes(c_id)%fy(1:nc:2, i, f_ixs) + &
+                  boxes(c_id)%fy(2:nc:2, i, f_ixs))
+          end where
        end do
 #elif $D == 3
     case (1)
