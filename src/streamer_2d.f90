@@ -167,8 +167,7 @@ program streamer_2d
   ! Set up the initial conditions
   do
      call a2_loop_box(tree, set_init_cond)
-     call a2_restrict_tree(tree, i_rhs)
-     call compute_fld(tree, n_fmg_cycles)
+     call compute_fld(tree, n_fmg_cycles, .true.)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
@@ -214,8 +213,6 @@ program streamer_2d
            call a2_loop_boxes_arg(tree, fluxes_koren, [dt], .true.)
            call a2_consistent_fluxes(tree, [f_elec])
 
-           call compute_fld(tree, n_fmg_cycles)
-
            ! Update the solution
            call a2_loop_box_arg(tree, update_solution, [dt], .true.)
 
@@ -226,10 +223,16 @@ program streamer_2d
            ! Fill ghost cells
            call a2_gc_sides(tree, i_elec, a2_sides_interp, a2_bc_neumann)
            call a2_gc_sides(tree, i_pion, a2_sides_interp, a2_bc_neumann)
+
+           ! Compute new field on first iteration
+           if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
         call a2_loop_box(tree, average_dens)
+
+        ! Compute field with new density
+        call compute_fld(tree, n_fmg_cycles, .false.)
      end do
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
@@ -239,7 +242,7 @@ program streamer_2d
         call prolong_to_new_boxes(tree, ref_info)
 
         ! Compute the field on the new mesh
-        call compute_fld(tree, n_fmg_cycles)
+        call compute_fld(tree, n_fmg_cycles, .false.)
 
         ! This will every now-and-then clean up the data in the tree
         call a2_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
@@ -446,10 +449,11 @@ contains
 
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
-  subroutine compute_fld(tree, n_fmg)
+  subroutine compute_fld(tree, n_cycles, no_guess)
     use m_units_constants
     type(a2_t), intent(inout) :: tree
-    integer, intent(in) :: n_fmg
+    integer, intent(in)       :: n_cycles
+    logical, intent(in)       :: no_guess
     real(dp), parameter :: fac = UC_elem_charge / UC_eps0
     integer :: lvl, i, id, nc
 
@@ -473,8 +477,8 @@ contains
     call a2_restrict_tree(tree, i_rhs)
 
     ! Perform n_fmg full-multigrid cycles
-    do i = 1, n_fmg
-       call mg2_fas_fmg(tree, mg, .false.)
+    do i = 1, n_cycles
+       call mg2_fas_fmg(tree, mg, .false., no_guess .and. i == 1)
     end do
 
     ! Compute field from potential
@@ -497,6 +501,25 @@ contains
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
     box%fy(:, :, f_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
+
+    ! Compute fields at the boundaries of the box, where eps can change (have to
+    ! be careful that there is enough refinement)
+    box%fx(1, :, f_fld) = 2 * inv_dr * &
+         (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
+         box%cc(0, 1:nc, i_eps) / &
+         (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
+    box%fx(nc+1, :, f_fld) = 2 * inv_dr * &
+         (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
+         box%cc(nc+1, 1:nc, i_eps) / &
+         (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
+    box%fy(:, 1, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
+         box%cc(1:nc, 0, i_eps) / &
+         (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
+    box%fy(:, nc+1, f_fld) = 2 * inv_dr * &
+         (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
+         box%cc(1:nc, nc+1, i_eps) / &
+         (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
 
     box%cc(1:nc, 1:nc, i_fld) = sqrt(&
          0.25_dp * (box%fx(1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, f_fld))**2 + &

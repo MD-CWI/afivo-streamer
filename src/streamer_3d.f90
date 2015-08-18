@@ -167,8 +167,7 @@ program streamer_3d
   ! Set up the initial conditions
   do
      call a3_loop_box(tree, set_init_cond)
-     call a3_restrict_tree(tree, i_rhs)
-     call compute_fld(tree, 2 * n_fmg_cycles)
+     call compute_fld(tree, n_fmg_cycles, .true.)
      call a3_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0 .and. ref_info%n_rm == 0) exit
   end do
@@ -213,8 +212,6 @@ program streamer_3d
            call a3_loop_boxes_arg(tree, fluxes_koren, [dt], .true.)
            call a3_consistent_fluxes(tree, [f_elec])
 
-           call compute_fld(tree, n_fmg_cycles)
-
            ! Update the solution
            call a3_loop_box_arg(tree, update_solution, [dt], .true.)
 
@@ -225,10 +222,16 @@ program streamer_3d
            ! Fill ghost cells
            call a3_gc_sides(tree, i_elec, a3_sides_interp, a3_bc_neumann)
            call a3_gc_sides(tree, i_pion, a3_sides_interp, a3_bc_neumann)
+
+           ! Compute new field on first iteration
+           if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
         call a3_loop_box(tree, average_dens)
+
+        ! Compute field with new density
+        call compute_fld(tree, n_fmg_cycles, .false.)
      end do
 
      call a3_adjust_refinement(tree, set_ref_flags, ref_info)
@@ -238,7 +241,7 @@ program streamer_3d
         call prolong_to_new_boxes(tree, ref_info)
 
         ! Compute the field on the new mesh
-        call compute_fld(tree, n_fmg_cycles)
+        call compute_fld(tree, n_fmg_cycles, .false.)
 
         ! This will every now-and-then clean up the data in the tree
         call a3_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
@@ -450,12 +453,13 @@ contains
 
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
-  subroutine compute_fld(tree, n_fmg)
+  subroutine compute_fld(tree, n_cycles, no_guess)
     use m_units_constants
     type(a3_t), intent(inout) :: tree
-    integer, intent(in) :: n_fmg
-    real(dp), parameter :: fac = UC_elem_charge / UC_eps0
-    integer :: lvl, i, id, nc
+    integer, intent(in)       :: n_cycles
+    logical, intent(in)       :: no_guess
+    real(dp), parameter       :: fac = UC_elem_charge / UC_eps0
+    integer                   :: lvl, i, id, nc
 
     nc = tree%n_cell
 
@@ -477,8 +481,8 @@ contains
     call a3_restrict_tree(tree, i_rhs)
 
     ! Perform n_fmg full-multigrid cycles
-    do i = 1, n_fmg
-       call mg3_fas_fmg(tree, mg, .false.)
+    do i = 1, n_cycles
+       call mg3_fas_fmg(tree, mg, .false., no_guess .and. i == 1)
     end do
 
     ! Compute field from potential
