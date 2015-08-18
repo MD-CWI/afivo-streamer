@@ -51,7 +51,7 @@ program test_drift_diff
   vel_z      = 1.0_dp
 
   print *, "Set up the initial conditions"
-  do i = 1, 20
+  do
      ! We should only set the finest level, but this also works
      call a3_loop_box(tree, set_init_cond)
      call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
@@ -86,6 +86,8 @@ program test_drift_diff
         call a3_tree_max_cc(tree, i_err, p_err)
         call a3_tree_min_cc(tree, i_err, n_err)
         print *, "max error", max(p_err, abs(n_err))
+        call a3_tree_sum_cc(tree, i_phi, p_err)
+        print *, "sum phi", p_err
      end if
 
      if (time > end_time) exit
@@ -96,7 +98,7 @@ program test_drift_diff
         do n = 1, n_steps
            call a3_loop_boxes_arg(tree, fluxes_centdif, &
                 [diff_coeff, vel_x, vel_y, vel_z])
-           ! call a3_consistent_fluxes(tree, [1])
+           call a3_consistent_fluxes(tree, [1])
            call a3_loop_box_arg(tree, update_solution, [dt])
            call a3_restrict_tree(tree, i_phi)
            call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
@@ -111,7 +113,7 @@ program test_drift_diff
            do i = 1, 2
               call a3_loop_boxes_arg(tree, fluxes_koren, &
                    [diff_coeff, vel_x, vel_y, vel_z])
-              ! call a3_consistent_fluxes(tree, [1])
+              call a3_consistent_fluxes(tree, [1])
               call a3_loop_box_arg(tree, update_solution, [dt])
               call a3_restrict_tree(tree, i_phi)
               call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)

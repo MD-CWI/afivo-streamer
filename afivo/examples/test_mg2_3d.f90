@@ -63,14 +63,10 @@ program test_mg2_3d
 
   call mg3_init_mg(mg)
 
-  print *, "Restrict from children recursively"
-  call a3_restrict_tree(tree, i_rhs)
-  call a3_restrict_tree(tree, i_phi)
-
   print *, "Do multigrid"
   do i = 1, 10
      ! call mg3_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg3_fas_fmg(tree, mg, .true.)
+     call mg3_fas_fmg(tree, mg, .true., i == 1)
      call a3_loop_box(tree, set_err)
      write(fname, "(A,I0,A)") "test_mg2_3d_", i, ".vtu"
      call a3_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)

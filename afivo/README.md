@@ -42,5 +42,4 @@ For some elaboration on the design choices, see
 Jannis Teunissen, jannis@teunissen.net
 
 ### Todo
-* Add streamer example for 3D code
 * Look for "pretty" examples, generate some animations, and put them online.
