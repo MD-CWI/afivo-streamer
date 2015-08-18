@@ -444,7 +444,7 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    print *, max_fld, dt_cfl, dt_dif, dt_drt, dt_alpha
+    ! print *, max_fld, dt_cfl, dt_dif, dt_drt, dt_alpha
     get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, dt_max)
   end function get_max_dt
 

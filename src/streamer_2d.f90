@@ -366,7 +366,7 @@ contains
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j]) / domain_len
 
-          if (xy(1) < 0.5_dp .and. xy(1) > 0.375_dp) then
+          if (xy(2) < 0.25_dp) then
              box%cc(i, j, i_eps) = epsilon_diel
           else
              box%cc(i, j, i_eps) = 1.0_dp
@@ -441,7 +441,7 @@ contains
 
     get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), &
          dt_alpha, dt_max)
-    print *, max_fld, dt_cfl, dt_drt, dt_alpha
+    ! print *, max_fld, dt_cfl, dt_drt, dt_alpha
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
