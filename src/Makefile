@@ -4,8 +4,8 @@ LIBS	:= afivo silo fosito
 
 include ../afivo/makerules.make
 
-PROGS	:= ../streamer_2d ../streamer_3d test_m_photons\
-	test_photoionization
+PROGS	:= ../streamer_2d ../streamer_3d ../streamer_cyl\
+	test_m_photons test_photoionization
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
@@ -23,8 +23,9 @@ clean:
 	$(RM) $(PROGS) *.o *.mod
 
 # Dependency information
-$(PROGS): 		../afivo/src/libafivo.a ../fosito/libfosito.a
+$(PROGS): 			../afivo/src/libafivo.a ../fosito/libfosito.a
 test_m_photons:		m_photons.o
 test_photoionization:	m_photons.o
 ../streamer_2d: 	m_transport_data.o m_photons.o m_geom.o
 ../streamer_3d: 	m_transport_data.o m_photons.o m_geom.o
+../streamer_cyl: 	m_transport_data.o m_photons.o m_geom.o

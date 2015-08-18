@@ -1,26 +1,19 @@
-applied_fld = 2.0e6
+applied_fld = -2.0e6
 gas_name = AIR
 input_file = td_air_phelps_bolsig.txt
 
 output_dir = output
-dt_output = 25.0e-11
+dt_output = 0.2e-9
 
-dt_max = 5e-11
-sim_name = hello
-end_time = 27.25e-9
-photoi_enabled = t
-photoi_frac_O2 = 0.2
-photoi_eta = 5e-2
-photoi_num_photons = 20000
-epsilon_diel = 100.
+dt_max = 10e-11
+sim_name = test
+end_time = 50e-9
+epsilon_diel = 1.
 domain_len = 32e-3
 
-bg_dens = 0e13
-seed_dens = 1e19 0e15
-seed_rel_r0 = 0.5 0.80 0.5 0.75
-seed_rel_r1 = 0.5 0.9 0.5 0.75
-seed_width = 1.5e-4 1.0e-3
+bg_dens = 0e12
+seed_dens = 2e19 1e15
+seed_rel_r0 = 0.0 0.7 0.0 0.65
+seed_rel_r1 = 0.0 0.65 0.0 0.60
+seed_width = 0.5e-4 0.1e-3
 seed_falloff = 3 1
-
-elec_use_top = f
-elec_use_bot = f
