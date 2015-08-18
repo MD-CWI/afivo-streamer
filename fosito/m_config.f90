@@ -15,7 +15,7 @@ module m_config
 
   ! String lengths
   integer, parameter :: tiny_len = 20
-  integer, parameter :: name_len = 40
+  integer, parameter :: name_len = 80
   integer, parameter :: line_len = 400
 
   ! Maximum length of a variable
@@ -30,7 +30,7 @@ module m_config
 
      real(dp), allocatable                :: real_data(:)
      integer, allocatable                 :: int_data(:)
-     character(len=name_len), allocatable :: char_data(:)
+     character(len=line_len), allocatable :: char_data(:)
      logical, allocatable                 :: logic_data(:)
   end type CFG_var_t
 
@@ -118,49 +118,44 @@ contains
        ! Find variable corresponding to name in file
        call get_var_index(cfg, p_name, ix)
 
-       if (ix > 0) then
-
-          if (cfg%vars(ix)%dyn_size) then
-             ! Get the start and end positions of the line content, and the number of entries
-             call split_line_by_delims(line, " ,'"""//char(9), max_var_len, nEntries, startIxs, endIxs)
-
-             if (cfg%vars(ix)%p_size /= nEntries) then
-                call resize_storage(cfg, ix, cfg%vars(ix)%p_type, nEntries)
-                cfg%vars(ix)%p_size = nEntries
-             end if
-
-             do n = 1, nEntries
-                select case (cfg%vars(ix)%p_type)
-                case (CFG_int_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%int_data(n)
-                case (CFG_real_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%real_data(n)
-                case (CFG_char_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%char_data(n)
-                case (CFG_logic_type)
-                   read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%logic_data(n)
-                end select
-             end do
-          else                  ! Fixed size parameter
-             select case (cfg%vars(ix)%p_type)
-             case (CFG_int_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%int_data
-             case (CFG_real_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%real_data
-             case (CFG_char_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%char_data
-             case (CFG_logic_type)
-                read(line, *, ERR = 999, end = 998) cfg%vars(ix)%logic_data
-             end select
-          end if
-
-       else
+       if (ix <= 0) then
           call handle_error("CFG_read_file: variable [" // trim(p_name) // &
                "] from [" //  filename // "] could not be updated")
+          return
        end if
 
-       ! Go to the next iteration
-       cycle
+       if (cfg%vars(ix)%dyn_size) then
+          ! Get the start and end positions of the line content, and the number of entries
+          call get_fields_string(line, " ,'"""//char(9), max_var_len, nEntries, startIxs, endIxs)
+          if (cfg%vars(ix)%p_size /= nEntries) then
+             call resize_storage(cfg, ix, cfg%vars(ix)%p_type, nEntries)
+             cfg%vars(ix)%p_size = nEntries
+          end if
+
+          do n = 1, nEntries
+             select case (cfg%vars(ix)%p_type)
+             case (CFG_int_type)
+                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%int_data(n)
+             case (CFG_real_type)
+                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%real_data(n)
+             case (CFG_char_type)
+                cfg%vars(ix)%char_data(n) = trim(line(startIxs(n):endIxs(n)))
+             case (CFG_logic_type)
+                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%logic_data(n)
+             end select
+          end do
+       else                  ! Fixed size parameter
+          select case (cfg%vars(ix)%p_type)
+          case (CFG_int_type)
+             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%int_data
+          case (CFG_real_type)
+             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%real_data
+          case (CFG_char_type)
+             cfg%vars(ix)%char_data = trim(line)
+          case (CFG_logic_type)
+             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%logic_data
+          end select
+       end if
     end do
 
 666 continue ! Routine ends here if the end of "filename" is reached
@@ -490,7 +485,7 @@ contains
     CFG_fget_logic = cfg%vars(ix)%logic_data(1)
   end function CFG_fget_logic
 
-  character(len=name_len) function CFG_fget_string(cfg, p_name)
+  character(len=line_len) function CFG_fget_string(cfg, p_name)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
     integer                      :: ix
@@ -610,49 +605,48 @@ contains
 
   end subroutine ensure_free_storage
 
-  !> Routine to help read a variable number of entries from a line.
-  ! In arguments:
-  !  line           The line from which we want to read
-  !  delims         A string with delimiters. For example delims = " ,'"""//char(9)
-  !                 " ,'"""//char(9) = space, comma, single/real quotation marks, tab
-  !  nEntriesMax    Maximum number of entries to read in
-  !
-  ! Out arguments:
-  !  nEntries       Number of entries found
-  !  startIxs       On return, startIxs(i) holds the starting point of entry i
-  !  endIxs         On return, endIxs(i) holds the end point of entry i
-  subroutine split_line_by_delims(line, delims, nEntriesMax, nEntries, startIxs, endIxs)
-    character(len=*), intent(in)  :: line, delims
-    integer, intent(in)           :: nEntriesMax
-    integer, intent(inout)        :: nEntries, startIxs(nEntriesMax), endIxs(nEntriesMax)
+  !> Routine to find the indices of entries in a string
+  subroutine get_fields_string(line, delims, n_max, n_found, ixs_start, ixs_end)
+    !> The line from which we want to read
+    character(len=*), intent(in)  :: line
+    !> A string with delimiters. For example delims = " ,'"""//char(9)
+    character(len=*), intent(in)  :: delims
+    !> Maximum number of entries to read in
+    integer, intent(in)           :: n_max
+    !> Number of entries found
+    integer, intent(inout)        :: n_found
+    !> On return, startIxs(i) holds the starting point of entry i
+    integer, intent(inout)        :: ixs_start(n_max)
+    !> On return, endIxs(i) holds the end point of entry i
+    integer, intent(inout)        :: ixs_end(n_max)
 
-    integer                       :: ix, prevIx
+    integer                       :: ix, ix_prev
 
-    prevIx   = 0
-    nEntries = 0
+    ix_prev = 0
+    n_found = 0
 
-    do while (nEntries < nEntriesMax)
+    do while (n_found < n_max)
 
        ! Find the starting point of the next entry (a non-delimiter value)
-       ix                   = verify(line(prevIx+1:), delims)
-       if (ix == 0) exit                      ! No more entries
+       ix = verify(line(ix_prev+1:), delims)
+       if (ix == 0) exit
 
-       nEntries             = nEntries + 1
-       startIxs(nEntries)   = prevIx + ix     ! This is the absolute position in 'line'
+       n_found            = n_found + 1
+       ixs_start(n_found) = ix_prev + ix ! This is the absolute position in 'line'
 
        ! Get the end point of the current entry (next delimiter index minus one)
-       ix = scan(line(startIxs(nEntries)+1:), delims) - 1
+       ix = scan(line(ixs_start(n_found)+1:), delims) - 1
 
-       if (ix == -1) then                     ! If there is no last delimiter,
-          endIxs(nEntries)  = len(line)       ! the end of the line is the endpoint
+       if (ix == -1) then              ! If there is no last delimiter,
+          ixs_end(n_found) = len(line) ! the end of the line is the endpoint
        else
-          endIxs(nEntries)  = startIxs(nEntries) + ix
+          ixs_end(n_found) = ixs_start(n_found) + ix
        end if
 
-       prevIx = endIxs(nEntries)              ! We continue to search from here
+       ix_prev = ixs_end(n_found) ! We continue to search from here
     end do
 
-  end subroutine split_line_by_delims
+  end subroutine get_fields_string
 
   !> Sort the variables for faster lookup
   subroutine CFG_sort(cfg)

@@ -15,6 +15,7 @@ program test_m_config
   call CFG_add(my_cfg, "my_age", 25, "Age of the author of this code")
   call CFG_add(my_cfg, "my_fav_reals", (/1.337d0, 13.37d0, 3.1337d0/), "My favorite numbers", dyn_size=.true.)
   call CFG_add(my_cfg, "lots_of_work", .true., "Whether I have a lot of work to do")
+  call CFG_add(my_cfg, "filename", "this/is/a/filename", "Example of a filename")
 
   print *, "Original values"
   call CFG_write(my_cfg, "stdout")                      ! Write to stdout (only when given the filename "stdout")
