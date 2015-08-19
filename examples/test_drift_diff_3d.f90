@@ -54,14 +54,14 @@ program test_drift_diff
   do
      ! We should only set the finest level, but this also works
      call a3_loop_box(tree, set_init_cond)
-     call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+     call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
      call a3_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
   ! Restrict the initial conditions
   call a3_restrict_tree(tree, i_phi)
-  call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+  call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
 
   print *, "Starting simulation"
   do
@@ -101,7 +101,7 @@ program test_drift_diff
            call a3_consistent_fluxes(tree, [1])
            call a3_loop_box_arg(tree, update_solution, [dt])
            call a3_restrict_tree(tree, i_phi)
-           call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+           call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
            time = time + dt
         end do
      case (2)
@@ -116,7 +116,7 @@ program test_drift_diff
               call a3_consistent_fluxes(tree, [1])
               call a3_loop_box_arg(tree, update_solution, [dt])
               call a3_restrict_tree(tree, i_phi)
-              call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+              call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
            end do
 
            ! Take average of phi_old and phi
@@ -127,7 +127,7 @@ program test_drift_diff
 
      call a3_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+     call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
      call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -151,11 +151,9 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    ! if (boxes(id)%lvl < 4) ref_flags(id) = a5_do_ref
-
-    if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
+    if (boxes(id)%lvl < 3 .or. diff > 0.1_dp) then
        ref_flags(id) = a5_do_ref
-    else if (diff > 0.2_dp * 0.05_dp) then
+    else if (diff > 0.2_dp * 0.025_dp) then
        ref_flags(id) = a5_kp_ref
     else if (boxes(id)%lvl > 4) then
        ref_flags(id) = a5_rm_ref
@@ -468,7 +466,7 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a3_gc_box_sides(tree%boxes, id, i_phi, &
-               a3_sides_interp, have_no_bc)
+               a3_sides_interp_lim, have_no_bc)
        end do
     end do
   end subroutine prolong_to_new_children

@@ -51,14 +51,14 @@ program test_drift_diff
   do
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
-     call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+     call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
   print *, "Restrict the initial conditions"
   call a2_restrict_tree(tree, i_phi)
-  call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+  call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
 
   do
      dr_min  = a2_min_dr(tree)
@@ -68,14 +68,14 @@ program test_drift_diff
      if (output_cnt * dt_output <= time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0,A)") "test_drift_diff_2d_", output_cnt, ".vtu"
+        write(fname, "(A,I0,A)") "test_drift_diff_2d_", output_cnt, ".silo"
      else
         write_out = .false.
      end if
 
      if (write_out) then
         call a2_loop_box_arg(tree, set_error, [time])
-        call a2_write_vtk(tree, trim(fname), &
+        call a2_write_silo(tree, trim(fname), &
              (/"phi", "tmp", "err"/), output_cnt, time)
         call a2_tree_max_cc(tree, i_err, p_err)
         call a2_tree_min_cc(tree, i_err, n_err)
@@ -93,7 +93,7 @@ program test_drift_diff
         call a2_consistent_fluxes(tree, [1])
         call a2_loop_box_arg(tree, update_solution, [dt])
         call a2_restrict_tree(tree, i_phi)
-        call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+        call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
         time = time + dt
      case (2)
         ! Copy previous solution
@@ -105,7 +105,7 @@ program test_drift_diff
            call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
-           call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+           call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
         end do
 
         ! Take average of phi_old and phi
@@ -115,7 +115,7 @@ program test_drift_diff
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+     call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -137,16 +137,16 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 0:nc, i_phi))))
 
-    ! if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
-    !    ref_flags(id) = a5_do_ref
-    ! else if (diff > 0.2_dp * 0.05_dp) then
-    !    ref_flags(id) = a5_kp_ref
-    ! else if (boxes(id)%lvl > 4) then
-    !    ref_flags(id) = a5_rm_ref
-    ! end if
+    if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
+       ref_flags(id) = a5_do_ref
+    else if (diff > 0.2_dp * 0.05_dp) then
+       ref_flags(id) = a5_kp_ref
+    else if (boxes(id)%lvl > 4) then
+       ref_flags(id) = a5_rm_ref
+    end if
 
-    if (boxes(id)%lvl < 5) ref_flags(id) = a5_do_ref
-    if (boxes(id)%lvl < 6 .and. boxes(id)%r_min(1) < 4) ref_flags(id) = a5_do_ref
+    ! if (boxes(id)%lvl < 4) ref_flags(id) = a5_do_ref
+    ! if (boxes(id)%lvl < 6 .and. boxes(id)%r_min(1) < 4) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -184,14 +184,14 @@ contains
     real(dp) :: sol, xy_t(2)
 
     xy_t = xy - [vel_x, vel_y] * t
-    xy_t = modulo(xy_t, domain_len) / domain_len
+    sol = sin(xy_t(1))**4 * cos(xy_t(2))**4
 
-    if (norm2(xy_t - [0.5_dp, 0.5_dp]) < 0.25_dp) then
-       sol = 1
-    else
-       sol = 0
-    end if
-    ! sol = sin(xy_t(1))**4 * cos(xy_t(2))**4
+    ! xy_t = modulo(xy_t, domain_len) / domain_len
+    ! if (norm2(xy_t - [0.5_dp, 0.5_dp]) < 0.25_dp) then
+    !    sol = 1
+    ! else
+    !    sol = 0
+    ! end if
   end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)
@@ -389,7 +389,7 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
-               a2_sides_interp, have_no_bc)
+               a2_sides_interp_lim, have_no_bc)
        end do
     end do
   end subroutine prolong_to_new_children
