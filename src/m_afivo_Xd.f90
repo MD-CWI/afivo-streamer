@@ -2159,6 +2159,115 @@ contains
 
   end subroutine a$D_sides_interp
 
+  !> Interpolate between fine points and coarse neighbors to fill ghost cells
+  !> near refinement boundaries. The ghost values are less than twice the coarse
+  !> values.
+  subroutine a$D_sides_interp_lim(boxes, id, nb, iv)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
+    integer                     :: nc, ix, ix_c, ix_f, i, j
+    integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
+    integer                     :: p_id, ix_offset($D)
+    real(dp)                    :: c1, c2
+    real(dp), parameter         :: sixth=1/6.0_dp, third=1/3.0_dp
+#if $D == 3
+    integer                     :: k_c1, k_c2, k
+    real(dp)                    :: c3
+#endif
+
+    nc        = boxes(id)%n_cell
+    p_id      = boxes(id)%parent
+    p_nb_id   = boxes(p_id)%neighbors(nb)
+    ix_offset = a$D_get_child_offset(boxes(id), nb)
+
+    if (a$D_nb_low(nb)) then
+       ix = 0
+       ix_f = 1
+       ix_c = nc
+    else
+       ix = nc+1
+       ix_f = nc
+       ix_c = 1
+    end if
+
+    select case (a$D_nb_dim(nb))
+#if $D == 2
+    case (1)
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          c1 = boxes(p_nb_id)%cc(ix_c, j_c1, iv)
+          c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)
+          boxes(id)%cc(ix, j, iv) = 0.5_dp * c1 + sixth * c2 + &
+               third * boxes(id)%cc(ix_f, j, iv)
+          if (boxes(id)%cc(ix, j, iv) > 2 * c1) boxes(id)%cc(ix, j, iv) = 2 * c1
+       end do
+    case (2)
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+          c1 = boxes(p_nb_id)%cc(i_c1, ix_c, iv)
+          c2 = boxes(p_nb_id)%cc(i_c2, ix_c, iv)
+          boxes(id)%cc(i, ix, iv) = 0.5_dp * c1 + sixth * c2 + &
+               third * boxes(id)%cc(i, ix_f, iv)
+          if (boxes(id)%cc(i, ix, iv) > 2 * c1) boxes(id)%cc(i, ix, iv) = 2 * c1
+       end do
+#elif $D==3
+    case (1)
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+             c1 = boxes(p_nb_id)%cc(ix_c, j_c1, k_c1, iv)
+             c2 = boxes(p_nb_id)%cc(ix_c, j_c2, k_c1, iv)
+             c3 = boxes(p_nb_id)%cc(ix_c, j_c1, k_c2, iv)
+             boxes(id)%cc(ix, j, k, iv) = third * c1 + sixth * c2 + &
+                  sixth * c3 + third * boxes(id)%cc(ix_f, j, k, iv)
+             if (boxes(id)%cc(ix, j, k, iv) > 2 * c1) &
+                  boxes(id)%cc(ix, j, k, iv) = 2 * c1
+          end do
+       end do
+    case (2)
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+             c1 = boxes(p_nb_id)%cc(i_c1, ix_c, k_c1, iv)
+             c2 = boxes(p_nb_id)%cc(i_c2, ix_c, k_c1, iv)
+             c3 = boxes(p_nb_id)%cc(i_c1, ix_c, k_c2, iv)
+             boxes(id)%cc(i, ix, k, iv) = third * c1 + sixth * c2 + &
+                  sixth * c3 + third * boxes(id)%cc(i, ix_f, k, iv)
+             if (boxes(id)%cc(i, ix, k, iv) > 2 * c1) &
+                  boxes(id)%cc(i, ix, k, iv) = 2 * c1
+          end do
+       end do
+    case (3)
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+             c1 = boxes(p_nb_id)%cc(i_c1, j_c1, ix_c, iv)
+             c2 = boxes(p_nb_id)%cc(i_c1, j_c2, ix_c, iv)
+             c3 = boxes(p_nb_id)%cc(i_c2, j_c1, ix_c, iv)
+             boxes(id)%cc(i, j, ix, iv) = third * c1 + sixth * c2 + &
+                  sixth * c3 + third * boxes(id)%cc(i, j, ix_f, iv)
+             if (boxes(id)%cc(i, j, ix, iv) > 2 * c1) &
+                  boxes(id)%cc(i, j, ix, iv) = 2 * c1
+          end do
+       end do
+#endif
+    end select
+
+  end subroutine a$D_sides_interp_lim
+
   ! This fills ghost cells near physical boundaries using Neumann zero
   subroutine a$D_bc_neumann(boxes, id, nb, iv)
     type(box$D_t), intent(inout) :: boxes(:)
@@ -2407,19 +2516,12 @@ contains
 
   end subroutine a$D_sides2_prolong1
 
-  !> Restrict fluxes from children to parents on refinement boundaries. If the
-  !> argument only_outflux is true, then: restrict fine 'out' fluxes, and use
-  !> coarse 'in' fluxes. Note that this assumes densities are positive!
-  !> TODO: test this outflux option
-  subroutine a$D_consistent_fluxes(tree, f_ixs, only_outflux)
+  !> Restrict fluxes from children to parents on refinement boundaries.
+  subroutine a$D_consistent_fluxes(tree, f_ixs)
     use omp_lib
     type(a$D_t), intent(inout)     :: tree         !< Tree to operate on
     integer, intent(in)           :: f_ixs(:)     !< Indices of the fluxes
-    logical, intent(in), optional :: only_outflux !< See function description
     integer                       :: lvl, i, id, nb, nb_id
-    logical                       :: only_out
-
-    only_out = .false.; if (present(only_outflux)) only_out = only_outflux
 
     !$omp parallel private(lvl, i, id, nb, nb_id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl-1
@@ -2432,8 +2534,7 @@ contains
              ! If the neighbor exists and has no children, set flux
              if (nb_id > a5_no_box) then
                 if (.not. a$D_has_children(tree%boxes(nb_id))) then
-                   call a$D_flux_from_children(tree%boxes, id, nb, &
-                        f_ixs, only_out)
+                   call a$D_flux_from_children(tree%boxes, id, nb, f_ixs)
                 end if
              end if
           end do
@@ -2445,12 +2546,11 @@ contains
 
   !> The neighbor nb has no children and id does, so set flux on the neighbor
   !> from our children. This ensures flux consistency at refinement boundary.
-  subroutine a$D_flux_from_children(boxes, id, nb, f_ixs, only_outflux)
+  subroutine a$D_flux_from_children(boxes, id, nb, f_ixs)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)         :: id        !< Id of box for which we set fluxes
     integer, intent(in)         :: nb        !< Direction in which fluxes are set
     integer, intent(in)         :: f_ixs(:)  !< Indices of the fluxes
-    logical, intent(in)         :: only_outflux !< See function description
     integer                     :: nc, nch, c_id, i_ch, i, ic, d, ioff($D)
     integer                     :: n_chnb, nb_id, i_nb
 
@@ -2477,35 +2577,18 @@ contains
           c_id = boxes(id)%children(i_ch)
           ! Index offset of child w.r.t. parent
           ioff = nch*a2_ch_dix(:, i_ch)
-
-          where (only_outflux .and. (a$D_nb_low(nb) .eqv. &
-               boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) > 0))
-             boxes(c_id)%fx(i, 1:nc:2, f_ixs) = &
-                  boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs)
-             boxes(c_id)%fx(i, 1:nc:2, f_ixs) = &
-                  boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs)
-          elsewhere
-             boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) = 0.5_dp * ( &
-                  boxes(c_id)%fx(i, 1:nc:2, f_ixs) + &
-                  boxes(c_id)%fx(i, 2:nc:2, f_ixs))
-          end where
+          boxes(nb_id)%fx(i_nb, ioff(2)+1:ioff(2)+nch, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fx(i, 1:nc:2, f_ixs) + &
+               boxes(c_id)%fx(i, 2:nc:2, f_ixs))
        end do
     case (2)
        do ic = 1, n_chnb
           i_ch = a2_ch_adj_nb(ic, nb)
           c_id = boxes(id)%children(i_ch)
           ioff = nch*a2_ch_dix(:, i_ch)
-          where (only_outflux .and. (a$D_nb_low(nb) .eqv. &
-               boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) > 0))
-             boxes(c_id)%fy(1:nc:2, i, f_ixs) = &
-                  boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs)
-             boxes(c_id)%fy(2:nc:2, i, f_ixs) = &
-                  boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs)
-          elsewhere
-             boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) = 0.5_dp * ( &
-                  boxes(c_id)%fy(1:nc:2, i, f_ixs) + &
-                  boxes(c_id)%fy(2:nc:2, i, f_ixs))
-          end where
+          boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) = 0.5_dp * ( &
+               boxes(c_id)%fy(1:nc:2, i, f_ixs) + &
+               boxes(c_id)%fy(2:nc:2, i, f_ixs))
        end do
 #elif $D == 3
     case (1)
