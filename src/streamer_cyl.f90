@@ -210,8 +210,8 @@ program streamer_cyl
            call a2_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a2_gc_sides(tree, i_elec, a2_sides_interp, a2_bc_neumann)
-           call a2_gc_sides(tree, i_pion, a2_sides_interp, a2_bc_neumann)
+           call a2_gc_sides(tree, i_elec, a2_sides_interp_lim, a2_bc_neumann)
+           call a2_gc_sides(tree, i_pion, a2_sides_interp_lim, a2_bc_neumann)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
@@ -307,7 +307,7 @@ contains
        end do
     end if
 
-    if (adx > 1.0_dp) ref_flags(id) = a5_do_ref
+    if (adx > 1.0_dp .and. max_dns > 1e10_dp) ref_flags(id) = a5_do_ref
     ! if (adx > -0.2_dp .and. crv_phi > 10 .and. boxes(id)%cc(1,1,i_eps) <= 1.0_dp) &
     ! if (adx > 0.1_dp .and. crv_phi > 15) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
@@ -354,7 +354,7 @@ contains
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j]) / domain_len
 
-          if (xy(2) < 0.25_dp) then
+          if (xy(1) < 0.25_dp) then
              box%cc(i, j, i_eps) = epsilon_diel
           else
              box%cc(i, j, i_eps) = 1.0_dp
@@ -382,8 +382,9 @@ contains
     diff_coeff   = LT_get_col(td_tbl, i_diffusion, max_fld)
     alpha        = LT_get_col(td_tbl, i_alpha, max_fld)
 
-    ! CFL condition
-    dt_cfl = 0.7_dp * dr_min / (mobility * max_fld) ! Factor ~ sqrt(0.5)
+    ! CFL condition. Note there should be a factor sqrt(0.5), but instead we
+    ! rely on the CFL number 0.5 at the bottom
+    dt_cfl = dr_min / (mobility * max_fld)
 
     ! Diffusion condition
     dt_dif = 0.25_dp * dr_min**2 / diff_coeff
@@ -395,7 +396,7 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.7_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, dt_max)
+    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, dt_max)
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -749,9 +750,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_elec, &
-               a2_sides_interp, a2_bc_neumann)
+               a2_sides_interp_lim, a2_bc_neumann)
           call a2_gc_box_sides(tree%boxes, id, i_pion, &
-               a2_sides_interp, a2_bc_neumann)
+               a2_sides_interp_lim, a2_bc_neumann)
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
                mg2_sides_rb, sides_bc_pot)
        end do
