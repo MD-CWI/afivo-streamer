@@ -21,12 +21,16 @@ which is automatically downloaded and compiled.
 
 ### Running the code
 
-    ./streamer_2d example_2d.txt
-    ./streamer_cyl example_cyl.txt
-    ./streamer_3d example_3d.txt
+    ./streamer_2d cfgs/example_2d.txt
+    ./streamer_cyl cfgs/example_cyl.txt
+    ./streamer_3d cfgs/example_3d.txt
 
 where the configuration files include the parameters that you want to use, see
-the examples in the *config* directory.
+the examples in the **cfgs** directory. You can also specify multiple configuration files, like
+
+    ./streamer_2d cfg_1.txt cfg_2.txt ...
+
+Options from later files will override earlier files.
 
 ### Getting input data (transport coefficients)
 
@@ -38,7 +42,7 @@ Transport data can be computed from cross sections with for example:
 * Particle_swarm https://github.com/jannisteunissen/particle_swarm
 
 Cross section can be obtained from http://lxcat.net. The format of the transport
-data used for the streamer models is illustrated in the files in the *input*
+data used for the streamer models is illustrated in the files in the **input**
 folder.
 
 ### Format of output data
