@@ -54,23 +54,8 @@ program streamer_3d
      integer, allocatable  :: seed_falloff(:)
   end type initcnd_t
 
-  type elec_t
-     logical  :: use_top
-     real(dp) :: top_voltage
-     real(dp) :: top_r0(3)
-     real(dp) :: top_r1(3)
-     real(dp) :: top_radius
 
-     logical  :: use_bot
-     real(dp) :: bot_voltage
-     real(dp) :: bot_r0(3)
-     real(dp) :: bot_r1(3)
-     real(dp) :: bot_radius
-  end type elec_t
-
-  type(initcnd_t) :: init_cond
-  type(elec_t) :: elec
-
+  type(initcnd_t)    :: init_cond
   type(LT_table_t)   :: td_tbl  ! Table with transport data vs fld
   type(CFG_t)        :: sim_cfg ! The configuration for the simulation
   type(a3_t)         :: tree    ! This contains the full grid information
@@ -82,7 +67,7 @@ program streamer_3d
   real(dp)         :: photoi_frac_O2     ! Oxygen fraction
   real(dp)         :: photoi_eta         ! Photoionization efficiency
   integer          :: photoi_num_photons ! Number of photons to use
-  type(PH_tbl_t) :: photoi_tbl         ! Table for photoionization
+  type(PH_tbl_t)   :: photoi_tbl         ! Table for photoionization
 
   integer            :: i, n, n_steps_amr
   integer            :: output_cnt
@@ -102,6 +87,9 @@ program streamer_3d
 
   ! The applied electric field
   real(dp) :: applied_fld
+
+  ! The applied voltage
+  real(dp) :: applied_voltage
 
   ! Pressure of the gas in bar
   real(dp) :: gas_pressure
@@ -136,9 +124,17 @@ program streamer_3d
   call CFG_get(sim_cfg, "dt_max", dt_max)
   call CFG_get(sim_cfg, "epsilon_diel", epsilon_diel)
 
-  call initialize(sim_cfg)
+  tmp_name = trim(output_dir) // "/" // trim(sim_name) // "_config.txt"
+  print *, "Settings written to ", trim(tmp_name)
+  call CFG_write(sim_cfg, trim(tmp_name))
+
+  ! Initialize the transport coefficients
+  call init_transport_coeff(sim_cfg)
+
+  ! Set the initial conditions from the configuration
+  applied_voltage = -domain_len * applied_fld
   call get_init_cond(sim_cfg, init_cond)
-  call get_elec_cfg(sim_cfg, elec)
+
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -289,22 +285,19 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
     integer                  :: nc, n
-    real(dp)                 :: dr2, max_fld, max_dns
-    real(dp)                 :: boxlen, dist, alpha
+    real(dp)                 :: dr2, max_fld, max_dns, crv_phi
+    real(dp)                 :: boxlen, dist, alpha, adx
 
     nc        = boxes(id)%n_cell
     dr2       = boxes(id)%dr**2
+    crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_fld))
     max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_elec))
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
+    adx       = boxes(id)%dr * alpha
 
-    if (boxes(id)%dr * alpha < 0.1_dp) then
-       if (max_dns > 1e17_dp) then
-          if (boxes(id)%dr < 1.0e-4_dp) ref_flags(id) = a5_rm_ref
-       else
-          if (boxes(id)%dr < 2.5e-4_dp) ref_flags(id) = a5_rm_ref
-       end if
-    end if
+    if (adx < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
+         ref_flags(id) = a5_rm_ref
 
     if (time < 5.0e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
@@ -320,8 +313,7 @@ contains
        end do
     end if
 
-    if (boxes(id)%dr * alpha > 1.0_dp .and. max_dns > 1e12_dp) &
-         ref_flags(id) = a5_do_ref
+    if (adx > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
 
   end subroutine set_ref_flags
 
@@ -381,41 +373,6 @@ contains
     end do
   end subroutine set_box_eps
 
-  ! subroutine set_box_lsf(box)
-  !   use m_geom
-  !   type(box3_t), intent(inout) :: box
-  !   integer                     :: i, j, k, nc
-  !   real(dp), parameter         :: high_lsf_value = 1e10_dp
-  !   real(dp)                    :: xy(3), lsf
-
-  !   nc = box%n_cell
-
-  !   do k = 0, nc+1
-  !      do j = 0, nc+1
-  !         do i = 0, nc+1
-  !            xy = a3_r_cc(box, [i,j,k])
-  !            box%cc(i, j, k, i_lsf) = high_lsf_value
-
-  !            if (elec%use_top) then
-  !               lsf = GM_dist_line(xy, elec%top_r0, elec%top_r1, 3) - &
-  !                    elec%top_radius
-  !               box%cc(i, j, k, i_bval) = elec%top_voltage
-  !               box%cc(i, j, k, i_lsf) = lsf
-  !            end if
-
-  !            if (elec%use_bot) then
-  !               lsf = GM_dist_line(xy, elec%bot_r0, elec%bot_r1, 3) - &
-  !                    elec%bot_radius
-  !               if (lsf < box%cc(i, j, k, i_lsf)) then
-  !                  box%cc(i, j, k, i_bval) = elec%bot_voltage
-  !                  box%cc(i, j, k, i_lsf) = lsf
-  !               end if
-  !            end if
-  !         end do
-  !      end do
-  !   end do
-  ! end subroutine set_box_lsf
-
   ! Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
     type(a3_t), intent(in) :: tree
@@ -436,7 +393,7 @@ contains
     alpha        = LT_get_col(td_tbl, i_alpha, max_fld)
 
     ! CFL condition
-    dt_cfl = 0.7_dp * dr_min / (mobility * max_fld) ! factor ~ sqrt(0.5)
+    dt_cfl = dr_min / (mobility * max_fld) ! factor ~ sqrt(0.5)
 
     ! Diffusion condition
     dt_dif = 0.25_dp * dr_min**2 / diff_coeff
@@ -447,8 +404,7 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    ! print *, max_fld, dt_cfl, dt_dif, dt_drt, dt_alpha
-    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, dt_max)
+    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, dt_max)
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -886,11 +842,10 @@ contains
        boxes(id)%cc(1:nc, 0, 1:nc, iv) = boxes(id)%cc(1:nc, 1, 1:nc, iv)
     case (a3_nb_hy)
        boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = boxes(id)%cc(1:nc, nc, 1:nc, iv)
-    case (a3_nb_lz)
-       boxes(id)%cc(1:nc, 1:nc, 0, iv) = 2 * elec%bot_voltage &
-            - boxes(id)%cc(1:nc, 1:nc, 1, iv)
+    case (a3_nb_lz)             ! Grounded
+       boxes(id)%cc(1:nc, 1:nc, 0, iv) = - boxes(id)%cc(1:nc, 1:nc, 1, iv)
     case (a3_nb_hz)
-       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = 2 * elec%top_voltage &
+       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = 2 * applied_voltage &
             - boxes(id)%cc(1:nc, 1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
@@ -966,37 +921,6 @@ contains
     call CFG_get(cfg, "seed_falloff", cond%seed_falloff)
   end subroutine get_init_cond
 
-  subroutine get_elec_cfg(cfg, elec)
-    type(CFG_t), intent(in)   :: cfg
-    type(elec_t), intent(out) :: elec
-    real(dp)                  :: dlen, fld
-
-    call CFG_get(cfg, "domain_len", dlen)
-    call CFG_get(cfg, "applied_fld", fld)
-
-    call CFG_get(cfg, "elec_use_top", elec%use_top)
-    call CFG_get(cfg, "elec_top_voltage", elec%top_voltage)
-    call CFG_get(cfg, "elec_top_rel_r0", elec%top_r0)
-    call CFG_get(cfg, "elec_top_rel_r1", elec%top_r1)
-    call CFG_get(cfg, "elec_top_radius", elec%top_radius)
-    elec%top_r0 = elec%top_r0 * dlen
-    elec%top_r1 = elec%top_r1 * dlen
-
-    call CFG_get(cfg, "elec_use_bot", elec%use_bot)
-    call CFG_get(cfg, "elec_bot_voltage", elec%bot_voltage)
-    call CFG_get(cfg, "elec_bot_rel_r0", elec%bot_r0)
-    call CFG_get(cfg, "elec_bot_rel_r1", elec%bot_r1)
-    call CFG_get(cfg, "elec_bot_radius", elec%bot_radius)
-    elec%bot_r0 = elec%bot_r0 * dlen
-    elec%bot_r1 = elec%bot_r1 * dlen
-
-    ! Without electrodes, use the applied field
-    if (.not. (elec%use_top .or. elec%use_bot)) then
-       elec%top_voltage = -dlen * fld
-       elec%bot_voltage = 0
-    end if
-  end subroutine get_elec_cfg
-
   subroutine create_cfg(cfg)
     type(CFG_t), intent(inout) :: cfg
 
@@ -1018,27 +942,6 @@ contains
          "The applied electric field if there are no electrodes")
     call CFG_add(cfg, "epsilon_diel", 1.5_dp, &
          "The dielectric constant of the dielectric")
-
-    call CFG_add(cfg, "elec_use_top", .true., &
-         "Use top electrode")
-    call CFG_add(cfg, "elec_top_voltage", 5e3_dp, &
-         "Voltage top electrode")
-    call CFG_add(cfg, "elec_top_rel_r0", [0.5d0, 0.5d0, 0.8d0], &
-         "The relative start position of the top electrode")
-    call CFG_add(cfg, "elec_top_rel_r1", [0.5d0, 0.5d0, 1.0d0], &
-         "The relative end position of the top electrode")
-    call CFG_add(cfg, "elec_top_radius", 4.0d-3, &
-         "The radius of the top electrode")
-    call CFG_add(cfg, "elec_use_bot", .true., &
-         "Use bot electrode")
-    call CFG_add(cfg, "elec_bot_voltage", 0e0_dp, &
-         "Voltage bot electrode")
-    call CFG_add(cfg, "elec_bot_rel_r0", [0.5d0, 0.5d0, 0.0d0], &
-         "The relative start position of the bot electrode")
-    call CFG_add(cfg, "elec_bot_rel_r1", [0.5d0, 0.5d0, 0.2d0], &
-         "The relative end position of the bot electrode")
-    call CFG_add(cfg, "elec_bot_radius", 4.0d-3, &
-         "The radius of the bot electrode")
 
     call CFG_add(cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")
@@ -1066,7 +969,7 @@ contains
          "Fraction of oxygen")
     call CFG_add(cfg, "photoi_eta", 0.05_dp, &
          "Photoionization efficiency factor")
-    call CFG_add(cfg, "photoi_num_photons", 100*1000, &
+    call CFG_add(cfg, "photoi_num_photons", 400*1000, &
          "Number of discrete photons to use for photoionization")
 
     call CFG_add(cfg, "input_file", "transport_data_file.txt", &
@@ -1085,7 +988,7 @@ contains
          "The name of the eff. attachment coeff.")
   end subroutine create_cfg
 
-  subroutine initialize(cfg)
+  subroutine init_transport_coeff(cfg)
     use m_transport_data
     use m_config
 
@@ -1138,6 +1041,6 @@ contains
             2 * domain_len)
     end if
 
-  end subroutine initialize
+  end subroutine init_transport_coeff
 
 end program streamer_3d

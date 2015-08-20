@@ -285,7 +285,7 @@ contains
     integer, intent(inout)   :: ref_flags(:)
     integer                  :: nc, n
     real(dp)                 :: crv_phi, dr2, max_fld, max_dns
-    real(dp)                 :: boxlen, dist, alpha
+    real(dp)                 :: boxlen, dist, alpha, adx
 
     nc        = boxes(id)%n_cell
     dr2       = boxes(id)%dr**2
@@ -293,8 +293,9 @@ contains
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
     max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
+    adx       = boxes(id)%dr * alpha
 
-    if (boxes(id)%dr * alpha < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
+    if (adx < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
     ! Refine around initial conditions
@@ -312,7 +313,7 @@ contains
        end do
     end if
 
-    if (boxes(id)%dr * alpha > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
+    if (adx > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
 
   end subroutine set_ref_flags
 
@@ -891,27 +892,6 @@ contains
          "The applied electric field")
     call CFG_add(cfg, "epsilon_diel", 1.5_dp, &
          "The dielectric constant of the dielectric")
-
-    call CFG_add(cfg, "elec_use_top", .true., &
-         "Use top electrode")
-    call CFG_add(cfg, "elec_top_voltage", 5e3_dp, &
-         "Voltage top electrode")
-    call CFG_add(cfg, "elec_top_rel_r0", [0.5d0, 0.8d0], &
-         "The relative start position of the top electrode")
-    call CFG_add(cfg, "elec_top_rel_r1", [0.5d0, 1.0d0], &
-         "The relative end position of the top electrode")
-    call CFG_add(cfg, "elec_top_radius", 4.0d-3, &
-         "The radius of the top electrode")
-    call CFG_add(cfg, "elec_use_bot", .true., &
-         "Use bot electrode")
-    call CFG_add(cfg, "elec_bot_voltage", 0e0_dp, &
-         "Voltage bot electrode")
-    call CFG_add(cfg, "elec_bot_rel_r0", [0.5d0, 0.0d0], &
-         "The relative start position of the bot electrode")
-    call CFG_add(cfg, "elec_bot_rel_r1", [0.5d0, 0.2d0], &
-         "The relative end position of the bot electrode")
-    call CFG_add(cfg, "elec_bot_radius", 4.0d-3, &
-         "The radius of the bot electrode")
 
     call CFG_add(cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")

@@ -121,12 +121,15 @@ program streamer_cyl
   call CFG_get(sim_cfg, "dt_max", dt_max)
   call CFG_get(sim_cfg, "epsilon_diel", epsilon_diel)
 
-  applied_voltage = -domain_len * applied_fld
+  tmp_name = trim(output_dir) // "/" // trim(sim_name) // "_config.txt"
+  print *, "Settings written to ", trim(tmp_name)
+  call CFG_write(sim_cfg, trim(tmp_name))
 
   ! Initialize the transport coefficients
   call init_transport_coeff(sim_cfg)
 
   ! Set the initial conditions from the configuration
+  applied_voltage = -domain_len * applied_fld
   call get_init_cond(sim_cfg, init_cond)
 
   ! Initialize the tree (which contains all the mesh information)
@@ -288,9 +291,9 @@ contains
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
     max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
+    adx       = boxes(id)%dr * alpha
 
-    adx = boxes(id)%dr * alpha
-    if (adx < 0.1_dp .and. boxes(id)%dr < 0.5e-5_dp) &
+    if (adx < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
     if (time < 2.0e-9_dp) then
@@ -307,9 +310,7 @@ contains
        end do
     end if
 
-    if (adx > 1.0_dp .and. max_dns > 1e10_dp) ref_flags(id) = a5_do_ref
-    ! if (adx > -0.2_dp .and. crv_phi > 10 .and. boxes(id)%cc(1,1,i_eps) <= 1.0_dp) &
-    ! if (adx > 0.1_dp .and. crv_phi > 15) ref_flags(id) = a5_do_ref
+    if (adx > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -874,7 +875,7 @@ contains
          "Fraction of oxygen")
     call CFG_add(cfg, "photoi_eta", 0.05_dp, &
          "Photoionization efficiency factor")
-    call CFG_add(cfg, "photoi_num_photons", 10*1000, &
+    call CFG_add(cfg, "photoi_num_photons", 50*1000, &
          "Number of discrete photons to use for photoionization")
 
     call CFG_add(cfg, "input_file", "transport_data_file.txt", &

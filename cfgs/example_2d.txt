@@ -1,20 +1,120 @@
-sim_name = example_2d
-applied_fld = 2.5e6
-domain_len = 32e-3
-epsilon_diel = 1.0
-photoi_enabled = true
+ ##############################################
+ ###          Configuration file            ###
+ ##############################################
 
-gas_name = AIR
-input_file = input/td_air_phelps_bolsig.txt
-output_dir = output
+ # The desired endtime in seconds of the simulation:
+ end_time = 0.1500E-07
 
-dt_output = 0.25e-9
-dt_max = 10e-11
-end_time = 15e-9
+ # The name of the simulation:
+ sim_name = example_2d
 
-bg_dens = 1e13
-seed_dens = 2e19
-seed_rel_r0 = 0.5 0.6
-seed_rel_r1 = 0.5 0.5
-seed_width = 2.0e-4
-seed_falloff = 3
+ # Directory where the output should be written:
+ output_dir = output
+
+ # The number of grid cells per coordinate in a box:
+ box_size = 8
+
+ # The length of the (square) domain:
+ domain_len = 0.3200E-01
+
+ # The name of the gas mixture used:
+ gas_name = AIR
+
+ # The gas pressure in bar (used for photoionization):
+ gas_pressure = 0.1000E+01
+
+ # The applied electric field:
+ applied_fld = 0.2500E+07
+
+ # The dielectric constant of the dielectric:
+ epsilon_diel = 0.1000E+01
+
+ # Use top electrode:
+ elec_use_top = T
+
+ # Voltage top electrode:
+ elec_top_voltage = 0.5000E+04
+
+ # The relative start position of the top electrode:
+ elec_top_rel_r0 = 0.5000E+00 0.8000E+00
+
+ # The relative end position of the top electrode:
+ elec_top_rel_r1 = 0.5000E+00 0.1000E+01
+
+ # The radius of the top electrode:
+ elec_top_radius = 0.4000E-02
+
+ # Use bot electrode:
+ elec_use_bot = T
+
+ # Voltage bot electrode:
+ elec_bot_voltage = 0.0000E+00
+
+ # The relative start position of the bot electrode:
+ elec_bot_rel_r0 = 0.5000E+00 0.0000E+00
+
+ # The relative end position of the bot electrode:
+ elec_bot_rel_r1 = 0.5000E+00 0.2000E+00
+
+ # The radius of the bot electrode:
+ elec_bot_radius = 0.4000E-02
+
+ # The background ion and electron density in 1/m^3:
+ bg_dens = 0.1000E+14
+
+ # Initial density of the seed:
+ seed_dens = 0.2000E+20
+
+ # The relative start position of the initial seed:
+ seed_rel_r0 = 0.5000E+00 0.6000E+00
+
+ # The relative end position of the initial seed:
+ seed_rel_r1 = 0.5000E+00 0.5000E+00
+
+ # Seed width:
+ seed_width = 0.2000E-03
+
+ # Fallof type for seed, see m_geom.f90:
+ seed_falloff = 3
+
+ # The timestep for writing output:
+ dt_output = 0.2500E-09
+
+ # The maximum timestep:
+ dt_max = 0.1000E-09
+
+ # The number of steps after which the mesh is updated:
+ num_steps_amr = 2
+
+ # Whether photoionization is enabled:
+ photoi_enabled = T
+
+ # Fraction of oxygen:
+ photoi_frac_O2 = 0.2000E+00
+
+ # Photoionization efficiency factor:
+ photoi_eta = 0.5000E-01
+
+ # Number of discrete photons to use for photoionization:
+ photoi_num_photons = 50000
+
+ # Input file with transport data:
+ input_file = input/td_air_phelps_bolsig.txt
+
+ # The transport data table size in the fluid model:
+ lkptbl_size = 1000
+
+ # The maximum electric field in the fluid model coefficients:
+ lkptbl_max_fld = 0.3000E+08
+
+ # The name of the mobility coefficient:
+ td_mobility_name = efield[V/m]_vs_mu[m2/Vs]
+
+ # The name of the diffusion coefficient:
+ td_diffusion_name = efield[V/m]_vs_dif[m2/s]
+
+ # The name of the eff. ionization coeff.:
+ td_alpha_name = efield[V/m]_vs_alpha[1/m]
+
+ # The name of the eff. attachment coeff.:
+ td_eta_name = efield[V/m]_vs_eta[1/m]
