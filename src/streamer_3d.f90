@@ -220,8 +220,8 @@ program streamer_3d
            call a3_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a3_gc_sides(tree, i_elec, a3_sides_interp, a3_bc_neumann)
-           call a3_gc_sides(tree, i_pion, a3_sides_interp, a3_bc_neumann)
+           call a3_gc_sides(tree, i_elec, a3_sides_interp_lim, a3_bc_neumann)
+           call a3_gc_sides(tree, i_pion, a3_sides_interp_lim, a3_bc_neumann)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
@@ -244,7 +244,7 @@ program streamer_3d
         call compute_fld(tree, n_fmg_cycles, .false.)
 
         ! This will every now-and-then clean up the data in the tree
-        call a3_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
+        call a3_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
      end if
 
      if (photoi_enabled) &
@@ -489,7 +489,7 @@ contains
     call a3_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a3_gc_sides(tree, i_fld, a3_sides_interp, a3_bc_neumann)
+    call a3_gc_sides(tree, i_fld, a3_sides_interp_lim, a3_bc_neumann)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
@@ -858,9 +858,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a3_gc_box_sides(tree%boxes, id, i_elec, &
-               a3_sides_interp, a3_bc_neumann)
+               a3_sides_interp_lim, a3_bc_neumann)
           call a3_gc_box_sides(tree%boxes, id, i_pion, &
-               a3_sides_interp, a3_bc_neumann)
+               a3_sides_interp_lim, a3_bc_neumann)
           call a3_gc_box_sides(tree%boxes, id, i_phi, &
                mg3_sides_rb, sides_bc_pot)
        end do

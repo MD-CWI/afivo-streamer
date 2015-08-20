@@ -54,23 +54,7 @@ program streamer_2d
      integer, allocatable  :: seed_falloff(:)
   end type initcnd_t
 
-  type elec_t
-     logical  :: use_top
-     real(dp) :: top_voltage
-     real(dp) :: top_r0(2)
-     real(dp) :: top_r1(2)
-     real(dp) :: top_radius
-
-     logical  :: use_bot
-     real(dp) :: bot_voltage
-     real(dp) :: bot_r0(2)
-     real(dp) :: bot_r1(2)
-     real(dp) :: bot_radius
-  end type elec_t
-
   type(initcnd_t)   :: init_cond
-  type(elec_t)      :: elec
-
   type(LT_table_t)  :: td_tbl             ! Table with transport data vs fld
   type(CFG_t)       :: sim_cfg            ! The configuration for the simulation
   type(a2_t)        :: tree               ! This contains the full grid information
@@ -102,6 +86,9 @@ program streamer_2d
 
   ! The applied electric field
   real(dp) :: applied_fld
+
+  ! The applied voltage
+  real(dp) :: applied_voltage
 
   ! Pressure of the gas in bar
   real(dp) :: gas_pressure
@@ -135,10 +122,17 @@ program streamer_2d
   call CFG_get(sim_cfg, "num_steps_amr", n_steps_amr)
   call CFG_get(sim_cfg, "dt_max", dt_max)
   call CFG_get(sim_cfg, "epsilon_diel", epsilon_diel)
-  call initialize(sim_cfg)
 
+  tmp_name = trim(output_dir) // "/" // trim(sim_name) // "_config.txt"
+  print *, "Settings written to ", trim(tmp_name)
+  call CFG_write(sim_cfg, trim(tmp_name))
+
+  ! Initialize the transport coefficients
+  call init_transport_coeff(sim_cfg)
+
+  ! Set the initial conditions from the configuration
+  applied_voltage = -domain_len * applied_fld
   call get_init_cond(sim_cfg, init_cond)
-  call get_elec_cfg(sim_cfg, elec)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -221,8 +215,8 @@ program streamer_2d
            call a2_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a2_gc_sides(tree, i_elec, a2_sides_interp, a2_bc_neumann)
-           call a2_gc_sides(tree, i_pion, a2_sides_interp, a2_bc_neumann)
+           call a2_gc_sides(tree, i_elec, a2_sides_interp_lim, a2_bc_neumann)
+           call a2_gc_sides(tree, i_pion, a2_sides_interp_lim, a2_bc_neumann)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
@@ -245,7 +239,7 @@ program streamer_2d
         call compute_fld(tree, n_fmg_cycles, .false.)
 
         ! This will every now-and-then clean up the data in the tree
-        call a2_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
+        call a2_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
      end if
 
      if (photoi_enabled) &
@@ -265,7 +259,7 @@ contains
     integer                   :: id
     integer                   :: ix_list(2, 1) ! Spatial indices of initial boxes
     integer                   :: nb_list(4, 1) ! Neighbors of initial boxes
-    integer                   :: n_boxes_init = 10*1000
+    integer                   :: n_boxes_init = 1000
 
     dr = domain_len / box_size
 
@@ -300,14 +294,10 @@ contains
     max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
 
-    if (boxes(id)%dr * alpha < 0.1_dp) then
-       if (max_dns > 1e17_dp) then
-          if (boxes(id)%dr < 1.0e-5_dp) ref_flags(id) = a5_rm_ref
-       else
-          if (boxes(id)%dr < 2.5e-5_dp) ref_flags(id) = a5_rm_ref
-       end if
-    end if
+    if (boxes(id)%dr * alpha < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
+         ref_flags(id) = a5_rm_ref
 
+    ! Refine around initial conditions
     if (time < 2.0e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
@@ -322,7 +312,7 @@ contains
        end do
     end if
 
-    if (boxes(id)%dr * alpha > 1.0_dp) ref_flags(id) = a5_do_ref
+    if (boxes(id)%dr * alpha > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
 
   end subroutine set_ref_flags
 
@@ -431,7 +421,7 @@ contains
     alpha        = LT_get_col(td_tbl, i_alpha, max_fld)
 
     ! CFL condition
-    dt_cfl = 0.7_dp * dr_min / (mobility * max_fld) ! Factor ~ sqrt(0.5)
+    dt_cfl = dr_min / (mobility * max_fld) ! Factor ~ sqrt(0.5)
 
     ! Diffusion condition
     dt_dif = 0.25_dp * dr_min**2 / diff_coeff
@@ -442,9 +432,8 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.8_dp * min(1/(1/dt_cfl + 1/dt_dif), &
+    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), &
          dt_alpha, dt_max)
-    ! print *, max_fld, dt_cfl, dt_drt, dt_alpha
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -485,7 +474,7 @@ contains
     call a2_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_sides(tree, i_fld, a2_sides_interp, a2_bc_neumann)
+    call a2_gc_sides(tree, i_fld, a2_sides_interp_lim, a2_bc_neumann)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
@@ -784,9 +773,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_elec, &
-               a2_sides_interp, a2_bc_neumann)
+               a2_sides_interp_lim, a2_bc_neumann)
           call a2_gc_box_sides(tree%boxes, id, i_pion, &
-               a2_sides_interp, a2_bc_neumann)
+               a2_sides_interp_lim, a2_bc_neumann)
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
                mg2_sides_rb, sides_bc_pot)
        end do
@@ -808,11 +797,10 @@ contains
        boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
     case (a2_nb_hx)
        boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv) = 2 * elec%bot_voltage &
-            - boxes(id)%cc(1:nc, 1, iv)
+    case (a2_nb_ly)             ! Grounded
+       boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
     case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = 2 * elec%top_voltage &
+       boxes(id)%cc(1:nc, nc+1, iv) = 2 * applied_voltage &
             - boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
@@ -881,37 +869,6 @@ contains
     call CFG_get(cfg, "seed_width", cond%seed_width)
     call CFG_get(cfg, "seed_falloff", cond%seed_falloff)
   end subroutine get_init_cond
-
-  subroutine get_elec_cfg(cfg, elec)
-    type(CFG_t), intent(in)   :: cfg
-    type(elec_t), intent(out) :: elec
-    real(dp)                  :: dlen, fld
-
-    call CFG_get(cfg, "domain_len", dlen)
-    call CFG_get(cfg, "applied_fld", fld)
-
-    call CFG_get(cfg, "elec_use_top", elec%use_top)
-    call CFG_get(cfg, "elec_top_voltage", elec%top_voltage)
-    call CFG_get(cfg, "elec_top_rel_r0", elec%top_r0)
-    call CFG_get(cfg, "elec_top_rel_r1", elec%top_r1)
-    call CFG_get(cfg, "elec_top_radius", elec%top_radius)
-    elec%top_r0 = elec%top_r0 * dlen
-    elec%top_r1 = elec%top_r1 * dlen
-
-    call CFG_get(cfg, "elec_use_bot", elec%use_bot)
-    call CFG_get(cfg, "elec_bot_voltage", elec%bot_voltage)
-    call CFG_get(cfg, "elec_bot_rel_r0", elec%bot_r0)
-    call CFG_get(cfg, "elec_bot_rel_r1", elec%bot_r1)
-    call CFG_get(cfg, "elec_bot_radius", elec%bot_radius)
-    elec%bot_r0 = elec%bot_r0 * dlen
-    elec%bot_r1 = elec%bot_r1 * dlen
-
-    ! Without electrodes, use the applied field
-    if (.not. (elec%use_top .or. elec%use_bot)) then
-       elec%top_voltage = -dlen * fld
-       elec%bot_voltage = 0
-    end if
-  end subroutine get_elec_cfg
 
   subroutine create_cfg(cfg)
     type(CFG_t), intent(inout) :: cfg
@@ -982,7 +939,7 @@ contains
          "Fraction of oxygen")
     call CFG_add(cfg, "photoi_eta", 0.05_dp, &
          "Photoionization efficiency factor")
-    call CFG_add(cfg, "photoi_num_photons", 10*1000, &
+    call CFG_add(cfg, "photoi_num_photons", 50*1000, &
          "Number of discrete photons to use for photoionization")
 
     call CFG_add(cfg, "input_file", "transport_data_file.txt", &
@@ -1001,7 +958,7 @@ contains
          "The name of the eff. attachment coeff.")
   end subroutine create_cfg
 
-  subroutine initialize(cfg)
+  subroutine init_transport_coeff(cfg)
     use m_transport_data
     use m_config
 
@@ -1054,6 +1011,6 @@ contains
             2 * domain_len)
     end if
 
-  end subroutine initialize
+  end subroutine init_transport_coeff
 
 end program streamer_2d

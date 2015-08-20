@@ -85,11 +85,11 @@ program streamer_cyl
   ! The applied electric field
   real(dp) :: applied_fld
 
-  ! Pressure of the gas in bar
-  real(dp) :: gas_pressure
-
   ! The applied voltage
   real(dp) :: applied_voltage
+
+  ! Pressure of the gas in bar
+  real(dp) :: gas_pressure
 
   ! Dielectric constant
   real(dp) :: epsilon_diel
@@ -234,7 +234,7 @@ program streamer_cyl
         call compute_fld(tree, n_fmg_cycles, .false.)
 
         ! This will every now-and-then clean up the data in the tree
-        call a2_tidy_up(tree, 0.9_dp, 0.5_dp, 5000, .false.)
+        call a2_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
      end if
 
      if (photoi_enabled) &
@@ -254,7 +254,7 @@ contains
     integer                   :: id
     integer                   :: ix_list(2, 1) ! Spatial indices of initial boxes
     integer                   :: nb_list(4, 1) ! Neighbors of initial boxes
-    integer                   :: n_boxes_init = 10*1000
+    integer                   :: n_boxes_init = 1000
 
     dr = domain_len / box_size
 
