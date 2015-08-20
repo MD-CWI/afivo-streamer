@@ -151,7 +151,12 @@ contains
           case (CFG_real_type)
              read(line, *, ERR = 999, end = 998) cfg%vars(ix)%real_data
           case (CFG_char_type)
-             cfg%vars(ix)%char_data = trim(line)
+             call get_fields_string(line, " ,'"""//char(9), max_var_len, &
+                  nEntries, startIxs, endIxs)
+             if (nEntries < cfg%vars(ix)%p_size) goto 998
+             do n = 1, cfg%vars(ix)%p_size
+                cfg%vars(ix)%char_data(n) = trim(line(startIxs(n):endIxs(n)))
+             end do
           case (CFG_logic_type)
              read(line, *, ERR = 999, end = 998) cfg%vars(ix)%logic_data
           end select
@@ -165,12 +170,12 @@ contains
     ! The routine only ends up here through an error
 998 continue
     call handle_error("CFG_read_file: Not enough values for variable [" &
-         // p_name // "] in " // filename)
+         // trim(p_name) // "] in " // filename)
     return
 
 999 continue
     write(err_string, *) "ioState = ", ioState, " while reading from ", &
-         filename, " at line ", nL
+         trim(filename), " at line ", nL
     call handle_error("CFG_read_file:" // err_string)
     return
 
@@ -525,7 +530,7 @@ contains
 
   subroutine CFG_write(cfg, filename)
     use iso_fortran_env
-    type(CFG_t), intent(in) :: cfg
+    type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: filename
 
     integer                      :: i, j, ioState, myUnit
@@ -548,25 +553,25 @@ contains
 
     do i = 1, cfg%n_vars
        write(myUnit, ERR = 999, FMT = "(A,A,A)") " # ", trim(cfg%vars(i)%comment), ":"
-       write(myUnit, ADVANCE = "NO", ERR = 999, FMT = nameFormat) " ", cfg%vars(i)%p_name, " = "
+       write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(A)") " " // trim(cfg%vars(i)%p_name) // " = "
 
        select case(cfg%vars(i)%p_type)
        case (CFG_int_type)
           do j = 1, cfg%vars(i)%p_size
-             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(I10, A) ") cfg%vars(i)%int_data(j), "  "
+             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(I0, A) ") cfg%vars(i)%int_data(j), " "
           end do
        case (CFG_real_type)
           do j = 1, cfg%vars(i)%p_size
-             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(E10.4, A) ") cfg%vars(i)%real_data(j), "  "
+             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(E10.4, A) ") cfg%vars(i)%real_data(j), " "
           end do
        case (CFG_char_type)
           do j = 1, cfg%vars(i)%p_size
              write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(A, A)") &
-                  & '"' // trim(cfg%vars(i)%char_data(j)) // '"', "  "
+                  & trim(cfg%vars(i)%char_data(j)), " "
           end do
        case (CFG_logic_type)
           do j = 1, cfg%vars(i)%p_size
-             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(L10, A) ") cfg%vars(i)%logic_data(j), "  "
+             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(L, A) ") cfg%vars(i)%logic_data(j), " "
           end do
        end select
        write(myUnit, ERR = 999, FMT = "(A)") ""
