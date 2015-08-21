@@ -167,8 +167,8 @@ module m_afivo_$Dd
 
   !> Type specifying the location of a cell
   type a$D_loc_t
-     integer :: id              !< Id of the box that the cell is in
-     integer :: ix($D)          !< Index inside the box
+     integer :: id = -1         !< Id of the box that the cell is in
+     integer :: ix($D) = -1     !< Index inside the box
   end type a$D_loc_t
 
   !> Type that contains the refinement changes in a level
@@ -1413,6 +1413,107 @@ contains
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_cc
+
+  !> A general scalar reduction method
+  !> TODO: test
+  subroutine a$D_reduction(tree, box_func, reduction, init_val, out_val)
+    type(a$D_t), intent(in) :: tree    !< Tree to do the reduction on
+    real(dp), intent(in)   :: init_val !< Initial value for the reduction
+    real(dp), intent(out)  :: out_val  !< Result of the reduction
+    real(dp)               :: tmp, my_val
+    integer                :: i, id, lvl
+
+    interface
+       real(dp) function box_func(box)
+         import
+         type(box$D_t), intent(in) :: box
+       end function box_func
+
+       real(dp) function reduction(a, b)
+         import
+         real(dp), intent(in) :: a, b
+       end function reduction
+    end interface
+
+    out_val = init_val
+    my_val  = init_val
+
+    !$omp parallel private(lvl, i, id, tmp) firstprivate(my_val)
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          tmp = box_func(tree%boxes(id))
+          my_val = reduction(tmp, my_val)
+       end do
+       !$omp end do
+    end do
+
+    !$omp critical
+    out_val = reduction(my_val, out_val)
+    !$omp end critical
+    !$omp end parallel
+  end subroutine a$D_reduction
+
+  !> A general scalar reduction method, that returns the location of the
+  !> minimum/maximum value found
+  !> TODO: test
+  subroutine a$D_reduction_loc(tree, box_subr, reduction, &
+       init_val, out_val, out_loc)
+    type(a$D_t), intent(in)      :: tree     !< Tree to do the reduction on
+    real(dp), intent(in)        :: init_val !< Initial value for the reduction
+    real(dp), intent(out)       :: out_val  !< Result of the reduction
+    type(a$D_loc_t), intent(out) :: out_loc  !< Location
+    real(dp)                    :: tmp, new_val, my_val
+    integer                     :: i, id, lvl, tmp_ix($D)
+    type(a$D_loc_t)             :: my_loc
+
+    interface
+       subroutine box_subr(box, val, ix)
+         import
+         type(box$D_t), intent(in) :: box
+         real(dp), intent(out)    :: val
+         integer, intent(out)     :: ix($D)
+       end subroutine box_subr
+
+       real(dp) function reduction(a, b)
+         import
+         real(dp), intent(in) :: a, b
+       end function reduction
+    end interface
+
+    out_val   = init_val
+    my_val    = init_val
+    my_loc%id = -1
+    my_loc%ix = -1
+
+    !$omp parallel private(lvl, i, id, tmp, tmp_ix, new_val) &
+    !$omp firstprivate(my_val, my_loc)
+    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          call box_subr(tree%boxes(id), tmp, tmp_ix)
+          new_val = reduction(tmp, my_val)
+          if (abs(new_val - my_val) > 0) then
+             my_loc%id = id
+             my_loc%ix = tmp_ix
+             my_val = tmp
+          end if
+       end do
+       !$omp end do
+    end do
+
+    !$omp critical
+    new_val = reduction(my_val, out_val)
+    if (abs(new_val - out_val) > 0) then
+       out_loc%id = my_loc%id
+       out_loc%ix = my_loc%ix
+       out_val = my_val
+    end if
+    !$omp end critical
+    !$omp end parallel
+  end subroutine a$D_reduction_loc
 
   !> Find maximum value of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
@@ -2753,7 +2854,7 @@ contains
        end do
     end do
 
-    fname = trim(filename)
+    fname = trim(filename) // ".vtu"
 
     if (present(dir)) then
        i = len_trim(dir)
@@ -2838,7 +2939,7 @@ contains
     allocate(box_done(tree%max_id))
     box_done = .false.
 
-    fname = trim(filename)
+    fname = trim(filename) // ".silo"
 
     if (present(dir)) then
        i = len_trim(dir)

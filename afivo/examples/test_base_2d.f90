@@ -58,7 +58,7 @@ program test_base
   do i = 1, 12
      print *, "i = ", i, "max_id", tree%max_id
 
-     write(fname, "(A,I0,A)") "test_base_2d_", i, ".vtu"
+     write(fname, "(A,I0)") "test_base_2d_", i
      call a2_write_vtk(tree, trim(fname), var_names, i, i * 1.0_dp)
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)

@@ -68,8 +68,8 @@ program test_mg2_3d
      ! call mg3_fas_vcycle(tree, mg, tree%n_lvls)
      call mg3_fas_fmg(tree, mg, .true., i == 1)
      call a3_loop_box(tree, set_err)
-     write(fname, "(A,I0,A)") "test_mg2_3d_", i, ".vtu"
-     call a3_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
+     write(fname, "(A,I0)") "test_mg2_3d_", i
+     call a3_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
   print *, "max_id", tree%max_id
