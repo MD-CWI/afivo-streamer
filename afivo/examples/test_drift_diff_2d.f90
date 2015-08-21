@@ -29,7 +29,7 @@ program test_drift_diff
   integer            :: time_step_method = 2
 
   print *, "Initialize tree"
-  call a2_init(tree, box_size, n_var_cell=3, n_var_face=2, dr = dr)
+  call a2_init(tree, box_size, n_var_cell=3, n_var_face=1, dr = dr)
 
   ! Set up geometry
   id             = 1
@@ -65,25 +65,6 @@ program test_drift_diff
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
 
-     if (output_cnt * dt_output <= time) then
-        write_out = .true.
-        output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "test_drift_diff_2d_", output_cnt
-     else
-        write_out = .false.
-     end if
-
-     if (write_out) then
-        call a2_loop_box_arg(tree, set_error, [time])
-        call a2_write_silo(tree, trim(fname), &
-             (/"phi", "tmp", "err"/), output_cnt, time)
-        call a2_tree_max_cc(tree, i_err, p_err)
-        call a2_tree_min_cc(tree, i_err, n_err)
-        print *, "max error", max(p_err, abs(n_err))
-        call a2_tree_sum_cc(tree, i_phi, p_err)
-        print *, "sum phi", p_err
-     end if
-
      if (time > end_time) exit
 
      select case (time_step_method)
@@ -112,6 +93,26 @@ program test_drift_diff
         call a2_loop_box(tree, average_phi)
         time = time + dt
      end select
+
+     if (output_cnt * dt_output <= time) then
+        write_out = .true.
+        output_cnt = output_cnt + 1
+        write(fname, "(A,I0)") "test_drift_diff_2d_", output_cnt
+     else
+        write_out = .false.
+     end if
+
+     if (write_out) then
+        call a2_loop_box_arg(tree, set_error, [time])
+        call a2_write_silo(tree, trim(fname), &
+             (/"phi", "tmp", "err"/), output_cnt, time, &
+             fc_names=["fx", "fy"])
+        call a2_tree_max_cc(tree, i_err, p_err)
+        call a2_tree_min_cc(tree, i_err, n_err)
+        print *, "max error", max(p_err, abs(n_err))
+        call a2_tree_sum_cc(tree, i_phi, p_err)
+        print *, "sum phi", p_err
+     end if
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
@@ -145,7 +146,7 @@ contains
        ref_flags(id) = a5_rm_ref
     end if
 
-    ! if (boxes(id)%lvl < 4) ref_flags(id) = a5_do_ref
+    ! if (boxes(id)%lvl < 6) ref_flags(id) = a5_do_ref
     ! if (boxes(id)%lvl < 6 .and. boxes(id)%r_min(1) < 4) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
