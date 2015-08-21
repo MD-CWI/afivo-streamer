@@ -65,7 +65,7 @@ program test_mgb
   do i = 1, 20
      ! call mg2_fas_vcycle(tree, mg, tree%max_lvl, .true.)
      call mg2_fas_fmg(tree, mg, .true., i == 1)
-     write(fname, "(A,I0,A)") "test_mgb_2d_", i, ".vtu"
+     write(fname, "(A,I0)") "test_mgb_2d_", i
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 

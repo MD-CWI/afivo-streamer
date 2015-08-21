@@ -74,7 +74,7 @@ program test_drift_diff
      if (output_cnt * dt_output <= time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0,A)") "test_drift_diff_3d_", output_cnt, ".silo"
+        write(fname, "(A,I0)") "test_drift_diff_3d_", output_cnt
      else
         write_out = .false.
      end if

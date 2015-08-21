@@ -82,7 +82,7 @@ program test_mg_cyl_diel
      call a2_tree_min_cc(tree, i_tmp, min_res)
      call a2_tree_max_cc(tree, i_tmp, max_res)
      print *, i, max(abs(min_res), abs(max_res))
-     write(fname, "(A,I0,A)") "test_mg_cyl_diel_", i, ".silo"
+     write(fname, "(A,I0)") "test_mg_cyl_diel_", i
      ! call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
