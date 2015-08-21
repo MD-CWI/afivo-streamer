@@ -14,7 +14,7 @@ cd ${BUILD_DIR}
 
 # Get silo if not found
 if [ ! -f ${SILO_TARNAME} ]; then
-    wget ${SILO_BASEURL}${SILO_TARNAME}
+    curl -O ${SILO_BASEURL}${SILO_TARNAME}
 fi
 
 # Extract
