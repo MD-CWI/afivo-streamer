@@ -182,8 +182,7 @@ program streamer_2d
      if (output_cnt * dt_output <= time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I6.6,A)") trim(sim_name) // "_", &
-             output_cnt, ".silo"
+        write(fname, "(A,I6.6)") trim(sim_name) // "_", output_cnt
      else
         write_out = .false.
      end if
