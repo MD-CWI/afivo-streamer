@@ -70,7 +70,7 @@ program streamer_cyl
   integer           :: output_cnt
   real(dp)          :: dt, time, end_time
   real(dp)          :: dt_output, dt_max
-  character(len=40) :: fname
+  character(len=40) :: fname, fname_axis, fname_stats
   logical           :: write_out
 
   ! How many multigrid FMG cycles we perform per time step
@@ -181,6 +181,8 @@ program streamer_cyl
         write_out = .true.
         output_cnt = output_cnt + 1
         write(fname, "(A,I6.6)") trim(sim_name) // "_", output_cnt
+        fname_axis = trim(output_dir) // "/" // trim(fname) // "_axis.txt"
+        fname_stats = trim(output_dir) // "/" // trim(sim_name) // ".txt"
      else
         write_out = .false.
      end if
@@ -189,8 +191,8 @@ program streamer_cyl
         call a2_write_silo(tree, fname, &
           cc_names, output_cnt, time, dir=output_dir, &
           fc_names=["fr", "fz", "er", "ez"])
-        call get_streamer_properties()
-        call axis_data(tree, i_elec)
+        call write_streamer_properties(tree, fname_stats, &
+             fname_axis, output_cnt==1)
      end if
 
      if (time > end_time) exit
@@ -953,25 +955,64 @@ contains
 
   end subroutine init_transport_coeff
 
-  subroutine get_streamer_properties()
-    real(dp) :: max_ez, max_er, radius, height, rz(2)
-    real(dp) :: edens
+  subroutine write_streamer_properties(tree, fname_stats, fname_axis, first_time)
+    type(a2_t), intent(in) :: tree
+    character(len=*), intent(in) :: fname_axis, fname_stats
+    logical, intent(in) :: first_time
+
+    real(dp) :: fld_z, fld_r, radius, height, edens
+    real(dp), allocatable :: axis_data(:,:)
+    integer :: n
+    integer, parameter :: unit_1 = 777, unit_2 = 778
+
+    call get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
+    call get_cc_axis(tree, [i_elec, i_pion, i_fld] , axis_data)
+
+    if (first_time) then
+       open(unit_1, file=trim(fname_stats), action="write")
+       write(unit_1, *) "#time, height, fld_z, radius, fld_r, edens"
+       close(unit_1)
+    else
+       open(unit_1, file=trim(fname_stats), action="write", &
+            position="append")
+       write(unit_1, *) time, height, fld_z, radius, fld_r, edens
+       close(unit_1)
+    end if
+
+    open(unit_2, file=trim(fname_axis), action="write")
+    do n = 1, size(axis_data, 2)
+       write(unit_2, *) axis_data(:, n)
+    end do
+    deallocate(axis_data)
+    close(unit_2)
+
+    print *, "Written ", trim(fname_axis)
+  end subroutine write_streamer_properties
+
+  subroutine get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
+    type(a2_t), intent(in) :: tree
+    real(dp), intent(out) :: fld_z, fld_r, radius, height, edens
+    real(dp) :: rz(2)
     type(a2_loc_t) :: loc_ez, loc_er, loc_dens
     integer :: id, ix(2)
 
-    call a2_reduction_loc(tree, box_max_ez, reduce_max, 0.0_dp, max_ez, loc_ez)
-    call a2_reduction_loc(tree, box_max_er, reduce_max, 0.0_dp, max_er, loc_er)
-    print *, "max ez", max_ez, max_er
+    call a2_reduction_loc(tree, box_fld_z, reduce_max, 0.0_dp, fld_z, loc_ez)
+    call a2_reduction_loc(tree, box_fld_r, reduce_max, 0.0_dp, fld_r, loc_er)
 
-    rz = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
+    ! Radius of positive streamer
+    rz     = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
     radius = rz(1)
+
+    ! Get electron density at location of radius
     loc_dens = a2_get_loc(tree, [0.0_dp, rz(2)])
-    rz = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
+    id       = loc_dens%id
+    ix       = loc_dens%ix
+    edens    = tree%boxes(id)%cc(ix(1), ix(2), i_elec)
+
+    ! Height of positive streamer
+    rz     = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
     height = rz(2)
-    print *, "rz", radius, height
-    id = loc_dens%id
-    ix = loc_dens%ix
-    print *, "dens", tree%boxes(id)%cc(ix(1), ix(2), i_elec)
+
   end subroutine get_streamer_properties
 
   real(dp) function reduce_max(a, b)
@@ -979,7 +1020,7 @@ contains
     reduce_max = max(a,b)
   end function reduce_max
 
-  subroutine box_max_er(box, val, ix)
+  subroutine box_fld_r(box, val, ix)
     type(box2_t), intent(in) :: box
     real(dp), intent(out)    :: val
     integer, intent(out)     :: ix(2)
@@ -988,9 +1029,9 @@ contains
     nc = box%n_cell
     ix = maxloc(box%fx(1:nc, :, f_fld) + box%fx(2:nc+1, :, f_fld))
     val = 0.5_dp * (box%fx(ix(1), ix(2), f_fld) + box%fx(ix(1)+1, ix(2), f_fld))
-  end subroutine box_max_er
+  end subroutine box_fld_r
 
-  subroutine box_max_ez(box, val, ix)
+  subroutine box_fld_z(box, val, ix)
     type(box2_t), intent(in) :: box
     real(dp), intent(out)    :: val
     integer, intent(out)     :: ix(2)
@@ -999,38 +1040,55 @@ contains
     nc = box%n_cell
     ix = maxloc(box%fy(:, 1:nc, f_fld) + box%fy(:, 2:nc+1, f_fld))
     val = 0.5_dp * (box%fy(ix(1), ix(2), f_fld) + box%fy(ix(1), ix(2)+1, f_fld))
-  end subroutine box_max_ez
+  end subroutine box_fld_z
 
-  subroutine axis_data(tree, iv)
-    type(a2_t), intent(in) :: tree
-    integer, intent(in) :: iv
-    type(a2_loc_t) :: loc
-    real(dp), parameter :: eps = epsilon(1.0_dp)
-    real(dp) :: z
-    integer                  :: id, nc
+  subroutine get_cc_axis(tree, ivs, axis_data)
+    type(a2_t), intent(in)               :: tree
+    integer, intent(in)                  :: ivs(:)
+    real(dp), allocatable, intent(inout) :: axis_data(:, :)
 
-    nc = tree%n_cell
-    z = 0
+    type(a2_loc_t)                       :: loc
+    real(dp), parameter                  :: eps = epsilon(1.0_dp)
+    real(dp)                             :: z, box_z, box_dz
+    integer                              :: i, id, nc, cnt
+
+    nc  = tree%n_cell
+    z   = 0
     cnt = 0
+
+    ! Determine how many boxes lie on the axis
+    do
+       loc = a2_get_loc(tree, [0.0_dp, z * (1+eps)])
+       if (loc%id == -1) exit
+
+       cnt    = cnt + nc
+       id     = loc%id
+       box_z  = tree%boxes(id)%r_min(2)
+       box_dz = tree%boxes(id)%dr
+       z      = box_z + nc * box_dz
+    end do
+
+    ! Now store the actual axis data
+    allocate(axis_data(size(ivs)+1, cnt))
+    cnt = 0
+    z   = 0
 
     do
        loc = a2_get_loc(tree, [0.0_dp, z * (1+eps)])
        if (loc%id == -1) exit
-       cnt = cnt + 1
-       id = loc%id
-       z = tree%boxes(id)%r_min(2) + nc * tree%boxes(id)%dr
-    end do
 
-    ! allocate(axis_data(cnt * nc, 2))
-    ! cnt = 0
-    ! do
-    !    loc = a2_get_loc(tree, [0.0_dp, z * (1+eps)])
-    !    if (loc%id == -1) exit
-    !    axis_data(cnt+1:cnt+nc, 1) = tree%boxes(id)%r_min(2) + ((i * dr)
-    !    cnt = cnt + 1
-    !    id = loc%id
-    !    z = tree%boxes(id)%r_min(2) + nc * tree%boxes(id)%dr
-    ! end do
-  end subroutine axis_data
+       id     = loc%id
+       box_z  = tree%boxes(id)%r_min(2)
+       box_dz = tree%boxes(id)%dr
+
+       axis_data(1, cnt+1:cnt+nc) = &
+            box_z + [((i-0.5_dp) * box_dz, i = 1, nc)]
+       axis_data(2:, cnt+1:cnt+nc) = &
+            transpose(tree%boxes(id)%cc(1, 1:nc, ivs))
+
+       cnt    = cnt + nc
+       z      = box_z + nc * box_dz
+    end do
+  end subroutine get_cc_axis
 
 end program streamer_cyl
