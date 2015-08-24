@@ -983,8 +983,8 @@ contains
     do n = 1, size(axis_data, 2)
        write(unit_2, *) axis_data(:, n)
     end do
-    deallocate(axis_data)
     close(unit_2)
+    deallocate(axis_data)
 
     print *, "Written ", trim(fname_axis)
   end subroutine write_streamer_properties
