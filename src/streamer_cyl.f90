@@ -960,10 +960,10 @@ contains
     character(len=*), intent(in) :: fname_axis, fname_stats
     logical, intent(in) :: first_time
 
-    real(dp) :: fld_z, fld_r, radius, height, edens
+    real(dp)              :: fld_z, fld_r, radius, height, edens
     real(dp), allocatable :: axis_data(:,:)
-    integer :: n
-    integer, parameter :: unit_1 = 777, unit_2 = 778
+    integer               :: n
+    integer, parameter    :: unit_1 = 777, unit_2 = 778
 
     call get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
     call get_cc_axis(tree, [i_elec, i_pion, i_fld] , axis_data)
@@ -1048,7 +1048,6 @@ contains
     real(dp), allocatable, intent(inout) :: axis_data(:, :)
 
     type(a2_loc_t)                       :: loc
-    real(dp), parameter                  :: eps = epsilon(1.0_dp)
     real(dp)                             :: z, box_z, box_dz
     integer                              :: i, id, nc, cnt
 
@@ -1058,14 +1057,14 @@ contains
 
     ! Determine how many boxes lie on the axis
     do
-       loc = a2_get_loc(tree, [0.0_dp, z * (1+eps)])
+       loc = a2_get_loc(tree, [0.0_dp, z])
        if (loc%id == -1) exit
 
        cnt    = cnt + nc
        id     = loc%id
        box_z  = tree%boxes(id)%r_min(2)
        box_dz = tree%boxes(id)%dr
-       z      = box_z + nc * box_dz
+       z      = box_z + (nc+1) * box_dz
     end do
 
     ! Now store the actual axis data
@@ -1074,7 +1073,7 @@ contains
     z   = 0
 
     do
-       loc = a2_get_loc(tree, [0.0_dp, z * (1+eps)])
+       loc = a2_get_loc(tree, [0.0_dp, z])
        if (loc%id == -1) exit
 
        id     = loc%id
@@ -1087,7 +1086,7 @@ contains
             transpose(tree%boxes(id)%cc(1, 1:nc, ivs))
 
        cnt    = cnt + nc
-       z      = box_z + nc * box_dz
+       z      = box_z + (nc+1) * box_dz
     end do
   end subroutine get_cc_axis
 
