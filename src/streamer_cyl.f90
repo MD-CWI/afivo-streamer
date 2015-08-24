@@ -185,8 +185,13 @@ program streamer_cyl
         write_out = .false.
      end if
 
-     if (write_out) call a2_write_silo(tree, fname, &
-          cc_names, output_cnt, time, dir=output_dir)
+     if (write_out) then
+        call a2_write_silo(tree, fname, &
+          cc_names, output_cnt, time, dir=output_dir, &
+          fc_names=["fr", "fz", "er", "ez"])
+        call get_streamer_properties()
+        call axis_data(tree, i_elec)
+     end if
 
      if (time > end_time) exit
 
@@ -947,5 +952,85 @@ contains
     end if
 
   end subroutine init_transport_coeff
+
+  subroutine get_streamer_properties()
+    real(dp) :: max_ez, max_er, radius, height, rz(2)
+    real(dp) :: edens
+    type(a2_loc_t) :: loc_ez, loc_er, loc_dens
+    integer :: id, ix(2)
+
+    call a2_reduction_loc(tree, box_max_ez, reduce_max, 0.0_dp, max_ez, loc_ez)
+    call a2_reduction_loc(tree, box_max_er, reduce_max, 0.0_dp, max_er, loc_er)
+    print *, "max ez", max_ez, max_er
+
+    rz = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
+    radius = rz(1)
+    loc_dens = a2_get_loc(tree, [0.0_dp, rz(2)])
+    rz = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
+    height = rz(2)
+    print *, "rz", radius, height
+    id = loc_dens%id
+    ix = loc_dens%ix
+    print *, "dens", tree%boxes(id)%cc(ix(1), ix(2), i_elec)
+  end subroutine get_streamer_properties
+
+  real(dp) function reduce_max(a, b)
+    real(dp), intent(in) :: a, b
+    reduce_max = max(a,b)
+  end function reduce_max
+
+  subroutine box_max_er(box, val, ix)
+    type(box2_t), intent(in) :: box
+    real(dp), intent(out)    :: val
+    integer, intent(out)     :: ix(2)
+    integer                  :: nc
+
+    nc = box%n_cell
+    ix = maxloc(box%fx(1:nc, :, f_fld) + box%fx(2:nc+1, :, f_fld))
+    val = 0.5_dp * (box%fx(ix(1), ix(2), f_fld) + box%fx(ix(1)+1, ix(2), f_fld))
+  end subroutine box_max_er
+
+  subroutine box_max_ez(box, val, ix)
+    type(box2_t), intent(in) :: box
+    real(dp), intent(out)    :: val
+    integer, intent(out)     :: ix(2)
+    integer                  :: nc
+
+    nc = box%n_cell
+    ix = maxloc(box%fy(:, 1:nc, f_fld) + box%fy(:, 2:nc+1, f_fld))
+    val = 0.5_dp * (box%fy(ix(1), ix(2), f_fld) + box%fy(ix(1), ix(2)+1, f_fld))
+  end subroutine box_max_ez
+
+  subroutine axis_data(tree, iv)
+    type(a2_t), intent(in) :: tree
+    integer, intent(in) :: iv
+    type(a2_loc_t) :: loc
+    real(dp), parameter :: eps = epsilon(1.0_dp)
+    real(dp) :: z
+    integer                  :: id, nc
+
+    nc = tree%n_cell
+    z = 0
+    cnt = 0
+
+    do
+       loc = a2_get_loc(tree, [0.0_dp, z * (1+eps)])
+       if (loc%id == -1) exit
+       cnt = cnt + 1
+       id = loc%id
+       z = tree%boxes(id)%r_min(2) + nc * tree%boxes(id)%dr
+    end do
+
+    ! allocate(axis_data(cnt * nc, 2))
+    ! cnt = 0
+    ! do
+    !    loc = a2_get_loc(tree, [0.0_dp, z * (1+eps)])
+    !    if (loc%id == -1) exit
+    !    axis_data(cnt+1:cnt+nc, 1) = tree%boxes(id)%r_min(2) + ((i * dr)
+    !    cnt = cnt + 1
+    !    id = loc%id
+    !    z = tree%boxes(id)%r_min(2) + nc * tree%boxes(id)%dr
+    ! end do
+  end subroutine axis_data
 
 end program streamer_cyl
