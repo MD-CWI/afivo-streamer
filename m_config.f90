@@ -91,15 +91,15 @@ contains
     character(len=name_len)      :: p_name
     character(len=line_len)      :: line, err_string
 
-    open(UNIT = 1, FILE = filename, STATUS = "OLD", ACTION = "READ", ERR = 999, IOSTAT = ioState)
+    open(UNIT = 1, FILE=filename, STATUS = "OLD", ACTION="READ", ERR=999, IOSTAT=ioState)
     nL = 0
 
     ! Set the line format to read, only depends on line_len currently
-    write(configFormat, FMT = "(I6)") line_len
+    write(configFormat, FMT="(I6)") line_len
     configFormat = "(A" // trim(adjustl(configFormat)) // ")"
 
     do
-       read( UNIT = 1, FMT = configFormat, ERR = 999, end = 666) line; nL = nL + 1
+       read( UNIT = 1, FMT=configFormat, ERR=999, end = 666) line; nL = nL + 1
        ! Line format should be "variable = value(s) [#Comment]"
 
        lineEnd = scan(line, '#') - 1       ! Don't use the part of the line after '#'
@@ -135,21 +135,21 @@ contains
           do n = 1, nEntries
              select case (cfg%vars(ix)%p_type)
              case (CFG_int_type)
-                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%int_data(n)
+                read(line(startIxs(n):endIxs(n)), *, ERR=999) cfg%vars(ix)%int_data(n)
              case (CFG_real_type)
-                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%real_data(n)
+                read(line(startIxs(n):endIxs(n)), *, ERR=999) cfg%vars(ix)%real_data(n)
              case (CFG_char_type)
                 cfg%vars(ix)%char_data(n) = trim(line(startIxs(n):endIxs(n)))
              case (CFG_logic_type)
-                read(line(startIxs(n):endIxs(n)), *, ERR = 999) cfg%vars(ix)%logic_data(n)
+                read(line(startIxs(n):endIxs(n)), *, ERR=999) cfg%vars(ix)%logic_data(n)
              end select
           end do
        else                  ! Fixed size parameter
           select case (cfg%vars(ix)%p_type)
           case (CFG_int_type)
-             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%int_data
+             read(line, *, ERR=999, end = 998) cfg%vars(ix)%int_data
           case (CFG_real_type)
-             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%real_data
+             read(line, *, ERR=999, end = 998) cfg%vars(ix)%real_data
           case (CFG_char_type)
              call get_fields_string(line, " ,'"""//char(9), max_var_len, &
                   nEntries, startIxs, endIxs)
@@ -158,13 +158,13 @@ contains
                 cfg%vars(ix)%char_data(n) = trim(line(startIxs(n):endIxs(n)))
              end do
           case (CFG_logic_type)
-             read(line, *, ERR = 999, end = 998) cfg%vars(ix)%logic_data
+             read(line, *, ERR=999, end = 998) cfg%vars(ix)%logic_data
           end select
        end if
     end do
 
 666 continue ! Routine ends here if the end of "filename" is reached
-    close(UNIT = 1, STATUS = "KEEP", ERR = 999, IOSTAT = ioState)
+    close(UNIT = 1, STATUS = "KEEP", ERR=999, IOSTAT=ioState)
     return
 
     ! The routine only ends up here through an error
@@ -537,52 +537,63 @@ contains
     character(len=tiny_len)      :: nameFormat
     character(len=line_len)      :: err_string
 
-    write(nameFormat, FMT = "(A,I0,A)") "(A,A", name_len, ",A)"
+    write(nameFormat, FMT="(A,I0,A)") "(A,A", name_len, ",A)"
 
     if (filename == "stdout") then
        myUnit = output_unit
     else
        myUnit = 333
-       open(myUnit, FILE = filename, ACTION = "WRITE", ERR = 999, IOSTAT = ioState)
+       open(myUnit, FILE=filename, ACTION="WRITE", ERR=999, IOSTAT=ioState)
     end if
 
-    write(myUnit, ERR = 999, FMT = "(A)") " ##############################################"
-    write(myUnit, ERR = 999, FMT = "(A)") " ###          Configuration file            ###"
-    write(myUnit, ERR = 999, FMT = "(A)") " ##############################################"
-    write(myUnit, ERR = 999, FMT = "(A)") ""
+    write(myUnit, ERR=999, FMT="(A)") " ##############################################"
+    write(myUnit, ERR=999, FMT="(A)") " ###          Configuration file            ###"
+    write(myUnit, ERR=999, FMT="(A)") " ##############################################"
+    write(myUnit, ERR=999, FMT="(A)") ""
 
     do i = 1, cfg%n_vars
-       write(myUnit, ERR = 999, FMT = "(A,A,A)") " # ", trim(cfg%vars(i)%comment), ":"
-       write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(A)") " " // trim(cfg%vars(i)%p_name) // " = "
+       write(myUnit, ERR=998, FMT="(A,A,A)") " # ", &
+            trim(cfg%vars(i)%comment), ":"
+       write(myUnit, ADVANCE="NO", ERR=998, FMT="(A)") &
+            " " // trim(cfg%vars(i)%p_name) // " = "
 
        select case(cfg%vars(i)%p_type)
        case (CFG_int_type)
           do j = 1, cfg%vars(i)%p_size
-             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(I0, A) ") cfg%vars(i)%int_data(j), " "
+             write(myUnit, ADVANCE="NO", ERR=998, FMT="(I0, A)") &
+                  cfg%vars(i)%int_data(j), " "
           end do
        case (CFG_real_type)
           do j = 1, cfg%vars(i)%p_size
-             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(E10.4, A) ") cfg%vars(i)%real_data(j), " "
+             write(myUnit, ADVANCE="NO", ERR=998, FMT="(E10.4, A)") &
+                  cfg%vars(i)%real_data(j), " "
           end do
        case (CFG_char_type)
           do j = 1, cfg%vars(i)%p_size
-             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(A, A)") &
-                  & trim(cfg%vars(i)%char_data(j)), " "
+             write(myUnit, ADVANCE="NO", ERR=998, FMT="(A, A)") &
+                  trim(cfg%vars(i)%char_data(j)), " "
           end do
        case (CFG_logic_type)
           do j = 1, cfg%vars(i)%p_size
-             write(myUnit, ADVANCE = "NO", ERR = 999, FMT = "(L, A) ") cfg%vars(i)%logic_data(j), " "
+             write(myUnit, ADVANCE="NO", ERR=998, FMT="(L1, A)") &
+                  cfg%vars(i)%logic_data(j), " "
           end do
        end select
-       write(myUnit, ERR = 999, FMT = "(A)") ""
-       write(myUnit, ERR = 999, FMT = "(A)") ""
+       write(myUnit, ERR=998, FMT="(A)") ""
+       write(myUnit, ERR=998, FMT="(A)") ""
     end do
 
-    if (myUnit /= output_unit) close(myUnit, ERR = 999, IOSTAT = ioState)
+    if (myUnit /= output_unit) close(myUnit, ERR=999, IOSTAT=ioState)
     return
 
+998 continue
+    write(err_string, *) "CFG_write error: ioState = ", ioState, &
+         " while writing ", trim(cfg%vars(i)%p_name), " to ", filename
+    call handle_error(err_string)
+
 999 continue ! If there was an error, the routine will end here
-    write(err_string, *) "CFG_write error: ioState = ", ioState, " while writing to ", filename
+    write(err_string, *) "CFG_write error: ioState = ", ioState, &
+         " while writing to ", filename
     call handle_error(err_string)
 
   end subroutine CFG_write
