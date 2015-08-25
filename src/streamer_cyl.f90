@@ -966,7 +966,7 @@ contains
     integer, parameter    :: unit_1 = 777, unit_2 = 778
 
     call get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
-    call get_cc_axis(tree, [i_elec, i_pion, i_fld] , axis_data)
+    call get_cc_axis(tree, [i_elec, i_pion], [f_fld], axis_data)
 
     if (first_time) then
        open(unit_1, file=trim(fname_stats), action="write")
@@ -1042,18 +1042,20 @@ contains
     val = 0.5_dp * (box%fy(ix(1), ix(2), f_fld) + box%fy(ix(1), ix(2)+1, f_fld))
   end subroutine box_fld_z
 
-  subroutine get_cc_axis(tree, ivs, axis_data)
+  subroutine get_cc_axis(tree, ixs_cc, ixs_fc, axis_data)
     type(a2_t), intent(in)               :: tree
-    integer, intent(in)                  :: ivs(:)
+    integer, intent(in)                  :: ixs_cc(:), ixs_fc(:)
     real(dp), allocatable, intent(inout) :: axis_data(:, :)
 
     type(a2_loc_t)                       :: loc
     real(dp)                             :: z, box_z, box_dz
-    integer                              :: i, id, nc, cnt
+    integer                              :: i, id, nc, cnt, n_cc, n_fc
 
-    nc  = tree%n_cell
-    z   = 0
-    cnt = 0
+    n_cc = size(ixs_cc)
+    n_fc = size(ixs_fc)
+    nc   = tree%n_cell
+    z    = 0
+    cnt  = 0
 
     ! Determine how many boxes lie on the axis
     do
@@ -1068,7 +1070,7 @@ contains
     end do
 
     ! Now store the actual axis data
-    allocate(axis_data(size(ivs)+1, cnt))
+    allocate(axis_data(n_cc+n_fc+1, cnt))
     cnt = 0
     z   = 0
 
@@ -1082,8 +1084,11 @@ contains
 
        axis_data(1, cnt+1:cnt+nc) = &
             box_z + [((i-0.5_dp) * box_dz, i = 1, nc)]
-       axis_data(2:, cnt+1:cnt+nc) = &
-            transpose(tree%boxes(id)%cc(1, 1:nc, ivs))
+       axis_data(2:n_cc+1, cnt+1:cnt+nc) = &
+            transpose(tree%boxes(id)%cc(1, 1:nc, ixs_cc))
+       axis_data(n_cc+2:, cnt+1:cnt+nc) = transpose( &
+            0.5_dp * (tree%boxes(id)%fy(1, 1:nc, ixs_fc) + &
+            tree%boxes(id)%fy(1, 2:nc+1, ixs_fc)))
 
        cnt    = cnt + nc
        z      = box_z + (nc+1) * box_dz
