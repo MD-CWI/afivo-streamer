@@ -2735,17 +2735,18 @@ contains
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
   !> leaves of the tree are used
   subroutine a$D_write_vtk(tree, filename, cc_names, n_cycle, time, ixs_cc, &
-       fc_names, dir)
+       fc_names, ixs_fc, dir)
     use m_vtk
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*), intent(in)  :: filename    !< Filename for the vtk file
     character(len=*), intent(in)  :: cc_names(:) !< Names of the cell-centered variables
     integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
     real(dp), intent(in)          :: time        !< Time for output file
-    integer, intent(in), optional :: ixs_cc(:)   !< Oncly include these variables
+    integer, intent(in), optional :: ixs_cc(:)   !< Oncly include these cell variables
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
     !> If present, output fluxes with these names
     character(len=*), optional, intent(in) :: fc_names(:)
+    integer, intent(in), optional :: ixs_fc(:)   !< Oncly include these face variables
 
     integer                       :: lvl, bc, bn, n, n_cells, n_nodes
     integer                       :: ig, i, j, id, n_ix, c_ix, n_grids
@@ -2776,9 +2777,14 @@ contains
     end if
 
     if (present(fc_names)) then
-       if (tree%n_var_face * $D /= size(fc_names)) &
-            stop "a$D_write_vtk: size(fc_names) /= tree%n_var_face * $D"
-       ifc_used = [(i, i = 1, tree%n_var_face)]
+       if (.not. present(ixs_fc)) then
+          stop "a$D_write_vtk: ixs_fc not present (but fc_names is)"
+       else
+          if (size(ixs_fc) * $D /= size(fc_names)) then
+             stop "a$D_write_vtk: size(fc_names) /= size(ixs_fc) * $D"
+          end if
+       end if
+       ifc_used = ixs_fc
     else
        allocate(ifc_used(0))
     end if
@@ -2917,17 +2923,18 @@ contains
   !> Write the cell centered data of a tree to a Silo file. Only the
   !> leaves of the tree are used
   subroutine a$D_write_silo(tree, filename, cc_names, n_cycle, time, ixs_cc, &
-       fc_names, dir)
+       fc_names, ixs_fc, dir)
     use m_write_silo
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*)              :: filename    !< Filename for the vtk file
     character(len=*)              :: cc_names(:) !< Names of the cell-centered variables
     integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
     real(dp), intent(in)          :: time        !< Time for output file
-    integer, intent(in), optional :: ixs_cc(:)      !< Oncly include these variables
+    integer, intent(in), optional :: ixs_cc(:)      !< Oncly include these cell variables
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
     !> If present, output fluxes with these names
     character(len=*), optional, intent(in) :: fc_names(:)
+    integer, intent(in), optional :: ixs_fc(:)      !< Oncly include these face variables
 
     character(len=*), parameter     :: grid_name = "gg"
     character(len=*), parameter     :: amr_name  = "mesh", meshdir = "data"
@@ -2961,9 +2968,14 @@ contains
     end if
 
     if (present(fc_names)) then
-       if (tree%n_var_face * $D /= size(fc_names)) &
-            stop "a$D_write_vtk: size(fc_names) /= tree%n_var_face * $D"
-       ifc_used = [(i, i = 1, tree%n_var_face)]
+       if (.not. present(ixs_fc)) then
+          stop "a$D_write_vtk: ixs_fc not present (but fc_names is)"
+       else
+          if (size(ixs_fc) * $D /= size(fc_names)) then
+             stop "a$D_write_vtk: size(fc_names) /= size(ixs_fc) * $D"
+          end if
+       end if
+       ifc_used = ixs_fc
     else
        allocate(ifc_used(0))
     end if
