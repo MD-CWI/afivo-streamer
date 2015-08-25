@@ -70,7 +70,7 @@ program streamer_cyl
   integer           :: output_cnt
   real(dp)          :: dt, time, end_time
   real(dp)          :: dt_output, dt_max
-  character(len=40) :: fname, fname_axis, fname_stats
+  character(len=200) :: fname, fname_axis, fname_stats
   logical           :: write_out
 
   ! How many multigrid FMG cycles we perform per time step
