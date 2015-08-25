@@ -3,7 +3,7 @@
  ##############################################
 
  # The desired endtime in seconds of the simulation:
- end_time = 0.3200E-07
+ end_time = 2.00E-07
 
  # The name of the simulation:
  sim_name = props_cyl
@@ -33,16 +33,16 @@
  bg_dens = 1.0e15
 
  # Initial density of the seed:
- seed_dens = 0.2000E+20 0.1000E+17
+ seed_dens = 5.000E+19 0.000E+17
 
  # The relative start position of the initial seed:
- seed_rel_r0 = 0.0000E+00 0.3300E+00 0.0000E+00 0.3500E+00
+ seed_rel_r0 = 0.0000E+00 0.320E+00 0.0000E+00 0.3600E+00
 
  # The relative end position of the initial seed:
- seed_rel_r1 = 0.0000E+00 0.3500E+00 0.0000E+00 0.4000E+00
+ seed_rel_r1 = 0.0000E+00 0.3500E+00 0.0000E+00 0.3600E+00
 
  # Seed width:
- seed_width = 0.5000E-04 2.5000E-04
+ seed_width = 1.0E-04 2.5000E-04
 
  # Fallof type for seed, see m_geom.f90:
  seed_falloff = 3 1

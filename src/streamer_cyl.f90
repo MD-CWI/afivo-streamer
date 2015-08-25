@@ -190,7 +190,7 @@ program streamer_cyl
      if (write_out) then
         call a2_write_silo(tree, fname, &
           cc_names, output_cnt, time, dir=output_dir, &
-          fc_names=["fr", "fz", "er", "ez"])
+          fc_names=["fld_r", "fld_z"], ixs_fc=[f_fld])
         call write_streamer_properties(tree, fname_stats, &
              fname_axis, output_cnt==1)
      end if
@@ -299,7 +299,7 @@ contains
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
-    if (adx < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
+    if (adx < 0.1_dp .and. boxes(id)%dr < 1.1e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
     if (time < 2.0e-9_dp) then
@@ -316,7 +316,7 @@ contains
        end do
     end if
 
-    if (adx > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
+    if (adx > 0.75_dp .and. crv_phi > 0.1_dp) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -956,14 +956,14 @@ contains
   end subroutine init_transport_coeff
 
   subroutine write_streamer_properties(tree, fname_stats, fname_axis, first_time)
-    type(a2_t), intent(in) :: tree
+    type(a2_t), intent(in)       :: tree
     character(len=*), intent(in) :: fname_axis, fname_stats
-    logical, intent(in) :: first_time
+    logical, intent(in)          :: first_time
 
-    real(dp)              :: fld_z, fld_r, radius, height, edens
-    real(dp), allocatable :: axis_data(:,:)
-    integer               :: n
-    integer, parameter    :: unit_1 = 777, unit_2 = 778
+    real(dp)                     :: fld_z, fld_r, radius, height, edens
+    real(dp), allocatable        :: axis_data(:,:)
+    integer                      :: n
+    integer, parameter           :: unit_1 = 777, unit_2 = 778
 
     call get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
     call get_cc_axis(tree, [i_elec, i_pion], [f_fld], axis_data)
@@ -987,6 +987,8 @@ contains
     deallocate(axis_data)
 
     print *, "Written ", trim(fname_axis)
+    if (.not. first_time .and. height > 0.9_dp * domain_len) &
+         stop "Simulation has reached boundary"
   end subroutine write_streamer_properties
 
   subroutine get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
