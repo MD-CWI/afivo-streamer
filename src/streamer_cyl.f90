@@ -66,6 +66,8 @@ program streamer_cyl
   integer           :: photoi_num_photons ! Number of photons to use
   type(PH_tbl_t)    :: photoi_tbl         ! Table for photoionization
 
+  real(dp) :: fld_mod_t0, fld_sin_amplitude, fld_sin_freq, fld_lin_deriv
+
   integer           :: i, n, n_steps_amr
   integer           :: output_cnt
   real(dp)          :: dt, time, end_time
@@ -116,14 +118,19 @@ program streamer_cyl
   call CFG_get(sim_cfg, "output_dir", output_dir)
   call CFG_get(sim_cfg, "domain_len", domain_len)
   call CFG_get(sim_cfg, "applied_fld", applied_fld)
+  call CFG_get(sim_cfg, "fld_mod_t0", fld_mod_t0)
+  call CFG_get(sim_cfg, "fld_sin_amplitude", fld_sin_amplitude)
+  call CFG_get(sim_cfg, "fld_sin_freq", fld_sin_freq)
+  call CFG_get(sim_cfg, "fld_lin_deriv", fld_lin_deriv)
   call CFG_get(sim_cfg, "dt_output", dt_output)
   call CFG_get(sim_cfg, "num_steps_amr", n_steps_amr)
   call CFG_get(sim_cfg, "dt_max", dt_max)
   call CFG_get(sim_cfg, "epsilon_diel", epsilon_diel)
 
+  if (trim(output_dir) == "") stop "No output directory given"
   tmp_name = trim(output_dir) // "/" // trim(sim_name) // "_config.txt"
-  print *, "Settings written to ", trim(tmp_name)
   call CFG_write(sim_cfg, trim(tmp_name))
+  print *, "Settings written to ", trim(tmp_name)
 
   ! Initialize the transport coefficients
   call init_transport_coeff(sim_cfg)
@@ -187,19 +194,10 @@ program streamer_cyl
         write_out = .false.
      end if
 
-     if (write_out) then
-        call a2_write_silo(tree, fname, &
-          cc_names, output_cnt, time, dir=output_dir, &
-          fc_names=["fld_r", "fld_z"], ixs_fc=[f_fld])
-        call write_streamer_properties(tree, fname_stats, &
-             fname_axis, output_cnt==1)
-     end if
-
      if (time > end_time) exit
 
      ! We perform n_steps between mesh-refinements
      do n = 1, n_steps_amr
-        time = time + dt
 
         ! Copy previous solution
         call a2_tree_copy_cc(tree, i_elec, i_elec_old)
@@ -207,6 +205,8 @@ program streamer_cyl
 
         ! Two forward Euler steps over dt
         do i = 1, 2
+           time = time + dt
+
            ! First calculate fluxes
            call a2_loop_boxes_arg(tree, fluxes_koren, [dt], .true.)
            call a2_consistent_fluxes(tree, [f_elec])
@@ -226,12 +226,22 @@ program streamer_cyl
            if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
         end do
 
+        time = time - dt        ! Go back one time step
+
         ! Take average of phi_old and phi (explicit trapezoidal rule)
         call a2_loop_box(tree, average_dens)
 
         ! Compute field with new density
         call compute_fld(tree, n_fmg_cycles, .false.)
      end do
+
+     if (write_out) then
+        call a2_write_silo(tree, fname, &
+             cc_names, output_cnt, time, dir=output_dir, &
+             fc_names=["fld_r", "fld_z"], ixs_fc=[f_fld])
+        call write_streamer_properties(tree, fname_stats, &
+             fname_axis, output_cnt==1)
+     end if
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
 
@@ -432,6 +442,8 @@ contains
     end do
     !$omp end parallel
 
+    applied_voltage = -domain_len * get_fld(time)
+
     ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
        call mg2_fas_fmg(tree, mg, .true., no_guess .and. i == 1)
@@ -443,6 +455,19 @@ contains
     ! Set the field norm also in ghost cells
     call a2_gc_sides(tree, i_fld, a2_sides_interp, a2_bc_neumann)
   end subroutine compute_fld
+
+  real(dp) function get_fld(time)
+    use m_units_constants
+    real(dp), intent(in) :: time
+
+    if (time > fld_mod_t0) then
+       get_fld = applied_fld + (time - fld_mod_t0) * fld_lin_deriv + &
+            fld_sin_amplitude * &
+            sin((time - fld_mod_t0) * 2 * UC_pi * fld_sin_freq)
+    else
+       get_fld = applied_fld
+    end if
+  end function get_fld
 
   ! Compute electric field from electrical potential
   subroutine fld_from_pot(box)
@@ -499,7 +524,7 @@ contains
        boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
     case (a2_nb_hy)             ! Applied voltage
        boxes(id)%cc(:, nc+1, iv) = 2 * applied_voltage &
-               - boxes(id)%cc(:, nc, iv)
+            - boxes(id)%cc(:, nc, iv)
     end select
   end subroutine sides_bc_pot
 
@@ -647,7 +672,7 @@ contains
     box%cc(:, :, i_pion) = 0.5_dp * (box%cc(:, :, i_pion) + box%cc(:, :, i_pion_old))
   end subroutine average_dens
 
-    ! Advance solution over dt based on the fluxes / source term, using forward Euler
+  ! Advance solution over dt based on the fluxes / source term, using forward Euler
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
@@ -855,6 +880,15 @@ contains
     call CFG_add(cfg, "epsilon_diel", 1.5_dp, &
          "The dielectric constant of the dielectric")
 
+    call CFG_add(cfg, "fld_mod_t0", 1.0e99_dp, &
+         "Modify electric field after this time")
+    call CFG_add(cfg, "fld_sin_amplitude", 0.0_dp, &
+         "Amplitude of sinusoidal modification")
+    call CFG_add(cfg, "fld_sin_freq", 0.2e9_dp, &
+         "Frequency of sinusoidal modification")
+    call CFG_add(cfg, "fld_lin_deriv", 0.0_dp, &
+         "Linear derivative of field")
+
     call CFG_add(cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")
     call CFG_add(cfg, "seed_dens", [5.0d19], &
@@ -898,6 +932,15 @@ contains
          "The name of the eff. ionization coeff.")
     call CFG_add(cfg, "td_eta_name", "efield[V/m]_vs_eta[1/m]", &
          "The name of the eff. attachment coeff.")
+
+    call CFG_add(cfg, "td_alpha_fac", 1.0_dp, &
+         "Modify alpha by this factor")
+    call CFG_add(cfg, "td_eta_fac", 1.0_dp, &
+         "Modify eta by this factor")
+    call CFG_add(cfg, "td_mobility_fac", 1.0_dp, &
+         "Modify mobility by this factor")
+    call CFG_add(cfg, "td_diffusion_fac", 1.0_dp, &
+         "Modify diffusion by this factor")
   end subroutine create_cfg
 
   subroutine init_transport_coeff(cfg)
@@ -907,7 +950,8 @@ contains
     type(CFG_t), intent(in) :: cfg
     character(len=name_len) :: input_file, gas_name
     integer                 :: table_size
-    real(dp)                :: max_fld
+    real(dp)                :: max_fld, alpha_fac, eta_fac
+    real(dp)                :: mobility_fac, diffusion_fac
     real(dp), allocatable   :: x_data(:), y_data(:)
     character(len=name_len) :: data_name
 
@@ -917,6 +961,11 @@ contains
     call CFG_get(cfg, "lkptbl_size", table_size)
     call CFG_get(cfg, "lkptbl_max_fld", max_fld)
 
+    call CFG_get(cfg, "td_alpha_fac", alpha_fac)
+    call CFG_get(cfg, "td_eta_fac", eta_fac)
+    call CFG_get(cfg, "td_mobility_fac", mobility_fac)
+    call CFG_get(cfg, "td_diffusion_fac", diffusion_fac)
+
     ! Create a lookup table for the model coefficients
     td_tbl = LT_create(0.0_dp, max_fld, table_size, n_var_td)
 
@@ -924,21 +973,25 @@ contains
     call CFG_get(cfg, "td_mobility_name", data_name)
     call TD_get_td_from_file(input_file, gas_name, &
          trim(data_name), x_data, y_data)
+    y_data = y_data * mobility_fac
     call LT_set_col(td_tbl, i_mobility, x_data, y_data)
 
     call CFG_get(cfg, "td_diffusion_name", data_name)
     call TD_get_td_from_file(input_file, gas_name, &
          trim(data_name), x_data, y_data)
+    y_data = y_data * diffusion_fac
     call LT_set_col(td_tbl, i_diffusion, x_data, y_data)
 
     call CFG_get(cfg, "td_alpha_name", data_name)
     call TD_get_td_from_file(input_file, gas_name, &
          trim(data_name), x_data, y_data)
+    y_data = y_data * alpha_fac
     call LT_set_col(td_tbl, i_alpha, x_data, y_data)
 
     call CFG_get(cfg, "td_eta_name", data_name)
     call TD_get_td_from_file(input_file, gas_name, &
          trim(data_name), x_data, y_data)
+    y_data = y_data * eta_fac
     call LT_set_col(td_tbl, i_eta, x_data, y_data)
 
     ! Create table for photoionization
@@ -960,26 +1013,31 @@ contains
     character(len=*), intent(in) :: fname_axis, fname_stats
     logical, intent(in)          :: first_time
 
-    real(dp)                     :: fld_z, fld_r, radius, height, edens
+    real(dp)                     :: fld_z, fld_r, radius, radius_z, height
+    real(dp)                     :: edens, phi, bg_fld
     real(dp), allocatable        :: axis_data(:,:)
     integer                      :: n
     integer, parameter           :: unit_1 = 777, unit_2 = 778
 
-    call get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
-    call get_cc_axis(tree, [i_elec, i_pion], [f_fld], axis_data)
+    call get_streamer_properties(tree, height, fld_z, radius, radius_z, &
+         fld_r, edens, phi, bg_fld)
+    call get_cc_axis(tree, [i_elec, i_pion], [f_fld, f_elec], axis_data)
 
     if (first_time) then
        open(unit_1, file=trim(fname_stats), action="write")
-       write(unit_1, *) "#time, height, fld_z, radius, fld_r, edens"
+       write(unit_1, *) "#time, height, fld_z, radius, radius_z, ", &
+            "fld_r, edens, phi, bg_fld"
        close(unit_1)
     else
        open(unit_1, file=trim(fname_stats), action="write", &
             position="append")
-       write(unit_1, *) time, height, fld_z, radius, fld_r, edens
+       write(unit_1, *) time, height, fld_z, radius, radius_z, &
+            fld_r, edens, phi, bg_fld
        close(unit_1)
     end if
 
     open(unit_2, file=trim(fname_axis), action="write")
+    write(unit_1, *) "#z, n_e, n_i, fld_z, flux_z"
     do n = 1, size(axis_data, 2)
        write(unit_2, *) axis_data(:, n)
     end do
@@ -991,30 +1049,38 @@ contains
          stop "Simulation has reached boundary"
   end subroutine write_streamer_properties
 
-  subroutine get_streamer_properties(tree, height, fld_z, radius, fld_r, edens)
+  subroutine get_streamer_properties(tree, height, fld_z, &
+       radius, radius_z, fld_r, edens, phi, bg_fld)
     type(a2_t), intent(in) :: tree
-    real(dp), intent(out) :: fld_z, fld_r, radius, height, edens
-    real(dp) :: rz(2)
+    real(dp), intent(out) :: fld_z, fld_r, radius, radius_z, height
+    real(dp), intent(out) :: edens, phi, bg_fld
+
+    real(dp)       :: rz(2)
     type(a2_loc_t) :: loc_ez, loc_er, loc_dens
-    integer :: id, ix(2)
+    integer        :: id, ix(2)
 
     call a2_reduction_loc(tree, box_fld_z, reduce_max, 0.0_dp, fld_z, loc_ez)
     call a2_reduction_loc(tree, box_fld_r, reduce_max, 0.0_dp, fld_r, loc_er)
 
     ! Radius of positive streamer
-    rz     = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
-    radius = rz(1)
+    rz       = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
+    radius   = rz(1)
+    radius_z = rz(2)
 
-    ! Get electron density at location of radius
+    ! Get electron density and potential at location of radius
     loc_dens = a2_get_loc(tree, [0.0_dp, rz(2)])
     id       = loc_dens%id
     ix       = loc_dens%ix
     edens    = tree%boxes(id)%cc(ix(1), ix(2), i_elec)
+    ! Set phi to potential difference
+    phi      = tree%boxes(id)%cc(ix(1), ix(2), i_phi)
+    phi      = phi - (rz(2)/domain_len) * applied_voltage
 
     ! Height of positive streamer
     rz     = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
     height = rz(2)
 
+    bg_fld = get_fld(time)
   end subroutine get_streamer_properties
 
   real(dp) function reduce_max(a, b)
