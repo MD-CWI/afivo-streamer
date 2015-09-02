@@ -1059,10 +1059,12 @@ contains
     type(a2_loc_t) :: loc_ez, loc_er, loc_dens
     integer        :: id, ix(2)
 
-    call a2_reduction_loc(tree, box_fld_z, reduce_max, 0.0_dp, fld_z, loc_ez)
-    call a2_reduction_loc(tree, box_fld_r, reduce_max, 0.0_dp, fld_r, loc_er)
+    call a2_reduction_loc(tree, box_fld_z, reduce_max, &
+         -1.0e99_dp, fld_z, loc_ez)
+    call a2_reduction_loc(tree, box_fld_r, reduce_max, &
+         -1.0e99_dp, fld_r, loc_er)
 
-    ! Radius of positive streamer
+    ! Radius of streamer is defined as location of maximum r-field
     rz       = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
     radius   = rz(1)
     radius_z = rz(2)
@@ -1076,7 +1078,7 @@ contains
     phi      = tree%boxes(id)%cc(ix(1), ix(2), i_phi)
     phi      = phi - (rz(2)/domain_len) * applied_voltage
 
-    ! Height of positive streamer
+    ! Height of streamer
     rz     = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
     height = rz(2)
 
@@ -1095,8 +1097,9 @@ contains
     integer                  :: nc
 
     nc = box%n_cell
-    ix = maxloc(box%fx(1:nc, :, f_fld) + box%fx(2:nc+1, :, f_fld))
-    val = 0.5_dp * (box%fx(ix(1), ix(2), f_fld) + box%fx(ix(1)+1, ix(2), f_fld))
+    ix = maxloc(abs(box%fx(1:nc, :, f_fld) + box%fx(2:nc+1, :, f_fld)))
+    val = 0.5_dp * abs(box%fx(ix(1), ix(2), f_fld) + &
+         box%fx(ix(1)+1, ix(2), f_fld))
   end subroutine box_fld_r
 
   subroutine box_fld_z(box, val, ix)
@@ -1106,8 +1109,9 @@ contains
     integer                  :: nc
 
     nc = box%n_cell
-    ix = maxloc(box%fy(:, 1:nc, f_fld) + box%fy(:, 2:nc+1, f_fld))
-    val = 0.5_dp * (box%fy(ix(1), ix(2), f_fld) + box%fy(ix(1), ix(2)+1, f_fld))
+    ix = maxloc(abs(box%fy(:, 1:nc, f_fld) + box%fy(:, 2:nc+1, f_fld)))
+    val = 0.5_dp * abs(box%fy(ix(1), ix(2), f_fld) + &
+         box%fy(ix(1), ix(2)+1, f_fld))
   end subroutine box_fld_z
 
   subroutine get_cc_axis(tree, ixs_cc, ixs_fc, axis_data)
