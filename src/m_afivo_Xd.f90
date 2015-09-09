@@ -390,7 +390,8 @@ contains
           tree%boxes(id)%lvl         = lvl
           tree%boxes(id)%ix          = ix
           tree%boxes(id)%dr          = tree%dr_base * 0.5_dp**(lvl-1)
-          tree%boxes(id)%r_min       = (ix - 1) * tree%dr_base * tree%n_cell
+          tree%boxes(id)%r_min       = tree%r_base + &
+               (ix - 1) * tree%dr_base * tree%n_cell
           tree%boxes(id)%n_cell      = tree%n_cell / (2**(1-lvl))
           tree%boxes(id)%coord_t     = tree%coord_t
 
