@@ -265,7 +265,7 @@ contains
 
     ! Initialize tree
     call a3_init(tree, box_size, n_var_cell, n_var_face, dr, &
-         coarsen_to=8, n_boxes = n_boxes_init)
+         coarsen_to=2, n_boxes = n_boxes_init)
 
     ! Set up geometry
     id             = 1          ! One box ...
@@ -298,7 +298,7 @@ contains
     if (adx < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
-    if (time < 5.0e-9_dp) then
+    if (time < 2.5e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
        do n = 1, init_cond%n_cond
@@ -312,7 +312,7 @@ contains
        end do
     end if
 
-    if (adx > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
+    if (adx > 1.0_dp .and. crv_phi > 0.1_dp) ref_flags(id) = a5_do_ref
 
   end subroutine set_ref_flags
 

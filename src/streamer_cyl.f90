@@ -309,10 +309,10 @@ contains
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
-    if (adx < 0.1_dp .and. boxes(id)%dr < 1.1e-5_dp) &
+    if (adx < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
-    if (time < 2.0e-9_dp) then
+    if (time < 5.0e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
        do n = 1, init_cond%n_cond
