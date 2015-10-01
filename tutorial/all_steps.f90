@@ -19,6 +19,10 @@ program tutorial
   real(dp)            :: dt, dt_output, time, end_time
   character(len=100)  :: fname
 #endif
+#if $STEP >= 4
+  type(ref_info_t)    :: ref_info
+#endif
+
 
   print *, "This is an Afivo tutorial for solving the heat equation."
 
@@ -26,30 +30,47 @@ program tutorial
   call initialize_tree(tree)
 #endif
 
-#if $STEP >= 2
-  call set_initial_conditions(tree)
-  call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_neumann)
+#if $STEP >= 4
+  do
 #endif
+#if $STEP >= 2
+     call set_initial_conditions(tree)
+     call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
+#endif
+#if $STEP >= 4
+     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     if (ref_info%n_add == 0) exit
+  end do
+#endif
+
 #if $STEP == 2
-  call a2_write_vtk(tree, "step2", ["phi"], 1, 0.0_dp)
+  call a2_write_vtk(tree, "step", ["phi"], 1, 0.0_dp)
 #endif
 
 #if $STEP >= 3
   output_cnt = 0
   time       = 0.0_dp
-  end_time   = 5.0_dp
-  dt         = 0.25_dp * a2_min_dr(tree)**2 / diff_coeff
-  dt_output  = 0.1_dp
+  end_time   = 1.0_dp
+  dt_output  = 0.02_dp
 
   do while (time < end_time)
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "step3_", output_cnt
+        write(fname, "(A,I0)") "step_", output_cnt
         call a2_write_vtk(tree, fname, ["phi"], output_cnt, time)
      end if
 
+     dt = a2_min_dr(tree)**2 / (6 * diff_coeff)
+
      call heat_forward_euler(tree, dt)
      time = time + dt
+
+#if $STEP >= 4
+     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call prolong_to_new_children(tree, ref_info)
+     call a2_gc_sides(tree, i_phi, a2_sides_interp, a2_bc_dirichlet)
+     call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
+#endif
   end do
 #endif
 
@@ -91,9 +112,6 @@ contains
     ! Construct the base (level 1) mesh
     call a2_set_base(tree, ix_list, nb_list)
 
-    print *, tree%boxes(1)%neighbors
-    print *, tree%boxes(2)%neighbors
-
     call a2_print_info(tree)
   end subroutine initialize_tree
 #endif
@@ -132,41 +150,37 @@ contains
        end do
     end do
   end subroutine set_init_cond
-
-  subroutine sides_bc(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
-
-    nc = boxes(id)%n_cell
-
-    select case (nb)
-    case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv) = 0
-    case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, iv) = 0
-    case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv) = 0
-    case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = 0
-    end select
-  end subroutine sides_bc
 #endif
 
-#if $STEP >= 3
+#if $STEP == 3
   subroutine heat_forward_euler(tree, dt)
     type(a2_t), intent(inout) :: tree
     real(dp), intent(in) :: dt
 
     ! Forward Euler
-    call a2_loop_boxes(tree, fluxes_centdif)
-    ! call a2_consistent_fluxes(tree, [i_phi])
-    call a2_loop_box_arg(tree, update_solution, [dt])
-    ! call a2_restrict_tree(tree, i_phi)
-    call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_neumann)
+    call a2_loop_boxes(tree, fluxes_centdif, .true.)
+    call a2_loop_box_arg(tree, update_solution, [dt], .true.)
+    call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
     time = time + dt
   end subroutine heat_forward_euler
+#endif
 
+#if $STEP == 4
+  subroutine heat_forward_euler(tree, dt)
+    type(a2_t), intent(inout) :: tree
+    real(dp), intent(in) :: dt
+
+    ! Forward Euler
+    call a2_loop_boxes(tree, fluxes_centdif, .true.)
+    call a2_consistent_fluxes(tree, [i_phi])
+    call a2_loop_box_arg(tree, update_solution, [dt], .true.)
+    call a2_restrict_tree(tree, i_phi)
+    call a2_gc_sides(tree, i_phi, a2_sides_interp, a2_bc_dirichlet)
+    time = time + dt
+  end subroutine heat_forward_euler
+#endif
+
+#if $STEP >= 3
   subroutine fluxes_centdif(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
@@ -191,10 +205,57 @@ contains
     nc = box%n_cell
     inv_dr = 1/box%dr
 
+    ! Add the fluxes to the cells
     box%cc(1:nc, 1:nc, i_phi) = box%cc(1:nc, 1:nc, i_phi) + dt(1) * ( &
          (box%fx(1:nc, :, i_phi) - box%fx(2:nc+1, :, i_phi)) * inv_dr + &
          (box%fy(:, 1:nc, i_phi) - box%fy(:, 2:nc+1, i_phi)) * inv_dr)
   end subroutine update_solution
+#endif
+
+#if $STEP >= 4
+  subroutine set_ref_flags(boxes, id, ref_flags)
+    type(box2_t), intent(in) :: boxes(:)
+    integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flags(:)
+    real(dp)                 :: diff
+    integer                  :: nc, lvl
+
+    nc   = boxes(id)%n_cell
+    lvl  = boxes(id)%lvl
+
+    ! Use a curvature monitor for the refinement criterion
+    diff = maxval(abs( &
+         boxes(id)%cc(2:nc+1, 1:nc, i_phi) + &
+         boxes(id)%cc(0:nc-1, 1:nc, i_phi) + &
+         boxes(id)%cc(1:nc, 2:nc+1, i_phi) + &
+         boxes(id)%cc(1:nc, 0:nc-1, i_phi) - 4 * &
+         boxes(id)%cc(1:nc, 1:nc, i_phi)))
+
+    if (diff > 5.0e-3_dp .and. lvl < 6) then
+       ref_flags(id) = a5_do_ref
+    else if (diff < 0.05_dp * 5.0e-3_dp) then
+       ref_flags(id) = a5_rm_ref
+    end if
+  end subroutine set_ref_flags
+
+  subroutine prolong_to_new_children(tree, ref_info)
+    type(a2_t), intent(inout)    :: tree
+    type(ref_info_t), intent(in) :: ref_info
+    integer                      :: lvl, i, id
+
+    do lvl = 1, tree%max_lvl
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          call a2_prolong1_to(tree%boxes, id, i_phi)
+       end do
+
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          call a2_gc_box_sides(tree%boxes, id, i_phi, &
+               a2_sides_interp, a2_bc_dirichlet)
+       end do
+    end do
+  end subroutine prolong_to_new_children
 #endif
 
 end program
