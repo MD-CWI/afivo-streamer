@@ -163,6 +163,7 @@ module m_afivo_$Dd
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
+     logical                    :: ready = .false. !< Is tree ready for use?
   end type a$D_t
 
   !> Type specifying the location of a cell
@@ -262,6 +263,30 @@ module m_afivo_$Dd
 
 contains
 
+  !> Get tree info
+  subroutine a$D_print_info(tree)
+    type(a$D_t), intent(in)        :: tree       !< The tree
+
+    if (.not. allocated(tree%lvls)) then
+       print *, "a$D_init has not been called for this tree"
+    else if (.not. tree%ready) then
+       print *, "a$D_set_base has not been called for this tree"
+    else
+       write(*, "(A,I0)") " maximum allowed level:  ", tree%lvls_max
+       write(*, "(A,I0)") " current maximum level:  ", tree%max_lvl
+       write(*, "(A,I0)") " max index in box list:  ", tree%max_id
+       write(*, "(A,I0)") " Boxes storage size:     ", size(tree%boxes)
+       write(*, "(A,I0)") " Boxes used:             ", &
+            count(tree%boxes(1:tree%max_id)%in_use)
+       write(*, "(A,I0)") " box size (cells):       ", tree%n_cell
+       write(*, "(A,I0)") " number of cc variables: ", tree%n_var_cell
+       write(*, "(A,I0)") " number of fc variables: ", tree%n_var_face
+       write(*, "(A,I0)") " Type of coordinates:    ", tree%coord_t
+       write(*, "(A,2E12.4)") " min. coords:        ", tree%r_base
+       write(*, "(A,2E12.4)") " dx at lvl 1:        ", tree%dr_base
+    end if
+  end subroutine a$D_print_info
+
   !> Initialize a $Dd tree type.
   subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, &
        dr, r_min, lvls_max, n_boxes, coarsen_to, coord)
@@ -339,6 +364,8 @@ contains
     type(a$D_t), intent(inout) :: tree
     integer                   :: lvl
 
+    if (.not. tree%ready) stop "a$D_destroy: Tree was not fully initialized"
+
     deallocate(tree%boxes)
     do lvl = lbound(tree%lvls, 1), tree%lvls_max
        deallocate(tree%lvls(lvl)%ids)
@@ -359,13 +386,16 @@ contains
 
     if (any(ix_list < 1)) stop "a$D_set_base: need all ix_list > 0"
     if (tree%max_id > 0)  stop "a$D_set_base: this tree already has boxes"
+    if (.not. allocated(tree%lvls)) stop "a$D_set_base: tree not initialized"
 
-    ! Neighbors only have to be specified from one side, mirror them
+    ! Non-periodic and non-boundary condition neighbors only have to be
+    ! specified from one side
     n_boxes = size(ix_list, 2)
     do i = 1, n_boxes
        do nb = 1, a$D_num_neighbors
           nb_id = nb_list(nb, i)
-          if (nb_id > a5_no_box) nb_list(a$D_nb_rev(nb), nb_id) = i
+          if (nb_id > a5_no_box .and. nb_id /= i) &
+               nb_list(a$D_nb_rev(nb), nb_id) = i
        end do
     end do
 
@@ -405,7 +435,7 @@ contains
              tree%boxes(id)%neighbors = nb_list(:, i)
           end where
 
-          call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+          call init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
 
@@ -428,6 +458,7 @@ contains
     end do
 
     tree%max_lvl = 1
+    tree%ready = .true.
 
   end subroutine a$D_set_base
 
@@ -440,6 +471,7 @@ contains
     integer                       :: lvl, i, id
 
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
+    if (.not. tree%ready) stop "a$D_loop_box: set_base has not been called"
 
     !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
@@ -530,6 +562,7 @@ contains
     logical                       :: leaves
     integer                       :: lvl, i, id
 
+    if (.not. tree%ready) stop "Tree not ready"
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
@@ -561,6 +594,7 @@ contains
     logical                       :: leaves
     integer                       :: lvl, i, id
 
+    if (.not. tree%ready) stop "Tree not ready"
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
@@ -593,6 +627,7 @@ contains
     logical                       :: leaves
     integer                      :: lvl, i, id
 
+    if (.not. tree%ready) stop "Tree not ready"
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
@@ -633,6 +668,7 @@ contains
     type(box$D_t), allocatable      :: boxes_cpy(:)
     integer(morton_k), allocatable :: mortons(:)
 
+    if (.not. tree%ready) stop "Tree not ready"
     if (goal_frac_used > max_frac_used) &
          stop "a$D_tidy_up: need goal_frac_used < max_frac_used"
     if (max_frac_used > 1.0_dp) stop "a$D_tidy_up: need max_frac_used < 1"
@@ -707,7 +743,7 @@ contains
           do n = n_used+1, max_id
              if (tree%boxes(n)%in_use) then
                 ! Remove moved data
-                call a$D_clear_box(tree%boxes(n))
+                call clear_box(tree%boxes(n))
              end if
           end do
        else
@@ -756,7 +792,7 @@ contains
 
   !> Mark box as active and allocate data storage for a box, for its cell- and
   !> face-centered data
-  subroutine a$D_init_box(box, n_cell, n_cc, n_fc)
+  subroutine init_box(box, n_cell, n_cc, n_fc)
     type(box$D_t), intent(inout) :: box !< Box for which we allocate memory
     integer, intent(in)         :: n_cell !< Number of cells per dimension in the box
     integer, intent(in)         :: n_cc   !< Number of cell-centered variables
@@ -774,10 +810,10 @@ contains
     allocate(box%fy(n_cell,     n_cell+1,   n_cell,     n_fc))
     allocate(box%fz(n_cell,     n_cell,     n_cell+1,   n_fc))
 #endif
-  end subroutine a$D_init_box
+  end subroutine init_box
 
   !> Deallocate data storage for a box and mark inactive
-  subroutine a$D_clear_box(box)
+  subroutine clear_box(box)
     type(box$D_t), intent(inout) :: box
 
     box%in_use = .false.
@@ -789,7 +825,7 @@ contains
     deallocate(box%fz)
 #endif
     if (associated(box%ud)) deallocate(box%ud)
-  end subroutine a$D_clear_box
+  end subroutine clear_box
 
   ! Set the neighbors of id (using their parent)
   subroutine set_nbs_$Dd(boxes, id)
@@ -856,6 +892,8 @@ contains
     integer, intent(in)       :: new_size !< New size for the array boxes(:)
     type(box$D_t), allocatable :: boxes_cpy(:)
 
+    if (.not. tree%ready) stop "Tree not ready"
+
     ! Store boxes in larger array boxes_cpy
     allocate(boxes_cpy(new_size))
     boxes_cpy(1:tree%max_id) = tree%boxes(1:tree%max_id)
@@ -882,6 +920,7 @@ contains
     integer                             :: max_id_prev, max_id_req
     integer, allocatable                :: ref_flags(:)
 
+    if (.not. tree%ready) stop "Tree not ready"
     max_id_prev = tree%max_id
     allocate(ref_flags(max_id_prev))
 
@@ -1146,7 +1185,7 @@ contains
           end if
        end do
 
-       call a$D_clear_box(boxes(c_id))
+       call clear_box(boxes(c_id))
     end do
 
     boxes(id)%children = a5_no_box
@@ -1178,7 +1217,7 @@ contains
        boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
             a$D_ch_dix(:,i) * boxes(id)%n_cell
 
-       call a$D_init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
+       call init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
     end do
 
     ! Set boundary conditions at children
@@ -1436,6 +1475,7 @@ contains
        end function reduction
     end interface
 
+    if (.not. tree%ready) stop "Tree not ready"
     out_val = init_val
     my_val  = init_val
 
@@ -1483,6 +1523,7 @@ contains
        end function reduction
     end interface
 
+    if (.not. tree%ready) stop "Tree not ready"
     out_val   = init_val
     my_val    = init_val
     my_loc%id = -1
@@ -1525,6 +1566,7 @@ contains
     real(dp)               :: tmp, my_max
     integer                :: i, id, lvl, nc
 
+    if (.not. tree%ready) stop "Tree not ready"
     my_max = -huge(1.0_dp)
 
     !$omp parallel reduction(max: my_max) private(lvl, i, id, nc, tmp)
@@ -1556,6 +1598,7 @@ contains
     real(dp)               :: tmp, my_min
     integer                :: i, id, lvl, nc
 
+    if (.not. tree%ready) stop "Tree not ready"
     my_min = huge(1.0_dp)
 
     !$omp parallel reduction(min: my_min) private(lvl, i, id, nc, tmp)
@@ -1587,6 +1630,7 @@ contains
     real(dp)               :: tmp, my_sum, fac
     integer                :: i, id, lvl, nc
 
+    if (.not. tree%ready) stop "Tree not ready"
     my_sum = 0
 
     !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp, fac)
@@ -1671,6 +1715,7 @@ contains
     integer, intent(in)       :: iv_from, iv_to
     integer                   :: lvl
 
+    if (.not. tree%ready) stop "Tree not ready"
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
        call a$D_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
@@ -2001,6 +2046,7 @@ contains
     integer, intent(in), optional :: i_to !< Destination (if /= iv)
     integer                       :: lvl
 
+    if (.not. tree%ready) stop "Tree not ready"
     do lvl = tree%max_lvl-1, lbound(tree%lvls, 1), -1
        call a$D_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv, i_to)
     end do
@@ -2088,6 +2134,7 @@ contains
     procedure(a$D_subr_gc)     :: subr_bc    !< Procedure called at physical boundaries
     integer                   :: lvl, i, id
 
+    if (.not. tree%ready) stop "Tree not ready"
     !$omp parallel private(lvl, i, id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl
        !$omp do
@@ -2620,11 +2667,11 @@ contains
 
   !> Restrict fluxes from children to parents on refinement boundaries.
   subroutine a$D_consistent_fluxes(tree, f_ixs)
-    use omp_lib
     type(a$D_t), intent(inout)     :: tree         !< Tree to operate on
     integer, intent(in)           :: f_ixs(:)     !< Indices of the fluxes
     integer                       :: lvl, i, id, nb, nb_id
 
+    if (.not. tree%ready) stop "Tree not ready"
     !$omp parallel private(lvl, i, id, nb, nb_id)
     do lvl = lbound(tree%lvls, 1), tree%max_lvl-1
        !$omp do
@@ -2765,6 +2812,7 @@ contains
     integer                       :: k, bn2
 #endif
 
+    if (.not. tree%ready) stop "Tree not ready"
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "a$D_write_vtk: wrong indices given (ixs_cc)"
