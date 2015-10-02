@@ -859,10 +859,16 @@ contains
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 etc.)
   function a$D_get_child_offset(box, nb) result(ix_offset)
     type(box$D_t), intent(in)           :: box   !< A child box
-    integer, intent(in), optional      :: nb     !< Optional: get index on neighbor
+    integer, intent(in), optional      :: nb     !< Optional: get index on parent neighbor
     integer                            :: ix_offset($D)
-    ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
-    if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
+    if (box%lvl > 1) then
+       ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
+       if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
+    else
+       ix_offset = 0
+       ! TODO
+       if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
+    endif
   end function a$D_get_child_offset
 
   !> Get the id of neighbor nb of boxes(id), through its parent
