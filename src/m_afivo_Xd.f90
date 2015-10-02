@@ -864,10 +864,10 @@ contains
     if (box%lvl > 1) then
        ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
        if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
-    else
+    else                        ! In the subtree, parents are half the size
        ix_offset = 0
-       ! TODO
-       if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
+       if (present(nb)) ix_offset = ix_offset - &
+            a$D_nb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
     endif
   end function a$D_get_child_offset
 

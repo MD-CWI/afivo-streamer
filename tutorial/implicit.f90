@@ -14,7 +14,7 @@ program tutorial
 
   real(dp), parameter :: domain_len   = 1.0_dp
   real(dp), parameter :: diff_coeff   = 1.0_dp
-  real(dp), parameter :: dt_global    = 0.1_dp
+  real(dp), parameter :: dt_global    = 1.0e-2_dp
 
   type(a2_t)          :: tree
   type(mg2_t)         :: mg
@@ -39,7 +39,7 @@ program tutorial
   do while (time < end_time)
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "heat_", output_cnt
+        write(fname, "(A,I0)") "heat_implicit_", output_cnt
         call a2_write_vtk(tree, fname, ["phi", "rhs", "res"], output_cnt, time)
      end if
 
@@ -53,7 +53,7 @@ contains
   subroutine initialize_tree(tree)
     type(a2_t), intent(inout) :: tree
 
-    integer, parameter  :: n_boxes_base = 1
+    integer, parameter  :: n_boxes_base = 3
     real(dp)            :: dr
     integer             :: ix_list(2, n_boxes_base)
     integer             :: nb_list(4, n_boxes_base)
@@ -70,9 +70,18 @@ contains
 
     ! Set the indices for boxes 1 to 3
     ix_list(:, 1) = [1, 1]
+    ix_list(:, 2) = [2, 1]
+    ix_list(:, 3) = [2, 2]
 
     ! Negative values are used for boundary conditions
     nb_list(1:4, 1) = -1
+    nb_list(1:4, 2) = -1
+    nb_list(1:4, 3) = -1
+
+    ! Connect the two boxes, nb_hx stands for "neighbor in high-x direction".
+    ! Connections only have to be specified from one side.
+    nb_list(a2_nb_hx, 1) = 2
+    nb_list(a2_nb_hy, 2) = 3
 
     ! Construct the base (level 1) mesh
     call a2_set_base(tree, ix_list, nb_list)
