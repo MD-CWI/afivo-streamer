@@ -32,19 +32,18 @@ program tutorial
 
 #if $STEP >= 4
   do
-#endif
-#if $STEP >= 2
-     call set_initial_conditions(tree)
+     call a2_loop_box(tree, set_init_cond)
      call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
-#endif
-#if $STEP >= 4
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
+#elif $STEP >= 2
+  call a2_loop_box(tree, set_init_cond)
+  call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
 #endif
 
 #if $STEP == 2
-  call a2_write_vtk(tree, "step", ["phi"], 1, 0.0_dp)
+  call a2_write_vtk(tree, "heat", ["phi"], 1, 0.0_dp)
 #endif
 
 #if $STEP >= 3
@@ -56,7 +55,7 @@ program tutorial
   do while (time < end_time)
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "step_", output_cnt
+        write(fname, "(A,I0)") "heat_", output_cnt
         call a2_write_vtk(tree, fname, ["phi"], output_cnt, time)
      end if
 
@@ -117,22 +116,6 @@ contains
 #endif
 
 #if $STEP >= 2
-  subroutine set_initial_conditions(tree)
-    type(a2_t), intent(inout) :: tree
-    integer :: i, id, lvl
-
-    ! We can set the initial condition in this way, using OpenMP
-    call a2_loop_box(tree, set_init_cond)
-
-    ! Or manually
-    do lvl = 1, tree%max_lvl
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call set_init_cond(tree%boxes(id))
-       end do
-    end do
-  end subroutine set_initial_conditions
-
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
@@ -161,7 +144,6 @@ contains
     call a2_loop_boxes(tree, fluxes_centdif, .true.)
     call a2_loop_box_arg(tree, update_solution, [dt], .true.)
     call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
-    time = time + dt
   end subroutine heat_forward_euler
 #endif
 
@@ -176,7 +158,6 @@ contains
     call a2_loop_box_arg(tree, update_solution, [dt], .true.)
     call a2_restrict_tree(tree, i_phi)
     call a2_gc_sides(tree, i_phi, a2_sides_interp, a2_bc_dirichlet)
-    time = time + dt
   end subroutine heat_forward_euler
 #endif
 
