@@ -239,10 +239,10 @@ contains
     inv_dr = 1/boxes(id)%dr
 
     ! Diffusion
-    boxes(id)%fx(:,:,i_phi) = boxes(id)%cc(0:nc, 1:nc, i_phi) - boxes(id)%cc(1:nc+1, 1:nc, i_phi)
-    boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) * flux_args(1) * inv_dr
-    boxes(id)%fy(:,:,i_phi) = boxes(id)%cc(1:nc, 0:nc, 1) - boxes(id)%cc(1:nc, 1:nc+1, 1)
-    boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) * flux_args(1) * inv_dr
+    boxes(id)%fx(:,:,i_phi) = (boxes(id)%cc(0:nc, 1:nc, i_phi) - &
+         boxes(id)%cc(1:nc+1, 1:nc, i_phi)) * flux_args(1) * inv_dr
+    boxes(id)%fy(:,:,i_phi) = (boxes(id)%cc(1:nc, 0:nc, i_phi) - &
+         boxes(id)%cc(1:nc, 1:nc+1, i_phi))  * flux_args(1) * inv_dr
 
     boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) + flux_args(2) * 0.5_dp * &
          (boxes(id)%cc(0:nc, 1:nc, 1) + boxes(id)%cc(1:nc+1, 1:nc, 1))

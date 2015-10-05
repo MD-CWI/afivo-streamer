@@ -1,4 +1,4 @@
-SRC_DIRS	:= src examples
+SRC_DIRS	:= src examples tutorial
 CREATE_DIRS	:= silo
 
 # Directories with altered names (useful for cleaning)
