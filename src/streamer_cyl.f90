@@ -176,7 +176,7 @@ program streamer_cyl
 
   do
      ! Get a new time step, which is at most dt_amr
-     dt      = get_max_dt(tree)
+     dt = get_max_dt(tree)
 
      if (dt < 1e-14) then
         print *, "dt getting too small, instability?"
@@ -198,6 +198,9 @@ program streamer_cyl
 
      ! We perform n_steps between mesh-refinements
      do n = 1, n_steps_amr
+
+        if (photoi_enabled) &
+             call set_photoionization(tree, photoi_eta, photoi_num_photons, dt)
 
         ! Copy previous solution
         call a2_tree_copy_cc(tree, i_elec, i_elec_old)
@@ -256,8 +259,6 @@ program streamer_cyl
         call a2_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
      end if
 
-     if (photoi_enabled) &
-          call set_photoionization(tree, photoi_eta, photoi_num_photons)
   end do
 
   call a2_destroy(tree)
@@ -326,7 +327,7 @@ contains
        end do
     end if
 
-    if (adx > 0.75_dp .and. crv_phi > 0.1_dp) ref_flags(id) = a5_do_ref
+    if (adx > 1.0_dp .and. crv_phi > 0.1_dp) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -714,11 +715,12 @@ contains
     end do
   end subroutine update_solution
 
-  subroutine set_photoionization(tree, eta, num_photons)
+  subroutine set_photoionization(tree, eta, num_photons, dt)
     use m_units_constants
 
     type(a2_t), intent(inout) :: tree
     real(dp), intent(in)      :: eta
+    real(dp), intent(in), optional :: dt
     integer, intent(in)       :: num_photons
     real(dp), parameter       :: p_quench = 30.0D0 * UC_torr_to_bar
     real(dp)                  :: quench_fac
@@ -732,7 +734,7 @@ contains
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
     call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_pho, i_pho, 0.6_dp, .false., .true., 0.05e-3_dp)
+         i_pho, i_pho, 0.25e-4_dp, .true., .true., .05e-3_dp, dt)
 
   end subroutine set_photoionization
 

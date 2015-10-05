@@ -205,7 +205,7 @@ contains
   end subroutine PH_do_absorp
 
   subroutine PH_set_src_2d(tree, pi_tbl, rng, num_photons, &
-       i_src, i_pho, fac_dx, const_dx, use_cyl, min_dx)
+       i_src, i_pho, fac_dx, const_dx, use_cyl, min_dx, dt)
     use m_random
     use m_afivo_2d
     use m_lookup_table
@@ -228,6 +228,8 @@ contains
     logical, intent(in)        :: use_cyl
     !> Minimum spacing for absorption
     real(dp), intent(in)        :: min_dx
+    !> Time step, if present use "physical" photons
+    real(dp), intent(in), optional :: dt
 
     integer                     :: lvl, ix, id, nc, min_lvl, max_lvl
     integer                     :: i, j, n, n_create, n_used, i_ph
@@ -243,17 +245,27 @@ contains
 
     nc = tree%n_cell
 
-    ! Allocate a bit more space because of stochastic production
-    allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
-
     ! Compute the sum of photon production
     call a2_tree_sum_cc(tree, i_src, sum_production)
 
-    ! Create approximately num_photons
-    fac    = num_photons / max(sum_production, epsilon(1.0_dp))
-    n_used = 0
+    if (present(dt)) then
+       ! Create "physical" photons
+       tmp = sum_production * dt
+       fac = dt
+       ! print *, "Number of photons", tmp
+
+       ! Allocate a bit more space because of stochastic production
+       allocate(xyz_src(3, nint(1.2_dp * tmp + 1000)))
+    else
+       ! Create approximately num_photons
+       fac    = num_photons / max(sum_production, epsilon(1.0_dp))
+
+       ! Allocate a bit more space because of stochastic production
+       allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
+    end if
 
     ! Now loop over all leaves and create photons using random numbers
+    n_used = 0
 
     !$omp parallel private(lvl, ix, id, i, j, n, r, dr, i_ph, proc_id, &
     !$omp tmp, n_create)
@@ -333,8 +345,6 @@ contains
        ! Determine at which level we estimate the photoionization source term. This
        ! depends on the typical lenght scale for absorption.
        pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
-       print *, "photon level", pho_lvl
-       print *, "photon dx", a2_lvl_dr(tree, pho_lvl)
 
        !$omp parallel do
        do n = 1, n_used
@@ -371,6 +381,8 @@ contains
 
     ! Add photons to production rate. Currently, this is done sequentially.
     if (use_cyl) then
+       tmp = fac * 2 * pi       ! Temporary factor to speed up loop
+
        do n = 1, n_used
           id = ph_loc(n)%id
           if (id > a5_no_box) then
@@ -380,7 +392,7 @@ contains
              r(1:2) = a2_r_cc(tree%boxes(id), [i, j])
              tree%boxes(id)%cc(i, j, i_pho) = &
                   tree%boxes(id)%cc(i, j, i_pho) + &
-                  pi_tbl%frac_in_tbl/(fac * dr**2 * 2 * pi * r(1))
+                  pi_tbl%frac_in_tbl/(tmp * dr**2 * r(1))
           end if
        end do
     else
@@ -426,7 +438,7 @@ contains
   end subroutine PH_set_src_2d
 
   subroutine PH_set_src_3d(tree, pi_tbl, rng, num_photons, &
-       i_src, i_pho, fac_dx, const_dx, min_dx)
+       i_src, i_pho, fac_dx, const_dx, min_dx, dt)
     use m_random
     use m_afivo_3d
     use m_lookup_table
@@ -447,6 +459,8 @@ contains
     logical, intent(in)         :: const_dx
     !> Minimum spacing for absorption
     real(dp), intent(in)        :: min_dx
+    !> Time step, if present use "physical" photons
+    real(dp), intent(in), optional :: dt
 
     integer                     :: lvl, ix, id, nc
     integer                     :: i, j, k, n, n_create, n_used, i_ph
@@ -461,17 +475,27 @@ contains
 
     nc = tree%n_cell
 
-    ! Allocate a bit more space because of stochastic production
-    allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
-
     ! Compute the sum of photon production
     call a3_tree_sum_cc(tree, i_src, sum_production)
 
-    ! Create approximately num_photons
-    fac    = num_photons / max(sum_production, epsilon(1.0_dp))
-    n_used = 0
+    if (present(dt)) then
+       ! Create "physical" photons
+       tmp = sum_production * dt
+       fac = dt
+       ! print *, "Number of photons", tmp
+
+       ! Allocate a bit more space because of stochastic production
+       allocate(xyz_src(3, nint(1.2_dp * tmp + 1000)))
+    else
+       ! Create approximately num_photons
+       fac    = num_photons / max(sum_production, epsilon(1.0_dp))
+
+       ! Allocate a bit more space because of stochastic production
+       allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
+    end if
 
     ! Now loop over all leaves and create photons using random numbers
+    n_used = 0
 
     !$omp parallel private(lvl, ix, id, i, j, k, n, dr, i_ph, &
     !$omp proc_id, tmp, n_create)

@@ -189,13 +189,17 @@ program streamer_3d
      end if
 
      if (write_out) call a3_write_silo(tree, fname, &
-          cc_names, output_cnt, time, dir=output_dir)
+          cc_names([i_elec, i_pion, i_fld, i_pho]), output_cnt, time, &
+          ixs_cc=[i_elec, i_pion, i_fld, i_pho], dir=output_dir)
 
      if (time > end_time) exit
 
      ! We perform n_steps between mesh-refinements
      do n = 1, n_steps_amr
         time = time + dt
+
+        if (photoi_enabled) &
+             call set_photoionization(tree, photoi_eta, photoi_num_photons, dt)
 
         ! Copy previous solution
         call a3_tree_copy_cc(tree, i_elec, i_elec_old)
@@ -242,8 +246,6 @@ program streamer_3d
         call a3_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
      end if
 
-     if (photoi_enabled) &
-          call set_photoionization(tree, photoi_eta, photoi_num_photons)
   end do
 
   call a3_destroy(tree)
@@ -745,11 +747,12 @@ contains
     end do
   end subroutine update_solution
 
-  subroutine set_photoionization(tree, eta, num_photons)
+  subroutine set_photoionization(tree, eta, num_photons, dt)
     use m_units_constants
 
     type(a3_t), intent(inout) :: tree
     real(dp), intent(in)      :: eta
+    real(dp), intent(in), optional :: dt
     integer, intent(in)       :: num_photons
     real(dp), parameter       :: p_quench = 30.0D0 * UC_torr_to_bar
     real(dp)                  :: quench_fac
@@ -762,7 +765,7 @@ contains
     ! ionization rate.
     call a3_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
     call PH_set_src_3d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_pho, i_pho, 0.6_dp, .false., 0.05e-3_dp)
+         i_pho, i_pho, 0.25e-4_dp, .true., 0.05e-3_dp, dt)
 
   end subroutine set_photoionization
 
