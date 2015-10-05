@@ -69,8 +69,14 @@ contains
 
   function GM_sigmoid(dist, width) result(val)
     real(dp), intent(in) :: dist, width
-    real(dp)             :: val
-    val = 2 / (1 + exp(dist / width))
+    real(dp)             :: val, tmp
+
+    tmp = dist / width
+    if (tmp > log(0.5_dp * huge(1.0_dp))) then
+       val = 0
+    else
+       val = 2 / (1 + exp(tmp))
+    end if
   end function GM_sigmoid
 
   function GM_gaussian(dist, width) result(val)
