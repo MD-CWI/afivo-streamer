@@ -249,20 +249,15 @@ contains
     call a2_tree_sum_cc(tree, i_src, sum_production)
 
     if (present(dt)) then
-       ! Create "physical" photons
-       tmp = sum_production * dt
-       fac = dt
-       ! print *, "Number of photons", tmp
-
-       ! Allocate a bit more space because of stochastic production
-       allocate(xyz_src(3, nint(1.2_dp * tmp + 1000)))
+       ! Create "physical" photons when less than num_photons are produced
+       fac = min(dt, num_photons / (sum_production + epsilon(1.0_dp)))
     else
        ! Create approximately num_photons
-       fac    = num_photons / max(sum_production, epsilon(1.0_dp))
-
-       ! Allocate a bit more space because of stochastic production
-       allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
+       fac = num_photons / (sum_production + epsilon(1.0_dp))
     end if
+
+    ! Allocate a bit more space because of stochastic production
+    allocate(xyz_src(3, nint(1.2_dp * fac * sum_production + 1000)))
 
     ! Now loop over all leaves and create photons using random numbers
     n_used = 0
@@ -479,20 +474,15 @@ contains
     call a3_tree_sum_cc(tree, i_src, sum_production)
 
     if (present(dt)) then
-       ! Create "physical" photons
-       tmp = sum_production * dt
-       fac = dt
-       ! print *, "Number of photons", tmp
-
-       ! Allocate a bit more space because of stochastic production
-       allocate(xyz_src(3, nint(1.2_dp * tmp + 1000)))
+       ! Create "physical" photons when less than num_photons are produced
+       fac = min(dt, num_photons / (sum_production + epsilon(1.0_dp)))
     else
        ! Create approximately num_photons
-       fac    = num_photons / max(sum_production, epsilon(1.0_dp))
-
-       ! Allocate a bit more space because of stochastic production
-       allocate(xyz_src(3, nint(1.2_dp * num_photons + 1000)))
+       fac = num_photons / (sum_production + epsilon(1.0_dp))
     end if
+
+    ! Allocate a bit more space because of stochastic production
+    allocate(xyz_src(3, nint(1.2_dp * fac * sum_production + 1000)))
 
     ! Now loop over all leaves and create photons using random numbers
     n_used = 0
