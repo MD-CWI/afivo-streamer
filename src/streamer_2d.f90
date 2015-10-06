@@ -297,6 +297,8 @@ contains
 
     if (adx < 0.1_dp .and. boxes(id)%dr < 2.0e-5_dp) &
          ref_flags(id) = a5_rm_ref
+    if (adx < 0.1_dp .and. crv_phi < 4.0_dp .and. boxes(id)%dr < 5.0e-5_dp) &
+         ref_flags(id) = a5_rm_ref
 
     ! Refine around initial conditions
     if (time < 2.0e-9_dp) then
