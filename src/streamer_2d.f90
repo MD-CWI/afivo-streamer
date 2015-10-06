@@ -295,7 +295,7 @@ contains
     alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
-    if (adx < 0.1_dp .and. boxes(id)%dr < 2.5e-5_dp) &
+    if (adx < 0.1_dp .and. boxes(id)%dr < 2.0e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
     ! Refine around initial conditions
@@ -725,7 +725,7 @@ contains
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
     call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_pho, i_pho, 0.25e-4_dp, .false., .false., 0.05e-3_dp, dt)
+         i_pho, i_pho, 0.25e-3_dp, .false., .false., 1e-9_dp, dt)
 
   end subroutine set_photoionization
 
