@@ -946,8 +946,8 @@ contains
          "The gas pressure in bar (used for photoionization)")
     call CFG_add(cfg, "applied_fld", 1.0d7, &
          "The applied electric field if there are no electrodes")
-    call CFG_add(cfg, "epsilon_diel", 1.5_dp, &
-         "The dielectric constant of the dielectric")
+    call CFG_add(cfg, "epsilon_diel", 1.0_dp, &
+         "The dielectric constant of the dielectric (1.0 means no dielectric)")
 
     call CFG_add(cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density in 1/m^3")
