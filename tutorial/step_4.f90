@@ -1,3 +1,4 @@
+
 program tutorial
   use m_afivo_2d
 
@@ -9,44 +10,25 @@ program tutorial
   integer, parameter  :: i_phi        = 1
 
   real(dp), parameter :: domain_len   = 1.0_dp
-#if $STEP >= 3
   real(dp), parameter :: diff_coeff   = 1.0_dp
-#endif
 
   type(a2_t)          :: tree
-#if $STEP >= 3
   integer             :: output_cnt
   real(dp)            :: dt, dt_output, time, end_time
   character(len=100)  :: fname
-#endif
-#if $STEP >= 4
   type(ref_info_t)    :: ref_info
-#endif
-
 
   print *, "This is an Afivo tutorial for solving the heat equation."
 
-#if $STEP >= 1
   call initialize_tree(tree)
-#endif
 
-#if $STEP >= 4
   do
      call a2_loop_box(tree, set_init_cond)
      call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
-#elif $STEP >= 2
-  call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
-#endif
 
-#if $STEP == 2
-  call a2_write_vtk(tree, "heat", ["phi"], 1, 0.0_dp)
-#endif
-
-#if $STEP >= 3
   output_cnt = 0
   time       = 0.0_dp
   end_time   = 1.0_dp
@@ -64,18 +46,14 @@ program tutorial
      call heat_forward_euler(tree, dt)
      time = time + dt
 
-#if $STEP >= 4
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
      call a2_gc_sides(tree, i_phi, a2_sides_interp, a2_bc_dirichlet)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
-#endif
   end do
-#endif
 
 contains
 
-#if $STEP >= 1
   subroutine initialize_tree(tree)
     type(a2_t), intent(inout) :: tree
 
@@ -113,9 +91,7 @@ contains
 
     call a2_print_info(tree)
   end subroutine initialize_tree
-#endif
 
-#if $STEP >= 2
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
@@ -133,21 +109,7 @@ contains
        end do
     end do
   end subroutine set_init_cond
-#endif
 
-#if $STEP == 3
-  subroutine heat_forward_euler(tree, dt)
-    type(a2_t), intent(inout) :: tree
-    real(dp), intent(in) :: dt
-
-    ! Forward Euler
-    call a2_loop_boxes(tree, fluxes_centdif, .true.)
-    call a2_loop_box_arg(tree, update_solution, [dt], .true.)
-    call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
-  end subroutine heat_forward_euler
-#endif
-
-#if $STEP == 4
   subroutine heat_forward_euler(tree, dt)
     type(a2_t), intent(inout) :: tree
     real(dp), intent(in) :: dt
@@ -159,9 +121,7 @@ contains
     call a2_restrict_tree(tree, i_phi)
     call a2_gc_sides(tree, i_phi, a2_sides_interp, a2_bc_dirichlet)
   end subroutine heat_forward_euler
-#endif
 
-#if $STEP >= 3
   subroutine fluxes_centdif(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
@@ -191,9 +151,7 @@ contains
          (box%fx(1:nc, :, i_phi) - box%fx(2:nc+1, :, i_phi)) * inv_dr + &
          (box%fy(:, 1:nc, i_phi) - box%fy(:, 2:nc+1, i_phi)) * inv_dr)
   end subroutine update_solution
-#endif
 
-#if $STEP >= 4
   subroutine set_ref_flags(boxes, id, ref_flags)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
@@ -237,6 +195,5 @@ contains
        end do
     end do
   end subroutine prolong_to_new_children
-#endif
 
 end program

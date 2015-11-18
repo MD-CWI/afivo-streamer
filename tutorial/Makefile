@@ -21,12 +21,3 @@ clean:
 
 # Dependency information
 $(STEPS): 		../src/libafivo.a
-
-step_1.f90: heat_expl_all.f90
-	sed 's|\$$STEP|1|g' < $< | cpp -traditional-cpp -P | cat -s > $@
-step_2.f90: heat_expl_all.f90
-	sed 's|\$$STEP|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
-step_3.f90: heat_expl_all.f90
-	sed 's|\$$STEP|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@
-step_4.f90: heat_expl_all.f90
-	sed 's|\$$STEP|4|g' < $< | cpp -traditional-cpp -P | cat -s > $@
