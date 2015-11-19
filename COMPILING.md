@@ -27,6 +27,12 @@ However, make sure that Silo (see below) is also compiled with ifort, otherwise
 you will probably not be able to produce Silo output files. The VTK unformatted
 output automaticcaly work with ifort and gfortran.
 
+Note that with ifort you might get the following warning:
+
+>warning #8266: Standard F2008 does not allow an internal procedure to be a procedure target
+
+That warning is [incorrect](https://software.intel.com/en-us/forums/intel-fortran-compiler-for-linux-and-mac-os-x/topic/535102).
+
 Dependencies
 =====
 
