@@ -239,12 +239,12 @@ module m_afivo_$Dd
        integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
        integer, intent(in)         :: nb       !< Neighbor direction
        integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
+       integer, intent(in)         :: nc       !< box%n_cell (this is purely for convenience)
 #if $D == 2
        real(dp), intent(out)       :: gc_data(nc) !< The requested ghost cells
 #elif $D == 3
        real(dp), intent(out)       :: gc_data(nc, nc) !< The requested ghost cells
 #endif
-       integer, intent(in)         :: nc       !< box%n_cell (this is purely for convenience)
      end subroutine a$D_subr_egc
   end interface
 
