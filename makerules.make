@@ -19,5 +19,10 @@ else ifeq ($(COMPILER), ifort)
 	endif
 endif
 
+# How to get .o object files from .f90 source files
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
+
+# How to get executables from .o object files
+%: %.o
+	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))

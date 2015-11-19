@@ -1,6 +1,6 @@
 SRCS	:= m_morton.f90 m_afivo_constants.f90 m_afivo_2d.f90 \
-	m_afivo_3d.f90 m_vtk.f90 m_mg_2d.f90 m_mg_3d.f90 \
-	m_write_silo.o
+		m_afivo_3d.f90 m_vtk.f90 m_mg_2d.f90 m_mg_3d.f90 \
+		m_write_silo.o
 
 OBJS	:= $(SRCS:%.f90=%.o)
 
@@ -37,6 +37,6 @@ m_mg_3d.f90: m_mg_Xd.f90
 # Dependency information
 m_afivo_2d.o:		m_vtk.o m_write_silo.o m_morton.o m_afivo_constants.o
 m_afivo_3d.o:		m_vtk.o m_write_silo.o m_morton.o m_afivo_constants.o
-m_mg_2d.o:		m_afivo_2d.o
-m_mg_3d.o:		m_afivo_3d.o
+m_mg_2d.o:			m_afivo_2d.o
+m_mg_3d.o:			m_afivo_3d.o
 m_write_silo.o:		INCDIRS += ../silo/include
