@@ -1,15 +1,17 @@
 Instructions for compiling the code
 =====
 
-QUICK guide: on an up-to-date system with gfortran, simply type 'make' in the
-Afivo directory to compile afivo and the examples.
+QUICK guide: on an up-to-date system with gfortran, simply do:
+
+    $ git clone https://github.com/jannisteunissen/afivo.git
+    $ cd afivo
+    $ make
 
 If you want to compile with runtime checks (useful for debugging) and profiling
 options, then do:
 
-$ make clean
-
-$ make DEBUG=1
+    $ make clean
+    $ make DEBUG=1
 
 More information
 =====
