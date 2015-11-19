@@ -15,7 +15,7 @@ else ifeq ($(COMPILER), ifort)
 	FC 	:= ifort
 	FFLAGS	:= -warn all -O2 -stand f08 -openmp -assume realloc-lhs
 	ifeq ($(DEBUG), 1)
-		FFLAGS += -check all -g -p -debug all
+		FFLAGS += -check all,noarg_temp_created -g -p -debug all
 	endif
 endif
 
