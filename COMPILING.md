@@ -18,11 +18,17 @@ Afivo requirements:
 * Fortran 2008 compatible compiler (gfortran >= 4.8 has been tested)
 * C/C++ compiler for compiling Silo (see below).
 
-A recent version of the Intel compiler ifort *should* in also work, however, I've
-had some problems with them (reporting wrong error message, not being up-to-date
-with the F2008 standard, crashes). You can try this with
+A recent version of the Intel compiler ifort *should* in also work. You can try
+this with
 
 $ make COMPILER=ifort
+
+However, make sure that Silo (see below) is also compiled with ifort, otherwise
+you will probably not be able to produce Silo output files. The VTK unformatted
+output automaticcaly work with ifort and gfortran.
+
+Dependencies
+=====
 
 Afivo has one dependency: Silo. The script build_silo.sh automatically
 downloads, configures and compiles Silo into your afivo directory. If this
