@@ -770,9 +770,7 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
 
-    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
-       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_prolong1_to(tree%boxes, id, i_elec)
@@ -780,9 +778,7 @@ contains
           call a2_prolong1_to(tree%boxes, id, i_phi)
           call set_box_eps(tree%boxes(id))
        end do
-       !$omp end do
 
-       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box_sides(tree%boxes, id, i_elec, &
@@ -792,9 +788,7 @@ contains
           call a2_gc_box_sides(tree%boxes, id, i_phi, &
                mg2_sides_rb, sides_bc_pot)
        end do
-       !$omp end do
     end do
-    !$omp end parallel
   end subroutine prolong_to_new_boxes
 
   ! This fills a second layer of ghost cells near physical boundaries for the
