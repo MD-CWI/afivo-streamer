@@ -1330,6 +1330,15 @@ contains
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_r_cc
 
+  !> Get the location of "loc"
+  pure function a$D_r_loc(tree, loc) result(r)
+    type(a$D_t), intent(in)     :: tree
+    type(a$D_loc_t), intent(in) :: loc
+    real(dp)                   :: r($D)
+    r = tree%boxes(loc%id)%r_min + &
+         (loc%ix-0.5_dp) * tree%boxes(loc%id)%dr
+  end function a$D_r_loc
+
 #if $D == 2
   !> Get the radius of the cell center with index cc_ix
   pure function a$D_cyl_radius_cc(box, cc_ix) result(r)
