@@ -66,7 +66,9 @@ program streamer_cyl
   integer           :: photoi_num_photons ! Number of photons to use
   type(PH_tbl_t)    :: photoi_tbl         ! Table for photoionization
 
-  real(dp) :: fld_mod_t0, fld_sin_amplitude, fld_sin_freq, fld_lin_deriv
+  real(dp)          :: fld_mod_t0, fld_sin_amplitude
+  real(dp)          :: fld_sin_freq, fld_lin_deriv
+  real(dp)          :: GLOBAL_fld_val
 
   integer           :: i, n, n_steps_amr
   integer           :: output_cnt
@@ -149,7 +151,7 @@ program streamer_cyl
   mg%i_eps        = i_eps
 
   ! The number of cycles at the lowest level
-  mg%n_cycle_base = 8
+  mg%n_cycle_base = 4
 
   ! Routines to use for ...
   mg%sides_bc    => sides_bc_pot ! Filling ghost cell on physical boundaries
@@ -243,7 +245,7 @@ program streamer_cyl
              cc_names, output_cnt, time, dir=output_dir, &
              fc_names=["fld_r", "fld_z"], ixs_fc=[f_fld])
         call write_streamer_properties(tree, fname_stats, &
-             fname_axis, output_cnt==1)
+             fname_axis, output_cnt, time)
      end if
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
@@ -280,7 +282,7 @@ contains
 
     ! Initialize tree
     call a2_init(tree, box_size, n_var_cell, n_var_face, dr, &
-         coarsen_to=4, n_boxes=n_boxes_init, coord=a5_cyl)
+         coarsen_to=2, n_boxes=n_boxes_init, coord=a5_cyl)
 
     ! Set up geometry
     id             = 1          ! One box ...
@@ -329,7 +331,7 @@ contains
        end do
     end if
 
-    if (adx > 1.0_dp .and. crv_phi > 0.1_dp) ref_flags(id) = a5_do_ref
+    if (adx > 1.0_dp .and. crv_phi > 0.0_dp) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -1006,36 +1008,33 @@ contains
 
   end subroutine init_transport_coeff
 
-  subroutine write_streamer_properties(tree, fname_stats, fname_axis, first_time)
+  subroutine write_streamer_properties(tree, fname_stats, fname_axis, output_cnt, time)
     type(a2_t), intent(in)       :: tree
     character(len=*), intent(in) :: fname_axis, fname_stats
-    logical, intent(in)          :: first_time
+    integer, intent(in) :: output_cnt
+    real(dp), intent(in) :: time
 
-    real(dp)                     :: fld_z, fld_r, radius, radius_z, height
-    real(dp)                     :: edens, phi, bg_fld
-    real(dp), allocatable        :: axis_data(:,:)
+    real(dp), allocatable        :: props(:), axis_data(:,:)
+    character(len=15), allocatable :: prop_names(:)
     integer                      :: n
     integer, parameter           :: unit_1 = 777, unit_2 = 778
 
-    call get_streamer_properties(tree, height, fld_z, radius, radius_z, &
-         fld_r, edens, phi, bg_fld)
+    call get_streamer_properties(tree, props, prop_names)
     call get_cc_axis(tree, [i_elec, i_pion], [f_fld, f_elec], axis_data)
 
-    if (first_time) then
+    if (output_cnt == 1) then
        open(unit_1, file=trim(fname_stats), action="write")
-       write(unit_1, *) "#time, height, fld_z, radius, radius_z, ", &
-            "fld_r, edens, phi, bg_fld"
+       write(unit_1, *) "ix_out      time     ", prop_names
        close(unit_1)
     else
        open(unit_1, file=trim(fname_stats), action="write", &
             position="append")
-       write(unit_1, *) time, height, fld_z, radius, radius_z, &
-            fld_r, edens, phi, bg_fld
+       write(unit_1, *) output_cnt, time, props
        close(unit_1)
     end if
 
     open(unit_2, file=trim(fname_axis), action="write")
-    write(unit_1, *) "#z, n_e, n_i, fld_z, flux_z"
+    write(unit_1, *) "z, n_e, n_i, fld_z, flux_z"
     do n = 1, size(axis_data, 2)
        write(unit_2, *) axis_data(:, n)
     end do
@@ -1043,44 +1042,85 @@ contains
     deallocate(axis_data)
 
     print *, "Written ", trim(fname_axis)
-    if (.not. first_time .and. height > 0.9_dp * domain_len) &
-         stop "Simulation has reached boundary"
   end subroutine write_streamer_properties
 
-  subroutine get_streamer_properties(tree, height, fld_z, &
-       radius, radius_z, fld_r, edens, phi, bg_fld)
+  subroutine get_streamer_properties(tree, props, prop_names)
     type(a2_t), intent(in) :: tree
-    real(dp), intent(out) :: fld_z, fld_r, radius, radius_z, height
-    real(dp), intent(out) :: edens, phi, bg_fld
+    real(dp), intent(inout), allocatable :: props(:)
+    character(len=15), intent(inout), allocatable :: prop_names(:)
 
-    real(dp)       :: rz(2)
-    type(a2_loc_t) :: loc_ez, loc_er, loc_dens
+    integer :: ip
+    integer, parameter :: n_props = 20
+    real(dp)       :: rz(2), dphi
+    type(a2_loc_t) :: loc_ez, loc_er, loc_dens, loc
     integer        :: id, ix(2)
 
-    call a2_reduction_loc(tree, box_fld_z, reduce_max, &
-         -1.0e99_dp, fld_z, loc_ez)
-    call a2_reduction_loc(tree, box_fld_r, reduce_max, &
-         -1.0e99_dp, fld_r, loc_er)
+    allocate(props(n_props))
+    allocate(prop_names(n_props))
+
+    ip = 1
+    prop_names(ip) = "E_bg"
+    props(ip)      = get_fld(time)
+
+    ip             = ip + 1
+    prop_names(ip) = "Ez_max"
+    call a2_reduction_loc(tree, box_maxfld_z, reduce_max, &
+         -1.0e99_dp, props(ip), loc_ez)
+
+    ip             = ip + 1
+    prop_names(ip) = "Er_max"
+    call a2_reduction_loc(tree, box_maxfld_r, reduce_max, &
+         -1.0e99_dp, props(ip), loc_er)
 
     ! Radius of streamer is defined as location of maximum r-field
     rz       = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
-    radius   = rz(1)
-    radius_z = rz(2)
+
+    ip             = ip + 1
+    prop_names(ip) = "Er_max(r)"
+    props(ip)      = rz(1)
+    ip             = ip + 1
+    prop_names(ip) = "Er_max(z)"
+    props(ip)      = rz(2)
+
+    if (time > 1.0e-9_dp .and. rz(2) > 0.9_dp * domain_len .or. &
+         rz(2) < 0.1_dp * domain_len) &
+         stop "Simulation has reached boundary"
 
     ! Get electron density and potential at location of radius
-    loc_dens = a2_get_loc(tree, [0.0_dp, rz(2)])
-    id       = loc_dens%id
-    ix       = loc_dens%ix
-    edens    = tree%boxes(id)%cc(ix(1), ix(2), i_elec)
+    loc_dens       = a2_get_loc(tree, [0.0_dp, rz(2)])
+    id             = loc_dens%id
+    ix             = loc_dens%ix
+    ip             = ip + 1
+    prop_names(ip) = "n_e(head)"
+    props(ip)      = tree%boxes(id)%cc(ix(1), ix(2), i_elec)
+
     ! Set phi to potential difference
-    phi      = tree%boxes(id)%cc(ix(1), ix(2), i_phi)
-    phi      = phi - (rz(2)/domain_len) * applied_voltage
+    dphi           = tree%boxes(id)%cc(ix(1), ix(2), i_phi)
+    dphi           = dphi - (rz(2)/domain_len) * applied_voltage
+    ip             = ip + 1
+    prop_names(ip) = "delta_phi"
+    props(ip)      = dphi
 
     ! Height of streamer
-    rz     = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
-    height = rz(2)
+    rz             = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
+    ip             = ip + 1
+    prop_names(ip) = "Ez_max(z)"
+    props(ip)      = rz(2)
 
-    bg_fld = get_fld(time)
+    do i = 4, 14, 2
+       GLOBAL_fld_val = i * 1e6_dp
+       ip = ip + 1
+       write(prop_names(ip), "(A,I0,A)") "r_max(", i, "e6)"
+       call a2_reduction_loc(tree, box_fld_maxr, reduce_max, &
+            0.0_dp, props(ip), loc)
+
+       ip = ip + 1
+       write(prop_names(ip), "(A,I0,A)") "z_max(", i, "e6)"
+       call a2_reduction_loc(tree, box_fld_maxz, reduce_max, &
+            0.0_dp, props(ip), loc)
+    end do
+
+    print *, "n_props", ip
   end subroutine get_streamer_properties
 
   real(dp) function reduce_max(a, b)
@@ -1088,7 +1128,7 @@ contains
     reduce_max = max(a,b)
   end function reduce_max
 
-  subroutine box_fld_r(box, val, ix)
+  subroutine box_maxfld_r(box, val, ix)
     type(box2_t), intent(in) :: box
     real(dp), intent(out)    :: val
     integer, intent(out)     :: ix(2)
@@ -1098,9 +1138,55 @@ contains
     ix = maxloc(abs(box%fx(1:nc, :, f_fld) + box%fx(2:nc+1, :, f_fld)))
     val = 0.5_dp * abs(box%fx(ix(1), ix(2), f_fld) + &
          box%fx(ix(1)+1, ix(2), f_fld))
-  end subroutine box_fld_r
+  end subroutine box_maxfld_r
 
-  subroutine box_fld_z(box, val, ix)
+  subroutine box_maxfld_r(box, val, ix)
+    type(box2_t), intent(in) :: box
+    real(dp), intent(out)    :: val
+    integer, intent(out)     :: ix(2)
+    integer                  :: i, j, nc
+    real(dp)                 :: maxr, rz(2)
+
+    val = 0
+    nc = box%n_cell
+
+    do j = 1, nc
+       do i = 1, nc
+          if (box%cc(i, j, i_fld) > GLOBAL_fld_val) then
+             rz = a2_r_cc(box, [i,j])
+             if (rz(1) > val) then
+                val = rz(1)
+                ix = [i, j]
+             end if
+          end if
+       end do
+    end do
+  end function box_fld_maxr
+
+  subroutine box_maxfld_r(box, val, ix)
+    type(box2_t), intent(in) :: box
+    real(dp), intent(out)    :: val
+    integer, intent(out)     :: ix(2)
+    integer                  :: i, j, nc
+    real(dp)                 :: maxr, rz(2)
+
+    val = 0
+    nc = box%n_cell
+
+    do j = 1, nc
+       do i = 1, nc
+          if (box%cc(i, j, i_fld) > GLOBAL_fld_val) then
+             rz = a2_r_cc(box, [i,j])
+             if (rz(1) > val) then
+                val = rz(1)
+                ix = [i, j]
+             end if
+          end if
+       end do
+    end do
+  end function box_fld_maxr
+
+  subroutine box_maxfld_z(box, val, ix)
     type(box2_t), intent(in) :: box
     real(dp), intent(out)    :: val
     integer, intent(out)     :: ix(2)
@@ -1110,7 +1196,7 @@ contains
     ix = maxloc(abs(box%fy(:, 1:nc, f_fld) + box%fy(:, 2:nc+1, f_fld)))
     val = 0.5_dp * abs(box%fy(ix(1), ix(2), f_fld) + &
          box%fy(ix(1), ix(2)+1, f_fld))
-  end subroutine box_fld_z
+  end subroutine box_maxfld_z
 
   subroutine get_cc_axis(tree, ixs_cc, ixs_fc, axis_data)
     type(a2_t), intent(in)               :: tree
@@ -1165,4 +1251,4 @@ contains
     end do
   end subroutine get_cc_axis
 
-end program streamer_cyl
+end program
