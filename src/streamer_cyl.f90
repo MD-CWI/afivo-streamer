@@ -1045,13 +1045,14 @@ contains
   end subroutine write_streamer_properties
 
   subroutine get_streamer_properties(tree, props, prop_names)
-    type(a2_t), intent(in) :: tree
-    real(dp), intent(inout), allocatable :: props(:)
+    type(a2_t), intent(in)                        :: tree
+    real(dp), intent(inout), allocatable          :: props(:)
     character(len=15), intent(inout), allocatable :: prop_names(:)
 
     integer :: ip
-    integer, parameter :: n_props = 20
-    real(dp)       :: rz(2), dphi
+    integer, parameter :: n_props = 38
+    real(dp)       :: rz(2), phi_head, z_head
+    real(dp)       :: alpha, mu, Er_max_norm, Ez_max
     type(a2_loc_t) :: loc_ez, loc_er, loc_dens, loc
     integer        :: id, ix(2)
 
@@ -1066,6 +1067,7 @@ contains
     prop_names(ip) = "Ez_max"
     call a2_reduction_loc(tree, box_maxfld_z, reduce_max, &
          -1.0e99_dp, props(ip), loc_ez)
+    Ez_max = props(ip)
 
     ip             = ip + 1
     prop_names(ip) = "Er_max"
@@ -1073,14 +1075,40 @@ contains
          -1.0e99_dp, props(ip), loc_er)
 
     ! Radius of streamer is defined as location of maximum r-field
-    rz       = a2_r_cc(tree%boxes(loc_er%id), loc_er%ix)
+    rz       = a2_r_loc(tree, loc_er)
 
     ip             = ip + 1
     prop_names(ip) = "Er_max(r)"
     props(ip)      = rz(1)
+
     ip             = ip + 1
     prop_names(ip) = "Er_max(z)"
     props(ip)      = rz(2)
+    z_head         = rz(2)
+
+    ip             = ip + 1
+    prop_names(ip) = "Er_max(E)"
+    props(ip)      = tree%boxes(loc_er%id)%cc(loc_er%ix(1), &
+         loc_er%ix(2), i_fld)
+    Er_max_norm    = props(ip)
+
+    alpha = LT_get_col(td_tbl, i_alpha, Ez_max)
+    mu = LT_get_col(td_tbl, i_alpha, Ez_max)
+    ip             = ip + 1
+    prop_names(ip) = "Ez_max(alpha)"
+    props(ip)      = alpha
+    ip             = ip + 1
+    prop_names(ip) = "Ez_max(S)"
+    props(ip)      = alpha * mu * Ez_max
+
+    alpha = LT_get_col(td_tbl, i_alpha, Er_max_norm)
+    mu = LT_get_col(td_tbl, i_alpha, Er_max_norm)
+    ip             = ip + 1
+    prop_names(ip) = "Er_max(alpha)"
+    props(ip)      = alpha
+    ip             = ip + 1
+    prop_names(ip) = "Er_max(S)"
+    props(ip)      = alpha * mu * Er_max_norm
 
     if (time > 1.0e-9_dp .and. rz(2) > 0.9_dp * domain_len .or. &
          rz(2) < 0.1_dp * domain_len) &
@@ -1095,11 +1123,10 @@ contains
     props(ip)      = tree%boxes(id)%cc(ix(1), ix(2), i_elec)
 
     ! Set phi to potential difference
-    dphi           = tree%boxes(id)%cc(ix(1), ix(2), i_phi)
-    dphi           = dphi - (rz(2)/domain_len) * applied_voltage
+    phi_head       = tree%boxes(id)%cc(ix(1), ix(2), i_phi)
     ip             = ip + 1
-    prop_names(ip) = "delta_phi"
-    props(ip)      = dphi
+    prop_names(ip) = "dphi"
+    props(ip)      = phi_head - (rz(2)/domain_len) * applied_voltage
 
     ! Height of streamer
     rz             = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
@@ -1115,9 +1142,29 @@ contains
             0.0_dp, props(ip), loc)
 
        ip = ip + 1
+       write(prop_names(ip), "(A,I0,A)") "dphi_r(", i, "e6)"
+       if (loc%id > a5_no_box) then
+          props(ip) = phi_head - &
+               tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
+       else
+          props(ip) = 0
+       end if
+
+       ip = ip + 1
        write(prop_names(ip), "(A,I0,A)") "z_max(", i, "e6)"
        call a2_reduction_loc(tree, box_fld_maxz, reduce_max, &
             0.0_dp, props(ip), loc)
+       props(ip) = props(ip) - z_head
+
+       ip = ip + 1
+       write(prop_names(ip), "(A,I0,A)") "dphi_z(", i, "e6)"
+       if (loc%id > a5_no_box) then
+          props(ip) = phi_head - &
+               tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
+
+       else
+          props(ip) = 0
+       end if
     end do
 
     print *, "n_props", ip
@@ -1140,12 +1187,12 @@ contains
          box%fx(ix(1)+1, ix(2), f_fld))
   end subroutine box_maxfld_r
 
-  subroutine box_maxfld_r(box, val, ix)
+  subroutine box_fld_maxr(box, val, ix)
     type(box2_t), intent(in) :: box
     real(dp), intent(out)    :: val
     integer, intent(out)     :: ix(2)
     integer                  :: i, j, nc
-    real(dp)                 :: maxr, rz(2)
+    real(dp)                 :: rz(2)
 
     val = 0
     nc = box%n_cell
@@ -1161,14 +1208,14 @@ contains
           end if
        end do
     end do
-  end function box_fld_maxr
+  end subroutine box_fld_maxr
 
-  subroutine box_maxfld_r(box, val, ix)
+  subroutine box_fld_maxz(box, val, ix)
     type(box2_t), intent(in) :: box
     real(dp), intent(out)    :: val
     integer, intent(out)     :: ix(2)
     integer                  :: i, j, nc
-    real(dp)                 :: maxr, rz(2)
+    real(dp)                 :: rz(2)
 
     val = 0
     nc = box%n_cell
@@ -1177,14 +1224,14 @@ contains
        do i = 1, nc
           if (box%cc(i, j, i_fld) > GLOBAL_fld_val) then
              rz = a2_r_cc(box, [i,j])
-             if (rz(1) > val) then
-                val = rz(1)
+             if (rz(2) > val) then
+                val = rz(2)
                 ix = [i, j]
              end if
           end if
        end do
     end do
-  end function box_fld_maxr
+  end subroutine box_fld_maxz
 
   subroutine box_maxfld_z(box, val, ix)
     type(box2_t), intent(in) :: box
