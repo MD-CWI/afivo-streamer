@@ -1,11 +1,15 @@
 !> \example test_drift_diff_2d.f90
-!> A drift-diffusion example for m_afivo_2d
+!> A drift-diffusion example for m_a2_t
 program test_drift_diff
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_io
+  use m_a2_utils
+  use m_a2_gc
+  use m_a2_restrict
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
   integer, parameter :: box_size    = 8
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
@@ -51,14 +55,14 @@ program test_drift_diff
   do
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
-     call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
   print *, "Restrict the initial conditions"
   call a2_restrict_tree(tree, i_phi)
-  call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
 
   do
      dr_min  = a2_min_dr(tree)
@@ -74,7 +78,7 @@ program test_drift_diff
         call a2_consistent_fluxes(tree, [1])
         call a2_loop_box_arg(tree, update_solution, [dt])
         call a2_restrict_tree(tree, i_phi)
-        call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
+        call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
         time = time + dt
      case (2)
         ! Copy previous solution
@@ -86,7 +90,7 @@ program test_drift_diff
            call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
-           call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
+           call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
         end do
 
         ! Take average of phi_old and phi
@@ -116,7 +120,7 @@ program test_drift_diff
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, have_no_bc)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -290,7 +294,7 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    call a2_gc2_box_sides(boxes, id, i_phi, a2_sides2_prolong1, &
+    call a2_gc2_box(boxes, id, i_phi, a2_gc2_prolong1, &
          have_no_bc2, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
@@ -377,6 +381,7 @@ contains
   end subroutine average_phi
 
   subroutine prolong_to_new_children(tree, ref_info)
+    use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
@@ -389,8 +394,8 @@ contains
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box_sides(tree%boxes, id, i_phi, &
-               a2_sides_interp_lim, have_no_bc)
+          call a2_gc_box(tree%boxes, id, i_phi, &
+               a2_gc_interp_lim, have_no_bc)
        end do
     end do
   end subroutine prolong_to_new_children

@@ -1,9 +1,13 @@
 
 program tutorial
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_gc
+  use m_a2_io
+  use m_a2_utils
 
   implicit none
-  integer, parameter  :: dp           = kind(0.0d0)
+
   integer, parameter  :: box_size     = 8
   integer, parameter  :: n_var_cell   = 1
   integer, parameter  :: n_var_face   = 1
@@ -24,7 +28,7 @@ program tutorial
 
   do
      call a2_loop_box(tree, set_init_cond)
-     call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
@@ -48,7 +52,7 @@ program tutorial
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a2_gc_sides(tree, i_phi, a2_sides_interp, a2_bc_dirichlet)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_gc_dirichlet)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -111,6 +115,7 @@ contains
   end subroutine set_init_cond
 
   subroutine heat_forward_euler(tree, dt)
+    use m_a2_restrict
     type(a2_t), intent(inout) :: tree
     real(dp), intent(in) :: dt
 
@@ -119,7 +124,7 @@ contains
     call a2_consistent_fluxes(tree, [i_phi])
     call a2_loop_box_arg(tree, update_solution, [dt], .true.)
     call a2_restrict_tree(tree, i_phi)
-    call a2_gc_sides(tree, i_phi, a2_sides_interp, a2_bc_dirichlet)
+    call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_gc_dirichlet)
   end subroutine heat_forward_euler
 
   subroutine fluxes_centdif(boxes, id)
@@ -178,6 +183,7 @@ contains
   end subroutine set_ref_flags
 
   subroutine prolong_to_new_children(tree, ref_info)
+    use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
@@ -190,8 +196,8 @@ contains
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box_sides(tree%boxes, id, i_phi, &
-               a2_sides_interp, a2_bc_dirichlet)
+          call a2_gc_box(tree%boxes, id, i_phi, &
+               a2_gc_interp, a2_gc_dirichlet)
        end do
     end do
   end subroutine prolong_to_new_children

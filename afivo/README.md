@@ -44,6 +44,7 @@ Jannis Teunissen, jannis@teunissen.net
 ### Todo
 
 * Look for "pretty" examples, generate some animations, and put them online.
+* Fix Doxygen output
 
 ### Some alternatives
 

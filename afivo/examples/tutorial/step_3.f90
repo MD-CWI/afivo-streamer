@@ -1,9 +1,13 @@
 
 program tutorial
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_gc
+  use m_a2_io
+  use m_a2_utils
 
   implicit none
-  integer, parameter  :: dp           = kind(0.0d0)
+
   integer, parameter  :: box_size     = 8
   integer, parameter  :: n_var_cell   = 1
   integer, parameter  :: n_var_face   = 1
@@ -22,7 +26,7 @@ program tutorial
   call initialize_tree(tree)
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
 
   output_cnt = 0
   time       = 0.0_dp
@@ -108,7 +112,7 @@ contains
     ! Forward Euler
     call a2_loop_boxes(tree, fluxes_centdif, .true.)
     call a2_loop_box_arg(tree, update_solution, [dt], .true.)
-    call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
+    call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
   end subroutine heat_forward_euler
 
   subroutine fluxes_centdif(boxes, id)

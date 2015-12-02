@@ -7,13 +7,11 @@
 ! 1. $D -> 2 or 3 (dimension of code)
 ! 2. preprocess file with cpp
 ! 3. cat -s (merge multiple blank lines)
-module m_mg_$Dd
-  use m_afivo_$Dd
+module m_a$D_mg
+  use m_a$D_t
 
   implicit none
   private
-
-  integer, parameter :: dp = kind(0.0d0)
 
   ! The mg module supports different multigrid operators, and uses these tags to
   ! identify boxes / operators
@@ -168,6 +166,7 @@ contains
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
   subroutine mg$D_fas_fmg(tree, mg, set_residual, first_call)
+    use m_a$D_utils, only: a$D_boxes_copy_cc
     type(a$D_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)         :: mg   !< Multigrid options
     logical, intent(in)             :: set_residual !< If true, store residual in i_tmp
@@ -265,6 +264,7 @@ contains
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
   subroutine mg$D_sides_rb(boxes, id, nb, iv)
+    use m_a$D_gc, only: a$D_gc_prolong0
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -284,7 +284,7 @@ contains
        dix = -1
     end if
 
-    call a$D_sides_prolong0(boxes, id, nb, iv)
+    call a$D_gc_prolong0(boxes, id, nb, iv)
 
     select case (a$D_nb_dim(nb))
 #if $D == 2
@@ -360,6 +360,7 @@ contains
   end subroutine mg$D_sides_rb
 
   subroutine fill_gc_phi(boxes, ids, mg)
+    use m_a$D_gc, only: a$D_gc_box
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:)
     type(mg$D_t), intent(in)     :: mg
@@ -367,7 +368,7 @@ contains
 
     !$omp parallel do
     do i = 1, size(ids)
-       call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
+       call a$D_gc_box(boxes, ids(i), mg%i_phi, &
             mg%sides_rb, mg%sides_bc)
     end do
     !$omp end parallel do
@@ -404,6 +405,7 @@ contains
   end subroutine correct_children
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
+    use m_a$D_gc, only: a$D_gc_box
     type(box$D_t), intent(inout) :: boxes(:)
     type(mg$D_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:), n_cycle
@@ -419,7 +421,7 @@ contains
 
        !$omp do
        do i = 1, size(ids)
-          call a$D_gc_box_sides(boxes, ids(i), mg%i_phi, &
+          call a$D_gc_box(boxes, ids(i), mg%i_phi, &
                mg%sides_rb, mg%sides_bc)
        end do
        !$omp end do
@@ -430,6 +432,7 @@ contains
   ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
   ! correction later
   subroutine update_coarse(tree, lvl, mg)
+    use m_a$D_utils, only: a$D_n_cell, a$D_box_add_cc, a$D_box_copy_cc
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)        :: lvl
     type(mg$D_t), intent(in)   :: mg
@@ -489,6 +492,7 @@ contains
   !> This routine performs the same as update_coarse, but it ignores the tmp
   !> variable
   subroutine set_coarse_phi_rhs(tree, lvl, mg)
+    use m_a$D_utils, only: a$D_box_add_cc
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)        :: lvl
     type(mg$D_t), intent(in)   :: mg
@@ -524,6 +528,7 @@ contains
 
   !> Set the initial guess for phi and restrict the rhs
   subroutine init_phi_rhs(tree, mg)
+    use m_a$D_utils, only: a$D_box_clear_cc
     type(a$D_t), intent(inout) :: tree
     type(mg$D_t), intent(in)   :: mg
     integer                    :: i, id, p_id, lvl, min_lvl
@@ -711,6 +716,7 @@ contains
   end subroutine mg$D_set_box_tag
 
   subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
+    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
@@ -847,6 +853,7 @@ contains
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg$D_box_rstr_lpl(box_c, box_p, iv, mg)
+    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
@@ -998,6 +1005,7 @@ contains
   end subroutine mg$D_box_lpld
 
   subroutine mg$D_box_corr_lpld(box_p, box_c, mg)
+    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout)  :: box_c
     type(box$D_t), intent(in)     :: box_p
     type(mg$D_t), intent(in)      :: mg
@@ -1100,6 +1108,7 @@ contains
   end subroutine lsf_dist_val
 
   subroutine mg$D_box_corr_lpllsf(box_p, box_c, mg)
+    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
@@ -1336,6 +1345,7 @@ contains
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg$D_box_rstr_lpllsf(box_c, box_p, iv, mg)
+    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
@@ -1525,4 +1535,4 @@ contains
   end subroutine mg2_box_gsrb_clpld
 #endif
 
-end module m_mg_$Dd
+end module m_a$D_mg

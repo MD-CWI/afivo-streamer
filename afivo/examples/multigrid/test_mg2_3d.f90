@@ -1,12 +1,14 @@
 !> \example test_mg2_3d.f90
 !> Example showing how to use m_mg_3d, and compare with an analytic solution.
 program test_mg2_3d
-  use m_afivo_3d
-  use m_mg_3d
+  use m_a3_t
+  use m_a3_core
+  use m_a3_mg
+  use m_a3_utils
+  use m_a3_io
 
   implicit none
 
-  integer, parameter :: dp           = kind(0.0d0)
   integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2

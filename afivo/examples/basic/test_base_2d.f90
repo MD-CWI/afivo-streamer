@@ -1,11 +1,14 @@
 !> \example test_base_2d.f90
-!> This example shows the basic functionality of m_afivo_2d.
+!> This example shows the basic functionality of m_a2_t.
 program test_base
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_utils
+  use m_a2_io
+  use m_a2_gc
 
   implicit none
 
-  integer, parameter   :: dp           = kind(0.0d0)
   type(a2_t)           :: tree
   integer              :: i
   integer, parameter   :: n_boxes_base = 2
@@ -53,7 +56,7 @@ program test_base
   call a2_loop_boxes(tree, set_morton_variable)
 
   ! Fill ghost cells for phi
-  call a2_gc_sides(tree, i_phi, a2_sides_interp, have_no_bc)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp, have_no_bc)
 
   do i = 1, 12
      print *, "i = ", i, "max_id", tree%max_id
@@ -105,6 +108,7 @@ contains
   end subroutine set_init_cond
 
   subroutine prolong_to_new_children(tree, ref_info)
+    use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
@@ -117,8 +121,8 @@ contains
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box_sides(tree%boxes, id, i_phi, &
-               a2_sides_interp, have_no_bc)
+          call a2_gc_box(tree%boxes, id, i_phi, &
+               a2_gc_interp, have_no_bc)
        end do
     end do
   end subroutine prolong_to_new_children
