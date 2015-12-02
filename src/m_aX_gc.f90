@@ -13,6 +13,7 @@ module m_a$D_gc
   public :: a$D_gc_interp_lim
   public :: a$D_gc2_box
   public :: a$D_gc2_prolong1
+  public :: a$D_gc2_neumann
 
 contains
 
@@ -576,5 +577,42 @@ contains
     end select
 
   end subroutine a$D_gc2_prolong1
+
+  ! This fills second ghost cells near physical boundaries using Neumann zero
+  subroutine a$D_gc2_neumann(boxes, id, nb, iv, gc_side, nc)
+    type(box$D_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, iv, nc
+#if $D == 2
+    real(dp), intent(out)       :: gc_side(nc)
+#elif $D == 3
+    real(dp), intent(out)       :: gc_side(nc, nc)
+#endif
+
+    select case (nb)
+#if $D == 2
+    case (a2_nb_lx)
+       gc_side = boxes(id)%cc(2, 1:nc, iv)
+    case (a2_nb_hx)
+       gc_side = boxes(id)%cc(nc-1, 1:nc, iv)
+    case (a2_nb_ly)
+       gc_side = boxes(id)%cc(1:nc, 2, iv)
+    case (a2_nb_hy)
+       gc_side = boxes(id)%cc(1:nc, nc-1, iv)
+#elif $D == 3
+    case (a3_nb_lx)
+       gc_side = boxes(id)%cc(2, 1:nc, 1:nc, iv)
+    case (a3_nb_hx)
+       gc_side = boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
+    case (a3_nb_ly)
+       gc_side = boxes(id)%cc(1:nc, 2, 1:nc, iv)
+    case (a3_nb_hy)
+       gc_side = boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
+    case (a3_nb_lz)
+       gc_side = boxes(id)%cc(1:nc, 1:nc, 2, iv)
+    case (a3_nb_hz)
+       gc_side = boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
+#endif
+    end select
+  end subroutine a$D_gc2_neumann
 
 end module m_a$D_gc
