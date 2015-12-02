@@ -2,7 +2,7 @@ COMPILER ?= gfortran
 
 ifeq ($(COMPILER), gfortran)
 	FC 	:= gfortran
-	FFLAGS	:= -Wall -Wextra -O2 -std=f2008 -fopenmp -frealloc-lhs
+	FFLAGS	:= -Wall -Wextra -Wimplicit-interface -O2 -std=f2008 -fopenmp
 	ifeq ($(DEBUG), 1)
 		FFLAGS += -O0 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
 		-pedantic -finit-real=snan

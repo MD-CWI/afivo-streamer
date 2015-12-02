@@ -1,11 +1,15 @@
 !> \example test_base_3d.f90
-!> Shows the basic functionality of m_afivo_3d
+!> Shows the basic functionality of m_a3_t
 program test_base
-  use m_afivo_3d
+  use m_a3_t
+  use m_a3_core
+  use m_a3_utils
+  use m_a3_gc
+  use m_a3_io
+  use m_a3_prolong
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
   type(a3_t)         :: tree
   integer            :: i, id
   integer            :: ix_list(3, 1)
@@ -33,7 +37,7 @@ program test_base
   call a3_loop_boxes(tree, set_morton_variable)
 
   ! Fill ghost cells for phi
-  call a3_gc_sides(tree, i_phi, a3_sides_interp, have_no_bc)
+  call a3_gc_tree(tree, i_phi, a3_gc_interp, have_no_bc)
 
   do i = 1, 13
      write(fname, "(A,I0)") "test_base_3d_", i
@@ -48,7 +52,6 @@ program test_base
      call a3_loop_boxes(tree, set_morton_variable)
   end do
 
-  stop "ERROR"
   call a3_destroy(tree)
 
 contains
@@ -96,8 +99,8 @@ contains
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a3_gc_box_sides(tree%boxes, id, i_phi, &
-               a3_sides_interp, have_no_bc)
+          call a3_gc_box(tree%boxes, id, i_phi, &
+               a3_gc_interp, have_no_bc)
        end do
     end do
   end subroutine prolong_to_new_children

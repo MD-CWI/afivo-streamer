@@ -1,11 +1,12 @@
 !> \example test_reduction_2d.f90
-!> This example shows the basic reduction functionality of m_afivo_2d.
+!> This example shows the basic reduction functionality of m_a2_t.
 program test_reduction
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_utils
 
   implicit none
 
-  integer, parameter   :: dp           = kind(0.0d0)
   type(a2_t)           :: tree
   integer              :: i
   integer, parameter   :: n_boxes_base = 1

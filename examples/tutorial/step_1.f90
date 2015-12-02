@@ -1,9 +1,10 @@
 
 program tutorial
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
 
   implicit none
-  integer, parameter  :: dp           = kind(0.0d0)
+
   integer, parameter  :: box_size     = 8
   integer, parameter  :: n_var_cell   = 1
   integer, parameter  :: n_var_face   = 1

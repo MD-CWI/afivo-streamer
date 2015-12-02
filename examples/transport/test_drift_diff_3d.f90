@@ -1,11 +1,15 @@
 !> \example test_drift_diff_3d.f90
-!> A drift-diffusion example for m_afivo_3d
+!> A drift-diffusion example for m_a3_t
 program test_drift_diff
-  use m_afivo_3d
+  use m_a3_t
+  use m_a3_core
+  use m_a3_io
+  use m_a3_utils
+  use m_a3_gc
+  use m_a3_restrict
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
   integer, parameter :: box_size    = 8
   integer, parameter :: i_phi       = 1
   integer, parameter :: i_phi_old   = 2
@@ -54,14 +58,14 @@ program test_drift_diff
   do
      ! We should only set the finest level, but this also works
      call a3_loop_box(tree, set_init_cond)
-     call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
+     call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
      call a3_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
   ! Restrict the initial conditions
   call a3_restrict_tree(tree, i_phi)
-  call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
+  call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
 
   print *, "Starting simulation"
   do
@@ -101,7 +105,7 @@ program test_drift_diff
            call a3_consistent_fluxes(tree, [1])
            call a3_loop_box_arg(tree, update_solution, [dt])
            call a3_restrict_tree(tree, i_phi)
-           call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
+           call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
            time = time + dt
         end do
      case (2)
@@ -116,7 +120,7 @@ program test_drift_diff
               call a3_consistent_fluxes(tree, [1])
               call a3_loop_box_arg(tree, update_solution, [dt])
               call a3_restrict_tree(tree, i_phi)
-              call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
+              call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
            end do
 
            ! Take average of phi_old and phi
@@ -127,7 +131,7 @@ program test_drift_diff
 
      call a3_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a3_gc_sides(tree, i_phi, a3_sides_interp_lim, have_no_bc)
+     call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
      call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -313,6 +317,7 @@ contains
   end function koren_mlim
 
   subroutine fluxes_koren(boxes, id, flux_args)
+    use m_a3_prolong
     type(box3_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
@@ -325,7 +330,7 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    call a3_gc2_box_sides(boxes, id, i_phi, a3_sides2_prolong1, &
+    call a3_gc2_box(boxes, id, i_phi, a3_gc2_prolong1, &
          have_no_bc2, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
@@ -453,6 +458,7 @@ contains
   end subroutine average_phi
 
   subroutine prolong_to_new_children(tree, ref_info)
+    use m_a3_prolong
     type(a3_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
@@ -465,8 +471,8 @@ contains
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a3_gc_box_sides(tree%boxes, id, i_phi, &
-               a3_sides_interp_lim, have_no_bc)
+          call a3_gc_box(tree%boxes, id, i_phi, &
+               a3_gc_interp_lim, have_no_bc)
        end do
     end do
   end subroutine prolong_to_new_children

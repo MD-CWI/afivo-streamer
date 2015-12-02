@@ -1,15 +1,17 @@
 !> \example test_mg_cyl_diel.f90
 !>
-!> Example showing how to use m_mg_2d in cylindrical
+!> Example showing how to use m_a2_mg in cylindrical
 !> coordinates with a change in eps, and compare with an
 !> analytic solution.
 program test_mg_cyl_diel
-  use m_afivo_2d
-  use m_mg_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_mg
+  use m_a2_utils
+  use m_a2_io
 
   implicit none
 
-  integer, parameter :: dp           = kind(0.0d0)
   integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: i_phi = 1, i_tmp = 2

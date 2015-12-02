@@ -1,10 +1,14 @@
 
 program tutorial
-  use m_afivo_2d
-  use m_mg_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_utils
+  use m_a2_gc
+  use m_a2_io
+  use m_a2_mg
 
   implicit none
-  integer, parameter  :: dp           = kind(0.0d0)
+
   integer, parameter  :: box_size     = 128
   integer, parameter  :: n_var_cell   = 3
   integer, parameter  :: n_var_face   = 0
@@ -28,7 +32,7 @@ program tutorial
   call initialize_mg(mg)
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_sides(tree, i_phi, a2_sides_interp_lim, a2_bc_dirichlet)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
 
   output_cnt = 0
   n_steps    = 0
@@ -96,7 +100,7 @@ contains
     mg%i_phi        = i_phi
     mg%i_tmp        = i_tmp
     mg%i_rhs        = i_rhs
-    mg%sides_bc     => a2_bc_dirichlet
+    mg%sides_bc     => a2_gc_dirichlet
     mg%box_op       => lpl_heat
     mg%box_gsrb     => gsrb_heat
 
