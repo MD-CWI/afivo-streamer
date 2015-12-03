@@ -406,6 +406,11 @@ contains
     call CFG_get(cfg, "photoi_eta", ST_photoi_eta)
     call CFG_get(cfg, "photoi_num_photons", ST_photoi_num_photons)
 
+    call CFG_get(cfg, "fld_mod_t0", ST_fld_mod_t0)
+    call CFG_get(cfg, "fld_sin_amplitude", ST_fld_sin_amplitude)
+    call CFG_get(cfg, "fld_sin_freq", ST_fld_sin_freq)
+    call CFG_get(cfg, "fld_lin_deriv", ST_fld_lin_deriv)
+
     ST_applied_voltage = -ST_domain_len * ST_applied_fld
 
     tmp_name = trim(ST_output_dir) // "/" // trim(ST_sim_name) // "_config.txt"
@@ -413,5 +418,20 @@ contains
     call CFG_write(cfg, trim(tmp_name))
 
   end subroutine ST_load_cfg
+
+  function ST_get_fld(time) result(fld)
+    use m_units_constants
+
+    real(dp), intent(in) :: time
+    real(dp)             :: fld
+
+    if (time > ST_fld_mod_t0) then
+       fld = ST_applied_fld + (time - ST_fld_mod_t0) * &
+            ST_fld_lin_deriv + ST_fld_sin_amplitude * &
+            sin((time - ST_fld_mod_t0) * 2 * UC_pi * ST_fld_sin_freq)
+    else
+       fld = ST_applied_fld
+    end if
+  end function ST_get_fld
 
 end module m_streamer

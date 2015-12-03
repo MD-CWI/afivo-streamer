@@ -309,8 +309,8 @@ contains
     type(a2_t), intent(inout) :: tree
     integer, intent(in)       :: n_cycles
     logical, intent(in)       :: no_guess
-    real(dp), parameter :: fac = UC_elem_charge / UC_eps0
-    integer :: lvl, i, id, nc
+    real(dp), parameter       :: fac = UC_elem_charge / UC_eps0
+    integer                   :: lvl, i, id, nc
 
     nc = tree%n_cell
 
@@ -328,10 +328,9 @@ contains
     end do
     !$omp end parallel
 
-    ! Restrict the rhs
-    call a2_restrict_tree(tree, i_rhs)
+    ST_applied_voltage = -ST_domain_len * ST_get_fld(ST_time)
 
-    ! Perform n_fmg full-multigrid cycles
+    ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
        call mg2_fas_fmg(tree, mg, .false., no_guess .and. i == 1)
     end do
@@ -340,7 +339,7 @@ contains
     call a2_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_tree(tree, i_fld, a2_gc_interp_lim, a2_gc_neumann)
+    call a2_gc_tree(tree, i_fld, a2_gc_interp, a2_gc_neumann)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential

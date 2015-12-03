@@ -330,10 +330,9 @@ contains
     end do
     !$omp end parallel
 
-    ! Restrict the rhs
-    call a3_restrict_tree(tree, i_rhs)
+    ST_applied_voltage = -ST_domain_len * ST_get_fld(ST_time)
 
-    ! Perform n_fmg full-multigrid cycles
+    ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
        call mg3_fas_fmg(tree, mg, .false., no_guess .and. i == 1)
     end do
@@ -342,7 +341,7 @@ contains
     call a3_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a3_gc_tree(tree, i_fld, a3_gc_interp_lim, a3_gc_neumann)
+    call a3_gc_tree(tree, i_fld, a3_gc_interp, a3_gc_neumann)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential

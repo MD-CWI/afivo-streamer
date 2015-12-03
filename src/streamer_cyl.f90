@@ -338,11 +338,11 @@ contains
     end do
     !$omp end parallel
 
-    ST_applied_voltage = -ST_domain_len * get_fld(ST_time)
+    ST_applied_voltage = -ST_domain_len * ST_get_fld(ST_time)
 
     ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
-       call mg2_fas_fmg(tree, mg, .true., no_guess .and. i == 1)
+       call mg2_fas_fmg(tree, mg, .false., no_guess .and. i == 1)
     end do
 
     ! Compute field from potential
@@ -351,19 +351,6 @@ contains
     ! Set the field norm also in ghost cells
     call a2_gc_tree(tree, i_fld, a2_gc_interp, a2_gc_neumann)
   end subroutine compute_fld
-
-  real(dp) function get_fld(time)
-    use m_units_constants
-    real(dp), intent(in) :: time
-
-    if (time > ST_fld_mod_t0) then
-       get_fld = ST_applied_fld + (time - ST_fld_mod_t0) * ST_fld_lin_deriv + &
-            ST_fld_sin_amplitude * &
-            sin((time - ST_fld_mod_t0) * 2 * UC_pi * ST_fld_sin_freq)
-    else
-       get_fld = ST_applied_fld
-    end if
-  end function get_fld
 
   ! Compute electric field from electrical potential
   subroutine fld_from_pot(box)
@@ -709,7 +696,7 @@ contains
 
     ip = 1
     prop_names(ip) = "E_bg"
-    props(ip)      = get_fld(ST_time)
+    props(ip)      = ST_get_fld(ST_time)
 
     ip             = ip + 1
     prop_names(ip) = "Ez_max"
