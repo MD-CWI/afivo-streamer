@@ -643,28 +643,28 @@ contains
     end do
   end subroutine prolong_to_new_boxes
 
-  subroutine write_streamer_properties(tree, fname_stats, fname_axis, ST_out_cnt, time)
-    type(a2_t), intent(in)       :: tree
-    character(len=*), intent(in) :: fname_axis, fname_stats
-    integer, intent(in) :: ST_out_cnt
-    real(dp), intent(in) :: time
+  subroutine write_streamer_properties(tree, fname_stats, fname_axis, out_cnt, time)
+    type(a2_t), intent(in)         :: tree
+    character(len=*), intent(in)   :: fname_axis, fname_stats
+    integer, intent(in)            :: out_cnt
+    real(dp), intent(in)           :: time
 
-    real(dp), allocatable        :: props(:), axis_data(:,:)
+    real(dp), allocatable          :: props(:), axis_data(:,:)
     character(len=15), allocatable :: prop_names(:)
-    integer                      :: n
-    integer, parameter           :: unit_1 = 777, unit_2 = 778
+    integer                        :: n
+    integer, parameter             :: unit_1 = 777, unit_2 = 778
 
     call get_streamer_properties(tree, props, prop_names)
     call get_cc_axis(tree, [i_elec, i_pion], [f_fld, f_elec], axis_data)
 
-    if (ST_out_cnt == 1) then
+    if (out_cnt == 1) then
        open(unit_1, file=trim(fname_stats), action="write")
        write(unit_1, *) "ix_out      time     ", prop_names
        close(unit_1)
     else
        open(unit_1, file=trim(fname_stats), action="write", &
             position="append")
-       write(unit_1, *) ST_out_cnt, time, props
+       write(unit_1, *) out_cnt, time, props
        close(unit_1)
     end if
 
@@ -676,7 +676,6 @@ contains
     close(unit_2)
     deallocate(axis_data)
 
-    print *, "Written ", trim(fname_axis)
   end subroutine write_streamer_properties
 
   subroutine get_streamer_properties(tree, props, prop_names)
@@ -685,7 +684,7 @@ contains
     character(len=15), intent(inout), allocatable :: prop_names(:)
 
     integer            :: ip
-    integer, parameter :: n_props = 38
+    integer, parameter :: n_props = 37
     real(dp)           :: rz(2), phi_head, z_head
     real(dp)           :: alpha, mu, Er_max_norm, Ez_max
     type(a2_loc_t)     :: loc_ez, loc_er, loc_dens, loc
@@ -801,8 +800,6 @@ contains
           props(ip) = 0
        end if
     end do
-
-    print *, "n_props", ip
   end subroutine get_streamer_properties
 
   real(dp) function reduce_max(a, b)
