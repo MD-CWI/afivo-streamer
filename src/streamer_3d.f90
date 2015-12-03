@@ -12,13 +12,13 @@ program streamer_3d
 
   implicit none
 
-  integer                 :: i, n
+  integer                :: i, n
   character(len=ST_slen) :: fname
-  logical                 :: write_out
+  logical                :: write_out
 
-  type(a3_t)              :: tree ! This contains the full grid information
-  type(mg3_t)             :: mg   ! Multigrid option struct
-  type(ref_info_t)        :: ref_info
+  type(a3_t)             :: tree ! This contains the full grid information
+  type(mg3_t)            :: mg   ! Multigrid option struct
+  type(ref_info_t)       :: ref_info
 
   call ST_create_cfg(ST_cfg)
   call ST_read_cfg_files(ST_cfg)
@@ -51,8 +51,8 @@ program streamer_3d
   ! This routine always needs to be called when using multigrid
   call mg3_init_mg(mg)
 
-  ST_out_cnt = 0          ! Number of output files written
-  ST_time       = 0          ! Simulation time (all times are in s)
+  ST_out_cnt = 0 ! Number of output files written
+  ST_time    = 0 ! Simulation time (all times are in s)
 
   ! Set up the initial conditions
   do

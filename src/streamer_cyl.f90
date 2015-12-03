@@ -13,7 +13,7 @@ program streamer_cyl
   implicit none
 
   integer                 :: i, n
-  character(len=ST_slen) :: fname
+  character(len=ST_slen)  :: fname
   logical                 :: write_out
 
   type(a2_t)              :: tree ! This contains the full grid information
@@ -53,8 +53,8 @@ program streamer_cyl
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
 
-  ST_out_cnt = 0          ! Number of output files written
-  ST_time       = 0          ! Simulation time (all times are in s)
+  ST_out_cnt = 0 ! Number of output files written
+  ST_time    = 0 ! Simulation time (all times are in s)
 
   ! Set up the initial conditions
   do
@@ -697,12 +697,12 @@ contains
     real(dp), intent(inout), allocatable          :: props(:)
     character(len=15), intent(inout), allocatable :: prop_names(:)
 
-    integer :: ip
+    integer            :: ip
     integer, parameter :: n_props = 38
-    real(dp)       :: rz(2), phi_head, z_head
-    real(dp)       :: alpha, mu, Er_max_norm, Ez_max
-    type(a2_loc_t) :: loc_ez, loc_er, loc_dens, loc
-    integer        :: id, ix(2)
+    real(dp)           :: rz(2), phi_head, z_head
+    real(dp)           :: alpha, mu, Er_max_norm, Ez_max
+    type(a2_loc_t)     :: loc_ez, loc_er, loc_dens, loc
+    integer            :: id, ix(2)
 
     allocate(props(n_props))
     allocate(prop_names(n_props))
@@ -782,7 +782,7 @@ contains
     prop_names(ip) = "Ez_max(z)"
     props(ip)      = rz(2)
 
-    do i = 4, 14, 2
+    do i = 3, 13, 2
        ST_fld_val = i * 1e6_dp
        ip = ip + 1
        write(prop_names(ip), "(A,I0,A)") "r_max(", i, "e6)"
