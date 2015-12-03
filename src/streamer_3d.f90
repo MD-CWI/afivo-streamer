@@ -8,58 +8,27 @@ program streamer_3d
   use m_a3_mg
   use m_a3_io
   use m_write_silo
-  use m_lookup_table
-  use m_config
-  use m_random
-  use m_photons
   use m_streamer
 
   implicit none
 
-  character(len=name_len) :: sim_name, output_dir
-  character(len=name_len) :: cfg_name, tmp_name, prev_name
-  type(a3_t)         :: tree    ! This contains the full grid information
-  type(mg3_t)        :: mg      ! Multigrid option struct
-  type(ref_info_t)   :: ref_info
+  integer                 :: i, n
+  character(len=ST_slen) :: fname
+  logical                 :: write_out
 
-  call create_cfg(sim_cfg)
+  type(a3_t)              :: tree ! This contains the full grid information
+  type(mg3_t)             :: mg   ! Multigrid option struct
+  type(ref_info_t)        :: ref_info
 
-  sim_name = ""
-  prev_name = ""
-  do n = 1, command_argument_count()
-     call get_command_argument(n, cfg_name)
-     call CFG_read_file(sim_cfg, trim(cfg_name))
-
-     call CFG_get(sim_cfg, "sim_name", tmp_name)
-     if (sim_name == "") then
-        sim_name = tmp_name
-     else if (tmp_name /= "" .and. tmp_name /= prev_name) then
-        sim_name = trim(sim_name) // "_" // trim(tmp_name)
-     end if
-     prev_name = tmp_name
-  end do
-
-  call CFG_get(sim_cfg, "end_time", end_time)
-  call CFG_get(sim_cfg, "box_size", box_size)
-  call CFG_get(sim_cfg, "output_dir", output_dir)
-  call CFG_get(sim_cfg, "domain_len", domain_len)
-  call CFG_get(sim_cfg, "applied_fld", applied_fld)
-  call CFG_get(sim_cfg, "dt_output", dt_output)
-  call CFG_get(sim_cfg, "num_steps_amr", n_steps_amr)
-  call CFG_get(sim_cfg, "dt_max", dt_max)
-  call CFG_get(sim_cfg, "epsilon_diel", epsilon_diel)
-
-  tmp_name = trim(output_dir) // "/" // trim(sim_name) // "_config.txt"
-  print *, "Settings written to ", trim(tmp_name)
-  call CFG_write(sim_cfg, trim(tmp_name))
+  call ST_create_cfg(ST_cfg)
+  call ST_read_cfg_files(ST_cfg)
+  call ST_load_cfg(ST_cfg)
 
   ! Initialize the transport coefficients
-  call init_transport_coeff(sim_cfg)
+  call ST_load_transport_data(ST_cfg, ST_td_tbl, ST_photoi_tbl)
 
   ! Set the initial conditions from the configuration
-  applied_voltage = -domain_len * applied_fld
-  call get_init_cond(sim_cfg, init_cond, 3)
-
+  call ST_get_init_cond(ST_cfg, ST_init_cond, 3)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -82,8 +51,8 @@ program streamer_3d
   ! This routine always needs to be called when using multigrid
   call mg3_init_mg(mg)
 
-  output_cnt = 0          ! Number of output files written
-  time       = 0          ! Simulation time (all times are in s)
+  ST_out_cnt = 0          ! Number of output files written
+  ST_time       = 0          ! Simulation time (all times are in s)
 
   ! Set up the initial conditions
   do
@@ -93,51 +62,51 @@ program streamer_3d
      if (ref_info%n_add == 0 .and. ref_info%n_rm == 0) exit
   end do
 
-  if (photoi_enabled) &
-       call set_photoionization(tree, photoi_eta, photoi_num_photons)
+  if (ST_photoi_enabled) &
+       call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
 
   do
-     dt = get_max_dt(tree)
+     ST_dt = get_max_dt(tree)
 
-     if (dt < 1e-14) then
+     if (ST_dt < 1e-14) then
         print *, "dt getting too small, instability?"
-        time = end_time + 1.0_dp
+        ST_time = ST_end_time + 1.0_dp
      end if
 
-     ! Every dt_output, write output
-     if (output_cnt * dt_output <= time) then
+     ! Every ST_dt_out, write output
+     if (ST_out_cnt * ST_dt_out <= ST_time) then
         write_out = .true.
-        output_cnt = output_cnt + 1
-        write(fname, "(A,I6.6)") trim(sim_name) // "_", output_cnt
+        ST_out_cnt = ST_out_cnt + 1
+        write(fname, "(A,I6.6)") trim(ST_sim_name) // "_", ST_out_cnt
      else
         write_out = .false.
      end if
 
      if (write_out) call a3_write_silo(tree, fname, &
-          cc_names([i_elec, i_pion, i_fld, i_pho]), output_cnt, time, &
-          ixs_cc=[i_elec, i_pion, i_fld, i_pho], dir=output_dir)
+          cc_names([i_elec, i_pion, i_fld, i_pho]), ST_out_cnt, ST_time, &
+          ixs_cc=[i_elec, i_pion, i_fld, i_pho], dir=ST_output_dir)
 
-     if (time > end_time) exit
+     if (ST_time > ST_end_time) exit
 
      ! We perform n_steps between mesh-refinements
-     do n = 1, n_steps_amr
-        time = time + dt
+     do n = 1, ST_steps_amr
+        ST_time = ST_time + ST_dt
 
-        if (photoi_enabled) &
-             call set_photoionization(tree, photoi_eta, photoi_num_photons, dt)
+        if (ST_photoi_enabled) &
+             call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
 
         ! Copy previous solution
         call a3_tree_copy_cc(tree, i_elec, i_elec_old)
         call a3_tree_copy_cc(tree, i_pion, i_pion_old)
 
-        ! Two forward Euler steps over dt
+        ! Two forward Euler steps over ST_dt
         do i = 1, 2
            ! First calculate fluxes
-           call a3_loop_boxes_arg(tree, fluxes_koren, [dt], .true.)
+           call a3_loop_boxes_arg(tree, fluxes_koren, [ST_dt], .true.)
            call a3_consistent_fluxes(tree, [f_elec])
 
            ! Update the solution
-           call a3_loop_box_arg(tree, update_solution, [dt], .true.)
+           call a3_loop_box_arg(tree, update_solution, [ST_dt], .true.)
 
            ! Restrict the electron and ion densities to lower levels
            call a3_restrict_tree(tree, i_elec)
@@ -188,10 +157,10 @@ contains
     integer                   :: nb_list(6, 1) ! Neighbors of initial boxes
     integer                   :: n_boxes_init = 5*1000
 
-    dr = domain_len / box_size
+    dr = ST_domain_len / ST_box_size
 
     ! Initialize tree
-    call a3_init(tree, box_size, n_var_cell, n_var_face, dr, &
+    call a3_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
          coarsen_to=2, n_boxes = n_boxes_init)
 
     ! Set up geometry
@@ -219,7 +188,7 @@ contains
     crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_fld))
     max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_elec))
-    alpha     = LT_get_col(td_tbl, i_alpha, max_fld)
+    alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
     if (adx < 0.1_dp .and. boxes(id)%dr < 2.0e-5_dp) &
@@ -227,15 +196,15 @@ contains
     if (adx < 0.1_dp .and. crv_phi < 4.0_dp .and. boxes(id)%dr < 5.0e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
-    if (time < 2.5e-9_dp) then
+    if (ST_time < 2.5e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
-       do n = 1, init_cond%n_cond
+       do n = 1, ST_init_cond%n_cond
           dist = GM_dist_line(a3_r_center(boxes(id)), &
-               init_cond%seed_r0(:, n), &
-               init_cond%seed_r1(:, n), 3)
-          if (dist - init_cond%seed_width(n) < boxlen &
-               .and. boxes(id)%dr > 0.2_dp * init_cond%seed_width(n)) then
+               ST_init_cond%seed_r0(:, n), &
+               ST_init_cond%seed_r1(:, n), 3)
+          if (dist - ST_init_cond%seed_width(n) < boxlen &
+               .and. boxes(id)%dr > 0.2_dp * ST_init_cond%seed_width(n)) then
              ref_flags(id) = a5_do_ref
           end if
        end do
@@ -253,19 +222,19 @@ contains
     real(dp)                    :: dens
 
     nc = box%n_cell
-    box%cc(:, :, :, i_elec) = init_cond%bg_dens
+    box%cc(:, :, :, i_elec) = ST_init_cond%bg_dens
 
     do k = 0, nc+1
        do j = 0, nc+1
           do i = 0, nc+1
              xy   = a3_r_cc(box, [i,j,k])
 
-             do n = 1, init_cond%n_cond
-                dens = init_cond%seed_dens(n) * &
-                     GM_dens_line(xy, init_cond%seed_r0(:, n), &
-                     init_cond%seed_r1(:, n), 3, &
-                     init_cond%seed_width(n), &
-                     init_cond%seed_falloff(n))
+             do n = 1, ST_init_cond%n_cond
+                dens = ST_init_cond%seed_dens(n) * &
+                     GM_dens_line(xy, ST_init_cond%seed_r0(:, n), &
+                     ST_init_cond%seed_r1(:, n), 3, &
+                     ST_init_cond%seed_width(n), &
+                     ST_init_cond%seed_falloff(n))
                 box%cc(i, j, k, i_elec) = box%cc(i, j, k, i_elec) + dens
              end do
           end do
@@ -288,11 +257,11 @@ contains
     do k = 0, nc+1
        do j = 0, nc+1
           do i = 0, nc+1
-             xyz = a3_r_cc(box, [i,j,k]) / domain_len
+             xyz = a3_r_cc(box, [i,j,k]) / ST_domain_len
              ! if (xyz(1) < 0.25_dp .or. &
              !      (xyz(3) > 0.875_dp .or. xyz(3) < 0.125_dp)) then
              if (xyz(1) < 0.5_dp .and. xyz(1) > 0.375_dp) then
-                box%cc(i, j, k, i_eps) = epsilon_diel
+                box%cc(i, j, k, i_eps) = ST_epsilon_diel
              else
                 box%cc(i, j, k, i_eps) = 1.0_dp
              end if
@@ -315,10 +284,10 @@ contains
     call a3_tree_max_cc(tree, i_elec, max_dns)
 
     dr_min       = a3_min_dr(tree)
-    mobility     = LT_get_col(td_tbl, i_mobility, max_fld)
-    max_mobility = LT_get_col(td_tbl, i_mobility, min_fld)
-    diff_coeff   = LT_get_col(td_tbl, i_diffusion, max_fld)
-    alpha        = LT_get_col(td_tbl, i_alpha, max_fld)
+    mobility     = LT_get_col(ST_td_tbl, i_mobility, max_fld)
+    max_mobility = LT_get_col(ST_td_tbl, i_mobility, min_fld)
+    diff_coeff   = LT_get_col(ST_td_tbl, i_diffusion, max_fld)
+    alpha        = LT_get_col(ST_td_tbl, i_alpha, max_fld)
 
     ! CFL condition
     dt_cfl = dr_min / (mobility * max_fld) ! factor ~ sqrt(0.5)
@@ -332,7 +301,7 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, dt_max)
+    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, ST_dt_max)
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -451,9 +420,9 @@ contains
           do i = 1, nc+1
              fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
                   boxes(id)%cc(i-1, j, k, i_fld))
-             loc        = LT_get_loc(td_tbl, fld_avg)
-             mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
-             diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+             loc        = LT_get_loc(ST_td_tbl, fld_avg)
+             mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+             diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
              fld        = boxes(id)%fx(i, j, k, f_fld)
              v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_elec) - &
@@ -497,9 +466,9 @@ contains
           do i = 1, nc
              fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
                   boxes(id)%cc(i, j-1, k, i_fld))
-             loc        = LT_get_loc(td_tbl, fld_avg)
-             mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
-             diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+             loc        = LT_get_loc(ST_td_tbl, fld_avg)
+             mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+             diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
              fld        = boxes(id)%fy(i, j, k, f_fld)
              v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_elec) - &
@@ -543,9 +512,9 @@ contains
           do i = 1, nc
              fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, k, i_fld) + &
                   boxes(id)%cc(i, j, k-1, i_fld))
-             loc        = LT_get_loc(td_tbl, fld_avg)
-             mobility   = LT_get_col_at_loc(td_tbl, i_mobility, loc)
-             diff_coeff = LT_get_col_at_loc(td_tbl, i_diffusion, loc)
+             loc        = LT_get_loc(ST_td_tbl, fld_avg)
+             mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+             diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
              fld        = boxes(id)%fz(i, j, k, f_fld)
              v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_elec) - &
@@ -609,16 +578,16 @@ contains
        do j = 1, nc
           do i = 1, nc
              fld      = box%cc(i, j, k, i_fld)
-             loc      = LT_get_loc(td_tbl, fld)
-             alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
-             eta      = LT_get_col_at_loc(td_tbl, i_eta, loc)
+             loc      = LT_get_loc(ST_td_tbl, fld)
+             alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+             eta      = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
 
              dflux(1) = box%fx(i, j, k, f_elec) + box%fx(i+1, j, k, f_elec)
              dflux(2) = box%fy(i, j, k, f_elec) + box%fy(i, j+1, k, f_elec)
              dflux(3) = box%fz(i, j, k, f_elec) + box%fz(i, j, k+1, f_elec)
              src = 0.5_dp * norm2(dflux) * (alpha - eta)
 
-             if (photoi_enabled) &
+             if (ST_photoi_enabled) &
                   src = src + box%cc(i, j, k, i_pho)
 
              sflux = (box%fx(i, j, k, f_elec) - box%fx(i+1, j, k, f_elec) + &
@@ -658,12 +627,12 @@ contains
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
-    quench_fac = p_quench / (gas_pressure + p_quench)
+    quench_fac = p_quench / (ST_gas_pressure + p_quench)
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
     call a3_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
-    call PH_set_src_3d(tree, photoi_tbl, sim_rng, num_photons, &
+    call PH_set_src_3d(tree, ST_photoi_tbl, ST_rng, num_photons, &
          i_pho, i_pho, 0.25e-3_dp, .true., 1e-9_dp, dt)
 
   end subroutine set_photoionization
@@ -681,9 +650,9 @@ contains
        do j = 1, nc
           do i = 1, nc
              fld      = box%cc(i, j, k, i_fld)
-             loc      = LT_get_loc(td_tbl, fld)
-             alpha    = LT_get_col_at_loc(td_tbl, i_alpha, loc)
-             mobility = LT_get_col_at_loc(td_tbl, i_mobility, loc)
+             loc      = LT_get_loc(ST_td_tbl, fld)
+             alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+             mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
              tmp = fld * mobility * alpha * box%cc(i, j, k, i_elec) * coeff(1)
              if (tmp < 0) tmp = 0
@@ -741,7 +710,7 @@ contains
     case (a3_nb_lz)             ! Grounded
        boxes(id)%cc(1:nc, 1:nc, 0, iv) = - boxes(id)%cc(1:nc, 1:nc, 1, iv)
     case (a3_nb_hz)
-       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = 2 * applied_voltage &
+       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = 2 * ST_applied_voltage &
             - boxes(id)%cc(1:nc, 1:nc, nc, iv)
     end select
   end subroutine sides_bc_pot
