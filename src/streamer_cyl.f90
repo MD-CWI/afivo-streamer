@@ -1050,8 +1050,8 @@ contains
     character(len=15), intent(inout), allocatable :: prop_names(:)
 
     integer :: ip
-    integer, parameter :: n_props = 38
-    real(dp)       :: rz(2), phi_head, z_head
+    integer, parameter :: n_props = 40
+    real(dp)       :: rz(2), phi_head, z_head, radius
     real(dp)       :: alpha, mu, Er_max_norm, Ez_max
     type(a2_loc_t) :: loc_ez, loc_er, loc_dens, loc
     integer        :: id, ix(2)
@@ -1080,6 +1080,7 @@ contains
     ip             = ip + 1
     prop_names(ip) = "Er_max(r)"
     props(ip)      = rz(1)
+    radius         = rz(1)
 
     ip             = ip + 1
     prop_names(ip) = "Er_max(z)"
@@ -1133,6 +1134,37 @@ contains
     ip             = ip + 1
     prop_names(ip) = "Ez_max(z)"
     props(ip)      = rz(2)
+
+    ! Phi 1 mm ahead
+    ip             = ip + 1
+    prop_names(ip) = "dphi(1mm)"
+    loc = a2_get_loc(tree, [0.0_dp, rz(2) + 1.0e-3_dp])
+    if (loc%id > a5_no_box) then
+       props(ip) = phi_head - &
+            tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
+    else
+       props(ip) = 0
+    end if
+
+    ip             = ip + 1
+    prop_names(ip) = "dphi(2mm)"
+    loc = a2_get_loc(tree, [0.0_dp, rz(2) + 2.0e-3_dp])
+    if (loc%id > a5_no_box) then
+       props(ip) = phi_head - &
+            tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
+    else
+       props(ip) = 0
+    end if
+
+    ip             = ip + 1
+    prop_names(ip) = "dphi(2R)"
+    loc = a2_get_loc(tree, [0.0_dp, rz(2) + 2 * radius])
+    if (loc%id > a5_no_box) then
+       props(ip) = phi_head - &
+            tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
+    else
+       props(ip) = 0
+    end if
 
     do i = 4, 14, 2
        GLOBAL_fld_val = i * 1e6_dp
