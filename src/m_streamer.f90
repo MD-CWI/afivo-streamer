@@ -95,9 +95,6 @@ module m_streamer
   ! Linear derivative of background field
   real(dp)          :: ST_fld_lin_deriv
 
-  ! Stores the current background field
-  real(dp)          :: ST_fld_val
-
   ! Name of the simulations
   character(len=ST_slen) :: ST_sim_name
 

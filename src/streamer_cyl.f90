@@ -15,6 +15,7 @@ program streamer_cyl
   integer                 :: i, n
   character(len=ST_slen)  :: fname
   logical                 :: write_out
+  real(dp)                :: tmp_fld_val
 
   type(a2_t)              :: tree ! This contains the full grid information
   type(mg2_t)             :: mg   ! Multigrid option struct
@@ -684,8 +685,8 @@ contains
     character(len=15), intent(inout), allocatable :: prop_names(:)
 
     integer            :: ip
-    integer, parameter :: n_props = 37
-    real(dp)           :: rz(2), phi_head, z_head
+    integer, parameter :: n_props = 40
+    real(dp)           :: rz(2), phi_head, z_head, radius
     real(dp)           :: alpha, mu, Er_max_norm, Ez_max
     type(a2_loc_t)     :: loc_ez, loc_er, loc_dens, loc
     integer            :: id, ix(2)
@@ -714,6 +715,7 @@ contains
     ip             = ip + 1
     prop_names(ip) = "Er_max(r)"
     props(ip)      = rz(1)
+    radius         = rz(1)
 
     ip             = ip + 1
     prop_names(ip) = "Er_max(z)"
@@ -768,8 +770,30 @@ contains
     prop_names(ip) = "Ez_max(z)"
     props(ip)      = rz(2)
 
-    do i = 3, 13, 2
-       ST_fld_val = i * 1e6_dp
+    ! Phi 1 mm ahead
+    ip             = ip + 1
+    prop_names(ip) = "dphi(2mm)"
+    loc = a2_get_loc(tree, [0.0_dp, rz(2) + 2.0e-3_dp])
+    if (loc%id > a5_no_box) then
+       props(ip) = phi_head - &
+            tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
+    else
+       props(ip) = 0
+    end if
+
+    ip             = ip + 1
+    prop_names(ip) = "dphi(4mm)"
+    loc = a2_get_loc(tree, [0.0_dp, rz(2) + 4.0e-3_dp])
+    if (loc%id > a5_no_box) then
+       props(ip) = phi_head - &
+            tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
+    else
+       props(ip) = 0
+    end if
+
+    do i = 4, 14, 2
+       tmp_fld_val = i * 1e6_dp
+
        ip = ip + 1
        write(prop_names(ip), "(A,I0,A)") "r_max(", i, "e6)"
        call a2_reduction_loc(tree, box_fld_maxr, reduce_max, &
@@ -800,6 +824,7 @@ contains
           props(ip) = 0
        end if
     end do
+
   end subroutine get_streamer_properties
 
   real(dp) function reduce_max(a, b)
@@ -831,7 +856,7 @@ contains
 
     do j = 1, nc
        do i = 1, nc
-          if (box%cc(i, j, i_fld) > ST_fld_val) then
+          if (box%cc(i, j, i_fld) > tmp_fld_val) then
              rz = a2_r_cc(box, [i,j])
              if (rz(1) > val) then
                 val = rz(1)
@@ -854,7 +879,7 @@ contains
 
     do j = 1, nc
        do i = 1, nc
-          if (box%cc(i, j, i_fld) > ST_fld_val) then
+          if (box%cc(i, j, i_fld) > tmp_fld_val) then
              rz = a2_r_cc(box, [i,j])
              if (rz(2) > val) then
                 val = rz(2)
