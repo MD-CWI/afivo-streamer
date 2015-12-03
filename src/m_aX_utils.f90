@@ -1,4 +1,5 @@
 module m_a$D_utils
+  use m_a$D_t
   use m_a$D_core
 
   implicit none

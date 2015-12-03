@@ -11,18 +11,19 @@ module m_a$D_core
   use m_a$D_t
 
   implicit none
-  public
+  private
 
-  private :: set_leaves_parents
-  private :: set_nbs_$Dd
-  private :: find_nb_$Dd
-  private :: get_free_ids
-  private :: set_ref_info
-  private :: consistent_ref_flags
-  private :: remove_children
-  private :: add_children
-  private :: set_child_ids
-  private :: flux_from_children
+  public :: a$D_print_info
+  public :: a$D_init
+  public :: a$D_destroy
+  public :: a$D_set_base
+  public :: a$D_tidy_up
+  public :: set_leaves_parents
+  public :: a$D_resize_box_storage
+  public :: a$D_adjust_refinement
+  public :: a$D_consistent_fluxes
+  public :: a$D_ix_to_cix
+  public :: a$D_has_children
 
 contains
 
