@@ -1,12 +1,16 @@
 program streamer_cyl
-  use m_afivo_2d
-  use m_mg_2d
+
+  use m_a2_t
+  use m_a2_core
+  use m_a2_gc
+  use m_a2_utils
+  use m_a2_restrict
+  use m_a2_mg
+  use m_a2_io
   use m_write_silo
   use m_streamer
 
   implicit none
-
-  integer, parameter :: dp       = kind(0.0d0)
 
   character(len=name_len) :: sim_name, output_dir
   character(len=name_len) :: cfg_name, tmp_name, prev_name
@@ -19,15 +23,7 @@ program streamer_cyl
   real(dp)          :: fld_sin_freq, fld_lin_deriv
   real(dp)          :: GLOBAL_fld_val
 
-  integer           :: i, n, n_steps_amr
-  integer           :: output_cnt
-  real(dp)          :: dt, time, end_time
-  real(dp)          :: dt_output, dt_max
-  character(len=200) :: fname, fname_axis, fname_stats
-  logical           :: write_out
-
-  ! Dielectric constant
-  real(dp) :: epsilon_diel
+  character(len=200) :: fname_axis, fname_stats
 
   call create_cfg(sim_cfg)
 
@@ -70,7 +66,7 @@ program streamer_cyl
 
   ! Set the initial conditions from the configuration
   applied_voltage = -domain_len * applied_fld
-  call get_init_cond(sim_cfg, init_cond)
+  call get_init_cond(sim_cfg, init_cond, 2)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -155,8 +151,8 @@ program streamer_cyl
            call a2_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a2_gc_sides(tree, i_elec, a2_sides_interp_lim, a2_bc_neumann)
-           call a2_gc_sides(tree, i_pion, a2_sides_interp_lim, a2_bc_neumann)
+           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_gc_neumann)
+           call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_gc_neumann)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
@@ -389,7 +385,7 @@ contains
     call a2_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_sides(tree, i_fld, a2_sides_interp, a2_bc_neumann)
+    call a2_gc_tree(tree, i_fld, a2_gc_interp, a2_gc_neumann)
   end subroutine compute_fld
 
   real(dp) function get_fld(time)
@@ -481,7 +477,7 @@ contains
     inv_dr = 1/boxes(id)%dr
     fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
-    call a2_gc2_box_sides(boxes, id, i_elec, a2_sides2_prolong1, &
+    call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong1, &
          a2_gc2_neumann, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
@@ -670,6 +666,7 @@ contains
 
   ! For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
+    use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
@@ -685,57 +682,15 @@ contains
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box_sides(tree%boxes, id, i_elec, &
-               a2_sides_interp_lim, a2_bc_neumann)
-          call a2_gc_box_sides(tree%boxes, id, i_pion, &
-               a2_sides_interp_lim, a2_bc_neumann)
-          call a2_gc_box_sides(tree%boxes, id, i_phi, &
+          call a2_gc_box(tree%boxes, id, i_elec, &
+               a2_gc_interp_lim, a2_gc_neumann)
+          call a2_gc_box(tree%boxes, id, i_pion, &
+               a2_gc_interp_lim, a2_gc_neumann)
+          call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, sides_bc_pot)
        end do
     end do
   end subroutine prolong_to_new_boxes
-
-  subroutine get_init_cond(cfg, cond)
-    type(CFG_t), intent(in)        :: cfg
-    type(initcnd_t), intent(inout) :: cond
-    integer                        :: n_cond, varsize
-    real(dp)                       :: dlen
-    real(dp), allocatable          :: tmp_vec(:)
-
-    call CFG_get(cfg, "bg_dens", cond%bg_dens)
-    call CFG_get(cfg, "domain_len", dlen)
-
-    call CFG_get_size(cfg, "seed_dens", n_cond)
-
-    call CFG_get_size(cfg, "seed_rel_r0", varsize)
-    if (varsize /= 2 * n_cond) &
-         stop "seed_... variables have incompatible size"
-
-    call CFG_get_size(cfg, "seed_rel_r1", varsize)
-    if (varsize /= 2 * n_cond) &
-         stop "seed_... variables have incompatible size"
-
-    call CFG_get_size(cfg, "seed_width", varsize)
-    if (varsize /= n_cond) &
-         stop "seed_... variables have incompatible size"
-
-    cond%n_cond = n_cond
-    allocate(cond%seed_dens(n_cond))
-    allocate(cond%seed_r0(2, n_cond))
-    allocate(cond%seed_r1(2, n_cond))
-    allocate(cond%seed_width(n_cond))
-    allocate(cond%seed_falloff(n_cond))
-
-    allocate(tmp_vec(2 * n_cond))
-    call CFG_get(cfg, "seed_rel_r0", tmp_vec)
-    cond%seed_r0 = dlen * reshape(tmp_vec, [2, n_cond])
-    call CFG_get(cfg, "seed_rel_r1", tmp_vec)
-    cond%seed_r1 = dlen * reshape(tmp_vec, [2, n_cond])
-
-    call CFG_get(cfg, "seed_dens", cond%seed_dens)
-    call CFG_get(cfg, "seed_width", cond%seed_width)
-    call CFG_get(cfg, "seed_falloff", cond%seed_falloff)
-  end subroutine get_init_cond
 
   subroutine write_streamer_properties(tree, fname_stats, fname_axis, output_cnt, time)
     type(a2_t), intent(in)       :: tree

@@ -1,12 +1,14 @@
 program test_photoionization
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_io
+  use m_a2_utils
   use m_lookup_table
   use m_random
   use m_photons
 
   implicit none
 
-  integer, parameter  :: dp           = kind(0.0d0)
   integer, parameter  :: box_size     = 8
   real(dp), parameter :: frac_O2      = 0.2_dp
   real(dp), parameter :: domain_len   = 8e-3_dp
@@ -120,6 +122,7 @@ contains
 
   subroutine set_photoi_rate(box, coeff)
     use m_geom
+    use m_a2_utils
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, nc

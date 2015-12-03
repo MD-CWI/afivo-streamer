@@ -1,7 +1,12 @@
 program streamer_3d
 
-  use m_afivo_3d
-  use m_mg_3d
+  use m_a3_t
+  use m_a3_core
+  use m_a3_gc
+  use m_a3_utils
+  use m_a3_restrict
+  use m_a3_mg
+  use m_a3_io
   use m_write_silo
   use m_lookup_table
   use m_config
@@ -11,92 +16,11 @@ program streamer_3d
 
   implicit none
 
-  integer, parameter :: dp       = kind(0.0d0)
-  integer, parameter :: name_len = 200
-
-  ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 9
-  integer, parameter :: i_elec     = 1 ! Electron density
-  integer, parameter :: i_pion     = 2 ! Positive ion density
-  integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
-  integer, parameter :: i_pion_old = 4 ! For time-stepping scheme
-  integer, parameter :: i_phi      = 5 ! Electrical potential
-  integer, parameter :: i_fld      = 6 ! Electric field norm
-  integer, parameter :: i_rhs      = 7 ! Source term Poisson
-  integer, parameter :: i_pho      = 8 ! Phototionization rate
-  integer, parameter :: i_eps      = 9 ! Dielectric perm.
-  character(len=10)  :: cc_names(n_var_cell) = &
-       [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs", "pho", "eps"]
-
-  ! Indices of face-centered variables
-  integer, parameter :: n_var_face = 2
-  integer, parameter :: f_elec     = 1 ! Electron flux
-  integer, parameter :: f_fld      = 2 ! Electric field vector
-
-  ! Indices of transport data
-  integer, parameter :: n_var_td = 4
-  integer, parameter :: i_mobility = 1
-  integer, parameter :: i_diffusion = 2
-  integer, parameter :: i_alpha = 3
-  integer, parameter :: i_eta = 4
-
   character(len=name_len) :: sim_name, output_dir
   character(len=name_len) :: cfg_name, tmp_name, prev_name
-
-  type initcnd_t
-     real(dp)              :: bg_dens
-
-     integer               :: n_cond
-     real(dp), allocatable :: seed_r0(:, :)
-     real(dp), allocatable :: seed_r1(:, :)
-     real(dp), allocatable :: seed_dens(:)
-     real(dp), allocatable :: seed_width(:)
-     integer, allocatable  :: seed_falloff(:)
-  end type initcnd_t
-
-
-  type(initcnd_t)    :: init_cond
-  type(LT_table_t)   :: td_tbl  ! Table with transport data vs fld
-  type(CFG_t)        :: sim_cfg ! The configuration for the simulation
   type(a3_t)         :: tree    ! This contains the full grid information
   type(mg3_t)        :: mg      ! Multigrid option struct
-  type(RNG_t)        :: sim_rng ! Random number generator
   type(ref_info_t)   :: ref_info
-
-  logical          :: photoi_enabled     ! Whether we use phototionization
-  real(dp)         :: photoi_frac_O2     ! Oxygen fraction
-  real(dp)         :: photoi_eta         ! Photoionization efficiency
-  integer          :: photoi_num_photons ! Number of photons to use
-  type(PH_tbl_t)   :: photoi_tbl         ! Table for photoionization
-
-  integer            :: i, n, n_steps_amr
-  integer            :: output_cnt
-  real(dp)           :: dt, time, end_time
-  real(dp)           :: dt_output, dt_max
-  character(len=40)  :: fname
-  logical            :: write_out
-
-  ! How many multigrid FMG cycles we perform per time step
-  integer, parameter :: n_fmg_cycles = 1
-
-  ! The size of the boxes that we use to construct our mesh
-  integer :: box_size
-
-  ! The length of the (square) domain
-  real(dp) :: domain_len
-
-  ! The applied electric field
-  real(dp) :: applied_fld
-
-  ! The applied voltage
-  real(dp) :: applied_voltage
-
-  ! Pressure of the gas in bar
-  real(dp) :: gas_pressure
-
-  ! Dielectric constant
-  real(dp) :: epsilon_diel
 
   call create_cfg(sim_cfg)
 
@@ -134,7 +58,7 @@ program streamer_3d
 
   ! Set the initial conditions from the configuration
   applied_voltage = -domain_len * applied_fld
-  call get_init_cond(sim_cfg, init_cond)
+  call get_init_cond(sim_cfg, init_cond, 3)
 
 
   ! Initialize the tree (which contains all the mesh information)
@@ -220,8 +144,8 @@ program streamer_3d
            call a3_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a3_gc_sides(tree, i_elec, a3_sides_interp_lim, a3_bc_neumann)
-           call a3_gc_sides(tree, i_pion, a3_sides_interp_lim, a3_bc_neumann)
+           call a3_gc_tree(tree, i_elec, a3_gc_interp_lim, a3_gc_neumann)
+           call a3_gc_tree(tree, i_pion, a3_gc_interp_lim, a3_gc_neumann)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
@@ -449,7 +373,7 @@ contains
     call a3_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a3_gc_sides(tree, i_fld, a3_sides_interp_lim, a3_bc_neumann)
+    call a3_gc_tree(tree, i_fld, a3_gc_interp_lim, a3_gc_neumann)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
@@ -518,8 +442,8 @@ contains
     inv_dr = 1/boxes(id)%dr
     fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
-    call a3_gc2_box_sides(boxes, id, i_elec, a3_sides2_prolong1, &
-         sides_bc2_dens, gc_data, nc)
+    call a3_gc2_box(boxes, id, i_elec, a3_gc2_prolong1, &
+         a3_gc2_neumann, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
     do k = 1, nc
@@ -771,6 +695,7 @@ contains
 
   ! For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
+    use m_a3_prolong
     type(a3_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
@@ -786,11 +711,11 @@ contains
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a3_gc_box_sides(tree%boxes, id, i_elec, &
-               a3_sides_interp_lim, a3_bc_neumann)
-          call a3_gc_box_sides(tree%boxes, id, i_pion, &
-               a3_sides_interp_lim, a3_bc_neumann)
-          call a3_gc_box_sides(tree%boxes, id, i_phi, &
+          call a3_gc_box(tree%boxes, id, i_elec, &
+               a3_gc_interp_lim, a3_gc_neumann)
+          call a3_gc_box(tree%boxes, id, i_pion, &
+               a3_gc_interp_lim, a3_gc_neumann)
+          call a3_gc_box(tree%boxes, id, i_phi, &
                mg3_sides_rb, sides_bc_pot)
        end do
     end do

@@ -41,9 +41,9 @@ afivo/examples/test_mgb_2d
 afivo/examples/test_morton
 afivo/ext_libs_build/
 afivo/silo/
-afivo/src/m_afivo_2d.f90
+afivo/src/m_a2_t.f90
 afivo/src/m_afivo_3d.f90
-afivo/src/m_mg_2d.f90
+afivo/src/m_a2_mg.f90
 afivo/src/m_mg_3d.f90
 afivo/tutorial/implicit
 afivo/tutorial/step_1
