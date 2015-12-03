@@ -1,4 +1,12 @@
+! This module contains all kinds of different "helper" routines for Afivo.
+! If the number of routines for a particular topic becomes large, they should
+! probably be put in a separate module.
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
 module m_a$D_utils
+  use m_a$D_t
   use m_a$D_core
 
   implicit none
@@ -34,7 +42,6 @@ module m_a$D_utils
   public :: a$D_r_center
   public :: a$D_get_child_offset
   public :: a$D_get_loc
-  public :: child_that_contains
   public :: a$D_cc_ix
   public :: a$D_r_cc
   public :: a$D_r_loc

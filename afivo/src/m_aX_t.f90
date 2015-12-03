@@ -1,3 +1,8 @@
+! This module contains the basic types and constants that are used in Afivo.
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
 module m_a$D_t
 
   implicit none

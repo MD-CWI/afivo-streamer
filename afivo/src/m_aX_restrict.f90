@@ -1,3 +1,9 @@
+! This module contains routines for restriction (going from fine to coarse
+! variables).
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
 module m_a$D_restrict
 
   use m_a$D_t
