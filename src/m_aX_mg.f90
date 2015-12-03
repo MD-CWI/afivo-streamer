@@ -1,12 +1,8 @@
-!> Multigrid code for $D-dimensional problems
-!> \author Jannis Teunissen
-!> \copyright GPLv3
+! This module contains the multigrid routines that come with Afivo
+!
+! Author: Jannis Teunissen
+! License: GPLv3
 
-! The following replacements take place on this file (m_mg_Xd.f90) to generate
-! 2D and 3D versions:
-! 1. $D -> 2 or 3 (dimension of code)
-! 2. preprocess file with cpp
-! 3. cat -s (merge multiple blank lines)
 module m_a$D_mg
   use m_a$D_t
 

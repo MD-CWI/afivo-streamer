@@ -1,3 +1,9 @@
+! This module contains the routines related to prolongation or interpolation
+! (going from a coarse to a fine variable).
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
 module m_a$D_prolong
   use m_a$D_t
 

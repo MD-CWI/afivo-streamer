@@ -1,11 +1,3 @@
-!> AFiVO code for $D-dimensional simulations
-!> \author Jannis Teunissen
-!> \copyright GPLv3
-
-! The following replacements take place on this code:
-! 1. $D -> 2 or 3 (dimension of code)
-! 2. preprocess file with cpp
-! 3. cat -s (merge multiple blank lines)
 
 module m_a$D_core
   use m_a$D_t

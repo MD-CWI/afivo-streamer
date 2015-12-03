@@ -1,3 +1,9 @@
+! This module contains routines related to the filling of ghost cells. Note that
+! corner ghost cells are not used in Afivo.
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
 module m_a$D_gc
   use m_a$D_t
 

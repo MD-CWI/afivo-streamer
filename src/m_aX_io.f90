@@ -1,3 +1,8 @@
+! This module contains routines for writing output files with Afivo
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
 module m_a$D_io
 
   use m_a$D_t
