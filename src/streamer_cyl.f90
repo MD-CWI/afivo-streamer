@@ -685,7 +685,7 @@ contains
     character(len=15), intent(inout), allocatable :: prop_names(:)
 
     integer            :: ip
-    integer, parameter :: n_props = 40
+    integer, parameter :: n_props = 39
     real(dp)           :: rz(2), phi_head, z_head, radius
     real(dp)           :: alpha, mu, Er_max_norm, Ez_max
     type(a2_loc_t)     :: loc_ez, loc_er, loc_dens, loc
