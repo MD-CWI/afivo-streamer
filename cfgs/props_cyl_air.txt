@@ -6,7 +6,7 @@
  end_time = 2.00E-07
 
  # The name of the simulation:
- sim_name = props_cyl_air
+ sim_name = cyl_air
 
  # Directory where the output should be written:
  output_dir = output
@@ -33,7 +33,7 @@
  bg_dens = 1.0e10
 
  # Initial density of the seed:
- seed_dens = 5.000E+19 0.000E+17
+ seed_dens = 5.000E+19 1.000E+16
 
  # The relative start position of the initial seed:
  seed_rel_r0 = 0.0000E+00 0.320E+00 0.0000E+00 0.3600E+00
@@ -42,7 +42,7 @@
  seed_rel_r1 = 0.0000E+00 0.3500E+00 0.0000E+00 0.3600E+00
 
  # Seed width:
- seed_width = 1.0E-04 2.5000E-04
+ seed_width = 1.0E-04 1.0E-04
 
  # Fallof type for seed, see m_geom.f90:
  seed_falloff = 3 1
