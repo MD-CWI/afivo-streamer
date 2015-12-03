@@ -33,13 +33,13 @@
  bg_dens = 1.0e10
 
  # Initial density of the seed:
- seed_dens = 5.000E+19 1.000E+16
+ seed_dens = 5.000E+19 1.000E+17
 
  # The relative start position of the initial seed:
- seed_rel_r0 = 0.0000E+00 0.320E+00 0.0000E+00 0.3600E+00
+ seed_rel_r0 = 0.0000E+00 0.310E+00 0.0000E+00 0.3700E+00
 
  # The relative end position of the initial seed:
- seed_rel_r1 = 0.0000E+00 0.3500E+00 0.0000E+00 0.3600E+00
+ seed_rel_r1 = 0.0000E+00 0.3500E+00 0.0000E+00 0.3700E+00
 
  # Seed width:
  seed_width = 1.0E-04 1.0E-04
