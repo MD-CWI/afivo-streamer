@@ -14,5 +14,5 @@ at least once in the Afivo root folder (one directory up):
 
 The m_aX_[...].f90 files contain code for both the 2D and 3D version. The
 corresponding m_a2_[...].f90 and m_a3_[...].f90 files are generated
-automatically, so you should **never** those! Instead, modify the m_aX_[...].f90
-files!
+automatically, so you should **not** edit those! Instead, modify the
+m_aX_[...].f90 files!
