@@ -58,3 +58,6 @@ src/test_m_photons
 streamer_2d
 streamer_3d
 streamer_cyl
+/cfgs/test*.txt
+/afivo/examples/*
+/fosito/test/*
