@@ -1,27 +1,29 @@
 program test_photoionization
-  use m_afivo_2d
+  use m_a2_t
+  use m_a2_core
+  use m_a2_io
+  use m_a2_utils
   use m_lookup_table
   use m_random
   use m_photons
 
   implicit none
 
-  integer, parameter  :: dp           = kind(0.0d0)
   integer, parameter  :: box_size     = 8
   real(dp), parameter :: frac_O2      = 0.2_dp
   real(dp), parameter :: domain_len   = 8e-3_dp
   real(dp), parameter :: dr           = domain_len / box_size
-  integer, parameter  :: num_photons  = 50*1000
 
   integer, parameter  :: i_src        = 1
   integer, parameter  :: i_pho        = 2
   integer, parameter  :: i_sol        = 3
 
-  real(dp) :: gas_pressure = 1.0e-3_dp
-  real(dp) :: grid_factor  = 0.3_dp
-  logical  :: use_const_dx = .false.
-  logical  :: use_cyl      = .false.
+  real(dp) :: gas_pressure
+  real(dp) :: grid_factor
+  logical  :: use_const_dx
+  logical  :: use_cyl
   integer  :: rng_seed(4)  = [234, 45, 843, 234]
+  integer  :: num_photons
 
   type(a2_t)          :: tree
   type(ref_info_t)    :: ref_info
@@ -37,25 +39,31 @@ program test_photoionization
   character(len=10)  :: cc_names(3) = &
        [character(len=10) :: "src", "pho", "sol"]
 
-  if (command_argument_count() < 4) &
-       stop "Need 4 arguments: pressure grid_fac const_dx cylindrical"
+  if (command_argument_count() < 4) then
+     print *, "Need >5 arguments: num_photons pressure grid_fac", &
+          " const_dx cylindrical [seed]"
+     stop
+  end if
+
   call get_command_argument(1, tmp)
-  read(tmp, *) gas_pressure
+  read(tmp, *) num_photons
   call get_command_argument(2, tmp)
-  read(tmp, *) grid_factor
+  read(tmp, *) gas_pressure
   call get_command_argument(3, tmp)
-  read(tmp, *) use_const_dx
+  read(tmp, *) grid_factor
   call get_command_argument(4, tmp)
+  read(tmp, *) use_const_dx
+  call get_command_argument(5, tmp)
   read(tmp, *) use_cyl
 
-  if (command_argument_count() > 4) then
-     call get_command_argument(5, tmp)
+  if (command_argument_count() > 5) then
+     call get_command_argument(6, tmp)
      read(tmp, *) rng_seed(1)
   end if
 
   print *, "Gas pressure (bar):", gas_pressure
   print *, "Fraction oxygen:   ", frac_O2
-  
+
   call PH_get_tbl_air(photoi_tbl, frac_O2 * gas_pressure, 2 * domain_len)
 
   ! Initialize tree
@@ -120,6 +128,7 @@ contains
 
   subroutine set_photoi_rate(box, coeff)
     use m_geom
+    use m_a2_utils
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, nc

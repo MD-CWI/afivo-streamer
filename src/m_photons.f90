@@ -207,7 +207,10 @@ contains
   subroutine PH_set_src_2d(tree, pi_tbl, rng, num_photons, &
        i_src, i_pho, fac_dx, const_dx, use_cyl, min_dx, dt)
     use m_random
-    use m_afivo_2d
+    use m_a2_t
+    use m_a2_utils
+    use m_a2_gc
+    use m_a2_prolong
     use m_lookup_table
     use omp_lib
 
@@ -417,8 +420,8 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_gc_box_sides(tree%boxes, id, i_pho, &
-               a2_sides_interp, a2_bc_neumann)
+          call a2_gc_box(tree%boxes, id, i_pho, &
+               a2_gc_interp, a2_gc_neumann)
        end do
        !$omp end do
 
@@ -435,7 +438,10 @@ contains
   subroutine PH_set_src_3d(tree, pi_tbl, rng, num_photons, &
        i_src, i_pho, fac_dx, const_dx, min_dx, dt)
     use m_random
-    use m_afivo_3d
+    use m_a3_t
+    use m_a3_utils
+    use m_a3_gc
+    use m_a3_prolong
     use m_lookup_table
     use omp_lib
 
@@ -605,8 +611,8 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_gc_box_sides(tree%boxes, id, i_pho, &
-               a3_sides_interp, a3_bc_neumann)
+          call a3_gc_box(tree%boxes, id, i_pho, &
+               a3_gc_interp, a3_gc_neumann)
        end do
        !$omp end do
 
