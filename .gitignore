@@ -61,3 +61,5 @@ streamer_cyl
 /cfgs/test*.txt
 /afivo/examples/*
 /fosito/test/*
+/afivo/src/m_a2*
+/afivo/src/m_a3*
