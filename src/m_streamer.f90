@@ -101,8 +101,41 @@ module m_streamer
   ! Output directory
   character(len=ST_slen) :: ST_output_dir
 
-  ! Number of steps between updating the mesh
-  integer  :: ST_steps_amr
+  ! The number of steps after which the mesh is updated
+  integer :: ST_ref_per_steps
+
+  ! The grid spacing will always be larger than this value
+  real(dp) :: ST_ref_min_dx
+
+  ! The grid spacing will always be smaller than this value
+  real(dp) :: ST_ref_max_dx
+
+  ! Refine if alpha*dx is larger than this value
+  real(dp) :: ST_ref_any_adx
+
+  ! Refine if the curvature in phi is larger than this value
+  real(dp) :: ST_ref_any_cphi
+
+  ! Refine if the curvature in elec is larger than this value
+  real(dp) :: ST_ref_any_celec
+
+  ! Refine if the curvature in rhs is larger than this value
+  real(dp) :: ST_ref_any_crhs
+
+  ! Refine if all conditions hold: value for alpha*dx
+  real(dp) :: ST_ref_all_adx
+
+  ! Refine if all conditions hold: value for curvature of phi
+  real(dp) :: ST_ref_all_cphi
+
+  ! Refine if all conditions hold: value for curvature of elec
+  real(dp) :: ST_ref_all_celec
+
+  ! Refine if all conditions hold: value for curvature of rhs
+  real(dp) :: ST_ref_all_crhs
+
+  ! Derefine if all values are at least this factor below refinement
+  real(dp) :: ST_ref_rm_threshold
 
   ! Number of output files written
   integer  :: ST_out_cnt
@@ -190,8 +223,31 @@ contains
          "The timestep for writing output (s)")
     call CFG_add(cfg, "dt_max", 1.0d-11, &
          "The maximum timestep (s)")
-    call CFG_add(cfg, "num_steps_amr", 2, &
+
+    call CFG_add(cfg, "ref_per_steps", 2, &
          "The number of steps after which the mesh is updated")
+    call CFG_add(cfg, "ref_min_dx", 1.0e-6_dp, &
+         "The grid spacing will always be larger than this value")
+    call CFG_add(cfg, "ref_max_dx", 1.0e-3_dp, &
+         "The grid spacing will always be smaller than this value")
+    call CFG_add(cfg, "ref_any_adx", 1.0_dp, &
+         "Refine if alpha*dx is larger than this value")
+    call CFG_add(cfg, "ref_any_cphi", 30.0_dp, &
+         "Refine if the curvature in phi is larger than this value")
+    call CFG_add(cfg, "ref_any_celec", 1e99_dp, &
+         "Refine if the curvature in elec is larger than this value")
+    call CFG_add(cfg, "ref_any_crhs", 1e99_dp, &
+         "Refine if the curvature in rhs is larger than this value")
+    call CFG_add(cfg, "ref_all_adx", 0.5_dp, &
+         "Refine if all conditions hold: value for alpha*dx")
+    call CFG_add(cfg, "ref_all_cphi", 15.0_dp, &
+         "Refine if all conditions hold: value for curvature of phi")
+    call CFG_add(cfg, "ref_all_celec", 1e99_dp, &
+         "Refine if all conditions hold: value for curvature of elec")
+    call CFG_add(cfg, "ref_all_crhs", 1e99_dp, &
+         "Refine if all conditions hold: value for curvature of rhs")
+    call CFG_add(cfg, "ref_rm_threshold", 0.1_dp, &
+         "Derefine if all values are at least this factor below refinement")
 
     call CFG_add(cfg, "photoi_enabled", .true., &
          "Whether photoionization is enabled")
@@ -393,7 +449,20 @@ contains
     call CFG_get(cfg, "domain_len", ST_domain_len)
     call CFG_get(cfg, "applied_fld", ST_applied_fld)
     call CFG_get(cfg, "dt_output", ST_dt_out)
-    call CFG_get(cfg, "num_steps_amr", ST_steps_amr)
+
+    call CFG_get(cfg, "ref_per_steps", ST_ref_per_steps)
+    call CFG_get(cfg, "ref_min_dx", ST_ref_min_dx)
+    call CFG_get(cfg, "ref_max_dx", ST_ref_max_dx)
+    call CFG_get(cfg, "ref_any_adx", ST_ref_any_adx)
+    call CFG_get(cfg, "ref_any_cphi", ST_ref_any_cphi)
+    call CFG_get(cfg, "ref_any_celec", ST_ref_any_celec)
+    call CFG_get(cfg, "ref_any_crhs", ST_ref_any_crhs)
+    call CFG_get(cfg, "ref_all_adx", ST_ref_all_adx)
+    call CFG_get(cfg, "ref_all_cphi", ST_ref_all_cphi)
+    call CFG_get(cfg, "ref_all_celec", ST_ref_all_celec)
+    call CFG_get(cfg, "ref_all_crhs", ST_ref_all_crhs)
+    call CFG_get(cfg, "ref_rm_threshold", ST_ref_rm_threshold)
+
     call CFG_get(cfg, "dt_max", ST_dt_max)
     call CFG_get(cfg, "epsilon_diel", ST_epsilon_diel)
 

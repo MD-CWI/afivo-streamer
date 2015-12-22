@@ -89,7 +89,7 @@ program streamer_3d
      if (ST_time > ST_end_time) exit
 
      ! We perform n_steps between mesh-refinements
-     do n = 1, ST_steps_amr
+     do n = 1, ST_ref_per_steps
         ST_time = ST_time + ST_dt
 
         if (ST_photoi_enabled) &

@@ -91,7 +91,7 @@ program streamer_cyl
      if (ST_time > ST_end_time) exit
 
      ! We perform n_steps between mesh-refinements
-     do n = 1, ST_steps_amr
+     do n = 1, ST_ref_per_steps
 
         if (ST_photoi_enabled) &
              call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
@@ -192,23 +192,37 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
-    integer                  :: nc, n
-    real(dp)                 :: crv_phi, dr2, max_fld, max_dns
-    real(dp)                 :: boxlen, dist, alpha, adx
+    integer                  :: nc
+    real(dp)                 :: cphi, crhs, celec, dx2, dx, fac
+    real(dp)                 :: alpha, adx, max_fld, max_dns
+    real(dp)                 :: boxlen, dist
 
     nc        = boxes(id)%n_cell
-    dr2       = boxes(id)%dr**2
-    crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+    dx        = boxes(id)%dr
+    dx2       = boxes(id)%dr**2
+    cphi      = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+    crhs      = max_curvature(boxes(id), i_rhs)
+    celec     = max_curvature(boxes(id), i_elec)
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
     max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
+    fac       = ST_ref_rm_threshold
 
-    if (adx < 0.1_dp .and. boxes(id)%dr < 2.0e-5_dp) &
-         ref_flags(id) = a5_rm_ref
-    if (adx < 0.1_dp .and. crv_phi < 4.0_dp .and. boxes(id)%dr < 5.0e-5_dp) &
-         ref_flags(id) = a5_rm_ref
+    if (adx > ST_ref_any_adx .or. cphi > ST_ref_any_cphi &
+         .or. celec > ST_ref_any_celec .or. crhs > ST_ref_any_crhs) then
+       ref_flags(id) = a5_do_ref
+    else if (adx > ST_ref_all_adx .and. cphi > ST_ref_all_cphi &
+         .and. celec > ST_ref_all_celec .and. crhs > ST_ref_all_crhs) then
+       ref_flags(id) = a5_do_ref
+    else if (adx < fac * max(ST_ref_all_adx, ST_ref_any_adx) .and. &
+         cphi < fac * max(ST_ref_all_cphi, ST_ref_any_cphi) .and. &
+         crhs < fac * max(ST_ref_all_crhs, ST_ref_any_crhs) .and. &
+         celec < fac * max(ST_ref_all_celec, ST_ref_any_celec)) then
+       ref_flags(id) = a5_rm_ref
+    end if
 
+    ! Refine around the initial conditions
     if (ST_time < 5.0e-9_dp) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
@@ -223,8 +237,39 @@ contains
        end do
     end if
 
-    if (adx > 1.0_dp .and. crv_phi > 0.0_dp) ref_flags(id) = a5_do_ref
+    ! Make sure we don't have or get a too fine or too coarse grid
+    if (dx > ST_ref_max_dx) then
+       ref_flags(id) = a5_do_ref
+    else if (dx < ST_ref_min_dx) then
+       ref_flags(id) = a5_rm_ref
+    else if (dx < 2 * ST_ref_min_dx .and. ref_flags(id) == a5_do_ref) then
+       ref_flags(id) = a5_kp_ref
+    else if (dx > 0.5_dp * ST_ref_max_dx .and. ref_flags(id) == a5_rm_ref) then
+       ref_flags(id) = a5_kp_ref
+    end if
+
   end subroutine set_ref_flags
+
+  !> Get maximum curvature
+  ! TODO: cylindrical coordinates or not?
+  function max_curvature (box, iv) result(crv)
+    type(box2_t), intent(in) :: box !< Box to operate on
+    integer, intent(in)         :: iv !< Index of variable
+    real(dp)                    :: crv, tmp
+    integer                     :: i, j, nc
+
+    nc  = box%n_cell
+    crv = 0
+
+    do j = 1, nc
+       do i = 1, nc
+          tmp = (box%cc(i-1, j, iv) + box%cc(i+1, j, iv) &
+               + box%cc(i, j-1, iv) + box%cc(i, j+1, iv) &
+               - 4 * box%cc(i, j, iv))
+          if (abs(tmp) > crv) crv = abs(tmp)
+       end do
+    end do
+  end function max_curvature
 
   subroutine set_init_cond(box)
     use m_geom
