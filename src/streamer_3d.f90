@@ -20,15 +20,15 @@ program streamer_3d
   type(mg3_t)            :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
-  call ST_create_cfg(ST_cfg)
-  call ST_read_cfg_files(ST_cfg)
-  call ST_load_cfg(ST_cfg)
+  call ST_create_cfg()
+  call ST_read_cfg_files()
+  call ST_load_cfg()
 
   ! Initialize the transport coefficients
-  call ST_load_transport_data(ST_cfg, ST_td_tbl, ST_photoi_tbl)
+  call ST_load_transport_data()
 
   ! Set the initial conditions from the configuration
-  call ST_get_init_cond(ST_cfg, ST_init_cond, 3)
+  call ST_get_init_cond(3)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -196,7 +196,7 @@ contains
     if (adx < 0.1_dp .and. crv_phi < 4.0_dp .and. boxes(id)%dr < 5.0e-5_dp) &
          ref_flags(id) = a5_rm_ref
 
-    if (ST_time < 2.5e-9_dp) then
+    if (ST_time < ST_ref_init_time) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
        do n = 1, ST_init_cond%n_cond
@@ -204,7 +204,8 @@ contains
                ST_init_cond%seed_r0(:, n), &
                ST_init_cond%seed_r1(:, n), 3)
           if (dist - ST_init_cond%seed_width(n) < boxlen &
-               .and. boxes(id)%dr > 0.2_dp * ST_init_cond%seed_width(n)) then
+               .and. boxes(id)%dr > ST_ref_init_fac * &
+               ST_init_cond%seed_width(n)) then
              ref_flags(id) = a5_do_ref
           end if
        end do
@@ -330,7 +331,7 @@ contains
     end do
     !$omp end parallel
 
-    ST_applied_voltage = -ST_domain_len * ST_get_fld(ST_time)
+    call ST_set_voltage(-ST_domain_len * ST_get_fld(ST_time))
 
     ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
