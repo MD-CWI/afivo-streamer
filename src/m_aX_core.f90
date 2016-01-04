@@ -1,3 +1,9 @@
+! This module contains the core routines of Afivo
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
+! TODO: Generalize consistent fluxes to cylindrical geometry (z-component)
 
 module m_a$D_core
   use m_a$D_t
