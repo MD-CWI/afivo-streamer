@@ -192,9 +192,9 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
-    integer                  :: n, nc, nb_id
-    real(dp)                 :: cphi, cfld, celec, dx2, dx
-    real(dp)                 :: alpha, adx, max_fld, max_dns
+    integer                  :: n, nc, nb, nbs(4)
+    real(dp)                 :: cphi, dx2, dx
+    real(dp)                 :: alpha, adx, max_fld
     real(dp)                 :: boxlen, dist
 
     nc        = boxes(id)%n_cell
@@ -202,7 +202,6 @@ contains
     dx2       = boxes(id)%dr**2
     cphi      = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
     max_fld   = maxval(boxes(id)%cc(:, :, i_fld))
-    max_dns   = maxval(boxes(id)%cc(:, :, i_elec))
     alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
@@ -293,6 +292,7 @@ contains
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
 
     call set_box_eps(box)
+
   end subroutine set_init_cond
 
   subroutine set_box_eps(box)

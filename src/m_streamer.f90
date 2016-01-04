@@ -111,22 +111,16 @@ module m_streamer
   real(dp), protected :: ST_ref_max_dx
 
   ! Refine if alpha*dx is larger than this value
-  real(dp), protected :: ST_ref_any_adx
+  real(dp), protected :: ST_ref_adx
 
   ! Refine if the curvature in phi is larger than this value
-  real(dp), protected :: ST_ref_any_cphi
-
-  ! Refine if all conditions hold: value for alpha*dx
-  real(dp), protected :: ST_ref_all_adx
-
-  ! Refine if all conditions hold: value for curvature of phi
-  real(dp), protected :: ST_ref_all_cphi
+  real(dp), protected :: ST_ref_cphi
 
   ! Derefine if all conditions hold: value for alpha*dx
-  real(dp), protected :: ST_deref_all_adx
+  real(dp), protected :: ST_deref_adx
 
   ! Derefine if all conditions hold: value for curvature of phi
-  real(dp), protected :: ST_deref_all_cphi
+  real(dp), protected :: ST_deref_cphi
 
   ! Refine around initial conditions up to this time
   real(dp), protected :: ST_ref_init_time
@@ -227,19 +221,14 @@ contains
     call CFG_add(ST_cfg, "ref_max_dx", 1.0e-3_dp, &
          "The grid spacing will always be smaller than this value")
 
-    call CFG_add(ST_cfg, "ref_any_adx", 1.0_dp, &
+    call CFG_add(ST_cfg, "ref_adx", 1.0_dp, &
          "Refine if alpha*dx is larger than this value")
-    call CFG_add(ST_cfg, "ref_any_cphi", 1e99_dp, &
+    call CFG_add(ST_cfg, "ref_cphi", 1e99_dp, &
          "Refine if the curvature in phi is larger than this value")
 
-    call CFG_add(ST_cfg, "ref_all_adx", 1e99_dp, &
-         "Refine if all conditions hold: value for alpha*dx")
-    call CFG_add(ST_cfg, "ref_all_cphi", 1e99_dp, &
-         "Refine if all conditions hold: value for curvature of phi")
-
-    call CFG_add(ST_cfg, "deref_all_adx", 0.1_dp, &
+    call CFG_add(ST_cfg, "deref_adx", 0.1_dp, &
          "Derefine if all conditions hold; value for alpha*dx")
-    call CFG_add(ST_cfg, "deref_all_cphi", 1e99_dp, &
+    call CFG_add(ST_cfg, "deref_cphi", 1e99_dp, &
          "Derefine if all conditions hold: value for curvature of phi")
 
     call CFG_add(ST_cfg, "ref_init_time", 10.0e-9_dp, &
@@ -445,14 +434,11 @@ contains
     call CFG_get(ST_cfg, "ref_per_steps", ST_ref_per_steps)
     call CFG_get(ST_cfg, "ref_min_dx", ST_ref_min_dx)
     call CFG_get(ST_cfg, "ref_max_dx", ST_ref_max_dx)
-    call CFG_get(ST_cfg, "ref_any_adx", ST_ref_any_adx)
-    call CFG_get(ST_cfg, "ref_any_cphi", ST_ref_any_cphi)
+    call CFG_get(ST_cfg, "ref_adx", ST_ref_adx)
+    call CFG_get(ST_cfg, "ref_cphi", ST_ref_cphi)
 
-    call CFG_get(ST_cfg, "ref_all_adx", ST_ref_all_adx)
-    call CFG_get(ST_cfg, "ref_all_cphi", ST_ref_all_cphi)
-
-    call CFG_get(ST_cfg, "deref_all_adx", ST_deref_all_adx)
-    call CFG_get(ST_cfg, "deref_all_cphi", ST_deref_all_cphi)
+    call CFG_get(ST_cfg, "deref_adx", ST_deref_adx)
+    call CFG_get(ST_cfg, "deref_cphi", ST_deref_cphi)
 
     call CFG_get(ST_cfg, "ref_init_time", ST_ref_init_time)
     call CFG_get(ST_cfg, "ref_init_fac", ST_ref_init_fac)
