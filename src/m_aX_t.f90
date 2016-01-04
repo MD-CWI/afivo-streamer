@@ -147,7 +147,8 @@ module m_a$D_t
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box
      integer               :: coord_t   !< Coordinate type (e.g. Cartesian)
-     class(*), pointer     :: ud=>null() !< User data (can be anything)
+     real(dp), allocatable :: rdata(:)  !< User data (reals)
+     real(dp), allocatable :: idata(:)  !< User data (integers)
 #if $D == 2
      real(dp), allocatable :: cc(:, :, :) !< cell centered variables
      real(dp), allocatable :: fx(:, :, :) !< x-face centered variables
