@@ -116,26 +116,17 @@ module m_streamer
   ! Refine if the curvature in phi is larger than this value
   real(dp), protected :: ST_ref_any_cphi
 
-  ! Refine if the curvature in elec is larger than this value
-  real(dp), protected :: ST_ref_any_celec
-
-  ! Refine if the curvature in rhs is larger than this value
-  real(dp), protected :: ST_ref_any_crhs
-
   ! Refine if all conditions hold: value for alpha*dx
   real(dp), protected :: ST_ref_all_adx
 
   ! Refine if all conditions hold: value for curvature of phi
   real(dp), protected :: ST_ref_all_cphi
 
-  ! Refine if all conditions hold: value for curvature of elec
-  real(dp), protected :: ST_ref_all_celec
+  ! Derefine if all conditions hold: value for alpha*dx
+  real(dp), protected :: ST_deref_all_adx
 
-  ! Refine if all conditions hold: value for curvature of rhs
-  real(dp), protected :: ST_ref_all_crhs
-
-  ! Derefine if all values are at least this factor below refinement
-  real(dp), protected :: ST_ref_rm_threshold
+  ! Derefine if all conditions hold: value for curvature of phi
+  real(dp), protected :: ST_deref_all_cphi
 
   ! Refine around initial conditions up to this time
   real(dp), protected :: ST_ref_init_time
@@ -235,25 +226,23 @@ contains
          "The grid spacing will always be larger than this value")
     call CFG_add(ST_cfg, "ref_max_dx", 1.0e-3_dp, &
          "The grid spacing will always be smaller than this value")
+
     call CFG_add(ST_cfg, "ref_any_adx", 1.0_dp, &
          "Refine if alpha*dx is larger than this value")
-    call CFG_add(ST_cfg, "ref_any_cphi", 30.0_dp, &
+    call CFG_add(ST_cfg, "ref_any_cphi", 1e99_dp, &
          "Refine if the curvature in phi is larger than this value")
-    call CFG_add(ST_cfg, "ref_any_celec", 1e99_dp, &
-         "Refine if the curvature in elec is larger than this value")
-    call CFG_add(ST_cfg, "ref_any_crhs", 1e99_dp, &
-         "Refine if the curvature in rhs is larger than this value")
-    call CFG_add(ST_cfg, "ref_all_adx", 0.5_dp, &
+
+    call CFG_add(ST_cfg, "ref_all_adx", 1e99_dp, &
          "Refine if all conditions hold: value for alpha*dx")
-    call CFG_add(ST_cfg, "ref_all_cphi", 15.0_dp, &
+    call CFG_add(ST_cfg, "ref_all_cphi", 1e99_dp, &
          "Refine if all conditions hold: value for curvature of phi")
-    call CFG_add(ST_cfg, "ref_all_celec", 1e99_dp, &
-         "Refine if all conditions hold: value for curvature of elec")
-    call CFG_add(ST_cfg, "ref_all_crhs", 1e99_dp, &
-         "Refine if all conditions hold: value for curvature of rhs")
-    call CFG_add(ST_cfg, "ref_rm_threshold", 0.1_dp, &
-         "Derefine if all values are at least this factor below refinement")
-    call CFG_add(ST_cfg, "ref_init_time", 1.0e-9_dp, &
+
+    call CFG_add(ST_cfg, "deref_all_adx", 0.1_dp, &
+         "Derefine if all conditions hold; value for alpha*dx")
+    call CFG_add(ST_cfg, "deref_all_cphi", 1e99_dp, &
+         "Derefine if all conditions hold: value for curvature of phi")
+
+    call CFG_add(ST_cfg, "ref_init_time", 10.0e-9_dp, &
          "Refine around initial conditions up to this time")
     call CFG_add(ST_cfg, "ref_init_fac", 0.25_dp, &
          "Refine until dx is smaller than this factor times the seed width")
@@ -458,13 +447,13 @@ contains
     call CFG_get(ST_cfg, "ref_max_dx", ST_ref_max_dx)
     call CFG_get(ST_cfg, "ref_any_adx", ST_ref_any_adx)
     call CFG_get(ST_cfg, "ref_any_cphi", ST_ref_any_cphi)
-    call CFG_get(ST_cfg, "ref_any_celec", ST_ref_any_celec)
-    call CFG_get(ST_cfg, "ref_any_crhs", ST_ref_any_crhs)
+
     call CFG_get(ST_cfg, "ref_all_adx", ST_ref_all_adx)
     call CFG_get(ST_cfg, "ref_all_cphi", ST_ref_all_cphi)
-    call CFG_get(ST_cfg, "ref_all_celec", ST_ref_all_celec)
-    call CFG_get(ST_cfg, "ref_all_crhs", ST_ref_all_crhs)
-    call CFG_get(ST_cfg, "ref_rm_threshold", ST_ref_rm_threshold)
+
+    call CFG_get(ST_cfg, "deref_all_adx", ST_deref_all_adx)
+    call CFG_get(ST_cfg, "deref_all_cphi", ST_deref_all_cphi)
+
     call CFG_get(ST_cfg, "ref_init_time", ST_ref_init_time)
     call CFG_get(ST_cfg, "ref_init_fac", ST_ref_init_fac)
 

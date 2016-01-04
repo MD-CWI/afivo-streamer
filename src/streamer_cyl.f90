@@ -192,8 +192,8 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
-    integer                  :: n, nc
-    real(dp)                 :: cphi, crhs, celec, dx2, dx, fac
+    integer                  :: n, nc, nb_id
+    real(dp)                 :: cphi, cfld, celec, dx2, dx
     real(dp)                 :: alpha, adx, max_fld, max_dns
     real(dp)                 :: boxlen, dist
 
@@ -201,26 +201,16 @@ contains
     dx        = boxes(id)%dr
     dx2       = boxes(id)%dr**2
     cphi      = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-    crhs      = max_curvature(boxes(id), i_rhs)
-    celec     = max_curvature(boxes(id), i_elec)
-    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
-    max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
+    max_fld   = maxval(boxes(id)%cc(:, :, i_fld))
+    max_dns   = maxval(boxes(id)%cc(:, :, i_elec))
     alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
-    fac       = ST_ref_rm_threshold
 
-    ! print *, celec * 1e-20
-
-    if (adx > ST_ref_any_adx .or. cphi > ST_ref_any_cphi &
-         .or. celec > ST_ref_any_celec .or. crhs > ST_ref_any_crhs) then
+    if (adx > ST_ref_any_adx .or. cphi > ST_ref_any_cphi) then
        ref_flags(id) = a5_do_ref
-    else if (adx > ST_ref_all_adx .and. cphi > ST_ref_all_cphi &
-         .and. celec > ST_ref_all_celec .and. crhs > ST_ref_all_crhs) then
+    else if (adx > ST_ref_all_adx .and. cphi > ST_ref_all_cphi) then
        ref_flags(id) = a5_do_ref
-    else if (adx < fac * max(ST_ref_all_adx, ST_ref_any_adx) .and. &
-         cphi < fac * max(ST_ref_all_cphi, ST_ref_any_cphi) .and. &
-         crhs < fac * max(ST_ref_all_crhs, ST_ref_any_crhs) .and. &
-         celec < fac * max(ST_ref_all_celec, ST_ref_any_celec)) then
+    else if (adx < ST_deref_all_adx .and. cphi < ST_deref_all_cphi) then
        ref_flags(id) = a5_rm_ref
     end if
 
@@ -344,9 +334,8 @@ contains
     diff_coeff   = LT_get_col(ST_td_tbl, i_diffusion, max_fld)
     alpha        = LT_get_col(ST_td_tbl, i_alpha, max_fld)
 
-    ! CFL condition. Note there should be a factor sqrt(0.5), but instead we
-    ! rely on the CFL number 0.5 at the bottom
-    dt_cfl = dr_min / (mobility * max_fld)
+    ! CFL condition
+    dt_cfl = sqrt(0.5_dp) * dr_min / (mobility * max_fld)
 
     ! Diffusion condition
     dt_dif = 0.25_dp * dr_min**2 / diff_coeff
@@ -358,7 +347,9 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, ST_dt_max)
+    get_max_dt = 0.9_dp * min(1/(1/dt_cfl + 1/dt_dif), &
+         dt_alpha, dt_drt, ST_dt_max)
+
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -466,7 +457,7 @@ contains
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: dt_vec(:)
-    real(dp)                    :: fac, inv_dr, tmp, gradp, gradc, gradn
+    real(dp)                    :: inv_dr, tmp, gradp, gradc, gradn
     real(dp)                    :: mobility, diff_coeff, v_drift
     real(dp)                    :: fld, fld_avg
     real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
@@ -475,7 +466,7 @@ contains
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
+    ! fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
     call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong1, &
          a2_gc2_neumann, gc_data, nc)
@@ -501,8 +492,8 @@ contains
              gradn = tmp - boxes(id)%cc(i, j, i_elec)
              boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-             if (boxes(id)%fx(i, j, f_elec) < fac * fld) &
-                  boxes(id)%fx(i, j, f_elec) = fac * fld
+             ! if (boxes(id)%fx(i, j, f_elec) < fac * fld) &
+             !      boxes(id)%fx(i, j, f_elec) = fac * fld
           else                  ! v_drift > 0
              if (i == 1) then
                 tmp = gc_data(j, a2_nb_lx)
@@ -512,8 +503,8 @@ contains
              gradp = boxes(id)%cc(i-1, j, i_elec) - tmp
              boxes(id)%fx(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i-1, j, i_elec) + koren_mlim(gradc, gradp))
-             if (boxes(id)%fx(i, j, f_elec) > fac * fld) &
-                  boxes(id)%fx(i, j, f_elec) = fac * fld
+             ! if (boxes(id)%fx(i, j, f_elec) > fac * fld) &
+             !      boxes(id)%fx(i, j, f_elec) = fac * fld
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -544,8 +535,8 @@ contains
              gradn = tmp - boxes(id)%cc(i, j, i_elec)
              boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-             if (boxes(id)%fy(i, j, f_elec) < fac * fld) &
-                  boxes(id)%fy(i, j, f_elec) = fac * fld
+             ! if (boxes(id)%fy(i, j, f_elec) < fac * fld) &
+             !      boxes(id)%fy(i, j, f_elec) = fac * fld
           else                  ! v_drift > 0
              if (j == 1) then
                 tmp = gc_data(i, a2_nb_ly)
@@ -555,8 +546,8 @@ contains
              gradp = boxes(id)%cc(i, j-1, i_elec) - tmp
              boxes(id)%fy(i, j, f_elec) = v_drift * &
                   (boxes(id)%cc(i, j-1, i_elec) + koren_mlim(gradc, gradp))
-             if (boxes(id)%fy(i, j, f_elec) > fac * fld) &
-                  boxes(id)%fy(i, j, f_elec) = fac * fld
+             ! if (boxes(id)%fy(i, j, f_elec) > fac * fld) &
+             !      boxes(id)%fy(i, j, f_elec) = fac * fld
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -747,13 +738,13 @@ contains
     props(ip)      = ST_get_fld(ST_time)
 
     ip             = ip + 1
-    prop_names(ip) = "Ez_max"
+    prop_names(ip) = "Ez"
     call a2_reduction_loc(tree, box_maxfld_z, reduce_max, &
          -1.0e99_dp, props(ip), loc_ez)
     Ez_max = props(ip)
 
     ip             = ip + 1
-    prop_names(ip) = "Er_max"
+    prop_names(ip) = "Er"
     call a2_reduction_loc(tree, box_maxfld_r, reduce_max, &
          -1.0e99_dp, props(ip), loc_er)
 
@@ -761,17 +752,17 @@ contains
     rz       = a2_r_loc(tree, loc_er)
 
     ip             = ip + 1
-    prop_names(ip) = "Er_max(r)"
+    prop_names(ip) = "r_Er"
     props(ip)      = rz(1)
     radius         = rz(1)
 
     ip             = ip + 1
-    prop_names(ip) = "Er_max(z)"
+    prop_names(ip) = "z_Er"
     props(ip)      = rz(2)
     z_head         = rz(2)
 
     ip             = ip + 1
-    prop_names(ip) = "Er_max(E)"
+    prop_names(ip) = "E_Er"
     props(ip)      = tree%boxes(loc_er%id)%cc(loc_er%ix(1), &
          loc_er%ix(2), i_fld)
     Er_max_norm    = props(ip)
@@ -779,19 +770,19 @@ contains
     alpha = LT_get_col(ST_td_tbl, i_alpha, Ez_max)
     mu = LT_get_col(ST_td_tbl, i_alpha, Ez_max)
     ip             = ip + 1
-    prop_names(ip) = "Ez_max(alpha)"
+    prop_names(ip) = "alpha_z"
     props(ip)      = alpha
     ip             = ip + 1
-    prop_names(ip) = "Ez_max(S)"
+    prop_names(ip) = "S_z"
     props(ip)      = alpha * mu * Ez_max
 
     alpha = LT_get_col(ST_td_tbl, i_alpha, Er_max_norm)
     mu = LT_get_col(ST_td_tbl, i_alpha, Er_max_norm)
     ip             = ip + 1
-    prop_names(ip) = "Er_max(alpha)"
+    prop_names(ip) = "alpha_r"
     props(ip)      = alpha
     ip             = ip + 1
-    prop_names(ip) = "Er_max(S)"
+    prop_names(ip) = "S_r"
     props(ip)      = alpha * mu * Er_max_norm
 
     if (ST_time > 1.0e-9_dp .and. rz(2) > 0.9_dp * ST_domain_len .or. &
@@ -803,7 +794,7 @@ contains
     id             = loc_dens%id
     ix             = loc_dens%ix
     ip             = ip + 1
-    prop_names(ip) = "n_e(head)"
+    prop_names(ip) = "n_e"
     props(ip)      = tree%boxes(id)%cc(ix(1), ix(2), i_elec)
 
     ! Set phi to potential difference
@@ -815,12 +806,12 @@ contains
     ! Height of streamer
     rz             = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
     ip             = ip + 1
-    prop_names(ip) = "Ez_max(z)"
+    prop_names(ip) = "z_Ez"
     props(ip)      = rz(2)
 
     ! Phi 1 mm ahead
     ip             = ip + 1
-    prop_names(ip) = "dphi(2mm)"
+    prop_names(ip) = "dphi_2mm"
     loc = a2_get_loc(tree, [0.0_dp, rz(2) + 2.0e-3_dp])
     if (loc%id > a5_no_box) then
        props(ip) = phi_head - &
@@ -830,7 +821,7 @@ contains
     end if
 
     ip             = ip + 1
-    prop_names(ip) = "dphi(4mm)"
+    prop_names(ip) = "dphi_4mm"
     loc = a2_get_loc(tree, [0.0_dp, rz(2) + 4.0e-3_dp])
     if (loc%id > a5_no_box) then
        props(ip) = phi_head - &
@@ -843,12 +834,12 @@ contains
        tmp_fld_val = i * 1e6_dp
 
        ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "r_max(", i, "e6)"
+       write(prop_names(ip), "(A,I0,A)") "dr_", i, "e6"
        call a2_reduction_loc(tree, box_fld_maxr, reduce_max, &
             0.0_dp, props(ip), loc)
 
        ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "dphi_r(", i, "e6)"
+       write(prop_names(ip), "(A,I0,A)") "dphi_r_", i, "e6"
        if (loc%id > a5_no_box) then
           props(ip) = phi_head - &
                tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
@@ -857,13 +848,13 @@ contains
        end if
 
        ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "z_max(", i, "e6)"
+       write(prop_names(ip), "(A,I0,A)") "dz_", i, "e6"
        call a2_reduction_loc(tree, box_fld_maxz, reduce_max, &
             0.0_dp, props(ip), loc)
        props(ip) = props(ip) - z_head
 
        ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "dphi_z(", i, "e6)"
+       write(prop_names(ip), "(A,I0,A)") "dphi_z_", i, "e6"
        if (loc%id > a5_no_box) then
           props(ip) = phi_head - &
                tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
