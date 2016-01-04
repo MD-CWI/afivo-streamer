@@ -1,14 +1,18 @@
-Important information about the code
+Information about the code
 ==
 
-This folder contains the source of Afivo, split over several modules. The
-m_aX_... files contain code for both the 2D and 3D version. The m_a2_... and
-m_a3_... files are generated automatically, in the following way:
+This folder (src) contains the source of Afivo, split over several modules. The
+code can be recompiled by typing
 
-1. Replace $D by 2 or 3 (dimension of code)
-2. Preprocess file with cpp
-3. cat -s (merge multiple blank lines)
+    $ make
 
-The m_a2_... and m_a3_... files are automaticcaly generated from the m_aX_...
-files. This means that you should **never** edit the m_a2_... or m_a3_... files,
-but only the m_aX_... files!
+The Silo library has to be available, which means that you need to type 'make'
+at least once in the Afivo root folder (one directory up):
+
+    $ cd ..
+    $ make
+
+The m_aX_[...].f90 files contain code for both the 2D and 3D version. The
+corresponding m_a2_[...].f90 and m_a3_[...].f90 files are generated
+automatically, so you should **not** edit those! Instead, modify the
+m_aX_[...].f90 files!

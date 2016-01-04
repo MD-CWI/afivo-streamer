@@ -1,3 +1,9 @@
+! This module contains the core routines of Afivo
+!
+! Author: Jannis Teunissen
+! License: GPLv3
+
+! TODO: Generalize consistent fluxes to cylindrical geometry (z-component)
 
 module m_a$D_core
   use m_a$D_t
@@ -392,7 +398,8 @@ contains
 #if $D == 3
     deallocate(box%fz)
 #endif
-    if (associated(box%ud)) deallocate(box%ud)
+    if (allocated(box%rdata)) deallocate(box%rdata)
+    if (allocated(box%idata)) deallocate(box%idata)
   end subroutine clear_box
 
   ! Set the neighbors of id (using their parent)
