@@ -353,16 +353,16 @@ contains
   !> Get the normalized weights of the 'inner' and 'outer' children of a cell
   !> with index ix. Note that the cell centers of the children are located at
   !> -/+ 0.25 dr compared to the parent.
-  subroutine a2_cyl_get_weights(box, i, inner, outer)
+  subroutine a2_cyl_child_weights(box, i, inner, outer)
     type(box2_t), intent(in) :: box
     integer, intent(in)      :: i
     real(dp), intent(out)    :: inner, outer
     real(dp)                 :: tmp
 
-    tmp = 0.25_dp * box_p%dr / a2_cyl_radius_cc(box, i)
+    tmp = 0.25_dp * box%dr / a2_cyl_radius_cc(box, i)
     inner = 1 - tmp
     outer = 1 + tmp
-  end subroutine a2_cyl_get_weights
+  end subroutine a2_cyl_child_weights
 #endif
 
 end module m_a$D_t

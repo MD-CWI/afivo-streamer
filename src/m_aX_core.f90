@@ -891,7 +891,7 @@ contains
              ioff = nch*a2_ch_dix(:, i_ch)
 
              do n = 1, nch
-                call a2_cyl_get_weights(boxes(nb_id), i, w1, w2)
+                call a2_cyl_child_weights(boxes(nb_id), i, w1, w2)
                 boxes(nb_id)%fy(ioff(1)+n, i_nb, f_ixs) = 0.5_dp * (&
                      w1 * boxes(c_id)%fy(2*n-1, i, f_ixs) + &
                      w2 * boxes(c_id)%fy(2*nc, i, f_ixs))
