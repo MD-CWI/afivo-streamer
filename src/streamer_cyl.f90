@@ -201,15 +201,25 @@ contains
     dx        = boxes(id)%dr
     dx2       = boxes(id)%dr**2
     cphi      = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-    max_fld   = maxval(boxes(id)%cc(:, :, i_fld))
+    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
     alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
-    if (adx > ST_ref_any_adx .or. cphi > ST_ref_any_cphi) then
+    ! If one of the neighbors is already refined, the current box will get
+    ! refined sooner. This expands the refined region outwards.
+    nbs = boxes(id)%neighbors
+    do nb = 1, a2_num_neighbors
+       if (nbs(nb) > a5_no_box) then
+          if (a2_has_children(boxes(nbs(nb)))) then
+             adx = adx * ST_ref_nb_fac
+             cphi = cphi * ST_ref_nb_fac
+          end if
+       end if
+    end do
+
+    if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
        ref_flags(id) = a5_do_ref
-    else if (adx > ST_ref_all_adx .and. cphi > ST_ref_all_cphi) then
-       ref_flags(id) = a5_do_ref
-    else if (adx < ST_deref_all_adx .and. cphi < ST_deref_all_cphi) then
+    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
        ref_flags(id) = a5_rm_ref
     end if
 

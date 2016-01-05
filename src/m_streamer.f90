@@ -104,6 +104,9 @@ module m_streamer
   ! The number of steps after which the mesh is updated
   integer, protected :: ST_ref_per_steps
 
+  ! If a neighbor is already refined, reduce the criteria by this factor
+  real(dp), protected :: ST_ref_nb_fac
+
   ! The grid spacing will always be larger than this value
   real(dp), protected :: ST_ref_min_dx
 
@@ -220,6 +223,9 @@ contains
          "The grid spacing will always be larger than this value")
     call CFG_add(ST_cfg, "ref_max_dx", 1.0e-3_dp, &
          "The grid spacing will always be smaller than this value")
+    call CFG_add(ST_cfg, "ref_nb_fac", 2.0_dp, &
+         "If a neighbor is already refined, reduce the refinement &
+         &criteria by this factor")
 
     call CFG_add(ST_cfg, "ref_adx", 1.0_dp, &
          "Refine if alpha*dx is larger than this value")
@@ -434,9 +440,9 @@ contains
     call CFG_get(ST_cfg, "ref_per_steps", ST_ref_per_steps)
     call CFG_get(ST_cfg, "ref_min_dx", ST_ref_min_dx)
     call CFG_get(ST_cfg, "ref_max_dx", ST_ref_max_dx)
+    call CFG_get(ST_cfg, "ref_nb_fac", ST_ref_nb_fac)
     call CFG_get(ST_cfg, "ref_adx", ST_ref_adx)
     call CFG_get(ST_cfg, "ref_cphi", ST_ref_cphi)
-
     call CFG_get(ST_cfg, "deref_adx", ST_deref_adx)
     call CFG_get(ST_cfg, "deref_cphi", ST_deref_cphi)
 
