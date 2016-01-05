@@ -284,7 +284,7 @@ contains
           do j = 1, nc
              do i = 1, nc
                 if (tree%boxes(id)%coord_t == a5_cyl) then
-                   tmp = a2_cyl_radius_cc(tree%boxes(id), [i, j])
+                   tmp = a2_cyl_radius_cc(tree%boxes(id), i)
                    tmp = fac * 2 * pi * tmp * &
                         tree%boxes(id)%cc(i, j, i_src) * dr**2
                 else
