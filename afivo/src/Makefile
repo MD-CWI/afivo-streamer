@@ -33,17 +33,17 @@ m_a3_%.f90: m_aX_%.f90
 # Dependency information
 m_a2_core.o:		m_morton.o m_a2_t.o
 m_a2_io.o:			m_vtk.o m_write_silo.o m_a2_t.o
-m_a2_gc.o:			m_a2_t.o m_a2_utils.o m_a2_prolong.o
-m_a2_restrict.o:	m_a2_t.o m_a2_utils.o
-m_a2_prolong.o:		m_a2_t.o m_a2_utils.o
+m_a2_gc.o:			m_a2_t.o m_a2_prolong.o
+m_a2_restrict.o:	m_a2_t.o
+m_a2_prolong.o:		m_a2_t.o
 m_a2_utils.o:		m_a2_t.o
 m_a2_mg:			m_a2_t.o m_a2_utils.o
 
 m_a3_core.o:		m_morton.o m_a3_t.o
 m_a3_io.o:			m_vtk.o m_write_silo.o m_a3_t.o
-m_a3_gc.o:			m_a3_t.o m_a3_utils.o m_a3_prolong.o
-m_a3_restrict.o:	m_a3_t.o m_a3_utils.o
-m_a3_prolong.o:		m_a3_t.o m_a3_utils.o
+m_a3_gc.o:			m_a3_t.o m_a3_prolong.o
+m_a3_restrict.o:	m_a3_t.o
+m_a3_prolong.o:		m_a3_t.o
 m_a3_utils.o:		m_a3_t.o
 m_a3_mg:			m_a3_t.o m_a3_utils.o
 
