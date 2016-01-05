@@ -20,7 +20,6 @@ contains
   subroutine a$D_write_vtk(tree, filename, cc_names, n_cycle, time, ixs_cc, &
        fc_names, ixs_fc, dir)
     use m_vtk
-    use m_a$D_core, only: a$D_has_children
 
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*), intent(in)  :: filename    !< Filename for the vtk file
@@ -211,7 +210,6 @@ contains
   subroutine a$D_write_silo(tree, filename, cc_names, n_cycle, time, ixs_cc, &
        fc_names, ixs_fc, dir)
     use m_write_silo
-    use m_a$D_core, only: a$D_has_children
 
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*)              :: filename    !< Filename for the vtk file

@@ -1,4 +1,5 @@
-! This module contains the basic types and constants that are used in Afivo.
+! This module contains the basic types and constants that are used in Afivo,
+! together with some corresponding simple routines.
 !
 ! Author: Jannis Teunissen
 ! License: GPLv3
@@ -267,5 +268,101 @@ module m_a$D_t
 #endif
      end subroutine a$D_subr_egc
   end interface
+
+contains
+
+  !> Return .true. if a box has children
+  elemental logical function a$D_has_children(box)
+    type(box$D_t), intent(in) :: box
+    a$D_has_children = (box%children(1) /= a5_no_box)
+  end function a$D_has_children
+
+  !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
+  !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 and one at
+  !> n_cell/2, n_cell/2)
+  function a$D_get_child_offset(box, nb) result(ix_offset)
+    type(box$D_t), intent(in)           :: box   !< A child box
+    integer, intent(in), optional      :: nb     !< Optional: get index on parent neighbor
+    integer                            :: ix_offset($D)
+    if (box%lvl > 1) then
+       ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
+       if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
+    else                        ! In the subtree, parents are half the size
+       ix_offset = 0
+       if (present(nb)) ix_offset = ix_offset - &
+            a$D_nb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
+    endif
+  end function a$D_get_child_offset
+
+  !> Get the cell index in which r lies. This routine does not check whether r
+  !> is actually located inside the box.
+  pure function a$D_cc_ix(box, r) result(cc_ix)
+    type(box$D_t), intent(in) :: box
+    real(dp), intent(in)     :: r($D)
+    integer                  :: cc_ix($D)
+    cc_ix = ceiling((r - box%r_min) / box%dr)
+  end function a$D_cc_ix
+
+  !> Get the location of the cell center with index cc_ix
+  pure function a$D_r_cc(box, cc_ix) result(r)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)      :: cc_ix($D)
+    real(dp)                 :: r($D)
+    r = box%r_min + (cc_ix-0.5_dp) * box%dr
+  end function a$D_r_cc
+
+  !> Get a general location with index cc_ix (like a$D_r_cc but using reals)
+  pure function a$D_rr_cc(box, cc_ix) result(r)
+    type(box$D_t), intent(in) :: box
+    real(dp), intent(in)     :: cc_ix($D)
+    real(dp)                 :: r($D)
+    r = box%r_min + (cc_ix-0.5_dp) * box%dr
+  end function a$D_rr_cc
+
+  !> Return the coordinate of the center of a box
+  pure function a$D_r_center(box) result(r_center)
+    type(box$D_t), intent(in) :: box
+    real(dp)                 :: r_center($D)
+    r_center = box%r_min + 0.5_dp * box%n_cell * box%dr
+  end function a$D_r_center
+
+  !> Return finest dr that is used in the tree
+  pure function a$D_min_dr(tree) result(dr)
+    type(a$D_t), intent(in) :: tree
+    real(dp)               :: dr !< Output: dr at the finest lvl of the tree
+    dr = a$D_lvl_dr(tree, tree%max_lvl)
+  end function a$D_min_dr
+
+  !> Return dr at lvl
+  pure function a$D_lvl_dr(tree, lvl) result(dr)
+    type(a$D_t), intent(in) :: tree
+    integer, intent(in)    :: lvl
+    real(dp)               :: dr !< Output: dr at the finest lvl of the tree
+    dr = tree%dr_base * 0.5_dp**(lvl-1)
+  end function a$D_lvl_dr
+
+#if $D == 2
+  !> Get the radius of the cell center with first index i
+  pure function a$D_cyl_radius_cc(box, i) result(r)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)      :: i
+    real(dp)                 :: r
+    r = box%r_min(1) + (i-0.5_dp) * box%dr
+  end function a$D_cyl_radius_cc
+
+  !> Get the normalized weights of the 'inner' and 'outer' children of a cell
+  !> with index ix. Note that the cell centers of the children are located at
+  !> -/+ 0.25 dr compared to the parent.
+  subroutine a2_cyl_get_weights(box, i, inner, outer)
+    type(box2_t), intent(in) :: box
+    integer, intent(in)      :: i
+    real(dp), intent(out)    :: inner, outer
+    real(dp)                 :: tmp
+
+    tmp = 0.25_dp * box_p%dr / a2_cyl_radius_cc(box, i)
+    inner = 1 - tmp
+    outer = 1 + tmp
+  end subroutine a2_cyl_get_weights
+#endif
 
 end module m_a$D_t

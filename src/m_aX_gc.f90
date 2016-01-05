@@ -88,7 +88,6 @@ contains
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries
   subroutine a$D_gc_interp(boxes, id, nb, iv)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -188,7 +187,6 @@ contains
   !> near refinement boundaries. The ghost values are less than twice the coarse
   !> values.
   subroutine a$D_gc_interp_lim(boxes, id, nb, iv)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -483,7 +481,6 @@ contains
 
   !> Linear interpolation (using data from neighbor) to fill ghost cells
   subroutine a$D_gc2_prolong1(boxes, id, nb, iv, gc_side, nc)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction

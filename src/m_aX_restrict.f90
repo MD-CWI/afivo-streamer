@@ -65,11 +65,6 @@ contains
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine a$D_restrict_box(box_c, box_p, iv, i_to)
-#if $D == 2
-    use m_a$D_utils, only: a$D_get_child_offset, a$D_cyl_radius_cc
-#elif $D == 3
-    use m_a$D_utils, only: a$D_get_child_offset
-#endif
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
@@ -77,7 +72,7 @@ contains
     integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
     integer                       :: hnc, ix_offset($D)
 #if $D == 2
-    real(dp)                      :: r, dr16, rfac
+    real(dp)                      :: w1, w2
 #elif $D == 3
     integer                       :: k, k_f, k_c
 #endif
@@ -93,8 +88,6 @@ contains
 
 #if $D == 2
     if (box_p%coord_t == a5_cyl) then
-       dr16 = 0.0625_dp * box_p%dr   ! (dr / 4) / 4
-
        do j = 1, hnc
           j_c = ix_offset(2) + j
           j_f = 2 * j - 1
@@ -102,13 +95,10 @@ contains
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
 
-             ! The weight of cells is proportional to their radius.
-             r = a2_cyl_radius_cc(box_p, [i, j])
-             rfac = dr16 / r
-
-             box_p%cc(i_c, j_c, i_dest) = &
-                  (0.25_dp - rfac) * sum(box_c%cc(i_f, j_f:j_f+1, iv)) + &
-                  (0.25_dp + rfac) * sum(box_c%cc(i_f+1, j_f:j_f+1, iv))
+             call a2_cyl_get_weights(box_p, i, w1, w2)
+             box_p%cc(i_c, j_c, i_dest) = 0.25_dp * (&
+                  w1 * sum(box_c%cc(i_f, j_f:j_f+1, iv)) + &
+                  w2 * sum(box_c%cc(i_f+1, j_f:j_f+1, iv)))
           end do
        end do
     else
