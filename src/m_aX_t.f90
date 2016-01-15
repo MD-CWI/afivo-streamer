@@ -10,6 +10,9 @@ module m_a$D_t
 
   integer, parameter :: dp = kind(0.0d0)
 
+  ! The prefix a5_ means that this constant is the same in the 2D and 3D
+  ! version of Afivo, and is inspired by "A-five-o"
+
   !> Value indicating you want to derefine a box
   integer, parameter :: a5_rm_ref = -1
 
@@ -37,6 +40,12 @@ module m_a$D_t
 
   !> Cylindrical coordinate system
   integer, parameter :: a5_cyl = 1
+
+  !> Value to indicate a Dirichlet boundary condition
+  integer, parameter :: a5_bc_dirichlet = 0
+
+  !> Value to indicate a Neumann boundary condition
+  integer, parameter :: a5_bc_neumann = 1
 
 #if $D == 2
   ! Numbering of children (same location as **corners**)
@@ -241,15 +250,24 @@ module m_a$D_t
        real(dp), intent(in)        :: rarg(:)
      end subroutine a$D_subr_boxes_arg
 
-     !> Subroutine for filling ghost cells on the sides of boxes, near
-     !> refinement or physical boundaries.
+     !> To fill ghost cells near refinement boundaries.
      subroutine a$D_subr_gc(boxes, id, nb, iv)
        import
        type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
        integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
-       integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled,
+       integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled
        integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
      end subroutine a$D_subr_gc
+
+     !> To fill ghost cells near physical boundaries
+     subroutine a$D_subr_bc(box, nb, iv, bc_values, bc_type)
+       import
+       type(box$D_t), intent(in) :: box !< Box that needs b.c.
+       integer, intent(in)      :: nb  !< Neighbor direction in which ghost cells need to be filled
+       integer, intent(in)      :: iv  !< Variable for which ghost cells are filled
+       real(dp), intent(out)    :: bc_values(box%n_cell)
+       real(dp), intent(out)    :: bc_type
+     end subroutine a$D_subr_bc
 
      !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries
      subroutine a$D_subr_egc(boxes, id, nb, iv, gc_data, nc)
