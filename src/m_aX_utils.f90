@@ -7,7 +7,6 @@
 
 module m_a$D_utils
   use m_a$D_t
-  use m_a$D_core
 
   implicit none
   private
@@ -36,20 +35,10 @@ module m_a$D_utils
   public :: a$D_tree_copy_fc
 
   ! Public functions
-  public :: a$D_lvl_dr
-  public :: a$D_min_dr
-  public :: a$D_r_inside
-  public :: a$D_r_center
   public :: a$D_get_child_offset
   public :: a$D_get_loc
-  public :: a$D_cc_ix
-  public :: a$D_r_cc
   public :: a$D_r_loc
-#if $D == 2
-  public :: a$D_cyl_radius_cc
-#endif
-  public :: a$D_rr_cc
-  public :: a$D_r_node
+  public :: a$D_r_inside
   public :: a$D_n_cell
 
 contains
@@ -184,21 +173,6 @@ contains
     !$omp end parallel
   end subroutine a$D_loop_boxes_arg
 
-  !> Return dr at lvl
-  pure function a$D_lvl_dr(tree, lvl) result(dr)
-    type(a$D_t), intent(in) :: tree
-    integer, intent(in)    :: lvl
-    real(dp)               :: dr !< Output: dr at the finest lvl of the tree
-    dr = tree%dr_base * 0.5_dp**(lvl-1)
-  end function a$D_lvl_dr
-
-  !> Return finest dr that is used in the tree
-  pure function a$D_min_dr(tree) result(dr)
-    type(a$D_t), intent(in) :: tree
-    real(dp)               :: dr !< Output: dr at the finest lvl of the tree
-    dr = a$D_lvl_dr(tree, tree%max_lvl)
-  end function a$D_min_dr
-
   !> Returns whether r is inside or within a distance d from box
   pure function a$D_r_inside(box, r, d) result(inside)
     type(box$D_t), intent(in)       :: box
@@ -214,29 +188,6 @@ contains
        inside = all(r >= box%r_min) .and. all(r <= r_max)
     end if
   end function a$D_r_inside
-
-  !> Return the coordinate of the center of a box
-  pure function a$D_r_center(box) result(r_center)
-    type(box$D_t), intent(in) :: box
-    real(dp)                 :: r_center($D)
-    r_center = box%r_min + 0.5_dp * box%n_cell * box%dr
-  end function a$D_r_center
-
-  !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
-  !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 etc.)
-  function a$D_get_child_offset(box, nb) result(ix_offset)
-    type(box$D_t), intent(in)           :: box   !< A child box
-    integer, intent(in), optional      :: nb     !< Optional: get index on parent neighbor
-    integer                            :: ix_offset($D)
-    if (box%lvl > 1) then
-       ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
-       if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
-    else                        ! In the subtree, parents are half the size
-       ix_offset = 0
-       if (present(nb)) ix_offset = ix_offset - &
-            a$D_nb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
-    endif
-  end function a$D_get_child_offset
 
   !> Get the location of the finest cell containing rr. If max_lvl is present,
   !> do not go to a finer level than max_lvl. If there is no box containing rr,
@@ -297,22 +248,6 @@ contains
 #endif
   end function child_that_contains
 
-  !> Get the index of the cell that includes point r
-  pure function a$D_cc_ix(box, r) result(cc_ix)
-    type(box$D_t), intent(in) :: box
-    real(dp), intent(in)     :: r($D)
-    integer                  :: cc_ix($D)
-    cc_ix = ceiling((r - box%r_min) / box%dr)
-  end function a$D_cc_ix
-
-  !> Get the location of the cell center with index cc_ix
-  pure function a$D_r_cc(box, cc_ix) result(r)
-    type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: cc_ix($D)
-    real(dp)                 :: r($D)
-    r = box%r_min + (cc_ix-0.5_dp) * box%dr
-  end function a$D_r_cc
-
   !> Get the location of "loc"
   pure function a$D_r_loc(tree, loc) result(r)
     type(a$D_t), intent(in)     :: tree
@@ -321,32 +256,6 @@ contains
     r = tree%boxes(loc%id)%r_min + &
          (loc%ix-0.5_dp) * tree%boxes(loc%id)%dr
   end function a$D_r_loc
-
-#if $D == 2
-  !> Get the radius of the cell center with index cc_ix
-  pure function a$D_cyl_radius_cc(box, cc_ix) result(r)
-    type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: cc_ix($D)
-    real(dp)                 :: r
-    r = box%r_min(1) + (cc_ix(1)-0.5_dp) * box%dr
-  end function a$D_cyl_radius_cc
-#endif
-
-  !> Get a general location with real index cc_ix (like a$D_r_cc).
-  pure function a$D_rr_cc(box, cc_ix) result(r)
-    type(box$D_t), intent(in) :: box
-    real(dp), intent(in)     :: cc_ix($D)
-    real(dp)                 :: r($D)
-    r = box%r_min + (cc_ix-0.5_dp) * box%dr
-  end function a$D_rr_cc
-
-  !> Get the location of a node (cell-corner) with index nd_ix
-  pure function a$D_r_node(box, nd_ix) result(r)
-    type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: nd_ix($D)
-    real(dp)                 :: r($D)
-    r = box%r_min + (nd_ix-1) * box%dr
-  end function a$D_r_node
 
   !> Set cc(..., iv) = 0
   subroutine a$D_box_clear_cc(box, iv)
@@ -671,7 +580,7 @@ contains
 
       do j = 1, nc
          do i = 1, nc
-            res = res + box%cc(i, j, iv) * a2_cyl_radius_cc(box, [i, j])
+            res = res + box%cc(i, j, iv) * a2_cyl_radius_cc(box, i)
          end do
       end do
       res = res * twopi
@@ -718,7 +627,7 @@ contains
     end do
   end subroutine a$D_tree_copy_fc
 
-    !> Return n_cell at lvl. For all lvls >= 1, n_cell has the same value, but
+  !> Return n_cell at lvl. For all lvls >= 1, n_cell has the same value, but
   !> for lvls <= 0, n_cell changes.
   !> TODO: remove this in future
   pure function a$D_n_cell(tree, lvl) result(n_cell)

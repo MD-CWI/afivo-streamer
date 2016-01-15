@@ -712,7 +712,6 @@ contains
   end subroutine mg$D_set_box_tag
 
   subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
@@ -849,7 +848,6 @@ contains
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg$D_box_rstr_lpl(box_c, box_p, iv, mg)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
@@ -1001,7 +999,6 @@ contains
   end subroutine mg$D_box_lpld
 
   subroutine mg$D_box_corr_lpld(box_p, box_c, mg)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout)  :: box_c
     type(box$D_t), intent(in)     :: box_p
     type(mg$D_t), intent(in)      :: mg
@@ -1104,7 +1101,6 @@ contains
   end subroutine lsf_dist_val
 
   subroutine mg$D_box_corr_lpllsf(box_p, box_c, mg)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
@@ -1341,7 +1337,6 @@ contains
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg$D_box_rstr_lpllsf(box_c, box_p, iv, mg)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict

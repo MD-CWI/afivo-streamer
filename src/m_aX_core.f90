@@ -1,3 +1,7 @@
+! This module contains the core routines of Afivo
+!
+! Author: Jannis Teunissen
+! License: GPLv3
 
 module m_a$D_core
   use m_a$D_t
@@ -14,8 +18,6 @@ module m_a$D_core
   public :: a$D_resize_box_storage
   public :: a$D_adjust_refinement
   public :: a$D_consistent_fluxes
-  public :: a$D_ix_to_cix
-  public :: a$D_has_children
 
 contains
 
@@ -392,7 +394,8 @@ contains
 #if $D == 3
     deallocate(box%fz)
 #endif
-    if (associated(box%ud)) deallocate(box%ud)
+    if (allocated(box%rdata)) deallocate(box%rdata)
+    if (allocated(box%idata)) deallocate(box%idata)
   end subroutine clear_box
 
   ! Set the neighbors of id (using their parent)
@@ -412,17 +415,6 @@ contains
     end do
   end subroutine set_nbs_$Dd
 
-  !> Compute the child index for a box with spatial index ix.
-  integer function a$D_ix_to_cix(ix)
-    integer, intent(in) :: ix($D) !< Spatial index of the box
-    ! The index can range from 1 (all ix odd) and 2**$D (all ix even)
-#if $D == 2
-    a$D_ix_to_cix = 4 - 2 * iand(ix(2), 1) - iand(ix(1), 1)
-#elif $D == 3
-    a3_ix_to_cix = 8 - 4 * iand(ix(3), 1) - 2 * iand(ix(2), 1) - iand(ix(1), 1)
-#endif
-  end function a$D_ix_to_cix
-
   !> Get the id of neighbor nb of boxes(id), through its parent
   function find_nb_$Dd(boxes, id, nb) result(nb_id)
     type(box$D_t), intent(in) :: boxes(:) !< List with all the boxes
@@ -432,7 +424,7 @@ contains
 
     p_id    = boxes(id)%parent
     old_pid = p_id
-    c_ix    = a$D_ix_to_cix(boxes(id)%ix)
+    c_ix    = ix_to_cix(boxes(id)%ix)
     d       = a$D_nb_dim(nb)
 
     ! Check if neighbor is in same direction as ix is (low/high). If so,
@@ -443,6 +435,18 @@ contains
     ! The child ix of the neighbor is reversed in direction d
     nb_id = boxes(p_id)%children(a$D_ch_rev(c_ix, d))
   end function find_nb_$Dd
+
+  !> Compute the 'child index' for a box with spatial index ix. With 'child
+  !> index' we mean the index in the children(:) array of its parent.
+  integer function ix_to_cix(ix)
+    integer, intent(in) :: ix($D) !< Spatial index of the box
+    ! The index can range from 1 (all ix odd) and 2**$D (all ix even)
+#if $D == 2
+    ix_to_cix = 4 - 2 * iand(ix(2), 1) - iand(ix(1), 1)
+#elif $D == 3
+    ix_to_cix = 8 - 4 * iand(ix(3), 1) - 2 * iand(ix(2), 1) - iand(ix(1), 1)
+#endif
+  end function ix_to_cix
 
   !> Resize box storage to new_size
   subroutine a$D_resize_box_storage(tree, new_size)
@@ -808,12 +812,6 @@ contains
     end do
   end subroutine set_child_ids
 
-  !> Test if a box has children
-  elemental logical function a$D_has_children(box)
-    type(box$D_t), intent(in) :: box
-    a$D_has_children = (box%children(1) /= a5_no_box)
-  end function a$D_has_children
-
   !> Restrict fluxes from children to parents on refinement boundaries.
   subroutine a$D_consistent_fluxes(tree, f_ixs)
     type(a$D_t), intent(inout)     :: tree         !< Tree to operate on
@@ -849,8 +847,13 @@ contains
     integer, intent(in)         :: id        !< Id of box for which we set fluxes
     integer, intent(in)         :: nb        !< Direction in which fluxes are set
     integer, intent(in)         :: f_ixs(:)  !< Indices of the fluxes
-    integer                     :: nc, nch, c_id, i_ch, i, ic, d, ioff($D)
-    integer                     :: n_chnb, nb_id, i_nb
+    integer                     :: nc, nch, c_id, i_ch, i, ic, d
+    integer                     :: n_chnb, nb_id, i_nb, ioff($D)
+#if $D == 2
+    integer                     :: n
+    real(dp)                    :: w1, w2
+#endif
+
 
     nc     = boxes(id)%n_cell
     nch    = ishft(nc, -1) ! nc/2
@@ -880,14 +883,31 @@ contains
                boxes(c_id)%fx(i, 2:nc:2, f_ixs))
        end do
     case (2)
-       do ic = 1, n_chnb
-          i_ch = a2_ch_adj_nb(ic, nb)
-          c_id = boxes(id)%children(i_ch)
-          ioff = nch*a2_ch_dix(:, i_ch)
-          boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) = 0.5_dp * ( &
-               boxes(c_id)%fy(1:nc:2, i, f_ixs) + &
-               boxes(c_id)%fy(2:nc:2, i, f_ixs))
-       end do
+       if (boxes(nb_id)%coord_t == a5_cyl) then
+          ! In cylindrical symmetry, we take the weighted average
+          do ic = 1, n_chnb
+             i_ch = a2_ch_adj_nb(ic, nb)
+             c_id = boxes(id)%children(i_ch)
+             ioff = nch*a2_ch_dix(:, i_ch)
+
+             do n = 1, nch
+                call a2_cyl_child_weights(boxes(nb_id), ioff(1)+n, w1, w2)
+                boxes(nb_id)%fy(ioff(1)+n, i_nb, f_ixs) = 0.5_dp * (&
+                     w1 * boxes(c_id)%fy(2*n-1, i, f_ixs) + &
+                     w2 * boxes(c_id)%fy(2*n, i, f_ixs))
+             end do
+          end do
+       else
+          ! Just take the average of the fine fluxes
+          do ic = 1, n_chnb
+             i_ch = a2_ch_adj_nb(ic, nb)
+             c_id = boxes(id)%children(i_ch)
+             ioff = nch*a2_ch_dix(:, i_ch)
+             boxes(nb_id)%fy(ioff(1)+1:ioff(1)+nch, i_nb, f_ixs) = 0.5_dp * ( &
+                  boxes(c_id)%fy(1:nc:2, i, f_ixs) + &
+                  boxes(c_id)%fy(2:nc:2, i, f_ixs))
+          end do
+       end if
 #elif $D == 3
     case (1)
        do ic = 1, n_chnb

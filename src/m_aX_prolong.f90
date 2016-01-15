@@ -35,7 +35,6 @@ contains
 
   !> Partial prolongation to a child (from parent) using injection (simply copy value)
   subroutine a$D_prolong0_to(boxes, id, iv, lo_a, hi_a)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
@@ -97,7 +96,6 @@ contains
   !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
   !> corner ghost cells.
   subroutine a$D_prolong1_to(boxes, id, iv, add)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
@@ -209,7 +207,6 @@ contains
   !> 5 / 7 point stencils which do not need corner ghost cells.
   !> @TODO 3D version
   subroutine a$D_prolong2_to(boxes, id, iv)
-    use m_a$D_utils, only: a$D_get_child_offset
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)          :: id       !< Id of child
     integer, intent(in)          :: iv       !< Variable to fill
