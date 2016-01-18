@@ -113,26 +113,27 @@ contains
     end do
   end subroutine set_init_cond
 
-  subroutine sides_bc(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+  subroutine sides_bc(box, nb, iv, bc_type)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
     integer                     :: nc
 
-    nc = boxes(id)%n_cell
+    nc = box%n_cell
 
     select case (nb)
     case (a2_nb_lx)
-       ! Neumann zero
-       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
+       bc_type = a5_bc_neumann
+       box%cc(0, 1:nc, iv) = 0
     case (a2_nb_hx)
-       ! Neumann zero
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
+       bc_type = a5_bc_neumann
+       box%cc(nc+1, 1:nc, iv) = 0
     case (a2_nb_ly)
-       ! Dirichlet zero
-       boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
+       bc_type = a5_bc_dirichlet
+       box%cc(1:nc, 0, iv) = 0
     case (a2_nb_hy)
-       ! Dirichlet one
-       boxes(id)%cc(1:nc, nc+1, iv) = 2 - boxes(id)%cc(1:nc, nc, iv)
+       bc_type = a5_bc_dirichlet
+       box%cc(1:nc, nc+1, iv) = 1
     end select
   end subroutine sides_bc
 

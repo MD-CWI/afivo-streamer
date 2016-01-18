@@ -401,11 +401,11 @@ contains
     end do
   end subroutine prolong_to_new_children
 
-  subroutine have_no_bc(boxes, id, i, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i, iv
+  subroutine have_no_bc(box, i, iv, bc_type)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: i, iv
+    integer, intent(out)        :: bc_type
     stop "We have no boundary conditions in this example"
-    boxes(id)%cc(1, i, iv) = 0    ! Prevent warning unused
   end subroutine have_no_bc
 
   subroutine have_no_bc2(boxes, id, nb, iv, gc_data, nc)
@@ -413,8 +413,6 @@ contains
     integer, intent(in)         :: id, nb, iv, nc
     real(dp), intent(out)       :: gc_data(nc)
     stop "We have no boundary conditions in this example"
-    boxes(id)%cc(1, nb, iv) = 0    ! Prevent warning unused
-    gc_data = nb                  ! idem
   end subroutine have_no_bc2
 
 end program test_drift_diff

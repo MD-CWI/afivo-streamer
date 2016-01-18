@@ -33,10 +33,10 @@ module m_a$D_mg
      logical :: initialized  = .false.
 
      !> Routine to call for filling ghost cells near physical boundaries
-     procedure(a$D_subr_gc), pointer, nopass   :: sides_bc => null()
+     procedure(a$D_subr_bc), pointer, nopass   :: sides_bc => null()
 
      !> Routine to call for filling ghost cells near refinement boundaries
-     procedure(a$D_subr_gc), pointer, nopass   :: sides_rb => null()
+     procedure(a$D_subr_rb), pointer, nopass   :: sides_rb => null()
 
      !> Subroutine that performs the (non)linear operator
      procedure(mg$D_box_op), pointer, nopass   :: box_op => null()

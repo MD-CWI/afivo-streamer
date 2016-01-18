@@ -67,14 +67,13 @@ program test_mg2_2d
   call mg2_init_mg(mg)
 
   do i = 1, 12
-     ! call mg2_fas_vcycle(tree, mg, tree%max_lvl)
      call mg2_fas_fmg(tree, mg, .true., i == 1)
      call a2_loop_box(tree, set_err)
      call a2_tree_min_cc(tree, i_tmp, min_res)
      call a2_tree_max_cc(tree, i_tmp, max_res)
      print *, i, max(abs(min_res), abs(max_res))
      write(fname, "(A,I0)") "test_mg2_2d_", i
-     ! call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
+     call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
   print *, "max_id", tree%max_id
@@ -129,34 +128,36 @@ contains
     end do
   end subroutine set_err
 
-  subroutine sides_bc(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+  subroutine sides_bc(box, nb, iv, bc_type)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
     real(dp)                    :: xy(2)
     integer                     :: n, nc
 
-    nc = boxes(id)%n_cell
+    nc = box%n_cell
+    bc_type = a5_bc_dirichlet
 
     select case (nb)
     case (a2_nb_lx)
        do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [0.5_dp, real(n, dp)])
-          boxes(id)%cc(0, n, iv) = 2 * phi_sol(xy) - boxes(id)%cc(1, n, iv)
+          xy = a2_rr_cc(box, [0.5_dp, real(n, dp)])
+          box%cc(0, n, iv) = phi_sol(xy)
        end do
     case (a2_nb_hx)
        do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [nc+0.5_dp, real(n, dp)])
-          boxes(id)%cc(nc+1, n, iv) = 2 * phi_sol(xy) - boxes(id)%cc(nc, n, iv)
+          xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
+          box%cc(nc+1, n, iv) = phi_sol(xy)
        end do
     case (a2_nb_ly)
        do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [real(n, dp), 0.5_dp])
-          boxes(id)%cc(n, 0, iv) = 2 * phi_sol(xy) - boxes(id)%cc(n, 1, iv)
+          xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
+          box%cc(n, 0, iv) = phi_sol(xy)
        end do
     case (a2_nb_hy)
        do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [real(n, dp), nc+0.5_dp])
-          boxes(id)%cc(n, nc+1, iv) = 2 * phi_sol(xy) - boxes(id)%cc(n, nc, iv)
+          xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
+          box%cc(n, nc+1, iv) = phi_sol(xy)
        end do
     end select
   end subroutine sides_bc

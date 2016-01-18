@@ -37,7 +37,7 @@ program test_base
   call a3_loop_boxes(tree, set_morton_variable)
 
   ! Fill ghost cells for phi
-  call a3_gc_tree(tree, i_phi, a3_gc_interp, have_no_bc)
+  call a3_gc_tree(tree, i_phi, a3_gc_interp, a3_bc_dirichlet_zero)
 
   do i = 1, 13
      write(fname, "(A,I0)") "test_base_3d_", i
@@ -100,7 +100,7 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a3_gc_box(tree%boxes, id, i_phi, &
-               a3_gc_interp, have_no_bc)
+               a3_gc_interp, a3_bc_dirichlet_zero)
        end do
     end do
   end subroutine prolong_to_new_children

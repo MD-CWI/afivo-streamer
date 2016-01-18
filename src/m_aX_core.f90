@@ -394,8 +394,6 @@ contains
 #if $D == 3
     deallocate(box%fz)
 #endif
-    if (allocated(box%rdata)) deallocate(box%rdata)
-    if (allocated(box%idata)) deallocate(box%idata)
   end subroutine clear_box
 
   ! Set the neighbors of id (using their parent)

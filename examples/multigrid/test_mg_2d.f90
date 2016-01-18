@@ -111,29 +111,14 @@ contains
     end do
   end subroutine set_init_cond
 
-  subroutine sides_bc(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
+  subroutine sides_bc(box, nb, iv, bc_type)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
 
-    nc = boxes(id)%n_cell
-
-    if (boxes(id)%neighbors(nb) == -1) then
-       select case (nb)
-       case (a2_nb_lx)
-          ! Dirichlet zero
-          boxes(id)%cc(0, 1:nc, iv) = -boxes(id)%cc(1, 1:nc, iv)
-       case (a2_nb_hx)
-          ! Dirichlet zero
-          boxes(id)%cc(nc+1, 1:nc, iv) = -boxes(id)%cc(nc, 1:nc, iv)
-       case (a2_nb_ly)
-          ! Dirichlet zero
-          boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
-       case (a2_nb_hy)
-          ! Dirichlet zero
-          boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
-       end select
-    end if
+    ! Dirichlet zero
+    bc_type = a5_bc_dirichlet
+    call a2_set_box_gc(box, nb, iv, 0.0_dp)
   end subroutine sides_bc
 
 end program test_mg

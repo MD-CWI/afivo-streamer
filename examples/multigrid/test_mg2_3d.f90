@@ -135,13 +135,15 @@ contains
     end do
   end subroutine set_err
 
-  subroutine sides_bc(boxes, id, nb, iv)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+  subroutine sides_bc(box, nb, iv, bc_type)
+    type(box3_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
     real(dp)                    :: xyz(3), loc
     integer                     :: ix, dix, i, j, k, nc
 
-    nc = boxes(id)%n_cell
+    nc = box%n_cell
+    bc_type = a5_bc_dirichlet
 
     if (a3_nb_low(nb)) then
        ix = 0
@@ -157,22 +159,22 @@ contains
     case (1)
        do k = 1, nc
           do j = 1, nc
-             xyz = a3_rr_cc(boxes(id), [loc, real(j, dp), real(k, dp)])
-             boxes(id)%cc(ix, j, k, iv) = 2 * phi_sol(xyz) - boxes(id)%cc(ix+dix, j, k, iv)
+             xyz = a3_rr_cc(box, [loc, real(j, dp), real(k, dp)])
+             box%cc(ix, j, k, iv) = phi_sol(xyz)
           end do
        end do
     case (2)
        do k = 1, nc
           do i = 1, nc
-             xyz = a3_rr_cc(boxes(id), [real(i, dp), loc, real(k, dp)])
-             boxes(id)%cc(i, ix, k, iv) = 2 * phi_sol(xyz) - boxes(id)%cc(i, ix+dix, k, iv)
+             xyz = a3_rr_cc(box, [real(i, dp), loc, real(k, dp)])
+             box%cc(i, ix, k, iv) = phi_sol(xyz)
           end do
        end do
     case (3)
        do j = 1, nc
           do i = 1, nc
-             xyz = a3_rr_cc(boxes(id), [real(i, dp), real(j, dp), loc])
-             boxes(id)%cc(i, j, ix, iv) = 2 * phi_sol(xyz) - boxes(id)%cc(i, j, ix+dix, iv)
+             xyz = a3_rr_cc(box, [real(i, dp), real(j, dp), loc])
+             box%cc(i, j, ix, iv) = phi_sol(xyz)
           end do
        end do
     end select

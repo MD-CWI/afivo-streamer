@@ -43,10 +43,10 @@ module m_a$D_t
   integer, parameter :: a5_cyl = 1
 
   !> Value to indicate a Dirichlet boundary condition
-  integer, parameter :: a5_bc_dirichlet = 0
+  integer, parameter :: a5_bc_dirichlet = -1
 
   !> Value to indicate a Neumann boundary condition
-  integer, parameter :: a5_bc_neumann = 1
+  integer, parameter :: a5_bc_neumann = -2
 
 #if $D == 2
   ! Numbering of children (same location as **corners**)
@@ -79,8 +79,10 @@ module m_a$D_t
   integer, parameter :: a2_nb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
   ! Which neighbors have a lower index
   logical, parameter :: a2_nb_low(4) = [.true., .false., .true., .false.]
-  ! Opposite of nb_low, but now as integers
+  ! Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: a2_nb_hi01(4) = [0, 1, 0, 1]
+  ! Opposite of nb_low, but now as -1,1 integers
+  integer, parameter :: a2_nb_hi_pm(4) = [-1, 1, -1, 1]
 
   ! Reverse neighbors
   integer, parameter :: a2_nb_rev(4) = [2, 1, 4, 3]
@@ -133,8 +135,10 @@ module m_a$D_t
   ! Which neighbors have a lower index
   logical, parameter :: a3_nb_low(6) = &
        [.true., .false., .true., .false., .true., .false.]
-  ! Opposite of nb_low, but now as integers
+  ! Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: a3_nb_hi01(6) = [0, 1, 0, 1, 0, 1]
+  ! Opposite of nb_low, but now as -1,1 integers
+  integer, parameter :: a3_nb_hi_pm(6) = [-1, 1, -1, 1, -1, 1]
   ! Reverse neighbors
   integer, parameter :: a3_nb_rev(6) = [2, 1, 4, 3, 6, 5]
   ! Direction (dimension) for a neighbor
@@ -157,8 +161,6 @@ module m_a$D_t
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box
      integer               :: coord_t   !< Coordinate type (e.g. Cartesian)
-     real(dp), allocatable :: rdata(:)  !< User data (reals)
-     real(dp), allocatable :: idata(:)  !< User data (integers)
 #if $D == 2
      real(dp), allocatable :: cc(:, :, :) !< cell centered variables
      real(dp), allocatable :: fx(:, :, :) !< x-face centered variables
@@ -253,22 +255,21 @@ module m_a$D_t
      end subroutine a$D_subr_boxes_arg
 
      !> To fill ghost cells near refinement boundaries.
-     subroutine a$D_subr_gc(boxes, id, nb, iv)
+     subroutine a$D_subr_rb(boxes, id, nb, iv)
        import
        type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
        integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
        integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled
        integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
-     end subroutine a$D_subr_gc
+     end subroutine a$D_subr_rb
 
      !> To fill ghost cells near physical boundaries
-     subroutine a$D_subr_bc(box, nb, iv, bc_values, bc_type)
+     subroutine a$D_subr_bc(box, nb, iv, bc_type)
        import
-       type(box$D_t), intent(in) :: box !< Box that needs b.c.
-       integer, intent(in)      :: nb  !< Neighbor direction in which ghost cells need to be filled
-       integer, intent(in)      :: iv  !< Variable for which ghost cells are filled
-       real(dp), intent(out)    :: bc_values(box%n_cell)
-       real(dp), intent(out)    :: bc_type
+       type(box$D_t), intent(inout)  :: box     !< Box that needs b.c.
+       integer, intent(in)          :: nb      !< Direction
+       integer, intent(in)          :: iv      !< Index of variable
+       integer, intent(out)         :: bc_type !< Type of b.c.
      end subroutine a$D_subr_bc
 
      !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries
@@ -358,6 +359,77 @@ contains
     real(dp)               :: dr !< Output: dr at the finest lvl of the tree
     dr = tree%dr_base * 0.5_dp**(lvl-1)
   end function a$D_lvl_dr
+
+  subroutine a$D_set_box_gc(box, nb, iv, gc_scalar, gc_array)
+    type(box$D_t), intent(inout) :: box      !< Box to operate on
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
+    real(dp), optional, intent(in) :: gc_scalar
+#if $D == 2
+    real(dp), optional, intent(in) :: gc_array(box%n_cell)
+#elif $D == 3
+    real(dp), optional, intent(in) :: gc_array(box%n_cell, box%n_cell)
+#endif
+    integer                     :: nc
+
+    nc = box%n_cell
+
+    if (present(gc_array)) then
+       select case (nb)
+#if $D == 2
+       case (a2_nb_lx)
+          box%cc(0, 1:nc, iv)    = gc_array
+       case (a2_nb_hx)
+          box%cc(nc+1, 1:nc, iv) = gc_array
+       case (a2_nb_ly)
+          box%cc(1:nc, 0, iv)    = gc_array
+       case (a2_nb_hy)
+          box%cc(1:nc, nc+1, iv) = gc_array
+#elif $D == 3
+       case (a3_nb_lx)
+          box%cc(0, 1:nc, 1:nc, iv)    = gc_array
+       case (a3_nb_hx)
+          box%cc(nc+1, 1:nc, 1:nc, iv) = gc_array
+       case (a3_nb_ly)
+          box%cc(1:nc, 0, 1:nc, iv)    = gc_array
+       case (a3_nb_hy)
+          box%cc(1:nc, nc+1, 1:nc, iv) = gc_array
+       case (a3_nb_lz)
+          box%cc(1:nc, 1:nc, 0, iv)    = gc_array
+       case (a3_nb_hz)
+          box%cc(1:nc, 1:nc, nc+1, iv) = gc_array
+#endif
+       end select
+    else if (present(gc_scalar)) then
+       select case (nb)
+#if $D == 2
+       case (a2_nb_lx)
+          box%cc(0, 1:nc, iv)    = gc_scalar
+       case (a2_nb_hx)
+          box%cc(nc+1, 1:nc, iv) = gc_scalar
+       case (a2_nb_ly)
+          box%cc(1:nc, 0, iv)    = gc_scalar
+       case (a2_nb_hy)
+          box%cc(1:nc, nc+1, iv) = gc_scalar
+#elif $D == 3
+       case (a3_nb_lx)
+          box%cc(0, 1:nc, 1:nc, iv)    = gc_scalar
+       case (a3_nb_hx)
+          box%cc(nc+1, 1:nc, 1:nc, iv) = gc_scalar
+       case (a3_nb_ly)
+          box%cc(1:nc, 0, 1:nc, iv)    = gc_scalar
+       case (a3_nb_hy)
+          box%cc(1:nc, nc+1, 1:nc, iv) = gc_scalar
+       case (a3_nb_lz)
+          box%cc(1:nc, 1:nc, 0, iv)    = gc_scalar
+       case (a3_nb_hz)
+          box%cc(1:nc, 1:nc, nc+1, iv) = gc_scalar
+#endif
+       end select
+    else
+       stop "a$D_set_box_gc: requires gc_scalar or gc_array"
+    end if
+  end subroutine a$D_set_box_gc
 
 #if $D == 2
   !> Get the radius of the cell center with first index i

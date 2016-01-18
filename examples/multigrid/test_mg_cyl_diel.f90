@@ -85,7 +85,7 @@ program test_mg_cyl_diel
      call a2_tree_max_cc(tree, i_tmp, max_res)
      print *, i, max(abs(min_res), abs(max_res))
      write(fname, "(A,I0)") "test_mg_cyl_diel_", i
-     ! call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
+     call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
   print *, "max_id", tree%max_id
@@ -181,31 +181,36 @@ contains
     end do
   end subroutine set_err
 
-  subroutine sides_bc(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+  subroutine sides_bc(box, nb, iv, bc_type)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
     real(dp)                    :: xy(2)
     integer                     :: n, nc
 
-    nc = boxes(id)%n_cell
+    nc = box%n_cell
 
     select case (nb)
     case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
+       bc_type = a5_bc_neumann
+       box%cc(0, 1:nc, iv) = 0
     case (a2_nb_hx)
+       bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [nc+0.5_dp, real(n, dp)])
-          boxes(id)%cc(nc+1, n, iv) = 2 * phi_sol(xy) - boxes(id)%cc(nc, n, iv)
+          xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
+          box%cc(nc+1, n, iv) = phi_sol(xy)
        end do
     case (a2_nb_ly)
+       bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [real(n, dp), 0.5_dp])
-          boxes(id)%cc(n, 0, iv) = 2 * phi_sol(xy) - boxes(id)%cc(n, 1, iv)
+          xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
+          box%cc(n, 0, iv) = phi_sol(xy)
        end do
     case (a2_nb_hy)
+       bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(boxes(id), [real(n, dp), nc+0.5_dp])
-          boxes(id)%cc(n, nc+1, iv) = 2 * phi_sol(xy) - boxes(id)%cc(n, nc, iv)
+          xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
+          box%cc(n, nc+1, iv) = phi_sol(xy)
        end do
     end select
   end subroutine sides_bc

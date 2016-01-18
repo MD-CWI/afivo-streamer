@@ -12,8 +12,8 @@ module m_a$D_gc
 
   public :: a$D_gc_tree
   public :: a$D_gc_box
-  public :: a$D_gc_dirichlet
-  public :: a$D_gc_neumann
+  public :: a$D_bc_dirichlet_zero
+  public :: a$D_bc_neumann_zero
   public :: a$D_gc_interp
   public :: a$D_gc_prolong0
   public :: a$D_gc_interp_lim
@@ -28,8 +28,8 @@ contains
   subroutine a$D_gc_tree(tree, iv, subr_rb, subr_bc)
     type(a$D_t), intent(inout) :: tree !< Tree to fill ghost cells on
     integer, intent(in)       :: iv !< Variable for which ghost cells are set
-    procedure(a$D_subr_gc)     :: subr_rb !< Procedure called at refinement boundaries
-    procedure(a$D_subr_gc)     :: subr_bc    !< Procedure called at physical boundaries
+    procedure(a$D_subr_rb)     :: subr_rb !< Procedure called at refinement boundaries
+    procedure(a$D_subr_bc)     :: subr_bc    !< Procedure called at physical boundaries
     integer                   :: lvl, i, id
 
     if (.not. tree%ready) stop "Tree not ready"
@@ -48,12 +48,12 @@ contains
   !> Fill ghost cells for variables iv on the sides of a box, using
   !> subr_rb on refinement boundaries and subr_bc on physical boundaries
   subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc)
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
-    integer, intent(in)         :: id !< Id of box for which we set ghost cells
-    integer, intent(in)         :: iv !< Variable for which ghost cells are set
-    procedure(a$D_subr_gc)      :: subr_rb !< Procedure called at refinement boundaries
-    procedure(a$D_subr_gc)      :: subr_bc !< Procedure called at physical boundaries
-    integer                     :: nb, nb_id
+    type(box$D_t), intent(inout)  :: boxes(:)              !< List of all the boxes
+    integer, intent(in)          :: id                    !< Id of box for which we set ghost cells
+    integer, intent(in)          :: iv                    !< Variable for which ghost cells are set
+    procedure(a$D_subr_rb)       :: subr_rb               !< Procedure called at refinement boundaries
+    procedure(a$D_subr_bc)       :: subr_bc               !< Procedure called at physical boundaries
+    integer                      :: nb, nb_id, bc_type
 
     do nb = 1, a$D_num_neighbors
        nb_id = boxes(id)%neighbors(nb)
@@ -62,10 +62,74 @@ contains
        else if (nb_id == a5_no_box) then
           call subr_rb(boxes, id, nb, iv)
        else
-          call subr_bc(boxes, id, nb, iv)
+          call subr_bc(boxes(id), nb, iv, bc_type)
+          call bc_to_gc(boxes(id), nb, iv, bc_type)
        end if
     end do
   end subroutine a$D_gc_box
+
+  subroutine bc_to_gc(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout)  :: box
+    integer, intent(in)          :: iv                    !< Variable to fill
+    integer, intent(in)          :: nb                    !< Neighbor direction
+    integer, intent(in)          :: bc_type               !< Type of b.c.
+    real(dp)                     :: c1, c2
+    integer                      :: nc
+
+    nc = box%n_cell
+
+    ! If we call the interior point x, and the ghost point y, then a Dirichlet
+    ! boundary value b can be imposed as:
+    ! y = -x + 2*b
+    ! A Neumann b.c. can be imposed as y = x +/- dx * b
+    ! Below, we set coefficients c1 and c2 to handle both cases
+    select case (bc_type)
+    case (a5_bc_dirichlet)
+       c1 = -1
+       c2 = 2
+    case (a5_bc_neumann)
+       c1 = 1
+       c2 = box%dr * a$D_nb_hi_pm(nb) ! This gives a + or - sign
+    case default
+       stop "fill_bc: unknown boundary condition"
+    end select
+
+    select case (nb)
+#if $D == 2
+    case (a2_nb_lx)
+       box%cc(0, 1:nc, iv) = &
+            c2 * box%cc(0, 1:nc, iv) + c1 * box%cc(1, 1:nc, iv)
+    case (a2_nb_hx)
+       box%cc(nc+1, 1:nc, iv) = &
+            c2 * box%cc(nc+1, 1:nc, iv) + c1 * box%cc(nc, 1:nc, iv)
+    case (a2_nb_ly)
+       box%cc(1:nc, 0, iv) = &
+            c2 * box%cc(1:nc, 0, iv) + c1 * box%cc(1:nc, 1, iv)
+    case (a2_nb_hy)
+       box%cc(1:nc, nc+1, iv) = &
+            c2 * box%cc(1:nc, nc+1, iv) + c1 * box%cc(1:nc, nc, iv)
+#elif $D == 3
+    case (a3_nb_lx)
+       box%cc(0, 1:nc, 1:nc, iv) = &
+            c2 * box%cc(0, 1:nc, 1:nc, iv) + c1 * box%cc(1, 1:nc, 1:nc, iv)
+    case (a3_nb_hx)
+       box%cc(nc+1, 1:nc, 1:nc, iv) = &
+            c2 * box%cc(nc+1, 1:nc, 1:nc, iv) + c1 * box%cc(nc, 1:nc, 1:nc, iv)
+    case (a3_nb_ly)
+       box%cc(1:nc, 0, 1:nc, iv) = &
+            c2 * box%cc(1:nc, 0, 1:nc, iv) + c1 * box%cc(1:nc, 1, 1:nc, iv)
+    case (a3_nb_hy)
+       box%cc(1:nc, nc+1, 1:nc, iv) = &
+            c2 * box%cc(1:nc, nc+1, 1:nc, iv) + c1 * box%cc(1:nc, nc, 1:nc, iv)
+    case (a3_nb_lz)
+       box%cc(1:nc, 1:nc, 0, iv) = &
+            c2 * box%cc(1:nc, 1:nc, 0, iv) + c1 * box%cc(1:nc, 1:nc, 1, iv)
+    case (a3_nb_hz)
+       box%cc(1:nc, 1:nc, nc+1, iv) = &
+            c2 * box%cc(1:nc, 1:nc, nc+1, iv) + c1 * box%cc(1:nc, 1:nc, nc, iv)
+#endif
+    end select
+  end subroutine bc_to_gc
 
   !> Partial prolongation to the ghost cells of box id from parent
   subroutine a$D_gc_prolong0(boxes, id, nb, iv)
@@ -293,74 +357,24 @@ contains
   end subroutine a$D_gc_interp_lim
 
   ! This fills ghost cells near physical boundaries using Neumann zero
-  subroutine a$D_gc_neumann(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
+  subroutine a$D_bc_neumann_zero(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
 
-    nc = boxes(id)%n_cell
+    bc_type = a5_bc_neumann
+    call a$D_set_box_gc(box, nb, iv, 0.0_dp)
+  end subroutine a$D_bc_neumann_zero
 
-    select case (nb)
-#if $D == 2
-    case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv) = boxes(id)%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = boxes(id)%cc(1:nc, nc, iv)
-#elif $D == 3
-    case (a3_nb_lx)
-       boxes(id)%cc(0, 1:nc, 1:nc, iv) = boxes(id)%cc(1, 1:nc, 1:nc, iv)
-    case (a3_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, 1:nc, iv)
-    case (a3_nb_ly)
-       boxes(id)%cc(1:nc, 0, 1:nc, iv) = boxes(id)%cc(1:nc, 1, 1:nc, iv)
-    case (a3_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = boxes(id)%cc(1:nc, nc, 1:nc, iv)
-    case (a3_nb_lz)
-       boxes(id)%cc(1:nc, 1:nc, 0, iv) = boxes(id)%cc(1:nc, 1:nc, 1, iv)
-    case (a3_nb_hz)
-       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = boxes(id)%cc(1:nc, 1:nc, nc, iv)
-#endif
-    end select
-  end subroutine a$D_gc_neumann
+  ! This fills ghost cells near physical boundaries using Neumann zero
+  subroutine a$D_bc_dirichlet_zero(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
 
-    !> This fills ghost cells near physical boundaries using Dirichlet zero
-  subroutine a$D_gc_dirichlet(boxes, id, nb, iv)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
-    integer                     :: nc
-
-    nc = boxes(id)%n_cell
-
-    select case (nb)
-#if $D == 2
-    case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv) = -boxes(id)%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, iv) = -boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
-       boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, nc, iv)
-#elif $D == 3
-    case (a3_nb_lx)
-       boxes(id)%cc(0, 1:nc, 1:nc, iv) = -boxes(id)%cc(1, 1:nc, 1:nc, iv)
-    case (a3_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, 1:nc, iv) = -boxes(id)%cc(nc, 1:nc, 1:nc, iv)
-    case (a3_nb_ly)
-       boxes(id)%cc(1:nc, 0, 1:nc, iv) = -boxes(id)%cc(1:nc, 1, 1:nc, iv)
-    case (a3_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, 1:nc, iv) = -boxes(id)%cc(1:nc, nc, 1:nc, iv)
-    case (a3_nb_lz)
-       boxes(id)%cc(1:nc, 1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1:nc, 1, iv)
-    case (a3_nb_hz)
-       boxes(id)%cc(1:nc, 1:nc, nc+1, iv) = -boxes(id)%cc(1:nc, 1:nc, nc, iv)
-#endif
-    end select
-  end subroutine a$D_gc_dirichlet
+    bc_type = a5_bc_dirichlet
+    call a$D_set_box_gc(box, nb, iv, 0.0_dp)
+  end subroutine a$D_bc_dirichlet_zero
 
   !> Fill values on the side of a box from a neighbor nb
   subroutine sides_from_nb(box, box_nb, nb, iv)

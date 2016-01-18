@@ -56,7 +56,7 @@ program test_base
   call a2_loop_boxes(tree, set_morton_variable)
 
   ! Fill ghost cells for phi
-  call a2_gc_tree(tree, i_phi, a2_gc_interp, have_no_bc)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_bc_dirichlet_zero)
 
   do i = 1, 12
      print *, "i = ", i, "max_id", tree%max_id
@@ -122,7 +122,7 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_phi, &
-               a2_gc_interp, have_no_bc)
+               a2_gc_interp, a2_bc_dirichlet_zero)
        end do
     end do
   end subroutine prolong_to_new_children
@@ -132,12 +132,5 @@ contains
     integer, intent(in)         :: id
     boxes(id)%cc(:,:,i_mrtn) = id
   end subroutine set_morton_variable
-
-  subroutine have_no_bc(boxes, id, i, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, i, iv
-    stop "We have no boundary conditions in this example"
-    boxes(id)%cc(1, i, iv) = 0    ! Prevent warning
-  end subroutine have_no_bc
 
 end program
