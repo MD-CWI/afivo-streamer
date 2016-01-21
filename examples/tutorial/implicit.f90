@@ -32,7 +32,7 @@ program tutorial
   call initialize_mg(mg)
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_dirichlet_zero)
 
   output_cnt = 0
   n_steps    = 0
@@ -100,7 +100,7 @@ contains
     mg%i_phi        = i_phi
     mg%i_tmp        = i_tmp
     mg%i_rhs        = i_rhs
-    mg%sides_bc     => a2_gc_dirichlet
+    mg%sides_bc     => a2_bc_dirichlet_zero
     mg%box_op       => lpl_heat
     mg%box_gsrb     => gsrb_heat
 

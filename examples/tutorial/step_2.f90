@@ -22,7 +22,7 @@ program tutorial
   call initialize_tree(tree)
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_dirichlet_zero)
 
   call a2_write_vtk(tree, "heat", ["phi"], 1, 0.0_dp)
 

@@ -28,7 +28,7 @@ program tutorial
 
   do
      call a2_loop_box(tree, set_init_cond)
-     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_dirichlet_zero)
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
@@ -52,7 +52,7 @@ program tutorial
 
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_gc_dirichlet)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_bc_dirichlet_zero)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -124,7 +124,7 @@ contains
     call a2_consistent_fluxes(tree, [i_phi])
     call a2_loop_box_arg(tree, update_solution, [dt], .true.)
     call a2_restrict_tree(tree, i_phi)
-    call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_gc_dirichlet)
+    call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_bc_dirichlet_zero)
   end subroutine heat_forward_euler
 
   subroutine fluxes_centdif(boxes, id)
@@ -197,7 +197,7 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_phi, &
-               a2_gc_interp, a2_gc_dirichlet)
+               a2_gc_interp, a2_bc_dirichlet_zero)
        end do
     end do
   end subroutine prolong_to_new_children

@@ -26,7 +26,7 @@ program tutorial
   call initialize_tree(tree)
 
   call a2_loop_box(tree, set_init_cond)
-  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_dirichlet_zero)
 
   output_cnt = 0
   time       = 0.0_dp
@@ -112,7 +112,7 @@ contains
     ! Forward Euler
     call a2_loop_boxes(tree, fluxes_centdif, .true.)
     call a2_loop_box_arg(tree, update_solution, [dt], .true.)
-    call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_gc_dirichlet)
+    call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_dirichlet_zero)
   end subroutine heat_forward_euler
 
   subroutine fluxes_centdif(boxes, id)
