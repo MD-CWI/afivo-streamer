@@ -17,27 +17,24 @@ contains
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
   !> leaves of the tree are used
-  subroutine a$D_write_vtk(tree, filename, cc_names, n_cycle, time, ixs_cc, &
-       fc_names, ixs_fc, dir)
+  subroutine a$D_write_vtk(tree, filename, n_cycle, time, ixs_cc, ixs_fc, dir)
     use m_vtk
 
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*), intent(in)  :: filename    !< Filename for the vtk file
-    character(len=*), intent(in)  :: cc_names(:) !< Names of the cell-centered variables
-    integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
-    real(dp), intent(in)          :: time        !< Time for output file
+    integer, intent(in), optional :: n_cycle     !< Cycle-number for vtk file (counter)
+    real(dp), intent(in), optional :: time        !< Time for output file
     integer, intent(in), optional :: ixs_cc(:)   !< Oncly include these cell variables
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
-    !> If present, output fluxes with these names
-    character(len=*), optional, intent(in) :: fc_names(:)
     integer, intent(in), optional :: ixs_fc(:)   !< Oncly include these face variables
 
     integer                       :: lvl, bc, bn, n, n_cells, n_nodes
     integer                       :: ig, i, j, id, n_ix, c_ix, n_grids
-    integer                       :: cell_ix, node_ix
+    integer                       :: cell_ix, node_ix, n_cycle_used
     integer                       :: n_cc, n_fc
     integer, parameter            :: n_ch = a$D_num_children
     integer                       :: nodes_per_box, cells_per_box
+    real(dp)                      :: time_used
     real(dp), allocatable         :: coords(:), cc_vars(:,:)
     integer, allocatable          :: offsets(:), connects(:)
     integer, allocatable          :: cell_types(:), icc_used(:), ifc_used(:)
@@ -49,26 +46,20 @@ contains
 #endif
 
     if (.not. tree%ready) stop "Tree not ready"
+    time_used = 0.0_dp; if (present(time)) time_used = time
+    n_cycle_used = 0; if (present(n_cycle)) n_cycle_used = n_cycle
+
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
-            minval(ixs_cc) < 1) stop "a$D_write_vtk: wrong indices given (ixs_cc)"
-       if (size(ixs_cc) /= size(cc_names)) &
-            stop "a$D_write_vtk: size(cc_names) /= size(ixs_cc)"
+            minval(ixs_cc) < 1) stop "a$D_write_silo: wrong indices given (ixs_cc)"
        icc_used = ixs_cc
     else
-       if (size(cc_names) /= tree%n_var_cell) &
-            stop "a$D_write_vtk: size(cc_names) /= n_var_cell"
        icc_used = [(i, i = 1, tree%n_var_cell)]
     end if
 
-    if (present(fc_names)) then
-       if (.not. present(ixs_fc)) then
-          stop "a$D_write_vtk: ixs_fc not present (but fc_names is)"
-       else
-          if (size(ixs_fc) * $D /= size(fc_names)) then
-             stop "a$D_write_vtk: size(fc_names) /= size(ixs_fc) * $D"
-          end if
-       end if
+    if (present(ixs_fc)) then
+       if (maxval(ixs_fc) > tree%n_var_cell .or. &
+            minval(ixs_fc) < 1) stop "a$D_write_silo: wrong indices given (ixs_fc)"
        ifc_used = ixs_fc
     else
        allocate(ifc_used(0))
@@ -78,8 +69,8 @@ contains
     n_fc = size(ifc_used)
 
     allocate(var_names(n_cc + n_fc * $D))
-    var_names(1:n_cc) = cc_names
-    if (present(fc_names)) var_names(n_cc+1:) = fc_names
+    var_names(1:n_cc) = tree%cc_names(icc_used)
+    var_names(n_cc+1:) = tree%fc_names(ifc_used)
 
     bc            = tree%n_cell     ! number of Box Cells
     bn            = tree%n_cell + 1 ! number of Box Nodes
@@ -207,19 +198,15 @@ contains
 
   !> Write the cell centered data of a tree to a Silo file. Only the
   !> leaves of the tree are used
-  subroutine a$D_write_silo(tree, filename, cc_names, n_cycle, time, ixs_cc, &
-       fc_names, ixs_fc, dir)
+  subroutine a$D_write_silo(tree, filename, n_cycle, time, ixs_cc, ixs_fc, dir)
     use m_write_silo
 
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*)              :: filename    !< Filename for the vtk file
-    character(len=*)              :: cc_names(:) !< Names of the cell-centered variables
-    integer, intent(in)           :: n_cycle     !< Cycle-number for vtk file (counter)
-    real(dp), intent(in)          :: time        !< Time for output file
+    integer, intent(in), optional :: n_cycle     !< Cycle-number for vtk file (counter)
+    real(dp), intent(in), optional :: time        !< Time for output file
     integer, intent(in), optional :: ixs_cc(:)      !< Oncly include these cell variables
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
-    !> If present, output fluxes with these names
-    character(len=*), optional, intent(in) :: fc_names(:)
     integer, intent(in), optional :: ixs_fc(:)      !< Oncly include these face variables
 
     character(len=*), parameter     :: grid_name = "gg"
@@ -229,9 +216,10 @@ contains
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
     integer                         :: n_vars, i0, j0, dbix, n_cc, n_fc
     integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
+    integer                         :: n_cycle_used
     integer, allocatable            :: ids(:), nb_ids(:), icc_used(:), ifc_used(:)
     logical, allocatable            :: box_done(:)
-    real(dp)                        :: dr($D), r_min($D)
+    real(dp)                        :: dr($D), r_min($D), time_used
 #if $D == 2
     integer, allocatable            :: box_list(:,:), new_box_list(:, :)
     real(dp), allocatable           :: var_data(:,:,:)
@@ -241,26 +229,21 @@ contains
     integer                         :: k0, nz, nz_prev, iz
 #endif
 
+    if (.not. tree%ready) stop "Tree not ready"
+    time_used = 0.0_dp; if (present(time)) time_used = time
+    n_cycle_used = 0; if (present(n_cycle)) n_cycle_used = n_cycle
+
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "a$D_write_silo: wrong indices given (ixs_cc)"
-       if (size(ixs_cc) /= size(cc_names)) &
-            stop "a$D_write_silo: size(cc_names) /= size(ixs_cc)"
        icc_used = ixs_cc
     else
-       if (size(cc_names) /= tree%n_var_cell) &
-            stop "a$D_write_silo: size(cc_names) /= n_var_cell"
        icc_used = [(i, i = 1, tree%n_var_cell)]
     end if
 
-    if (present(fc_names)) then
-       if (.not. present(ixs_fc)) then
-          stop "a$D_write_vtk: ixs_fc not present (but fc_names is)"
-       else
-          if (size(ixs_fc) * $D /= size(fc_names)) then
-             stop "a$D_write_vtk: size(fc_names) /= size(ixs_fc) * $D"
-          end if
-       end if
+    if (present(ixs_fc)) then
+       if (maxval(ixs_fc) > tree%n_var_cell .or. &
+            minval(ixs_fc) < 1) stop "a$D_write_silo: wrong indices given (ixs_fc)"
        ifc_used = ixs_fc
     else
        allocate(ifc_used(0))
@@ -270,8 +253,8 @@ contains
     n_fc = size(ifc_used)
 
     allocate(var_names(n_cc + n_fc * $D))
-    var_names(1:n_cc) = cc_names
-    if (present(fc_names)) var_names(n_cc+1:) = fc_names
+    var_names(1:n_cc) = tree%cc_names(icc_used)
+    var_names(n_cc+1:) = tree%fc_names(ifc_used)
 
     nc = tree%n_cell
     n_vars = n_cc + n_fc * $D

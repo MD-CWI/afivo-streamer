@@ -48,6 +48,9 @@ module m_a$D_t
   !> Value to indicate a Neumann boundary condition
   integer, parameter :: a5_bc_neumann = -2
 
+  !> Maximum length of the names of variables
+  integer, parameter :: a5_nlen = 20
+
 #if $D == 2
   ! Numbering of children (same location as **corners**)
   integer, parameter :: a2_num_children = 4
@@ -184,6 +187,7 @@ module m_a$D_t
   !> Type which stores all the boxes and levels, as well as some information
   !> about the number of boxes, variables and levels.
   type a$D_t
+     logical                    :: ready = .false. !< Is tree ready for use?
      integer                    :: lvls_max   !< maximum allowed level
      integer                    :: max_lvl    !< current maximum level
      integer                    :: max_id     !< max index in box list
@@ -195,7 +199,10 @@ module m_a$D_t
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
-     logical                    :: ready = .false. !< Is tree ready for use?
+     !> Names of cell-centered variables
+     character(len=a5_nlen), allocatable :: cc_names(:)
+     !> Names of face-centered variables
+     character(len=a5_nlen), allocatable :: fc_names(:)
   end type a$D_t
 
   !> Type specifying the location of a cell

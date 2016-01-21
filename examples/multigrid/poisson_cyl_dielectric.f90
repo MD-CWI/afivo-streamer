@@ -79,13 +79,13 @@ program test_mg_cyl_diel
 
   do i = 1, 12
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg2_fas_fmg(tree, mg, .true., i == 1)
+     call mg2_fas_fmg(tree, mg, .true., i>1)
      call a2_loop_box(tree, set_err)
      call a2_tree_min_cc(tree, i_tmp, min_res)
      call a2_tree_max_cc(tree, i_tmp, max_res)
      print *, i, max(abs(min_res), abs(max_res))
      write(fname, "(A,I0)") "test_mg_cyl_diel_", i
-     call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
+     call a2_write_silo(tree, trim(fname))
   end do
 
   print *, "max_id", tree%max_id

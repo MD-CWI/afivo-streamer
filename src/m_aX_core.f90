@@ -46,8 +46,8 @@ contains
   end subroutine a$D_print_info
 
   !> Initialize a $Dd tree type.
-  subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, &
-       dr, r_min, lvls_max, n_boxes, coarsen_to, coord)
+  subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, dr, r_min, &
+       lvls_max, n_boxes, coarsen_to, coord, cc_names, fc_names)
     type(a$D_t), intent(out)        :: tree       !< The tree to initialize
     integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
     integer, intent(in)            :: n_var_cell !< Number of cell-centered variables
@@ -60,17 +60,21 @@ contains
     integer, intent(in), optional  :: coarsen_to
     !> Maximum number of levels. Default is 30
     integer, intent(in), optional  :: lvls_max
-    !> Allocate initial storage for n_boxes. Default is 100
+    !> Allocate initial storage for n_boxes. Default is 1000
     integer, intent(in), optional  :: n_boxes
-    integer, intent(in), optional  :: coord
+    integer, intent(in), optional  :: coord !< Select coordinate type
+    !> Names of cell-centered variables
+    character(len=*), intent(in), optional :: cc_names(:)
+    !> Names of face-centered variables
+    character(len=*), intent(in), optional :: fc_names(:)
 
     integer                        :: lvls_max_a, n_boxes_a, coarsen_to_a
     real(dp)                       :: r_min_a($D)
-    integer                        :: lvl, min_lvl, coord_a
+    integer                        :: n, lvl, min_lvl, coord_a
 
     ! Set default arguments if not present
     lvls_max_a = 30;   if (present(lvls_max)) lvls_max_a = lvls_max
-    n_boxes_a = 100;   if (present(n_boxes)) n_boxes_a = n_boxes
+    n_boxes_a = 1000;  if (present(n_boxes)) n_boxes_a = n_boxes
     coarsen_to_a = -1; if (present(coarsen_to)) coarsen_to_a = coarsen_to
     r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
     coord_a = a5_xyz;  if (present(coord)) coord_a = coord
@@ -78,6 +82,7 @@ contains
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a$D_init: n_cell should be even"
     if (n_var_cell <= 0)  stop "a$D_init: n_var_cell should be > 0"
+    if (n_var_face < 0)   stop "a$D_init: n_var_face should be >= 0"
     if (n_boxes_a <= 0)   stop "a$D_init: n_boxes should be > 0"
     if (lvls_max_a <= 0)  stop "a$D_init: lvls_max should be > 0"
 #if $D == 3
@@ -115,6 +120,30 @@ contains
     tree%max_id          = 0
     tree%max_lvl         = 0
     tree%coord_t         = coord_a
+
+    ! Set variable names
+    allocate(tree%cc_names(n_var_cell))
+    allocate(tree%fc_names(n_var_face))
+
+    if (present(cc_names)) then
+       if (size(cc_names) /= n_var_cell) &
+            stop "a$D_init: size(cc_names) /= n_var_cell"
+       tree%cc_names = cc_names
+    else
+       do n = 1, n_var_cell
+          write(tree%cc_names(n), "(A,I0)") "cc_", n
+       end do
+    end if
+
+    if (present(fc_names)) then
+       if (size(fc_names) /= n_var_face) &
+            stop "a$D_init: size(fc_names) /= n_var_face"
+       tree%fc_names = fc_names
+    else
+       do n = 1, n_var_face
+          write(tree%fc_names(n), "(A,I0)") "fc_", n
+       end do
+    end if
   end subroutine a$D_init
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also

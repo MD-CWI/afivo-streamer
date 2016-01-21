@@ -1,6 +1,7 @@
-!> \example test_mg_benchmark_2d.f90
-!> Benchmark of the multigrid routines
-program test_mg2_2d
+!> \example test_mg_cyl.f90
+!> Example showing how to use m_a2_mg in cylindrical
+!> coordinates, and compare with an analytic solution.
+program test_mg_cyl
   use m_a2_t
   use m_a2_core
   use m_a2_mg
@@ -9,25 +10,25 @@ program test_mg2_2d
 
   implicit none
 
+  integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
-  integer, parameter :: n_iterations = 100
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_err = 4
 
   ! The manufactured solution exists of two Gaussians here.
   ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
-  integer, parameter :: n_gaussians = 1
+  integer, parameter :: n_gaussians = 2
   real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
-       [1.0_dp, 0.5_dp, 0.5_dp, 0.04_dp], [4, n_gaussians])
+       [1.0_dp, 0.1_dp, 0.25_dp, 0.15_dp, &
+       1.0e-3_dp, 0.75_dp, 0.75_dp, 0.05_dp], [4,2])
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: i, id
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  integer            :: box_size, mesh_size, max_ref_lvl
   real(dp)           :: dr
-  character(len=40)  :: var_names(4), arg_string
+  character(len=40)  :: fname, var_names(4)
   type(mg2_t)        :: mg
 
   var_names(i_phi) = "phi"
@@ -37,22 +38,9 @@ program test_mg2_2d
 
   dr = 1.0_dp / box_size
 
-  ! Get box size and mesh size from command line argument
-  if (command_argument_count() /= 2) stop "Arguments should be: box_size mesh_size"
-  call get_command_argument(1, arg_string)
-  read(arg_string, *) box_size
-  call get_command_argument(2, arg_string)
-  read(arg_string, *) mesh_size
-
-  ! Determine maximum refinement level
-  max_ref_lvl = nint(log(mesh_size / real(box_size, dp)) / log(2.0_dp)) + 1
-
-  print *, "Box size: ", box_size
-  print *, "Mesh size:", 2**(max_ref_lvl-1) * box_size
-
   ! Initialize tree
   call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, &
-       dr = dr, coarsen_to = 2, n_boxes=10*1000)
+       dr = dr, coarsen_to = 2, coord=a5_cyl)
 
   id = 1
   ix_list(:, id) = [1,1]         ! Set index of boxnn
@@ -60,11 +48,13 @@ program test_mg2_2d
 
   call a2_set_base(tree, ix_list, nb_list)
 
-  do
-     call a2_loop_box(tree, set_init_cond)
+  do i = 1, 20
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
      if (ref_info%n_add == 0) exit
   end do
+
+  ! Set rhs and initial guess for phi
+  call a2_loop_box(tree, set_init_cond)
 
   ! Set the multigrid options
   mg%i_phi        = i_phi
@@ -74,14 +64,19 @@ program test_mg2_2d
   mg%n_cycle_up   = 2
   mg%n_cycle_base = 2
   mg%sides_bc     => sides_bc
+  mg%box_op       => mg2_auto_op
+  mg%box_gsrb     => mg2_auto_gsrb
 
   call mg2_init_mg(mg)
 
-  do i = 1, n_iterations
-     call mg2_fas_fmg(tree, mg, .true., i == 1)
+  do i = 1, 10
+     ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
+     call mg2_fas_fmg(tree, mg, .true., i>1)
+     call a2_loop_box(tree, set_err)
+     write(fname, "(A,I0)") "test_mg_cyl_", i
+     call a2_write_vtk(tree, trim(fname))
   end do
 
-  call a2_write_silo(tree, "test_mg_benchmark_2d", var_names, 1, 0.0_dp)
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**2
 
@@ -93,8 +88,20 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
+    integer                  :: n
 
-    if (boxes(id)%lvl < max_ref_lvl) ref_flags(id) = a5_do_ref
+    ref_flags(id) = a5_rm_ref
+
+    if (boxes(id)%lvl < 6) then
+       ref_flags(id) = a5_do_ref
+    else if (boxes(id)%lvl < 1) then
+       do n = 1, n_gaussians
+          if (norm2(a2_r_center(boxes(id)) - g_params(2:3, n)) < 0.1_dp) then
+             ref_flags(id) = a5_do_ref
+             exit
+          end if
+       end do
+    end if
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -103,9 +110,10 @@ contains
     real(dp)                    :: xy(2)
 
     nc = box%n_cell
+    box%cc(:, :, i_phi) = 0
 
-    do j = 1, nc
-       do i = 1, nc
+    do j = 0, nc+1
+       do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
           box%cc(i, j, i_rhs) = rhs(xy)
        end do
@@ -134,25 +142,25 @@ contains
     integer                     :: n, nc
 
     nc = box%n_cell
-    bc_type = a5_bc_dirichlet
 
     select case (nb)
     case (a2_nb_lx)
-       do n = 1, nc
-          xy = a2_rr_cc(box, [0.5_dp, real(n, dp)])
-          box%cc(0, n, iv) = phi_sol(xy)
-       end do
+       bc_type = a5_bc_neumann
+       box%cc(0, 1:nc, iv) = 0
     case (a2_nb_hx)
+       bc_type = a5_bc_dirichlet
        do n = 1, nc
           xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
           box%cc(nc+1, n, iv) = phi_sol(xy)
        end do
     case (a2_nb_ly)
+       bc_type = a5_bc_dirichlet
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
           box%cc(n, 0, iv) = phi_sol(xy)
        end do
     case (a2_nb_hy)
+       bc_type = a5_bc_dirichlet
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
           box%cc(n, nc+1, iv) = phi_sol(xy)
@@ -193,8 +201,9 @@ contains
     real(dp), intent(in) :: x(2), x0(2), sigma
     real(dp) :: xrel(2)
     xrel = (x-x0)/sigma
-    lpl_gaussian_2d = 4/sigma**2 * (sum(xrel**2) - 1) * &
-         gaussian_2d(x, x0, sigma)
+
+    lpl_gaussian_2d = 4/sigma**2 * (sum(xrel**2) - 1.0_dp - &
+         0.5_dp * (x(1)-x0(1))/x(1)) * gaussian_2d(x, x0, sigma)
   end function lpl_gaussian_2d
 
-end program test_mg2_2d
+end program test_mg_cyl

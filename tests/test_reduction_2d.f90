@@ -25,8 +25,8 @@ program test_reduction
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
        box_size, &     ! Number of cells per coordinate in a box
-       n_var_cell, &   ! Number of face-centered variables
-       n_var_face, &   ! Number of cell-centered variables
+       1, &            ! Number of cell-centered variables
+       0, &            ! Number of face-centered variables
        dr)             ! Distance between cells on base level
 
   ! Set up geometry

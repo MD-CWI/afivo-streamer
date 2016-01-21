@@ -64,10 +64,10 @@ program test_mg3_2d
 
   do i = 1, 10
      ! call mg2_fas_vcycle(tree, mg, tree%n_lvls)
-     call mg2_fas_fmg(tree, mg, .true., i == 1)
+     call mg2_fas_fmg(tree, mg, .true., i>1)
      call a2_loop_box(tree, fld_from_pot)
      write(fname, "(A,I0)") "test_mg3_2d_", i
-     call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
+     call a2_write_vtk(tree, trim(fname))
   end do
 
   print *, "max_id", tree%max_id

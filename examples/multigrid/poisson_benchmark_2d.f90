@@ -1,5 +1,5 @@
-!> \example test_mg2_2d.f90
-!> Example showing how to use m_a2_mg, and compare with an analytic solution.
+!> \example test_mg_benchmark_2d.f90
+!> Benchmark of the multigrid routines
 program test_mg2_2d
   use m_a2_t
   use m_a2_core
@@ -9,38 +9,49 @@ program test_mg2_2d
 
   implicit none
 
-  integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
+  integer, parameter :: n_iterations = 100
   integer, parameter :: i_phi = 1, i_tmp = 2
   integer, parameter :: i_rhs = 3, i_err = 4
-  integer, parameter :: i_dx = 5
 
   ! The manufactured solution exists of two Gaussians here.
   ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
-  integer, parameter :: n_gaussians = 2
+  integer, parameter :: n_gaussians = 1
   real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
-       [1.0_dp, 0.25_dp, 0.25_dp, 0.04_dp, &
-       1.0_dp, 0.75_dp, 0.75_dp, 0.04_dp], [4,2])
+       [1.0_dp, 0.5_dp, 0.5_dp, 0.04_dp], [4, n_gaussians])
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: i, id
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr, min_res, max_res
-  character(len=40)  :: fname, var_names(5)
+  integer            :: box_size, mesh_size, max_ref_lvl
+  real(dp)           :: dr
+  character(len=40)  :: var_names(4), arg_string
   type(mg2_t)        :: mg
 
   var_names(i_phi) = "phi"
   var_names(i_tmp) = "tmp"
   var_names(i_rhs) = "rhs"
   var_names(i_err) = "err"
-  var_names(i_dx) = "dx"
 
   dr = 1.0_dp / box_size
 
+  ! Get box size and mesh size from command line argument
+  if (command_argument_count() /= 2) stop "Arguments should be: box_size mesh_size"
+  call get_command_argument(1, arg_string)
+  read(arg_string, *) box_size
+  call get_command_argument(2, arg_string)
+  read(arg_string, *) mesh_size
+
+  ! Determine maximum refinement level
+  max_ref_lvl = nint(log(mesh_size / real(box_size, dp)) / log(2.0_dp)) + 1
+
+  print *, "Box size: ", box_size
+  print *, "Mesh size:", 2**(max_ref_lvl-1) * box_size
+
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=5, n_var_face=0, &
+  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, &
        dr = dr, coarsen_to = 2, n_boxes=10*1000)
 
   id = 1
@@ -66,16 +77,11 @@ program test_mg2_2d
 
   call mg2_init_mg(mg)
 
-  do i = 1, 12
-     call mg2_fas_fmg(tree, mg, .true., i == 1)
-     call a2_loop_box(tree, set_err)
-     call a2_tree_min_cc(tree, i_tmp, min_res)
-     call a2_tree_max_cc(tree, i_tmp, max_res)
-     print *, i, max(abs(min_res), abs(max_res))
-     write(fname, "(A,I0)") "test_mg2_2d_", i
-     call a2_write_silo(tree, trim(fname), var_names, i, 0.0_dp)
+  do i = 1, n_iterations
+     call mg2_fas_fmg(tree, mg, .true., i>1)
   end do
 
+  call a2_write_silo(tree, "test_mg_benchmark_2d")
   print *, "max_id", tree%max_id
   print *, "n_cells", tree%max_id * tree%n_cell**2
 
@@ -87,15 +93,8 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
-    integer                  :: nc
-    real(dp)                 :: max_crv
 
-    nc = boxes(id)%n_cell
-    max_crv = boxes(id)%dr**2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-
-    if (max_crv > 5.0e-4_dp) then
-       ref_flags(id) = a5_do_ref
-    end if
+    if (boxes(id)%lvl < max_ref_lvl) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   subroutine set_init_cond(box)
@@ -109,7 +108,6 @@ contains
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
           box%cc(i, j, i_rhs) = rhs(xy)
-          box%cc(i, j, i_dx) = box%dr
        end do
     end do
   end subroutine set_init_cond

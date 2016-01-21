@@ -161,25 +161,25 @@ contains
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
-  subroutine mg$D_fas_fmg(tree, mg, set_residual, first_call)
+  subroutine mg$D_fas_fmg(tree, mg, set_residual, have_guess)
     use m_a$D_utils, only: a$D_boxes_copy_cc
     type(a$D_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)         :: mg   !< Multigrid options
     logical, intent(in)             :: set_residual !< If true, store residual in i_tmp
-    logical, intent(in)             :: first_call   !< If true, start from phi = 0
+    logical, intent(in)             :: have_guess   !< If false, start from phi = 0
     integer                         :: lvl, min_lvl
 
     call check_mg(mg)           ! Check whether mg options are set
 
     min_lvl = lbound(tree%lvls, 1)
 
-    if (first_call) then
-       call init_phi_rhs(tree, mg)
-    else
+    if (have_guess) then
        do lvl = tree%max_lvl,  min_lvl+1, -1
           ! Set rhs on coarse grid and restrict phi
           call set_coarse_phi_rhs(tree, lvl, mg)
        end do
+    else
+       call init_phi_rhs(tree, mg)
     end if
 
     do lvl = min_lvl, tree%max_lvl

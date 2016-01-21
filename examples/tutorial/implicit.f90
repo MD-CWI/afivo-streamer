@@ -133,7 +133,7 @@ contains
     call a2_loop_box(tree, set_rhs)
 
     ! Solve
-    call mg2_fas_fmg(tree, mg, .true., first_time)
+    call mg2_fas_fmg(tree, mg, .true., .not. first_time)
   end subroutine heat_backward_euler
 
   subroutine set_rhs(box)
