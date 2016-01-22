@@ -1,7 +1,7 @@
 !> \example poisson_basic_3d.f90
-
-! Example showing how to use multigrid and compare with an analytic solution. A
-! standard 7-point Laplacian is used.
+!>
+!> Example showing how to use multigrid and compare with an analytic solution. A
+!> standard 7-point Laplacian is used.
 program poisson_basic_3d
   use m_a3_t
   use m_a3_core
@@ -78,7 +78,6 @@ program poisson_basic_3d
   ! default values where necessary.
   call mg3_init_mg(mg)
 
-  print *, "Do multigrid"
   do i = 1, 10
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
@@ -96,7 +95,7 @@ program poisson_basic_3d
      ! This writes a Silo output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_basic_3d_", i
-     call a3_write_silo(tree, trim(fname))
+     call a3_write_silo(tree, trim(fname), dir="output")
   end do
 
   ! This call is not really necessary here, but cleaning up the data in a tree
@@ -106,7 +105,6 @@ program poisson_basic_3d
 contains
 
   ! This routine sets refinement flags
-  ! TODO: set_ref_flags should operate on singe box
   subroutine set_ref_flags(boxes, id, ref_flags)
     type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
@@ -121,7 +119,7 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
 
     ! And refine if it exceeds a threshold
-    if (max_crv > 5.0e-4_dp) then
+    if (max_crv > 5.0e-3_dp) then
        ref_flags(id) = a5_do_ref
     end if
   end subroutine set_ref_flags
@@ -219,7 +217,7 @@ contains
   ! Analytic solution to the Poisson problem
   real(dp) function analytic_solution(x)
     real(dp), intent(in) :: x(3)
-    integer :: n
+    integer              :: n
 
     analytic_solution = 0
     do n = 1, n_gaussians
@@ -231,7 +229,7 @@ contains
   ! Analytic right-hand side to the Poisson problem
   real(dp) function analytic_rhs(x)
     real(dp), intent(in) :: x(3)
-    integer :: n
+    integer              :: n
 
     analytic_rhs = 0
     do n = 1, n_gaussians
@@ -243,7 +241,8 @@ contains
   ! A Gaussian in xyz coordinates
   real(dp) function gaussian_3d(x, x0, sigma)
     real(dp), intent(in) :: x(3), x0(3), sigma
-    real(dp) :: xrel(3)
+    real(dp)             :: xrel(3)
+
     xrel = (x-x0)/sigma
     gaussian_3d = exp(-sum(xrel**2))
   end function gaussian_3d
@@ -251,7 +250,8 @@ contains
   ! Laplacian of a Gaussian in xyz coordinates
   real(dp) function lpl_gaussian_3d(x, x0, sigma)
     real(dp), intent(in) :: x(3), x0(3), sigma
-    real(dp) :: xrel(3)
+    real(dp)             :: xrel(3)
+
     xrel = (x-x0)/sigma
     lpl_gaussian_3d = 4/sigma**2 * (sum(xrel**2) - 1.5_dp) * &
          gaussian_3d(x, x0, sigma)

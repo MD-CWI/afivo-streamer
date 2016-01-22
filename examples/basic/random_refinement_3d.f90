@@ -66,7 +66,7 @@ program random_refinement_3d
      ! leaves of the tree (the boxes not covered by refinement). Variables are the names
      ! given as the third argument.
      write(fname, "(A,I0)") "random_refinement_3d_", i
-     call a3_write_vtk(tree, trim(fname))
+     call a3_write_vtk(tree, trim(fname), dir="output")
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can

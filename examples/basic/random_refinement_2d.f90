@@ -63,7 +63,7 @@ program random_refinement_2d
      ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "random_refinement_2d_", i
-     call a2_write_vtk(tree, trim(fname))
+     call a2_write_vtk(tree, trim(fname), dir="output")
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can

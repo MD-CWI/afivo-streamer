@@ -1,7 +1,11 @@
+# A template for the Makefiles in the example subdirectories
+
+# ../.. is only correct for subfolders
 A5_DIR  := ../..
 INCDIRS	:= $(A5_DIR)/src
 LIBDIRS := $(A5_DIR)/src $(A5_DIR)/silo/lib
 LIBS	:= afivo silo
+OUTDIR	:= output
 
 include $(A5_DIR)/makerules.make
 
@@ -15,5 +19,8 @@ all:	$(TESTS)
 clean:
 	$(RM) $(TESTS) *.o *.mod
 
+$(OUTDIR):
+		mkdir -p $@
+
 # Dependency information
-$(TESTS): $(A5_DIR)/src/libafivo.a
+$(TESTS): $(A5_DIR)/src/libafivo.a | $(OUTDIR)

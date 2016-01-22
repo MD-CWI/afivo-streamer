@@ -108,9 +108,7 @@ program test_drift_diff
 
      if (write_out) then
         call a2_loop_box_arg(tree, set_error, [time])
-        call a2_write_silo(tree, trim(fname), &
-             (/"phi", "tmp", "err"/), output_cnt, time, &
-             fc_names=["fx", "fy"], ixs_fc=[1])
+        call a2_write_silo(tree, trim(fname), output_cnt, time, dir="output")
         call a2_tree_max_cc(tree, i_err, p_err)
         call a2_tree_min_cc(tree, i_err, n_err)
         print *, "max error", max(p_err, abs(n_err))

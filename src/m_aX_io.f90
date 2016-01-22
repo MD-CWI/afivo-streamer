@@ -30,14 +30,14 @@ contains
 
     integer                       :: lvl, bc, bn, n, n_cells, n_nodes
     integer                       :: ig, i, j, id, n_ix, c_ix, n_grids
-    integer                       :: cell_ix, node_ix, n_cycle_used
+    integer                       :: cell_ix, node_ix, n_cycle_val
     integer                       :: n_cc, n_fc
     integer, parameter            :: n_ch = a$D_num_children
     integer                       :: nodes_per_box, cells_per_box
-    real(dp)                      :: time_used
+    real(dp)                      :: time_val
     real(dp), allocatable         :: coords(:), cc_vars(:,:)
     integer, allocatable          :: offsets(:), connects(:)
-    integer, allocatable          :: cell_types(:), icc_used(:), ifc_used(:)
+    integer, allocatable          :: cell_types(:), icc_val(:), ifc_val(:)
     type(vtk_t)                   :: vtkf
     character(len=400)            :: fname
     character(len=100), allocatable :: var_names(:)
@@ -46,31 +46,31 @@ contains
 #endif
 
     if (.not. tree%ready) stop "Tree not ready"
-    time_used = 0.0_dp; if (present(time)) time_used = time
-    n_cycle_used = 0; if (present(n_cycle)) n_cycle_used = n_cycle
+    time_val = 0.0_dp; if (present(time)) time_val = time
+    n_cycle_val = 0; if (present(n_cycle)) n_cycle_val = n_cycle
 
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "a$D_write_silo: wrong indices given (ixs_cc)"
-       icc_used = ixs_cc
+       icc_val = ixs_cc
     else
-       icc_used = [(i, i = 1, tree%n_var_cell)]
+       icc_val = [(i, i = 1, tree%n_var_cell)]
     end if
 
     if (present(ixs_fc)) then
        if (maxval(ixs_fc) > tree%n_var_cell .or. &
             minval(ixs_fc) < 1) stop "a$D_write_silo: wrong indices given (ixs_fc)"
-       ifc_used = ixs_fc
+       ifc_val = ixs_fc
     else
-       allocate(ifc_used(0))
+       allocate(ifc_val(0))
     end if
 
-    n_cc = size(icc_used)
-    n_fc = size(ifc_used)
+    n_cc = size(icc_val)
+    n_fc = size(ifc_val)
 
     allocate(var_names(n_cc + n_fc * $D))
-    var_names(1:n_cc) = tree%cc_names(icc_used)
-    var_names(n_cc+1:) = tree%fc_names(ifc_used)
+    var_names(1:n_cc) = tree%cc_names(icc_val)
+    var_names(n_cc+1:) = tree%fc_names(ifc_val)
 
     bc            = tree%n_cell     ! number of Box Cells
     bn            = tree%n_cell + 1 ! number of Box Nodes
@@ -120,11 +120,11 @@ contains
                 ! In vtk, indexing starts at 0, so subtract 1
                 n_ix                      = node_ix + (j-1) * bn + i - 1
                 c_ix                      = cell_ix + (j-1) * bc + i
-                cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, icc_used)
+                cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, icc_val)
                 cc_vars(c_ix, n_cc+1::$D) = &
-                     0.5_dp * sum(tree%boxes(id)%fx(i:i+1, j, ifc_used))
+                     0.5_dp * sum(tree%boxes(id)%fx(i:i+1, j, ifc_val))
                 cc_vars(c_ix, n_cc+2::$D) = &
-                     0.5_dp * sum(tree%boxes(id)%fy(i, j:j+1, ifc_used))
+                     0.5_dp * sum(tree%boxes(id)%fy(i, j:j+1, ifc_val))
                 offsets(c_ix)             = a$D_num_children * c_ix
                 connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1]
              end do
@@ -148,13 +148,13 @@ contains
                         (j-1) * bn + i - 1
                    c_ix                      = cell_ix + (k-1) * bc**2 + &
                         (j-1) * bc + i
-                   cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, k, icc_used)
+                   cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, k, icc_val)
                    cc_vars(c_ix, n_cc+1::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fx(i:i+1, j, k, ifc_used))
+                        0.5_dp * sum(tree%boxes(id)%fx(i:i+1, j, k, ifc_val))
                    cc_vars(c_ix, n_cc+2::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fy(i, j:j+1, k, ifc_used))
+                        0.5_dp * sum(tree%boxes(id)%fy(i, j:j+1, k, ifc_val))
                    cc_vars(c_ix, n_cc+3::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fz(i, j, k:k+1, ifc_used))
+                        0.5_dp * sum(tree%boxes(id)%fz(i, j, k:k+1, ifc_val))
                    offsets(c_ix)             = 8 * c_ix
                    connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = &
                         [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1, &
@@ -181,7 +181,7 @@ contains
 
     call vtk_ini_xml(vtkf, trim(fname), 'UnstructuredGrid')
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
-    call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, $D, n_cycle, time)
+    call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, $D, n_cycle_val, time_val)
     call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
     call vtk_dat_xml(vtkf, "CellData", .true.)
 
@@ -216,10 +216,10 @@ contains
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
     integer                         :: n_vars, i0, j0, dbix, n_cc, n_fc
     integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
-    integer                         :: n_cycle_used
-    integer, allocatable            :: ids(:), nb_ids(:), icc_used(:), ifc_used(:)
+    integer                         :: n_cycle_val
+    integer, allocatable            :: ids(:), nb_ids(:), icc_val(:), ifc_val(:)
     logical, allocatable            :: box_done(:)
-    real(dp)                        :: dr($D), r_min($D), time_used
+    real(dp)                        :: dr($D), r_min($D), time_val
 #if $D == 2
     integer, allocatable            :: box_list(:,:), new_box_list(:, :)
     real(dp), allocatable           :: var_data(:,:,:)
@@ -230,31 +230,31 @@ contains
 #endif
 
     if (.not. tree%ready) stop "Tree not ready"
-    time_used = 0.0_dp; if (present(time)) time_used = time
-    n_cycle_used = 0; if (present(n_cycle)) n_cycle_used = n_cycle
+    time_val = 0.0_dp; if (present(time)) time_val = time
+    n_cycle_val = 0; if (present(n_cycle)) n_cycle_val = n_cycle
 
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "a$D_write_silo: wrong indices given (ixs_cc)"
-       icc_used = ixs_cc
+       icc_val = ixs_cc
     else
-       icc_used = [(i, i = 1, tree%n_var_cell)]
+       icc_val = [(i, i = 1, tree%n_var_cell)]
     end if
 
     if (present(ixs_fc)) then
        if (maxval(ixs_fc) > tree%n_var_cell .or. &
             minval(ixs_fc) < 1) stop "a$D_write_silo: wrong indices given (ixs_fc)"
-       ifc_used = ixs_fc
+       ifc_val = ixs_fc
     else
-       allocate(ifc_used(0))
+       allocate(ifc_val(0))
     end if
 
-    n_cc = size(icc_used)
-    n_fc = size(ifc_used)
+    n_cc = size(icc_val)
+    n_fc = size(ifc_val)
 
     allocate(var_names(n_cc + n_fc * $D))
-    var_names(1:n_cc) = tree%cc_names(icc_used)
-    var_names(n_cc+1:) = tree%fc_names(ifc_used)
+    var_names(1:n_cc) = tree%cc_names(icc_val)
+    var_names(n_cc+1:) = tree%fc_names(ifc_val)
 
     nc = tree%n_cell
     n_vars = n_cc + n_fc * $D
@@ -383,13 +383,13 @@ contains
                 i0 = 1 + (ix-1) * nc
                 j0 = 1 + (iy-1) * nc
                 var_data(i0:i0+nc-1, j0:j0+nc-1, 1:n_cc) = &
-                     tree%boxes(id)%cc(1:nc, 1:nc, icc_used)
+                     tree%boxes(id)%cc(1:nc, 1:nc, icc_val)
                 var_data(i0:i0+nc-1, j0:j0+nc-1, n_cc+1::$D) = &
-                     0.5_dp * (tree%boxes(id)%fx(1:nc, 1:nc, ifc_used) + &
-                     tree%boxes(id)%fx(2:nc+1, 1:nc, ifc_used))
+                     0.5_dp * (tree%boxes(id)%fx(1:nc, 1:nc, ifc_val) + &
+                     tree%boxes(id)%fx(2:nc+1, 1:nc, ifc_val))
                 var_data(i0:i0+nc-1, j0:j0+nc-1, n_cc+2::$D) = &
-                     0.5_dp * (tree%boxes(id)%fy(1:nc, 1:nc, ifc_used) + &
-                     tree%boxes(id)%fy(1:nc, 2:nc+1, ifc_used))
+                     0.5_dp * (tree%boxes(id)%fy(1:nc, 1:nc, ifc_val) + &
+                     tree%boxes(id)%fy(1:nc, 2:nc+1, ifc_val))
              end do
           end do
 
@@ -535,16 +535,16 @@ contains
                    j0 = 1 + (iy-1) * nc
                    k0 = 1 + (iz-1) * nc
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, 1:n_cc) = &
-                        tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, icc_used)
+                        tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, icc_val)
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+1::$D) = &
-                        0.5_dp * (tree%boxes(id)%fx(1:nc, 1:nc, 1:nc, ifc_used) + &
-                        tree%boxes(id)%fx(2:nc+1, 1:nc, 1:nc, ifc_used))
+                        0.5_dp * (tree%boxes(id)%fx(1:nc, 1:nc, 1:nc, ifc_val) + &
+                        tree%boxes(id)%fx(2:nc+1, 1:nc, 1:nc, ifc_val))
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+2::$D) = &
-                        0.5_dp * (tree%boxes(id)%fy(1:nc, 1:nc, 1:nc, ifc_used) + &
-                        tree%boxes(id)%fy(1:nc, 2:nc+1, 1:nc, ifc_used))
+                        0.5_dp * (tree%boxes(id)%fy(1:nc, 1:nc, 1:nc, ifc_val) + &
+                        tree%boxes(id)%fy(1:nc, 2:nc+1, 1:nc, ifc_val))
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+3::$D) = &
-                        0.5_dp * (tree%boxes(id)%fz(1:nc, 1:nc, 1:nc, ifc_used) + &
-                        tree%boxes(id)%fz(1:nc, 1:nc, 2:nc+1, ifc_used))
+                        0.5_dp * (tree%boxes(id)%fz(1:nc, 1:nc, 1:nc, ifc_val) + &
+                        tree%boxes(id)%fz(1:nc, 1:nc, 2:nc+1, ifc_val))
                 end do
              end do
           end do
@@ -570,10 +570,11 @@ contains
        end do
     end do
 
-    call SILO_set_mmesh_grid(dbix, amr_name, grid_list(1:i_grid), n_cycle, time)
+    call SILO_set_mmesh_grid(dbix, amr_name, grid_list(1:i_grid), &
+         n_cycle_val, time_val)
     do iv = 1, n_vars
        call SILO_set_mmesh_var(dbix, trim(var_names(iv)), amr_name, &
-            var_list(iv, 1:i_grid), n_cycle, time)
+            var_list(iv, 1:i_grid), n_cycle_val, time_val)
     end do
     call SILO_close_file(dbix)
 

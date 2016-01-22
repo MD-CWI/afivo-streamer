@@ -1,4 +1,4 @@
-SRC_DIRS	:= basic multigrid transport tutorial
+SRC_DIRS	:= basic multigrid transport heat_equation
 
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)

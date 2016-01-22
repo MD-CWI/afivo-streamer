@@ -1,200 +1,120 @@
 !> \example test_mg_benchmark_2d.f90
-!> Benchmark of the multigrid routines
+
+! This program can be used to benchmark the multigrid routines. For simplicity,
+! it does not compare results with known solution.
 program test_mg2_2d
   use m_a2_t
   use m_a2_core
   use m_a2_mg
   use m_a2_utils
+  use m_a2_gc
   use m_a2_io
 
   implicit none
 
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 100
-  integer, parameter :: i_phi = 1, i_tmp = 2
-  integer, parameter :: i_rhs = 3, i_err = 4
-
-  ! The manufactured solution exists of two Gaussians here.
-  ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
-  integer, parameter :: n_gaussians = 1
-  real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
-       [1.0_dp, 0.5_dp, 0.5_dp, 0.04_dp], [4, n_gaussians])
+  integer, parameter :: n_var_cell = 3
+  integer, parameter :: i_phi = 1
+  integer, parameter :: i_tmp = 2
+  integer, parameter :: i_rhs = 3
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i, id
+  integer            :: i
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  integer            :: box_size, mesh_size, max_ref_lvl
+  integer            :: n_cell, mesh_size, max_ref_lvl
   real(dp)           :: dr
-  character(len=40)  :: var_names(4), arg_string
+  character(len=40)  :: arg_string
   type(mg2_t)        :: mg
 
-  var_names(i_phi) = "phi"
-  var_names(i_tmp) = "tmp"
-  var_names(i_rhs) = "rhs"
-  var_names(i_err) = "err"
-
-  dr = 1.0_dp / box_size
-
   ! Get box size and mesh size from command line argument
-  if (command_argument_count() /= 2) stop "Arguments should be: box_size mesh_size"
+  if (command_argument_count() /= 2) stop "Arguments should be: n_cell mesh_size"
   call get_command_argument(1, arg_string)
-  read(arg_string, *) box_size
+  read(arg_string, *) n_cell
   call get_command_argument(2, arg_string)
   read(arg_string, *) mesh_size
 
   ! Determine maximum refinement level
-  max_ref_lvl = nint(log(mesh_size / real(box_size, dp)) / log(2.0_dp)) + 1
+  max_ref_lvl = nint(log(mesh_size / real(n_cell, dp)) / log(2.0_dp)) + 1
 
-  print *, "Box size: ", box_size
-  print *, "Mesh size:", 2**(max_ref_lvl-1) * box_size
+  print *, "Box size: ", n_cell
+  print *, "Mesh size:", 2**(max_ref_lvl-1) * n_cell
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=4, n_var_face=0, &
-       dr = dr, coarsen_to = 2, n_boxes=10*1000)
+  call a2_init(tree, & ! Tree to initialize
+       n_cell, &       ! A box contains n_cell**DIM cells
+       n_var_cell, &   ! Number of cell-centered variables
+       0, &            ! Number of face-centered variables
+       dr, &           ! Distance between cells on base level
+       coarsen_to=2, & ! Add coarsened levels for multigrid
+       cc_names=["phi", "rhs", "tmp"]) ! Variable names
 
-  id = 1
-  ix_list(:, id) = [1,1]         ! Set index of boxnn
-  nb_list(:, id) = -1            ! Dirichlet zero -> -1
+  ! Set up geometry. These indices are used to define the coordinates of a box,
+  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
+  ix_list(:, 1) = [1,1]         ! Set index of boxnn
+  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
 
+  ! Create the base mesh, using the box indices and their neighbor information
   call a2_set_base(tree, ix_list, nb_list)
 
   do
+     ! For each box, set the initial conditions
      call a2_loop_box(tree, set_init_cond)
+
+     ! This updates the refinement of the tree, by at most one level per call.
      call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+
+     ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
 
-  ! Set the multigrid options
-  mg%i_phi        = i_phi
-  mg%i_tmp        = i_tmp
-  mg%i_rhs        = i_rhs
-  mg%n_cycle_down = 2
-  mg%n_cycle_up   = 2
-  mg%n_cycle_base = 2
-  mg%sides_bc     => sides_bc
+  ! Set the multigrid options.
+  mg%i_phi        = i_phi       ! Solution variable
+  mg%i_rhs        = i_rhs       ! Right-hand side variable
+  mg%i_tmp        = i_tmp       ! Variable for temporary space
+  mg%sides_bc     => a2_bc_dirichlet_zero ! Method for boundary conditions
 
+  ! Initialize the multigrid options. This performs some basics checks and sets
+  ! default values where necessary.
   call mg2_init_mg(mg)
 
+  ! Do the actual benchmarking
   do i = 1, n_iterations
+     ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
+     ! third argument controls whether the residual is stored in i_tmp. The
+     ! fourth argument controls whether to improve the current solution.
      call mg2_fas_fmg(tree, mg, .true., i>1)
   end do
 
-  call a2_write_silo(tree, "test_mg_benchmark_2d")
-  print *, "max_id", tree%max_id
-  print *, "n_cells", tree%max_id * tree%n_cell**2
+  ! This writes a Silo output file containing the cell-centered values of the
+  ! leaves of the tree (the boxes not covered by refinement).
+  call a2_write_silo(tree, "poisson_benchmark_2d")
 
+  ! This call is not really necessary here, but cleaning up the data in a tree
+  ! is important if your program continues with other tasks.
   call a2_destroy(tree)
 
 contains
 
+  ! This routine sets refinement flags
   subroutine set_ref_flags(boxes, id, ref_flags)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
 
+    ! Fully refine up to max_ref_lvl
     if (boxes(id)%lvl < max_ref_lvl) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
+  ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
-    integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
+    integer                     :: nc
 
     nc = box%n_cell
-
-    do j = 1, nc
-       do i = 1, nc
-          xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_rhs) = rhs(xy)
-       end do
-    end do
+    box%cc(1:nc, 1:nc, i_rhs) = 1.0_dp
   end subroutine set_init_cond
-
-  subroutine set_err(box)
-    type(box2_t), intent(inout) :: box
-    integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
-
-    nc = box%n_cell
-    do j = 1, nc
-       do i = 1, nc
-          xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - phi_sol(xy)
-       end do
-    end do
-  end subroutine set_err
-
-  subroutine sides_bc(box, nb, iv, bc_type)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: nb, iv
-    integer, intent(out)        :: bc_type
-    real(dp)                    :: xy(2)
-    integer                     :: n, nc
-
-    nc = box%n_cell
-    bc_type = a5_bc_dirichlet
-
-    select case (nb)
-    case (a2_nb_lx)
-       do n = 1, nc
-          xy = a2_rr_cc(box, [0.5_dp, real(n, dp)])
-          box%cc(0, n, iv) = phi_sol(xy)
-       end do
-    case (a2_nb_hx)
-       do n = 1, nc
-          xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = phi_sol(xy)
-       end do
-    case (a2_nb_ly)
-       do n = 1, nc
-          xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = phi_sol(xy)
-       end do
-    case (a2_nb_hy)
-       do n = 1, nc
-          xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = phi_sol(xy)
-       end do
-    end select
-  end subroutine sides_bc
-
-  real(dp) function phi_sol(x)
-    real(dp), intent(in) :: x(2)
-    integer :: n
-
-    phi_sol = 0
-    do n = 1, n_gaussians
-       phi_sol = phi_sol + g_params(1, n) * &
-            gaussian_2d(x, g_params(2:3, n), g_params(4, n))
-    end do
-  end function phi_sol
-
-  real(dp) function rhs(x)
-    real(dp), intent(in) :: x(2)
-    integer :: n
-
-    rhs = 0
-    do n = 1, n_gaussians
-       rhs = rhs + g_params(1, n) * &
-            lpl_gaussian_2d(x, g_params(2:3, n), g_params(4, n))
-    end do
-  end function rhs
-
-  real(dp) function gaussian_2d(x, x0, sigma)
-    real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp) :: xrel(2)
-    xrel = (x-x0)/sigma
-    gaussian_2d = exp(-sum(xrel**2))
-  end function gaussian_2d
-
-  real(dp) function lpl_gaussian_2d(x, x0, sigma)
-    real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp) :: xrel(2)
-    xrel = (x-x0)/sigma
-    lpl_gaussian_2d = 4/sigma**2 * (sum(xrel**2) - 1) * &
-         gaussian_2d(x, x0, sigma)
-  end function lpl_gaussian_2d
 
 end program test_mg2_2d

@@ -1,7 +1,7 @@
 !> \example poisson_basic_2d.f90
-
-! Example showing how to use multigrid and compare with an analytic solution. A
-! standard 5-point Laplacian is used.
+!>
+!> Example showing how to use multigrid and compare with an analytic solution. A
+!> standard 5-point Laplacian is used.
 program poisson_basic_2d
   use m_a2_t
   use m_a2_core
@@ -95,11 +95,9 @@ program poisson_basic_2d
      ! This writes a Silo output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_basic_2d_", i
-     call a2_write_silo(tree, trim(fname))
+     call a2_write_silo(tree, trim(fname), dir="output")
   end do
 
-  ! This call is not really necessary here, but cleaning up the data in a tree
-  ! is important if your program continues with other tasks.
   call a2_destroy(tree)
 
 contains
@@ -109,28 +107,39 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
-    integer                  :: nc
-    real(dp)                 :: max_crv
+    integer                  :: i, j, nc
+    real(dp)                 :: max_crv, xy(2), dr2, derror
 
     nc = boxes(id)%n_cell
+    ! dr2 = boxes(id)%dr**2
+
+    ! do j = 1, nc
+    !    do i = 1, nc
+    !       xy = a2_r_cc(boxes(id), [i, j])
+    !       derror = dr2 * discr_error(xy)
+    !    end do
+    ! end do
 
     ! Compute the "curvature" in phi
     max_crv = boxes(id)%dr**2 * &
          maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
 
-    ! And refine if it exceeds a threshold
-    if (max_crv > 5.0e-4_dp) then
-       ref_flags(id) = a5_do_ref
-    end if
+    ! ! And refine if it exceeds a threshold
+    ! if (max_crv > 10.0e-4_dp) then
+    !    ref_flags(id) = a5_do_ref
+    ! end if
+
+    if (boxes(id)%lvl < 5 .and. max_crv > 0.0e-4_dp) ref_flags(id) = a5_do_ref
   end subroutine set_ref_flags
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
+    real(dp)                    :: xy(2), dr2
 
     nc = box%n_cell
+    dr2 = box%dr**2
 
     do j = 1, nc
        do i = 1, nc
@@ -138,7 +147,8 @@ contains
           xy = a2_r_cc(box, [i,j])
 
           ! And set the rhs values
-          box%cc(i, j, i_rhs) = analytic_rhs(xy)
+          box%cc(i, j, i_rhs) = analytic_rhs(xy)! + &
+               ! dr2 * analytic_fourth(xy) / 12
        end do
     end do
   end subroutine set_init_cond
@@ -162,7 +172,7 @@ contains
   ! with approriate values.
   subroutine sides_bc(box, nb, iv, bc_type)
     type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction in which to set the boundary condition
+    integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
     real(dp)                    :: xy(2)
@@ -241,4 +251,26 @@ contains
          gaussian_2d(x, x0, sigma)
   end function lpl_gaussian_2d
 
-end program poisson_basic_2d
+  ! Fourth derivative of a Gaussian
+  real(dp) function d4_gaussian_2d(x, x0, sigma)
+    real(dp), intent(in) :: x(2), x0(2), sigma
+    real(dp)             :: xrel(2)
+
+    xrel = (x-x0)/sigma
+    d4_gaussian_2d = gaussian_2d(x, x0, sigma) / sigma**4 * ( &
+         16 * sum(xrel**4) - 48 * sum(xrel**2) + 24)
+  end function d4_gaussian_2d
+
+  ! Approximate discretization error of a Gaussian
+  real(dp) function analytic_fourth(x)
+    real(dp), intent(in) :: x(2)
+    integer              :: n
+
+    analytic_fourth = 0
+    do n = 1, n_gaussians
+       analytic_fourth = analytic_fourth + g_params(1, n) * &
+            d4_gaussian_2d(x, g_params(2:3, n), g_params(4, n))
+    end do
+  end function analytic_fourth
+
+end program
