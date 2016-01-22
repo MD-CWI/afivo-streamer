@@ -43,7 +43,7 @@ program test_reduction
 
   do i = 1, 16
      print *, "i = ", i, "max_id", tree%max_id
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a2_adjust_refinement(tree, ref_func, ref_info)
      call a2_loop_box(tree, set_random_values)
 
      call a2_tree_max_cc(tree, i_phi, max_val)
@@ -102,19 +102,18 @@ contains
     min_ab = min(a,b)
   end function min_ab
 
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  integer function ref_func(boxes, id)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flags(:)
     real(dp)                 :: rr
 
     call random_number(rr)
     if (rr < 0.2_dp .and. boxes(id)%lvl < 10) then
-       ref_flags(id) = a5_do_ref
+       ref_func = a5_do_ref
     else
-       ref_flags(id) = a5_rm_ref
+       ref_func = a5_rm_ref
     end if
-  end subroutine set_ref_flags
+  end function ref_func
 
   subroutine set_random_values(box)
     type(box2_t), intent(inout) :: box

@@ -72,7 +72,7 @@ program random_refinement_3d
      ! The second argument is a subroutine that is called for each box that can
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
-     call a3_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a3_adjust_refinement(tree, ref_func, ref_info)
      print *, "# new     boxes", ref_info%n_add
      print *, "# removed boxes", ref_info%n_rm
 
@@ -86,27 +86,25 @@ program random_refinement_3d
 
 contains
 
-  ! This routine sets refinement flags
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  ! Return the refinement flag for boxes(id)
+  integer function ref_func(boxes, id)
     type(box3_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
     integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: ref_flags(:) ! A list with the refinement flags
-                                             ! for the boxes
     real(dp)                 :: rr
 
     ! Draw a [0, 1) random number
     call random_number(rr)
 
     if (rr < 0.25_dp .and. boxes(id)%lvl < 8) then
-       ref_flags(id) = a5_do_ref ! Add refinement
+       ref_func = a5_do_ref ! Add refinement
     else if (rr > 0.75_dp) then
-       ref_flags(id) = a5_rm_ref ! Ask to remove this box, which will not always
-                                 ! happen (see documentation)
+       ref_func = a5_rm_ref ! Ask to remove this box, which will not always
+                            ! happen (see documentation)
     else
-       ref_flags(id) = a5_kp_ref ! Keep the box as-is (which is the default
-                                 ! action if you don't specify anything)
+       ref_func = a5_kp_ref ! Keep the box as-is (which is the default action if
+                            ! you don't specify anything)
     end if
-  end subroutine set_ref_flags
+  end function ref_func
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)

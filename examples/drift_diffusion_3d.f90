@@ -1,6 +1,6 @@
-!> \example test_drift_diff_3d.f90
+!> \example drift_diffusion_3d.f90
 !> A drift-diffusion example for m_a3_t
-program test_drift_diff
+program drift_diffusion_3d
   use m_a3_t
   use m_a3_core
   use m_a3_io
@@ -33,7 +33,8 @@ program test_drift_diff
   integer           :: time_step_method = 2
 
   print *, "Initialize tree"
-  call a3_init(tree, box_size, n_var_cell=3, n_var_face=2, dr = dr)
+  call a3_init(tree, box_size, n_var_cell=3, n_var_face=2, dr=dr, &
+       cc_names=["phi", "old", "err"])
 
   print *, "Set up geometry"
   id             = 1
@@ -59,7 +60,7 @@ program test_drift_diff
      ! We should only set the finest level, but this also works
      call a3_loop_box(tree, set_init_cond)
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
-     call a3_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a3_adjust_refinement(tree, ref_func, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -78,7 +79,7 @@ program test_drift_diff
      if (output_cnt * dt_output <= time) then
         write_out = .true.
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "test_drift_diff_3d_", output_cnt
+        write(fname, "(A,I0)") "drift_diffusion_3d_", output_cnt
      else
         write_out = .false.
      end if
@@ -128,7 +129,7 @@ program test_drift_diff
         end do
      end select
 
-     call a3_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a3_adjust_refinement(tree, ref_func, ref_info)
      call prolong_to_new_children(tree, ref_info)
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
      call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
@@ -138,10 +139,9 @@ program test_drift_diff
 
 contains
 
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  integer function ref_func(boxes, id)
     type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flags(:)
     real(dp)                 :: diff
     integer                  :: nc
 
@@ -154,14 +154,13 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
+    ref_func = a5_kp_ref
     if (boxes(id)%lvl < 3 .or. diff > 0.1_dp) then
-       ref_flags(id) = a5_do_ref
-    else if (diff > 0.2_dp * 0.025_dp) then
-       ref_flags(id) = a5_kp_ref
-    else if (boxes(id)%lvl > 4) then
-       ref_flags(id) = a5_rm_ref
+       ref_func = a5_do_ref
+    else if (boxes(id)%lvl > 4 .and. diff < 0.2_dp * 0.05) then
+       ref_func = a5_rm_ref
     end if
-  end subroutine set_ref_flags
+  end function ref_func
 
   subroutine set_init_cond(box)
     type(box3_t), intent(inout) :: box
@@ -490,4 +489,4 @@ contains
     stop "We have no boundary conditions in this example"
   end subroutine have_no_bc2
 
-end program
+end program drift_diffusion_3d

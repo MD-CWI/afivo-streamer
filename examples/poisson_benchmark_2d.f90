@@ -64,7 +64,7 @@ program test_mg2_2d
      call a2_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a2_adjust_refinement(tree, ref_func, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -98,15 +98,14 @@ program test_mg2_2d
 
 contains
 
-  ! This routine sets refinement flags
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  ! Return the refinement flag for boxes(id)
+  integer function ref_func(boxes, id)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flags(:)
 
     ! Fully refine up to max_ref_lvl
-    if (boxes(id)%lvl < max_ref_lvl) ref_flags(id) = a5_do_ref
-  end subroutine set_ref_flags
+    if (boxes(id)%lvl < max_ref_lvl) ref_func = a5_do_ref
+  end function ref_func
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)

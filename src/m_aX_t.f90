@@ -226,12 +226,12 @@ module m_a$D_t
 
   abstract interface
      !> Function for setting refinement flags
-     subroutine a$D_subr_ref(boxes, id, ref_flags)
+     function a$D_ref_func(boxes, id) result(ref_flag)
        import
-       type(box$D_t), intent(in) :: boxes(:) ! List of boxes
-       integer, intent(in)       :: id  ! Id (index) of box
-       integer, intent(inout)    :: ref_flags(:) ! Refinement flags
-     end subroutine a$D_subr_ref
+       type(box$D_t), intent(in) :: boxes(:) !< List of boxes
+       integer, intent(in)       :: id  !< Id (index) of box
+       integer                   :: ref_flag !< Refinement flags
+     end function a$D_ref_func
 
      !> Subroutine that gets a box
      subroutine a$D_subr(box)

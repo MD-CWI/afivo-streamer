@@ -494,16 +494,16 @@ contains
     call move_alloc(boxes_cpy, tree%boxes)
   end subroutine a$D_resize_box_storage
 
-  !> Adjust the refinement of a tree using the user-supplied set_ref_flags. If the
+  !> Adjust the refinement of a tree using the user-supplied ref_func. If the
   !> argument n_changes is present, it contains the number of boxes that were
   !> (de)refined.
   !>
   !> This routine sets the bit a5_bit_new_children for each box that is refined.
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
-  subroutine a$D_adjust_refinement(tree, set_ref_flags, ref_info)
+  subroutine a$D_adjust_refinement(tree, ref_func, ref_info)
     type(a$D_t), intent(inout)           :: tree          !< Tree
-    procedure(a$D_subr_ref)              :: set_ref_flags !< Refinement function
+    procedure(a$D_ref_func)              :: ref_func !< Refinement function
     type(ref_info_t), intent(inout)     :: ref_info !< Information about refinement
     integer                             :: lvl, id, i, c_ids(a$D_num_children)
     integer                             :: max_id_prev, max_id_req
@@ -514,7 +514,7 @@ contains
     allocate(ref_flags(max_id_prev))
 
     ! Set refinement values for all boxes
-    call consistent_ref_flags(tree, ref_flags, set_ref_flags)
+    call consistent_ref_flags(tree, ref_flags, ref_func)
 
     ! Check whether there is enough free space, otherwise extend the list
     max_id_req = max_id_prev + a$D_num_children * count(ref_flags == a5_refine)
@@ -652,43 +652,29 @@ contains
   !> base level, and it cannot refine above tree%lvls_max. The argument
   !> ref_flags is changed: for boxes that will be refined it holds a5_refine,
   !> for boxes that will be derefined it holds a5_derefine
-  subroutine consistent_ref_flags(tree, ref_flags, set_ref_flags)
+  subroutine consistent_ref_flags(tree, ref_flags, ref_func)
     type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
-    procedure(a$D_subr_ref)    :: set_ref_flags     !< User-supplied refinement function.
+    procedure(a$D_ref_func)    :: ref_func     !< User-supplied refinement function.
     integer                   :: lvl, i, id, c_ids(a$D_num_children)
     integer                   :: nb, p_id, nb_id, p_nb_id
     integer                   :: lvls_max
-    integer, allocatable      :: my_ref_flags(:)
 
     lvls_max = tree%lvls_max
     ref_flags(:) = -HUGE(1)
-    my_ref_flags = ref_flags
 
-    ! Set refinement flags for all boxes using set_ref_flags. Each thread first sets
-    ! the flags on its own copy
+    ! Set refinement flags for all boxes
 
-    !$omp parallel private(lvl, i, id) firstprivate(my_ref_flags) shared(ref_flags)
+    !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%max_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          call set_ref_flags(tree%boxes, id, my_ref_flags)
+          ref_flags(id) = ref_func(tree%boxes, id)
        end do
        !$omp end do
     end do
-
-    ! Now set refinement flags to the maximum (refine > keep ref > derefine)
-
-    !$omp critical
-    do i = 1, size(ref_flags)
-       if (my_ref_flags(i) > ref_flags(i)) &
-            ref_flags(i) = my_ref_flags(i)
-    end do
-    !$omp end critical
     !$omp end parallel
-
-    deallocate(my_ref_flags)
 
     ! Set flags with unknown values to default (keep refinement)
     where (ref_flags > a5_do_ref) ref_flags = a5_kp_ref
