@@ -1,14 +1,30 @@
-SRC_DIRS	:= basic multigrid transport heat_equation
+A5_DIR  := ..
+INCDIRS	:= $(A5_DIR)/src
+LIBDIRS := $(A5_DIR)/src $(A5_DIR)/silo/lib
+LIBS	:= afivo silo
+OUTDIR	:= output
 
-# Directories with altered names (useful for cleaning)
-CLEANSRC	:= $(SRC_DIRS:%=clean-%)
+include $(A5_DIR)/makerules.make
 
-.PHONY:	all clean $(SRC_DIRS) $(CLEANSRC)
+# All program sources (the .f90 files except modules)
+SRCS	:= $(filter-out $(wildcard m_*.f90), $(wildcard *.f90))
+PROGS	:= $(SRCS:%.f90=%)
 
-all: 		$(SRC_DIRS)
-clean: 		$(CLEANSRC)
+.PHONY: all clean
 
-$(SRC_DIRS):
-		$(MAKE) -C $@
-$(CLEANSRC):
-		$(MAKE) -C $(@:clean-%=%) clean
+all:	$(PROGS)
+
+clean:
+	$(RM) $(PROGS) *.o *.mod
+
+$(OUTDIR):
+		mkdir -p $@
+
+# Dependency information
+$(PROGS): $(A5_DIR)/src/libafivo.a | $(OUTDIR)
+
+# Poisson programs and objects depend on m_gaussians
+PROGS_POIS	:= $(filter poisson_%, $(PROGS))
+OBJS_POIS	:= $(PROGS_POIS:%=%.o)
+$(PROGS_POIS): 	m_gaussians.o
+$(OBJS_POIS):	m_gaussians.o

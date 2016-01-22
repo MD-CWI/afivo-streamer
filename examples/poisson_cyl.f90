@@ -8,6 +8,7 @@ program poisson_cyl
   use m_a2_mg
   use m_a2_utils
   use m_a2_io
+  use m_gaussians
 
   implicit none
 
@@ -19,13 +20,6 @@ program poisson_cyl
   integer, parameter :: i_err = 3
   integer, parameter :: i_tmp = 4
 
-  ! The manufactured solution exists of two Gaussians here.
-  ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
-  integer, parameter :: n_gaussians = 2
-  real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
-       [1.0_dp, 0.1_dp, 0.25_dp, 0.15_dp, &
-       1.0e-3_dp, 0.75_dp, 0.75_dp, 0.05_dp], [4,2])
-
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: i
@@ -34,6 +28,11 @@ program poisson_cyl
   real(dp)           :: dr, min_res, max_res
   character(len=40)  :: fname
   type(mg2_t)        :: mg
+  type(gauss_t)      :: gs
+
+  ! The manufactured solution exists of two Gaussians, which are stored in gs
+  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
+       reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / n_cell
@@ -98,7 +97,7 @@ program poisson_cyl
      call a2_tree_max_cc(tree, i_tmp, max_res)
      print *, "Iteration ", i, "max residual: ", max(abs(min_res), abs(max_res))
 
-     write(fname, "(A,I0)") "test_mg_cyl_", i
+     write(fname, "(A,I0)") "poisson_cyl_", i
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
 
@@ -130,14 +129,14 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
+    real(dp)                    :: rz(2)
 
     nc = box%n_cell
 
     do j = 0, nc+1
        do i = 0, nc+1
-          xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_rhs) = analytic_rhs(xy)
+          rz = a2_r_cc(box, [i,j])
+          box%cc(i, j, i_rhs) = gauss_lpl_cyl(gs, rz)
        end do
     end do
   end subroutine set_init_cond
@@ -146,13 +145,13 @@ contains
   subroutine set_err(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
+    real(dp)                    :: rz(2)
 
     nc = box%n_cell
     do j = 1, nc
        do i = 1, nc
-          xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - analytic_solution(xy)
+          rz = a2_r_cc(box, [i,j])
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_val(gs, rz)
        end do
     end do
   end subroutine set_err
@@ -166,7 +165,7 @@ contains
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
-    real(dp)                    :: xy(2)
+    real(dp)                    :: rz(2)
     integer                     :: n, nc
 
     nc = box%n_cell
@@ -178,64 +177,22 @@ contains
     case (a2_nb_hx)             ! Use solution on other boundaries
        bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = analytic_solution(xy)
+          rz = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
+          box%cc(nc+1, n, iv) = gauss_val(gs, rz)
        end do
     case (a2_nb_ly)
        bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = analytic_solution(xy)
+          rz = a2_rr_cc(box, [real(n, dp), 0.5_dp])
+          box%cc(n, 0, iv) = gauss_val(gs, rz)
        end do
     case (a2_nb_hy)
        bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = analytic_solution(xy)
+          rz = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
+          box%cc(n, nc+1, iv) = gauss_val(gs, rz)
        end do
     end select
   end subroutine sides_bc
-
-  ! Analytic solution to the Poisson problem
-  real(dp) function analytic_solution(x)
-    real(dp), intent(in) :: x(2)
-    integer              :: n
-
-    analytic_solution = 0
-    do n = 1, n_gaussians
-       analytic_solution = analytic_solution + g_params(1, n) * &
-            gaussian_2d(x, g_params(2:3, n), g_params(4, n))
-    end do
-  end function analytic_solution
-
-  ! Analytic right-hand side to the Poisson problem
-  real(dp) function analytic_rhs(x)
-    real(dp), intent(in) :: x(2)
-    integer :: n
-
-    analytic_rhs = 0
-    do n = 1, n_gaussians
-       analytic_rhs = analytic_rhs + g_params(1, n) * &
-            lpl_gaussian_2d(x, g_params(2:3, n), g_params(4, n))
-    end do
-  end function analytic_rhs
-
-  ! A Gaussian in rz coordinates
-  real(dp) function gaussian_2d(x, x0, sigma)
-    real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp) :: xrel(2)
-    xrel = (x-x0)/sigma
-    gaussian_2d = exp(-sum(xrel**2))
-  end function gaussian_2d
-
-  ! Laplacian of a Gaussian in rz coordinates
-  real(dp) function lpl_gaussian_2d(x, x0, sigma)
-    real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp) :: xrel(2)
-    xrel = (x-x0)/sigma
-
-    lpl_gaussian_2d = 4/sigma**2 * (sum(xrel**2) - 1.0_dp - &
-         0.5_dp * (x(1)-x0(1))/x(1)) * gaussian_2d(x, x0, sigma)
-  end function lpl_gaussian_2d
 
 end program

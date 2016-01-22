@@ -8,6 +8,7 @@ program poisson_basic_3d
   use m_a3_mg
   use m_a3_utils
   use m_a3_io
+  use m_gaussians
 
   implicit none
 
@@ -19,13 +20,6 @@ program poisson_basic_3d
   integer, parameter :: i_err = 3
   integer, parameter :: i_tmp = 4
 
-  ! The manufactured solution exists of two Gaussians here. For each Gaussian, 4
-  ! constants are used: pre-factor, x0, y0, sigma.
-  integer, parameter :: n_gaussians = 2
-  real(dp), parameter :: g_params(5, n_gaussians) = reshape(&
-       [1.0_dp, 0.25_dp, 0.25_dp, 0.25_dp, 0.05_dp, &
-       1.0_dp, 0.75_dp, 0.75_dp, 0.75_dp, 0.05_dp], [5,2])
-
   type(a3_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: i
@@ -34,6 +28,11 @@ program poisson_basic_3d
   real(dp)           :: dr, min_res, max_res
   character(len=40)  :: fname
   type(mg3_t)        :: mg
+  type(gauss_t)      :: gs
+
+  ! The manufactured solution exists of two Gaussians, which are stored in gs
+  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
+       reshape([0.25_dp, 0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp, 0.75_dp], [3,2]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / n_cell
@@ -140,7 +139,7 @@ contains
              xyz = a3_r_cc(box, [i,j,k])
 
              ! And set the rhs values
-             box%cc(i, j, k, i_rhs) = analytic_rhs(xyz)
+             box%cc(i, j, k, i_rhs) = gauss_lpl(gs, xyz)
           end do
        end do
     end do
@@ -158,7 +157,7 @@ contains
           do i = 1, nc
              xyz = a3_r_cc(box, [i,j,k])
              box%cc(i, j, k, i_err) = box%cc(i, j, k, i_phi) - &
-                  analytic_solution(xyz)
+                  gauss_val(gs, xyz)
           end do
        end do
     end do
@@ -194,67 +193,24 @@ contains
        do k = 1, nc
           do j = 1, nc
              xyz = a3_rr_cc(box, [loc, real(j, dp), real(k, dp)])
-             box%cc(ix, j, k, iv) = analytic_solution(xyz)
+             box%cc(ix, j, k, iv) = gauss_val(gs, xyz)
           end do
        end do
     case (2)
        do k = 1, nc
           do i = 1, nc
              xyz = a3_rr_cc(box, [real(i, dp), loc, real(k, dp)])
-             box%cc(i, ix, k, iv) = analytic_solution(xyz)
+             box%cc(i, ix, k, iv) = gauss_val(gs, xyz)
           end do
        end do
     case (3)
        do j = 1, nc
           do i = 1, nc
              xyz = a3_rr_cc(box, [real(i, dp), real(j, dp), loc])
-             box%cc(i, j, ix, iv) = analytic_solution(xyz)
+             box%cc(i, j, ix, iv) = gauss_val(gs, xyz)
           end do
        end do
     end select
   end subroutine sides_bc
-
-  ! Analytic solution to the Poisson problem
-  real(dp) function analytic_solution(x)
-    real(dp), intent(in) :: x(3)
-    integer              :: n
-
-    analytic_solution = 0
-    do n = 1, n_gaussians
-       analytic_solution = analytic_solution + g_params(1, n) * &
-            gaussian_3d(x, g_params(2:4, n), g_params(5, n))
-    end do
-  end function analytic_solution
-
-  ! Analytic right-hand side to the Poisson problem
-  real(dp) function analytic_rhs(x)
-    real(dp), intent(in) :: x(3)
-    integer              :: n
-
-    analytic_rhs = 0
-    do n = 1, n_gaussians
-       analytic_rhs = analytic_rhs + g_params(1, n) * &
-            lpl_gaussian_3d(x, g_params(2:4, n), g_params(5, n))
-    end do
-  end function analytic_rhs
-
-  ! A Gaussian in xyz coordinates
-  real(dp) function gaussian_3d(x, x0, sigma)
-    real(dp), intent(in) :: x(3), x0(3), sigma
-    real(dp)             :: xrel(3)
-
-    xrel = (x-x0)/sigma
-    gaussian_3d = exp(-sum(xrel**2))
-  end function gaussian_3d
-
-  ! Laplacian of a Gaussian in xyz coordinates
-  real(dp) function lpl_gaussian_3d(x, x0, sigma)
-    real(dp), intent(in) :: x(3), x0(3), sigma
-    real(dp)             :: xrel(3)
-
-    xrel = (x-x0)/sigma
-    lpl_gaussian_3d = 4/sigma**2 * (sum(xrel**2) - 1.5_dp) * &
-         gaussian_3d(x, x0, sigma)
-  end function lpl_gaussian_3d
 
 end program poisson_basic_3d

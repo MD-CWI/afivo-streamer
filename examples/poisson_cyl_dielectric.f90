@@ -8,6 +8,7 @@ program poisson_cyl_dielectric
   use m_a2_mg
   use m_a2_utils
   use m_a2_io
+  use m_gaussians
 
   implicit none
 
@@ -20,13 +21,6 @@ program poisson_cyl_dielectric
   integer, parameter :: i_tmp = 4
   integer, parameter :: i_eps = 5
 
-  ! The manufactured solution exists of two Gaussians here.
-  ! For each Gaussian, 4 constants are used: pre-factor, x0, y0, sigma.
-  integer, parameter :: n_gaussians = 2
-  real(dp), parameter :: g_params(4, n_gaussians) = reshape(&
-       [1.0_dp, 0.25_dp, 0.25_dp, 0.04_dp, &
-       1.0_dp, 0.75_dp, 0.75_dp, 0.04_dp], [4,2])
-
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: i
@@ -35,6 +29,11 @@ program poisson_cyl_dielectric
   real(dp)           :: dr, max_res, min_res
   character(len=40)  :: fname
   type(mg2_t)        :: mg
+  type(gauss_t)      :: gs
+
+  ! The manufactured solution exists of two Gaussians, which are stored in gs
+  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
+       reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / n_cell
@@ -120,7 +119,8 @@ contains
 
     ! Compute the "curvature" in phi
     max_crv = boxes(id)%dr**2 * &
-         maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+         maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs) / &
+         boxes(id)%cc(1:nc, 1:nc, i_eps)))
 
     ! And refine if it exceeds a threshold
     if (max_crv > 5.0e-4_dp) then
@@ -132,7 +132,7 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), grad(2), dr, qbnd, tmp
+    real(dp)                    :: rz(2), grad(2), dr, qbnd, tmp
 
     nc                  = box%n_cell
     box%cc(:, :, i_phi) = 0
@@ -140,17 +140,17 @@ contains
 
     do j = 0, nc+1
        do i = 0, nc+1
-          xy = a2_r_cc(box, [i,j])
+          rz = a2_r_cc(box, [i,j])
 
           ! Change epsilon in part of the domain
-          if (xy(1) < 0.5_dp .and. xy(2) < 0.5_dp) then
+          if (rz(1) < 0.5_dp .and. rz(2) < 0.5_dp) then
              box%cc(i, j, i_eps) = 100.0_dp
           else
              box%cc(i, j, i_eps) = 1.0_dp
           end if
 
           ! Partially compute the right-hand side (see below)
-          box%cc(i, j, i_rhs) = analytic_rhs(xy) * box%cc(i, j, i_eps)
+          box%cc(i, j, i_rhs) = gauss_lpl_cyl(gs, rz) * box%cc(i, j, i_eps)
        end do
     end do
 
@@ -158,10 +158,10 @@ contains
     ! done in the r-direction
     do j = 1, nc
        do i = 0, nc
-          xy = a2_rr_cc(box, [i + 0.5_dp, real(j, dp)])
+          rz = a2_rr_cc(box, [i + 0.5_dp, real(j, dp)])
 
           ! Determine amount of charge
-          grad = gradient_solution(xy)
+          call gauss_grad(gs, rz, grad)
           qbnd = (box%cc(i+1, j, i_eps) - box%cc(i, j, i_eps)) * &
                grad(1) / dr
 
@@ -176,10 +176,10 @@ contains
     ! Set surface charge in z-direction
     do j = 0, nc
        do i = 1, nc
-          xy = a2_rr_cc(box, [real(i, dp), j + 0.5_dp])
+          rz = a2_rr_cc(box, [real(i, dp), j + 0.5_dp])
 
           ! Determine amount of charge
-          grad = gradient_solution(xy)
+          call gauss_grad(gs, rz, grad)
           qbnd = (box%cc(i, j+1, i_eps) - box%cc(i, j, i_eps)) * &
                grad(2) / dr
 
@@ -196,14 +196,14 @@ contains
   subroutine set_err(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
+    real(dp)                    :: rz(2)
 
     nc = box%n_cell
     do j = 1, nc
        do i = 1, nc
-          xy = a2_r_cc(box, [i,j])
+          rz = a2_r_cc(box, [i,j])
           box%cc(i, j, i_err) = box%cc(i, j, i_phi) - &
-               analytic_solution(xy)
+               gauss_val(gs, rz)
        end do
     end do
   end subroutine set_err
@@ -217,7 +217,7 @@ contains
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
-    real(dp)                    :: xy(2)
+    real(dp)                    :: rz(2)
     integer                     :: n, nc
 
     nc = box%n_cell
@@ -229,85 +229,22 @@ contains
     case (a2_nb_hx)             ! Use solution on other boundaries
        bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = analytic_solution(xy)
+          rz = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
+          box%cc(nc+1, n, iv) = gauss_val(gs, rz)
        end do
     case (a2_nb_ly)
        bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = analytic_solution(xy)
+          rz = a2_rr_cc(box, [real(n, dp), 0.5_dp])
+          box%cc(n, 0, iv) = gauss_val(gs, rz)
        end do
     case (a2_nb_hy)
        bc_type = a5_bc_dirichlet
        do n = 1, nc
-          xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = analytic_solution(xy)
+          rz = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
+          box%cc(n, nc+1, iv) = gauss_val(gs, rz)
        end do
     end select
   end subroutine sides_bc
-
-  ! Analytic solution to the Poisson problem
-  real(dp) function analytic_solution(x)
-    real(dp), intent(in) :: x(2)
-    integer :: n
-
-    analytic_solution = 0
-    do n = 1, n_gaussians
-       analytic_solution = analytic_solution + g_params(1, n) * &
-            gaussian_2d(x, g_params(2:3, n), g_params(4, n))
-    end do
-  end function analytic_solution
-
-  ! Gradient of the solution
-  function gradient_solution(x) result(grad)
-    real(dp), intent(in) :: x(2)
-    real(dp) :: grad(2)
-    integer :: n
-
-    grad = 0
-    do n = 1, n_gaussians
-       grad = grad + g_params(1, n) * &
-            grad_gaussian_2d(x, g_params(2:3, n), g_params(4, n))
-    end do
-  end function gradient_solution
-
-  ! Analytic right-hand side to the Poisson problem
-  real(dp) function analytic_rhs(x)
-    real(dp), intent(in) :: x(2)
-    integer :: n
-
-    analytic_rhs = 0
-    do n = 1, n_gaussians
-       analytic_rhs = analytic_rhs + g_params(1, n) * &
-            lpl_gaussian_2d(x, g_params(2:3, n), g_params(4, n))
-    end do
-  end function analytic_rhs
-
-  ! A Gaussian in rz coordinates
-  real(dp) function gaussian_2d(x, x0, sigma)
-    real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp) :: xrel(2)
-    xrel = (x-x0)/sigma
-    gaussian_2d = exp(-sum(xrel**2))
-  end function gaussian_2d
-
-  ! Gradient of a Gaussian in rz coordinates
-  function grad_gaussian_2d(x, x0, sigma) result(grad)
-    real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp) :: xrel(2), grad(2)
-    xrel = (x-x0)/sigma
-    grad = -2 * xrel/sigma * gaussian_2d(x, x0, sigma)
-  end function grad_gaussian_2d
-
-  ! Laplacian of a Gaussian in rz coordinates
-  real(dp) function lpl_gaussian_2d(x, x0, sigma)
-    real(dp), intent(in) :: x(2), x0(2), sigma
-    real(dp) :: xrel(2)
-    xrel = (x-x0)/sigma
-
-    lpl_gaussian_2d = 4/sigma**2 * (sum(xrel**2) - 1.0_dp - &
-         0.5_dp * (x(1)-x0(1))/x(1)) * gaussian_2d(x, x0, sigma)
-  end function lpl_gaussian_2d
 
 end program poisson_cyl_dielectric

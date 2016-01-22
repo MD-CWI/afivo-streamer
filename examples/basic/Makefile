@@ -1,1 +1,0 @@
-include ../make_template
