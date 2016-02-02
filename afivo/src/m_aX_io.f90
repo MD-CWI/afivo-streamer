@@ -70,7 +70,14 @@ contains
 
     allocate(var_names(n_cc + n_fc * $D))
     var_names(1:n_cc) = tree%cc_names(icc_val)
-    var_names(n_cc+1:) = tree%fc_names(ifc_val)
+
+    do i = 1, n_fc
+       var_names(n_cc + (i-1)*$D + 1) = trim(tree%fc_names(ifc_val(i))) // "x"
+       var_names(n_cc + (i-1)*$D + 2) = trim(tree%fc_names(ifc_val(i))) // "y"
+#if $D == 3
+       var_names(n_cc + (i-1)*$D + 3) = trim(tree%fc_names(ifc_val(i))) // "z"
+#endif
+    end do
 
     bc            = tree%n_cell     ! number of Box Cells
     bn            = tree%n_cell + 1 ! number of Box Nodes
@@ -254,7 +261,14 @@ contains
 
     allocate(var_names(n_cc + n_fc * $D))
     var_names(1:n_cc) = tree%cc_names(icc_val)
-    var_names(n_cc+1:) = tree%fc_names(ifc_val)
+
+    do i = 1, n_fc
+       var_names(n_cc + (i-1)*$D + 1) = trim(tree%fc_names(ifc_val(i))) // "x"
+       var_names(n_cc + (i-1)*$D + 2) = trim(tree%fc_names(ifc_val(i))) // "y"
+#if $D == 3
+       var_names(n_cc + (i-1)*$D + 3) = trim(tree%fc_names(ifc_val(i))) // "z"
+#endif
+    end do
 
     nc = tree%n_cell
     n_vars = n_cc + n_fc * $D
