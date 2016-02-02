@@ -57,14 +57,14 @@ program drift_diffusion_2d
   do
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
-     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
      call a2_adjust_refinement(tree, ref_func, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
   print *, "Restrict the initial conditions"
   call a2_restrict_tree(tree, i_phi)
-  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
+  call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
 
   do
      dr_min  = a2_min_dr(tree)
@@ -80,7 +80,7 @@ program drift_diffusion_2d
         call a2_consistent_fluxes(tree, [1])
         call a2_loop_box_arg(tree, update_solution, [dt])
         call a2_restrict_tree(tree, i_phi)
-        call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
+        call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
         time = time + dt
      case (2)
         ! Copy previous solution
@@ -92,7 +92,7 @@ program drift_diffusion_2d
            call a2_consistent_fluxes(tree, [1])
            call a2_loop_box_arg(tree, update_solution, [dt])
            call a2_restrict_tree(tree, i_phi)
-           call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
+           call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
         end do
 
         ! Take average of phi_old and phi
@@ -120,7 +120,7 @@ program drift_diffusion_2d
 
      call a2_adjust_refinement(tree, ref_func, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, have_no_bc)
+     call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
      call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -141,7 +141,7 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 0:nc, i_phi))))
 
-    ref_func = a5_kp_ref
+    ref_func = a5_keep_ref
     if (boxes(id)%lvl < 3 .or. diff > 0.05_dp) then
        ref_func = a5_do_ref
     else if (boxes(id)%lvl > 4 .and. diff < 0.2_dp * 0.05) then
@@ -290,7 +290,7 @@ contains
     inv_dr = 1/boxes(id)%dr
 
     call a2_gc2_box(boxes, id, i_phi, a2_gc2_prolong1, &
-         have_no_bc2, gc_data, nc)
+         a2_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
@@ -298,7 +298,7 @@ contains
           gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i-1, j, i_phi)
           if (flux_args(2) < 0.0_dp) then
              if (i == nc+1) then
-                tmp = gc_data(j, a2_nb_hx)
+                tmp = gc_data(j, a2_neighb_highx)
              else
                 tmp = boxes(id)%cc(i+1, j, i_phi)
              end if
@@ -308,7 +308,7 @@ contains
                   (boxes(id)%cc(i, j, i_phi) - koren_mlim(gradc, gradn))
           else                  ! flux_args(2) > 0
              if (i == 1) then
-                tmp = gc_data(j, a2_nb_lx)
+                tmp = gc_data(j, a2_neighb_lowx)
              else
                 tmp = boxes(id)%cc(i-2, j, i_phi)
              end if
@@ -330,7 +330,7 @@ contains
           gradc = boxes(id)%cc(i, j, i_phi) - boxes(id)%cc(i, j-1, i_phi)
           if (flux_args(3) < 0.0_dp) then
              if (j == nc+1) then
-                tmp = gc_data(i, a2_nb_hy)
+                tmp = gc_data(i, a2_neighb_highy)
              else
                 tmp = boxes(id)%cc(i, j+1, i_phi)
              end if
@@ -340,7 +340,7 @@ contains
                   (boxes(id)%cc(i, j, i_phi) - koren_mlim(gradc, gradn))
           else                  ! flux_args(3) > 0
              if (j == 1) then
-                tmp = gc_data(i, a2_nb_ly)
+                tmp = gc_data(i, a2_neighb_lowy)
              else
                 tmp = boxes(id)%cc(i, j-2, i_phi)
              end if
@@ -381,7 +381,7 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           ! Linear prolongation will not strictly conserve phi
@@ -391,23 +391,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_phi, &
-               a2_gc_interp_lim, have_no_bc)
+               a2_gc_interp_lim, a2_bc_neumann_zero)
        end do
     end do
   end subroutine prolong_to_new_children
-
-  subroutine have_no_bc(box, i, iv, bc_type)
-    type(box2_t), intent(inout) :: box
-    integer, intent(in)         :: i, iv
-    integer, intent(out)        :: bc_type
-    stop "We have no boundary conditions in this example"
-  end subroutine have_no_bc
-
-  subroutine have_no_bc2(boxes, id, nb, iv, gc_data, nc)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv, nc
-    real(dp), intent(out)       :: gc_data(nc)
-    stop "We have no boundary conditions in this example"
-  end subroutine have_no_bc2
 
 end program drift_diffusion_2d

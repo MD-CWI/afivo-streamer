@@ -55,7 +55,7 @@ contains
     if (.not. tree%ready) stop "a$D_loop_box: set_base has not been called"
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -88,7 +88,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -120,7 +120,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -153,7 +153,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -189,19 +189,19 @@ contains
     end if
   end function a$D_r_inside
 
-  !> Get the location of the finest cell containing rr. If max_lvl is present,
-  !> do not go to a finer level than max_lvl. If there is no box containing rr,
+  !> Get the location of the finest cell containing rr. If highest_lvl is present,
+  !> do not go to a finer level than highest_lvl. If there is no box containing rr,
   !> return a location of -1
-  pure function a$D_get_loc(tree, rr, max_lvl) result(loc)
+  pure function a$D_get_loc(tree, rr, highest_lvl) result(loc)
     type(a$D_t), intent(in)       :: tree   !< Tree
     real(dp), intent(in)          :: rr($D) !< Coordinate
-    integer, intent(in), optional :: max_lvl !< Maximum level of box
+    integer, intent(in), optional :: highest_lvl !< Maximum level of box
     type(a$D_loc_t)               :: loc    !< Location of cell
 
     integer :: i, id, i_ch, lvl_max
 
-    lvl_max = tree%lvls_max
-    if (present(max_lvl)) lvl_max = max_lvl
+    lvl_max = tree%lvl_limit
+    if (present(highest_lvl)) lvl_max = highest_lvl
 
     ! Find lvl 1 box that includes rr
     do i = 1, size(tree%lvls(1)%ids)
@@ -356,7 +356,7 @@ contains
     integer, intent(in)       :: iv_from, iv_to
     integer                   :: lvl
 
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_cc
@@ -386,7 +386,7 @@ contains
     my_val  = init_val
 
     !$omp parallel private(lvl, i, id, tmp) firstprivate(my_val)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -404,7 +404,6 @@ contains
 
   !> A general scalar reduction method, that returns the location of the
   !> minimum/maximum value found
-  !> TODO: test
   subroutine a$D_reduction_loc(tree, box_subr, reduction, &
        init_val, out_val, out_loc)
     type(a$D_t), intent(in)      :: tree     !< Tree to do the reduction on
@@ -437,7 +436,7 @@ contains
 
     !$omp parallel private(lvl, i, id, tmp, tmp_ix, new_val) &
     !$omp firstprivate(my_val, my_loc)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -476,7 +475,7 @@ contains
     my_max = -huge(1.0_dp)
 
     !$omp parallel reduction(max: my_max) private(lvl, i, id, nc, tmp)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -508,7 +507,7 @@ contains
     my_min = huge(1.0_dp)
 
     !$omp parallel reduction(min: my_min) private(lvl, i, id, nc, tmp)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -540,7 +539,7 @@ contains
     my_sum = 0
 
     !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp, fac)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        fac = a$D_lvl_dr(tree, lvl)**$D
 
        !$omp do
@@ -622,7 +621,7 @@ contains
     integer                   :: lvl
 
     if (.not. tree%ready) stop "Tree not ready"
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        call a$D_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine a$D_tree_copy_fc

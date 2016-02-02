@@ -174,7 +174,7 @@ contains
     min_lvl = lbound(tree%lvls, 1)
 
     if (have_guess) then
-       do lvl = tree%max_lvl,  min_lvl+1, -1
+       do lvl = tree%highest_lvl,  min_lvl+1, -1
           ! Set rhs on coarse grid and restrict phi
           call set_coarse_phi_rhs(tree, lvl, mg)
        end do
@@ -182,7 +182,7 @@ contains
        call init_phi_rhs(tree, mg)
     end if
 
-    do lvl = min_lvl, tree%max_lvl
+    do lvl = min_lvl, tree%highest_lvl
        ! Store phi_old in tmp
        call a$D_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_tmp)
@@ -198,24 +198,24 @@ contains
 
        ! Perform V-cycle, only set residual on last iteration
        call mg$D_fas_vcycle(tree, mg, lvl, &
-            set_residual .and. lvl == tree%max_lvl)
+            set_residual .and. lvl == tree%highest_lvl)
     end do
   end subroutine mg$D_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
-  subroutine mg$D_fas_vcycle(tree, mg, max_lvl, set_residual)
+  subroutine mg$D_fas_vcycle(tree, mg, highest_lvl, set_residual)
     type(a$D_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)   :: mg   !< Multigrid options
-    integer, intent(in)        :: max_lvl !< Maximum level for V-cycle
+    integer, intent(in)        :: highest_lvl !< Maximum level for V-cycle
     logical, intent(in)        :: set_residual !< If true, store residual in i_tmp
     integer                    :: lvl, min_lvl, i, id
 
     call check_mg(mg)           ! Check whether mg options are set
     min_lvl = lbound(tree%lvls, 1)
 
-    do lvl = max_lvl,  min_lvl+1, -1
+    do lvl = highest_lvl,  min_lvl+1, -1
        ! Downwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
@@ -228,7 +228,7 @@ contains
     call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_base)
 
     ! Do the upwards part of the v-cycle in the tree
-    do lvl = min_lvl+1, max_lvl
+    do lvl = min_lvl+1, highest_lvl
        ! Correct solution at this lvl using lvl-1 data
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
@@ -242,7 +242,7 @@ contains
 
     if (set_residual) then
        !$omp parallel private(lvl, i, id)
-       do lvl = min_lvl, max_lvl
+       do lvl = min_lvl, highest_lvl
           !$omp do
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
@@ -272,7 +272,7 @@ contains
 
     nc = boxes(id)%n_cell
 
-    if (a$D_nb_low(nb)) then
+    if (a$D_neighb_low(nb)) then
        ix = 1
        dix = 1
     else
@@ -282,7 +282,7 @@ contains
 
     call a$D_gc_prolong0(boxes, id, nb, iv)
 
-    select case (a$D_nb_dim(nb))
+    select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
        i = ix
@@ -495,7 +495,7 @@ contains
     integer                    :: i, id, p_id
 
     ! In case ghost cells are not filled, fill them here to be sure
-    if (lvl == tree%max_lvl) &
+    if (lvl == tree%highest_lvl) &
          call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
 
     !$omp parallel do private(id, p_id)
@@ -533,7 +533,7 @@ contains
     min_lvl = lbound(tree%lvls, 1)
 
     !$omp parallel private(lvl, i, id, p_id)
-    do lvl = tree%max_lvl,  min_lvl+1, -1
+    do lvl = tree%highest_lvl,  min_lvl+1, -1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -1344,9 +1344,9 @@ contains
     integer                       :: i, j, i_f, j_f, i_c, j_c
     integer                       :: hnc, ix_offset($D), n_ch
 #if $D == 2
-    logical                       :: ch_mask(2, 2)
+    logical                       :: child_mask(2, 2)
 #elif $D == 3
-    logical                       :: ch_mask(2, 2, 2)
+    logical                       :: child_mask(2, 2, 2)
     integer                       :: k, k_f, k_c
 #endif
 
@@ -1361,13 +1361,13 @@ contains
           i_c = ix_offset(1) + i
           i_f = 2 * i - 1
 
-          ch_mask = (box_p%cc(i_c, j_c, mg%i_lsf) * &
+          child_mask = (box_p%cc(i_c, j_c, mg%i_lsf) * &
                box_c%cc(i_f:i_f+1, j_f:j_f+1, mg%i_lsf) > 0)
-          n_ch = count(ch_mask)
+          n_ch = count(child_mask)
 
           if (n_ch < a$D_num_children .and. n_ch > 0) then
              box_p%cc(i_c, j_c, iv) = 1 / n_ch * &
-                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv), mask=ch_mask)
+                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv), mask=child_mask)
           else                  ! Take average of children
              box_p%cc(i_c, j_c, iv) = 0.25_dp * &
                   sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
@@ -1385,14 +1385,14 @@ contains
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
 
-             ch_mask = (box_p%cc(i_c, j_c, k_c, mg%i_lsf) * &
+             child_mask = (box_p%cc(i_c, j_c, k_c, mg%i_lsf) * &
                   box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, mg%i_lsf) > 0)
-             n_ch = count(ch_mask)
+             n_ch = count(child_mask)
 
              if (n_ch < a$D_num_children .and. n_ch > 0) then
                 box_p%cc(i_c, j_c, k_c, iv) = 1 / n_ch * &
                      sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, iv), &
-                     mask=ch_mask)
+                     mask=child_mask)
              else                  ! Take average of children
                 box_p%cc(i_c, j_c, k_c, iv) = 0.125_dp * &
                      sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, iv))

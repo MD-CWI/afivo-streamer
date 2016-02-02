@@ -178,7 +178,7 @@ contains
     bc_type = a5_bc_dirichlet
 
     ! Determine whether the direction nb is to "lower" or "higher" neighbors
-    if (a3_nb_low(nb)) then
+    if (a3_neighb_low(nb)) then
        ix = 0
        loc = 0.5_dp
     else
@@ -187,7 +187,7 @@ contains
     end if
 
     ! Below the solution is specified in the approriate ghost cells
-    select case (a3_nb_dim(nb))
+    select case (a3_neighb_dim(nb))
     case (1)
        do k = 1, nc
           do j = 1, nc

@@ -78,7 +78,7 @@ contains
     cells_per_box = bc**$D
 
     n_grids = 0
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        n_grids = n_grids + size(tree%lvls(lvl)%leaves)
     end do
     n_nodes = nodes_per_box * n_grids
@@ -98,7 +98,7 @@ contains
 #endif
 
     ig = 0
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        do n = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(n)
 
@@ -259,13 +259,13 @@ contains
     nc = tree%n_cell
     n_vars = n_cc + n_fc * $D
     n_grids_max = 0
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        n_grids_max = n_grids_max + size(tree%lvls(lvl)%leaves)
     end do
 
     allocate(grid_list(n_grids_max))
     allocate(var_list(n_vars, n_grids_max))
-    allocate(box_done(tree%max_id))
+    allocate(box_done(tree%highest_id))
     box_done = .false.
 
     fname = trim(filename) // ".silo"
@@ -285,7 +285,7 @@ contains
     call SILO_mkdir(dbix, meshdir)
     i_grid = 0
 
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           if (box_done(id)) cycle
@@ -307,7 +307,7 @@ contains
 
              ! Check whether we can extend to the -x direction
              ids = box_list(1, :)
-             nb_ids = tree%boxes(ids)%neighbors(a2_nb_lx)
+             nb_ids = tree%boxes(ids)%neighbors(a2_neighb_lowx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
@@ -324,7 +324,7 @@ contains
 
              ! Check whether we can extend to the +x direction
              ids = box_list(nx, :)
-             nb_ids = tree%boxes(ids)%neighbors(a2_nb_hx)
+             nb_ids = tree%boxes(ids)%neighbors(a2_neighb_highx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
@@ -341,7 +341,7 @@ contains
 
              ! Check whether we can extend to the -y direction
              ids = box_list(:, 1)
-             nb_ids = tree%boxes(ids)%neighbors(a2_nb_ly)
+             nb_ids = tree%boxes(ids)%neighbors(a2_neighb_lowy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
@@ -358,7 +358,7 @@ contains
 
              ! Check whether we can extend to the +y direction
              ids = box_list(:, ny)
-             nb_ids = tree%boxes(ids)%neighbors(a2_nb_hy)
+             nb_ids = tree%boxes(ids)%neighbors(a2_neighb_highy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
@@ -423,7 +423,7 @@ contains
 
              ! Check whether we can extend to the -x direction
              ids = pack(box_list(1, :, :), .true.)
-             nb_ids = tree%boxes(ids)%neighbors(a3_nb_lx)
+             nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
@@ -440,7 +440,7 @@ contains
 
              ! Check whether we can extend to the +x direction
              ids = pack(box_list(nx, :, :), .true.)
-             nb_ids = tree%boxes(ids)%neighbors(a3_nb_hx)
+             nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highx)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
@@ -457,7 +457,7 @@ contains
 
              ! Check whether we can extend to the -y direction
              ids = pack(box_list(:, 1, :), .true.)
-             nb_ids = tree%boxes(ids)%neighbors(a3_nb_ly)
+             nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
@@ -474,7 +474,7 @@ contains
 
              ! Check whether we can extend to the +y direction
              ids = pack(box_list(:, ny, :), .true.)
-             nb_ids = tree%boxes(ids)%neighbors(a3_nb_hy)
+             nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highy)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
@@ -491,7 +491,7 @@ contains
 
              ! Check whether we can extend to the -z direction
              ids = pack(box_list(:, :, 1), .true.)
-             nb_ids = tree%boxes(ids)%neighbors(a3_nb_lz)
+             nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowz)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(3) < tree%boxes(ids(1))%ix(3) .and. &
@@ -508,7 +508,7 @@ contains
 
              ! Check whether we can extend to the +z direction
              ids = pack(box_list(:, :, nz), .true.)
-             nb_ids = tree%boxes(ids)%neighbors(a3_nb_hz)
+             nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highz)
              if (all(nb_ids > a5_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(3) > tree%boxes(ids(1))%ix(3) .and. &

@@ -42,7 +42,7 @@ program test_reduction
   call a2_loop_box(tree, set_random_values)
 
   do i = 1, 16
-     print *, "i = ", i, "max_id", tree%max_id
+     print *, "i = ", i, "highest_id", tree%highest_id
      call a2_adjust_refinement(tree, ref_func, ref_info)
      call a2_loop_box(tree, set_random_values)
 

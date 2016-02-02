@@ -18,7 +18,7 @@ module m_a$D_t
   integer, parameter :: a5_rm_ref = -1
 
   !> Value indicating you want to keep a box's refinement
-  integer, parameter :: a5_kp_ref = 0
+  integer, parameter :: a5_keep_ref = 0
 
   !> Value indicating you want to refine a box
   integer, parameter :: a5_do_ref = 1
@@ -54,71 +54,71 @@ module m_a$D_t
 #if $D == 2
   ! Numbering of children (same location as **corners**)
   integer, parameter :: a2_num_children = 4
-  integer, parameter :: a2_ch_lxly = 1
-  integer, parameter :: a2_ch_hxly = 2
-  integer, parameter :: a2_ch_lxhy = 3
-  integer, parameter :: a2_ch_hxhy = 4
+  integer, parameter :: a2_child_lowx_lowy = 1
+  integer, parameter :: a2_child_highx_lowy = 2
+  integer, parameter :: a2_child_lowx_highy = 3
+  integer, parameter :: a2_child_highx_highy = 4
 
   ! Neighboring indices for each child
-  integer, parameter :: a2_ch_nbs(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
+  integer, parameter :: a2_child_neighbs(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
   ! Index offset for each child
-  integer, parameter :: a2_ch_dix(2, 4) = reshape([0,0,1,0,0,1,1,1], [2,4])
+  integer, parameter :: a2_child_dix(2, 4) = reshape([0,0,1,0,0,1,1,1], [2,4])
   ! Reverse child index in each direction
-  integer, parameter :: a2_ch_rev(4, 2) = reshape([2,1,4,3,3,4,1,2], [4,2])
+  integer, parameter :: a2_child_rev(4, 2) = reshape([2,1,4,3,3,4,1,2], [4,2])
   ! Children adjacent to a neighbor
-  integer, parameter :: a2_ch_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
+  integer, parameter :: a2_child_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
   ! Which children have a low index per dimension
-  logical, parameter :: a2_ch_low(4, 2) = reshape([.true., .false., .true., &
+  logical, parameter :: a2_child_low(4, 2) = reshape([.true., .false., .true., &
        .false., .true., .true., .false., .false.], [4,2])
 
   ! Neighbor topology information
   integer, parameter :: a2_num_neighbors = 4
-  integer, parameter :: a2_nb_lx = 1
-  integer, parameter :: a2_nb_hx = 2
-  integer, parameter :: a2_nb_ly = 3
-  integer, parameter :: a2_nb_hy = 4
+  integer, parameter :: a2_neighb_lowx = 1
+  integer, parameter :: a2_neighb_highx = 2
+  integer, parameter :: a2_neighb_lowy = 3
+  integer, parameter :: a2_neighb_highy = 4
 
   ! Index offsets of neighbors
-  integer, parameter :: a2_nb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
+  integer, parameter :: a2_neighb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
   ! Which neighbors have a lower index
-  logical, parameter :: a2_nb_low(4) = [.true., .false., .true., .false.]
+  logical, parameter :: a2_neighb_low(4) = [.true., .false., .true., .false.]
   ! Opposite of nb_low, but now as 0,1 integers
-  integer, parameter :: a2_nb_hi01(4) = [0, 1, 0, 1]
+  integer, parameter :: a2_neighb_high_01(4) = [0, 1, 0, 1]
   ! Opposite of nb_low, but now as -1,1 integers
-  integer, parameter :: a2_nb_hi_pm(4) = [-1, 1, -1, 1]
+  integer, parameter :: a2_neighb_high_pm(4) = [-1, 1, -1, 1]
 
   ! Reverse neighbors
-  integer, parameter :: a2_nb_rev(4) = [2, 1, 4, 3]
+  integer, parameter :: a2_neighb_rev(4) = [2, 1, 4, 3]
   ! Direction (dimension) for a neighbor
-  integer, parameter :: a2_nb_dim(4) = [1, 1, 2, 2]
+  integer, parameter :: a2_neighb_dim(4) = [1, 1, 2, 2]
 #elif $D == 3
   ! Numbering of children (same location as **corners**)
   integer, parameter :: a3_num_children = 8
-  integer, parameter :: a3_ch_lxlylz = 1
-  integer, parameter :: a3_ch_hxlylz = 2
-  integer, parameter :: a3_ch_lxhylz = 3
-  integer, parameter :: a3_ch_hxhylz = 4
-  integer, parameter :: a3_ch_lxlyhz = 5
-  integer, parameter :: a3_ch_hxlyhz = 6
-  integer, parameter :: a3_ch_lxhyhz = 7
-  integer, parameter :: a3_ch_hxhyhz = 8
+  integer, parameter :: a3_child_lowx_lowy_lowz = 1
+  integer, parameter :: a3_child_highx_lowy_lowz = 2
+  integer, parameter :: a3_child_lowx_highy_lowz = 3
+  integer, parameter :: a3_child_highx_highy_lowz = 4
+  integer, parameter :: a3_child_lowx_lowy_highz = 5
+  integer, parameter :: a3_child_highx_lowy_highz = 6
+  integer, parameter :: a3_child_lowx_highy_highz = 7
+  integer, parameter :: a3_child_highx_highy_highz = 8
 
   ! Neighboring indices for each child
-  integer, parameter :: a3_ch_nbs(3, 8) = reshape( &
+  integer, parameter :: a3_child_neighbs(3, 8) = reshape( &
        [1,3,5, 2,3,5, 1,4,5, 2,4,5, &
        1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
   ! Index offset for each child
-  integer, parameter :: a3_ch_dix(3, 8) = reshape( &
+  integer, parameter :: a3_child_dix(3, 8) = reshape( &
        [0,0,0, 1,0,0, 0,1,0, 1,1,0, &
        0,0,1, 1,0,1, 0,1,1, 1,1,1], [3,8])
   ! Reverse child index in each direction
-  integer, parameter :: a3_ch_rev(8, 3) = reshape( &
+  integer, parameter :: a3_child_rev(8, 3) = reshape( &
        [2,1,4,3,6,5,8,7, 3,4,1,2,7,8,5,6, 5,6,7,8,1,2,3,4], [8,3])
   ! Children adjacent to a neighbor
-  integer, parameter :: a3_ch_adj_nb(4, 6) = reshape( &
+  integer, parameter :: a3_child_adj_nb(4, 6) = reshape( &
        [1,3,5,7, 2,4,6,8, 1,2,5,6, 3,4,7,8, 1,2,3,4, 5,6,7,8], [4,6])
   ! Which children have a low index per dimension
-  logical, parameter :: a3_ch_low(8, 3) = reshape([ &
+  logical, parameter :: a3_child_low(8, 3) = reshape([ &
        .true., .false., .true., .false., .true., .false., .true., .false., &
        .true., .true., .false., .false., .true., .true., .false., .false., &
        .true., .true., .true., .true., .false., .false., .false., .false.], &
@@ -126,26 +126,26 @@ module m_a$D_t
 
   ! Neighbor topology information
   integer, parameter :: a3_num_neighbors = 6
-  integer, parameter :: a3_nb_lx = 1
-  integer, parameter :: a3_nb_hx = 2
-  integer, parameter :: a3_nb_ly = 3
-  integer, parameter :: a3_nb_hy = 4
-  integer, parameter :: a3_nb_lz = 5
-  integer, parameter :: a3_nb_hz = 6
+  integer, parameter :: a3_neighb_lowx = 1
+  integer, parameter :: a3_neighb_highx = 2
+  integer, parameter :: a3_neighb_lowy = 3
+  integer, parameter :: a3_neighb_highy = 4
+  integer, parameter :: a3_neighb_lowz = 5
+  integer, parameter :: a3_neighb_highz = 6
   ! Index offsets of neighbors
-  integer, parameter :: a3_nb_dix(3, 6) = reshape( &
+  integer, parameter :: a3_neighb_dix(3, 6) = reshape( &
        [-1,0,0, 1,0,0, 0,-1,0, 0,1,0, 0,0,-1, 0,0,1], [3,6])
   ! Which neighbors have a lower index
-  logical, parameter :: a3_nb_low(6) = &
+  logical, parameter :: a3_neighb_low(6) = &
        [.true., .false., .true., .false., .true., .false.]
   ! Opposite of nb_low, but now as 0,1 integers
-  integer, parameter :: a3_nb_hi01(6) = [0, 1, 0, 1, 0, 1]
+  integer, parameter :: a3_neighb_high_01(6) = [0, 1, 0, 1, 0, 1]
   ! Opposite of nb_low, but now as -1,1 integers
-  integer, parameter :: a3_nb_hi_pm(6) = [-1, 1, -1, 1, -1, 1]
+  integer, parameter :: a3_neighb_high_pm(6) = [-1, 1, -1, 1, -1, 1]
   ! Reverse neighbors
-  integer, parameter :: a3_nb_rev(6) = [2, 1, 4, 3, 6, 5]
+  integer, parameter :: a3_neighb_rev(6) = [2, 1, 4, 3, 6, 5]
   ! Direction (dimension) for a neighbor
-  integer, parameter :: a3_nb_dim(6) = [1, 1, 2, 2, 3, 3]
+  integer, parameter :: a3_neighb_dim(6) = [1, 1, 2, 2, 3, 3]
 #endif
 
   !> The basic building block of afivo: a box with cell-centered and face
@@ -188,17 +188,18 @@ module m_a$D_t
   !> about the number of boxes, variables and levels.
   type a$D_t
      logical                    :: ready = .false. !< Is tree ready for use?
-     integer                    :: lvls_max   !< maximum allowed level
-     integer                    :: max_lvl    !< current maximum level
-     integer                    :: max_id     !< max index in box list
-     integer                    :: n_cell     !< number of cells per dimension
-     integer                    :: n_var_cell !< number of cc variables
-     integer                    :: n_var_face !< number of fc variables
-     integer                    :: coord_t    !< Type of coordinates
-     real(dp)                   :: r_base($D) !< min. coords of box at index (1,1)
-     real(dp)                   :: dr_base    !< cell spacing at lvl 1
-     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
-     type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
+     integer                    :: lvl_limit       !< maximum allowed level
+     integer                    :: id_limit        !< maximum allowed box index
+     integer                    :: highest_lvl     !< highest level present
+     integer                    :: highest_id      !< highest box index present
+     integer                    :: n_cell          !< number of cells per dimension
+     integer                    :: n_var_cell      !< number of cc variables
+     integer                    :: n_var_face      !< number of fc variables
+     integer                    :: coord_t         !< Type of coordinates
+     real(dp)                   :: r_base($D)       !< min. coords of box at index (1,1)
+     real(dp)                   :: dr_base         !< cell spacing at lvl 1
+     type(lvl_t), allocatable   :: lvls(:)         !< list storing the tree levels
+     type(box$D_t), allocatable :: boxes(:)        !< list of all boxes
      !> Names of cell-centered variables
      character(len=a5_nlen), allocatable :: cc_names(:)
      !> Names of face-centered variables
@@ -312,11 +313,11 @@ contains
     integer                            :: ix_offset($D)
     if (box%lvl > 1) then
        ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
-       if (present(nb)) ix_offset = ix_offset - a$D_nb_dix(:, nb) * box%n_cell
+       if (present(nb)) ix_offset = ix_offset - a$D_neighb_dix(:, nb) * box%n_cell
     else                        ! In the subtree, parents are half the size
        ix_offset = 0
        if (present(nb)) ix_offset = ix_offset - &
-            a$D_nb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
+            a$D_neighb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
     endif
   end function a$D_get_child_offset
 
@@ -356,7 +357,7 @@ contains
   pure function a$D_min_dr(tree) result(dr)
     type(a$D_t), intent(in) :: tree
     real(dp)               :: dr !< Output: dr at the finest lvl of the tree
-    dr = a$D_lvl_dr(tree, tree%max_lvl)
+    dr = a$D_lvl_dr(tree, tree%highest_lvl)
   end function a$D_min_dr
 
   !> Return dr at lvl
@@ -384,52 +385,52 @@ contains
     if (present(gc_array)) then
        select case (nb)
 #if $D == 2
-       case (a2_nb_lx)
+       case (a2_neighb_lowx)
           box%cc(0, 1:nc, iv)    = gc_array
-       case (a2_nb_hx)
+       case (a2_neighb_highx)
           box%cc(nc+1, 1:nc, iv) = gc_array
-       case (a2_nb_ly)
+       case (a2_neighb_lowy)
           box%cc(1:nc, 0, iv)    = gc_array
-       case (a2_nb_hy)
+       case (a2_neighb_highy)
           box%cc(1:nc, nc+1, iv) = gc_array
 #elif $D == 3
-       case (a3_nb_lx)
+       case (a3_neighb_lowx)
           box%cc(0, 1:nc, 1:nc, iv)    = gc_array
-       case (a3_nb_hx)
+       case (a3_neighb_highx)
           box%cc(nc+1, 1:nc, 1:nc, iv) = gc_array
-       case (a3_nb_ly)
+       case (a3_neighb_lowy)
           box%cc(1:nc, 0, 1:nc, iv)    = gc_array
-       case (a3_nb_hy)
+       case (a3_neighb_highy)
           box%cc(1:nc, nc+1, 1:nc, iv) = gc_array
-       case (a3_nb_lz)
+       case (a3_neighb_lowz)
           box%cc(1:nc, 1:nc, 0, iv)    = gc_array
-       case (a3_nb_hz)
+       case (a3_neighb_highz)
           box%cc(1:nc, 1:nc, nc+1, iv) = gc_array
 #endif
        end select
     else if (present(gc_scalar)) then
        select case (nb)
 #if $D == 2
-       case (a2_nb_lx)
+       case (a2_neighb_lowx)
           box%cc(0, 1:nc, iv)    = gc_scalar
-       case (a2_nb_hx)
+       case (a2_neighb_highx)
           box%cc(nc+1, 1:nc, iv) = gc_scalar
-       case (a2_nb_ly)
+       case (a2_neighb_lowy)
           box%cc(1:nc, 0, iv)    = gc_scalar
-       case (a2_nb_hy)
+       case (a2_neighb_highy)
           box%cc(1:nc, nc+1, iv) = gc_scalar
 #elif $D == 3
-       case (a3_nb_lx)
+       case (a3_neighb_lowx)
           box%cc(0, 1:nc, 1:nc, iv)    = gc_scalar
-       case (a3_nb_hx)
+       case (a3_neighb_highx)
           box%cc(nc+1, 1:nc, 1:nc, iv) = gc_scalar
-       case (a3_nb_ly)
+       case (a3_neighb_lowy)
           box%cc(1:nc, 0, 1:nc, iv)    = gc_scalar
-       case (a3_nb_hy)
+       case (a3_neighb_highy)
           box%cc(1:nc, nc+1, 1:nc, iv) = gc_scalar
-       case (a3_nb_lz)
+       case (a3_neighb_lowz)
           box%cc(1:nc, 1:nc, 0, iv)    = gc_scalar
-       case (a3_nb_hz)
+       case (a3_neighb_highz)
           box%cc(1:nc, 1:nc, nc+1, iv) = gc_scalar
 #endif
        end select

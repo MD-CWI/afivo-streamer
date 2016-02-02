@@ -122,7 +122,7 @@ contains
     if (max_crv > 5.0e-4_dp) then
        ref_func = a5_do_ref
     else
-       ref_func = a5_kp_ref
+       ref_func = a5_keep_ref
     end if
   end function ref_func
 
@@ -172,22 +172,22 @@ contains
     nc = box%n_cell
 
     select case (nb)
-    case (a2_nb_lx)             ! Neumann zero on axis
+    case (a2_neighb_lowx)             ! Neumann zero on axis
        bc_type = a5_bc_neumann
        box%cc(0, 1:nc, iv) = 0
-    case (a2_nb_hx)             ! Use solution on other boundaries
+    case (a2_neighb_highx)             ! Use solution on other boundaries
        bc_type = a5_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
           box%cc(nc+1, n, iv) = gauss_val(gs, rz)
        end do
-    case (a2_nb_ly)
+    case (a2_neighb_lowy)
        bc_type = a5_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), 0.5_dp])
           box%cc(n, 0, iv) = gauss_val(gs, rz)
        end do
-    case (a2_nb_hy)
+    case (a2_neighb_highy)
        bc_type = a5_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])

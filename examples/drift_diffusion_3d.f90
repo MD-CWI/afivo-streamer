@@ -59,14 +59,14 @@ program drift_diffusion_3d
   do
      ! We should only set the finest level, but this also works
      call a3_loop_box(tree, set_init_cond)
-     call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
+     call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
      call a3_adjust_refinement(tree, ref_func, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
   ! Restrict the initial conditions
   call a3_restrict_tree(tree, i_phi)
-  call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
+  call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
 
   print *, "Starting simulation"
   do
@@ -105,7 +105,7 @@ program drift_diffusion_3d
            call a3_consistent_fluxes(tree, [1])
            call a3_loop_box_arg(tree, update_solution, [dt])
            call a3_restrict_tree(tree, i_phi)
-           call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
+           call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
            time = time + dt
         end do
      case (2)
@@ -120,7 +120,7 @@ program drift_diffusion_3d
               call a3_consistent_fluxes(tree, [1])
               call a3_loop_box_arg(tree, update_solution, [dt])
               call a3_restrict_tree(tree, i_phi)
-              call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
+              call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
            end do
 
            ! Take average of phi_old and phi
@@ -131,7 +131,7 @@ program drift_diffusion_3d
 
      call a3_adjust_refinement(tree, ref_func, ref_info)
      call prolong_to_new_children(tree, ref_info)
-     call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, have_no_bc)
+     call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
      call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
@@ -154,7 +154,7 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    ref_func = a5_kp_ref
+    ref_func = a5_keep_ref
     if (boxes(id)%lvl < 3 .or. diff > 0.1_dp) then
        ref_func = a5_do_ref
     else if (boxes(id)%lvl > 4 .and. diff < 0.2_dp * 0.05) then
@@ -329,7 +329,7 @@ contains
     inv_dr = 1/boxes(id)%dr
 
     call a3_gc2_box(boxes, id, i_phi, a3_gc2_prolong1, &
-         have_no_bc2, gc_data, nc)
+         a3_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
     do k = 1, nc
@@ -338,7 +338,7 @@ contains
              gradc = boxes(id)%cc(i, j, k, i_phi) - boxes(id)%cc(i-1, j, k, i_phi)
              if (flux_args(2) < 0.0_dp) then
                 if (i == nc+1) then
-                   tmp = gc_data(j, k, a3_nb_hx)
+                   tmp = gc_data(j, k, a3_neighb_highx)
                 else
                    tmp = boxes(id)%cc(i+1, j, k, i_phi)
                 end if
@@ -348,7 +348,7 @@ contains
                      (boxes(id)%cc(i, j, k, i_phi) - koren_mlim(gradc, gradn))
              else                  ! flux_args(2) > 0
                 if (i == 1) then
-                   tmp = gc_data(j, k, a3_nb_lx)
+                   tmp = gc_data(j, k, a3_neighb_lowx)
                 else
                    tmp = boxes(id)%cc(i-2, j, k, i_phi)
                 end if
@@ -372,7 +372,7 @@ contains
              gradc = boxes(id)%cc(i, j, k, i_phi) - boxes(id)%cc(i, j-1, k, i_phi)
              if (flux_args(3) < 0.0_dp) then
                 if (j == nc+1) then
-                   tmp = gc_data(i, k, a3_nb_hy)
+                   tmp = gc_data(i, k, a3_neighb_highy)
                 else
                    tmp = boxes(id)%cc(i, j+1, k, i_phi)
                 end if
@@ -383,7 +383,7 @@ contains
              else                  ! flux_args(3) > 0
 
                 if (j == 1) then
-                   tmp = gc_data(i, k, a3_nb_ly)
+                   tmp = gc_data(i, k, a3_neighb_lowy)
                 else
                    tmp = boxes(id)%cc(i, j-2, k, i_phi)
                 end if
@@ -407,7 +407,7 @@ contains
              gradc = boxes(id)%cc(i, j, k, i_phi) - boxes(id)%cc(i, j, k-1, i_phi)
              if (flux_args(4) < 0.0_dp) then
                 if (k == nc+1) then
-                   tmp = gc_data(i, j, a3_nb_hz)
+                   tmp = gc_data(i, j, a3_neighb_highz)
                 else
                    tmp = boxes(id)%cc(i, j, k+1, i_phi)
                 end if
@@ -418,7 +418,7 @@ contains
              else                  ! flux_args(4) > 0
 
                 if (k == 1) then
-                   tmp = gc_data(i, j, a3_nb_lz)
+                   tmp = gc_data(i, j, a3_neighb_lowz)
                 else
                    tmp = boxes(id)%cc(i, j, k-2, i_phi)
                 end if
@@ -461,7 +461,7 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a3_prolong1_to(tree%boxes, id, i_phi)
@@ -470,23 +470,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a3_gc_box(tree%boxes, id, i_phi, &
-               a3_gc_interp_lim, have_no_bc)
+               a3_gc_interp_lim, a3_bc_neumann_zero)
        end do
     end do
   end subroutine prolong_to_new_children
-
-  subroutine have_no_bc(box, i, iv, bc_type)
-    type(box3_t), intent(inout) :: box
-    integer, intent(in)         :: i, iv
-    integer, intent(out)        :: bc_type
-    stop "We have no boundary conditions in this example"
-  end subroutine have_no_bc
-
-  subroutine have_no_bc2(boxes, id, nb, iv, gc_data, nc)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv, nc
-    real(dp), intent(out)       :: gc_data(nc, nc)
-    stop "We have no boundary conditions in this example"
-  end subroutine have_no_bc2
 
 end program drift_diffusion_3d

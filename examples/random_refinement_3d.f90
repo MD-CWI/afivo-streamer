@@ -18,8 +18,6 @@ program random_refinement_3d
   integer              :: nb_list(6, n_boxes_base)
   integer, parameter   :: n_cell       = 8
   integer, parameter   :: i_phi        = 1
-  integer, parameter   :: n_var_cell   = 2
-  integer, parameter   :: n_var_face   = 0
   type(ref_info_t)     :: ref_info
   real(dp)             :: dr
   character(len=40)    :: fname
@@ -41,12 +39,12 @@ program random_refinement_3d
 
   ! Set neighbors for box one, here nb means neighbor (direction) and l/h stands
   ! for low/high
-  nb_list(a3_nb_lx, 1) = 1      ! lower-x neighbor of box 1 is box 1
-  nb_list(a3_nb_hx, 1) = 1      ! higher-x neighbor of box 1 is box 1
-  nb_list(a3_nb_ly, 1) = 1      ! idem for y-direction
-  nb_list(a3_nb_hy, 1) = 1
-  nb_list(a3_nb_lz, 1) = 1      ! idem for z-direction
-  nb_list(a3_nb_hz, 1) = 1
+  nb_list(a3_neighb_lowx, 1) = 1      ! lower-x neighbor of box 1 is box 1
+  nb_list(a3_neighb_highx, 1) = 1      ! higher-x neighbor of box 1 is box 1
+  nb_list(a3_neighb_lowy, 1) = 1      ! idem for y-direction
+  nb_list(a3_neighb_highy, 1) = 1
+  nb_list(a3_neighb_lowz, 1) = 1      ! idem for z-direction
+  nb_list(a3_neighb_highz, 1) = 1
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a3_set_base(tree, ix_list, nb_list)
@@ -101,7 +99,7 @@ contains
        ref_func = a5_rm_ref ! Ask to remove this box, which will not always
                             ! happen (see documentation)
     else
-       ref_func = a5_kp_ref ! Keep the box as-is (which is the default action if
+       ref_func = a5_keep_ref ! Keep the box as-is (which is the default action if
                             ! you don't specify anything)
     end if
   end function ref_func
@@ -133,7 +131,7 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        ! For each newly added box ...
        do i = 1, size(ref_info%lvls(lvl)%add)
           ! Use prolongation to set the values of variable i_phi

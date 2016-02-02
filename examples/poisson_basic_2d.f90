@@ -179,22 +179,22 @@ contains
 
     ! Below the solution is specified in the approriate ghost cells
     select case (nb)
-    case (a2_nb_lx)             ! Lower-x direction
+    case (a2_neighb_lowx)             ! Lower-x direction
        do n = 1, nc
           xy = a2_rr_cc(box, [0.5_dp, real(n, dp)])
           box%cc(0, n, iv) = gauss_val(gs, xy)
        end do
-    case (a2_nb_hx)             ! Higher-x direction
+    case (a2_neighb_highx)             ! Higher-x direction
        do n = 1, nc
           xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
           box%cc(nc+1, n, iv) = gauss_val(gs, xy)
        end do
-    case (a2_nb_ly)             ! Lower-y direction
+    case (a2_neighb_lowy)             ! Lower-y direction
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
           box%cc(n, 0, iv) = gauss_val(gs, xy)
        end do
-    case (a2_nb_hy)             ! Higher-y direction
+    case (a2_neighb_highy)             ! Higher-y direction
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
           box%cc(n, nc+1, iv) = gauss_val(gs, xy)

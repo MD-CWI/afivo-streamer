@@ -19,7 +19,7 @@ module m_a$D_gc
   public :: a$D_gc_interp_lim
   public :: a$D_gc2_box
   public :: a$D_gc2_prolong1
-  public :: a$D_gc2_neumann
+  public :: a$D_bc2_neumann_zero
 
 contains
 
@@ -34,7 +34,7 @@ contains
 
     if (.not. tree%ready) stop "Tree not ready"
     !$omp parallel private(lvl, i, id)
-    do lvl = lbound(tree%lvls, 1), tree%max_lvl
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -89,42 +89,42 @@ contains
        c2 = 2
     case (a5_bc_neumann)
        c1 = 1
-       c2 = box%dr * a$D_nb_hi_pm(nb) ! This gives a + or - sign
+       c2 = box%dr * a$D_neighb_high_pm(nb) ! This gives a + or - sign
     case default
        stop "fill_bc: unknown boundary condition"
     end select
 
     select case (nb)
 #if $D == 2
-    case (a2_nb_lx)
+    case (a2_neighb_lowx)
        box%cc(0, 1:nc, iv) = &
             c2 * box%cc(0, 1:nc, iv) + c1 * box%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
+    case (a2_neighb_highx)
        box%cc(nc+1, 1:nc, iv) = &
             c2 * box%cc(nc+1, 1:nc, iv) + c1 * box%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
+    case (a2_neighb_lowy)
        box%cc(1:nc, 0, iv) = &
             c2 * box%cc(1:nc, 0, iv) + c1 * box%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
+    case (a2_neighb_highy)
        box%cc(1:nc, nc+1, iv) = &
             c2 * box%cc(1:nc, nc+1, iv) + c1 * box%cc(1:nc, nc, iv)
 #elif $D == 3
-    case (a3_nb_lx)
+    case (a3_neighb_lowx)
        box%cc(0, 1:nc, 1:nc, iv) = &
             c2 * box%cc(0, 1:nc, 1:nc, iv) + c1 * box%cc(1, 1:nc, 1:nc, iv)
-    case (a3_nb_hx)
+    case (a3_neighb_highx)
        box%cc(nc+1, 1:nc, 1:nc, iv) = &
             c2 * box%cc(nc+1, 1:nc, 1:nc, iv) + c1 * box%cc(nc, 1:nc, 1:nc, iv)
-    case (a3_nb_ly)
+    case (a3_neighb_lowy)
        box%cc(1:nc, 0, 1:nc, iv) = &
             c2 * box%cc(1:nc, 0, 1:nc, iv) + c1 * box%cc(1:nc, 1, 1:nc, iv)
-    case (a3_nb_hy)
+    case (a3_neighb_highy)
        box%cc(1:nc, nc+1, 1:nc, iv) = &
             c2 * box%cc(1:nc, nc+1, 1:nc, iv) + c1 * box%cc(1:nc, nc, 1:nc, iv)
-    case (a3_nb_lz)
+    case (a3_neighb_lowz)
        box%cc(1:nc, 1:nc, 0, iv) = &
             c2 * box%cc(1:nc, 1:nc, 0, iv) + c1 * box%cc(1:nc, 1:nc, 1, iv)
-    case (a3_nb_hz)
+    case (a3_neighb_highz)
        box%cc(1:nc, 1:nc, nc+1, iv) = &
             c2 * box%cc(1:nc, 1:nc, nc+1, iv) + c1 * box%cc(1:nc, 1:nc, nc, iv)
 #endif
@@ -140,11 +140,11 @@ contains
     integer, intent(in)           :: nb       !< Neighbor to get data from
     integer                       :: nb_dim, lo($D), hi($D)
 
-    nb_dim     = a$D_nb_dim(nb)
+    nb_dim     = a$D_neighb_dim(nb)
     lo(:)      = 1
     hi(:)      = boxes(id)%n_cell
-    lo(nb_dim) = a$D_nb_hi01(nb) * (boxes(id)%n_cell+1)
-    hi(nb_dim) = a$D_nb_hi01(nb) * (boxes(id)%n_cell+1)
+    lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
+    hi(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
 
     call a$D_prolong0_to(boxes, id, iv, lo, hi)
   end subroutine a$D_gc_prolong0
@@ -169,7 +169,7 @@ contains
     p_nb_id   = boxes(p_id)%neighbors(nb)
     ix_offset = a$D_get_child_offset(boxes(id), nb)
 
-    if (a$D_nb_low(nb)) then
+    if (a$D_neighb_low(nb)) then
        ix = 0
        ix_f = 1
        ix_c = nc
@@ -179,7 +179,7 @@ contains
        ix_c = 1
     end if
 
-    select case (a$D_nb_dim(nb))
+    select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
        do j = 1, nc
@@ -270,7 +270,7 @@ contains
     p_nb_id   = boxes(p_id)%neighbors(nb)
     ix_offset = a$D_get_child_offset(boxes(id), nb)
 
-    if (a$D_nb_low(nb)) then
+    if (a$D_neighb_low(nb)) then
        ix = 0
        ix_f = 1
        ix_c = nc
@@ -280,7 +280,7 @@ contains
        ix_c = 1
     end if
 
-    select case (a$D_nb_dim(nb))
+    select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
        do j = 1, nc
@@ -388,26 +388,26 @@ contains
 
     select case (nb)
 #if $D == 2
-    case (a2_nb_lx)
+    case (a2_neighb_lowx)
        box%cc(0, 1:nc, iv)    = box_nb%cc(nc, 1:nc, iv)
-    case (a2_nb_hx)
+    case (a2_neighb_highx)
        box%cc(nc+1, 1:nc, iv) = box_nb%cc(1, 1:nc, iv)
-    case (a2_nb_ly)
+    case (a2_neighb_lowy)
        box%cc(1:nc, 0, iv)    = box_nb%cc(1:nc, nc, iv)
-    case (a2_nb_hy)
+    case (a2_neighb_highy)
        box%cc(1:nc, nc+1, iv) = box_nb%cc(1:nc, 1, iv)
 #elif $D == 3
-    case (a3_nb_lx)
+    case (a3_neighb_lowx)
        box%cc(0, 1:nc, 1:nc, iv)    = box_nb%cc(nc, 1:nc, 1:nc, iv)
-    case (a3_nb_hx)
+    case (a3_neighb_highx)
        box%cc(nc+1, 1:nc, 1:nc, iv) = box_nb%cc(1, 1:nc, 1:nc, iv)
-    case (a3_nb_ly)
+    case (a3_neighb_lowy)
        box%cc(1:nc, 0, 1:nc, iv)    = box_nb%cc(1:nc, nc, 1:nc, iv)
-    case (a3_nb_hy)
+    case (a3_neighb_highy)
        box%cc(1:nc, nc+1, 1:nc, iv) = box_nb%cc(1:nc, 1, 1:nc, iv)
-    case (a3_nb_lz)
+    case (a3_neighb_lowz)
        box%cc(1:nc, 1:nc, 0, iv)    = box_nb%cc(1:nc, 1:nc, nc, iv)
-    case (a3_nb_hz)
+    case (a3_neighb_highz)
        box%cc(1:nc, 1:nc, nc+1, iv) = box_nb%cc(1:nc, 1:nc, 1, iv)
 #endif
     end select
@@ -468,26 +468,26 @@ contains
 
     select case (nb)
 #if $D == 2
-    case (a2_nb_lx)
+    case (a2_neighb_lowx)
        gc_side = box_nb%cc(nc-1, 1:nc, iv)
-    case (a2_nb_hx)
+    case (a2_neighb_highx)
        gc_side = box_nb%cc(2, 1:nc, iv)
-    case (a2_nb_ly)
+    case (a2_neighb_lowy)
        gc_side = box_nb%cc(1:nc, nc-1, iv)
-    case (a2_nb_hy)
+    case (a2_neighb_highy)
        gc_side = box_nb%cc(1:nc, 2, iv)
 #elif $D == 3
-    case (a3_nb_lx)
+    case (a3_neighb_lowx)
        gc_side = box_nb%cc(nc-1, 1:nc, 1:nc, iv)
-    case (a3_nb_hx)
+    case (a3_neighb_highx)
        gc_side = box_nb%cc(2, 1:nc, 1:nc, iv)
-    case (a3_nb_ly)
+    case (a3_neighb_lowy)
        gc_side = box_nb%cc(1:nc, nc-1, 1:nc, iv)
-    case (a3_nb_hy)
+    case (a3_neighb_highy)
        gc_side = box_nb%cc(1:nc, 2, 1:nc, iv)
-    case (a3_nb_lz)
+    case (a3_neighb_lowz)
        gc_side = box_nb%cc(1:nc, 1:nc, nc-1, iv)
-    case (a3_nb_hz)
+    case (a3_neighb_highz)
        gc_side = box_nb%cc(1:nc, 1:nc, 2, iv)
 #endif
     end select
@@ -515,9 +515,9 @@ contains
     p_id      = boxes(id)%parent
     p_nb_id   = boxes(p_id)%neighbors(nb)
     ix_offset = a$D_get_child_offset(boxes(id), nb)
-    ix        = a$D_nb_hi01(nb) * (nc+3) - 1 ! -1 or nc+2
+    ix        = a$D_neighb_high_01(nb) * (nc+3) - 1 ! -1 or nc+2
 
-    select case (a$D_nb_dim(nb))
+    select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
        i_c1 = ix_offset(1) + ishft(ix+1, -1) ! (ix+1)/2
@@ -596,7 +596,7 @@ contains
   end subroutine a$D_gc2_prolong1
 
   ! This fills second ghost cells near physical boundaries using Neumann zero
-  subroutine a$D_gc2_neumann(boxes, id, nb, iv, gc_side, nc)
+  subroutine a$D_bc2_neumann_zero(boxes, id, nb, iv, gc_side, nc)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id, nb, iv, nc
 #if $D == 2
@@ -607,29 +607,29 @@ contains
 
     select case (nb)
 #if $D == 2
-    case (a2_nb_lx)
+    case (a2_neighb_lowx)
        gc_side = boxes(id)%cc(2, 1:nc, iv)
-    case (a2_nb_hx)
+    case (a2_neighb_highx)
        gc_side = boxes(id)%cc(nc-1, 1:nc, iv)
-    case (a2_nb_ly)
+    case (a2_neighb_lowy)
        gc_side = boxes(id)%cc(1:nc, 2, iv)
-    case (a2_nb_hy)
+    case (a2_neighb_highy)
        gc_side = boxes(id)%cc(1:nc, nc-1, iv)
 #elif $D == 3
-    case (a3_nb_lx)
+    case (a3_neighb_lowx)
        gc_side = boxes(id)%cc(2, 1:nc, 1:nc, iv)
-    case (a3_nb_hx)
+    case (a3_neighb_highx)
        gc_side = boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
-    case (a3_nb_ly)
+    case (a3_neighb_lowy)
        gc_side = boxes(id)%cc(1:nc, 2, 1:nc, iv)
-    case (a3_nb_hy)
+    case (a3_neighb_highy)
        gc_side = boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
-    case (a3_nb_lz)
+    case (a3_neighb_lowz)
        gc_side = boxes(id)%cc(1:nc, 1:nc, 2, iv)
-    case (a3_nb_hz)
+    case (a3_neighb_highz)
        gc_side = boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
 #endif
     end select
-  end subroutine a$D_gc2_neumann
+  end subroutine a$D_bc2_neumann_zero
 
 end module m_a$D_gc
