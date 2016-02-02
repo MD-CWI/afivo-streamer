@@ -61,7 +61,7 @@ program poisson_basic_2d
      call a2_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
-     call a2_adjust_refinement(tree, ref_func, ref_info)
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -102,9 +102,10 @@ program poisson_basic_2d
 contains
 
   ! Return the refinement flag for boxes(id)
-  integer function ref_func(boxes, id)
+  subroutine ref_routine(boxes, id, ref_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flag
     integer                  :: i, j, nc
     real(dp)                 :: xy(2), dr2, drhs
 
@@ -120,12 +121,12 @@ contains
           drhs = dr2 * gauss_4th(gs, xy) / 12
 
           if (abs(drhs) > 1.0_dp) then
-             ref_func = a5_do_ref
+             ref_flag = a5_do_ref
              exit outer
           end if
        end do
     end do outer
-  end function ref_func
+  end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)

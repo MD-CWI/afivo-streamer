@@ -451,7 +451,7 @@ contains
 
     p_id    = boxes(id)%parent
     old_pid = p_id
-    c_ix    = ix_to_cix(boxes(id)%ix)
+    c_ix    = a$D_ix_to_ichild(boxes(id)%ix)
     d       = a$D_neighb_dim(nb)
 
     ! Check if neighbor is in same direction as ix is (low/high). If so,
@@ -462,18 +462,6 @@ contains
     ! The child ix of the neighbor is reversed in direction d
     nb_id = boxes(p_id)%children(a$D_child_rev(c_ix, d))
   end function find_neighb_$Dd
-
-  !> Compute the 'child index' for a box with spatial index ix. With 'child
-  !> index' we mean the index in the children(:) array of its parent.
-  integer function ix_to_cix(ix)
-    integer, intent(in) :: ix($D) !< Spatial index of the box
-    ! The index can range from 1 (all ix odd) and 2**$D (all ix even)
-#if $D == 2
-    ix_to_cix = 4 - 2 * iand(ix(2), 1) - iand(ix(1), 1)
-#elif $D == 3
-    ix_to_cix = 8 - 4 * iand(ix(3), 1) - 2 * iand(ix(2), 1) - iand(ix(1), 1)
-#endif
-  end function ix_to_cix
 
   !> Resize box storage to new_size
   subroutine a$D_resize_box_storage(tree, new_size)
@@ -494,16 +482,16 @@ contains
     call move_alloc(boxes_cpy, tree%boxes)
   end subroutine a$D_resize_box_storage
 
-  !> Adjust the refinement of a tree using the user-supplied ref_func. If the
+  !> Adjust the refinement of a tree using the user-supplied ref_subr. If the
   !> argument n_changes is present, it contains the number of boxes that were
   !> (de)refined.
   !>
   !> This routine sets the bit a5_bit_new_children for each box that is refined.
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
-  subroutine a$D_adjust_refinement(tree, ref_func, ref_info)
+  subroutine a$D_adjust_refinement(tree, ref_subr, ref_info)
     type(a$D_t), intent(inout)           :: tree          !< Tree
-    procedure(a$D_ref_func)              :: ref_func !< Refinement function
+    procedure(a$D_subr_ref)              :: ref_subr !< Refinement function
     type(ref_info_t), intent(inout)     :: ref_info !< Information about refinement
     integer                             :: lvl, id, i, c_ids(a$D_num_children)
     integer                             :: highest_id_prev, highest_id_req
@@ -514,7 +502,7 @@ contains
     allocate(ref_flags(highest_id_prev))
 
     ! Set refinement values for all boxes
-    call consistent_ref_flags(tree, ref_flags, ref_func)
+    call consistent_ref_flags(tree, ref_flags, ref_subr)
 
     ! Check whether there is enough free space, otherwise extend the list
     highest_id_req = highest_id_prev + a$D_num_children * count(ref_flags == a5_refine)
@@ -652,33 +640,42 @@ contains
   !> base level, and it cannot refine above tree%lvl_limit. The argument
   !> ref_flags is changed: for boxes that will be refined it holds a5_refine,
   !> for boxes that will be derefined it holds a5_derefine
-  subroutine consistent_ref_flags(tree, ref_flags, ref_func)
+  subroutine consistent_ref_flags(tree, ref_flags, ref_subr)
     type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
-    procedure(a$D_ref_func)    :: ref_func     !< User-supplied refinement function.
+    procedure(a$D_subr_ref)    :: ref_subr     !< User-supplied refinement function.
     integer                   :: lvl, i, id, c_ids(a$D_num_children)
     integer                   :: nb, p_id, nb_id, p_nb_id
     integer                   :: lvl_limit
 
     lvl_limit = tree%lvl_limit
-    ref_flags(:) = -HUGE(1)
+    ref_flags(:) = a5_keep_ref
 
-    ! Set refinement flags for all boxes
+    ! Set refinement flags on all leaves and their immediate parents (on other
+    ! boxes the flags would not matter)
 
     !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%highest_lvl
        !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          ref_flags(id) = ref_func(tree%boxes, id)
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          call ref_subr(tree%boxes, id, ref_flags(id))
+
+          ! If the parent exists, and this is the first child, set refinement
+          ! flags for the parent
+          p_id = tree%boxes(id)%parent
+          if (p_id > a5_no_box .and. &
+               a$D_ix_to_ichild(tree%boxes(id)%ix) == 1) then
+             call ref_subr(tree%boxes, p_id, ref_flags(p_id))
+          end if
        end do
        !$omp end do
     end do
     !$omp end parallel
 
     ! Set flags with unknown values to default (keep refinement)
-    where (ref_flags > a5_do_ref) ref_flags = a5_keep_ref
-    where (ref_flags < a5_rm_ref) ref_flags = a5_keep_ref
+    if (maxval(ref_flags) > a5_do_ref .or. minval(ref_flags) < a5_rm_ref) &
+         stop "a$D_adjust_refinement: invalid refinement flag given"
 
     ! Cannot refine beyond max level
     do i = 1, size(tree%lvls(lvl_limit)%ids)

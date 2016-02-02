@@ -61,7 +61,7 @@ program poisson_basic_3d
      call a3_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
-     call a3_adjust_refinement(tree, ref_func, ref_info)
+     call a3_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -104,9 +104,10 @@ program poisson_basic_3d
 contains
 
   ! Return the refinement flag for boxes(id)
-  integer function ref_func(boxes, id)
+  subroutine ref_routine(boxes, id, ref_flag)
     type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flag
     integer                  :: nc
     real(dp)                 :: max_crv
 
@@ -118,9 +119,9 @@ contains
 
     ! And refine if it exceeds a threshold
     if (max_crv > 5.0e-3_dp) then
-       ref_func = a5_do_ref
+       ref_flag = a5_do_ref
     end if
-  end function ref_func
+  end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
