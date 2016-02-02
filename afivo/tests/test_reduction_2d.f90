@@ -25,8 +25,8 @@ program test_reduction
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
        box_size, &     ! Number of cells per coordinate in a box
-       n_var_cell, &   ! Number of face-centered variables
-       n_var_face, &   ! Number of cell-centered variables
+       1, &            ! Number of cell-centered variables
+       0, &            ! Number of face-centered variables
        dr)             ! Distance between cells on base level
 
   ! Set up geometry
@@ -42,8 +42,8 @@ program test_reduction
   call a2_loop_box(tree, set_random_values)
 
   do i = 1, 16
-     print *, "i = ", i, "max_id", tree%max_id
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     print *, "i = ", i, "highest_id", tree%highest_id
+     call a2_adjust_refinement(tree, ref_func, ref_info)
      call a2_loop_box(tree, set_random_values)
 
      call a2_tree_max_cc(tree, i_phi, max_val)
@@ -102,19 +102,18 @@ contains
     min_ab = min(a,b)
   end function min_ab
 
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  integer function ref_func(boxes, id)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flags(:)
     real(dp)                 :: rr
 
     call random_number(rr)
     if (rr < 0.2_dp .and. boxes(id)%lvl < 10) then
-       ref_flags(id) = a5_do_ref
+       ref_func = a5_do_ref
     else
-       ref_flags(id) = a5_rm_ref
+       ref_func = a5_rm_ref
     end if
-  end subroutine set_ref_flags
+  end function ref_func
 
   subroutine set_random_values(box)
     type(box2_t), intent(inout) :: box

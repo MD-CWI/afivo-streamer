@@ -22,7 +22,7 @@ libafivo.a: $(OBJS)
 srcs:	$(SRCS)
 
 clean:
-	$(RM) libafivo.a *.o *.mod
+	$(RM) libafivo.a *.o *.mod $(SRC_2D) $(SRC_3D)
 
 m_a2_%.f90: m_aX_%.f90
 	sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@

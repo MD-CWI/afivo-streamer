@@ -20,7 +20,7 @@ else ifeq ($(COMPILER), ifort)
 endif
 
 # How to get .o object files from .f90 source files
-%.o: 	%.f90
+%.o: %.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
 
 # How to get executables from .o object files

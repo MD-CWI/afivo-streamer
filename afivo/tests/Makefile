@@ -2,7 +2,6 @@ A5_DIR  := ..
 INCDIRS	:= $(A5_DIR)/src
 LIBDIRS := $(A5_DIR)/src $(A5_DIR)/silo/lib
 LIBS	:= afivo silo
-OUTDIR	:= output
 
 include $(A5_DIR)/makerules.make
 
@@ -21,10 +20,4 @@ $(OUTDIR):
 		mkdir -p $@
 
 # Dependency information
-$(PROGS): $(A5_DIR)/src/libafivo.a | $(OUTDIR)
-
-# Poisson programs and objects depend on m_gaussians
-PROGS_POIS	:= $(filter poisson_%, $(PROGS))
-OBJS_POIS	:= $(PROGS_POIS:%=%.o)
-$(PROGS_POIS): 	m_gaussians.o
-$(OBJS_POIS):	m_gaussians.o
+$(PROGS): $(A5_DIR)/src/libafivo.a

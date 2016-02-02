@@ -44,7 +44,7 @@ program test_mgb
   call a2_set_base(tree, ix_list, nb_list)
 
   do i = 1, 20
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a2_adjust_refinement(tree, ref_func, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -65,27 +65,27 @@ program test_mgb
   call mg2_init_mg(mg)
 
   do i = 1, 20
-     ! call mg2_fas_vcycle(tree, mg, tree%max_lvl, .true.)
+     ! call mg2_fas_vcycle(tree, mg, tree%highest_lvl, .true.)
      call mg2_fas_fmg(tree, mg, .true., i == 1)
      write(fname, "(A,I0)") "test_mgb_2d_", i
      call a2_write_vtk(tree, trim(fname), var_names, i, 0.0_dp)
   end do
 
-  print *, "max_id", tree%max_id
-  print *, "n_cells", tree%max_id * tree%n_cell**2
+  print *, "highest_id", tree%highest_id
+  print *, "n_cells", tree%highest_id * tree%n_cell**2
 
   call a2_destroy(tree)
 
 contains
 
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  subroutine ref_func(boxes, id, ref_flags)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flags(:)
 
     if (boxes(id)%lvl < 6) &
          ref_flags(id) = a5_do_ref
-  end subroutine set_ref_flags
+  end subroutine ref_func
 
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
@@ -115,13 +115,13 @@ contains
     nc = boxes(id)%n_cell
 
     select case (nb)
-    case (a2_nb_lx)
+    case (a2_neighb_lowx)
        boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
+    case (a2_neighb_highx)
        boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)
+    case (a2_neighb_lowy)
        boxes(id)%cc(1:nc, 0, iv) = - boxes(id)%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
+    case (a2_neighb_highy)
        boxes(id)%cc(1:nc, nc+1, iv) = - boxes(id)%cc(1:nc, nc, iv)
     end select
   end subroutine sides_bc
