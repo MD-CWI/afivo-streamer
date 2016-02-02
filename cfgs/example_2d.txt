@@ -53,11 +53,8 @@
  # The maximum timestep:
  dt_max = 0.1000E-09
 
- # The number of steps after which the mesh is updated:
- num_steps_amr = 2
-
  # Whether photoionization is enabled:
- photoi_enabled = T
+ photoi_enabled = f
 
  # Fraction of oxygen:
  photoi_frac_O2 = 0.2000E+00

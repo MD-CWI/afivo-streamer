@@ -26,7 +26,7 @@ module m_streamer
   integer, parameter :: i_eps      = 9 ! Level set function
 
   ! Names of the cell-centered variables
-  character(len=10) :: cc_names(n_var_cell) = &
+  character(len=10) :: ST_cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
        "pion_old", "phi", "fld", "rhs", "pho", "eps"]
 
@@ -105,7 +105,7 @@ module m_streamer
   integer, protected :: ST_ref_per_steps
 
   ! If a neighbor is already refined, reduce the criteria by this factor
-  real(dp), protected :: ST_ref_nb_fac
+  real(dp), protected :: ST_ref_neighb_fac
 
   ! The grid spacing will always be larger than this value
   real(dp), protected :: ST_ref_min_dx
@@ -223,13 +223,13 @@ contains
          "The grid spacing will always be larger than this value")
     call CFG_add(ST_cfg, "ref_max_dx", 1.0e-3_dp, &
          "The grid spacing will always be smaller than this value")
-    call CFG_add(ST_cfg, "ref_nb_fac", 2.0_dp, &
+    call CFG_add(ST_cfg, "ref_neighb_fac", 2.0_dp, &
          "If a neighbor is already refined, reduce the refinement &
          &criteria by this factor")
 
     call CFG_add(ST_cfg, "ref_adx", 1.0_dp, &
          "Refine if alpha*dx is larger than this value")
-    call CFG_add(ST_cfg, "ref_cphi", 1e99_dp, &
+    call CFG_add(ST_cfg, "ref_cphi", 0.05_dp, &
          "Refine if the curvature in phi is larger than this value")
 
     call CFG_add(ST_cfg, "deref_adx", 0.1_dp, &
@@ -440,7 +440,7 @@ contains
     call CFG_get(ST_cfg, "ref_per_steps", ST_ref_per_steps)
     call CFG_get(ST_cfg, "ref_min_dx", ST_ref_min_dx)
     call CFG_get(ST_cfg, "ref_max_dx", ST_ref_max_dx)
-    call CFG_get(ST_cfg, "ref_nb_fac", ST_ref_nb_fac)
+    call CFG_get(ST_cfg, "ref_neighb_fac", ST_ref_neighb_fac)
     call CFG_get(ST_cfg, "ref_adx", ST_ref_adx)
     call CFG_get(ST_cfg, "ref_cphi", ST_ref_cphi)
     call CFG_get(ST_cfg, "deref_adx", ST_deref_adx)

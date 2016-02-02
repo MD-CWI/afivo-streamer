@@ -234,7 +234,7 @@ contains
     !> Time step, if present use "physical" photons
     real(dp), intent(in), optional :: dt
 
-    integer                     :: lvl, ix, id, nc, min_lvl, max_lvl
+    integer                     :: lvl, ix, id, nc, min_lvl, highest_lvl
     integer                     :: i, j, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
@@ -275,7 +275,7 @@ contains
 
     proc_id = 1+omp_get_thread_num()
 
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        dr = a2_lvl_dr(tree, lvl)
        !$omp do
        do ix = 1, size(tree%lvls(lvl)%leaves)
@@ -350,14 +350,14 @@ contains
        end do
        !$omp end parallel do
     else
-       max_lvl = get_lvl_length(tree%dr_base, min_dx)
+       highest_lvl = get_lvl_length(tree%dr_base, min_dx)
        !$omp parallel private(n, dist, lvl, proc_id)
        proc_id = 1+omp_get_thread_num()
        !$omp do
        do n = 1, n_used
           dist = norm2(xyz_dst(1:2, n) - xyz_src(1:2, n))
           lvl = get_rlvl_length(tree%dr_base, fac_dx * dist, prng%rngs(proc_id))
-          if (lvl > max_lvl) lvl = max_lvl
+          if (lvl > highest_lvl) lvl = highest_lvl
           ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), lvl)
        end do
        !$omp end do
@@ -367,7 +367,7 @@ contains
     ! Clear variable i_pho, in which we will store the photoionization source term
 
     !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -416,12 +416,12 @@ contains
 
     !$omp parallel private(lvl, i, id)
     ! Prolong to finer grids
-    do lvl = min_lvl, tree%max_lvl-1
+    do lvl = min_lvl, tree%highest_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           call a2_gc_box(tree%boxes, id, i_pho, &
-               a2_gc_interp, a2_gc_neumann)
+               a2_gc_interp, a2_bc_neumann_zero)
        end do
        !$omp end do
 
@@ -466,7 +466,7 @@ contains
     integer                     :: lvl, ix, id, nc
     integer                     :: i, j, k, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
-    integer                     :: pho_lvl, max_lvl, min_lvl
+    integer                     :: pho_lvl, highest_lvl, min_lvl
     real(dp)                    :: tmp, dr, fac, dist
     real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
@@ -502,7 +502,7 @@ contains
 
     proc_id = 1+omp_get_thread_num()
     tmp = 0
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        dr = a3_lvl_dr(tree, lvl)
        !$omp do
        do ix = 1, size(tree%lvls(lvl)%leaves)
@@ -557,14 +557,14 @@ contains
        end do
        !$omp end parallel do
     else
-       max_lvl = get_lvl_length(tree%dr_base, min_dx)
+       highest_lvl = get_lvl_length(tree%dr_base, min_dx)
        !$omp parallel private(n, dist, lvl, proc_id)
        proc_id = 1+omp_get_thread_num()
        !$omp do
        do n = 1, n_used
           dist = norm2(xyz_dst(:, n) - xyz_src(:, n))
           lvl = get_rlvl_length(tree%dr_base, fac_dx * dist, prng%rngs(proc_id))
-          if (lvl > max_lvl) lvl = max_lvl
+          if (lvl > highest_lvl) lvl = highest_lvl
           ph_loc(n) = a3_get_loc(tree, xyz_dst(:, n), lvl)
        end do
        !$omp end do
@@ -574,7 +574,7 @@ contains
     ! Clear variable i_pho, in which we will store the photoionization source term
 
     !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -607,12 +607,12 @@ contains
 
     !$omp parallel private(lvl, i, id)
     ! Prolong to finer grids
-    do lvl = min_lvl, tree%max_lvl-1
+    do lvl = min_lvl, tree%highest_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           call a3_gc_box(tree%boxes, id, i_pho, &
-               a3_gc_interp, a3_gc_neumann)
+               a3_gc_interp, a3_bc_neumann_zero)
        end do
        !$omp end do
 

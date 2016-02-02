@@ -36,8 +36,6 @@ program test_photoionization
   real(dp)            :: sum_pho
 
   character(len=100) :: fname, tmp
-  character(len=10)  :: cc_names(3) = &
-       [character(len=10) :: "src", "pho", "sol"]
 
   if (command_argument_count() < 4) then
      print *, "Need >5 arguments: num_photons pressure grid_fac", &
@@ -69,10 +67,10 @@ program test_photoionization
   ! Initialize tree
   if (use_cyl) then
      call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, &
-          dr=dr, n_boxes=25*1000, coord=a5_cyl)
+          dr=dr, n_boxes=25*1000, coord=a5_cyl, cc_names=["src", "pho", "sol"])
   else
      call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, &
-          dr=dr, n_boxes=25*1000)
+          dr=dr, n_boxes=25*1000, cc_names=["src", "pho", "sol"])
   end if
 
   ! Set up geometry
@@ -84,7 +82,7 @@ program test_photoionization
   call a2_set_base(tree, ix_list, nb_list)
 
   do n = 1, 20
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -92,8 +90,7 @@ program test_photoionization
   call set_photoionization(tree, num_photons)
   write(fname, "(A,I0,A,L1,L1,I0,A)") "pho_", nint(1e3_dp * gas_pressure), "_", &
        use_const_dx, use_cyl, nint(100 * grid_factor), ".silo"
-  call a2_write_silo(tree, fname, &
-       cc_names, 0, 0.0_dp)
+  call a2_write_silo(tree, fname)
   call a2_tree_sum_cc(tree, i_pho, sum_pho)
   print *, "Sum photoionization", sum_pho
   call a2_tree_sum_cc(tree, i_sol, sum_pho)
@@ -102,16 +99,16 @@ program test_photoionization
 contains
 
   ! Refinement function
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  subroutine ref_routine(boxes, id, ref_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flags(:)
+    integer, intent(inout)   :: ref_flag
 
     if (boxes(id)%dr > 1.0e-3_dp * domain_len) then
-       ref_flags(id) = a5_do_ref
+       ref_flag = a5_do_ref
     end if
 
-  end subroutine set_ref_flags
+  end subroutine ref_routine
 
   subroutine set_photoionization(tree, num_photons)
     use m_photons

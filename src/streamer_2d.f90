@@ -58,7 +58,7 @@ program streamer_2d
   do
      call a2_loop_box(tree, set_init_cond)
      call compute_fld(tree, n_fmg_cycles, .true.)
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -82,9 +82,6 @@ program streamer_2d
      else
         write_out = .false.
      end if
-
-     if (write_out) call a2_write_silo(tree, fname, &
-          cc_names, ST_out_cnt, ST_time, dir=ST_output_dir)
 
      if (ST_time > ST_end_time) exit
 
@@ -113,8 +110,8 @@ program streamer_2d
            call a2_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_gc_neumann)
-           call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_gc_neumann)
+           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_neumann_zero)
+           call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
@@ -127,7 +124,10 @@ program streamer_2d
         call compute_fld(tree, n_fmg_cycles, .false.)
      end do
 
-     call a2_adjust_refinement(tree, set_ref_flags, ref_info)
+     if (write_out) call a2_write_silo(tree, fname, ST_out_cnt, &
+          ST_time, dir=ST_output_dir)
+
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -161,7 +161,7 @@ contains
 
     ! Initialize tree
     call a2_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
-         coarsen_to=2, n_boxes = n_boxes_init)
+         coarsen_to=2, n_boxes = n_boxes_init, cc_names=ST_cc_names)
 
     ! Set up geometry
     id             = 1          ! One box ...
@@ -173,30 +173,45 @@ contains
 
   end subroutine init_tree
 
-  ! Refinement function
-  subroutine set_ref_flags(boxes, id, ref_flags)
+  ! This routine sets the refinement flag for boxes(id)
+  subroutine ref_routine(boxes, id, ref_flag)
     use m_geom
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flags(:)
-    integer                  :: nc, n
-    real(dp)                 :: crv_phi, dr2, max_fld, max_dns
-    real(dp)                 :: boxlen, dist, alpha, adx
+    type(box2_t), intent(in) :: boxes(:) ! List of all boxes
+    integer, intent(in)      :: id       ! Index of box to look at
+    integer, intent(inout)   :: ref_flag ! Refinement flag for the box
+    integer                  :: n, nc, nb, nbs(4)
+    real(dp)                 :: cphi, dx2, dx
+    real(dp)                 :: alpha, adx, max_fld
+    real(dp)                 :: boxlen, dist, max_dns
 
     nc        = boxes(id)%n_cell
-    dr2       = boxes(id)%dr**2
-    crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+    dx        = boxes(id)%dr
+    dx2       = boxes(id)%dr**2
+    cphi      = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
     max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
     max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
     alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
-    if (adx < 0.1_dp .and. boxes(id)%dr < 2.0e-5_dp) &
-         ref_flags(id) = a5_rm_ref
-    if (adx < 0.1_dp .and. crv_phi < 4.0_dp .and. boxes(id)%dr < 5.0e-5_dp) &
-         ref_flags(id) = a5_rm_ref
+    ! If one of the neighbors is already refined, the current box will get
+    ! refined sooner. This expands the refined region outwards.
+    nbs = boxes(id)%neighbors
+    do nb = 1, a2_num_neighbors
+       if (nbs(nb) > a5_no_box) then
+          if (a2_has_children(boxes(nbs(nb)))) then
+             adx = adx * ST_ref_neighb_fac
+             cphi = cphi * ST_ref_neighb_fac
+          end if
+       end if
+    end do
 
-    ! Refine around initial conditions
+    if (adx > ST_ref_adx .and. cphi > ST_ref_cphi) then
+       ref_flag = a5_do_ref
+    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
+       ref_flag = a5_rm_ref
+    end if
+
+    ! Refine around the initial conditions
     if (ST_time < ST_ref_init_time) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
@@ -207,14 +222,43 @@ contains
           if (dist - ST_init_cond%seed_width(n) < boxlen &
                .and. boxes(id)%dr > ST_ref_init_fac * &
                ST_init_cond%seed_width(n)) then
-             ref_flags(id) = a5_do_ref
+             ref_flag = a5_do_ref
           end if
        end do
     end if
 
-    if (adx > 1.0_dp .and. crv_phi > 1) ref_flags(id) = a5_do_ref
+    ! Make sure we don't have or get a too fine or too coarse grid
+    if (dx > ST_ref_max_dx) then
+       ref_flag = a5_do_ref
+    else if (dx < ST_ref_min_dx) then
+       ref_flag = a5_rm_ref
+    else if (dx < 2 * ST_ref_min_dx .and. ref_flag == a5_do_ref) then
+       ref_flag = a5_keep_ref
+    else if (dx > 0.5_dp * ST_ref_max_dx .and. ref_flag == a5_rm_ref) then
+       ref_flag = a5_keep_ref
+    end if
 
-  end subroutine set_ref_flags
+  end subroutine ref_routine
+
+  !> Get maximum curvature
+  function max_curvature (box, iv) result(crv)
+    type(box2_t), intent(in) :: box !< Box to operate on
+    integer, intent(in)         :: iv !< Index of variable
+    real(dp)                    :: crv, tmp
+    integer                     :: i, j, nc
+
+    nc  = box%n_cell
+    crv = 0
+
+    do j = 1, nc
+       do i = 1, nc
+          tmp = (box%cc(i-1, j, iv) + box%cc(i+1, j, iv) &
+               + box%cc(i, j-1, iv) + box%cc(i, j+1, iv) &
+               - 4 * box%cc(i, j, iv))
+          if (abs(tmp) > crv) crv = abs(tmp)
+       end do
+    end do
+  end function max_curvature
 
   subroutine set_init_cond(box)
     use m_geom
@@ -317,7 +361,7 @@ contains
 
     ! Set the source term (rhs)
     !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -340,7 +384,7 @@ contains
     call a2_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_tree(tree, i_fld, a2_gc_interp, a2_gc_neumann)
+    call a2_gc_tree(tree, i_fld, a2_gc_interp, a2_bc_neumann_zero)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
@@ -399,7 +443,7 @@ contains
     fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
     call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong1, &
-         a2_gc2_neumann, gc_data, nc)
+         a2_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
@@ -415,7 +459,7 @@ contains
 
           if (v_drift < 0.0_dp) then
              if (i == nc+1) then
-                tmp = gc_data(j, a2_nb_hx)
+                tmp = gc_data(j, a2_neighb_highx)
              else
                 tmp = boxes(id)%cc(i+1, j, i_elec)
              end if
@@ -426,7 +470,7 @@ contains
                   boxes(id)%fx(i, j, f_elec) = fac * fld
           else                  ! v_drift > 0
              if (i == 1) then
-                tmp = gc_data(j, a2_nb_lx)
+                tmp = gc_data(j, a2_neighb_lowx)
              else
                 tmp = boxes(id)%cc(i-2, j, i_elec)
              end if
@@ -458,7 +502,7 @@ contains
 
           if (v_drift < 0.0_dp) then
              if (j == nc+1) then
-                tmp = gc_data(i, a2_nb_hy)
+                tmp = gc_data(i, a2_neighb_highy)
              else
                 tmp = boxes(id)%cc(i, j+1, i_elec)
              end if
@@ -469,7 +513,7 @@ contains
                   boxes(id)%fy(i, j, f_elec) = fac * fld
           else                  ! v_drift > 0
              if (j == 1) then
-                tmp = gc_data(i, a2_nb_ly)
+                tmp = gc_data(i, a2_neighb_lowy)
              else
                 tmp = boxes(id)%cc(i, j-2, i_elec)
              end if
@@ -596,7 +640,7 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id
 
-    do lvl = 1, tree%max_lvl
+    do lvl = 1, tree%highest_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_prolong1_to(tree%boxes, id, i_elec)
@@ -608,9 +652,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
-               a2_gc_interp_lim, a2_gc_neumann)
+               a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_pion, &
-               a2_gc_interp_lim, a2_gc_neumann)
+               a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, sides_bc_pot)
        end do
@@ -618,23 +662,28 @@ contains
   end subroutine prolong_to_new_boxes
 
   ! This fills ghost cells near physical boundaries for the potential
-  subroutine sides_bc_pot(boxes, id, nb, iv)
-    type(box2_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv
+  subroutine sides_bc_pot(box, nb, iv, bc_type)
+    type(box2_t), intent(inout) :: box
+    integer, intent(in)         :: nb ! Direction for the boundary condition
+    integer, intent(in)         :: iv ! Index of variable
+    integer, intent(out)        :: bc_type ! Type of boundary condition
     integer                     :: nc
 
-    nc = boxes(id)%n_cell
+    nc = box%n_cell
 
     select case (nb)
-    case (a2_nb_lx)
-       boxes(id)%cc(0, 1:nc, iv) = boxes(id)%cc(1, 1:nc, iv)
-    case (a2_nb_hx)
-       boxes(id)%cc(nc+1, 1:nc, iv) = boxes(id)%cc(nc, 1:nc, iv)
-    case (a2_nb_ly)             ! Grounded
-       boxes(id)%cc(1:nc, 0, iv) = -boxes(id)%cc(1:nc, 1, iv)
-    case (a2_nb_hy)
-       boxes(id)%cc(1:nc, nc+1, iv) = 2 * ST_applied_voltage &
-            - boxes(id)%cc(1:nc, nc, iv)
+    case (a2_neighb_lowx)
+       bc_type = a5_bc_neumann
+       box%cc(0, 1:nc, iv) = 0
+    case (a2_neighb_highx)
+       bc_type = a5_bc_neumann
+       box%cc(nc+1, 1:nc, iv) = 0
+    case (a2_neighb_lowy)
+       bc_type = a5_bc_dirichlet
+       box%cc(1:nc, 0, iv) = 0
+    case (a2_neighb_highy)
+       bc_type = a5_bc_dirichlet
+       box%cc(1:nc, nc+1, iv) = ST_applied_voltage
     end select
   end subroutine sides_bc_pot
 
