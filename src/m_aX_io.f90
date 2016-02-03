@@ -40,6 +40,7 @@ contains
     integer, allocatable          :: cell_types(:), icc_val(:), ifc_val(:)
     type(vtk_t)                   :: vtkf
     character(len=400)            :: fname
+    character(len=100)            :: tmp_name
     character(len=100), allocatable :: var_names(:)
 #if $D == 3
     integer                       :: k, bn2
@@ -72,10 +73,20 @@ contains
     var_names(1:n_cc) = tree%cc_names(icc_val)
 
     do i = 1, n_fc
-       var_names(n_cc + (i-1)*$D + 1) = trim(tree%fc_names(ifc_val(i))) // "x"
-       var_names(n_cc + (i-1)*$D + 2) = trim(tree%fc_names(ifc_val(i))) // "y"
-#if $D == 3
-       var_names(n_cc + (i-1)*$D + 3) = trim(tree%fc_names(ifc_val(i))) // "z"
+       n = n_cc + (i-1)*$D
+       tmp_name = tree%fc_names(ifc_val(i))
+#if $D == 2
+       if (tree%coord_t == a5_cyl) then
+          var_names(n+1) = trim(tmp_name) // "_r"
+          var_names(n+2) = trim(tmp_name) // "_z"
+       else
+          var_names(n+1) = trim(tmp_name) // "_x"
+          var_names(n+2) = trim(tmp_name) // "_y"
+       end if
+#elif $D == 3
+       var_names(n+1) = trim(tmp_name) // "_x"
+       var_names(n+2) = trim(tmp_name) // "_y"
+       var_names(n+3) = trim(tmp_name) // "_z"
 #endif
     end do
 
@@ -218,10 +229,11 @@ contains
 
     character(len=*), parameter     :: grid_name = "gg"
     character(len=*), parameter     :: amr_name  = "mesh", meshdir = "data"
+    character(len=100)              :: tmp_name
     character(len=100), allocatable :: grid_list(:), var_list(:, :), var_names(:)
     character(len=400)              :: fname
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
-    integer                         :: n_vars, i0, j0, dbix, n_cc, n_fc
+    integer                         :: n, n_vars, i0, j0, dbix, n_cc, n_fc
     integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
     integer                         :: n_cycle_val
     integer, allocatable            :: ids(:), nb_ids(:), icc_val(:), ifc_val(:)
@@ -263,10 +275,20 @@ contains
     var_names(1:n_cc) = tree%cc_names(icc_val)
 
     do i = 1, n_fc
-       var_names(n_cc + (i-1)*$D + 1) = trim(tree%fc_names(ifc_val(i))) // "x"
-       var_names(n_cc + (i-1)*$D + 2) = trim(tree%fc_names(ifc_val(i))) // "y"
-#if $D == 3
-       var_names(n_cc + (i-1)*$D + 3) = trim(tree%fc_names(ifc_val(i))) // "z"
+       n = n_cc + (i-1)*$D
+       tmp_name = tree%fc_names(ifc_val(i))
+#if $D == 2
+       if (tree%coord_t == a5_cyl) then
+          var_names(n+1) = trim(tmp_name) // "_r"
+          var_names(n+2) = trim(tmp_name) // "_z"
+       else
+          var_names(n+1) = trim(tmp_name) // "_x"
+          var_names(n+2) = trim(tmp_name) // "_y"
+       end if
+#elif $D == 3
+       var_names(n+1) = trim(tmp_name) // "_x"
+       var_names(n+2) = trim(tmp_name) // "_y"
+       var_names(n+3) = trim(tmp_name) // "_z"
 #endif
     end do
 
