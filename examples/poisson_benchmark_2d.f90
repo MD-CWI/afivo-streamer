@@ -90,7 +90,7 @@ program test_mg2_2d
 
   ! This writes a Silo output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
-  call a2_write_silo(tree, "poisson_benchmark_2d")
+  call a2_write_silo(tree, "poisson_benchmark_2d", dir="output")
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
