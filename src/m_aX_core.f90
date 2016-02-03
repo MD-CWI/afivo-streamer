@@ -654,7 +654,7 @@ contains
     ! Set refinement flags on all leaves and their immediate parents (on other
     ! boxes the flags would not matter)
 
-    !$omp parallel private(lvl, i, id)
+    !$omp parallel private(lvl, i, id, p_id)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
