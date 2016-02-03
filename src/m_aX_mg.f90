@@ -266,6 +266,7 @@ contains
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
     integer                     :: nc, ix, dix, i, di, j, dj
+    real(dp), parameter         :: sixth = 1 / 6.0_dp
 #if $D == 3
     integer                     :: k, dk
 #endif
@@ -313,8 +314,8 @@ contains
 
              boxes(id)%cc(i-di, j, k, iv) = &
                   0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
-                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j, k, iv) - &
+                  sixth * (boxes(id)%cc(i+di, j, k, iv) + &
                   boxes(id)%cc(i, j+dj, k, iv) + &
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
@@ -329,8 +330,8 @@ contains
 
              boxes(id)%cc(i, j-dj, k, iv) = &
                   0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
-                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j, k, iv) - &
+                  sixth * (boxes(id)%cc(i+di, j, k, iv) + &
                   boxes(id)%cc(i, j+dj, k, iv) + &
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
@@ -345,8 +346,8 @@ contains
 
              boxes(id)%cc(i, j, k-dk, iv) = &
                   0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
-                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
+                  boxes(id)%cc(i, j, k, iv) - &
+                  sixth * (boxes(id)%cc(i+di, j, k, iv) + &
                   boxes(id)%cc(i, j+dj, k, iv) + &
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
