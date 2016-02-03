@@ -205,7 +205,6 @@ contains
 
   !> Prolongation to a child (from parent) using quadratic interpolation. We use
   !> 5 / 7 point stencils which do not need corner ghost cells.
-  !> @TODO 3D version
   subroutine a$D_prolong2_to(boxes, id, iv)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)          :: id       !< Id of child
