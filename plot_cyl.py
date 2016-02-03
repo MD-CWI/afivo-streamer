@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
 import numpy as np
+import collections
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
 class Plotdata():
 
     def __init__(self):
-        self.d = {}
+        self.d = collections.OrderedDict()
 
     def add_file(self, fname, label):
         self.d[label] = np.genfromtxt(fname, names=True)
@@ -51,18 +52,15 @@ class Plotdata():
 if __name__ == '__main__':
     p = Plotdata()
 
-    p.add_file("output/quick_cyl_adx6.txt", "a6")
-    # p.add_file("output/quick_cyl_adx8.txt", "a8")
-    # p.add_file("output/quick_cyl_adx8_cphi20.txt", "a8_c20")
-    # p.add_file("output/quick_cyl_adx10.txt", "a10")
-    # p.add_file("output/quick_cyl_adx12.txt", "a12")
-    p.add_file("output/quick_cyl.txt", "a10_1")
-    p.add_file("output/quick_cyl_test.txt", "a10_2")
-    p.add_file("output/quick_cyl_test2.txt", "a10_3")
-    p.add_file("output/quick_cyl_nd.txt", "a10_3")
-    p.add_file("output/quick_cyl_new.txt", "a10_new")
-    # p.add_file("output/quick_cyl_adx12_noderef.txt", "a12_nd")
-    # p.plot('time', 'Ez')
+    p.add_file("output/guiding_cyl.txt", "test")
+    p.add_file("output/guiding_cyl_2.txt", "test2")
+    # p.add_file("output/guiding_cyl_adx6.txt", "a6")
+    p.add_file("output/guiding_cyl_adx8.txt", "a8")
+    # p.add_file("output/guiding_cyl_adx10.txt", "a10")
+    # p.add_file("output/guiding_cyl_adx12.txt", "a12")
+    # p.add_file("output/guiding_cyl_adx14.txt", "a14")
+    # p.add_file("output/guiding_cyl_adx16.txt", "a16")
+    # p.plot('time', 'z_Ez')
     # p.plot('time', 'r_Er')
     # p.plot_deriv('time', 'Er', 2)
     p.plot_deriv('time', 'z_Ez')
