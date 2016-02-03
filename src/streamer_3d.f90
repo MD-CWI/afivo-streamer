@@ -57,7 +57,7 @@ program streamer_3d
   ! Set up the initial conditions
   do
      call a3_loop_box(tree, set_init_cond)
-     call compute_fld(tree, n_fmg_cycles, .true.)
+     call compute_fld(tree, n_fmg_cycles, .false.)
      call a3_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0 .and. ref_info%n_rm == 0) exit
   end do
@@ -116,14 +116,14 @@ program streamer_3d
            call a3_gc_tree(tree, i_pion, a3_gc_interp_lim, a3_bc_neumann_zero)
 
            ! Compute new field on first iteration
-           if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
+           if (i == 1) call compute_fld(tree, n_fmg_cycles, .true.)
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
         call a3_loop_box(tree, average_dens)
 
         ! Compute field with new density
-        call compute_fld(tree, n_fmg_cycles, .false.)
+        call compute_fld(tree, n_fmg_cycles, .true.)
      end do
 
      call a3_adjust_refinement(tree, ref_routine, ref_info)
@@ -133,7 +133,7 @@ program streamer_3d
         call prolong_to_new_boxes(tree, ref_info)
 
         ! Compute the field on the new mesh
-        call compute_fld(tree, n_fmg_cycles, .false.)
+        call compute_fld(tree, n_fmg_cycles, .true.)
 
         ! This will every now-and-then clean up the data in the tree
         call a3_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
@@ -306,11 +306,11 @@ contains
 
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
-  subroutine compute_fld(tree, n_cycles, no_guess)
+  subroutine compute_fld(tree, n_cycles, have_guess)
     use m_units_constants
     type(a3_t), intent(inout) :: tree
     integer, intent(in)       :: n_cycles
-    logical, intent(in)       :: no_guess
+    logical, intent(in)       :: have_guess
     real(dp), parameter       :: fac = UC_elem_charge / UC_eps0
     integer                   :: lvl, i, id, nc
 
@@ -334,7 +334,7 @@ contains
 
     ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
-       call mg3_fas_fmg(tree, mg, .false., no_guess .and. i == 1)
+       call mg3_fas_fmg(tree, mg, .false., have_guess .or. i > 1)
     end do
 
     ! Compute field from potential

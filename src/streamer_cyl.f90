@@ -60,7 +60,7 @@ program streamer_cyl
   ! Set up the initial conditions
   do
      call a2_loop_box(tree, set_init_cond)
-     call compute_fld(tree, n_fmg_cycles, .true.)
+     call compute_fld(tree, n_fmg_cycles, .false.)
      call a2_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
@@ -120,7 +120,7 @@ program streamer_cyl
            call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
 
            ! Compute new field on first iteration
-           if (i == 1) call compute_fld(tree, n_fmg_cycles, .false.)
+           if (i == 1) call compute_fld(tree, n_fmg_cycles, .true.)
         end do
 
         ST_time = ST_time - ST_dt        ! Go back one time step
@@ -129,7 +129,7 @@ program streamer_cyl
         call a2_loop_box(tree, average_dens)
 
         ! Compute field with new density
-        call compute_fld(tree, n_fmg_cycles, .false.)
+        call compute_fld(tree, n_fmg_cycles, .true.)
      end do
 
      if (write_out) then
@@ -146,7 +146,7 @@ program streamer_cyl
         call prolong_to_new_boxes(tree, ref_info)
 
         ! Compute the field on the new mesh
-        call compute_fld(tree, n_fmg_cycles, .false.)
+        call compute_fld(tree, n_fmg_cycles, .true.)
 
         ! This will every now-and-then clean up the data in the tree
         call a2_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
@@ -191,7 +191,7 @@ contains
     type(box2_t), intent(in) :: boxes(:) ! List of all boxes
     integer, intent(in)      :: id       ! Index of box to look at
     integer, intent(inout)   :: ref_flag ! Refinement flag for the box
-    integer                  :: n, nc, nb, nbs(4)
+    integer                  :: n, nc
     real(dp)                 :: cphi, dx2, dx
     real(dp)                 :: alpha, adx, max_fld
     real(dp)                 :: boxlen, dist
@@ -204,19 +204,7 @@ contains
     alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
     adx       = boxes(id)%dr * alpha
 
-    ! If one of the neighbors is already refined, the current box will get
-    ! refined sooner. This expands the refined region outwards.
-    nbs = boxes(id)%neighbors
-    do nb = 1, a2_num_neighbors
-       if (nbs(nb) > a5_no_box) then
-          if (a2_has_children(boxes(nbs(nb)))) then
-             adx = adx * ST_ref_neighb_fac
-             cphi = cphi * ST_ref_neighb_fac
-          end if
-       end if
-    end do
-
-    if (adx > ST_ref_adx .and. cphi > ST_ref_cphi) then
+    if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
        ref_flag = a5_do_ref
     else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
        ref_flag = a5_rm_ref
@@ -363,11 +351,11 @@ contains
 
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
-  subroutine compute_fld(tree, n_cycles, no_guess)
+  subroutine compute_fld(tree, n_cycles, have_guess)
     use m_units_constants
     type(a2_t), intent(inout) :: tree
     integer, intent(in)       :: n_cycles
-    logical, intent(in)       :: no_guess
+    logical, intent(in)       :: have_guess
     real(dp), parameter       :: fac = UC_elem_charge / UC_eps0
     integer                   :: lvl, i, id, nc
 
@@ -391,7 +379,7 @@ contains
 
     ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
-       call mg2_fas_fmg(tree, mg, .false., no_guess .and. i == 1)
+       call mg2_fas_fmg(tree, mg, .false., have_guess .or. i > 1)
     end do
 
     ! Compute field from potential
