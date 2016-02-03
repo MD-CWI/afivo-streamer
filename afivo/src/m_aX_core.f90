@@ -131,7 +131,7 @@ contains
        tree%cc_names = cc_names
     else
        do n = 1, n_var_cell
-          write(tree%cc_names(n), "(A,I0)") "cc_", n
+          write(tree%cc_names(n), "(A,I0)") "cc_var", n
        end do
     end if
 
@@ -141,7 +141,7 @@ contains
        tree%fc_names = fc_names
     else
        do n = 1, n_var_face
-          write(tree%fc_names(n), "(A,I0)") "fc_", n
+          write(tree%fc_names(n), "(A,I0)") "flux", n
        end do
     end if
   end subroutine a$D_init
