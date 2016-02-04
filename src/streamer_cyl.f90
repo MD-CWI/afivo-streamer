@@ -662,14 +662,15 @@ contains
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, id
+    integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_prolong1_to(tree%boxes, id, i_elec)
-          call a2_prolong1_to(tree%boxes, id, i_pion)
-          call a2_prolong1_to(tree%boxes, id, i_phi)
+          p_id = tree%boxes(id)%parent
+          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_elec)
+          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_pion)
+          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_phi)
           call set_box_eps(tree%boxes(id))
        end do
 
@@ -680,7 +681,7 @@ contains
           call a2_gc_box(tree%boxes, id, i_pion, &
                a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
-               mg2_sides_rb, sides_bc_pot)
+               mg2_sides_rb, mg%sides_bc)
        end do
     end do
   end subroutine prolong_to_new_boxes
