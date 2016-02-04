@@ -132,10 +132,9 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), dr2
+    real(dp)                    :: xy(2)
 
     nc = box%n_cell
-    dr2 = box%dr**2
 
     do j = 1, nc
        do i = 1, nc

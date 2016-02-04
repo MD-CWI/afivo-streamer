@@ -139,7 +139,6 @@ contains
     real(dp)                    :: xyz(3)
 
     nc = box%n_cell
-    box%cc(:, :, :, i_phi) = 0
 
     do k = 1, nc
        do j = 1, nc
