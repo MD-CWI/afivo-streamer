@@ -97,7 +97,7 @@ contains
     do ix = 1, gs%n_gauss
        xrel = (r-gs%r0(:, ix)) / gs%sigma(ix)
        gauss_lpl = gauss_lpl + 4/gs%sigma(ix)**2 * &
-            (sum(xrel**2) - 1) * gauss_single(gs, r, ix)
+            (sum(xrel**2) - 0.5_dp * gs%n_dim) * gauss_single(gs, r, ix)
     end do
   end function gauss_lpl
 

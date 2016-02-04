@@ -32,7 +32,7 @@ program poisson_basic_3d
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([0.25_dp, 0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp, 0.75_dp], [3,2]))
+       reshape([0.25_dp, 0.25_dp, 0.5_dp, 0.75_dp, 0.75_dp, 0.5_dp], [3,2]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / n_cell
@@ -108,19 +108,28 @@ contains
     type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flag
-    integer                  :: nc
-    real(dp)                 :: max_crv
+    integer                  :: i, j, k, nc
+    real(dp)                 :: xyz(3), dr2, drhs
 
     nc = boxes(id)%n_cell
+    dr2 = boxes(id)%dr**2
 
-    ! Compute the "curvature" in phi
-    max_crv = boxes(id)%dr**2 * &
-         maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
+    outer: do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             xyz = a3_r_cc(boxes(id), [i, j, k])
 
-    ! And refine if it exceeds a threshold
-    if (max_crv > 5.0e-3_dp) then
-       ref_flag = a5_do_ref
-    end if
+             ! This is an estimate of the truncation error in the right-hand side,
+             ! which is related to the fourth derivative of the solution.
+             drhs = dr2 * gauss_4th(gs, xyz) / 12
+
+             if (abs(drhs) > 1.0_dp) then
+                ref_flag = a5_do_ref
+                exit outer
+             end if
+          end do
+       end do
+    end do outer
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
@@ -130,7 +139,6 @@ contains
     real(dp)                    :: xyz(3)
 
     nc = box%n_cell
-    box%cc(:, :, :, i_phi) = 0
 
     do k = 1, nc
        do j = 1, nc

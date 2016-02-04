@@ -35,7 +35,6 @@ module m_a$D_utils
   public :: a$D_tree_copy_fc
 
   ! Public functions
-  public :: a$D_get_child_offset
   public :: a$D_get_loc
   public :: a$D_r_loc
   public :: a$D_r_inside
@@ -462,65 +461,108 @@ contains
     !$omp end parallel
   end subroutine a$D_reduction_loc
 
-  !> Find maximum value of cc(..., iv). Only loop over leaves, and ghost cells
-  !> are not used.
-  subroutine a$D_tree_max_cc(tree, iv, cc_max)
-    type(a$D_t), intent(in) :: tree
-    integer, intent(in)    :: iv
-    real(dp), intent(out)  :: cc_max
-    real(dp)               :: tmp, my_max
-    integer                :: i, id, lvl, nc
+  !> Find maximum value of cc(..., iv). By default, only loop over leaves, and
+  !> ghost cells are not used.
+  subroutine a$D_tree_max_cc(tree, iv, cc_max, include_parents)
+    type(a$D_t), intent(in)       :: tree
+    integer, intent(in)           :: iv
+    real(dp), intent(out)         :: cc_max
+    logical, intent(in), optional :: include_parents
+    logical                       :: only_leaves
+    real(dp)                      :: tmp, my_max
+    integer                       :: i, id, lvl, nc
 
     if (.not. tree%ready) stop "Tree not ready"
+    only_leaves = .true.
+    if (present(include_parents)) only_leaves = .not. include_parents
     my_max = -huge(1.0_dp)
 
     !$omp parallel reduction(max: my_max) private(lvl, i, id, nc, tmp)
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          nc = tree%boxes(id)%n_cell
+    if (only_leaves) then
+       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             nc = tree%boxes(id)%n_cell
 #if $D == 2
-          tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
 #elif $D == 3
-          tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
 #endif
-          if (tmp > my_max) my_max = tmp
+             if (tmp > my_max) my_max = tmp
+          end do
+          !$omp end do
        end do
-       !$omp end do
-    end do
+    else
+       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             nc = tree%boxes(id)%n_cell
+#if $D == 2
+             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+#elif $D == 3
+             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+#endif
+             if (tmp > my_max) my_max = tmp
+          end do
+          !$omp end do
+       end do
+    end if
     !$omp end parallel
+
 
     cc_max = my_max
   end subroutine a$D_tree_max_cc
 
-  !> Find minimum value of cc(..., iv). Only loop over leaves, and ghost cells
-  !> are not used.
-  subroutine a$D_tree_min_cc(tree, iv, cc_min)
-    type(a$D_t), intent(in) :: tree
-    integer, intent(in)    :: iv
-    real(dp), intent(out)  :: cc_min
-    real(dp)               :: tmp, my_min
-    integer                :: i, id, lvl, nc
+  !> Find minimum value of cc(..., iv). By default, only loop over leaves, and
+  !> ghost cells are not used.
+  subroutine a$D_tree_min_cc(tree, iv, cc_min, include_parents)
+    type(a$D_t), intent(in)       :: tree
+    integer, intent(in)           :: iv
+    real(dp), intent(out)         :: cc_min
+    logical, intent(in), optional :: include_parents
+    logical                       :: only_leaves
+    real(dp)                      :: tmp, my_min
+    integer                       :: i, id, lvl, nc
 
     if (.not. tree%ready) stop "Tree not ready"
+    only_leaves = .true.
+    if (present(include_parents)) only_leaves = .not. include_parents
     my_min = huge(1.0_dp)
 
     !$omp parallel reduction(min: my_min) private(lvl, i, id, nc, tmp)
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          nc = tree%boxes(id)%n_cell
+    if (only_leaves) then
+       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             nc = tree%boxes(id)%n_cell
 #if $D == 2
-          tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
 #elif $D == 3
-          tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
 #endif
-          if (tmp < my_min) my_min = tmp
+             if (tmp < my_min) my_min = tmp
+          end do
+          !$omp end do
        end do
-       !$omp end do
-    end do
+    else
+       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             nc = tree%boxes(id)%n_cell
+#if $D == 2
+             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+#elif $D == 3
+             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+#endif
+             if (tmp < my_min) my_min = tmp
+          end do
+          !$omp end do
+       end do
+    end if
     !$omp end parallel
 
     cc_min = my_min
