@@ -133,20 +133,21 @@ contains
 
   !> Partial prolongation to the ghost cells of box id from parent
   subroutine a$D_gc_prolong0(boxes, id, nb, iv)
-    use m_a$D_prolong, only: a$D_prolong0_to
+    use m_a$D_prolong, only: a$D_prolong0
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
     integer, intent(in)           :: nb       !< Neighbor to get data from
-    integer                       :: nb_dim, lo($D), hi($D)
+    integer                       :: p_id, nb_dim, lo($D), hi($D)
 
+    p_id       = boxes(id)%parent
     nb_dim     = a$D_neighb_dim(nb)
     lo(:)      = 1
     hi(:)      = boxes(id)%n_cell
     lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
     hi(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
 
-    call a$D_prolong0_to(boxes, id, iv, lo, hi)
+    call a$D_prolong0(boxes(p_id), boxes(id), iv, low=lo, high=hi)
   end subroutine a$D_gc_prolong0
 
   !> Interpolate between fine points and coarse neighbors to fill ghost cells

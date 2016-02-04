@@ -125,14 +125,16 @@ contains
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, id
+    integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
        ! For each newly added box ...
        do i = 1, size(ref_info%lvls(lvl)%add)
           ! Use prolongation to set the values of variable i_phi
           id = ref_info%lvls(lvl)%add(i)
-          call a2_prolong2_to(tree%boxes, id, i_phi)
+          p_id = tree%boxes(id)%parent
+
+          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)

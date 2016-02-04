@@ -266,7 +266,6 @@ contains
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
     integer                     :: nc, ix, dix, i, di, j, dj
-    real(dp), parameter         :: sixth = 1 / 6.0_dp
 #if $D == 3
     integer                     :: k, dk
 #endif
@@ -314,8 +313,8 @@ contains
 
              boxes(id)%cc(i-di, j, k, iv) = &
                   0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
-                  boxes(id)%cc(i, j, k, iv) - &
-                  sixth * (boxes(id)%cc(i+di, j, k, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
                   boxes(id)%cc(i, j+dj, k, iv) + &
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
@@ -330,8 +329,8 @@ contains
 
              boxes(id)%cc(i, j-dj, k, iv) = &
                   0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
-                  boxes(id)%cc(i, j, k, iv) - &
-                  sixth * (boxes(id)%cc(i+di, j, k, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
                   boxes(id)%cc(i, j+dj, k, iv) + &
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
@@ -346,8 +345,8 @@ contains
 
              boxes(id)%cc(i, j, k-dk, iv) = &
                   0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
-                  boxes(id)%cc(i, j, k, iv) - &
-                  sixth * (boxes(id)%cc(i+di, j, k, iv) + &
+                  1.25_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * (boxes(id)%cc(i+di, j, k, iv) + &
                   boxes(id)%cc(i, j+dj, k, iv) + &
                   boxes(id)%cc(i, j, k+dk, iv))
           end do
@@ -713,56 +712,12 @@ contains
   end subroutine mg$D_set_box_tag
 
   subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
+    use m_a$D_prolong
     type(box$D_t), intent(inout) :: box_c
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
-    integer                     :: ix_offset($D), i_phi, i_corr
-    integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-#if $D == 3
-    integer                     :: k, k_c1, k_c2
-#endif
 
-    nc        = box_c%n_cell
-    ix_offset = a$D_get_child_offset(box_c)
-    i_phi     = mg%i_phi
-    i_corr    = mg%i_tmp
-
-    ! In these loops, we calculate the closest coarse index (_c1), and the
-    ! one-but-closest (_c2). The fine cell lies in between.
-#if $D == 2
-    do j = 1, nc
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) &
-               + 0.5_dp * box_p%cc(i_c1, j_c1, i_corr) &
-               + 0.25_dp * (box_p%cc(i_c2, j_c1, i_corr) &
-               +       box_p%cc(i_c1, j_c2, i_corr))
-       end do
-    end do
-#elif $D == 3
-    do k = 1, nc
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-
-             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + 0.25_dp * ( &
-                  box_p%cc(i_c1, j_c1, k_c1, i_corr) &
-                  + box_p%cc(i_c2, j_c1, k_c1, i_corr) &
-                  + box_p%cc(i_c1, j_c2, k_c1, i_corr) &
-                  + box_p%cc(i_c1, j_c1, k_c2, i_corr))
-          end do
-       end do
-    end do
-#endif
+    call a$D_prolong2(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
   end subroutine mg$D_box_corr_lpl
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
@@ -849,46 +804,13 @@ contains
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg$D_box_rstr_lpl(box_c, box_p, iv, mg)
+    use m_a$D_restrict, only: a$D_restrict_box
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
     type(mg$D_t), intent(in)       :: mg
-    integer                       :: i, j, i_f, j_f, i_c, j_c
-    integer                       :: hnc, ix_offset($D)
-#if $D == 3
-    integer                       :: k, k_f, k_c
-#endif
 
-    hnc       = ishft(box_c%n_cell, -1) ! n_cell / 2
-    ix_offset = a$D_get_child_offset(box_c)
-
-#if $D == 2
-    do j = 1, hnc
-       j_c = ix_offset(2) + j
-       j_f = 2 * j - 1
-       do i = 1, hnc
-          i_c = ix_offset(1) + i
-          i_f = 2 * i - 1
-          box_p%cc(i_c, j_c, iv) = 0.25_dp * &
-               sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
-       end do
-    end do
-#elif $D == 3
-    do k = 1, hnc
-       k_c = ix_offset(3) + k
-       k_f = 2 * k - 1
-       do j = 1, hnc
-          j_c = ix_offset(2) + j
-          j_f = 2 * j - 1
-          do i = 1, hnc
-             i_c = ix_offset(1) + i
-             i_f = 2 * i - 1
-             box_p%cc(i_c, j_c, k_c, iv) = 0.125_dp * &
-                  sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, iv))
-          end do
-       end do
-    end do
-#endif
+    call a$D_restrict_box(box_c, box_p, iv)
   end subroutine mg$D_box_rstr_lpl
 
   subroutine mg$D_box_gsrb_lpld(box, redblack_cntr, mg)

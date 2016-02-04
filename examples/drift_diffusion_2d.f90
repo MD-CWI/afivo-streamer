@@ -381,13 +381,15 @@ contains
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, id
+    integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
+          p_id = tree%boxes(id)%parent
+
           ! Linear prolongation will not strictly conserve phi
-          call a2_prolong1_to(tree%boxes, id, i_phi)
+          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
