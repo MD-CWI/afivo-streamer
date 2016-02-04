@@ -179,22 +179,24 @@ contains
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flag
     integer                  :: nc, n
-    real(dp)                 :: dr2, max_fld, max_dns, crv_phi
+    real(dp)                 :: dx, dx2, max_fld, cphi
     real(dp)                 :: boxlen, dist, alpha, adx
 
-    nc        = boxes(id)%n_cell
-    dr2       = boxes(id)%dr**2
-    crv_phi   = dr2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
-    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_fld))
-    max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_elec))
-    alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
-    adx       = boxes(id)%dr * alpha
+    nc      = boxes(id)%n_cell
+    dx      = boxes(id)%dr
+    dx2     = boxes(id)%dr**2
+    cphi    = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_rhs)))
+    max_fld = maxval(boxes(id)%cc(1:nc, 1:nc, 1:nc, i_fld))
+    alpha   = LT_get_col(ST_td_tbl, i_alpha, max_fld)
+    adx     = boxes(id)%dr * alpha
 
-    if (adx < 0.1_dp .and. boxes(id)%dr < 2.0e-5_dp) &
-         ref_flag = a5_rm_ref
-    if (adx < 0.1_dp .and. crv_phi < 4.0_dp .and. boxes(id)%dr < 5.0e-5_dp) &
-         ref_flag = a5_rm_ref
+    if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
+       ref_flag = a5_do_ref
+    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
+       ref_flag = a5_rm_ref
+    end if
 
+    ! Refine around the initial conditions
     if (ST_time < ST_ref_init_time) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
@@ -210,7 +212,16 @@ contains
        end do
     end if
 
-    if (adx > 1.0_dp .and. crv_phi > 0.1_dp) ref_flag = a5_do_ref
+    ! Make sure we don't have or get a too fine or too coarse grid
+    if (dx > ST_ref_max_dx) then
+       ref_flag = a5_do_ref
+    else if (dx < ST_ref_min_dx) then
+       ref_flag = a5_rm_ref
+    else if (dx < 2 * ST_ref_min_dx .and. ref_flag == a5_do_ref) then
+       ref_flag = a5_keep_ref
+    else if (dx > 0.5_dp * ST_ref_max_dx .and. ref_flag == a5_rm_ref) then
+       ref_flag = a5_keep_ref
+    end if
 
   end subroutine ref_routine
 
