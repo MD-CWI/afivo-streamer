@@ -189,7 +189,8 @@ contains
 
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
        ref_flag = a5_do_ref
-    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
+    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi .and. &
+         boxes(id)%dr < 1.0e-4_dp) then
        ref_flag = a5_rm_ref
     end if
 
