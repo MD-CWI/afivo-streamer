@@ -9,15 +9,18 @@ module m_geom
   integer, parameter :: GM_gaussian_t   = 2
   integer, parameter :: GM_smoothstep_t = 3
   integer, parameter :: GM_step_t       = 4
+  integer, parameter :: GM_laser_t      = 5
 
   ! Public types
   public :: GM_sigmoid_t
   public :: GM_gaussian_t
   public :: GM_smoothstep_t
   public :: GM_step_t
+  public :: GM_laser_t
 
   ! Public methods
   public :: GM_dist_line
+  public :: GM_dist_vec_line
   public :: GM_dens_line
   public :: GM_sigmoid
   public :: GM_gaussian
@@ -25,33 +28,41 @@ module m_geom
 
 contains
 
-  !> Compute distance to line between r0 and r1
-  function GM_dist_line(r, r0, r1, ndim) result(dist)
-    integer, intent(in)  :: ndim
-    real(dp), intent(in) :: r(ndim), r0(ndim), r1(ndim)
-    real(dp)             :: line_len2, temp, dist
-    real(dp)             :: projection(ndim)
+  !> Compute distance vector between point and its projection onto a line
+  !> between r0 and r1
+  function GM_dist_vec_line(r, r0, r1, n_dim) result(dist_vec)
+    integer, intent(in)  :: n_dim
+    real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim)
+    real(dp)             :: line_len2, temp
+    real(dp)             :: dist_vec(n_dim)
 
     line_len2 = sum((r1 - r0)**2)
     temp = sum((r - r0) * (r1 - r0))
 
     if (temp <= 0.0_dp) then
-       dist = norm2(r-r0)
+       dist_vec = r - r0
     else if (temp >= line_len2) then
-       dist = norm2(r-r1)
+       dist_vec = r - r1
     else
-       projection = r0 + temp/line_len2 * (r1 - r0)
-       dist = norm2(r-projection)
+       dist_vec = r - (r0 + temp/line_len2 * (r1 - r0))
     end if
+  end function GM_dist_vec_line
+
+  function GM_dist_line(r, r0, r1, n_dim) result(dist)
+    integer, intent(in)  :: n_dim
+    real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim)
+    real(dp)             :: dist
+    dist = norm2(GM_dist_vec_line(r, r0, r1, n_dim))
   end function GM_dist_line
 
-  function GM_dens_line(r, r0, r1, ndim, width, falloff_t) result(val)
-    integer, intent(in)  :: ndim
-    real(dp), intent(in) :: r(ndim), r0(ndim), r1(ndim), width
+  function GM_dens_line(r, r0, r1, n_dim, width, falloff_t) result(val)
+    integer, intent(in)  :: n_dim
+    real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim), width
     integer, intent(in)  :: falloff_t
-    real(dp)             :: dist, val
+    real(dp)             :: dist, val, dist_vec(n_dim)
 
-    dist = GM_dist_line(r, r0, r1, ndim)
+    dist_vec = GM_dist_vec_line(r, r0, r1, n_dim)
+    dist = norm2(dist_vec)
 
     select case (falloff_t)
     case (GM_sigmoid_t)
@@ -62,6 +73,8 @@ contains
        val  = GM_smoothstep(dist, width)
     case (GM_step_t)
        val  = GM_step(dist, width)
+    case (GM_laser_t)
+       val  = GM_laser(dist_vec, width, n_dim)
     case default
        val  = 0
     end select
@@ -107,5 +120,22 @@ contains
        val = 0.0_dp
     end if
   end function GM_step
+
+  function GM_laser(dist_vec, width, n_dim) result(val)
+    integer, intent(in)  :: n_dim
+    real(dp), intent(in) :: dist_vec(n_dim), width
+    real(dp)             :: val, xz(2), dy, dxz
+
+    xz(1) = dist_vec(1)
+    xz(2) = dist_vec(3)
+    dy = abs(dist_vec(2))
+    dxz = norm2(xz)
+
+    if (dy < width .and. dxz < width) then
+       val = 1
+    else
+       val = exp(1-(dy**2 + dxz**2)/width**2)
+    end if
+  end function GM_laser
 
 end module m_geom

@@ -190,7 +190,7 @@ contains
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
        ref_flag = a5_do_ref
     else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi .and. &
-         boxes(id)%dr < 1.0e-4_dp) then
+         boxes(id)%dr < 2.0e-4_dp) then
        ref_flag = a5_rm_ref
     end if
 
@@ -288,6 +288,7 @@ contains
 
     get_max_dt = 0.9_dp * min(1/(1/dt_cfl + 1/dt_dif), &
          dt_alpha, ST_dt_max)
+
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
