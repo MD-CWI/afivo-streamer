@@ -8,7 +8,7 @@
  end_time = 500E-09
 
  # The name of the simulation:
- sim_name = guid_3d
+ sim_name = guidv3_3d
 
  # Directory where the output should be written:
  output_dir = output
@@ -44,13 +44,13 @@
  seed_rel_r1 = 0.5 0.5 0.92 0.65 0.5 0.8
 
  # Seed width:
- seed_width = 1.0E-03 5.0e-3
+ seed_width = 1.0E-03 2.5e-3
 
  # Fallof type for seed, see m_geom.f90:
  seed_falloff = 3 5
 
  # The timestep for writing output:
- dt_output = 1.0E-09
+ dt_output = 2.0E-09
 
  # The maximum timestep:
  dt_max = 0.5000E-10
