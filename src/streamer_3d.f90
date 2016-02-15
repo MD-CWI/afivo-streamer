@@ -82,9 +82,6 @@ program streamer_3d
         write_out = .false.
      end if
 
-     if (write_out) call a3_write_silo(tree, fname, ST_out_cnt, ST_time, &
-          ixs_cc=[i_elec, i_pion, i_fld, i_pho], dir=ST_output_dir)
-
      if (ST_time > ST_end_time) exit
 
      ! We perform n_steps between mesh-refinements
@@ -125,6 +122,9 @@ program streamer_3d
         ! Compute field with new density
         call compute_fld(tree, n_fmg_cycles, .true.)
      end do
+
+     if (write_out) call a3_write_silo(tree, fname, ST_out_cnt, ST_time, &
+          ixs_cc=[i_elec, i_pion, i_fld, i_pho], dir=ST_output_dir)
 
      call a3_adjust_refinement(tree, ref_routine, ref_info)
 
