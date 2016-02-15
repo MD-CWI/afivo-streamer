@@ -1,0 +1,2 @@
+ seed_dens = 7.500E+18 1e15
+ sim_name = L1e15
