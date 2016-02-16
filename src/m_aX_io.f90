@@ -211,7 +211,7 @@ contains
     call vtk_geo_xml_close(vtkf)
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
-    print *, "Written ", trim(fname), ", n_grids", n_grids
+    print *, "Written ", trim(fname)
   end subroutine a$D_write_vtk
 
   !> Write the cell centered data of a tree to a Silo file. Only the
@@ -614,7 +614,7 @@ contains
     end do
     call SILO_close_file(dbix)
 
-    print *, "Written ", trim(fname), ", n_grids", i_grid
+    print *, "Written ", trim(fname)
   end subroutine a$D_write_silo
 
 end module m_a$D_io
