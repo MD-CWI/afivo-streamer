@@ -13,34 +13,53 @@ program test_mg2_2d
   implicit none
 
   integer, parameter :: n_boxes_base = 1
-  integer, parameter :: n_iterations = 100
   integer, parameter :: n_var_cell = 3
   integer, parameter :: i_phi = 1
-  integer, parameter :: i_tmp = 2
-  integer, parameter :: i_rhs = 3
+  integer, parameter :: i_rhs = 2
+  integer, parameter :: i_tmp = 3
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i
+  integer            :: i, n_args, n_cell, max_ref_lvl
+  integer            :: n_iterations, t_start, t_end
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  integer            :: n_cell, mesh_size, max_ref_lvl
-  real(dp)           :: dr
+  real(dp)           :: dr, count_rate
   character(len=40)  :: arg_string
   type(mg2_t)        :: mg
 
   ! Get box size and mesh size from command line argument
-  if (command_argument_count() /= 2) stop "Arguments should be: n_cell mesh_size"
-  call get_command_argument(1, arg_string)
-  read(arg_string, *) n_cell
-  call get_command_argument(2, arg_string)
-  read(arg_string, *) mesh_size
+  n_args = command_argument_count()
 
-  ! Determine maximum refinement level
-  max_ref_lvl = nint(log(mesh_size / real(n_cell, dp)) / log(2.0_dp)) + 1
+  if (n_args >= 1) then
+     call get_command_argument(1, arg_string)
+     read(arg_string, *) n_cell
+  else
+     print *, "No arguments specified, using default values"
+     print *, "Usage: ./poisson_benchmark_2d n_cell max_ref_lvl n_iterations"
+     n_cell = 16
+  end if
 
-  print *, "Box size: ", n_cell
-  print *, "Mesh size:", 2**(max_ref_lvl-1) * n_cell
+  if (n_args >= 2) then
+     call get_command_argument(2, arg_string)
+     read(arg_string, *) max_ref_lvl
+  else
+     max_ref_lvl = 4
+  end if
+
+  if (n_args >= 3) then
+     call get_command_argument(3, arg_string)
+     read(arg_string, *) n_iterations
+  else
+     n_iterations = 100
+  end if
+
+  print *, "Box size:           ", n_cell
+  print *, "Max refinement lvl: ", max_ref_lvl
+  print *, "Num iterations:     ", n_iterations
+  print *, ""
+
+  dr = 1.0_dp / n_cell
 
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
@@ -70,6 +89,8 @@ program test_mg2_2d
      if (ref_info%n_add == 0) exit
   end do
 
+  call a2_print_info(tree)
+
   ! Set the multigrid options.
   mg%i_phi        = i_phi       ! Solution variable
   mg%i_rhs        = i_rhs       ! Right-hand side variable
@@ -81,12 +102,16 @@ program test_mg2_2d
   call mg2_init_mg(mg)
 
   ! Do the actual benchmarking
+  call system_clock(t_start, count_rate)
   do i = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
      ! fourth argument controls whether to improve the current solution.
      call mg2_fas_fmg(tree, mg, .true., i>1)
   end do
+  call system_clock(t_end, count_rate)
+
+  write(*, "(A,E12.4)") " Wall-clock time (s): ", (t_end-t_start) / count_rate
 
   ! This writes a Silo output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
