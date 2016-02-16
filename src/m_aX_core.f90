@@ -47,7 +47,7 @@ contains
 
   !> Initialize a $Dd tree type.
   subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, dr, r_min, &
-       lvl_limit, n_boxes, coarsen_to, coord, cc_names, fc_names)
+       lvl_limit, n_boxes, coarsen_to, coord, cc_names, fc_names, mem_limit_gb)
     type(a$D_t), intent(out)        :: tree       !< The tree to initialize
     integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
     integer, intent(in)            :: n_var_cell !< Number of cell-centered variables
@@ -63,28 +63,33 @@ contains
     !> Allocate initial storage for n_boxes. Default is 1000
     integer, intent(in), optional  :: n_boxes
     integer, intent(in), optional  :: coord !< Select coordinate type
+    real(dp), intent(in), optional :: mem_limit_gb !< Memory limit in GByte
+
     !> Names of cell-centered variables
     character(len=*), intent(in), optional :: cc_names(:)
     !> Names of face-centered variables
     character(len=*), intent(in), optional :: fc_names(:)
 
+
     integer                        :: lvl_limit_a, n_boxes_a, coarsen_to_a
-    real(dp)                       :: r_min_a($D)
-    integer                        :: n, lvl, min_lvl, coord_a
+    real(dp)                       :: r_min_a($D), gb_limit
+    integer                        :: n, lvl, min_lvl, coord_a, box_bytes
 
     ! Set default arguments if not present
-    lvl_limit_a = 30;   if (present(lvl_limit)) lvl_limit_a = lvl_limit
+    lvl_limit_a = 30;  if (present(lvl_limit)) lvl_limit_a = lvl_limit
     n_boxes_a = 1000;  if (present(n_boxes)) n_boxes_a = n_boxes
     coarsen_to_a = -1; if (present(coarsen_to)) coarsen_to_a = coarsen_to
     r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
     coord_a = a5_xyz;  if (present(coord)) coord_a = coord
+    gb_limit = 16;     if (present(mem_limit_gb)) gb_limit = mem_limit_gb
 
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a$D_init: n_cell should be even"
     if (n_var_cell <= 0)  stop "a$D_init: n_var_cell should be > 0"
     if (n_var_face < 0)   stop "a$D_init: n_var_face should be >= 0"
     if (n_boxes_a <= 0)   stop "a$D_init: n_boxes should be > 0"
-    if (lvl_limit_a <= 0)  stop "a$D_init: lvl_limit should be > 0"
+    if (lvl_limit_a <= 0) stop "a$D_init: lvl_limit should be > 0"
+    if (gb_limit <= 0)    stop "a$D_init: mem_limit_gb should be > 0"
 #if $D == 3
     if (coord_a == a5_cyl) stop "a$D_init: cannot have 3d cyl coords"
 #endif
@@ -111,15 +116,19 @@ contains
        allocate(tree%lvls(lvl)%parents(0))
     end do
 
-    tree%n_cell          = n_cell
-    tree%n_var_cell      = n_var_cell
-    tree%n_var_face      = n_var_face
-    tree%r_base          = r_min_a
-    tree%dr_base         = dr
-    tree%lvl_limit        = lvl_limit_a
-    tree%highest_id          = 0
-    tree%highest_lvl         = 0
-    tree%coord_t         = coord_a
+    tree%n_cell      = n_cell
+    tree%n_var_cell  = n_var_cell
+    tree%n_var_face  = n_var_face
+    tree%r_base      = r_min_a
+    tree%dr_base     = dr
+    tree%lvl_limit   = lvl_limit_a
+    tree%highest_id  = 0
+    tree%highest_lvl = 0
+    tree%coord_t     = coord_a
+
+    ! Calculate size of a box
+    box_bytes = a$D_box_bytes(n_cell, n_var_cell, n_var_face)
+    tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
 
     ! Set variable names
     allocate(tree%cc_names(n_var_cell))
@@ -250,53 +259,32 @@ contains
 
   end subroutine a$D_set_base
 
-  !> Reorder and resize the list of boxes. If the argument reorder is true,
-  !> reorder the boxes but do not resize.
-  subroutine a$D_tidy_up(tree, max_frac_used, goal_frac_used, &
-       n_clean_min, reorder)
+  !> Reorder and resize the list of boxes
+  subroutine a$D_tidy_up(tree, max_hole_frac, n_clean_min)
     use m_morton
-    type(a$D_t), intent(inout)      :: tree          !< Tree for the list of boxes is reordered/resized
-    real(dp), intent(in)           :: max_frac_used !< Maximum fraction of box-memory used
-    real(dp), intent(in)           :: goal_frac_used !< If resizing, what fraction should be in use?
-    integer, intent(in)            :: n_clean_min    !< Free up memory if at least this many boxes can be cleaned up
-    logical, intent(in)            :: reorder   !< Do not resize the box list; only reorder it
-    real(dp)                       :: frac_in_use
-    integer                        :: n, lvl, id, old_size, new_size, n_clean
+    type(a$D_t), intent(inout)      :: tree !< The tree to tidy up
+    !> Maximum fraction of holes in boxes array
+    real(dp), intent(in)           :: max_hole_frac
+    !> Reorganize memory if at least this many boxes can be cleaned up
+    integer, intent(in)            :: n_clean_min
+    real(dp)                       :: hole_frac
+    integer                        :: n, lvl, id, n_clean
     integer                        :: highest_id, n_used, n_stored, n_used_lvl
     integer, allocatable           :: ixs_sort(:), ixs_map(:)
     type(box$D_t), allocatable      :: boxes_cpy(:)
     integer(morton_k), allocatable :: mortons(:)
 
     if (.not. tree%ready) stop "Tree not ready"
-    if (goal_frac_used > max_frac_used) &
-         stop "a$D_tidy_up: need goal_frac_used < max_frac_used"
-    if (max_frac_used > 1.0_dp) stop "a$D_tidy_up: need max_frac_used < 1"
-    if (n_clean_min < 1)        stop "a$D_tidy_up: need n_clean_min > 0"
+    if (max_hole_frac < 0) stop "a$D_tidy_up: need max_hole_frac >= 0"
+    if (n_clean_min < 0) stop "a$D_tidy_up: need n_clean_min >= 0"
 
-    highest_id      = tree%highest_id
-    n_used      = count(tree%boxes(1:highest_id)%in_use)
-    old_size    = size(tree%boxes)
-    frac_in_use = n_used / real(old_size, dp)
-    n_clean     = nint((goal_frac_used - frac_in_use) * old_size)
-    new_size    = old_size
+    highest_id  = tree%highest_id
+    n_used      = a$D_num_boxes_used(tree)
+    hole_frac   = 1 - n_used / real(highest_id, dp)
+    n_clean     = nint(hole_frac * highest_id)
 
-    if (.not. reorder) then
-       if (highest_id > old_size * max_frac_used .or. &
-            (frac_in_use < goal_frac_used .and. &
-            n_clean > n_clean_min)) then
-          new_size = max(1, nint(n_used/goal_frac_used))
-       end if
-    end if
-
-    if (new_size /= old_size .or. reorder) then
-       print *, "a$D_tidy_up: new size = ", new_size
-
-       if (reorder) then
-          allocate(boxes_cpy(n_used))  ! Need just enough space
-       else
-          allocate(boxes_cpy(new_size))
-       end if
-
+    if (hole_frac > max_hole_frac .and. n_clean >= n_clean_min) then
+       allocate(boxes_cpy(n_used))
        allocate(ixs_map(0:highest_id))
        ixs_map(0)       = 0
        n_stored         = 0
@@ -337,18 +325,13 @@ contains
           end where
        end do
 
-       if (reorder) then
-          tree%boxes(1:n_used) = boxes_cpy ! Copy ordered data
-          do n = n_used+1, highest_id
-             if (tree%boxes(n)%in_use) then
-                ! Remove moved data
-                call clear_box(tree%boxes(n))
-             end if
-          end do
-       else
-          deallocate(tree%boxes)
-          call move_alloc(boxes_cpy, tree%boxes)
-       end if
+       tree%boxes(1:n_used) = boxes_cpy ! Copy ordered data
+       do n = n_used+1, highest_id
+          if (tree%boxes(n)%in_use) then
+             ! Remove moved data
+             call clear_box(tree%boxes(n))
+          end if
+       end do
 
        tree%highest_id = n_used
     end if
@@ -469,7 +452,9 @@ contains
     integer, intent(in)       :: new_size !< New size for the array boxes(:)
     type(box$D_t), allocatable :: boxes_cpy(:)
 
-    if (.not. tree%ready) stop "Tree not ready"
+    if (.not. tree%ready) stop "a$D_resize_box_storage: Tree not ready"
+    if (new_size < tree%highest_id) &
+         stop "a$D_resize_box_storage: Cannot shrink tree"
 
     ! Store boxes in larger array boxes_cpy
     allocate(boxes_cpy(new_size))
@@ -490,25 +475,50 @@ contains
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
   subroutine a$D_adjust_refinement(tree, ref_subr, ref_info)
-    type(a$D_t), intent(inout)           :: tree          !< Tree
-    procedure(a$D_subr_ref)              :: ref_subr !< Refinement function
-    type(ref_info_t), intent(inout)     :: ref_info !< Information about refinement
-    integer                             :: lvl, id, i, c_ids(a$D_num_children)
-    integer                             :: highest_id_prev, highest_id_req
-    integer, allocatable                :: ref_flags(:)
+    type(a$D_t), intent(inout)       :: tree     !< Tree
+    procedure(a$D_subr_ref)          :: ref_subr !< Refinement function
+    type(ref_info_t), intent(inout) :: ref_info !< Information about refinement
+    integer                         :: lvl, id, i, c_ids(a$D_num_children)
+    integer                         :: highest_id_prev, highest_id_req
+    integer, allocatable            :: ref_flags(:)
+    integer                         :: num_new_boxes, total_num_boxes
+    integer                         :: new_size
 
     if (.not. tree%ready) stop "Tree not ready"
+
+    ! Check whether the boxes array contains many holes, and if this is the
+    ! case, reorganize the array
+    call a$D_tidy_up(tree, 0.5_dp, 1000)
+
     highest_id_prev = tree%highest_id
     allocate(ref_flags(highest_id_prev))
 
     ! Set refinement values for all boxes
     call consistent_ref_flags(tree, ref_flags, ref_subr)
 
-    ! Check whether there is enough free space, otherwise extend the list
-    highest_id_req = highest_id_prev + a$D_num_children * count(ref_flags == a5_refine)
+    ! Compute number of new boxes
+    num_new_boxes = a$D_num_children * count(ref_flags == a5_refine)
+
+    ! Determine number of boxes that could be in use after resizing
+    total_num_boxes = a$D_num_boxes_used(tree) + num_new_boxes
+
+    if (total_num_boxes > tree%box_limit) then
+       print *, "a$D_adjust_refinement: exceeding memory limit"
+       write(*, '(A,E12.2)') " memory_limit (GByte):     ", &
+            tree%box_limit * 0.5_dp**30 * &
+            a$D_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
+       print *, "memory_limit (boxes):     ", tree%box_limit
+       print *, "required number of boxes: ", total_num_boxes
+       print *, "You can increase the memory limit in your call to a$D_init"
+       print *, "by setting mem_limit_gb to a higher value (in GBytes)"
+       stop
+    end if
+
+    ! Resize box storage if required
+    highest_id_req = highest_id_prev + num_new_boxes
     if (highest_id_req > size(tree%boxes)) then
-       print *, "Resizing box storage for refinement", highest_id_req
-       call a$D_resize_box_storage(tree, highest_id_req)
+       new_size = 2 * highest_id_req ! Allocate some extra empty boxes
+       call a$D_resize_box_storage(tree, new_size)
     end if
 
     do lvl = 1, tree%lvl_limit-1

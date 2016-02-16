@@ -189,17 +189,17 @@ module m_a$D_t
   type a$D_t
      logical                    :: ready = .false. !< Is tree ready for use?
      integer                    :: lvl_limit       !< maximum allowed level
-     integer                    :: id_limit        !< maximum allowed box index
+     integer                    :: box_limit       !< maximum number of boxes
      integer                    :: highest_lvl     !< highest level present
      integer                    :: highest_id      !< highest box index present
-     integer                    :: n_cell          !< number of cells per dimension
-     integer                    :: n_var_cell      !< number of cc variables
-     integer                    :: n_var_face      !< number of fc variables
-     integer                    :: coord_t         !< Type of coordinates
-     real(dp)                   :: r_base($D)       !< min. coords of box at index (1,1)
-     real(dp)                   :: dr_base         !< cell spacing at lvl 1
-     type(lvl_t), allocatable   :: lvls(:)         !< list storing the tree levels
-     type(box$D_t), allocatable :: boxes(:)        !< list of all boxes
+     integer                    :: n_cell     !< number of cells per dimension
+     integer                    :: n_var_cell !< number of cell-centered variables
+     integer                    :: n_var_face !< number of face-centered variables
+     integer                    :: coord_t    !< Type of coordinates
+     real(dp)                   :: r_base($D) !< min. coords of box at index (1,1)
+     real(dp)                   :: dr_base    !< cell spacing at lvl 1
+     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
+     type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
      !> Names of cell-centered variables
      character(len=a5_nlen), allocatable :: cc_names(:)
      !> Names of face-centered variables
@@ -298,6 +298,28 @@ module m_a$D_t
   end interface
 
 contains
+
+  function a$D_box_bytes(n_cell, n_var_cell, n_var_face) result(box_bytes)
+    integer, intent(in) :: n_cell     !< number of cells per dimension
+    integer, intent(in) :: n_var_cell !< number of cell-centered variables
+    integer, intent(in) :: n_var_face !< number of face-centered variables
+    integer             :: box_bytes
+    type(box$D_t)       :: dummy_box
+
+    box_bytes = 8 * n_var_cell * (n_cell + 2)**$D + &
+         8 * n_var_face * (n_cell + 1) * n_cell**($D-1) + &
+         int(storage_size(dummy_box) / 8)
+  end function a$D_box_bytes
+
+  function a$D_num_boxes_used(tree) result(n_boxes)
+    type(a$D_t), intent(in) :: tree
+    integer :: n_boxes, lvl
+
+    n_boxes = 0
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       n_boxes = n_boxes + size(tree%lvls(lvl)%ids)
+    end do
+  end function a$D_num_boxes_used
 
   !> Return .true. if a box has children
   elemental logical function a$D_has_children(box)

@@ -57,7 +57,7 @@ program random_refinement_2d
   ! cells near physical boundaries.
   call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_bc_dirichlet_zero)
 
-  do i = 1, 10
+  do i = 1, 25
      ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "random_refinement_2d_", i
@@ -91,14 +91,11 @@ contains
     ! Draw a [0, 1) random number
     call random_number(rr)
 
-    if (rr < 0.25_dp .and. boxes(id)%lvl < 8) then
+    if (rr < 0.5_dp**0.25_dp .and. boxes(id)%lvl < 6) then
        ref_flag = a5_do_ref ! Add refinement
-    else if (rr > 0.75_dp) then
-       ref_flag = a5_rm_ref ! Ask to remove this box, which will not always
-                                 ! happen (see documentation)
     else
-       ref_flag = a5_keep_ref ! Keep the box as-is (which is the default
-                                 ! action if you don't specify anything)
+       ref_flag = a5_rm_ref ! Ask to remove this box, which will not always
+                            ! happen (see documentation)
     end if
   end subroutine ref_routine
 
