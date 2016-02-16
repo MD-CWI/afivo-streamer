@@ -122,7 +122,6 @@ program drift_diffusion_2d
      call a2_adjust_refinement(tree, ref_routine, ref_info)
      call prolong_to_new_children(tree, ref_info)
      call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
-     call a2_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
   call a2_destroy(tree)

@@ -189,7 +189,7 @@ module m_a$D_t
   type a$D_t
      logical                    :: ready = .false. !< Is tree ready for use?
      integer                    :: lvl_limit       !< maximum allowed level
-     integer                    :: id_limit        !< maximum allowed box index
+     integer                    :: box_limit       !< maximum number of boxes
      integer                    :: highest_lvl     !< highest level present
      integer                    :: highest_id      !< highest box index present
      integer                    :: n_cell          !< number of cells per dimension
@@ -298,6 +298,16 @@ module m_a$D_t
   end interface
 
 contains
+
+  function a$D_num_boxes_used(tree) result(n_boxes)
+    type(a$D_t), intent(in) :: tree
+    integer :: n_boxes, lvl
+
+    n_boxes = 0
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       n_boxes = n_boxes + size(tree%lvls(lvl)%ids)
+    end do
+  end function a$D_num_boxes_used
 
   !> Return .true. if a box has children
   elemental logical function a$D_has_children(box)

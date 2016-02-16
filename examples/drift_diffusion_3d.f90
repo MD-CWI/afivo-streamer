@@ -133,7 +133,6 @@ program drift_diffusion_3d
      call a3_adjust_refinement(tree, ref_routine, ref_info)
      call prolong_to_new_children(tree, ref_info)
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
-     call a3_tidy_up(tree, 0.8_dp, 0.5_dp, 10000, .false.)
   end do
 
   call a3_destroy(tree)
