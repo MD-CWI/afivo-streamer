@@ -299,6 +299,34 @@ module m_a$D_t
 
 contains
 
+    !> Get tree info
+  subroutine a$D_print_info(tree)
+    type(a$D_t), intent(in)        :: tree       !< The tree
+
+    if (.not. allocated(tree%lvls)) then
+       print *, "a$D_init has not been called for this tree"
+    else if (.not. tree%ready) then
+       print *, "a$D_set_base has not been called for this tree"
+    else
+       write(*, "(A)") " a$D_print_info(tree):"
+       write(*, "(A,I10)") " Current maximum level:  ", tree%highest_lvl
+       write(*, "(A,I10)") " Maximum allowed level:  ", tree%lvl_limit
+       write(*, "(A,I10)") " Number of boxes used:   ", a$D_num_boxes_used(tree)
+       write(*, "(A,I10)") " Memory limit(boxes):    ", tree%box_limit
+       write(*, "(A,E10.2)") " Memory limit(GByte):    ", &
+            tree%box_limit * 0.5_dp**30 * &
+            a$D_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
+       write(*, "(A,I10)") " Highest id in box list: ", tree%highest_id
+       write(*, "(A,I10)") " Size of box list:       ", size(tree%boxes)
+       write(*, "(A,I10)") " Box size (cells):       ", tree%n_cell
+       write(*, "(A,I10)") " Number of cc variables: ", tree%n_var_cell
+       write(*, "(A,I10)") " Number of fc variables: ", tree%n_var_face
+       write(*, "(A,I10)") " Type of coordinates:    ", tree%coord_t
+       write(*, "(A,2E12.4)") " min. coords:        ", tree%r_base
+       write(*, "(A,2E12.4)") " dx at lvl 1:        ", tree%dr_base
+    end if
+  end subroutine a$D_print_info
+
   function a$D_box_bytes(n_cell, n_var_cell, n_var_face) result(box_bytes)
     integer, intent(in) :: n_cell     !< number of cells per dimension
     integer, intent(in) :: n_var_cell !< number of cell-centered variables

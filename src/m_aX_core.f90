@@ -9,7 +9,6 @@ module m_a$D_core
   implicit none
   private
 
-  public :: a$D_print_info
   public :: a$D_init
   public :: a$D_destroy
   public :: a$D_set_base
@@ -20,30 +19,6 @@ module m_a$D_core
   public :: a$D_consistent_fluxes
 
 contains
-
-  !> Get tree info
-  subroutine a$D_print_info(tree)
-    type(a$D_t), intent(in)        :: tree       !< The tree
-
-    if (.not. allocated(tree%lvls)) then
-       print *, "a$D_init has not been called for this tree"
-    else if (.not. tree%ready) then
-       print *, "a$D_set_base has not been called for this tree"
-    else
-       write(*, "(A,I0)") " maximum allowed level:  ", tree%lvl_limit
-       write(*, "(A,I0)") " current maximum level:  ", tree%highest_lvl
-       write(*, "(A,I0)") " max index in box list:  ", tree%highest_id
-       write(*, "(A,I0)") " Size of boxes array:    ", size(tree%boxes)
-       write(*, "(A,I0)") " Number of boxes used:   ", &
-            count(tree%boxes(1:tree%highest_id)%in_use)
-       write(*, "(A,I0)") " box size (cells):       ", tree%n_cell
-       write(*, "(A,I0)") " number of cc variables: ", tree%n_var_cell
-       write(*, "(A,I0)") " number of fc variables: ", tree%n_var_face
-       write(*, "(A,I0)") " Type of coordinates:    ", tree%coord_t
-       write(*, "(A,2E12.4)") " min. coords:        ", tree%r_base
-       write(*, "(A,2E12.4)") " dx at lvl 1:        ", tree%dr_base
-    end if
-  end subroutine a$D_print_info
 
   !> Initialize a $Dd tree type.
   subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, dr, r_min, &
