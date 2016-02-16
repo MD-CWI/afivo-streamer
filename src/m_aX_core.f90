@@ -33,8 +33,8 @@ contains
        write(*, "(A,I0)") " maximum allowed level:  ", tree%lvl_limit
        write(*, "(A,I0)") " current maximum level:  ", tree%highest_lvl
        write(*, "(A,I0)") " max index in box list:  ", tree%highest_id
-       write(*, "(A,I0)") " Boxes storage size:     ", size(tree%boxes)
-       write(*, "(A,I0)") " Boxes used:             ", &
+       write(*, "(A,I0)") " Size of boxes array:    ", size(tree%boxes)
+       write(*, "(A,I0)") " Number of boxes used:   ", &
             count(tree%boxes(1:tree%highest_id)%in_use)
        write(*, "(A,I0)") " box size (cells):       ", tree%n_cell
        write(*, "(A,I0)") " number of cc variables: ", tree%n_var_cell
