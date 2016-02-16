@@ -74,7 +74,6 @@ contains
     integer                        :: lvl_limit_a, n_boxes_a, coarsen_to_a
     real(dp)                       :: r_min_a($D), gb_limit
     integer                        :: n, lvl, min_lvl, coord_a, box_bytes
-    type(box$D_t)                  :: dummy_box
 
     ! Set default arguments if not present
     lvl_limit_a = 30;  if (present(lvl_limit)) lvl_limit_a = lvl_limit
@@ -128,10 +127,7 @@ contains
     tree%coord_t     = coord_a
 
     ! Calculate size of a box
-    box_bytes = 8 * n_var_cell * (n_cell + 2)**$D + &
-         8 * n_var_face * (n_cell + 1) * n_cell**($D-1) + &
-         int(storage_size(dummy_box) / 8)
-
+    box_bytes = a$D_box_bytes(n_cell, n_var_cell, n_var_face)
     tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
 
     ! Set variable names
@@ -508,10 +504,13 @@ contains
 
     if (total_num_boxes > tree%box_limit) then
        print *, "a$D_adjust_refinement: exceeding memory limit"
+       write(*, '(A,E12.2)') " memory_limit (GByte):     ", &
+            tree%box_limit * 0.5_dp**30 * &
+            a$D_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
        print *, "memory_limit (boxes):     ", tree%box_limit
        print *, "required number of boxes: ", total_num_boxes
-       print *, "You can increase the memory limit in your call to a$D_init,"
-       print *, "by setting mem_limit_gb to a higher value"
+       print *, "You can increase the memory limit in your call to a$D_init"
+       print *, "by setting mem_limit_gb to a higher value (in GBytes)"
        stop
     end if
 

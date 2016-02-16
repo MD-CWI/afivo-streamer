@@ -192,14 +192,14 @@ module m_a$D_t
      integer                    :: box_limit       !< maximum number of boxes
      integer                    :: highest_lvl     !< highest level present
      integer                    :: highest_id      !< highest box index present
-     integer                    :: n_cell          !< number of cells per dimension
-     integer                    :: n_var_cell      !< number of cc variables
-     integer                    :: n_var_face      !< number of fc variables
-     integer                    :: coord_t         !< Type of coordinates
-     real(dp)                   :: r_base($D)       !< min. coords of box at index (1,1)
-     real(dp)                   :: dr_base         !< cell spacing at lvl 1
-     type(lvl_t), allocatable   :: lvls(:)         !< list storing the tree levels
-     type(box$D_t), allocatable :: boxes(:)        !< list of all boxes
+     integer                    :: n_cell     !< number of cells per dimension
+     integer                    :: n_var_cell !< number of cell-centered variables
+     integer                    :: n_var_face !< number of face-centered variables
+     integer                    :: coord_t    !< Type of coordinates
+     real(dp)                   :: r_base($D) !< min. coords of box at index (1,1)
+     real(dp)                   :: dr_base    !< cell spacing at lvl 1
+     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
+     type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
      !> Names of cell-centered variables
      character(len=a5_nlen), allocatable :: cc_names(:)
      !> Names of face-centered variables
@@ -298,6 +298,18 @@ module m_a$D_t
   end interface
 
 contains
+
+  function a$D_box_bytes(n_cell, n_var_cell, n_var_face) result(box_bytes)
+    integer, intent(in) :: n_cell     !< number of cells per dimension
+    integer, intent(in) :: n_var_cell !< number of cell-centered variables
+    integer, intent(in) :: n_var_face !< number of face-centered variables
+    integer             :: box_bytes
+    type(box$D_t)       :: dummy_box
+
+    box_bytes = 8 * n_var_cell * (n_cell + 2)**$D + &
+         8 * n_var_face * (n_cell + 1) * n_cell**($D-1) + &
+         int(storage_size(dummy_box) / 8)
+  end function a$D_box_bytes
 
   function a$D_num_boxes_used(tree) result(n_boxes)
     type(a$D_t), intent(in) :: tree
