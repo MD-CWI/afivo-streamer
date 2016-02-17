@@ -197,7 +197,7 @@ contains
     integer, intent(in), optional :: highest_lvl !< Maximum level of box
     type(a$D_loc_t)               :: loc    !< Location of cell
 
-    integer :: i, id, i_ch, lvl_max
+    integer                       :: i, id, i_ch, lvl_max
 
     lvl_max = tree%lvl_limit
     if (present(highest_lvl)) lvl_max = highest_lvl
@@ -217,17 +217,19 @@ contains
 
     ! Jump into children for as long as possible
     do
-       if (tree%boxes(id)%lvl < lvl_max .and. &
-            a$D_has_children(tree%boxes(id))) then
-          i_ch = child_that_contains(tree%boxes(id), rr)
-          id = tree%boxes(id)%children(i_ch)
-       else
-          exit
-       end if
+       if (tree%boxes(id)%lvl >= lvl_max .or. &
+            .not. a$D_has_children(tree%boxes(id))) exit
+       i_ch = child_that_contains(tree%boxes(id), rr)
+       id = tree%boxes(id)%children(i_ch)
     end do
 
     loc%id = id
     loc%ix = a$D_cc_ix(tree%boxes(id), rr)
+
+    ! This way, we don't have to care about points exactly on the boundaries of
+    ! a box (which could get a ghost cell index)
+    where (loc%ix < 1) loc%ix = 1
+    where (loc%ix > tree%n_cell) loc%ix = tree%n_cell
   end function a$D_get_loc
 
   !> For a box with children that contains rr, find in which child rr lies
@@ -235,15 +237,15 @@ contains
     type(box$D_t), intent(in) :: box    !< A box with children
     real(dp), intent(in)      :: rr($D) !< Location inside the box
     integer                   :: i_ch   !< Index of child containing rr
-    real(dp)                  :: cntr($D)
+    real(dp)                  :: center($D)
 
-    i_ch = 1
-    cntr = box%r_min + box%dr * ishft(box%n_cell, -1)
+    i_ch   = 1
+    center = box%r_min + box%dr * ishft(box%n_cell, -1)
 
-    if (rr(1) > cntr(1)) i_ch = i_ch + 1
-    if (rr(2) > cntr(2)) i_ch = i_ch + 2
+    if (rr(1) > center(1)) i_ch = i_ch + 1
+    if (rr(2) > center(2)) i_ch = i_ch + 2
 #if $D==3
-    if (rr(3) > cntr(3)) i_ch = i_ch + 4
+    if (rr(3) > center(3)) i_ch = i_ch + 4
 #endif
   end function child_that_contains
 

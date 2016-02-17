@@ -1,5 +1,5 @@
-! This module contains the routines related to prolongation or interpolation
-! (going from a coarse to a fine variable).
+! This module contains the routines related to prolongation (going from a coarse
+! to a fine variable).
 !
 ! Author: Jannis Teunissen
 ! License: GPLv3

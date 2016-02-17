@@ -51,7 +51,7 @@ contains
     vtkf%indent = vtkf%indent + indent_spaces
   end subroutine vtk_ini_xml
 
-  subroutine vtk_geo_xml(vtkf, coords, n_nodes, n_cells, n_dim, cycl, time)
+  subroutine vtk_unstr_geo_xml(vtkf, coords, n_nodes, n_cells, n_dim, cycl, time)
     type(vtk_t), intent(inout) :: vtkf
     real(dp), intent(in)       :: coords(:), time
     real(sp), allocatable      :: wr_coords(:)
@@ -102,14 +102,14 @@ contains
     write(vtkf%sunit) n_bytes, wr_coords
 
     call vtk_dat_xml(vtkf, "Points", .false.)
-  end subroutine vtk_geo_xml
+  end subroutine vtk_unstr_geo_xml
 
-  subroutine vtk_geo_xml_close(vtkf)
+  subroutine vtk_unstr_geo_xml_close(vtkf)
     type(vtk_t), intent(inout) :: vtkf
     call vtk_dat_xml(vtkf, "Piece", .false.)
-  end subroutine vtk_geo_xml_close
+  end subroutine vtk_unstr_geo_xml_close
 
-  subroutine vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
+  subroutine vtk_unstr_con_xml(vtkf, connects, offsets, cell_types, n_cells)
     type(vtk_t), intent(inout) :: vtkf
     integer, intent(IN)        :: n_cells       !< Number of cells.
     integer, intent(IN)        :: connects(:)   !< Mesh connectivity.
@@ -148,7 +148,7 @@ contains
     write(vtkf%sunit) n_bytes, cell_types
 
     call vtk_dat_xml(vtkf, "Cells", .false.)
-  end subroutine vtk_con_xml
+  end subroutine vtk_unstr_con_xml
 
   subroutine vtk_dat_xml(vtkf, xml_name, true_is_open)
     type(vtk_t), intent(inout) :: vtkf

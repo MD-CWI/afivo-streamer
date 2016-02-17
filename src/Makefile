@@ -1,6 +1,7 @@
 SRC_ND	:= m_morton.f90 m_vtk.f90 m_write_silo.o
 SRC_XD	:= m_aX_t.f90 m_aX_core.f90 m_aX_io.f90 m_aX_gc.f90 \
-		m_aX_restrict.f90 m_aX_prolong.f90 m_aX_utils.f90 m_aX_mg.f90
+		m_aX_restrict.f90 m_aX_prolong.f90 m_aX_utils.f90 \
+		m_aX_mg.f90 m_aX_interp.f90
 
 SRC_2D	:= $(SRC_XD:m_aX_%.f90=m_a2_%.f90)
 SRC_3D	:= $(SRC_XD:m_aX_%.f90=m_a3_%.f90)
@@ -32,18 +33,20 @@ m_a3_%.f90: m_aX_%.f90
 
 # Dependency information
 m_a2_core.o:		m_morton.o m_a2_t.o
-m_a2_io.o:			m_vtk.o m_write_silo.o m_a2_t.o
+m_a2_io.o:			m_vtk.o m_write_silo.o m_a2_t.o m_a2_interp.o
 m_a2_gc.o:			m_a2_t.o m_a2_prolong.o
 m_a2_restrict.o:	m_a2_t.o
 m_a2_prolong.o:		m_a2_t.o
+m_a2_interp.o:      m_a2_utils.o
 m_a2_utils.o:		m_a2_t.o
 m_a2_mg:			m_a2_t.o m_a2_utils.o
 
 m_a3_core.o:		m_morton.o m_a3_t.o
-m_a3_io.o:			m_vtk.o m_write_silo.o m_a3_t.o
+m_a3_io.o:			m_vtk.o m_write_silo.o m_a3_t.o m_a3_interp.o
 m_a3_gc.o:			m_a3_t.o m_a3_prolong.o
 m_a3_restrict.o:	m_a3_t.o
 m_a3_prolong.o:		m_a3_t.o
+m_a3_interp.o:      m_a3_utils.o
 m_a3_utils.o:		m_a3_t.o
 m_a3_mg:			m_a3_t.o m_a3_utils.o
 
