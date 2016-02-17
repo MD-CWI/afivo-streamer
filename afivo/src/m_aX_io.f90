@@ -12,8 +12,103 @@ module m_a$D_io
 
   public :: a$D_write_vtk
   public :: a$D_write_silo
+  public :: a$D_write_plane
 
 contains
+
+  !> Write data in a plane (2D) to a VTK ASCII file. In 3D, r_min and r_max
+  !> should have one identical coordinate (i.e., they differ in two
+  !> coordinates).
+  subroutine a$D_write_plane(tree, filename, ivs, r_min, r_max, n_pixels, dir)
+    use m_a$D_interp, only: a$D_interp1, a$D_interp2
+    type(a$D_t), intent(in)       :: tree        !< Tree to write out
+    character(len=*), intent(in) :: filename    !< Filename for the vtk file
+    integer, intent(in)          :: ivs(:)      !< Variables to write
+    real(dp), intent(in)         :: r_min($D)   !< Minimum coordinate of plane
+    real(dp), intent(in)         :: r_max($D)   !< Maximum coordinate of plane
+    integer, intent(in)          :: n_pixels(2) !< Number of pixels in the plane
+    character(len=*), optional, intent(in) :: dir !< Directory to place files in
+
+    integer, parameter           :: my_unit = 100
+    character(len=100)           :: fmt_string
+    character(len=400)           :: fname
+    integer                      :: i, j, n_vars, dim_unused, n_points(3)
+    real(dp)                     :: r($D), dvec(3)
+    real(dp)                     :: v1($D), v2($D)
+    real(dp), allocatable        :: pixel_data(:, :, :)
+
+    n_vars = size(ivs)
+
+#if $D == 2
+    dvec(1:2) = r_max(1:2) - r_min(1:2)
+    dvec(3) = 0
+    dim_unused = 3
+    n_points = [n_pixels(1), n_pixels(2), 1]
+    v1 = [dvec(1), 0.0_dp] / (n_pixels(1) - 1)
+    v2 = [0.0_dp, dvec(2)] / (n_pixels(2) - 1)
+#elif $D == 3
+    dvec = r_max - r_min
+    dim_unused = minloc(abs(dvec), 1)
+
+    select case (dim_unused)
+    case (1)
+       v1 = [0.0_dp, dvec(2), 0.0_dp] / (n_pixels(1) - 1)
+       v2 = [0.0_dp, 0.0_dp, dvec(3)] / (n_pixels(2) - 1)
+       n_points = [1, n_pixels(1), n_pixels(2)]
+    case (2)
+       v1 = [dvec(1), 0.0_dp, 0.0_dp] / (n_pixels(1) - 1)
+       v2 = [0.0_dp, 0.0_dp, dvec(3)] / (n_pixels(2) - 1)
+       n_points = [n_pixels(1), 1, n_pixels(2)]
+    case (3)
+       v1 = [dvec(1), 0.0_dp, 0.0_dp] / (n_pixels(1) - 1)
+       v2 = [0.0_dp, dvec(2), 0.0_dp] / (n_pixels(2) - 1)
+       n_points = [n_pixels(1), n_pixels(2), 1]
+    end select
+#endif
+
+    allocate(pixel_data(n_vars, n_pixels(1), n_pixels(2)))
+
+    do j = 1, n_pixels(2)
+       do i = 1, n_pixels(1)
+          r = r_min + (i-1) * v1 + (j-1) * v2
+          pixel_data(:, i, j) = a$D_interp2(tree, r, ivs, n_vars)
+       end do
+    end do
+
+    ! Construct format string. Write one row at a time
+    write(fmt_string, '(A,I0,A)') '(', n_pixels(1), 'E16.8)'
+
+    ! Construct file name
+    fname = trim(filename) // ".vtk"
+    if (present(dir)) then
+       i = len_trim(dir)
+       if (i > 0) then
+          if (dir(i:i) == "/") then ! Dir has trailing slash
+             fname = trim(dir) // trim(fname)
+          else
+             fname = trim(dir) // "/" // trim(fname)
+          end if
+       end if
+    end if
+
+    open(my_unit, file=trim(fname), action="write")
+    write(my_unit, '(A)') "# vtk DataFile Version 2.0"
+    write(my_unit, '(A)') trim(filename)
+    write(my_unit, '(A)') "ASCII"
+    write(my_unit, '(A)') "DATASET STRUCTURED_POINTS"
+    write(my_unit, '(A,3I10)') "DIMENSIONS ", n_points
+    write(my_unit, '(A,3E16.8)') "ORIGIN ", r_min
+    write(my_unit, '(A,3E16.8)') "SPACING ", v1 + v2
+    write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
+    do i = 1, n_vars
+       write(my_unit, '(A)') "SCALARS " // &
+            trim(tree%cc_names(ivs(i))) // " double 1"
+       write(my_unit, '(A)') "LOOKUP_TABLE default"
+       write(my_unit, trim(fmt_string)) pixel_data(i, :, :)
+    end do
+    close(my_unit)
+    print *, "Written ", trim(fname)
+  end subroutine a$D_write_plane
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
   !> leaves of the tree are used
@@ -199,8 +294,8 @@ contains
 
     call vtk_ini_xml(vtkf, trim(fname), 'UnstructuredGrid')
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
-    call vtk_geo_xml(vtkf, coords, n_nodes, n_cells, $D, n_cycle_val, time_val)
-    call vtk_con_xml(vtkf, connects, offsets, cell_types, n_cells)
+    call vtk_unstr_geo_xml(vtkf, coords, n_nodes, n_cells, $D, n_cycle_val, time_val)
+    call vtk_unstr_con_xml(vtkf, connects, offsets, cell_types, n_cells)
     call vtk_dat_xml(vtkf, "CellData", .true.)
 
     do n = 1, n_cc + n_fc * $D
@@ -208,10 +303,10 @@ contains
     end do
 
     call vtk_dat_xml(vtkf, "CellData", .false.)
-    call vtk_geo_xml_close(vtkf)
+    call vtk_unstr_geo_xml_close(vtkf)
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
-    print *, "Written ", trim(fname), ", n_grids", n_grids
+    print *, "Written ", trim(fname)
   end subroutine a$D_write_vtk
 
   !> Write the cell centered data of a tree to a Silo file. Only the
@@ -614,7 +709,7 @@ contains
     end do
     call SILO_close_file(dbix)
 
-    print *, "Written ", trim(fname), ", n_grids", i_grid
+    print *, "Written ", trim(fname)
   end subroutine a$D_write_silo
 
 end module m_a$D_io
