@@ -21,10 +21,10 @@ program test_mg2_2d
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: i, n_args, n_cell, max_ref_lvl
-  integer            :: n_iterations, t_start, t_end
+  integer            :: n_iterations, t_start, t_end, count_rate
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr, count_rate
+  real(dp)           :: dr
   character(len=40)  :: arg_string
   type(mg2_t)        :: mg
 
@@ -111,7 +111,8 @@ program test_mg2_2d
   end do
   call system_clock(t_end, count_rate)
 
-  write(*, "(A,E12.4)") " Wall-clock time (s): ", (t_end-t_start) / count_rate
+  write(*, "(A,E12.4)") " Wall-clock time (s): ", &
+       (t_end-t_start) / real(count_rate, dp)
 
   ! This writes a Silo output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
