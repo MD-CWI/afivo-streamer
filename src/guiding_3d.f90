@@ -125,10 +125,10 @@ program streamer_guiding_3d
      if (write_out) then
         call a3_write_silo(tree, fname, ST_out_cnt, ST_time, &
              ixs_cc=[i_elec, i_pion, i_fld, i_phi, i_pho], dir=ST_output_dir)
-        ! call a3_write_plane(tree, fname, [i_elec, i_phi, i_fld], &
-        !      ST_domain_len * [0.45_dp, 0.5_dp, 0.5_dp], &
-        !      ST_domain_len * [0.55_dp, 0.5_dp, 1.0_dp], &
-        !      [100, 500], dir="output")
+        call a3_write_plane(tree, fname, [i_elec, i_phi, i_fld], &
+             [0.14_dp, 0.12_dp, 0.167_dp], &
+             [0.15_dp, 0.12_dp, 0.177_dp], &
+             [40, 40], dir="output")
      end if
 
      call a3_adjust_refinement(tree, ref_routine, ref_info)
