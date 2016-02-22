@@ -5,7 +5,7 @@
  ref_max_dx = 1.0e-2
 
  # The desired endtime in seconds of the simulation:
- end_time = 500E-09
+ end_time = 250E-09
 
  # The name of the simulation:
  sim_name = guidv3_3d
@@ -23,7 +23,7 @@
  gas_name = N2
 
  # The gas pressure in bar (used for photoionization):
- gas_pressure = 0.133E+01
+ gas_pressure = 0.133
 
  # The applied electric field if there are no electrodes:
  applied_fld = -0.020E+07
