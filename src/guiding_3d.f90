@@ -133,9 +133,6 @@ program streamer_guiding_3d
 
         ! Compute the field on the new mesh
         call compute_fld(tree, n_fmg_cycles, .true.)
-
-        ! This will every now-and-then clean up the data in the tree
-        call a3_tidy_up(tree, 0.9_dp, 0.25_dp, 5000, .false.)
      end if
 
   end do
