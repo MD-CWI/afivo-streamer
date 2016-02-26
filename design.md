@@ -1,6 +1,6 @@
 ### Design considerations
 
-#### Why don't you fill corner ghost cells by default?
+#### Why do not you fill corner ghost cells by default?
 
 Filling these is relatively easy in 2D, but quite a pain in 3D. There you have to
 consider 8 corner points and 12 edges between these corners. These edges can be
@@ -11,7 +11,7 @@ difficult.
 
 Because it is one of the more convenient languages for scientific computing.
 
-#### Why don't you use MPI?
+#### Why do not you use MPI?
 
 There are a couple of reasons for this:
 
@@ -21,11 +21,11 @@ There are a couple of reasons for this:
 * Most of the complexity of the current frameworks is in the communication, this
   is much simpler for AFiVO. There is much less code, and it is probably easier
   to make changes in a project if you can read all the data from each core, so
-  that you don't have to think about MPI. (Although getting good OpenMP
+  that you do not have to think about MPI. (Although getting good OpenMP
   performance is also quite tricky, I admit).
 * When your code is more efficient, you can use a smaller system to do the same
   type of simulations. This is what I hope to achieve.
-* Most parallel codes don't scale so well, especially if there is a lot of grid
+* Most parallel codes do not scale so well, especially if there is a lot of grid
   refinement. The work is then harder to distribute, and more communication is
   required.
 * If your simulation fits in memory, then you can also consider running 5
@@ -63,7 +63,7 @@ I have considered a couple of options, which are listed below with some remarks:
 
 * No ghost cells
 
-	* Perhaps the most general / elegant idea: don't waste memory on ghost cells
+	* Perhaps the most general / elegant idea: do not waste memory on ghost cells
       but just look the values up at the neighbors.
 	* Hard to write efficient code: typically you would work on an enlarged copy
       of the current box that includes neighbor data. Copying data takes time,
@@ -71,5 +71,5 @@ I have considered a couple of options, which are listed below with some remarks:
       corner ghost cell, you typically want to use the "side" ghost cell of a
       neighbor, but if these are not stored, they have to be recomputed each
       time.
-	* If you don't work on an enlarged copy of the box, indexing is really
+	* If you do not work on an enlarged copy of the box, indexing is really
       annoying.

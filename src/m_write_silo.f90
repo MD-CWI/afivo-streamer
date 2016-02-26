@@ -38,7 +38,8 @@ contains
 
     ierr = dbopen(trim(filename), len_trim(filename), DB_TYPE, &
          DB_APPEND, dbix)
-    if (ierr /= 0) print *, "Error opening file", trim(filename)
+    if (ierr /= 0) print *, &
+            "Error opening file", trim(filename)
   end subroutine SILO_open_file
 
   subroutine SILO_close_file(dbix)
@@ -46,7 +47,8 @@ contains
     integer :: ierr
 
     ierr = dbclose(dbix)
-    if (ierr /= 0) print *, "Error closing file with index", dbix
+    if (ierr /= 0) print *, &
+            "Error closing file with index", dbix
   end subroutine SILO_close_file
 
   subroutine SILO_mkdir(dbix, dirname)
@@ -55,7 +57,8 @@ contains
     integer :: ierr, iostat
 
     ierr = dbmkdir(dbix, trim(dirname), len_trim(dirname), iostat)
-    if (ierr /= 0) print *, "Error creating directory ", dirname
+    if (ierr /= 0) print *, &
+            "Error creating directory ", dirname
   end subroutine SILO_mkdir
 
   subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr)
@@ -108,18 +111,27 @@ contains
 
     ! Make option list
     ierr = dbmkoptlist(20, dboptix)
+    if (ierr /= 0) print *, &
+            "Error creating options list in SILO_add_grid ", dboptix
 
     ! Set integer options
     ierr = dbaddiopt(dboptix, DBOPT_NSPACE, n_dim)
+    if (ierr /= 0) print *, &
+            "Error dbaddiopt is SILO_add_grid: DBOPT_NSPACE", ierr
     ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, 1)
-    ! ierr = dbaddiopt(dboptix, DBOPT_MAJORORDER, 1)
+    if (ierr /= 0) print *, &
+            "Error dbaddiopt is SILO_add_grid: DBOPT_HIDE_FROM_GUI", ierr
 
     ! Write the grid structure
     ierr = dbputqm(dbix, trim(gridname), len_trim(gridname), &
          'x', 1, 'y', 1, 'z', 1, x_coords, y_coords, z_coords, &
          N_r, n_dim, DB_DOUBLE, DB_COLLINEAR, dboptix, iostat)
+    if (ierr /= 0) print *, &
+            "Error dbputqm is SILO_add_grid", ierr
 
     ierr = dbfreeoptlist(dboptix)
+    if (ierr /= 0) print *, &
+            "Error dbfreeoptlist is SILO_add_grid", ierr
   end subroutine SILO_add_grid
 
   subroutine SILO_add_var(dbix, dataname, gridname, &
@@ -154,15 +166,22 @@ contains
     end if
 
     ierr = dbmkoptlist(10, dboptix)
+    if (ierr /= 0) print *, &
+            "Error creating options list in SILO_add_var ", dboptix
     ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, 1)
-    !       ierr = dbaddiopt(dboptix, DBOPT_MAJORORDER, 1)
+    if (ierr /= 0) print *, &
+            "Error dbaddiopt is SILO_add_var: DBOPT_HIDE_FROM_GUI", ierr
 
     ! Write the data to the grid
     ierr = dbputqv1(dbix, trim(dataname), len_trim(dataname), &
          trim(gridname), len_trim(gridname), d_packed, d_shape, &
          size(d_shape), dummy, 0, DB_DOUBLE, DB_ZONECENT, dboptix, iostat)
+    if (ierr /= 0) print *, &
+            "Error dbputqv1 is SILO_add_var", ierr
 
     ierr = dbfreeoptlist(dboptix)
+    if (ierr /= 0) print *, &
+            "Error dbfreeoptlist is SILO_add_var", ierr
   end subroutine SILO_add_var
 
   subroutine SILO_set_mmesh_grid(dbix, mmname, gridnames, n_cycle, time)
@@ -208,15 +227,28 @@ contains
     name_lengths = name_len
 
     ierr = dbmkoptlist(10, dboptix)
-    if (present(n_cycle)) ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
-    if (present(time)) ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+    if (present(n_cycle)) then
+       ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
+       if (ierr /= 0) print *, &
+               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_CYCLE", ierr
+    end if
+    if (present(time)) then
+       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+       if (ierr /= 0) print *, &
+               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_DTIME", ierr
+    end if
 
     ierr = dbputmmesh(dbix, trim(mmname), len_trim(mmname), n_grids, &
          mnames(1:total_len), name_lengths, m_types, dboptix, iostat)
-    if (ierr /= 0) print *, "Error calling dbputmmesh", ierr
+    if (ierr /= 0) print *, &
+            "Error calling dbputmmesh", ierr
 
     ierr = dbfreeoptlist(dboptix)
+    if (ierr /= 0) print *, &
+            "Error dbfreeoptlist is SILO_set_mmesh_grid", ierr
     ierr = dbset2dstrlen(old_str_len)
+    if (ierr /= 0) print *, &
+            "Error dbset2dstrlen is SILO_set_mmesh_grid", ierr
   end subroutine SILO_set_mmesh_grid
 
   subroutine SILO_set_mmesh_var(dbix, mvname, mmname, &
@@ -262,17 +294,34 @@ contains
     name_lengths = name_len
 
     ierr = dbmkoptlist(10, dboptix)
-    if (present(n_cycle)) ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
-    if (present(time)) ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+    if (ierr /= 0) print *, &
+            "Error creating options list in SILO_set_mmesh_var", ierr
+    if (present(n_cycle)) then
+       ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
+       if (ierr /= 0) print *, &
+               "Error dbaddiopt is SILO_set_mmesh_var: DBOPT_CYCLE", ierr
+    end if
+    if (present(time)) then
+       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+       if (ierr /= 0) print *, &
+               "Error dbaddiopt is SILO_set_mmesh_var: DBOPT_DTIME", ierr
+    end if
     ierr = dbaddcopt(dboptix, DBOPT_MMESH_NAME, &
          trim(mmname), len_trim(mmname))
+    if (ierr /= 0) print *, &
+            "Error dbaddiopt is SILO_set_mmesh_var: DBOPT_MMESH_NAME", ierr
 
     ierr = dbputmvar(dbix, trim(mvname), len_trim(mvname), n_grids, &
          dnames(1:total_len), name_lengths, m_types, dboptix, iostat)
-    if (ierr /= 0) print *, "Error calling dbputmvar", ierr
+    if (ierr /= 0) print *, &
+            "Error calling dbputmvar", ierr
 
     ierr = dbfreeoptlist(dboptix)
+    if (ierr /= 0) print *, &
+            "Error dbfreeoptlist is SILO_set_mmesh_var", ierr
     ierr = dbset2dstrlen(old_str_len)
+    if (ierr /= 0) print *, &
+            "Error dbset2dstrlen is SILO_set_mmesh_var", ierr
   end subroutine SILO_set_mmesh_var
 
 end module m_write_silo

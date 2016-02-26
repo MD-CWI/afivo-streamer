@@ -1,5 +1,6 @@
 !> \example drift_diffusion_3d.f90
 !> A drift-diffusion example for m_a3_t
+!> @TODO: document this
 program drift_diffusion_3d
   use m_a3_t
   use m_a3_core
@@ -18,33 +19,36 @@ program drift_diffusion_3d
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr = domain_len / box_size
 
-  type(a3_t)        :: tree
-  type(ref_info_t)  :: ref_info
-  integer           :: i, n, n_steps, id
-  integer           :: ix_list(3, 1)
-  integer           :: nb_list(6, 1)
-  integer           :: output_cnt
-  real(dp)          :: dt, time, end_time, p_err, n_err
-  real(dp)          :: dt_adapt, dt_output
-  real(dp)          :: diff_coeff, vel_x, vel_y, vel_z, dr_min(3)
-  character(len=40) :: fname
+  type(a3_t)         :: tree
+  type(ref_info_t)   :: ref_info
+  integer            :: i, id,unit_error
+  integer            :: ix_list(3, 1)
+  integer            :: nb_list(6, 1)
+  integer            :: n,n_steps,time_steps,output_cnt
+  real(dp)           :: dt, time, end_time, p_err, n_err
+  real(dp)           :: dt_adapt, dt_output
+  real(dp)           :: diff_coeff, vel_x, vel_y, vel_z, dr_min(3)
+  character(len=40)  :: fname
+  real               :: t_start, t_finish
 
-  logical           :: write_out
-  integer           :: time_step_method = 2
+  logical            :: write_out
+  integer            :: time_step_method = 2
 
-  print *, "Initialize tree"
+  write(*,'(A)') 'program drift_diffusion_3d'
+
+  ! Initialize tree
   call a3_init(tree, box_size, n_var_cell=3, n_var_face=2, dr=dr, &
        cc_names=["phi", "old", "err"])
 
-  print *, "Set up geometry"
+  ! Set up geometry
   id             = 1
   ix_list(:, id) = [1,1,1] ! Set index of box
   nb_list(:, id) = id      ! Box is periodic, so its own neighbor
 
-  print *, "Create the base mesh"
+  ! Create the base mesh, using the box indices and their neighbor information
   call a3_set_base(tree, ix_list, nb_list)
+  call a3_print_info(tree)
 
-  i          = 0
   output_cnt = 0
   time       = 0
   dt_adapt   = 0.01_dp
@@ -55,24 +59,60 @@ program drift_diffusion_3d
   vel_y      = 0.0_dp
   vel_z      = 1.0_dp
 
-  print *, "Set up the initial conditions"
+  ! Set up the initial conditions
+  call cpu_time(t_start)
   do
      ! We should only set the finest level, but this also works
      call a3_loop_box(tree, set_init_cond)
+
+     ! Fill ghost cells for variables i_phi on the sides of all boxes, using
+     ! a3_gc_interp_lim on refinement boundaries:
+     !   Interpolation between fine points and coarse neighbors to fill ghost cells
+     !   near refinement boundaries. The ghost values are less than twice the coarse
+     !   values.
+     ! and a3_bc_neumann_zero physical boundaries:
+     !   fill ghost cells near physical boundaries using Neumann zero
+
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
+
+     ! Use ref_routine (see below) for grid refinement
      call a3_adjust_refinement(tree, ref_routine, ref_info)
+
+     ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
+  call cpu_time(t_finish)
+  print '("Time making amr grid = ",f8.2," seconds.")',t_finish-t_start
+  call a3_print_info(tree)
+  dr_min = a3_min_dr(tree)
+  write(*,'(A,3(2x,Es11.4))') ' dr of finest level:',dr_min
 
   ! Restrict the initial conditions
+  ! Restrict the children of a box to the box (e.g., in 3D, average the values
+  ! at the four children to get the value for the parent)
   call a3_restrict_tree(tree, i_phi)
+  ! Purpose of a3_gc_tree see above
   call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
 
-  print *, "Starting simulation"
+  select case (time_step_method)
+  case (1)
+     print *,'Forward Euler'
+  case (2)
+     print*,'Two forward Euler steps over dt'
+  end select
+
+  call cpu_time(t_start)
+  time_steps = 0
+  open(newunit=unit_error,file='drift_error_3d',status='UNKNOWN', &
+       position='REWIND')
+
+  ! Starting simulation
   do
+     time_steps = time_steps + 1
      dr_min  = a3_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y, vel_z]) / dr_min ) + epsilon(1.0_dp))
+
      n_steps = ceiling(dt_adapt/dt)
      dt      = dt_adapt / n_steps
 
@@ -90,9 +130,10 @@ program drift_diffusion_3d
              ixs_fc=[1], dir="output")
         call a3_tree_max_cc(tree, i_err, p_err)
         call a3_tree_min_cc(tree, i_err, n_err)
-        print *, "max error", max(p_err, abs(n_err))
         call a3_tree_sum_cc(tree, i_phi, p_err)
-        print *, "sum phi", p_err
+        write(unit_error,'(2(A,1x,Es12.4))')  &
+                'max error', max(p_err, abs(n_err)), &
+                'sum phi  ', p_err
      end if
 
      if (time > end_time) exit
@@ -133,12 +174,19 @@ program drift_diffusion_3d
      call a3_adjust_refinement(tree, ref_routine, ref_info)
      call prolong_to_new_children(tree, ref_info)
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
+     call a3_tidy_up(tree, 0.8_dp, 10000)
   end do
+  call cpu_time(t_finish)
+  print '("Time for ",i3, " time steps = ",f8.2," seconds.")', &
+          time_steps,t_finish-t_start
 
+  ! This call is not really necessary here, but cleaning up the data in a tree
+  ! is important if your program continues with other tasks.
   call a3_destroy(tree)
 
 contains
 
+  ! Return the refinement flag for boxes(id)
   subroutine ref_routine(boxes, id, ref_flag)
     type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id

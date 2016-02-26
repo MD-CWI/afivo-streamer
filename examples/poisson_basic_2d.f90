@@ -12,8 +12,9 @@ program poisson_basic_2d
 
   implicit none
 
-  integer, parameter :: n_cell = 8
+  integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
+  integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 4
   integer, parameter :: i_phi = 1
   integer, parameter :: i_rhs = 2
@@ -22,24 +23,43 @@ program poisson_basic_2d
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i
+  integer            :: n_gaussian=1, mg_iter
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr, min_res, max_res
+  real(dp)           :: dr, min_dr, residu(2), anal_err(2)
   character(len=40)  :: fname
-  type(mg2_t)        :: mg
   type(gauss_t)      :: gs
+  type(mg2_t)        :: mg
+  real               :: t_start, t_finish
 
+  write(*,'(A)') 'program poisson_basic_2d'
   ! The manufactured solution exists of two Gaussians, which are stored in gs
-  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
+  if (n_gaussian==1) then
+    ! Amplitudes:  [1.0_dp]
+    ! Sigmas    :  [0.04_dp]
+    ! Locations :  [0.5_dp, 0.5_dp]
+    call gauss_init(gs, [1.0_dp], [0.04_dp], &
+         reshape([0.5_dp, 0.5_dp], [2,1]))
+  else if (n_gaussian==2) then
+    ! Amplitudes:  [1.0_dp, 1.0_dp]
+    ! Sigmas    :  [0.04_dp, 0.04_dp]
+    ! Locations :  reshape([0.5_dp, 0.5_dp, 0.5_dp, 0.5_dp], [2,2])
+    call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
+         reshape([0.5_dp, 0.5_dp, 0.5_dp, 0.5_dp], [2,2]))
+  end if
+  write(*,'(2(A11,2x,i2,/),2(A11,2x,Es10.2,/),A11,2x,3(Es10.2,1x))') &
+          'gs%n_gauss:',gs%n_gauss, &
+          'gs%n_dim  :',gs%n_dim, &
+          'gs%ampl   :',gs%ampl, &
+          'gs%sigma  :',gs%sigma, &
+          'gs%r0     :',gs%r0
 
   ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / n_cell
+  dr = 1.0_dp / box_size
 
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
-       n_cell, &       ! A box contains n_cell**DIM cells
+       box_size, &     ! A box contains box_size**DIM cells
        n_var_cell, &   ! Number of cell-centered variables
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
@@ -51,11 +71,13 @@ program poisson_basic_2d
   ix_list(:, 1) = [1,1]         ! Set index of box 1
 
   ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1
+  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a2_set_base(tree, ix_list, nb_list)
+  call a2_print_info(tree)
 
+  call cpu_time(t_start)
   do
      ! For each box, set the initial conditions
      call a2_loop_box(tree, set_init_cond)
@@ -66,6 +88,11 @@ program poisson_basic_2d
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
+  call cpu_time(t_finish)
+  print '("Time making amr grid = ",f8.2," seconds.")',t_finish-t_start
+  call a2_print_info(tree)
+  min_dr = a2_min_dr(tree)
+  write(*,'(A,2x,Es11.4)') ' dr of finest level:',min_dr
 
   ! Set the multigrid options.
   mg%i_phi        = i_phi       ! Solution variable
@@ -77,26 +104,37 @@ program poisson_basic_2d
   ! default values where necessary.
   call mg2_init_mg(mg)
 
-  do i = 1, 10
+  call cpu_time(t_start)
+  do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
      ! fourth argument controls whether to improve the current solution.
-     call mg2_fas_fmg(tree, mg, set_residual=.true., have_guess=(i>1))
+     call mg2_fas_fmg(tree, mg, set_residual=.true., have_guess=(mg_iter>1))
 
      ! Compute the error compared to the analytic solution
-     call a2_loop_box(tree, set_err)
+     call a2_loop_box(tree, set_error)
 
      ! Determine the minimum and maximum residual
-     call a2_tree_min_cc(tree, i_tmp, min_res)
-     call a2_tree_max_cc(tree, i_tmp, max_res)
-     print *, "Iteration ", i, "max residual: ", max(abs(min_res), abs(max_res))
+     call a2_tree_min_cc(tree, i_tmp, residu(1))
+     call a2_tree_max_cc(tree, i_tmp, residu(2))
+     call a2_tree_min_cc(tree, i_err, anal_err(1))
+     call a2_tree_max_cc(tree, i_err, anal_err(2))
+     min_dr = a2_min_dr(tree)
+     write(*,'(A,1x,I3,3(1x,A13,1x,Es12.5))') & 
+       'Multigrid iteration',mg_iter, "max residual: ", maxval(abs(residu)), &
+                                      "max error: ",    maxval(abs(anal_err)), &
+                                      "min dr: ",min_dr
 
      ! This writes a Silo output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
-     write(fname, "(A,I0)") "poisson_basic_2d_", i
+     write(fname, "(A,I0)") "poisson_basic_2d_", mg_iter
      call a2_write_silo(tree, trim(fname), dir="output")
   end do
+  call cpu_time(t_finish)
+  print '("Time solving by multigrid = ",f8.2," seconds.")',t_finish-t_start
 
+  ! This call is not really necessary here, but cleaning up the data in a tree
+  ! is important if your program continues with other tasks.
   call a2_destroy(tree)
 
 contains
@@ -148,7 +186,7 @@ contains
   end subroutine set_init_cond
 
   ! Set the error compared to the analytic solution
-  subroutine set_err(box)
+  subroutine set_error(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
@@ -160,7 +198,7 @@ contains
           box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_val(gs, xy)
        end do
     end do
-  end subroutine set_err
+  end subroutine set_error
 
   ! This routine sets boundary conditions for a box, by filling its ghost cells
   ! with approriate values.
@@ -202,4 +240,4 @@ contains
     end select
   end subroutine sides_bc
 
-end program
+end program poisson_basic_2d

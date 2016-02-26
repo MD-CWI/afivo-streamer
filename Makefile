@@ -15,11 +15,11 @@ doc:
 clean: 		$(CLEANSRC)
 
 $(SRC_DIRS): 	| $(CREATE_DIRS)
-		@echo "\n*********** Build information ***********"
+		@echo "*********** Build information ***********"
 		@echo "  Debug is set to: [$(DEBUG)],"
 		@echo "  Set it to 1 to enable a debug build."
 		@echo "  For example: make clean; make DEBUG=1"
-		@echo "*****************************************\n"
+		@echo "*****************************************"
 		$(MAKE) -C $@
 $(CLEANSRC):
 		$(MAKE) -C $(@:clean-%=%) clean
@@ -27,5 +27,5 @@ $(CLEANSRC):
 silo:
 		./build_silo.sh
 
-# Dependecy information
+# Dependency information
 $(SRC_DIRS):

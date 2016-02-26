@@ -7,13 +7,14 @@ program poisson_cyl_dielectric
   use m_a2_core
   use m_a2_mg
   use m_a2_utils
-  use m_a2_io
   use m_gaussians
+  use m_a2_io
 
   implicit none
 
-  integer, parameter :: n_cell = 8
+  integer, parameter :: box_size = 8
   integer, parameter :: n_boxes_base = 1
+  integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 5
   integer, parameter :: i_phi = 1
   integer, parameter :: i_rhs = 2
@@ -23,24 +24,27 @@ program poisson_cyl_dielectric
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i
+  integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, max_res, min_res
   character(len=40)  :: fname
-  type(mg2_t)        :: mg
   type(gauss_t)      :: gs
+  type(mg2_t)        :: mg
+  integer            :: count_rate,t_start, t_end
+
+  write(*,'(A)') 'program poisson_cyl_dielectric'
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
        reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
 
   ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / n_cell
+  dr = 1.0_dp / box_size
 
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
-       n_cell, &       ! A box contains n_cell**DIM cells
+       box_size, &     ! A box contains box_size**DIM cells
        n_var_cell, &   ! Number of cell-centered variables
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
@@ -53,10 +57,31 @@ program poisson_cyl_dielectric
   ix_list(:, 1) = [1,1]         ! Set index of box 1
 
   ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1
+  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a2_set_base(tree, ix_list, nb_list)
+  call a2_print_info(tree)
+
+  call system_clock(t_start, count_rate)
+  do
+     ! For each box, set the initial conditions
+     call a2_loop_box(tree, set_init_cond)
+
+     ! This updates the refinement of the tree, by at most one level per call.
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
+
+     ! If no new boxes have been added, exit the loop
+     if (ref_info%n_add == 0) exit
+  end do
+  call system_clock(t_end, count_rate)
+  write(*,'(A,f8.2,1x,A,1/)') 'Time making amr grid = ', &
+          (t_end-t_start) / real(count_rate,dp), &
+          ' seconds'
+
+  call a2_print_info(tree)
+  dr = a2_min_dr(tree)
+  write(*,'(A,2x,Es11.4)') ' dr of finest level:',dr
 
   ! Set the multigrid options.
   mg%i_phi        = i_phi       ! Solution variable
@@ -71,25 +96,19 @@ program poisson_cyl_dielectric
   mg%box_corr     => mg2_auto_corr
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary
+  ! default values where necessary.
+  ! This routine does not initialize the multigrid variables i_phi, i_rhs
+  ! and i_tmp. These variables will be initialized at the first call
+  ! of mg2_fas_fmg
   call mg2_init_mg(mg)
 
-  do
-     ! For each box, set the initial conditions
-     call a2_loop_box(tree, set_init_cond)
-
-     ! This updates the refinement of the tree, by at most one level per call.
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
-
-     ! If no new boxes have been added, exit the loop
-     if (ref_info%n_add == 0) exit
-  end do
-
-  do i = 1, 10
+  ! Do the actual benchmarking
+  call system_clock(t_start, count_rate)
+  do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
      ! fourth argument controls whether to improve the current solution.
-     call mg2_fas_fmg(tree, mg, .true., i>1)
+     call mg2_fas_fmg(tree, mg, .true., mg_iter>1)
 
      ! Compute the error compared to the analytic solution
      call a2_loop_box(tree, set_err)
@@ -97,12 +116,22 @@ program poisson_cyl_dielectric
      ! Determine the minimum and maximum residual
      call a2_tree_min_cc(tree, i_tmp, min_res)
      call a2_tree_max_cc(tree, i_tmp, max_res)
-     print *, "Iteration ", i, "max residual: ", max(abs(min_res), abs(max_res))
+     write(*,'(A,i3,2x,A,Es12.4)')  &
+             "Iteration ", mg_iter, &
+             "max residual: ", max(abs(min_res), abs(max_res))
 
-     write(fname, "(A,I0)") "poisson_cyl_dielectric_", i
+     write(fname, "(A,I0)") "poisson_cyl_dielectric_", mg_iter
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
+  call system_clock(t_end, count_rate)
 
+  write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
+           ' Wall-clock time after ',n_iterations, &
+           ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
+           ' seconds'
+
+  ! This call is not really necessary here, but cleaning up the data in a tree
+  ! is important if your program continues with other tasks.
   call a2_destroy(tree)
 
 contains
@@ -194,7 +223,7 @@ contains
     end do
   end subroutine set_init_cond
 
-  ! Compute error with solution
+  ! Compute error compared to the analytic solution
   subroutine set_err(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc

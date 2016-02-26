@@ -4,9 +4,9 @@
 program drift_diffusion_2d
   use m_a2_t
   use m_a2_core
-  use m_a2_io
-  use m_a2_utils
   use m_a2_gc
+  use m_a2_utils
+  use m_a2_io
   use m_a2_restrict
 
   implicit none
@@ -21,19 +21,22 @@ program drift_diffusion_2d
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i, id
+  integer            :: i, id,unit_error
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
-  integer            :: output_cnt
+  integer            :: n,n_steps,time_steps,output_cnt
   real(dp)           :: dt, time, end_time, p_err, n_err
-  real(dp)           :: dt_output
+  real(dp)           :: dt_adapt, dt_output
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=40)  :: fname
+  real               :: t_start, t_finish
 
   logical            :: write_out
   integer            :: time_step_method = 2
 
-  print *, "Initialize tree"
+  write(*,'(A)') 'program drift_diffusion_2d'
+
+  ! Initialize tree
   call a2_init(tree, box_size, n_var_cell=3, n_var_face=1, dr=dr, &
        cc_names=["phi", "old", "err"])
 
@@ -42,63 +45,75 @@ program drift_diffusion_2d
   ix_list(:, id) = [1,1] ! Set index of box
   nb_list(:, id) = id    ! Box is periodic, so its own neighbor
 
-  print *, "Create the base mesh"
+  ! Create the base mesh, using the box indices and their neighbor information
   call a2_set_base(tree, ix_list, nb_list)
+  call a2_print_info(tree)
 
   output_cnt = 0
   time       = 0
-  dt_output  = 0.1_dp
-  end_time   = 5.0_dp
+  dt_adapt   = 0.01_dp
+  dt_output  = 0.05_dp
+  end_time   = 1.5_dp
   diff_coeff = 0.0_dp
   vel_x      = 1.0_dp
   vel_y      = 1.0_dp
 
-  print *, "Set up the initial conditions"
+  ! Set up the initial conditions
+  call cpu_time(t_start)
   do
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
+
+     ! Fill ghost cells for variables i_phi on the sides of all boxes, using
+     ! a2_gc_interp_lim on refinement boundaries:
+     !   Interpolation between fine points and coarse neighbors to fill ghost cells
+     !   near refinement boundaries. The ghost values are less than twice the coarse
+     !   values.
+     ! and a2_bc_neumann_zero physical boundaries:
+     !   fill ghost cells near physical boundaries using Neumann zero
+
      call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
+
+     ! Use ref_routine (see below) for grid refinement
      call a2_adjust_refinement(tree, ref_routine, ref_info)
+
+     ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
+  call cpu_time(t_finish)
+  print '("Time making amr grid = ",f8.2," seconds.")',t_finish-t_start
+  call a2_print_info(tree)
+  dr_min = a2_min_dr(tree)
+  write(*,'(A,2(2x,Es11.4))') ' dr of finest level:',dr_min
 
-  print *, "Restrict the initial conditions"
+  ! Restrict the initial conditions
+  ! Restrict the children of a box to the box (e.g., in 2D, average the values
+  ! at the four children to get the value for the parent)
   call a2_restrict_tree(tree, i_phi)
+  ! Purpose of a2_gc_tree see above
   call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
 
+  select case (time_step_method)
+  case (1)
+     print *,'Forward Euler'
+  case (2)
+     print*,'Two forward Euler steps over dt'
+  end select
+
+  call cpu_time(t_start)
+  time_steps = 0
+  open(newunit=unit_error,file='drift_error_2d',status='UNKNOWN', &
+       position='REWIND')
+
+  ! Starting simulation
   do
+     time_steps = time_steps + 1
      dr_min  = a2_min_dr(tree)
      dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
           sum( abs([vel_x, vel_y]) / dr_min ) + epsilon(1.0_dp))
 
-     if (time > end_time) exit
-
-     select case (time_step_method)
-     case (1)
-        ! Forward Euler
-        call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-        call a2_consistent_fluxes(tree, [1])
-        call a2_loop_box_arg(tree, update_solution, [dt])
-        call a2_restrict_tree(tree, i_phi)
-        call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
-        time = time + dt
-     case (2)
-        ! Copy previous solution
-        call a2_tree_copy_cc(tree, i_phi, i_phi_old)
-
-        ! Two forward Euler steps over dt
-        do i = 1, 2
-           call a2_loop_boxes_arg(tree, fluxes_koren, [diff_coeff, vel_x, vel_y])
-           call a2_consistent_fluxes(tree, [1])
-           call a2_loop_box_arg(tree, update_solution, [dt])
-           call a2_restrict_tree(tree, i_phi)
-           call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
-        end do
-
-        ! Take average of phi_old and phi
-        call a2_loop_box(tree, average_phi)
-        time = time + dt
-     end select
+     n_steps = ceiling(dt_adapt/dt)
+     dt      = dt_adapt / n_steps
 
      if (output_cnt * dt_output <= time) then
         write_out = .true.
@@ -114,20 +129,63 @@ program drift_diffusion_2d
              ixs_fc=[1], dir="output")
         call a2_tree_max_cc(tree, i_err, p_err)
         call a2_tree_min_cc(tree, i_err, n_err)
-        print *, "max error", max(p_err, abs(n_err))
         call a2_tree_sum_cc(tree, i_phi, p_err)
-        print *, "sum phi", p_err
+        write(unit_error,'(2(A,1x,Es12.4))')  &
+                'max error', max(p_err, abs(n_err)), &
+                'sum phi  ', p_err
      end if
+
+     if (time > end_time) exit
+
+     select case (time_step_method)
+     case (1)
+        ! Forward Euler
+        do n = 1, n_steps
+           call a2_loop_boxes_arg(tree, fluxes_koren, &
+                [diff_coeff, vel_x, vel_y])
+           call a2_consistent_fluxes(tree, [1])
+           call a2_loop_box_arg(tree, update_solution, [dt])
+           call a2_restrict_tree(tree, i_phi)
+           call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
+           time = time + dt
+        end do
+     case (2)
+        do n = 1, n_steps
+           ! Copy previous solution
+           call a2_tree_copy_cc(tree, i_phi, i_phi_old)
+
+           ! Two forward Euler steps over dt
+           do i = 1, 2
+              call a2_loop_boxes_arg(tree, fluxes_koren, &
+                   [diff_coeff, vel_x, vel_y])
+              call a2_consistent_fluxes(tree, [1])
+              call a2_loop_box_arg(tree, update_solution, [dt])
+              call a2_restrict_tree(tree, i_phi)
+              call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
+           end do
+
+           ! Take average of phi_old and phi
+           call a2_loop_box(tree, average_phi)
+           time = time + dt
+        end do
+     end select
 
      call a2_adjust_refinement(tree, ref_routine, ref_info)
      call prolong_to_new_children(tree, ref_info)
      call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
+     call a2_tidy_up(tree, 0.8_dp, 10000)
   end do
+  call cpu_time(t_finish)
+  print '("Time for ",i3, " time steps = ",f8.2," seconds.")', &
+          time_steps,t_finish-t_start
 
+  ! This call is not really necessary here, but cleaning up the data in a tree
+  ! is important if your program continues with other tasks.
   call a2_destroy(tree)
 
 contains
 
+  ! Return the refinement flag for boxes(id)
   subroutine ref_routine(boxes, id, ref_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
@@ -150,6 +208,7 @@ contains
     end if
   end subroutine ref_routine
 
+  ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
@@ -186,13 +245,6 @@ contains
 
     xy_t = xy - [vel_x, vel_y] * t
     sol = sin(xy_t(1))**4 * cos(xy_t(2))**4
-
-    ! xy_t = modulo(xy_t, domain_len) / domain_len
-    ! if (norm2(xy_t - [0.5_dp, 0.5_dp]) < 0.25_dp) then
-    !    sol = 1
-    ! else
-    !    sol = 0
-    ! end if
   end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)
