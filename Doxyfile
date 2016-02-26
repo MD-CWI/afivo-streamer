@@ -778,7 +778,7 @@ RECURSIVE              = NO
 # Note that relative paths are relative to the directory from which doxygen is
 # run.
 
-EXCLUDE                = "src/m_afivo_Xd.f90" "src/m_mg_Xd.f90" "src/m_mgb_Xd.f90"
+EXCLUDE                = "src/m_afivo_Xd.f90" "src/m_mg_Xd.f90" "src/m_mgb_Xd.f90" "src/m_aX_core.f90" 
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
 # directories that are symbolic links (a Unix file system feature) are excluded
@@ -2060,7 +2060,8 @@ HAVE_DOT               = YES
 # Minimum value: 0, maximum value: 32, default value: 0.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-DOT_NUM_THREADS        = 0
+#DOT_NUM_THREADS        = 0
+DOT_NUM_THREADS        = 32
 
 # When you want a differently looking font n the dot files that doxygen
 # generates you can specify the font name using DOT_FONTNAME. You need to make
