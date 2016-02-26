@@ -190,7 +190,7 @@ contains
     integer, intent(in), optional  :: n_cycle
     real(dp), intent(in), optional :: time
 
-    integer                        :: i, ierr
+    integer                        :: i, ierr,length
     integer                        :: dboptix, iostat, old_str_len
     integer                        :: n_grids, name_len, total_len
     integer, allocatable           :: m_types(:), name_lengths(:)
@@ -246,9 +246,7 @@ contains
     ierr = dbfreeoptlist(dboptix)
     if (ierr /= 0) print *, &
             "Error dbfreeoptlist is SILO_set_mmesh_grid", ierr
-    ierr = dbset2dstrlen(old_str_len)
-    if (ierr /= 0) print *, &
-            "Error dbset2dstrlen is SILO_set_mmesh_grid", ierr
+    length = dbset2dstrlen(old_str_len)
   end subroutine SILO_set_mmesh_grid
 
   subroutine SILO_set_mmesh_var(dbix, mvname, mmname, &
@@ -258,7 +256,7 @@ contains
     integer, intent(in), optional  :: n_cycle
     real(dp), intent(in), optional :: time
 
-    integer                        :: i, ierr, dboptix, iostat
+    integer                        :: i, ierr, dboptix, iostat,length
     integer                        :: old_str_len, n_grids, name_len, total_len
     integer, allocatable           :: m_types(:), name_lengths(:)
     character(:), allocatable      :: dnames
@@ -319,9 +317,7 @@ contains
     ierr = dbfreeoptlist(dboptix)
     if (ierr /= 0) print *, &
             "Error dbfreeoptlist is SILO_set_mmesh_var", ierr
-    ierr = dbset2dstrlen(old_str_len)
-    if (ierr /= 0) print *, &
-            "Error dbset2dstrlen is SILO_set_mmesh_var", ierr
+    length = dbset2dstrlen(old_str_len)
   end subroutine SILO_set_mmesh_var
 
 end module m_write_silo
