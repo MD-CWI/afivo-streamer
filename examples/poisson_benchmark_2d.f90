@@ -16,8 +16,8 @@ program poisson_benchmark_2d
   integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 3
   integer, parameter :: i_phi = 1
-  integer, parameter :: i_tmp = 2
-  integer, parameter :: i_rhs = 3
+  integer, parameter :: i_tmp = 3
+  integer, parameter :: i_rhs = 2
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info

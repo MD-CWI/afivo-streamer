@@ -30,7 +30,7 @@ program poisson_basic_3d
   character(len=40)  :: fname
   type(gauss_t)      :: gs
   type(mg3_t)        :: mg
-  real               :: t_start, t_finish
+  integer            :: count_rate,t_start, t_end
 
   write(*,'(A)') 'program poisson_basic_3d'
   ! The manufactured solution exists of two Gaussians, which are stored in gs
@@ -77,19 +77,25 @@ program poisson_basic_3d
   call a3_set_base(tree, ix_list, nb_list)
   call a3_print_info(tree)
 
-  call cpu_time(t_start)
+  call system_clock(t_start, count_rate)
   do
      ! For each box, set the initial conditions
      call a3_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
+     ! The second argument is a subroutine that is called for each box that can
+     ! be refined or derefined, and it should set refinement flags. Information
+     ! about the changes in refinement are returned in the third argument.
      call a3_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
-  call cpu_time(t_finish)
-  print '("Time making amr grid = ",f8.2," seconds.")',t_finish-t_start
+  call system_clock(t_end, count_rate)
+  write(*,'(A,f8.2,1x,A,1/)') 'Time making amr grid = ', &
+          (t_end-t_start) / real(count_rate,dp), &
+          ' seconds'
+
   call a3_print_info(tree)
   min_dr = a3_min_dr(tree)
   write(*,'(3(A,2x,Es11.4))') ' dr of finest level:',min_dr
@@ -104,7 +110,7 @@ program poisson_basic_3d
   ! default values where necessary.
   call mg3_init_mg(mg)
 
-  call cpu_time(t_start)
+  call system_clock(t_start, count_rate)
   do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
@@ -130,8 +136,12 @@ program poisson_basic_3d
      write(fname, "(A,I0)") "poisson_basic_3d_", mg_iter
      call a3_write_silo(tree, trim(fname), dir="output")
   end do
-  call cpu_time(t_finish)
-  print '("Time solving by multigrid = ",f8.2," seconds.")',t_finish-t_start
+  call system_clock(t_end, count_rate)
+
+  write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
+           ' Wall-clock time after ',n_iterations, &
+           ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
+           ' seconds'
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.

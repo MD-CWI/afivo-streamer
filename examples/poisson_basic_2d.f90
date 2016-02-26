@@ -12,7 +12,7 @@ program poisson_basic_2d
 
   implicit none
 
-  integer, parameter :: box_size     = 8
+  integer, parameter :: box_size = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 4
@@ -23,14 +23,14 @@ program poisson_basic_2d
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: n_gaussian=1, mg_iter
+  integer            :: n_gaussian=1,mg_iter
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, min_dr, residu(2), anal_err(2)
   character(len=40)  :: fname
   type(gauss_t)      :: gs
   type(mg2_t)        :: mg
-  real               :: t_start, t_finish
+  integer            :: count_rate,t_start, t_end
 
   write(*,'(A)') 'program poisson_basic_2d'
   ! The manufactured solution exists of two Gaussians, which are stored in gs
@@ -77,19 +77,25 @@ program poisson_basic_2d
   call a2_set_base(tree, ix_list, nb_list)
   call a2_print_info(tree)
 
-  call cpu_time(t_start)
+  call system_clock(t_start, count_rate)
   do
      ! For each box, set the initial conditions
      call a2_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
+     ! The second argument is a subroutine that is called for each box that can
+     ! be refined or derefined, and it should set refinement flags. Information
+     ! about the changes in refinement are returned in the third argument.
      call a2_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
-  call cpu_time(t_finish)
-  print '("Time making amr grid = ",f8.2," seconds.")',t_finish-t_start
+  call system_clock(t_end, count_rate)
+  write(*,'(A,f8.2,1x,A,1/)') 'Time making amr grid = ', &
+          (t_end-t_start) / real(count_rate,dp), &
+          ' seconds'
+
   call a2_print_info(tree)
   min_dr = a2_min_dr(tree)
   write(*,'(A,2x,Es11.4)') ' dr of finest level:',min_dr
@@ -102,9 +108,12 @@ program poisson_basic_2d
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
+  ! This routine does not initialize the multigrid variables i_phi, i_rhs
+  ! and i_tmp. These variables will be initialized at the first call
+  ! of mg2_fas_fmg
   call mg2_init_mg(mg)
 
-  call cpu_time(t_start)
+  call system_clock(t_start, count_rate)
   do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
@@ -130,8 +139,12 @@ program poisson_basic_2d
      write(fname, "(A,I0)") "poisson_basic_2d_", mg_iter
      call a2_write_silo(tree, trim(fname), dir="output")
   end do
-  call cpu_time(t_finish)
-  print '("Time solving by multigrid = ",f8.2," seconds.")',t_finish-t_start
+  call system_clock(t_end, count_rate)
+
+  write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
+           ' Wall-clock time after ',n_iterations, &
+           ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
+           ' seconds'
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
