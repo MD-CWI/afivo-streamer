@@ -14,8 +14,6 @@ program test_reduction
   integer              :: nb_list(4, n_boxes_base)
   integer, parameter   :: box_size     = 8
   integer, parameter   :: i_phi        = 1
-  integer, parameter   :: n_var_cell   = 1
-  integer, parameter   :: n_var_face   = 0
   type(ref_info_t)     :: ref_info
   real(dp)             :: dr, max_val, min_val
   type(a2_loc_t)       :: max_loc, min_loc
@@ -50,11 +48,11 @@ program test_reduction
      call a2_tree_min_cc(tree, i_phi, min_val)
      print *, "1 - max/min", max_val, min_val
      call a2_reduction(tree, box_max, max_ab, -huge(1.0_dp), max_val)
-     call a2_reduction(tree, box_min, min_ab, huge(1.0_dp), min_val)
+     call a2_reduction(tree, box_min, min_ab,  huge(1.0_dp), min_val)
      print *, "2 - max/min", max_val, min_val
      call a2_reduction_loc(tree, box_max_ix, max_ab, -huge(1.0_dp), &
           max_val, max_loc)
-     call a2_reduction_loc(tree, box_min_ix, min_ab, huge(1.0_dp), &
+     call a2_reduction_loc(tree, box_min_ix, min_ab,  huge(1.0_dp), &
           min_val, min_loc)
      print *, "3 - max/min", max_val, min_val
      print *, "4 - max/min", tree%boxes(max_loc%id)%cc(max_loc%ix(1), &
@@ -102,18 +100,19 @@ contains
     min_ab = min(a,b)
   end function min_ab
 
-  integer function ref_func(boxes, id)
+  subroutine ref_func(boxes, id, ref_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
+    integer, intent(inout)   :: ref_flag
     real(dp)                 :: rr
 
     call random_number(rr)
     if (rr < 0.2_dp .and. boxes(id)%lvl < 10) then
-       ref_func = a5_do_ref
+       ref_flag = a5_do_ref
     else
-       ref_func = a5_rm_ref
+       ref_flag = a5_rm_ref
     end if
-  end function ref_func
+  end subroutine ref_func
 
   subroutine set_random_values(box)
     type(box2_t), intent(inout) :: box
