@@ -28,11 +28,14 @@ program poisson_basic_2d
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, min_dr, residu(2), anal_err(2)
   character(len=40)  :: fname
-  type(gauss_t)      :: gs
   type(mg2_t)        :: mg
-  integer            :: count_rate,t_start, t_end
+  type(gauss_t)      :: gs
+  integer            :: count_rate,t_start,t_end
 
   write(*,'(A)') 'program poisson_basic_2d'
+
+  call parallel_threads()
+
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   if (n_gaussian==1) then
     ! Amplitudes:  [1.0_dp]

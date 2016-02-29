@@ -33,6 +33,9 @@ program poisson_basic_3d
   integer            :: count_rate,t_start, t_end
 
   write(*,'(A)') 'program poisson_basic_3d'
+  
+  call parallel_threads()
+
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   if (n_gaussian==1) then
     ! Amplitudes:  [1.0_dp]

@@ -25,7 +25,7 @@ program drift_diffusion_3d
   integer            :: ix_list(3, 1)
   integer            :: nb_list(6, 1)
   integer            :: n,n_steps,refine_steps,time_steps,output_cnt
-  real(dp)           :: dt, time, end_time, p_err, n_err
+  real(dp)           :: dt, time, end_time, p_err, n_err,sum_phi
   real(dp)           :: dt_adapt, dt_output
   real(dp)           :: diff_coeff, vel_x, vel_y, vel_z, dr_min(3)
   character(len=40)  :: fname
@@ -35,6 +35,8 @@ program drift_diffusion_3d
   integer            :: time_step_method = 2
 
   write(*,'(A)') 'program drift_diffusion_3d'
+
+  call parallel_threads()
 
   ! Initialize tree
   call a3_init(tree, box_size, n_var_cell=3, n_var_face=2, dr=dr, &
@@ -132,14 +134,14 @@ program drift_diffusion_3d
 
      if (write_out) then
         call a3_loop_box_arg(tree, set_error, [time])
-        call a3_write_silo(tree, trim(fname), output_cnt, time, &
+        call a3_write_vtk(tree, trim(fname), output_cnt, time, &
              ixs_fc=[1], dir="output")
         call a3_tree_max_cc(tree, i_err, p_err)
         call a3_tree_min_cc(tree, i_err, n_err)
-        call a3_tree_sum_cc(tree, i_phi, p_err)
-        write(unit_error,'(2(A,1x,Es12.4))')  &
+        call a3_tree_sum_cc(tree, i_phi, sum_phi)
+        write(unit_error,'(2(A,1x,Es12.4,2x))')  &
                 'max error', max(p_err, abs(n_err)), &
-                'sum phi  ', p_err
+                'sum phi  ', sum_phi
      end if
 
      if (time > end_time) exit
