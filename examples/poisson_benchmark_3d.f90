@@ -16,8 +16,8 @@ program poisson_benchmark_3d
   integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 3
   integer, parameter :: i_phi = 1
-  integer, parameter :: i_tmp = 2
-  integer, parameter :: i_rhs = 3
+  integer, parameter :: i_rhs = 2
+  integer, parameter :: i_tmp = 3
 
   type(a3_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -31,6 +31,8 @@ program poisson_benchmark_3d
   integer            :: count_rate,t_start, t_end
 
   write(*,'(A)') 'program poisson_benchmark_3d'
+
+  call parallel_threads()
 
   filename='input'
   ! Get box size and mesh size from file input_benchmark
@@ -74,12 +76,15 @@ program poisson_benchmark_3d
      call a3_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
+     ! The second argument is a subroutine that is called for each box that can
+     ! be refined or derefined, and it should set refinement flags. Information
+     ! about the changes in refinement are returned in the third argument.
      call a3_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
-    call system_clock(t_end, count_rate)
+  call system_clock(t_end, count_rate)
   write(*,'(A,f8.2,1x,A,1/)') 'Time making amr grid = ', &
           (t_end-t_start) / real(count_rate,dp), &
           ' seconds'
@@ -109,10 +114,10 @@ program poisson_benchmark_3d
      ! fourth argument controls whether to improve the current solution.
      call mg3_fas_fmg(tree, mg, .true., mg_iter>1)
 
-     ! This writes a Silo output file containing the cell-centered values of the
+     ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_benchmark_3d_", mg_iter
-     call a3_write_silo(tree, trim(fname), dir="output")
+     call a3_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
@@ -120,6 +125,10 @@ program poisson_benchmark_3d
            ' Wall-clock time after ',n_iterations, &
            ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
            ' seconds'
+   
+  ! This writes a VTK output file containing the cell-centered values of the
+  ! leaves of the tree (the boxes not covered by refinement).
+  call a3_write_vtk(tree, "poisson_benchmark_3d", dir="output")
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
@@ -129,8 +138,8 @@ contains
 
   ! Return the refinement flag for boxes(id)
   subroutine ref_routine(boxes, id, ref_flag)
-    type(box3_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
+    type(box2_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
+    integer, intent(in)      :: id       ! The index of the current box
     integer, intent(inout)   :: ref_flag
 
     ! Fully refine up to max_ref_lvl

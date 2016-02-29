@@ -16,8 +16,8 @@ program poisson_benchmark_2d
   integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 3
   integer, parameter :: i_phi = 1
-  integer, parameter :: i_tmp = 3
   integer, parameter :: i_rhs = 2
+  integer, parameter :: i_tmp = 3
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -31,6 +31,8 @@ program poisson_benchmark_2d
   integer            :: count_rate,t_start, t_end
 
   write(*,'(A)') 'program poisson_benchmark_2d'
+
+  call parallel_threads()
 
   filename='input'
   ! Get box size and mesh size from file input_benchmark
@@ -112,10 +114,10 @@ program poisson_benchmark_2d
      ! fourth argument controls whether to improve the current solution.
      call mg2_fas_fmg(tree, mg, .true., mg_iter>1)
 
-     ! This writes a Silo output file containing the cell-centered values of the
+     ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
-     write(fname, "(A,I0)") "poisson_benchmark_2d_", mg_iter
-     call a2_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "poisson_benchmark_3d_", mg_iter
+     call a2_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
@@ -123,6 +125,10 @@ program poisson_benchmark_2d
            ' Wall-clock time after ',n_iterations, &
            ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
            ' seconds'
+   
+  ! This writes a VTK output file containing the cell-centered values of the
+  ! leaves of the tree (the boxes not covered by refinement).
+  call a2_write_vtk(tree, "poisson_benchmark_2d", dir="output")
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
