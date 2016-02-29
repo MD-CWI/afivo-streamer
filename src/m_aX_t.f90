@@ -307,6 +307,7 @@ contains
 !$omp parallel shared(num_threads,max_threads)
     num_threads  = OMP_get_num_threads()
 !$omp end parallel
+    max_threads  = OMP_get_max_threads()
     write(*,'(2(A,1x,i3,2x))') &
             'num_threads=',num_threads, &
             'max_threads=',max_threads
