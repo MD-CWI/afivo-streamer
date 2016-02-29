@@ -1,4 +1,4 @@
-SRC_ND	:= m_morton.f90 m_vtk.f90 m_write_silo.o
+SRC_ND	:= m_morton.f90 m_vtk.f90 m_write_silo.f90 omp_lib.f90
 SRC_XD	:= m_aX_t.f90 m_aX_core.f90 m_aX_io.f90 m_aX_gc.f90 \
 		m_aX_restrict.f90 m_aX_prolong.f90 m_aX_utils.f90 \
 		m_aX_mg.f90 m_aX_interp.f90
@@ -40,6 +40,7 @@ m_a2_prolong.o:		m_a2_t.o
 m_a2_interp.o:      m_a2_utils.o
 m_a2_utils.o:		m_a2_t.o
 m_a2_mg:			m_a2_t.o m_a2_utils.o
+m_a2_t:			omp_lib.o
 
 m_a3_core.o:		m_morton.o m_a3_t.o
 m_a3_io.o:			m_vtk.o m_write_silo.o m_a3_t.o m_a3_interp.o
@@ -49,6 +50,7 @@ m_a3_prolong.o:		m_a3_t.o
 m_a3_interp.o:      m_a3_utils.o
 m_a3_utils.o:		m_a3_t.o
 m_a3_mg:			m_a3_t.o m_a3_utils.o
+m_a3_t:			omp_lib.o
 
 m_write_silo.o:		INCDIRS += ../silo/include
 m_write_silo.o:		FFLAGS += -Wno-implicit-interface

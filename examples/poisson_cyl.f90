@@ -1,4 +1,4 @@
-!> \example test_mg_cyl.f90
+!> \example poisson_cyl.f90
 !>
 !> Example showing how to use multigrid and compare with an analytic solution. A
 !> standard 5-point Laplacian is used in cylindrical coordinates.
@@ -7,8 +7,8 @@ program poisson_cyl
   use m_a2_core
   use m_a2_mg
   use m_a2_utils
-  use m_gaussians
   use m_a2_io
+  use m_gaussians
 
   implicit none
 
@@ -23,16 +23,18 @@ program poisson_cyl
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: mg_iter
+  integer            :: mg_iter,ref_iter
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, min_res, max_res
   character(len=40)  :: fname
-  type(gauss_t)      :: gs
   type(mg2_t)        :: mg
+  type(gauss_t)      :: gs
   integer            :: count_rate,t_start, t_end
 
   write(*,'(A)') 'program poisson_cyl'
+
+  call parallel_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
@@ -182,8 +184,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           rz = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - &
-               gauss_val(gs, rz)
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_val(gs, rz)
        end do
     end do
   end subroutine set_err

@@ -7,8 +7,8 @@ program poisson_cyl_dielectric
   use m_a2_core
   use m_a2_mg
   use m_a2_utils
-  use m_gaussians
   use m_a2_io
+  use m_gaussians
 
   implicit none
 
@@ -34,6 +34,8 @@ program poisson_cyl_dielectric
   integer            :: count_rate,t_start, t_end
 
   write(*,'(A)') 'program poisson_cyl_dielectric'
+  
+  call parallel_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &

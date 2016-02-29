@@ -138,7 +138,7 @@ contains
 
   ! Return the refinement flag for boxes(id)
   subroutine ref_routine(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
+    type(box3_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
     integer, intent(in)      :: id       ! The index of the current box
     integer, intent(inout)   :: ref_flag
 

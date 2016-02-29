@@ -25,6 +25,8 @@ program random_refinement_3d
 
   write(*,'(A)') 'program random_refinement_3d'
 
+  call parallel_threads()
+
   ! The cell spacing at the coarsest grid level
   dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
 
