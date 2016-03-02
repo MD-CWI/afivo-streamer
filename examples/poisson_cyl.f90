@@ -23,7 +23,7 @@ program poisson_cyl
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: mg_iter,ref_iter
+  integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, min_res, max_res

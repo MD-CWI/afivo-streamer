@@ -1,4 +1,4 @@
-!> \example test_mg_cyl_diel.f90
+!> \example poisson_cyl_dielectric.f90
 !>
 !> Example showing how to use m_a2_mg in cylindrical coordinates with an abrubt
 !> change in "eps", and compare with an analytic solution.
