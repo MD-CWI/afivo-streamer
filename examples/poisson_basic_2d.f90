@@ -137,10 +137,10 @@ program poisson_basic_2d
                                       "max error: ",    maxval(abs(anal_err)), &
                                       "min dr: ",min_dr
 
-     ! This writes a Silo output file containing the cell-centered values of the
+     ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_basic_2d_", mg_iter
-     call a2_write_silo(tree, trim(fname), dir="output")
+     call a2_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
@@ -174,7 +174,7 @@ contains
           ! which is related to the fourth derivative of the solution.
           drhs = dr2 * gauss_4th(gs, xy) / 12
 
-          if (abs(drhs) > 1.0_dp) then
+          if (abs(drhs) > 0.05_dp) then
              ref_flag = a5_do_ref
              exit outer
           end if
