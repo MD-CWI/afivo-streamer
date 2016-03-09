@@ -13,7 +13,6 @@ program poisson_benchmark_2d
   implicit none
 
   integer, parameter :: n_boxes_base = 1
-  integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 3
   integer, parameter :: i_phi = 1
   integer, parameter :: i_rhs = 2
@@ -21,38 +20,54 @@ program poisson_benchmark_2d
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: box_size, mg_iter
+  integer            :: mg_iter, n_args
+  integer            :: n_cell, n_iterations, max_ref_lvl
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  integer            :: mesh_size,max_ref_lvl
   real(dp)           :: dr
-  character(len=40)  :: fname,filename
+  character(len=40)  :: fname, arg_string
   type(mg2_t)        :: mg
   integer            :: count_rate,t_start, t_end
 
-  write(*,'(A)') 'program poisson_benchmark_2d'
-
+  print *, "Running poisson_benchmark_2d"
   print *, "Number of threads", a5_get_max_threads()
 
-  filename='input'
-  ! Get box size and mesh size from file input_benchmark
-  open(unit=5,file=trim(filename),status='UNKNOWN',position='REWIND')
-  read(5, *) box_size
-  read(5, *) mesh_size
+  ! Get box size and mesh size from command line argument
+  n_args = command_argument_count()
 
-  ! Determine maximum refinement level
-  max_ref_lvl = nint(log(mesh_size / real(box_size, dp)) / log(2.0_dp)) + 1
+  if (n_args >= 1) then
+     call get_command_argument(1, arg_string)
+     read(arg_string, *) n_cell
+  else
+     print *, "No arguments specified, using default values"
+     print *, "Usage: ./poisson_benchmark_2d n_cell max_ref_lvl n_iterations"
+     n_cell = 16
+  end if
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
+  if (n_args >= 2) then
+     call get_command_argument(2, arg_string)
+     read(arg_string, *) max_ref_lvl
+  else
+     max_ref_lvl = 4
+  end if
 
-  write(*,'(A,i4)') 'Box size             :', box_size
-  write(*,'(A,i4)') 'Mesh size            :', 2**(max_ref_lvl-1) * box_size
-  write(*,'(A,i4)') 'Max refinement level :', max_ref_lvl
+  if (n_args >= 3) then
+     call get_command_argument(3, arg_string)
+     read(arg_string, *) n_iterations
+  else
+     n_iterations = 100
+  end if
+
+  print *, "Box size:           ", n_cell
+  print *, "Max refinement lvl: ", max_ref_lvl
+  print *, "Num iterations:     ", n_iterations
+  print *, ""
+
+  dr = 1.0_dp / n_cell
 
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
-       box_size, &     ! A box contains box_size**DIM cells
+       n_cell, &       ! A box contains box_size**DIM cells
        n_var_cell, &   ! Number of cell-centered variables
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
@@ -85,13 +100,11 @@ program poisson_benchmark_2d
      if (ref_info%n_add == 0) exit
   end do
   call system_clock(t_end, count_rate)
-  write(*,'(A,f8.2,1x,A,1/)') 'Time making amr grid = ', &
-          (t_end-t_start) / real(count_rate,dp), &
-          ' seconds'
+
+  write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
+       (t_end-t_start) / real(count_rate,dp), " seconds"
 
   call a2_print_info(tree)
-  dr = a2_min_dr(tree)
-  write(*,'(A,2x,Es11.4)') ' dr of finest level:',dr
 
   ! Set the multigrid options.
   mg%i_phi        = i_phi       ! Solution variable
@@ -100,10 +113,9 @@ program poisson_benchmark_2d
   mg%sides_bc     => a2_bc_dirichlet_zero ! Method for boundary conditions
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary.
-  ! This routine does not initialize the multigrid variables i_phi, i_rhs
-  ! and i_tmp. These variables will be initialized at the first call
-  ! of mg2_fas_fmg
+  ! default values where necessary. This routine does not initialize the
+  ! multigrid variables i_phi, i_rhs and i_tmp. These variables will be
+  ! initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   ! Do the actual benchmarking
@@ -114,21 +126,22 @@ program poisson_benchmark_2d
      ! fourth argument controls whether to improve the current solution.
      call mg2_fas_fmg(tree, mg, .true., mg_iter>1)
 
-     ! This writes a VTK output file containing the cell-centered values of the
-     ! leaves of the tree (the boxes not covered by refinement).
-     write(fname, "(A,I0)") "poisson_benchmark_3d_", mg_iter
-     call a2_write_vtk(tree, trim(fname), dir="output")
+     ! If uncommented, this writes Silo output files containing the
+     ! cell-centered values of the leaves of the tree
+     ! write(fname, "(A,I0)") "poisson_benchmark_3d_", mg_iter
+     ! call a2_write_silo(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
-  write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
-           ' Wall-clock time after ',n_iterations, &
-           ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
-           ' seconds'
-   
+  write(*, "(A,I0,A,E10.3,A)") &
+       " Wall-clock time after ", n_iterations, &
+       " iterations: ", (t_end-t_start) / real(count_rate, dp), &
+       " seconds"
+
   ! This writes a VTK output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
-  call a2_write_vtk(tree, "poisson_benchmark_2d", dir="output")
+  fname = "poisson_benchmark_2d"
+  call a2_write_silo(tree, trim(fname), dir="output")
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.

@@ -26,36 +26,36 @@ program poisson_basic_3d
   integer            :: n_gaussian=1,mg_iter
   integer            :: ix_list(3, n_boxes_base)
   integer            :: nb_list(6, n_boxes_base)
-  real(dp)           :: dr, min_dr, residu(2), anal_err(2)
-  character(len=40)  :: fname
+  real(dp)           :: dr, residu(2), anal_err(2)
+  character(len=100) :: fname
   type(gauss_t)      :: gs
   type(mg3_t)        :: mg
   integer            :: count_rate,t_start, t_end
 
-  write(*,'(A)') 'program poisson_basic_3d'
-  
+  print *, "Running poisson_basic_3d"
   print *, "Number of threads", a5_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   if (n_gaussian==1) then
-    ! Amplitudes:  [1.0_dp]
-    ! Sigmas    :  [0.04_dp]
-    ! Locations :  [0.5_dp, 0.5_dp, 0.5_dp]
-    call gauss_init(gs, [1.0_dp], [4.00E-2_dp], &
-         reshape([0.5_dp, 0.5_dp, 0.5_dp], [3,1]))
+     ! Amplitudes:  [1.0_dp]
+     ! Sigmas    :  [0.04_dp]
+     ! Locations :  [0.5_dp, 0.5_dp, 0.5_dp]
+     call gauss_init(gs, [1.0_dp], [4.00E-2_dp], &
+          reshape([0.5_dp, 0.5_dp, 0.5_dp], [3,1]))
   else if (n_gaussian==2) then
-    ! Amplitudes:  [1.0_dp, 1.0_dp]
-    ! Sigmas    :  [0.04_dp, 0.04_dp]
-    ! Locations :  reshape([0.25_dp, 0.25_dp, 0.5_dp, 0.75_dp, 0.75_dp, 0.5_dp], [3,2]))
-    call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-         reshape([0.25_dp, 0.25_dp, 0.5_dp, 0.75_dp, 0.75_dp, 0.5_dp], [3,2]))
+     ! Amplitudes:  [1.0_dp, 1.0_dp]
+     ! Sigmas    :  [0.04_dp, 0.04_dp]
+     ! Locations :  [0.25_dp, 0.25_dp, 0.5_dp], [0.75_dp, 0.75_dp, 0.5_dp]
+     call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
+          reshape([0.25_dp, 0.25_dp, 0.5_dp, 0.75_dp, 0.75_dp, 0.5_dp], [3,2]))
   end if
+
   write(*,'(2(A11,2x,i2,/),2(A11,2x,Es10.2,/),A11,2x,3(Es10.2,1x))') &
-          'gs%n_gauss:',gs%n_gauss, &
-          'gs%n_dim  :',gs%n_dim, &
-          'gs%ampl   :',gs%ampl, &
-          'gs%sigma  :',gs%sigma, &
-          'gs%r0     :',gs%r0
+       'gs%n_gauss:',gs%n_gauss, &
+       'gs%n_dim  :',gs%n_dim, &
+       'gs%ampl   :',gs%ampl, &
+       'gs%sigma  :',gs%sigma, &
+       'gs%r0     :',gs%r0
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
@@ -95,13 +95,11 @@ program poisson_basic_3d
      if (ref_info%n_add == 0) exit
   end do
   call system_clock(t_end, count_rate)
-  write(*,'(A,f8.2,1x,A,1/)') 'Time making amr grid = ', &
-          (t_end-t_start) / real(count_rate,dp), &
-          ' seconds'
+
+  write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
+       (t_end-t_start) / real(count_rate,dp), " seconds"
 
   call a3_print_info(tree)
-  min_dr = a3_min_dr(tree)
-  write(*,'(3(A,2x,Es11.4))') ' dr of finest level:',min_dr
 
   ! Set the multigrid options.
   mg%i_phi        = i_phi       ! Solution variable
@@ -113,6 +111,7 @@ program poisson_basic_3d
   ! default values where necessary.
   call mg3_init_mg(mg)
 
+  print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
   do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
@@ -128,23 +127,20 @@ program poisson_basic_3d
      call a3_tree_max_cc(tree, i_tmp, residu(2))
      call a3_tree_min_cc(tree, i_err, anal_err(1))
      call a3_tree_max_cc(tree, i_err, anal_err(2))
-     min_dr = a3_min_dr(tree)
-     write(*,'(A,1x,I3,3(1x,A13,1x,Es12.5))') & 
-       'Multigrid iteration',mg_iter, "max residual: ", maxval(abs(residu)), &
-                                      "max error: ",    maxval(abs(anal_err)), &
-                                      "min dr: ",min_dr
+     write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
+          maxval(abs(anal_err))
 
-     ! This writes a VTK output file containing the cell-centered values of the
+     ! This writes a Silo output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_basic_3d_", mg_iter
-     call a3_write_vtk(tree, trim(fname), dir="output")
+     call a3_write_silo(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
-  write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
-           ' Wall-clock time after ',n_iterations, &
-           ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
-           ' seconds'
+  write(*, "(A,I0,A,E10.3,A)") &
+       " Wall-clock time after ", n_iterations, &
+       " iterations: ", (t_end-t_start) / real(count_rate, dp), &
+       " seconds"
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
@@ -172,7 +168,7 @@ contains
              ! which is related to the fourth derivative of the solution.
              drhs = dr2 * gauss_4th(gs, xyz) / 12
 
-             if (abs(drhs) > 0.05_dp) then
+             if (abs(drhs) > 0.5_dp) then
                 ref_flag = a5_do_ref
                 exit outer
              end if

@@ -26,14 +26,13 @@ program poisson_cyl
   integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr, min_res, max_res
-  character(len=40)  :: fname
+  real(dp)           :: dr, residu(2), anal_err(2)
+  character(len=100) :: fname
   type(mg2_t)        :: mg
   type(gauss_t)      :: gs
   integer            :: count_rate,t_start, t_end
 
-  write(*,'(A)') 'program poisson_cyl'
-
+  print *, "Running poisson_cyl"
   print *, "Number of threads", a5_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
@@ -76,13 +75,11 @@ program poisson_cyl
      if (ref_info%n_add == 0) exit
   end do
   call system_clock(t_end, count_rate)
-  write(*,'(A,f8.2,1x,A,1/)') 'Time making amr grid = ', &
-          (t_end-t_start) / real(count_rate,dp), &
-          ' seconds'
+
+  write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
+       (t_end-t_start) / real(count_rate,dp), " seconds"
 
   call a2_print_info(tree)
-  dr = a2_min_dr(tree)
-  write(*,'(A,2x,Es11.4)') ' dr of finest level:',dr
 
   ! Set the multigrid options.
   mg%i_phi        = i_phi       ! Solution variable
@@ -96,14 +93,14 @@ program poisson_cyl
   mg%box_corr     => mg2_auto_corr
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary.
-  ! This routine does not initialize the multigrid variables i_phi, i_rhs
-  ! and i_tmp. These variables will be initialized at the first call
-  ! of mg2_fas_fmg
+  ! default values where necessary. This routine does not initialize the
+  ! multigrid variables i_phi, i_rhs and i_tmp. These variables will be
+  ! initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
-  ! Do the actual benchmarking
+  print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
+
   do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
@@ -113,22 +110,23 @@ program poisson_cyl
      ! Compute the error compared to the analytic solution
      call a2_loop_box(tree, set_err)
 
-     ! Determine the minimum and maximum residual
-     call a2_tree_min_cc(tree, i_tmp, min_res)
-     call a2_tree_max_cc(tree, i_tmp, max_res)
-     write(*,'(A,i3,2x,A,Es12.4)')  &
-             "Iteration ", mg_iter, &
-             "max residual: ", max(abs(min_res), abs(max_res))
+     ! Determine the minimum and maximum residual and error
+     call a2_tree_min_cc(tree, i_tmp, residu(1))
+     call a2_tree_max_cc(tree, i_tmp, residu(2))
+     call a2_tree_min_cc(tree, i_err, anal_err(1))
+     call a2_tree_max_cc(tree, i_err, anal_err(2))
+     write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
+          maxval(abs(anal_err))
 
      write(fname, "(A,I0)") "poisson_cyl_", mg_iter
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
-  write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
-           ' Wall-clock time after ',n_iterations, &
-           ' multigrid iterations: ', (t_end-t_start) / real(count_rate, dp), &
-           ' seconds'
+  write(*, "(A,I0,A,E10.3,A)") &
+       " Wall-clock time after ", n_iterations, &
+       " iterations: ", (t_end-t_start) / real(count_rate, dp), &
+       " seconds"
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.

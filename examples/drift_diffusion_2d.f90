@@ -21,21 +21,20 @@ program drift_diffusion_2d
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i, id,unit_error
+  integer            :: i, id
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
-  integer            :: n,n_steps,refine_steps,time_steps,output_cnt
-  real(dp)           :: dt, time, end_time, p_err, n_err,sum_phi
+  integer            :: n, n_steps, refine_steps, time_steps, output_cnt
+  real(dp)           :: dt, time, end_time, p_err, n_err, sum_phi
   real(dp)           :: dt_adapt, dt_output
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
-  character(len=40)  :: fname
-  integer            :: count_rate,t_start,t_end
+  character(len=100) :: fname
+  integer            :: count_rate, t_start, t_end
 
   logical            :: write_out
   integer            :: time_step_method = 2
 
-  write(*,'(A)') 'program drift_diffusion_2d'
-
+  print *, "Running drift_diffusion_2d"
   print *, "Number of threads", a5_get_max_threads()
 
   ! Initialize tree
@@ -61,20 +60,17 @@ program drift_diffusion_2d
   vel_y      = 1.0_dp
 
   ! Set up the initial conditions
-  call system_clock(t_start,count_rate)
-  refine_steps=0
-  do
-     refine_steps=refine_steps+1
+  call system_clock(t_start, count_rate)
+  do refine_steps = 1, 100
      ! We should only set the finest level, but this also works
      call a2_loop_box(tree, set_init_cond)
 
      ! Fill ghost cells for variables i_phi on the sides of all boxes, using
-     ! a2_gc_interp_lim on refinement boundaries:
-     !   Interpolation between fine points and coarse neighbors to fill ghost cells
-     !   near refinement boundaries. The ghost values are less than twice the coarse
-     !   values.
-     ! and a2_bc_neumann_zero physical boundaries:
-     !   fill ghost cells near physical boundaries using Neumann zero
+     ! a2_gc_interp_lim on refinement boundaries: Interpolation between fine
+     ! points and coarse neighbors to fill ghost cells near refinement
+     ! boundaries. The ghost values are less than twice the coarse values. and
+     ! a2_bc_neumann_zero physical boundaries: fill ghost cells near physical
+     ! boundaries using Neumann zero
 
      call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
 
@@ -85,14 +81,13 @@ program drift_diffusion_2d
      if (ref_info%n_add == 0) exit
   end do
   call system_clock(t_end,count_rate)
-  write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
-           ' Wall-clock time after ',refine_steps, &
-           ' refinement staps: ', (t_end-t_start) / real(count_rate, dp), &
-           ' seconds'
+
+  write(*, "(A,i0,A,Es10.3,A)") &
+       " Wall-clock time for ",refine_steps, &
+       " refinement steps: ", (t_end-t_start) / real(count_rate, dp), &
+       " seconds"
 
   call a2_print_info(tree)
-  dr_min = a2_min_dr(tree)
-  write(*,'(A,2(2x,Es11.4))') ' dr of finest level:',dr_min
 
   ! Restrict the initial conditions
   ! Restrict the children of a box to the box (e.g., in 2D, average the values
@@ -103,15 +98,13 @@ program drift_diffusion_2d
 
   select case (time_step_method)
   case (1)
-     print *,'Forward Euler'
+     print *,"Time stepping: forward Euler"
   case (2)
-     print*,'Two forward Euler steps over dt'
+     print*, "Time stepping: explicit trapezoidal rule"
   end select
 
-  call system_clock(t_start,count_rate)
+  call system_clock(t_start, count_rate)
   time_steps = 0
-  open(newunit=unit_error,file='drift_error_2d',status='UNKNOWN', &
-       position='REWIND')
 
   ! Starting simulation
   do
@@ -138,9 +131,9 @@ program drift_diffusion_2d
         call a2_tree_max_cc(tree, i_err, p_err)
         call a2_tree_min_cc(tree, i_err, n_err)
         call a2_tree_sum_cc(tree, i_phi, sum_phi)
-        write(unit_error,'(2(A,1x,Es12.4,2x))')  &
-                'max error', max(p_err, abs(n_err)), &
-                'sum phi  ', sum_phi
+        write(*, "(2(A,1x,Es12.4,2x))")  &
+             " max error:", max(p_err, abs(n_err)), &
+             "sum phi:  ", sum_phi
      end if
 
      if (time > end_time) exit
@@ -184,10 +177,10 @@ program drift_diffusion_2d
      call a2_tidy_up(tree, 0.8_dp, 10000)
   end do
   call system_clock(t_end,count_rate)
-   write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
-           ' Wall-clock time after ',time_steps, &
-           ' time steps: ', (t_end-t_start) / real(count_rate, dp), &
-           ' seconds'
+  write(*, "(A,I0,A,Es10.3,A)") &
+       " Wall-clock time after ",time_steps, &
+       " time steps: ", (t_end-t_start) / real(count_rate, dp), &
+       " seconds"
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
