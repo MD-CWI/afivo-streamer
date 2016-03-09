@@ -34,7 +34,7 @@ program poisson_basic_3d
 
   write(*,'(A)') 'program poisson_basic_3d'
   
-  call parallel_threads()
+  print *, "Number of threads", a5_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   if (n_gaussian==1) then

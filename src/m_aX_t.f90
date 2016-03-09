@@ -299,19 +299,11 @@ module m_a$D_t
 
 contains
 
-  subroutine parallel_threads()
+  ! Get number of threads
+  integer function a5_get_max_threads()
     use omp_lib
-
-    integer(kind= OMP_integer_kind) :: num_threads=-1,max_threads=-1
-
-!$omp parallel shared(num_threads,max_threads)
-    num_threads  = OMP_get_num_threads()
-!$omp end parallel
-    max_threads  = OMP_get_max_threads()
-    write(*,'(2(A,1x,i3,2x))') &
-            'num_threads=',num_threads, &
-            'max_threads=',max_threads
-  end subroutine parallel_threads
+    a5_get_max_threads = OMP_get_max_threads()
+  end function a5_get_max_threads
 
     !> Get tree info
   subroutine a$D_print_info(tree)

@@ -36,7 +36,7 @@ program drift_diffusion_2d
 
   write(*,'(A)') 'program drift_diffusion_2d'
 
-  call parallel_threads()
+  print *, "Number of threads", a5_get_max_threads()
 
   ! Initialize tree
   call a2_init(tree, box_size, n_var_cell=3, n_var_face=1, dr=dr, &

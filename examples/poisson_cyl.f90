@@ -34,7 +34,7 @@ program poisson_cyl
 
   write(*,'(A)') 'program poisson_cyl'
 
-  call parallel_threads()
+  print *, "Number of threads", a5_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &

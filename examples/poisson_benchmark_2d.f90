@@ -32,7 +32,7 @@ program poisson_benchmark_2d
 
   write(*,'(A)') 'program poisson_benchmark_2d'
 
-  call parallel_threads()
+  print *, "Number of threads", a5_get_max_threads()
 
   filename='input'
   ! Get box size and mesh size from file input_benchmark

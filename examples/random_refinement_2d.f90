@@ -25,7 +25,7 @@ program random_refinement_2d
 
   write(*,'(A)') 'program random_refinement_2d'
 
-  call parallel_threads()
+  print *, "Number of threads", a5_get_max_threads()
 
   ! The cell spacing at the coarsest grid level
   dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
