@@ -108,9 +108,9 @@ contains
 
     call random_number(rr)
     if (rr < 0.2_dp .and. boxes(id)%lvl < 10) then
-       ref_flag = a5_do_ref
+       ref_flag = af_do_ref
     else
-       ref_flag = a5_rm_ref
+       ref_flag = af_rm_ref
     end if
   end subroutine ref_func
 
