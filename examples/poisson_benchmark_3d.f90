@@ -61,7 +61,6 @@ program poisson_benchmark_3d
   print *, "Box size:           ", n_cell
   print *, "Max refinement lvl: ", max_ref_lvl
   print *, "Num iterations:     ", n_iterations
-  print *, ""
 
   dr = 1.0_dp / n_cell
 
