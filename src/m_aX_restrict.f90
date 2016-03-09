@@ -30,7 +30,7 @@ contains
     nc = boxes(id)%n_cell
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
-       if (c_id == a5_no_box) cycle
+       if (c_id == af_no_box) cycle
        call a$D_restrict_box(boxes(c_id), boxes(id), iv, iv_to)
     end do
   end subroutine a$D_restrict_to_box
@@ -87,7 +87,7 @@ contains
     end if
 
 #if $D == 2
-    if (box_p%coord_t == a5_cyl) then
+    if (box_p%coord_t == af_cyl) then
        do j = 1, hnc
           j_c = ix_offset(2) + j
           j_f = 2 * j - 1

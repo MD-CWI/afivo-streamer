@@ -33,7 +33,7 @@ program poisson_basic_2d
   integer            :: count_rate,t_start,t_end
 
   print *, "Running poisson_basic_2d"
-  print *, "Number of threads", a5_get_max_threads()
+  print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists Gaussians, which are stored in gs
   if (n_gaussian == 1) then
@@ -172,7 +172,7 @@ contains
           drhs = dr2 * gauss_4th(gs, xy) / 12
 
           if (abs(drhs) > 0.05_dp) then
-             ref_flag = a5_do_ref
+             ref_flag = af_do_ref
              exit outer
           end if
        end do
@@ -226,7 +226,7 @@ contains
     nc = box%n_cell
 
     ! We use dirichlet boundary conditions
-    bc_type = a5_bc_dirichlet
+    bc_type = af_bc_dirichlet
 
     ! Below the solution is specified in the approriate ghost cells
     select case (nb)

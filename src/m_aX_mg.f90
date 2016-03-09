@@ -387,7 +387,7 @@ contains
 
        do i_c = 1, a$D_num_children
           c_id = boxes(id)%children(i_c)
-          if (c_id == a5_no_box) cycle
+          if (c_id == af_no_box) cycle
           call mg%box_corr(boxes(id), boxes(c_id), mg)
        end do
     end do
@@ -564,12 +564,12 @@ contains
     integer, intent(in)         :: redblack_cntr
     type(mg$D_t), intent(in)     :: mg
 
-    if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
+    if (box%tag == af_init_tag) call mg$D_set_box_tag(box, mg)
 
     select case(box%tag)
 #if $D == 2
     case (mg_normal_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_gsrb_clpl(box, redblack_cntr, mg)
        else
           call mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
@@ -577,7 +577,7 @@ contains
     case (mg_lsf_box)
        call mg$D_box_gsrb_lpllsf(box, redblack_cntr, mg)
     case (mg_veps_box, mg_ceps_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_gsrb_clpld(box, redblack_cntr, mg)
        else
           call mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
@@ -599,12 +599,12 @@ contains
     integer, intent(in)         :: i_out
     type(mg$D_t), intent(in)     :: mg
 
-    if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
+    if (box%tag == af_init_tag) call mg$D_set_box_tag(box, mg)
 
     select case(box%tag)
 #if $D == 2
     case (mg_normal_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_clpl(box, i_out, mg)
        else
           call mg$D_box_lpl(box, i_out, mg)
@@ -612,7 +612,7 @@ contains
     case (mg_lsf_box)
        call mg$D_box_lpllsf(box, i_out, mg)
     case (mg_veps_box, mg_ceps_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_clpld(box, i_out, mg)
        else
           call mg$D_box_lpld(box, i_out, mg)
@@ -636,7 +636,7 @@ contains
     type(mg$D_t), intent(in)     :: mg
 
     ! We can only restrict after gsrb, so tag should always be set
-    if (box_c%tag == a5_init_tag) stop "mg$D_auto_rstr: box_c tag not set"
+    if (box_c%tag == af_init_tag) stop "mg$D_auto_rstr: box_c tag not set"
 
     select case(box_c%tag)
     case (mg_normal_box, mg_veps_box, mg_ceps_box)
@@ -652,7 +652,7 @@ contains
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
 
-    if (box_c%tag == a5_init_tag) call mg$D_set_box_tag(box_c, mg)
+    if (box_c%tag == af_init_tag) call mg$D_set_box_tag(box_c, mg)
 
     select case(box_c%tag)
     case (mg_normal_box)

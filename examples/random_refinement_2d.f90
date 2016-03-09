@@ -25,7 +25,7 @@ program random_refinement_2d
 
   write(*,'(A)') 'program random_refinement_2d'
 
-  print *, "Number of threads", a5_get_max_threads()
+  print *, "Number of threads", af_get_max_threads()
 
   ! The cell spacing at the coarsest grid level
   dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
@@ -119,9 +119,9 @@ contains
     call random_number(rr)
 
     if (rr < 0.5_dp**0.25_dp .and. boxes(id)%lvl < 7) then
-       ref_flag = a5_do_ref   ! Add refinement
+       ref_flag = af_do_ref   ! Add refinement
     else
-       ref_flag = a5_rm_ref   ! Ask to remove this box, which will not always
+       ref_flag = af_rm_ref   ! Ask to remove this box, which will not always
                               ! happen (see documentation)
     end if
   end subroutine ref_routine

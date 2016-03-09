@@ -30,7 +30,7 @@ program poisson_benchmark_3d
   integer            :: count_rate,t_start, t_end
 
   print *, "Running poisson_benchmark_3d"
-  print *, "Number of threads", a5_get_max_threads()
+  print *, "Number of threads", af_get_max_threads()
 
   ! Get box size and mesh size from command line argument
   n_args = command_argument_count()
@@ -156,7 +156,7 @@ contains
     integer, intent(inout)   :: ref_flag
 
     ! Fully refine up to max_ref_lvl
-    if (boxes(id)%lvl < max_ref_lvl) ref_flag = a5_do_ref
+    if (boxes(id)%lvl < max_ref_lvl) ref_flag = af_do_ref
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box

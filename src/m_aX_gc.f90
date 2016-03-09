@@ -57,9 +57,9 @@ contains
 
     do nb = 1, a$D_num_neighbors
        nb_id = boxes(id)%neighbors(nb)
-       if (nb_id > a5_no_box) then
+       if (nb_id > af_no_box) then
           call sides_from_nb(boxes(id), boxes(nb_id), nb, iv)
-       else if (nb_id == a5_no_box) then
+       else if (nb_id == af_no_box) then
           call subr_rb(boxes, id, nb, iv)
        else
           call subr_bc(boxes(id), nb, iv, bc_type)
@@ -84,10 +84,10 @@ contains
     ! A Neumann b.c. can be imposed as y = x +/- dx * b
     ! Below, we set coefficients c1 and c2 to handle both cases
     select case (bc_type)
-    case (a5_bc_dirichlet)
+    case (af_bc_dirichlet)
        c1 = -1
        c2 = 2
-    case (a5_bc_neumann)
+    case (af_bc_neumann)
        c1 = 1
        c2 = box%dr * a$D_neighb_high_pm(nb) ! This gives a + or - sign
     case default
@@ -363,7 +363,7 @@ contains
     integer, intent(in)         :: nb, iv
     integer, intent(out)        :: bc_type
 
-    bc_type = a5_bc_neumann
+    bc_type = af_bc_neumann
     call a$D_set_box_gc(box, nb, iv, 0.0_dp)
   end subroutine a$D_bc_neumann_zero
 
@@ -373,7 +373,7 @@ contains
     integer, intent(in)         :: nb, iv
     integer, intent(out)        :: bc_type
 
-    bc_type = a5_bc_dirichlet
+    bc_type = af_bc_dirichlet
     call a$D_set_box_gc(box, nb, iv, 0.0_dp)
   end subroutine a$D_bc_dirichlet_zero
 
@@ -433,13 +433,13 @@ contains
 
     do nb = 1, a$D_num_neighbors
        nb_id = boxes(id)%neighbors(nb)
-       if (nb_id > a5_no_box) then
+       if (nb_id > af_no_box) then
 #if $D == 2
           call sides2_from_nb(boxes(nb_id), nb, iv, gc_data(:, nb), nc)
 #elif $D == 3
           call sides2_from_nb(boxes(nb_id), nb, iv, gc_data(:, :, nb), nc)
 #endif
-       else if (nb_id == a5_no_box) then
+       else if (nb_id == af_no_box) then
 #if $D == 2
           call subr_rb(boxes, id, nb, iv, gc_data(:, nb), nc)
 #elif $D == 3

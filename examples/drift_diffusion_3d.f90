@@ -35,7 +35,7 @@ program drift_diffusion_3d
   integer            :: time_step_method = 2
 
   print *, "Running drift_diffusion_3d"
-  print *, "Number of threads", a5_get_max_threads()
+  print *, "Number of threads", af_get_max_threads()
 
   ! Initialize tree
   call a3_init(tree, box_size, n_var_cell=3, n_var_face=2, dr=dr, &
@@ -209,11 +209,11 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    ref_flag = a5_keep_ref
+    ref_flag = af_keep_ref
     if (boxes(id)%lvl < 3 .or. diff > 0.1_dp) then
-       ref_flag = a5_do_ref
+       ref_flag = af_do_ref
     else if (boxes(id)%lvl > 4 .and. diff < 0.2_dp * 0.05) then
-       ref_flag = a5_rm_ref
+       ref_flag = af_rm_ref
     end if
   end subroutine ref_routine
 

@@ -171,7 +171,7 @@ contains
        n = n_cc + (i-1)*$D
        tmp_name = tree%fc_names(ifc_val(i))
 #if $D == 2
-       if (tree%coord_t == a5_cyl) then
+       if (tree%coord_t == af_cyl) then
           var_names(n+1) = trim(tmp_name) // "_r"
           var_names(n+2) = trim(tmp_name) // "_z"
        else
@@ -373,7 +373,7 @@ contains
        n = n_cc + (i-1)*$D
        tmp_name = tree%fc_names(ifc_val(i))
 #if $D == 2
-       if (tree%coord_t == a5_cyl) then
+       if (tree%coord_t == af_cyl) then
           var_names(n+1) = trim(tmp_name) // "_r"
           var_names(n+2) = trim(tmp_name) // "_z"
        else
@@ -439,7 +439,7 @@ contains
              ! Check whether we can extend to the -x direction
              ids = box_list(1, :)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_lowx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -456,7 +456,7 @@ contains
              ! Check whether we can extend to the +x direction
              ids = box_list(nx, :)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_highx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -473,7 +473,7 @@ contains
              ! Check whether we can extend to the -y direction
              ids = box_list(:, 1)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_lowy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -490,7 +490,7 @@ contains
              ! Check whether we can extend to the +y direction
              ids = box_list(:, ny)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_highy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -555,7 +555,7 @@ contains
              ! Check whether we can extend to the -x direction
              ids = pack(box_list(1, :, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -572,7 +572,7 @@ contains
              ! Check whether we can extend to the +x direction
              ids = pack(box_list(nx, :, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -589,7 +589,7 @@ contains
              ! Check whether we can extend to the -y direction
              ids = pack(box_list(:, 1, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -606,7 +606,7 @@ contains
              ! Check whether we can extend to the +y direction
              ids = pack(box_list(:, ny, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -623,7 +623,7 @@ contains
              ! Check whether we can extend to the -z direction
              ids = pack(box_list(:, :, 1), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowz)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(3) < tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -640,7 +640,7 @@ contains
              ! Check whether we can extend to the +z direction
              ids = pack(box_list(:, :, nz), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highz)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(3) > tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then

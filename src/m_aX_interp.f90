@@ -34,7 +34,7 @@ contains
     loc   = a$D_get_loc(tree, r)
     id    = loc%id
 
-    if (id <= a5_no_box) then
+    if (id <= af_no_box) then
        print *, "a$D_interp1: point outside domain", r
        stop
     end if
@@ -90,7 +90,7 @@ contains
     loc   = a$D_get_loc(tree, r)
     id    = loc%id
 
-    if (id <= a5_no_box) then
+    if (id <= af_no_box) then
        print *, "a$D_interp2: point outside domain", r
        stop
     end if

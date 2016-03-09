@@ -55,7 +55,7 @@ contains
     n_boxes_a = 1000;  if (present(n_boxes)) n_boxes_a = n_boxes
     coarsen_to_a = -1; if (present(coarsen_to)) coarsen_to_a = coarsen_to
     r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
-    coord_a = a5_xyz;  if (present(coord)) coord_a = coord
+    coord_a = af_xyz;  if (present(coord)) coord_a = coord
     gb_limit = 16;     if (present(mem_limit_gb)) gb_limit = mem_limit_gb
 
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
@@ -66,7 +66,7 @@ contains
     if (lvl_limit_a <= 0) stop "a$D_init: lvl_limit should be > 0"
     if (gb_limit <= 0)    stop "a$D_init: mem_limit_gb should be > 0"
 #if $D == 3
-    if (coord_a == a5_cyl) stop "a$D_init: cannot have 3d cyl coords"
+    if (coord_a == af_cyl) stop "a$D_init: cannot have 3d cyl coords"
 #endif
 
     allocate(tree%boxes(n_boxes_a))
@@ -166,12 +166,12 @@ contains
     do i = 1, n_boxes
        do nb = 1, a$D_num_neighbors
           nb_id = nb_list(nb, i)
-          if (nb_id > a5_no_box .and. nb_id /= i) &
+          if (nb_id > af_no_box .and. nb_id /= i) &
                nb_list(a$D_neighb_rev(nb), nb_id) = i
        end do
     end do
 
-    if (any(nb_list == a5_no_box)) stop "a$D_set_base: unresolved neighbors"
+    if (any(nb_list == af_no_box)) stop "a$D_set_base: unresolved neighbors"
 
     ! Check if we have enough space, if not, increase space
     if (n_boxes > size(tree%boxes(:))) then
@@ -197,11 +197,11 @@ contains
           tree%boxes(id)%n_cell      = tree%n_cell / (2**(1-lvl))
           tree%boxes(id)%coord_t     = tree%coord_t
 
-          tree%boxes(id)%parent      = a5_no_box
-          tree%boxes(id)%children(:) = a5_no_box ! Gets overwritten, see below
+          tree%boxes(id)%parent      = af_no_box
+          tree%boxes(id)%children(:) = af_no_box ! Gets overwritten, see below
 
           ! Connectivity is the same for all lvls
-          where (nb_list(:, i) > a5_no_box)
+          where (nb_list(:, i) > af_no_box)
              tree%boxes(id)%neighbors = nb_list(:, i) + offset
           elsewhere
              tree%boxes(id)%neighbors = nb_list(:, i)
@@ -295,7 +295,7 @@ contains
        do n = 1, n_used
           boxes_cpy(n)%parent = ixs_map(boxes_cpy(n)%parent)
           boxes_cpy(n)%children = ixs_map(boxes_cpy(n)%children)
-          where (boxes_cpy(n)%neighbors > a5_no_box)
+          where (boxes_cpy(n)%neighbors > af_no_box)
              boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
           end where
        end do
@@ -390,9 +390,9 @@ contains
     integer                     :: nb, nb_id
 
     do nb = 1, a$D_num_neighbors
-       if (boxes(id)%neighbors(nb) == a5_no_box) then
+       if (boxes(id)%neighbors(nb) == af_no_box) then
           nb_id = find_neighb_$Dd(boxes, id, nb)
-          if (nb_id > a5_no_box) then
+          if (nb_id > af_no_box) then
              boxes(id)%neighbors(nb) = nb_id
              boxes(nb_id)%neighbors(a$D_neighb_rev(nb)) = id
           end if
@@ -446,7 +446,7 @@ contains
   !> argument n_changes is present, it contains the number of boxes that were
   !> (de)refined.
   !>
-  !> This routine sets the bit a5_bit_new_children for each box that is refined.
+  !> This routine sets the bit af_bit_new_children for each box that is refined.
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
   subroutine a$D_adjust_refinement(tree, ref_subr, ref_info)
@@ -472,7 +472,7 @@ contains
     call consistent_ref_flags(tree, ref_flags, ref_subr)
 
     ! Compute number of new boxes
-    num_new_boxes = a$D_num_children * count(ref_flags == a5_refine)
+    num_new_boxes = a$D_num_children * count(ref_flags == af_refine)
 
     ! Determine number of boxes that could be in use after resizing
     total_num_boxes = a$D_num_boxes_used(tree) + num_new_boxes
@@ -502,12 +502,12 @@ contains
 
           if (id > highest_id_prev) then
              cycle              ! This is a newly added box
-          else if (ref_flags(id) == a5_refine) then
+          else if (ref_flags(id) == af_refine) then
              ! Add children. First need to get num_children free id's
              call get_free_ids(tree, c_ids)
              call add_children(tree%boxes, id, c_ids, &
                   tree%n_var_cell, tree%n_var_face)
-          else if (ref_flags(id) == a5_derefine) then
+          else if (ref_flags(id) == af_derefine) then
              ! Remove children
              call remove_children(tree%boxes, id)
           end if
@@ -549,8 +549,8 @@ contains
     integer, allocatable            :: ref_count(:), drf_count(:)
 
     n_ch           = a$D_num_children
-    ref_info%n_add = n_ch * count(ref_flags == a5_refine)
-    ref_info%n_rm  = n_ch * count(ref_flags == a5_derefine)
+    ref_info%n_add = n_ch * count(ref_flags == af_refine)
+    ref_info%n_rm  = n_ch * count(ref_flags == af_derefine)
 
     ! Use highest_lvl+1 here because this lvl might have been completely removed
     if (allocated(ref_info%lvls)) deallocate(ref_info%lvls)
@@ -565,9 +565,9 @@ contains
     do id = 1, size(ref_flags)
        lvl = tree%boxes(id)%lvl
 
-       if (ref_flags(id) == a5_refine) then
+       if (ref_flags(id) == af_refine) then
           ref_count(lvl) = ref_count(lvl) + 1
-       else if (ref_flags(id) == a5_derefine) then
+       else if (ref_flags(id) == af_derefine) then
           drf_count(lvl) = drf_count(lvl) + 1
        end if
     end do
@@ -592,11 +592,11 @@ contains
     do id = 1, size(ref_flags)
        lvl = tree%boxes(id)%lvl
 
-       if (ref_flags(id) == a5_refine) then
+       if (ref_flags(id) == af_refine) then
           ref_count(lvl) = ref_count(lvl) + 1
           n = n_ch * (ref_count(lvl)-1) + 1
           ref_info%lvls(lvl+1)%add(n:n+n_ch-1) = tree%boxes(id)%children
-       else if (ref_flags(id) == a5_derefine) then
+       else if (ref_flags(id) == af_derefine) then
           drf_count(lvl) = drf_count(lvl) + 1
           n = n_ch * (drf_count(lvl)-1) + 1
           ref_info%lvls(lvl+1)%rm(n:n+n_ch-1) = tree%boxes(id)%children
@@ -623,8 +623,8 @@ contains
   !> Given the refinement function, return consistent refinement flags, that
   !> ensure that the tree is still balanced. Furthermore, it cannot derefine the
   !> base level, and it cannot refine above tree%lvl_limit. The argument
-  !> ref_flags is changed: for boxes that will be refined it holds a5_refine,
-  !> for boxes that will be derefined it holds a5_derefine
+  !> ref_flags is changed: for boxes that will be refined it holds af_refine,
+  !> for boxes that will be derefined it holds af_derefine
   subroutine consistent_ref_flags(tree, ref_flags, ref_subr)
     type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
@@ -634,7 +634,7 @@ contains
     integer                   :: lvl_limit
 
     lvl_limit = tree%lvl_limit
-    ref_flags(:) = a5_keep_ref
+    ref_flags(:) = af_keep_ref
 
     ! Set refinement flags on all leaves and their immediate parents (on other
     ! boxes the flags would not matter)
@@ -649,7 +649,7 @@ contains
           ! If the parent exists, and this is the first child, set refinement
           ! flags for the parent
           p_id = tree%boxes(id)%parent
-          if (p_id > a5_no_box .and. &
+          if (p_id > af_no_box .and. &
                a$D_ix_to_ichild(tree%boxes(id)%ix) == 1) then
              call ref_subr(tree%boxes, p_id, ref_flags(p_id))
           end if
@@ -659,13 +659,13 @@ contains
     !$omp end parallel
 
     ! Set flags with unknown values to default (keep refinement)
-    if (maxval(ref_flags) > a5_do_ref .or. minval(ref_flags) < a5_rm_ref) &
+    if (maxval(ref_flags) > af_do_ref .or. minval(ref_flags) < af_rm_ref) &
          stop "a$D_adjust_refinement: invalid refinement flag given"
 
     ! Cannot refine beyond max level
     do i = 1, size(tree%lvls(lvl_limit)%ids)
        id = tree%lvls(lvl_limit)%ids(i)
-       if (ref_flags(id) == a5_do_ref) ref_flags(id) = a5_keep_ref
+       if (ref_flags(id) == af_do_ref) ref_flags(id) = af_keep_ref
     end do
 
     ! Ensure 2-1 balance
@@ -673,28 +673,28 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves) ! We only check leaf tree%boxes
           id = tree%lvls(lvl)%leaves(i)
 
-          if (ref_flags(id) > a5_keep_ref) then ! This means refine
-             ref_flags(id) = a5_refine ! Mark for actual refinement
+          if (ref_flags(id) > af_keep_ref) then ! This means refine
+             ref_flags(id) = af_refine ! Mark for actual refinement
 
              ! Ensure we will have the necessary neighbors
              do nb = 1, a$D_num_neighbors
                 nb_id = tree%boxes(id)%neighbors(nb)
-                if (nb_id == a5_no_box) then
+                if (nb_id == af_no_box) then
                    ! Mark the parent containing neighbor for refinement
                    p_id = tree%boxes(id)%parent
                    p_nb_id = tree%boxes(p_id)%neighbors(nb)
-                   ref_flags(p_nb_id) = a5_refine ! Mark for actual refinement
+                   ref_flags(p_nb_id) = af_refine ! Mark for actual refinement
                 end if
              end do
 
-          else if (ref_flags(id) == a5_rm_ref) then
+          else if (ref_flags(id) == af_rm_ref) then
              ! Ensure we do not remove a required neighbor
              do nb = 1, a$D_num_neighbors
                 nb_id = tree%boxes(id)%neighbors(nb)
-                if (nb_id > a5_no_box) then
+                if (nb_id > af_no_box) then
                    if (a$D_has_children(tree%boxes(nb_id)) .or. &
-                        ref_flags(nb_id) > a5_keep_ref) then
-                      ref_flags(id) = a5_keep_ref
+                        ref_flags(nb_id) > af_keep_ref) then
+                      ref_flags(id) = af_keep_ref
                       exit
                    end if
                 end if
@@ -713,11 +713,11 @@ contains
           ! Can only remove children if they are all marked for
           ! derefinement, and the box itself not for refinement.
           c_ids = tree%boxes(id)%children
-          if (all(ref_flags(c_ids) == a5_rm_ref) .and. &
-               ref_flags(id) <= a5_keep_ref) then
-             ref_flags(id) = a5_derefine
+          if (all(ref_flags(c_ids) == af_rm_ref) .and. &
+               ref_flags(id) <= af_keep_ref) then
+             ref_flags(id) = af_derefine
           else
-             ref_flags(id) = a5_keep_ref
+             ref_flags(id) = af_keep_ref
           end if
        end do
     end do
@@ -736,16 +736,16 @@ contains
        ! Remove from neighbors
        do nb = 1, a$D_num_neighbors
           nb_id = boxes(c_id)%neighbors(nb)
-          if (nb_id > a5_no_box) then
+          if (nb_id > af_no_box) then
              nb_rev = a$D_neighb_rev(nb)
-             boxes(nb_id)%neighbors(nb_rev) = a5_no_box
+             boxes(nb_id)%neighbors(nb_rev) = af_no_box
           end if
        end do
 
        call clear_box(boxes(c_id))
     end do
 
-    boxes(id)%children = a5_no_box
+    boxes(id)%children = af_no_box
   end subroutine remove_children
 
   !> Add children to box id, using the indices in c_ids
@@ -765,9 +765,9 @@ contains
        boxes(c_id)%ix        = c_ix_base + a$D_child_dix(:,i)
        boxes(c_id)%lvl       = boxes(id)%lvl+1
        boxes(c_id)%parent    = id
-       boxes(c_id)%tag       = a5_init_tag
-       boxes(c_id)%children  = a5_no_box
-       boxes(c_id)%neighbors = a5_no_box
+       boxes(c_id)%tag       = af_init_tag
+       boxes(c_id)%children  = af_no_box
+       boxes(c_id)%neighbors = af_no_box
        boxes(c_id)%n_cell    = boxes(id)%n_cell
        boxes(c_id)%coord_t   = boxes(id)%coord_t
        boxes(c_id)%dr        = 0.5_dp * boxes(id)%dr
@@ -779,7 +779,7 @@ contains
 
     ! Set boundary conditions at children
     do nb = 1, a$D_num_neighbors
-       if (boxes(id)%neighbors(nb) < a5_no_box) then
+       if (boxes(id)%neighbors(nb) < af_no_box) then
           child_nb = c_ids(a$D_child_adj_nb(:, nb)) ! Neighboring children
           boxes(child_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
        end if
@@ -823,7 +823,7 @@ contains
              nb_id = tree%boxes(id)%neighbors(nb)
 
              ! If the neighbor exists and has no children, set flux
-             if (nb_id > a5_no_box) then
+             if (nb_id > af_no_box) then
                 if (.not. a$D_has_children(tree%boxes(nb_id))) then
                    call flux_from_children(tree%boxes, id, nb, f_ixs)
                 end if
@@ -878,7 +878,7 @@ contains
                boxes(c_id)%fx(i, 2:nc:2, f_ixs))
        end do
     case (2)
-       if (boxes(nb_id)%coord_t == a5_cyl) then
+       if (boxes(nb_id)%coord_t == af_cyl) then
           ! In cylindrical symmetry, we take the weighted average
           do ic = 1, n_chnb
              i_ch = a2_child_adj_nb(ic, nb)

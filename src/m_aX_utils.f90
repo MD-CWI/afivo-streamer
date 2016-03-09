@@ -591,7 +591,7 @@ contains
           id = tree%lvls(lvl)%leaves(i)
           nc = tree%boxes(id)%n_cell
 #if $D == 2
-          if (tree%coord_t == a5_cyl) then
+          if (tree%coord_t == af_cyl) then
              tmp = sum_2pr_box(tree%boxes(id), iv)
           else
              tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
