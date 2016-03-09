@@ -314,6 +314,7 @@ contains
     else if (.not. tree%ready) then
        print *, "a$D_set_base has not been called for this tree"
     else
+       write(*, "(A)") ""
        write(*, "(A)") " *** a$D_print_info(tree) ***"
        write(*, "(A,I10)") " Current maximum level:  ", tree%highest_lvl
        write(*, "(A,I10)") " Maximum allowed level:  ", tree%lvl_limit
@@ -329,7 +330,7 @@ contains
        write(*, "(A,I10)") " Number of fc variables: ", tree%n_var_face
        write(*, "(A,I10)") " Type of coordinates:    ", tree%coord_t
        write(*, "(A,$DE12.4)") " min. coords:        ", tree%r_base
-       write(*, "(A,2E12.4)") " dx at lvl 1:        ", tree%dr_base
+       write(*, "(A,2E12.4)")  " dx at min/max level ", tree%dr_base, a$D_min_dr(tree)
        write(*, "(A)") ""
     end if
   end subroutine a$D_print_info
