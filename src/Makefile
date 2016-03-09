@@ -14,7 +14,7 @@ LIBS	:=
 
 include ../makerules.make
 
-.PHONY: srcs clean
+.PHONY: srcs clean allclean
 
 libafivo.a: $(OBJS)
 	$(RM) $@
@@ -23,13 +23,18 @@ libafivo.a: $(OBJS)
 srcs:	$(SRCS)
 
 clean:
-	$(RM) libafivo.a *.o *.mod $(SRC_2D) $(SRC_3D)
+	$(RM) libafivo.a *.o *.mod
+
+allclean: clean
+	$(RM) $(SRC_2D) $(SRC_3D)
 
 m_a2_%.f90: m_aX_%.f90
-	sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+	@echo "*** $< has changed, regenerating $@ ***"
+	@sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
 
 m_a3_%.f90: m_aX_%.f90
-	sed 's|$$D|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+	@echo "*** $< has changed, regenerating $@ ***"
+	@sed 's|$$D|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@
 
 # Dependency information
 m_a2_core.o:		m_morton.o m_a2_t.o
