@@ -1,4 +1,5 @@
-! This module contains routines for writing output files with Afivo
+! This module contains routines for writing output files with Afivo. The Silo
+! format should probably be used for larger files, especially in 3D.
 !
 ! Author: Jannis Teunissen
 ! License: GPLv3
@@ -305,6 +306,7 @@ contains
     call vtk_unstr_geo_xml_close(vtkf)
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
+    print *, "a$D_write_vtk: written " // trim(fname)
   end subroutine a$D_write_vtk
 
   !> Write the cell centered data of a tree to a Silo file. Only the
@@ -706,7 +708,7 @@ contains
             var_list(iv, 1:i_grid), n_cycle_val, time_val)
     end do
     call SILO_close_file(dbix)
-
+    print *, "a$D_write_silo: written " // trim(fname)
   end subroutine a$D_write_silo
 
 end module m_a$D_io
