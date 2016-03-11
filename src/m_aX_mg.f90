@@ -289,18 +289,31 @@ contains
        di = dix
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
+
+          ! Bilinear extrapolation (using 4 points)
           boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
-               + boxes(id)%cc(i, j+dj, iv))
+               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
+               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
+               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
+          ! Extrapolation using 3 points
+          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+          !      boxes(id)%cc(i, j, iv) - 0.25_dp * &
+          !      (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv))
+          ! Extrapolation using 2 points
+          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+          !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
+          !      boxes(id)%cc(i+di, j+dj, iv)
        end do
     case (2)
        j = ix
        dj = dix
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
+          ! Bilinear extrapolation (using 4 points)
           boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
-               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
-               + boxes(id)%cc(i, j+dj, iv))
+               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
+               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
+               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
        end do
 #elif $D == 3
     case (1)
@@ -310,7 +323,19 @@ contains
           dk = -1 + 2 * iand(k, 1)
           do j = 1, nc
              dj = -1 + 2 * iand(j, 1)
+             ! Trilinear extrapolation (using 8 points)
+             ! boxes(id)%cc(i-di, j, k, iv) = &
+             !      0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 0.0625_dp * (&
+             !      27 * boxes(id)%cc(i, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
 
+             ! Extrapolation using 2 points
              boxes(id)%cc(i-di, j, k, iv) = &
                   0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
                   0.75_dp * boxes(id)%cc(i, j, k, iv) - &
@@ -325,6 +350,17 @@ contains
           do i = 1, nc
              di = -1 + 2 * iand(i, 1)
 
+             ! boxes(id)%cc(i, j-dj, k, iv) = &
+             !      0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 0.0625_dp * (&
+             !      27 * boxes(id)%cc(i, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
+
              boxes(id)%cc(i, j-dj, k, iv) = &
                   0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
                   0.75_dp * boxes(id)%cc(i, j, k, iv) - &
@@ -338,6 +374,17 @@ contains
           dj = -1 + 2 * iand(j, 1)
           do i = 1, nc
              di = -1 + 2 * iand(i, 1)
+
+             ! boxes(id)%cc(i, j, k-dk, iv) = &
+             !      0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 0.0625_dp * (&
+             !      27 * boxes(id)%cc(i, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
 
              boxes(id)%cc(i, j, k-dk, iv) = &
                   0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
