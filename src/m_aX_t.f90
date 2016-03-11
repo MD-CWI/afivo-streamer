@@ -314,6 +314,14 @@ contains
     endif
   end function a$D_get_child_offset
 
+  !> Given a cell index on box, get index of the closest cell at its parent
+  function a$D_get_ix_on_parent(box, ix) result(p_ix)
+    type(box$D_t), intent(in)           :: box   !< A child box
+    integer, intent(in), optional      :: ix($D) !< Index on child box
+    integer                            :: p_ix($D)
+    p_ix = a$D_get_child_offset(box) + ishft(ix+1, -1)
+  end function a$D_get_ix_on_parent
+
   !> Compute the 'child index' for a box with spatial index ix. With 'child
   !> index' we mean the index in the children(:) array of its parent.
   integer function a$D_ix_to_ichild(ix)
