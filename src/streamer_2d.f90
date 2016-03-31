@@ -192,7 +192,8 @@ contains
 
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
        ref_flag = a5_do_ref
-    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
+    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi .and. &
+         boxes(id)%dr < 4.0e-4_dp) then
        ref_flag = a5_rm_ref
     end if
 
@@ -358,7 +359,7 @@ contains
     end do
     !$omp end parallel
 
-    call ST_set_voltage(-ST_domain_len * ST_get_fld(ST_time))
+    call ST_set_voltages(ST_time)
 
     ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
@@ -653,23 +654,41 @@ contains
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
-    integer                     :: nc
+    integer                     :: nc, i, j
+    real(dp)                    :: xy(2)
 
     nc = box%n_cell
+    bc_type = a5_bc_dirichlet
 
     select case (nb)
     case (a2_neighb_lowx)
-       bc_type = a5_bc_neumann
-       box%cc(0, 1:nc, iv) = 0
+       do j = 1, nc
+          xy = a2_rr_cc(box, [0.5_dp, real(j, dp)])
+          box%cc(0, j, iv) = &
+               ST_applied_voltage * xy(2) / ST_domain_len + &
+               ST_applied_voltage2 * xy(1) / ST_domain_len
+       end do
     case (a2_neighb_highx)
-       bc_type = a5_bc_neumann
-       box%cc(nc+1, 1:nc, iv) = 0
+       do j = 1, nc
+          xy = a2_rr_cc(box, [nc+0.5_dp, real(j, dp)])
+          box%cc(nc+1, j, iv) = &
+               ST_applied_voltage * xy(2) / ST_domain_len + &
+               ST_applied_voltage2 * xy(1) / ST_domain_len
+       end do
     case (a2_neighb_lowy)
-       bc_type = a5_bc_dirichlet
-       box%cc(1:nc, 0, iv) = 0
+       do i = 1, nc
+          xy = a2_rr_cc(box, [real(i, dp), 0.5_dp])
+          box%cc(i, 0, iv) = &
+               ST_applied_voltage * xy(2) / ST_domain_len + &
+               ST_applied_voltage2 * xy(1) / ST_domain_len
+       end do
     case (a2_neighb_highy)
-       bc_type = a5_bc_dirichlet
-       box%cc(1:nc, nc+1, iv) = ST_applied_voltage
+       do i = 1, nc
+          xy = a2_rr_cc(box, [real(i, dp), nc+0.5_dp])
+          box%cc(i, nc+1, iv) = &
+               ST_applied_voltage * xy(2) / ST_domain_len + &
+               ST_applied_voltage2 * xy(1) / ST_domain_len
+       end do
     end select
   end subroutine sides_bc_pot
 

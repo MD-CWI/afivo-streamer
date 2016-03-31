@@ -83,7 +83,7 @@ module m_streamer
   ! Table for photoionization
   type(PH_tbl_t), protected :: ST_photoi_tbl
 
-  ! Start modifying the background field after this times
+  ! Start modifying the vertical background field after this time
   real(dp), protected :: ST_fld_mod_t0
 
   ! Amplitude of sinusoidal modification
@@ -94,6 +94,24 @@ module m_streamer
 
   ! Linear derivative of background field
   real(dp), protected :: ST_fld_lin_deriv
+
+  ! Decay time of background field
+  real(dp), protected :: ST_fld_decay
+
+  ! Start modifying the horizontal background field after this time
+  real(dp), protected :: ST_fld2_mod_t0
+
+  ! Amplitude of sinusoidal modification
+  real(dp), protected :: ST_fld2_sin_amplitude
+
+  ! Frequency (Hz) of sinusoidal modification
+  real(dp), protected :: ST_fld2_sin_freq
+
+  ! Linear derivative of background field
+  real(dp), protected :: ST_fld2_lin_deriv
+
+  ! Decay time of background field
+  real(dp), protected :: ST_fld2_decay
 
   ! Name of the simulations
   character(len=ST_slen), protected :: ST_sim_name
@@ -152,11 +170,17 @@ module m_streamer
   ! The length of the (square) domain
   real(dp), protected :: ST_domain_len
 
-  ! The applied electric field
+  ! The applied electric field (vertical direction)
   real(dp), protected :: ST_applied_fld
 
-  ! The applied voltage
+  ! The applied electric field (horizontal direction)
+  real(dp), protected :: ST_applied_fld2
+
+  ! The applied voltage (vertical direction)
   real(dp), protected :: ST_applied_voltage
+
+  ! The applied voltage (horizontal direction)
+  real(dp), protected :: ST_applied_voltage2
 
   ! Pressure of the gas in bar
   real(dp), protected :: ST_gas_pressure
@@ -183,7 +207,9 @@ contains
     call CFG_add(ST_cfg, "gas_pressure", 1.0_dp, &
          "The gas pressure (bar), used for photoionization")
     call CFG_add(ST_cfg, "applied_fld", 1.0d7, &
-         "The applied electric field (V/m)")
+         "The applied electric field (V/m) (vertical)")
+    call CFG_add(ST_cfg, "applied_fld2", 0.0d0, &
+         "The applied electric field (V/m) (horizontal)")
     call CFG_add(ST_cfg, "epsilon_diel", 1.5_dp, &
          "The relative dielectric constant (if a dielectric is specified)")
 
@@ -195,6 +221,19 @@ contains
          "Frequency of sinusoidal modification (Hz)")
     call CFG_add(ST_cfg, "fld_lin_deriv", 0.0_dp, &
          "Linear derivative of field [V/(ms)]")
+    call CFG_add(ST_cfg, "fld_decay", huge(1.0_dp), &
+         "Decay time of field (s)")
+
+    call CFG_add(ST_cfg, "fld2_mod_t0", 1.0e99_dp, &
+         "Modify electric field after this time (s)")
+    call CFG_add(ST_cfg, "fld2_sin_amplitude", 0.0_dp, &
+         "Amplitude of sinusoidal modification (V/m)")
+    call CFG_add(ST_cfg, "fld2_sin_freq", 0.2e9_dp, &
+         "Frequency of sinusoidal modification (Hz)")
+    call CFG_add(ST_cfg, "fld2_lin_deriv", 0.0_dp, &
+         "Linear derivative of field [V/(ms)]")
+    call CFG_add(ST_cfg, "fld2_decay", huge(1.0_dp), &
+         "Decay time of field (s)")
 
     call CFG_add(ST_cfg, "bg_dens", 1.0d12, &
          "The background ion and electron density (1/m3)")
@@ -429,6 +468,7 @@ contains
     call CFG_get(ST_cfg, "output_dir", ST_output_dir)
     call CFG_get(ST_cfg, "domain_len", ST_domain_len)
     call CFG_get(ST_cfg, "applied_fld", ST_applied_fld)
+    call CFG_get(ST_cfg, "applied_fld2", ST_applied_fld2)
     call CFG_get(ST_cfg, "dt_output", ST_dt_out)
 
     call CFG_get(ST_cfg, "ref_per_steps", ST_ref_per_steps)
@@ -455,8 +495,16 @@ contains
     call CFG_get(ST_cfg, "fld_sin_amplitude", ST_fld_sin_amplitude)
     call CFG_get(ST_cfg, "fld_sin_freq", ST_fld_sin_freq)
     call CFG_get(ST_cfg, "fld_lin_deriv", ST_fld_lin_deriv)
+    call CFG_get(ST_cfg, "fld_decay", ST_fld_decay)
+
+    call CFG_get(ST_cfg, "fld2_mod_t0", ST_fld2_mod_t0)
+    call CFG_get(ST_cfg, "fld2_sin_amplitude", ST_fld2_sin_amplitude)
+    call CFG_get(ST_cfg, "fld2_sin_freq", ST_fld2_sin_freq)
+    call CFG_get(ST_cfg, "fld2_lin_deriv", ST_fld2_lin_deriv)
+    call CFG_get(ST_cfg, "fld2_decay", ST_fld2_decay)
 
     ST_applied_voltage = -ST_domain_len * ST_applied_fld
+    ST_applied_voltage2 = -ST_domain_len * ST_applied_fld2
 
     tmp_name = trim(ST_output_dir) // "/" // trim(ST_sim_name) // "_config.txt"
     print *, "Settings written to ", trim(tmp_name)
@@ -468,20 +516,53 @@ contains
     use m_units_constants
 
     real(dp), intent(in) :: time
-    real(dp)             :: fld
+    real(dp)             :: fld, t_rel
 
-    if (time > ST_fld_mod_t0) then
-       fld = ST_applied_fld + (time - ST_fld_mod_t0) * &
-            ST_fld_lin_deriv + ST_fld_sin_amplitude * &
-            sin((time - ST_fld_mod_t0) * 2 * UC_pi * ST_fld_sin_freq)
+    t_rel = time - ST_fld_mod_t0
+    if (t_rel > 0) then
+       fld = ST_applied_fld * exp(-t_rel/ST_fld_decay) + &
+            t_rel * ST_fld_lin_deriv + ST_fld_sin_amplitude * &
+            sin(t_rel * ST_fld_sin_freq * 2 * UC_pi)
     else
        fld = ST_applied_fld
     end if
   end function ST_get_fld
 
+  subroutine ST_set_voltages(time)
+    use m_units_constants
+
+    real(dp), intent(in) :: time
+    real(dp)             :: fld, t_rel
+
+    t_rel = time - ST_fld_mod_t0
+    if (t_rel > 0) then
+       fld = ST_applied_fld * exp(-t_rel/ST_fld_decay) + &
+            t_rel * ST_fld_lin_deriv + ST_fld_sin_amplitude * &
+            sin(t_rel * ST_fld_sin_freq * 2 * UC_pi)
+    else
+       fld = ST_applied_fld
+    end if
+    ST_applied_voltage = -ST_domain_len * fld
+
+    t_rel = time - ST_fld2_mod_t0
+    if (t_rel > 0) then
+       fld = ST_applied_fld2 * exp(-t_rel/ST_fld2_decay) + &
+            t_rel * ST_fld2_lin_deriv + ST_fld2_sin_amplitude * &
+            sin(t_rel * ST_fld2_sin_freq * 2 * UC_pi)
+    else
+       fld = ST_applied_fld2
+    end if
+    ST_applied_voltage2 = -ST_domain_len * fld
+  end subroutine ST_set_voltages
+
   subroutine ST_set_voltage(phi)
     real(dp), intent(in) :: phi
     ST_applied_voltage = phi
   end subroutine ST_set_voltage
+
+  subroutine ST_set_voltage2(phi)
+    real(dp), intent(in) :: phi
+    ST_applied_voltage2 = phi
+  end subroutine ST_set_voltage2
 
 end module m_streamer
