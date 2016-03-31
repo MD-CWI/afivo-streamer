@@ -54,7 +54,7 @@
  dt_max = 0.5000E-10
 
  # The number of steps after which the mesh is updated:
- num_steps_amr = 2
+ ref_per_steps = 2
 
  # Whether photoionization is enabled:
  photoi_enabled = T
