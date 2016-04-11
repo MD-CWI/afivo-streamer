@@ -120,7 +120,7 @@ contains
     ! Draw a [0, 1) random number
     call random_number(rr)
 
-    if (rr < 0.5_dp**0.125_dp .and. boxes(id)%lvl < 5) then
+    if (rr < 0.125_dp .and. boxes(id)%lvl < 5) then
        ref_flag = af_do_ref ! Add refinement
     else
        ref_flag = af_rm_ref ! Ask to remove this box, which will not always

@@ -118,7 +118,7 @@ contains
     ! Draw a [0, 1) random number
     call random_number(rr)
 
-    if (rr < 0.5_dp**0.25_dp .and. boxes(id)%lvl < 7) then
+    if (rr < 0.25_dp .and. boxes(id)%lvl < 7) then
        ref_flag = af_do_ref   ! Add refinement
     else
        ref_flag = af_rm_ref   ! Ask to remove this box, which will not always
