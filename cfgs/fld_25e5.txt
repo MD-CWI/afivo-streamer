@@ -1,2 +1,0 @@
-applied_fld = 0.25E+07
-sim_name = 25e5
