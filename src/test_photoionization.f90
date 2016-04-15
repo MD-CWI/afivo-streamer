@@ -15,7 +15,7 @@ program test_photoionization
   real(dp), parameter :: dr           = domain_len / box_size
 
   integer, parameter  :: i_src        = 1
-  integer, parameter  :: i_pho        = 2
+  integer, parameter  :: i_photo      = 2
   integer, parameter  :: i_sol        = 3
 
   real(dp) :: gas_pressure
@@ -91,7 +91,7 @@ program test_photoionization
   write(fname, "(A,I0,A,L1,L1,I0,A)") "pho_", nint(1e3_dp * gas_pressure), "_", &
        use_const_dx, use_cyl, nint(100 * grid_factor), ".silo"
   call a2_write_silo(tree, fname)
-  call a2_tree_sum_cc(tree, i_pho, sum_pho)
+  call a2_tree_sum_cc(tree, i_photo, sum_pho)
   print *, "Sum photoionization", sum_pho
   call a2_tree_sum_cc(tree, i_sol, sum_pho)
   print *, "Sum solution", sum_pho
@@ -119,7 +119,7 @@ contains
 
     call a2_loop_box_arg(tree, set_photoi_rate, [1.0_dp], .true.)
     call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_src, i_pho, grid_factor, use_const_dx, use_cyl, 0.05e-3_dp)
+         i_src, i_photo, grid_factor, use_const_dx, use_cyl, 0.05e-3_dp)
 
   end subroutine set_photoionization
 

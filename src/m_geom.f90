@@ -1,3 +1,4 @@
+!> Module that provides routines for geometric operations and calculations
 module m_geom
 
   implicit none

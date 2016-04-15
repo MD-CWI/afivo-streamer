@@ -1,3 +1,4 @@
+!> Module that provides routines for operations on photons
 module m_photons
   use m_lookup_table
 
@@ -205,7 +206,7 @@ contains
   end subroutine PH_do_absorp
 
   subroutine PH_set_src_2d(tree, pi_tbl, rng, num_photons, &
-       i_src, i_pho, fac_dx, const_dx, use_cyl, min_dx, dt)
+       i_src, i_photo, fac_dx, const_dx, use_cyl, min_dx, dt)
     use m_random
     use m_a2_t
     use m_a2_utils
@@ -222,7 +223,7 @@ contains
     !> Input variable that contains photon production per cell
     integer, intent(in)        :: i_src
     !> Output variable that contains photoionization source rate
-    integer, intent(in)        :: i_pho
+    integer, intent(in)        :: i_photo
     !> Use dx proportional to this value
     real(dp), intent(in)       :: fac_dx
     !> Use constant grid spacing or variable
@@ -364,14 +365,14 @@ contains
        !$omp end parallel
     end if
 
-    ! Clear variable i_pho, in which we will store the photoionization source term
+    ! Clear variable i_photo, in which we will store the photoionization source term
 
     !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          call a2_box_clear_cc(tree%boxes(id), i_pho)
+          call a2_box_clear_cc(tree%boxes(id), i_photo)
        end do
        !$omp end do nowait
     end do
@@ -388,8 +389,8 @@ contains
              j = ph_loc(n)%ix(2)
              dr = tree%boxes(id)%dr
              r(1:2) = a2_r_cc(tree%boxes(id), [i, j])
-             tree%boxes(id)%cc(i, j, i_pho) = &
-                  tree%boxes(id)%cc(i, j, i_pho) + &
+             tree%boxes(id)%cc(i, j, i_photo) = &
+                  tree%boxes(id)%cc(i, j, i_photo) + &
                   pi_tbl%frac_in_tbl/(tmp * dr**2 * r(1))
           end if
        end do
@@ -400,8 +401,8 @@ contains
              i = ph_loc(n)%ix(1)
              j = ph_loc(n)%ix(2)
              dr = tree%boxes(id)%dr
-             tree%boxes(id)%cc(i, j, i_pho) = &
-                  tree%boxes(id)%cc(i, j, i_pho) + &
+             tree%boxes(id)%cc(i, j, i_photo) = &
+                  tree%boxes(id)%cc(i, j, i_photo) + &
                   pi_tbl%frac_in_tbl/(fac * dr**2)
           end if
        end do
@@ -420,7 +421,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_gc_box(tree%boxes, id, i_pho, &
+          call a2_gc_box(tree%boxes, id, i_photo, &
                a2_gc_interp, a2_bc_neumann_zero)
        end do
        !$omp end do
@@ -428,7 +429,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong1_from(tree%boxes, id, i_pho, add=.true.)
+          call a2_prolong1_from(tree%boxes, id, i_photo, add=.true.)
        end do
        !$omp end do
     end do
@@ -436,7 +437,7 @@ contains
   end subroutine PH_set_src_2d
 
   subroutine PH_set_src_3d(tree, pi_tbl, rng, num_photons, &
-       i_src, i_pho, fac_dx, const_dx, min_dx, dt)
+       i_src, i_photo, fac_dx, const_dx, min_dx, dt)
     use m_random
     use m_a3_t
     use m_a3_utils
@@ -453,7 +454,7 @@ contains
     !> Input variable that contains photon production per cell
     integer, intent(in)         :: i_src
     !> Output variable that contains photoionization source rate
-    integer, intent(in)         :: i_pho
+    integer, intent(in)         :: i_photo
     !> Use dx proportional to this value
     real(dp), intent(in)        :: fac_dx
     !> Use constant grid spacing or variable
@@ -571,14 +572,14 @@ contains
        !$omp end parallel
     end if
 
-    ! Clear variable i_pho, in which we will store the photoionization source term
+    ! Clear variable i_photo, in which we will store the photoionization source term
 
     !$omp parallel private(lvl, i, id)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          call a3_box_clear_cc(tree%boxes(id), i_pho)
+          call a3_box_clear_cc(tree%boxes(id), i_photo)
        end do
        !$omp end do nowait
     end do
@@ -592,8 +593,8 @@ contains
           j = ph_loc(n)%ix(2)
           k = ph_loc(n)%ix(3)
           dr = tree%boxes(id)%dr
-          tree%boxes(id)%cc(i, j, k, i_pho) = &
-               tree%boxes(id)%cc(i, j, k, i_pho) + &
+          tree%boxes(id)%cc(i, j, k, i_photo) = &
+               tree%boxes(id)%cc(i, j, k, i_photo) + &
                pi_tbl%frac_in_tbl/(fac * dr**3)
        end if
     end do
@@ -611,7 +612,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_gc_box(tree%boxes, id, i_pho, &
+          call a3_gc_box(tree%boxes, id, i_photo, &
                a3_gc_interp, a3_bc_neumann_zero)
        end do
        !$omp end do
@@ -619,7 +620,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_prolong1_from(tree%boxes, id, i_pho, add=.true.)
+          call a3_prolong1_from(tree%boxes, id, i_photo, add=.true.)
        end do
        !$omp end do
     end do

@@ -1,3 +1,4 @@
+!> Program that solves a 2d streamer
 program streamer_2d
 
   use m_a2_t
@@ -20,9 +21,9 @@ program streamer_2d
   type(mg2_t)            :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
-  call ST_create_cfg()
-  call ST_read_cfg_files()
-  call ST_load_cfg()
+  call ST_create_config()
+  call ST_read_config_files()
+  call ST_load_config()
 
   ! Initialize the transport coefficients
   call ST_load_transport_data()
@@ -35,7 +36,7 @@ program streamer_2d
 
   ! Set the multigrid options. First define the variables to use
   mg%i_phi        = i_phi
-  mg%i_tmp        = i_fld
+  mg%i_tmp        = i_electric_fld
   mg%i_rhs        = i_rhs
   mg%i_eps        = i_eps
 
@@ -43,7 +44,7 @@ program streamer_2d
   mg%n_cycle_base = 8
 
   ! Routines to use for ...
-  mg%sides_bc    => sides_bc_pot ! Filling ghost cell on physical boundaries
+  mg%sides_bc    => sides_bc_potential ! Filling ghost cell on physical boundaries
   mg%box_op      => mg2_auto_op
   mg%box_corr    => mg2_auto_corr
   mg%box_gsrb    => mg2_auto_gsrb
@@ -57,7 +58,7 @@ program streamer_2d
   ! Set up the initial conditions
   do
      call a2_loop_box(tree, set_init_cond)
-     call compute_fld(tree, n_fmg_cycles, .false.)
+     call compute_electric_field(tree, n_fmg_cycles, .false.)
      call a2_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
@@ -93,35 +94,35 @@ program streamer_2d
              call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
 
         ! Copy previous solution
-        call a2_tree_copy_cc(tree, i_elec, i_elec_old)
-        call a2_tree_copy_cc(tree, i_pion, i_pion_old)
+        call a2_tree_copy_cc(tree, i_electron, i_electron_old)
+        call a2_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
 
         ! Two forward Euler steps over ST_dt
         do i = 1, 2
            ! First calculate fluxes
            call a2_loop_boxes_arg(tree, fluxes_koren, [ST_dt], .true.)
-           call a2_consistent_fluxes(tree, [f_elec])
+           call a2_consistent_fluxes(tree, [flux_elec])
 
            ! Update the solution
            call a2_loop_box_arg(tree, update_solution, [ST_dt], .true.)
 
            ! Restrict the electron and ion densities to lower levels
-           call a2_restrict_tree(tree, i_elec)
-           call a2_restrict_tree(tree, i_pion)
+           call a2_restrict_tree(tree, i_electron)
+           call a2_restrict_tree(tree, i_pos_ion)
 
            ! Fill ghost cells
-           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_neumann_zero)
-           call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
+           call a2_gc_tree(tree, i_electron, a2_gc_interp_lim, a2_bc_neumann_zero)
+           call a2_gc_tree(tree, i_pos_ion, a2_gc_interp_lim, a2_bc_neumann_zero)
 
            ! Compute new field on first iteration
-           if (i == 1) call compute_fld(tree, n_fmg_cycles, .true.)
+           if (i == 1) call compute_electric_field(tree, n_fmg_cycles, .true.)
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
         call a2_loop_box(tree, average_dens)
 
         ! Compute field with new density
-        call compute_fld(tree, n_fmg_cycles, .true.)
+        call compute_electric_field(tree, n_fmg_cycles, .true.)
      end do
 
      if (write_out) call a2_write_silo(tree, fname, ST_out_cnt, &
@@ -134,7 +135,7 @@ program streamer_2d
         call prolong_to_new_boxes(tree, ref_info)
 
         ! Compute the field on the new mesh
-        call compute_fld(tree, n_fmg_cycles, .true.)
+        call compute_electric_field(tree, n_fmg_cycles, .true.)
      end if
 
   end do
@@ -177,18 +178,18 @@ contains
     integer, intent(in)      :: id       ! Index of box to look at
     integer, intent(inout)   :: ref_flag ! Refinement flag for the box
     integer                  :: n, nc
-    real(dp)                 :: cphi, dx2, dx
-    real(dp)                 :: alpha, adx, max_fld
+    real(dp)                 :: cphi, dx, dx2, max_fld
+    real(dp)                 :: alpha, adx
     real(dp)                 :: boxlen, dist, max_dns
 
-    nc        = boxes(id)%n_cell
-    dx        = boxes(id)%dr
-    dx2       = boxes(id)%dr**2
-    cphi      = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
-    max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
-    alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
-    adx       = boxes(id)%dr * alpha
+    nc      = boxes(id)%n_cell
+    dx      = boxes(id)%dr
+    dx2     = boxes(id)%dr**2
+    cphi    = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+    max_fld = maxval(boxes(id)%cc(1:nc, 1:nc, i_electric_fld))
+    max_dns = maxval(boxes(id)%cc(1:nc, 1:nc, i_electron))
+    alpha   = LT_get_col(ST_td_tbl, i_alpha, max_fld)
+    adx     = boxes(id)%dr * alpha
 
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
        ref_flag = a5_do_ref
@@ -254,7 +255,7 @@ contains
     real(dp)                    :: dens
 
     nc = box%n_cell
-    box%cc(:, :, i_elec) = ST_init_cond%bg_dens
+    box%cc(:, :, i_electron) = ST_init_cond%bg_dens
 
 
     do j = 0, nc+1
@@ -267,12 +268,12 @@ contains
                   ST_init_cond%seed_r1(:, n), 2, &
                   ST_init_cond%seed_width(n), &
                   ST_init_cond%seed_falloff(n))
-             box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + dens
+             box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + dens
           end do
        end do
     end do
 
-    box%cc(:, :, i_pion) = box%cc(:, :, i_elec)
+    box%cc(:, :, i_pos_ion) = box%cc(:, :, i_electron)
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
 
     call set_box_eps(box)
@@ -307,9 +308,9 @@ contains
     real(dp)               :: mobility, diff_coeff, alpha, max_mobility
     real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
 
-    call a2_tree_max_cc(tree, i_fld, max_fld)
-    call a2_tree_min_cc(tree, i_fld, min_fld)
-    call a2_tree_max_cc(tree, i_elec, max_dns)
+    call a2_tree_max_cc(tree, i_electric_fld, max_fld)
+    call a2_tree_min_cc(tree, i_electric_fld, min_fld)
+    call a2_tree_max_cc(tree, i_electron, max_dns)
 
     dr_min       = a2_min_dr(tree)
     mobility     = LT_get_col(ST_td_tbl, i_mobility, max_fld)
@@ -329,13 +330,12 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), &
-         dt_alpha, ST_dt_max)
+    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, ST_dt_max)
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
-  subroutine compute_fld(tree, n_cycles, have_guess)
+  subroutine compute_electric_field(tree, n_cycles, have_guess)
     use m_units_constants
     type(a2_t), intent(inout) :: tree
     integer, intent(in)       :: n_cycles
@@ -352,8 +352,8 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           tree%boxes(id)%cc(:, :, i_rhs) = fac * (&
-               tree%boxes(id)%cc(:, :, i_elec) - &
-               tree%boxes(id)%cc(:, :, i_pion))
+               tree%boxes(id)%cc(:, :, i_electron) - &
+               tree%boxes(id)%cc(:, :, i_pos_ion))
        end do
        !$omp end do nowait
     end do
@@ -367,14 +367,14 @@ contains
     end do
 
     ! Compute field from potential
-    call a2_loop_box(tree, fld_from_pot)
+    call a2_loop_box(tree, electric_field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_tree(tree, i_fld, a2_gc_interp, a2_bc_neumann_zero)
-  end subroutine compute_fld
+    call a2_gc_tree(tree, i_electric_fld, a2_gc_interp, a2_bc_neumann_zero)
+  end subroutine compute_electric_field
 
   ! Compute electric field from electrical potential
-  subroutine fld_from_pot(box)
+  subroutine electric_field_from_potential(box)
     type(box2_t), intent(inout) :: box
     integer                     :: nc
     real(dp)                    :: inv_dr
@@ -382,34 +382,34 @@ contains
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-    box%fx(:, :, f_fld) = inv_dr * &
+    box%fx(:, :, electric_fld) = inv_dr * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fy(:, :, f_fld) = inv_dr * &
+    box%fy(:, :, electric_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
 
     ! Compute fields at the boundaries of the box, where eps can change (have to
     ! be careful that there is enough refinement)
-    box%fx(1, :, f_fld) = 2 * inv_dr * &
+    box%fx(1, :, electric_fld) = 2 * inv_dr * &
          (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
          box%cc(0, 1:nc, i_eps) / &
          (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-    box%fx(nc+1, :, f_fld) = 2 * inv_dr * &
+    box%fx(nc+1, :, electric_fld) = 2 * inv_dr * &
          (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
          box%cc(nc+1, 1:nc, i_eps) / &
          (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-    box%fy(:, 1, f_fld) = 2 * inv_dr * &
+    box%fy(:, 1, electric_fld) = 2 * inv_dr * &
          (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
          box%cc(1:nc, 0, i_eps) / &
          (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-    box%fy(:, nc+1, f_fld) = 2 * inv_dr * &
+    box%fy(:, nc+1, electric_fld) = 2 * inv_dr * &
          (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
          box%cc(1:nc, nc+1, i_eps) / &
          (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
 
-    box%cc(1:nc, 1:nc, i_fld) = sqrt(&
-         0.25_dp * (box%fx(1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, f_fld))**2 + &
-         0.25_dp * (box%fy(1:nc, 1:nc, f_fld) + box%fy(1:nc, 2:nc+1, f_fld))**2)
-  end subroutine fld_from_pot
+    box%cc(1:nc, 1:nc, i_electric_fld) = sqrt(&
+         0.25_dp * (box%fx(1:nc, 1:nc, electric_fld) + box%fx(2:nc+1, 1:nc, electric_fld))**2 + &
+         0.25_dp * (box%fy(1:nc, 1:nc, electric_fld) + box%fy(1:nc, 2:nc+1, electric_fld))**2)
+  end subroutine electric_field_from_potential
 
   ! Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id, dt_vec)
@@ -419,7 +419,7 @@ contains
     real(dp), intent(in)        :: dt_vec(:)
     real(dp)                    :: fac, inv_dr, tmp, gradp, gradc, gradn
     real(dp)                    :: mobility, diff_coeff, v_drift
-    real(dp)                    :: fld, fld_avg
+    real(dp)                    :: fld_avg, fld
     real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
     integer                     :: i, j, nc
     type(LT_loc_t) :: loc
@@ -428,48 +428,49 @@ contains
     inv_dr = 1/boxes(id)%dr
     fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
-    call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong1, &
+    call a2_gc2_box(boxes, id, i_electron, a2_gc2_prolong1, &
          a2_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
        do i = 1, nc+1
-          fld_avg   = 0.5_dp * (boxes(id)%cc(i, j, i_fld) + &
-               boxes(id)%cc(i-1, j, i_fld))
+          fld_avg   = 0.5_dp * (boxes(id)%cc(i, j, i_electric_fld) + &
+               boxes(id)%cc(i-1, j, i_electric_fld))
           loc        = LT_get_loc(ST_td_tbl, fld_avg)
           mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
           diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
-          fld        = boxes(id)%fx(i, j, f_fld)
+          fld        = boxes(id)%fx(i, j, electric_fld)
           v_drift    = -mobility * fld
-          gradc      = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
+          gradc      = boxes(id)%cc(i  , j, i_electron) - &
+                       boxes(id)%cc(i-1, j, i_electron)
 
           if (v_drift < 0.0_dp) then
              if (i == nc+1) then
                 tmp = gc_data(j, a2_neighb_highx)
              else
-                tmp = boxes(id)%cc(i+1, j, i_elec)
+                tmp = boxes(id)%cc(i+1, j, i_electron)
              end if
-             gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fx(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-             if (boxes(id)%fx(i, j, f_elec) < fac * fld) &
-                  boxes(id)%fx(i, j, f_elec) = fac * fld
+             gradn = tmp - boxes(id)%cc(i, j, i_electron)
+             boxes(id)%fx(i, j, flux_elec) = v_drift * &
+                  (boxes(id)%cc(i, j, i_electron) - koren_mlim(gradc, gradn))
+             if (boxes(id)%fx(i, j, flux_elec) < fac * fld) &
+                  boxes(id)%fx(i, j, flux_elec) = fac * fld
           else                  ! v_drift > 0
              if (i == 1) then
                 tmp = gc_data(j, a2_neighb_lowx)
              else
-                tmp = boxes(id)%cc(i-2, j, i_elec)
+                tmp = boxes(id)%cc(i-2, j, i_electron)
              end if
-             gradp = boxes(id)%cc(i-1, j, i_elec) - tmp
-             boxes(id)%fx(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i-1, j, i_elec) + koren_mlim(gradc, gradp))
-             if (boxes(id)%fx(i, j, f_elec) > fac * fld) &
-                  boxes(id)%fx(i, j, f_elec) = fac * fld
+             gradp = boxes(id)%cc(i-1, j, i_electron) - tmp
+             boxes(id)%fx(i, j, flux_elec) = v_drift * &
+                  (boxes(id)%cc(i-1, j, i_electron) + koren_mlim(gradc, gradp))
+             if (boxes(id)%fx(i, j, flux_elec) > fac * fld) &
+                  boxes(id)%fx(i, j, flux_elec) = fac * fld
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
           ! scaled by 1/dx
-          boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_elec) - &
+          boxes(id)%fx(i, j, flux_elec) = boxes(id)%fx(i, j, flux_elec) - &
                diff_coeff * gradc * inv_dr
        end do
     end do
@@ -477,42 +478,43 @@ contains
     ! y-fluxes interior, advective part with flux limiter
     do j = 1, nc+1
        do i = 1, nc
-          fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, i_fld) + &
-               boxes(id)%cc(i, j-1, i_fld))
+          fld_avg    = 0.5_dp * (boxes(id)%cc(i, j, i_electric_fld) + &
+               boxes(id)%cc(i, j-1, i_electric_fld))
           loc        = LT_get_loc(ST_td_tbl, fld_avg)
           mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
           diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
-          fld        = boxes(id)%fy(i, j, f_fld)
+          fld        = boxes(id)%fy(i, j, electric_fld)
           v_drift    = -mobility * fld
-          gradc      = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i, j-1, i_elec)
+          gradc      = boxes(id)%cc(i, j  , i_electron) - &
+                       boxes(id)%cc(i, j-1, i_electron)
 
           if (v_drift < 0.0_dp) then
              if (j == nc+1) then
                 tmp = gc_data(i, a2_neighb_highy)
              else
-                tmp = boxes(id)%cc(i, j+1, i_elec)
+                tmp = boxes(id)%cc(i, j+1, i_electron)
              end if
-             gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fy(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-             if (boxes(id)%fy(i, j, f_elec) < fac * fld) &
-                  boxes(id)%fy(i, j, f_elec) = fac * fld
+             gradn = tmp - boxes(id)%cc(i, j, i_electron)
+             boxes(id)%fy(i, j, flux_elec) = v_drift * &
+                  (boxes(id)%cc(i, j, i_electron) - koren_mlim(gradc, gradn))
+             if (boxes(id)%fy(i, j, flux_elec) < fac * fld) &
+                  boxes(id)%fy(i, j, flux_elec) = fac * fld
           else                  ! v_drift > 0
              if (j == 1) then
                 tmp = gc_data(i, a2_neighb_lowy)
              else
-                tmp = boxes(id)%cc(i, j-2, i_elec)
+                tmp = boxes(id)%cc(i, j-2, i_electron)
              end if
-             gradp = boxes(id)%cc(i, j-1, i_elec) - tmp
-             boxes(id)%fy(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j-1, i_elec) + koren_mlim(gradc, gradp))
-             if (boxes(id)%fy(i, j, f_elec) > fac * fld) &
-                  boxes(id)%fy(i, j, f_elec) = fac * fld
+             gradp = boxes(id)%cc(i, j-1, i_electron) - tmp
+             boxes(id)%fy(i, j, flux_elec) = v_drift * &
+                  (boxes(id)%cc(i, j-1, i_electron) + koren_mlim(gradc, gradp))
+             if (boxes(id)%fy(i, j, flux_elec) > fac * fld) &
+                  boxes(id)%fy(i, j, flux_elec) = fac * fld
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
           ! scaled by 1/dx
-          boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_elec) - &
+          boxes(id)%fy(i, j, flux_elec) = boxes(id)%fy(i, j, flux_elec) - &
                diff_coeff * gradc * inv_dr
        end do
     end do
@@ -522,16 +524,20 @@ contains
   ! Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_dens(box)
     type(box2_t), intent(inout) :: box
-    box%cc(:, :, i_elec) = 0.5_dp * (box%cc(:, :, i_elec) + box%cc(:, :, i_elec_old))
-    box%cc(:, :, i_pion) = 0.5_dp * (box%cc(:, :, i_pion) + box%cc(:, :, i_pion_old))
+    box%cc(:, :, i_electron) = 0.5_dp *  &
+                               (box%cc(:, :, i_electron) + &
+                                box%cc(:, :, i_electron_old))
+    box%cc(:, :, i_pos_ion) = 0.5_dp * &
+                          (box%cc(:, :, i_pos_ion) + &
+                           box%cc(:, :, i_pos_ion_old))
   end subroutine average_dens
 
   ! Advance solution over dt based on the fluxes / source term, using forward Euler
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
-    real(dp)                    :: inv_dr, src, sflux, fld
-    real(dp)                    :: alpha, eta, dflux(2)
+    real(dp)                    :: inv_dr, src, fld
+    real(dp)                    :: alpha, eta, sflux, dflux(2)
     integer                     :: i, j, nc
     type(LT_loc_t) :: loc
 
@@ -539,34 +545,35 @@ contains
     inv_dr                = 1/box%dr
     do j = 1, nc
        do i = 1, nc
-          fld      = box%cc(i,j, i_fld)
+          fld      = box%cc(i,j, i_electric_fld)
           loc      = LT_get_loc(ST_td_tbl, fld)
           alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
           eta      = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
           ! mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
           ! src = abs(mobility * fld) * (alpha-eta) * &
-          !      box%cc(i, j, i_elec)
+          !      box%cc(i, j, i_electron)
 
-          dflux(1) = box%fx(i, j, f_elec) + box%fx(i+1, j, f_elec)
-          dflux(2) = box%fy(i, j, f_elec) + box%fy(i, j+1, f_elec)
+          dflux(1) = box%fx(i, j, flux_elec) + box%fx(i+1, j, flux_elec)
+          dflux(2) = box%fy(i, j, flux_elec) + box%fy(i, j+1, flux_elec)
           src = 0.5_dp * norm2(dflux) * (alpha - eta)
 
           if (ST_photoi_enabled) &
-               src = src + box%cc(i,j, i_pho)
+               src = src + box%cc(i,j, i_photo)
 
-          sflux = (box%fx(i, j, f_elec) - box%fx(i+1, j, f_elec) + &
-               box%fy(i, j, f_elec) - box%fy(i, j+1, f_elec)) * inv_dr
+          sflux = (box%fx(i, j, flux_elec) - box%fx(i+1, j, flux_elec) + &
+               box%fy(i, j, flux_elec) - box%fy(i, j+1, flux_elec)) * inv_dr
 
-          box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + (src + sflux) * dt(1)
-          box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src * dt(1)
+          box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + (src + sflux) * dt(1)
+          box%cc(i, j, i_pos_ion) = box%cc(i, j, i_pos_ion) + src * dt(1)
        end do
     end do
 
     do j = 1, nc
        do i = 1, nc
           if (box%cc(i, j, i_eps) > 1.0_dp) then
-             box%cc(i, j, i_pion) = box%cc(i, j, i_pion) - box%cc(i, j, i_elec)
-             box%cc(i, j, i_elec) = 0
+             box%cc(i, j, i_pos_ion) = box%cc(i, j, i_pos_ion) - &
+                                    box%cc(i, j, i_electron)
+             box%cc(i, j, i_electron) = 0
           end if
        end do
     end do
@@ -591,7 +598,7 @@ contains
     call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
 
     call PH_set_src_2d(tree, ST_photoi_tbl, ST_rng, num_photons, &
-         i_pho, i_pho, 0.25e-3_dp, .false., .false., 1e-9_dp, dt)
+         i_photo, i_photo, 0.25e-3_dp, .false., .false., 1e-9_dp, dt)
 
   end subroutine set_photoionization
 
@@ -607,14 +614,14 @@ contains
     do j = 1, nc
        do i = 1, nc
           dr       = box%dr
-          fld      = box%cc(i, j, i_fld)
+          fld      = box%cc(i, j, i_electric_fld)
           loc      = LT_get_loc(ST_td_tbl, fld)
           alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
           mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-          tmp = fld * mobility * alpha * box%cc(i, j, i_elec) * coeff(1)
+          tmp = fld * mobility * alpha * box%cc(i, j, i_electron) * coeff(1)
           if (tmp < 0) tmp = 0
-          box%cc(i, j, i_pho) = tmp
+          box%cc(i, j, i_photo) = tmp
        end do
     end do
   end subroutine set_photoi_rate
@@ -630,17 +637,17 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_elec)
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_pion)
+          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
           call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_phi)
           call set_box_eps(tree%boxes(id))
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box(tree%boxes, id, i_elec, &
+          call a2_gc_box(tree%boxes, id, i_electron, &
                a2_gc_interp_lim, a2_bc_neumann_zero)
-          call a2_gc_box(tree%boxes, id, i_pion, &
+          call a2_gc_box(tree%boxes, id, i_pos_ion, &
                a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, mg%sides_bc)
@@ -649,7 +656,7 @@ contains
   end subroutine prolong_to_new_boxes
 
   ! This fills ghost cells near physical boundaries for the potential
-  subroutine sides_bc_pot(box, nb, iv, bc_type)
+  subroutine sides_bc_potential(box, nb, iv, bc_type)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
@@ -690,6 +697,6 @@ contains
                ST_applied_voltage2 * xy(1) / ST_domain_len
        end do
     end select
-  end subroutine sides_bc_pot
+  end subroutine sides_bc_potential
 
 end program streamer_2d
