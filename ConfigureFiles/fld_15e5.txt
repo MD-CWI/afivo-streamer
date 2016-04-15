@@ -1,0 +1,2 @@
+applied_fld = 0.15E+07
+sim_name = 15e5

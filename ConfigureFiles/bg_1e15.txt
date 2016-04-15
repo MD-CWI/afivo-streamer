@@ -1,0 +1,2 @@
+bg_dens = 1.0e15
+sim_name = 1e15
