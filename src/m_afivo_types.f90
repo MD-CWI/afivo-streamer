@@ -1,11 +1,11 @@
 ! This module contains the basic dimension-independent types and constants that
 ! are used in Afivo, together with some basic routines. Dimension-dependent
-! types and constant are place in m_a2_t.f90 and m_a3_t.f90.
+! types and constant are place in m_a2_t.f90 and m_a3_types.f90.
 !
 ! Author: Jannis Teunissen
 ! License: GPLv3
 
-module m_af_t
+module m_afivo_types
 
   implicit none
   public
@@ -80,4 +80,4 @@ contains
     af_get_max_threads = OMP_get_max_threads()
   end function af_get_max_threads
 
-end module m_af_t
+end module m_afivo_types

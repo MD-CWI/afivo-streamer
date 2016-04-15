@@ -1,7 +1,7 @@
 !> \example test_reduction_2d.f90
-!> This example shows the basic reduction functionality of m_a2_t.
+!> This example shows the basic reduction functionality of m_a2_types.
 program test_reduction
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
   use m_a2_utils
 

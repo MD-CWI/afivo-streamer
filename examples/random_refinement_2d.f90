@@ -3,11 +3,11 @@
 ! This example shows how to create an AMR tree, perform random refinement, write
 ! output files, and how to fill ghost cells.
 program random_refinement_2d
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
   use m_a2_utils
-  use m_a2_gc
-  use m_a2_io
+  use m_a2_ghostcell
+  use m_a2_output
 
   implicit none
 

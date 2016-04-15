@@ -1,13 +1,13 @@
 !> \example poisson_cyl_dielectric.f90
 !>
-!> Example showing how to use m_a2_mg in cylindrical coordinates with an abrubt
+!> Example showing how to use m_a2_multigrid in cylindrical coordinates with an abrubt
 !> change in "eps", and compare with an analytic solution.
 program poisson_cyl_dielectric
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_mg
+  use m_a2_multigrid
   use m_a2_utils
-  use m_a2_io
+  use m_a2_output
   use m_gaussians
 
   implicit none

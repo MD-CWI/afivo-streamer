@@ -1,12 +1,12 @@
 !> \example drift_diffusion_3d.f90
-!> A drift-diffusion example for m_a3_t
+!> A drift-diffusion example for m_a3_types
 !> @TODO: document this
 program drift_diffusion_3d
-  use m_a3_t
+  use m_a3_types
   use m_a3_core
-  use m_a3_io
+  use m_a3_output
   use m_a3_utils
-  use m_a3_gc
+  use m_a3_ghostcell
   use m_a3_restrict
 
   implicit none

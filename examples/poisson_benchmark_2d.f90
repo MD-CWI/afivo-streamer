@@ -3,12 +3,12 @@
 ! This program can be used to benchmark the multigrid routines. For simplicity,
 ! it does not compare results with known solution.
 program poisson_benchmark_2d
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_mg
+  use m_a2_multigrid
   use m_a2_utils
-  use m_a2_gc
-  use m_a2_io
+  use m_a2_ghostcell
+  use m_a2_output
 
   implicit none
 

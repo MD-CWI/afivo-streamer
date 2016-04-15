@@ -4,8 +4,8 @@
 ! Author: Jannis Teunissen
 ! License: GPLv3
 
-module m_a$D_gc
-  use m_a$D_t
+module m_a$D_ghostcell
+  use m_a$D_types
 
   implicit none
   private
@@ -633,4 +633,4 @@ contains
     end select
   end subroutine a$D_bc2_neumann_zero
 
-end module m_a$D_gc
+end module m_a$D_ghostcell

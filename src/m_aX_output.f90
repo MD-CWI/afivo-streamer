@@ -4,9 +4,9 @@
 ! Author: Jannis Teunissen
 ! License: GPLv3
 
-module m_a$D_io
+module m_a$D_output
 
-  use m_a$D_t
+  use m_a$D_types
 
   implicit none
   private
@@ -711,4 +711,4 @@ contains
     print *, "a$D_write_silo: written " // trim(fname)
   end subroutine a$D_write_silo
 
-end module m_a$D_io
+end module m_a$D_output

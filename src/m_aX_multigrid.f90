@@ -3,8 +3,8 @@
 ! Author: Jannis Teunissen
 ! License: GPLv3
 
-module m_a$D_mg
-  use m_a$D_t
+module m_a$D_multigrid
+  use m_a$D_types
 
   implicit none
   private
@@ -260,7 +260,7 @@ contains
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
   subroutine mg$D_sides_rb(boxes, id, nb, iv)
-    use m_a$D_gc, only: a$D_gc_prolong0
+    use m_a$D_ghostcell, only: a$D_gc_prolong0
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -397,7 +397,7 @@ contains
   end subroutine mg$D_sides_rb
 
   subroutine fill_gc_phi(boxes, ids, mg)
-    use m_a$D_gc, only: a$D_gc_box
+    use m_a$D_ghostcell, only: a$D_gc_box
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:)
     type(mg$D_t), intent(in)     :: mg
@@ -442,7 +442,7 @@ contains
   end subroutine correct_children
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
-    use m_a$D_gc, only: a$D_gc_box
+    use m_a$D_ghostcell, only: a$D_gc_box
     type(box$D_t), intent(inout) :: boxes(:)
     type(mg$D_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:), n_cycle
@@ -1490,4 +1490,4 @@ contains
   end subroutine mg2_box_gsrb_clpld
 #endif
 
-end module m_a$D_mg
+end module m_a$D_multigrid

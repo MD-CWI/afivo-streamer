@@ -3,12 +3,12 @@
 ! This program can be used to benchmark the multigrid routines. For simplicity,
 ! it does not compare results with known solution.
 program poisson_benchmark_3d
-  use m_a3_t
+  use m_a3_types
   use m_a3_core
-  use m_a3_mg
+  use m_a3_multigrid
   use m_a3_utils
-  use m_a3_gc
-  use m_a3_io
+  use m_a3_ghostcell
+  use m_a3_output
 
   implicit none
 

@@ -4,7 +4,7 @@
 ! License: GPLv3
 
 module m_a$D_core
-  use m_a$D_t
+  use m_a$D_types
 
   implicit none
   private
