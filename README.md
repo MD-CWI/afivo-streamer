@@ -1,8 +1,7 @@
 # a5_streamer
 
 This is a collection of streamer models based on
-[AFiVO](https://github.com/jannisteunissen/afivo). A 2D, a 3D and a cylindrical
-model are included.
+[AFiVO](https://github.com/jannisteunissen/afivo). 2D, 3D and cylindrical models are included.
 
 ### Requirements
 
@@ -21,12 +20,12 @@ which is automatically downloaded and compiled.
 
 ### Running the code
 
-    ./streamer_2d cfgs/example_2d.txt
-    ./streamer_cyl cfgs/example_cyl.txt
-    ./streamer_3d cfgs/example_3d.txt
+    ./streamer_2d  ConfigureFiles/example_2d.txt
+    ./streamer_cyl ConfigureFiles/example_cyl.txt
+    ./streamer_3d  ConfigureFiles/example_3d.txt
 
 where the configuration files include the parameters that you want to use, see
-the examples in the **cfgs** directory. You can also specify multiple configuration files, like
+the examples in the **ConfigureFiles** directory. You can also specify multiple configuration files, like
 
     ./streamer_2d cfg_1.txt cfg_2.txt ...
 
