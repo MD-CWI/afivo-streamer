@@ -30,26 +30,28 @@ contains
     integer, intent(in)          :: n_pixels(2) !< Number of pixels in the plane
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
 
-    integer, parameter           :: my_unit = 100
-    character(len=100)           :: fmt_string
-    character(len=400)           :: fname
-    integer                      :: i, j, n_vars, dim_unused, n_points(3)
-    real(dp)                     :: r($D), dvec(3)
-    real(dp)                     :: v1($D), v2($D)
-    real(dp), allocatable        :: pixel_data(:, :, :)
+    integer, parameter    :: my_unit = 100
+    character(len=100)    :: fmt_string
+    character(len=400)    :: fname
+    integer               :: i, j, n_vars, dim_unused, n_points(3)
+    real(dp)              :: r($D), dvec(3), origin(3)
+    real(dp)              :: v1($D), v2($D)
+    real(dp), allocatable :: pixel_data(:, :, :)
 
-    n_vars = size(ivs)
-
+    n_vars      = size(ivs)
 #if $D == 2
-    dvec(1:2) = r_max(1:2) - r_min(1:2)
-    dvec(3) = 0
-    dim_unused = 3
-    n_points = [n_pixels(1), n_pixels(2), 1]
-    v1 = [dvec(1), 0.0_dp] / (n_pixels(1) - 1)
-    v2 = [0.0_dp, dvec(2)] / (n_pixels(2) - 1)
+    origin(1:2) = r_min
+    origin(3)   = 0
+    dvec(1:2)   = r_max(1:2) - r_min(1:2)
+    dvec(3)     = 0
+    dim_unused  = 3
+    n_points    = [n_pixels(1), n_pixels(2), 1]
+    v1          = [dvec(1), 0.0_dp] / (n_pixels(1) - 1)
+    v2          = [0.0_dp, dvec(2)] / (n_pixels(2) - 1)
 #elif $D == 3
-    dvec = r_max - r_min
-    dim_unused = minloc(abs(dvec), 1)
+    origin      = r_min
+    dvec        = r_max - r_min
+    dim_unused  = minloc(abs(dvec), 1)
 
     select case (dim_unused)
     case (1)
