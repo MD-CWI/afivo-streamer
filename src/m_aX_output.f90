@@ -100,7 +100,7 @@ contains
     write(my_unit, '(A)') "ASCII"
     write(my_unit, '(A)') "DATASET STRUCTURED_POINTS"
     write(my_unit, '(A,3I10)') "DIMENSIONS ", n_points
-    write(my_unit, '(A,3E16.8)') "ORIGIN ", r_min
+    write(my_unit, '(A,3E16.8)') "ORIGIN ", origin
     write(my_unit, '(A,3E16.8)') "SPACING ", v1 + v2
     write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
     do i = 1, n_vars
