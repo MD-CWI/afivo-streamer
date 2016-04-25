@@ -34,14 +34,12 @@ contains
     character(len=100)    :: fmt_string
     character(len=400)    :: fname
     integer               :: i, j, n_vars, dim_unused, n_points(3)
-    real(dp)              :: r($D), dvec(3), origin(3)
+    real(dp)              :: r($D), dvec(3)
     real(dp)              :: v1($D), v2($D)
     real(dp), allocatable :: pixel_data(:, :, :)
 
     n_vars      = size(ivs)
 #if $D == 2
-    origin(1:2) = r_min
-    origin(3)   = 0
     dvec(1:2)   = r_max(1:2) - r_min(1:2)
     dvec(3)     = 0
     dim_unused  = 3
@@ -49,7 +47,6 @@ contains
     v1          = [dvec(1), 0.0_dp] / (n_pixels(1) - 1)
     v2          = [0.0_dp, dvec(2)] / (n_pixels(2) - 1)
 #elif $D == 3
-    origin      = r_min
     dvec        = r_max - r_min
     dim_unused  = minloc(abs(dvec), 1)
 
@@ -100,8 +97,14 @@ contains
     write(my_unit, '(A)') "ASCII"
     write(my_unit, '(A)') "DATASET STRUCTURED_POINTS"
     write(my_unit, '(A,3I10)') "DIMENSIONS ", n_points
-    write(my_unit, '(A,3E16.8)') "ORIGIN ", origin
+#if $D == 2
+    write(my_unit, '(A,3E16.8)') "ORIGIN ", [r_min(1), r_min(2), 0.0_dp]
+    write(my_unit, '(A,3E16.8)') "SPACING ", &
+         [v1(1) + v2(1), v1(2) + v2(2), 0.0_dp]
+#elif $D == 3
+    write(my_unit, '(A,3E16.8)') "ORIGIN ", r_min
     write(my_unit, '(A,3E16.8)') "SPACING ", v1 + v2
+#endif
     write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
     do i = 1, n_vars
        write(my_unit, '(A)') "SCALARS " // &
