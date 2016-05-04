@@ -1,50 +1,43 @@
 Afivo
 =====
 
-Afivo stands for <b>A</b>daptive <b>Fi</b>nite <b>V</b>olume <b>O</b>ctree. It
-is a framework for adaptive finite volume simulations on quadtree / octree
-grids. Some alternatives are listed below, but what makes Afivo different is the
-focus on **simplicity**. It intentionally supports less features than most
-alternatives, which keeps the code relatively simple.
+Afivo (<b>A</b>daptive <b>Fi</b>nite <b>V</b>olume <b>O</b>ctree) is a framework
+for simulations on adaptively refined quadtree and octree grids. It
+intentionally supports less features than most alternatives, with the aim of
+making the code relatively easy to modify.
 
 ### Features
 
-* All the basic grid functionality for finite volume simulations with
-  adaptive mesh refinement.
-* Relatively simple.
-* OpenMP implementation.
-* FAS multigrid solver (v-cycle and FMG) with point relaxation.
+* Support for adaptively refined quadtree and octree grids
+* OpenMP parallelization
+* FAS multigrid solver (v-cycle and FMG)
 * Silo and VTK unstructured output, which can be visualized with e.g.
   [Visit](https://wci.llnl.gov/simulation/computer-codes/visit).
 
 ### Design choices
 
-* Afivo uses an octree-like grid. The basic blocks in this grid contain NxN (2D) or
-  NxNxN (3D) cells, where N is an even number. This is similar to
-  [Paramesh](http://www.physics.drexel.edu/~olson/paramesh-doc/Users_manual/amr.html).
-* Parallellization using OpenMP only, no MPI.
-* The refinement ratio is always 2.
-* There is always a layer of width 1 of ghost cells (you can of course get
-  more data from neighbors, this is easy with OpenMP).
-* Corner ghost cells are not automatically filled.
-* Quantities are either cell-centered or face-centered.
-* Boundary conditions are provided by the user.
+Some of the design choices are liste below. A more detailed discussion can be
+found on [this page](documentation/design.md).
 
-For some elaboration on the design choices, see
-[design considerations](documentation/design.md).
+* The refinement ratio is always 2.
+* Quantities are either cell-centered or face-centered.
+* Parallellization using OpenMP only, no MPI.
+* There is always one layer of ghost cells (but of course you can get
+  more data from neighbors).
+* No 'corner' ghost cells
 
 ### Installation & compilation
 
-Have a look here: [Compiling the code](documentation/compiling.md).
+Instructions can be found on [this page](documentation/compiling.md).
 
-### Author
+### Documentation
 
-Jannis Teunissen, jannis@teunissen.net
+Documentation can be found in the "documentation" directory (TODO: describe details)
 
-### Todo
+### Authors
 
-* Look for "pretty" examples, generate some animations, and put them online.
-* Fix Doxygen output
+* Jannis Teunissen (started the project to do discharge simulations)
+* Margreet Nool (worked on documentation, examples, testing)
 
 ### Some alternatives
 
