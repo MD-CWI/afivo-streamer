@@ -31,11 +31,11 @@ alternatives, which keeps the code relatively simple.
 * Boundary conditions are provided by the user.
 
 For some elaboration on the design choices, see
-[design considerations](design.md).
+[design considerations](documentation/design.md).
 
 ### Installation & compilation
 
-Have a look here: [Compiling the code](COMPILING.md).
+Have a look here: [Compiling the code](documentation/compiling.md).
 
 ### Author
 
