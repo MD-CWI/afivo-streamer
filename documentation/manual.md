@@ -73,7 +73,7 @@ multigrid routines is available under the <code>GNU GPLv3</code> license; both w
 implemented in Fortran 2008.
 
 <a name="fig_ex-orthtree" />
-<img src="../figures/two_boxes.png" width=300px />
+<img src="../../figures/two_boxes.png" width=300px />
 **Figure 1**. In \f$D\f$ dimensions, a quadtree or octree grid consist of boxes that each contain \f$N^D\f$ cells. A box with a grid spacing \f$h\f$ can be subdivided into \f$2^D\f$ smaller boxes with grid spacing \f$h/2\f$. By refining boxes up to different levels, local refinements can be created. In Afivo the **2:1 balance** is ensured, which means that between neighboring cells the refinement level differs by at most one.
 
 Below, the basic data
@@ -118,7 +118,7 @@ Some of the advantages and disadvantages of these approaches are:
 <a name="fig_block-orth-example" />
 a) A block-structured grid | b) A quadtree grid
 ------------- | -------------
-<img src="../figures/block_structured.png" height=200px /> | <img src="../figures/quadtree_cex4.png" height=200px />
+<img src="../../figures/block_structured.png" height=200px /> | <img src="../../figures/quadtree_cex4.png" height=200px />
 
 **Figure 2**. a) Example of a block-structured grid, taken from Xcite{www_bell_block_amr}.
 b) A quadtree grid consisting of boxes of \f$2 \times 2\f$ cells.
@@ -214,11 +214,11 @@ data types are described below.
 
 |       |        | 
 | ----: |  :---- |
-<img src="../figures/quadtree_cex1.png" width=100px /> | <img src="../figures/quadtree_cex2.png" width=100px /> 
-<img src="../figures/quadtree_cex3.png" width=100px /> | <img src="../figures/quadtree_cex4.png" width=100px /> |
+<img src="../../figures/quadtree_cex1.png" width=100px /> | <img src="../../figures/quadtree_cex2.png" width=100px /> 
+<img src="../../figures/quadtree_cex3.png" width=100px /> | <img src="../../figures/quadtree_cex4.png" width=100px /> |
 
 <a name="fig_example-quadtree" />
-<img src="../figures/box_indices.png" width=200px /> 
+<img src="../../figures/box_indices.png" width=200px /> 
 **Figure 4**. **TODO**: refine in one corner Upper: Example of a quadtree mesh
 that gets refined. Here boxes contain \f$2 \times 2\f$ cells, and different
 boxes have different colors.
@@ -270,7 +270,7 @@ refinement level, minimum coordinate and spatial index.
 <a name="fig_location-box-indices" />
 a) | b) 
 ------------- | -------------
-<img src="../figures/children_neighbors.png" width=200px /> | <img src="../figures/location_cc_fx.png" width=250px />
+<img src="../../figures/children_neighbors.png" width=200px /> | <img src="../../figures/location_cc_fx.png" width=250px />
 
 
 **Figure 5**. a) Each box contains an array of children and neighbors.
@@ -445,7 +445,7 @@ It is generally quite complicated to do this consistently near refinement
 boundaries.
 
 <a name="fig_interp-2d" />
-<img src="../figures/interp_2d.png" width=200px />
+<img src="../../figures/interp_2d.png" width=200px />
 **Figure 7**. Schematic drawing of \f$2-1-1\f$ interpolation.
 The three nearest coarse grid values are used to interpolate to the center
 of a fine grid cell.
@@ -656,7 +656,7 @@ This means that when fine and coarse fluxes are consistent, the integral over
 \f$\rho\f$ will be same on the fine and the coarse grid.
 
 <a name="fig_mg-ref-bound" />
-<img src="../figures/mg_refinement_boundary.png" width=300px />
+<img src="../../figures/mg_refinement_boundary.png" width=300px />
 **Figure 8**. Two coarse cells, of which the right one is refined.
 The cell centers are indicated by dots.
 There are two ghost values (red dots) on the left of the refinement boundary.
@@ -891,7 +891,7 @@ locally amplifies the source term by a factor of 100.
 <a name="fig_mg-ex1" />
 a) Mesh spacing | b) Maximum residual versus FMG
 ------------- | -------------
-<img src="../figures/mesh_mg_ex_1.png" width=300px /> | <img src="../figures/ex1_mg_res_pdf.tex" width="300px" />
+<img src="../../figures/mesh_mg_ex_1.png" width=300px /> | <img src="../../figures/ex1_mg_res_pdf.tex" width="300px" />
 
 **Figure 9**. a) mesh spacing used for the multigrid examples, in a
 \f$[0,1] \times [0,1]\f$ domain.
@@ -984,7 +984,7 @@ ones:
 \subsection sect_results Simulation conditions and results
 
 <a name="fig_ex-streamer-seed" />
-<img src="../figures/streamer_seed.png" width=300 />
+<img src="../../figures/streamer_seed.png" width=300 />
 **Figure 10**. Cross section through the center of the three-dimensional simulation
 domain. The ionized seeds with a density of \f$10^{20} \, \textrm{m}^{-3}\f$
 electrons and ions are indicated in red. There is a background density of
@@ -1020,7 +1020,7 @@ took about 3.5 hours on a 16-core machine, and eventually used about
 <a name="fig_ex-streamer-dns" />
 | 1 ns  | 3 ns   | 5 ns   | 7 ns   | 9 ns   | 11 ns  | 13 ns  | 15 ns  | 17 ns  | |
 | ----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :---- |
-<img src="../figures/visit/crop_two_str0010.png" width=60px /> | <img src="../figures/visit/crop_two_str0011.png" width=60px /> | <img src="../figures/visit/crop_two_str0012.png" width=60px /> | <img src="../figures/visit/crop_two_str0013.png" width=60px /> | <img src="../figures/visit/crop_two_str0014.png" width=60px /> | <img src="../figures/visit/crop_two_str0015.png" width=60px /> | <img src="../figures/visit/crop_two_str0016.png" width=60px /> | <img src="../figures/visit/crop_two_str0017.png" width=60px /> | <img src="../figures/visit/crop_two_str0018.png" width=60px /> | <img src="../figures/legend_elec_3d.png" width=80px /> 
+<img src="../../figures/visit/crop_two_str0010.png" width=60px /> | <img src="../../figures/visit/crop_two_str0011.png" width=60px /> | <img src="../../figures/visit/crop_two_str0012.png" width=60px /> | <img src="../../figures/visit/crop_two_str0013.png" width=60px /> | <img src="../../figures/visit/crop_two_str0014.png" width=60px /> | <img src="../../figures/visit/crop_two_str0015.png" width=60px /> | <img src="../../figures/visit/crop_two_str0016.png" width=60px /> | <img src="../../figures/visit/crop_two_str0017.png" width=60px /> | <img src="../../figures/visit/crop_two_str0018.png" width=60px /> | <img src="../../figures/legend_elec_3d.png" width=80px /> 
 **Figure 11**. A three-dimensional simulation showing two positive streamers
 propagating downwards. The upper one connects to the back of the lower one.
 The electron density is shown using volume rendering, for which the opacity
@@ -1029,7 +1029,7 @@ is indicated in the legend; low densities are transparent
 <a name="fig_ex-streamer-fld" />
 | 1 ns  | 3 ns   | 5 ns   | 7 ns   | 9 ns   | 11 ns  | 13 ns  | 15 ns  | 17 ns  | |
 | ----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :---- |
-<img src="../figures/visit/crop_two_str0000.png" width=60px /> | <img src="../figures/visit/crop_two_str0001.png" width=60px /> | <img src="../figures/visit/crop_two_str0002.png" width=60px /> | <img src="../figures/visit/crop_two_str0003.png" width=60px /> | <img src="../figures/visit/crop_two_str0004.png" width=60px /> | <img src="../figures/visit/crop_two_str0005.png" width=60px /> | <img src="../figures/visit/crop_two_str0006.png" width=60px /> | <img src="../figures/visit/crop_two_str0007.png" width=60px /> | <img src="../figures/visit/crop_two_str0008.png" width=60px /> | <img src="../figures/legend_2d.pdf" width=80px /> 
+<img src="../../figures/visit/crop_two_str0000.png" width=60px /> | <img src="../../figures/visit/crop_two_str0001.png" width=60px /> | <img src="../../figures/visit/crop_two_str0002.png" width=60px /> | <img src="../../figures/visit/crop_two_str0003.png" width=60px /> | <img src="../../figures/visit/crop_two_str0004.png" width=60px /> | <img src="../../figures/visit/crop_two_str0005.png" width=60px /> | <img src="../../figures/visit/crop_two_str0006.png" width=60px /> | <img src="../../figures/visit/crop_two_str0007.png" width=60px /> | <img src="../../figures/visit/crop_two_str0008.png" width=60px /> | <img src="../../figures/legend_2d.pdf" width=80px /> 
 **Figure 12**. Cross section through the three-dimensional domain showing the time
 evolution of the electric field. The full height of the domain is shown
 (\f$32 \, \textrm{mm}\f$), but only \f$6 \, \textrm{mm}\f$ of the width.
