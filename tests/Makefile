@@ -28,7 +28,7 @@ $(ANSWERS):	$(TESTS) | $(ANSDIR)
 		@./$(@:$(ANSDIR)/%=%) > $@
 
 # Rule to generate results and compare to answer
-$(RESULTS): $(TESTS) phonytest | $(RESDIR) $(ANSWERS)
+$(RESULTS): $(TESTS) phonytest | $(RESDIR)
 		@./$(@:$(RESDIR)/%=%) > $@
 		@if cmp -s $@ $(@:$(RESDIR)/%=$(ANSDIR)/%) ; \
         then echo PASSED $(@:$(RESDIR)/%=%) ; \

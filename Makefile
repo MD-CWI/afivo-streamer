@@ -5,7 +5,7 @@ CREATE_DIRS	:= silo
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
 # phonytest ensures that tests are always performed
-.PHONY:	all test doc clean phonytest $(EXT_LIBS) $(CLEANSRC)
+.PHONY:	all test doc clean phonytest $(SRC_DIRS) $(EXT_LIBS) $(CLEANSRC)
 
 all:	$(SRC_DIRS)
 
