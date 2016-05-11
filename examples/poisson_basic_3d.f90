@@ -28,15 +28,15 @@ program poisson_basic_3d
   integer            :: nb_list(6, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
-  type(gauss_t)      :: gs
   type(mg3_t)        :: mg
+  type(gauss_t)      :: gs
   integer            :: count_rate,t_start, t_end
 
   print *, "Running poisson_basic_3d"
   print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
-  if (n_gaussian==1) then
+  if (n_gaussian == 1) then
      ! Amplitudes:  [1.0_dp]
      ! Sigmas    :  [0.04_dp]
      ! Locations :  [0.5_dp, 0.5_dp, 0.5_dp]
@@ -50,12 +50,12 @@ program poisson_basic_3d
           reshape([0.25_dp, 0.25_dp, 0.5_dp, 0.75_dp, 0.75_dp, 0.5_dp], [3,2]))
   end if
 
-  write(*,'(2(A11,2x,i2,/),2(A11,2x,Es10.2,/),A11,2x,3(Es10.2,1x))') &
-       'gs%n_gauss:',gs%n_gauss, &
-       'gs%n_dim  :',gs%n_dim, &
-       'gs%ampl   :',gs%ampl, &
-       'gs%sigma  :',gs%sigma, &
-       'gs%r0     :',gs%r0
+  write(*,"(2(A11,2x,i2,/),2(A11,2x,Es10.2,/),A11,2x,3(Es10.2,1x))") &
+       "gs%n_gauss:",gs%n_gauss, &
+       "gs%n_dim  :",gs%n_dim, &
+       "gs%ampl   :",gs%ampl, &
+       "gs%sigma  :",gs%sigma, &
+       "gs%r0     :",gs%r0
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
@@ -109,10 +109,14 @@ program poisson_basic_3d
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
+  ! This routine does not initialize the multigrid variables i_phi, i_rhs
+  ! and i_tmp. These variables will be initialized at the first call
+  ! of mg3_fas_fmg
   call mg3_init_mg(mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
+
   do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
@@ -130,10 +134,10 @@ program poisson_basic_3d
      write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
-     ! This writes a Silo output file containing the cell-centered values of the
+     ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_basic_3d_", mg_iter
-     call a3_write_silo(tree, trim(fname), dir="output")
+     call a3_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
