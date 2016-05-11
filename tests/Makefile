@@ -25,11 +25,11 @@ score: 	$(TESTS) | $(ANSWERS)
 # Rule for generating (correct) answers to tests
 $(ANSWERS):	$(TESTS) | $(ANSDIR)
 		@echo Storing answer $@
-		@$(PWD)/$(@:$(ANSDIR)/%=%) > $@
+		@./$(@:$(ANSDIR)/%=%) > $@
 
 # Rule to generate results and compare to answer
 $(RESULTS): $(TESTS) phonytest | $(RESDIR) $(ANSWERS)
-		@$(PWD)/$(@:$(RESDIR)/%=%) > $@
+		@./$(@:$(RESDIR)/%=%) > $@
 		@if cmp -s $@ $(@:$(RESDIR)/%=$(ANSDIR)/%) ; \
         then echo PASSED $(@:$(RESDIR)/%=%) ; \
         else echo FAILED $(@:$(RESDIR)/%=%) ; \
