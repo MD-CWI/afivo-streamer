@@ -104,10 +104,8 @@ contains
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
     integer, intent(inout)   :: ref_flag
-    real(dp)                 :: rr
 
-    call random_number(rr)
-    if (rr < 0.2_dp .and. boxes(id)%lvl < 10) then
+    if (all(boxes(id)%r_min < 0.4_dp) .and. boxes(id)%lvl < 10) then
        ref_flag = af_do_ref
     else
        ref_flag = af_rm_ref
@@ -119,8 +117,7 @@ contains
     integer                     :: nc
 
     nc = box%n_cell
-    call random_number(box%cc(1:nc, 1:nc, i_phi))
-    box%cc(1:nc, 1:nc, i_phi) = 2 * box%cc(1:nc, 1:nc, i_phi) - 1
+    box%cc(1:nc, 1:nc, i_phi) = sum(box%ix)
   end subroutine set_random_values
 
 end program test_reduction
