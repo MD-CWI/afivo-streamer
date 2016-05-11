@@ -7,17 +7,39 @@ include $(A5_DIR)/makerules.make
 
 # All program sources (the .f90 files except modules)
 SRCS	:= $(filter-out $(wildcard m_*.f90), $(wildcard *.f90))
-PROGS	:= $(SRCS:%.f90=%)
+TESTS	:= $(SRCS:%.f90=%)
 
-.PHONY: all clean
+ANSDIR	:= answers
+RESDIR	:= results
+RESULTS	:= $(TESTS:%=$(RESDIR)/%)
+ANSWERS	:= $(TESTS:%=$(ANSDIR)/%)
 
-all:	$(PROGS)
+# phonytest helps to always regenerate test results
+.PHONY: all score clean phonytest
+
+all:	$(RESULTS)
+
+score: 	$(TESTS) | $(ANSWERS)
+		@$(MAKE) $(RESULTS) | cut -d\  -f 1 | egrep '(PASSED|FAILED)' | sort | uniq -c
+
+# Rule for generating (correct) answers to tests
+$(ANSWERS):	$(TESTS) | $(ANSDIR)
+		@echo Storing answer $@
+		@./$(@:$(ANSDIR)/%=%) > $@
+
+# Rule to generate results and compare to answer
+$(RESULTS): $(TESTS) phonytest | $(RESDIR)
+		@./$(@:$(RESDIR)/%=%) > $@
+		@if cmp -s $@ $(@:$(RESDIR)/%=$(ANSDIR)/%) ; \
+        then echo PASSED $(@:$(RESDIR)/%=%) ; \
+        else echo FAILED $(@:$(RESDIR)/%=%) ; \
+        fi
 
 clean:
-	$(RM) $(PROGS) *.o *.mod
+	$(RM) $(TESTS) $(RESULTS) *.o *.mod
 
-$(OUTDIR):
-		mkdir -p $@
+$(RESDIR) $(ANSDIR):
+		@mkdir -p $@
 
 # Dependency information
-$(PROGS): $(A5_DIR)/src/libafivo.a
+$(TESTS): $(A5_DIR)/src/libafivo.a
