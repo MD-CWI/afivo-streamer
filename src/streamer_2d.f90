@@ -1,12 +1,12 @@
 program streamer_2d
 
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_gc
+  use m_a2_ghostcell
   use m_a2_utils
   use m_a2_restrict
-  use m_a2_mg
-  use m_a2_io
+  use m_a2_multigrid
+  use m_a2_output
   use m_write_silo
   use m_streamer
 

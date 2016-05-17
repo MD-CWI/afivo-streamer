@@ -1,7 +1,7 @@
 program test_photoionization
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_io
+  use m_a2_output
   use m_a2_utils
   use m_lookup_table
   use m_random
