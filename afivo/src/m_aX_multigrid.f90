@@ -3,8 +3,8 @@
 ! Author: Jannis Teunissen
 ! License: GPLv3
 
-module m_a$D_mg
-  use m_a$D_t
+module m_a$D_multigrid
+  use m_a$D_types
 
   implicit none
   private
@@ -12,9 +12,9 @@ module m_a$D_mg
   ! The mg module supports different multigrid operators, and uses these tags to
   ! identify boxes / operators
   integer, parameter, public :: mg_normal_box = 1 !< Normal box
-  integer, parameter, public :: mg_lsf_box = 2    !< Box with an internal boundary
-  integer, parameter, public :: mg_ceps_box = 3   !< Box with constant eps /= 1
-  integer, parameter, public :: mg_veps_box = 4   !< Box with varying eps (on face)
+  integer, parameter, public :: mg_lsf_box    = 2 !< Box with an internal boundary
+  integer, parameter, public :: mg_ceps_box   = 3 !< Box with constant eps /= 1
+  integer, parameter, public :: mg_veps_box   = 4 !< Box with varying eps (on face)
 
   !> Type to store multigrid options in
   type, public :: mg$D_t
@@ -260,7 +260,7 @@ contains
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
   subroutine mg$D_sides_rb(boxes, id, nb, iv)
-    use m_a$D_gc, only: a$D_gc_prolong0
+    use m_a$D_ghostcell, only: a$D_gc_prolong0
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -289,18 +289,31 @@ contains
        di = dix
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
+
+          ! Bilinear extrapolation (using 4 points)
           boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
-               + boxes(id)%cc(i, j+dj, iv))
+               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
+               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
+               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
+          ! Extrapolation using 3 points
+          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+          !      boxes(id)%cc(i, j, iv) - 0.25_dp * &
+          !      (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv))
+          ! Extrapolation using 2 points
+          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+          !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
+          !      boxes(id)%cc(i+di, j+dj, iv)
        end do
     case (2)
        j = ix
        dj = dix
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
+          ! Bilinear extrapolation (using 4 points)
           boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
-               boxes(id)%cc(i, j, iv) - 0.25_dp * (boxes(id)%cc(i+di, j, iv) &
-               + boxes(id)%cc(i, j+dj, iv))
+               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
+               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
+               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
        end do
 #elif $D == 3
     case (1)
@@ -310,7 +323,19 @@ contains
           dk = -1 + 2 * iand(k, 1)
           do j = 1, nc
              dj = -1 + 2 * iand(j, 1)
+             ! Trilinear extrapolation (using 8 points)
+             ! boxes(id)%cc(i-di, j, k, iv) = &
+             !      0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 0.0625_dp * (&
+             !      27 * boxes(id)%cc(i, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
 
+             ! Extrapolation using 2 points
              boxes(id)%cc(i-di, j, k, iv) = &
                   0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
                   0.75_dp * boxes(id)%cc(i, j, k, iv) - &
@@ -324,6 +349,17 @@ contains
           dk = -1 + 2 * iand(k, 1)
           do i = 1, nc
              di = -1 + 2 * iand(i, 1)
+
+             ! boxes(id)%cc(i, j-dj, k, iv) = &
+             !      0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 0.0625_dp * (&
+             !      27 * boxes(id)%cc(i, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
 
              boxes(id)%cc(i, j-dj, k, iv) = &
                   0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
@@ -339,6 +375,17 @@ contains
           do i = 1, nc
              di = -1 + 2 * iand(i, 1)
 
+             ! boxes(id)%cc(i, j, k-dk, iv) = &
+             !      0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 0.0625_dp * (&
+             !      27 * boxes(id)%cc(i, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
+
              boxes(id)%cc(i, j, k-dk, iv) = &
                   0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
                   0.75_dp * boxes(id)%cc(i, j, k, iv) - &
@@ -350,7 +397,7 @@ contains
   end subroutine mg$D_sides_rb
 
   subroutine fill_gc_phi(boxes, ids, mg)
-    use m_a$D_gc, only: a$D_gc_box
+    use m_a$D_ghostcell, only: a$D_gc_box
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: ids(:)
     type(mg$D_t), intent(in)     :: mg
@@ -387,7 +434,7 @@ contains
 
        do i_c = 1, a$D_num_children
           c_id = boxes(id)%children(i_c)
-          if (c_id == a5_no_box) cycle
+          if (c_id == af_no_box) cycle
           call mg%box_corr(boxes(id), boxes(c_id), mg)
        end do
     end do
@@ -395,7 +442,7 @@ contains
   end subroutine correct_children
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
-    use m_a$D_gc, only: a$D_gc_box
+    use m_a$D_ghostcell, only: a$D_gc_box
     type(box$D_t), intent(inout) :: boxes(:)
     type(mg$D_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:), n_cycle
@@ -564,12 +611,12 @@ contains
     integer, intent(in)         :: redblack_cntr
     type(mg$D_t), intent(in)     :: mg
 
-    if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
+    if (box%tag == af_init_tag) call mg$D_set_box_tag(box, mg)
 
     select case(box%tag)
 #if $D == 2
     case (mg_normal_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_gsrb_clpl(box, redblack_cntr, mg)
        else
           call mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
@@ -577,7 +624,7 @@ contains
     case (mg_lsf_box)
        call mg$D_box_gsrb_lpllsf(box, redblack_cntr, mg)
     case (mg_veps_box, mg_ceps_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_gsrb_clpld(box, redblack_cntr, mg)
        else
           call mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
@@ -599,12 +646,12 @@ contains
     integer, intent(in)         :: i_out
     type(mg$D_t), intent(in)     :: mg
 
-    if (box%tag == a5_init_tag) call mg$D_set_box_tag(box, mg)
+    if (box%tag == af_init_tag) call mg$D_set_box_tag(box, mg)
 
     select case(box%tag)
 #if $D == 2
     case (mg_normal_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_clpl(box, i_out, mg)
        else
           call mg$D_box_lpl(box, i_out, mg)
@@ -612,7 +659,7 @@ contains
     case (mg_lsf_box)
        call mg$D_box_lpllsf(box, i_out, mg)
     case (mg_veps_box, mg_ceps_box)
-       if (box%coord_t == a5_cyl) then
+       if (box%coord_t == af_cyl) then
           call mg$D_box_clpld(box, i_out, mg)
        else
           call mg$D_box_lpld(box, i_out, mg)
@@ -636,7 +683,7 @@ contains
     type(mg$D_t), intent(in)     :: mg
 
     ! We can only restrict after gsrb, so tag should always be set
-    if (box_c%tag == a5_init_tag) stop "mg$D_auto_rstr: box_c tag not set"
+    if (box_c%tag == af_init_tag) stop "mg$D_auto_rstr: box_c tag not set"
 
     select case(box_c%tag)
     case (mg_normal_box, mg_veps_box, mg_ceps_box)
@@ -652,7 +699,7 @@ contains
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
 
-    if (box_c%tag == a5_init_tag) call mg$D_set_box_tag(box_c, mg)
+    if (box_c%tag == af_init_tag) call mg$D_set_box_tag(box_c, mg)
 
     select case(box_c%tag)
     case (mg_normal_box)
@@ -1443,4 +1490,4 @@ contains
   end subroutine mg2_box_gsrb_clpld
 #endif
 
-end module m_a$D_mg
+end module m_a$D_multigrid

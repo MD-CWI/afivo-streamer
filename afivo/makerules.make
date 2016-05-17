@@ -1,4 +1,4 @@
-COMPILER ?= gfortran
+COMPILER = gfortran
 
 ifeq ($(COMPILER), gfortran)
 	FC 	:= gfortran

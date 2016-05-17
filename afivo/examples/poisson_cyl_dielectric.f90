@@ -1,19 +1,20 @@
-!> \example test_mg_cyl_diel.f90
+!> \example poisson_cyl_dielectric.f90
 !>
-!> Example showing how to use m_a2_mg in cylindrical coordinates with an abrubt
+!> Example showing how to use m_a2_multigrid in cylindrical coordinates with an abrubt
 !> change in "eps", and compare with an analytic solution.
 program poisson_cyl_dielectric
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_mg
+  use m_a2_multigrid
   use m_a2_utils
-  use m_a2_io
+  use m_a2_output
   use m_gaussians
 
   implicit none
 
-  integer, parameter :: n_cell = 8
+  integer, parameter :: box_size = 8
   integer, parameter :: n_boxes_base = 1
+  integer, parameter :: n_iterations = 10
   integer, parameter :: n_var_cell = 5
   integer, parameter :: i_phi = 1
   integer, parameter :: i_rhs = 2
@@ -23,29 +24,33 @@ program poisson_cyl_dielectric
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i
+  integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr, max_res, min_res
-  character(len=40)  :: fname
-  type(mg2_t)        :: mg
+  real(dp)           :: dr, residu(2), anal_err(2)
+  character(len=100) :: fname
   type(gauss_t)      :: gs
+  type(mg2_t)        :: mg
+  integer            :: count_rate,t_start, t_end
+
+  print *, "Running poisson_cyl_dielectric"
+  print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
        reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
 
   ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / n_cell
+  dr = 1.0_dp / box_size
 
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
-       n_cell, &       ! A box contains n_cell**DIM cells
+       box_size, &     ! A box contains box_size**DIM cells
        n_var_cell, &   ! Number of cell-centered variables
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
        coarsen_to=2, & ! Add coarsened levels for multigrid
-       coord=a5_cyl, & ! Cylindrical coordinates
+       coord=af_cyl, & ! Cylindrical coordinates
        cc_names=["phi", "rhs", "err", "tmp", "eps"]) ! Variable names
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
@@ -53,10 +58,29 @@ program poisson_cyl_dielectric
   ix_list(:, 1) = [1,1]         ! Set index of box 1
 
   ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1
+  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a2_set_base(tree, ix_list, nb_list)
+  call a2_print_info(tree)
+
+  call system_clock(t_start, count_rate)
+  do
+     ! For each box, set the initial conditions
+     call a2_loop_box(tree, set_init_cond)
+
+     ! This updates the refinement of the tree, by at most one level per call.
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
+
+     ! If no new boxes have been added, exit the loop
+     if (ref_info%n_add == 0) exit
+  end do
+  call system_clock(t_end, count_rate)
+
+  write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
+       (t_end-t_start) / real(count_rate,dp), " seconds"
+
+  call a2_print_info(tree)
 
   ! Set the multigrid options.
   mg%i_phi        = i_phi       ! Solution variable
@@ -71,38 +95,44 @@ program poisson_cyl_dielectric
   mg%box_corr     => mg2_auto_corr
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary
+  ! default values where necessary.
+  ! This routine does not initialize the multigrid variables i_phi, i_rhs
+  ! and i_tmp. These variables will be initialized at the first call
+  ! of mg2_fas_fmg
   call mg2_init_mg(mg)
 
-  do
-     ! For each box, set the initial conditions
-     call a2_loop_box(tree, set_init_cond)
+  print *, "Multigrid iteration | max residual | max error"
+  call system_clock(t_start, count_rate)
 
-     ! This updates the refinement of the tree, by at most one level per call.
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
-
-     ! If no new boxes have been added, exit the loop
-     if (ref_info%n_add == 0) exit
-  end do
-
-  do i = 1, 10
+  do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
      ! fourth argument controls whether to improve the current solution.
-     call mg2_fas_fmg(tree, mg, .true., i>1)
+     call mg2_fas_fmg(tree, mg, .true., mg_iter>1)
 
      ! Compute the error compared to the analytic solution
      call a2_loop_box(tree, set_err)
 
-     ! Determine the minimum and maximum residual
-     call a2_tree_min_cc(tree, i_tmp, min_res)
-     call a2_tree_max_cc(tree, i_tmp, max_res)
-     print *, "Iteration ", i, "max residual: ", max(abs(min_res), abs(max_res))
+     ! Determine the minimum and maximum residual and error
+     call a2_tree_min_cc(tree, i_tmp, residu(1))
+     call a2_tree_max_cc(tree, i_tmp, residu(2))
+     call a2_tree_min_cc(tree, i_err, anal_err(1))
+     call a2_tree_max_cc(tree, i_err, anal_err(2))
+     write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
+          maxval(abs(anal_err))
 
-     write(fname, "(A,I0)") "poisson_cyl_dielectric_", i
+     write(fname, "(A,I0)") "poisson_cyl_dielectric_", mg_iter
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
+  call system_clock(t_end, count_rate)
 
+  write(*, "(A,I0,A,E10.3,A)") &
+       " Wall-clock time after ", n_iterations, &
+       " iterations: ", (t_end-t_start) / real(count_rate, dp), &
+       " seconds"
+
+  ! This call is not really necessary here, but cleaning up the data in a tree
+  ! is important if your program continues with other tasks.
   call a2_destroy(tree)
 
 contains
@@ -124,9 +154,9 @@ contains
 
     ! And refine if it exceeds a threshold
     if (max_crv > 5.0e-4_dp) then
-       ref_flag = a5_do_ref
+       ref_flag = af_do_ref
     else
-       ref_flag = a5_keep_ref
+       ref_flag = af_keep_ref
     end if
   end subroutine ref_routine
 
@@ -194,7 +224,7 @@ contains
     end do
   end subroutine set_init_cond
 
-  ! Compute error with solution
+  ! Compute error compared to the analytic solution
   subroutine set_err(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
@@ -226,22 +256,22 @@ contains
 
     select case (nb)
     case (a2_neighb_lowx)             ! Neumann zero on axis
-       bc_type = a5_bc_neumann
+       bc_type = af_bc_neumann
        box%cc(0, 1:nc, iv) = 0
     case (a2_neighb_highx)             ! Use solution on other boundaries
-       bc_type = a5_bc_dirichlet
+       bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
           box%cc(nc+1, n, iv) = gauss_val(gs, rz)
        end do
     case (a2_neighb_lowy)
-       bc_type = a5_bc_dirichlet
+       bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), 0.5_dp])
           box%cc(n, 0, iv) = gauss_val(gs, rz)
        end do
     case (a2_neighb_highy)
-       bc_type = a5_bc_dirichlet
+       bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
           box%cc(n, nc+1, iv) = gauss_val(gs, rz)

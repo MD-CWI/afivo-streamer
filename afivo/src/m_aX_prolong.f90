@@ -5,7 +5,7 @@
 ! License: GPLv3
 
 module m_a$D_prolong
-  use m_a$D_t
+  use m_a$D_types
 
   implicit none
   private
@@ -30,7 +30,7 @@ contains
 
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
-       if (c_id == a5_no_box) cycle
+       if (c_id == af_no_box) cycle
        call a$D_prolong0(boxes(id), boxes(c_id), iv, iv_to=iv_to, add=add)
     end do
   end subroutine a$D_prolong0_from
@@ -119,7 +119,7 @@ contains
 
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
-       if (c_id == a5_no_box) cycle
+       if (c_id == af_no_box) cycle
        call a$D_prolong1(boxes(id), boxes(c_id), iv, iv_to, add)
     end do
   end subroutine a$D_prolong1_from
@@ -233,7 +233,7 @@ contains
 
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
-       if (c_id == a5_no_box) cycle
+       if (c_id == af_no_box) cycle
        call a$D_prolong2(boxes(id), boxes(c_id), iv, iv_to, add)
     end do
   end subroutine a$D_prolong2_from

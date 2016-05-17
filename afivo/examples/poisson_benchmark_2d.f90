@@ -2,13 +2,13 @@
 
 ! This program can be used to benchmark the multigrid routines. For simplicity,
 ! it does not compare results with known solution.
-program test_mg2_2d
-  use m_a2_t
+program poisson_benchmark_2d
+  use m_a2_types
   use m_a2_core
-  use m_a2_mg
+  use m_a2_multigrid
   use m_a2_utils
-  use m_a2_gc
-  use m_a2_io
+  use m_a2_ghostcell
+  use m_a2_output
 
   implicit none
 
@@ -20,13 +20,17 @@ program test_mg2_2d
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: i, n_args, n_cell, max_ref_lvl
-  integer            :: n_iterations, t_start, t_end, count_rate
+  integer            :: mg_iter, n_args
+  integer            :: n_cell, n_iterations, max_ref_lvl
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr
-  character(len=40)  :: arg_string
+  character(len=40)  :: fname, arg_string
   type(mg2_t)        :: mg
+  integer            :: count_rate,t_start, t_end
+
+  print *, "Running poisson_benchmark_2d"
+  print *, "Number of threads", af_get_max_threads()
 
   ! Get box size and mesh size from command line argument
   n_args = command_argument_count()
@@ -57,13 +61,12 @@ program test_mg2_2d
   print *, "Box size:           ", n_cell
   print *, "Max refinement lvl: ", max_ref_lvl
   print *, "Num iterations:     ", n_iterations
-  print *, ""
 
   dr = 1.0_dp / n_cell
 
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
-       n_cell, &       ! A box contains n_cell**DIM cells
+       n_cell, &       ! A box contains box_size**DIM cells
        n_var_cell, &   ! Number of cell-centered variables
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
@@ -72,22 +75,33 @@ program test_mg2_2d
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [1,1]         ! Set index of boxnn
+  ix_list(:, 1) = [1,1]         ! Set index of box 1
+
+  ! Set neighbors for box one, negative values indicate a physical boundary
   nb_list(:, 1) = -1            ! Dirichlet zero -> -1
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a2_set_base(tree, ix_list, nb_list)
+  call a2_print_info(tree)
 
+  call system_clock(t_start, count_rate)
   do
      ! For each box, set the initial conditions
      call a2_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
+     ! The second argument is a subroutine that is called for each box that can
+     ! be refined or derefined, and it should set refinement flags. Information
+     ! about the changes in refinement are returned in the third argument.
      call a2_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
   end do
+  call system_clock(t_end, count_rate)
+
+  write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
+       (t_end-t_start) / real(count_rate,dp), " seconds"
 
   call a2_print_info(tree)
 
@@ -98,25 +112,35 @@ program test_mg2_2d
   mg%sides_bc     => a2_bc_dirichlet_zero ! Method for boundary conditions
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary.
+  ! default values where necessary. This routine does not initialize the
+  ! multigrid variables i_phi, i_rhs and i_tmp. These variables will be
+  ! initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   ! Do the actual benchmarking
   call system_clock(t_start, count_rate)
-  do i = 1, n_iterations
+  do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
      ! fourth argument controls whether to improve the current solution.
-     call mg2_fas_fmg(tree, mg, .true., i>1)
+     call mg2_fas_fmg(tree, mg, .true., mg_iter>1)
+
+     ! If uncommented, this writes Silo output files containing the
+     ! cell-centered values of the leaves of the tree
+     ! write(fname, "(A,I0)") "poisson_benchmark_3d_", mg_iter
+     ! call a2_write_silo(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
-  write(*, "(A,E12.4)") " Wall-clock time (s): ", &
-       (t_end-t_start) / real(count_rate, dp)
+  write(*, "(A,I0,A,E10.3,A)") &
+       " Wall-clock time after ", n_iterations, &
+       " iterations: ", (t_end-t_start) / real(count_rate, dp), &
+       " seconds"
 
-  ! This writes a Silo output file containing the cell-centered values of the
+  ! This writes a VTK output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
-  call a2_write_silo(tree, "poisson_benchmark_2d", dir="output")
+  fname = "poisson_benchmark_2d"
+  call a2_write_silo(tree, trim(fname), dir="output")
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
@@ -126,12 +150,12 @@ contains
 
   ! Return the refinement flag for boxes(id)
   subroutine ref_routine(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
+    type(box2_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
+    integer, intent(in)      :: id       ! The index of the current box
     integer, intent(inout)   :: ref_flag
 
     ! Fully refine up to max_ref_lvl
-    if (boxes(id)%lvl < max_ref_lvl) ref_flag = a5_do_ref
+    if (boxes(id)%lvl < max_ref_lvl) ref_flag = af_do_ref
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
@@ -143,4 +167,4 @@ contains
     box%cc(1:nc, 1:nc, i_rhs) = 1.0_dp
   end subroutine set_init_cond
 
-end program test_mg2_2d
+end program poisson_benchmark_2d
