@@ -63,7 +63,7 @@ program drift_diffusion_2d
   call system_clock(t_start, count_rate)
   do refine_steps = 1, 100
      ! We should only set the finest level, but this also works
-     call a2_loop_box(tree, set_init_cond)
+     call a2_loop_box(tree, set_initial_condition)
 
      ! Fill ghost cells for variables i_phi on the sides of all boxes, using
      ! a2_gc_interp_lim on refinement boundaries: Interpolation between fine
@@ -212,7 +212,7 @@ contains
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_init_cond(box)
+  subroutine set_initial_condition(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
@@ -224,7 +224,7 @@ contains
           box%cc(i, j, i_phi) = solution(xy, 0.0_dp)
        end do
     end do
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
   subroutine set_error(box, time)
     type(box2_t), intent(inout) :: box

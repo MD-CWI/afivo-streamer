@@ -87,7 +87,7 @@ program poisson_benchmark_2d
   call system_clock(t_start, count_rate)
   do
      ! For each box, set the initial conditions
-     call a2_loop_box(tree, set_init_cond)
+     call a2_loop_box(tree, set_initial_condition)
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can
@@ -159,12 +159,12 @@ contains
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_init_cond(box)
+  subroutine set_initial_condition(box)
     type(box2_t), intent(inout) :: box
     integer                     :: nc
 
     nc = box%n_cell
     box%cc(1:nc, 1:nc, i_rhs) = 1.0_dp
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
 end program poisson_benchmark_2d

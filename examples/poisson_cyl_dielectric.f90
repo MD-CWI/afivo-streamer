@@ -2,7 +2,7 @@
 !>
 !> Example showing how to use m_a2_multigrid in cylindrical coordinates with an abrubt
 !> change in "eps", and compare with an analytic solution.
-program poisson_cyl_dielectric
+program poisson_cylindrical_dielectric
   use m_a2_types
   use m_a2_core
   use m_a2_multigrid
@@ -33,7 +33,7 @@ program poisson_cyl_dielectric
   type(mg2_t)        :: mg
   integer            :: count_rate,t_start, t_end
 
-  print *, "Running poisson_cyl_dielectric"
+  print *, "Running poisson_cylindrical_dielectric"
   print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
@@ -121,7 +121,7 @@ program poisson_cyl_dielectric
      write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
-     write(fname, "(A,I0)") "poisson_cyl_dielectric_", mg_iter
+     write(fname, "(A,I0)") "poisson_cylindrical_dielectric_", mg_iter
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
@@ -164,7 +164,7 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: rz(2), grad(2), dr, qbnd, tmp
+    real(dp)                    :: rz(2), gradient(2), dr, qbnd, tmp
 
     nc                  = box%n_cell
     box%cc(:, :, i_phi) = 0
@@ -182,7 +182,7 @@ contains
           end if
 
           ! Partially compute the right-hand side (see below)
-          box%cc(i, j, i_rhs) = gauss_lpl_cyl(gs, rz) * box%cc(i, j, i_eps)
+          box%cc(i, j, i_rhs) = gauss_laplacian_cylindrical(gs, rz) * box%cc(i, j, i_eps)
        end do
     end do
 
@@ -193,9 +193,9 @@ contains
           rz = a2_rr_cc(box, [i + 0.5_dp, real(j, dp)])
 
           ! Determine amount of charge
-          call gauss_grad(gs, rz, grad)
+          call gauss_gradient(gs, rz, gradient)
           qbnd = (box%cc(i+1, j, i_eps) - box%cc(i, j, i_eps)) * &
-               grad(1) / dr
+               gradient(1) / dr
 
           ! Place surface charge weighted with eps
           tmp = box%cc(i+1, j, i_eps) / &
@@ -211,9 +211,9 @@ contains
           rz = a2_rr_cc(box, [real(i, dp), j + 0.5_dp])
 
           ! Determine amount of charge
-          call gauss_grad(gs, rz, grad)
+          call gauss_gradient(gs, rz, gradient)
           qbnd = (box%cc(i, j+1, i_eps) - box%cc(i, j, i_eps)) * &
-               grad(2) / dr
+               gradient(2) / dr
 
           ! Place surface charge weighted with eps
           tmp = box%cc(i, j+1, i_eps) / &
@@ -235,7 +235,7 @@ contains
        do i = 1, nc
           rz = a2_r_cc(box, [i,j])
           box%cc(i, j, i_err) = box%cc(i, j, i_phi) - &
-               gauss_val(gs, rz)
+               gauss_value(gs, rz)
        end do
     end do
   end subroutine set_err
@@ -262,21 +262,21 @@ contains
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_val(gs, rz)
+          box%cc(nc+1, n, iv) = gauss_value(gs, rz)
        end do
     case (a2_neighb_lowy)
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_val(gs, rz)
+          box%cc(n, 0, iv) = gauss_value(gs, rz)
        end do
     case (a2_neighb_highy)
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_val(gs, rz)
+          box%cc(n, nc+1, iv) = gauss_value(gs, rz)
        end do
     end select
   end subroutine sides_bc
 
-end program poisson_cyl_dielectric
+end program poisson_cylindrical_dielectric

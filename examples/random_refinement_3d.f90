@@ -58,7 +58,7 @@ program random_refinement_3d
   ! Set variables on base by using the helper functions a3_loop_box(tree, sub)
   ! and a3_loop_boxes(tree, sub). These functions call the subroutine sub for
   ! each box in the tree, with a slightly different syntax.
-  call a3_loop_box(tree, set_init_cond)
+  call a3_loop_box(tree, set_initial_condition)
 
   ! Fill ghost cells for phi. The third argument is a subroutine that fills
   ! ghost cells near refinement boundaries, and the fourth argument fill ghost
@@ -129,7 +129,7 @@ contains
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_init_cond(box)
+  subroutine set_initial_condition(box)
     type(box3_t), intent(inout) :: box
     integer                     :: i, j, k, nc
     real(dp)                    :: xyz(3)
@@ -146,7 +146,7 @@ contains
           end do
        end do
     end do
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
   ! Set values on newly added boxes
   subroutine prolong_to_new_children(tree, ref_info)

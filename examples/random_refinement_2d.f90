@@ -56,7 +56,7 @@ program random_refinement_2d
   ! Set variables on base by using the helper functions a2_loop_box(tree, sub)
   ! and a2_loop_boxes(tree, sub). These functions call the subroutine sub for
   ! each box in the tree, with a slightly different syntax.
-  call a2_loop_box(tree, set_init_cond)
+  call a2_loop_box(tree, set_initial_condition)
 
   ! Fill ghost cells for phi. The third argument is a subroutine that fills
   ! ghost cells near refinement boundaries, and the fourth argument fill ghost
@@ -127,7 +127,7 @@ contains
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_init_cond(box)
+  subroutine set_initial_condition(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
@@ -142,7 +142,7 @@ contains
           box%cc(i, j, i_phi) = sin(0.5_dp * xy(1)) * cos(xy(2))
        end do
     end do
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
   ! Set values on newly added boxes
   subroutine prolong_to_new_children(tree, ref_info)

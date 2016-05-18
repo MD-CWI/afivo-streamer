@@ -83,7 +83,7 @@ program poisson_basic_3d
   call system_clock(t_start, count_rate)
   do
      ! For each box, set the initial conditions
-     call a3_loop_box(tree, set_init_cond)
+     call a3_loop_box(tree, set_initial_condition)
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can
@@ -182,7 +182,7 @@ contains
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_init_cond(box)
+  subroutine set_initial_condition(box)
     type(box3_t), intent(inout) :: box
     integer                     :: i, j, k, nc
     real(dp)                    :: xyz(3)
@@ -196,11 +196,11 @@ contains
              xyz = a3_r_cc(box, [i,j,k])
 
              ! And set the rhs values
-             box%cc(i, j, k, i_rhs) = gauss_lpl(gs, xyz)
+             box%cc(i, j, k, i_rhs) = gauss_laplacian(gs, xyz)
           end do
        end do
     end do
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
   ! Set the error compared to the analytic solution
   subroutine set_error(box)
@@ -214,7 +214,7 @@ contains
           do i = 1, nc
              xyz = a3_r_cc(box, [i,j,k])
              box%cc(i, j, k, i_err) = box%cc(i, j, k, i_phi) - &
-                  gauss_val(gs, xyz)
+                  gauss_value(gs, xyz)
           end do
        end do
     end do
@@ -250,21 +250,21 @@ contains
        do k = 1, nc
           do j = 1, nc
              xyz = a3_rr_cc(box, [loc, real(j, dp), real(k, dp)])
-             box%cc(ix, j, k, iv) = gauss_val(gs, xyz)
+             box%cc(ix, j, k, iv) = gauss_value(gs, xyz)
           end do
        end do
     case (2)
        do k = 1, nc
           do i = 1, nc
              xyz = a3_rr_cc(box, [real(i, dp), loc, real(k, dp)])
-             box%cc(i, ix, k, iv) = gauss_val(gs, xyz)
+             box%cc(i, ix, k, iv) = gauss_value(gs, xyz)
           end do
        end do
     case (3)
        do j = 1, nc
           do i = 1, nc
              xyz = a3_rr_cc(box, [real(i, dp), real(j, dp), loc])
-             box%cc(i, j, ix, iv) = gauss_val(gs, xyz)
+             box%cc(i, j, ix, iv) = gauss_value(gs, xyz)
           end do
        end do
     end select

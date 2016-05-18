@@ -19,7 +19,7 @@ module m_gaussians
   public :: gauss_value
   public :: gauss_gradient
   public :: gauss_laplacian
-  public :: gauss_laplacian_cylinder
+  public :: gauss_laplacian_cylindrical
   public :: gauss_4th
 
 contains
@@ -102,20 +102,20 @@ contains
   end function gauss_laplacian
 
   !> Summed Laplacian of the gaussians in (r,z) coordinates
-  real(dp) function gauss_laplacian_cylinder(gaussian, r)
+  real(dp) function gauss_laplacian_cylindrical(gaussian, r)
     type(gauss_t), intent(in) :: gaussian
     real(dp), intent(in)      :: r(gaussian%n_dim)
     integer :: ix
     real(dp)                  :: xrel(gaussian%n_dim)
 
-    gauss_laplacian_cylinder = 0
+    gauss_laplacian_cylindrical = 0
     do ix = 1, gaussian%n_gauss
        xrel = (r-gaussian%r0(:, ix)) / gaussian%sigma(ix)
-       gauss_laplacian_cylinder = gauss_laplacian_cylinder + 4/gaussian%sigma(ix)**2 * &
+       gauss_laplacian_cylindrical = gauss_laplacian_cylindrical + 4/gaussian%sigma(ix)**2 * &
             (sum(xrel**2) - 1 - 0.5_dp * (r(1)-gaussian%r0(1, ix))/r(1)) * &
             gauss_single(gaussian, r, ix)
     end do
-  end function gauss_laplacian_cylinder
+  end function gauss_laplacian_cylindrical
 
   !> Fourth derivative of the gaussians in Cartesian coordinates
   real(dp) function gauss_4th(gaussian, r)
