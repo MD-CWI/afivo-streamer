@@ -20,26 +20,26 @@ ANSWERS	:= $(TESTS:%=$(ANSDIR)/%)
 all:	$(RESULTS)
 
 score: 	$(TESTS)
-		@$(MAKE) $(RESULTS) | cut -d\  -f 1 | egrep '(PASSED|FAILED)' | sort | uniq -c
+	@$(MAKE) $(RESULTS) | cut -d\  -f 1 | egrep '(PASSED|FAILED)' | sort | uniq -c
 
 # Rule for generating (correct) answers to tests
 $(ANSWERS):	$(TESTS) | $(ANSDIR)
-		@echo Storing answer $@
-		@./$(@:$(ANSDIR)/%=%) > $@
+	@echo Storing answer $@
+	@./$(@:$(ANSDIR)/%=%) > $@
 
 # Rule to generate results and compare to answer
 $(RESULTS): $(TESTS) phonytest | $(RESDIR)
-		@./$(@:$(RESDIR)/%=%) > $@
-		@if cmp -s $@ $(@:$(RESDIR)/%=$(ANSDIR)/%) ; \
-        then echo PASSED $(@:$(RESDIR)/%=%) ; \
-        else echo FAILED $(@:$(RESDIR)/%=%) ; \
-        fi
+	@./$(@:$(RESDIR)/%=%) > $@
+	@if cmp -s $@ $(@:$(RESDIR)/%=$(ANSDIR)/%) ; \
+	then echo PASSED $(@:$(RESDIR)/%=%) ; \
+	else echo FAILED $(@:$(RESDIR)/%=%) ; \
+	fi
 
 clean:
 	$(RM) $(TESTS) $(RESULTS) *.o *.mod
 
 $(RESDIR) $(ANSDIR):
-		@mkdir -p $@
+	@mkdir -p $@
 
 # Dependency information
 $(TESTS): $(A5_DIR)/src/libafivo.a
