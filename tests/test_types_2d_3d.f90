@@ -3,6 +3,8 @@ program test_types_2d_3d
   use m_a2_types
   use m_a3_types
 
+  implicit none
+
   type(a2_t) :: tree_2d
   type(a3_t) :: tree_3d
 
