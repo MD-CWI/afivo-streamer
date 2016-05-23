@@ -19,7 +19,7 @@ ANSWERS	:= $(TESTS:%=$(ANSDIR)/%)
 
 all:	$(RESULTS)
 
-score: 	$(TESTS) | $(ANSWERS)
+score: 	$(TESTS)
 		@$(MAKE) $(RESULTS) | cut -d\  -f 1 | egrep '(PASSED|FAILED)' | sort | uniq -c
 
 # Rule for generating (correct) answers to tests
