@@ -1,5 +1,6 @@
 !> Module that provides routines for operations on photons
 module m_photons
+
   use m_lookup_table
 
   implicit none
@@ -7,24 +8,25 @@ module m_photons
 
   integer, parameter :: dp = kind(0.0d0)
 
-  type PH_tbl_t
-     type(LT_table_t) :: tbl           !< The lookup table
+  type photoi_tbl_t
+     type(lookup_table_t) :: tbl           !< The lookup table
      real(dp)         :: frac_in_tbl   !< Fraction photons in table
-  end type PH_tbl_t
+  end type photoi_tbl_t
 
-  public :: PH_tbl_t
+  public :: photoi_tbl_t
 
   ! Public methods
-  public :: PH_get_tbl_air
-  public :: PH_do_absorp
-  public :: PH_absfunc_air
-  public :: PH_set_src_2d
-  public :: PH_set_src_3d
+  public :: photoi_get_table_air
+  public :: photoi_do_absorp
+  public :: photoi_absfunc_air
+  public :: photoi_set_src_2d
+  public :: photoi_set_src_3d
 
 contains
 
-  subroutine PH_get_tbl_air(phtbl, p_O2, max_dist)
-    type(PH_tbl_t), intent(inout) :: phtbl      !< The photon table
+  !> Compute the photonization table for air
+  subroutine photoi_get_table_air(photoi_tbl, p_O2, max_dist)
+    type(photoi_tbl_t), intent(inout) :: photoi_tbl      !< The photon table
     real(dp), intent(in)  :: p_O2     !< Partial pressure of oxygen (bar)
     real(dp), intent(in)  :: max_dist !< Maximum distance in lookup table
 
@@ -72,15 +74,15 @@ contains
     end do
 
     if (n > tbl_size + 10) &
-         stop "PH_get_tbl_air: integration accuracy fail"
+         stop "photoi_get_table_air: integration accuracy fail"
 
     ! Scale table to lie between 0 and 1
-    phtbl%frac_in_tbl = fsum(n-1)
+    photoi_tbl%frac_in_tbl = fsum(n-1)
     fsum(1:n-1) = fsum(1:n-1) / fsum(n-1)
 
-    phtbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
-    call LT_set_col(phtbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
-  end subroutine PH_get_tbl_air
+    photoi_tbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
+    call LT_set_col(photoi_tbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
+  end subroutine photoi_get_table_air
 
   real(dp) function rk4_drdF(r, dF, p_O2)
     real(dp), intent(in)           :: r, dF, p_O2
@@ -89,26 +91,26 @@ contains
     real(dp), parameter            :: one_sixth = 1 / 6.0_dp
 
     ! Step 1 (at initial r)
-    drdF = 1 / PH_absfunc_air(r, p_O2)
+    drdF = 1 / photoi_absfunc_air(r, p_O2)
     sum_drdF = drdF
 
     ! Step 2 (at initial r + dr/2)
-    drdF = 1 / PH_absfunc_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / photoi_absfunc_air(r + 0.5_dp * dF * drdF, p_O2)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 3 (at initial r + dr/2)
-    drdF = 1 / PH_absfunc_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / photoi_absfunc_air(r + 0.5_dp * dF * drdF, p_O2)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 4 (at initial r + dr)
-    drdF = 1 / PH_absfunc_air(r + dF * drdF, p_O2)
+    drdF = 1 / photoi_absfunc_air(r + dF * drdF, p_O2)
     sum_drdF = sum_drdF + drdF
 
     ! Combine r derivatives at steps
     rk4_drdF = one_sixth * sum_drdF
   end function rk4_drdF
 
-  real(dp) function PH_absfunc_air(dist, p_O2)
+  real(dp) function photoi_absfunc_air(dist, p_O2)
     use m_units_constants
     real(dp), intent(in) :: dist, p_O2
     real(dp)             :: r
@@ -119,14 +121,14 @@ contains
     r = p_O2 * dist
     if (r * (c0 + c1) < eps) then
        ! Use limit
-       PH_absfunc_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
+       photoi_absfunc_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
             * p_O2 / log(c1/c0)
     else if (r * c0 > -log(eps)) then
-       PH_absfunc_air = eps
+       photoi_absfunc_air = eps
     else
-       PH_absfunc_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
+       photoi_absfunc_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
     end if
-  end function PH_absfunc_air
+  end function photoi_absfunc_air
 
   integer function get_lvl_length(dr_base, length)
     real(dp), intent(in) :: dr_base, length
@@ -159,7 +161,7 @@ contains
     end if
   end function get_rlvl_length
 
-  subroutine PH_do_absorp(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
+  subroutine photoi_do_absorp(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
     use m_lookup_table
     use m_random
     use omp_lib
@@ -167,7 +169,7 @@ contains
     real(dp), intent(in)         :: xyz_in(3, n_photons)
     real(dp), intent(out)        :: xyz_out(3, n_photons)
     integer, intent(in)          :: n_dim
-    type(LT_table_t), intent(in) :: tbl
+    type(lookup_table_t), intent(in) :: tbl
     type(RNG_t), intent(inout)   :: rng
     integer                      :: n, n_procs, proc_id
     real(dp)                     :: rr, dist
@@ -199,13 +201,13 @@ contains
        end do
        !$omp end do
     else
-       print *, "PH_do_absorp: unknown n_dim", n_dim
+       print *, "photoi_do_absorp: unknown n_dim", n_dim
        stop
     end if
     !$omp end parallel
-  end subroutine PH_do_absorp
+  end subroutine photoi_do_absorp
 
-  subroutine PH_set_src_2d(tree, pi_tbl, rng, num_photons, &
+  subroutine photoi_set_src_2d(tree, pi_tbl, rng, num_photons, &
        i_src, i_photo, fac_dx, const_dx, use_cyl, min_dx, dt)
     use m_random
     use m_a2_t
@@ -216,7 +218,7 @@ contains
     use omp_lib
 
     type(a2_t), intent(inout)  :: tree   !< Tree
-    type(PH_tbl_t)             :: pi_tbl !< Table to sample abs. lenghts
+    type(photoi_tbl_t)             :: pi_tbl !< Table to sample abs. lenghts
     type(RNG_t), intent(inout) :: rng    !< Random number generator
     !> How many discrete photons to use
     integer, intent(in)        :: num_photons
@@ -324,7 +326,7 @@ contains
 
     if (use_cyl) then
        ! Get location of absorbption
-       call PH_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
+       call photoi_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
 
        !$omp do
        do n = 1, n_used
@@ -334,7 +336,7 @@ contains
        !$omp end do
     else
        ! Get location of absorbption
-       call PH_do_absorp(xyz_src, xyz_dst, 2, n_used, pi_tbl%tbl, rng)
+       call photoi_do_absorp(xyz_src, xyz_dst, 2, n_used, pi_tbl%tbl, rng)
     end if
 
     if (const_dx) then
@@ -434,9 +436,9 @@ contains
        !$omp end do
     end do
     !$omp end parallel
-  end subroutine PH_set_src_2d
+  end subroutine photoi_set_src_2d
 
-  subroutine PH_set_src_3d(tree, pi_tbl, rng, num_photons, &
+  subroutine photoi_set_src_3d(tree, pi_tbl, rng, num_photons, &
        i_src, i_photo, fac_dx, const_dx, min_dx, dt)
     use m_random
     use m_a3_t
@@ -447,7 +449,7 @@ contains
     use omp_lib
 
     type(a3_t), intent(inout)   :: tree   !< Tree
-    type(PH_tbl_t)              :: pi_tbl !< Table to sample abs. lenghts
+    type(photoi_tbl_t)              :: pi_tbl !< Table to sample abs. lenghts
     type(RNG_t), intent(inout)  :: rng    !< Random number generator
     !> How many discrete photons to use
     integer, intent(in)         :: num_photons
@@ -542,7 +544,7 @@ contains
     allocate(ph_loc(n_used))
 
     ! Get location of absorbption
-    call PH_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
+    call photoi_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
 
     if (const_dx) then
        ! Get a typical length scale for the absorption of photons
@@ -625,6 +627,6 @@ contains
        !$omp end do
     end do
     !$omp end parallel
-  end subroutine PH_set_src_3d
+  end subroutine photoi_set_src_3d
 
 end module m_photons

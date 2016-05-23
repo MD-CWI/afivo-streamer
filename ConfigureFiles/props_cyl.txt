@@ -24,7 +24,7 @@
  gas_pressure = 0.1000E+01
 
  # The applied electric field:
- applied_electric_field_y = 0.2E+07
+ applied_electric_fld_y = 0.2E+07
 
  # The dielectric constant of the dielectric:
  epsilon_diel = 0.1000E+01
@@ -33,7 +33,7 @@
  bg_dens = 1.0e15
 
  # Initial density of the seed:
- seed_dens = 5.000E+19 0.000E+17
+ seed_density = 5.000E+19 0.000E+17
 
  # The relative start position of the initial seed:
  seed_rel_r0 = 0.0000E+00 0.320E+00 0.0000E+00 0.3600E+00
@@ -75,7 +75,7 @@
  lookup_table_size = 1000
 
  # The maximum electric field in the fluid model coefficients:
- lookup_table_max_fld = 0.3000E+08
+ lookup_table_max_electric_fld = 0.3000E+08
 
  # The name of the mobility coefficient:
  td_mobility_name = efield[V/m]_vs_mu[m2/Vs]

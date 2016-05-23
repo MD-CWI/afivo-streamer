@@ -60,7 +60,7 @@ module m_streamer
   type(initcnd_t), protected :: ST_init_cond
 
   ! Table with transport data vs electric field
-  type(LT_table_t), protected :: ST_td_tbl
+  type(lookup_table_t), protected :: ST_td_tbl
 
   ! The configuration for the simulation
   type(CFG_t), protected :: ST_config
@@ -81,7 +81,7 @@ module m_streamer
   integer, protected :: ST_photoi_num_photons
 
   ! Table for photoionization
-  type(PH_tbl_t), protected :: ST_photoi_tbl
+  type(photoi_tbl_t), protected :: ST_photoi_tbl
 
   ! Start modifying the vertical background field after this time
   real(dp), protected :: ST_electric_fld_y_mod_t0
@@ -246,7 +246,7 @@ contains
     call CFG_add(ST_config, "seed_width", [0.5d-3], &
          "Seed width (m)", .true.)
     call CFG_add(ST_config, "seed_falloff", [1], &
-         "Fallof type for seed, see m_geom.f90", .true.)
+         "Fallof type for seed, see m_geometry.f90", .true.)
 
     call CFG_add(ST_config, "dt_output", 1.0d-10, &
          "The timestep for writing output (s)")
@@ -404,7 +404,7 @@ contains
 
     ! Create table for photoionization
     if (ST_photoi_enabled) then
-       call PH_get_tbl_air(ST_photoi_tbl, ST_photoi_frac_O2 * &
+       call photoi_get_table_air(ST_photoi_tbl, ST_photoi_frac_O2 * &
             ST_gas_pressure, 2 * ST_domain_len)
     end if
 

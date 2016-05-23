@@ -1,4 +1,7 @@
 !> Program that solves a 2d streamer
+!
+! Author: Jannis Teunissen
+! License: GPLv3
 program streamer_2d
 
   use m_a2_t
@@ -144,7 +147,7 @@ program streamer_2d
 
 contains
 
-  ! Initialize the AMR tree
+  !> Initialize the AMR tree
   subroutine init_tree(tree)
     type(a2_t), intent(inout) :: tree
 
@@ -173,7 +176,7 @@ contains
 
   ! This routine sets the refinement flag for boxes(id)
   subroutine refine_routine(boxes, id, refine_flag)
-    use m_geom
+    use m_geometry
     type(box2_t), intent(in) :: boxes(:) ! List of all boxes
     integer, intent(in)      :: id       ! Index of box to look at
     integer, intent(inout)   :: refine_flag ! Refinement flag for the box
@@ -248,7 +251,7 @@ contains
   end function max_curvature
 
   subroutine set_initial_condition(box)
-    use m_geom
+    use m_geometry
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, n, nc
     real(dp)                    :: xy(2)
@@ -299,7 +302,7 @@ contains
     end do
   end subroutine set_box_eps
 
-  ! Get maximum time step based on e.g. CFL criteria
+  !> Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
@@ -333,7 +336,7 @@ contains
     get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, ST_dt_max)
   end function get_max_dt
 
-  ! Compute electric field on the tree. First perform multigrid to get electric
+  !> Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
   subroutine compute_electric_field(tree, n_cycles, have_guess)
     use m_units_constants
@@ -373,7 +376,7 @@ contains
     call a2_gc_tree(tree, i_electric_fld, a2_gc_interp, a2_bc_neumann_zero)
   end subroutine compute_electric_field
 
-  ! Compute electric field from electrical potential
+  !> Compute electric field from electrical potential
   subroutine electric_field_from_potential(box)
     type(box2_t), intent(inout) :: box
     integer                     :: nc
@@ -411,7 +414,7 @@ contains
          0.25_dp * (box%fy(1:nc, 1:nc, electric_fld) + box%fy(1:nc, 2:nc+1, electric_fld))**2)
   end subroutine electric_field_from_potential
 
-  ! Compute the electron fluxes due to drift and diffusion
+  !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id, dt_vec)
     use m_units_constants
     type(box2_t), intent(inout) :: boxes(:)
@@ -521,7 +524,7 @@ contains
 
   end subroutine fluxes_koren
 
-  ! Take average of new and old electron/ion density for explicit trapezoidal rule
+  !> Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_density(box)
     type(box2_t), intent(inout) :: box
     box%cc(:, :, i_electron) = 0.5_dp *  &
@@ -532,7 +535,7 @@ contains
                            box%cc(:, :, i_pos_ion_old))
   end subroutine average_density
 
-  ! Advance solution over dt based on the fluxes / source term, using forward Euler
+  !> Advance solution over dt based on the fluxes / source term, using forward Euler
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
@@ -595,14 +598,14 @@ contains
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
-    call a2_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
+    call a2_loop_box_arg(tree, set_photoionization_rate, [eta * quench_fac], .true.)
 
-    call PH_set_src_2d(tree, ST_photoi_tbl, ST_rng, num_photons, &
+    call photoi_set_src_2d(tree, ST_photoi_tbl, ST_rng, num_photons, &
          i_photo, i_photo, 0.25e-3_dp, .false., .false., 1e-9_dp, dt)
 
   end subroutine set_photoionization
 
-  subroutine set_photoi_rate(box, coeff)
+  subroutine set_photoionization_rate(box, coeff)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, nc
@@ -624,9 +627,9 @@ contains
           box%cc(i, j, i_photo) = tmp
        end do
     end do
-  end subroutine set_photoi_rate
+  end subroutine set_photoionization_rate
 
-  ! For each box that gets refined, set data on its children using this routine
+  !> For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
@@ -655,7 +658,7 @@ contains
     end do
   end subroutine prolong_to_new_boxes
 
-  ! This fills ghost cells near physical boundaries for the potential
+  !> This fills ghost cells near physical boundaries for the potential
   subroutine sides_bc_potential(box, nb, iv, bc_type)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition

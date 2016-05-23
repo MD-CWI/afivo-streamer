@@ -1,6 +1,8 @@
 !> Module that provides routines for geometric operations and calculations
-module m_geom
+module m_geometry
 
+! TODO: Describe methods. Till now those GM methods are not used elsewhere
+! TODO: GM stands for Geometry?? 
   implicit none
   private
 
@@ -139,4 +141,4 @@ contains
     end if
   end function GM_laser
 
-end module m_geom
+end module m_geometry

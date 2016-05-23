@@ -33,7 +33,7 @@
  bg_dens = 0.1000E+14
 
  # Initial density of the seed:
- seed_dens = 0.2000E+20
+ seed_density = 0.2000E+20
 
  # The relative start position of the initial seed:
  seed_rel_r0 = 0.5000E+00 0.6000E+00

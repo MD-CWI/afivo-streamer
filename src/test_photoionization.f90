@@ -27,7 +27,7 @@ program test_photoionization
 
   type(a2_t)          :: tree
   type(ref_info_t)    :: ref_info
-  type(PH_tbl_t)      :: photoi_tbl
+  type(photoi_tbl_t)      :: photoi_tbl
   type(RNG_t)         :: sim_rng       ! Random number generator
 
   integer             :: n, id
@@ -62,7 +62,7 @@ program test_photoionization
   print *, "Gas pressure (bar):", gas_pressure
   print *, "Fraction oxygen:   ", frac_O2
 
-  call PH_get_tbl_air(photoi_tbl, frac_O2 * gas_pressure, 2 * domain_len)
+  call photoi_get_table_air(photoi_tbl, frac_O2 * gas_pressure, 2 * domain_len)
 
   ! Initialize tree
   if (use_cyl) then
@@ -117,14 +117,14 @@ contains
     type(a2_t), intent(inout) :: tree
     integer, intent(in)       :: num_photons
 
-    call a2_loop_box_arg(tree, set_photoi_rate, [1.0_dp], .true.)
-    call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
+    call a2_loop_box_arg(tree, set_photoionization_rate, [1.0_dp], .true.)
+    call photoi_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
          i_src, i_photo, grid_factor, use_const_dx, use_cyl, 0.05e-3_dp)
 
   end subroutine set_photoionization
 
-  subroutine set_photoi_rate(box, coeff)
-    use m_geom
+  subroutine set_photoionization_rate(box, coeff)
+    use m_geometry
     use m_a2_utils
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
@@ -142,7 +142,7 @@ contains
 
           if (use_cyl) then
              box%cc(i, j, i_sol) = coeff(1) / (4 * pi * r**2) * &
-                  PH_absfunc_air(r, gas_pressure * frac_O2)
+                  photoi_absfunc_air(r, gas_pressure * frac_O2)
 
              if (r < box%dr) then
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / &
@@ -152,7 +152,7 @@ contains
              end if
           else
              box%cc(i, j, i_sol) = coeff(1) / (2 * pi * r) * &
-                  PH_absfunc_air(r, gas_pressure * frac_O2)
+                  photoi_absfunc_air(r, gas_pressure * frac_O2)
 
              if (r < box%dr) then
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / box%dr**2
@@ -162,6 +162,6 @@ contains
           end if
        end do
     end do
-  end subroutine set_photoi_rate
+  end subroutine set_photoionization_rate
 
 end program test_photoionization

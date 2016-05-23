@@ -173,7 +173,7 @@ contains
 
   ! This routine sets the refinement flag for boxes(id)
   subroutine refine_routine(boxes, id, refine_flag)
-    use m_geom
+    use m_geometry
     type(box3_t), intent(in) :: boxes(:) ! List of all boxes
     integer, intent(in)      :: id       ! Index of box to look at
     integer, intent(inout)   :: refine_flag ! Refinement flag for the box
@@ -226,7 +226,7 @@ contains
   end subroutine refine_routine
 
   subroutine set_initial_condition(box)
-    use m_geom
+    use m_geometry
     type(box3_t), intent(inout) :: box
     integer                     :: i, j, k, n, nc
     real(dp)                    :: xy(3)
@@ -642,13 +642,13 @@ contains
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
-    call a3_loop_box_arg(tree, set_photoi_rate, [eta * quench_fac], .true.)
-    call PH_set_src_3d(tree, ST_photoi_tbl, ST_rng, num_photons, &
+    call a3_loop_box_arg(tree, set_photoionization_rate, [eta * quench_fac], .true.)
+    call photoi_set_src_3d(tree, ST_photoi_tbl, ST_rng, num_photons, &
          i_photo, i_photo, 0.25e-3_dp, .true., 1e-9_dp, dt)
 
   end subroutine set_photoionization
 
-  subroutine set_photoi_rate(box, coeff)
+  subroutine set_photoionization_rate(box, coeff)
     type(box3_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, k, nc
@@ -671,7 +671,7 @@ contains
           end do
        end do
     end do
-  end subroutine set_photoi_rate
+  end subroutine set_photoionization_rate
 
   ! For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
