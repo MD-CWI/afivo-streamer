@@ -110,19 +110,16 @@ program poisson_basic_2d
   ! leaves of the tree (the boxes not covered by refinement).
   write(fname, "(A,I0)") "poisson_basic_2d_", 0
   call a2_write_vtk(tree, trim(fname), dir="output")
-  stop 'after mesh'
 
-  ! Set the multigrid options.
+  ! Initialize the multigrid options. This performs some basics checks and sets
+  ! default values where necessary.
   mg%i_phi        = i_phi       ! Solution variable
   mg%i_rhs        = i_rhs       ! Right-hand side variable
   mg%i_tmp        = i_tmp       ! Variable for temporary space
   mg%sides_bc     => sides_bc   ! Method for boundary conditions
-
-  ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary.
-  ! This routine does not initialize the multigrid variables i_phi, i_rhs
-  ! and i_tmp. These variables will be initialized at the first call
-  ! of mg2_fas_fmg
+  ! This routine does not initialize the multigrid fields boxes%i_phi,
+  ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
+  ! first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   print *, "Multigrid iteration | max residual | max error"
@@ -142,7 +139,7 @@ program poisson_basic_2d
      call a2_tree_max_cc(tree, i_tmp, residu(2))
      call a2_tree_min_cc(tree, i_err, anal_err(1))
      call a2_tree_max_cc(tree, i_err, anal_err(2))
-     write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
+     write(*,"(I8,13x,2(Es14.5))") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
      ! This writes a VTK output file containing the cell-centered values of the
@@ -164,10 +161,10 @@ program poisson_basic_2d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
     integer                  :: i, j, nc
     real(dp)                 :: xy(2), dr2, drhs
 
@@ -183,7 +180,7 @@ contains
           drhs = dr2 * gauss_4th(gaussian, xy) / 12
 
           if (abs(drhs) > 0.05_dp) then
-             ref_flag = af_do_ref
+             refine_flag = af_do_ref
              exit outer
           end if
        end do

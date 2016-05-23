@@ -89,7 +89,7 @@ program poisson_basic_3d
      ! The second argument is a subroutine that is called for each box that can
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
-     call a3_adjust_refinement(tree, ref_routine, ref_info)
+     call a3_adjust_refinement(tree, refine_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -153,10 +153,10 @@ program poisson_basic_3d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
     integer                  :: i, j, k, nc
     real(dp)                 :: xyz(3), dr2, drhs
 
@@ -173,13 +173,13 @@ contains
              drhs = dr2 * gauss_4th(gs, xyz) / 12
 
              if (abs(drhs) > 0.5_dp) then
-                ref_flag = af_do_ref
+                refine_flag = af_do_ref
                 exit outer
              end if
           end do
        end do
     end do outer
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)

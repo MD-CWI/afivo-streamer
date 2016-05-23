@@ -93,7 +93,7 @@ program poisson_benchmark_2d
      ! The second argument is a subroutine that is called for each box that can
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -149,14 +149,14 @@ program poisson_benchmark_2d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box2_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
     integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
 
     ! Fully refine up to max_ref_lvl
-    if (boxes(id)%lvl < max_ref_lvl) ref_flag = af_do_ref
-  end subroutine ref_routine
+    if (boxes(id)%lvl < max_ref_lvl) refine_flag = af_do_ref
+  end subroutine refine_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)

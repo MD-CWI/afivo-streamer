@@ -70,7 +70,7 @@ program poisson_cylindrical_dielectric
      call a2_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -138,10 +138,10 @@ program poisson_cylindrical_dielectric
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
     integer                  :: nc
     real(dp)                 :: max_crv
 
@@ -154,11 +154,11 @@ contains
 
     ! And refine if it exceeds a threshold
     if (max_crv > 5.0e-4_dp) then
-       ref_flag = af_do_ref
+       refine_flag = af_do_ref
     else
-       ref_flag = af_keep_ref
+       refine_flag = af_keep_ref
     end if
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
