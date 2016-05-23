@@ -12,9 +12,9 @@ module m_a$D_multigrid
   ! The mg module supports different multigrid operators, and uses these tags to
   ! identify boxes / operators
   integer, parameter, public :: mg_normal_box = 1 !< Normal box
-  integer, parameter, public :: mg_lsf_box = 2    !< Box with an internal boundary
-  integer, parameter, public :: mg_ceps_box = 3   !< Box with constant eps /= 1
-  integer, parameter, public :: mg_veps_box = 4   !< Box with varying eps (on face)
+  integer, parameter, public :: mg_lsf_box    = 2 !< Box with an internal boundary
+  integer, parameter, public :: mg_ceps_box   = 3 !< Box with constant eps /= 1
+  integer, parameter, public :: mg_veps_box   = 4 !< Box with varying eps (on face)
 
   !> Type to store multigrid options in
   type, public :: mg$D_t
