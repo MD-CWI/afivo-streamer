@@ -51,7 +51,7 @@ module m_streamer
      integer               :: n_cond
      real(dp), allocatable :: seed_r0(:, :)
      real(dp), allocatable :: seed_r1(:, :)
-     real(dp), allocatable :: seed_dens(:)
+     real(dp), allocatable :: seed_density(:)
      real(dp), allocatable :: seed_width(:)
      integer, allocatable  :: seed_falloff(:)
   end type initcnd_t
@@ -114,7 +114,7 @@ module m_streamer
   real(dp), protected :: ST_electric_fld_x_decay
 
   ! Name of the simulations
-  character(len=ST_slen), protected :: ST_sim_name
+  character(len=ST_slen), protected :: ST_simulation_name
 
   ! Output directory
   character(len=ST_slen), protected :: ST_output_dir
@@ -194,7 +194,7 @@ contains
 
     call CFG_add(ST_config, "end_time", 10.0d-9, &
          "The desired endtime (s) of the simulation")
-    call CFG_add(ST_config, "sim_name", "sim", &
+    call CFG_add(ST_config, "simulation_name", "sim", &
          "The name of the simulation")
     call CFG_add(ST_config, "output_dir", "", &
          "Directory where the output should be written")
@@ -237,7 +237,7 @@ contains
 
     call CFG_add(ST_config, "bg_dens", 1.0d12, &
          "The background ion and electron density (1/m3)")
-    call CFG_add(ST_config, "seed_dens", [5.0d19], &
+    call CFG_add(ST_config, "seed_density", [5.0d19], &
          "Initial density of the seed (1/m3)", .true.)
     call CFG_add(ST_config, "seed_rel_r0", [0.5d0, 0.4d0], &
          "The relative start position of the initial seed", .true.)
@@ -286,9 +286,9 @@ contains
 
     call CFG_add(ST_config, "input_file", "transport_data_file.txt", &
          "Input file with transport data")
-    call CFG_add(ST_config, "lkptbl_size", 1000, &
+    call CFG_add(ST_config, "lookup_table_size", 1000, &
          "The transport data table size in the fluid model")
-    call CFG_add(ST_config, "lkptbl_max_electric_fld", 3.0d7, &
+    call CFG_add(ST_config, "lookup_table_max_electric_fld", 3.0d7, &
          "The maximum electric field in the fluid model coefficients")
     call CFG_add(ST_config, "td_mobility_name", "efield[V/m]_vs_mu[m2/Vs]", &
          "The name of the mobility coefficient")
@@ -319,7 +319,7 @@ contains
     call CFG_get(ST_config, "bg_dens", ic%bg_dens)
     call CFG_get(ST_config, "domain_len", dlen)
 
-    call CFG_get_size(ST_config, "seed_dens", n_cond)
+    call CFG_get_size(ST_config, "seed_density", n_cond)
 
     call CFG_get_size(ST_config, "seed_rel_r0", varsize)
     if (varsize /= n_dim * n_cond) &
@@ -334,7 +334,7 @@ contains
          stop "seed_... variables have incompatible size"
 
     ic%n_cond = n_cond
-    allocate(ic%seed_dens(n_cond))
+    allocate(ic%seed_density(n_cond))
     allocate(ic%seed_r0(n_dim, n_cond))
     allocate(ic%seed_r1(n_dim, n_cond))
     allocate(ic%seed_width(n_cond))
@@ -346,7 +346,7 @@ contains
     call CFG_get(ST_config, "seed_rel_r1", tmp_vec)
     ic%seed_r1 = dlen * reshape(tmp_vec, [n_dim, n_cond])
 
-    call CFG_get(ST_config, "seed_dens", ic%seed_dens)
+    call CFG_get(ST_config, "seed_density", ic%seed_density)
     call CFG_get(ST_config, "seed_width", ic%seed_width)
     call CFG_get(ST_config, "seed_falloff", ic%seed_falloff)
     ST_init_cond = ic
@@ -366,8 +366,8 @@ contains
     call CFG_get(ST_config, "input_file", input_file)
     call CFG_get(ST_config, "gas_name", gas_name)
 
-    call CFG_get(ST_config, "lkptbl_size", table_size)
-    call CFG_get(ST_config, "lkptbl_max_electric_fld", max_electric_fld)
+    call CFG_get(ST_config, "lookup_table_size", table_size)
+    call CFG_get(ST_config, "lookup_table_max_electric_fld", max_electric_fld)
 
     call CFG_get(ST_config, "td_alpha_fac", alpha_fac)
     call CFG_get(ST_config, "td_eta_fac", eta_fac)
@@ -443,7 +443,7 @@ contains
     character(len=ST_slen)     :: tmp_name, prev_name, config_name
     integer                    :: n
 
-    ST_sim_name = ""
+    ST_simulation_name = ""
     prev_name = ""
     print *,'command_argument_count():',command_argument_count()
     do n = 1, command_argument_count()
@@ -451,11 +451,11 @@ contains
        print *,'n=',n,'; config_name:',config_name
        call CFG_read_file(ST_config, trim(config_name))
 
-       call CFG_get(ST_config, "sim_name", tmp_name)
-       if (ST_sim_name == "") then
-          ST_sim_name = tmp_name
+       call CFG_get(ST_config, "simulation_name", tmp_name)
+       if (ST_simulation_name == "") then
+          ST_simulation_name = tmp_name
        else if (tmp_name /= "" .and. tmp_name /= prev_name) then
-          ST_sim_name = trim(ST_sim_name) // "_" // trim(tmp_name)
+          ST_simulation_name = trim(ST_simulation_name) // "_" // trim(tmp_name)
        end if
        prev_name = tmp_name
     end do
@@ -508,7 +508,7 @@ contains
     ST_applied_voltage = -ST_domain_len * ST_applied_electric_fld_y
     ST_applied_voltage2 = -ST_domain_len * ST_applied_electric_fld_x
 
-    tmp_name = trim(ST_output_dir) // "/" // trim(ST_sim_name) // "_config.txt"
+    tmp_name = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_config.txt"
     print *, "Settings written to ", trim(tmp_name)
     call CFG_write(ST_config, trim(tmp_name))
 

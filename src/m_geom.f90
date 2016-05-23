@@ -22,7 +22,7 @@ module m_geom
   ! Public methods
   public :: GM_dist_line
   public :: GM_dist_vec_line
-  public :: GM_dens_line
+  public :: GM_density_line
   public :: GM_sigmoid
   public :: GM_gaussian
   public :: GM_smoothstep
@@ -56,7 +56,7 @@ contains
     dist = norm2(GM_dist_vec_line(r, r0, r1, n_dim))
   end function GM_dist_line
 
-  function GM_dens_line(r, r0, r1, n_dim, width, falloff_t) result(val)
+  function GM_density_line(r, r0, r1, n_dim, width, falloff_t) result(val)
     integer, intent(in)  :: n_dim
     real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim), width
     integer, intent(in)  :: falloff_t
@@ -79,7 +79,7 @@ contains
     case default
        val  = 0
     end select
-  end function GM_dens_line
+  end function GM_density_line
 
   function GM_sigmoid(dist, width) result(val)
     real(dp), intent(in) :: dist, width

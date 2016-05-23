@@ -6,7 +6,7 @@
  end_time = 2.00E-07
 
  # The name of the simulation:
- sim_name = props_cyl
+ simulation_name = props_cyl
 
  # Directory where the output should be written:
  output_dir = output
@@ -24,7 +24,7 @@
  gas_pressure = 0.1000E+01
 
  # The applied electric field:
- applied_fld = 0.2E+07
+ applied_electric_field_y = 0.2E+07
 
  # The dielectric constant of the dielectric:
  epsilon_diel = 0.1000E+01
@@ -72,10 +72,10 @@
  input_file = input/td_air_props.txt
 
  # The transport data table size in the fluid model:
- lkptbl_size = 1000
+ lookup_table_size = 1000
 
  # The maximum electric field in the fluid model coefficients:
- lkptbl_max_fld = 0.3000E+08
+ lookup_table_max_fld = 0.3000E+08
 
  # The name of the mobility coefficient:
  td_mobility_name = efield[V/m]_vs_mu[m2/Vs]

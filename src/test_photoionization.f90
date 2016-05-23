@@ -82,7 +82,7 @@ program test_photoionization
   call a2_set_base(tree, ix_list, nb_list)
 
   do n = 1, 20
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -99,16 +99,16 @@ program test_photoionization
 contains
 
   ! Refinement function
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
 
     if (boxes(id)%dr > 1.0e-3_dp * domain_len) then
-       ref_flag = a5_do_ref
+       refine_flag = a5_do_ref
     end if
 
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   subroutine set_photoionization(tree, num_photons)
     use m_photons

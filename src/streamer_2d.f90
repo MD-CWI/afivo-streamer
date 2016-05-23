@@ -57,9 +57,9 @@ program streamer_2d
 
   ! Set up the initial conditions
   do
-     call a2_loop_box(tree, set_init_cond)
+     call a2_loop_box(tree, set_initial_condition)
      call compute_electric_field(tree, n_fmg_cycles, .false.)
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -79,7 +79,7 @@ program streamer_2d
      if (ST_out_cnt * ST_dt_out <= ST_time) then
         write_out = .true.
         ST_out_cnt = ST_out_cnt + 1
-        write(fname, "(A,I6.6)") trim(ST_sim_name) // "_", ST_out_cnt
+        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", ST_out_cnt
      else
         write_out = .false.
      end if
@@ -119,7 +119,7 @@ program streamer_2d
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
-        call a2_loop_box(tree, average_dens)
+        call a2_loop_box(tree, average_density)
 
         ! Compute field with new density
         call compute_electric_field(tree, n_fmg_cycles, .true.)
@@ -128,7 +128,7 @@ program streamer_2d
      if (write_out) call a2_write_silo(tree, fname, ST_out_cnt, &
           ST_time, dir=ST_output_dir)
 
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -172,11 +172,11 @@ contains
   end subroutine init_tree
 
   ! This routine sets the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     use m_geom
     type(box2_t), intent(in) :: boxes(:) ! List of all boxes
     integer, intent(in)      :: id       ! Index of box to look at
-    integer, intent(inout)   :: ref_flag ! Refinement flag for the box
+    integer, intent(inout)   :: refine_flag ! Refinement flag for the box
     integer                  :: n, nc
     real(dp)                 :: cphi, dx, dx2, max_fld
     real(dp)                 :: alpha, adx
@@ -192,10 +192,10 @@ contains
     adx     = boxes(id)%dr * alpha
 
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
-       ref_flag = a5_do_ref
+       refine_flag = a5_do_ref
     else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi .and. &
          boxes(id)%dr < 4.0e-4_dp) then
-       ref_flag = a5_rm_ref
+       refine_flag = a5_rm_ref
     end if
 
     ! Refine around the initial conditions
@@ -209,23 +209,23 @@ contains
           if (dist - ST_init_cond%seed_width(n) < boxlen &
                .and. boxes(id)%dr > ST_ref_init_fac * &
                ST_init_cond%seed_width(n)) then
-             ref_flag = a5_do_ref
+             refine_flag = a5_do_ref
           end if
        end do
     end if
 
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > ST_ref_max_dx) then
-       ref_flag = a5_do_ref
+       refine_flag = a5_do_ref
     else if (dx < ST_ref_min_dx) then
-       ref_flag = a5_rm_ref
-    else if (dx < 2 * ST_ref_min_dx .and. ref_flag == a5_do_ref) then
-       ref_flag = a5_keep_ref
-    else if (dx > 0.5_dp * ST_ref_max_dx .and. ref_flag == a5_rm_ref) then
-       ref_flag = a5_keep_ref
+       refine_flag = a5_rm_ref
+    else if (dx < 2 * ST_ref_min_dx .and. refine_flag == a5_do_ref) then
+       refine_flag = a5_keep_ref
+    else if (dx > 0.5_dp * ST_ref_max_dx .and. refine_flag == a5_rm_ref) then
+       refine_flag = a5_keep_ref
     end if
 
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   !> Get maximum curvature
   function max_curvature (box, iv) result(crv)
@@ -247,12 +247,12 @@ contains
     end do
   end function max_curvature
 
-  subroutine set_init_cond(box)
+  subroutine set_initial_condition(box)
     use m_geom
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, n, nc
     real(dp)                    :: xy(2)
-    real(dp)                    :: dens
+    real(dp)                    :: density
 
     nc = box%n_cell
     box%cc(:, :, i_electron) = ST_init_cond%bg_dens
@@ -263,12 +263,12 @@ contains
           xy   = a2_r_cc(box, [i,j])
 
           do n = 1, ST_init_cond%n_cond
-             dens = ST_init_cond%seed_dens(n) * &
-                  GM_dens_line(xy, ST_init_cond%seed_r0(:, n), &
-                  ST_init_cond%seed_r1(:, n), 2, &
-                  ST_init_cond%seed_width(n), &
-                  ST_init_cond%seed_falloff(n))
-             box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + dens
+             density = ST_init_cond%seed_density(n) * &
+                       GM_density_line(xy, ST_init_cond%seed_r0(:, n), &
+                       ST_init_cond%seed_r1(:, n), 2, &
+                       ST_init_cond%seed_width(n), &
+                       ST_init_cond%seed_falloff(n))
+             box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + density
           end do
        end do
     end do
@@ -277,7 +277,7 @@ contains
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
 
     call set_box_eps(box)
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
   subroutine set_box_eps(box)
     type(box2_t), intent(inout) :: box
@@ -522,7 +522,7 @@ contains
   end subroutine fluxes_koren
 
   ! Take average of new and old electron/ion density for explicit trapezoidal rule
-  subroutine average_dens(box)
+  subroutine average_density(box)
     type(box2_t), intent(inout) :: box
     box%cc(:, :, i_electron) = 0.5_dp *  &
                                (box%cc(:, :, i_electron) + &
@@ -530,7 +530,7 @@ contains
     box%cc(:, :, i_pos_ion) = 0.5_dp * &
                           (box%cc(:, :, i_pos_ion) + &
                            box%cc(:, :, i_pos_ion_old))
-  end subroutine average_dens
+  end subroutine average_density
 
   ! Advance solution over dt based on the fluxes / source term, using forward Euler
   subroutine update_solution(box, dt)

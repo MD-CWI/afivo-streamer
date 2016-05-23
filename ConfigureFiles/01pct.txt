@@ -4,4 +4,4 @@
  # Fraction of oxygen:
  photoi_frac_O2 = 1e-3
 
-sim_name = 01pct
+simulation_name = 01pct

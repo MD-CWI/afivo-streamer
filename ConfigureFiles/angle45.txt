@@ -4,4 +4,4 @@
  # The relative end position of the initial seed:
  seed_rel_r1 = 0.5 0.5 0.92 0.75 0.5 0.98527
 
-sim_name = angle45
+simulation_name = angle45

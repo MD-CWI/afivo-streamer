@@ -76,6 +76,7 @@ contains
     print *, "The following fatal error occured in m_config:"
     print *, trim(err_string)
     ! Gnu extension to get a backtrace
+    stop 'handle_error'
     call abort()
   end subroutine handle_error
 

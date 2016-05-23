@@ -1,2 +1,2 @@
-applied_fld = 0.15E+07
-sim_name = 15e5
+applied_electric_field_y = 0.15E+07
+simulation_name = 15e5
