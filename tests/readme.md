@@ -12,14 +12,23 @@ All tests:
 
     make
 
-Perform individual test
+which should (after compilation) produce output such as:
+
+    PASSED test_refinement
+    PASSED test_ghostcell
+    PASSED test_init
+    PASSED test_reduction_2d
+    PASSED test_morton
+    PASSED test_types_2d_3d
+
+Perform an individual test
 
     make results/test_name
 
 Adding tests
 ===
 
-Simply add a new program to this directory
+Simply add a new program to this directory.
 
 Editing/adding answers
 ===
