@@ -190,6 +190,7 @@ module m_streamer
 
 contains
 
+  !> Create the configuration file with default values
   subroutine ST_create_config()
 
     call CFG_add(ST_config, "end_time", 10.0d-9, &
@@ -309,6 +310,7 @@ contains
          "Modify diffusion by this factor")
   end subroutine ST_create_config
 
+  ! Set the initial conditions from the configuration
   subroutine ST_get_init_cond(n_dim)
     integer, intent(in)            :: n_dim
     integer                        :: n_cond, varsize
@@ -352,6 +354,7 @@ contains
     ST_init_cond = ic
   end subroutine ST_get_init_cond
 
+  !> Initialize the transport coefficients
   subroutine ST_load_transport_data()
     use m_transport_data
     use m_config
@@ -439,16 +442,17 @@ contains
     end if
   end function koren_mlim
 
+  !> Read the values of the configuration file.
+  ! Only values which differ from the default values must be listed
+  ! in the configuration file
   subroutine ST_read_config_files()
     character(len=ST_slen)     :: tmp_name, prev_name, config_name
     integer                    :: n
 
     ST_simulation_name = ""
     prev_name = ""
-    print *,'command_argument_count():',command_argument_count()
     do n = 1, command_argument_count()
        call get_command_argument(n, config_name)
-       print *,'n=',n,'; config_name:',config_name
        call CFG_read_file(ST_config, trim(config_name))
 
        call CFG_get(ST_config, "simulation_name", tmp_name)
@@ -462,6 +466,8 @@ contains
 
   end subroutine ST_read_config_files
 
+  !> Update the configuration file with the values read in 
+  ! previous call of ST_read_config_files()
   subroutine ST_load_config()
     character(len=ST_slen)    :: tmp_name
 
@@ -514,6 +520,7 @@ contains
 
   end subroutine ST_load_config
 
+  ! Compute the electric field at a given time
   function ST_get_electric_field(time) result(electric_fld)
     use m_units_constants
 
@@ -523,13 +530,15 @@ contains
     t_rel = time - ST_electric_fld_y_mod_t0
     if (t_rel > 0) then
        electric_fld = ST_applied_electric_fld_y * exp(-t_rel/ST_electric_fld_y_decay) + &
-                      t_rel * ST_electric_fld_y_lin_deriv + ST_electric_fld_y_sin_amplitude * &
+                      t_rel * ST_electric_fld_y_lin_deriv + &
+                      ST_electric_fld_y_sin_amplitude * &
                       sin(t_rel * ST_electric_fld_y_sin_freq * 2 * UC_pi)
     else
        electric_fld = ST_applied_electric_fld_y
     end if
   end function ST_get_electric_field
 
+  !> Compute the voltages at a given time
   subroutine ST_set_voltages(time)
     use m_units_constants
 
@@ -539,7 +548,8 @@ contains
     t_rel = time - ST_electric_fld_y_mod_t0
     if (t_rel > 0) then
        electric_fld = ST_applied_electric_fld_y * exp(-t_rel/ST_electric_fld_y_decay) + &
-                      t_rel * ST_electric_fld_y_lin_deriv + ST_electric_fld_y_sin_amplitude * &
+                      t_rel * ST_electric_fld_y_lin_deriv + &
+                      ST_electric_fld_y_sin_amplitude * &
                       sin(t_rel * ST_electric_fld_y_sin_freq * 2 * UC_pi)
     else
        electric_fld = ST_applied_electric_fld_y
@@ -549,18 +559,21 @@ contains
     t_rel = time - ST_electric_fld_x_mod_t0
     if (t_rel > 0) then
        electric_fld = ST_applied_electric_fld_x * exp(-t_rel/ST_electric_fld_x_decay) + &
-                      t_rel * ST_electric_fld_x_lin_deriv + ST_electric_fld_x_sin_amplitude * &
+                      t_rel * ST_electric_fld_x_lin_deriv + &
+                      ST_electric_fld_x_sin_amplitude * &
                       sin(t_rel * ST_electric_fld_x_sin_freq * 2 * UC_pi)
     else
     end if
     ST_applied_voltage2 = -ST_domain_len * electric_fld
   end subroutine ST_set_voltages
 
+  !> Set the voltage to a fixed value
   subroutine ST_set_voltage(phi)
     real(dp), intent(in) :: phi
     ST_applied_voltage = phi
   end subroutine ST_set_voltage
 
+  !> Set the voltage2 to a fixed value
   subroutine ST_set_voltage2(phi)
     real(dp), intent(in) :: phi
     ST_applied_voltage2 = phi

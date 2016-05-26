@@ -715,7 +715,7 @@ contains
     end if
 
     open(unit_2, file=trim(fname_axis), action="write")
-    write(unit_1, *) "z, n_e, n_i, fld_z, flux_z"
+    write(unit_2, *) "z, n_e, n_i, fld_z, flux_z"
     do n = 1, size(axis_data, 2)
        write(unit_2, *) axis_data(:, n)
     end do

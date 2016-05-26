@@ -1,6 +1,8 @@
 !> Module that provides routines for operations on photons
 module m_photons
 
+! TODO: describe the menaing of the subroutines.
+
   use m_lookup_table
 
   implicit none
