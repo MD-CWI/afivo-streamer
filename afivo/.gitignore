@@ -16,3 +16,8 @@ src/m_a3_*
 /examples/poisson_cyl
 /examples/poisson_cyl_dielectric
 /documentation/doc/
+/tests/test_ghostcell
+/tests/test_init
+/tests/test_refinement
+/tests/test_types_2d_3d
+tests/results/*
