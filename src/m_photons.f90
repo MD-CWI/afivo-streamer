@@ -283,7 +283,7 @@ contains
 
           do j = 1, nc
              do i = 1, nc
-                if (tree%boxes(id)%coord_t == a5_cyl) then
+                if (tree%boxes(id)%coord_t == af_cyl) then
                    tmp = a2_cyl_radius_cc(tree%boxes(id), i)
                    tmp = fac * 2 * pi * tmp * &
                         tree%boxes(id)%cc(i, j, i_src) * dr**2
@@ -383,7 +383,7 @@ contains
 
        do n = 1, n_used
           id = ph_loc(n)%id
-          if (id > a5_no_box) then
+          if (id > af_no_box) then
              i = ph_loc(n)%ix(1)
              j = ph_loc(n)%ix(2)
              dr = tree%boxes(id)%dr
@@ -396,7 +396,7 @@ contains
     else
        do n = 1, n_used
           id = ph_loc(n)%id
-          if (id > a5_no_box) then
+          if (id > af_no_box) then
              i = ph_loc(n)%ix(1)
              j = ph_loc(n)%ix(2)
              dr = tree%boxes(id)%dr
@@ -587,7 +587,7 @@ contains
     ! Add photons to production rate. Currently, this is done sequentially.
     do n = 1, n_used
        id = ph_loc(n)%id
-       if (id > a5_no_box) then
+       if (id > af_no_box) then
           i = ph_loc(n)%ix(1)
           j = ph_loc(n)%ix(2)
           k = ph_loc(n)%ix(3)
