@@ -295,10 +295,12 @@ contains
                1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
                (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
                + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
+
           ! Extrapolation using 3 points
           ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
           !      boxes(id)%cc(i, j, iv) - 0.25_dp * &
           !      (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv))
+
           ! Extrapolation using 2 points
           ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
           !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
@@ -309,11 +311,17 @@ contains
        dj = dix
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
+
           ! Bilinear extrapolation (using 4 points)
           boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
                1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
                (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
                + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
+
+          ! Extrapolation using 2 points
+          ! boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
+          !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
+          !      boxes(id)%cc(i+di, j+dj, iv)
        end do
 #elif $D == 3
     case (1)
@@ -394,6 +402,7 @@ contains
        end do
 #endif
     end select
+
   end subroutine mg$D_sides_rb
 
   subroutine fill_gc_phi(boxes, ids, mg)
@@ -488,6 +497,7 @@ contains
     allocate(tmp(1:nc, 1:nc, 1:nc))
 #endif
 
+    ! Restrict phi and the residual
     !$omp parallel do private(id, p_id, tmp)
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
@@ -519,8 +529,14 @@ contains
     !$omp parallel do private(id)
     do i = 1, size(tree%lvls(lvl-1)%parents)
        id = tree%lvls(lvl-1)%parents(i)
+
+       ! Set rhs = L phi
        call mg%box_op(tree%boxes(id), mg%i_rhs, mg)
+
+       ! Add tmp (the fine grid residual) to rhs
        call a$D_box_add_cc(tree%boxes(id), mg%i_tmp, mg%i_rhs)
+
+       ! Story a copy of phi in tmp
        call a$D_box_copy_cc(tree%boxes(id), mg%i_phi, mg%i_tmp)
     end do
     !$omp end parallel do
