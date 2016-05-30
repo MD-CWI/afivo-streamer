@@ -1,0 +1,2 @@
+ seed_density = 7.500E+18 1e16
+ simulation_name = L1e16

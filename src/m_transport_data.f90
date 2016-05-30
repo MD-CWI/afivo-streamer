@@ -6,7 +6,8 @@ module m_transport_data
    private
 
    integer, parameter :: dp = kind(0.0d0)
-   integer, parameter :: max_num_rows   = 500 !> The maximum number of rows of transport data for an entry
+   integer, parameter :: max_num_rows   = 500 ! The maximum number of rows of
+                                              ! transport data for an entry
    integer, parameter :: lineLen        = 200
 
    public :: TD_get_td_from_file
@@ -67,8 +68,9 @@ contains
          ! cycle if this is not the right entry
          if (trim(data_name) /= trim(prev_line)) cycle
 
-         ! Now we can check whether there is a comment, while scanning lines until dashes are found,
-         ! which indicate the start of the transport data
+         ! Now we can check whether there is a comment, while scanning lines
+         ! until dashes are found, which indicate the start of the transport
+         ! data
          do
             read(my_unit, FMT = line_fmt, ERR = 999, end = 777) line; nL = nL+1
             line = adjustl(line)
@@ -89,7 +91,8 @@ contains
                n_rows = n_rows + 1
                read(line, FMT = *, ERR = 999, end = 777) temp_table(:, n_rows)
             else
-               print *, "CS_read_file error: too many rows in ", file_name, " at line ", nL
+               print *, "CS_read_file error: too many rows in ", &
+                        file_name, " at line ", nL
             end if
          end do
 

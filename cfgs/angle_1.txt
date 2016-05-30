@@ -1,7 +1,0 @@
- # The relative start position of the initial seed:
- seed_rel_r0 = 0.5 0.5 1.0 0.35 0.5 0.6
-
- # The relative end position of the initial seed:
- seed_rel_r1 = 0.5 0.5 0.9 0.65 0.5 0.8
-
-sim_name = angle1

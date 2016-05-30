@@ -26,8 +26,8 @@ clean:
 $(PROGS): 			../afivo/src/libafivo.a ../fosito/libfosito.a
 test_m_photons:		m_photons.o
 test_photoionization:	m_photons.o
-../streamer_2d: 	m_transport_data.o m_photons.o m_geom.o m_streamer.o
-../streamer_3d: 	m_transport_data.o m_photons.o m_geom.o m_streamer.o
-../guiding_3d: 		m_transport_data.o m_photons.o m_geom.o m_streamer.o
-../streamer_cyl: 	m_transport_data.o m_photons.o m_geom.o m_streamer.o
+../streamer_2d: 	m_transport_data.o m_photons.o m_geometry.o m_streamer.o
+../streamer_3d: 	m_transport_data.o m_photons.o m_geometry.o m_streamer.o
+../guiding_3d: 		m_transport_data.o m_photons.o m_geometry.o m_streamer.o
+../streamer_cyl: 	m_transport_data.o m_photons.o m_geometry.o m_streamer.o
 m_streamer.o:		m_transport_data.o

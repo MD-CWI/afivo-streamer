@@ -8,5 +8,5 @@ This is a collection of tools that can help doing simulations:
   * m_units_constants.f90: small list of units/constants (physics)
   * m_random.f90: using the standard random number generator, generate different types of random numbers.
 
-Usage: type 'make' to compile a static library, or simply use the source files
-directly. There are a few basic tests included.
+Usage: type 'make' to compile a static library, or simply use the source files directly.
+There are a few basic tests included.

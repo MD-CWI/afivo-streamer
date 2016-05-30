@@ -1,0 +1,2 @@
+bg_dens = 1.0e15
+simulation_name = 1e15
