@@ -212,9 +212,9 @@ contains
   subroutine photoi_set_src_2d(tree, pi_tbl, rng, num_photons, &
        i_src, i_photo, fac_dx, const_dx, use_cyl, min_dx, dt)
     use m_random
-    use m_a2_t
+    use m_a2_types
     use m_a2_utils
-    use m_a2_gc
+    use m_a2_ghostcell
     use m_a2_prolong
     use m_lookup_table
     use omp_lib
@@ -288,7 +288,7 @@ contains
 
           do j = 1, nc
              do i = 1, nc
-                if (tree%boxes(id)%coord_t == a5_cyl) then
+                if (tree%boxes(id)%coord_t == af_cyl) then
                    tmp = a2_cyl_radius_cc(tree%boxes(id), i)
                    tmp = fac * 2 * pi * tmp * &
                         tree%boxes(id)%cc(i, j, i_src) * dr**2
@@ -388,7 +388,7 @@ contains
 
        do n = 1, n_used
           id = ph_loc(n)%id
-          if (id > a5_no_box) then
+          if (id > af_no_box) then
              i = ph_loc(n)%ix(1)
              j = ph_loc(n)%ix(2)
              dr = tree%boxes(id)%dr
@@ -401,7 +401,7 @@ contains
     else
        do n = 1, n_used
           id = ph_loc(n)%id
-          if (id > a5_no_box) then
+          if (id > af_no_box) then
              i = ph_loc(n)%ix(1)
              j = ph_loc(n)%ix(2)
              dr = tree%boxes(id)%dr
@@ -443,9 +443,9 @@ contains
   subroutine photoi_set_src_3d(tree, pi_tbl, rng, num_photons, &
        i_src, i_photo, fac_dx, const_dx, min_dx, dt)
     use m_random
-    use m_a3_t
+    use m_a3_types
     use m_a3_utils
-    use m_a3_gc
+    use m_a3_ghostcell
     use m_a3_prolong
     use m_lookup_table
     use omp_lib
@@ -592,7 +592,7 @@ contains
     ! Add photons to production rate. Currently, this is done sequentially.
     do n = 1, n_used
        id = ph_loc(n)%id
-       if (id > a5_no_box) then
+       if (id > af_no_box) then
           i = ph_loc(n)%ix(1)
           j = ph_loc(n)%ix(2)
           k = ph_loc(n)%ix(3)

@@ -1,11 +1,12 @@
-! This module contains routines for writing output files with Afivo
+! This module contains routines for writing output files with Afivo. The Silo
+! format should probably be used for larger files, especially in 3D.
 !
 ! Author: Jannis Teunissen
 ! License: GPLv3
 
-module m_a$D_io
+module m_a$D_output
 
-  use m_a$D_t
+  use m_a$D_types
 
   implicit none
   private
@@ -29,26 +30,25 @@ contains
     integer, intent(in)          :: n_pixels(2) !< Number of pixels in the plane
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
 
-    integer, parameter           :: my_unit = 100
-    character(len=100)           :: fmt_string
-    character(len=400)           :: fname
-    integer                      :: i, j, n_vars, dim_unused, n_points(3)
-    real(dp)                     :: r($D), dvec(3)
-    real(dp)                     :: v1($D), v2($D)
-    real(dp), allocatable        :: pixel_data(:, :, :)
+    integer, parameter    :: my_unit = 100
+    character(len=100)    :: fmt_string
+    character(len=400)    :: fname
+    integer               :: i, j, n_vars, dim_unused, n_points(3)
+    real(dp)              :: r($D), dvec(3)
+    real(dp)              :: v1($D), v2($D)
+    real(dp), allocatable :: pixel_data(:, :, :)
 
-    n_vars = size(ivs)
-
+    n_vars      = size(ivs)
 #if $D == 2
-    dvec(1:2) = r_max(1:2) - r_min(1:2)
-    dvec(3) = 0
-    dim_unused = 3
-    n_points = [n_pixels(1), n_pixels(2), 1]
-    v1 = [dvec(1), 0.0_dp] / (n_pixels(1) - 1)
-    v2 = [0.0_dp, dvec(2)] / (n_pixels(2) - 1)
+    dvec(1:2)   = r_max(1:2) - r_min(1:2)
+    dvec(3)     = 0
+    dim_unused  = 3
+    n_points    = [n_pixels(1), n_pixels(2), 1]
+    v1          = [dvec(1), 0.0_dp] / (n_pixels(1) - 1)
+    v2          = [0.0_dp, dvec(2)] / (n_pixels(2) - 1)
 #elif $D == 3
-    dvec = r_max - r_min
-    dim_unused = minloc(abs(dvec), 1)
+    dvec        = r_max - r_min
+    dim_unused  = minloc(abs(dvec), 1)
 
     select case (dim_unused)
     case (1)
@@ -97,8 +97,14 @@ contains
     write(my_unit, '(A)') "ASCII"
     write(my_unit, '(A)') "DATASET STRUCTURED_POINTS"
     write(my_unit, '(A,3I10)') "DIMENSIONS ", n_points
+#if $D == 2
+    write(my_unit, '(A,3E16.8)') "ORIGIN ", [r_min(1), r_min(2), 0.0_dp]
+    write(my_unit, '(A,3E16.8)') "SPACING ", &
+         [v1(1) + v2(1), v1(2) + v2(2), 0.0_dp]
+#elif $D == 3
     write(my_unit, '(A,3E16.8)') "ORIGIN ", r_min
     write(my_unit, '(A,3E16.8)') "SPACING ", v1 + v2
+#endif
     write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
     do i = 1, n_vars
        write(my_unit, '(A)') "SCALARS " // &
@@ -107,7 +113,6 @@ contains
        write(my_unit, trim(fmt_string)) pixel_data(i, :, :)
     end do
     close(my_unit)
-    print *, "Written ", trim(fname)
   end subroutine a$D_write_plane
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
@@ -171,7 +176,7 @@ contains
        n = n_cc + (i-1)*$D
        tmp_name = tree%fc_names(ifc_val(i))
 #if $D == 2
-       if (tree%coord_t == a5_cyl) then
+       if (tree%coord_t == af_cyl) then
           var_names(n+1) = trim(tmp_name) // "_r"
           var_names(n+2) = trim(tmp_name) // "_z"
        else
@@ -306,7 +311,7 @@ contains
     call vtk_unstr_geo_xml_close(vtkf)
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .false.)
     call vtk_end_xml(vtkf)
-    print *, "Written ", trim(fname)
+    print *, "a$D_write_vtk: written " // trim(fname)
   end subroutine a$D_write_vtk
 
   !> Write the cell centered data of a tree to a Silo file. Only the
@@ -373,7 +378,7 @@ contains
        n = n_cc + (i-1)*$D
        tmp_name = tree%fc_names(ifc_val(i))
 #if $D == 2
-       if (tree%coord_t == a5_cyl) then
+       if (tree%coord_t == af_cyl) then
           var_names(n+1) = trim(tmp_name) // "_r"
           var_names(n+2) = trim(tmp_name) // "_z"
        else
@@ -439,7 +444,7 @@ contains
              ! Check whether we can extend to the -x direction
              ids = box_list(1, :)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_lowx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -456,7 +461,7 @@ contains
              ! Check whether we can extend to the +x direction
              ids = box_list(nx, :)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_highx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -473,7 +478,7 @@ contains
              ! Check whether we can extend to the -y direction
              ids = box_list(:, 1)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_lowy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -490,7 +495,7 @@ contains
              ! Check whether we can extend to the +y direction
              ids = box_list(:, ny)
              nb_ids = tree%boxes(ids)%neighbors(a2_neighb_highy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a2_has_children(tree%boxes(nb_ids)))) then
@@ -555,7 +560,7 @@ contains
              ! Check whether we can extend to the -x direction
              ids = pack(box_list(1, :, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -572,7 +577,7 @@ contains
              ! Check whether we can extend to the +x direction
              ids = pack(box_list(nx, :, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highx)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -589,7 +594,7 @@ contains
              ! Check whether we can extend to the -y direction
              ids = pack(box_list(:, 1, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) < tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -606,7 +611,7 @@ contains
              ! Check whether we can extend to the +y direction
              ids = pack(box_list(:, ny, :), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highy)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(2) > tree%boxes(ids(1))%ix(2) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -623,7 +628,7 @@ contains
              ! Check whether we can extend to the -z direction
              ids = pack(box_list(:, :, 1), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_lowz)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(3) < tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -640,7 +645,7 @@ contains
              ! Check whether we can extend to the +z direction
              ids = pack(box_list(:, :, nz), .true.)
              nb_ids = tree%boxes(ids)%neighbors(a3_neighb_highz)
-             if (all(nb_ids > a5_no_box)) then
+             if (all(nb_ids > af_no_box)) then
                 if (.not. any(box_done(nb_ids)) .and. &
                      tree%boxes(nb_ids(1))%ix(3) > tree%boxes(ids(1))%ix(3) .and. &
                      .not. any(a3_has_children(tree%boxes(nb_ids)))) then
@@ -708,8 +713,7 @@ contains
             var_list(iv, 1:i_grid), n_cycle_val, time_val)
     end do
     call SILO_close_file(dbix)
-
-    print *, "Written ", trim(fname)
+    print *, "a$D_write_silo: written " // trim(fname)
   end subroutine a$D_write_silo
 
-end module m_a$D_io
+end module m_a$D_output

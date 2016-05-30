@@ -1,7 +1,12 @@
 # a5_streamer
 
 This is a collection of streamer models based on
+<<<<<<< HEAD
 [AFiVO](https://github.com/jannisteunissen/afivo). 2D, 3D and cylindrical models are included.
+=======
+[Afivo](https://github.com/jannisteunissen/afivo). A 2D, a 3D and a cylindrical
+model are included.
+>>>>>>> master
 
 ### Requirements
 

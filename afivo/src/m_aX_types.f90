@@ -1,55 +1,16 @@
-! This module contains the basic types and constants that are used in Afivo,
-! together with some corresponding simple routines.
+! This module contains the basic types and constants that are used in the
+! $D-dimensional version of Afivo, together with some basic routines. The
+! dimension-independent types and constant are place in m_afivo_types.f90.
 !
 ! Author: Jannis Teunissen
 ! License: GPLv3
 
-module m_a$D_t
+module m_a$D_types
+  ! Import dimension-independent types
+  use m_afivo_types
 
   implicit none
   public
-
-  integer, parameter :: dp = kind(0.0d0)
-
-  ! The prefix a5_ means that this constant is the same in the 2D and 3D
-  ! version of Afivo, and is inspired by "A-five-o"
-
-  !> Value indicating you want to derefine a box
-  integer, parameter :: a5_rm_ref = -1
-
-  !> Value indicating you want to keep a box's refinement
-  integer, parameter :: a5_keep_ref = 0
-
-  !> Value indicating you want to refine a box
-  integer, parameter :: a5_do_ref = 1
-
-  !> The children of a box are removed (for internal use)
-  integer, parameter :: a5_derefine = -2
-
-  !> A box will be refined (for internal use)
-  integer, parameter :: a5_refine = 2
-
-  !> Special value indicating there is no box
-  integer, parameter :: a5_no_box = 0
-
-  !> Each box contains a tag, for which bits can be set. This is the initial
-  !> value, which should not be used by the user
-  integer, parameter :: a5_init_tag = -huge(1)
-
-  !> Default coordinate system
-  integer, parameter :: a5_xyz = 0
-
-  !> Cylindrical coordinate system
-  integer, parameter :: a5_cyl = 1
-
-  !> Value to indicate a Dirichlet boundary condition
-  integer, parameter :: a5_bc_dirichlet = -1
-
-  !> Value to indicate a Neumann boundary condition
-  integer, parameter :: a5_bc_neumann = -2
-
-  !> Maximum length of the names of variables
-  integer, parameter :: a5_nlen = 20
 
 #if $D == 2
   ! Numbering of children (same location as **corners**)
@@ -153,7 +114,7 @@ module m_a$D_t
   type box$D_t
      integer               :: lvl    !< level of the box
      logical               :: in_use=.false.  !< is the box in use?
-     integer               :: tag=a5_init_tag !< for the user
+     integer               :: tag=af_init_tag !< for the user
      integer               :: ix($D) !< index in the domain
      integer               :: parent !< index of parent in box list
      !> index of children in box list
@@ -176,14 +137,6 @@ module m_a$D_t
 #endif
   end type box$D_t
 
-  !> Type which contains the indices of all boxes at a refinement level, as well
-  !> as a list with all the "leaf" boxes and non-leaf (parent) boxes
-  type lvl_t
-     integer, allocatable :: ids(:)     !< indices of boxes of level
-     integer, allocatable :: leaves(:)  !< all ids(:) that are leaves
-     integer, allocatable :: parents(:) !< all ids(:) that have children
-  end type lvl_t
-
   !> Type which stores all the boxes and levels, as well as some information
   !> about the number of boxes, variables and levels.
   type a$D_t
@@ -201,9 +154,9 @@ module m_a$D_t
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
      !> Names of cell-centered variables
-     character(len=a5_nlen), allocatable :: cc_names(:)
+     character(len=af_nlen), allocatable :: cc_names(:)
      !> Names of face-centered variables
-     character(len=a5_nlen), allocatable :: fc_names(:)
+     character(len=af_nlen), allocatable :: fc_names(:)
   end type a$D_t
 
   !> Type specifying the location of a cell
@@ -211,19 +164,6 @@ module m_a$D_t
      integer :: id = -1         !< Id of the box that the cell is in
      integer :: ix($D) = -1     !< Index inside the box
   end type a$D_loc_t
-
-  !> Type that contains the refinement changes in a level
-  type ref_lvl_t
-     integer, allocatable :: add(:) !< Id's of newly added boxes
-     integer, allocatable :: rm(:) !< Id's of removed boxes
-  end type ref_lvl_t
-
-  !> Type that contains the refinement changes in a tree
-  type ref_info_t
-     integer :: n_add = 0                    !< Total number of added boxes
-     integer :: n_rm = 0                     !< Total number removed boxes
-     type(ref_lvl_t), allocatable :: lvls(:) !< Information per level
-  end type ref_info_t
 
   abstract interface
 
@@ -299,15 +239,16 @@ module m_a$D_t
 
 contains
 
-    !> Get tree info
+  !> Get tree info
   subroutine a$D_print_info(tree)
-    type(a$D_t), intent(in)        :: tree       !< The tree
+    type(a$D_t), intent(in) :: tree !< The tree
 
     if (.not. allocated(tree%lvls)) then
        print *, "a$D_init has not been called for this tree"
     else if (.not. tree%ready) then
        print *, "a$D_set_base has not been called for this tree"
     else
+       write(*, "(A)") ""
        write(*, "(A)") " *** a$D_print_info(tree) ***"
        write(*, "(A,I10)") " Current maximum level:  ", tree%highest_lvl
        write(*, "(A,I10)") " Maximum allowed level:  ", tree%lvl_limit
@@ -322,8 +263,8 @@ contains
        write(*, "(A,I10)") " Number of cc variables: ", tree%n_var_cell
        write(*, "(A,I10)") " Number of fc variables: ", tree%n_var_face
        write(*, "(A,I10)") " Type of coordinates:    ", tree%coord_t
-       write(*, "(A,2E12.4)") " min. coords:        ", tree%r_base
-       write(*, "(A,2E12.4)") " dx at lvl 1:        ", tree%dr_base
+       write(*, "(A,$DE12.4)") " min. coords:        ", tree%r_base
+       write(*, "(A,2E12.4)")  " dx at min/max level ", tree%dr_base, a$D_min_dr(tree)
        write(*, "(A)") ""
     end if
   end subroutine a$D_print_info
@@ -353,7 +294,7 @@ contains
   !> Return .true. if a box has children
   elemental logical function a$D_has_children(box)
     type(box$D_t), intent(in) :: box
-    a$D_has_children = (box%children(1) /= a5_no_box)
+    a$D_has_children = (box%children(1) /= af_no_box)
   end function a$D_has_children
 
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
@@ -372,6 +313,14 @@ contains
             a$D_neighb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
     endif
   end function a$D_get_child_offset
+
+  !> Given a cell index on box, get index of the closest cell at its parent
+  function a$D_get_ix_on_parent(box, ix) result(p_ix)
+    type(box$D_t), intent(in)           :: box   !< A child box
+    integer, intent(in), optional      :: ix($D) !< Index on child box
+    integer                            :: p_ix($D)
+    p_ix = a$D_get_child_offset(box) + ishft(ix+1, -1)
+  end function a$D_get_ix_on_parent
 
   !> Compute the 'child index' for a box with spatial index ix. With 'child
   !> index' we mean the index in the children(:) array of its parent.
@@ -528,4 +477,4 @@ contains
   end subroutine a2_cyl_child_weights
 #endif
 
-end module m_a$D_t
+end module m_a$D_types

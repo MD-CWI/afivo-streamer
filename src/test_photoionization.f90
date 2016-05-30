@@ -1,7 +1,7 @@
 program test_photoionization
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_io
+  use m_a2_output
   use m_a2_utils
   use m_lookup_table
   use m_random
@@ -67,7 +67,7 @@ program test_photoionization
   ! Initialize tree
   if (use_cyl) then
      call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, &
-          dr=dr, n_boxes=25*1000, coord=a5_cyl, cc_names=["src", "pho", "sol"])
+          dr=dr, n_boxes=25*1000, coord=af_cyl, cc_names=["src", "pho", "sol"])
   else
      call a2_init(tree, box_size, n_var_cell=3, n_var_face=0, &
           dr=dr, n_boxes=25*1000, cc_names=["src", "pho", "sol"])
@@ -105,7 +105,7 @@ contains
     integer, intent(inout)   :: refine_flag
 
     if (boxes(id)%dr > 1.0e-3_dp * domain_len) then
-       refine_flag = a5_do_ref
+       refine_flag = af_do_ref
     end if
 
   end subroutine refine_routine

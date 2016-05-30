@@ -4,28 +4,30 @@ CREATE_DIRS	:= silo
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
-.PHONY:	all doc clean $(SRC_DIRS) $(EXT_LIBS) $(CLEANSRC)
+# Hide entering/leaving directory messages
+MAKEFLAGS	:= --no-print-directory
 
-all: 		$(SRC_DIRS)
+.PHONY:	all test doc clean $(SRC_DIRS) $(EXT_LIBS) $(CLEANSRC)
+
+all:	$(SRC_DIRS)
+
+tests:	$(SRC_DIRS)
+		@$(MAKE) -C $@
 
 doc:
 		$(MAKE) srcs -C src
 		doxygen
 
-clean: 		$(CLEANSRC)
+clean:	$(CLEANSRC)
 
-$(SRC_DIRS): 	| $(CREATE_DIRS)
-		@echo "\n*********** Build information ***********"
-		@echo "  Debug is set to: [$(DEBUG)],"
-		@echo "  Set it to 1 to enable a debug build."
-		@echo "  For example: make clean; make DEBUG=1"
-		@echo "*****************************************\n"
-		$(MAKE) -C $@
+$(SRC_DIRS): | $(CREATE_DIRS)
+		@$(MAKE) -C $@
+
 $(CLEANSRC):
 		$(MAKE) -C $(@:clean-%=%) clean
 
 silo:
 		./build_silo.sh
 
-# Dependecy information
+# Dependency information
 $(SRC_DIRS):

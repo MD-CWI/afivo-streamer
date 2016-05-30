@@ -1,12 +1,12 @@
 program streamer_cyl
 
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_gc
+  use m_a2_ghostcell
   use m_a2_utils
   use m_a2_restrict
-  use m_a2_mg
-  use m_a2_io
+  use m_a2_multigrid
+  use m_a2_output
   use m_write_silo
   use m_streamer
 
@@ -170,7 +170,7 @@ contains
 
     ! Initialize tree
     call a2_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
-         coarsen_to=2, n_boxes=n_boxes_init, coord=a5_cyl, cc_names=ST_cc_names)
+         coarsen_to=2, n_boxes=n_boxes_init, coord=af_cyl, cc_names=ST_cc_names)
 
     ! Set up geometry
     id             = 1          ! One box ...
@@ -202,9 +202,9 @@ contains
     adx       = boxes(id)%dr * alpha
 
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
-       refine_flag = a5_do_ref
+       refine_flag = af_do_ref
     else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
-       refine_flag = a5_rm_ref
+       refine_flag = af_rm_ref
     end if
 
     ! Refine around the initial conditions
@@ -218,20 +218,20 @@ contains
           if (dist - ST_init_cond%seed_width(n) < boxlen &
                .and. boxes(id)%dr > ST_ref_init_fac * &
                ST_init_cond%seed_width(n)) then
-             refine_flag = a5_do_ref
+             refine_flag = af_do_ref
           end if
        end do
     end if
 
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > ST_ref_max_dx) then
-       refine_flag = a5_do_ref
+       refine_flag = af_do_ref
     else if (dx < ST_ref_min_dx) then
-       refine_flag = a5_rm_ref
-    else if (dx < 2 * ST_ref_min_dx .and. refine_flag == a5_do_ref) then
-       refine_flag = a5_keep_ref
-    else if (dx > 0.5_dp * ST_ref_max_dx .and. refine_flag == a5_rm_ref) then
-       refine_flag = a5_keep_ref
+       refine_flag = af_rm_ref
+    else if (dx < 2 * ST_ref_min_dx .and. refine_flag == af_do_ref) then
+       refine_flag = af_keep_ref
+    else if (dx > 0.5_dp * ST_ref_max_dx .and. refine_flag == af_rm_ref) then
+       refine_flag = af_keep_ref
     end if
 
   end subroutine refine_routine
@@ -436,16 +436,16 @@ contains
 
     select case (nb)
     case (a2_neighb_lowx)
-       bc_type = a5_bc_neumann
+       bc_type = af_bc_neumann
        box%cc(0, 1:nc, iv) = 0
     case (a2_neighb_highx)             ! Neumann
-       bc_type = a5_bc_neumann
+       bc_type = af_bc_neumann
        box%cc(nc+1, 1:nc, iv) = 0
     case (a2_neighb_lowy)
-       bc_type = a5_bc_dirichlet
+       bc_type = af_bc_dirichlet
        box%cc(1:nc, 0, iv) = 0
     case (a2_neighb_highy)
-       bc_type = a5_bc_dirichlet
+       bc_type = af_bc_dirichlet
        box%cc(:, nc+1, iv) = ST_applied_voltage
     end select
   end subroutine sides_bc_potential
@@ -819,7 +819,7 @@ contains
     ip             = ip + 1
     prop_names(ip) = "dphi_2mm"
     loc = a2_get_loc(tree, [0.0_dp, rz(2) + 2.0e-3_dp])
-    if (loc%id > a5_no_box) then
+    if (loc%id > af_no_box) then
        props(ip) = phi_head - &
             tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
     else
@@ -829,7 +829,7 @@ contains
     ip             = ip + 1
     prop_names(ip) = "dphi_4mm"
     loc = a2_get_loc(tree, [0.0_dp, rz(2) + 4.0e-3_dp])
-    if (loc%id > a5_no_box) then
+    if (loc%id > af_no_box) then
        props(ip) = phi_head - &
             tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
     else
@@ -846,7 +846,7 @@ contains
 
        ip = ip + 1
        write(prop_names(ip), "(A,I0,A)") "dphi_r_", i, "e6"
-       if (loc%id > a5_no_box) then
+       if (loc%id > af_no_box) then
           props(ip) = phi_head - &
                tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
        else
@@ -861,7 +861,7 @@ contains
 
        ip = ip + 1
        write(prop_names(ip), "(A,I0,A)") "dphi_z_", i, "e6"
-       if (loc%id > a5_no_box) then
+       if (loc%id > af_no_box) then
           props(ip) = phi_head - &
                tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
 
@@ -1000,4 +1000,4 @@ contains
     end do
   end subroutine get_cc_axis
 
-end program
+end program streamer_cyl

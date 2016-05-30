@@ -4,13 +4,13 @@
 ! License: GPLv3
 program streamer_2d
 
-  use m_a2_t
+  use m_a2_types
   use m_a2_core
-  use m_a2_gc
+  use m_a2_ghostcell
   use m_a2_utils
   use m_a2_restrict
-  use m_a2_mg
-  use m_a2_io
+  use m_a2_multigrid
+  use m_a2_output
   use m_write_silo
   use m_streamer
 
@@ -195,10 +195,10 @@ contains
     adx     = boxes(id)%dr * alpha
 
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
-       refine_flag = a5_do_ref
+       refine_flag = af_do_ref
     else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi .and. &
          boxes(id)%dr < 4.0e-4_dp) then
-       refine_flag = a5_rm_ref
+       refine_flag = af_rm_ref
     end if
 
     ! Refine around the initial conditions
@@ -212,20 +212,20 @@ contains
           if (dist - ST_init_cond%seed_width(n) < boxlen &
                .and. boxes(id)%dr > ST_ref_init_fac * &
                ST_init_cond%seed_width(n)) then
-             refine_flag = a5_do_ref
+             refine_flag = af_do_ref
           end if
        end do
     end if
 
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > ST_ref_max_dx) then
-       refine_flag = a5_do_ref
+       refine_flag = af_do_ref
     else if (dx < ST_ref_min_dx) then
-       refine_flag = a5_rm_ref
-    else if (dx < 2 * ST_ref_min_dx .and. refine_flag == a5_do_ref) then
-       refine_flag = a5_keep_ref
-    else if (dx > 0.5_dp * ST_ref_max_dx .and. refine_flag == a5_rm_ref) then
-       refine_flag = a5_keep_ref
+       refine_flag = af_rm_ref
+    else if (dx < 2 * ST_ref_min_dx .and. refine_flag == af_do_ref) then
+       refine_flag = af_keep_ref
+    else if (dx > 0.5_dp * ST_ref_max_dx .and. refine_flag == af_rm_ref) then
+       refine_flag = af_keep_ref
     end if
 
   end subroutine refine_routine
@@ -668,7 +668,7 @@ contains
     real(dp)                    :: xy(2)
 
     nc = box%n_cell
-    bc_type = a5_bc_dirichlet
+    bc_type = af_bc_dirichlet
 
     select case (nb)
     case (a2_neighb_lowx)
