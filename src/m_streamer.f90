@@ -63,7 +63,7 @@ module m_streamer
   type(LT_table_t), protected :: ST_td_tbl
 
   ! The configuration for the simulation
-  type(CFG_t), protected :: ST_cfg
+  type(CFG_t) :: ST_cfg
 
   ! Random number generator
   type(RNG_t) :: ST_rng
@@ -134,11 +134,14 @@ module m_streamer
   ! Refine if the curvature in phi is larger than this value
   real(dp), protected :: ST_ref_cphi
 
-  ! Derefine if all conditions hold: value for alpha*dx
+  ! Derefine if all conditions hold: max value for alpha*dx
   real(dp), protected :: ST_deref_adx
 
-  ! Derefine if all conditions hold: value for curvature of phi
+  ! Derefine if all conditions hold: max value for curvature of phi
   real(dp), protected :: ST_deref_cphi
+
+  ! Derefine if all conditions hold: max value for dx
+  real(dp), protected :: ST_deref_dx
 
   ! Refine around initial conditions up to this time
   real(dp), protected :: ST_ref_init_time
@@ -266,9 +269,11 @@ contains
          "Refine if the curvature in phi is larger than this value")
 
     call CFG_add(ST_cfg, "deref_adx", 0.1_dp, &
-         "Derefine if all conditions hold; value for alpha*dx")
+         "Derefine if all conditions hold; max value for alpha*dx")
+    call CFG_add(ST_cfg, "deref_dx", 1e-4_dp, &
+         "Derefine if all conditions hold; max value for dx")
     call CFG_add(ST_cfg, "deref_cphi", 1e99_dp, &
-         "Derefine if all conditions hold: value for curvature of phi")
+         "Derefine if all conditions hold: max value for curvature of phi")
 
     call CFG_add(ST_cfg, "ref_init_time", 10.0e-9_dp, &
          "Refine around initial conditions up to this time")
@@ -307,6 +312,7 @@ contains
          "Modify mobility by this factor")
     call CFG_add(ST_cfg, "td_diffusion_fac", 1.0_dp, &
          "Modify diffusion by this factor")
+
   end subroutine ST_create_cfg
 
   subroutine ST_get_init_cond(n_dim)
@@ -477,6 +483,7 @@ contains
     call CFG_get(ST_cfg, "ref_adx", ST_ref_adx)
     call CFG_get(ST_cfg, "ref_cphi", ST_ref_cphi)
     call CFG_get(ST_cfg, "deref_adx", ST_deref_adx)
+    call CFG_get(ST_cfg, "deref_dx", ST_deref_dx)
     call CFG_get(ST_cfg, "deref_cphi", ST_deref_cphi)
 
     call CFG_get(ST_cfg, "ref_init_time", ST_ref_init_time)
