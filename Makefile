@@ -1,4 +1,4 @@
-SRC_DIRS	:= src fosito afivo
+SRC_DIRS	:= src afivo
 
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
@@ -21,4 +21,4 @@ $(CLEANSRC):
 		$(MAKE) -C $(@:clean-%=%) clean
 
 # Dependecy information
-src:		fosito afivo
+src:		afivo

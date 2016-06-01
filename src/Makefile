@@ -1,11 +1,13 @@
-INCDIRS	:= ../afivo/src ../fosito
-LIBDIRS := ../afivo/src ../afivo/silo/lib ../fosito
-LIBS	:= afivo silo fosito
+INCDIRS	:= ../afivo/src
+LIBDIRS := ../afivo/src ../afivo/silo/lib .
+LIBS	:= afivo silo streamer
 
 include ../afivo/makerules.make
 
-PROGS	:= ../streamer_2d ../streamer_3d ../streamer_cyl\
-	../guiding_3d test_m_photons test_photoionization
+OBJS	:= m_units_constants.o m_config.o m_lookup_table.o\
+	m_random.o m_mrgrnk.o m_linked_list.o m_find_index.o \
+	m_photons.o m_streamer.o m_geometry.o m_transport_data.o
+PROGS	:= ../streamer_2d ../streamer_3d ../streamer_cyl
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
@@ -17,17 +19,16 @@ PROGS	:= ../streamer_2d ../streamer_3d ../streamer_cyl\
 
 .PHONY: all clean
 
-all:	$(PROGS)
+all: 	$(PROGS) 
+
+libstreamer.a: $(OBJS)
+	$(RM) $@
+	$(AR) rcs $@ $^
 
 clean:
-	$(RM) $(PROGS) *.o *.mod
+	$(RM) $(PROGS) *.o *.mod libstreamer.a
 
 # Dependency information
-$(PROGS): 			../afivo/src/libafivo.a ../fosito/libfosito.a
-test_m_photons:		m_photons.o
-test_photoionization:	m_photons.o
-../streamer_2d: 	m_transport_data.o m_photons.o m_geometry.o m_streamer.o
-../streamer_3d: 	m_transport_data.o m_photons.o m_geometry.o m_streamer.o
-../guiding_3d: 		m_transport_data.o m_photons.o m_geometry.o m_streamer.o
-../streamer_cyl: 	m_transport_data.o m_photons.o m_geometry.o m_streamer.o
 m_streamer.o:		m_transport_data.o
+m_lookup_table.o:	m_find_index.o
+$(PROGS): 		../afivo/src/libafivo.a libstreamer.a
