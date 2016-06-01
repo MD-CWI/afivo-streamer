@@ -65,7 +65,7 @@ octree (3D) grids. These grids have a simple structure and connectivity, which
 allows for efficient numerical computations. At the same time, they allow for
 strong local refinements, as illustrated in <a href="#fig_ex-orthtree" >Figure 1</a>.
 
-One of the main reasons to develope Afivo (which stands for Adaptive Finite
+One of the main reasons to develop Afivo (which stands for Adaptive Finite
 Volume Octree) was to be able to experiment with geometric multigrid algorithms.
 This has led to the development of a geometric multigrid solver for quadtrees /
 octrees that handles refinement boundaries consistently. The framework with the
@@ -518,7 +518,7 @@ In discretized form, we write the
 where \f$h\f$ denotes the mesh spacing at which the equation is discretized.
 
 There already exists numerous sources on the foundations of multigrid, the
-different cycles and relaxation methods, convergence behaviour and other
+different cycles and relaxation methods, convergence behavior and other
 aspects, see for example
 Xcite{Brandt_2011,trottenberg2000multigrid,Briggs_2000,Hackbusch_1985}.
 Here we will not provide a general introduction to multigrid.
@@ -612,9 +612,9 @@ following way:
 		* Perform a V-cycle starting at level \f$l\f$, as described in the previous
 		section
 
-\subsection sect_gsrb Gauss Seidel red-black
+\subsection sect_gsrb Gauss-Seidel red-black
 
-In Afivo, we have implemented Gauss Seidel red-black or GS-RB as a relaxation
+In Afivo, we have implemented Gauss-Seidel red-black or GS-RB as a relaxation
 method.
 This method is probably described in almost all textbooks on multigrid, such as
 Xcite{Brandt_2011,trottenberg2000multigrid,Briggs_2000,Hackbusch_1985}, so we
@@ -629,7 +629,7 @@ neighboring values and the source term \f$\rho\f$. If we keep the values of the
 neighbors fixed, then we can determine the value \f$u_h^{(i,j)}\f$ that locally
 solves the linear equation. This is precisely what is done in GS-RB: the linear
 equations are solved for all the red points while keeping the old black values,
-and then vice-versa.
+and then vice versa.
 
 
 \subsection sect_mg-ghost-cells Conservative filling of ghost cells
@@ -863,7 +863,7 @@ and the solution itself is used to set boundary conditions.
 The two different problems can now be solved numerically.
 For the cylindrical case with the varying \f$\varepsilon\f$, a modified Laplacian
 operator is used, as described in section \ref sect_mg-ghost-cells.
-The Gauss Seidel red-black relaxation methods are also modified, because they
+The Gauss-Seidel red-black relaxation methods are also modified, because they
 depend on the applied operator, see section \ref sect_gsrb.
 For these examples, we have used
 \f$N_\mathrm{down} = N_\mathrm{up} = N_\mathrm{base} = 2\f$ (number of down/up/base
@@ -883,7 +883,7 @@ Consecutive FMG cycles have a negligible effect on the absolute error, although
 they do reduce the residual \f$r = \rho - \nabla^2 u\f$.
 The maximum value of \f$|r|\f$ is shown versus iteration number in
 <a href="#fig_mg-ex1">Figure 9b</a>.
-The convergence behaviour is similar for both cases, with each iteration
+The convergence behavior is similar for both cases, with each iteration
 reducing the residual by a factor of about \f$0.056\f$.
 The offset between the lines is caused by the \f$\varepsilon = 100\f$ region, which
 locally amplifies the source term by a factor of 100.

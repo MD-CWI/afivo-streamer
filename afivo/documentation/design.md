@@ -82,7 +82,7 @@ Because it is one of the more convenient languages for scientific computing.
 There are a couple of reasons for this:
 
 * There are already many frameworks out there aimed at "big" simulations.
-* I think most people dont need "big" simulations, running on more than say 10
+* I think most people do not need "big" simulations, running on more than say 10
   cores.
 * Most of the complexity of the current frameworks is in the communication, this
   is much simpler for AFiVO. There is much less code, and it is probably easier
