@@ -12,19 +12,35 @@ program streamer_cyl
 
   implicit none
 
-  integer                 :: i, n
-  character(len=ST_slen)  :: fname
-  logical                 :: write_out
-  real(dp)                :: tmp_fld_val
-
-  type(a2_t)              :: tree ! This contains the full grid information
-  type(mg2_t)             :: mg   ! Multigrid option struct
-  type(ref_info_t)        :: ref_info
-
+  integer                :: i, n
+  character(len=ST_slen) :: fname
+  logical                :: write_out
+  real(dp)               :: tmp_fld_val
+  type(a2_t)             :: tree ! This contains the full grid information
+  type(mg2_t)            :: mg   ! Multigrid option struct
+  type(ref_info_t)       :: ref_info
   character(len=ST_slen) :: fname_axis, fname_stats
+  logical                :: ref_cyl_uniform, write_properties
+  real(dp)               :: ref_cyl_rmin, ref_cyl_dx
 
   call ST_create_cfg()
+
+  call CFG_add(ST_cfg, "write_properties", .false., &
+       "Whether to write streamer properties in cylindrical coordinates")
+  call CFG_add(ST_cfg, "ref_cyl_uniform", .false., &
+       "Uniform refinement around axis (if true)")
+  call CFG_add(ST_cfg, "ref_cyl_rmin", 1e-3_dp, &
+       "Uniform refinement around axis up to this radius")
+  call CFG_add(ST_cfg, "ref_cyl_dx", 10e-6_dp, &
+       "Uniform refinement around at least as fine as dx")
+
   call ST_read_cfg_files()
+
+  call CFG_get(ST_cfg, "write_properties", write_properties)
+  call CFG_get(ST_cfg, "ref_cyl_uniform", ref_cyl_uniform)
+  call CFG_get(ST_cfg, "ref_cyl_rmin", ref_cyl_rmin)
+  call CFG_get(ST_cfg, "ref_cyl_dx", ref_cyl_dx)
+
   call ST_load_cfg()
 
   ! Initialize the transport coefficients
@@ -61,9 +77,11 @@ program streamer_cyl
   do
      call a2_loop_box(tree, set_init_cond)
      call compute_fld(tree, n_fmg_cycles, .false.)
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refinement_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
+
+  call a2_print_info(tree)
 
   if (ST_photoi_enabled) &
        call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
@@ -135,11 +153,13 @@ program streamer_cyl
      if (write_out) then
         call a2_write_silo(tree, fname, ST_out_cnt, ST_time, &
              dir=ST_output_dir, ixs_fc=[f_fld])
-        call write_streamer_properties(tree, fname_stats, &
-             fname_axis, ST_out_cnt, ST_time)
+        if (write_properties) then
+           call write_streamer_properties(tree, fname_stats, &
+                fname_axis, ST_out_cnt, ST_time)
+        end if
      end if
 
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refinement_routine, ref_info)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -183,7 +203,7 @@ contains
   end subroutine init_tree
 
   ! This routine sets the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refinement_routine(boxes, id, ref_flag)
     use m_geom
     type(box2_t), intent(in) :: boxes(:) ! List of all boxes
     integer, intent(in)      :: id       ! Index of box to look at
@@ -203,8 +223,15 @@ contains
 
     if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
        ref_flag = af_do_ref
-    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
+    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi &
+         .and. dx < ST_deref_dx) then
        ref_flag = af_rm_ref
+    end if
+
+    if (ref_cyl_uniform) then
+       if (boxes(id)%r_min(1) < ref_cyl_rmin .and. dx > ref_cyl_dx) then
+          ref_flag = af_do_ref
+       end if
     end if
 
     ! Refine around the initial conditions
@@ -215,7 +242,7 @@ contains
           dist = GM_dist_line(a2_r_center(boxes(id)), &
                ST_init_cond%seed_r0(:, n), &
                ST_init_cond%seed_r1(:, n), 2)
-          if (dist - ST_init_cond%seed_width(n) < boxlen &
+          if (dist - 2 * ST_init_cond%seed_width(n) < 6 * boxlen &
                .and. boxes(id)%dr > ST_ref_init_fac * &
                ST_init_cond%seed_width(n)) then
              ref_flag = af_do_ref
@@ -234,7 +261,7 @@ contains
        ref_flag = af_keep_ref
     end if
 
-  end subroutine ref_routine
+  end subroutine refinement_routine
 
   !> Get maximum curvature
   ! TODO: cylindrical coordinates or not?
@@ -340,10 +367,9 @@ contains
 
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
-
     get_max_dt = 0.9_dp * min(1/(1/dt_cfl + 1/dt_dif), &
-         dt_alpha, dt_drt, ST_dt_max)
-
+         dt_drt, dt_alpha, ST_dt_max)
+    ! print *, get_max_dt, dt_cfl, dt_dif, dt_drt
   end function get_max_dt
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -458,10 +484,10 @@ contains
     real(dp), intent(in)        :: dt_vec(:)
     real(dp)                    :: inv_dr, tmp, gradp, gradc, gradn
     real(dp)                    :: mobility, diff_coeff, v_drift
-    real(dp)                    :: fld, fld_avg
+    real(dp)                    :: fld, fld_avg!, fac
     real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
     integer                     :: i, j, nc
-    type(LT_loc_t) :: loc
+    type(LT_loc_t)              :: loc
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
@@ -570,7 +596,7 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, sflux, fld
-    real(dp)                    :: alpha, eta, dflux(2), rfac(2)
+    real(dp)                    :: alpha, eta, mu, rfac(2)
     integer                     :: i, j, nc, ioff
     type(LT_loc_t)              :: loc
 
@@ -581,17 +607,15 @@ contains
     do j = 1, nc
        do i = 1, nc
           ! Weighting of flux contribution for cylindrical coordinates
-          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          rfac  = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          fld   = box%cc(i,j, i_fld)
+          loc   = LT_get_loc(ST_td_tbl, fld)
+          alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+          eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
+          mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-          fld      = box%cc(i,j, i_fld)
-          loc      = LT_get_loc(ST_td_tbl, fld)
-          alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-          eta      = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
-
-          ! Set source term equal to ||flux|| * (alpha - eta)
-          dflux(1) = box%fx(i, j, f_elec) + box%fx(i+1, j, f_elec)
-          dflux(2) = box%fy(i, j, f_elec) + box%fy(i, j+1, f_elec)
-          src = 0.5_dp * norm2(dflux) * (alpha - eta)
+          ! Source term
+          src = fld * mu * abs(box%cc(i, j, i_elec)) * (alpha - eta)
 
           if (ST_photoi_enabled) &
                src = src + box%cc(i,j, i_pho)
@@ -665,9 +689,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_elec)
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_pion)
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_elec)
+          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_pion)
+          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_phi)
           call set_box_eps(tree%boxes(id))
        end do
 
