@@ -1,9 +1,0 @@
-
-Program aborted. Backtrace:
-#0  0x7F5A36EC5D58
-#1  0x7F5A36EC6C22
-#2  0x7F5A36FA0A88
-#3  0x502B15 in __m_config_MOD_handle_error at m_config.f90:?
-#4  0x5063DB in __m_config_MOD_cfg_write
-#5  0x432F2C in __m_streamer_MOD_st_load_cfg
-#6  0x406124 in MAIN__ at guiding_3d.f90:?
