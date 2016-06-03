@@ -51,18 +51,19 @@ module m_units_constants
 
 contains
 
-                                                                        ! Convert (classical) kinetic energy to velocity
+  !> Convert (classical) kinetic energy to velocity
   real(dp) function UC_en_to_vel(en, mass)
     real(dp), intent(in) :: en, mass
     UC_en_to_vel                            = sqrt(2 * en) / mass
   end function UC_en_to_vel
 
-  ! Convert velocity to energy
+  !> Convert velocity to energy
   real(dp) function UC_vel_to_en(vel, mass)
     real(dp), intent(in) :: vel, mass
     UC_vel_to_en = 0.5_dp * mass * vel**2
   end function UC_vel_to_en
 
+  !> Convert Cartisian coordinates into spherical coordinates
   subroutine UC_xyz_to_spherical(xyz, radius, theta, phi)
     real(dp), intent(in) :: xyz(3)
     real(dp), intent(out) :: radius, theta, phi

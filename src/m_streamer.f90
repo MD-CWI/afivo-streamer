@@ -514,13 +514,13 @@ contains
     ST_applied_voltage = -ST_domain_len * ST_applied_electric_fld_y
     ST_applied_voltage2 = -ST_domain_len * ST_applied_electric_fld_x
 
-    tmp_name = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_config.txt"
+    tmp_name = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_output.cfg"
     print *, "Settings written to ", trim(tmp_name)
     call CFG_write(ST_config, trim(tmp_name))
 
   end subroutine ST_load_config
 
-  ! Compute the electric field at a given time
+  !> Compute the electric field at a given time
   function ST_get_electric_field(time) result(electric_fld)
     use m_units_constants
 

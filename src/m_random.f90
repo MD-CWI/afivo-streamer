@@ -55,7 +55,7 @@ contains
     end do
   end subroutine init
 
-  ! Method mzran (Marsaglia), see http://jblevins.org/log/openmp
+  !> Method mzran (Marsaglia), see http://jblevins.org/log/openmp
   function int4(self) result(rr)
     class(RNG_t), intent(inout) :: self
     integer(i4)                 :: rr
@@ -75,7 +75,7 @@ contains
     rr = a + int(self%uni_01() * (b-a+1))
   end function int_ab
 
-  ! Uniform random number in range [0,1)
+  !> Uniform random number in range [0,1)
   function uni_01(self) result(rr)
     class(RNG_t), intent(inout) :: self
     real(dp)                    :: rr
@@ -83,7 +83,7 @@ contains
     rr = 0.5_dp + conv_fac * self%int4()
   end function uni_01
 
-  ! Uniform random number in range [a,b)
+  !> Uniform random number in range [a,b)
   function uni_ab(self, a, b) result(rr)
     class(RNG_t), intent(inout) :: self
     real(dp), intent(in)        :: a, b
@@ -91,7 +91,7 @@ contains
     rr = a + self%uni_01() * (b-a)
   end function uni_ab
 
-  ! Return two normal random variates with mean 0 and variance 1
+  !> Return two normal random variates with mean 0 and variance 1
   ! Source: http://en.wikipedia.org/wiki/Marsaglia_polar_method
   function two_normals(self) result(rands)
     class(RNG_t), intent(inout) :: self
@@ -105,7 +105,7 @@ contains
     rands = rands * sqrt(-2 * log(sum_sq) / sum_sq)
   end function two_normals
 
-  ! Return Poisson random variate with rate lambda. Works well for lambda < 30
+  !> Return Poisson random variate with rate lambda. Works well for lambda < 30
   ! or so. For lambda >> 1 it can produce wrong results due to roundoff error.
   function poisson(self, lambda) result(rr)
     class(RNG_t), intent(inout) :: self
@@ -123,7 +123,7 @@ contains
     end do
   end function poisson
 
-  ! Sample point on a circle with given radius
+  !> Sample point on a circle with given radius
   function circle(self, radius) result(xy)
     class(RNG_t), intent(inout) :: self
     real(dp), intent(in)        :: radius
@@ -143,7 +143,7 @@ contains
     xy    = xy * radius
   end function circle
 
-  ! Sample point on a sphere with given radius
+  !> Sample point on a sphere with given radius
   function sphere(self, radius) result(xyz)
     class(RNG_t), intent(inout) :: self
     real(dp), intent(in)        :: radius

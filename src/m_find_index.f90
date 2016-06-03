@@ -1,3 +1,5 @@
+!> module m_find_index contains subroutines for finding special indices in
+!  monotonically increasing sorted lists
 module m_find_index
 
   implicit none
@@ -7,14 +9,14 @@ module m_find_index
 
   ! Public methods
   public :: FI_linear_r
-  public :: FI_bsearch_r
+  public :: FI_binary_search_r
   public :: FI_adaptive_r
 
 contains
 
-  ! Searches sorted list for the smallest ix such that
-  ! val <= list(ix)
-  ! On failure, returns size(list)+1
+  !> Searches monotonically increasing sorted list for the smallest ix
+  !  such that val <= list(ix)
+  !  On failure, returns size(list)+1
   function FI_linear_r(list, val) result(ix)
     real(dp), intent(in) :: list(:), val
     integer :: ix
@@ -24,10 +26,11 @@ contains
     end do
   end function FI_linear_r
 
-  ! Searches sorted list for the smallest ix such that
-  ! val <= list(ix)
-  ! On failure, returns size(list)+1
-  function FI_bsearch_r(list, val) result(ix)
+  !> Searches monotonically increasing sorted list for the ix which is
+  !  'closest' to val. If val is not in the list list(ix) will be the
+  !  first value larger than val.
+  !  On failure, returns size(list)+1
+  function FI_binary_search_r(list, val) result(ix)
     real(dp), intent(in) :: list(:)
     real(dp), intent(in) :: val
     integer              :: ix, i_min, i_max, i_middle
@@ -47,22 +50,22 @@ contains
 
     ix = i_min
     if (val > list(ix)) ix = size(list) + 1
-  end function FI_bsearch_r
+  end function FI_binary_search_r
 
-  ! Searches sorted list for the smallest ix such that
-  ! val <= list(ix)
-  ! On failure, returns size(list)+1
-  ! Switches between linear and binary search
+  !> Searches monotonically increasing sorted list for the smallest ix
+  !  such that val <= list(ix)
+  !  Switches between linear and binary search
+  !  On failure, returns size(list)+1
   function FI_adaptive_r(list, val) result(ix)
     real(dp), intent(in) :: list(:)
     real(dp), intent(in) :: val
     integer              :: ix
-    integer, parameter   :: bsearch_limit = 40
+    integer, parameter   :: binary_search_limit = 40
     
-    if (size(list) < bsearch_limit) then
+    if (size(list) < binary_search_limit) then
        ix = FI_linear_r(list, val)
     else
-       ix = FI_bsearch_r(list, val)
+       ix = FI_binary_search_r(list, val)
     end if
   end function FI_adaptive_r
   

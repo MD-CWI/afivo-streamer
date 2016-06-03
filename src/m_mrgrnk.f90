@@ -1,3 +1,6 @@
+!> Module that provide a general routine for Merge-sort ranking of array
+!  of double precision (15bytes), real (8bytes) and integer kind
+!
 Module m_mrgrnk
    Integer, Parameter :: kdp = selected_real_kind(15)
    public :: mrgrnk
@@ -8,6 +11,7 @@ Module m_mrgrnk
    end interface mrgrnk
 contains
 
+   ! Double precision variant of  Merge-sort ranking of an array
    Subroutine D_mrgrnk (XDONT, IRNGT)
       ! __________________________________________________________
       !   MRGRNK = Merge-sort ranking of an array
@@ -208,6 +212,7 @@ contains
       !
    End Subroutine D_mrgrnk
 
+   ! Real variant of  Merge-sort ranking of an array
    Subroutine R_mrgrnk (XDONT, IRNGT)
       ! __________________________________________________________
       !   MRGRNK = Merge-sort ranking of an array
@@ -407,6 +412,8 @@ contains
       Return
       !
    End Subroutine R_mrgrnk
+
+   ! Integer variant of  Merge-sort ranking of an array
    Subroutine I_mrgrnk (XDONT, IRNGT)
       ! __________________________________________________________
       !   MRGRNK = Merge-sort ranking of an array
@@ -606,4 +613,5 @@ contains
       Return
       !
    End Subroutine I_mrgrnk
+
 end module m_mrgrnk

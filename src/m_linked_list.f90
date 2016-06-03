@@ -1,3 +1,4 @@
+!> This modules provides methods to work properly with linked lists
 module m_linked_list
 
    implicit none
@@ -28,6 +29,7 @@ module m_linked_list
 
 contains
 
+   !> Clears an linked list of type LL_int_head_t
    subroutine LL_clear(head)
       type(LL_int_head_t), intent(inout) :: head
       type(LL_int_t), pointer            :: this_element
@@ -42,6 +44,7 @@ contains
       head%n_values = 0
    end subroutine LL_clear
 
+   !> Adds an element to a linked list of type LL_int_head_t at position head
    subroutine LL_add(head, x)
       type(LL_int_head_t)     :: head
       integer, intent(in)     :: x
@@ -54,6 +57,7 @@ contains
       head%n_values = head%n_values + 1
    end subroutine LL_add
 
+   !> TODO : description of this subroutine
    subroutine LL_pop(head, popped_value, success)
       type(LL_int_head_t), intent(inout) :: head
       integer, intent(inout)             :: popped_value
@@ -71,6 +75,7 @@ contains
       end if
    end subroutine LL_pop
 
+   !> Computes the number of elements of a linked list of type LL_int_head_t
    function LL_get_size(head) result(list_size)
       type(LL_int_head_t), intent(in) :: head
       integer                         :: list_size

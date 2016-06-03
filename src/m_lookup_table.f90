@@ -1,3 +1,6 @@
+!> Modules that provides subroutines for creating and initializing lookup
+! tables
+! TODO: describe the functions and subroutines in this module
 module m_lookup_table
   implicit none
   private
@@ -25,6 +28,8 @@ module m_lookup_table
 
   ! Public methods
   public :: LT_create
+  public :: LT_get_xdata
+  public :: LT_get_spaced_data
   public :: LT_set_col
   public :: LT_add_to_col
   public :: LT_add_col
@@ -36,13 +41,13 @@ module m_lookup_table
   public :: LT_get_num_rows
   public :: LT_get_num_cols
   public :: LT_get_data
-  public :: LT_get_xdata
   public :: LT_lin_interp_list
   public :: LT_to_file
   public :: LT_from_file
 
 contains
 
+  !> Create a lookup table
   function LT_create(x_min, x_max, n_rows, n_cols) result(my_lt)
     real(dp), intent(in) :: x_min, x_max
     integer, intent(in)  :: n_rows, n_cols
@@ -62,12 +67,34 @@ contains
     my_lt%n_cols    = n_cols
   end function LT_create
 
+  !> Computes the data points in x direction starting at my_lt%x_min
+  !  Distance between points: 1 / my_lt%inv_dx ?????
+  function LT_get_xdata(my_lt) result(xdata)
+    type(lookup_table_t), intent(in) :: my_lt
+    real(dp)                    :: xdata(my_lt%n_rows)
+    integer                     :: ix
+    real(dp)                    :: dx
+    dx = 1 / my_lt%inv_dx
+    do ix = 1, my_lt%n_rows
+       xdata(ix) = my_lt%x_min + (ix-1) * dx
+    end do
+  end function LT_get_xdata
+
+  function LT_get_spaced_data(in_xx, in_yy, new_xx) result(out_yy)
+    real(dp), intent(in) :: in_xx(:), in_yy(:), new_xx(:)
+    real(dp)             :: out_yy(size(new_xx))
+    integer              :: ix
+    do ix = 1, size(new_xx)
+       call LT_lin_interp_list(in_xx, in_yy, new_xx(ix), out_yy(ix))
+    end do
+  end function LT_get_spaced_data
+
   subroutine LT_set_col(my_lt, col_ix, xx, yy)
     type(lookup_table_t), intent(inout) :: my_lt
     integer, intent(in)            :: col_ix
     real(dp), intent(in)           :: xx(:), yy(:)
     my_lt%cols_rows(col_ix, :) = &
-         get_spaced_data(xx, yy, LT_get_xdata(my_lt))
+         LT_get_spaced_data(xx, yy, LT_get_xdata(my_lt))
     my_lt%rows_cols(:, col_ix) = my_lt%cols_rows(col_ix, :)
   end subroutine LT_set_col
 
@@ -84,7 +111,7 @@ contains
     my_lt%cols_rows(1:my_lt%n_cols, :) = temp_lt%cols_rows
     my_lt%rows_cols(:, 1:my_lt%n_cols) = temp_lt%rows_cols
     my_lt%n_cols                       = my_lt%n_cols + 1
-    my_lt%cols_rows(my_lt%n_cols, :)   = get_spaced_data(xx, yy, LT_get_xdata(my_lt))
+    my_lt%cols_rows(my_lt%n_cols, :)   = LT_get_spaced_data(xx, yy, LT_get_xdata(my_lt))
     my_lt%rows_cols(:, my_lt%n_cols)   = my_lt%cols_rows(my_lt%n_cols, :)
   end subroutine LT_add_col
 
@@ -93,7 +120,7 @@ contains
     integer, intent(in)            :: col_ix
     real(dp), intent(in)           :: xx(:), yy(:)
     my_lt%cols_rows(col_ix, :) = &
-         my_lt%cols_rows(col_ix, :) + get_spaced_data(xx, yy, LT_get_xdata(my_lt))
+         my_lt%cols_rows(col_ix, :) + LT_get_spaced_data(xx, yy, LT_get_xdata(my_lt))
     my_lt%rows_cols(:, col_ix) = my_lt%cols_rows(col_ix, :)
   end subroutine LT_add_to_col
 
@@ -177,26 +204,12 @@ contains
     cols_rows = my_lt%cols_rows
   end subroutine LT_get_data
 
-  function LT_get_xdata(my_lt) result(xdata)
-    type(lookup_table_t), intent(in) :: my_lt
-    real(dp)                    :: xdata(my_lt%n_rows)
-    integer                     :: ix
-    real(dp)                    :: dx
-    dx = 1 / my_lt%inv_dx
-    do ix = 1, my_lt%n_rows
-       xdata(ix) = my_lt%x_min + (ix-1) * dx
-    end do
-  end function LT_get_xdata
-
-  function get_spaced_data(in_xx, in_yy, new_xx) result(out_yy)
-    real(dp), intent(in) :: in_xx(:), in_yy(:), new_xx(:)
-    real(dp)             :: out_yy(size(new_xx))
-    integer              :: ix
-    do ix = 1, size(new_xx)
-       call LT_lin_interp_list(in_xx, in_yy, new_xx(ix), out_yy(ix))
-    end do
-  end function get_spaced_data
-
+  !> Compute by use of linear interpolation the value in the middle
+  ! of a domain D = [x_list(1) , x_list(size(x_list))].
+  ! If x_value is left of domain  D, 
+  ! then the value becomes the value at the left side of D,
+  ! if x_value is right of domain D,
+  ! then the value becomes the value at the rigth side of D
   subroutine LT_lin_interp_list(x_list, y_list, x_value, y_value)
     use m_find_index
     real(dp), intent(in)  :: x_list(:), y_list(:)
@@ -220,6 +233,7 @@ contains
     end if
   end subroutine LT_lin_interp_list
 
+  !> Write the lookup table to file
   subroutine LT_to_file(my_lt, filename)
     type(lookup_table_t), intent(in) :: my_lt
     character(len=*), intent(in) :: filename
@@ -233,6 +247,7 @@ contains
     close(my_unit)
   end subroutine LT_to_file
 
+  !> Read the lookup table from file
   subroutine LT_from_file(my_lt, filename)
     type(lookup_table_t), intent(inout) :: my_lt
     character(len=*), intent(in)    :: filename

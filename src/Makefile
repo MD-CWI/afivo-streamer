@@ -29,6 +29,6 @@ clean:
 	$(RM) $(PROGS) *.o *.mod libstreamer.a
 
 # Dependency information
-m_streamer.o:		m_transport_data.o
-m_lookup_table.o:	m_find_index.o
 $(PROGS): 		../afivo/src/libafivo.a libstreamer.a
+m_lookup_table.o:	m_find_index.o
+m_streamer.o:		m_transport_data.o

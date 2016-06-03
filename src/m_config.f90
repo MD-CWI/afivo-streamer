@@ -1,4 +1,4 @@
-! Module that allows working with a configuration file.
+!> Module that allows working with a configuration file.
 ! Don't use the functions in this module in a print statement!
 module m_config
 
@@ -70,6 +70,8 @@ module m_config
 
 contains
 
+  !> This routine will be called if some fatal error occurs in one of the subroutines
+  !  of this module.
   subroutine handle_error(err_string)
     character(len=*), intent(in) :: err_string
 
@@ -77,8 +79,28 @@ contains
     print *, trim(err_string)
     ! Gnu extension to get a backtrace
     stop 'handle_error'
-    call abort()
+    call abort
   end subroutine handle_error
+
+  !> Return the index of the variable with name 'p_name', or -1 if not found.
+  subroutine get_var_index(cfg, p_name, ix)
+    type(CFG_t), intent(in)      :: cfg
+    character(len=*), intent(in) :: p_name
+    integer, intent(inout)       :: ix
+    integer                      :: i
+
+    if (cfg%sorted) then
+       call bin_search_var(cfg, p_name, ix)
+    else
+       ix = -1
+       do i = 1, cfg%n_vars
+          if (cfg%vars(i)%p_name == p_name) then
+             ix = i
+             exit
+          end if
+       end do
+    end if
+  end subroutine get_var_index
 
   !> Update the variables in the configartion with the values found in 'filename'
   subroutine CFG_read_file(cfg, filename)
@@ -182,6 +204,8 @@ contains
 
   end subroutine CFG_read_file
 
+  !> Resize the storage size of array cfg%var which can be of type 
+  !  integer, logical, real or character
   subroutine resize_storage(cfg, ix, p_type, p_size)
     type(CFG_t), intent(inout) :: cfg
     integer, intent(in) :: ix, p_type, p_size
@@ -201,26 +225,6 @@ contains
        allocate( cfg%vars(ix)%char_data(p_size) )
     end select
   end subroutine resize_storage
-
-  !> Return the index of the variable with name 'p_name', or -1 if not found.
-  subroutine get_var_index(cfg, p_name, ix)
-    type(CFG_t), intent(in)      :: cfg
-    character(len=*), intent(in) :: p_name
-    integer, intent(inout)       :: ix
-    integer                      :: i
-
-    if (cfg%sorted) then
-       call bin_search_var(cfg, p_name, ix)
-    else
-       ix = -1
-       do i = 1, cfg%n_vars
-          if (cfg%vars(i)%p_name == p_name) then
-             ix = i
-             exit
-          end if
-       end do
-    end if
-  end subroutine get_var_index
 
   !> Performa a binary search for the variable 'p_name'
   subroutine bin_search_var(cfg, p_name, ix)
@@ -251,7 +255,7 @@ contains
     end if
   end subroutine bin_search_var
 
-  !> Helper routine to create variables. This is useful because a lot of the same
+  !> Helper routine to store variables. This is useful because a lot of the same
   !! code is executed for the different types of variables.
   subroutine prepare_store_var(cfg, p_name, p_type, p_size, comment, dyn_size)
     type(CFG_t), intent(inout) :: cfg
@@ -288,6 +292,8 @@ contains
     end select
   end subroutine prepare_store_var
 
+  !> Helper routine to get variables. This is useful because a lot of the same
+  !! code is executed for the different types of variables.
   subroutine prepare_get_var(cfg, p_name, p_type, p_size, ix)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -314,6 +320,7 @@ contains
     end if
   end subroutine prepare_get_var
 
+  !> Helper routine to update a configuration variable with a real value
   subroutine add_real(cfg, p_name, real_data, comment)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment
@@ -322,6 +329,8 @@ contains
     cfg%vars(cfg%n_vars)%real_data(1) = real_data
   end subroutine add_real
 
+  !> Helper routine to update a configuration variable with an array of type
+  !  real
   subroutine add_real_array(cfg, p_name, real_data, comment, dyn_size)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment
@@ -331,6 +340,7 @@ contains
     cfg%vars(cfg%n_vars)%real_data = real_data
   end subroutine add_real_array
 
+  !> Helper routine to update a configuration variable with an integer value
   subroutine add_int(cfg, p_name, int_data, comment)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment
@@ -339,6 +349,8 @@ contains
     cfg%vars(cfg%n_vars)%int_data(1) = int_data
   end subroutine add_int
 
+  !> Helper routine to update a configuration variable with an array of type
+  !  integer
   subroutine add_int_array(cfg, p_name, int_data, comment, dyn_size)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment
@@ -348,6 +360,7 @@ contains
     cfg%vars(cfg%n_vars)%int_data = int_data
   end subroutine add_int_array
 
+  !> Helper routine to update a configuration variable with an character value
   subroutine add_char(cfg, p_name, char_data, comment)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment, char_data
@@ -355,6 +368,8 @@ contains
     cfg%vars(cfg%n_vars)%char_data(1) = char_data
   end subroutine add_char
 
+  !> Helper routine to update a configuration variable with an array of type
+  !  character
   subroutine add_char_array(cfg, p_name, char_data, comment, dyn_size)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment, char_data(:)
@@ -363,6 +378,7 @@ contains
     cfg%vars(cfg%n_vars)%char_data = char_data
   end subroutine add_char_array
 
+  !> Helper routine to update a configuration variable with an logical value
   subroutine add_logical(cfg, p_name, logic_data, comment)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment
@@ -371,6 +387,8 @@ contains
     cfg%vars(cfg%n_vars)%logic_data(1) = logic_data
   end subroutine add_logical
 
+  !> Helper routine to update a configuration variable with an array of type
+  !  logical
   subroutine add_logical_array(cfg, p_name, logic_data, comment, dyn_size)
     type(CFG_t), intent(inout) :: cfg
     character(len=*), intent(in)  :: p_name, comment
@@ -380,6 +398,7 @@ contains
     cfg%vars(cfg%n_vars)%logic_data = logic_data
   end subroutine add_logical_array
 
+  !> Helper routine to get a real array of a given name
   subroutine get_real_array(cfg, p_name, real_data)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -389,6 +408,7 @@ contains
     real_data = cfg%vars(ix)%real_data
   end subroutine get_real_array
 
+  !> Helper routine to get a integer array of a given name
   subroutine get_int_array(cfg, p_name, int_data)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -398,6 +418,7 @@ contains
     int_data    = cfg%vars(ix)%int_data
   end subroutine get_int_array
 
+  !> Helper routine to get a character array of a given name
   subroutine get_char_array(cfg, p_name, char_data)
     type(CFG_t), intent(in) :: cfg
     character(len=*), intent(in)     :: p_name
@@ -407,6 +428,7 @@ contains
     char_data   = cfg%vars(ix)%char_data
   end subroutine get_char_array
 
+  !> Helper routine to get a logical array of a given name
   subroutine get_logical_array(cfg, p_name, logic_data)
     type(CFG_t), intent(in) :: cfg
     character(len=*), intent(in)     :: p_name
@@ -416,6 +438,7 @@ contains
     logic_data   = cfg%vars(ix)%logic_data
   end subroutine get_logical_array
 
+  !> Helper routine to get a real value of a given name
   subroutine get_real(cfg, p_name, res)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -425,6 +448,7 @@ contains
     res = cfg%vars(ix)%real_data(1)
   end subroutine get_real
 
+  !> Helper routine to get a integer value of a given name
   subroutine get_int(cfg, p_name, res)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -434,6 +458,7 @@ contains
     res = cfg%vars(ix)%int_data(1)
   end subroutine get_int
 
+  !> Helper routine to get a logical value of a given name
   subroutine get_logic(cfg, p_name, res)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -443,6 +468,7 @@ contains
     res = cfg%vars(ix)%logic_data(1)
   end subroutine get_logic
 
+  !> Helper routine to get a character value of a given name
   subroutine get_string(cfg, p_name, res)
     type(CFG_t), intent(in)       :: cfg
     character(len=*), intent(in)  :: p_name
@@ -452,6 +478,8 @@ contains
     res = cfg%vars(ix)%char_data(1)
   end subroutine get_string
 
+  !> Helper routine to get the size of a given variable of 
+  !  a configuration type
   subroutine CFG_get_size(cfg, p_name, res)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -467,6 +495,8 @@ contains
     end if
   end subroutine CFG_get_size
 
+  !> Helper routine to get the real data of a given variable of 
+  !  a configuration type
   real(dp) function CFG_fget_real(cfg, p_name)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -475,6 +505,8 @@ contains
     CFG_fget_real = cfg%vars(ix)%real_data(1)
   end function CFG_fget_real
 
+  !> Helper routine to get the integer data of a given variable of 
+  !  a configuration type
   integer function CFG_fget_int(cfg, p_name)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -483,6 +515,8 @@ contains
     CFG_fget_int = cfg%vars(ix)%int_data(1)
   end function CFG_fget_int
 
+  !> Helper routine to get the logical data of a given variable of 
+  !  a configuration type
   logical function CFG_fget_logic(cfg, p_name)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -491,6 +525,8 @@ contains
     CFG_fget_logic = cfg%vars(ix)%logic_data(1)
   end function CFG_fget_logic
 
+  !> Helper routine to get the charater data of a given variable of 
+  !  a configuration type
   character(len=line_len) function CFG_fget_string(cfg, p_name)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -499,6 +535,8 @@ contains
     CFG_fget_string = cfg%vars(ix)%char_data(1)
   end function CFG_fget_string
 
+  !> Helper routine to get the size of a given variable of 
+  !  a configuration type
   integer function CFG_fget_size(cfg, p_name)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -513,6 +551,8 @@ contains
     end if
   end function CFG_fget_size
 
+  !> Helper routine to get the type of a given variable of 
+  !  a configuration type
   subroutine CFG_get_type(cfg, p_name, res)
     type(CFG_t), intent(in)      :: cfg
     character(len=*), intent(in) :: p_name
@@ -529,6 +569,9 @@ contains
     end if
   end subroutine CFG_get_type
 
+  !> This routine write a new configuration file with values
+  !  read by CFG_read_file and supplemented with default values, which 
+  !  were not filled by CFG_read_file
   subroutine CFG_write(cfg, filename)
     use iso_fortran_env
     type(CFG_t), intent(in)      :: cfg
@@ -599,6 +642,10 @@ contains
 
   end subroutine CFG_write
 
+  !> Routine to ensure that enough storage is allocated for the1s
+  !  configuration type. If not the new size will be twice as much as
+  ! the current size. If no storage is allocated yet a minumum amount
+  ! of starage is allocated.
   subroutine ensure_free_storage(cfg)
     type(CFG_t), intent(inout) :: cfg
     integer, parameter         :: min_dyn_size = 100
