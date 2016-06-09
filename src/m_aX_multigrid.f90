@@ -12,7 +12,7 @@ module m_a$D_multigrid
   ! The mg module supports different multigrid operators, and uses these tags to
   ! identify boxes / operators
   integer, parameter, public :: mg_normal_box = 1 !< Normal box
-  integer, parameter, public :: mg_lsf_box = 2    !< Box with an internal boundary
+  integer, parameter, public :: mg_lsf_box  = 2   !< Box with an internal boundary
   integer, parameter, public :: mg_ceps_box = 3   !< Box with constant eps /= 1
   integer, parameter, public :: mg_veps_box = 4   !< Box with varying eps (on face)
 
@@ -140,7 +140,7 @@ contains
 
     ! Check whether these are set, otherwise use default
     if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
-    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
+    if (mg%n_cycle_up < 0)             mg%n_cycle_up   = 2
     if (mg%n_cycle_base < 0)           mg%n_cycle_base = 2
 
     ! Check whether methods are set, otherwise use default (for laplacian)

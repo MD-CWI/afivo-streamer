@@ -117,6 +117,7 @@ program poisson_basic_2d
   mg%i_rhs        = i_rhs       ! Right-hand side variable
   mg%i_tmp        = i_tmp       ! Variable for temporary space
   mg%sides_bc     => sides_bc   ! Method for boundary conditions
+
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
   ! first call of mg2_fas_fmg
