@@ -16,12 +16,12 @@ making the code relatively easy to modify.
 
 ### Design choices
 
-Some of the design choices are liste below. A more detailed discussion can be
+Some of the design choices are listed below. A more detailed discussion can be
 found on [this page](documentation/design.md).
 
 * The refinement ratio is always 2.
 * Quantities are either cell-centered or face-centered.
-* Parallellization using OpenMP only, no MPI.
+* Parallelization using OpenMP only, no MPI.
 * There is always one layer of ghost cells (but of course you can get
   more data from neighbors).
 * No 'corner' ghost cells

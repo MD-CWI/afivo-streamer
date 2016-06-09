@@ -63,7 +63,7 @@ module m_streamer
   type(lookup_table_t), protected :: ST_td_tbl
 
   ! The configuration for the simulation
-  type(CFG_t) :: ST_cfg
+  type(CFG_t) :: ST_config
 
   ! Random number generator
   type(RNG_t) :: ST_rng
@@ -269,11 +269,11 @@ contains
     call CFG_add(ST_config, "ref_cphi", 1e99_dp, &
          "Refine if the curvature in phi is larger than this value")
 
-    call CFG_add(ST_cfg, "deref_adx", 0.1_dp, &
+    call CFG_add(ST_config, "deref_adx", 0.1_dp, &
          "Derefine if all conditions hold; max value for alpha*dx")
-    call CFG_add(ST_cfg, "deref_dx", 1e-4_dp, &
+    call CFG_add(ST_config, "deref_dx", 1e-4_dp, &
          "Derefine if all conditions hold; max value for dx")
-    call CFG_add(ST_cfg, "deref_cphi", 1e99_dp, &
+    call CFG_add(ST_config, "deref_cphi", 1e99_dp, &
          "Derefine if all conditions hold: max value for curvature of phi")
 
     call CFG_add(ST_config, "ref_init_time", 10.0e-9_dp, &
@@ -519,13 +519,13 @@ contains
     ST_applied_voltage = -ST_domain_len * ST_applied_electric_fld_y
     ST_applied_voltage2 = -ST_domain_len * ST_applied_electric_fld_x
 
-    tmp_name = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_config.txt"
+    tmp_name = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_output.cfg"
     print *, "Settings written to ", trim(tmp_name)
     call CFG_write(ST_config, trim(tmp_name))
 
   end subroutine ST_load_config
 
-  ! Compute the electric field at a given time
+  !> Compute the electric field at a given time
   function ST_get_electric_field(time) result(electric_fld)
     use m_units_constants
 

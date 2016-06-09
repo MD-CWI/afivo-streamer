@@ -1,2 +1,0 @@
-applied_electric_fld_y = 0.15E+07
-simulation_name = 15e5

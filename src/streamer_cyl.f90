@@ -20,8 +20,6 @@ program streamer_cyl
   type(mg2_t)            :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
   character(len=ST_slen) :: fname_axis, fname_stats
-  logical                :: ref_cyl_uniform, write_properties
-  real(dp)               :: ref_cyl_rmin, ref_cyl_dx
 
   call ST_create_config()
   call ST_read_config_files()
@@ -207,12 +205,6 @@ contains
        refine_flag = af_do_ref
     else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
        refine_flag = af_rm_ref
-    end if
-
-    if (ref_cyl_uniform) then
-       if (boxes(id)%r_min(1) < ref_cyl_rmin .and. dx > ref_cyl_dx) then
-          ref_flag = af_do_ref
-       end if
     end if
 
     ! Refine around the initial conditions
@@ -595,14 +587,14 @@ contains
        do i = 1, nc
           ! Weighting of flux contribution for cylindrical coordinates
           rfac  = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          fld   = box%cc(i,j, i_fld)
+          fld   = box%cc(i,j, i_electric_fld)
           loc   = LT_get_loc(ST_td_tbl, fld)
           alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
           eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
           mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
           ! Source term
-          src = fld * mu * abs(box%cc(i, j, i_elec)) * (alpha - eta)
+          src = fld * mu * abs(box%cc(i, j, i_electron)) * (alpha - eta)
 
           if (ST_photoi_enabled) &
                src = src + box%cc(i,j, i_photo)
@@ -676,8 +668,8 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_elec)
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_pion)
+          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
           call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_phi)
           call set_box_eps(tree%boxes(id))
        end do

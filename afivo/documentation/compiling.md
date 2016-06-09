@@ -27,7 +27,7 @@ $ make COMPILER=ifort
 
 However, make sure that Silo (see below) is also compiled with ifort, otherwise
 you will probably not be able to produce Silo output files. The VTK unformatted
-output automaticcaly work with ifort and gfortran.
+output automatically work with ifort and gfortran.
 
 Note that with ifort you might get the following warning:
 
