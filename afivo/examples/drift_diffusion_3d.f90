@@ -78,8 +78,8 @@ program drift_diffusion_3d
 
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
 
-     ! Use ref_routine (see below) for grid refinement
-     call a3_adjust_refinement(tree, ref_routine, ref_info)
+     ! Use refine_routine (see below) for grid refinement
+     call a3_adjust_refinement(tree, refine_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -175,7 +175,7 @@ program drift_diffusion_3d
         end do
      end select
 
-     call a3_adjust_refinement(tree, ref_routine, ref_info)
+     call a3_adjust_refinement(tree, refine_routine, ref_info)
      call prolong_to_new_children(tree, ref_info)
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
      call a3_tidy_up(tree, 0.8_dp, 10000)
@@ -193,10 +193,10 @@ program drift_diffusion_3d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box3_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
     real(dp)                 :: diff
     integer                  :: nc
 
@@ -209,13 +209,13 @@ contains
          maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
          boxes(id)%cc(1:nc, 1:nc, 0:nc, i_phi))))
 
-    ref_flag = af_keep_ref
+    refine_flag = af_keep_ref
     if (boxes(id)%lvl < 3 .or. diff > 0.1_dp) then
-       ref_flag = af_do_ref
+       refine_flag = af_do_ref
     else if (boxes(id)%lvl > 4 .and. diff < 0.2_dp * 0.05) then
-       ref_flag = af_rm_ref
+       refine_flag = af_rm_ref
     end if
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   subroutine set_init_cond(box)
     type(box3_t), intent(inout) :: box
