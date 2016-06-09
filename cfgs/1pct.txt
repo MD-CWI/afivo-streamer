@@ -1,7 +1,0 @@
- # Whether photoionization is enabled:
- photoi_enabled = t
-
- # Fraction of oxygen:
- photoi_frac_O2 = 1e-2
-
-sim_name = 1pct

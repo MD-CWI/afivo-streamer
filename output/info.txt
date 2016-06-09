@@ -1,1 +1,0 @@
-This is the directory where output from the examples is stored

@@ -15,7 +15,7 @@ program test_photoionization
   real(dp), parameter :: dr           = domain_len / box_size
 
   integer, parameter  :: i_src        = 1
-  integer, parameter  :: i_pho        = 2
+  integer, parameter  :: i_photo      = 2
   integer, parameter  :: i_sol        = 3
 
   real(dp) :: gas_pressure
@@ -27,7 +27,7 @@ program test_photoionization
 
   type(a2_t)          :: tree
   type(ref_info_t)    :: ref_info
-  type(PH_tbl_t)      :: photoi_tbl
+  type(photoi_tbl_t)      :: photoi_tbl
   type(RNG_t)         :: sim_rng       ! Random number generator
 
   integer             :: n, id
@@ -62,7 +62,7 @@ program test_photoionization
   print *, "Gas pressure (bar):", gas_pressure
   print *, "Fraction oxygen:   ", frac_O2
 
-  call PH_get_tbl_air(photoi_tbl, frac_O2 * gas_pressure, 2 * domain_len)
+  call photoi_get_table_air(photoi_tbl, frac_O2 * gas_pressure, 2 * domain_len)
 
   ! Initialize tree
   if (use_cyl) then
@@ -82,7 +82,7 @@ program test_photoionization
   call a2_set_base(tree, ix_list, nb_list)
 
   do n = 1, 20
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -91,7 +91,7 @@ program test_photoionization
   write(fname, "(A,I0,A,L1,L1,I0,A)") "pho_", nint(1e3_dp * gas_pressure), "_", &
        use_const_dx, use_cyl, nint(100 * grid_factor), ".silo"
   call a2_write_silo(tree, fname)
-  call a2_tree_sum_cc(tree, i_pho, sum_pho)
+  call a2_tree_sum_cc(tree, i_photo, sum_pho)
   print *, "Sum photoionization", sum_pho
   call a2_tree_sum_cc(tree, i_sol, sum_pho)
   print *, "Sum solution", sum_pho
@@ -99,16 +99,16 @@ program test_photoionization
 contains
 
   ! Refinement function
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
 
     if (boxes(id)%dr > 1.0e-3_dp * domain_len) then
-       ref_flag = af_do_ref
+       refine_flag = af_do_ref
     end if
 
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   subroutine set_photoionization(tree, num_photons)
     use m_photons
@@ -117,14 +117,14 @@ contains
     type(a2_t), intent(inout) :: tree
     integer, intent(in)       :: num_photons
 
-    call a2_loop_box_arg(tree, set_photoi_rate, [1.0_dp], .true.)
-    call PH_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
-         i_src, i_pho, grid_factor, use_const_dx, use_cyl, 0.05e-3_dp)
+    call a2_loop_box_arg(tree, set_photoionization_rate, [1.0_dp], .true.)
+    call photoi_set_src_2d(tree, photoi_tbl, sim_rng, num_photons, &
+         i_src, i_photo, grid_factor, use_const_dx, use_cyl, 0.05e-3_dp)
 
   end subroutine set_photoionization
 
-  subroutine set_photoi_rate(box, coeff)
-    use m_geom
+  subroutine set_photoionization_rate(box, coeff)
+    use m_geometry
     use m_a2_utils
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
@@ -142,7 +142,7 @@ contains
 
           if (use_cyl) then
              box%cc(i, j, i_sol) = coeff(1) / (4 * pi * r**2) * &
-                  PH_absfunc_air(r, gas_pressure * frac_O2)
+                  photoi_absfunc_air(r, gas_pressure * frac_O2)
 
              if (r < box%dr) then
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / &
@@ -152,7 +152,7 @@ contains
              end if
           else
              box%cc(i, j, i_sol) = coeff(1) / (2 * pi * r) * &
-                  PH_absfunc_air(r, gas_pressure * frac_O2)
+                  photoi_absfunc_air(r, gas_pressure * frac_O2)
 
              if (r < box%dr) then
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / box%dr**2
@@ -162,6 +162,6 @@ contains
           end if
        end do
     end do
-  end subroutine set_photoi_rate
+  end subroutine set_photoionization_rate
 
 end program test_photoionization
