@@ -54,12 +54,6 @@ program poisson_basic_2d
      ! Locations :  [[0.25_dp, 0.25_dp], [0.75_dp, 0.75_dp]]
      call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
           reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
-     write(*,"(2(A17,2x,i2,/),2(A17,2(1x,Es10.2),/),A17,1x,4(Es10.2,1x))") &
-       "gs%n_gauss:",gs%n_gauss, &
-       "gs%n_dim  :",gs%n_dim, &
-       "gs%ampl   :",gs%ampl(:), &
-       "gs%sigma  :",gs%sigma(:), &
-       "gs%r0     :",gs%r0(:,:)
   end if
 
   ! The cell spacing at the coarsest grid level
