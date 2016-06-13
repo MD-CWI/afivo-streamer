@@ -288,9 +288,9 @@ contains
   elemental function get_alpha(fld) result(alpha)
     real(dp), intent(in) :: fld
     real(dp)             :: alpha
-    real(dp), parameter  :: inv_fld0 = 1 / 2e7_dp
+    real(dp), parameter  :: fld0 = 2e7_dp
 
-    alpha = 4.332e5_dp * exp(-fld * inv_fld0)
+    alpha = 4.332e5_dp * exp(- fld0 / fld)
   end function get_alpha
 
   ! Compute electric field on the tree. First perform multigrid to get electric
