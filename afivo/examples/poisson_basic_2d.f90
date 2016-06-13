@@ -201,7 +201,7 @@ contains
           xy = a2_r_cc(box, [i,j])
 
           ! And set the rhs values
-          box%cc(i, j, i_rhs) = gauss_laplacian(gaussian, xy)
+          box%cc(i, j, i_rhs) = gauss_laplacian(gs, xy)
        end do
     end do
   end subroutine set_initial_condition
@@ -216,7 +216,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gaussian, xy)
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gs, xy)
        end do
     end do
   end subroutine set_error
@@ -241,22 +241,22 @@ contains
     case (a2_neighb_lowx)             ! Lower-x direction
        do n = 1, nc
           xy = a2_rr_cc(box, [0.5_dp, real(n, dp)])
-          box%cc(0, n, iv) = gauss_value(gaussian, xy)
+          box%cc(0, n, iv) = gauss_value(gs, xy)
        end do
     case (a2_neighb_highx)             ! Higher-x direction
        do n = 1, nc
           xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_value(gaussian, xy)
+          box%cc(nc+1, n, iv) = gauss_value(gs, xy)
        end do
     case (a2_neighb_lowy)             ! Lower-y direction
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_value(gaussian, xy)
+          box%cc(n, 0, iv) = gauss_value(gs, xy)
        end do
     case (a2_neighb_highy)             ! Higher-y direction
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_value(gaussian, xy)
+          box%cc(n, nc+1, iv) = gauss_value(gs, xy)
        end do
     end select
   end subroutine sides_bc

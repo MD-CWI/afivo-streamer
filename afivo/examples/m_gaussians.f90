@@ -1,3 +1,7 @@
+!> This module can be used to construct solutions consisting of one or more
+!> Gaussians.
+!>
+!> Author: Jannis Teunissen
 module m_gaussians
 
   implicit none
@@ -7,19 +11,19 @@ module m_gaussians
 
   !> A type to store a collection of gaussians in
   type gauss_t
-     integer :: n_gauss         !< Number of gaussians
-     integer :: n_dim           !< Dimensionality
-     real(dp), allocatable :: ampl(:) !< Amplitudes
+     integer               :: n_gauss  !< Number of gaussians
+     integer               :: n_dim    !< Dimensionality
+     real(dp), allocatable :: ampl(:)  !< Amplitudes
      real(dp), allocatable :: sigma(:) !< Widths
-     real(dp), allocatable :: r0(:,:) !< Centers
+     real(dp), allocatable :: r0(:,:)  !< Centers
   end type gauss_t
 
   public :: gauss_t
   public :: gauss_init
-  public :: gauss_val
-  public :: gauss_grad
-  public :: gauss_lpl
-  public :: gauss_lpl_cyl
+  public :: gauss_value
+  public :: gauss_gradient
+  public :: gauss_laplacian
+  public :: gauss_laplacian_cyl
   public :: gauss_4th
 
 contains
@@ -49,16 +53,16 @@ contains
   end subroutine gauss_init
 
   !> Return the value of the sum of gaussians at r
-  real(dp) function gauss_val(gs, r)
+  real(dp) function gauss_value(gs, r)
     type(gauss_t), intent(in) :: gs
     real(dp), intent(in)      :: r(gs%n_dim)
     integer                   :: n
 
-    gauss_val = 0
+    gauss_value = 0
     do n = 1, gs%n_gauss
-       gauss_val = gauss_val + gauss_single(gs, r, n)
+       gauss_value = gauss_value + gauss_single(gs, r, n)
     end do
-  end function gauss_val
+  end function gauss_value
 
   !> Return the value of a single gaussian at r
   real(dp) function gauss_single(gs, r, ix)
@@ -71,7 +75,7 @@ contains
     gauss_single = exp(-sum(xrel**2))
   end function gauss_single
 
-  subroutine gauss_grad(gs, r, grad)
+  subroutine gauss_gradient(gs, r, grad)
     type(gauss_t), intent(in) :: gs
     real(dp), intent(in)      :: r(gs%n_dim)
     real(dp), intent(out)     :: grad(gs%n_dim)
@@ -84,38 +88,38 @@ contains
        grad = grad - 2 * xrel/gs%sigma(ix) * &
             gauss_single(gs, r, ix)
     end do
-  end subroutine gauss_grad
+  end subroutine gauss_gradient
 
   !> Summed Laplacian of the gaussians in Cartesian coordinates
-  real(dp) function gauss_lpl(gs, r)
+  real(dp) function gauss_laplacian(gs, r)
     type(gauss_t), intent(in) :: gs
     real(dp), intent(in)      :: r(gs%n_dim)
     integer                   :: ix
     real(dp)                  :: xrel(gs%n_dim)
 
-    gauss_lpl = 0
+    gauss_laplacian = 0
     do ix = 1, gs%n_gauss
        xrel = (r-gs%r0(:, ix)) / gs%sigma(ix)
-       gauss_lpl = gauss_lpl + 4/gs%sigma(ix)**2 * &
+       gauss_laplacian = gauss_laplacian + 4/gs%sigma(ix)**2 * &
             (sum(xrel**2) - 0.5_dp * gs%n_dim) * gauss_single(gs, r, ix)
     end do
-  end function gauss_lpl
+  end function gauss_laplacian
 
   !> Summed Laplacian of the gaussians in (r,z) coordinates
-  real(dp) function gauss_lpl_cyl(gs, r)
+  real(dp) function gauss_laplacian_cyl(gs, r)
     type(gauss_t), intent(in) :: gs
     real(dp), intent(in)      :: r(gs%n_dim)
     integer :: ix
     real(dp)                  :: xrel(gs%n_dim)
 
-    gauss_lpl_cyl = 0
+    gauss_laplacian_cyl = 0
     do ix = 1, gs%n_gauss
        xrel = (r-gs%r0(:, ix)) / gs%sigma(ix)
-       gauss_lpl_cyl = gauss_lpl_cyl + 4/gs%sigma(ix)**2 * &
+       gauss_laplacian_cyl = gauss_laplacian_cyl + 4/gs%sigma(ix)**2 * &
             (sum(xrel**2) - 1 - 0.5_dp * (r(1)-gs%r0(1, ix))/r(1)) * &
             gauss_single(gs, r, ix)
     end do
-  end function gauss_lpl_cyl
+  end function gauss_laplacian_cyl
 
   !> Fourth derivative of the gaussians in Cartesian coordinates
   real(dp) function gauss_4th(gs, r)
