@@ -192,7 +192,7 @@ contains
              xyz = a3_r_cc(box, [i,j,k])
 
              ! And set the rhs values
-             box%cc(i, j, k, i_rhs) = gauss_lpl(gs, xyz)
+             box%cc(i, j, k, i_rhs) = gauss_laplacian(gs, xyz)
           end do
        end do
     end do
@@ -210,7 +210,7 @@ contains
           do i = 1, nc
              xyz = a3_r_cc(box, [i,j,k])
              box%cc(i, j, k, i_err) = box%cc(i, j, k, i_phi) - &
-                  gauss_val(gs, xyz)
+                  gauss_value(gs, xyz)
           end do
        end do
     end do
@@ -246,21 +246,21 @@ contains
        do k = 1, nc
           do j = 1, nc
              xyz = a3_rr_cc(box, [loc, real(j, dp), real(k, dp)])
-             box%cc(ix, j, k, iv) = gauss_val(gs, xyz)
+             box%cc(ix, j, k, iv) = gauss_value(gs, xyz)
           end do
        end do
     case (2)
        do k = 1, nc
           do i = 1, nc
              xyz = a3_rr_cc(box, [real(i, dp), loc, real(k, dp)])
-             box%cc(i, ix, k, iv) = gauss_val(gs, xyz)
+             box%cc(i, ix, k, iv) = gauss_value(gs, xyz)
           end do
        end do
     case (3)
        do j = 1, nc
           do i = 1, nc
              xyz = a3_rr_cc(box, [real(i, dp), real(j, dp), loc])
-             box%cc(i, j, ix, iv) = gauss_val(gs, xyz)
+             box%cc(i, j, ix, iv) = gauss_value(gs, xyz)
           end do
        end do
     end select
