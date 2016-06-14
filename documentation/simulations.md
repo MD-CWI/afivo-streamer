@@ -88,20 +88,23 @@ This can be performed by
 a user defined subroutine, which uses multigrid to compute the electric field
 for each level of the mesh.
 The mesh is sufficiently refined when no more new grids are created based on criteria
-defined in the refinement subroutine <code>refine_routine</code>, defined by the user, too.
+defined in the refinement subroutine
+<a class="el" href="streamer__2d_8f90.html#a6b6ddafe30bfd36b772e2bc7888bf5fb">refine_routine</a>,
+defined by the user, too.
 
 Further the user may decide whether photoionization will be added.
 Also here the user has to enclose a subroutine how the photoionization
 is defined.
-See <code>set_photoionization</code> as an example. 
 The photon production rate per cell is proportional to the ionization rate
 and will be computed per cell and stored in the <code>i_photo</code> part
 for each box.
-For more details see <code>set_photoionization_rate</code> as an example. 
+For more details see
+<a class="el" href="streamer__2d_8f90.html#abc619b5d02ebb950749f874f4f9f6dcb">set_photoionization</a>
+as an example. 
 
 \subsection sect_timestepping Time Stepping
 
-The maximum time step is restricted by e.g., the CFL criteria:
+The maximum allowed time step is restricted by e.g., the CFL criteria:
 \verbatim
    ! CFL condition
    dt_cfl = dr_min / (mobility * max_electric_fld) ! Factor ~ sqrt(0.5)
@@ -133,6 +136,8 @@ This leads to a maximum time step \f$dt_{amr-max}\f$ :
     \; dt_{alpha}, \; dt_{max}) 
 \f]
 where \f$ dt_{max}\f$ arises from the configuration file <code>streamer_2d.cfg</code>.
+The maximum time step is calculated by the user defined function
+<a class="el" href="streamer__2d_8f90.html#a2eb820779f8ab73aa61e8665e0c13473">get_max_dt</a>. 
 
 Inside the time stepping loop, two forward Euler iteration steps are performed.
 In an Euler iteration the following steps are completed:
@@ -158,10 +163,15 @@ recalculated.
 
 The user may decide to compute a new mesh after each time step, but he may
 also choose to keep the mesh a fixed number of time steps unchanged. This
-can be handled by the variable <code>st_ref_per_steps</code>. Its default value is 2.
+can be handled by the variable
+<a class="el" href="namespacem__streamer.html#a27ad38736d3b7d879bcfcc8826411d98">st_ref_per_steps</a>.
+Its default value is 2.
 
-In case <code>st_ref_per_steps = 1</code>, each time step the subroutine
-<code>a2_adjust_refinement</code> will be called to recompute the mesh.
+In case
+<a class="el" href="namespacem__streamer.html#a27ad38736d3b7d879bcfcc8826411d98">st_ref_per_steps</a>
+<code>= 1</code>, each time step the subroutine
+<a class="el" href="streamer__2d_8f90.html#a6b6ddafe30bfd36b772e2bc7888bf5fb">refine_routine</a>
+will be called to recompute the mesh.
 There is a 'new' mesh if new grids are added or if children grids are deleted. 
 See manual.md????, how grids can be deleted. In case new grids are created,
 the values of the parent box (like i_photo, i_pos_ion and so on) will be prolongated
@@ -169,5 +179,5 @@ to its children by using linear interpolation.
 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) are applied, which
 do not need corner ghost cells.
 The new mesh needs a recalculation of the electric field by calling 
-<code>compute_electric_field</code>
+<a class="el" href="streamer__2d_8f90.html#a3078ef0e5f2dbb937b8b9d54baccaa6c">compute_electric_field</a>.
 
