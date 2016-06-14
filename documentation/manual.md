@@ -207,7 +207,7 @@ be memory-bound instead of CPU-bound.
 
 \section sect_data-structures Overview of data structures
 
-We now start with the description of the implementation of AFiVO.
+We now start with the description of the implementation of Afivo.
 First, the properties of *orthtree* meshes are discussed.
 Three data types are used to store these meshes: boxes, levels and trees. These
 data types are described below.

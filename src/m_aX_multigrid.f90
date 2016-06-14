@@ -140,8 +140,8 @@ contains
 
     ! Check whether these are set, otherwise use default
     if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
-    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
-    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 4
+    if (mg%n_cycle_up < 0)             mg%n_cycle_up   = 2
+    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 2
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg$D_sides_rb
