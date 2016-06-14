@@ -215,7 +215,7 @@ contains
           dist = GM_dist_line(a2_r_center(boxes(id)), &
                ST_init_cond%seed_r0(:, n), &
                ST_init_cond%seed_r1(:, n), 2)
-          if (dist - 2 * ST_init_cond%seed_width(n) < 6 * boxlen &
+          if (dist - 2 * ST_init_cond%seed_width(n) < boxlen &
                .and. boxes(id)%dr > ST_ref_init_fac * &
                ST_init_cond%seed_width(n)) then
              refine_flag = af_do_ref
