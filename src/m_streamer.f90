@@ -63,7 +63,7 @@ module m_streamer
   type(lookup_table_t), protected :: ST_td_tbl
 
   ! The configuration for the simulation
-  type(CFG_t), protected :: ST_config
+  type(CFG_t) :: ST_config
 
   ! Random number generator
   type(RNG_t) :: ST_rng
@@ -134,11 +134,14 @@ module m_streamer
   ! Refine if the curvature in phi is larger than this value
   real(dp), protected :: ST_ref_cphi
 
-  ! Derefine if all conditions hold: value for alpha*dx
+  ! Derefine if all conditions hold: max value for alpha*dx
   real(dp), protected :: ST_deref_adx
 
-  ! Derefine if all conditions hold: value for curvature of phi
+  ! Derefine if all conditions hold: max value for curvature of phi
   real(dp), protected :: ST_deref_cphi
+
+  ! Derefine if all conditions hold: max value for dx
+  real(dp), protected :: ST_deref_dx
 
   ! Refine around initial conditions up to this time
   real(dp), protected :: ST_ref_init_time
@@ -267,9 +270,11 @@ contains
          "Refine if the curvature in phi is larger than this value")
 
     call CFG_add(ST_config, "deref_adx", 0.1_dp, &
-         "Derefine if all conditions hold; value for alpha*dx")
+         "Derefine if all conditions hold; max value for alpha*dx")
+    call CFG_add(ST_config, "deref_dx", 1e-4_dp, &
+         "Derefine if all conditions hold; max value for dx")
     call CFG_add(ST_config, "deref_cphi", 1e99_dp, &
-         "Derefine if all conditions hold: value for curvature of phi")
+         "Derefine if all conditions hold: max value for curvature of phi")
 
     call CFG_add(ST_config, "ref_init_time", 10.0e-9_dp, &
          "Refine around initial conditions up to this time")

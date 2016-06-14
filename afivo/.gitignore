@@ -21,3 +21,4 @@ src/m_a3_*
 /tests/test_refinement
 /tests/test_types_2d_3d
 tests/results/*
+/examples/simple_streamer_2d

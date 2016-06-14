@@ -182,7 +182,7 @@ contains
           end if
 
           ! Partially compute the right-hand side (see below)
-          box%cc(i, j, i_rhs) = gauss_lpl_cyl(gs, rz) * box%cc(i, j, i_eps)
+          box%cc(i, j, i_rhs) = gauss_laplacian_cyl(gs, rz) * box%cc(i, j, i_eps)
        end do
     end do
 
@@ -193,7 +193,7 @@ contains
           rz = a2_rr_cc(box, [i + 0.5_dp, real(j, dp)])
 
           ! Determine amount of charge
-          call gauss_grad(gs, rz, grad)
+          call gauss_gradient(gs, rz, grad)
           qbnd = (box%cc(i+1, j, i_eps) - box%cc(i, j, i_eps)) * &
                grad(1) / dr
 
@@ -211,7 +211,7 @@ contains
           rz = a2_rr_cc(box, [real(i, dp), j + 0.5_dp])
 
           ! Determine amount of charge
-          call gauss_grad(gs, rz, grad)
+          call gauss_gradient(gs, rz, grad)
           qbnd = (box%cc(i, j+1, i_eps) - box%cc(i, j, i_eps)) * &
                grad(2) / dr
 
@@ -235,7 +235,7 @@ contains
        do i = 1, nc
           rz = a2_r_cc(box, [i,j])
           box%cc(i, j, i_err) = box%cc(i, j, i_phi) - &
-               gauss_val(gs, rz)
+               gauss_value(gs, rz)
        end do
     end do
   end subroutine set_err
@@ -262,19 +262,19 @@ contains
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_val(gs, rz)
+          box%cc(nc+1, n, iv) = gauss_value(gs, rz)
        end do
     case (a2_neighb_lowy)
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_val(gs, rz)
+          box%cc(n, 0, iv) = gauss_value(gs, rz)
        end do
     case (a2_neighb_highy)
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_val(gs, rz)
+          box%cc(n, nc+1, iv) = gauss_value(gs, rz)
        end do
     end select
   end subroutine sides_bc
