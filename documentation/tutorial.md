@@ -231,8 +231,7 @@ is called for each box, with as argument the user-defined routine
 which calls  <code>gauss_laplacian</code> from <code>m_gaussian</code> corresponding the problem
 described above. The routine <code>a2_r_cc</code> computes the cell center of the cells in the box.
 In this example, each box has 4 cell centered matrices. Here <code>box%cc(:,:,i_rhs)</code> is
-initialized
-with the right hand side values. 
+initialized with the right hand side values. 
 
 The following <code>do loop</code> all right hand side field of the boxed used are initialized and
 boxes are refined in accordance with the refinement routine to obtain an adaptive mesh.
@@ -394,7 +393,6 @@ a) | b)
 <img src="../../figures/poisson_basic_2d_10_phi.png" width=400px /> | <img src="../../figures/poisson_basic_2d_10_err.png" width=400px />
 
 **Figure 3**. a) solution \f$ \phi \f$ b) error \f$ \epsilon \f$ after 10 multigrid iteration steps.
-
 
 \subsection sect_parallel Parallel results
 Most operations in Afivo loop over a number of boxes, for example the leaves at a certain refinement
