@@ -15,10 +15,10 @@ module m_a$D_ghostcell
   public :: a$D_bc_dirichlet_zero
   public :: a$D_bc_neumann_zero
   public :: a$D_gc_interp
-  public :: a$D_gc_prolong0
+  public :: a$D_gc_prolong_copy
   public :: a$D_gc_interp_lim
   public :: a$D_gc2_box
-  public :: a$D_gc2_prolong1
+  public :: a$D_gc2_prolong_linear
   public :: a$D_bc2_neumann_zero
 
 contains
@@ -132,8 +132,8 @@ contains
   end subroutine bc_to_gc
 
   !> Partial prolongation to the ghost cells of box id from parent
-  subroutine a$D_gc_prolong0(boxes, id, nb, iv)
-    use m_a$D_prolong, only: a$D_prolong0
+  subroutine a$D_gc_prolong_copy(boxes, id, nb, iv)
+    use m_a$D_prolong, only: a$D_prolong_copy
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
@@ -147,8 +147,8 @@ contains
     lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
     hi(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
 
-    call a$D_prolong0(boxes(p_id), boxes(id), iv, low=lo, high=hi)
-  end subroutine a$D_gc_prolong0
+    call a$D_prolong_copy(boxes(p_id), boxes(id), iv, low=lo, high=hi)
+  end subroutine a$D_gc_prolong_copy
 
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries
@@ -495,7 +495,7 @@ contains
   end subroutine sides2_from_nb
 
   !> Linear interpolation (using data from neighbor) to fill ghost cells
-  subroutine a$D_gc2_prolong1(boxes, id, nb, iv, gc_side, nc)
+  subroutine a$D_gc2_prolong_linear(boxes, id, nb, iv, gc_side, nc)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -594,7 +594,7 @@ contains
 #endif
     end select
 
-  end subroutine a$D_gc2_prolong1
+  end subroutine a$D_gc2_prolong_linear
 
   ! This fills second ghost cells near physical boundaries using Neumann zero
   subroutine a$D_bc2_neumann_zero(boxes, id, nb, iv, gc_side, nc)
