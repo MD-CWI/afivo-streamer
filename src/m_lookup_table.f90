@@ -61,8 +61,8 @@ contains
 
   !> This function returns a new lookup table
   function LT_create(x_min, x_max, n_rows, n_cols) result(my_lt)
-    real(dp), intent(in) :: x_min !< Minimum x-coordinate
-    real(dp), intent(in) :: x_max !< Maximum x-coordinate
+    real(dp), intent(in) :: x_min  !< Minimum x-coordinate
+    real(dp), intent(in) :: x_max  !< Maximum x-coordinate
     integer, intent(in)  :: n_rows !< How many x-values to store
     integer, intent(in)  :: n_cols !< Number of variables that will be looked up
     type(lookup_table_t) :: my_lt

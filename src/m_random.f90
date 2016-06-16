@@ -100,7 +100,7 @@ contains
        rands(1) = self%uni_ab(-1.0_dp, 1.0_dp)
        rands(2) = self%uni_ab(-1.0_dp, 1.0_dp)
        sum_sq = sum(rands**2)
-       if (sum_sq < 1.0_dp .and. sum_sq /= 0.0_dp) exit
+       if (sum_sq < 1.0_dp .and. abs(sum_sq) <1.0e-12_dp) exit
     end do
     rands = rands * sqrt(-2 * log(sum_sq) / sum_sq)
   end function two_normals

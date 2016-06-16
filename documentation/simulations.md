@@ -174,10 +174,9 @@ In case
 will be called to recompute the mesh.
 There is a 'new' mesh if new grids are added or if children grids are deleted. 
 See manual.md????, how grids can be deleted. In case new grids are created,
-the values of the parent box (like i_photo, i_pos_ion and so on) will be prolongated
+the values of the parent box (like <code>i_photo, i_pos_ion</code> and so on) will be prolongated
 to its children by using linear interpolation. 
-2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) are applied, which
-do not need corner ghost cells.
+2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) are applied, which do not need corner ghost cells.
 The new mesh needs a recalculation of the electric field by calling 
 <a class="el" href="streamer__2d_8f90.html#a3078ef0e5f2dbb937b8b9d54baccaa6c">compute_electric_field</a>.
 
