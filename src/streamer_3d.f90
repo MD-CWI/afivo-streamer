@@ -422,7 +422,7 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    call a3_gc2_box(boxes, id, i_electron, a3_gc2_prolong1, &
+    call a3_gc2_box(boxes, id, i_electron, a3_gc2_prolong_linear, &
          a3_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
@@ -567,52 +567,46 @@ contains
     type(box3_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, fld
-    real(dp)                    :: alpha, eta, sflux, dflux(3)
-    integer                     :: i, j, k, nc
+    real(dp)                    :: alpha, eta, sflux, mu
+    integer                     :: i, j, k, nc, ioff
     type(LT_loc_t)              :: loc
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
+    ioff   = (box%ix(1)-1) * nc
 
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
-             fld      = box%cc(i, j, k, i_electric_fld)
-             loc      = LT_get_loc(ST_td_tbl, fld)
-             alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-             eta      = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
+             ! Weighting of flux contribution for cylindrical coordinates
+             fld   = box%cc(i,j, k, i_electric_fld)
+             loc   = LT_get_loc(ST_td_tbl, fld)
+             alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+             eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
+             mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-             dflux(1) = box%fx(i, j, k, flux_elec) + box%fx(i+1, j, k, flux_elec)
-             dflux(2) = box%fy(i, j, k, flux_elec) + box%fy(i, j+1, k, flux_elec)
-             dflux(3) = box%fz(i, j, k, flux_elec) + box%fz(i, j, k+1, flux_elec)
-             src = 0.5_dp * norm2(dflux) * (alpha - eta)
-
-             if (ST_photoi_enabled) &
-                  src = src + box%cc(i, j, k, i_photo)
-
-             sflux = (box%fx(i, j, k, flux_elec) - box%fx(i+1, j, k, flux_elec) + &
-                  box%fy(i, j, k, flux_elec) - box%fy(i, j+1, k, flux_elec) + &
-                  box%fz(i, j, k, flux_elec) - box%fz(i, j, k+1, flux_elec)) * inv_dr
-
-             box%cc(i, j, k, i_electron) = &
-                  box%cc(i, j, k, i_electron) + (src + sflux) * dt(1)
-             box%cc(i, j, k, i_pos_ion) = &
-                  box%cc(i, j, k, i_pos_ion) + src * dt(1)
+             ! Contribution of flux
+             sflux = (box%fy(i, j, k, flux_elec) - box%fy(i, j+1, k, flux_elec) + &
+                      box%fx(i, j, k, flux_elec) - box%fx(i+1, j, k, flux_elec) + &
+                      box%fx(i, j, k, flux_elec) - box%fx(i, j, k+1, flux_elec)) * inv_dr * dt(1)
+   
+             ! Source term
+             src = fld * mu * box%cc(i, j, k, i_electron) * (alpha - eta) * dt(1)
+   
+             if (ST_photoi_enabled) src = src + box%cc(i, j, k, i_photo) * dt(1)
+   
+             ! Add flux and source term
+             box%cc(i, j, k, i_electron) = box%cc(i, j, k, i_electron) + sflux + src
+   
+             ! Add source term
+             box%cc(i, j, k, i_pos_ion) = box%cc(i, j, k, i_pos_ion) + src
           end do
        end do
     end do
 
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             box%cc(i, j, k, i_pos_ion) = box%cc(i, j, k, i_pos_ion) - &
-                                          box%cc(i, j, k, i_electron)
-             box%cc(i, j, k, i_electron) = 0
-          end do
-       end do
-    end do
   end subroutine update_solution
 
+  !> Sets the photoionization
   subroutine set_photoionization(tree, eta, num_photons, dt)
     use m_units_constants
 
@@ -636,6 +630,7 @@ contains
 
   end subroutine set_photoionization
 
+  !> Sets the photoionization_rate
   subroutine set_photoionization_rate(box, coeff)
     type(box3_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
@@ -672,9 +667,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a3_prolong1(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a3_prolong1(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a3_prolong1(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a3_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a3_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
+          call a3_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)

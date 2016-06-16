@@ -131,10 +131,8 @@ program streamer_cyl
         call compute_electric_field(tree, n_fmg_cycles, .true.)
      end do
 
-     if (write_out) then
-        call a2_write_silo(tree, fname, ST_out_cnt, ST_time, &
-             dir=ST_output_dir, ixs_fc=[electric_fld])
-     end if
+     if (write_out) call a2_write_silo(tree, fname, ST_out_cnt, &
+          ST_time, dir=ST_output_dir, ixs_fc=[electric_fld])
 
      call a2_adjust_refinement(tree, refine_routine, ref_info)
 
@@ -412,7 +410,7 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    call a2_gc2_box(boxes, id, i_electron, a2_gc2_prolong1, &
+    call a2_gc2_box(boxes, id, i_electron, a2_gc2_prolong_linear, &
          a2_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
@@ -529,23 +527,27 @@ contains
           eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
           mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-          ! Source term
-          src = fld * mu * abs(box%cc(i, j, i_electron)) * (alpha - eta)
-
-          if (ST_photoi_enabled) &
-               src = src + box%cc(i,j, i_photo)
-
           ! Contribution of flux
           sflux = (box%fy(i, j, flux_elec) - box%fy(i, j+1, flux_elec) + &
                rfac(1) * box%fx(i, j, flux_elec) - &
-               rfac(2) * box%fx(i+1, j, flux_elec)) * inv_dr
+               rfac(2) * box%fx(i+1, j, flux_elec)) * inv_dr * dt(1)
 
-          box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + (src + sflux) * dt(1)
-          box%cc(i, j, i_pos_ion)  = box%cc(i, j, i_pos_ion)  + src * dt(1)
+          ! Source term
+          src = fld * mu * abs(box%cc(i, j, i_electron)) * (alpha - eta) *dt(1)
+
+          if (ST_photoi_enabled) src = src + box%cc(i,j, i_photo) * dt(1)
+
+          ! Add flux and source term
+          box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + sflux + src
+
+          ! Add source term
+          box%cc(i, j, i_pos_ion)  = box%cc(i, j, i_pos_ion) + src
+
        end do
     end do
   end subroutine update_solution
 
+  !> Sets the photoionization
   subroutine set_photoionization(tree, eta, num_photons, dt)
     use m_units_constants
 
@@ -569,6 +571,7 @@ contains
 
   end subroutine set_photoionization
 
+  !> Sets the photoionization_rate
   subroutine set_photoionization_rate(box, coeff)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
@@ -604,9 +607,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)

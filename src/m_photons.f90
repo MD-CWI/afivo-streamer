@@ -433,7 +433,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong1_from(tree%boxes, id, i_photo, add=.true.)
+          call a2_prolong_linear_from(tree%boxes, id, i_photo, add=.true.)
        end do
        !$omp end do
     end do
@@ -624,7 +624,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_prolong1_from(tree%boxes, id, i_photo, add=.true.)
+          call a3_prolong_linear_from(tree%boxes, id, i_photo, add=.true.)
        end do
        !$omp end do
     end do
