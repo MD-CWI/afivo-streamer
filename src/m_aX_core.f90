@@ -673,7 +673,7 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves) ! We only check leaf tree%boxes
           id = tree%lvls(lvl)%leaves(i)
 
-          if (ref_flags(id) > af_keep_ref) then ! This means refine
+          if (ref_flags(id) == af_do_ref .or. ref_flags(id) == a5_refine) then
              ref_flags(id) = af_refine ! Mark for actual refinement
 
              ! Ensure we will have the necessary neighbors
@@ -683,7 +683,7 @@ contains
                    ! Mark the parent containing neighbor for refinement
                    p_id = tree%boxes(id)%parent
                    p_nb_id = tree%boxes(p_id)%neighbors(nb)
-                   ref_flags(p_nb_id) = af_refine ! Mark for actual refinement
+                   ref_flags(p_nb_id) = af_refine
                 end if
              end do
 
@@ -731,7 +731,7 @@ contains
     integer                     :: ic, c_id, nb_id, nb_rev, nb
 
     do ic = 1, a$D_num_children
-       c_id               = boxes(id)%children(ic)
+       c_id = boxes(id)%children(ic)
 
        ! Remove from neighbors
        do nb = 1, a$D_num_neighbors
