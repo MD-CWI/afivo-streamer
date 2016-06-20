@@ -1,20 +1,21 @@
 !> Module for pseudo random number generation
 module m_random
 
+! TODO: describe the meaning of the subroutines.
+
   implicit none
   private
 
   integer, parameter :: dp = kind(0.0d0)
   integer, parameter :: i4 = selected_int_kind(9)
 
+  !> Random number generator type
   type RNG_t
      integer(i4), private :: state(4) = (/521288629, &
           362436069, 16163801, 1131199299/)
      integer              :: separator(32) ! Separate cache lines
    contains
-     procedure, non_overridable :: set_seed
      procedure, non_overridable :: int4
-     procedure, non_overridable :: int_ab
      procedure, non_overridable :: uni_01
      procedure, non_overridable :: uni_ab
      procedure, non_overridable :: two_normals
@@ -23,9 +24,10 @@ module m_random
      procedure, non_overridable :: sphere
   end type RNG_t
 
+  !> Pseudo random number generator type
   type PRNG_t
      type(RNG_t), allocatable :: rngs(:)
-   contains
+  contains
      procedure, non_overridable :: init
   end type PRNG_t
 
@@ -33,12 +35,6 @@ module m_random
   public :: PRNG_t
 
 contains
-
-  subroutine set_seed(self, seed)
-    class(RNG_t), intent(out) :: self
-    integer(i4), intent(in)   :: seed(4)
-    self%state = seed
-  end subroutine set_seed
 
   subroutine init(self, n_proc, rng)
     class(PRNG_t), intent(inout) :: self
@@ -67,13 +63,6 @@ contains
     self%state(4)   = 69069 * self%state(4) + 1013904243
     rr              = rr + self%state(4)
   end function int4
-
-  function int_ab(self, a, b) result(rr)
-    class(RNG_t), intent(inout) :: self
-    integer, intent(in)         :: a, b
-    integer                     :: rr
-    rr = a + int(self%uni_01() * (b-a+1))
-  end function int_ab
 
   !> Uniform random number in range [0,1)
   function uni_01(self) result(rr)

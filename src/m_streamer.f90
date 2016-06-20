@@ -1,3 +1,27 @@
+!> Module  that contains subroutines to handle with configuration files
+!!
+!! * Creating configuration files
+!! * Reading configuration files
+!! * Loading configuration files
+!! * Setting the initial conditions from the configuration
+!!
+!! Further it contains a subroutine for
+!! * loading the transport data
+!! * Setting  the voltage on fixed time
+!!
+!! Moreover, it contains several pre-defined variables like 
+!!
+!! * Indices of cell-centered variables
+!! * Names of the cell-centered variables
+!! * Indices of face-centered variables
+!! * Indices of transport data
+!! * How many multigrid FMG cycles we perform per time step
+!!
+!! The subroutines and variables are used by the examples:
+!! * streamer_2d
+!! * streamer_3d
+!! * streamer_cyl
+!!
 module m_streamer
 
   use m_config
@@ -14,7 +38,7 @@ module m_streamer
   integer, parameter :: ST_slen = 200
 
   ! ** Indices of cell-centered variables **
-  integer, parameter :: n_var_cell     = 9 ! Number of variables
+  integer, parameter :: n_var_cell     = 8 ! Number of variables
   integer, parameter :: i_electron     = 1 ! Electron density
   integer, parameter :: i_pos_ion      = 2 ! Positive ion density
   integer, parameter :: i_electron_old = 3 ! For time-stepping scheme
@@ -23,12 +47,11 @@ module m_streamer
   integer, parameter :: i_electric_fld = 6 ! Electric field norm
   integer, parameter :: i_rhs          = 7 ! Source term Poisson
   integer, parameter :: i_photo        = 8 ! Phototionization rate
-  integer, parameter :: i_eps          = 9 ! Level set function
 
   ! Names of the cell-centered variables
   character(len=12) :: ST_cc_names(n_var_cell) = &
        [character(len=12) :: "electron", "pos_ion", "electron_old", &
-       "pos_ion_old", "phi", "electric_fld", "rhs", "pho", "eps"]
+       "pos_ion_old", "phi", "electric_fld", "rhs", "pho"]
 
   ! ** Indices of face-centered variables **
   integer, parameter :: n_var_face   = 2 ! Number of variables

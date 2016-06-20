@@ -12,7 +12,7 @@ module m_photons
 
   type photoi_tbl_t
      type(lookup_table_t) :: tbl           !< The lookup table
-     real(dp)         :: frac_in_tbl   !< Fraction photons in table
+     real(dp)             :: frac_in_tbl   !< Fraction photons in table
   end type photoi_tbl_t
 
   public :: photoi_tbl_t
@@ -28,15 +28,17 @@ contains
 
   !> Compute the photonization table for air
   subroutine photoi_get_table_air(photoi_tbl, p_O2, max_dist)
-    type(photoi_tbl_t), intent(inout) :: photoi_tbl      !< The photon table
-    real(dp), intent(in)  :: p_O2     !< Partial pressure of oxygen (bar)
-    real(dp), intent(in)  :: max_dist !< Maximum distance in lookup table
+    !< The photonization table
+    type(photoi_tbl_t), intent(inout) :: photoi_tbl
+    !< Partial pressure of oxygen (bar)
+    real(dp), intent(in)              :: p_O2
+    !< Maximum distance in lookup table
+    real(dp), intent(in)  :: max_dist
 
     integer               :: n
     integer, parameter    :: tbl_size  = 500
     real(dp), allocatable :: fsum(:), dist(:)
     real(dp)              :: dF, drdF, r, F, frac_guess
-
 
     ! First estimate which fraction of photons are within max_dist
     frac_guess = 1.0_dp
@@ -86,11 +88,14 @@ contains
     call LT_set_col(photoi_tbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
   end subroutine photoi_get_table_air
 
+  !> Runge Kutta 4 method
   real(dp) function rk4_drdF(r, dF, p_O2)
-    real(dp), intent(in)           :: r, dF, p_O2
-    real(dp)                       :: drdF
-    real(dp)                       :: sum_drdF
-    real(dp), parameter            :: one_sixth = 1 / 6.0_dp
+    real(dp), intent(in) :: r    !> Initial point
+    real(dp), intent(in) :: dF   !> grid size
+    real(dp), intent(in) :: p_O2 !< Partial pressure of oxygen (bar)
+    real(dp)             :: drdF
+    real(dp)             :: sum_drdF
+    real(dp), parameter  :: one_sixth = 1 / 6.0_dp
 
     ! Step 1 (at initial r)
     drdF = 1 / photoi_absfunc_air(r, p_O2)
@@ -114,7 +119,8 @@ contains
 
   real(dp) function photoi_absfunc_air(dist, p_O2)
     use m_units_constants
-    real(dp), intent(in) :: dist, p_O2
+    real(dp), intent(in) :: dist   !< Distance
+    real(dp), intent(in) :: p_O2   !< Partial pressure of oxygen (bar)
     real(dp)             :: r
     real(dp), parameter  :: c0 = 3.5_dp / UC_torr_to_bar
     real(dp), parameter  :: c1 = 200 / UC_torr_to_bar
@@ -133,7 +139,8 @@ contains
   end function photoi_absfunc_air
 
   integer function get_lvl_length(dr_base, length)
-    real(dp), intent(in) :: dr_base, length
+    real(dp), intent(in) :: dr_base !< cell spacing at lvl 1
+    real(dp), intent(in) :: length  !< Some length
     real(dp), parameter :: invlog2 = 1 / log(2.0_dp)
     real(dp) :: ratio
 
@@ -147,9 +154,10 @@ contains
 
   integer function get_rlvl_length(dr_base, length, rng)
     use m_random
-    real(dp), intent(in) :: dr_base, length
+    real(dp), intent(in) :: dr_base   !< cell spacing at lvl 1
+    real(dp), intent(in) :: length    !< Some length
+    type(RNG_t), intent(inout) :: rng !< Random number generator
     real(dp), parameter :: invlog2 = 1 / log(2.0_dp)
-    type(RNG_t), intent(inout) :: rng
     real(dp) :: ratio, tmp
 
     ratio = dr_base / length
@@ -167,15 +175,18 @@ contains
     use m_lookup_table
     use m_random
     use omp_lib
-    integer, intent(in)          :: n_photons
-    real(dp), intent(in)         :: xyz_in(3, n_photons)
-    real(dp), intent(out)        :: xyz_out(3, n_photons)
-    integer, intent(in)          :: n_dim
+    integer, intent(in)              :: n_photons !< Number of photons
+    !< Input (x,y,z) values
+    real(dp), intent(in)             :: xyz_in(3, n_photons)
+    !< Output (x,y,z) values
+    real(dp), intent(out)            :: xyz_out(3, n_photons)
+    integer, intent(in)              :: n_dim     !< 2 or 3 dimensional
+    !< Lookup table
     type(lookup_table_t), intent(in) :: tbl
-    type(RNG_t), intent(inout)   :: rng
-    integer                      :: n, n_procs, proc_id
-    real(dp)                     :: rr, dist
-    type(PRNG_t)                 :: prng
+    type(RNG_t), intent(inout)       :: rng       !< Random number geneator
+    integer                          :: n, n_procs, proc_id
+    real(dp)                         :: rr, dist
+    type(PRNG_t)                     :: prng
 
     !$omp parallel private(n, rr, dist, proc_id)
     !$omp single
@@ -220,13 +231,13 @@ contains
     use omp_lib
 
     type(a2_t), intent(inout)  :: tree   !< Tree
-    type(photoi_tbl_t)             :: pi_tbl !< Table to sample abs. lenghts
+    type(photoi_tbl_t)         :: pi_tbl !< Table to sample abs. lengths
     type(RNG_t), intent(inout) :: rng    !< Random number generator
     !> How many discrete photons to use
     integer, intent(in)        :: num_photons
     !> Input variable that contains photon production per cell
     integer, intent(in)        :: i_src
-    !> Output variable that contains photoionization source rate
+    !> Input variable that contains photoionization source rate
     integer, intent(in)        :: i_photo
     !> Use dx proportional to this value
     real(dp), intent(in)       :: fac_dx
@@ -346,7 +357,7 @@ contains
        pi_lengthscale = LT_get_col(pi_tbl%tbl, 1, fac_dx)
 
        ! Determine at which level we estimate the photoionization source term. This
-       ! depends on the typical lenght scale for absorption.
+       ! depends on the typical length scale for absorption.
        pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
 
        !$omp parallel do
@@ -451,13 +462,13 @@ contains
     use omp_lib
 
     type(a3_t), intent(inout)   :: tree   !< Tree
-    type(photoi_tbl_t)              :: pi_tbl !< Table to sample abs. lenghts
+    type(photoi_tbl_t)          :: pi_tbl !< Table to sample abs. lengths
     type(RNG_t), intent(inout)  :: rng    !< Random number generator
     !> How many discrete photons to use
     integer, intent(in)         :: num_photons
     !> Input variable that contains photon production per cell
     integer, intent(in)         :: i_src
-    !> Output variable that contains photoionization source rate
+    !> Input variable that contains photoionization source rate
     integer, intent(in)         :: i_photo
     !> Use dx proportional to this value
     real(dp), intent(in)        :: fac_dx
@@ -553,7 +564,7 @@ contains
        pi_lengthscale = LT_get_col(pi_tbl%tbl, 1, fac_dx)
 
        ! Determine at which level we estimate the photoionization source term. This
-       ! depends on the typical lenght scale for absorption.
+       ! depends on the typical length scale for absorption.
        pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
 
        !$omp parallel do
