@@ -26,6 +26,7 @@ module m_a$D_utils
   public :: a$D_boxes_copy_cc
   public :: a$D_tree_copy_cc
   public :: a$D_reduction
+  public :: a$D_reduction_vec
   public :: a$D_reduction_loc
   public :: a$D_tree_max_cc
   public :: a$D_tree_min_cc
@@ -362,7 +363,7 @@ contains
     end do
   end subroutine a$D_tree_copy_cc
 
-    !> A general scalar reduction method
+  !> A general scalar reduction method
   subroutine a$D_reduction(tree, box_func, reduction, init_val, out_val)
     type(a$D_t), intent(in) :: tree    !< Tree to do the reduction on
     real(dp), intent(in)   :: init_val !< Initial value for the reduction
@@ -402,6 +403,53 @@ contains
     !$omp end critical
     !$omp end parallel
   end subroutine a$D_reduction
+
+  !> A general vector reduction method
+  subroutine a$D_reduction_vec(tree, box_func, reduction, init_val, &
+       out_val, n_vals)
+    type(a$D_t), intent(in) :: tree             !< Tree to do the reduction on
+    integer, intent(in)     :: n_vals
+    real(dp), intent(in)    :: init_val(n_vals) !< Initial value for the reduction
+    real(dp), intent(out)   :: out_val(n_vals)  !< Result of the reduction
+    real(dp)                :: tmp(n_vals), my_val(n_vals)
+    integer                 :: i, id, lvl
+
+    interface
+       function box_func(box, n_vals) result(vec)
+         import
+         type(box$D_t), intent(in) :: box
+         integer, intent(in)       :: n_vals
+         real(dp)                  :: vec(n_vals)
+       end function box_func
+
+       function reduction(vec_1, vec_2, n_vals) result(vec)
+         import
+         integer, intent(in)  :: n_vals
+         real(dp), intent(in) :: vec_1(n_vals), vec_2(n_vals)
+         real(dp)             :: vec(n_vals)
+       end function reduction
+    end interface
+
+    if (.not. tree%ready) stop "Tree not ready"
+    out_val = init_val
+    my_val  = init_val
+
+    !$omp parallel private(lvl, i, id, tmp) firstprivate(my_val)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          tmp = box_func(tree%boxes(id), n_vals)
+          my_val = reduction(tmp, my_val, n_vals)
+       end do
+       !$omp end do
+    end do
+
+    !$omp critical
+    out_val = reduction(my_val, out_val, n_vals)
+    !$omp end critical
+    !$omp end parallel
+  end subroutine a$D_reduction_vec
 
   !> A general scalar reduction method, that returns the location of the
   !> minimum/maximum value found
