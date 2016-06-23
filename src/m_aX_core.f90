@@ -673,7 +673,7 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves) ! We only check leaf tree%boxes
           id = tree%lvls(lvl)%leaves(i)
 
-          if (ref_flags(id) == af_do_ref .or. ref_flags(id) == a5_refine) then
+          if (ref_flags(id) == af_do_ref .or. ref_flags(id) == af_refine) then
              ref_flags(id) = af_refine ! Mark for actual refinement
 
              ! Ensure we will have the necessary neighbors
