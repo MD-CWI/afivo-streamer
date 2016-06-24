@@ -77,6 +77,7 @@ contains
 
     print *, "The following fatal error occured in m_config:"
     print *, trim(err_string)
+    stop
   end subroutine handle_error
 
   !> Return the index of the variable with name 'p_name', or -1 if not found.
