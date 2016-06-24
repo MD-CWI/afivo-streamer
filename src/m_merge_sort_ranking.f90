@@ -1,20 +1,20 @@
 !> Module that provide a general routine for Merge-sort ranking of array
 !  of double precision (15bytes), real (8bytes) and integer kind
 !
-Module m_mrgrnk
+Module m_merge_sort
    Integer, Parameter :: kdp = selected_real_kind(15)
-   public :: mrgrnk
+   public :: merge_sort
    private :: kdp
-   private :: R_mrgrnk, I_mrgrnk, D_mrgrnk
-   interface mrgrnk
-      module procedure D_mrgrnk, R_mrgrnk, I_mrgrnk
-   end interface mrgrnk
+   private :: R_merge_sort, I_merge_sort, D_merge_sort
+   interface merge_sort
+      module procedure D_merge_sort, R_merge_sort, I_merge_sort
+   end interface merge_sort
 contains
 
    ! Double precision variant of  Merge-sort ranking of an array
-   Subroutine D_mrgrnk (XDONT, IRNGT)
+   Subroutine D_merge_sort (XDONT, IRNGT)
       ! __________________________________________________________
-      !   MRGRNK = Merge-sort ranking of an array
+      !   Merge_sort = Merge-sort ranking of an array
       !   For performance reasons, the first 2 passes are taken
       !   out of the standard loop, and use dedicated coding.
       ! __________________________________________________________
@@ -210,12 +210,12 @@ contains
       !
       Return
       !
-   End Subroutine D_mrgrnk
+   End Subroutine D_merge_sort
 
    ! Real variant of  Merge-sort ranking of an array
-   Subroutine R_mrgrnk (XDONT, IRNGT)
+   Subroutine R_merge_sort (XDONT, IRNGT)
       ! __________________________________________________________
-      !   MRGRNK = Merge-sort ranking of an array
+      !   Merge_sort = Merge-sort ranking of an array
       !   For performance reasons, the first 2 passes are taken
       !   out of the standard loop, and use dedicated coding.
       ! __________________________________________________________
@@ -411,12 +411,12 @@ contains
       !
       Return
       !
-   End Subroutine R_mrgrnk
+   End Subroutine R_merge_sort
 
    ! Integer variant of  Merge-sort ranking of an array
-   Subroutine I_mrgrnk (XDONT, IRNGT)
+   Subroutine I_merge_sort (XDONT, IRNGT)
       ! __________________________________________________________
-      !   MRGRNK = Merge-sort ranking of an array
+      !   Merge_sort = Merge-sort ranking of an array
       !   For performance reasons, the first 2 passes are taken
       !   out of the standard loop, and use dedicated coding.
       ! __________________________________________________________
@@ -612,6 +612,6 @@ contains
       !
       Return
       !
-   End Subroutine I_mrgrnk
+   End Subroutine I_merge_sort
 
-end module m_mrgrnk
+end module m_merge_sort

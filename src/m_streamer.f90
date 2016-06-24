@@ -70,7 +70,7 @@ module m_streamer
 
   ! Type to store initial conditions in
   type initcnd_t
-     real(dp)              :: bg_dens
+     real(dp)              :: background_density
      integer               :: n_cond
      real(dp), allocatable :: seed_r0(:, :)
      real(dp), allocatable :: seed_r1(:, :)
@@ -262,7 +262,7 @@ contains
     call CFG_add(ST_config, "electric_fld_x_decay", huge(1.0_dp), &
          "Decay time of field (s)")
 
-    call CFG_add(ST_config, "bg_dens", 1.0d12, &
+    call CFG_add(ST_config, "background_density", 1.0d12, &
          "The background ion and electron density (1/m3)")
     call CFG_add(ST_config, "seed_density", [5.0d19], &
          "Initial density of the seed (1/m3)", .true.)
@@ -348,7 +348,7 @@ contains
     real(dp), allocatable          :: tmp_vec(:)
     type(initcnd_t) :: ic
 
-    call CFG_get(ST_config, "bg_dens", ic%bg_dens)
+    call CFG_get(ST_config, "background_density", ic%background_density)
     call CFG_get(ST_config, "domain_len", dlen)
 
     call CFG_get_size(ST_config, "seed_density", n_cond)

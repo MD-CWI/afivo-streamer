@@ -20,7 +20,7 @@ module m_photons
   ! Public methods
   public :: photoi_get_table_air
   public :: photoi_do_absorp
-  public :: photoi_absfunc_air
+  public :: photoi_absorption_func_air
   public :: photoi_set_src_2d
   public :: photoi_set_src_3d
 
@@ -98,26 +98,26 @@ contains
     real(dp), parameter  :: one_sixth = 1 / 6.0_dp
 
     ! Step 1 (at initial r)
-    drdF = 1 / photoi_absfunc_air(r, p_O2)
+    drdF = 1 / photoi_absorption_func_air(r, p_O2)
     sum_drdF = drdF
 
     ! Step 2 (at initial r + dr/2)
-    drdF = 1 / photoi_absfunc_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / photoi_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 3 (at initial r + dr/2)
-    drdF = 1 / photoi_absfunc_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / photoi_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 4 (at initial r + dr)
-    drdF = 1 / photoi_absfunc_air(r + dF * drdF, p_O2)
+    drdF = 1 / photoi_absorption_func_air(r + dF * drdF, p_O2)
     sum_drdF = sum_drdF + drdF
 
     ! Combine r derivatives at steps
     rk4_drdF = one_sixth * sum_drdF
   end function rk4_drdF
 
-  real(dp) function photoi_absfunc_air(dist, p_O2)
+  real(dp) function photoi_absorption_func_air(dist, p_O2)
     use m_units_constants
     real(dp), intent(in) :: dist   !< Distance
     real(dp), intent(in) :: p_O2   !< Partial pressure of oxygen (bar)
@@ -129,14 +129,14 @@ contains
     r = p_O2 * dist
     if (r * (c0 + c1) < eps) then
        ! Use limit
-       photoi_absfunc_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
+       photoi_absorption_func_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
             * p_O2 / log(c1/c0)
     else if (r * c0 > -log(eps)) then
-       photoi_absfunc_air = eps
+       photoi_absorption_func_air = eps
     else
-       photoi_absfunc_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
+       photoi_absorption_func_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
     end if
-  end function photoi_absfunc_air
+  end function photoi_absorption_func_air
 
   integer function get_lvl_length(dr_base, length)
     real(dp), intent(in) :: dr_base !< cell spacing at lvl 1
@@ -171,7 +171,7 @@ contains
     end if
   end function get_rlvl_length
 
-  subroutine photoi_do_absorp(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
+  subroutine photoi_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
     use m_lookup_table
     use m_random
     use omp_lib
@@ -214,11 +214,11 @@ contains
        end do
        !$omp end do
     else
-       print *, "photoi_do_absorp: unknown n_dim", n_dim
+       print *, "photoi_do_absorption: unknown n_dim", n_dim
        stop
     end if
     !$omp end parallel
-  end subroutine photoi_do_absorp
+  end subroutine photoi_do_absorption
 
   subroutine photoi_set_src_2d(tree, pi_tbl, rng, num_photons, &
        i_src, i_photo, fac_dx, const_dx, use_cyl, min_dx, dt)
@@ -339,7 +339,7 @@ contains
 
     if (use_cyl) then
        ! Get location of absorbption
-       call photoi_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
+       call photoi_do_absorption(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
 
        !$omp do
        do n = 1, n_used
@@ -349,7 +349,7 @@ contains
        !$omp end do
     else
        ! Get location of absorbption
-       call photoi_do_absorp(xyz_src, xyz_dst, 2, n_used, pi_tbl%tbl, rng)
+       call photoi_do_absorption(xyz_src, xyz_dst, 2, n_used, pi_tbl%tbl, rng)
     end if
 
     if (const_dx) then
@@ -556,7 +556,7 @@ contains
     allocate(xyz_dst(3, n_used))
     allocate(ph_loc(n_used))
 
-    ! Get location of absorbption
+    ! Get location of absorption
     call photoi_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
 
     if (const_dx) then

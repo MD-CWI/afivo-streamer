@@ -252,7 +252,7 @@ contains
     real(dp)                    :: density
 
     nc = box%n_cell
-    box%cc(:, :, i_electron) = ST_init_cond%bg_dens
+    box%cc(:, :, i_electron) = ST_init_cond%background_density
 
     do j = 0, nc+1
        do i = 0, nc+1
