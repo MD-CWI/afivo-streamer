@@ -1,5 +1,107 @@
 \section sect_intro Introduction 
 
+\section sect_photoi Photoionization (11.3.3)
+
+Photoionization can play an important role in electrical discharges in air and
+other gases. 
+
+\verbatim
+[ .. ]
+\endverbatim
+
+If we consider models for streamer discharges, then two typical challenges are
+solving Poisson’s equation to obtain the electrostatic potential, and computing
+the photoionization profile. Both challenges involve a non-local process or
+interaction – at least when the speed of light is assumed to be effectively
+infinite.
+However, the required accuracy for these two problems is quite different:
+discharges are much less sensitive t  the amount of photoionization around them
+than to the electric field. The method presented here was thus designed to
+be fast and flexible, but not necessarily highly accurate.
+
+\verbatim
+[ .. ]
+\endverbatim
+
+\subsection sect_descr Description of the method
+
+In our Monte Carlo method for photoionization, we assume that photon scattering
+can be neglected, and that the direction of ionizing photons is isotropic. The
+method can be divided in three parts:
+	-  Determine the coordinates at which photons are produced, and
+store these coordinates in a list \f$L_{src}\f$.
+	- Determine the coordinates at which photons are absorbed, and
+store these coordinates in a list \f$L_{dst}\f$.
+	- Compute the resulting photoionization profile on a mesh.
+
+The implementation of these steps is described below.
+
+\subsection sect_ionizing The source of ionizing photons
+
+In a plasma fluid simulation, the computational domain is divided into cells. We
+assume that for each cell the production of ionizing photons \f$I\f$ is known within
+a given time step \f$\Delta t\f$. In our Monte Carlo method, this information is converted
+to a list  \f$L_{src}\f$ of approximately \f$N\f$ discrete photons in the following way.
+1. Determine the total photon production \f$I_{\Sigma}\f$ within the time step \f$\Delta t\f$,
+by summing over all the cells.
+2. For each cell \f$n_{\gamma} = N I / I_{\Sigma}\f$ photons should be produced.
+To convert \f$n_{\gamma}\f$ to an integer, first draw a uniform random number
+\f$U (0 , 1)\f$.
+If \f$n_{\gamma} - \lfloor{ n_{\gamma}} \rfloor > U\f$ round up,
+else round down.
+3. For each produced photon, add the coordinate of the cell center to the list
+\f$L_{src}\f$ of photons.
+
+Some additional remarks: In principle the number of photons N can be chosen
+adaptively, for example to create discrete ‘super-photons’ with a given weight.
+It is also possible to assign different weights to different photons by modifying
+the above procedure, see section 11.3.4.
+Instead of rounding \f$n_{\gamma}\f$ to an integer as described above, it can be more
+realistic to sample from the Poisson distribution with parameter \f$n_{\gamma}\f$.
+For \f$n_{\gamma} \ll 1\f$ the result would be almost identical, but for larger
+values there are differences.
+However, most of the random fluctuations in our method are due to the stochastic
+photon direction and absorption, as discussed in the next section. Therefore our
+rounding with uniform random numbers should be fine for most applications.
+When grid cells are large compared to typical photoionization length scales,
+one could determine a ‘subgrid’ production location in the cell, instead of using
+the cell center. However, this scenario should generally be avoided, because the
+resulting photoionization profile would itself be insufficiently resolved.
+
+\subsection sect_absorption Absorption of ionizing photons
+
+Now that we know where photons are produced, we need to determine where
+they are absorbed. This is done in the following way. First, we determine
+the absorption distance \f$r\f$ for a photon. Given an absorption function \f$f(r)\f$,
+the cumulative absorption function \f$F(r) =\int_0^r f(r')dr'\f$ can be computed, either
+numerically or analytically. Then a so-called lookup table is constructed with
+columns \f$F(r)\f$ and \f$r\f$. Now we can do inversion sampling: given a random number
+\f$U(0, 1)\f$, the corresponding distance \f$r\f$ is obtained by linear interpolation from the
+table. The procedure is illustrated in figure 11.1. (In the special case where the
+inverse of \f$F(r)\f$ is known, one could directly compute
+\f$r = F^{-1}(U)\f$, but this will often be slower than using a lookup table.)
+Then a random orientation \f$\hat{r}\f$ for the photon is determined, using a procedure
+for picking a point on a sphere proposed by Marsaglia [205]:
+1. Get two random numbers \f$U_1(-1,1)\f$ and \f$U_2(-1,1)\f$. If
+\f$U_1^2 + U_2^2 \leq 1\f$ accept them, otherwise draw new numbers.
+2. Let \f$a = U_1^2 + U_2^2\f$ and \f$b = 2 \sqrt{1-a}\f$.
+The isotropic random direction is
+\f$\hat{r} = (b U_1, b U_2, 1 - 2a)\f$ in Cartesian coordinates.
+In the special case of a 2D Cartesian \f$(x, y)\f$ coordinate system, we should not
+pick points on a sphere but points on a circle. Then the second step is replaced
+by
+\f[
+\hat{r} = ( \frac{U_1^2-U_2^2}{U_1^2+U_2^2},\frac{2 U_1 U_2}{U_1^2+U_2^2}) .
+\f]
+Given the direction and the distance, the location of absorption
+\f$\mathbf{r} = r \hat{\mathbf{r}}\f$ is known,
+which is added to the list \f$L_{dst}\f$.
+Sometimes, the typical absorption length of photons is much larger than the
+domain size. Since most photons will not be absorbed within the domain, the
+Monte Carlo approximation becomes less accurate. This can be resolved by
+
+[nog niet klaar]
+
 \subsection sect_config Usage of configuration files
 
 The streamer programs discussed here are using configuration files
@@ -65,29 +167,46 @@ which can be used to speed up multiple lookups of different columns
 In order to optimize the use of the lookup tables, the following public functions and
 subroutines are presented in module <code>m_lookup_table</code>:
 \verbatim
-   LT_create              ! Returns a new lookup table
-   LT_get_xdata           ! Returns the x-coordinates of the lookup table
-   LT_get_spaced_data     ! Linearly interpolate the (x, y) input data to the new_x coordinates
-   LT_set_col             ! Fill the column with index col_ix using the linearly interpolated (x, y) data
-   LT_add_to_col          ! Add a new column by linearly interpolating the (x, y) data
-   LT_add_col             ! Add the (x,y) data to a given column
-   LT_get_loc             ! Get a location in the lookup table
-   LT_get_col             ! Get the values of all columns at x
-   LT_get_mcol            ! Get the value of a single column at x
-   LT_get_col_at_loc      ! Get the values of all columns at a location
-   LT_get_mcol_at_loc     ! Get the value of a single column at a location
-   LT_get_num_rows        ! Return the number of rows
-   LT_get_num_cols        ! Return the number of columns
-   LT_get_data            ! Get the x-coordinates and the columns of the lookup table
-   ! Compute by use of linear interpolation the value in the middle of a domain
-   ! D = [x_list(1) , x_list(size(x_list))].
-   ! If x_value is left of domain  D, then the value becomes the value at the left side of D,
-   ! if x_value is right of domain D, then the value becomes the value at the right side of D
+   ! Returns a new lookup table
+   LT_create
+   ! Returns the x-coordinates of the lookup table
+   LT_get_xdata
+   ! Linearly interpolate the (x, y) input data to the new_x coordinates
+   LT_get_spaced_data
+   ! Fill the column with index col_ix using the linearly interpolated (x, y) data
+   LT_set_col
+   ! Add a new column by linearly interpolating the (x, y) data
+   LT_add_to_col
+   ! Add the (x,y) data to a given column
+   LT_add_col
+   ! Get a location in the lookup table
+   LT_get_loc
+   ! Get the values of all columns at x
+   LT_get_col
+   ! Get the value of a single column at x
+   LT_get_mcol
+   ! Get the values of all columns at a location
+   LT_get_col_at_loc
+   ! Get the value of a single column at a location
+   LT_get_mcol_at_loc
+   ! Return the number of rows
+   LT_get_num_rows
+   ! Return the number of columns
+   LT_get_num_cols
+   ! Get the x-coordinates and the columns of the lookup table
+   LT_get_data
+   ! Compute by use of linear interpolation the value in the middle of
+   ! domain D = [x_list(1) , x_list(size(x_list))].
+   ! If x_value is left of domain  D, then the value becomes the value
+   ! at the left side of D,
+   ! if x_value is right of domain D, then the value becomes the value
+   ! at the right side of D
    LT_lin_interp_list
-   LT_to_file             ! Write the lookup table to file (in binary, potentially unportable)
-   LT_from_file           ! Read the lookup table from file (in binary, potentially unportable)
+   ! Write the lookup table to file (in binary, potentially unportable)
+   LT_to_file
+   ! Read the lookup table from file (in binary, potentially unportable)
+   LT_from_file
 \endverbatim
-The string <code>LT</code> stands for 'lookup table'.
 
 \subsection sect_TD Transport data (TD)
 
@@ -95,18 +214,18 @@ The module <code>m_transport_data</code> provides a routine <code>TD_get_td_from
 for reading in arbitrary transport data. <code>TD_get_td_from_file</code> reads in transport
 data from a file. Searches 'file_name' for transport 'data_name' concerning 'gas_name'
 \verbatim
-   ! Look for collision processes with the correct gas name in the file,
-   ! which should contains entries like below:
+! Look for collision processes with the correct gas name in the file,
+! which should contains entries like below:
 
-   !     Efield[V/m]_vs_energy[eV]     [description of the type of transport data]
-   !     AIR                           [the gas (mixture) name]
-   !     COMMENT: Compiled by xxxxx    [possibly comments, these are optional]
-   !     UPDATED: 2010-06-24 15:04:36
-   !     ------------------            [at least 5 dashes]
-   !     xxx       xxx                 [transport data in two column format]
-   !     ...       ...
-   !     xxx       xxx
-   !     ------------------
+!     Efield[V/m]_vs_energy[eV]     [description of the type of transport data]
+!     AIR                           [the gas (mixture) name]
+!     COMMENT: Compiled by xxxxx    [possibly comments, these are optional]
+!     UPDATED: 2010-06-24 15:04:36
+!     ------------------            [at least 5 dashes]
+!     xxx       xxx                 [transport data in two column format]
+!     ...       ...
+!     xxx       xxx
+!     ------------------
 \endverbatim
 The directory 'input' contains five transport data files for cross sections:
 \verbatim
@@ -114,7 +233,7 @@ The directory 'input' contains five transport data files for cross sections:
    td_air_phelps_bolsig.txt 
    td_air_props.txt         
    td_n2_siglo_133mbar.txt  
-   td_example_file.txt      
+   td_example.txt      
 \endverbatim
 The electron cross sections were retrieved from
 <a href="www.lxcat.net/SIGLO">SIGLO(N2,O2)</a> and
@@ -143,7 +262,7 @@ Two different types for linked lists are defined:
       integer                 :: n_values = 0
    end type LL_int_head_t
 \endverbatim
-The moodule <code>m_linked_list</code> contains four subroutines to work properly with linked lists:
+The module <code>m_linked_list</code> contains four subroutines to work properly with linked lists:
 \verbatim
    LL_Clear    ! Clears an linked list of type LL_int_head_t
    LL_add      ! Adds an element to a linked list of type LL_int_head_t at position head
@@ -174,106 +293,17 @@ This subsection contains several physical constants:
   UC_elec_charge      = -1.6022d-19             ! the electron charge in Coulombs
   UC_elec_volt        = 1.6022d-19              ! the eV in joules
   UC_elec_mass        = 9.10938189d-31          ! the electron mass in kg
-  UC_atomic_mass      = 1.66053886D-27          ! the atomic mass unit in kg
+  UC_atomic_mass      = 1.66053886d-27          ! the atomic mass unit in kg
   UC_N2_mass          = 28.0D0 * UC_atomic_mass ! The mass of a N2 molecule
   UC_lightspeed       = 299792458d0             ! the speed of light in m/s
   UC_boltzmann_const  = 1.3806503d-23           ! the Boltzmann constant
   UC_bohr_radius      = 5.29d-11                ! the Bohr radius (m)
-  UC_torr_to_bar      = 133.322368 * 1.0D-5     ! one Torr in units of bar
+  UC_torr_to_bar      = 133.322368 * 1.0d-5     ! one Torr in units of bar
   UC_elec_q_over_eps0 = UC_elec_charge / UC_eps0
   UC_elec_q_over_m    = UC_elec_charge / UC_elec_mass
 \endverbatim
 All constants are of type <code>real(dp)</code>, where <code>dp = kind(0.0d0)</code>.
-The string <code>UC</code> stands for 'unit_constants'.
 
-\section sect_photoi Photoionization (11.3.3)
-
-Photoionization can play an important role in electrical discharges in air and
-other gases. 
-If we consider models for streamer discharges, then two typical challenges are
-solving Poisson’s equation to obtain the electrostatic potential, and computing
-the photoionization profile. Both challenges involve a non-local process or inter-
-action – at least when the speed of light is assumed to be effectively infinite.
-However, the required accuracy for these two problems is quite different: dis-
-charges are much less sensitive to the amount of photoionization around them
-than to the electric field. The method presented here was thus designed to
-be fast and flexible, but not necessarily highly accurate.
-
-\subsection Description of the method
-
-In our Monte Carlo method for photoionization, we assume that photon scattering
-can be neglected, and that the direction of ionizing photons is isotropic. The
-method can be divided in three parts:
-1. Determine the coordinates at which photons are produced, and store these
-coordinates in a list \f$L_{src}\f$.
-2. Determine the coordinates at which photons are absorbed, and store these
-coordinates in a list \f$L_{dst}\f$.
-3. Compute the resulting photoionization profile on a mesh.
-The implementation of these steps is described below.
-
-\subsection  The source of ionizing photons
-
-In a plasma fluid simulation, the computational domain is divided into cells. We
-assume that for each cell the production of ionizing photons \f$I\f$ is known within
-a given time step \f$\delta t\f$. In our Monte Carlo method, this information is converted
-to a list  \f$L_{src}\f$ of approximately \f$N\f$ discrete photons in the following way.
-1. Determine the total photon production \f$I_{\Sigma}\f$ within the time step \f$\Delta t\f$,
-by summing over all the cells.
-2. For each cell \f$n_{\gamma} = N I / I_{\Sigma}\f$ photons should be produced.
-To convert \f$n_{\gamma}\f$ to an integer, first draw a uniform random number
-\f$U (0 , 1)\f$.
-If \f$n_{\gamma} - \lfloor{ n_{\gamma}} > U\f$ round up, else round down.
-
-3. For each produced photon, add the coordinate of the cell center to the list
-\f$L_{src}\f$ of photons.
-Some additional remarks: In principle the number of photons N can be chosen
-adaptively, for example to create discrete ‘super-photons’ with a given weight.
-It is also possible to assign different weights to different photons by modifying
-the above procedure, see section 11.3.4.
-Instead of rounding \f$n_{\gamma}\f$ to an integer as described above, it can be more
-realistic to sample from the Poisson distribution with parameter \f$n_{\gamma}\f$.
-For \f$n_{\gamma} \ll 1\f$ the result would be almost identical, but for larger
-values there are differences.
-However, most of the random fluctuations in our method are due to the stochastic
-photon direction and absorption, as discussed in the next section. Therefore our
-rounding with uniform random numbers should be fine for most applications.
-When grid cells are large compared to typical photoionization length scales,
-one could determine a ‘subgrid’ production location in the cell, instead of using
-the cell center. However, this scenario should generally be avoided, because the
-resulting photoionization profile would itself be insufficiently resolved.
-
-\subsection Absorption of ionizing photons
-Now that we know where photons are produced, we need to determine where
-they are absorbed. This is done in the following way. First, we determine
-the absorption distance r for a photon. Given an absorption function \f$f(r)\f$,
-the cumulative absorption function \f$F(r) =\int_0^r f(r')dr'\f$ can be computed, either
-numerically or analytically. Then a so-called lookup table is constructed with
-columns \f$F(r)\f$ and \f$r\f$. Now we can do inversion sampling: given a random number
-\f$U(0; 1)\f$, the corresponding distance \f$r\f$ is obtained by linear interpolation from the
-table. The procedure is illustrated in figure 11.1. (In the special case where the
-inverse of \f$F(r)\f$ is known, one could directly compute
-\f$r = F^{-1}(U)\f$, but this will often be slower than using a lookup table.)
-Then a random orientation \f$\hat{r}\f$ for the photon is determined, using a procedure
-for picking a point on a sphere proposed by Marsaglia [205]:
-1. Get two random numbers \f$U_1(-1,1)\f$ and \f$U_2(-1,1)\f$. If
-\f$U_1^2 + U_2^2 \leq 1\f$ accept them, otherwise draw new numbers.
-2. Let \f$a = U_1^2 + U_2^2\f$ and \f$b = 2 \sqrt{1-a}\f$
-The isotropic random direction is
-\f$\hat{r} = (b U_1; b U_2; 1 - 2a)\f$ in Cartesian coordinates.
-In the special case of a 2D Cartesian \f$(x, y)\f$ coordinate system, we should not
-pick points on a sphere but points on a circle. Then the second step is replaced
-by
-\f[
-\hat{r} = ( \frac{U_1^2-U_2^2}{U_1^2+u_2^2},\frac{2 U_1 U_2}{U_1^2+u_2^2}\f$ .
-\f]
-Given the direction and the distance, the location of absorption
-\f$\mathbf{r} = r \hat{\mathbf{r}\f$ is known,
-which is added to the list \f$L_dst}\f$.
-Sometimes, the typical absorption length of photons is much larger than the
-domain size. Since most photons will not be absorbed within the domain, the
-Monte Carlo approximation becomes less accurate. This can be resolved by
-
-[nog niet klaar]
 
 A Lookup table with the absorption locations of the photons has been created.
 These coordinates need to be mapped to a mesh to get the photoionization profile
