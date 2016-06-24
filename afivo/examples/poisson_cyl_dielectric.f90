@@ -2,7 +2,7 @@
 !>
 !> Example showing how to use m_a2_multigrid in cylindrical coordinates with an abrubt
 !> change in "eps", and compare with an analytic solution.
-program poisson_cyl_dielectric
+program poisson_cylindrical_dielectric
   use m_a2_types
   use m_a2_core
   use m_a2_multigrid
@@ -33,7 +33,7 @@ program poisson_cyl_dielectric
   type(mg2_t)        :: mg
   integer            :: count_rate,t_start, t_end
 
-  print *, "Running poisson_cyl_dielectric"
+  print *, "Running poisson_cylindrical_dielectric"
   print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
@@ -70,7 +70,7 @@ program poisson_cyl_dielectric
      call a2_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -121,7 +121,7 @@ program poisson_cyl_dielectric
      write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
-     write(fname, "(A,I0)") "poisson_cyl_dielectric_", mg_iter
+     write(fname, "(A,I0)") "poisson_cylindrical_dielectric_", mg_iter
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
@@ -138,10 +138,10 @@ program poisson_cyl_dielectric
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
     integer                  :: nc
     real(dp)                 :: max_crv
 
@@ -154,17 +154,17 @@ contains
 
     ! And refine if it exceeds a threshold
     if (max_crv > 5.0e-4_dp) then
-       ref_flag = af_do_ref
+       refine_flag = af_do_ref
     else
-       ref_flag = af_keep_ref
+       refine_flag = af_keep_ref
     end if
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: rz(2), grad(2), dr, qbnd, tmp
+    real(dp)                    :: rz(2), gradient(2), dr, qbnd, tmp
 
     nc                  = box%n_cell
     box%cc(:, :, i_phi) = 0
@@ -182,7 +182,7 @@ contains
           end if
 
           ! Partially compute the right-hand side (see below)
-          box%cc(i, j, i_rhs) = gauss_laplacian_cyl(gs, rz) * box%cc(i, j, i_eps)
+          box%cc(i, j, i_rhs) = gauss_laplacian_cylindrical(gs, rz) * box%cc(i, j, i_eps)
        end do
     end do
 
@@ -193,9 +193,9 @@ contains
           rz = a2_rr_cc(box, [i + 0.5_dp, real(j, dp)])
 
           ! Determine amount of charge
-          call gauss_gradient(gs, rz, grad)
+          call gauss_gradient(gs, rz, gradient)
           qbnd = (box%cc(i+1, j, i_eps) - box%cc(i, j, i_eps)) * &
-               grad(1) / dr
+               gradient(1) / dr
 
           ! Place surface charge weighted with eps
           tmp = box%cc(i+1, j, i_eps) / &
@@ -211,9 +211,9 @@ contains
           rz = a2_rr_cc(box, [real(i, dp), j + 0.5_dp])
 
           ! Determine amount of charge
-          call gauss_gradient(gs, rz, grad)
+          call gauss_gradient(gs, rz, gradient)
           qbnd = (box%cc(i, j+1, i_eps) - box%cc(i, j, i_eps)) * &
-               grad(2) / dr
+               gradient(2) / dr
 
           ! Place surface charge weighted with eps
           tmp = box%cc(i, j+1, i_eps) / &
@@ -279,4 +279,4 @@ contains
     end select
   end subroutine sides_bc
 
-end program poisson_cyl_dielectric
+end program poisson_cylindrical_dielectric

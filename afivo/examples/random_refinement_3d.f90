@@ -58,7 +58,7 @@ program random_refinement_3d
   ! Set variables on base by using the helper functions a3_loop_box(tree, sub)
   ! and a3_loop_boxes(tree, sub). These functions call the subroutine sub for
   ! each box in the tree, with a slightly different syntax.
-  call a3_loop_box(tree, set_init_cond)
+  call a3_loop_box(tree, set_initial_condition)
 
   ! Fill ghost cells for phi. The third argument is a subroutine that fills
   ! ghost cells near refinement boundaries, and the fourth argument fill ghost
@@ -85,7 +85,7 @@ program random_refinement_3d
      ! This means that every now and then whether too much holes appear in the
      ! tree box list. Therefore reordering of tree is not necessary at the end
      ! of the iteration process
-     call a3_adjust_refinement(tree, ref_routine, ref_info)
+     call a3_adjust_refinement(tree, refine_routine, ref_info)
      boxes_used = boxes_used + ref_info%n_add - ref_info%n_rm
      write(*,'(4(3x,A,1x,i4))') "# new     boxes", ref_info%n_add, &
                                 "# removed boxes", ref_info%n_rm,  &
@@ -111,25 +111,25 @@ program random_refinement_3d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
+  subroutine refine_routine(boxes, id, refine_flag)
     type(box3_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
     integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: ref_flag
+    integer, intent(inout)   :: refine_flag
     real(dp)                 :: rr
 
     ! Draw a [0, 1) random number
     call random_number(rr)
 
     if (rr < 0.125_dp .and. boxes(id)%lvl < 5) then
-       ref_flag = af_do_ref ! Add refinement
+       refine_flag = af_do_ref ! Add refinement
     else
-       ref_flag = af_rm_ref ! Ask to remove this box, which will not always
+       refine_flag = af_rm_ref ! Ask to remove this box, which will not always
                             ! happen (see documentation)
     end if
-  end subroutine ref_routine
+  end subroutine refine_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_init_cond(box)
+  subroutine set_initial_condition(box)
     type(box3_t), intent(inout) :: box
     integer                     :: i, j, k, nc
     real(dp)                    :: xyz(3)
@@ -146,7 +146,7 @@ contains
           end do
        end do
     end do
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
   ! Set values on newly added boxes
   subroutine prolong_to_new_children(tree, ref_info)
