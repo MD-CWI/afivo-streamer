@@ -148,28 +148,132 @@ contains
   end subroutine a$D_destroy
 
   !> Create the base level of the tree, ix_list(:, id) stores the spatial index
-  !> of box(id), nb_list(:, id) stores the neighbors of box(id)
+  !> of box(id), nb_list(:, id) stores the neighbors of box(id). The connection
+  !> between neighbors is handled automatically, so only boundary conditions
+  !> have to be specified. Periodic boundaries only have to be specified from
+  !> one side. A default value of af_no_box in the nb_list is converted to a
+  !> physical boundary with index of -1.
   subroutine a$D_set_base(tree, ix_list, nb_list)
-    type(a$D_t), intent(inout) :: tree !< Tree for which we set the base
-    integer, intent(in)       :: ix_list(:, :) !< List of spatial indices for the initial boxes
-    integer, intent(inout)    :: nb_list(:, :) !< Neighbors for the initial boxes
-    integer                   :: n_boxes, i, id, nb, nb_id
-    integer                   :: ix($D), lvl, offset
+    type(a$D_t), intent(inout)  :: tree          !< Tree for which we set the base
+    integer, intent(in)        :: ix_list(:, :) !< List of spatial indices for the initial boxes
+    integer, intent(inout)     :: nb_list(:, :) !< Neighbors for the initial boxes
+    integer                    :: n_boxes, i, j, n, id, nb, nb_id
+    integer                    :: ix($D), lvl, offset
+    integer                    :: ix_min($D), ix_max($D), nb_ix($D)
+#if $D == 2
+    integer, allocatable       :: id_array(:, :)
+#elif $D == 3
+    integer                    :: k
+    integer, allocatable       :: id_array(:, :, :)
+#endif
 
+    n_boxes = size(ix_list, 2)
+
+    if (n_boxes < 1) stop "a$D_set_base: need at least one box"
     if (any(ix_list < 1)) stop "a$D_set_base: need all ix_list > 0"
     if (tree%highest_id > 0)  stop "a$D_set_base: this tree already has boxes"
     if (.not. allocated(tree%lvls)) stop "a$D_set_base: tree not initialized"
 
-    ! Non-periodic and non-boundary condition neighbors only have to be
-    ! specified from one side
-    n_boxes = size(ix_list, 2)
-    do i = 1, n_boxes
-       do nb = 1, a$D_num_neighbors
-          nb_id = nb_list(nb, i)
-          if (nb_id > af_no_box .and. nb_id /= i) &
-               nb_list(a$D_neighb_rev(nb), nb_id) = i
+    ! Create an array covering the coarse grid, in which boxes are indicated by
+    ! their id.
+    do n = 1, $D
+       ! -1 and +1 to also include 'neighbors' of the coarse grid
+       ix_min(n) = minval(ix_list(n, :)) - 1
+       ix_max(n) = maxval(ix_list(n, :)) + 1
+    end do
+
+#if $D == 2
+    allocate(id_array(ix_min(1):ix_max(1), ix_min(2):ix_max(2)))
+
+    ! Store box ids in the index array covering the coarse grid
+    id_array = af_no_box
+
+    do n = 1, n_boxes
+       ix = ix_list(:, n)
+       id_array(ix(1), ix(2)) = n
+    end do
+
+    do j = ix_min(2), ix_max(2)
+       do i = ix_min(1), ix_max(1)
+
+          ! If there is a box, set its neighbors
+          if (id_array(i, j) /= af_no_box) then
+             id = id_array(i, j)
+
+             do nb = 1, a$D_num_neighbors
+                ! Compute ix of neighbor
+                nb_ix = [i, j] + a$D_neighb_dix(:, nb)
+                nb_id = id_array(nb_ix(1), nb_ix(2))
+
+                if (nb_id /= af_no_box) then
+                   ! Neighbor present, so store id
+                   nb_list(nb, id) = nb_id
+                else
+                   ! A periodic or boundary condition
+                   nb_id = nb_list(nb, id)
+
+                   if (nb_id > af_no_box) then
+                      ! If periodic, copy to other box
+                      nb_list(a$D_neighb_rev(nb), nb_id) = id
+                   else if (nb_id == af_no_box) then
+                      ! The default value (af_no_box) is converted to -1,
+                      ! indicating a boundary condition
+                      nb_list(nb, id) = -1
+                   end if
+                end if
+
+             end do
+          end if
        end do
     end do
+#elif $D == 3
+    allocate(id_array(ix_min(1):ix_max(1), &
+         ix_min(2):ix_max(2), ix_min(3):ix_max(3)))
+
+    ! Store box ids in the index array covering the coarse grid
+    id_array = af_no_box
+
+    do n = 1, n_boxes
+       ix = ix_list(:, n)
+       id_array(ix(1), ix(2), ix(3)) = n
+    end do
+
+    do k = ix_min(3), ix_max(3)
+       do j = ix_min(2), ix_max(2)
+          do i = ix_min(1), ix_max(1)
+
+             ! If there is a box, set its neighbors
+             if (id_array(i, j, k) /= af_no_box) then
+                id = id_array(i, j, k)
+
+                do nb = 1, a$D_num_neighbors
+                   ! Compute ix of neighbor
+                   nb_ix = [i, j, k] + a$D_neighb_dix(:, nb)
+                   nb_id = id_array(nb_ix(1), nb_ix(2), nb_ix(3))
+
+                   ! If present, store neighbor id
+                   if (nb_id /= af_no_box) then
+                      nb_list(nb, id) = nb_id
+                   else
+                      ! A periodic or boundary condition
+                      nb_id = nb_list(nb, id)
+
+                      if (nb_id > af_no_box) then
+                         ! If periodic, copy to other box
+                         nb_list(a$D_neighb_rev(nb), nb_id) = id
+                      else if (nb_id == af_no_box) then
+                         ! The default value (af_no_box) is converted to -1,
+                         ! indicating a boundary condition
+                         nb_list(nb, id) = -1
+                      end if
+                   end if
+
+                end do
+             end if
+          end do
+       end do
+    end do
+#endif
 
     if (any(nb_list == af_no_box)) stop "a$D_set_base: unresolved neighbors"
 
