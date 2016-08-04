@@ -15,7 +15,7 @@ the photoionization profile. Both challenges involve a non-local process or
 interaction – at least when the speed of light is assumed to be effectively
 infinite.
 However, the required accuracy for these two problems is quite different:
-discharges are much less sensitive t  the amount of photoionization around them
+discharges are much less sensitive to the amount of photoionization around them
 than to the electric field. The method presented here was thus designed to
 be fast and flexible, but not necessarily highly accurate.
 
@@ -52,7 +52,7 @@ else round down.
 3. For each produced photon, add the coordinate of the cell center to the list
 \f$L_{src}\f$ of photons.
 
-Some additional remarks: In principle the number of photons N can be chosen
+Some additional remarks: In principle the number of photons \f$N\f$ can be chosen
 adaptively, for example to create discrete ‘super-photons’ with a given weight.
 It is also possible to assign different weights to different photons by modifying
 the above procedure, see section 11.3.4.
@@ -65,8 +65,7 @@ photon direction and absorption, as discussed in the next section. Therefore our
 rounding with uniform random numbers should be fine for most applications.
 When grid cells are large compared to typical photoionization length scales,
 one could determine a ‘subgrid’ production location in the cell, instead of using
-the cell center. However, this scenario should generally be avoided, because the
-resulting photoionization profile would itself be insufficiently resolved.
+the cell center.
 
 \subsection sect_absorption Absorption of ionizing photons
 
@@ -74,13 +73,11 @@ Now that we know where photons are produced, we need to determine where
 they are absorbed. This is done in the following way. First, we determine
 the absorption distance \f$r\f$ for a photon. Given an absorption function \f$f(r)\f$,
 the cumulative absorption function \f$F(r) =\int_0^r f(r')dr'\f$ can be computed, either
-numerically or analytically. Then a so-called lookup table is constructed with
+numerically or analytically. Then a so-called <b>lookup table</b> is constructed with
 columns \f$F(r)\f$ and \f$r\f$. Now we can do inversion sampling: given a random number
 \f$U(0, 1)\f$, the corresponding distance \f$r\f$ is obtained by linear interpolation from the
-table. The procedure is illustrated in figure 11.1. (In the special case where the
-inverse of \f$F(r)\f$ is known, one could directly compute
-\f$r = F^{-1}(U)\f$, but this will often be slower than using a lookup table.)
-Then a random orientation \f$\hat{r}\f$ for the photon is determined, using a procedure
+table.
+A random orientation \f$\hat{r}\f$ for the photon is determined, using a procedure
 for picking a point on a sphere proposed by Marsaglia [205]:
 1. Get two random numbers \f$U_1(-1,1)\f$ and \f$U_2(-1,1)\f$. If
 \f$U_1^2 + U_2^2 \leq 1\f$ accept them, otherwise draw new numbers.
@@ -99,7 +96,10 @@ which is added to the list \f$L_{dst}\f$.
 Sometimes, the typical absorption length of photons is much larger than the
 domain size. Since most photons will not be absorbed within the domain, the
 Monte Carlo approximation becomes less accurate. This can be resolved by
-
+changing the lookup table. Suppose that all photons with absorption distances
+\f$r > r_{max}\f$ can be ignored, then one can construct a lookup table up to
+\f$r_{max}\f$ and scale the corresponding \f$F(r)\f$ values to the range (0; 1).
+Each photon that is produced now gets a smaller weight \f$F(r_{max})\f$.
 [nog niet klaar]
 
 \subsection sect_config Usage of configuration files
@@ -137,7 +137,9 @@ To be able to compare the original configuration files *.cfg the new created
 
 This streamer package makes use of lookup tables. These tables can be used to
 efficiently interpolate one or more values.
-Therefore a special lookup table type <code>lookup_table_t</code> has been designed
+Therefore a special lookup table type
+<a class="el" href="structm__lookup__table_1_1lookup__table__t.html">lookup_table_t</a>
+has been designed
 \verbatim
   !> The lookup table type. There can be one or more columns, for which values
   !> can be looked up for a given 'x-coordinate'.
@@ -154,7 +156,10 @@ Therefore a special lookup table type <code>lookup_table_t</code> has been desig
      real(dp), allocatable :: rows_cols(:, :) !< The table in row-major order
   end type lookup_table_t
 \endverbatim
-Besides the type <code>lookup_table_t</code> another special type <code>LT_loc_t</code> has been created,
+Besides the type 
+<a class="el" href="structm__lookup__table_1_1lookup__table__t.html">lookup_table_t</a>
+ another special type
+<a class="el" href="structm__lookup__table_1_1lt__loc__t.html">lt_loc_t</a> has been created,
 which can be used to speed up multiple lookups of different columns
 \verbatim
   type LT_loc_t
@@ -167,42 +172,42 @@ which can be used to speed up multiple lookups of different columns
 In order to optimize the use of the lookup tables, the following public functions and
 subroutines are presented in module <code>m_lookup_table</code>:
 \verbatim
-   ! Returns a new lookup table
+   ! To return a new lookup table
    LT_create
-   ! Returns the x-coordinates of the lookup table
+   ! To return the x-coordinates of the lookup table
    LT_get_xdata
-   ! Linearly interpolate the (x, y) input data to the new_x coordinates
+   ! To Linearly interpolate the (x, y) input data to the new_x coordinates
    LT_get_spaced_data
-   ! Fill the column with index col_ix using the linearly interpolated (x, y) data
+   ! To fill the column with index col_ix using the linearly interpolated (x, y) data
    LT_set_col
-   ! Add a new column by linearly interpolating the (x, y) data
+   ! To add a new column by linearly interpolating the (x, y) data
    LT_add_to_col
-   ! Add the (x,y) data to a given column
+   ! To add the (x,y) data to a given column
    LT_add_col
-   ! Get a location in the lookup table
+   ! To get a location in the lookup table
    LT_get_loc
-   ! Get the values of all columns at x
+   ! To get the values of all columns at x
    LT_get_col
-   ! Get the value of a single column at x
+   ! To get the value of a single column at x
    LT_get_mcol
-   ! Get the values of all columns at a location
+   ! To get the values of all columns at a location
    LT_get_col_at_loc
-   ! Get the value of a single column at a location
+   ! To get the value of a single column at a location
    LT_get_mcol_at_loc
-   ! Return the number of rows
+   ! To return the number of rows
    LT_get_num_rows
-   ! Return the number of columns
+   ! To return the number of columns
    LT_get_num_cols
-   ! Get the x-coordinates and the columns of the lookup table
+   ! To get the x-coordinates and the columns of the lookup table
    LT_get_data
-   ! Compute by use of linear interpolation the value in the middle of
+   ! To compute by use of linear interpolation the value in the middle of
    ! domain D = [x_list(1) , x_list(size(x_list))].
    ! If x_value is left of domain  D, then the value becomes the value
    ! at the left side of D,
    ! if x_value is right of domain D, then the value becomes the value
    ! at the right side of D
    LT_lin_interp_list
-   ! Write the lookup table to file (in binary, potentially unportable)
+   ! To write the lookup table to file (in binary, potentially unportable)
    LT_to_file
    ! Read the lookup table from file (in binary, potentially unportable)
    LT_from_file
