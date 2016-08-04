@@ -390,10 +390,10 @@ contains
     use m_config
 
     character(len=ST_slen) :: input_file, gas_name
-    integer                 :: table_size
-    real(dp)                :: max_electric_fld, alpha_fac, eta_fac
-    real(dp)                :: mobility_fac, diffusion_fac
-    real(dp), allocatable   :: x_data(:), y_data(:)
+    integer                :: table_size
+    real(dp)               :: max_electric_fld, alpha_fac, eta_fac
+    real(dp)               :: mobility_fac, diffusion_fac
+    real(dp), allocatable  :: x_data(:), y_data(:)
     character(len=ST_slen) :: data_name
 
     call CFG_get(ST_config, "input_file", input_file)
