@@ -19,7 +19,7 @@ module m_photons
 
   ! Public methods
   public :: photoi_get_table_air
-  public :: photoi_do_absorp
+  public :: photoi_do_absorption
   public :: photoi_absorption_func_air
   public :: photoi_set_src_2d
   public :: photoi_set_src_3d
@@ -557,7 +557,7 @@ contains
     allocate(ph_loc(n_used))
 
     ! Get location of absorption
-    call photoi_do_absorp(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
+    call photoi_do_absorption(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
 
     if (const_dx) then
        ! Get a typical length scale for the absorption of photons
