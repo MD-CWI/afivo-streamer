@@ -19,17 +19,17 @@ separate from <b><code>a5_streamer</code></b>.
 
 We define a linked list by the following types
 
-  type LL_int_t
-     private
-     integer                 :: x
-     type(LL_int_t), pointer :: next
-  end type LL_int_t
-
-  type LL_int_head_t
-     private
-     type(LL_int_t), pointer :: ptr => null()
-     integer                 :: n_values = 0
-  end type LL_int_head_t
+    type LL_int_t
+       private
+       integer                 :: x
+       type(LL_int_t), pointer :: next
+    end type LL_int_t
+    
+    type LL_int_head_t
+       private
+       type(LL_int_t), pointer :: ptr => null()
+       integer                 :: n_values = 0
+    end type LL_int_head_t
 
 Besides these types we present for subroutines operating on a linked list: 
 
