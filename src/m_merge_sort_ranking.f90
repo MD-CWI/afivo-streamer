@@ -1,9 +1,9 @@
 !> Module that provide a general routine for Merge-sort ranking of array
-!  of double precision (15bytes), real (8bytes) and integer kind
+!!  of double precision (15bytes), real (8bytes) and integer kind
 !
 Module m_merge_sort
    Integer, Parameter :: kdp = selected_real_kind(15)
-   public :: merge_sort
+   public  :: merge_sort
    private :: kdp
    private :: R_merge_sort, I_merge_sort, D_merge_sort
    interface merge_sort
@@ -11,7 +11,7 @@ Module m_merge_sort
    end interface merge_sort
 contains
 
-   ! Double precision variant of  Merge-sort ranking of an array
+   !> Double precision variant of  Merge-sort ranking of an array
    Subroutine D_merge_sort (XDONT, IRNGT)
       ! __________________________________________________________
       !   Merge_sort = Merge-sort ranking of an array
@@ -212,7 +212,7 @@ contains
       !
    End Subroutine D_merge_sort
 
-   ! Real variant of  Merge-sort ranking of an array
+   !> Real variant of  Merge-sort ranking of an array
    Subroutine R_merge_sort (XDONT, IRNGT)
       ! __________________________________________________________
       !   Merge_sort = Merge-sort ranking of an array
@@ -413,7 +413,7 @@ contains
       !
    End Subroutine R_merge_sort
 
-   ! Integer variant of  Merge-sort ranking of an array
+   !> Integer variant of  Merge-sort ranking of an array
    Subroutine I_merge_sort (XDONT, IRNGT)
       ! __________________________________________________________
       !   Merge_sort = Merge-sort ranking of an array
