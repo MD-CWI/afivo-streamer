@@ -1,4 +1,4 @@
-\section sect_lt Lookup table
+\section sect_lt Lookup table(LT) and finding indices(FI) in lookup tables
 
 A lookup table (see <a href="https://en.wikipedia.org/wiki/Lookup_table">Wikipedia</a>)
 is an array that replaces runtime computation with a simpler array indexing operation.
@@ -7,8 +7,6 @@ a value from memory is often faster than undergoing an "expensive" computation
 or input/output operation.
 
 \subsection sect_alone Stand alone package
-
-New
 
 The package <b><code>lookup_table</code></b> can easily be used in program
 environments where the use of lookup tables makes sense.
@@ -36,16 +34,14 @@ type defined as
   end type lookup_table_t
 \endverbatim
 
-Besides such
+Besides the type 
 <a class="el" href="structm__lookup__table_1_1lookup__table__t.html">lookup_table_t</a>
-type we need a way to find locations in the table,
+we need a way to find locations in the table,
 which can be used to speed up multiple lookups of different columns.
 Therefore, another type
 <a class="el" href="structm__lookup__table_1_1lt__loc__t.html">lt_loc_t</a>
 is defined: 
 \verbatim
-  !> Type to indicate a location in the lookup table, which can be used to speed
-  !> up multiple lookups of different columns.
   type LT_loc_t
      private
      integer  :: low_ix   !< The x-value lies between low_ix and low_ix+1
@@ -264,6 +260,6 @@ The result of the second part of
 \subsection sect_example More examples
 
 If you are interested on how this package is used by  <code>a5_streamer</code>
-to create a lookup table with transport data, see subroutine 
+to handle with lookup tables with transport data, see subroutine 
 <a class="el" href="namespacem__streamer.html#ac543e682ffced5108a9e5f33b7c6c1ba">st_load_transport_data</a>
 

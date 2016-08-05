@@ -13,9 +13,9 @@ efficient insertion or removal from arbitrary element references.
 
 The package `fortran_linked_list` can easily be used in fortran programs
 where linked lists are useful.
-It has been developed as a by-product of <b>`a5_streamer`</b>,
+It has been developed as a by-product of `a5_streamer`,
 a package to simulate streamers. However, the program shown here is completely
-separate from <b>`a5_streamer`</b>.
+separate from `a5_streamer`.
 
 We define a linked list by the following types
 
@@ -31,24 +31,42 @@ We define a linked list by the following types
        integer                 :: n_values = 0
     end type LL_int_head_t
 
-Besides these types we present for subroutines operating on a linked list: 
+Besides these types we present four subroutines operating on a linked list: 
 
 	LL_clear    to clear a linked list of type `LL_int_t`
 	LL_pop      to add an element to a linked list of type  `LL_int_head_t` at position head
 	LL_add      ?????
-	LL_get_size to compute the number of elements of a linked list of type
-`LL_int_head_t`
+	LL_get_size to compute the number of elements of a linked list of type `LL_int_head_t`
 
 
-An example how to add data is shown in test program
-<a class="el" href="test__lookup__table_8f90_source.html">test_lookup_table</a>.
-The result of the first part of this program
-is:
+A test example `test_m_linked_list` has been added to show how a list can be created, added,
+read and cleared. If you have a sufficiently recent `gfortran` compiler, you can run the test with
+
+    $ make
+    $ ./test_m_linked_list
+
+## Output
+
+The output of this program is:
+
+    Lists do not need to be initialized
+    Initial size:           0
+    Adding           10  values to list
+    Popping values until the list is empty
+              10
+               9
+               8
+               7
+               6
+               5
+               4
+               3
+               2
+               1
 
 
-\subsection sect_example More examples
+## More examples
 
-If you are interested on how this package is used by  `a5_streamer`
-to create a lookup table with transport data, see subroutine 
-<a class="el" href="namespacem__streamer.html#ac543e682ffced5108a9e5f33b7c6c1ba">st_load_transport_data</a>
+If you are interested on how this package is used by `a5_streamer`
+to handle with linked lists, see subroutine: wordt NIET gebruikt
 

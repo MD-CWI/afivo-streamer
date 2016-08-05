@@ -1,7 +1,7 @@
 streamer tools
 ==============
 
-originally the files mentioned below were included in the fosito directory.
+Originally the files mentioned below were included in the fosito directory.
 Now they are moved to 'src' and together with the files
 
   * m_geometry.f90:
@@ -9,7 +9,7 @@ Now they are moved to 'src' and together with the files
   * m_streamer.f90:
   * m_find_index.f90:
   * m_linked_list.f90:
-  * m_mrgrnk.f90:
+  * m_merge_sort_ranking.f90:
   * m_transport_data.f90:
 
 This is a collection of tools that can help doing simulations:
