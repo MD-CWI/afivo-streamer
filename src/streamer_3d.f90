@@ -251,7 +251,7 @@ contains
     real(dp)                    :: xy(3)
     real(dp)                    :: density
 
-    nc                       = box%n_cell
+    nc                          = box%n_cell
     box%cc(:, :, :, i_electron) = ST_init_cond%background_density
     box%cc(:, :, :, i_pos_ion)  = ST_init_cond%background_density
     box%cc(:, :, :, i_phi)      = 0 ! Inital potential set to zero
@@ -424,7 +424,7 @@ contains
     real(dp)                    :: mobility, diff_coeff, v_drift
     real(dp)                    :: fld_avg, fld
     real(dp)                    :: gc_data(boxes(id)%n_cell, &
-                                   boxes(id)%n_cell, a3_num_neighbors)
+         boxes(id)%n_cell, a3_num_neighbors)
     integer                     :: i, j, k, nc
     type(LT_loc_t)              :: loc
 
