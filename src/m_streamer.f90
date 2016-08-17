@@ -161,13 +161,7 @@ module m_streamer
   ! Refine if the curvature in phi is larger than this value
   real(dp), protected :: ST_refine_cphi
 
-  ! Derefine if all conditions hold: max value for alpha*dx
-  real(dp), protected :: ST_derefine_adx
-
-  ! Derefine if all conditions hold: max value for curvature of phi
-  real(dp), protected :: ST_derefine_cphi
-
-  ! Derefine if all conditions hold: max value for dx
+  ! Only derefine if grid spacing if smaller than this value
   real(dp), protected :: ST_derefine_dx
 
   ! Refine around initial conditions up to this time
@@ -296,14 +290,8 @@ contains
          "Refine if alpha*dx is larger than this value")  !!! comment ???
     call CFG_add(ST_config, "refine_cphi", 1e99_dp, &
          "Refine if the curvature in phi is larger than this value")
-
-    call CFG_add(ST_config, "derefine_adx", 0.1_dp, &
-         "Derefine if all conditions hold; max value for alpha*dx")
     call CFG_add(ST_config, "derefine_dx", 1e-4_dp, &
-         "Derefine if all conditions hold; max value for dx")
-    call CFG_add(ST_config, "derefine_cphi", 1e99_dp, &
-         "Derefine if all conditions hold: max value for curvature of phi")
-
+         "Only derefine if grid spacing if smaller than this value")
     call CFG_add(ST_config, "refine_init_time", 10.0e-9_dp, &
          "Refine around initial conditions up to this time")
     call CFG_add(ST_config, "refine_init_fac", 0.25_dp, &
@@ -524,8 +512,6 @@ contains
     call CFG_get(ST_config, "refine_adx", ST_refine_adx)
     call CFG_get(ST_config, "refine_cphi", ST_refine_cphi)
     call CFG_get(ST_config, "derefine_dx", ST_derefine_dx)
-    call CFG_get(ST_config, "derefine_adx", ST_derefine_adx)
-    call CFG_get(ST_config, "derefine_cphi", ST_derefine_cphi)
 
     call CFG_get(ST_config, "refine_init_time", ST_refine_init_time)
     call CFG_get(ST_config, "refine_init_fac", ST_refine_init_fac)
