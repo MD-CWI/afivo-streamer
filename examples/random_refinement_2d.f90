@@ -56,7 +56,7 @@ program random_refinement_2d
   ! Set variables on base by using the helper functions a2_loop_box(tree, sub)
   ! and a2_loop_boxes(tree, sub). These functions call the subroutine sub for
   ! each box in the tree, with a slightly different syntax.
-  call a2_loop_box(tree, set_initial_condition)
+  call a2_loop_box(tree, set_init_cond)
 
   ! Fill ghost cells for phi. The third argument is a subroutine that fills
   ! ghost cells near refinement boundaries, and the fourth argument fill ghost
@@ -83,7 +83,7 @@ program random_refinement_2d
      ! This means that every now and then whether too much holes appear in the
      ! tree box list. Therefore reordering of tree is not necessary at the end
      ! of the iteration process
-     call a2_adjust_refinement(tree, refine_routine, ref_info)
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
      boxes_used = boxes_used + ref_info%n_add - ref_info%n_rm
      write(*,'(4(3x,A,1x,i4))') "# new     boxes", ref_info%n_add, &
                                 "# removed boxes", ref_info%n_rm,  &
@@ -109,25 +109,25 @@ program random_refinement_2d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, refine_flag)
+  subroutine ref_routine(boxes, id, ref_flag)
     type(box2_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
     integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: refine_flag
+    integer, intent(inout)   :: ref_flag
     real(dp)                 :: rr
 
     ! Draw a [0, 1) random number
     call random_number(rr)
 
     if (rr < 0.25_dp .and. boxes(id)%lvl < 7) then
-       refine_flag = af_do_ref   ! Add refinement
+       ref_flag = af_do_ref   ! Add refinement
     else
-       refine_flag = af_rm_ref   ! Ask to remove this box, which will not always
+       ref_flag = af_rm_ref   ! Ask to remove this box, which will not always
                               ! happen (see documentation)
     end if
-  end subroutine refine_routine
+  end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_initial_condition(box)
+  subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2)
@@ -142,7 +142,7 @@ contains
           box%cc(i, j, i_phi) = sin(0.5_dp * xy(1)) * cos(xy(2))
        end do
     end do
-  end subroutine set_initial_condition
+  end subroutine set_init_cond
 
   ! Set values on newly added boxes
   subroutine prolong_to_new_children(tree, ref_info)
@@ -158,7 +158,7 @@ contains
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
 
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)

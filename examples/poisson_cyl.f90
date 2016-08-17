@@ -2,7 +2,7 @@
 !>
 !> Example showing how to use multigrid and compare with an analytic solution. A
 !> standard 5-point Laplacian is used in cylindrical coordinates.
-program poisson_cylindrical
+program poisson_cyl
   use m_a2_types
   use m_a2_core
   use m_a2_multigrid
@@ -32,7 +32,7 @@ program poisson_cylindrical
   type(gauss_t)      :: gs
   integer            :: count_rate,t_start, t_end
 
-  print *, "Running poisson_cylindrical"
+  print *, "Running poisson_cyl"
   print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
@@ -69,7 +69,7 @@ program poisson_cylindrical
      call a2_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
-     call a2_adjust_refinement(tree, refine_routine, ref_info)
+     call a2_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -118,7 +118,7 @@ program poisson_cylindrical
      write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
-     write(fname, "(A,I0)") "poisson_cylindrical_", mg_iter
+     write(fname, "(A,I0)") "poisson_cyl_", mg_iter
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
@@ -135,10 +135,10 @@ program poisson_cylindrical
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, refine_flag)
+  subroutine ref_routine(boxes, id, ref_flag)
     type(box2_t), intent(in) :: boxes(:)
     integer, intent(in)      :: id
-    integer, intent(inout)   :: refine_flag
+    integer, intent(inout)   :: ref_flag
     integer                  :: nc
     real(dp)                 :: max_crv
 
@@ -150,11 +150,11 @@ contains
 
     ! And refine if it exceeds a threshold
     if (max_crv > 5.0e-4_dp) then
-       refine_flag = af_do_ref
+       ref_flag = af_do_ref
     else
-       refine_flag = af_keep_ref
+       ref_flag = af_keep_ref
     end if
-  end subroutine refine_routine
+  end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
@@ -167,7 +167,7 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           rz = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_rhs) = gauss_laplacian_cylindrical(gs, rz)
+          box%cc(i, j, i_rhs) = gauss_laplacian_cyl(gs, rz)
        end do
     end do
   end subroutine set_init_cond
@@ -226,4 +226,4 @@ contains
     end select
   end subroutine sides_bc
 
-end program poisson_cylindrical
+end program poisson_cyl

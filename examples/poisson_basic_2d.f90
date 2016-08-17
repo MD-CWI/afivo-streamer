@@ -29,37 +29,31 @@ program poisson_basic_2d
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg2_t)        :: mg
-  type(gauss_t)      :: gaussian
+  type(gauss_t)      :: gs
   integer            :: count_rate,t_start,t_end
 
   print *, "Running poisson_basic_2d"
   print *, "Number of threads", af_get_max_threads()
 
-  ! The manufactured solution exists Gaussians, which are stored in gaussian
+  ! The manufactured solution exists Gaussians, which are stored in gs
   if (n_gaussian == 1) then
      ! Amplitudes:  [1.0_dp]
      ! Sigmas    :  [0.04_dp]
      ! Locations :  [0.5_dp, 0.5_dp]
-     call gauss_init(gaussian, [1.0_dp], [0.04_dp], &
+     call gauss_init(gs, [1.0_dp], [0.04_dp], &
           reshape([0.5_dp, 0.5_dp], [2,1]))
      write(*,"(2(A17,2x,i2,/),2(A17,1x,Es10.2,/),A17,1x,2(Es10.2,1x))") &
-       "gaussian%n_gauss:",gaussian%n_gauss, &
-       "gaussian%n_dim  :",gaussian%n_dim, &
-       "gaussian%ampl   :",gaussian%ampl(:), &
-       "gaussian%sigma  :",gaussian%sigma(:), &
-       "gaussian%r0     :",gaussian%r0(:,:)
+       "gs%n_gauss:",gs%n_gauss, &
+       "gs%n_dim  :",gs%n_dim, &
+       "gs%ampl   :",gs%ampl(:), &
+       "gs%sigma  :",gs%sigma(:), &
+       "gs%r0     :",gs%r0(:,:)
   else if (n_gaussian == 2) then
      ! Amplitudes:  [1.0_dp, 1.0_dp]
      ! Sigmas    :  [0.04_dp, 0.04_dp]
      ! Locations :  [[0.25_dp, 0.25_dp], [0.75_dp, 0.75_dp]]
-     call gauss_init(gaussian, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
+     call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
           reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
-     write(*,"(2(A17,2x,i2,/),2(A17,2(1x,Es10.2),/),A17,1x,4(Es10.2,1x))") &
-       "gaussian%n_gauss:",gaussian%n_gauss, &
-       "gaussian%n_dim  :",gaussian%n_dim, &
-       "gaussian%ampl   :",gaussian%ampl(:), &
-       "gaussian%sigma  :",gaussian%sigma(:), &
-       "gaussian%r0     :",gaussian%r0(:,:)
   end if
 
   ! The cell spacing at the coarsest grid level
@@ -117,7 +111,6 @@ program poisson_basic_2d
   mg%i_rhs        = i_rhs       ! Right-hand side variable
   mg%i_tmp        = i_tmp       ! Variable for temporary space
   mg%sides_bc     => sides_bc   ! Method for boundary conditions
-
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
   ! first call of mg2_fas_fmg
@@ -178,7 +171,7 @@ contains
 
           ! This is an estimate of the truncation error in the right-hand side,
           ! which is related to the fourth derivative of the solution.
-          drhs = dr2 * gauss_4th(gaussian, xy) / 12
+          drhs = dr2 * gauss_4th(gs, xy) / 12
 
           if (abs(drhs) > 0.05_dp) then
              refine_flag = af_do_ref
@@ -202,7 +195,7 @@ contains
           xy = a2_r_cc(box, [i,j])
 
           ! And set the rhs values
-          box%cc(i, j, i_rhs) = gauss_laplacian(gaussian, xy)
+          box%cc(i, j, i_rhs) = gauss_laplacian(gs, xy)
        end do
     end do
   end subroutine set_initial_condition
@@ -217,7 +210,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           xy = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gaussian, xy)
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gs, xy)
        end do
     end do
   end subroutine set_error
@@ -242,22 +235,22 @@ contains
     case (a2_neighb_lowx)             ! Lower-x direction
        do n = 1, nc
           xy = a2_rr_cc(box, [0.5_dp, real(n, dp)])
-          box%cc(0, n, iv) = gauss_value(gaussian, xy)
+          box%cc(0, n, iv) = gauss_value(gs, xy)
        end do
     case (a2_neighb_highx)             ! Higher-x direction
        do n = 1, nc
           xy = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_value(gaussian, xy)
+          box%cc(nc+1, n, iv) = gauss_value(gs, xy)
        end do
     case (a2_neighb_lowy)             ! Lower-y direction
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_value(gaussian, xy)
+          box%cc(n, 0, iv) = gauss_value(gs, xy)
        end do
     case (a2_neighb_highy)             ! Higher-y direction
        do n = 1, nc
           xy = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_value(gaussian, xy)
+          box%cc(n, nc+1, iv) = gauss_value(gs, xy)
        end do
     end select
   end subroutine sides_bc
