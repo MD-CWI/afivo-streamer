@@ -1,25 +1,26 @@
-# a5_streamer
+# Introduction to a5_streamer
 
 This is a collection of streamer models based on
 [Afivo](https://github.com/jannisteunissen/afivo). A 2D, a 3D and a cylindrical
-model are included.
+model are included. The name *a5_streamer* was chosen because *a-five* sounds
+similar Afivo, but perhaps this project should get a better name in the future.
 
-### Requirements
+## Requirements
 
 Gfortran 4.8 or newer. Afivo makes use of the
 [Silo](https://wci.llnl.gov/simulation/computer-codes/silo/downloads) library,
 which is automatically downloaded and compiled.
 
-### Getting the code
+## Getting the code
 
     git clone https://github.com/jannisteunissen/a5_streamer
 
-### Compiling the code
+## Compiling the code
 
     cd a5_streamer
     make
 
-### Running the code
+## Running the code
 
     ./streamer_2d  ConfigureFiles/example_2d.txt
     ./streamer_cyl ConfigureFiles/example_cyl.txt
@@ -32,7 +33,7 @@ the examples in the **ConfigureFiles** directory. You can also specify multiple 
 
 Options from later files will override earlier files.
 
-### Getting input data (transport coefficients)
+## Getting input data (transport coefficients)
 
 Transport data can be computed from cross sections with for example:
 
@@ -42,10 +43,10 @@ Transport data can be computed from cross sections with for example:
 * Particle_swarm https://github.com/jannisteunissen/particle_swarm
 
 Cross section can be obtained from http://lxcat.net. The format of the transport
-data used for the streamer models is illustrated in the files in the **input**
+data used for the streamer models is illustrated in the files in the `transport_data`
 folder.
 
-### Format of output data
+## Format of output data
 
 Output files have the
 [Silo](https://wci.llnl.gov/simulation/computer-codes/silo) format.
