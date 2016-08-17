@@ -1,8 +1,4 @@
-! This module contains the multigrid routines that come with Afivo
-!
-! Author: Jannis Teunissen
-! License: GPLv3
-
+!> This module contains the geometric multigrid routines that come with Afivo
 module m_a$D_multigrid
   use m_a$D_types
 

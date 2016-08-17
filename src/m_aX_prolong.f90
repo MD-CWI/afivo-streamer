@@ -1,9 +1,5 @@
-! This module contains the routines related to prolongation (going from a coarse
-! to a fine variable).
-!
-! Author: Jannis Teunissen
-! License: GPLv3
-
+!> This module contains the routines related to prolongation: going from
+!> coarse to fine variables.
 module m_a$D_prolong
   use m_a$D_types
 

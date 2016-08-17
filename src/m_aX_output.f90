@@ -1,9 +1,5 @@
-! This module contains routines for writing output files with Afivo. The Silo
-! format should probably be used for larger files, especially in 3D.
-!
-! Author: Jannis Teunissen
-! License: GPLv3
-
+!> This module contains routines for writing output files with Afivo. The Silo
+!> format should probably be used for larger files, especially in 3D.
 module m_a$D_output
 
   use m_a$D_types
