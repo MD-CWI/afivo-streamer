@@ -1,3 +1,7 @@
+!> Program that solves a cylindrical streamer
+!
+! Author: Jannis Teunissen
+! License: GPLv3
 program streamer_cyl
 
   use m_a2_types
@@ -15,11 +19,9 @@ program streamer_cyl
   integer                :: i, n
   character(len=ST_slen) :: fname
   logical                :: write_out
-  real(dp)               :: tmp_fld_val
   type(a2_t)             :: tree ! This contains the full grid information
   type(mg2_t)            :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
-  character(len=ST_slen) :: fname_axis, fname_stats
 
   call ST_create_config()
   call ST_read_config_files()
@@ -29,7 +31,7 @@ program streamer_cyl
   call ST_load_transport_data()
 
   ! Set the initial conditions from the configuration
-  call ST_get_init_cond( 2)
+  call ST_get_init_cond(2)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -38,7 +40,6 @@ program streamer_cyl
   mg%i_phi        = i_phi
   mg%i_tmp        = i_electric_fld
   mg%i_rhs        = i_rhs
-  mg%i_eps        = i_eps
 
   ! The number of cycles at the lowest level
   mg%n_cycle_base = 4
@@ -73,17 +74,15 @@ program streamer_cyl
      ST_dt = get_max_dt(tree)
 
      if (ST_dt < 1e-14) then
-        print *, "dt getting too small, instability?"
+        print *, "ST_dt getting too small, instability?"
         ST_time = ST_end_time + 1.0_dp
      end if
 
-     ! Every dt_output, write output
+     ! Every ST_dt_out, write output
      if (ST_out_cnt * ST_dt_out <= ST_time) then
         write_out = .true.
         ST_out_cnt = ST_out_cnt + 1
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", ST_out_cnt
-        fname_axis = trim(ST_output_dir) // "/" // trim(fname) // "_axis.txt"
-        fname_stats = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // ".txt"
      else
         write_out = .false.
      end if
@@ -91,7 +90,7 @@ program streamer_cyl
      if (ST_time > ST_end_time) exit
 
      ! We perform n_steps between mesh-refinements
-     do n = 1, ST_ref_per_steps
+     do n = 1, ST_refine_per_steps
 
         if (ST_photoi_enabled) &
              call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
@@ -132,12 +131,8 @@ program streamer_cyl
         call compute_electric_field(tree, n_fmg_cycles, .true.)
      end do
 
-     if (write_out) then
-        call a2_write_silo(tree, fname, ST_out_cnt, ST_time, &
-             dir=ST_output_dir, ixs_fc=[electric_fld])
-        call write_streamer_properties(tree, fname_stats, &
-             fname_axis, ST_out_cnt, ST_time)
-     end if
+     if (write_out) call a2_write_silo(tree, fname, ST_out_cnt, &
+          ST_time, dir=ST_output_dir, ixs_fc=[electric_fld])
 
      call a2_adjust_refinement(tree, refine_routine, ref_info)
 
@@ -155,7 +150,7 @@ program streamer_cyl
 
 contains
 
-  ! Initialize the AMR tree
+  !> Initialize the AMR tree
   subroutine init_tree(tree)
     type(a2_t), intent(inout) :: tree
 
@@ -189,26 +184,37 @@ contains
     integer, intent(in)      :: id       ! Index of box to look at
     integer, intent(inout)   :: refine_flag ! Refinement flag for the box
     integer                  :: n, nc
-    real(dp)                 :: cphi, dx2, dx
+    real(dp)                 :: cphi, dx, dx2
     real(dp)                 :: alpha, adx, max_fld
     real(dp)                 :: boxlen, dist
 
-    nc        = boxes(id)%n_cell
-    dx        = boxes(id)%dr
-    dx2       = boxes(id)%dr**2
-    cphi      = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_electric_fld))
-    alpha     = LT_get_col(ST_td_tbl, i_alpha, max_fld)
-    adx       = boxes(id)%dr * alpha
+    nc      = boxes(id)%n_cell
+    dx      = boxes(id)%dr
+    dx2     = boxes(id)%dr**2
 
-    if (adx > ST_ref_adx .or. cphi > ST_ref_cphi) then
+    max_fld = maxval(boxes(id)%cc(1:nc, 1:nc, i_electric_fld))
+    alpha   = LT_get_col(ST_td_tbl, i_alpha, max_fld)
+
+    ! The refinement is based on the ionization length times the grid spacing
+    adx     = boxes(id)%dr * alpha
+
+    ! Increase the refinement in fields below ST_refine_adx_field
+    adx     = adx * max(1.0_dp, (2 * ST_refine_adx_field) / &
+         (max_fld + ST_refine_adx_field))
+
+    ! The refinement is also based on the intensity of the source term. Here we
+    ! estimate the curvature of phi (given by dx**2 * Laplacian(phi))
+    cphi    = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+
+    if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
        refine_flag = af_do_ref
-    else if (adx < ST_deref_adx .and. cphi < ST_deref_cphi) then
+    else if (adx < 0.125_dp * ST_refine_adx .and. cphi < 0.0625_dp * ST_refine_cphi &
+         .and. dx < ST_derefine_dx) then
        refine_flag = af_rm_ref
     end if
 
     ! Refine around the initial conditions
-    if (ST_time < ST_ref_init_time) then
+    if (ST_time < ST_refine_init_time) then
        boxlen = boxes(id)%n_cell * boxes(id)%dr
 
        do n = 1, ST_init_cond%n_cond
@@ -216,7 +222,7 @@ contains
                ST_init_cond%seed_r0(:, n), &
                ST_init_cond%seed_r1(:, n), 2)
           if (dist - 2 * ST_init_cond%seed_width(n) < boxlen &
-               .and. boxes(id)%dr > ST_ref_init_fac * &
+               .and. boxes(id)%dr > ST_refine_init_fac * &
                ST_init_cond%seed_width(n)) then
              refine_flag = af_do_ref
           end if
@@ -224,39 +230,19 @@ contains
     end if
 
     ! Make sure we don't have or get a too fine or too coarse grid
-    if (dx > ST_ref_max_dx) then
+    if (dx > ST_refine_max_dx) then
        refine_flag = af_do_ref
-    else if (dx < ST_ref_min_dx) then
+    else if (dx < ST_refine_min_dx) then
        refine_flag = af_rm_ref
-    else if (dx < 2 * ST_ref_min_dx .and. refine_flag == af_do_ref) then
+    else if (dx < 2 * ST_refine_min_dx .and. refine_flag == af_do_ref) then
        refine_flag = af_keep_ref
-    else if (dx > 0.5_dp * ST_ref_max_dx .and. refine_flag == af_rm_ref) then
+    else if (dx > 0.5_dp * ST_refine_max_dx .and. refine_flag == af_rm_ref) then
        refine_flag = af_keep_ref
     end if
 
   end subroutine refine_routine
 
-  !> Get maximum curvature
-  ! TODO: cylindrical coordinates or not?
-  function max_curvature (box, iv) result(crv)
-    type(box2_t), intent(in) :: box !< Box to operate on
-    integer, intent(in)         :: iv !< Index of variable
-    real(dp)                    :: crv, tmp
-    integer                     :: i, j, nc
-
-    nc  = box%n_cell
-    crv = 0
-
-    do j = 1, nc
-       do i = 1, nc
-          tmp = (box%cc(i-1, j, iv) + box%cc(i+1, j, iv) &
-               + box%cc(i, j-1, iv) + box%cc(i, j+1, iv) &
-               - 4 * box%cc(i, j, iv))
-          if (abs(tmp) > crv) crv = abs(tmp)
-       end do
-    end do
-  end function max_curvature
-
+  !> Sets the initial condition
   subroutine set_initial_condition(box)
     use m_geometry
     type(box2_t), intent(inout) :: box
@@ -265,7 +251,7 @@ contains
     real(dp)                    :: density
 
     nc = box%n_cell
-    box%cc(:, :, i_electron) = ST_init_cond%bg_dens
+    box%cc(:, :, i_electron) = ST_init_cond%background_density
 
     do j = 0, nc+1
        do i = 0, nc+1
@@ -285,31 +271,9 @@ contains
     box%cc(:, :, i_pos_ion) = box%cc(:, :, i_electron)
     box%cc(:, :, i_phi)     = 0     ! Inital potential set to zero
 
-    call set_box_eps(box)
-
   end subroutine set_initial_condition
 
-  subroutine set_box_eps(box)
-    type(box2_t), intent(inout) :: box
-    integer                     :: i, j, nc
-    real(dp)                    :: xy(2)
-
-    nc = box%n_cell
-
-    do j = 0, nc+1
-       do i = 0, nc+1
-          xy = a2_r_cc(box, [i,j]) / ST_domain_len
-
-          if (xy(1) < 0.25_dp) then
-             box%cc(i, j, i_eps) = ST_epsilon_diel
-          else
-             box%cc(i, j, i_eps) = 1.0_dp
-          end if
-       end do
-    end do
-  end subroutine set_box_eps
-
-  ! Get maximum time step based on e.g. CFL criteria
+  !> Get maximum time step based on e.g. CFL criteria
   real(dp) function get_max_dt(tree)
     type(a2_t), intent(in) :: tree
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
@@ -340,12 +304,12 @@ contains
 
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
+
     get_max_dt = 0.9_dp * min(1/(1/dt_cfl + 1/dt_dif), &
          dt_drt, dt_alpha, ST_dt_max)
-    ! print *, get_max_dt, dt_cfl, dt_dif, dt_drt
   end function get_max_dt
 
-  ! Compute electric field on the tree. First perform multigrid to get electric
+  !> Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
   subroutine compute_electric_field(tree, n_cycles, have_guess)
     use m_units_constants
@@ -371,7 +335,7 @@ contains
     end do
     !$omp end parallel
 
-    call ST_set_voltage(-ST_domain_len * ST_get_electric_field(ST_time))
+    call ST_set_voltage(ST_time)
 
     ! Perform n_cycles fmg cycles (logicals: store residual, first call)
     do i = 1, n_cycles
@@ -385,7 +349,7 @@ contains
     call a2_gc_tree(tree, i_electric_fld, a2_gc_interp, a2_bc_neumann_zero)
   end subroutine compute_electric_field
 
-  ! Compute electric field from electrical potential
+  !> Compute electric field from electrical potential
   subroutine electric_field_from_potential(box)
     type(box2_t), intent(inout) :: box
     integer                     :: nc
@@ -399,31 +363,12 @@ contains
     box%fy(:, :, electric_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
 
-    ! Compute fields at the boundaries of the box, where eps can change (have to
-    ! be careful that there is enough refinement)
-    box%fx(1, :, electric_fld) = 2 * inv_dr * &
-         (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
-         box%cc(0, 1:nc, i_eps) / &
-         (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-    box%fx(nc+1, :, electric_fld) = 2 * inv_dr * &
-         (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
-         box%cc(nc+1, 1:nc, i_eps) / &
-         (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-    box%fy(:, 1, electric_fld) = 2 * inv_dr * &
-         (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
-         box%cc(1:nc, 0, i_eps) / &
-         (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-    box%fy(:, nc+1, electric_fld) = 2 * inv_dr * &
-         (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
-         box%cc(1:nc, nc+1, i_eps) / &
-         (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
-
-    box%cc(1:nc, 1:nc, i_electric_fld) = sqrt(&
-         0.25_dp * (box%fx(1:nc, 1:nc, electric_fld) + box%fx(2:nc+1, 1:nc, electric_fld))**2 + &
-         0.25_dp * (box%fy(1:nc, 1:nc, electric_fld) + box%fy(1:nc, 2:nc+1, electric_fld))**2)
+    box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
+         (box%fx(1:nc, 1:nc, electric_fld) + box%fx(2:nc+1, 1:nc, electric_fld))**2 + &
+         (box%fy(1:nc, 1:nc, electric_fld) + box%fy(1:nc, 2:nc+1, electric_fld))**2)
   end subroutine electric_field_from_potential
 
-  ! This fills ghost cells near physical boundaries for the potential
+  !> This fills ghost cells near physical boundaries for the potential
   subroutine sides_bc_potential(box, nb, iv, bc_type)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
@@ -436,20 +381,20 @@ contains
     select case (nb)
     case (a2_neighb_lowx)
        bc_type = af_bc_neumann
-       box%cc(0, 1:nc, iv) = 0
+       box%cc(   0, 1:nc, iv) = 0
     case (a2_neighb_highx)             ! Neumann
        bc_type = af_bc_neumann
        box%cc(nc+1, 1:nc, iv) = 0
     case (a2_neighb_lowy)
        bc_type = af_bc_dirichlet
-       box%cc(1:nc, 0, iv) = 0
+       box%cc(1:nc,    0, iv) = 0
     case (a2_neighb_highy)
        bc_type = af_bc_dirichlet
-       box%cc(:, nc+1, iv) = ST_applied_voltage
+       box%cc(1:nc, nc+1, iv) = ST_applied_voltage
     end select
   end subroutine sides_bc_potential
 
-  ! Compute the electron fluxes due to drift and diffusion
+  !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id, dt_vec)
     use m_units_constants
     type(box2_t), intent(inout) :: boxes(:)
@@ -457,16 +402,15 @@ contains
     real(dp), intent(in)        :: dt_vec(:)
     real(dp)                    :: inv_dr, tmp, gradp, gradc, gradn
     real(dp)                    :: mobility, diff_coeff, v_drift
-    real(dp)                    :: fld, fld_avg!, fac
+    real(dp)                    :: fld_avg, fld
     real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
     integer                     :: i, j, nc
     type(LT_loc_t)              :: loc
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
-    ! fac    = -0.8_dp * UC_eps0 / (UC_elem_charge * dt_vec(1))
 
-    call a2_gc2_box(boxes, id, i_electron, a2_gc2_prolong1, &
+    call a2_gc2_box(boxes, id, i_electron, a2_gc2_prolong_linear, &
          a2_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
@@ -491,8 +435,6 @@ contains
              gradn = tmp - boxes(id)%cc(i, j, i_electron)
              boxes(id)%fx(i, j, flux_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_electron) - koren_mlim(gradc, gradn))
-             ! if (boxes(id)%fx(i, j, flux_elec) < fac * fld) &
-             !      boxes(id)%fx(i, j, flux_elec) = fac * fld
           else                  ! v_drift > 0
              if (i == 1) then
                 tmp = gc_data(j, a2_neighb_lowx)
@@ -502,8 +444,6 @@ contains
              gradp = boxes(id)%cc(i-1, j, i_electron) - tmp
              boxes(id)%fx(i, j, flux_elec) = v_drift * &
                   (boxes(id)%cc(i-1, j, i_electron) + koren_mlim(gradc, gradp))
-             ! if (boxes(id)%fx(i, j, flux_elec) > fac * fld) &
-             !      boxes(id)%fx(i, j, flux_elec) = fac * fld
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -535,8 +475,6 @@ contains
              gradn = tmp - boxes(id)%cc(i, j, i_electron)
              boxes(id)%fy(i, j, flux_elec) = v_drift * &
                   (boxes(id)%cc(i, j, i_electron) - koren_mlim(gradc, gradn))
-             ! if (boxes(id)%fy(i, j, flux_elec) < fac * fld) &
-             !      boxes(id)%fy(i, j, flux_elec) = fac * fld
           else                  ! v_drift > 0
              if (j == 1) then
                 tmp = gc_data(i, a2_neighb_lowy)
@@ -546,8 +484,6 @@ contains
              gradp = boxes(id)%cc(i, j-1, i_electron) - tmp
              boxes(id)%fy(i, j, flux_elec) = v_drift * &
                   (boxes(id)%cc(i, j-1, i_electron) + koren_mlim(gradc, gradp))
-             ! if (boxes(id)%fy(i, j, flux_elec) > fac * fld) &
-             !      boxes(id)%fy(i, j, flux_elec) = fac * fld
           end if
 
           ! Diffusive part with 2-nd order explicit method. dif_f has to be
@@ -559,23 +495,21 @@ contains
 
   end subroutine fluxes_koren
 
-  ! Take average of new and old electron/ion density for explicit trapezoidal rule
+  !> Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_density(box)
     type(box2_t), intent(inout) :: box
     box%cc(:, :, i_electron) = 0.5_dp *  &
-                               (box%cc(:, :, i_electron) + &
-                                box%cc(:, :, i_electron_old))
-    box%cc(:, :, i_pos_ion)  = 0.5_dp *  &
-                               (box%cc(:, :, i_pos_ion) + &
-                                box%cc(:, :, i_pos_ion_old))
+         (box%cc(:, :, i_electron) + box%cc(:, :, i_electron_old))
+    box%cc(:, :, i_pos_ion) = 0.5_dp * &
+         (box%cc(:, :, i_pos_ion)  + box%cc(:, :, i_pos_ion_old))
   end subroutine average_density
 
-  ! Advance solution over dt based on the fluxes / source term, using forward Euler
+  !> Advance solution over dt based on the fluxes / source term, using forward Euler
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
-    real(dp)                    :: inv_dr, src, sflux, fld
-    real(dp)                    :: alpha, eta, mu, rfac(2)
+    real(dp)                    :: inv_dr, src, fld
+    real(dp)                    :: alpha, eta, sflux, mu, rfac(2)
     integer                     :: i, j, nc, ioff
     type(LT_loc_t)              :: loc
 
@@ -593,23 +527,27 @@ contains
           eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
           mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-          ! Source term
-          src = fld * mu * abs(box%cc(i, j, i_electron)) * (alpha - eta)
-
-          if (ST_photoi_enabled) &
-               src = src + box%cc(i,j, i_photo)
-
           ! Contribution of flux
           sflux = (box%fy(i, j, flux_elec) - box%fy(i, j+1, flux_elec) + &
                rfac(1) * box%fx(i, j, flux_elec) - &
-               rfac(2) * box%fx(i+1, j, flux_elec)) * inv_dr
+               rfac(2) * box%fx(i+1, j, flux_elec)) * inv_dr * dt(1)
 
-          box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + (src + sflux) * dt(1)
-          box%cc(i, j, i_pos_ion)  = box%cc(i, j, i_pos_ion)  + src * dt(1)
+          ! Source term
+          src = fld * mu * abs(box%cc(i, j, i_electron)) * (alpha - eta) *dt(1)
+
+          if (ST_photoi_enabled) src = src + box%cc(i,j, i_photo) * dt(1)
+
+          ! Add flux and source term
+          box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + sflux + src
+
+          ! Add source term
+          box%cc(i, j, i_pos_ion)  = box%cc(i, j, i_pos_ion) + src
+
        end do
     end do
   end subroutine update_solution
 
+  !> Sets the photoionization
   subroutine set_photoionization(tree, eta, num_photons, dt)
     use m_units_constants
 
@@ -633,6 +571,7 @@ contains
 
   end subroutine set_photoionization
 
+  !> Sets the photoionization_rate
   subroutine set_photoionization_rate(box, coeff)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
@@ -657,7 +596,7 @@ contains
     end do
   end subroutine set_photoionization_rate
 
-  ! For each box that gets refined, set data on its children using this routine
+  !> For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
@@ -668,10 +607,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_phi)
-          call set_box_eps(tree%boxes(id))
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
@@ -685,316 +623,5 @@ contains
        end do
     end do
   end subroutine prolong_to_new_boxes
-
-  subroutine write_streamer_properties(tree, fname_stats, fname_axis, out_cnt, time)
-    type(a2_t), intent(in)         :: tree
-    character(len=*), intent(in)   :: fname_axis, fname_stats
-    integer, intent(in)            :: out_cnt
-    real(dp), intent(in)           :: time
-
-    real(dp), allocatable          :: props(:), axis_data(:,:)
-    character(len=15), allocatable :: prop_names(:)
-    integer                        :: n
-    integer, parameter             :: unit_1 = 777, unit_2 = 778
-
-    call get_streamer_properties(tree, props, prop_names)
-    call get_cc_axis(tree, [i_electron, i_pos_ion], [electric_fld, flux_elec], axis_data)
-
-    if (out_cnt == 1) then
-       open(unit_1, file=trim(fname_stats), action="write")
-       write(unit_1, *) "ix_out      time     ", prop_names
-       close(unit_1)
-    else
-       open(unit_1, file=trim(fname_stats), action="write", &
-            position="append")
-       write(unit_1, *) out_cnt, time, props
-       close(unit_1)
-    end if
-
-    open(unit_2, file=trim(fname_axis), action="write")
-    write(unit_2, *) "z, n_e, n_i, fld_z, flux_z"
-    do n = 1, size(axis_data, 2)
-       write(unit_2, *) axis_data(:, n)
-    end do
-    close(unit_2)
-    deallocate(axis_data)
-
-  end subroutine write_streamer_properties
-
-  subroutine get_streamer_properties(tree, props, prop_names)
-    type(a2_t), intent(in)                        :: tree
-    real(dp), intent(inout), allocatable          :: props(:)
-    character(len=15), intent(inout), allocatable :: prop_names(:)
-
-    integer            :: ip
-    integer, parameter :: n_props = 39
-    real(dp)           :: rz(2), phi_head, z_head, radius
-    real(dp)           :: alpha, mu, Er_max_norm, Ez_max
-    type(a2_loc_t)     :: loc_ez, loc_er, loc_density, loc
-    integer            :: id, ix(2)
-
-    allocate(props(n_props))
-    allocate(prop_names(n_props))
-
-    ip = 1
-    prop_names(ip) = "E_bg"
-    props(ip)      = ST_get_electric_field(ST_time)
-
-    ip             = ip + 1
-    prop_names(ip) = "Ez"
-    call a2_reduction_loc(tree, box_max_electric_field_z, reduce_max, &
-         -1.0e99_dp, props(ip), loc_ez)
-    Ez_max = props(ip)
-
-    ip             = ip + 1
-    prop_names(ip) = "Er"
-    call a2_reduction_loc(tree, box_max_electric_field_r, reduce_max, &
-         -1.0e99_dp, props(ip), loc_er)
-
-    ! Radius of streamer is defined as location of maximum r-field
-    rz       = a2_r_loc(tree, loc_er)
-
-    ip             = ip + 1
-    prop_names(ip) = "r_Er"
-    props(ip)      = rz(1)
-    radius         = rz(1)
-
-    ip             = ip + 1
-    prop_names(ip) = "z_Er"
-    props(ip)      = rz(2)
-    z_head         = rz(2)
-
-    ip             = ip + 1
-    prop_names(ip) = "E_Er"
-    props(ip)      = tree%boxes(loc_er%id)%cc(loc_er%ix(1), &
-         loc_er%ix(2), i_electric_fld)
-    Er_max_norm    = props(ip)
-
-    alpha = LT_get_col(ST_td_tbl, i_alpha, Ez_max)
-    mu = LT_get_col(ST_td_tbl, i_alpha, Ez_max)
-    ip             = ip + 1
-    prop_names(ip) = "alpha_z"
-    props(ip)      = alpha
-    ip             = ip + 1
-    prop_names(ip) = "S_z"
-    props(ip)      = alpha * mu * Ez_max
-
-    alpha = LT_get_col(ST_td_tbl, i_alpha, Er_max_norm)
-    mu = LT_get_col(ST_td_tbl, i_alpha, Er_max_norm)
-    ip             = ip + 1
-    prop_names(ip) = "alpha_r"
-    props(ip)      = alpha
-    ip             = ip + 1
-    prop_names(ip) = "S_r"
-    props(ip)      = alpha * mu * Er_max_norm
-
-    if (ST_time > 1.0e-9_dp .and. rz(2) > 0.9_dp * ST_domain_len .or. &
-         rz(2) < 0.1_dp * ST_domain_len) &
-         stop "Simulation has reached boundary"
-
-    ! Get electron density and potential at location of radius
-    loc_density       = a2_get_loc(tree, [0.0_dp, rz(2)])
-    id             = loc_density%id
-    ix             = loc_density%ix
-    ip             = ip + 1
-    prop_names(ip) = "n_e"
-    props(ip)      = tree%boxes(id)%cc(ix(1), ix(2), i_electron)
-
-    ! Set phi to potential difference
-    phi_head       = tree%boxes(id)%cc(ix(1), ix(2), i_phi)
-    ip             = ip + 1
-    prop_names(ip) = "dphi"
-    props(ip)      = phi_head - (rz(2)/ST_domain_len) * ST_applied_voltage
-
-    ! Height of streamer
-    rz             = a2_r_cc(tree%boxes(loc_ez%id), loc_ez%ix)
-    ip             = ip + 1
-    prop_names(ip) = "z_Ez"
-    props(ip)      = rz(2)
-
-    ! Phi 1 mm ahead
-    ip             = ip + 1
-    prop_names(ip) = "dphi_2mm"
-    loc = a2_get_loc(tree, [0.0_dp, rz(2) + 2.0e-3_dp])
-    if (loc%id > af_no_box) then
-       props(ip) = phi_head - &
-            tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
-    else
-       props(ip) = 0
-    end if
-
-    ip             = ip + 1
-    prop_names(ip) = "dphi_4mm"
-    loc = a2_get_loc(tree, [0.0_dp, rz(2) + 4.0e-3_dp])
-    if (loc%id > af_no_box) then
-       props(ip) = phi_head - &
-            tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
-    else
-       props(ip) = 0
-    end if
-
-    do i = 4, 14, 2
-       tmp_fld_val = i * 1e6_dp
-
-       ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "dr_", i, "e6"
-       call a2_reduction_loc(tree, box_electric_field_maxr, reduce_max, &
-            0.0_dp, props(ip), loc)
-
-       ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "dphi_r_", i, "e6"
-       if (loc%id > af_no_box) then
-          props(ip) = phi_head - &
-               tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
-       else
-          props(ip) = 0
-       end if
-
-       ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "dz_", i, "e6"
-       call a2_reduction_loc(tree, box_electric_field_maxz, reduce_max, &
-            0.0_dp, props(ip), loc)
-       props(ip) = props(ip) - z_head
-
-       ip = ip + 1
-       write(prop_names(ip), "(A,I0,A)") "dphi_z_", i, "e6"
-       if (loc%id > af_no_box) then
-          props(ip) = phi_head - &
-               tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), i_phi)
-
-       else
-          props(ip) = 0
-       end if
-    end do
-
-  end subroutine get_streamer_properties
-
-  real(dp) function reduce_max(a, b)
-    real(dp), intent(in) :: a, b
-    reduce_max = max(a,b)
-  end function reduce_max
-
-  subroutine box_max_electric_field_r(box, val, ix)
-    type(box2_t), intent(in) :: box
-    real(dp), intent(out)    :: val
-    integer, intent(out)     :: ix(2)
-    integer                  :: nc
-
-    nc = box%n_cell
-    ix = maxloc(abs(box%fx(1:nc, :, electric_fld) + box%fx(2:nc+1, :, electric_fld)))
-    val = 0.5_dp * abs(box%fx(ix(1), ix(2), electric_fld) + &
-         box%fx(ix(1)+1, ix(2), electric_fld))
-  end subroutine box_max_electric_field_r
-
-  subroutine box_electric_field_maxr(box, val, ix)
-    type(box2_t), intent(in) :: box
-    real(dp), intent(out)    :: val
-    integer, intent(out)     :: ix(2)
-    integer                  :: i, j, nc
-    real(dp)                 :: rz(2)
-
-    val = 0
-    nc = box%n_cell
-
-    do j = 1, nc
-       do i = 1, nc
-          if (box%cc(i, j, i_electric_fld) > tmp_fld_val) then
-             rz = a2_r_cc(box, [i,j])
-             if (rz(1) > val) then
-                val = rz(1)
-                ix = [i, j]
-             end if
-          end if
-       end do
-    end do
-  end subroutine box_electric_field_maxr
-
-  subroutine box_electric_field_maxz(box, val, ix)
-    type(box2_t), intent(in) :: box
-    real(dp), intent(out)    :: val
-    integer, intent(out)     :: ix(2)
-    integer                  :: i, j, nc
-    real(dp)                 :: rz(2)
-
-    val = 0
-    nc = box%n_cell
-
-    do j = 1, nc
-       do i = 1, nc
-          if (box%cc(i, j, i_electric_fld) > tmp_fld_val) then
-             rz = a2_r_cc(box, [i,j])
-             if (rz(2) > val) then
-                val = rz(2)
-                ix = [i, j]
-             end if
-          end if
-       end do
-    end do
-  end subroutine box_electric_field_maxz
-
-  subroutine box_max_electric_field_z(box, val, ix)
-    type(box2_t), intent(in) :: box
-    real(dp), intent(out)    :: val
-    integer, intent(out)     :: ix(2)
-    integer                  :: nc
-
-    nc = box%n_cell
-    ix = maxloc(abs(box%fy(:, 1:nc, electric_fld) + box%fy(:, 2:nc+1, electric_fld)))
-    val = 0.5_dp * abs(box%fy(ix(1), ix(2), electric_fld) + &
-         box%fy(ix(1), ix(2)+1, electric_fld))
-  end subroutine box_max_electric_field_z
-
-  subroutine get_cc_axis(tree, ixs_cc, ixs_fc, axis_data)
-    type(a2_t), intent(in)               :: tree
-    integer, intent(in)                  :: ixs_cc(:), ixs_fc(:)
-    real(dp), allocatable, intent(inout) :: axis_data(:, :)
-
-    type(a2_loc_t)                       :: loc
-    real(dp)                             :: z, box_z, box_dz
-    integer                              :: i, id, nc, cnt, n_cc, n_fc
-
-    n_cc = size(ixs_cc)
-    n_fc = size(ixs_fc)
-    nc   = tree%n_cell
-    z    = 0
-    cnt  = 0
-
-    ! Determine how many boxes lie on the axis
-    do
-       loc = a2_get_loc(tree, [0.0_dp, z])
-       if (loc%id == -1) exit
-
-       cnt    = cnt + nc
-       id     = loc%id
-       box_z  = tree%boxes(id)%r_min(2)
-       box_dz = tree%boxes(id)%dr
-       z      = box_z + (nc+1) * box_dz
-    end do
-
-    ! Now store the actual axis data
-    allocate(axis_data(n_cc+n_fc+1, cnt))
-    cnt = 0
-    z   = 0
-
-    do
-       loc = a2_get_loc(tree, [0.0_dp, z])
-       if (loc%id == -1) exit
-
-       id     = loc%id
-       box_z  = tree%boxes(id)%r_min(2)
-       box_dz = tree%boxes(id)%dr
-
-       axis_data(1, cnt+1:cnt+nc) = &
-            box_z + [((i-0.5_dp) * box_dz, i = 1, nc)]
-       axis_data(2:n_cc+1, cnt+1:cnt+nc) = &
-            transpose(tree%boxes(id)%cc(1, 1:nc, ixs_cc))
-       axis_data(n_cc+2:, cnt+1:cnt+nc) = transpose( &
-            0.5_dp * (tree%boxes(id)%fy(1, 1:nc, ixs_fc) + &
-            tree%boxes(id)%fy(1, 2:nc+1, ixs_fc)))
-
-       cnt    = cnt + nc
-       z      = box_z + (nc+1) * box_dz
-    end do
-  end subroutine get_cc_axis
 
 end program streamer_cyl

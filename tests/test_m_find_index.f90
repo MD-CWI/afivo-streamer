@@ -33,7 +33,7 @@ program test_m_find_index
 
      call cpu_time(t_start)
      do n = 1, n_finds
-        ix_2 = FI_bsearch_r(list, search_vals(n))
+        ix_2 = FI_binary_search_r(list, search_vals(n))
      end do
      call cpu_time(t_end)
      t_bsearch = t_end - t_start

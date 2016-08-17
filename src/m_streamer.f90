@@ -1,3 +1,27 @@
+!> Module  that contains subroutines to handle with configuration files
+!!
+!! * Creating configuration files
+!! * Reading configuration files
+!! * Loading configuration files
+!! * Setting the initial conditions from the configuration
+!!
+!! Further it contains a subroutine for
+!! * loading the transport data
+!! * Setting  the voltage on fixed time
+!!
+!! Moreover, it contains several pre-defined variables like 
+!!
+!! * Indices of cell-centered variables
+!! * Names of the cell-centered variables
+!! * Indices of face-centered variables
+!! * Indices of transport data
+!! * How many multigrid FMG cycles we perform per time step
+!!
+!! The subroutines and variables are used by the examples:
+!! * streamer_2d
+!! * streamer_3d
+!! * streamer_cyl
+!!
 module m_streamer
 
   use m_config
@@ -14,7 +38,7 @@ module m_streamer
   integer, parameter :: ST_slen = 200
 
   ! ** Indices of cell-centered variables **
-  integer, parameter :: n_var_cell     = 9 ! Number of variables
+  integer, parameter :: n_var_cell     = 8 ! Number of variables
   integer, parameter :: i_electron     = 1 ! Electron density
   integer, parameter :: i_pos_ion      = 2 ! Positive ion density
   integer, parameter :: i_electron_old = 3 ! For time-stepping scheme
@@ -23,12 +47,11 @@ module m_streamer
   integer, parameter :: i_electric_fld = 6 ! Electric field norm
   integer, parameter :: i_rhs          = 7 ! Source term Poisson
   integer, parameter :: i_photo        = 8 ! Phototionization rate
-  integer, parameter :: i_eps          = 9 ! Level set function
 
   ! Names of the cell-centered variables
   character(len=12) :: ST_cc_names(n_var_cell) = &
        [character(len=12) :: "electron", "pos_ion", "electron_old", &
-       "pos_ion_old", "phi", "electric_fld", "rhs", "pho", "eps"]
+       "pos_ion_old", "phi", "electric_fld", "rhs", "pho"]
 
   ! ** Indices of face-centered variables **
   integer, parameter :: n_var_face   = 2 ! Number of variables
@@ -47,7 +70,7 @@ module m_streamer
 
   ! Type to store initial conditions in
   type initcnd_t
-     real(dp)              :: bg_dens
+     real(dp)              :: background_density
      integer               :: n_cond
      real(dp), allocatable :: seed_r0(:, :)
      real(dp), allocatable :: seed_r1(:, :)
@@ -120,34 +143,37 @@ module m_streamer
   character(len=ST_slen), protected :: ST_output_dir
 
   ! The number of steps after which the mesh is updated
-  integer, protected :: ST_ref_per_steps
+  integer, protected :: ST_refine_per_steps
 
   ! The grid spacing will always be larger than this value
-  real(dp), protected :: ST_ref_min_dx
+  real(dp), protected :: ST_refine_min_dx
 
   ! The grid spacing will always be smaller than this value
-  real(dp), protected :: ST_ref_max_dx
+  real(dp), protected :: ST_refine_max_dx
 
   ! Refine if alpha*dx is larger than this value
-  real(dp), protected :: ST_ref_adx
+  real(dp), protected :: ST_refine_adx
+
+  ! Refine if alpha*dx is larger than this value             !!! comment???
+  real(dp), protected :: ST_refine_adx_field                 !!! 
 
   ! Refine if the curvature in phi is larger than this value
-  real(dp), protected :: ST_ref_cphi
+  real(dp), protected :: ST_refine_cphi
 
   ! Derefine if all conditions hold: max value for alpha*dx
-  real(dp), protected :: ST_deref_adx
+  real(dp), protected :: ST_derefine_adx
 
   ! Derefine if all conditions hold: max value for curvature of phi
-  real(dp), protected :: ST_deref_cphi
+  real(dp), protected :: ST_derefine_cphi
 
   ! Derefine if all conditions hold: max value for dx
-  real(dp), protected :: ST_deref_dx
+  real(dp), protected :: ST_derefine_dx
 
   ! Refine around initial conditions up to this time
-  real(dp), protected :: ST_ref_init_time
+  real(dp), protected :: ST_refine_init_time
 
   ! Refine until dx is smaller than this factor times the seed width
-  real(dp), protected :: ST_ref_init_fac
+  real(dp), protected :: ST_refine_init_fac
 
   ! Number of output files written
   integer :: ST_out_cnt
@@ -181,9 +207,6 @@ module m_streamer
 
   ! The applied voltage (vertical direction)
   real(dp), protected :: ST_applied_voltage
-
-  ! The applied voltage (horizontal direction)
-  real(dp), protected :: ST_applied_voltage2
 
   ! Pressure of the gas in bar
   real(dp), protected :: ST_gas_pressure
@@ -239,7 +262,7 @@ contains
     call CFG_add(ST_config, "electric_fld_x_decay", huge(1.0_dp), &
          "Decay time of field (s)")
 
-    call CFG_add(ST_config, "bg_dens", 1.0d12, &
+    call CFG_add(ST_config, "background_density", 1.0d12, &
          "The background ion and electron density (1/m3)")
     call CFG_add(ST_config, "seed_density", [5.0d19], &
          "Initial density of the seed (1/m3)", .true.)
@@ -257,28 +280,30 @@ contains
     call CFG_add(ST_config, "dt_max", 1.0d-11, &
          "The maximum timestep (s)")
 
-    call CFG_add(ST_config, "ref_per_steps", 2, &
+    call CFG_add(ST_config, "refine_per_steps", 2, &
          "The number of steps after which the mesh is updated")
-    call CFG_add(ST_config, "ref_min_dx", 1.0e-6_dp, &
+    call CFG_add(ST_config, "refine_min_dx", 1.0e-6_dp, &
          "The grid spacing will always be larger than this value")
-    call CFG_add(ST_config, "ref_max_dx", 1.0e-3_dp, &
+    call CFG_add(ST_config, "refine_max_dx", 1.0e-3_dp, &
          "The grid spacing will always be smaller than this value")
 
-    call CFG_add(ST_config, "ref_adx", 1.0_dp, &
+    call CFG_add(ST_config, "refine_adx", 1.0_dp, &
          "Refine if alpha*dx is larger than this value")
-    call CFG_add(ST_config, "ref_cphi", 1e99_dp, &
+    call CFG_add(ST_config, "refine_adx_field", 1.0_dp, & !!! value ???
+         "Refine if alpha*dx is larger than this value")  !!! comment ???
+    call CFG_add(ST_config, "refine_cphi", 1e99_dp, &
          "Refine if the curvature in phi is larger than this value")
 
-    call CFG_add(ST_config, "deref_adx", 0.1_dp, &
+    call CFG_add(ST_config, "derefine_adx", 0.1_dp, &
          "Derefine if all conditions hold; max value for alpha*dx")
-    call CFG_add(ST_config, "deref_dx", 1e-4_dp, &
+    call CFG_add(ST_config, "derefine_dx", 1e-4_dp, &
          "Derefine if all conditions hold; max value for dx")
-    call CFG_add(ST_config, "deref_cphi", 1e99_dp, &
+    call CFG_add(ST_config, "derefine_cphi", 1e99_dp, &
          "Derefine if all conditions hold: max value for curvature of phi")
 
-    call CFG_add(ST_config, "ref_init_time", 10.0e-9_dp, &
+    call CFG_add(ST_config, "refine_init_time", 10.0e-9_dp, &
          "Refine around initial conditions up to this time")
-    call CFG_add(ST_config, "ref_init_fac", 0.25_dp, &
+    call CFG_add(ST_config, "refine_init_fac", 0.25_dp, &
          "Refine until dx is smaller than this factor times the seed width")
 
     call CFG_add(ST_config, "photoi_enabled", .true., &
@@ -323,7 +348,7 @@ contains
     real(dp), allocatable          :: tmp_vec(:)
     type(initcnd_t) :: ic
 
-    call CFG_get(ST_config, "bg_dens", ic%bg_dens)
+    call CFG_get(ST_config, "background_density", ic%background_density)
     call CFG_get(ST_config, "domain_len", dlen)
 
     call CFG_get_size(ST_config, "seed_density", n_cond)
@@ -365,10 +390,10 @@ contains
     use m_config
 
     character(len=ST_slen) :: input_file, gas_name
-    integer                 :: table_size
-    real(dp)                :: max_electric_fld, alpha_fac, eta_fac
-    real(dp)                :: mobility_fac, diffusion_fac
-    real(dp), allocatable   :: x_data(:), y_data(:)
+    integer                :: table_size
+    real(dp)               :: max_electric_fld, alpha_fac, eta_fac
+    real(dp)               :: mobility_fac, diffusion_fac
+    real(dp), allocatable  :: x_data(:), y_data(:)
     character(len=ST_slen) :: data_name
 
     call CFG_get(ST_config, "input_file", input_file)
@@ -484,16 +509,17 @@ contains
     call CFG_get(ST_config, "applied_electric_fld_x", ST_applied_electric_fld_x)
     call CFG_get(ST_config, "dt_output", ST_dt_out)
 
-    call CFG_get(ST_config, "ref_per_steps", ST_ref_per_steps)
-    call CFG_get(ST_config, "ref_min_dx", ST_ref_min_dx)
-    call CFG_get(ST_config, "ref_max_dx", ST_ref_max_dx)
-    call CFG_get(ST_config, "ref_adx", ST_ref_adx)
-    call CFG_get(ST_config, "ref_cphi", ST_ref_cphi)
-    call CFG_get(ST_config, "deref_adx", ST_deref_adx)
-    call CFG_get(ST_config, "deref_cphi", ST_deref_cphi)
+    call CFG_get(ST_config, "refine_per_steps", ST_refine_per_steps)
+    call CFG_get(ST_config, "refine_min_dx", ST_refine_min_dx)
+    call CFG_get(ST_config, "refine_max_dx", ST_refine_max_dx)
+    call CFG_get(ST_config, "refine_adx", ST_refine_adx)
+    call CFG_get(ST_config, "refine_cphi", ST_refine_cphi)
+    call CFG_get(ST_config, "derefine_dx", ST_derefine_dx)
+    call CFG_get(ST_config, "derefine_adx", ST_derefine_adx)
+    call CFG_get(ST_config, "derefine_cphi", ST_derefine_cphi)
 
-    call CFG_get(ST_config, "ref_init_time", ST_ref_init_time)
-    call CFG_get(ST_config, "ref_init_fac", ST_ref_init_fac)
+    call CFG_get(ST_config, "refine_init_time", ST_refine_init_time)
+    call CFG_get(ST_config, "refine_init_fac", ST_refine_init_fac)
 
     call CFG_get(ST_config, "dt_max", ST_dt_max)
     call CFG_get(ST_config, "epsilon_diel", ST_epsilon_diel)
@@ -517,7 +543,6 @@ contains
     call CFG_get(ST_config, "electric_fld_x_decay", ST_electric_fld_x_decay)
 
     ST_applied_voltage = -ST_domain_len * ST_applied_electric_fld_y
-    ST_applied_voltage2 = -ST_domain_len * ST_applied_electric_fld_x
 
     tmp_name = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_output.cfg"
     print *, "Settings written to ", trim(tmp_name)
@@ -543,8 +568,8 @@ contains
     end if
   end function ST_get_electric_field
 
-  !> Compute the voltages at a given time
-  subroutine ST_set_voltages(time)
+  !> Compute the voltage at a given time
+  subroutine ST_set_voltage(time)
     use m_units_constants
 
     real(dp), intent(in) :: time
@@ -561,27 +586,6 @@ contains
     end if
     ST_applied_voltage = -ST_domain_len * electric_fld
 
-    t_rel = time - ST_electric_fld_x_mod_t0
-    if (t_rel > 0) then
-       electric_fld = ST_applied_electric_fld_x * exp(-t_rel/ST_electric_fld_x_decay) + &
-                      t_rel * ST_electric_fld_x_lin_deriv + &
-                      ST_electric_fld_x_sin_amplitude * &
-                      sin(t_rel * ST_electric_fld_x_sin_freq * 2 * UC_pi)
-    else
-    end if
-    ST_applied_voltage2 = -ST_domain_len * electric_fld
-  end subroutine ST_set_voltages
-
-  !> Set the voltage to a fixed value
-  subroutine ST_set_voltage(phi)
-    real(dp), intent(in) :: phi
-    ST_applied_voltage = phi
   end subroutine ST_set_voltage
-
-  !> Set the voltage2 to a fixed value
-  subroutine ST_set_voltage2(phi)
-    real(dp), intent(in) :: phi
-    ST_applied_voltage2 = phi
-  end subroutine ST_set_voltage2
 
 end module m_streamer

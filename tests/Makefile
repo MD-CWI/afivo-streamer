@@ -5,8 +5,10 @@ LIBS	:= afivo silo streamer
 
 include ../afivo/makerules.make
 
-TESTS	:= test_m_config test_m_lookup_table test_m_random test_m_linked_list\
+#TESTS	:= test_m_config test_m_lookup_table test_m_random test_m_linked_list\
 	test_m_find_index test_m_photons test_photoionization
+TESTS	:= test_m_config test_m_lookup_table test_m_linked_list\
+	test_m_find_index test_photoionization
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))

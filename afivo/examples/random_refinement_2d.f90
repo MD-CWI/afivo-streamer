@@ -158,7 +158,7 @@ contains
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
 
-          call a2_prolong2(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a2_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)

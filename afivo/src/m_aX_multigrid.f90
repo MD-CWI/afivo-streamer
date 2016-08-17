@@ -260,7 +260,7 @@ contains
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
   subroutine mg$D_sides_rb(boxes, id, nb, iv)
-    use m_a$D_ghostcell, only: a$D_gc_prolong0
+    use m_a$D_ghostcell, only: a$D_gc_prolong_copy
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -280,7 +280,7 @@ contains
        dix = -1
     end if
 
-    call a$D_gc_prolong0(boxes, id, nb, iv)
+    call a$D_gc_prolong_copy(boxes, id, nb, iv)
 
     select case (a$D_neighb_dim(nb))
 #if $D == 2
@@ -774,7 +774,7 @@ contains
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
 
-    call a$D_prolong2(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
+    call a$D_prolong_quadratic(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
   end subroutine mg$D_box_corr_lpl
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator

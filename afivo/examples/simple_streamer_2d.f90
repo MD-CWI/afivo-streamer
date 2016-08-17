@@ -359,7 +359,7 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong1, &
+    call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong_linear, &
          a2_bc2_neumann_zero, gc_data, nc)
 
     ! x-fluxes interior, advective part with flux limiter
@@ -479,9 +479,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_elec)
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_pion)
-          call a2_prolong1(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_elec)
+          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pion)
+          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
        do i = 1, size(ref_info%lvls(lvl)%add)
