@@ -1,4 +1,5 @@
-! A simplified model for ionization waves and/or streamers in 2D
+!> \example
+!> A simplified model for ionization waves and/or streamers in 2D
 program simple_streamer_2d
 
   use m_a2_types
@@ -48,19 +49,19 @@ program simple_streamer_2d
 
   ! Physical parameters
   real(dp), parameter :: applied_field = -1e7_dp
-  real(dp), parameter :: mobility = 0.025_dp
-  real(dp), parameter :: diffusion_c = 0.0_dp
+  real(dp), parameter :: mobility      = 0.025_dp
+  real(dp), parameter :: diffusion_c   = 0.0_dp
 
   ! Computational domain
   real(dp), parameter :: domain_length = 10e-3_dp
   real(dp), parameter :: domain_max_dx = 1e-5_dp
 
   ! Settings for the initial conditions
-  real(dp), parameter :: init_density = 1e10_dp
-  real(dp), parameter :: init_y_min   = 8e-3_dp
-  real(dp), parameter :: init_y_max   = 9e-3_dp
-  real(dp), parameter :: init_perturb_ampl = 1e10_dp
-  real(dp), parameter :: init_perturb_periods = 5
+  real(dp), parameter :: init_density         = 1e10_dp
+  real(dp), parameter :: init_y_min           = 8e-3_dp
+  real(dp), parameter :: init_y_max           = 9e-3_dp
+  real(dp), parameter :: init_perturb_ampl    = 0e10_dp
+  real(dp), parameter :: init_perturb_periods = 2
 
   ! Simulation variables
   real(dp) :: dt
@@ -139,7 +140,6 @@ program simple_streamer_2d
 
            ! Fill ghost cells
            call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_neumann_zero)
-           call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, .true.)
@@ -488,8 +488,6 @@ contains
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
                a2_gc_interp_lim, a2_bc_neumann_zero)
-          call a2_gc_box(tree%boxes, id, i_pion, &
-               a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, mg%sides_bc)
        end do
@@ -546,6 +544,5 @@ contains
        bphi = b
     end if
   end function koren_mlim
-
 
 end program simple_streamer_2d
