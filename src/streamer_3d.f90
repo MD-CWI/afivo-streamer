@@ -251,8 +251,10 @@ contains
     real(dp)                    :: xy(3)
     real(dp)                    :: density
 
-    nc = box%n_cell
+    nc                       = box%n_cell
     box%cc(:, :, :, i_electron) = ST_init_cond%background_density
+    box%cc(:, :, :, i_pos_ion)  = ST_init_cond%background_density
+    box%cc(:, :, :, i_phi)      = 0 ! Inital potential set to zero
 
     do k = 0, nc+1
        do j = 0, nc+1
@@ -261,19 +263,26 @@ contains
 
              do n = 1, ST_init_cond%n_cond
                 density = ST_init_cond%seed_density(n) * &
-                          GM_density_line(xy, ST_init_cond%seed_r0(:, n), &
-                          ST_init_cond%seed_r1(:, n), 3, &
-                          ST_init_cond%seed_width(n), &
-                          ST_init_cond%seed_falloff(n))
-                box%cc(i, j, k, i_electron) = box%cc(i, j, k, i_electron) + &
-                          density
+                     GM_density_line(xy, ST_init_cond%seed_r0(:, n), &
+                     ST_init_cond%seed_r1(:, n), 3, &
+                     ST_init_cond%seed_width(n), &
+                     ST_init_cond%seed_falloff(n))
+
+                ! Add electrons and/or ions depending on the seed charge type
+                ! (positive, negative or neutral)
+                if (ST_init_cond%seed_charge_type(n) <= 0) then
+                   box%cc(i, j, k, i_electron) = &
+                        box%cc(i, j, k, i_electron) + density
+                end if
+
+                if (ST_init_cond%seed_charge_type(n) >= 0) then
+                   box%cc(i, j, k, i_pos_ion) = &
+                        box%cc(i, j, k, i_pos_ion) + density
+                end if
              end do
           end do
        end do
     end do
-
-    box%cc(:, :, :, i_pos_ion) = box%cc(:, :, :, i_electron)
-    box%cc(:, :, :, i_phi)     = 0     ! Inital potential set to zero
 
   end subroutine set_initial_condition
 

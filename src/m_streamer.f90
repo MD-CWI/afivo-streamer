@@ -75,6 +75,7 @@ module m_streamer
      real(dp), allocatable :: seed_r0(:, :)
      real(dp), allocatable :: seed_r1(:, :)
      real(dp), allocatable :: seed_density(:)
+     integer, allocatable  :: seed_charge_type(:)
      real(dp), allocatable :: seed_width(:)
      integer, allocatable  :: seed_falloff(:)
   end type initcnd_t
@@ -266,6 +267,8 @@ contains
          "The background ion and electron density (1/m3)")
     call CFG_add(ST_config, "seed_density", [5.0d19], &
          "Initial density of the seed (1/m3)", .true.)
+    call CFG_add(ST_config, "seed_charge_type", [0], &
+         "Type of seed: neutral (0), ions (1) or electrons (-1)", .true.)
     call CFG_add(ST_config, "seed_rel_r0", [0.5d0, 0.4d0], &
          "The relative start position of the initial seed", .true.)
     call CFG_add(ST_config, "seed_rel_r1", [0.5d0, 0.6d0], &
@@ -355,18 +358,23 @@ contains
 
     call CFG_get_size(ST_config, "seed_rel_r0", varsize)
     if (varsize /= n_dim * n_cond) &
-         stop "seed_... variables have incompatible size"
+         stop "seed_rel_r0 variable has incompatible size"
 
     call CFG_get_size(ST_config, "seed_rel_r1", varsize)
     if (varsize /= n_dim * n_cond) &
-         stop "seed_... variables have incompatible size"
+         stop "seed_rel_r1 variable has incompatible size"
+
+    call CFG_get_size(ST_config, "seed_charge_type", varsize)
+    if (varsize /= n_cond) &
+         stop "seed_charge_type variable has incompatible size"
 
     call CFG_get_size(ST_config, "seed_width", varsize)
     if (varsize /= n_cond) &
-         stop "seed_... variables have incompatible size"
+         stop "seed_width variable has incompatible size"
 
     ic%n_cond = n_cond
     allocate(ic%seed_density(n_cond))
+    allocate(ic%seed_charge_type(n_cond))
     allocate(ic%seed_r0(n_dim, n_cond))
     allocate(ic%seed_r1(n_dim, n_cond))
     allocate(ic%seed_width(n_cond))
@@ -379,6 +387,7 @@ contains
     ic%seed_r1 = dlen * reshape(tmp_vec, [n_dim, n_cond])
 
     call CFG_get(ST_config, "seed_density", ic%seed_density)
+    call CFG_get(ST_config, "seed_charge_type", ic%seed_charge_type)
     call CFG_get(ST_config, "seed_width", ic%seed_width)
     call CFG_get(ST_config, "seed_falloff", ic%seed_falloff)
     ST_init_cond = ic

@@ -105,7 +105,7 @@ program streamer_2d
            ST_time = ST_time + ST_dt
 
            ! First calculate fluxes
-           call a2_loop_boxes_arg(tree, fluxes_koren, [ST_dt], .true.)
+           call a2_loop_boxes(tree, fluxes_koren, .true.)
            call a2_consistent_fluxes(tree, [flux_elec])
 
            ! Update the solution
@@ -251,8 +251,10 @@ contains
     real(dp)                    :: xy(2)
     real(dp)                    :: density
 
-    nc = box%n_cell
+    nc                       = box%n_cell
     box%cc(:, :, i_electron) = ST_init_cond%background_density
+    box%cc(:, :, i_pos_ion)  = ST_init_cond%background_density
+    box%cc(:, :, i_phi)      = 0 ! Inital potential set to zero
 
     do j = 0, nc+1
        do i = 0, nc+1
@@ -260,17 +262,23 @@ contains
 
           do n = 1, ST_init_cond%n_cond
              density = ST_init_cond%seed_density(n) * &
-                       GM_density_line(xy, ST_init_cond%seed_r0(:, n), &
-                       ST_init_cond%seed_r1(:, n), 2, &
-                       ST_init_cond%seed_width(n), &
-                       ST_init_cond%seed_falloff(n))
-             box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + density
+                  GM_density_line(xy, ST_init_cond%seed_r0(:, n), &
+                  ST_init_cond%seed_r1(:, n), 2, &
+                  ST_init_cond%seed_width(n), &
+                  ST_init_cond%seed_falloff(n))
+
+             ! Add electrons and/or ions depending on the seed charge type
+             ! (positive, negative or neutral)
+             if (ST_init_cond%seed_charge_type(n) <= 0) then
+                box%cc(i, j, i_electron) = box%cc(i, j, i_electron) + density
+             end if
+
+             if (ST_init_cond%seed_charge_type(n) >= 0) then
+                box%cc(i, j, i_pos_ion) = box%cc(i, j, i_pos_ion) + density
+             end if
           end do
        end do
     end do
-
-    box%cc(:, :, i_pos_ion) = box%cc(:, :, i_electron)
-    box%cc(:, :, i_phi)     = 0     ! Inital potential set to zero
 
   end subroutine set_initial_condition
 
@@ -394,11 +402,10 @@ contains
   end subroutine sides_bc_potential
 
   !> Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_koren(boxes, id, dt_vec)
+  subroutine fluxes_koren(boxes, id)
     use m_units_constants
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp), intent(in)        :: dt_vec(:)
     real(dp)                    :: inv_dr, tmp, gradp, gradc, gradn
     real(dp)                    :: mobility, diff_coeff, v_drift
     real(dp)                    :: fld_avg, fld
