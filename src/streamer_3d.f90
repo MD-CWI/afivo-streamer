@@ -400,11 +400,11 @@ contains
        bc_type = af_bc_neumann
        box%cc(nc+1, 1:nc, 1:nc, iv) = 0
     case (a3_neighb_lowy)
-       bc_type = af_bc_dirichlet
+       bc_type = af_bc_neumann
        box%cc(1:nc,    0, 1:nc, iv) = 0
     case (a3_neighb_highy)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc, nc+1, 1:nc, iv) = ST_applied_voltage
+       bc_type = af_bc_neumann
+       box%cc(1:nc, nc+1, 1:nc, iv) = 0
     case (a3_neighb_lowz)
        bc_type = af_bc_dirichlet
        box%cc(1:nc, 1:nc,    0, iv) = 0
