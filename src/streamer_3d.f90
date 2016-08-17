@@ -595,18 +595,20 @@ contains
              mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
              ! Contribution of flux
-             sflux = (box%fy(i, j, k, flux_elec) - box%fy(i, j+1, k, flux_elec) + &
-                      box%fx(i, j, k, flux_elec) - box%fx(i+1, j, k, flux_elec) + &
-                      box%fx(i, j, k, flux_elec) - box%fx(i, j, k+1, flux_elec)) * inv_dr * dt(1)
-   
+             sflux = &
+                  box%fy(i, j, k, flux_elec) - box%fy(i, j+1, k, flux_elec) + &
+                  box%fx(i, j, k, flux_elec) - box%fx(i+1, j, k, flux_elec) + &
+                  box%fz(i, j, k, flux_elec) - box%fz(i, j, k+1, flux_elec)
+             sflux = sflux * inv_dr * dt(1)
+
              ! Source term
              src = fld * mu * box%cc(i, j, k, i_electron) * (alpha - eta) * dt(1)
-   
+
              if (ST_photoi_enabled) src = src + box%cc(i, j, k, i_photo) * dt(1)
-   
+
              ! Add flux and source term
              box%cc(i, j, k, i_electron) = box%cc(i, j, k, i_electron) + sflux + src
-   
+
              ! Add source term
              box%cc(i, j, k, i_pos_ion) = box%cc(i, j, k, i_pos_ion) + src
           end do
