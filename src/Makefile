@@ -57,5 +57,5 @@ m_a3_utils.o:		m_a3_types.o
 m_a3_multigrid:		m_a3_types.o m_a3_utils.o
 m_a3_types.o:		m_afivo_types.o
 
-m_write_silo.o:		INCDIRS += ../silo/include
+m_write_silo.o:		INCDIRS += ../external_libraries/silo/include
 m_write_silo.o:		FFLAGS += -Wno-implicit-interface
