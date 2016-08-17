@@ -1,7 +1,4 @@
-!> Program that solves a 2d streamer
-!
-! Author: Jannis Teunissen
-! License: GPLv3
+!> Program to perform 2d streamer simulations
 program streamer_2d
 
   use m_a2_types

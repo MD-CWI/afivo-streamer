@@ -1,7 +1,4 @@
-!> Program that solves a 3d streamer
-!
-! Author: Jannis Teunissen
-! License: GPLv3
+!> Program to perform 3d streamer simulations
 program streamer_3d
 
   use m_a3_types

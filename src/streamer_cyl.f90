@@ -1,7 +1,4 @@
-!> Program that solves a cylindrical streamer
-!
-! Author: Jannis Teunissen
-! License: GPLv3
+!> Program to perform axisymmetric streamer simulations
 program streamer_cyl
 
   use m_a2_types
