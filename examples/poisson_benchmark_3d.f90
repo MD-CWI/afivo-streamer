@@ -87,13 +87,13 @@ program poisson_benchmark_3d
   call system_clock(t_start, count_rate)
   do
      ! For each box, set the initial conditions
-     call a3_loop_box(tree, set_initial_condition)
+     call a3_loop_box(tree, set_init_cond)
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
-     call a3_adjust_refinement(tree, refine_routine, ref_info)
+     call a3_adjust_refinement(tree, ref_routine, ref_info)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -150,22 +150,22 @@ program poisson_benchmark_3d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, refine_flag)
+  subroutine ref_routine(boxes, id, ref_flag)
     type(box3_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
     integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: refine_flag
+    integer, intent(inout)   :: ref_flag
 
     ! Fully refine up to max_ref_lvl
-    if (boxes(id)%lvl < max_ref_lvl) refine_flag = af_do_ref
-  end subroutine refine_routine
+    if (boxes(id)%lvl < max_ref_lvl) ref_flag = af_do_ref
+  end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
-  subroutine set_initial_condition(box)
+  subroutine set_init_cond(box)
     type(box3_t), intent(inout) :: box
     integer                     :: nc
 
     nc = box%n_cell
     box%cc(1:nc, 1:nc, 1:nc, i_rhs) = 1.0_dp
-  end subroutine set_initial_condition
+  end subroutine set_init_cond
 
 end program poisson_benchmark_3d

@@ -1,8 +1,5 @@
-! This module contains the core routines of Afivo
-!
-! Author: Jannis Teunissen
-! License: GPLv3
-
+!> This module contains the core routines of Afivo, namely those that deal with
+!> initializing and changing the quadtree/octree mesh.
 module m_a$D_core
   use m_a$D_types
 

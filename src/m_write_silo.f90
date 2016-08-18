@@ -1,3 +1,5 @@
+!> This module contains wrapper functions to simplify writing Silo files
+!> \todo Document the functions in this module
 module m_write_silo
 
   implicit none

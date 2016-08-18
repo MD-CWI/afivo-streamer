@@ -6,7 +6,7 @@ SILO_BASEURL="https://wci.llnl.gov/content/assets/docs/simulation/"\
 "computer-codes/silo/silo-4.10/"
 SILO_TARNAME="silo-4.10-bsd-smalltest.tar.gz"
 SILO_DIRNAME="silo-4.10-bsd"
-BUILD_DIR="ext_libs_build"
+BUILD_DIR="build"
 
 # Do compilation etc. in build directory
 mkdir -p ${BUILD_DIR}

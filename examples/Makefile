@@ -1,6 +1,6 @@
 A5_DIR  := ..
 INCDIRS	:= $(A5_DIR)/src
-LIBDIRS := $(A5_DIR)/src $(A5_DIR)/silo/lib
+LIBDIRS := $(A5_DIR)/src $(A5_DIR)/external_libraries/silo/lib
 LIBS	:= afivo silo
 OUTDIR	:= output
 

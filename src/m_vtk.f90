@@ -1,8 +1,10 @@
-!> This file is a modification of code found in Lib_VTK_IO, see
-!> https://github.com/szaghi/Lib_VTK_IO. I have extracted the parts that I needed
-!> and simplified them a bit. The license for this file is thus also GPLv3.
-!> Author Lib_VTK_IO: Stefano Zaghi
-!> Modifications: Jannis Teunissen
+!> This file is a modification of code found in Lib_VTK_IO
+!>
+!> For the original code, see https://github.com/szaghi/Lib_VTK_IO. I have
+!> extracted the parts that I needed and simplified them a bit. The license for
+!> this file is thus also GPLv3.
+!>
+!> Author Lib_VTK_IO: Stefano Zaghi, modifications: Jannis Teunissen
 !> \todo Document this module
 module m_vtk
 

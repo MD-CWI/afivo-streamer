@@ -1,10 +1,6 @@
-! This module contains all kinds of different "helper" routines for Afivo.
-! If the number of routines for a particular topic becomes large, they should
-! probably be put in a separate module.
-!
-! Author: Jannis Teunissen
-! License: GPLv3
-
+!> This module contains all kinds of different 'helper' routines for Afivo. If
+!> the number of routines for a particular topic becomes large, they should
+!> probably be put in a separate module.
 module m_a$D_utils
   use m_a$D_types
 

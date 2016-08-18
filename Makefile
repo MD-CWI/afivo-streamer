@@ -1,5 +1,4 @@
-SRC_DIRS	:= src examples
-CREATE_DIRS	:= silo
+SRC_DIRS	:= src examples tests
 
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
@@ -11,23 +10,20 @@ MAKEFLAGS	:= --no-print-directory
 
 all:	$(SRC_DIRS)
 
-tests:	$(SRC_DIRS)
-		@$(MAKE) -C $@
-
-doc:
-		$(MAKE) srcs -C src
-		doxygen
+doc:    $(SRC_DIRS)
+	@doxygen
 
 clean:	$(CLEANSRC)
 
-$(SRC_DIRS): | $(CREATE_DIRS)
-		@$(MAKE) -C $@
+$(SRC_DIRS):
+	@$(MAKE) -C $@
 
 $(CLEANSRC):
-		$(MAKE) -C $(@:clean-%=%) clean
+	$(MAKE) -C $(@:clean-%=%) clean
 
-silo:
-		./build_silo.sh
+external_libraries/silo:
+	@echo "Locally installing the Silo library"
+	@cd external_libraries; ./build_silo.sh
 
 # Dependency information
-$(SRC_DIRS):
+$(SRC_DIRS): external_libraries/silo

@@ -1,26 +1,22 @@
-! This module contains the routines related to prolongation (going from a coarse
-! to a fine variable).
-!
-! Author: Jannis Teunissen
-! License: GPLv3
-
+!> This module contains the routines related to prolongation: going from
+!> coarse to fine variables.
 module m_a$D_prolong
   use m_a$D_types
 
   implicit none
   private
 
-  public :: a$D_prolong0_from
-  public :: a$D_prolong0
-  public :: a$D_prolong1_from
-  public :: a$D_prolong1
-  public :: a$D_prolong2_from
-  public :: a$D_prolong2
+  public :: a$D_prolong_copy_from
+  public :: a$D_prolong_copy
+  public :: a$D_prolong_linear_from
+  public :: a$D_prolong_linear
+  public :: a$D_prolong_quadratic_from
+  public :: a$D_prolong_quadratic
 
 contains
 
   !> Zeroth-order prolongation to children.
-  subroutine a$D_prolong0_from(boxes, id, iv, iv_to, add)
+  subroutine a$D_prolong_copy_from(boxes, id, iv, iv_to, add)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Box whose children we will fill
     integer, intent(in)           :: iv       !< Variable that is prolonged
@@ -31,12 +27,12 @@ contains
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == af_no_box) cycle
-       call a$D_prolong0(boxes(id), boxes(c_id), iv, iv_to=iv_to, add=add)
+       call a$D_prolong_copy(boxes(id), boxes(c_id), iv, iv_to=iv_to, add=add)
     end do
-  end subroutine a$D_prolong0_from
+  end subroutine a$D_prolong_copy_from
 
   !> Partial prolongation to a child (from parent) using injection (simply copy value)
-  subroutine a$D_prolong0(box_p, box_c, iv, iv_to, low, high, add)
+  subroutine a$D_prolong_copy(box_p, box_c, iv, iv_to, low, high, add)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box
     integer, intent(in)           :: iv       !< Variable to fill
@@ -105,11 +101,11 @@ contains
        end do
 #endif
     end if
-  end subroutine a$D_prolong0
+  end subroutine a$D_prolong_copy
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
-  subroutine a$D_prolong1_from(boxes, id, iv, iv_to, add)
+  subroutine a$D_prolong_linear_from(boxes, id, iv, iv_to, add)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Box whose children we will fill
     integer, intent(in)           :: iv       !< Variable that is filled
@@ -120,14 +116,14 @@ contains
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == af_no_box) cycle
-       call a$D_prolong1(boxes(id), boxes(c_id), iv, iv_to, add)
+       call a$D_prolong_linear(boxes(id), boxes(c_id), iv, iv_to, add)
     end do
-  end subroutine a$D_prolong1_from
+  end subroutine a$D_prolong_linear_from
 
   !> Prolongation to a child (from parent) using linear interpolation. We use
   !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
   !> corner ghost cells.
-  subroutine a$D_prolong1(box_p, box_c, iv, iv_to, add)
+  subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box
     integer, intent(in)           :: iv       !< Variable to fill
@@ -219,11 +215,11 @@ contains
        end do
     end do
 #endif
-  end subroutine a$D_prolong1
+  end subroutine a$D_prolong_linear
 
   !> Quadratic prolongation to children. We use stencils that do not require
   !> corner ghost cells.
-  subroutine a$D_prolong2_from(boxes, id, iv, iv_to, add)
+  subroutine a$D_prolong_quadratic_from(boxes, id, iv, iv_to, add)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Box whose children we will fill
     integer, intent(in)           :: iv       !< Variable that is filled
@@ -234,13 +230,13 @@ contains
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == af_no_box) cycle
-       call a$D_prolong2(boxes(id), boxes(c_id), iv, iv_to, add)
+       call a$D_prolong_quadratic(boxes(id), boxes(c_id), iv, iv_to, add)
     end do
-  end subroutine a$D_prolong2_from
+  end subroutine a$D_prolong_quadratic_from
 
   !> Prolongation to a child (from parent) using quadratic interpolation. We use
   !> 5 / 7 point stencils which do not need corner ghost cells.
-  subroutine a$D_prolong2(box_p, box_c, iv, iv_to, add)
+  subroutine a$D_prolong_quadratic(box_p, box_c, iv, iv_to, add)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box
     integer, intent(in)           :: iv       !< Variable to fill
@@ -345,6 +341,6 @@ contains
        end do
     end do
 #endif
-  end subroutine a$D_prolong2
+  end subroutine a$D_prolong_quadratic
 
 end module m_a$D_prolong

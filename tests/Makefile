@@ -1,6 +1,6 @@
 A5_DIR  := ..
 INCDIRS	:= $(A5_DIR)/src
-LIBDIRS := $(A5_DIR)/src $(A5_DIR)/silo/lib
+LIBDIRS := $(A5_DIR)/src $(A5_DIR)/external_libraries/silo/lib
 LIBS	:= afivo silo
 
 include $(A5_DIR)/makerules.make
@@ -15,9 +15,11 @@ RESULTS	:= $(TESTS:%=$(RESDIR)/%)
 ANSWERS	:= $(TESTS:%=$(ANSDIR)/%)
 
 # phonytest helps to always regenerate test results
-.PHONY: all score clean phonytest
+.PHONY: all test score clean phonytest
 
-all:	$(RESULTS)
+all:	$(TESTS)
+
+test:	$(RESULTS)
 
 score: 	$(TESTS)
 	@$(MAKE) $(RESULTS) | cut -d\  -f 1 | egrep '(PASSED|FAILED)' | sort | uniq -c
