@@ -88,7 +88,7 @@ program random_refinement_2d
      ! of the iteration process
      call a2_adjust_refinement(tree, ref_routine, ref_info)
      boxes_used = boxes_used + ref_info%n_add - ref_info%n_rm
-     write(*,'(4(3x,A,1x,i4))') "# new     boxes", ref_info%n_add, &
+     write(*,'(4(3x,A,1x,i6))') "# new     boxes", ref_info%n_add, &
                                 "# removed boxes", ref_info%n_rm,  &
                                 "# boxes used   ", boxes_used,     &
                                 " highest level ", tree%highest_lvl
