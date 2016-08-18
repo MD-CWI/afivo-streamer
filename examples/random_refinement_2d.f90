@@ -12,8 +12,8 @@ program random_refinement_2d
   implicit none
 
   type(a2_t)           :: tree
-  integer              :: iter,boxes_used
-  integer, parameter   :: n_boxes_base = 1
+  integer              :: id, iter, boxes_used
+  integer, parameter   :: n_boxes_base = 5
   integer              :: ix_list(2, n_boxes_base)
   integer              :: nb_list(4, n_boxes_base)
   integer, parameter   :: box_size     = 8
@@ -38,16 +38,19 @@ program random_refinement_2d
        dr, &           ! Distance between cells on base level
        cc_names = ["phi"])      ! Optional: names of cell-centered variables
 
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [1,1]         ! One box at index 1,1
+  ! Set up geometry. Neighbors for the boxes are stored in nb_list
+  nb_list(:, :) = af_no_box     ! Default value
 
-  ! Set neighbors for box one, here nb means neighbor (direction) and l/h stands
-  ! for low/high
-  nb_list(a2_neighb_lowx, 1)  = 1      ! lower-x neighbor of box 1 is box 1
-  nb_list(a2_neighb_highx, 1) = 1      ! higher-x neighbor of box 1 is box 1
-  nb_list(a2_neighb_lowy, 1)  = 1      ! etc. for y-direction
-  nb_list(a2_neighb_highy, 1) = 1
+  ! Spatial indices are used to define the coordinates of a box. By default the
+  ! box at [1,1] touches the origin (x,y) = (0,0)
+  do id = 1, n_boxes_base
+     ix_list(:, id)               = [id, 1] ! Boxes at (1,1), (2,1), (3,1) etc.
+     nb_list(a2_neighb_highy, id) = id      ! Periodic in y-direction
+  end do
+
+  ! Periodic boundaries only have to be specified from one side. The lower-x
+  ! neighbor of box 1 is the last box
+  nb_list(a2_neighb_lowx, 1)  = n_boxes_base
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a2_set_base(tree, ix_list, nb_list)
@@ -118,7 +121,7 @@ contains
     ! Draw a [0, 1) random number
     call random_number(rr)
 
-    if (rr < 0.25_dp .and. boxes(id)%lvl < 7) then
+    if (rr < 0.25_dp .and. boxes(id)%lvl < 5) then
        refine_flag = af_do_ref   ! Add refinement
     else
        refine_flag = af_rm_ref   ! Ask to remove this box, which will not always
