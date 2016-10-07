@@ -1,58 +1,59 @@
-# a5_streamer
+# Afivo-streamer
 
 This is a collection of streamer models based on
-<<<<<<< HEAD
 [Afivo](https://github.com/jannisteunissen/afivo). A 2D, a 3D and a cylindrical
 model are included.
-=======
-[Afivo](https://github.com/jannisteunissen/afivo). A 2D, a 3D and a cylindrical
-model are included.
->>>>>>> origin/Margreet
 
-### Requirements
+## Requirements
 
 Gfortran 4.8 or newer. Afivo makes use of the
 [Silo](https://wci.llnl.gov/simulation/computer-codes/silo/downloads) library,
-which is automatically downloaded and compiled.
+which is automatically downloaded and compiled. It also supports writing VTK
+unstructured grids in XML-binary format, for which no external libraries are
+required.
 
-### Getting the code
+## getting the code
 
-    git clone https://github.com/jannisteunissen/a5_streamer
+    git clone TODO [new url]
 
-### Compiling the code
+## Compiling the code
 
-    cd a5_streamer
+    cd afivo_streamer
     make
 
-### Running the code
+## Running the code
 
     ./streamer_2d  ConfigureFiles/example_2d.txt
     ./streamer_cyl ConfigureFiles/example_cyl.txt
     ./streamer_3d  ConfigureFiles/example_3d.txt
 
 where the configuration files include the parameters that you want to use, see
-the examples in the **ConfigureFiles** directory. You can also specify multiple configuration files, like
+the examples in the `configs` directory. You can also specify multiple
+configuration files, like
 
     ./streamer_2d cfg_1.txt cfg_2.txt ...
 
-Options from later files will override earlier files.
+Options from later files will override those from earlier files.
 
-### Getting input data (transport coefficients)
+## Getting input data (transport coefficients)
 
 Transport data can be computed from cross sections with for example:
 
-* Bolos: https://github.com/aluque/bolos
-* Bolsig+: http://www.bolsig.laplace.univ-tlse.fr
-* Magboltz: http://consult.cern.ch/writeup/magboltz/
-* Particle_swarm https://github.com/jannisteunissen/particle_swarm
+* [Bolos](https://github.com/aluque/bolos) (Open source two-term Boltzmann
+  solver)
+* [Bolsig+](http://www.bolsig.laplace.univ-tlse.fr) (Popular two-term Boltzmann
+  solver)
+* [Magboltz](http://consult.cern.ch/writeup/magboltz/)
+* [Particle_swarm](TODO new url) (Particle / Monte Carlo transport data
+  computation)
 
 Cross section can be obtained from http://lxcat.net. The format of the transport
 data used for the streamer models is illustrated in the files in the **input**
 folder.
 
-### Format of output data
+## Format of output data
 
-Output files have the
-[Silo](https://wci.llnl.gov/simulation/computer-codes/silo) format.
-[Visit](https://wci.llnl.gov/simulation/computer-codes/visit/downloads) is the
-recommended tool to visualize these files.
+Output can be written in the
+[Silo](https://wci.llnl.gov/simulation/computer-codes/silo) or VTK unstructured
+format. [Visit](https://wci.llnl.gov/simulation/computer-codes/visit/downloads)
+is the recommended tool to visualize the output.
