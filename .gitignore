@@ -63,3 +63,5 @@ streamer_cyl
 /fosito/test/*
 /afivo/src/m_a2*
 /afivo/src/m_a3*
+/afivo/src/m_afivo_2d.f90
+/afivo/src/m_mg_2d.f90
