@@ -305,6 +305,8 @@ contains
          "Photoionization efficiency factor, typically around 0.05")
     call CFG_add(ST_config, "photoi_num_photons", 50*1000, &
          "Number of discrete photons to use for photoionization")
+    call CFG_add(ST_config, "photoi_rng_seed", [8123, 91234, 12399, 293434], &
+         "Seed for the photoionization random number generator")
 
     call CFG_add(ST_config, "input_file", "transport_data_file.txt", &
          "Input file with transport data")
@@ -383,11 +385,13 @@ contains
 
   !> Initialize the transport coefficients
   subroutine ST_load_transport_data()
+    use iso_fortran_env, only: int64
     use m_transport_data
     use m_config
 
     character(len=ST_slen) :: input_file, gas_name
-    integer                :: table_size
+    integer                :: table_size, rng_int4_seed(4)
+    integer(int64)         :: rng_int8_seed(2)
     real(dp)               :: max_electric_fld, alpha_fac, eta_fac
     real(dp)               :: mobility_fac, diffusion_fac
     real(dp), allocatable  :: x_data(:), y_data(:)
@@ -434,6 +438,10 @@ contains
 
     ! Create table for photoionization
     if (ST_photoi_enabled) then
+       call CFG_get(ST_config, "photoi_rng_seed", rng_int4_seed)
+       rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
+       call ST_rng%set_seed(rng_int8_seed)
+
        call photoi_get_table_air(ST_photoi_tbl, ST_photoi_frac_O2 * &
             ST_gas_pressure, 2 * ST_domain_len)
     end if
