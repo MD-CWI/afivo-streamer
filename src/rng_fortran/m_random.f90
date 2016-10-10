@@ -16,8 +16,8 @@ module m_random
 
   !> Random number generator type, which contains the state
   type rng_t
-     !> The rng state (needs initialization)
-     integer(i8), private       :: s(2) = [0_i8, 0_i8]
+     !> The rng state (always use your own seed)
+     integer(i8), private       :: s(2) = [123456789_i8, 987654321_i8]
    contains
      procedure, non_overridable :: set_seed    ! Seed the generator
      procedure, non_overridable :: jump        ! Jump function (see below)
@@ -48,14 +48,14 @@ contains
     class(prng_t), intent(inout) :: self
     class(rng_t), intent(inout)  :: rng
     integer, intent(in)          :: n_proc
-    integer                      :: i, n
+    integer                      :: n
 
     allocate(self%rngs(n_proc))
+    self%rngs(1) = rng
 
-    do n = 1, n_proc
-       do i = 1, size(self%rngs(n)%s)
-          self%rngs(n)%s(i) = rng%int8()
-       end do
+    do n = 2, n_proc
+       self%rngs(n) = self%rngs(n-1)
+       call self%rngs(n)%jump()
     end do
   end subroutine init_parallel
 
