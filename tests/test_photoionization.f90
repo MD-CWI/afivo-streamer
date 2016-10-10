@@ -27,7 +27,7 @@ program test_photoionization
 
   type(a2_t)          :: tree
   type(ref_info_t)    :: ref_info
-  type(photoi_tbl_t)      :: photoi_tbl
+  type(photoi_tbl_t)  :: photoi_tbl
   type(RNG_t)         :: sim_rng       ! Random number generator
 
   integer             :: n, id
@@ -142,7 +142,7 @@ contains
 
           if (use_cyl) then
              box%cc(i, j, i_sol) = coeff(1) / (4 * pi * r**2) * &
-                  photoi_absfunc_air(r, gas_pressure * frac_O2)
+                  photoi_absorption_func_air(r, gas_pressure * frac_O2)
 
              if (r < box%dr) then
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / &
@@ -152,7 +152,7 @@ contains
              end if
           else
              box%cc(i, j, i_sol) = coeff(1) / (2 * pi * r) * &
-                  photoi_absfunc_air(r, gas_pressure * frac_O2)
+                  photoi_absorption_func_air(r, gas_pressure * frac_O2)
 
              if (r < box%dr) then
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / box%dr**2

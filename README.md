@@ -12,7 +12,7 @@ which is automatically downloaded and compiled. It also supports writing VTK
 unstructured grids in XML-binary format, for which no external libraries are
 required.
 
-## getting the code
+## Getting the code
 
     git clone TODO [new url]
 
@@ -48,7 +48,7 @@ Transport data can be computed from cross sections with for example:
   computation)
 
 Cross section can be obtained from http://lxcat.net. The format of the transport
-data used for the streamer models is illustrated in the files in the **input**
+data used for the streamer models is illustrated in the files in the `transport_data`
 folder.
 
 ## Format of output data
