@@ -14,6 +14,7 @@ module m_random
   ! A 64 bit integer type
   integer, parameter :: i8 = selected_int_kind(18)
 
+  !> Random number generator type, which contains the state
   type rng_t
      !> The rng state (needs initialization)
      integer(i8), private       :: s(2) = [0_i8, 0_i8]
@@ -30,9 +31,33 @@ module m_random
      procedure, non_overridable :: next        ! Internal method
   end type rng_t
 
+  !> Parallel random number generator type
+  type prng_t
+     type(rng_t), allocatable :: rngs(:)
+   contains
+     procedure, non_overridable :: init_parallel
+  end type prng_t
+
   public :: rng_t
+  public :: prng_t
 
 contains
+
+  !> Initialize a collection of rng's for parallel use
+  subroutine init_parallel(self, n_proc, rng)
+    class(prng_t), intent(inout) :: self
+    class(rng_t), intent(inout)  :: rng
+    integer, intent(in)          :: n_proc
+    integer                      :: i, n
+
+    allocate(self%rngs(n_proc))
+
+    do n = 1, n_proc
+       do i = 1, size(self%rngs(n)%s)
+          self%rngs(n)%s(i) = rng%int8()
+       end do
+    end do
+  end subroutine init_parallel
 
   !> Set a seed for the rng
   subroutine set_seed(self, the_seed)
@@ -164,7 +189,7 @@ contains
     xyz      = xyz * radius
   end function sphere
 
-    !> Interal routine: get the next value (returned as 64 bit signed integer)
+  !> Interal routine: get the next value (returned as 64 bit signed integer)
   function next(self) result(res)
     class(rng_t), intent(inout) :: self
     integer(i8)                 :: res

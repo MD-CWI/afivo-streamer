@@ -166,7 +166,7 @@ contains
     else
        tmp = log(ratio) * invlog2
        get_rlvl_length = floor(tmp)
-       if (rng%uni_01() < tmp - get_rlvl_length) &
+       if (rng%unif_01() < tmp - get_rlvl_length) &
             get_rlvl_length = get_rlvl_length + 1
     end if
   end function get_rlvl_length
@@ -191,7 +191,7 @@ contains
     !$omp parallel private(n, rr, dist, proc_id)
     !$omp single
     n_procs = omp_get_num_threads()
-    call prng%init(n_procs, rng)
+    call prng%init_parallel(n_procs, rng)
     !$omp end single
 
     proc_id = 1+omp_get_thread_num()
@@ -199,7 +199,7 @@ contains
     if (n_dim == 2) then
        !$omp do
        do n = 1, n_photons
-          rr = prng%rngs(proc_id)%uni_01()
+          rr = prng%rngs(proc_id)%unif_01()
           dist = LT_get_col(tbl, 1, rr)
           xyz_out(1:n_dim, n) =  xyz_in(1:n_dim, n) + &
                prng%rngs(proc_id)%circle(dist)
@@ -208,7 +208,7 @@ contains
     else if (n_dim == 3) then
        !$omp do
        do n = 1, n_photons
-          rr = prng%rngs(proc_id)%uni_01()
+          rr = prng%rngs(proc_id)%unif_01()
           dist = LT_get_col(tbl, 1, rr)
           xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
        end do
@@ -286,7 +286,7 @@ contains
 
     !$omp single
     n_procs = omp_get_num_threads()
-    call prng%init(n_procs, rng)
+    call prng%init_parallel(n_procs, rng)
     !$omp end single
 
     proc_id = 1+omp_get_thread_num()
@@ -309,7 +309,7 @@ contains
 
                 n_create = floor(tmp)
 
-                if (prng%rngs(proc_id)%uni_01() < tmp - n_create) &
+                if (prng%rngs(proc_id)%unif_01() < tmp - n_create) &
                      n_create = n_create + 1
 
                 if (n_create > 0) then
@@ -513,7 +513,7 @@ contains
     !$omp proc_id, tmp, n_create)
     !$omp single
     n_procs = omp_get_num_threads()
-    call prng%init(n_procs, rng)
+    call prng%init_parallel(n_procs, rng)
     !$omp end single
 
     proc_id = 1+omp_get_thread_num()
@@ -531,7 +531,7 @@ contains
                    tmp = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
                    n_create = floor(tmp)
 
-                   if (prng%rngs(proc_id)%uni_01() < tmp - n_create) &
+                   if (prng%rngs(proc_id)%unif_01() < tmp - n_create) &
                         n_create = n_create + 1
 
                    if (n_create > 0) then
