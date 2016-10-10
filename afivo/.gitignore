@@ -1,6 +1,5 @@
 *.vtu
 *.silo
-silo/*
 src/m_a2_*
 src/m_a3_*
 /examples/poisson_basic_2d
@@ -22,3 +21,5 @@ src/m_a3_*
 /tests/test_types_2d_3d
 tests/results/*
 /examples/simple_streamer_2d
+external_libraries/*
+documentation/html/*

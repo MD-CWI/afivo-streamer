@@ -1,8 +1,6 @@
-! This module contains routines related to interpolation
-!
-! Author: Jannis Teunissen
-! License: GPLv3
-
+!> This module contains routines related to point-based interpolation, which can
+!> be useful when you want to have output at given points. The interpolation for
+!> meshes is called prolongation, see m_aX_prolong.
 module m_a$D_interp
   use m_a$D_types
 

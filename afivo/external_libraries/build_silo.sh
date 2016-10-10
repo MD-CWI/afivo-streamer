@@ -6,7 +6,7 @@ SILO_BASEURL="https://wci.llnl.gov/content/assets/docs/simulation/"\
 "computer-codes/silo/silo-4.10/"
 SILO_TARNAME="silo-4.10-bsd-smalltest.tar.gz"
 SILO_DIRNAME="silo-4.10-bsd"
-BUILD_DIR="ext_libs_build"
+BUILD_DIR="build"
 
 # Do compilation etc. in build directory
 mkdir -p ${BUILD_DIR}
@@ -14,7 +14,13 @@ cd ${BUILD_DIR}
 
 # Get silo if not found
 if [ ! -f ${SILO_TARNAME} ]; then
-    curl -O ${SILO_BASEURL}${SILO_TARNAME}
+    if hash curl 2> /dev/null; then
+        curl -O ${SILO_BASEURL}${SILO_TARNAME}
+    elif hash wget 2> /dev/null; then
+        wget ${SILO_BASEURL}${SILO_TARNAME}
+    else
+        echo "build_silo.sh error: cannot find curl or wget"
+    fi
 fi
 
 # Extract
