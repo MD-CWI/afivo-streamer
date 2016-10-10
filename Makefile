@@ -9,7 +9,7 @@ all: 		$(SRC_DIRS)
 
 clean: 		$(CLEANSRC)
 
-$(SRC_DIRS):
+$(SRC_DIRS):	| output
 		@echo "\n*********** Build information ***********"
 		@echo "  Debug is set to: [$(DEBUG)],"
 		@echo "  Set it to 1 to enable a debug build."
@@ -19,6 +19,10 @@ $(SRC_DIRS):
 
 $(CLEANSRC):
 		$(MAKE) -C $(@:clean-%=%) clean
+
+# Ensure the output folder exists
+output:
+		mkdir -p output
 
 # Dependecy information
 src:		afivo
