@@ -155,9 +155,6 @@ module m_streamer
   ! Refine if alpha*dx is larger than this value
   real(dp), protected :: ST_refine_adx
 
-  ! Refine if alpha*dx is larger than this value             !!! comment???
-  real(dp), protected :: ST_refine_adx_field                 !!! 
-
   ! Refine if the curvature in phi is larger than this value
   real(dp), protected :: ST_refine_cphi
 
@@ -284,10 +281,8 @@ contains
     call CFG_add(ST_config, "refine_max_dx", 1.0e-3_dp, &
          "The grid spacing will always be smaller than this value")
 
-    call CFG_add(ST_config, "refine_adx", 1.0_dp, &
+    call CFG_add(ST_config, "refine_adx", 0.8_dp, &
          "Refine if alpha*dx is larger than this value")
-    call CFG_add(ST_config, "refine_adx_field", 1.0_dp, & !!! value ???
-         "Refine if alpha*dx is larger than this value")  !!! comment ???
     call CFG_add(ST_config, "refine_cphi", 1e99_dp, &
          "Refine if the curvature in phi is larger than this value")
     call CFG_add(ST_config, "derefine_dx", 1e-4_dp, &

@@ -196,10 +196,6 @@ contains
     ! The refinement is based on the ionization length times the grid spacing
     adx     = boxes(id)%dr * alpha
 
-    ! Increase the refinement in fields below ST_refine_adx_field
-    adx     = adx * max(1.0_dp, (2 * ST_refine_adx_field) / &
-         (max_fld + ST_refine_adx_field))
-
     ! The refinement is also based on the intensity of the source term. Here we
     ! estimate the curvature of phi (given by dx**2 * Laplacian(phi))
     cphi    = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
