@@ -1,20 +1,20 @@
-Afivo
-=====
+# Afivo
 
 Afivo (<b>A</b>daptive <b>Fi</b>nite <b>V</b>olume <b>O</b>ctree) is a framework
-for simulations on adaptively refined quadtree and octree grids. It
-intentionally supports less features than most alternatives, with the aim of
-making the code relatively easy to modify.
+for simulations on adaptively refined quadtree and octree grids. It was designed
+with a focus on simplicity.
 
-### Features
+## Features
 
-* Support for adaptively refined quadtree and octree grids
+* Adaptively refined quadtree and octree grids
 * OpenMP parallelization
 * FAS multigrid solver (v-cycle and FMG)
+* Flexible handling of refinement boundaries and physical boundaries
+* Written in modern Fortran
 * Silo and VTK unstructured output, which can be visualized with e.g.
   [Visit](https://wci.llnl.gov/simulation/computer-codes/visit).
 
-### Design choices
+## Design choices
 
 Some of the design choices are liste below. A more detailed discussion can be
 found on [this page](documentation/design.md).
@@ -26,21 +26,17 @@ found on [this page](documentation/design.md).
   more data from neighbors).
 * No 'corner' ghost cells
 
-### Installation & compilation
+## Installation & compilation
 
 Instructions can be found on [this page](documentation/compiling.md).
 
-### Documentation
-
-Documentation can be found in the "documentation" directory (TODO: describe details)
-
-### Authors
+## Authors
 
 * Jannis Teunissen (started the project to do discharge simulations)
 * Margreet Nool (worked on documentation, examples, testing)
 
-### Some alternatives
+## Some alternatives
 
-* Boxlib
-* Paramesh
-* Chombo
+* [Boxlib](https://ccse.lbl.gov/BoxLib/index.html)
+* [Paramesh](https://sourceforge.net/projects/paramesh/)
+* [Chombo](https://commons.lbl.gov/display/chombo/Chombo+-+Software+for+Adaptive+Solutions+of+Partial+Differential+Equations)
