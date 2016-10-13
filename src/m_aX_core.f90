@@ -154,13 +154,12 @@ contains
     type(a$D_t), intent(inout)  :: tree          !< Tree for which we set the base
     integer, intent(in)        :: ix_list(:, :) !< List of spatial indices for the initial boxes
     integer, intent(inout)     :: nb_list(:, :) !< Neighbors for the initial boxes
-    integer                    :: n_boxes, i, j, n, id, nb, nb_id
+    integer                    :: n_boxes, n, id, nb, nb_id
     integer                    :: ix($D), lvl, offset
     integer                    :: ix_min($D), ix_max($D), nb_ix($D)
 #if $D == 2
     integer, allocatable       :: id_array(:, :)
 #elif $D == 3
-    integer                    :: k
     integer, allocatable       :: id_array(:, :, :)
 #endif
 
@@ -181,96 +180,55 @@ contains
 
 #if $D == 2
     allocate(id_array(ix_min(1):ix_max(1), ix_min(2):ix_max(2)))
-
-    ! Store box ids in the index array covering the coarse grid
-    id_array = af_no_box
-
-    do n = 1, n_boxes
-       ix = ix_list(:, n)
-       id_array(ix(1), ix(2)) = n
-    end do
-
-    do j = ix_min(2), ix_max(2)
-       do i = ix_min(1), ix_max(1)
-
-          ! If there is a box, set its neighbors
-          if (id_array(i, j) /= af_no_box) then
-             id = id_array(i, j)
-
-             do nb = 1, a$D_num_neighbors
-                ! Compute ix of neighbor
-                nb_ix = [i, j] + a$D_neighb_dix(:, nb)
-                nb_id = id_array(nb_ix(1), nb_ix(2))
-
-                if (nb_id /= af_no_box) then
-                   ! Neighbor present, so store id
-                   nb_list(nb, id) = nb_id
-                else
-                   ! A periodic or boundary condition
-                   nb_id = nb_list(nb, id)
-
-                   if (nb_id > af_no_box) then
-                      ! If periodic, copy to other box
-                      nb_list(a$D_neighb_rev(nb), nb_id) = id
-                   else if (nb_id == af_no_box) then
-                      ! The default value (af_no_box) is converted to -1,
-                      ! indicating a boundary condition
-                      nb_list(nb, id) = -1
-                   end if
-                end if
-
-             end do
-          end if
-       end do
-    end do
 #elif $D == 3
     allocate(id_array(ix_min(1):ix_max(1), &
          ix_min(2):ix_max(2), ix_min(3):ix_max(3)))
+#endif
 
     ! Store box ids in the index array covering the coarse grid
     id_array = af_no_box
 
-    do n = 1, n_boxes
-       ix = ix_list(:, n)
-       id_array(ix(1), ix(2), ix(3)) = n
+    do id = 1, n_boxes
+       ix = ix_list(:, id)
+#if $D == 2
+       id_array(ix(1), ix(2)) = id
+#elif $D == 3
+       id_array(ix(1), ix(2), ix(3)) = id
+#endif
     end do
 
-    do k = ix_min(3), ix_max(3)
-       do j = ix_min(2), ix_max(2)
-          do i = ix_min(1), ix_max(1)
+    ! Loop over the boxes and set their neighbors
+    do id = 1, n_boxes
+       ix = ix_list(:, id)
 
-             ! If there is a box, set its neighbors
-             if (id_array(i, j, k) /= af_no_box) then
-                id = id_array(i, j, k)
+       do nb = 1, a$D_num_neighbors
+          ! Compute ix of neighbor
+          nb_ix = ix + a$D_neighb_dix(:, nb)
+#if $D == 2
+          nb_id = id_array(nb_ix(1), nb_ix(2))
+#elif $D == 3
+          nb_id = id_array(nb_ix(1), nb_ix(2), nb_ix(3))
+#endif
 
-                do nb = 1, a$D_num_neighbors
-                   ! Compute ix of neighbor
-                   nb_ix = [i, j, k] + a$D_neighb_dix(:, nb)
-                   nb_id = id_array(nb_ix(1), nb_ix(2), nb_ix(3))
+          if (nb_id /= af_no_box) then
+             ! Neighbor present, so store id
+             nb_list(nb, id) = nb_id
+          else
+             ! A periodic or boundary condition
+             nb_id = nb_list(nb, id)
 
-                   ! If present, store neighbor id
-                   if (nb_id /= af_no_box) then
-                      nb_list(nb, id) = nb_id
-                   else
-                      ! A periodic or boundary condition
-                      nb_id = nb_list(nb, id)
-
-                      if (nb_id > af_no_box) then
-                         ! If periodic, copy to other box
-                         nb_list(a$D_neighb_rev(nb), nb_id) = id
-                      else if (nb_id == af_no_box) then
-                         ! The default value (af_no_box) is converted to -1,
-                         ! indicating a boundary condition
-                         nb_list(nb, id) = -1
-                      end if
-                   end if
-
-                end do
+             if (nb_id > af_no_box) then
+                ! If periodic, copy connectivity information to other box
+                nb_list(a$D_neighb_rev(nb), nb_id) = id
+             else if (nb_id == af_no_box) then
+                ! The value af_no_box is converted to -1, indicating the default
+                ! boundary condition
+                nb_list(nb, id) = -1
              end if
-          end do
+          end if
+
        end do
     end do
-#endif
 
     if (any(nb_list == af_no_box)) stop "a$D_set_base: unresolved neighbors"
 
@@ -287,9 +245,9 @@ contains
        call get_free_ids(tree, tree%lvls(lvl)%ids)
        offset = tree%lvls(lvl)%ids(1) - 1
 
-       do i = 1, n_boxes
-          id                         = tree%lvls(lvl)%ids(i)
-          ix                         = ix_list(:, i)
+       do n = 1, n_boxes
+          id                         = tree%lvls(lvl)%ids(n)
+          ix                         = ix_list(:, n)
           tree%boxes(id)%lvl         = lvl
           tree%boxes(id)%ix          = ix
           tree%boxes(id)%dr          = tree%dr_base * 0.5_dp**(lvl-1)
@@ -302,10 +260,10 @@ contains
           tree%boxes(id)%children(:) = af_no_box ! Gets overwritten, see below
 
           ! Connectivity is the same for all lvls
-          where (nb_list(:, i) > af_no_box)
-             tree%boxes(id)%neighbors = nb_list(:, i) + offset
+          where (nb_list(:, n) > af_no_box)
+             tree%boxes(id)%neighbors = nb_list(:, n) + offset
           elsewhere
-             tree%boxes(id)%neighbors = nb_list(:, i)
+             tree%boxes(id)%neighbors = nb_list(:, n)
           end where
 
           call init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
