@@ -1,106 +1,65 @@
-\section Contents
-<ul>
-	<li> \ref sect_intro </li>
-	<li> \ref sect_example1
-		<ul>
-			<li> \ref sect_parallel </li>
-		</ul>
-	</li>
+# Multigrid tutorial
 
-</ul>
+[TOC]
 
-\section sect_intro Introduction 
+# Introduction {#mgtut-intro}
 
-In this tutorial we describe several examples.
+In this tutorial we present two Poisson test problems, which demonstrate the
+multigrid behavior on a partially refined mesh. The examples are in 2D and in
+3D, but the code for 2D and 3D is pretty much the same.
 
-\subsection sect_example1 Example1: Afivo for solving the Poisson equation in two- and three dimensions
+\todo Link data structure to code (perhaps 2d files instead of Xd?)
 
-In this section we present two Poisson test problems
-to demonstrate the multigrid behavior on a partially refined mesh.
-We use the **method of manufactured solutions**: from an analytic solution the right-hand side and boundary
-conditions are computed. Two test problems are considered, a
-constant-coefficient
-<a class="code" href="poisson__basic__2d_8f90.html#aef02b53cac21b72a47afc1c34286c443">two-</a> and
-<a class="code" href="poisson__basic__3d_8f90.html#a1b0ee6adabd66bb15df1120e11776ead">three-dimensional</a>
-Poisson equation shown in <a href="examples.html">Examples</a>
-<a name="eq_mg-example-lpl-1" >(11)</a>
-\f[
-  \nabla^2 u = \nabla \cdot (\nabla u) = \rho ,
-\f]
-on a two-dimensional rectangular domain \f$[0,1] \times [0,1]\f$ and
-on a three-dimensional cubic domain \f$[0,1] \times [0,1] \times [0,1]\f$, respectively.
-We pick the following solution for \f$u\f$
-\f[
-  u(r) = \exp(|{\vec{r}-\vec{r}_1}|/\sigma) + \exp(|{\vec{r}-\vec{r}_2}|/\sigma),
-\f]
-where \f$\vec{r_1} = (0.25, 0.25)\f$, \f$\vec{r_2} = (0.75, 0.75)\f$, in the 2D case
-  and \f$\vec{r_1} = (0.25, 0.25, 0.25)\f$, \f$\vec{r_2} = (0.75, 0.75, 0.75)\f$, in the 3D case
-  and \f$\sigma = 0.04\f$.
-An analytic expression for the right-hand side \f$\rho\f$ is obtained by plugging
-the solution in <a href="#eq_mg-example-lpl-1">equation(11)</a>.
+# Poisson equation in 2D/3D
 
-In this tutorial we concentrate on the 2D case. The 3D example will be used for timing results.
-<code>gaussian</code> of type <a class="el" href="structm__gaussians_1_1gauss__t.html">gauss_t</a>:
+We use the *method of manufactured solutions*: from an analytic solution the
+right-hand side and boundary conditions are computed. The equation solved here
+is Poisson's equation with constant coefficients: \f[ \nabla^2 u = \nabla \cdot
+(\nabla u) = \rho , \f] in a rectangular domain of \f$[0,1]^D\f$, where $D$ is
+the problem dimension.
 
-\verbatim
-  !> A type to store a collection of gaussians in
-  type gauss_t
-     integer :: n_gauss                !< Number of gaussians
-     integer :: n_dim                  !< Dimensionality
-     real(dp), allocatable :: ampl(:)  !< Amplitudes
-     real(dp), allocatable :: sigma(:) !< Widths
-     real(dp), allocatable :: r0(:,:)  !< Centers
-  end type gauss_t
-\endverbatim
-defined in module <code>m_gaussians</code>. This module also contains the routine 
-<a class="el" href="namespacem__gaussians.html#a050ea2228d5aa753d13e1f81996045d7">gauss_init</a>,
-which is called to store variable <code>gaussian</code>:
+We pick the following solution \f$u\f$ \f[ u(r) =
+\exp(|{\vec{r}-\vec{r}_1}|/\sigma) + \exp(|{\vec{r}-\vec{r}_2}|/\sigma), \f]
+where \f$\vec{r_1} = (0.25, 0.25)\f$, \f$\vec{r_2} = (0.75, 0.75)\f$ (2D) and
+\f$\vec{r_1} = (0.25, 0.25, 0.25)\f$, \f$\vec{r_2} = (0.75, 0.75, 0.75)\f$ (3D)
+and \f$\sigma = 0.04\f$. An analytic expression for the right-hand side
+\f$\rho\f$ is obtained by plugging the solution into the original equation.
 
-\verbatim
-! The manufactured solution exists Gaussians, which are stored in gaussian
-  if (n_gaussian == 2) then
+In the code, the solution is stored used the module m_gaussians. This module
+also contains the type m_gaussians::gauss_t and the subroutine gauss_init() to
+initialize it as follows:
+
      ! Amplitudes:  [1.0_dp, 1.0_dp]
      ! Sigmas    :  [0.04_dp, 0.04_dp]
      ! Locations :  [[0.25_dp, 0.25_dp], [0.75_dp, 0.75_dp]]
-     call gauss_init(gaussian, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
+     call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
           reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
-  end if
-\endverbatim
 
-Defining <code>box_size = 8</code>  denotes that each box has \f$ 8 \times 8\f$ cells, and,
-since the problem is solved on a rectangular domain of \f$[0,1] \times [0,1]\f$,
-implies that variable <code>dr = 1 / 8 </code>.
-The variable <code>tree</code> of type
-<a class="el" href="structm__a2__types_1_1a2__t.html">a2_t</a>
-is initialized by a call to 
-<a class="el" href="namespacem__a2__core.html#aa3e7687c41f7b3915de71b96f4511de3">a2_init</a>
+The variable `tree` contains the full AMR mesh. It is of type a2_t, and a call
+to a2_init() takes care of the initialization:
 
-\verbatim
-! Initialize tree
-  call a2_init(tree, & ! Tree to initialize
-       box_size, &     ! Number of cells per coordinate in a box
-       n_var_cell, &   ! Number of face-centered variables
-       n_var_face, &   ! Number of cell-centered variables
-       dr)             ! Distance between cells on base level
-\endverbatim
-Note that <a class="el" href="namespacem__a2__core.html#aa3e7687c41f7b3915de71b96f4511de3">a2_init</a>
-also has some optional variables. In example 
-<a class="code" href="poisson__basic__2d_8f90.html#aef02b53cac21b72a47afc1c34286c443">poisson_basic_2d</a>
-the variable <code>n_var_cell</code>, the number of cell centered values, has been set
-to 4 (reserved for <code>i_phi, i_rhs, i_err</code> and <code>i_tmp</code>, see below),
-whereas the variable <code>n_var_face</code>, the number of face centered values,
-has been initialized to 0.
+    call a2_init(tree, & ! Tree to initialize
+         box_size, &     ! Number of cells per coordinate in a box
+         n_var_cell, &   ! Number of face-centered variables
+         n_var_face, &   ! Number of cell-centered variables
+         dr)             ! Distance between cells on base level
+
+
+We define `box_size = 8`, which means that each box has \f$ 8 \times 8\f$ cells,
+and `dr = 0.125` (so that the domain length is one). The variable `n_var_cell`,
+the number of cell centered values, is set to 4 (reserved for `i_phi, i_rhs,
+i_err` and `i_tmp`, see below), whereas the variable `n_var_face`, the number of
+face centered values, is zero.
 
 In Afivo the coarsest mesh, which covers the full computational domain, is not
-supposed to change. To create this mesh there is a routine
-<a class="el" href="namespacem__a2__core.html#ab7007734c1625a6057a63f4676ce7244">a2_set_base</a>,
-which takes as input the spatial indices of the coarse boxes and their neighbors.
-Below, a 2D example is shown for creating a single coarse box at index \f$(1,1)\f$. 
-Physical (non-periodic) boundaries are indicated by a
-negative index for the neighbor. By adjusting the neighbors one can specify
-different geometries, the possibilities include meshes that contain a hole, or
-meshes that consist of two isolated parts. The treatment of boundary conditions
-is discussed in section \ref sect_fill-ghost-cell.
+supposed to change. To create this mesh there is a routine a2_set_base(), which
+takes as input the spatial indices of the coarse boxes and their neighbors.
+Below, a 2D example is shown for creating a single coarse box at index
+\f$(1,1)\f$. Physical (non-periodic) boundaries are indicated by a negative
+index for the neighbor. By adjusting the neighbors one can specify different
+geometries, the possibilities include meshes that contain a hole, or meshes that
+consist of two isolated parts. The treatment of boundary conditions is discussed
+in section \ref sect_fill-ghost-cell.
 
 \verbatim
   ! Set up geometry. These indices are used to define the coordinates of a box,
@@ -141,10 +100,10 @@ The memory limit has been set on 16 GB (default value) which results in at most 
 the numbers of cell and face centered variables. 
 The length of the box list is 1000, but if more boxes are required, the length will be extended
 and boxes which are not longer used will be cleaned up.
-Since <code>box_size = 8</code>  this implies that each box has \f$ 8 \times 8\f$ cells, excluding
+Since `box_size = 8`  this implies that each box has \f$ 8 \times 8\f$ cells, excluding
 ghost cells, and, since the problem is solved on a rectangular domain of \f$[0,1] \times [0,1]\f$,
-(<code> min. coords:          0.0000E+00  0.0000E+00</code>, the cell size <code>dx</code>
-at the coarsest level is <code>dr = 1 / 8 </code>.
+(` min. coords:          0.0000E+00  0.0000E+00`, the cell size `dx`
+at the coarsest level is `dr = 1 / 8 `.
 
 Next, we start refining the mesh by means of subroutine
 <td class="memItemRight" valign="bottom"><a class="el" href="poisson__basic__2d_8f90.html#a1c44f0de37167b4b60895cf38c39e430">refine_routine</a>
@@ -179,14 +138,14 @@ which has been added to program
        end do outer
      end subroutine refine_routine
 \endverbatim
-Here variable <code>id</code> denotes the index number of the box.
+Here variable `id` denotes the index number of the box.
 <a class="el" href="namespacem__a2__types.html#a36d16420768ccb9874afb2cfe392ed01">a2_r_cc</a>
-is one of those useful features from module <code>m_a2_types</code> to calculate the center of a cell.
+is one of those useful features from module `m_a2_types` to calculate the center of a cell.
 The refinement is based on the fourth derivative of the solution.
 This example only shows when a box should be refined or not, the derefinement does not play a role here.
-Besides, value <code>af_do_ref</code>, indicating you want to refine a box,
-the value <code>af_keep_ref</code>, indicating you want to keep a box's refinement, and
-<code>af_rm_ref</code>, indicating you want to derefine a box, are available.
+Besides, value `af_do_ref`, indicating you want to refine a box,
+the value `af_keep_ref`, indicating you want to keep a box's refinement, and
+`af_rm_ref`, indicating you want to derefine a box, are available.
 The routine  
 <a class="el" href="namespacem__a2__core.html#a3f0dd0f48f710e79b6b2085177b19dd6">a2_adjust_refinement</a>
 ensures the 2:1 balance is ensured, so that there is never a jump of more than
@@ -228,12 +187,12 @@ is called for each box, with as argument the user-defined routine
        end do
      end subroutine set_initial_condition
 \endverbatim
-which calls  <code>gauss_laplacian</code> from <code>m_gaussian</code> corresponding the problem
-described above. The routine <code>a2_r_cc</code> computes the cell center of the cells in the box.
-In this example, each box has 4 cell centered matrices. Here <code>box%cc(:,:,i_rhs)</code> is
+which calls  `gauss_laplacian` from `m_gaussian` corresponding the problem
+described above. The routine `a2_r_cc` computes the cell center of the cells in the box.
+In this example, each box has 4 cell centered matrices. Here `box%cc(:,:,i_rhs)` is
 initialized with the right hand side values. 
 
-The following <code>do loop</code> all right hand side field of the boxed used are initialized and
+The following `do loop` all right hand side field of the boxed used are initialized and
 boxes are refined in accordance with the refinement routine to obtain an adaptive mesh.
 \verbatim
   do
@@ -250,7 +209,7 @@ boxes are refined in accordance with the refinement routine to obtain an adaptiv
      if (refine_info%n_add == 0) exit
   end do
 \endverbatim
-If no further refinement is required, i.e., <code>refine_info\%n_add == 0</code>, the do loop stops.
+If no further refinement is required, i.e., `refine_info\%n_add == 0`, the do loop stops.
 
 The routine
 <a class="el" href="namespacem__a2__types.html#a42dbfb05abcda7baa560a475849d2bbb">a2_print_info</a>
@@ -274,8 +233,8 @@ shows after the refinement loop:
 So ten levels of refinement are required leading to 5487 boxes and a cell size of the highest level
 of \f$1 / 4096\f$. 
 
-By means of a call to <code>a2_write_vtk</code> from module <code>m_a2_output</code>
-a <code>vtu</code> file can be produced to show the adapted mesh, but also the solution.
+By means of a call to `a2_write_vtk` from module `m_a2_output`
+a `vtu` file can be produced to show the adapted mesh, but also the solution.
 \verbatim
   ! This writes a VTK output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
@@ -293,10 +252,10 @@ a) | b)
 **Figure 1**. a) initialization of the right hand side b) adapted mesh
 
 Now the grid has been constructed to match the RHS function and in accordance with the refinement function
-<code>refine_routine</code> showed above, we continue to solve the Poisson problem using multigrid.
+`refine_routine` showed above, we continue to solve the Poisson problem using multigrid.
 Therefore we first initialize the multigrid options.
 The routine <a class="el" href="structm__a2__multigrid_1_1mg2__t.html">mg2_t</a>
-performs some basic checks and sets default values where necessary in variable <code>mg</code> of type 
+performs some basic checks and sets default values where necessary in variable `mg` of type 
 <a class="el" href="structm__a2__multigrid_1_1mg2__t.html">mg2_t</a>.
 
 \verbatim
@@ -338,16 +297,16 @@ performs some basic checks and sets default values where necessary in variable <
 To this end, we perform a number of multi-grid iterations. Within each loop we call routine
 <a class="el" href="namespacem__a2__multigrid.html#a9a06b7943954767e5a207ed1c1a1d5bb">mg2_fas_fmg</a>, performing a full approximation scheme using full multigrid.
 At the first call of
-<a class="el" href="namespacem__a2__multigrid.html#a9a06b7943954767e5a207ed1c1a1d5bb">mg2_fas_fmg</a>sets the initial guess for <code>phi</code> and
-restricts the right hand side fields <code>rhs</code> from the highest level down to the
+<a class="el" href="namespacem__a2__multigrid.html#a9a06b7943954767e5a207ed1c1a1d5bb">mg2_fas_fmg</a>sets the initial guess for `phi` and
+restricts the right hand side fields `rhs` from the highest level down to the
 coarsest level.
 After the first call of
 <a class="el" href="namespacem__a2__multigrid.html#a9a06b7943954767e5a207ed1c1a1d5bb">mg2_fas_fmg</a>
 it sets the right hand side field on coarser grids and
-restricts the field with the holding solution of <code>phi</code>.
+restricts the field with the holding solution of `phi`.
 If required the ghost cells are filled.
 
-Next the user-defined routine <code>set_error</code> is called to computed the error
+Next the user-defined routine `set_error` is called to computed the error
 compared to the analytic solution.
 \verbatim
  ! Set the error compared to the analytic solution
@@ -446,3 +405,4 @@ For the multigrid process we achieve a speedup factor of nearly a factor 9.
 For a multigrid process, which is hard to parallelize, this is a very good result.
 
 <img src="../../figures/WCT_basic_3d_lisa_new.png" width=300px /> 
+
