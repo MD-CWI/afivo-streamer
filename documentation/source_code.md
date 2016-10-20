@@ -1,5 +1,4 @@
-Information about the code
-==
+# Description of source code
 
 This folder (src) contains the source of Afivo, split over several modules. The
 code can be recompiled by typing
