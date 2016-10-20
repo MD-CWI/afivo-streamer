@@ -3,9 +3,12 @@ SRC_DIRS	:= src afivo
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
-.PHONY:	all clean $(SRC_DIRS) $(CLEANSRC)
+.PHONY:	all doc clean $(SRC_DIRS) $(CLEANSRC)
 
 all: 		$(SRC_DIRS)
+
+doc:    	$(SRC_DIRS)
+		@doxygen
 
 clean: 		$(CLEANSRC)
 
