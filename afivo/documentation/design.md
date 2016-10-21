@@ -1,143 +1,108 @@
-### Design considerations
+# Design of Afivo
+
+# Introduction {#design-intro}
 
 Given the fact that there are already several frameworks available, why develop
-another one? The main reason was that a *simple* or *basic* framework
-seemed to be missing. Our motivation came from work on time-dependent
-simulations of streamer discharges. These discharges have a multiscale nature,
-and require a fine mesh in the region where they grow. Furthermore, at every
-time step Poisson's equation has to be solved. A streamer model that uses a
-uniform Cartesian grid is therefore computationally expensive, especially for 3D
-simulations.
+another one? The main reason was that a relatively simple framework seemed to be
+missing. Therefore, much of the design choices were made to keep the framework
+simple.
 
-#### What about other parallel, block-structured AMR applications?
+# Grids {#design-grid}
 
-*Paramesh*
+Two types of structured meshes are commonly used: *block-structured* meshes and
+*orthtree* meshes, see the figure below.
 
-In Xcite{Pancheshnyi_2008}, Paramesh was used for streamer simulations. The main
-bottleneck in this implementation was however the Poisson solver. Other streamer
-models (see e.g., \cite Montijn_2006, Xcite{Li_hybrid_ii_2012, Luque_2012}) had the
-same problem, because the non-local nature of Poisson's equation makes an
-efficient parallel solution difficult, especially on an adaptively refined grid.
-An attractive solution method to get around this is geometric multigrid,
-discussed in section \ref sect_afivo-multigrid.
+Block-structured meshes are more general than orthtree meshes: any orthtree mesh
+is also a block-structured mesh, whereas the opposite is not true.
+Some of the advantages and disadvantages of these approaches are:
 
-First, we considered implementing multigrid in Paramesh (see e.g.,
-<a href="http://www.sciencedirect.com/science/article/pii/S0010465599005019">paper</a>
-and 
-<a href="http://www.physics.drexel.edu/~olson/paramesh-doc/Users_manual/amr.html">User's Manual</a>)
-which includes an *alpha* version of a multigrid solver with the
-following 
-<a href="http://www.physics.drexel.edu/~olson/paramesh-doc/Users_manual/multigrid.html">
-comment</a>
-> ##
->  This is an ALPHA version of this feature.
->  You should be aware that it may be **buggy**.
->  Also, construction of multigrid algorithms and AMR is much less
->  straightforward than incorporating AMR into finite-volume hydro codes.
+- In a block-structured mesh, blocks can have a flexible size. Computations on
+  larger blocks are typically more efficient, especially when ghost cells are
+  required (virtual cells on the boundary of a block), which is typically the
+  case.
 
-Because Paramesh does not seem to be actively maintained, we decided not to move
-forward with it after experiencing several problems (writing and visualizing
-output, having a fixed number of blocks).
+- For an orthtree grid, there is a trade-off: larger block sizes allow for more
+  efficient computations, but reduce the adaptivity of the mesh. For a
+  block-structured grid, there is a similar trade-off: in principle it can be
+  refined in a more flexible way, but adding many refined blocks increases the
+  overhead.
 
-*Boxlib*
+- The connectivity of the mesh is simpler for an orthtree mesh, because each
+  block has the same number of cells, and blocks are refined in the same way.
+  This also ensures a simple relation between fine and coarse meshes. These
+  properties make operations such as prolongation and restriction easier to
+  implement, especially in parallel.
 
-Next, we considered <a href="https://ccse.lbl.gov/BoxLib/">Boxlib</a>
-an actively maintained framework
-which is also used in <a href="https://commons.lbl.gov/display/chombo/Chombo+-+Software+for+Adaptive+Solutions+of+Partial+Differential+Equations">Chombo</a>.
-Boxlib contains a significant amount
-of multigrid code, including several examples that demonstrate how a solver can
-be set up and used. After spending some time getting familiar with the
-framework, we tried to modify the multigrid solver to our needs. This involves
-operations like: get the coarse grid values next to refinement boundaries to
-perform a special type of ghost cell filling (see section
-\ref sect_mg-ghost-cells). An operation like this can definitely be implemented
-in Boxlib, but we realized that this task can be made easier in several ways.
+Block-structured grid | Quadtree grid
+---|---
+![a](block_structured.png) | ![](quadtree_cex4.png)
 
-##### Why OpenMP?
-In our experience, a large number of scientific simulations fit into the memory
-of a desktop machine or cluster node, which nowadays often have 16 or 32
-gigabytes of RAM. A practical reason for this is that for larger problems, the
-visualization of the results becomes quite challenging. In general, writing
-parallel code with good scaling takes considerable effort, for which the
-manpower and resources are often lacking. For the application we had in mind,
-efficient large scale parallelism would anyway be hard, due to the non-locality
-of Poisson's equation. This inspired us to develop a framework that uses
-shared-memory parallelism, which makes many operations much simpler, because all
-data can directly be accessed. The goal was to create a relatively simple
-framework that could easily be modified
+# One ghost cell {#design-one-ghost-cell}
 
-#### Why do not you fill corner ghost cells by default?
+There are essentially two ways to implement ghost cells in a framework such as Afivo.
 
-Filling these is relatively easy in 2D, but quite a pain in 3D. There you have to
-consider 8 corner points and 12 edges between these corners. These edges can be
-shared by multiple neighbors, and filling them in a consistent way is quite
-difficult.
+1. Ghost cells are not stored for boxes. When a computation has to be performed
+   on a box, there are typically two options: algorithms can be made aware of
+   the mesh structure, or a box can be temporarily copied to an enlarged box on
+   which ghost cells are filled.
+2. Each box includes ghost cells, either a fixed number for all variables or a
+   variable-dependent number.
 
-#### Why use Fortran (2003+)?
+Storing ghost cells can be quite costly. For example, adding two layers of ghost
+cells to a box of \f$8^3\f$ cells requires \f$(12/8)^3 = 3.375\f$ times as much
+storage. With one layer, about two times as much storage is required. Not
+storing ghost cells prevents this extra memory consumption. However, some
+operations can become more complicated to program, for example when some type of
+interpolation depends on coarse-grid ghost cells. Furthermore, one has to take
+care not to unnecessarily recompute ghost values, and parallelization becomes
+slightly harder.
 
-Because it is one of the more convenient languages for scientific computing.
+If ghost cells are stored for each box, then there are still two options: store
+a fixed number of them for each variable, or let the number of ghost cells vary
+per variable. In Afivo, we have opted for the simplest approach: there is always
+one layer of ghost cells for cell-centered variables. For numerical operations
+that depend on the nearest neighbors, such as computing a second order
+Laplacian, one ghost cell is enough. When additional ghost cells are required,
+these can of course still be computed, there is just no default storage for
+them.
 
-#### Why do not you use MPI?
+# No corner ghost cells {#design-no-corner-ghost}
 
-There are a couple of reasons for this:
+In Afivo, corner ghost cells are not used.
+The reason for this is that in three dimensions, the situation is quite
+complicated: there are eight corners, twelve edges and six sides.
+It is hard to write an elegant routine to fill all these ghost cells, especially
+because the corners and edges have multiple neighbors.
+Therefore, only the sides of a box are considered in Afivo.
+This means that Afivo is not suitable for stencils with diagonal terms.
 
-* There are already many frameworks out there aimed at "big" simulations.
-* I think most people do not need "big" simulations, running on more than say 10
-  cores.
-* Most of the complexity of the current frameworks is in the communication, this
-  is much simpler for AFiVO. There is much less code, and it is probably easier
-  to make changes in a project if you can read all the data from each core, so
-  that you do not have to think about MPI. (Although getting good OpenMP
-  performance is also quite tricky, I admit).
-* When your code is more efficient, you can use a smaller system to do the same
-  type of simulations. This is what I hope to achieve.
-* Most parallel codes do not scale so well, especially if there is a lot of grid
-  refinement. The work is then harder to distribute, and more communication is
-  required.
-* If your simulation fits in memory, then you can also consider running 5
-  different test cases on a big system instead of one bigger one. The bigger one
-  will almost always be less efficient.
+# OpenMP for parallelism {#design-openmp}
 
-#### Why use one fixed ghost cell?
+The two conventional methods for parallel computing are OpenMP (shared memory)
+and MPI (communicating tasks).
+Afivo was designed for small scale parallelism, for example using at most 16
+cores, and therefore only supports OpenMP.
+Compared to an MPI implementation, the main advantage of OpenMP is simplicity:
+data can always be accessed, sequential (user) code can easily be included,
+there is no need for load balancing and no communication between processes needs
+to be set up.
 
-I have considered a couple of options, which are listed below with some remarks:
+Most operations in Afivo loop over a number of boxes, for example the leaves at
+a certain refinement level.
+All such loops have been parallelized by adding OpenMP statements around them,
+for example as shown below:
 
-* Variable number of ghost cells (depending on the variable)
+    do lvl = 1, tree%max_lvl
+       !$omp parallel do private(id)
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call my_method(tree%boxes(id))
+       end do
+       !$omp end parallel do
+    end do
 
-	* Suitable for all ghost cell requirements, flexible.
-	* Having more than 1 ghost cells is not very memory efficient. For example,
-	  for a 2D 8x8 block with 2 ghost cells per side, you would have to store
-	  12x12 cells (144). So the flexibility of having more than one is not really
-	  all that useful.
-	* It is harder to write code for a variable number of ghost cells, for
-      example, when copying data, should we copy the ghost cells? And writing
-      code for filling more than one ghost cell is also hard.
-	* Storing variables is annoying, because they cannot be stored in the same
-      array (since they have different shapes). This makes indexing harder.
-
-* One ghost cell
-
-	* Restricted, not flexible.
-	* Simple to implement because all variables are the same.
-	* One ghost cells does not cost too much memory.
-	* One ghost cells is convenient for 2nd order schemes, such as the multigrid
-      examples, which are quite common.
-	* When you need more than one ghost cell, you can simply access the data on
-      a neighbor directly. See for example the drift-diffusion test.
-	* Perhaps I will add variables without ghost cells in the future, to not
-      waste memory for them.
-
-* No ghost cells
-
-	* Perhaps the most general / elegant idea: do not waste memory on ghost cells
-      but just look the values up at the neighbors.
-	* Hard to write efficient code: typically you would work on an enlarged copy
-      of the current box that includes neighbor data. Copying data takes time,
-      and it is hard to write elegant routines for this. For example, to get a
-      corner ghost cell, you typically want to use the "side" ghost cell of a
-      neighbor, but if these are not stored, they have to be recomputed each
-      time.
-	* If you do not work on an enlarged copy of the box, indexing is really
-      annoying.
-
-
+The parallel speedup that one can get depends on the cost of the algorithm that
+one is using. The communication cost (updating ghost cells) is always about the
+same, so that an expensive algorithm will show a better speedup. Furthermore, on
+a shared memory system, it is not unlikely for an algorithm to be memory-bound
+instead of CPU-bound.
