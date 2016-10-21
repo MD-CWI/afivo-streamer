@@ -46,7 +46,7 @@ contains
   !> Initialize a collection of rng's for parallel use
   subroutine init_parallel(self, n_proc, rng)
     class(prng_t), intent(inout) :: self
-    class(rng_t), intent(inout)  :: rng
+    type(rng_t), intent(inout)   :: rng
     integer, intent(in)          :: n_proc
     integer                      :: n
 
