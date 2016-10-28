@@ -7,11 +7,11 @@ data types are described below.
 
 |       |        | 
 | ----: |  :---- |
-<img src="../../figures/quadtree_cex1.png" width=100px /> | <img src="../../figures/quadtree_cex2.png" width=100px /> 
-<img src="../../figures/quadtree_cex3.png" width=100px /> | <img src="../../figures/quadtree_cex4.png" width=100px /> |
-
+<img src="../../documentation/figures/quadtree_cex1.png" width=100px /> | <img src="../../documentation/figures/quadtree_cex2.png" width=100px /> 
+<img src="../../documentation/figures/quadtree_cex3.png" width=100px /> | <img src="../../documentation/figures/quadtree_cex4.png" width=100px /> |
 <a name="fig_example-quadtree" />
-<img src="../../figures/box_indices.png" width=200px /> 
+<img src="../../documentation/figures/box_indices.png" width=200px style="right" /> 
+
 **Figure 4**. **TODO**: refine in one corner Upper: Example of a quadtree mesh
 that gets refined. Here boxes contain \f$2 \times 2\f$ cells, and different
 boxes have different colors.
@@ -63,7 +63,7 @@ refinement level, minimum coordinate and spatial index.
 <a name="fig_location-box-indices" />
 a) | b) 
 ------------- | -------------
-<img src="../../figures/children_neighbors.png" width=200px /> | <img src="../../figures/location_cc_fx.png" width=250px />
+<img src="../../documentation/figures/children_neighbors.png" width=200px /> | <img src="../../documentation/figures/location_cc_fx.png" width=250px />
 
 
 **Figure 5**. a) Each box contains an array of children and neighbors.
@@ -238,7 +238,7 @@ It is generally quite complicated to do this consistently near refinement
 boundaries.
 
 <a name="fig_interp-2d" />
-<img src="../../figures/interp_2d.png" width=200px />
+<img src="../../documentation/figures/interp_2d.png" width=200px />
 **Figure 7**. Schematic drawing of \f$2-1-1\f$ interpolation.
 The three nearest coarse grid values are used to interpolate to the center
 of a fine grid cell.

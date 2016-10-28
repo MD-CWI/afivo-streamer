@@ -81,7 +81,7 @@ ones:
 ## Simulation conditions and results {#main-results}
 
 <a name="fig_ex-streamer-seed" />
-<img src="../../figures/streamer_seed.png" width=300 />
+<img src="../../documentation/figures/streamer_seed.png" width=300 />
 **Figure 10**. Cross section through the center of the three-dimensional simulation
 domain. The ionized seeds with a density of \f$10^{20} \, \textrm{m}^{-3}\f$
 electrons and ions are indicated in red. There is a background density of
@@ -117,7 +117,7 @@ took about 3.5 hours on a 16-core machine, and eventually used about
 <a name="fig_ex-streamer-dns" />
 | 1 ns  | 3 ns   | 5 ns   | 7 ns   | 9 ns   | 11 ns  | 13 ns  | 15 ns  | 17 ns  | |
 | ----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :---- |
-<img src="../../figures/visit/crop_two_str0010.png" width=60px /> | <img src="../../figures/visit/crop_two_str0011.png" width=60px /> | <img src="../../figures/visit/crop_two_str0012.png" width=60px /> | <img src="../../figures/visit/crop_two_str0013.png" width=60px /> | <img src="../../figures/visit/crop_two_str0014.png" width=60px /> | <img src="../../figures/visit/crop_two_str0015.png" width=60px /> | <img src="../../figures/visit/crop_two_str0016.png" width=60px /> | <img src="../../figures/visit/crop_two_str0017.png" width=60px /> | <img src="../../figures/visit/crop_two_str0018.png" width=60px /> | <img src="../../figures/legend_elec_3d.png" width=80px /> 
+<img src="../../documentation/figures/visit/crop_two_str0010.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0011.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0012.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0013.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0014.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0015.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0016.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0017.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0018.png" width=60px /> | <img src="../../documentation/figures/legend_elec_3d.png" width=80px /> 
 **Figure 11**. A three-dimensional simulation showing two positive streamers
 propagating downwards. The upper one connects to the back of the lower one.
 The electron density is shown using volume rendering, for which the opacity
@@ -126,7 +126,7 @@ is indicated in the legend; low densities are transparent
 <a name="fig_ex-streamer-fld" />
 | 1 ns  | 3 ns   | 5 ns   | 7 ns   | 9 ns   | 11 ns  | 13 ns  | 15 ns  | 17 ns  | |
 | ----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :---- |
-<img src="../../figures/visit/crop_two_str0000.png" width=60px /> | <img src="../../figures/visit/crop_two_str0001.png" width=60px /> | <img src="../../figures/visit/crop_two_str0002.png" width=60px /> | <img src="../../figures/visit/crop_two_str0003.png" width=60px /> | <img src="../../figures/visit/crop_two_str0004.png" width=60px /> | <img src="../../figures/visit/crop_two_str0005.png" width=60px /> | <img src="../../figures/visit/crop_two_str0006.png" width=60px /> | <img src="../../figures/visit/crop_two_str0007.png" width=60px /> | <img src="../../figures/visit/crop_two_str0008.png" width=60px /> | <img src="../../figures/legend_2d.pdf" width=80px /> 
+<img src="../../documentation/figures/visit/crop_two_str0000.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0001.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0002.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0003.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0004.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0005.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0006.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0007.png" width=60px /> | <img src="../../documentation/figures/visit/crop_two_str0008.png" width=60px /> | <img src="../../documentation/figures/legend_2d.pdf" width=80px /> 
 **Figure 12**. Cross section through the three-dimensional domain showing the time
 evolution of the electric field. The full height of the domain is shown
 (\f$32 \, \textrm{mm}\f$), but only \f$6 \, \textrm{mm}\f$ of the width.
