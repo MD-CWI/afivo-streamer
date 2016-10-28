@@ -19,7 +19,7 @@ There are a couple of reasons for this:
   easier to make changes in a project if you can read all the data from each
   core, so that you do not have to think about MPI. (Although getting good
   OpenMP performance can be quite tricky).
-* It quite challenging to write a distributed memory code with an efficient
+* It is quite challenging to write a distributed memory code with an efficient
   multigrid solver that scales well to 100 cores or more, in particular when
   there is a lot of grid refinement.
 * If your simulation fits in memory, you can also consider running 5 different
