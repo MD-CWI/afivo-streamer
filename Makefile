@@ -3,9 +3,6 @@ SRC_DIRS	:= src examples tests
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
-# Hide entering/leaving directory messages
-MAKEFLAGS	:= --no-print-directory
-
 .PHONY:	all test doc clean $(SRC_DIRS) $(EXT_LIBS) $(CLEANSRC)
 
 all:	$(SRC_DIRS)
@@ -27,3 +24,4 @@ external_libraries/silo:
 
 # Dependency information
 $(SRC_DIRS): external_libraries/silo
+examples tests: src
