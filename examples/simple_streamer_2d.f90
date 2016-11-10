@@ -50,7 +50,7 @@ program simple_streamer_2d
   ! Physical parameters
   real(dp), parameter :: applied_field = -1e7_dp
   real(dp), parameter :: mobility      = 0.025_dp
-  real(dp), parameter :: diffusion_c   = 0.0_dp
+  real(dp), parameter :: diffusion_c   = 0.1_dp
 
   ! Computational domain
   real(dp), parameter :: domain_length = 10e-3_dp
@@ -60,15 +60,13 @@ program simple_streamer_2d
   real(dp), parameter :: init_density         = 1e10_dp
   real(dp), parameter :: init_y_min           = 8e-3_dp
   real(dp), parameter :: init_y_max           = 9e-3_dp
-  real(dp), parameter :: init_perturb_ampl    = 0e10_dp
-  real(dp), parameter :: init_perturb_periods = 2
+  real(dp), parameter :: init_perturb_ampl    = 1e10_dp
+  real(dp), parameter :: init_perturb_periods = 5
 
   ! Simulation variables
   real(dp) :: dt
   real(dp) :: time
   integer  :: output_count
-  logical  :: write_out
-
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -108,11 +106,9 @@ program simple_streamer_2d
 
      ! Every dt_output, write output
      if (output_count * dt_output <= time) then
-        write_out = .true.
         output_count = output_count + 1
         write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
-     else
-        write_out = .false.
+        call a2_write_silo(tree, fname, output_count, time, dir="output")
      end if
 
      if (time > end_time) exit
@@ -152,9 +148,6 @@ program simple_streamer_2d
         call compute_fld(tree, .true.)
      end do
 
-     if (write_out) call a2_write_silo(tree, fname, output_count, &
-          time, dir="output")
-
      call a2_adjust_refinement(tree, refinement_routine, ref_info)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
@@ -192,9 +185,9 @@ contains
     id             = 1          ! One box ...
     ix_list(:, id) = [1,1]      ! With index 1,1 ...
 
-    nb_list(a2_neighb_lowy, id) = -1  ! physical boundary
+    nb_list(a2_neighb_lowy, id)  = -1 ! physical boundary
     nb_list(a2_neighb_highy, id) = -1 ! idem
-    nb_list(a2_neighb_lowx, id) = id  ! periodic boundary
+    nb_list(a2_neighb_lowx, id)  = id ! periodic boundary
     nb_list(a2_neighb_highx, id) = id ! idem
 
     ! Create the base mesh
@@ -241,7 +234,7 @@ contains
 
           if (xy(2) > init_y_min .and. xy(2) < init_y_max) then
              tmp = 2 * pi * xy(1) * init_perturb_periods / domain_length
-             box%cc(i, j, i_elec) = init_density + init_perturb_ampl * sin(tmp)
+             box%cc(i, j, i_elec) = init_density + init_perturb_ampl * cos(tmp)
           else
              box%cc(i, j, i_elec) = 0
           end if
@@ -258,19 +251,18 @@ contains
     type(a2_t), intent(in) :: tree
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
     real(dp), parameter    :: UC_elem_charge = 1.6022d-19
-    real(dp)               :: max_fld, min_fld, max_dns, dr_min
+    real(dp)               :: max_fld, max_dns, dr_min
     real(dp)               :: alpha
     real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
 
     call a2_tree_max_cc(tree, i_fld, max_fld)
-    call a2_tree_min_cc(tree, i_fld, min_fld)
     call a2_tree_max_cc(tree, i_elec, max_dns)
 
     dr_min       = a2_min_dr(tree)
     alpha        = get_alpha(max_fld)
 
     ! CFL condition
-    dt_cfl = dr_min / (mobility * max_fld) ! Factor ~ sqrt(0.5)
+    dt_cfl = sqrt(0.5_dp) * dr_min / (mobility * max_fld)
 
     ! Diffusion condition
     dt_dif = 0.25_dp * dr_min**2 / max(diffusion_c, epsilon(1.0_dp))
@@ -281,8 +273,8 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = min(0.5_dp/(1/dt_cfl + 1/dt_dif), 0.9_dp * dt_drt, &
-         0.9_dp * dt_alpha, dt_max)
+    get_max_dt = 0.95_dp * &
+         min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha, dt_max)
   end function get_max_dt
 
   elemental function get_alpha(fld) result(alpha)
@@ -290,7 +282,7 @@ contains
     real(dp)             :: alpha
     real(dp), parameter  :: fld0 = 2e7_dp
 
-    alpha = 4.332e5_dp * exp(- fld0 / fld)
+    alpha = 4.332e5_dp * exp(-fld0 / abs(fld))
   end function get_alpha
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -444,19 +436,16 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, sflux, fld
-    real(dp)                    :: alpha, dflux(2)
+    real(dp)                    :: alpha
     integer                     :: i, j, nc
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr
     do j = 1, nc
        do i = 1, nc
-          fld      = box%cc(i,j, i_fld)
-          alpha    = get_alpha(fld)
-
-          dflux(1) = box%fx(i, j, f_elec) + box%fx(i+1, j, f_elec)
-          dflux(2) = box%fy(i, j, f_elec) + box%fy(i, j+1, f_elec)
-          src = 0.5_dp * norm2(dflux) * alpha
+          fld   = box%cc(i,j, i_fld)
+          alpha = get_alpha(fld)
+          src   = box%cc(i, j, i_elec) * mobility * abs(fld) * alpha
 
           sflux = (box%fx(i, j, f_elec) - box%fx(i+1, j, f_elec) + &
                box%fy(i, j, f_elec) - box%fy(i, j+1, f_elec)) * inv_dr
