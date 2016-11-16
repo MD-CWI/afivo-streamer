@@ -154,31 +154,31 @@ program poisson_basic_2d
 
 contains
 
-  ! Return the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, refine_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: refine_flag
+  ! Return the refinement flags for box
+  subroutine refine_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
     integer                  :: i, j, nc
     real(dp)                 :: xy(2), dr2, drhs
 
-    nc = boxes(id)%n_cell
-    dr2 = boxes(id)%dr**2
+    nc = box%n_cell
+    dr2 = box%dr**2
 
-    outer: do j = 1, nc
+    do j = 1, nc
        do i = 1, nc
-          xy = a2_r_cc(boxes(id), [i, j])
+          xy = a2_r_cc(box, [i, j])
 
           ! This is an estimate of the truncation error in the right-hand side,
           ! which is related to the fourth derivative of the solution.
           drhs = dr2 * gauss_4th(gs, xy) / 12
 
           if (abs(drhs) > 0.05_dp) then
-             refine_flag = af_do_ref
-             exit outer
+             cell_flags(i, j) = af_do_ref
+          else
+             cell_flags(i, j) = af_keep_ref
           end if
        end do
-    end do outer
+    end do
   end subroutine refine_routine
 
   ! This routine sets the initial conditions for each box

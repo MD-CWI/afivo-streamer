@@ -148,14 +148,17 @@ program poisson_benchmark_2d
 
 contains
 
-  ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
-    integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: ref_flag
+  ! Set refinement flags for box
+  subroutine ref_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box ! A list of all boxes in the tree
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
 
     ! Fully refine up to max_ref_lvl
-    if (boxes(id)%lvl < max_ref_lvl) ref_flag = af_do_ref
+    if (box%lvl < max_ref_lvl) then
+       cell_flags = af_do_ref
+    else
+       cell_flags = af_keep_ref
+    end if
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box

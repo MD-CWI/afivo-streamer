@@ -1,7 +1,4 @@
-!> \example drift_diffusion_2d.f90
-!> A drift-diffusion example
-!> @TODO: document this
-program drift_diffusion_2d
+program implicit_diffusion_2d
   use m_a2_types
   use m_a2_core
   use m_a2_ghostcell
@@ -32,7 +29,7 @@ program drift_diffusion_2d
   real(dp)           :: dt, time, end_time
   character(len=100) :: fname
 
-  print *, "Running drift_diffusion_2d"
+  print *, "Running implicit_diffusion_2d"
   print *, "Number of threads", af_get_max_threads()
 
   ! Initialize tree
@@ -97,12 +94,15 @@ program drift_diffusion_2d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, refine_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: refine_flag
+  subroutine refine_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
 
-    if (boxes(id)%dr > 5e-3_dp * domain_len) refine_flag = af_do_ref
+    if (box%dr > 5e-2_dp * domain_len) then
+       cell_flags = af_do_ref
+    else
+       cell_flags = af_keep_ref
+    end if
   end subroutine refine_routine
 
   ! This routine sets the initial conditions for each box
@@ -224,4 +224,4 @@ contains
     end do
   end subroutine box_gsrb_diff
 
-end program drift_diffusion_2d
+end program implicit_diffusion_2d

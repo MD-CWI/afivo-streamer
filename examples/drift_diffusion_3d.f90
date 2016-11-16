@@ -79,7 +79,7 @@ program drift_diffusion_3d
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
 
      ! Use refine_routine (see below) for grid refinement
-     call a3_adjust_refinement(tree, refine_routine, ref_info)
+     call a3_adjust_refinement(tree, refine_routine, ref_info, 2)
 
      ! If no new boxes have been added, exit the loop
      if (ref_info%n_add == 0) exit
@@ -175,7 +175,7 @@ program drift_diffusion_3d
         end do
      end select
 
-     call a3_adjust_refinement(tree, refine_routine, ref_info)
+     call a3_adjust_refinement(tree, refine_routine, ref_info, 2)
      call prolong_to_new_children(tree, ref_info)
      call a3_gc_tree(tree, i_phi, a3_gc_interp_lim, a3_bc_neumann_zero)
      call a3_tidy_up(tree, 0.8_dp, 10000)
@@ -192,29 +192,35 @@ program drift_diffusion_3d
 
 contains
 
-  ! Return the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, refine_flag)
-    type(box3_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: refine_flag
+  ! Set refinement flags for box
+  subroutine refine_routine(box, cell_flags)
+    type(box3_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
     real(dp)                 :: diff
-    integer                  :: nc
+    integer                  :: i, j, k, nc
 
-    nc   = boxes(id)%n_cell
-    diff = max( &
-         maxval(abs(boxes(id)%cc(1:nc+1, 1:nc, 1:nc, i_phi) - &
-         boxes(id)%cc(0:nc, 1:nc, 1:nc, i_phi))), &
-         maxval(abs(boxes(id)%cc(1:nc, 1:nc+1, 1:nc, i_phi) - &
-         boxes(id)%cc(1:nc, 0:nc, 1:nc, i_phi))), &
-         maxval(abs(boxes(id)%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
-         boxes(id)%cc(1:nc, 1:nc, 0:nc, i_phi))))
+    nc   = box%n_cell
 
-    refine_flag = af_keep_ref
-    if (boxes(id)%lvl < 3 .or. diff > 0.1_dp) then
-       refine_flag = af_do_ref
-    else if (boxes(id)%lvl > 4 .and. diff < 0.2_dp * 0.05) then
-       refine_flag = af_rm_ref
-    end if
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             diff = abs(box%cc(i+1, j, k, i_phi) + &
+                  box%cc(i-1, j, k, i_phi) + &
+                  box%cc(i, j+1, k, i_phi) + &
+                  box%cc(i, j-1, k, i_phi) + &
+                  box%cc(i, j, k+1, i_phi) + &
+                  box%cc(i, j, k-1, i_phi) - &
+                  6 * box%cc(i, j, k, i_phi)) * box%dr
+
+             cell_flags(i, j, k) = af_keep_ref
+             if (box%lvl < 2 .or. diff > 0.5e-3_dp .and. box%lvl < 6) then
+                cell_flags(i, j, k) = af_do_ref
+             else if (box%lvl > 4 .and. diff < 0.1_dp * 0.5e-3) then
+                cell_flags(i, j, k) = af_rm_ref
+             end if
+          end do
+       end do
+    end do
   end subroutine refine_routine
 
   subroutine set_init_cond(box)
@@ -253,10 +259,22 @@ contains
 
   function solution(xyz, t) result(sol)
     real(dp), intent(in) :: xyz(3), t
-    real(dp) :: sol, xyz_t(3)
+    real(dp)             :: sol, xyz_t(3)
+    integer, parameter   :: sol_type = 1
 
     xyz_t = xyz - [vel_x, vel_y, vel_z] * t
-    sol = sin(xyz_t(1))**4 * cos(xyz_t(3))**4 ! * cos(xyz_t(3))**4
+
+    select case (sol_type)
+    case (1)
+       sol = sin(xyz_t(1))**4 * cos(xyz_t(3))**4 ! * cos(xyz_t(3))**4
+    case (2)
+       xyz_t = modulo(xyz_t, domain_len) / domain_len
+       if (norm2(xyz_t - 0.5_dp) < 0.1_dp) then
+          sol = 1.0_dp
+       else
+          sol = 0.0_dp
+       end if
+    end select
   end function solution
 
   subroutine fluxes_upwind1(boxes, id, flux_args)

@@ -37,7 +37,7 @@ m_a3_%.f90: m_aX_%.f90
 	@sed 's|$$D|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@
 
 # Dependency information
-m_a2_core.o:		m_morton.o m_a2_types.o
+m_a2_core.o:		m_morton.o m_a2_types.o m_a2_utils.o
 m_a2_output.o:		m_vtk.o m_write_silo.o m_a2_types.o m_a2_interp.o
 m_a2_ghostcell.o:	m_a2_types.o m_a2_prolong.o
 m_a2_restrict.o:	m_a2_types.o
@@ -47,7 +47,7 @@ m_a2_utils.o:		m_a2_types.o
 m_a2_multigrid.o:	m_a2_types.o m_a2_utils.o m_a2_ghostcell.o
 m_a2_types.o:		m_afivo_types.o
 
-m_a3_core.o:		m_morton.o m_a3_types.o
+m_a3_core.o:		m_morton.o m_a3_types.o m_a3_utils.o
 m_a3_output.o:		m_vtk.o m_write_silo.o m_a3_types.o m_a3_interp.o
 m_a3_ghostcell.o:	m_a3_types.o m_a3_prolong.o
 m_a3_restrict.o:	m_a3_types.o

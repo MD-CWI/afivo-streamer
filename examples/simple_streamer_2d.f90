@@ -43,7 +43,7 @@ program simple_streamer_2d
   ! Simulation parameters
   real(dp), parameter :: end_time      = 10e-9_dp
   real(dp), parameter :: dt_output     = 0.1e-9_dp
-  real(dp), parameter :: dt_max        = 1e-11_dp
+  real(dp), parameter :: dt_max        = 5e-11_dp
   integer, parameter  :: ref_per_steps = 2
   integer, parameter  :: box_size      = 8
 
@@ -62,7 +62,6 @@ program simple_streamer_2d
   real(dp), parameter :: init_y_min           = 4e-3_dp
   real(dp), parameter :: init_y_max           = 4.5e-3_dp
   real(dp), parameter :: init_perturb_ampl    = 1e10_dp
-  real(dp), parameter :: init_perturb_periods = 6
 
   ! Simulation variables
   real(dp) :: dt
@@ -98,10 +97,12 @@ program simple_streamer_2d
 
   do
      ! Get a new time step, which is at most dt_amr
-     dt = get_max_dt(tree)
+     ! dt = get_max_dt(tree)
+
+     call a2_reduction(tree, max_dt, get_min, dt_max, dt)
 
      if (dt < 1e-14) then
-        print *, "dt getting too small, instability?"
+        print *, "dt getting too small, instability?", dt
         time = end_time + 1.0_dp
      end if
 
@@ -151,7 +152,7 @@ program simple_streamer_2d
 
      call a2_restrict_tree(tree, i_pion)
      call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
-     call a2_adjust_refinement(tree, refinement_routine, ref_info)
+     call a2_adjust_refinement(tree, refinement_routine, ref_info, 4)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -199,44 +200,48 @@ contains
   end subroutine init_tree
 
   ! This routine sets the refinement flag for boxes(id)
-  subroutine refinement_routine(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:) ! List of all boxes
-    integer, intent(in)      :: id       ! Index of box to look at
-    integer, intent(inout)   :: ref_flag ! Refinement flag for the box
-    integer                  :: nc
+  subroutine refinement_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    integer                  :: i, j, nc
     real(dp)                 :: dx2, dx
     real(dp)                 :: alpha, adx, max_fld
     real(dp)                 :: max_dns, cphi
 
-    nc      = boxes(id)%n_cell
-    dx      = boxes(id)%dr
-    dx2     = boxes(id)%dr**2
-    max_fld = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
-    max_dns = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
+    nc      = box%n_cell
+    dx      = box%dr
+    dx2     = box%dr**2
+    max_fld = maxval(box%cc(1:nc, 1:nc, i_fld))
+    max_dns = maxval(box%cc(1:nc, 1:nc, i_elec))
     alpha   = get_alpha(max_fld)
-    adx     = boxes(id)%dr * alpha
-    cphi    = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+    adx     = box%dr * alpha
+    cphi    = dx2 * maxval(abs(box%cc(1:nc, 1:nc, i_rhs)))
 
-    ref_flag = af_keep_ref
+    do j = 1, nc
+       do i = 1, nc
+          if (max_dns > 1e3_dp .and. adx > 0.8_dp) then
+             cell_flags(i, j) = af_do_ref
+          else if (adx < 0.025_dp) then
+             cell_flags(i, j) = af_rm_ref
+          else
+             cell_flags(i, j) = af_keep_ref
+          end if
 
-    if (max_dns > 1e3_dp .and. adx > 0.8_dp) then
-       ref_flag = af_do_ref
-    else if (adx < 0.025_dp) then
-       ref_flag = af_rm_ref
-    end if
+       end do
+    end do
 
-    if (boxes(id)%r_min(1) < 0.5_dp * domain_length .and. &
-         dx > 2 * refine_min_dx) ref_flag = af_do_ref
+    if (box%r_min(1) < 0.5_dp * domain_length .and. &
+         dx > 2 * refine_min_dx) cell_flags = af_do_ref
 
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > refine_max_dx) then
-       ref_flag = af_do_ref
+       cell_flags = af_do_ref
     else if (dx < refine_min_dx) then
-       ref_flag = af_rm_ref
-    else if (dx < 2 * refine_min_dx .and. ref_flag == af_do_ref) then
-       ref_flag = af_keep_ref
-    else if (dx > 0.5_dp * refine_max_dx .and. ref_flag == af_rm_ref) then
-       ref_flag = af_keep_ref
+       cell_flags = af_rm_ref
+    else if (dx < 2 * refine_min_dx) then
+       where(cell_flags == af_do_ref) cell_flags = af_keep_ref
+    else if (dx > 0.5_dp * refine_max_dx) then
+       where(cell_flags == af_rm_ref) cell_flags = af_keep_ref
     end if
 
   end subroutine refinement_routine
@@ -245,7 +250,6 @@ contains
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2), tmp
-    real(dp), parameter         :: pi = acos(-1.0_dp)
 
     nc = box%n_cell
 
@@ -296,9 +300,46 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.9_dp * &
+    get_max_dt = 0.5_dp * &
          min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha, dt_max)
+    print *, get_max_dt, dt_cfl
   end function get_max_dt
+
+  real(dp) function get_min(a, b)
+    real(dp), intent(in) :: a, b
+    get_min = min(a, b)
+  end function get_min
+
+  ! Get maximum time step based on e.g. CFL criteria
+  real(dp) function max_dt(box)
+    type(box2_t), intent(in) :: box
+    real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
+    real(dp), parameter    :: UC_elem_charge = 1.6022d-19
+    integer :: i, j, nc
+    real(dp)               :: fld(2)
+    real(dp)               :: dt_cfl, dt_dif, dt_drt
+
+    nc = box%n_cell
+    dt_cfl = dt_max
+
+    do j = 1, nc
+       do i = 1, nc
+          fld(1) = 0.5_dp * (box%fx(i, j, f_fld) + box%fx(i+1, j, f_fld))
+          fld(2) = 0.5_dp * (box%fy(i, j, f_fld) + box%fy(i, j+1, f_fld))
+
+          dt_cfl = min(dt_cfl, 0.5_dp / sum(abs(fld * mobility) / box%dr))
+       end do
+    end do
+
+    ! Dielectric relaxation time
+    dt_drt = UC_eps0 / (UC_elem_charge * mobility * &
+         maxval(box%cc(1:nc, 1:nc, i_elec)))
+
+    ! Diffusion condition
+    dt_dif = 0.25_dp * box%dr**2 / max(diffusion_c, epsilon(1.0_dp))
+
+    max_dt = min(dt_cfl, dt_drt, dt_dif)
+  end function max_dt
 
   elemental function get_alpha(fld) result(alpha)
     real(dp), intent(in) :: fld
