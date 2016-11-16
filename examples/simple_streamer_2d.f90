@@ -45,7 +45,7 @@ program simple_streamer_2d
   real(dp), parameter :: dt_output     = 0.1e-9_dp
   real(dp), parameter :: dt_max        = 1e-11_dp
   integer, parameter  :: ref_per_steps = 2
-  integer, parameter  :: box_size      = 128
+  integer, parameter  :: box_size      = 8
 
   ! Physical parameters
   real(dp), parameter :: applied_field = -1e7_dp
@@ -53,15 +53,16 @@ program simple_streamer_2d
   real(dp), parameter :: diffusion_c   = 0.1_dp
 
   ! Computational domain
-  real(dp), parameter :: domain_length = 10e-3_dp
-  real(dp), parameter :: domain_max_dx = 1e-5_dp
+  real(dp), parameter :: domain_length = 5e-3_dp
+  real(dp), parameter :: refine_max_dx = 1e-3_dp
+  real(dp), parameter :: refine_min_dx = 5e-6_dp
 
   ! Settings for the initial conditions
   real(dp), parameter :: init_density         = 1e10_dp
-  real(dp), parameter :: init_y_min           = 8e-3_dp
-  real(dp), parameter :: init_y_max           = 9e-3_dp
+  real(dp), parameter :: init_y_min           = 4e-3_dp
+  real(dp), parameter :: init_y_max           = 4.5e-3_dp
   real(dp), parameter :: init_perturb_ampl    = 1e10_dp
-  real(dp), parameter :: init_perturb_periods = 5
+  real(dp), parameter :: init_perturb_periods = 6
 
   ! Simulation variables
   real(dp) :: dt
@@ -90,7 +91,7 @@ program simple_streamer_2d
      call a2_loop_box(tree, set_init_cond)
      call compute_fld(tree, .false.)
      call a2_adjust_refinement(tree, refinement_routine, ref_info)
-     if (ref_info%n_add == 0) exit
+     if (ref_info%n_add == 0 .and. ref_info%n_rm == 0) exit
   end do
 
   call a2_print_info(tree)
@@ -107,7 +108,7 @@ program simple_streamer_2d
      ! Every dt_output, write output
      if (output_count * dt_output <= time) then
         output_count = output_count + 1
-        write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
+        write(fname, "(A,I6.6)") "simple_streamer_2d_new_", output_count
         call a2_write_silo(tree, fname, output_count, time, dir="output")
      end if
 
@@ -124,15 +125,15 @@ program simple_streamer_2d
         ! Two forward Euler steps over dt
         do i = 1, 2
            ! First calculate fluxes
-           call a2_loop_boxes(tree, fluxes_koren, .true.)
+           call a2_loop_boxes(tree, fluxes_koren, leaves_only=.true.)
            call a2_consistent_fluxes(tree, [f_elec])
 
            ! Update the solution
-           call a2_loop_box_arg(tree, update_solution, [dt], .true.)
+           call a2_loop_box_arg(tree, update_solution, [dt], &
+                leaves_only=.true.)
 
            ! Restrict the electron and ion densities to lower levels
            call a2_restrict_tree(tree, i_elec)
-           call a2_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
            call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_neumann_zero)
@@ -148,6 +149,8 @@ program simple_streamer_2d
         call compute_fld(tree, .true.)
      end do
 
+     call a2_restrict_tree(tree, i_pion)
+     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
      call a2_adjust_refinement(tree, refinement_routine, ref_info)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
@@ -203,20 +206,38 @@ contains
     integer                  :: nc
     real(dp)                 :: dx2, dx
     real(dp)                 :: alpha, adx, max_fld
-    real(dp)                 :: max_dns
+    real(dp)                 :: max_dns, cphi
 
-    nc        = boxes(id)%n_cell
-    dx        = boxes(id)%dr
-    dx2       = boxes(id)%dr**2
-    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
-    max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
-    alpha     = get_alpha(max_fld)
-    adx       = boxes(id)%dr * alpha
+    nc      = boxes(id)%n_cell
+    dx      = boxes(id)%dr
+    dx2     = boxes(id)%dr**2
+    max_fld = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
+    max_dns = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
+    alpha   = get_alpha(max_fld)
+    adx     = boxes(id)%dr * alpha
+    cphi    = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
 
     ref_flag = af_keep_ref
 
-    ! Make sure we don't have or get a too coarse grid
-    if (dx > domain_max_dx) ref_flag = af_do_ref
+    if (max_dns > 1e3_dp .and. adx > 0.8_dp) then
+       ref_flag = af_do_ref
+    else if (adx < 0.025_dp) then
+       ref_flag = af_rm_ref
+    end if
+
+    if (boxes(id)%r_min(1) < 0.5_dp * domain_length .and. &
+         dx > 2 * refine_min_dx) ref_flag = af_do_ref
+
+    ! Make sure we don't have or get a too fine or too coarse grid
+    if (dx > refine_max_dx) then
+       ref_flag = af_do_ref
+    else if (dx < refine_min_dx) then
+       ref_flag = af_rm_ref
+    else if (dx < 2 * refine_min_dx .and. ref_flag == af_do_ref) then
+       ref_flag = af_keep_ref
+    else if (dx > 0.5_dp * refine_max_dx .and. ref_flag == af_rm_ref) then
+       ref_flag = af_keep_ref
+    end if
 
   end subroutine refinement_routine
 
@@ -233,8 +254,10 @@ contains
           xy   = a2_r_cc(box, [i,j])
 
           if (xy(2) > init_y_min .and. xy(2) < init_y_max) then
-             tmp = 2 * pi * xy(1) * init_perturb_periods / domain_length
-             box%cc(i, j, i_elec) = init_density + init_perturb_ampl * cos(tmp)
+             ! tmp = 2 * pi * xy(1) * init_perturb_periods / domain_length
+             ! box%cc(i, j, i_elec) = init_density + init_perturb_ampl * cos(tmp)
+             call random_number(tmp)
+             box%cc(i, j, i_elec) = init_density + init_perturb_ampl * tmp
           else
              box%cc(i, j, i_elec) = 0
           end if
@@ -273,7 +296,7 @@ contains
     ! Ionization limit
     dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
 
-    get_max_dt = 0.95_dp * &
+    get_max_dt = 0.9_dp * &
          min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha, dt_max)
   end function get_max_dt
 
@@ -476,6 +499,8 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
+               a2_gc_interp_lim, a2_bc_neumann_zero)
+          call a2_gc_box(tree%boxes, id, i_pion, &
                a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, mg%sides_bc)
