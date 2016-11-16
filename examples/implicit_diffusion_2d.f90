@@ -30,7 +30,6 @@ program drift_diffusion_2d
   integer            :: nb_list(4, 1)
   integer            :: time_steps, output_cnt
   real(dp)           :: dt, time, end_time
-  real(dp)           :: sum_phi
   character(len=100) :: fname
 
   print *, "Running drift_diffusion_2d"
