@@ -847,17 +847,8 @@ contains
        error stop "Error: invalid cell flags given"
     end if
 
-    if (any(cell_flags == af_do_ref)) then
-       ref_flags(id) = af_do_ref
-    else if (any(cell_flags == af_keep_ref)) then
-       ref_flags(id) = af_keep_ref
-    else
-       ref_flags(id) = af_rm_ref
-    end if
-
-    return
-
     ! Check whether the box needs to be refined or keep its refinement
+    !> @todo Check whether the procedure works correctly with periodic boundaries
     if (any(cell_flags == af_do_ref)) then
 
        ! Compute the distance between flagged cells and neighbors
@@ -939,7 +930,6 @@ contains
        d_to_nb  = nc * tree%boxes(id)%dr
 
        do nb = 1, 3**$D
-          ! print *, d_nb(nb), nb_dix(:, nb)
           if (d_nb(nb) <= ref_buffer) then
              ! Define a position inside the neighbor box
              r_in_nb = r_center + nb_dix(:, nb) * d_to_nb
