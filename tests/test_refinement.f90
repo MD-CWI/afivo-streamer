@@ -53,31 +53,27 @@ program test_init
 
 contains
 
-  subroutine refinement_2d(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
-    ref_flag = af_do_ref
+  subroutine refinement_2d(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    cell_flags = af_do_ref
   end subroutine refinement_2d
 
-  subroutine derefinement_2d(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
-    ref_flag = af_rm_ref
+  subroutine derefinement_2d(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    cell_flags = af_rm_ref
   end subroutine derefinement_2d
 
-  subroutine refinement_3d(boxes, id, ref_flag)
-    type(box3_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
-    ref_flag = af_do_ref
+  subroutine refinement_3d(box, cell_flags)
+    type(box3_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
+    cell_flags = af_do_ref
   end subroutine refinement_3d
 
-  subroutine derefinement_3d(boxes, id, ref_flag)
-    type(box3_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
-    ref_flag = af_rm_ref
+  subroutine derefinement_3d(box, cell_flags)
+    type(box3_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
+    cell_flags = af_rm_ref
   end subroutine derefinement_3d
 end program

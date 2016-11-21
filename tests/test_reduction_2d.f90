@@ -100,15 +100,14 @@ contains
     min_ab = min(a,b)
   end function min_ab
 
-  subroutine ref_func(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
+  subroutine ref_func(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
 
-    if (all(boxes(id)%r_min < 0.4_dp) .and. boxes(id)%lvl < 10) then
-       ref_flag = af_do_ref
+    if (all(box%r_min < 0.4_dp) .and. box%lvl < 10) then
+       cell_flags = af_do_ref
     else
-       ref_flag = af_rm_ref
+       cell_flags = af_rm_ref
     end if
   end subroutine ref_func
 
