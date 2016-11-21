@@ -10,6 +10,7 @@ program simple_streamer_2d
   use m_a2_multigrid
   use m_a2_output
   use m_write_silo
+  use m_a2_prolong, onLy: a2_prolong_copy_from
 
   implicit none
 
@@ -96,9 +97,7 @@ program simple_streamer_2d
   call a2_print_info(tree)
 
   do
-     ! Get a new time step, which is at most dt_amr
-     ! dt = get_max_dt(tree)
-
+     ! Get a new time step, which is at most dt_max
      call a2_reduction(tree, max_dt, get_min, dt_max, dt)
 
      if (dt < 1e-14) then
@@ -109,7 +108,7 @@ program simple_streamer_2d
      ! Every dt_output, write output
      if (output_count * dt_output <= time) then
         output_count = output_count + 1
-        write(fname, "(A,I6.6)") "simple_streamer_2d_new_", output_count
+        write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
         call a2_write_silo(tree, fname, output_count, time, dir="output")
      end if
 
@@ -161,7 +160,6 @@ program simple_streamer_2d
         ! Compute the field on the new mesh
         call compute_fld(tree, .true.)
      end if
-
   end do
 
   call a2_destroy(tree)
@@ -204,24 +202,20 @@ contains
     type(box2_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
     integer                  :: i, j, nc
-    real(dp)                 :: dx2, dx
-    real(dp)                 :: alpha, adx, max_fld
-    real(dp)                 :: max_dns, cphi
+    real(dp)                 :: dx, dens, fld, adx
 
     nc      = box%n_cell
     dx      = box%dr
-    dx2     = box%dr**2
-    max_fld = maxval(box%cc(1:nc, 1:nc, i_fld))
-    max_dns = maxval(box%cc(1:nc, 1:nc, i_elec))
-    alpha   = get_alpha(max_fld)
-    adx     = box%dr * alpha
-    cphi    = dx2 * maxval(abs(box%cc(1:nc, 1:nc, i_rhs)))
 
     do j = 1, nc
        do i = 1, nc
-          if (max_dns > 1e3_dp .and. adx > 0.8_dp) then
+          dens = box%cc(i, j, i_elec)
+          fld = box%cc(i, j, i_fld)
+          adx = get_alpha(fld) * dx
+
+          if (dens > 1e3_dp .and. adx > 0.8_dp) then
              cell_flags(i, j) = af_do_ref
-          else if (adx < 0.025_dp) then
+          else if (dens < 1e3_dp .or. adx < 0.025_dp) then
              cell_flags(i, j) = af_rm_ref
           else
              cell_flags(i, j) = af_keep_ref
@@ -236,8 +230,6 @@ contains
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > refine_max_dx) then
        cell_flags = af_do_ref
-    else if (dx < refine_min_dx) then
-       cell_flags = af_rm_ref
     else if (dx < 2 * refine_min_dx) then
        where(cell_flags == af_do_ref) cell_flags = af_keep_ref
     else if (dx > 0.5_dp * refine_max_dx) then
@@ -273,38 +265,6 @@ contains
 
   end subroutine set_init_cond
 
-  ! Get maximum time step based on e.g. CFL criteria
-  real(dp) function get_max_dt(tree)
-    type(a2_t), intent(in) :: tree
-    real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
-    real(dp), parameter    :: UC_elem_charge = 1.6022d-19
-    real(dp)               :: max_fld, max_dns, dr_min
-    real(dp)               :: alpha
-    real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
-
-    call a2_tree_max_cc(tree, i_fld, max_fld)
-    call a2_tree_max_cc(tree, i_elec, max_dns)
-
-    dr_min       = a2_min_dr(tree)
-    alpha        = get_alpha(max_fld)
-
-    ! CFL condition
-    dt_cfl = sqrt(0.5_dp) * dr_min / (mobility * max_fld)
-
-    ! Diffusion condition
-    dt_dif = 0.25_dp * dr_min**2 / max(diffusion_c, epsilon(1.0_dp))
-
-    ! Dielectric relaxation time
-    dt_drt = UC_eps0 / (UC_elem_charge * mobility * max_dns)
-
-    ! Ionization limit
-    dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
-
-    get_max_dt = 0.5_dp * &
-         min(1/(1/dt_cfl + 1/dt_dif), dt_drt, dt_alpha, dt_max)
-    print *, get_max_dt, dt_cfl
-  end function get_max_dt
-
   real(dp) function get_min(a, b)
     real(dp), intent(in) :: a, b
     get_min = min(a, b)
@@ -327,6 +287,7 @@ contains
           fld(1) = 0.5_dp * (box%fx(i, j, f_fld) + box%fx(i+1, j, f_fld))
           fld(2) = 0.5_dp * (box%fy(i, j, f_fld) + box%fy(i, j+1, f_fld))
 
+          ! The 0.5 is here because of the explicit trapezoidal rule
           dt_cfl = min(dt_cfl, 0.5_dp / sum(abs(fld * mobility) / box%dr))
        end do
     end do
