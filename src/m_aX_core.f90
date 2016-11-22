@@ -817,19 +817,22 @@ contains
 
   end subroutine consistent_ref_flags
 
+  !> Given the cell refinement flags of a box, set the refinement flag for that
+  !> box and potentially also its neighbors (in case of refinement near a
+  !> boundary).
   subroutine cell_to_ref_flags(cell_flags, nc, ref_flags, tree, id, &
        ref_buffer)
     use m_a$D_utils, only: a$D_get_loc
-    integer, intent(in)     :: nc
+    integer, intent(in)     :: nc                     !< n_cell for the box
 #if $D == 2
-    integer, intent(in)     :: cell_flags(nc, nc)
+    integer, intent(in)     :: cell_flags(nc, nc)     !< Cell refinement flags
 #elif $D == 3
-    integer, intent(in)     :: cell_flags(nc, nc, nc)
+    integer, intent(in)     :: cell_flags(nc, nc, nc) !< Cell refinement flags
 #endif
-    integer, intent(inout)  :: ref_flags(:)
-    type(a$D_t), intent(in) :: tree
-    integer, intent(in)     :: id
-    integer, intent(in)     :: ref_buffer
+    integer, intent(inout)  :: ref_flags(:)           !< Box refinement flags for this thread
+    type(a$D_t), intent(in) :: tree                   !< Full tree
+    integer, intent(in)     :: id                     !< Which box is considered
+    integer, intent(in)     :: ref_buffer             !< Buffer cells around refinement
 
 #if $D == 2
     integer         :: i, j
