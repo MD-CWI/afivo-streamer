@@ -41,7 +41,7 @@ program test_reduction
 
   do i = 1, 16
      print *, "i = ", i, "highest_id", tree%highest_id
-     call a2_adjust_refinement(tree, ref_func, ref_info)
+     call a2_adjust_refinement(tree, ref_func, ref_info, 0)
      call a2_loop_box(tree, set_random_values)
 
      call a2_tree_max_cc(tree, i_phi, max_val)
