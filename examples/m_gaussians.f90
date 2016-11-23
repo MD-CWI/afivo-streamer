@@ -125,15 +125,16 @@ contains
   real(dp) function gauss_4th(gs, r)
     type(gauss_t), intent(in) :: gs
     real(dp), intent(in)      :: r(gs%n_dim)
-    integer :: ix
-    real(dp)                  :: xrel(gs%n_dim)
+    integer                   :: ix
+    real(dp)                  :: xrel(gs%n_dim), d4(gs%n_dim)
 
-    gauss_4th = 0
+    d4 = 0
     do ix = 1, gs%n_gauss
        xrel = (r-gs%r0(:, ix)) / gs%sigma(ix)
-       gauss_4th = gauss_4th + gauss_single(gs, r, ix) / gs%sigma(ix)**4 * &
-            (16 * sum(xrel**4) - 48 * sum(xrel**2) + gs%n_dim * 12)
+       d4 = d4 + gauss_single(gs, r, ix) / gs%sigma(ix)**4 * &
+            (16 * xrel**4 - 48 * xrel**2  + 12)
     end do
+    gauss_4th = norm2(d4)
   end function gauss_4th
 
 end module m_gaussians
