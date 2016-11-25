@@ -734,9 +734,9 @@ contains
 
           ! If the parent exists, and this is the first child, set refinement
           ! flags for the parent
-          p_id = tree%boxes(id)%parent
-          if (p_id > af_no_box .and. &
+          if (tree%boxes(id)%lvl > 1 .and. &
                a$D_ix_to_ichild(tree%boxes(id)%ix) == 1) then
+             p_id = tree%boxes(id)%parent
              call ref_subr(tree%boxes(p_id), cell_flags)
              call cell_to_ref_flags(cell_flags, tree%n_cell, &
                   tmp_flags(:, thread_id), tree, p_id, ref_buffer)
