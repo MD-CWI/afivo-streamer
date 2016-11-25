@@ -24,7 +24,7 @@ program poisson_benchmark_2d
   integer            :: n_cell, n_iterations, max_ref_lvl
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr
+  real(dp)           :: dr, time
   character(len=40)  :: fname, arg_string
   type(mg2_t)        :: mg
   integer            :: count_rate,t_start, t_end
@@ -132,10 +132,11 @@ program poisson_benchmark_2d
   end do
   call system_clock(t_end, count_rate)
 
+  time = (t_end-t_start) / real(count_rate, dp)
   write(*, "(A,I0,A,E10.3,A)") &
        " Wall-clock time after ", n_iterations, &
-       " iterations: ", (t_end-t_start) / real(count_rate, dp), &
-       " seconds"
+       " iterations: ", time, " seconds"
+  write(*, "(A,E10.3,A)") " Per iteration: ", time/n_iterations, " seconds"
 
   ! This writes a VTK output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
