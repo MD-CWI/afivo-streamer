@@ -170,9 +170,9 @@ contains
 
           ! This is an estimate of the truncation error in the right-hand side,
           ! which is related to the fourth derivative of the solution.
-          drhs = dr2 * gauss_4th(gs, xy) / 12
+          drhs = dr2 * box%cc(i, j, i_rhs)
 
-          if (abs(drhs) > 0.05_dp) then
+          if (abs(drhs) > 1e-3_dp) then
              cell_flags(i, j) = af_do_ref
           else
              cell_flags(i, j) = af_keep_ref

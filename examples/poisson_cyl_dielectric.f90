@@ -149,10 +149,10 @@ contains
     ! Compute the "curvature" in phi
     do j = 1, nc
        do i = 1, nc
-          crv = box%dr**2 * abs(box%cc(i, j, i_rhs))
+          crv = box%dr**2 * abs(box%cc(i, j, i_rhs)) / box%cc(i, j, i_eps)
 
           ! And refine if it exceeds a threshold
-          if (crv > 5.0e-4_dp) then
+          if (crv > 1.0e-3_dp) then
              cell_flags(i, j) = af_do_ref
           else
              cell_flags(i, j) = af_keep_ref
