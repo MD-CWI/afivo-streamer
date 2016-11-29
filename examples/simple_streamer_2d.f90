@@ -35,34 +35,32 @@ program simple_streamer_2d
   integer, parameter :: f_elec     = 1 ! Electron flux
   integer, parameter :: f_fld      = 2 ! Electric field vector
 
-
   ! Names of the cell-centered variables
   character(len=10) :: ST_cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
        "pion_old", "phi", "fld", "rhs"]
 
   ! Simulation parameters
-  real(dp), parameter :: end_time      = 10e-9_dp
-  real(dp), parameter :: dt_output     = 0.1e-9_dp
-  real(dp), parameter :: dt_max        = 5e-11_dp
-  integer, parameter  :: ref_per_steps = 2
+  real(dp), parameter :: end_time      = 8e-9_dp
+  real(dp), parameter :: dt_output     = 20e-11_dp
+  real(dp), parameter :: dt_max        = 20e-11_dp
+  integer, parameter  :: ref_per_steps = 1
   integer, parameter  :: box_size      = 8
 
   ! Physical parameters
-  real(dp), parameter :: applied_field = -1e7_dp
-  real(dp), parameter :: mobility      = 0.025_dp
-  real(dp), parameter :: diffusion_c   = 0.1_dp
+  real(dp), parameter :: applied_field = -0.8e7_dp
+  real(dp), parameter :: mobility      = 0.03_dp
+  real(dp), parameter :: diffusion_c   = 0.2_dp
 
   ! Computational domain
-  real(dp), parameter :: domain_length = 5e-3_dp
+  real(dp), parameter :: domain_length = 10e-3_dp
   real(dp), parameter :: refine_max_dx = 1e-3_dp
-  real(dp), parameter :: refine_min_dx = 5e-6_dp
+  real(dp), parameter :: refine_min_dx = 1e-9_dp
 
   ! Settings for the initial conditions
-  real(dp), parameter :: init_density         = 1e10_dp
-  real(dp), parameter :: init_y_min           = 4e-3_dp
-  real(dp), parameter :: init_y_max           = 4.5e-3_dp
-  real(dp), parameter :: init_perturb_ampl    = 1e10_dp
+  real(dp), parameter :: init_density = 1e15_dp
+  real(dp), parameter :: init_y_min   = 8.0e-3_dp
+  real(dp), parameter :: init_y_max   = 9.0e-3_dp
 
   ! Simulation variables
   real(dp) :: dt
@@ -136,7 +134,7 @@ program simple_streamer_2d
            call a2_restrict_tree(tree, i_elec)
 
            ! Fill ghost cells
-           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_neumann_zero)
+           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_dirichlet_zero)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, .true.)
@@ -150,7 +148,7 @@ program simple_streamer_2d
      end do
 
      call a2_restrict_tree(tree, i_pion)
-     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
+     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_dirichlet_zero)
      call a2_adjust_refinement(tree, refinement_routine, ref_info, 4)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
@@ -202,30 +200,27 @@ contains
     type(box2_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
     integer                  :: i, j, nc
-    real(dp)                 :: dx, dens, fld, adx
+    real(dp)                 :: dx, dens, fld, adx, xy(2)
 
     nc      = box%n_cell
     dx      = box%dr
 
     do j = 1, nc
        do i = 1, nc
+          xy   = a2_r_cc(box, [i,j])
           dens = box%cc(i, j, i_elec)
           fld = box%cc(i, j, i_fld)
           adx = get_alpha(fld) * dx
 
-          if (dens > 1e3_dp .and. adx > 0.8_dp) then
+          if (dens > 1e0_dp .and. adx > 0.8_dp) then
              cell_flags(i, j) = af_do_ref
-          else if (dens < 1e3_dp .or. adx < 0.025_dp) then
+          else if (dx < 1.25e-5_dp .and. adx < 0.1_dp) then
              cell_flags(i, j) = af_rm_ref
           else
              cell_flags(i, j) = af_keep_ref
           end if
-
        end do
     end do
-
-    if (box%r_min(1) < 0.5_dp * domain_length .and. &
-         dx > 2 * refine_min_dx) cell_flags = af_do_ref
 
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > refine_max_dx) then
@@ -241,7 +236,7 @@ contains
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), tmp
+    real(dp)                    :: xy(2), normal_rands(2)
 
     nc = box%n_cell
 
@@ -250,10 +245,11 @@ contains
           xy   = a2_r_cc(box, [i,j])
 
           if (xy(2) > init_y_min .and. xy(2) < init_y_max) then
-             ! tmp = 2 * pi * xy(1) * init_perturb_periods / domain_length
-             ! box%cc(i, j, i_elec) = init_density + init_perturb_ampl * cos(tmp)
-             call random_number(tmp)
-             box%cc(i, j, i_elec) = init_density + init_perturb_ampl * tmp
+             ! Approximate Poisson distribution with normal distribution
+             normal_rands = two_normals(box%dr**3 * init_density, &
+                   sqrt(box%dr**3 * init_density))
+             ! Prevent negative numbers
+             box%cc(i, j, i_elec) = abs(normal_rands(1)) / box%dr**3
           else
              box%cc(i, j, i_elec) = 0
           end if
@@ -261,9 +257,25 @@ contains
     end do
 
     box%cc(:, :, i_pion) = box%cc(:, :, i_elec)
-    box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
+    box%cc(:, :, i_phi)  = 0 ! Inital potential set to zero
 
   end subroutine set_init_cond
+
+  !> Return two normal random variates
+  !> http://en.wikipedia.org/wiki/Marsaglia_polar_method
+  function two_normals(mean, sigma) result(rands)
+    real(dp), intent(in) :: mean, sigma
+    real(dp) :: rands(2), sum_sq
+
+    do
+       call random_number(rands)
+       rands = 2 * rands - 1
+       sum_sq = sum(rands**2)
+       if (sum_sq < 1.0_dp .and. sum_sq > 0.0_dp) exit
+    end do
+    rands = rands * sqrt(-2 * log(sum_sq) / sum_sq)
+    rands = mean + rands * sigma
+  end function two_normals
 
   real(dp) function get_min(a, b)
     real(dp), intent(in) :: a, b
@@ -302,12 +314,17 @@ contains
     max_dt = min(dt_cfl, dt_drt, dt_dif)
   end function max_dt
 
+  ! Taken from: Spatially hybrid computations for streamer discharges: II. Fully
+  ! 3D simulations, Chao Li, Ute Ebert, Willem Hundsdorfer, J. Comput. Phys.
+  ! 231, 1020-1050 (2012), doi:10.1016/j.jcp.2011.07.023
   elemental function get_alpha(fld) result(alpha)
     real(dp), intent(in) :: fld
     real(dp)             :: alpha
-    real(dp), parameter  :: fld0 = 2e7_dp
+    real(dp), parameter  :: c0 = 1.04e1_dp
+    real(dp), parameter  :: c1 = 0.601_dp
+    real(dp), parameter  :: c2 = 1.86e7_dp
 
-    alpha = 4.332e5_dp * exp(-fld0 / abs(fld))
+    alpha = exp(c0) * (abs(fld) * 1e-5_dp)**c1 * exp(-c2 / abs(fld))
   end function get_alpha
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -501,9 +518,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
-               a2_gc_interp_lim, a2_bc_neumann_zero)
+               a2_gc_interp_lim, a2_bc_dirichlet_zero)
           call a2_gc_box(tree%boxes, id, i_pion, &
-               a2_gc_interp_lim, a2_bc_neumann_zero)
+               a2_gc_interp_lim, a2_bc_dirichlet_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, mg%sides_bc)
        end do
@@ -522,6 +539,8 @@ contains
 
     select case (nb)
     case (a2_neighb_lowy)
+       ! bc_type = af_bc_dirichlet
+       ! box%cc(1:nc, 0, iv) = -applied_field * domain_length
        bc_type = af_bc_neumann
        box%cc(1:nc, 0, iv) = applied_field
     case (a2_neighb_highy)
@@ -561,4 +580,4 @@ contains
     end if
   end function koren_mlim
 
-end program simple_streamer_2d
+end program
