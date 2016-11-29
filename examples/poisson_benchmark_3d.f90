@@ -75,7 +75,7 @@ program poisson_benchmark_3d
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [1,1,1]       ! Set index of boxnn
+  ix_list(:, 1) = [1,1,1]       ! Set index of box 1
 
   ! Set neighbors for box one, negative values indicate a physical boundary
   nb_list(:, 1) = -1            ! Dirichlet zero -> -1
