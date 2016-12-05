@@ -46,7 +46,6 @@ module m_afivo_types
   !> Maximum length of the names of variables
   integer, parameter :: af_nlen = 20
 
-
   !> Type which contains the indices of all boxes at a refinement level, as well
   !> as a list with all the "leaf" boxes and non-leaf (parent) boxes
   type lvl_t
@@ -72,8 +71,8 @@ contains
 
   !> Get number of threads
   integer function af_get_max_threads()
-    use omp_lib
-    af_get_max_threads = OMP_get_max_threads()
+    use omp_lib, only: omp_get_max_threads
+    af_get_max_threads = omp_get_max_threads()
   end function af_get_max_threads
 
 end module m_afivo_types

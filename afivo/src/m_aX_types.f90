@@ -165,11 +165,16 @@ module m_a$D_types
   abstract interface
 
      !> Subroutine for setting refinement flags
-     subroutine a$D_subr_ref(boxes, id, ref_flag)
+     subroutine a$D_subr_ref(box, cell_flags)
        import
-       type(box$D_t), intent(in) :: boxes(:) !< List of boxes
-       integer, intent(in)       :: id  !< Id (index) of box
-       integer, intent(inout)    :: ref_flag !< Refinement flag
+       type(box$D_t), intent(in) :: box !< Box to inspect
+       !> Cell refinement flags
+#if $D == 2
+       integer, intent(out)      :: cell_flags(box%n_cell, box%n_cell)
+#elif $D == 3
+       integer, intent(out)      :: cell_flags(box%n_cell, &
+            box%n_cell, box%n_cell)
+#endif
      end subroutine a$D_subr_ref
 
      !> Subroutine that gets a box

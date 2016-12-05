@@ -134,26 +134,28 @@ program poisson_cyl
 
 contains
 
-  ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
-    integer                  :: nc
-    real(dp)                 :: max_crv
+  ! Set refinement flags for box
+  subroutine ref_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    integer                  :: i, j, nc
+    real(dp)                 :: crv
 
-    nc = boxes(id)%n_cell
+    nc = box%n_cell
 
     ! Compute the "curvature" in phi
-    max_crv = boxes(id)%dr**2 * &
-         maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
+    do j = 1, nc
+       do i = 1, nc
+          crv = box%dr**2 * abs(box%cc(i, j, i_rhs))
 
-    ! And refine if it exceeds a threshold
-    if (max_crv > 5.0e-4_dp) then
-       ref_flag = af_do_ref
-    else
-       ref_flag = af_keep_ref
-    end if
+          ! And refine if it exceeds a threshold
+          if (crv > 5.0e-4_dp) then
+             cell_flags(i, j) = af_do_ref
+          else
+             cell_flags(i, j) = af_keep_ref
+          end if
+       end do
+    end do
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box

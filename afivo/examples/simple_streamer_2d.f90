@@ -10,6 +10,7 @@ program simple_streamer_2d
   use m_a2_multigrid
   use m_a2_output
   use m_write_silo
+  use m_a2_prolong, onLy: a2_prolong_copy_from
 
   implicit none
 
@@ -34,41 +35,37 @@ program simple_streamer_2d
   integer, parameter :: f_elec     = 1 ! Electron flux
   integer, parameter :: f_fld      = 2 ! Electric field vector
 
-
   ! Names of the cell-centered variables
   character(len=10) :: ST_cc_names(n_var_cell) = &
        [character(len=10) :: "elec", "pion", "elec_old", &
        "pion_old", "phi", "fld", "rhs"]
 
   ! Simulation parameters
-  real(dp), parameter :: end_time      = 10e-9_dp
-  real(dp), parameter :: dt_output     = 0.1e-9_dp
-  real(dp), parameter :: dt_max        = 1e-11_dp
-  integer, parameter  :: ref_per_steps = 2
-  integer, parameter  :: box_size      = 128
+  real(dp), parameter :: end_time      = 8e-9_dp
+  real(dp), parameter :: dt_output     = 20e-11_dp
+  real(dp), parameter :: dt_max        = 20e-11_dp
+  integer, parameter  :: ref_per_steps = 1
+  integer, parameter  :: box_size      = 8
 
   ! Physical parameters
-  real(dp), parameter :: applied_field = -1e7_dp
-  real(dp), parameter :: mobility      = 0.025_dp
-  real(dp), parameter :: diffusion_c   = 0.0_dp
+  real(dp), parameter :: applied_field = -0.8e7_dp
+  real(dp), parameter :: mobility      = 0.03_dp
+  real(dp), parameter :: diffusion_c   = 0.2_dp
 
   ! Computational domain
   real(dp), parameter :: domain_length = 10e-3_dp
-  real(dp), parameter :: domain_max_dx = 1e-5_dp
+  real(dp), parameter :: refine_max_dx = 1e-3_dp
+  real(dp), parameter :: refine_min_dx = 1e-9_dp
 
   ! Settings for the initial conditions
-  real(dp), parameter :: init_density         = 1e10_dp
-  real(dp), parameter :: init_y_min           = 8e-3_dp
-  real(dp), parameter :: init_y_max           = 9e-3_dp
-  real(dp), parameter :: init_perturb_ampl    = 0e10_dp
-  real(dp), parameter :: init_perturb_periods = 2
+  real(dp), parameter :: init_density = 1e15_dp
+  real(dp), parameter :: init_y_min   = 8.0e-3_dp
+  real(dp), parameter :: init_y_max   = 9.0e-3_dp
 
   ! Simulation variables
   real(dp) :: dt
   real(dp) :: time
   integer  :: output_count
-  logical  :: write_out
-
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -92,27 +89,25 @@ program simple_streamer_2d
      call a2_loop_box(tree, set_init_cond)
      call compute_fld(tree, .false.)
      call a2_adjust_refinement(tree, refinement_routine, ref_info)
-     if (ref_info%n_add == 0) exit
+     if (ref_info%n_add == 0 .and. ref_info%n_rm == 0) exit
   end do
 
   call a2_print_info(tree)
 
   do
-     ! Get a new time step, which is at most dt_amr
-     dt = get_max_dt(tree)
+     ! Get a new time step, which is at most dt_max
+     call a2_reduction(tree, max_dt, get_min, dt_max, dt)
 
      if (dt < 1e-14) then
-        print *, "dt getting too small, instability?"
+        print *, "dt getting too small, instability?", dt
         time = end_time + 1.0_dp
      end if
 
      ! Every dt_output, write output
      if (output_count * dt_output <= time) then
-        write_out = .true.
         output_count = output_count + 1
         write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
-     else
-        write_out = .false.
+        call a2_write_silo(tree, fname, output_count, time, dir="output")
      end if
 
      if (time > end_time) exit
@@ -128,18 +123,18 @@ program simple_streamer_2d
         ! Two forward Euler steps over dt
         do i = 1, 2
            ! First calculate fluxes
-           call a2_loop_boxes(tree, fluxes_koren, .true.)
+           call a2_loop_boxes(tree, fluxes_koren, leaves_only=.true.)
            call a2_consistent_fluxes(tree, [f_elec])
 
            ! Update the solution
-           call a2_loop_box_arg(tree, update_solution, [dt], .true.)
+           call a2_loop_box_arg(tree, update_solution, [dt], &
+                leaves_only=.true.)
 
            ! Restrict the electron and ion densities to lower levels
            call a2_restrict_tree(tree, i_elec)
-           call a2_restrict_tree(tree, i_pion)
 
            ! Fill ghost cells
-           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_neumann_zero)
+           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_dirichlet_zero)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, .true.)
@@ -152,10 +147,9 @@ program simple_streamer_2d
         call compute_fld(tree, .true.)
      end do
 
-     if (write_out) call a2_write_silo(tree, fname, output_count, &
-          time, dir="output")
-
-     call a2_adjust_refinement(tree, refinement_routine, ref_info)
+     call a2_restrict_tree(tree, i_pion)
+     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_dirichlet_zero)
+     call a2_adjust_refinement(tree, refinement_routine, ref_info, 4)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -164,7 +158,6 @@ program simple_streamer_2d
         ! Compute the field on the new mesh
         call compute_fld(tree, .true.)
      end if
-
   end do
 
   call a2_destroy(tree)
@@ -192,9 +185,9 @@ contains
     id             = 1          ! One box ...
     ix_list(:, id) = [1,1]      ! With index 1,1 ...
 
-    nb_list(a2_neighb_lowy, id) = -1  ! physical boundary
+    nb_list(a2_neighb_lowy, id)  = -1 ! physical boundary
     nb_list(a2_neighb_highy, id) = -1 ! idem
-    nb_list(a2_neighb_lowx, id) = id  ! periodic boundary
+    nb_list(a2_neighb_lowx, id)  = id ! periodic boundary
     nb_list(a2_neighb_highx, id) = id ! idem
 
     ! Create the base mesh
@@ -203,35 +196,47 @@ contains
   end subroutine init_tree
 
   ! This routine sets the refinement flag for boxes(id)
-  subroutine refinement_routine(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:) ! List of all boxes
-    integer, intent(in)      :: id       ! Index of box to look at
-    integer, intent(inout)   :: ref_flag ! Refinement flag for the box
-    integer                  :: nc
-    real(dp)                 :: dx2, dx
-    real(dp)                 :: alpha, adx, max_fld
-    real(dp)                 :: max_dns
+  subroutine refinement_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    integer                  :: i, j, nc
+    real(dp)                 :: dx, dens, fld, adx, xy(2)
 
-    nc        = boxes(id)%n_cell
-    dx        = boxes(id)%dr
-    dx2       = boxes(id)%dr**2
-    max_fld   = maxval(boxes(id)%cc(1:nc, 1:nc, i_fld))
-    max_dns   = maxval(boxes(id)%cc(1:nc, 1:nc, i_elec))
-    alpha     = get_alpha(max_fld)
-    adx       = boxes(id)%dr * alpha
+    nc      = box%n_cell
+    dx      = box%dr
 
-    ref_flag = af_keep_ref
+    do j = 1, nc
+       do i = 1, nc
+          xy   = a2_r_cc(box, [i,j])
+          dens = box%cc(i, j, i_elec)
+          fld = box%cc(i, j, i_fld)
+          adx = get_alpha(fld) * dx
 
-    ! Make sure we don't have or get a too coarse grid
-    if (dx > domain_max_dx) ref_flag = af_do_ref
+          if (dens > 1e0_dp .and. adx > 0.8_dp) then
+             cell_flags(i, j) = af_do_ref
+          else if (dx < 1.25e-5_dp .and. adx < 0.1_dp) then
+             cell_flags(i, j) = af_rm_ref
+          else
+             cell_flags(i, j) = af_keep_ref
+          end if
+       end do
+    end do
+
+    ! Make sure we don't have or get a too fine or too coarse grid
+    if (dx > refine_max_dx) then
+       cell_flags = af_do_ref
+    else if (dx < 2 * refine_min_dx) then
+       where(cell_flags == af_do_ref) cell_flags = af_keep_ref
+    else if (dx > 0.5_dp * refine_max_dx) then
+       where(cell_flags == af_rm_ref) cell_flags = af_keep_ref
+    end if
 
   end subroutine refinement_routine
 
   subroutine set_init_cond(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), tmp
-    real(dp), parameter         :: pi = acos(-1.0_dp)
+    real(dp)                    :: xy(2), normal_rands(2)
 
     nc = box%n_cell
 
@@ -240,8 +245,11 @@ contains
           xy   = a2_r_cc(box, [i,j])
 
           if (xy(2) > init_y_min .and. xy(2) < init_y_max) then
-             tmp = 2 * pi * xy(1) * init_perturb_periods / domain_length
-             box%cc(i, j, i_elec) = init_density + init_perturb_ampl * sin(tmp)
+             ! Approximate Poisson distribution with normal distribution
+             normal_rands = two_normals(box%dr**3 * init_density, &
+                   sqrt(box%dr**3 * init_density))
+             ! Prevent negative numbers
+             box%cc(i, j, i_elec) = abs(normal_rands(1)) / box%dr**3
           else
              box%cc(i, j, i_elec) = 0
           end if
@@ -249,48 +257,74 @@ contains
     end do
 
     box%cc(:, :, i_pion) = box%cc(:, :, i_elec)
-    box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
+    box%cc(:, :, i_phi)  = 0 ! Inital potential set to zero
 
   end subroutine set_init_cond
 
+  !> Return two normal random variates
+  !> http://en.wikipedia.org/wiki/Marsaglia_polar_method
+  function two_normals(mean, sigma) result(rands)
+    real(dp), intent(in) :: mean, sigma
+    real(dp) :: rands(2), sum_sq
+
+    do
+       call random_number(rands)
+       rands = 2 * rands - 1
+       sum_sq = sum(rands**2)
+       if (sum_sq < 1.0_dp .and. sum_sq > 0.0_dp) exit
+    end do
+    rands = rands * sqrt(-2 * log(sum_sq) / sum_sq)
+    rands = mean + rands * sigma
+  end function two_normals
+
+  real(dp) function get_min(a, b)
+    real(dp), intent(in) :: a, b
+    get_min = min(a, b)
+  end function get_min
+
   ! Get maximum time step based on e.g. CFL criteria
-  real(dp) function get_max_dt(tree)
-    type(a2_t), intent(in) :: tree
+  real(dp) function max_dt(box)
+    type(box2_t), intent(in) :: box
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
     real(dp), parameter    :: UC_elem_charge = 1.6022d-19
-    real(dp)               :: max_fld, min_fld, max_dns, dr_min
-    real(dp)               :: alpha
-    real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
+    integer :: i, j, nc
+    real(dp)               :: fld(2)
+    real(dp)               :: dt_cfl, dt_dif, dt_drt
 
-    call a2_tree_max_cc(tree, i_fld, max_fld)
-    call a2_tree_min_cc(tree, i_fld, min_fld)
-    call a2_tree_max_cc(tree, i_elec, max_dns)
+    nc = box%n_cell
+    dt_cfl = dt_max
 
-    dr_min       = a2_min_dr(tree)
-    alpha        = get_alpha(max_fld)
+    do j = 1, nc
+       do i = 1, nc
+          fld(1) = 0.5_dp * (box%fx(i, j, f_fld) + box%fx(i+1, j, f_fld))
+          fld(2) = 0.5_dp * (box%fy(i, j, f_fld) + box%fy(i, j+1, f_fld))
 
-    ! CFL condition
-    dt_cfl = dr_min / (mobility * max_fld) ! Factor ~ sqrt(0.5)
-
-    ! Diffusion condition
-    dt_dif = 0.25_dp * dr_min**2 / max(diffusion_c, epsilon(1.0_dp))
+          ! The 0.5 is here because of the explicit trapezoidal rule
+          dt_cfl = min(dt_cfl, 0.5_dp / sum(abs(fld * mobility) / box%dr))
+       end do
+    end do
 
     ! Dielectric relaxation time
-    dt_drt = UC_eps0 / (UC_elem_charge * mobility * max_dns)
+    dt_drt = UC_eps0 / (UC_elem_charge * mobility * &
+         maxval(box%cc(1:nc, 1:nc, i_elec)))
 
-    ! Ionization limit
-    dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
+    ! Diffusion condition
+    dt_dif = 0.25_dp * box%dr**2 / max(diffusion_c, epsilon(1.0_dp))
 
-    get_max_dt = min(0.5_dp/(1/dt_cfl + 1/dt_dif), 0.9_dp * dt_drt, &
-         0.9_dp * dt_alpha, dt_max)
-  end function get_max_dt
+    max_dt = min(dt_cfl, dt_drt, dt_dif)
+  end function max_dt
 
+  ! Taken from: Spatially hybrid computations for streamer discharges: II. Fully
+  ! 3D simulations, Chao Li, Ute Ebert, Willem Hundsdorfer, J. Comput. Phys.
+  ! 231, 1020-1050 (2012), doi:10.1016/j.jcp.2011.07.023
   elemental function get_alpha(fld) result(alpha)
     real(dp), intent(in) :: fld
     real(dp)             :: alpha
-    real(dp), parameter  :: fld0 = 2e7_dp
+    real(dp), parameter  :: c0 = 1.04e1_dp
+    real(dp), parameter  :: c1 = 0.601_dp
+    real(dp), parameter  :: c2 = 1.86e7_dp
 
-    alpha = 4.332e5_dp * exp(- fld0 / fld)
+    alpha = exp(c0) * (abs(fld) * 1e-5_dp)**c1 * exp(-c2 / abs(fld))
   end function get_alpha
 
   ! Compute electric field on the tree. First perform multigrid to get electric
@@ -444,19 +478,16 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, sflux, fld
-    real(dp)                    :: alpha, dflux(2)
+    real(dp)                    :: alpha
     integer                     :: i, j, nc
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr
     do j = 1, nc
        do i = 1, nc
-          fld      = box%cc(i,j, i_fld)
-          alpha    = get_alpha(fld)
-
-          dflux(1) = box%fx(i, j, f_elec) + box%fx(i+1, j, f_elec)
-          dflux(2) = box%fy(i, j, f_elec) + box%fy(i, j+1, f_elec)
-          src = 0.5_dp * norm2(dflux) * alpha
+          fld   = box%cc(i,j, i_fld)
+          alpha = get_alpha(fld)
+          src   = box%cc(i, j, i_elec) * mobility * abs(fld) * alpha
 
           sflux = (box%fx(i, j, f_elec) - box%fx(i+1, j, f_elec) + &
                box%fy(i, j, f_elec) - box%fy(i, j+1, f_elec)) * inv_dr
@@ -487,7 +518,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
-               a2_gc_interp_lim, a2_bc_neumann_zero)
+               a2_gc_interp_lim, a2_bc_dirichlet_zero)
+          call a2_gc_box(tree%boxes, id, i_pion, &
+               a2_gc_interp_lim, a2_bc_dirichlet_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, mg%sides_bc)
        end do
@@ -506,6 +539,8 @@ contains
 
     select case (nb)
     case (a2_neighb_lowy)
+       ! bc_type = af_bc_dirichlet
+       ! box%cc(1:nc, 0, iv) = -applied_field * domain_length
        bc_type = af_bc_neumann
        box%cc(1:nc, 0, iv) = applied_field
     case (a2_neighb_highy)
@@ -545,4 +580,4 @@ contains
     end if
   end function koren_mlim
 
-end program simple_streamer_2d
+end program

@@ -111,19 +111,18 @@ program random_refinement_3d
 contains
 
   ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
-    type(box3_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
-    integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: ref_flag
+  subroutine ref_routine(box, cell_flags)
+    type(box3_t), intent(in) :: box ! A list of all boxes in the tree
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
     real(dp)                 :: rr
 
     ! Draw a [0, 1) random number
     call random_number(rr)
 
-    if (rr < 0.125_dp .and. boxes(id)%lvl < 5) then
-       ref_flag = af_do_ref ! Add refinement
+    if (rr < 0.125_dp .and. box%lvl < 5) then
+       cell_flags = af_do_ref ! Add refinement
     else
-       ref_flag = af_rm_ref ! Ask to remove this box, which will not always
+       cell_flags = af_rm_ref ! Ask to remove this box, which will not always
                             ! happen (see documentation)
     end if
   end subroutine ref_routine

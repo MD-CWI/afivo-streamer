@@ -24,7 +24,7 @@ program poisson_benchmark_2d
   integer            :: n_cell, n_iterations, max_ref_lvl
   integer            :: ix_list(2, n_boxes_base)
   integer            :: nb_list(4, n_boxes_base)
-  real(dp)           :: dr
+  real(dp)           :: dr, time
   character(len=40)  :: fname, arg_string
   type(mg2_t)        :: mg
   integer            :: count_rate,t_start, t_end
@@ -132,10 +132,11 @@ program poisson_benchmark_2d
   end do
   call system_clock(t_end, count_rate)
 
+  time = (t_end-t_start) / real(count_rate, dp)
   write(*, "(A,I0,A,E10.3,A)") &
        " Wall-clock time after ", n_iterations, &
-       " iterations: ", (t_end-t_start) / real(count_rate, dp), &
-       " seconds"
+       " iterations: ", time, " seconds"
+  write(*, "(A,E10.3,A)") " Per iteration: ", time/n_iterations, " seconds"
 
   ! This writes a VTK output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
@@ -148,14 +149,17 @@ program poisson_benchmark_2d
 
 contains
 
-  ! Return the refinement flag for boxes(id)
-  subroutine ref_routine(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:) ! A list of all boxes in the tree
-    integer, intent(in)      :: id       ! The index of the current box
-    integer, intent(inout)   :: ref_flag
+  ! Set refinement flags for box
+  subroutine ref_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box ! A list of all boxes in the tree
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
 
     ! Fully refine up to max_ref_lvl
-    if (boxes(id)%lvl < max_ref_lvl) ref_flag = af_do_ref
+    if (box%lvl < max_ref_lvl) then
+       cell_flags = af_do_ref
+    else
+       cell_flags = af_keep_ref
+    end if
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box

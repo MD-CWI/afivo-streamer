@@ -51,20 +51,24 @@ program test_init
 
 contains
 
-  subroutine refinement_2d(boxes, id, ref_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
-
-    if (all(boxes(id)%ix == 1)) ref_flag = af_do_ref
+  subroutine refinement_2d(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    if (all(box%ix == 1)) then
+       cell_flags = af_do_ref
+    else
+       cell_flags = af_keep_ref
+    end if
   end subroutine refinement_2d
 
-  subroutine refinement_3d(boxes, id, ref_flag)
-    type(box3_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: ref_flag
-
-    if (all(boxes(id)%ix == 1)) ref_flag = af_do_ref
+  subroutine refinement_3d(box, cell_flags)
+    type(box3_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
+    if (all(box%ix == 1)) then
+       cell_flags = af_do_ref
+    else
+       cell_flags = af_keep_ref
+    end if
   end subroutine refinement_3d
 
   subroutine init_2d(box)

@@ -247,7 +247,7 @@ See Figure <a href="#fig_start_poisson_basic_2d">Figure 1</a>.
 <a name="fig_start_poisson_basic_2d" />
 a) | b) 
 ------------- | -------------
-<img src="../../figures/poisson_basic_2d_rhs.png" width=400px /> | <img src="../../figures/poisson_basic_2d_0.png" width=400px />
+<img src="../../documentation/figures/poisson_basic_2d_rhs.png" width=400px /> | <img src="../../documentation/figures/poisson_basic_2d_0.png" width=400px />
 
 **Figure 1**. a) initialization of the right hand side b) adapted mesh
 
@@ -349,7 +349,7 @@ See <a href="#fig_end_poisson_basic_2d">Figure 3</a>.
 <a name="fig_end_poisson_basic_2d" />
 a) | b)
 ------------- | -------------
-<img src="../../figures/poisson_basic_2d_10_phi.png" width=400px /> | <img src="../../figures/poisson_basic_2d_10_err.png" width=400px />
+<img src="../../documentation/figures/poisson_basic_2d_10_phi.png" width=400px /> | <img src="../../documentation/figures/poisson_basic_2d_10_err.png" width=400px />
 
 **Figure 3**. a) solution \f$ \phi \f$ b) error \f$ \epsilon \f$ after 10 multigrid iteration steps.
 
@@ -404,5 +404,5 @@ for 16 and just one thread.
 For the multigrid process we achieve a speedup factor of nearly a factor 9.
 For a multigrid process, which is hard to parallelize, this is a very good result.
 
-<img src="../../figures/WCT_basic_3d_lisa_new.png" width=300px /> 
+<img src="../../documentation/figures/WCT_basic_3d_lisa_new.png" width=300px /> 
 
