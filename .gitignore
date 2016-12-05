@@ -21,6 +21,7 @@ GPATH
 
 Other files
 ###################
+.DS_Store*
 *.silo
 *.vtu
 output/

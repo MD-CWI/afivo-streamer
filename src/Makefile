@@ -1,5 +1,5 @@
 INCDIRS	:= ../afivo/src
-LIBDIRS := ../afivo/src ../afivo/silo/lib .
+LIBDIRS := ../afivo/src ../afivo/externaL_libraries/silo/lib .
 LIBS	:= afivo silo streamer
 VPATH	:= config_fortran:lookup_table_fortran:rng_fortran
 
