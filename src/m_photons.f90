@@ -527,7 +527,6 @@ contains
           do k = 1, nc
              do j = 1, nc
                 do i = 1, nc
-                   tmp = tmp + fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
                    tmp = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
                    n_create = floor(tmp)
 
