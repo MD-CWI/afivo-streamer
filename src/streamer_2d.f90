@@ -58,7 +58,7 @@ program streamer_2d
   do
      call a2_loop_box(tree, set_initial_condition)
      call compute_electric_field(tree, n_fmg_cycles, .false.)
-     call a2_adjust_refinement(tree, refine_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info, 4)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -132,7 +132,7 @@ program streamer_2d
      if (write_out) call a2_write_silo(tree, fname, ST_out_cnt, &
           ST_time, dir=ST_output_dir)
 
-     call a2_adjust_refinement(tree, refine_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info, 4)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -554,7 +554,7 @@ contains
     real(dp), intent(in)      :: eta
     real(dp), intent(in), optional :: dt
     integer, intent(in)       :: num_photons
-    real(dp), parameter       :: p_quench = 30.0D0 * UC_torr_to_bar
+    real(dp), parameter       :: p_quench = 30.0e-3_dp
     real(dp)                  :: quench_fac
 
     ! Compute quench factor, because some excited species will be quenched by
@@ -575,14 +575,13 @@ contains
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, nc
-    real(dp)                    :: fld, alpha, mobility, dr, tmp
+    real(dp)                    :: fld, alpha, mobility, tmp
     type(LT_loc_t)              :: loc
 
     nc = box%n_cell
 
     do j = 1, nc
        do i = 1, nc
-          dr       = box%dr
           fld      = box%cc(i, j, i_electric_fld)
           loc      = LT_get_loc(ST_td_tbl, fld)
           alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)

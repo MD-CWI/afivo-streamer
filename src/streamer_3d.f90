@@ -58,7 +58,7 @@ program streamer_3d
   do
      call a3_loop_box(tree, set_initial_condition)
      call compute_electric_field(tree, n_fmg_cycles, .false.)
-     call a3_adjust_refinement(tree, refine_routine, ref_info)
+     call a3_adjust_refinement(tree, refine_routine, ref_info, 4)
      if (ref_info%n_add == 0 .and. ref_info%n_rm == 0) exit !!
   end do
 
@@ -68,8 +68,8 @@ program streamer_3d
        call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
 
   do
-     ! Get a new time step, which is at most dt_amr
-     ST_dt = get_max_dt(tree)
+     ! Get a new time step, which is at most dt_max
+     call a3_reduction(tree, get_max_dt, get_min, ST_dt_max, ST_dt)
 
      if (ST_dt < 1e-14) then
         print *, "ST_dt getting too small, instability?"
@@ -110,11 +110,9 @@ program streamer_3d
 
            ! Restrict the electron and ion densities to lower levels
            call a3_restrict_tree(tree, i_electron)
-           call a3_restrict_tree(tree, i_pos_ion)
 
            ! Fill ghost cells
            call a3_gc_tree(tree, i_electron, a3_gc_interp_lim, a3_bc_neumann_zero)
-           call a3_gc_tree(tree, i_pos_ion, a3_gc_interp_lim, a3_bc_neumann_zero)
 
            ! Compute new field on first iteration
            if (i == 1) call compute_electric_field(tree, n_fmg_cycles, .true.)
@@ -130,9 +128,12 @@ program streamer_3d
      end do
 
      if (write_out) call a3_write_silo(tree, fname, ST_out_cnt, ST_time, &
-          ixs_cc=[i_electron, i_pos_ion, i_electric_fld, i_photo], dir=ST_output_dir)
+          ixs_cc=[i_electron, i_pos_ion, i_electric_fld, i_photo, i_rhs], &
+          dir=ST_output_dir)
 
-     call a3_adjust_refinement(tree, refine_routine, ref_info)
+     call a3_restrict_tree(tree, i_pos_ion)
+     call a3_gc_tree(tree, i_pos_ion, a3_gc_interp_lim, a3_bc_neumann_zero)
+     call a3_adjust_refinement(tree, refine_routine, ref_info, 4)
 
      if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -283,39 +284,87 @@ contains
 
   end subroutine set_initial_condition
 
-  !> Get maximum time step based on e.g. CFL criteria
-  real(dp) function get_max_dt(tree)
-    type(a3_t), intent(in) :: tree
-    real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
-    real(dp), parameter    :: UC_elem_charge = 1.6022d-19
-    real(dp)               :: max_fld, min_fld, max_dns, dr_min
-    real(dp)               :: mobility, diff_coeff, alpha, max_mobility
-    real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
+  ! Get maximum time step based on e.g. CFL criteria
+  real(dp) function get_max_dt(box)
+    use m_units_constants
+    type(box3_t), intent(in) :: box
+    integer                  :: i, j, k, nc
+    real(dp)                 :: fld(3), fld_norm, mobility, diffusion_c
+    real(dp)                 :: dt_cfl, dt_dif, dt_drt
 
-    call a3_tree_max_cc(tree, i_electric_fld, max_fld)
-    call a3_tree_min_cc(tree, i_electric_fld, min_fld)
-    call a3_tree_max_cc(tree, i_electron, max_dns)
+    nc = box%n_cell
+    dt_cfl = ST_dt_max
+    dt_drt = ST_dt_max
+    dt_dif = ST_dt_max
 
-    dr_min       = a3_min_dr(tree)
-    mobility     = LT_get_col(ST_td_tbl, i_mobility, max_fld)
-    max_mobility = LT_get_col(ST_td_tbl, i_mobility, min_fld)
-    diff_coeff   = LT_get_col(ST_td_tbl, i_diffusion, max_fld)
-    alpha        = LT_get_col(ST_td_tbl, i_alpha, max_fld)
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             fld(1) = 0.5_dp * (box%fx(i, j, k, electric_fld) + &
+                  box%fx(i+1, j, k, electric_fld))
+             fld(2) = 0.5_dp * (box%fy(i, j, k, electric_fld) + &
+                  box%fy(i, j+1, k, electric_fld))
+             fld(3) = 0.5_dp * (box%fz(i, j, k, electric_fld) + &
+                  box%fz(i, j, k+1, electric_fld))
 
-    ! CFL condition
-    dt_cfl = dr_min / (mobility * max_fld) ! Factor ~ sqrt(0.5)
+             fld_norm = box%cc(i, j, k, i_electric_fld)
+             mobility = LT_get_col(ST_td_tbl, i_mobility, fld_norm)
+             diffusion_c = LT_get_col(ST_td_tbl, i_diffusion, fld_norm)
 
-    ! Diffusion condition
-    dt_dif = 0.25_dp * dr_min**2 / diff_coeff
+             ! The 0.5 is here because of the explicit trapezoidal rule
+             dt_cfl = min(dt_cfl, 0.5_dp/sum(abs(fld * mobility) / box%dr))
 
-    ! Dielectric relaxation time
-    dt_drt = UC_eps0 / (UC_elem_charge * max_mobility * max_dns)
+             ! Dielectric relaxation time
+             dt_drt = min(dt_drt, UC_eps0 / (UC_elem_charge * mobility * &
+                  max(box%cc(i, j, k, i_electron), epsilon(1.0_dp))))
 
-    ! Ionization limit
-    dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
+             ! Diffusion condition
+             dt_dif = min(dt_dif, 0.25_dp * box%dr**2 / &
+                  max(diffusion_c, epsilon(1.0_dp)))
+          end do
+       end do
+    end do
 
-    get_max_dt = 0.5_dp * min(1/(1/dt_cfl + 1/dt_dif), dt_alpha, ST_dt_max)
+    get_max_dt = min(dt_cfl, dt_drt, dt_dif)
   end function get_max_dt
+
+  real(dp) function get_min(a, b)
+    real(dp), intent(in) :: a, b
+    get_min = min(a, b)
+  end function get_min
+
+  ! !> Get maximum time step based on e.g. CFL criteria
+  ! real(dp) function get_max_dt(tree)
+  !   use m_units_constants
+  !   type(a3_t), intent(in) :: tree
+  !   real(dp)               :: max_fld, min_fld, max_dns, dr_min
+  !   real(dp)               :: mobility, diff_coeff, alpha, max_mobility
+  !   real(dp)               :: dt_cfl, dt_dif, dt_drt, dt_alpha
+
+  !   call a3_tree_max_cc(tree, i_electric_fld, max_fld)
+  !   call a3_tree_min_cc(tree, i_electric_fld, min_fld)
+  !   call a3_tree_max_cc(tree, i_electron, max_dns)
+
+  !   dr_min       = a3_min_dr(tree)
+  !   mobility     = LT_get_col(ST_td_tbl, i_mobility, max_fld)
+  !   max_mobility = LT_get_col(ST_td_tbl, i_mobility, min_fld)
+  !   diff_coeff   = LT_get_col(ST_td_tbl, i_diffusion, max_fld)
+  !   alpha        = LT_get_col(ST_td_tbl, i_alpha, max_fld)
+
+  !   ! CFL condition
+  !   dt_cfl = 0.5_dp * dr_min / (mobility * max_fld)
+
+  !   ! Diffusion condition
+  !   dt_dif = 0.25_dp * dr_min**2 / diff_coeff
+
+  !   ! Dielectric relaxation time
+  !   dt_drt = UC_eps0 / (UC_elem_charge * max_mobility * max_dns)
+
+  !   ! Ionization limit
+  !   dt_alpha =  1 / max(mobility * max_fld * alpha, epsilon(1.0_dp))
+
+  !   get_max_dt = 0.95_dp * min(dt_cfl, dt_dif, dt_alpha, ST_dt_max)
+  ! end function get_max_dt
 
   !> Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
@@ -622,7 +671,7 @@ contains
     real(dp), intent(in)      :: eta
     real(dp), intent(in), optional :: dt
     integer, intent(in)       :: num_photons
-    real(dp), parameter       :: p_quench = 30.0D0 * UC_torr_to_bar
+    real(dp), parameter       :: p_quench = 30e-3_dp ! 30 mbar
     real(dp)                  :: quench_fac
 
     ! Compute quench factor, because some excited species will be quenched by
@@ -643,7 +692,7 @@ contains
     type(box3_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, k, nc
-    real(dp)                    :: fld, alpha, mobility, tmp
+    real(dp)                    :: fld, alpha, mobility
     type(LT_loc_t)              :: loc
 
     nc = box%n_cell
@@ -656,9 +705,8 @@ contains
              alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
              mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-             tmp = fld * mobility * alpha * box%cc(i, j, k, i_electron) * coeff(1)
-             if (tmp < 0) tmp = 0
-             box%cc(i, j, k, i_photo) = tmp
+             box%cc(i, j, k, i_photo) = fld * mobility * alpha * &
+                  box%cc(i, j, k, i_electron) * coeff(1)
           end do
        end do
     end do
@@ -671,7 +719,9 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id, p_id
 
+    !$omp parallel private(lvl, i, id, p_id)
     do lvl = 1, tree%highest_lvl
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
@@ -679,7 +729,9 @@ contains
           call a3_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
           call a3_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
+       !$omp end do
 
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a3_gc_box(tree%boxes, id, i_electron, &
@@ -689,7 +741,9 @@ contains
           call a3_gc_box(tree%boxes, id, i_phi, &
                mg3_sides_rb, mg%sides_bc)
        end do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine prolong_to_new_boxes
 
 end program streamer_3d

@@ -559,7 +559,7 @@ contains
     real(dp), intent(in)      :: eta
     real(dp), intent(in), optional :: dt
     integer, intent(in)       :: num_photons
-    real(dp), parameter       :: p_quench = 30.0D0 * UC_torr_to_bar
+    real(dp), parameter       :: p_quench = 30.0e-3_dp
     real(dp)                  :: quench_fac
 
     ! Compute quench factor, because some excited species will be quenched by
