@@ -32,7 +32,7 @@ clean:
 
 # Dependency information
 $(PROGS): 		../afivo/src/libafivo.a libstreamer.a
-streamer_2d.o streamer_3d.o streamer_cyl.o: m_streamer.o
+streamer_2d.o streamer_3d.o streamer_cyl.o: m_streamer.o m_geometry.o
 m_lookup_table.o:	m_find_index.o
-m_streamer.o:		m_transport_data.o m_photons.o
-m_photons.o:		m_lookup_table.o
+m_streamer.o:		m_transport_data.o m_photons.o m_config.o
+m_photons.o:		m_lookup_table.o m_units_constants.o m_random.o
