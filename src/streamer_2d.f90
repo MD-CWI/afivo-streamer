@@ -175,63 +175,65 @@ contains
 
   end subroutine init_tree
 
-  ! This routine sets the refinement flag for boxes(id)
-  subroutine refine_routine(boxes, id, refine_flag)
+  ! This routine sets the cell refinement flags for box
+  subroutine refine_routine(box, cell_flags)
     use m_geometry
-    type(box2_t), intent(in) :: boxes(:) ! List of all boxes
-    integer, intent(in)      :: id       ! Index of box to look at
-    integer, intent(inout)   :: refine_flag ! Refinement flag for the box
-    integer                  :: n, nc
+    type(box2_t), intent(in) :: box
+    ! Refinement flags for the cells of the box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    integer                  :: i, j, n, nc
     real(dp)                 :: cphi, dx, dx2
-    real(dp)                 :: alpha, adx, max_fld
-    real(dp)                 :: boxlen, dist
+    real(dp)                 :: alpha, adx, fld
+    real(dp)                 :: dist
 
-    nc      = boxes(id)%n_cell
-    dx      = boxes(id)%dr
-    dx2     = boxes(id)%dr**2
+    nc      = box%n_cell
+    dx      = box%dr
+    dx2     = box%dr**2
 
-    max_fld = maxval(boxes(id)%cc(1:nc, 1:nc, i_electric_fld))
-    alpha   = LT_get_col(ST_td_tbl, i_alpha, max_fld)
+    do j = 1, nc
+       do i = 1, nc
+          fld   = box%cc(i, j, i_electric_fld)
+          alpha = LT_get_col(ST_td_tbl, i_alpha, fld)
+          ! The refinement is based on the ionization length
+          adx   = box%dr * alpha
 
-    ! The refinement is based on the ionization length times the grid spacing
-    adx     = boxes(id)%dr * alpha
+          ! The refinement is also based on the intensity of the source term.
+          ! Here we estimate the curvature of phi (given by dx**2 *
+          ! Laplacian(phi))
+          cphi = dx2 * abs(box%cc(i, j, i_rhs))
 
-    ! The refinement is also based on the intensity of the source term. Here we
-    ! estimate the curvature of phi (given by dx**2 * Laplacian(phi))
-    cphi    = dx2 * maxval(abs(boxes(id)%cc(1:nc, 1:nc, i_rhs)))
-
-    if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
-       refine_flag = af_do_ref
-    else if (adx < 0.125_dp * ST_refine_adx .and. cphi < 0.0625_dp * ST_refine_cphi &
-         .and. dx < ST_derefine_dx) then
-       refine_flag = af_rm_ref
-    end if
-
-    ! Refine around the initial conditions
-    if (ST_time < ST_refine_init_time) then
-       boxlen = boxes(id)%n_cell * boxes(id)%dr
-
-       do n = 1, ST_init_cond%n_cond
-          dist = GM_dist_line(a2_r_center(boxes(id)), &
-               ST_init_cond%seed_r0(:, n), &
-               ST_init_cond%seed_r1(:, n), 2)
-          if (dist - 2 * ST_init_cond%seed_width(n) < boxlen &
-               .and. boxes(id)%dr > ST_refine_init_fac * &
-               ST_init_cond%seed_width(n)) then
-             refine_flag = af_do_ref
+          if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
+             cell_flags(i, j) = af_do_ref
+          else if (adx < 0.125_dp * ST_refine_adx .and. &
+               cphi < 0.0625_dp * ST_refine_cphi &
+               .and. dx < ST_derefine_dx) then
+             cell_flags(i, j) = af_rm_ref
+          else
+             cell_flags(i, j) = af_keep_ref
           end if
+
+          ! Refine around the initial conditions
+          if (ST_time < ST_refine_init_time) then
+             do n = 1, ST_init_cond%n_cond
+                dist = GM_dist_line(a2_r_cc(box, [i, j]), &
+                     ST_init_cond%seed_r0(:, n), &
+                     ST_init_cond%seed_r1(:, n), 2)
+                if (dist - ST_init_cond%seed_width(n) < 2 * dx &
+                     .and. box%dr > ST_refine_init_fac * &
+                     ST_init_cond%seed_width(n)) then
+                   cell_flags(i, j) = af_do_ref
+                end if
+             end do
+          end if
+
        end do
-    end if
+    end do
 
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > ST_refine_max_dx) then
-       refine_flag = af_do_ref
-    else if (dx < ST_refine_min_dx) then
-       refine_flag = af_rm_ref
-    else if (dx < 2 * ST_refine_min_dx .and. refine_flag == af_do_ref) then
-       refine_flag = af_keep_ref
-    else if (dx > 0.5_dp * ST_refine_max_dx .and. refine_flag == af_rm_ref) then
-       refine_flag = af_keep_ref
+       cell_flags = af_do_ref
+    else if (dx < 2 * ST_refine_min_dx) then
+       where(cell_flags == af_do_ref) cell_flags = af_keep_ref
     end if
 
   end subroutine refine_routine
