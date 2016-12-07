@@ -69,7 +69,9 @@ program streamer_3d
 
   do
      ! Get a new time step, which is at most dt_max
-     call a3_reduction(tree, get_max_dt, get_min, ST_dt_max, ST_dt)
+     call a3_reduction_vec(tree, get_max_dt, get_min, &
+          [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
+     ST_dt = minval(ST_dt_vec)
 
      if (ST_dt < 1e-14) then
         print *, "ST_dt getting too small, instability?"
@@ -285,17 +287,16 @@ contains
   end subroutine set_initial_condition
 
   ! Get maximum time step based on e.g. CFL criteria
-  real(dp) function get_max_dt(box)
+  function get_max_dt(box, n_cond) result(dt_vec)
     use m_units_constants
     type(box3_t), intent(in) :: box
+    integer, intent(in)      :: n_cond
     integer                  :: i, j, k, nc
     real(dp)                 :: fld(3), fld_norm, mobility, diffusion_c
-    real(dp)                 :: dt_cfl, dt_dif, dt_drt
+    real(dp)                 :: dt_vec(n_cond)
 
     nc = box%n_cell
-    dt_cfl = ST_dt_max
-    dt_drt = ST_dt_max
-    dt_dif = ST_dt_max
+    dt_vec = ST_dt_max
 
     do k = 1, nc
        do j = 1, nc
@@ -312,25 +313,29 @@ contains
              diffusion_c = LT_get_col(ST_td_tbl, i_diffusion, fld_norm)
 
              ! The 0.5 is here because of the explicit trapezoidal rule
-             dt_cfl = min(dt_cfl, 0.5_dp/sum(abs(fld * mobility) / box%dr))
+             dt_vec(ST_ix_cfl) = min(dt_vec(ST_ix_cfl), &
+                  0.5_dp/sum(abs(fld * mobility) / box%dr))
 
              ! Dielectric relaxation time
-             dt_drt = min(dt_drt, UC_eps0 / (UC_elem_charge * mobility * &
+             dt_vec(ST_ix_drt) = min(dt_vec(ST_ix_drt), &
+                  UC_eps0 / (UC_elem_charge * mobility * &
                   max(box%cc(i, j, k, i_electron), epsilon(1.0_dp))))
 
              ! Diffusion condition
-             dt_dif = min(dt_dif, 0.25_dp * box%dr**2 / &
-                  max(diffusion_c, epsilon(1.0_dp)))
+             dt_vec(ST_ix_diff) = min(dt_vec(ST_ix_diff), &
+                  0.25_dp * box%dr**2 / max(diffusion_c, epsilon(1.0_dp)))
           end do
        end do
     end do
 
-    get_max_dt = min(dt_cfl, dt_drt, dt_dif)
   end function get_max_dt
 
-  real(dp) function get_min(a, b)
-    real(dp), intent(in) :: a, b
-    get_min = min(a, b)
+  function get_min(a, b, n) result(min_vec)
+    integer, intent(in)  :: n
+    real(dp), intent(in) :: a(n), b(n)
+    real(dp)             :: min_vec(n)
+
+    min_vec = min(a, b)
   end function get_min
 
   ! !> Get maximum time step based on e.g. CFL criteria

@@ -173,6 +173,21 @@ module m_streamer
   ! Current time step
   real(dp) :: ST_dt
 
+  ! Number of time step restrictions
+  integer, parameter :: ST_dt_num_cond = 3
+
+  ! Array of time step restrictions
+  real(dp) :: ST_dt_vec(ST_dt_num_cond)
+
+  ! Index of CFL condition
+  integer, parameter :: ST_ix_cfl = 1
+
+  ! Index of diffusion time step condition
+  integer, parameter :: ST_ix_diff = 2
+
+  ! Index of dielectric relaxation time condition
+  integer, parameter :: ST_ix_drt = 3
+
   ! Maximum allowed time step
   real(dp), protected :: ST_dt_max
 
