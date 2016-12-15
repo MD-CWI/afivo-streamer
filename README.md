@@ -77,5 +77,3 @@ More information about the photoionization method can be found in chapter 11 of:
 [3D Simulations and Analysis of Pulsed Discharges](http://repository.tue.nl/801516),
 J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
 
-
-
