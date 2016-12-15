@@ -38,3 +38,20 @@ through [this link](http://cwimd.nl/other_files/afivo_doc/html/index.html).
 * [Related projects & alternatives](documentation/other_projects.md)
 * [FAQ](documentation/faq.md)
 * [Authors](documentation/authors.md)
+
+## References / how to cite
+
+A draft of a paper about the Afivo framework is available upon request.
+
+The first paper in which the code was used is:
+
+[The role of free electrons in the guiding of positive streamers](http://dx.doi.org/10.1088/0963-0252/25/4/044001),
+S. Nijdam, J. Teunissen, E. Takahashi, U. Ebert, Plasma Sources Sci. Technol.
+(2016)
+
+Afivo was first presented in chapter 10 of:
+
+[3D Simulations and Analysis of Pulsed Discharges](http://repository.tue.nl/801516),
+J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
+
+
