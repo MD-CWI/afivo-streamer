@@ -13,7 +13,7 @@ program random_refinement_2d
 
   type(a2_t)           :: tree
   integer              :: id, iter, boxes_used
-  integer, parameter   :: n_boxes_base = 5
+  integer, parameter   :: n_boxes_base = 2
   integer              :: ix_list(2, n_boxes_base)
   integer              :: nb_list(4, n_boxes_base)
   integer, parameter   :: box_size     = 8
@@ -68,7 +68,7 @@ program random_refinement_2d
 
   call system_clock(t_start, count_rate)
   boxes_used = 1
-  do iter = 1, 50
+  do iter = 1, 20
      ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      ! Variables are the names given as the third argument.
@@ -80,13 +80,12 @@ program random_refinement_2d
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
      !
-     ! Within each (de)refinement step the subroutine a2_tidy_up is called, with
-     !    max_hole_frac = 0.5_dp
-     !    n_clean_min    = 1000
-     ! This means that every now and then whether too much holes appear in the
-     ! tree box list. Therefore reordering of tree is not necessary at the end
-     ! of the iteration process
-     call a2_adjust_refinement(tree, ref_routine, ref_info)
+     ! Within each (de)refinement step the subroutine a2_tidy_up is called. This
+     ! means that every now and then whether too much holes appear in the tree
+     ! box list. Therefore reordering of tree is not necessary at the end of the
+     ! iteration process
+     call a2_adjust_refinement(tree, ref_routine, ref_info, ref_buffer=0)
+
      boxes_used = boxes_used + ref_info%n_add - ref_info%n_rm
      write(*,'(4(3x,A,1x,i6))') "# new     boxes", ref_info%n_add, &
                                 "# removed boxes", ref_info%n_rm,  &
