@@ -29,15 +29,15 @@ In order to keep the code simple, the following choices were made:
 The best way to read Afivo's Doxygen-based documentation is
 through [this link](http://cwimd.nl/other_files/afivo_doc/html/index.html).
 
-* [Why Afivo?](documentation/why_afivo.md)
-* [Installation instructions](documentation/installation.md)
-* [About the documentation](documentation/documentation.md)
-* [Discussion of design](documentation/design.md)
-* [Geometric multigrid](documentation/multigrid.md)
-* [Tutorial multigrid](documentation/tutorial_mg.md)
-* [Related projects & alternatives](documentation/other_projects.md)
-* [FAQ](documentation/faq.md)
-* [Authors](documentation/authors.md)
+* [Why Afivo?](http://cwimd.nl/other_files/afivo_doc/html/md_documentation_why_afivo.html)
+* [Installation instructions](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_installation.html)
+* [About the documentation](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_installation.html)
+* [Discussion of design](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_design.html)
+* [Geometric multigrid](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_multigrid.html)
+* [Tutorial multigrid](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_tutorial_mg.html)
+* [Related projects & alternatives](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_other_projects.html)
+* [FAQ](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_faq.html)
+* [Authors](http://cwimd.nl/cwimd.nl/other_files/afivo_doc/html/md_documentation_authors.html)
 
 ## References / how to cite
 
@@ -53,5 +53,3 @@ Afivo was first presented in chapter 10 of:
 
 [3D Simulations and Analysis of Pulsed Discharges](http://repository.tue.nl/801516),
 J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
-
-
