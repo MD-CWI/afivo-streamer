@@ -234,8 +234,10 @@ contains
     end do
   end subroutine a$D_prolong_quadratic_from
 
-  !> Prolongation to a child (from parent) using quadratic interpolation. We use
-  !> 5 / 7 point stencils which do not need corner ghost cells.
+  !> Prolongation to a child (from parent) using quadratic interpolation. The 3D
+  !> version of this routine misses the cross-derivative term f_xyz, and the 2D
+  !> version relies on corner ghost cells (which are filled with an
+  !> extrapolation in a$D_gc_box).
   subroutine a$D_prolong_quadratic(box_p, box_c, iv, iv_to, add)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box
@@ -247,7 +249,9 @@ contains
     integer                      :: i, j, nc, ivc
     integer                      :: i_c, i_f, j_c, j_f
     real(dp)                     :: f0, fx, fy, fxx, fyy, f2
-#if $D == 3
+#if $D == 2
+    real(dp)                     :: fxy(2**$D)
+#elif $D == 3
     real(dp)                     :: fz, fzz
     integer                      :: k, k_c, k_f
 #endif
@@ -285,13 +289,22 @@ contains
                2 * f0 + box_p%cc(i_c, j_c+1, iv))
           f2 = fxx + fyy
 
-          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy + f2 + &
+          fxy(1) = 0.0625_dp * (box_p%cc(i_c-1, j_c-1, iv) + f0 - &
+               box_p%cc(i_c-1, j_c, iv) - box_p%cc(i_c, j_c-1, iv))
+          fxy(2) = 0.0625_dp * (box_p%cc(i_c+1, j_c-1, iv) + f0 - &
+               box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c-1, iv))
+          fxy(3) = 0.0625_dp * (box_p%cc(i_c-1, j_c+1, iv) + f0 - &
+               box_p%cc(i_c-1, j_c, iv) - box_p%cc(i_c, j_c+1, iv))
+          fxy(4) = 0.0625_dp * (box_p%cc(i_c+1, j_c+1, iv) + f0 - &
+               box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c+1, iv))
+
+          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy + f2 + fxy(1) + &
                box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy + f2 + &
+          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy + f2 + fxy(2) + &
                box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy + f2 + &
+          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy + f2 + fxy(3) + &
                box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy + f2 + &
+          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy + f2 + fxy(4) + &
                box_c%cc(i_f+1, j_f+1, ivc)
        end do
     end do
