@@ -41,8 +41,9 @@ contains
     !$omp end parallel
   end subroutine a$D_gc_tree
 
-  !> Fill ghost cells for variables iv on the sides of a box, using
-  !> subr_rb on refinement boundaries and subr_bc on physical boundaries
+  !> Fill ghost cells for variables iv on the sides of a box, using subr_rb on
+  !> refinement boundaries and subr_bc on physical boundaries. In 2D, corner
+  !> ghost cells are set by low-order extrapolation.
   subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc)
     type(box$D_t), intent(inout)  :: boxes(:)              !< List of all the boxes
     integer, intent(in)          :: id                    !< Id of box for which we set ghost cells
@@ -62,6 +63,8 @@ contains
           call bc_to_gc(boxes(id), nb, iv, bc_type)
        end if
     end do
+
+    call a$D_corner_gc_extrap(boxes(id), iv)
   end subroutine a$D_gc_box
 
   subroutine bc_to_gc(box, nb, iv, bc_type)
@@ -628,5 +631,32 @@ contains
 #endif
     end select
   end subroutine a$D_bc2_neumann_zero
+
+  !> This fills corner (or edge) ghost cells using linear extrapolation. The
+  !> ghost cells on the sides already need to be filled.
+  subroutine a$D_corner_gc_extrap(box, iv)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)          :: iv
+    integer                      :: nc
+
+    nc = box%n_cell
+
+#if $D == 2
+    box%cc(0, 0, iv) = box%cc(1, 0, iv) + box%cc(0, 1, iv) &
+         - box%cc(1, 1, iv)
+
+    box%cc(nc+1, 0, iv) = box%cc(nc, 0, iv) + box%cc(nc+1, 1, iv) &
+         - box%cc(nc, 1, iv)
+
+    box%cc(0, nc+1, iv) = box%cc(0, nc, iv) + box%cc(1, nc+1, iv) &
+         - box%cc(1, nc, iv)
+
+    box%cc(nc+1, nc+1, iv) = box%cc(nc+1, nc, iv) + box%cc(nc, nc+1, iv) &
+         - box%cc(nc, nc, iv)
+#elif $D == 3
+    ! To do (or not, perhaps include corner ghost cells more realistically?)
+#endif
+
+  end subroutine a$D_corner_gc_extrap
 
 end module m_a$D_ghostcell
