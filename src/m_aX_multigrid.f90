@@ -770,7 +770,7 @@ contains
     type(box$D_t), intent(in)    :: box_p
     type(mg$D_t), intent(in)     :: mg
 
-    call a$D_prolong_quadratic(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
+    call a$D_prolong_linear(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
   end subroutine mg$D_box_corr_lpl
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
