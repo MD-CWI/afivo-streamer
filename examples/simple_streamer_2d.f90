@@ -1,4 +1,4 @@
-!> \example
+!> \example simple_streamer_2d.f90
 !> A simplified model for ionization waves and/or streamers in 2D
 program simple_streamer_2d
 
