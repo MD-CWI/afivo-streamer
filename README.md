@@ -22,15 +22,5 @@ recent version of Doxygen, it can also be generated locally using `make doc`.
 
 ## References / how to cite
 
-A draft of a paper about the Afivo framework is available upon request.
-
-The first paper in which the code was used is:
-
-[The role of free electrons in the guiding of positive streamers](http://dx.doi.org/10.1088/0963-0252/25/4/044001),
-S. Nijdam, J. Teunissen, E. Takahashi, U. Ebert, Plasma Sources Sci. Technol.
-(2016)
-
-Afivo was first presented in chapter 10 of:
-
-[3D Simulations and Analysis of Pulsed Discharges](http://repository.tue.nl/801516),
-J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
+* Paper describing Afivo [arXiv](http://arxiv.org/abs/1701.04329)
+* Paper in which Afivo was first used [doi](http://dx.doi.org/10.1088/0963-0252/25/4/044001)
