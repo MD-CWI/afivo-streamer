@@ -29,8 +29,8 @@ program poisson_cyl_dielectric
   integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
-  type(gauss_t)      :: gs
   type(mg2_t)        :: mg
+  type(gauss_t)      :: gs
   integer            :: count_rate,t_start, t_end
 
   print *, "Running poisson_cyl_dielectric"
@@ -97,8 +97,7 @@ program poisson_cyl_dielectric
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
-  ! and i_tmp. These variables will be initialized at the first call
-  ! of mg2_fas_fmg
+  ! and i_tmp. These variables will be initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   print *, "Multigrid iteration | max residual | max error"
@@ -235,8 +234,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           rz = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - &
-               gauss_value(gs, rz)
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gs, rz)
        end do
     end do
   end subroutine set_err

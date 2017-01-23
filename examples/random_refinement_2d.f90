@@ -38,7 +38,8 @@ program random_refinement_2d
        dr, &           ! Distance between cells on base level
        cc_names = ["phi"])      ! Optional: names of cell-centered variables
 
-  ! Set up geometry. Neighbors for the boxes are stored in nb_list
+  ! Set up geometry. 
+  ! Neighbors for the boxes are stored in nb_list
   nb_list(:, :) = af_no_box     ! Default value
 
   ! Spatial indices are used to define the coordinates of a box. By default the

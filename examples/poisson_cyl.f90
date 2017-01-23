@@ -93,9 +93,9 @@ program poisson_cyl
   mg%box_corr     => mg2_auto_corr
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary. This routine does not initialize the
-  ! multigrid variables i_phi, i_rhs and i_tmp. These variables will be
-  ! initialized at the first call of mg2_fas_fmg
+  ! default values where necessary.
+  ! This routine does not initialize the multigrid variables i_phi, i_rhs
+  ! and i_tmp. These variables will be initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   print *, "Multigrid iteration | max residual | max error"

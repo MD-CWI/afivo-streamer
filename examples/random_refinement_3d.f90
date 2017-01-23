@@ -38,9 +38,10 @@ program random_refinement_3d
        dr, &           ! Distance between cells on base level
        cc_names = ["phi"])      ! Optional: names of cell-centered variables
 
-  ! Set up geometry. These indices are used to define the coordinates of a box,
+  ! Set up geometry. 
+  ! These indices are used to define the coordinates of a box,
   ! by default the box at [1,1,1] touches the origin (x,y,z) = (0,0,0)
-  ix_list(:, 1) = [1,1,1] ! One box at index 1,1
+  ix_list(:, 1) = [1,1,1] ! One box at index 1,1,1
 
   ! Set neighbors for box one, here nb means neighbor (direction) and l/h stands
   ! for low/high

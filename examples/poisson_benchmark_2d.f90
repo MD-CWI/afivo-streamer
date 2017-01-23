@@ -1,4 +1,4 @@
-!> \example test_mg_benchmark_2d.f90
+!> \example poisson_benchmark_2d.f90
 
 ! This program can be used to benchmark the multigrid routines. For simplicity,
 ! it does not compare results with known solution.
@@ -112,9 +112,9 @@ program poisson_benchmark_2d
   mg%sides_bc     => a2_bc_dirichlet_zero ! Method for boundary conditions
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary. This routine does not initialize the
-  ! multigrid variables i_phi, i_rhs and i_tmp. These variables will be
-  ! initialized at the first call of mg2_fas_fmg
+  ! default values where necessary.
+  ! This routine does not initialize the multigrid variables i_phi, i_rhs
+  ! and i_tmp. These variables will be initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   ! Do the actual benchmarking
@@ -137,7 +137,7 @@ program poisson_benchmark_2d
        " iterations: ", (t_end-t_start) / real(count_rate, dp), &
        " seconds"
 
-  ! This writes a VTK output file containing the cell-centered values of the
+  ! This writes a Silo output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
   fname = "poisson_benchmark_2d"
   call a2_write_silo(tree, trim(fname), dir="output")

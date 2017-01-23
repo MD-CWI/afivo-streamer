@@ -1,3 +1,7 @@
+!> \example implicit_diffusion_2d.f90
+!>
+!> A implicit-diffusion example
+!> @TODO: document this
 program implicit_diffusion_2d
   use m_a2_types
   use m_a2_core
@@ -9,11 +13,11 @@ program implicit_diffusion_2d
 
   implicit none
 
-  integer, parameter :: box_size    = 8
-  integer, parameter :: i_phi       = 1
-  integer, parameter :: i_rhs       = 2
-  integer, parameter :: i_tmp       = 3
-  integer, parameter :: i_err       = 4
+  integer, parameter :: box_size  = 8
+  integer, parameter :: i_phi     = 1
+  integer, parameter :: i_rhs     = 2
+  integer, parameter :: i_tmp     = 3
+  integer, parameter :: i_err     = 4
 
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr = domain_len / box_size
@@ -93,7 +97,7 @@ program implicit_diffusion_2d
 
 contains
 
-  ! Return the refinement flag for boxes(id)
+  ! Return the refinement flag for box
   subroutine refine_routine(box, cell_flags)
     type(box2_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
@@ -152,27 +156,6 @@ contains
     nc = box%n_cell
     box%cc(1:nc, 1:nc, i_rhs) = box%cc(1:nc, 1:nc, i_phi)
   end subroutine set_rhs
-
-  subroutine prolong_to_new_children(tree, ref_info)
-    use m_a2_prolong
-    type(a2_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, id, p_id
-
-    do lvl = 1, tree%highest_lvl
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          p_id = tree%boxes(id)%parent
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
-       end do
-
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box(tree%boxes, id, i_phi, &
-               a2_gc_interp_lim, a2_bc_dirichlet_zero)
-       end do
-    end do
-  end subroutine prolong_to_new_children
 
   ! Compute L * phi, where L corresponds to (D * dt * nabla^2 - 1)
   subroutine box_op_diff(box, i_out, mg)
