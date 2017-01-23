@@ -31,8 +31,6 @@ program drift_diffusion_2d
   real(dp)           :: diff_coeff, vel_x, vel_y, dr_min(2)
   character(len=100) :: fname
   integer            :: count_rate, t_start, t_end
-
-  logical            :: write_out
   integer            :: time_step_method = 2
 
   print *, "Running drift_diffusion_2d"

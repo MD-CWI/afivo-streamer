@@ -1,4 +1,5 @@
 !> \example simple_streamer_2d
+!>
 !> A simplified model for ionization waves and/or streamers in 2D
 program simple_streamer_2d
 
@@ -18,7 +19,7 @@ program simple_streamer_2d
   character(len=100) :: fname
   type(a2_t)         :: tree ! This contains the full grid information
   type(mg2_t)        :: mg   ! Multigrid option struct
-  type(ref_info_t)   :: ref_info
+  type(ref_info_t)   :: refine_info
 
   ! Indices of cell-centered variables
   integer, parameter :: n_var_cell = 7 ! Number of variables
@@ -88,17 +89,36 @@ program simple_streamer_2d
 
   ! Set up the initial conditions
   do
-     call a2_loop_box(tree, set_init_cond)
+     ! For each box in tree, set the initial conditions
+     call a2_loop_box(tree, set_initial_condition)
+
+     ! Compute electric field on the tree. 
+     ! First perform multigrid to get electric potential,
+     ! then take numerical gradient to geld field.
      call compute_fld(tree, .false.)
-     call a2_adjust_refinement(tree, refinement_routine, ref_info)
-     if (ref_info%n_add == 0 .and. ref_info%n_rm == 0) exit
+
+     ! Adjust the refinement of a tree using refine_routine (see below) for grid
+     ! refinement. 
+     ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
+     ! that is refined.  On input, the tree should be balanced. On output,
+     ! the tree is still balanced, and its refinement is updated (with at most
+     call a2_adjust_refinement(tree, &               ! tree
+                               refinement_routine, & ! Refinement function
+                               refine_info)          ! Information about refinement
+
+     ! If no new boxes have been added or removed, exit the loop
+     if (refine_info%n_add == 0 .and. refine_info%n_rm == 0) exit
   end do
 
   call a2_print_info(tree)
 
   do
      ! Get a new time step, which is at most dt_max
-     call a2_reduction(tree, max_dt, get_min, dt_max, dt)
+     call a2_reduction(tree, &    ! Tree to do the reduction on 
+                       max_dt, &  ! function
+                       get_min, & ! function
+                       dt_max, &  ! Initial value for the reduction
+                       dt)        ! Result of the reduction
 
      if (dt < 1e-14) then
         print *, "dt getting too small, instability?", dt
@@ -109,6 +129,9 @@ program simple_streamer_2d
      if (output_count * dt_output <= time) then
         output_count = output_count + 1
         write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
+
+        ! Write the cell centered data of a tree to a Silo file. Only the
+        ! leaves of the tree are used
         call a2_write_silo(tree, fname, output_count, time, dir="output")
      end if
 
@@ -149,24 +172,41 @@ program simple_streamer_2d
         call compute_fld(tree, .true.)
      end do
 
+     ! Restrict the i_pion value of the children of a box to the box (e.g., in 2D,
+     ! average the values at the four children to get the value for the parent)
      call a2_restrict_tree(tree, i_pion)
-     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
-     call a2_adjust_refinement(tree, refinement_routine, ref_info, 4)
 
-     if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
+     ! Fill ghost cells for variables i_pion on the sides of all boxes, using
+     ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
+     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
+
+     ! Adjust the refinement of a tree using refine_routine (see below) for grid
+     ! refinement. 
+     ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
+     ! that is refined.  On input, the tree should be balanced. On output,
+     ! the tree is still balanced, and its refinement is updated (with at most
+     ! one level per call).
+     call a2_adjust_refinement(tree, &               ! tree
+                               refinement_routine, & ! Refinement function
+                               refine_info, &        ! Information about refinement
+                               4)                    ! Buffer width (in cells)
+
+     if (refine_info%n_add > 0 .or. refine_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
-        call prolong_to_new_boxes(tree, ref_info)
+        call prolong_to_new_boxes(tree, refine_info)
 
         ! Compute the field on the new mesh
         call compute_fld(tree, .true.)
      end if
   end do
 
+  ! "Destroy" the data in a tree. Since we don't use pointers, you can also
+  ! just let a tree get out of scope
   call a2_destroy(tree)
 
 contains
 
-  ! Initialize the AMR tree
+  !> Initialize the AMR tree
   subroutine init_tree(tree)
     type(a2_t), intent(inout) :: tree
 
@@ -180,8 +220,14 @@ contains
     dr = domain_length / box_size
 
     ! Initialize tree
-    call a2_init(tree, box_size, n_var_cell, n_var_face, dr, &
-         coarsen_to=2, n_boxes = n_boxes_init, cc_names=ST_cc_names)
+    call a2_init(tree, &                   ! The tree to initialize
+                 box_size, &               ! Boxes have box_size^dim cells
+                 n_var_cell, &             ! Number of cell-centered variables
+                 n_var_face, &             ! Number of face-centered variables
+                 dr, &                     ! spacing of a cell at lvl 1
+                 coarsen_to=2, &           ! Create additional coarse grids down to this size.
+                 n_boxes = n_boxes_init, & ! Allocate initial storage for n_boxes.
+                 cc_names=ST_cc_names)     ! Names of cell-centered variables
 
     ! Set up geometry
     id             = 1          ! One box ...
@@ -197,7 +243,7 @@ contains
 
   end subroutine init_tree
 
-  ! This routine sets the refinement flag for boxes(id)
+  !> This routine sets the refinement flag for boxes(id)
   subroutine refinement_routine(box, cell_flags)
     type(box2_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
@@ -238,7 +284,8 @@ contains
 
   end subroutine refinement_routine
 
-  subroutine set_init_cond(box)
+  !> This routine sets the initial conditions for each box
+  subroutine set_initial_condition(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2), tmp
@@ -263,14 +310,15 @@ contains
     box%cc(:, :, i_pion) = box%cc(:, :, i_elec)
     box%cc(:, :, i_phi) = 0     ! Inital potential set to zero
 
-  end subroutine set_init_cond
+  end subroutine set_initial_condition
 
+  !> This function computes the minimum val of a and b
   real(dp) function get_min(a, b)
     real(dp), intent(in) :: a, b
     get_min = min(a, b)
   end function get_min
 
-  ! Get maximum time step based on e.g. CFL criteria
+  !> Get maximum time step based on e.g. CFL criteria
   real(dp) function max_dt(box)
     type(box2_t), intent(in) :: box
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
@@ -302,6 +350,7 @@ contains
     max_dt = min(dt_cfl, dt_drt, dt_dif)
   end function max_dt
 
+  !> This function gets the alpha value
   elemental function get_alpha(fld) result(alpha)
     real(dp), intent(in) :: fld
     real(dp)             :: alpha
@@ -483,23 +532,23 @@ contains
   end subroutine update_solution
 
   ! For each box that gets refined, set data on its children using this routine
-  subroutine prolong_to_new_boxes(tree, ref_info)
+  subroutine prolong_to_new_boxes(tree, refine_info)
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: ref_info
+    type(ref_info_t), intent(in) :: refine_info
     integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
+       do i = 1, size(refine_info%lvls(lvl)%add)
+          id = refine_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
           call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_elec)
           call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pion)
           call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
+       do i = 1, size(refine_info%lvls(lvl)%add)
+          id = refine_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
                a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_pion, &
@@ -510,7 +559,7 @@ contains
     end do
   end subroutine prolong_to_new_boxes
 
-  ! This fills ghost cells near physical boundaries for the potential
+  !> This fills ghost cells near physical boundaries for the potential
   subroutine sides_bc_pot(box, nb, iv, bc_type)
     type(box2_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition

@@ -21,7 +21,7 @@ program drift_diffusion_3d
   real(dp), parameter :: dr = domain_len / box_size
 
   type(a3_t)         :: tree
-  type(ref_info_t)   :: ref_info
+  type(ref_info_t)   :: refine_info
   integer            :: ix_list(3, 1)
   integer            :: nb_list(6, 1)
   integer            :: refine_steps, time_steps, output_cnt
@@ -31,8 +31,6 @@ program drift_diffusion_3d
   real(dp)           :: diff_coeff, vel_x, vel_y, vel_z, dr_min(3)
   character(len=100) :: fname
   integer            :: count_rate, t_start, t_end
-
-  logical            :: write_out
   integer            :: time_step_method = 2
 
   print *, "Running drift_diffusion_3d"
@@ -71,7 +69,7 @@ program drift_diffusion_3d
   do
      refine_steps=refine_steps+1
      ! We should only set the finest level, but this also works
-     call a3_loop_box(tree, set_init_condition)
+     call a3_loop_box(tree, set_initial_condition)
 
      ! Fill ghost cells for variables i_phi on the sides of all boxes, using
      ! a3_gc_interp_lim on refinement boundaries: Interpolation between fine
@@ -215,10 +213,10 @@ program drift_diffusion_3d
      ! that is refined.  On input, the tree should be balanced. On output,
      ! the tree is still balanced, and its refinement is updated (with at most
      ! one level per call).
-     call a3_adjust_refinement(tree, refine_routine, ref_info, 2)
+     call a3_adjust_refinement(tree, refine_routine, refine_info, 2)
 
      ! Linear prolongation of i_phi values to new children (see below)
-     call prolong_to_new_children(tree, ref_info)
+     call prolong_to_new_children(tree, refine_info)
 
      ! Fill ghost cells for variables i_phi on the sides of all boxes, using
      ! a3_gc_interp_lim on refinement boundaries and a3_bc_neumann_zero on physical boundaries
@@ -328,53 +326,53 @@ contains
     end select
   end function solution
 
-  !> This routine computes the drift diffusion upwind fluxes for all boxes
-  subroutine fluxes_upwind1(boxes, id, flux_args)
-    type(box3_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id
-    real(dp), intent(in)        :: flux_args(:)
-    real(dp)                    :: inv_dr
-    integer                     :: nc
-
-    nc     = boxes(id)%n_cell
-    inv_dr = 1/boxes(id)%dr
-
-    ! Diffusion
-    boxes(id)%fx(:,:,:,i_phi) = boxes(id)%cc(0:nc, 1:nc, 1:nc, i_phi) &
-         - boxes(id)%cc(1:nc+1, 1:nc, 1:nc, i_phi)
-    boxes(id)%fx(:,:,:,i_phi) = boxes(id)%fx(:,:,:,i_phi) * flux_args(1) * inv_dr
-
-    boxes(id)%fy(:,:,:,i_phi) = boxes(id)%cc(1:nc, 0:nc, 1:nc, 1) &
-         - boxes(id)%cc(1:nc, 1:nc+1, 1:nc, 1)
-    boxes(id)%fy(:,:,:,i_phi) = boxes(id)%fy(:,:,:,i_phi) * flux_args(1) * inv_dr
-
-    boxes(id)%fz(:,:,:,i_phi) = boxes(id)%cc(1:nc, 1:nc, 0:nc, 1) &
-         - boxes(id)%cc(1:nc, 1:nc, 1:nc+1, 1)
-    boxes(id)%fz(:,:,:,i_phi) = boxes(id)%fz(:,:,:,i_phi) * flux_args(1) * inv_dr
-
-    ! Drift (1st order upwind, which is very diffusive!)
-    if (flux_args(2) > 0) then
-       boxes(id)%fx(:,:,:,i_phi) = boxes(id)%fx(:,:,:,i_phi) + &
-            flux_args(2) * boxes(id)%cc(0:nc, 1:nc, 1:nc, 1)
-    else
-       boxes(id)%fx(:,:,:,i_phi) = boxes(id)%fx(:,:,:,i_phi) + &
-            flux_args(2) * boxes(id)%cc(1:nc+1, 1:nc, 1:nc, 1)
-    end if
-    if (flux_args(3) > 0) then
-       boxes(id)%fy(:,:,:,i_phi) = boxes(id)%fy(:,:,:,i_phi) + &
-            flux_args(3) * boxes(id)%cc(1:nc, 0:nc, 1:nc, 1)
-    else
-       boxes(id)%fy(:,:,:,i_phi) = boxes(id)%fy(:,:,:,i_phi) + &
-            flux_args(3) * boxes(id)%cc(1:nc, 1:nc+1, 1:nc, 1)
-    end if
-    if (flux_args(4) > 0) then
-       boxes(id)%fz(:,:,:,i_phi) = boxes(id)%fz(:,:,:,i_phi) + &
-            flux_args(4) * boxes(id)%cc(1:nc, 1:nc, 0:nc, 1)
-    else
-       boxes(id)%fz(:,:,:,i_phi) = boxes(id)%fz(:,:,:,i_phi) + &
-            flux_args(4) * boxes(id)%cc(1:nc, 1:nc, 1:nc+1, 1)
-    end if
-  end subroutine fluxes_upwind1
+!not used!  !> This routine computes the drift diffusion upwind fluxes for all boxes
+!not used!  subroutine fluxes_upwind1(boxes, id, flux_args)
+!not used!    type(box3_t), intent(inout) :: boxes(:)
+!not used!    integer, intent(in)         :: id
+!not used!    real(dp), intent(in)        :: flux_args(:)
+!not used!    real(dp)                    :: inv_dr
+!not used!    integer                     :: nc
+!not used!
+!not used!    nc     = boxes(id)%n_cell
+!not used!    inv_dr = 1/boxes(id)%dr
+!not used!
+!not used!    ! Diffusion
+!not used!    boxes(id)%fx(:,:,:,i_phi) = boxes(id)%cc(0:nc, 1:nc, 1:nc, i_phi) &
+!not used!         - boxes(id)%cc(1:nc+1, 1:nc, 1:nc, i_phi)
+!not used!    boxes(id)%fx(:,:,:,i_phi) = boxes(id)%fx(:,:,:,i_phi) * flux_args(1) * inv_dr
+!not used!
+!not used!    boxes(id)%fy(:,:,:,i_phi) = boxes(id)%cc(1:nc, 0:nc, 1:nc, 1) &
+!not used!         - boxes(id)%cc(1:nc, 1:nc+1, 1:nc, 1)
+!not used!    boxes(id)%fy(:,:,:,i_phi) = boxes(id)%fy(:,:,:,i_phi) * flux_args(1) * inv_dr
+!not used!
+!not used!    boxes(id)%fz(:,:,:,i_phi) = boxes(id)%cc(1:nc, 1:nc, 0:nc, 1) &
+!not used!         - boxes(id)%cc(1:nc, 1:nc, 1:nc+1, 1)
+!not used!    boxes(id)%fz(:,:,:,i_phi) = boxes(id)%fz(:,:,:,i_phi) * flux_args(1) * inv_dr
+!not used!
+!not used!    ! Drift (1st order upwind, which is very diffusive!)
+!not used!    if (flux_args(2) > 0) then
+!not used!       boxes(id)%fx(:,:,:,i_phi) = boxes(id)%fx(:,:,:,i_phi) + &
+!not used!            flux_args(2) * boxes(id)%cc(0:nc, 1:nc, 1:nc, 1)
+!not used!    else
+!not used!       boxes(id)%fx(:,:,:,i_phi) = boxes(id)%fx(:,:,:,i_phi) + &
+!not used!            flux_args(2) * boxes(id)%cc(1:nc+1, 1:nc, 1:nc, 1)
+!not used!    end if
+!not used!    if (flux_args(3) > 0) then
+!not used!       boxes(id)%fy(:,:,:,i_phi) = boxes(id)%fy(:,:,:,i_phi) + &
+!not used!            flux_args(3) * boxes(id)%cc(1:nc, 0:nc, 1:nc, 1)
+!not used!    else
+!not used!       boxes(id)%fy(:,:,:,i_phi) = boxes(id)%fy(:,:,:,i_phi) + &
+!not used!            flux_args(3) * boxes(id)%cc(1:nc, 1:nc+1, 1:nc, 1)
+!not used!    end if
+!not used!    if (flux_args(4) > 0) then
+!not used!       boxes(id)%fz(:,:,:,i_phi) = boxes(id)%fz(:,:,:,i_phi) + &
+!not used!            flux_args(4) * boxes(id)%cc(1:nc, 1:nc, 0:nc, 1)
+!not used!    else
+!not used!       boxes(id)%fz(:,:,:,i_phi) = boxes(id)%fz(:,:,:,i_phi) + &
+!not used!            flux_args(4) * boxes(id)%cc(1:nc, 1:nc, 1:nc+1, 1)
+!not used!    end if
+!not used!  end subroutine fluxes_upwind1
 
   !> This routine computes the central differences in x-, y- and z-direction
   subroutine fluxes_centdif(boxes, id, flux_args)
@@ -594,15 +592,15 @@ contains
   end subroutine average_phi
 
   ! Linear prolongation of i_phi values to new children
-  subroutine prolong_to_new_children(tree, ref_info)
+  subroutine prolong_to_new_children(tree, refine_info)
     use m_a3_prolong
     type(a3_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: ref_info
+    type(ref_info_t), intent(in) :: refine_info
     integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
+       do i = 1, size(refine_info%lvls(lvl)%add)
+          id = refine_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
 
           ! Linear prolongation will not strictly conserve phi
@@ -610,7 +608,7 @@ contains
        end do
 
        do i = 1, size(refine_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
+          id = refine_info%lvls(lvl)%add(i)
           ! Fill ghost cells for variables i_phi on the sides of a box, using
           ! a3_gc_interp_lim on refinement boundaries and a3_bc_neumann_zero on physical boundaries
           call a3_gc_box(tree%boxes, & ! List of all the boxes 
