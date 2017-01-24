@@ -80,13 +80,11 @@ program random_refinement_3d
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
      !
-     ! Within each (de)refinement step the subroutine a3_tidy_up is called, with
-     !    max_hole_frac = 0.5_dp
-     !    n_clean_min    = 1000
-     ! This means that every now and then whether too much holes appear in the
-     ! tree box list. Therefore reordering of tree is not necessary at the end
-     ! of the iteration process
-     call a3_adjust_refinement(tree, ref_routine, ref_info)
+     ! Within each (de)refinement step the subroutine a2_tidy_up is called. This
+     ! means that every now and then whether too much holes appear in the tree
+     ! box list. Therefore reordering of tree is not necessary at the end of the
+     ! iteration process
+     call a3_adjust_refinement(tree, ref_routine, ref_info, ref_buffer=0)
      boxes_used = boxes_used + ref_info%n_add - ref_info%n_rm
      write(*,'(4(3x,A,1x,i6))') "# new     boxes", ref_info%n_add, &
                                 "# removed boxes", ref_info%n_rm,  &

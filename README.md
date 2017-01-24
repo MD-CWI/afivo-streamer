@@ -4,9 +4,7 @@
 
 Afivo (which stands for *Adaptive Finite Volume Octree*) is a framework for
 simulations on adaptively refined quadtree and octree grids. It was designed
-with a focus on simplicity.
-
-Some of the key features:
+with a focus on simplicity. Some of the key features are:
 
 * Adaptively refined quadtree and octree grids
 * OpenMP parallelization
@@ -16,25 +14,13 @@ Some of the key features:
 * Silo and VTK unstructured output, which can be visualized with e.g.
   [Visit](https://wci.llnl.gov/simulation/computer-codes/visit)
 
-In order to keep the code simple, the following choices were made:
+# Documentation
 
-* The refinement ratio is always 2
-* Quantities are either cell-centered or face-centered
-* Parallellization using OpenMP only, no MPI
-* There is one layer of ghost cells (but you can get more)
-* No corner ghost cells
+Afivo's Doxygen-based documentation is
+available [here](http://cwimd.nl/other_files/afivo_doc/html/index.html). With a
+recent version of Doxygen, it can also be generated locally using `make doc`.
 
-# Documentation contents
+## References / how to cite
 
-The best way to read Afivo's Doxygen-based documentation is
-through [this link](http://cwimd.nl/other_files/afivo_doc/html/index.html).
-
-* [Why Afivo?](documentation/why_afivo.md)
-* [Installation instructions](documentation/installation.md)
-* [About the documentation](documentation/documentation.md)
-* [Discussion of design](documentation/design.md)
-* [Geometric multigrid](documentation/multigrid.md)
-* [Tutorial multigrid](documentation/tutorial_mg.md)
-* [Related projects & alternatives](documentation/other_projects.md)
-* [FAQ](documentation/faq.md)
-* [Authors](documentation/authors.md)
+* Paper describing Afivo [arXiv](http://arxiv.org/abs/1701.04329)
+* Paper in which Afivo was first used [doi](http://dx.doi.org/10.1088/0963-0252/25/4/044001)

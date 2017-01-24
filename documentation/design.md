@@ -5,7 +5,13 @@
 Given the fact that there are already several frameworks available, why develop
 another one? The main reason was that a relatively simple framework seemed to be
 missing. Therefore, much of the design choices were made to keep the framework
-simple.
+simple, e.g.:
+
+* The refinement ratio is always 2
+* Quantities are either cell-centered or face-centered
+* Parallellization using OpenMP only, no MPI
+* There is one layer of ghost cells (but you can get more)
+* No corner ghost cells
 
 # Grids {#design-grid}
 

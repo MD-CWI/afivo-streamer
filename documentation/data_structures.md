@@ -1,3 +1,5 @@
+# Data structures
+
 # Overview of data structures {#main-data-structures}
 
 We now start with the description of the implementation of Afivo.
