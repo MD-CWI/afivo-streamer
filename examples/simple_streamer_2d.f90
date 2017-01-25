@@ -90,13 +90,13 @@ program simple_streamer_2d
      ! For each box in tree, set the initial conditions
      call a2_loop_box(tree, set_initial_condition)
 
-     ! Compute electric field on the tree. 
+     ! Compute electric field on the tree.
      ! First perform multigrid to get electric potential,
      ! then take numerical gradient to geld field.
      call compute_fld(tree, .false.)
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
-     ! refinement. 
+     ! refinement.
      ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
      ! that is refined.  On input, the tree should be balanced. On output,
      ! the tree is still balanced, and its refinement is updated (with at most
@@ -112,7 +112,7 @@ program simple_streamer_2d
 
   do
      ! Get a new time step, which is at most dt_max
-     call a2_reduction(tree, &    ! Tree to do the reduction on 
+     call a2_reduction(tree, &    ! Tree to do the reduction on
                        max_dt, &  ! function
                        get_min, & ! function
                        dt_max, &  ! Initial value for the reduction
@@ -173,18 +173,13 @@ program simple_streamer_2d
      ! Restrict the i_pion value of the children of a box to the box (e.g., in 2D,
      ! average the values at the four children to get the value for the parent)
      call a2_restrict_tree(tree, i_pion)
-<<<<<<< HEAD
 
      ! Fill ghost cells for variables i_pion on the sides of all boxes, using
      ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
      call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
-=======
-     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_dirichlet_zero)
-     call a2_adjust_refinement(tree, refinement_routine, ref_info, 4)
->>>>>>> cb4727402579dcd42e46f290d4b4debc081cee95
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
-     ! refinement. 
+     ! refinement.
      ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
      ! that is refined.  On input, the tree should be balanced. On output,
      ! the tree is still balanced, and its refinement is updated (with at most
@@ -313,9 +308,6 @@ contains
 
   end subroutine set_initial_condition
 
-<<<<<<< HEAD
-  !> This function computes the minimum val of a and b
-=======
   !> Return two normal random variates
   !> http://en.wikipedia.org/wiki/Marsaglia_polar_method
   function two_normals(mean, sigma) result(rands)
@@ -332,7 +324,7 @@ contains
     rands = mean + rands * sigma
   end function two_normals
 
->>>>>>> cb4727402579dcd42e46f290d4b4debc081cee95
+  !> This function computes the minimum val of a and b
   real(dp) function get_min(a, b)
     real(dp), intent(in) :: a, b
     get_min = min(a, b)
@@ -370,13 +362,12 @@ contains
     max_dt = min(dt_cfl, dt_drt, dt_dif)
   end function max_dt
 
-<<<<<<< HEAD
+
   !> This function gets the alpha value
-=======
-  ! Taken from: Spatially hybrid computations for streamer discharges: II. Fully
-  ! 3D simulations, Chao Li, Ute Ebert, Willem Hundsdorfer, J. Comput. Phys.
-  ! 231, 1020-1050 (2012), doi:10.1016/j.jcp.2011.07.023
->>>>>>> cb4727402579dcd42e46f290d4b4debc081cee95
+  !>
+  !> Taken from: Spatially hybrid computations for streamer discharges: II. Fully
+  !> 3D simulations, Chao Li, Ute Ebert, Willem Hundsdorfer, J. Comput. Phys.
+  !> 231, 1020-1050 (2012), doi:10.1016/j.jcp.2011.07.023
   elemental function get_alpha(fld) result(alpha)
     real(dp), intent(in) :: fld
     real(dp)             :: alpha
@@ -578,9 +569,9 @@ contains
        do i = 1, size(refine_info%lvls(lvl)%add)
           id = refine_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
-               a2_gc_interp_lim, a2_bc_dirichlet_zero)
+               a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_pion, &
-               a2_gc_interp_lim, a2_bc_dirichlet_zero)
+               a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, mg%sides_bc)
        end do
