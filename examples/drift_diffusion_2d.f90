@@ -1,5 +1,6 @@
 !> \example drift_diffusion_2d.f90
-!> A drift-diffusion example
+!>
+!> A drift-diffusion example for m_a2_types
 !> @TODO: document this
 program drift_diffusion_2d
   use m_a2_types
@@ -8,7 +9,6 @@ program drift_diffusion_2d
   use m_a2_utils
   use m_a2_output
   use m_a2_restrict
-  use m_a2_prolong, only: a2_prolong_copy_from
 
   implicit none
 
@@ -21,7 +21,7 @@ program drift_diffusion_2d
   real(dp), parameter :: dr = domain_len / box_size
 
   type(a2_t)         :: tree
-  type(ref_info_t)   :: ref_info
+  type(ref_info_t)   :: refine_info
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
   integer            :: refine_steps, time_steps, output_cnt
@@ -37,8 +37,12 @@ program drift_diffusion_2d
   print *, "Number of threads", af_get_max_threads()
 
   ! Initialize tree
-  call a2_init(tree, box_size, n_var_cell=3, n_var_face=1, dr=dr, &
-       cc_names=["phi", "old", "err"])
+  call a2_init(tree, & ! Tree to initialize
+       box_size, &     ! A box contains box_size**DIM cells
+       n_var_cell=3, & ! Number of cell-centered variables
+       n_var_face=1, & ! Number of face-centered variables
+       dr=dr, &        ! Distance between cells on base level
+       cc_names=["phi", "old", "err"]) ! Variable names
 
   ! Set up geometry
   id             = 1
@@ -61,7 +65,8 @@ program drift_diffusion_2d
   ! Set up the initial conditions
   call system_clock(t_start, count_rate)
   do refine_steps = 1, 100
-     ! We should only set the finest level, but this also works
+
+     ! For each box, set the initial conditions
      call a2_loop_box(tree, set_initial_condition)
 
      ! Fill ghost cells for variables i_phi on the sides of all boxes, using
@@ -70,21 +75,27 @@ program drift_diffusion_2d
      ! boundaries. The ghost values are less than twice the coarse values. and
      ! a2_bc_neumann_zero physical boundaries: fill ghost cells near physical
      ! boundaries using Neumann zero
-
      call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
 
-     ! Use refine_routine (see below) for grid refinement
-     call a2_adjust_refinement(tree, refine_routine, ref_info, 2)
+     ! Adjust the refinement of a tree using refine_routine (see below) for grid
+     ! refinement. 
+     ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
+     ! that is refined.  On input, the tree should be balanced. On output,
+     ! the tree is still balanced, and its refinement is updated (with at most
+     ! one level per call).
+     call a2_adjust_refinement(tree, &           ! tree
+                               refine_routine, & ! Refinement function
+                               refine_info, &    ! Information about refinement
+                               2)                ! Buffer width (in cells)
 
      ! If no new boxes have been added, exit the loop
-     if (ref_info%n_add == 0) exit
+     if (refine_info%n_add == 0) exit
   end do
-  call system_clock(t_end,count_rate)
+  call system_clock(t_end, count_rate)
 
-  write(*, "(A,i0,A,Es10.3,A)") &
-       " Wall-clock time for ",refine_steps, &
-       " refinement steps: ", (t_end-t_start) / real(count_rate, dp), &
-       " seconds"
+  write(*, "(A,i0,A,Es10.3,A)") " Wall-clock time for ", &
+                                refine_steps, " refinement steps: ", &
+                                (t_end-t_start) / real(count_rate, dp), " seconds"
 
   call a2_print_info(tree)
 
@@ -92,12 +103,14 @@ program drift_diffusion_2d
   ! Restrict the children of a box to the box (e.g., in 2D, average the values
   ! at the four children to get the value for the parent)
   call a2_restrict_tree(tree, i_phi)
-  ! Purpose of a2_gc_tree see above
+
+  ! Fill ghost cells for variables i_phi on the sides of all boxes, using
+  ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
   call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
 
   select case (time_step_method)
   case (1)
-     print *,"Time stepping: forward Euler"
+     print *,"Time stepping: Forward Euler"
   case (2)
      print*, "Time stepping: explicit trapezoidal rule"
   end select
@@ -115,9 +128,17 @@ program drift_diffusion_2d
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
         write(fname, "(A,I0)") "drift_diffusion_2d_", output_cnt
+
+        ! Call procedure set_error (see below) for each box in tree, with argument time
         call a2_loop_box_arg(tree, set_error, [time])
+
+        ! Write the cell centered data of tree to a vtk unstructured file fname.
+        ! Only the leaves of the tree are used
         call a2_write_vtk(tree, trim(fname), output_cnt, time, &
              ixs_fc=[1], dir="output")
+
+        ! Find maximum and minimum values of cc(..., i_err) and cc(..., i_phi).
+        ! By default, only loop over leaves, and ghost cells are not used.
         call a2_tree_max_cc(tree, i_err, p_err)
         call a2_tree_min_cc(tree, i_err, n_err)
         call a2_tree_sum_cc(tree, i_phi, sum_phi)
@@ -130,25 +151,49 @@ program drift_diffusion_2d
 
      select case (time_step_method)
      case (1)
+        ! Forward Euler
+
+        ! Call procedure fluxes_koren for each id in tree, giving the list of boxes
         call a2_loop_boxes_arg(tree, fluxes_koren, &
              [diff_coeff, vel_x, vel_y])
+
+        ! Restrict fluxes from children to parents on refinement boundaries.
         call a2_consistent_fluxes(tree, [1])
+
+        ! Call procedure update_solution (see below) for each box in tree, with argument dt
         call a2_loop_box_arg(tree, update_solution, [dt])
+
+        ! Restrict variables i_phi to all parent boxes
         call a2_restrict_tree(tree, i_phi)
+
+        ! Fill ghost cells for variables i_phi on the sides of all boxes, using
+        ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
         call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
         time = time + dt
      case (2)
+
         ! Copy previous solution
         call a2_tree_copy_cc(tree, i_phi, i_phi_old)
 
         ! Two forward Euler steps over dt
         do i = 1, 2
+           ! Call procedure fluxes_koren for each id in tree, giving the list of boxes
            call a2_loop_boxes_arg(tree, fluxes_koren, &
                 [diff_coeff, vel_x, vel_y])
+
+           ! Restrict fluxes from children to parents on refinement boundaries.
            call a2_consistent_fluxes(tree, [1])
+
+           ! Call procedure update_solution (see below) for each box in tree, with argument dt
            call a2_loop_box_arg(tree, update_solution, [dt])
+
+           ! Restrict variables i_phi to all parent boxes
            call a2_restrict_tree(tree, i_phi)
+
+           ! Fill ghost cells for variables i_phi on the sides of all boxes, using
+           ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
            call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
+
         end do
 
         ! Take average of phi_old and phi
@@ -157,8 +202,22 @@ program drift_diffusion_2d
      end select
 
      if (mod(time_steps, refine_every_n_steps) == 0) then
-        call a2_adjust_refinement(tree, refine_routine, ref_info, 2)
-        call prolong_to_new_children(tree, ref_info)
+        ! Adjust the refinement of a tree using refine_routine (see below) for grid
+        ! refinement. 
+        ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
+        ! that is refined.  On input, the tree should be balanced. On output,
+        ! the tree is still balanced, and its refinement is updated (with at most
+        ! one level per call).
+        call a2_adjust_refinement(tree, & ! tree
+                                  refine_routine, &  ! Refinement function
+                                  refine_info, &     ! Information about refinement
+                                  2)                 ! Buffer width (in cells)
+
+        ! Linear prolongation of i_phi values to new children (see below)
+        call prolong_to_new_children(tree, refine_info)
+
+        ! Fill ghost cells for variables i_phi on the sides of all boxes, using
+        ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
         call a2_gc_tree(tree, i_phi, a2_gc_interp_lim, a2_bc_neumann_zero)
      end if
   end do
@@ -175,7 +234,7 @@ program drift_diffusion_2d
 
 contains
 
-  ! Set refinement flags for box
+  !> Set refinement flags for box
   subroutine refine_routine(box, cell_flags)
     type(box2_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
@@ -199,10 +258,9 @@ contains
           end if
        end do
     end do
-
   end subroutine refine_routine
 
-  ! This routine sets the initial conditions for each box
+  !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
@@ -217,6 +275,7 @@ contains
     end do
   end subroutine set_initial_condition
 
+  !> This routine computes the error in i_phi
   subroutine set_error(box, time)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: time(:)
@@ -233,6 +292,7 @@ contains
     end do
   end subroutine set_error
 
+  !> This routine calculates the analytic solution in point xy
   function solution(xy, t) result(sol)
     real(dp), intent(in) :: xy(2), t
     real(dp)             :: sol, xy_t(2)
@@ -253,6 +313,7 @@ contains
     end select
   end function solution
 
+  !> This routine computes the drift diffusion upwind fluxes for all boxes
   subroutine fluxes_upwind1(boxes, id, flux_args)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
@@ -264,9 +325,12 @@ contains
     inv_dr = 1/boxes(id)%dr
 
     ! Diffusion
-    boxes(id)%fx(:,:,i_phi) = boxes(id)%cc(0:nc, 1:nc, i_phi) - boxes(id)%cc(1:nc+1, 1:nc, i_phi)
+    boxes(id)%fx(:,:,i_phi) = boxes(id)%cc(0:nc, 1:nc, i_phi) &
+         - boxes(id)%cc(1:nc+1, 1:nc, i_phi)
     boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) * flux_args(1) * inv_dr
-    boxes(id)%fy(:,:,i_phi) = boxes(id)%cc(1:nc, 0:nc, 1) - boxes(id)%cc(1:nc, 1:nc+1, 1)
+
+    boxes(id)%fy(:,:,i_phi) = boxes(id)%cc(1:nc, 0:nc, 1) &
+         - boxes(id)%cc(1:nc, 1:nc+1, 1)
     boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) * flux_args(1) * inv_dr
 
     ! Drift (1st order upwind, which is very diffusive!)
@@ -286,6 +350,7 @@ contains
     end if
   end subroutine fluxes_upwind1
 
+  !> This routine computes the central differences in x- and y direction
   subroutine fluxes_centdif(boxes, id, flux_args)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
@@ -297,13 +362,13 @@ contains
     inv_dr = 1/boxes(id)%dr
 
     ! Diffusion
-    boxes(id)%fx(:,:,i_phi) = (boxes(id)%cc(0:nc, 1:nc, i_phi) - &
-         boxes(id)%cc(1:nc+1, 1:nc, i_phi)) * flux_args(1) * inv_dr
-    boxes(id)%fy(:,:,i_phi) = (boxes(id)%cc(1:nc, 0:nc, i_phi) - &
-         boxes(id)%cc(1:nc, 1:nc+1, i_phi))  * flux_args(1) * inv_dr
-
+    boxes(id)%fx(:,:,i_phi) = (boxes(id)%cc(0:nc, 1:nc, i_phi) &
+         - boxes(id)%cc(1:nc+1, 1:nc, i_phi)) * flux_args(1) * inv_dr
     boxes(id)%fx(:,:,i_phi) = boxes(id)%fx(:,:,i_phi) + flux_args(2) * 0.5_dp * &
          (boxes(id)%cc(0:nc, 1:nc, 1) + boxes(id)%cc(1:nc+1, 1:nc, 1))
+
+    boxes(id)%fy(:,:,i_phi) = (boxes(id)%cc(1:nc, 0:nc, i_phi) &
+         - boxes(id)%cc(1:nc, 1:nc+1, i_phi))  * flux_args(1) * inv_dr
     boxes(id)%fy(:,:,i_phi) = boxes(id)%fy(:,:,i_phi) + flux_args(3) * 0.5_dp * &
          (boxes(id)%cc(1:nc, 0:nc, 1) + boxes(id)%cc(1:nc, 1:nc+1, 1))
   end subroutine fluxes_centdif
@@ -336,20 +401,32 @@ contains
     end if
   end function koren_mlim
 
+  !> This routine computes the x-fluxes and y-fluxes interior (advective part)
+  !> with the Koren limiter
   subroutine fluxes_koren(boxes, id, flux_args)
+    use m_a2_prolong
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp), intent(in)        :: flux_args(:)
-    real(dp)                    :: inv_dr
-    real(dp)                    :: tmp, gradp, gradc, gradn
-    real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
+    real(dp)                    :: tmp, inv_dr
+    real(dp)                    :: gradp, gradc, gradn
+    real(dp)                    :: gc_data(boxes(id)%n_cell, &
+                                   a2_num_neighbors)
     integer                     :: i, j, nc
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
-    call a2_gc2_box(boxes, id, i_phi, a2_gc2_prolong_linear, &
-         a2_bc2_neumann_zero, gc_data, nc)
+    ! Get a second layer of ghost cell data (the 'normal' routines give just one
+    ! layer of ghost cells). Use a2_gc2_prolong_linear on refinement boundaries and
+    ! a2_bc2_neumann_zero on physical boundaries.
+    call a2_gc2_box(boxes, &                 ! List of all the boxes
+                    id, &                    ! Id of box for which we set ghost cells
+                    i_phi, &                 ! Variable for which ghost cells are set
+                    a2_gc2_prolong_linear, & ! Procedure called at refinement boundaries
+                    a2_bc2_neumann_zero, &   ! Procedure called at physical boundaries
+                    gc_data, &               ! The requested ghost cells
+                    nc)                      ! box%n_cell
 
     ! x-fluxes interior, advective part with flux limiter
     do j = 1, nc
@@ -416,6 +493,7 @@ contains
     end do
   end subroutine fluxes_koren
 
+  !> This routine computes the update of the solution per box
   subroutine update_solution(box, dt)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
@@ -429,30 +507,37 @@ contains
          (box%fy(:, 1:nc, i_phi) - box%fy(:, 2:nc+1, i_phi)) * inv_dr)
   end subroutine update_solution
 
+  !> This routine computes the update of the solution per box
   subroutine average_phi(box)
     type(box2_t), intent(inout) :: box
     box%cc(:, :, i_phi) = 0.5_dp * (box%cc(:, :, i_phi) + box%cc(:, :, i_phi_old))
   end subroutine average_phi
 
-  subroutine prolong_to_new_children(tree, ref_info)
+  ! Linear prolongation of i_phi values to new children
+  subroutine prolong_to_new_children(tree, refine_info)
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: ref_info
+    type(ref_info_t), intent(in) :: refine_info
     integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
+       do i = 1, size(refine_info%lvls(lvl)%add)
+          id = refine_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
 
           ! Linear prolongation will not strictly conserve phi
           call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box(tree%boxes, id, i_phi, &
-               a2_gc_interp_lim, a2_bc_neumann_zero)
+       do i = 1, size(refine_info%lvls(lvl)%add)
+          id = refine_info%lvls(lvl)%add(i)
+          ! Fill ghost cells for variables i_phi on the sides of a box, using
+          ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
+          call a2_gc_box(tree%boxes, & ! List of all the boxes
+                         id, &         ! Id of box for which we set ghost cells
+                         i_phi, &      ! Variable for which ghost cells are set
+                         a2_gc_interp_lim, & ! Procedure called at refinement boundaries
+                         a2_bc_neumann_zero) ! Procedure called at physical boundaries
        end do
     end do
   end subroutine prolong_to_new_children

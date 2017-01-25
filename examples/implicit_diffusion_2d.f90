@@ -1,3 +1,7 @@
+!> \example implicit_diffusion_2d.f90
+!>
+!> A implicit-diffusion example
+!> @TODO: document this
 program implicit_diffusion_2d
   use m_a2_types
   use m_a2_core
@@ -9,11 +13,11 @@ program implicit_diffusion_2d
 
   implicit none
 
-  integer, parameter :: box_size    = 8
-  integer, parameter :: i_phi       = 1
-  integer, parameter :: i_rhs       = 2
-  integer, parameter :: i_tmp       = 3
-  integer, parameter :: i_err       = 4
+  integer, parameter :: box_size  = 8
+  integer, parameter :: i_phi     = 1
+  integer, parameter :: i_rhs     = 2
+  integer, parameter :: i_tmp     = 3
+  integer, parameter :: i_err     = 4
 
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr = domain_len / box_size
@@ -21,7 +25,7 @@ program implicit_diffusion_2d
 
   type(a2_t)         :: tree
   type(mg2_t)        :: mg
-  type(ref_info_t)   :: ref_info
+  type(ref_info_t)   :: refine_info
   integer            :: id
   integer            :: ix_list(2, 1)
   integer            :: nb_list(4, 1)
@@ -47,10 +51,30 @@ program implicit_diffusion_2d
 
   ! Set up the initial conditions
   do
+
+     ! For each box, set the initial conditions
      call a2_loop_box(tree, set_initial_condition)
+
+     ! Fill ghost cells for variables i_phi on the sides of all boxes, using
+     ! a2_gc_interp on refinement boundaries: Interpolation between fine
+     ! points and coarse neighbors to fill ghost cells near refinement
+     ! boundaries. 
+     ! Fill ghost cells near physical boundaries using Dirichlet zero
+
      call a2_gc_tree(tree, i_phi, a2_gc_interp, a2_bc_dirichlet_zero)
-     call a2_adjust_refinement(tree, refine_routine, ref_info)
-     if (ref_info%n_add == 0) exit
+
+     ! Adjust the refinement of a tree using refine_routine (see below) for grid
+     ! refinement. 
+     ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
+     ! that is refined.  On input, the tree should be balanced. On output,
+     ! the tree is still balanced, and its refinement is updated (with at most
+     ! one level per call).
+     call a2_adjust_refinement(tree, &           ! tree
+                               refine_routine, & ! Refinement function
+                               refine_info)      ! Information about refinement
+
+     ! If no new boxes have been added, exit the loop
+     if (refine_info%n_add == 0) exit
   end do
 
   mg%i_phi    = i_phi                 ! Solution variable
@@ -64,7 +88,7 @@ program implicit_diffusion_2d
   mg%box_gsrb => box_gsrb_diff
 
   ! This routine does not initialize the multigrid fields boxes%i_phi,
-  ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
+  ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
   ! first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
@@ -81,19 +105,31 @@ program implicit_diffusion_2d
 
      output_cnt = output_cnt + 1
      write(fname, "(A,I0)") "implicit_diffusion_2d_", output_cnt
+
+     ! Call procedure set_error (see below) for each box in tree, with argument time
      call a2_loop_box_arg(tree, set_error, [time])
+
+     ! Write the cell centered data of tree to a vtk unstructured file fname.
+     ! Only the leaves of the tree are used
      call a2_write_vtk(tree, trim(fname), output_cnt, time, dir="output")
 
      if (time > end_time) exit
 
+     ! Call set_rhs (see below) for each box in tree
      call a2_loop_box(tree, set_rhs)
-     call mg2_fas_fmg(tree, mg, set_residual=.true., have_guess=.true.)
+
+     ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid).
+     call mg2_fas_fmg(tree, &                ! Tree to do multigrid on
+                      mg, &                  ! Multigrid options
+                      set_residual=.true., & ! If true, store residual in i_tmp
+                      have_guess=.true.)     ! If false, start from phi = 0
+
      time = time + dt
   end do
 
 contains
 
-  ! Return the refinement flag for boxes(id)
+  !> Return the refinement flag for box
   subroutine refine_routine(box, cell_flags)
     type(box2_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
@@ -105,7 +141,7 @@ contains
     end if
   end subroutine refine_routine
 
-  ! This routine sets the initial conditions for each box
+  !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
     type(box2_t), intent(inout) :: box
     integer                     :: i, j, nc
@@ -120,6 +156,7 @@ contains
     end do
   end subroutine set_initial_condition
 
+  !> This routine computes the error in i_phi
   subroutine set_error(box, time)
     type(box2_t), intent(inout) :: box
     real(dp), intent(in)        :: time(:)
@@ -145,6 +182,7 @@ contains
          exp(-sum(cxy**2) * diffusion_coeff * t)
   end function solution
 
+  !> This routine computes the right hand side per box
   subroutine set_rhs(box)
     type(box2_t), intent(inout) :: box
     integer                     :: nc
@@ -152,27 +190,6 @@ contains
     nc = box%n_cell
     box%cc(1:nc, 1:nc, i_rhs) = box%cc(1:nc, 1:nc, i_phi)
   end subroutine set_rhs
-
-  subroutine prolong_to_new_children(tree, ref_info)
-    use m_a2_prolong
-    type(a2_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, id, p_id
-
-    do lvl = 1, tree%highest_lvl
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          p_id = tree%boxes(id)%parent
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
-       end do
-
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          call a2_gc_box(tree%boxes, id, i_phi, &
-               a2_gc_interp_lim, a2_bc_dirichlet_zero)
-       end do
-    end do
-  end subroutine prolong_to_new_children
 
   ! Compute L * phi, where L corresponds to (D * dt * nabla^2 - 1)
   subroutine box_op_diff(box, i_out, mg)
