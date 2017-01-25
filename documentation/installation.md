@@ -8,7 +8,8 @@ On an up-to-date system with gfortran, simply do:
     $ cd afivo
     $ make
 
-If you want to compile with runtime checks (useful for debugging) and profiling
+With `make -j 4` the build is done in parallel, using four processors. If you
+want to compile with runtime checks (useful for debugging) and profiling
 options, then do:
 
     $ make clean

@@ -22,5 +22,5 @@ recent version of Doxygen, it can also be generated locally using `make doc`.
 
 ## References / how to cite
 
-* Paper describing Afivo [arXiv](http://arxiv.org/abs/1701.04329)
-* Paper in which Afivo was first used [doi](http://dx.doi.org/10.1088/0963-0252/25/4/044001)
+* \cite afivo_arXiv Paper describing Afivo
+* \cite Nijdam_Teunissen_2016 Paper in which Afivo was first used
