@@ -158,6 +158,7 @@ contains
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
   subroutine mg$D_fas_fmg(tree, mg, set_residual, have_guess)
+    use m_a$D_ghostcell, only: a$D_gc_ids
     use m_a$D_utils, only: a$D_boxes_copy_cc
     type(a$D_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)         :: mg   !< Multigrid options
@@ -189,7 +190,8 @@ contains
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
-          call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
+          call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+               mg%sides_rb, mg%sides_bc)
        end if
 
        ! Perform V-cycle, only set residual on last iteration
@@ -202,6 +204,7 @@ contains
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
   subroutine mg$D_fas_vcycle(tree, mg, highest_lvl, set_residual)
+    use m_a$D_ghostcell, only: a$D_gc_ids
     type(a$D_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg$D_t), intent(in)   :: mg   !< Multigrid options
     integer, intent(in)        :: highest_lvl !< Maximum level for V-cycle
@@ -230,7 +233,8 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells after correction
-       call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
+       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+            mg%sides_rb, mg%sides_bc)
 
        ! Upwards relaxation
        call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
@@ -401,21 +405,6 @@ contains
 
   end subroutine mg$D_sides_rb
 
-  subroutine fill_gc_phi(boxes, ids, mg)
-    use m_a$D_ghostcell, only: a$D_gc_box
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: ids(:)
-    type(mg$D_t), intent(in)     :: mg
-    integer                     :: i
-
-    !$omp parallel do
-    do i = 1, size(ids)
-       call a$D_gc_box(boxes, ids(i), mg%i_phi, &
-            mg%sides_rb, mg%sides_bc)
-    end do
-    !$omp end parallel do
-  end subroutine fill_gc_phi
-
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
   subroutine correct_children(boxes, ids, mg)
     type(box$D_t), intent(inout) :: boxes(:)
@@ -447,13 +436,12 @@ contains
   end subroutine correct_children
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
-    use m_a$D_ghostcell, only: a$D_gc_box
+    use m_a$D_ghostcell, only: a$D_gc_ids
     type(box$D_t), intent(inout) :: boxes(:)
     type(mg$D_t), intent(in)     :: mg
     integer, intent(in)         :: ids(:), n_cycle
     integer                     :: n, i
 
-    !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
@@ -461,20 +449,16 @@ contains
        end do
        !$omp end do
 
-       !$omp do
-       do i = 1, size(ids)
-          call a$D_gc_box(boxes, ids(i), mg%i_phi, &
-               mg%sides_rb, mg%sides_bc)
-       end do
-       !$omp end do
+       call a$D_gc_ids(boxes, ids, mg%i_phi, &
+            mg%sides_rb, mg%sides_bc)
     end do
-    !$omp end parallel
   end subroutine gsrb_boxes
 
   ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
   ! correction later
   subroutine update_coarse(tree, lvl, mg)
     use m_a$D_utils, only: a$D_n_cell, a$D_box_add_cc, a$D_box_copy_cc
+    use m_a$D_ghostcell, only: a$D_gc_ids
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)        :: lvl
     type(mg$D_t), intent(in)   :: mg
@@ -517,7 +501,8 @@ contains
     end do
     !$omp end parallel do
 
-    call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
+    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
+         mg%sides_rb, mg%sides_bc)
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
     ! store current coarse phi in tmp.
@@ -541,6 +526,7 @@ contains
   !> This routine performs the same as update_coarse, but it ignores the tmp
   !> variable
   subroutine set_coarse_phi_rhs(tree, lvl, mg)
+    use m_a$D_ghostcell, only: a$D_gc_ids
     use m_a$D_utils, only: a$D_box_add_cc
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)        :: lvl
@@ -548,8 +534,10 @@ contains
     integer                    :: i, id, p_id
 
     ! In case ghost cells are not filled, fill them here to be sure
-    if (lvl == tree%highest_lvl) &
-         call fill_gc_phi(tree%boxes, tree%lvls(lvl)%ids, mg)
+    if (lvl == tree%highest_lvl) then
+       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+            mg%sides_rb, mg%sides_bc)
+    end if
 
     !$omp parallel do private(id, p_id)
     do i = 1, size(tree%lvls(lvl)%ids)
@@ -562,7 +550,8 @@ contains
     end do
     !$omp end parallel do
 
-    call fill_gc_phi(tree%boxes, tree%lvls(lvl-1)%ids, mg)
+    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
+         mg%sides_rb, mg%sides_bc)
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
 

@@ -9,6 +9,7 @@ module m_a$D_prolong
   public :: a$D_prolong_copy_from
   public :: a$D_prolong_copy
   public :: a$D_prolong_linear_from
+  public :: a$D_prolong_sparse
   public :: a$D_prolong_linear
   public :: a$D_prolong_quadratic_from
   public :: a$D_prolong_quadratic
@@ -123,7 +124,7 @@ contains
   !> Prolongation to a child (from parent) using linear interpolation. We use
   !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
   !> corner ghost cells.
-  subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add)
+  subroutine a$D_prolong_sparse(box_p, box_c, iv, iv_to, add)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box
     integer, intent(in)           :: iv       !< Variable to fill
@@ -215,6 +216,146 @@ contains
        end do
     end do
 #endif
+  end subroutine a$D_prolong_sparse
+
+  !> Bi/trilinear prolongation to a child (from parent)
+  subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add)
+    type(box$D_t), intent(in)     :: box_p !< Parent box
+    type(box$D_t), intent(inout)  :: box_c !< Child box
+    integer, intent(in)           :: iv    !< Variable to fill
+    integer, intent(in), optional :: iv_to !< Destination variable
+    logical, intent(in), optional :: add   !< Add to old values
+    integer                       :: hnc, nc, ix_offset($D), ivc
+    integer                       :: i, j, i_c, i_f, j_c, j_f
+    logical                       :: add_to
+#if $D == 2
+    real(dp)                      :: f0, flx, fhx, fly, fhy
+    real(dp)                      :: fll, fhl, flh, fhh
+    real(dp), parameter           :: f1  = 1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
+#elif $D == 3
+    real(dp)                      :: f000, f00l, f0l0, f0ll, fl00, fl0l, fll0
+    real(dp)                      :: flll, f00h, f0h0, f0hh, fh00, fh0h, fhh0
+    real(dp)                      :: fhhh, f0lh, f0hl, fl0h, fh0l, flh0, fhl0
+    real(dp)                      :: fllh, flhl, fhll, fhhl, fhlh, flhh
+    real(dp), parameter           :: f1  = 1/64.0_dp, f3=3/64.0_dp, f9=9/64.0_dp
+    real(dp), parameter           :: f27 = 27/64.0_dp
+    integer                       :: k, k_c, k_f
+#endif
+
+    nc        = box_c%n_cell
+    hnc       = ishft(box_c%n_cell, -1)
+    ix_offset = a$D_get_child_offset(box_c)
+    add_to    = .false.; if (present(add)) add_to = add
+    ivc       = iv; if (present(iv_to)) ivc = iv_to
+
+    if (.not. add_to) then
+#if $D == 2
+       box_c%cc(1:nc, 1:nc, ivc) = 0
+#elif $D == 3
+       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
+#endif
+    end if
+
+#if $D == 2
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
+
+          f0 = f9 * box_p%cc(i_c, j_c, iv)
+          flx = f3 * box_p%cc(i_c-1, j_c, iv)
+          fhx = f3 * box_p%cc(i_c+1, j_c, iv)
+          fly = f3 * box_p%cc(i_c, j_c-1, iv)
+          fhy = f3 * box_p%cc(i_c, j_c+1, iv)
+          fll = f1 * box_p%cc(i_c-1, j_c-1, iv)
+          fhl = f1 * box_p%cc(i_c+1, j_c-1, iv)
+          flh = f1 * box_p%cc(i_c-1, j_c+1, iv)
+          fhh = f1 * box_p%cc(i_c+1, j_c+1, iv)
+
+          box_c%cc(i_f,   j_f,   ivc) = f0 + flx + fly + fll &
+               + box_c%cc(i_f,   j_f,   ivc)
+          box_c%cc(i_f+1, j_f,   ivc) = f0 + fhx + fly + fhl &
+               + box_c%cc(i_f+1, j_f,   ivc)
+          box_c%cc(i_f,   j_f+1, ivc) = f0 + flx + fhy + flh &
+               + box_c%cc(i_f,   j_f+1, ivc)
+          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fhx + fhy + fhh &
+               + box_c%cc(i_f+1, j_f+1, ivc)
+       end do
+    end do
+#elif $D == 3
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f000 = f27 * box_p%cc(i_c,  j_c,   k_c,   iv)
+
+             f00l = f9 * box_p%cc(i_c,   j_c,   k_c-1, iv)
+             f0l0 = f9 * box_p%cc(i_c,   j_c-1, k_c,   iv)
+             f0ll = f3 * box_p%cc(i_c,   j_c-1, k_c-1, iv)
+             fl00 = f9 * box_p%cc(i_c-1, j_c,   k_c,   iv)
+             fl0l = f3 * box_p%cc(i_c-1, j_c,   k_c-1, iv)
+             fll0 = f3 * box_p%cc(i_c-1, j_c-1, k_c,   iv)
+             flll = f1 * box_p%cc(i_c-1, j_c-1, k_c-1, iv)
+
+             f00h = f9 * box_p%cc(i_c,   j_c,   k_c+1, iv)
+             f0h0 = f9 * box_p%cc(i_c,   j_c+1, k_c,   iv)
+             f0hh = f3 * box_p%cc(i_c,   j_c+1, k_c+1, iv)
+             fh00 = f9 * box_p%cc(i_c+1, j_c,   k_c,   iv)
+             fh0h = f3 * box_p%cc(i_c+1, j_c,   k_c+1, iv)
+             fhh0 = f3 * box_p%cc(i_c+1, j_c+1, k_c,   iv)
+             fhhh = f1 * box_p%cc(i_c+1, j_c+1, k_c+1, iv)
+
+             fl0h = f3 * box_p%cc(i_c-1, j_c,   k_c+1, iv)
+             fh0l = f3 * box_p%cc(i_c+1, j_c,   k_c-1, iv)
+             flh0 = f3 * box_p%cc(i_c-1, j_c+1, k_c,   iv)
+             fhl0 = f3 * box_p%cc(i_c+1, j_c-1, k_c,   iv)
+             f0lh = f3 * box_p%cc(i_c,   j_c-1, k_c+1, iv)
+             f0hl = f3 * box_p%cc(i_c,   j_c+1, k_c-1, iv)
+
+             fllh = f1 * box_p%cc(i_c-1, j_c-1, k_c+1, iv)
+             flhl = f1 * box_p%cc(i_c-1, j_c+1, k_c-1, iv)
+             fhll = f1 * box_p%cc(i_c+1, j_c-1, k_c-1, iv)
+
+             fhhl = f1 * box_p%cc(i_c+1, j_c+1, k_c-1, iv)
+             fhlh = f1 * box_p%cc(i_c+1, j_c-1, k_c+1, iv)
+             flhh = f1 * box_p%cc(i_c-1, j_c+1, k_c+1, iv)
+
+             box_c%cc(i_f,   j_f,   k_f,   ivc) = f000 + fl00 + &
+                  f0l0 + f00l + fll0 + fl0l + f0ll + flll + &
+                  box_c%cc(i_f,   j_f,   k_f,   ivc)
+             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f000 + fh00 + &
+                  f0l0 + f00l + fhl0 + fh0l + f0ll + fhll + &
+                  box_c%cc(i_f+1, j_f,   k_f,   ivc)
+             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f000 + fl00 + &
+                  f0h0 + f00l + flh0 + fl0l + f0hl + flhl + &
+                  box_c%cc(i_f,   j_f+1, k_f,   ivc)
+             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f000 + fh00 + &
+                  f0h0 + f00l + fhh0 + fh0l + f0hl + fhhl + &
+                  box_c%cc(i_f+1, j_f+1, k_f,   ivc)
+             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f000 + fl00 + &
+                  f0l0 + f00h + fll0 + fl0h + f0lh + fllh + &
+                  box_c%cc(i_f,   j_f,   k_f+1, ivc)
+             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f000 + fh00 + &
+                  f0l0 + f00h + fhl0 + fh0h + f0lh + fhlh + &
+                  box_c%cc(i_f+1, j_f,   k_f+1, ivc)
+             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f000 + fl00 + &
+                  f0h0 + f00h + flh0 + fl0h + f0hh + flhh + &
+                  box_c%cc(i_f,   j_f+1, k_f+1, ivc)
+             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f000 + fh00 + &
+                  f0h0 + f00h + fhh0 + fh0h + f0hh + fhhh + &
+                  box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
+          end do
+       end do
+    end do
+#endif
   end subroutine a$D_prolong_linear
 
   !> Quadratic prolongation to children. We use stencils that do not require
@@ -234,10 +375,9 @@ contains
     end do
   end subroutine a$D_prolong_quadratic_from
 
-  !> Prolongation to a child (from parent) using quadratic interpolation. The 3D
-  !> version of this routine misses the cross-derivative term f_xyz, and the 2D
-  !> version relies on corner ghost cells (which are filled with an
-  !> extrapolation in a$D_gc_box).
+  !> Prolongation to a child (from parent) using quadratic interpolation (using
+  !> a local Taylor approximation)
+  !> \todo Mixed derivatives in 3D version
   subroutine a$D_prolong_quadratic(box_p, box_c, iv, iv_to, add)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box

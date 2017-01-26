@@ -473,7 +473,7 @@ contains
 
     ! Check if neighbor is in same direction as ix is (low/high). If so,
     ! use neighbor of parent
-    if (a$D_child_low(c_ix, d) .eqv. a$D_neighb_low(nb)) &
+    if (a$D_child_low(d, c_ix) .eqv. a$D_neighb_low(nb)) &
          p_id = boxes(p_id)%neighbors(nb)
 
     ! The child ix of the neighbor is reversed in direction d

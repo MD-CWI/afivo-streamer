@@ -25,9 +25,13 @@ module m_a$D_types
   integer, parameter :: a2_child_rev(4, 2) = reshape([2,1,4,3,3,4,1,2], [4,2])
   ! Children adjacent to a neighbor
   integer, parameter :: a2_child_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
+  ! Neighbors adjacent to a child
+  integer, parameter :: a2_nb_adj_child(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
   ! Which children have a low index per dimension
-  logical, parameter :: a2_child_low(4, 2) = reshape([.true., .false., .true., &
-       .false., .true., .true., .false., .false.], [4,2])
+  logical, parameter :: a2_child_low(2, 4) = reshape([.true., .true., &
+       .false., .true., .true., .false., .false., .false.], [2, 4])
+  integer, parameter :: a2_child_high_01(2, 4) = &
+       reshape([0, 0, 1, 0, 0, 1, 1, 1], [2, 4])
 
   ! Neighbor topology information
   integer, parameter :: a2_num_neighbors = 4
@@ -75,12 +79,21 @@ module m_a$D_types
   ! Children adjacent to a neighbor
   integer, parameter :: a3_child_adj_nb(4, 6) = reshape( &
        [1,3,5,7, 2,4,6,8, 1,2,5,6, 3,4,7,8, 1,2,3,4, 5,6,7,8], [4,6])
+  ! Neighbors adjacent to a child
+  integer, parameter :: a3_nb_adj_child(3, 8) = reshape( &
+       [1,3,5, 2,3,5, 1,4,5, 2,4,5, 1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
   ! Which children have a low index per dimension
-  logical, parameter :: a3_child_low(8, 3) = reshape([ &
-       .true., .false., .true., .false., .true., .false., .true., .false., &
-       .true., .true., .false., .false., .true., .true., .false., .false., &
-       .true., .true., .true., .true., .false., .false., .false., .false.], &
-       [8,3])
+  logical, parameter :: a3_child_low(3, 8) = reshape([ &
+       .true., .true., .true., .false., .true., .true., &
+       .true., .false., .true., .false., .false., .true., &
+       .true., .true., .false., .false., .true., .false., &
+       .true., .false., .false., .false., .false., .false.], [3, 8])
+  ! Which children have a high index per dimension
+  integer, parameter :: a3_child_high_01(3, 8) = reshape([ &
+       0, 0, 0, 1, 0, 0, &
+       0, 1, 0, 1, 1, 0, &
+       0, 0, 1, 1, 0, 1, &
+       0, 1, 1, 1, 1, 1], [3, 8])
 
   ! Neighbor topology information
   integer, parameter :: a3_num_neighbors = 6
@@ -104,6 +117,22 @@ module m_a$D_types
   integer, parameter :: a3_neighb_rev(6) = [2, 1, 4, 3, 6, 5]
   ! Direction (dimension) for a neighbor
   integer, parameter :: a3_neighb_dim(6) = [1, 1, 2, 2, 3, 3]
+
+  ! Number of edgse
+  integer, parameter :: a3_num_edges = 12
+  ! Coordinate parallel to edge
+  integer, parameter :: a3_edge_dim(12) = &
+       [1,1,1,1, 2,2,2,2, 3,3,3,3]
+  ! Neighbors adjacent to edges
+  integer, parameter :: a3_nb_adj_edge(2, 12) = reshape( &
+       [3,5, 4,5, 3,6, 4,6, &
+       1,5, 2,5, 1,6, 2,6, &
+       1,3, 2,3, 1,4, 2,4], [2,12])
+  ! Minimum index of edge (1 indicates n_cell + 1)
+  integer, parameter :: a3_edge_min_ix(3, 12) = reshape( &
+       [0,0,0, 0,1,0, 0,0,1, 0,1,1, &
+       0,0,0, 1,0,0, 0,0,1, 1,0,1, &
+       0,0,0, 1,0,0, 0,1,0, 1,1,0], [3,12])
 #endif
 
   !> The basic building block of afivo: a box with cell-centered and face
@@ -271,7 +300,7 @@ contains
     end if
   end subroutine a$D_print_info
 
-  function a$D_box_bytes(n_cell, n_var_cell, n_var_face) result(box_bytes)
+  pure function a$D_box_bytes(n_cell, n_var_cell, n_var_face) result(box_bytes)
     integer, intent(in) :: n_cell     !< number of cells per dimension
     integer, intent(in) :: n_var_cell !< number of cell-centered variables
     integer, intent(in) :: n_var_face !< number of face-centered variables
@@ -283,9 +312,9 @@ contains
          int(storage_size(dummy_box) / 8)
   end function a$D_box_bytes
 
-  function a$D_num_boxes_used(tree) result(n_boxes)
+  pure function a$D_num_boxes_used(tree) result(n_boxes)
     type(a$D_t), intent(in) :: tree
-    integer :: n_boxes, lvl
+    integer                 :: n_boxes, lvl
 
     n_boxes = 0
     do lvl = lbound(tree%lvls, 1), tree%highest_lvl
@@ -302,7 +331,7 @@ contains
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 and one at
   !> n_cell/2, n_cell/2)
-  function a$D_get_child_offset(box, nb) result(ix_offset)
+  pure function a$D_get_child_offset(box, nb) result(ix_offset)
     type(box$D_t), intent(in)           :: box   !< A child box
     integer, intent(in), optional      :: nb     !< Optional: get index on parent neighbor
     integer                            :: ix_offset($D)
@@ -317,16 +346,87 @@ contains
   end function a$D_get_child_offset
 
   !> Given a cell index on box, get index of the closest cell at its parent
-  function a$D_get_ix_on_parent(box, ix) result(p_ix)
-    type(box$D_t), intent(in)           :: box   !< A child box
-    integer, intent(in), optional      :: ix($D) !< Index on child box
-    integer                            :: p_ix($D)
+  pure function a$D_get_ix_on_parent(box, ix) result(p_ix)
+    type(box$D_t), intent(in) :: box    !< A child box
+    integer, intent(in)       :: ix($D) !< Index on child box
+    integer                   :: p_ix($D)
     p_ix = a$D_get_child_offset(box) + ishft(ix+1, -1)
   end function a$D_get_ix_on_parent
 
+  !> Given a cell index on box, get index on a neighbor
+  pure function a$D_get_ix_on_neighb(box, ix, nb) result(nb_ix)
+    type(box$D_t), intent(in) :: box    !< A box
+    integer, intent(in)       :: ix($D) !< Index on box
+    integer, intent(in)       :: nb     !< Neighbor identifier
+    integer                   :: nb_ix($D), nb_dim
+
+    nb_dim        = a$D_neighb_dim(nb)
+    nb_ix         = ix
+    nb_ix(nb_dim) = nb_ix(nb_dim) - a$D_neighb_high_pm(nb) * box%n_cell
+  end function a$D_get_ix_on_neighb
+
+  !> Given a list of neighbor directions, compute the index offset
+  pure function a$D_neighb_offset(nbs) result(dix)
+    integer, intent(in) :: nbs(:) !< List of neighbor directions
+    integer             :: n, dim, dix($D)
+
+    dix = 0
+    do n = 1, size(nbs)
+       dim = a$D_neighb_dim(nbs(n))
+       dix(dim) = dix(dim) + a$D_neighb_high_pm(nbs(n))
+    end do
+  end function a$D_neighb_offset
+
+  !> Get diagonal neighbors. Returns the index of the neighbor if found,
+  !> otherwise the result nb_id <= af_no_box.
+  pure function a$D_diag_neighb_id(boxes, id, nbs) result(nb_id)
+    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
+    integer, intent(in)       :: id       !< Start index
+    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
+    integer                   :: i, j, k, nb, nb_id
+    integer                   :: nbs_perm(size(nbs))
+
+    do i = 1, size(nbs)
+       nb_id = id
+
+       do j = 1, size(nbs)
+          ! k runs over the neighbors
+          k = 1 + mod(i + j - 2, size(nbs))
+          nb = nbs(k)
+
+          nb_id = boxes(nb_id)%neighbors(nb)
+          if (nb_id <= af_no_box) exit
+       end do
+
+       if (nb_id > af_no_box) exit ! Found it
+    end do
+
+    ! For a corner neighbor in 3D, try again using the permuted neighbor list
+    ! to covers all paths
+    if (nb_id <= af_no_box .and. size(nbs) == 3) then
+       nbs_perm = nbs([2,1,3])
+
+       do i = 1, size(nbs)
+          nb_id = id
+
+          do j = 1, size(nbs)
+             ! k runs over the neighbors
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+  end function a$D_diag_neighb_id
+
   !> Compute the 'child index' for a box with spatial index ix. With 'child
   !> index' we mean the index in the children(:) array of its parent.
-  integer function a$D_ix_to_ichild(ix)
+  pure integer function a$D_ix_to_ichild(ix)
     integer, intent(in) :: ix($D) !< Spatial index of the box
     ! The index can range from 1 (all ix odd) and 2**$D (all ix even)
 #if $D == 2

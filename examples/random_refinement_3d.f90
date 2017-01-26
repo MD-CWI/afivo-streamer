@@ -68,7 +68,7 @@ program random_refinement_3d
 
   call system_clock(t_start, count_rate)
   boxes_used = 1
-  do iter = 1, 50
+  do iter = 1, 20
      ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      ! Variables are the names given as the third argument.
@@ -80,7 +80,7 @@ program random_refinement_3d
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
      !
-     ! Within each (de)refinement step the subroutine a2_tidy_up is called. This
+     ! Within each (de)refinement step the subroutine a3_tidy_up is called. This
      ! means that every now and then whether too much holes appear in the tree
      ! box list. Therefore reordering of tree is not necessary at the end of the
      ! iteration process
@@ -163,12 +163,9 @@ contains
           call a3_prolong_quadratic(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
 
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          ! After values have been set on this level, fill ghost cells
-          call a3_gc_box(tree%boxes, id, i_phi, &
-               a3_gc_interp, a3_bc_dirichlet_zero)
-       end do
+       ! After values have been set on this level, fill ghost cells
+       call a3_gc_ids(tree%boxes, ref_info%lvls(lvl)%add, i_phi, &
+            a3_gc_interp, a3_bc_dirichlet_zero)
     end do
   end subroutine prolong_to_new_children
 
