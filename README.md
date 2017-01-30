@@ -24,9 +24,9 @@ be downloaded, but this is not recommended, since there is no update mechanism.
 
 ### Step 3: Run the examples
 
-    ./streamer_2d  configs/example_2d.txt
-    ./streamer_cyl configs/example_cyl.txt
-    ./streamer_3d  configs/example_3d.txt
+    ./streamer_2d  configs/streamer_2d.cfg
+    ./streamer_cyl configs/streamer_cly.cfg
+    ./streamer_3d  configs/streamer_3d.cfg
 
 where the configuration files include the parameters that you want to use, see
 the examples in the `configs` directory. You can also specify multiple
