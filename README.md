@@ -13,7 +13,7 @@ with a focus on simplicity. Some of the key features are:
   [Visit](https://wci.llnl.gov/simulation/computer-codes/visit)
 
 Documentation is available at
-[this url](http://cwimd.nl/other_files/afivo_doc/html/index.html).
-[This paper](http://arxiv.org/abs/1701.04329) describes the framework, and
-[this paper](http://dx.doi.org/10.1088/0963-0252/25/4/044001) shows results
-obtained with the framework.
+[this link](http://cwimd.nl/other_files/afivo_doc/html/index.html).
+[This paper](http://arxiv.org/abs/1701.04329) gives an overview of Afivo, and
+[this paper](http://dx.doi.org/10.1088/0963-0252/25/4/044001) contains
+simulations performed with Afivo.
