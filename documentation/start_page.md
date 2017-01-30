@@ -19,6 +19,7 @@ with a focus on simplicity. Some of the key features are:
 * [Installation instructions](documentation/installation.md)
 * [About the source code](documentation/source_code.md)
 * [Why Afivo?](documentation/why_afivo.md)
+* [Overview of examples](documentation/examples.md)
 * [Data structures](documentation/data_structures.md)
 * [Multigrid tutorial](documentation/multigrid_tutorial.md)
 * [Related projects](documentation/other_projects.md)
