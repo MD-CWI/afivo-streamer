@@ -1,6 +1,4 @@
-# Afivo's documentation
-
-# Introduction
+# Afivo
 
 Afivo (which stands for *Adaptive Finite Volume Octree*) is a framework for
 simulations on adaptively refined quadtree and octree grids. It was designed
@@ -14,13 +12,8 @@ with a focus on simplicity. Some of the key features are:
 * Silo and VTK unstructured output, which can be visualized with e.g.
   [Visit](https://wci.llnl.gov/simulation/computer-codes/visit)
 
-# Documentation
-
-Afivo's Doxygen-based documentation is
-available [here](http://cwimd.nl/other_files/afivo_doc/html/index.html). With a
-recent version of Doxygen, it can also be generated locally using `make doc`.
-
-## References / how to cite
-
-* \cite afivo_arXiv Paper describing Afivo
-* \cite Nijdam_Teunissen_2016 Paper in which Afivo was first used
+Documentation is available at
+[this url](http://cwimd.nl/other_files/afivo_doc/html/index.html).
+[This paper](http://arxiv.org/abs/1701.04329) describes the framework, and
+[this paper](http://dx.doi.org/10.1088/0963-0252/25/4/044001) shows results
+obtained with the framework.
