@@ -103,20 +103,8 @@ contains
     integer                      :: hi($D), dim
 #endif
 
-    do n = 1, a$D_num_children
-       ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
-       lo    = a$D_child_high_01(:, n) * (boxes(id)%n_cell + 1)
-
-       if (nb_id > af_no_box) then
-          dnb   = a$D_neighb_offset(a$D_nb_adj_child(:, n))
-          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, lo, iv)
-       else
-          call a$D_corner_gc_extrap(boxes(id), lo, iv)
-       end if
-    end do
-
 #if $D == 3
+    ! Have to do edges before corners (since extrapolation can depend on edge values)
     do n = 1, a3_num_edges
        dim = a3_edge_dim(n)
 
@@ -136,6 +124,19 @@ contains
        end if
     end do
 #endif
+
+    do n = 1, a$D_num_children
+       ! Check whether there is a neighbor, and find its index
+       nb_id = a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
+       lo    = a$D_child_high_01(:, n) * (boxes(id)%n_cell + 1)
+
+       if (nb_id > af_no_box) then
+          dnb   = a$D_neighb_offset(a$D_nb_adj_child(:, n))
+          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, lo, iv)
+       else
+          call a$D_corner_gc_extrap(boxes(id), lo, iv)
+       end if
+    end do
 
   end subroutine a$D_gc_box_corner
 
