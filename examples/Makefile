@@ -7,8 +7,7 @@ OUTDIR	:= output
 include $(A5_DIR)/makerules.make
 
 # All program sources (the .f90 files except modules)
-SRCS	:= $(filter-out $(wildcard m_*.f90), $(wildcard *.f90))
-PROGS	:= $(SRCS:%.f90=%)
+PROGS	:= random_refinement_2d random_refinement_3d poisson_basic_2d poisson_basic_3d poisson_cyl poisson_cyl_dielectric poisson_benchmark_2d poisson_benchmark_3d drift_diffusion_2d drift_diffusion_3d implicit_diffusion_2d
 
 .PHONY: all clean
 
@@ -19,6 +18,14 @@ clean:
 
 $(OUTDIR):
 		mkdir -p $@
+
+%_2d.f90: %_Xd.f90
+	@echo "*** $< has changed, regenerating $@ ***"
+	@$(PPROCESS_2D)
+
+%_3d.f90: %_Xd.f90
+	@echo "*** $< has changed, regenerating $@ ***"
+	@$(PPROCESS_3D)
 
 # Dependency information
 $(PROGS): $(A5_DIR)/src/libafivo.a | $(OUTDIR)

@@ -30,11 +30,11 @@ allclean: clean
 
 m_a2_%.f90: m_aX_%.f90
 	@echo "*** $< has changed, regenerating $@ ***"
-	@sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+	@$(PPROCESS_2D)
 
 m_a3_%.f90: m_aX_%.f90
 	@echo "*** $< has changed, regenerating $@ ***"
-	@sed 's|$$D|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+	@$(PPROCESS_3D)
 
 # Dependency information
 m_a2_core.o:		m_morton.o m_a2_types.o m_a2_utils.o

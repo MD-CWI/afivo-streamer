@@ -26,3 +26,9 @@ endif
 # How to get executables from .o object files
 %: %.o
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
+
+# How to preprocess dimension-independent files to 2D
+PPROCESS_2D = sed 's|$$D|2|g' < $< | cpp -traditional-cpp -P | cat -s > $@
+
+# How to preprocess dimension-independent files to 3D
+PPROCESS_3D = sed 's|$$D|3|g' < $< | cpp -traditional-cpp -P | cat -s > $@

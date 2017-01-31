@@ -236,9 +236,9 @@ contains
                 c_ix                      = cell_ix + (j-1) * bc + i
                 cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, icc_val)
                 cc_vars(c_ix, n_cc+1::$D) = &
-                     0.5_dp * sum(tree%boxes(id)%fx(i:i+1, j, ifc_val))
+                     0.5_dp * sum(tree%boxes(id)%fc(i:i+1, j, 1, ifc_val))
                 cc_vars(c_ix, n_cc+2::$D) = &
-                     0.5_dp * sum(tree%boxes(id)%fy(i, j:j+1, ifc_val))
+                     0.5_dp * sum(tree%boxes(id)%fc(i, j:j+1, 2, ifc_val))
                 offsets(c_ix)             = a$D_num_children * c_ix
                 connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1]
              end do
@@ -264,11 +264,11 @@ contains
                         (j-1) * bc + i
                    cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, k, icc_val)
                    cc_vars(c_ix, n_cc+1::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fx(i:i+1, j, k, ifc_val))
+                        0.5_dp * sum(tree%boxes(id)%fc(i:i+1, j, k, 1, ifc_val))
                    cc_vars(c_ix, n_cc+2::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fy(i, j:j+1, k, ifc_val))
+                        0.5_dp * sum(tree%boxes(id)%fc(i, j:j+1, k, 2, ifc_val))
                    cc_vars(c_ix, n_cc+3::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fz(i, j, k:k+1, ifc_val))
+                        0.5_dp * sum(tree%boxes(id)%fc(i, j, k:k+1, 3, ifc_val))
                    offsets(c_ix)             = 8 * c_ix
                    connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = &
                         [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1, &
@@ -517,11 +517,11 @@ contains
                 var_data(i0:i0+nc-1, j0:j0+nc-1, 1:n_cc) = &
                      tree%boxes(id)%cc(1:nc, 1:nc, icc_val)
                 var_data(i0:i0+nc-1, j0:j0+nc-1, n_cc+1::$D) = &
-                     0.5_dp * (tree%boxes(id)%fx(1:nc, 1:nc, ifc_val) + &
-                     tree%boxes(id)%fx(2:nc+1, 1:nc, ifc_val))
+                     0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1, ifc_val) + &
+                     tree%boxes(id)%fc(2:nc+1, 1:nc, 1, ifc_val))
                 var_data(i0:i0+nc-1, j0:j0+nc-1, n_cc+2::$D) = &
-                     0.5_dp * (tree%boxes(id)%fy(1:nc, 1:nc, ifc_val) + &
-                     tree%boxes(id)%fy(1:nc, 2:nc+1, ifc_val))
+                     0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 2, ifc_val) + &
+                     tree%boxes(id)%fc(1:nc, 2:nc+1, 2, ifc_val))
              end do
           end do
 
@@ -669,14 +669,14 @@ contains
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, 1:n_cc) = &
                         tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, icc_val)
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+1::$D) = &
-                        0.5_dp * (tree%boxes(id)%fx(1:nc, 1:nc, 1:nc, ifc_val) + &
-                        tree%boxes(id)%fx(2:nc+1, 1:nc, 1:nc, ifc_val))
+                        0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1:nc, 1, ifc_val) + &
+                        tree%boxes(id)%fc(2:nc+1, 1:nc, 1:nc, 1, ifc_val))
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+2::$D) = &
-                        0.5_dp * (tree%boxes(id)%fy(1:nc, 1:nc, 1:nc, ifc_val) + &
-                        tree%boxes(id)%fy(1:nc, 2:nc+1, 1:nc, ifc_val))
+                        0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1:nc, 2, ifc_val) + &
+                        tree%boxes(id)%fc(1:nc, 2:nc+1, 1:nc, 2, ifc_val))
                    var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+3::$D) = &
-                        0.5_dp * (tree%boxes(id)%fz(1:nc, 1:nc, 1:nc, ifc_val) + &
-                        tree%boxes(id)%fz(1:nc, 1:nc, 2:nc+1, ifc_val))
+                        0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1:nc, 3, ifc_val) + &
+                        tree%boxes(id)%fc(1:nc, 1:nc, 2:nc+1, 3, ifc_val))
                 end do
              end do
           end do

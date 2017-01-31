@@ -680,12 +680,9 @@ contains
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
 #if $D == 2
-    box%fx(:,:, iv_to) = box%fx(:,:, iv_from)
-    box%fy(:,:, iv_to) = box%fy(:,:, iv_from)
+    box%fc(:,:,:, iv_to) = box%fc(:,:,:, iv_from)
 #elif $D == 3
-    box%fx(:,:,:, iv_to) = box%fx(:,:,:, iv_from)
-    box%fy(:,:,:, iv_to) = box%fy(:,:,:, iv_from)
-    box%fz(:,:,:, iv_to) = box%fz(:,:,:, iv_from)
+    box%fc(:,:,:,:, iv_to) = box%fc(:,:,:,:, iv_from)
 #endif
   end subroutine a$D_box_copy_fc
 

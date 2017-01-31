@@ -153,13 +153,10 @@ module m_a$D_types
      integer               :: coord_t   !< Coordinate type (e.g. Cartesian)
 #if $D == 2
      real(dp), allocatable :: cc(:, :, :) !< cell centered variables
-     real(dp), allocatable :: fx(:, :, :) !< x-face centered variables
-     real(dp), allocatable :: fy(:, :, :) !< y-face centered variables
+     real(dp), allocatable :: fc(:, :, :, :) !< face centered variables
 #elif $D == 3
      real(dp), allocatable :: cc(:, :, :, :) !< cell centered variables
-     real(dp), allocatable :: fx(:, :, :, :) !< x-face centered variables
-     real(dp), allocatable :: fy(:, :, :, :) !< y-face centered variables
-     real(dp), allocatable :: fz(:, :, :, :) !< z-face centered variables
+     real(dp), allocatable :: fc(:, :, :, :, :) !< x-face centered variables
 #endif
   end type box$D_t
 
@@ -386,11 +383,12 @@ contains
     integer                   :: i, j, k, nb, nb_id
     integer                   :: nbs_perm(size(nbs))
 
-    do i = 1, size(nbs)
-       nb_id = id
+    nb_id = id
 
+    do i = 1, size(nbs)
+       ! Check if path exists starting from nbs(i)
        do j = 1, size(nbs)
-          ! k runs over the neighbors
+          ! k starts at i and runs over the neighbors
           k = 1 + mod(i + j - 2, size(nbs))
           nb = nbs(k)
 
@@ -398,7 +396,11 @@ contains
           if (nb_id <= af_no_box) exit
        end do
 
-       if (nb_id > af_no_box) exit ! Found it
+       if (nb_id > af_no_box) then
+          exit ! Found it
+       else
+          nb_id = id            ! Start again from id
+       end if
     end do
 
     ! For a corner neighbor in 3D, try again using the permuted neighbor list
@@ -410,7 +412,6 @@ contains
           nb_id = id
 
           do j = 1, size(nbs)
-             ! k runs over the neighbors
              k = 1 + mod(i + j - 2, size(nbs))
              nb = nbs(k)
 

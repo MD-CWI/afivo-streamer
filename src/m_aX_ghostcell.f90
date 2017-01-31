@@ -472,41 +472,61 @@ contains
   end subroutine copy_from_nb
 
   !> Get a second layer of ghost cell data (the 'normal' routines give just one
-  !> layer of ghost cells). Use subr_rb > on refinement boundaries and subr_bc
+  !> layer of ghost cells). Use subr_rb on refinement boundaries and subr_bc
   !> on physical boundaries.
-  subroutine a$D_gc2_box(boxes, id, iv, subr_rb, subr_bc, gc_data, nc)
+  subroutine a$D_gc2_box(boxes, id, iv, subr_rb, subr_bc, cc, nc)
     type(box$D_t), intent(inout) :: boxes(:)        !< List of all the boxes
     integer, intent(in)          :: id              !< Id of box for which we set ghost cells
     integer, intent(in)          :: iv              !< Variable for which ghost cells are set
     procedure(a$D_subr_egc)      :: subr_rb         !< Procedure called at refinement boundaries
     procedure(a$D_subr_egc)      :: subr_bc         !< Procedure called at physical boundaries
     integer, intent(in)          :: nc              !< box%n_cell
+    !> The data with extra ghost cells
 #if $D   == 2
-    real(dp), intent(out)        :: gc_data(nc, 2*$D)     !< The requested ghost cells
+    real(dp), intent(out)        :: cc(-1:nc+2, -1:nc+2)
 #elif $D == 3
-    real(dp), intent(out)        :: gc_data(nc, nc, 2*$D) !< The requested ghost cells
+    real(dp), intent(out)        :: cc(-1:nc+2, -1:nc+2, -1:nc+2)
 #endif
-    integer                      :: nb, nb_id
+    integer                      :: nb, nb_id, nb_dim, lo($D), hi($D)
+
+#if $D == 2
+    cc(0:nc+1, 0:nc+1) = boxes(id)%cc(0:nc+1, 0:nc+1, iv)
+#elif $D == 3
+    cc(0:nc+1, 0:nc+1, 0:nc+1) = boxes(id)%cc(0:nc+1, 0:nc+1, 0:nc+1, iv)
+#endif
 
     do nb = 1, a$D_num_neighbors
+       nb_dim = a$D_neighb_dim(nb)
+       lo(:) = 1
+       hi(:) = boxes(id)%n_cell
+       lo(nb_dim) = -1 + a$D_neighb_high_01(nb) * (boxes(id)%n_cell + 3)
+       hi(nb_dim) = lo(nb_dim)
+
        nb_id = boxes(id)%neighbors(nb)
+
        if (nb_id > af_no_box) then
 #if $D == 2
-          call sides2_from_nb(boxes(nb_id), nb, iv, gc_data(:, nb), nc)
+          call sides2_from_nb(boxes(nb_id), nb, iv, &
+               cc(lo(1):hi(1), lo(2):hi(2)), nc)
 #elif $D == 3
-          call sides2_from_nb(boxes(nb_id), nb, iv, gc_data(:, :, nb), nc)
+          call sides2_from_nb(boxes(nb_id), nb, iv, &
+               cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), nc)
 #endif
        else if (nb_id == af_no_box) then
 #if $D == 2
-          call subr_rb(boxes, id, nb, iv, gc_data(:, nb), nc)
+          call subr_rb(boxes, id, nb, iv, &
+               cc(lo(1):hi(1), lo(2):hi(2)), nc)
 #elif $D == 3
-          call subr_rb(boxes, id, nb, iv, gc_data(:, :, nb), nc)
+          call subr_rb(boxes, id, nb, iv, &
+               cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), nc)
 #endif
        else
 #if $D == 2
-          call subr_bc(boxes, id, nb, iv, gc_data(:, nb), nc)
+          call subr_bc(boxes, id, nb, iv, &
+               cc(lo(1):hi(1), lo(2):hi(2)), nc)
 #elif $D == 3
-          call subr_bc(boxes, id, nb, iv, gc_data(:, :, nb), nc)
+          call subr_bc(boxes, id, nb, iv, &
+               cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), nc)
 #endif
        end if
     end do
