@@ -17,11 +17,11 @@ program drift_diffusion_$Dd
   integer, parameter  :: i_phi      = 1
   integer, parameter  :: i_phi_old  = 2
   integer, parameter  :: i_err      = 3
-  integer, parameter  :: sol_type   = 2
+  integer, parameter  :: sol_type   = 1
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr         = domain_len / box_size
 
-  type(a$D_t)         :: tree
+  type(a$D_t)        :: tree
   type(ref_info_t)   :: refine_info
   integer            :: ix_list($D, 1)
   integer            :: nb_list(a$D_num_neighbors, 1)
@@ -405,6 +405,7 @@ contains
          nc)                       ! box%n_cell
 
     do dim = 1, $D
+       ! This array is used to write code for dim = 1, 2, ...
        dix(:) = 0
        dix(dim) = 1
 
@@ -414,7 +415,7 @@ contains
              gradc = cc(i, j) - cc(i-dix(1), j-dix(2))
 
              if (velocity(dim) < 0.0_dp) then
-                gradn = cc(i+1, j) - cc(i, j)
+                gradn = cc(i+dix(1), j+dix(2)) - cc(i, j)
                 boxes(id)%fc(i, j, dim, i_phi) = velocity(dim) * &
                      (cc(i, j) - koren_mlim(gradc, gradn))
              else                  ! velocity(dim) > 0
