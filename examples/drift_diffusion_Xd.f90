@@ -1,3 +1,4 @@
+#include "../src/cpp_macros_$Dd.h"
 !> \example drift_diffusion_$Dd.f90
 !>
 !> A drift-diffusion example. Diffusion is implemented with centered
@@ -51,7 +52,6 @@ program drift_diffusion_$Dd
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a$D_set_base(tree, ix_list, nb_list)
-  call a$D_print_info(tree)
 
   output_cnt = 0
   time       = 0
@@ -134,8 +134,8 @@ program drift_diffusion_$Dd
 
         ! Write the cell centered data of tree to a vtk unstructured file fname.
         ! Only the leaves of the tree are used
-        call a$D_write_vtk(tree, trim(fname), output_cnt, time, &
-             ixs_fc=[1], dir="output")
+        ! call a$D_write_vtk(tree, trim(fname), output_cnt, time, &
+             ! ixs_fc=[1], dir="output")
 
         ! Find maximum and minimum values of cc(..., i_err) and cc(..., i_phi).
         ! By default, only loop over leaves, and ghost cells are not used.
@@ -201,124 +201,65 @@ contains
   !> Set refinement flags for box
   subroutine refine_routine(box, cell_flags)
     type(box$D_t), intent(in) :: box
-#if $D == 2
-    integer, intent(out)      :: cell_flags(box%n_cell, box%n_cell)
-#elif $D == 3
-    integer, intent(out)      :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
-#endif
+    integer, intent(out)      :: cell_flags(DTIMES(box%n_cell))
     real(dp)                  :: diff
-#if $D == 2
-    integer                   :: i, j, nc
-#elif $D == 3
-    integer                   :: i, j, k, nc
-#endif
+    integer                   :: IJK, nc
 
     nc   = box%n_cell
 
+    do KJI_DO(1,nc)
 #if $D == 2
-    do j = 1, nc
-       do i = 1, nc
-          diff = abs(box%cc(i+1, j, i_phi) + &
-               box%cc(i-1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + &
-               box%cc(i, j-1, i_phi) - &
-               4 * box%cc(i, j, i_phi)) * box%dr
-
-          if (box%lvl < 2 .or. diff > 0.5e-3_dp .and. box%lvl < 5) then
-             cell_flags(i, j) = af_do_ref
-          else if (diff < 0.1_dp * 0.1e-3_dp) then
-             cell_flags(i, j) = af_rm_ref
-          else
-             cell_flags(i, j) = af_keep_ref
-          end if
-       end do
-    end do
+       diff = abs(box%cc(i+1, j, i_phi) + &
+            box%cc(i-1, j, i_phi) + &
+            box%cc(i, j+1, i_phi) + &
+            box%cc(i, j-1, i_phi) - &
+            4 * box%cc(i, j, i_phi)) * box%dr
 #elif $D == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             diff = abs(box%cc(i+1, j, k, i_phi) + &
-                  box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + &
-                  box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) + &
-                  box%cc(i, j, k-1, i_phi) - &
-                  6 * box%cc(i, j, k, i_phi)) * box%dr
-
-             if (box%lvl < 2 .or. diff > 0.5e-3_dp .and. box%lvl < 5) then
-                cell_flags(i, j, k) = af_do_ref
-             else if (diff < 0.1_dp * 0.1e-3_dp) then
-                cell_flags(i, j, k) = af_rm_ref
-             else
-                cell_flags(i, j, k) = af_keep_ref
-             end if
-          end do
-       end do
-    end do
+       diff = abs(box%cc(i+1, j, k, i_phi) + &
+            box%cc(i-1, j, k, i_phi) + &
+            box%cc(i, j+1, k, i_phi) + &
+            box%cc(i, j-1, k, i_phi) + &
+            box%cc(i, j, k+1, i_phi) + &
+            box%cc(i, j, k-1, i_phi) - &
+            6 * box%cc(i, j, k, i_phi)) * box%dr
 #endif
+
+       if (box%lvl < 2 .or. diff > 0.5e-3_dp .and. box%lvl < 5) then
+          cell_flags(IJK) = af_do_ref
+       else if (diff < 0.1_dp * 0.1e-3_dp) then
+          cell_flags(IJK) = af_rm_ref
+       else
+          cell_flags(IJK) = af_keep_ref
+       end if
+    end do; CLOSE_DO
   end subroutine refine_routine
 
   !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
     type(box$D_t), intent(inout) :: box
-#if $D == 2
-    integer                      :: i, j, nc
-#elif $D == 3
-    integer                      :: i, j, k, nc
-#endif
-    real(dp)                    :: rr($D)
+    integer                      :: IJK, nc
+    real(dp)                     :: rr($D)
 
     nc = box%n_cell
-#if $D == 2
-    do j = 0, nc+1
-       do i = 0, nc+1
-          rr = a$D_r_cc(box, [i,j])
-          box%cc(i, j, i_phi) = solution(rr, 0.0_dp)
-       end do
-    end do
-#elif $D == 3
-    do k = 0, nc+1
-       do j = 0, nc+1
-          do i = 0, nc+1
-             rr = a$D_r_cc(box, [i,j,k])
-             box%cc(i, j, k, i_phi) = solution(rr, 0.0_dp)
-          end do
-       end do
-    end do
-#endif
+    do KJI_DO(0,nc+1)
+       rr = a$D_r_cc(box, [IJK])
+       box%cc(IJK, i_phi) = solution(rr, 0.0_dp)
+    end do; CLOSE_DO
   end subroutine set_initial_condition
 
   !> This routine computes the error in i_phi
   subroutine set_error(box, time)
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: time(:)
-#if $D == 2
-    integer                      :: i, j, nc
-#elif $D == 3
-    integer                      :: i, j, k, nc
-#endif
+    integer                      :: IJK, nc
     real(dp)                     :: rr($D)
 
     nc = box%n_cell
-#if $D == 2
-    do j = 1, nc
-       do i = 1, nc
-          rr = a$D_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = &
-               box%cc(i, j, i_phi) - solution(rr, time(1))
-       end do
-    end do
-#elif $D == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             rr = a$D_r_cc(box, [i,j,k])
-             box%cc(i, j, k, i_err) = &
-                  box%cc(i, j, k, i_phi) - solution(rr, time(1))
-          end do
-       end do
-    end do
-#endif
+    do KJI_DO(1,nc)
+       rr = a$D_r_cc(box, [IJK])
+       box%cc(IJK, i_err) = &
+            box%cc(IJK, i_phi) - solution(rr, time(1))
+    end do; CLOSE_DO
   end subroutine set_error
 
   !> This routine calculates the analytic solution in point rr
@@ -377,19 +318,12 @@ contains
     integer, intent(in)          :: id
     real(dp)                     :: gradp, gradc, gradn
     real(dp)                     :: inv_dr
-    integer                      :: dim, dix($D)
-#if $D == 2
-    real(dp)                     :: cc(-1:boxes(id)%n_cell+2, &
-         -1:boxes(id)%n_cell+2)
-    integer                      :: i, j, nc
-#elif $D == 3
-    real(dp)                     :: cc(-1:boxes(id)%n_cell+2, &
-         -1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
-    integer                      :: i, j, k, nc
-#endif
+    integer                      :: dim, dix($D), IJK, nc
+    real(dp), allocatable        :: cc(DTIMES(:))
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+    allocate(cc(DTIMES(-1:nc+2)))
 
     call a$D_gc_box(boxes, id, i_phi, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
@@ -464,12 +398,7 @@ contains
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: dt(:)
     real(dp)                     :: inv_dr
-#if $D == 2
-    integer                      :: i, j
-#elif $D == 3
-    integer                      :: i, j, k
-#endif
-    integer                      :: nc
+    integer                      :: IJK, nc
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
@@ -494,13 +423,8 @@ contains
   subroutine average_phi(box)
     type(box$D_t), intent(inout) :: box
 
-#if $D == 2
-    box%cc(:, :, i_phi) = 0.5_dp * (box%cc(:, :, i_phi) + &
-         box%cc(:, :, i_phi_old))
-#elif $D == 3
-    box%cc(:, :, :, i_phi) = 0.5_dp * (box%cc(:, :, :, i_phi) + &
-         box%cc(:, :, :, i_phi_old))
-#endif
+    box%cc(DTIMES(:), i_phi) = 0.5_dp * (box%cc(DTIMES(:), i_phi) + &
+         box%cc(DTIMES(:), i_phi_old))
   end subroutine average_phi
 
   ! Linear prolongation of i_phi values to new children

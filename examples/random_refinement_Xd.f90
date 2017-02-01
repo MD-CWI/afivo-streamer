@@ -1,3 +1,4 @@
+#include "../src/cpp_macros_$Dd.h"
 !> \example random_refinement_$Dd.f90
 !>
 !> This example shows how to create an AMR tree, perform random refinement,
@@ -118,11 +119,7 @@ contains
   ! Return the refinement flag for boxes(id)
   subroutine ref_routine(box, cell_flags)
     type(box$D_t), intent(in) :: box ! A list of all boxes in the tree
-#if $D == 2
-    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
-#elif $D == 3
-    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
-#endif
+    integer, intent(out)     :: cell_flags(DTIMES(box%n_cell))
     real(dp)                 :: rr
 
     ! Draw a [0, 1) random number
@@ -139,37 +136,17 @@ contains
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
     type(box$D_t), intent(inout) :: box
-#if $D == 2
-    integer                     :: i, j, nc
-#elif $D == 3
-    integer                     :: i, j, k, nc
-#endif
+    integer                     :: IJK, nc
     real(dp)                    :: rr($D)
 
     nc = box%n_cell
-#if $D == 2
-    do j = 1, nc
-       do i = 1, nc
-          ! Get the coordinate of the cell center at i,j
-          rr = a$D_r_cc(box, [i,j])
+    do KJI_DO(1,nc)
+       ! Get the coordinate of the cell center at i,j
+       rr = a$D_r_cc(box, [IJK])
 
-          ! Set the values at each cell according to some function
-          box%cc(i, j, i_phi) = sin(0.5_dp * rr(1)) * cos(rr(2))
-       end do
-    end do
-#elif $D == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             ! Get the coordinate of the cell center at i,j,k
-             rr = a3_r_cc(box, [i,j,k])
-
-             ! Set the values at each cell according to some function
-             box%cc(i, j, k, i_phi) = sin(0.5_dp * rr(1)) * cos(rr(2))
-          end do
-       end do
-    end do
-#endif
+       ! Set the values at each cell according to some function
+       box%cc(IJK, i_phi) = sin(0.5_dp * rr(1)) * cos(rr(2))
+    end do; CLOSE_DO
   end subroutine set_init_cond
 
   ! Set values on newly added boxes
