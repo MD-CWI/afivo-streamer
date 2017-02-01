@@ -1,7 +1,7 @@
 !> \example implicit_diffusion_2d.f90
 !>
-!> A implicit-diffusion example
-!> @TODO: document this
+!> An implicit diffusion example, showing how the multigrid methods can be used
+!> to solve the diffusion equation with a backward Euler scheme.
 program implicit_diffusion_2d
   use m_a2_types
   use m_a2_core
