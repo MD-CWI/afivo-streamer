@@ -13,15 +13,15 @@ program drift_diffusion_$Dd
 
   implicit none
 
-  integer, parameter :: box_size  = 8
-  integer, parameter :: i_phi     = 1
-  integer, parameter :: i_phi_old = 2
-  integer, parameter :: i_err     = 3
-
+  integer, parameter  :: box_size   = 8
+  integer, parameter  :: i_phi      = 1
+  integer, parameter  :: i_phi_old  = 2
+  integer, parameter  :: i_err      = 3
+  integer, parameter  :: sol_type   = 1
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
-  real(dp), parameter :: dr = domain_len / box_size
+  real(dp), parameter :: dr         = domain_len / box_size
 
-  type(a$D_t)         :: tree
+  type(a$D_t)        :: tree
   type(ref_info_t)   :: refine_info
   integer            :: ix_list($D, 1)
   integer            :: nb_list(a$D_num_neighbors, 1)
@@ -61,6 +61,7 @@ program drift_diffusion_$Dd
   diff_coeff = 0.0_dp
   velocity(:) = 0.0_dp
   velocity(1) = 1.0_dp
+  velocity(2) = -1.0_dp
 
   ! Set up the initial conditions
   call system_clock(t_start,count_rate)
@@ -101,13 +102,14 @@ program drift_diffusion_$Dd
 
   call a$D_print_info(tree)
 
-  ! Restrict the initial conditions
-  ! Restrict the children of a box to the box (e.g., in $DD, average the values
-  ! at the four children to get the value for the parent)
+  ! Restrict the initial conditions Restrict the children of a box to the box
+  ! (e.g., in $DD, average the values at the four children to get the value for
+  ! the parent)
   call a$D_restrict_tree(tree, i_phi)
 
   ! Fill ghost cells for variables i_phi on the sides of all boxes, using
-  ! a$D_gc_interp_lim on refinement boundaries and a$D_bc_neumann_zero on physical boundaries
+  ! a$D_gc_interp_lim on refinement boundaries and a$D_bc_neumann_zero on
+  ! physical boundaries
   call a$D_gc_tree(tree, i_phi, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
   call system_clock(t_start, count_rate)
@@ -164,10 +166,6 @@ program drift_diffusion_$Dd
 
            ! Restrict variables i_phi to all parent boxes
            call a$D_restrict_tree(tree, i_phi)
-
-           ! Fill ghost cells for variables i_phi on the sides of all boxes, using
-           ! a$D_gc_interp_lim on refinement boundaries and a$D_bc_neumann_zero on physical boundaries
-           call a$D_gc_tree(tree, i_phi, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         end do
 
         ! Take average of phi_old and phi
@@ -175,23 +173,17 @@ program drift_diffusion_$Dd
         time = time + dt
      end do
 
-     ! Adjust the refinement of a tree using refine_routine (see below) for grid
-     ! refinement.
-     ! Routine a$D_adjust_refinement sets the bit af_bit_new_children for each box
-     ! that is refined.  On input, the tree should be balanced. On output,
-     ! the tree is still balanced, and its refinement is updated (with at most
-     ! one level per call).
-     call a$D_adjust_refinement(tree, refine_routine, refine_info, 2)
-
-     ! Linear prolongation of i_phi values to new children (see below)
-     call prolong_to_new_children(tree, refine_info)
-
-     ! Fill ghost cells for variables i_phi on the sides of all boxes, using
-     ! a$D_gc_interp_lim on refinement boundaries and a$D_bc_neumann_zero on physical boundaries
+     ! Fill ghost cells for variable i_phi
      call a$D_gc_tree(tree, i_phi, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
-     !> Reorder and resize the list of boxes
-     call a$D_tidy_up(tree, 0.8_dp, 10000)
+     ! Adjust the refinement of a tree using refine_routine (see below) for grid
+     ! refinement. On input, the tree should be balanced. On output, the tree is
+     ! still balanced, and its refinement is updated (with at most one level per
+     ! call).
+     call a$D_adjust_refinement(tree, refine_routine, refine_info, 2)
+
+     ! Prolongation of i_phi values to new children (see below)
+     call prolong_to_new_children(tree, refine_info)
   end do
 
   call system_clock(t_end,count_rate)
@@ -210,16 +202,20 @@ contains
   subroutine refine_routine(box, cell_flags)
     type(box$D_t), intent(in) :: box
 #if $D == 2
-    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
+    integer, intent(out)      :: cell_flags(box%n_cell, box%n_cell)
 #elif $D == 3
-    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
+    integer, intent(out)      :: cell_flags(box%n_cell, box%n_cell, box%n_cell)
 #endif
-    real(dp)                 :: diff
+    real(dp)                  :: diff
 #if $D == 2
-    integer                  :: i, j, nc
+    integer                   :: i, j, nc
+#elif $D == 3
+    integer                   :: i, j, k, nc
+#endif
 
     nc   = box%n_cell
 
+#if $D == 2
     do j = 1, nc
        do i = 1, nc
           diff = abs(box%cc(i+1, j, i_phi) + &
@@ -228,7 +224,7 @@ contains
                box%cc(i, j-1, i_phi) - &
                4 * box%cc(i, j, i_phi)) * box%dr
 
-          if (box%lvl < 3 .or. diff > 0.5e-3_dp .and. box%lvl < 6) then
+          if (box%lvl < 2 .or. diff > 0.5e-3_dp .and. box%lvl < 5) then
              cell_flags(i, j) = af_do_ref
           else if (diff < 0.1_dp * 0.1e-3_dp) then
              cell_flags(i, j) = af_rm_ref
@@ -238,10 +234,6 @@ contains
        end do
     end do
 #elif $D == 3
-    integer                  :: i, j, k, nc
-
-    nc   = box%n_cell
-
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
@@ -253,7 +245,7 @@ contains
                   box%cc(i, j, k-1, i_phi) - &
                   6 * box%cc(i, j, k, i_phi)) * box%dr
 
-             if (box%lvl < 3 .or. diff > 0.5e-3_dp .and. box%lvl < 6) then
+             if (box%lvl < 2 .or. diff > 0.5e-3_dp .and. box%lvl < 5) then
                 cell_flags(i, j, k) = af_do_ref
              else if (diff < 0.1_dp * 0.1e-3_dp) then
                 cell_flags(i, j, k) = af_rm_ref
@@ -269,11 +261,15 @@ contains
   !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
     type(box$D_t), intent(inout) :: box
-    integer                     :: i, j, k, nc
+#if $D == 2
+    integer                      :: i, j, nc
+#elif $D == 3
+    integer                      :: i, j, k, nc
+#endif
     real(dp)                    :: rr($D)
 
     nc = box%n_cell
-#if $d == 2
+#if $D == 2
     do j = 0, nc+1
        do i = 0, nc+1
           rr = a$D_r_cc(box, [i,j])
@@ -295,9 +291,13 @@ contains
   !> This routine computes the error in i_phi
   subroutine set_error(box, time)
     type(box$D_t), intent(inout) :: box
-    real(dp), intent(in)        :: time(:)
-    integer                     :: i, j, k, nc
-    real(dp)                    :: rr($D)
+    real(dp), intent(in)         :: time(:)
+#if $D == 2
+    integer                      :: i, j, nc
+#elif $D == 3
+    integer                      :: i, j, k, nc
+#endif
+    real(dp)                     :: rr($D)
 
     nc = box%n_cell
 #if $D == 2
@@ -325,7 +325,6 @@ contains
   function solution(rr, t) result(sol)
     real(dp), intent(in) :: rr($D), t
     real(dp)             :: sol, rr_t($D)
-    integer, parameter   :: sol_type = 1
 
     rr_t = rr - velocity * t
 
@@ -376,21 +375,23 @@ contains
     use m_a$D_prolong
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
-    real(dp)                     :: tmp, inv_dr
     real(dp)                     :: gradp, gradc, gradn
+    real(dp)                     :: inv_dr
     integer                      :: dim, dix($D)
 #if $D == 2
     real(dp)                     :: cc(-1:boxes(id)%n_cell+2, &
          -1:boxes(id)%n_cell+2)
     integer                      :: i, j, nc
 #elif $D == 3
-    real(dp)                     :: gc_data(boxes(id)%n_cell, &
-         boxes(id)%n_cell, a$D_num_neighbors)
+    real(dp)                     :: cc(-1:boxes(id)%n_cell+2, &
+         -1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
     integer                      :: i, j, k, nc
 #endif
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+
+    call a$D_gc_box(boxes, id, i_phi, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
     ! Get a second layer of ghost cell data (the 'normal' routines give just one
     ! layer of ghost cells). Use a$D_gc2_prolong_linear on refinement boundaries and
@@ -403,137 +404,59 @@ contains
          cc, &                  ! The enlarged box with ghost cells
          nc)                       ! box%n_cell
 
-#if $D == 2
     do dim = 1, $D
+       ! This array is used to write code for dim = 1, 2, ...
        dix(:) = 0
        dix(dim) = 1
 
+#if $D == 2
        do j = 1, nc+dix(2)
           do i = 1, nc+dix(1)
-
              gradc = cc(i, j) - cc(i-dix(1), j-dix(2))
 
              if (velocity(dim) < 0.0_dp) then
-                gradn = cc(i+1, j) - cc(i, j)
+                gradn = cc(i+dix(1), j+dix(2)) - cc(i, j)
                 boxes(id)%fc(i, j, dim, i_phi) = velocity(dim) * &
                      (cc(i, j) - koren_mlim(gradc, gradn))
              else                  ! velocity(dim) > 0
-                gradp = cc(i-1, j) - cc(i-2, j)
+                gradp = cc(i-dix(1), j-dix(2)) - cc(i-2*dix(1), j-2*dix(2))
                 boxes(id)%fc(i, j, dim, i_phi) = velocity(dim) * &
                      (cc(i-dix(1), j-dix(2)) + koren_mlim(gradc, gradp))
              end if
 
-             ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
-             boxes(id)%fc(i, j, dim, i_phi) = boxes(id)%fc(i, j, dim, i_phi) - &
+             ! Diffusive part with 2-nd order explicit method
+             boxes(id)%fc(i, j, dim, i_phi) = &
+                  boxes(id)%fc(i, j, dim, i_phi) - &
                   diff_coeff * gradc * inv_dr
           end do
        end do
-    end do
 #elif $D == 3
-    ! x-fluxes interior, advective part with flux limiter
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc+1
-             gradc = boxes(id)%cc(i, j, k, i_phi) - boxes(id)%cc(i-1, j, k, i_phi)
-             if (velocity(1) < 0.0_dp) then
-                if (i == nc+1) then
-                   tmp = gc_data(j, k, a$D_neighb_highx)
-                else
-                   tmp = boxes(id)%cc(i+1, j, k, i_phi)
+       do k = 1, nc+dix(3)
+          do j = 1, nc+dix(2)
+             do i = 1, nc+dix(1)
+                gradc = cc(i, j, k) - cc(i-dix(1), j-dix(2), k-dix(3))
+
+                if (velocity(dim) < 0.0_dp) then
+                   gradn = cc(i+dix(1), j+dix(2), k+dix(3)) - cc(i, j, k)
+                   boxes(id)%fc(i, j, k, dim, i_phi) = velocity(dim) * &
+                        (cc(i, j, k) - koren_mlim(gradc, gradn))
+                else                  ! velocity(dim) > 0
+                   gradp = cc(i-dix(1), j-dix(2), k-dix(3)) - &
+                        cc(i-2*dix(1), j-2*dix(2), k-2*dix(3))
+                   boxes(id)%fc(i, j, k, dim, i_phi) = velocity(dim) * &
+                        (cc(i-dix(1), j-dix(2), k-dix(3)) + &
+                        koren_mlim(gradc, gradp))
                 end if
 
-                gradn = tmp - boxes(id)%cc(i, j, k, i_phi)
-                boxes(id)%fx(i, j, k, i_phi) = velocity(1) * &
-                     (boxes(id)%cc(i, j, k, i_phi) - koren_mlim(gradc, gradn))
-             else                  ! velocity(1) > 0
-                if (i == 1) then
-                   tmp = gc_data(j, k, a$D_neighb_lowx)
-                else
-                   tmp = boxes(id)%cc(i-2, j, k, i_phi)
-                end if
-
-                gradp = boxes(id)%cc(i-1, j, k, i_phi) - tmp
-                boxes(id)%fx(i, j, k, i_phi) = velocity(1) * &
-                     (boxes(id)%cc(i-1, j, k, i_phi) + koren_mlim(gradc, gradp))
-             end if
-
-             ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
-             boxes(id)%fx(i, j, k, i_phi) = boxes(id)%fx(i, j, k, i_phi) - &
-                  diff_coeff * gradc * inv_dr
+                ! Diffusive part with 2-nd order explicit method
+                boxes(id)%fc(i, j, k, dim, i_phi) = &
+                     boxes(id)%fc(i, j, k, dim, i_phi) - &
+                     diff_coeff * gradc * inv_dr
+             end do
           end do
        end do
-    end do
-
-    ! y-fluxes interior, advective part with flux limiter
-    do k = 1, nc
-       do j = 1, nc+1
-          do i = 1, nc
-             gradc = boxes(id)%cc(i, j, k, i_phi) - boxes(id)%cc(i, j-1, k, i_phi)
-             if (velocity(2) < 0.0_dp) then
-                if (j == nc+1) then
-                   tmp = gc_data(i, k, a$D_neighb_highy)
-                else
-                   tmp = boxes(id)%cc(i, j+1, k, i_phi)
-                end if
-
-                gradn = tmp - boxes(id)%cc(i, j, k, i_phi)
-                boxes(id)%fy(i, j, k, i_phi) = velocity(2) * &
-                     (boxes(id)%cc(i, j, k, i_phi) - koren_mlim(gradc, gradn))
-             else                  ! velocity(2) > 0
-
-                if (j == 1) then
-                   tmp = gc_data(i, k, a$D_neighb_lowy)
-                else
-                   tmp = boxes(id)%cc(i, j-2, k, i_phi)
-                end if
-
-                gradp = boxes(id)%cc(i, j-1, k, i_phi) - tmp
-                boxes(id)%fy(i, j, k, i_phi) = velocity(2) * &
-                     (boxes(id)%cc(i, j-1, k, i_phi) + koren_mlim(gradc, gradp))
-             end if
-
-             ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
-             boxes(id)%fy(i, j, k, i_phi) = boxes(id)%fy(i, j, k, i_phi) - &
-                  diff_coeff * gradc * inv_dr
-          end do
-       end do
-    end do
-
-    ! z-fluxes interior, advective part with flux limiter
-    do k = 1, nc+1
-       do j = 1, nc
-          do i = 1, nc
-             gradc = boxes(id)%cc(i, j, k, i_phi) - boxes(id)%cc(i, j, k-1, i_phi)
-             if (velocity(3) < 0.0_dp) then
-                if (k == nc+1) then
-                   tmp = gc_data(i, j, a$D_neighb_highz)
-                else
-                   tmp = boxes(id)%cc(i, j, k+1, i_phi)
-                end if
-
-                gradn = tmp - boxes(id)%cc(i, j, k, i_phi)
-                boxes(id)%fz(i, j, k, i_phi) = velocity(3) * &
-                     (boxes(id)%cc(i, j, k, i_phi) - koren_mlim(gradc, gradn))
-             else                  ! velocity(3) > 0
-
-                if (k == 1) then
-                   tmp = gc_data(i, j, a$D_neighb_lowz)
-                else
-                   tmp = boxes(id)%cc(i, j, k-2, i_phi)
-                end if
-
-                gradp = boxes(id)%cc(i, j, k-1, i_phi) - tmp
-                boxes(id)%fz(i, j, k, i_phi) = velocity(3) * &
-                     (boxes(id)%cc(i, j, k-1, i_phi) + koren_mlim(gradc, gradp))
-             end if
-
-             ! Diffusive part with 2-nd order explicit method. dif_f has to be scaled by 1/dx
-             boxes(id)%fz(i, j, k, i_phi) = boxes(id)%fz(i, j, k, i_phi) - &
-                  diff_coeff * gradc * inv_dr
-          end do
-       end do
-    end do
 #endif
+    end do
   end subroutine fluxes_koren
 
   !> This routine computes the update of the solution per box
@@ -541,11 +464,15 @@ contains
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: dt(:)
     real(dp)                     :: inv_dr
+#if $D == 2
+    integer                      :: i, j
+#elif $D == 3
     integer                      :: i, j, k
+#endif
     integer                      :: nc
 
-    nc                    = box%n_cell
-    inv_dr                = 1/box%dr
+    nc     = box%n_cell
+    inv_dr = 1/box%dr
 
 #if $D == 2
     forall (i = 1:nc, j = 1:nc)
@@ -553,7 +480,7 @@ contains
             box%fc(i, j, 1, i_phi) - box%fc(i+1, j, 1, i_phi) + &
             box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi))
     end forall
-#elif $D = 3
+#elif $D == 3
     forall (i = 1:nc, j = 1:nc, k = 1:nc)
        box%cc(i, j, k, i_phi) = box%cc(i, j, k, i_phi) + dt(1) * inv_dr * ( &
             box%fc(i, j, k, 1, i_phi) - box%fc(i+1, j, k, 1, i_phi) + &
@@ -584,6 +511,7 @@ contains
     integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
+       !$omp parallel do private(id, p_id)
        do i = 1, size(refine_info%lvls(lvl)%add)
           id = refine_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
@@ -591,6 +519,7 @@ contains
           ! Linear prolongation will not strictly conserve phi
           call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
+       !$omp end parallel do
 
        ! Fill ghost cells for variables i_phi on the sides of a box, using
        ! a$D_gc_interp_lim on refinement boundaries and a$D_bc_neumann_zero
