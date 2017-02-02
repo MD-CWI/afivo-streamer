@@ -45,7 +45,7 @@ program simple_streamer_2d
   real(dp), parameter :: end_time      = 8e-9_dp
   real(dp), parameter :: dt_output     = 20e-11_dp
   real(dp), parameter :: dt_max        = 20e-11_dp
-  integer, parameter  :: ref_per_steps = 1
+  integer, parameter  :: ref_per_steps = 10
   integer, parameter  :: box_size      = 8
 
   ! Physical parameters
@@ -101,8 +101,8 @@ program simple_streamer_2d
      ! that is refined.  On input, the tree should be balanced. On output,
      ! the tree is still balanced, and its refinement is updated (with at most
      call a2_adjust_refinement(tree, &               ! tree
-                               refinement_routine, & ! Refinement function
-                               refine_info)          ! Information about refinement
+          refinement_routine, & ! Refinement function
+          refine_info)          ! Information about refinement
 
      ! If no new boxes have been added or removed, exit the loop
      if (refine_info%n_add == 0 .and. refine_info%n_rm == 0) exit
@@ -113,10 +113,10 @@ program simple_streamer_2d
   do
      ! Get a new time step, which is at most dt_max
      call a2_reduction(tree, &    ! Tree to do the reduction on
-                       max_dt, &  ! function
-                       get_min, & ! function
-                       dt_max, &  ! Initial value for the reduction
-                       dt)        ! Result of the reduction
+          max_dt, &  ! function
+          get_min, & ! function
+          dt_max, &  ! Initial value for the reduction
+          dt)        ! Result of the reduction
 
      if (dt < 1e-14) then
         print *, "dt getting too small, instability?", dt
@@ -153,12 +153,6 @@ program simple_streamer_2d
            call a2_loop_box_arg(tree, update_solution, [dt], &
                 leaves_only=.true.)
 
-           ! Restrict the electron and ion densities to lower levels
-           call a2_restrict_tree(tree, i_elec)
-
-           ! Fill ghost cells
-           call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_dirichlet_zero)
-
            ! Compute new field on first iteration
            if (i == 1) call compute_fld(tree, .true.)
         end do
@@ -173,10 +167,19 @@ program simple_streamer_2d
      ! Restrict the i_pion value of the children of a box to the box (e.g., in 2D,
      ! average the values at the four children to get the value for the parent)
      call a2_restrict_tree(tree, i_pion)
+     call a2_restrict_tree(tree, i_elec)
 
-     ! Fill ghost cells for variables i_pion on the sides of all boxes, using
-     ! a2_gc_interp_lim on refinement boundaries and a2_bc_neumann_zero on physical boundaries
-     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_neumann_zero)
+     ! Fill ghost cells for i_pion and i_elec
+     call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_dirichlet_zero)
+     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_dirichlet_zero)
+
+     output_count = output_count + 1
+     write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
+
+     ! Write the cell centered data of a tree to a Silo file. Only the
+     ! leaves of the tree are used
+     call a2_write_silo(tree, fname, output_count, time, dir="output")
+
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
@@ -185,9 +188,9 @@ program simple_streamer_2d
      ! the tree is still balanced, and its refinement is updated (with at most
      ! one level per call).
      call a2_adjust_refinement(tree, &               ! tree
-                               refinement_routine, & ! Refinement function
-                               refine_info, &        ! Information about refinement
-                               4)                    ! Buffer width (in cells)
+          refinement_routine, & ! Refinement function
+          refine_info, &        ! Information about refinement
+          4)                    ! Buffer width (in cells)
 
      if (refine_info%n_add > 0 .or. refine_info%n_rm > 0) then
         ! For boxes which just have been refined, set data on their children
@@ -196,6 +199,13 @@ program simple_streamer_2d
         ! Compute the field on the new mesh
         call compute_fld(tree, .true.)
      end if
+
+     output_count = output_count + 1
+     write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
+
+     ! Write the cell centered data of a tree to a Silo file. Only the
+     ! leaves of the tree are used
+     call a2_write_silo(tree, fname, output_count, time, dir="output")
   end do
 
   ! "Destroy" the data in a tree. Since we don't use pointers, you can also
@@ -219,13 +229,13 @@ contains
 
     ! Initialize tree
     call a2_init(tree, &                   ! The tree to initialize
-                 box_size, &               ! Boxes have box_size^dim cells
-                 n_var_cell, &             ! Number of cell-centered variables
-                 n_var_face, &             ! Number of face-centered variables
-                 dr, &                     ! spacing of a cell at lvl 1
-                 coarsen_to=2, &           ! Create additional coarse grids down to this size.
-                 n_boxes = n_boxes_init, & ! Allocate initial storage for n_boxes.
-                 cc_names=ST_cc_names)     ! Names of cell-centered variables
+         box_size, &               ! Boxes have box_size^dim cells
+         n_var_cell, &             ! Number of cell-centered variables
+         n_var_face, &             ! Number of face-centered variables
+         dr, &                     ! spacing of a cell at lvl 1
+         coarsen_to=2, &           ! Create additional coarse grids down to this size.
+         n_boxes = n_boxes_init, & ! Allocate initial storage for n_boxes.
+         cc_names=ST_cc_names)     ! Names of cell-centered variables
 
     ! Set up geometry
     id             = 1          ! One box ...
@@ -294,7 +304,7 @@ contains
           if (xy(2) > init_y_min .and. xy(2) < init_y_max) then
              ! Approximate Poisson distribution with normal distribution
              normal_rands = two_normals(box%dr**3 * init_density, &
-                   sqrt(box%dr**3 * init_density))
+                  sqrt(box%dr**3 * init_density))
              ! Prevent negative numbers
              box%cc(i, j, i_elec) = abs(normal_rands(1)) / box%dr**3
           else
@@ -344,8 +354,10 @@ contains
 
     do j = 1, nc
        do i = 1, nc
-          fld(1) = 0.5_dp * (box%fx(i, j, f_fld) + box%fx(i+1, j, f_fld))
-          fld(2) = 0.5_dp * (box%fy(i, j, f_fld) + box%fy(i, j+1, f_fld))
+          fld(1) = 0.5_dp * (box%fc(i, j, 1, f_fld) + &
+               box%fc(i+1, j, 1, f_fld))
+          fld(2) = 0.5_dp * (box%fc(i, j, 2, f_fld) + &
+               box%fc(i, j+1, 2, f_fld))
 
           ! The 0.5 is here because of the explicit trapezoidal rule
           dt_cfl = min(dt_cfl, 0.5_dp / sum(abs(fld * mobility) / box%dr))
@@ -354,7 +366,7 @@ contains
 
     ! Dielectric relaxation time
     dt_drt = UC_eps0 / (UC_elem_charge * mobility * &
-         maxval(box%cc(1:nc, 1:nc, i_elec)))
+         maxval(box%cc(1:nc, 1:nc, i_elec)) + epsilon(1.0_dp))
 
     ! Diffusion condition
     dt_dif = 0.25_dp * box%dr**2 / max(diffusion_c, epsilon(1.0_dp))
@@ -421,100 +433,63 @@ contains
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-    box%fx(:, :, f_fld) = inv_dr * &
+    box%fc(1:nc+1, 1:nc, 1, f_fld) = inv_dr * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fy(:, :, f_fld) = inv_dr * &
+    box%fc(1:nc, 1:nc+1, 2, f_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
 
     box%cc(1:nc, 1:nc, i_fld) = sqrt(&
-         0.25_dp * (box%fx(1:nc, 1:nc, f_fld) + box%fx(2:nc+1, 1:nc, f_fld))**2 + &
-         0.25_dp * (box%fy(1:nc, 1:nc, f_fld) + box%fy(1:nc, 2:nc+1, f_fld))**2)
+         0.25_dp * (box%fc(1:nc, 1:nc, 1, f_fld) + &
+         box%fc(2:nc+1, 1:nc, 1, f_fld))**2 + &
+         0.25_dp * (box%fc(1:nc, 1:nc, 2, f_fld) + &
+         box%fc(1:nc, 2:nc+1, 2, f_fld))**2)
   end subroutine fld_from_pot
 
   ! Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp)                    :: inv_dr, tmp, gradp, gradc, gradn
+    real(dp)                    :: inv_dr, gradp, gradc, gradn
     real(dp)                    :: v_drift
     real(dp)                    :: fld
-    real(dp)                    :: gc_data(boxes(id)%n_cell, a2_num_neighbors)
-    integer                     :: i, j, nc
+    real(dp)                    :: cc(-1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
+    integer                     :: i, j, nc, dim, dix(2)
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
 
+    call a2_gc_box(boxes, id, i_elec, a2_gc_interp_lim, &
+         a2_bc_dirichlet_zero)
     call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong_linear, &
-         a2_bc2_neumann_zero, gc_data, nc)
+         a2_bc2_dirichlet_zero, cc, nc)
 
-    ! x-fluxes interior, advective part with flux limiter
-    do j = 1, nc
-       do i = 1, nc+1
-          fld        = boxes(id)%fx(i, j, f_fld)
-          v_drift    = -mobility * fld
-          gradc      = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i-1, j, i_elec)
+    do dim = 1, 2
+       dix(:) = 0
+       dix(dim) = 1
 
-          if (v_drift < 0.0_dp) then
-             if (i == nc+1) then
-                tmp = gc_data(j, a2_neighb_highx)
-             else
-                tmp = boxes(id)%cc(i+1, j, i_elec)
+       do j = 1, nc+dix(2)
+          do i = 1, nc+dix(1)
+             fld        = boxes(id)%fc(i, j, dim, f_fld)
+             v_drift    = -mobility * fld
+             gradc      = cc(i, j) - cc(i-dix(1), j-dix(2))
+
+             if (v_drift < 0.0_dp) then
+                gradn = cc(i+dix(1), j+dix(2)) - cc(i, j)
+                boxes(id)%fc(i, j, dim, f_elec) = v_drift * &
+                     (cc(i, j) - koren_mlim(gradc, gradn))
+             else                  ! v_drift > 0
+                gradp = cc(i-dix(1), j-dix(2)) - cc(i-2*dix(1), j-2*dix(2))
+                boxes(id)%fc(i, j, dim, f_elec) = v_drift * &
+                     (cc(i-dix(1), j-dix(2)) + koren_mlim(gradc, gradp))
              end if
-             gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fx(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-          else                  ! v_drift > 0
-             if (i == 1) then
-                tmp = gc_data(j, a2_neighb_lowx)
-             else
-                tmp = boxes(id)%cc(i-2, j, i_elec)
-             end if
-             gradp = boxes(id)%cc(i-1, j, i_elec) - tmp
-             boxes(id)%fx(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i-1, j, i_elec) + koren_mlim(gradc, gradp))
-          end if
 
-          ! Diffusive part with 2-nd order explicit method. dif_f has to be
-          ! scaled by 1/dx
-          boxes(id)%fx(i, j, f_elec) = boxes(id)%fx(i, j, f_elec) - &
-               diffusion_c * gradc * inv_dr
+             ! Diffusive part with 2-nd order explicit method
+             boxes(id)%fc(i, j, dim, f_elec) = &
+                  boxes(id)%fc(i, j, dim, f_elec) - &
+                  diffusion_c * gradc * inv_dr
+          end do
        end do
     end do
-
-    ! y-fluxes interior, advective part with flux limiter
-    do j = 1, nc+1
-       do i = 1, nc
-          fld        = boxes(id)%fy(i, j, f_fld)
-          v_drift    = -mobility * fld
-          gradc      = boxes(id)%cc(i, j, i_elec) - boxes(id)%cc(i, j-1, i_elec)
-
-          if (v_drift < 0.0_dp) then
-             if (j == nc+1) then
-                tmp = gc_data(i, a2_neighb_highy)
-             else
-                tmp = boxes(id)%cc(i, j+1, i_elec)
-             end if
-             gradn = tmp - boxes(id)%cc(i, j, i_elec)
-             boxes(id)%fy(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j, i_elec) - koren_mlim(gradc, gradn))
-          else                  ! v_drift > 0
-             if (j == 1) then
-                tmp = gc_data(i, a2_neighb_lowy)
-             else
-                tmp = boxes(id)%cc(i, j-2, i_elec)
-             end if
-             gradp = boxes(id)%cc(i, j-1, i_elec) - tmp
-             boxes(id)%fy(i, j, f_elec) = v_drift * &
-                  (boxes(id)%cc(i, j-1, i_elec) + koren_mlim(gradc, gradp))
-          end if
-
-          ! Diffusive part with 2-nd order explicit method. dif_f has to be
-          ! scaled by 1/dx
-          boxes(id)%fy(i, j, f_elec) = boxes(id)%fy(i, j, f_elec) - &
-               diffusion_c * gradc * inv_dr
-       end do
-    end do
-
   end subroutine fluxes_koren
 
   ! Take average of new and old electron/ion density for explicit trapezoidal rule
@@ -540,8 +515,9 @@ contains
           alpha = get_alpha(fld)
           src   = box%cc(i, j, i_elec) * mobility * abs(fld) * alpha
 
-          sflux = (box%fx(i, j, f_elec) - box%fx(i+1, j, f_elec) + &
-               box%fy(i, j, f_elec) - box%fy(i, j+1, f_elec)) * inv_dr
+          sflux = (sum(box%fc(i, j, :, f_elec)) - &
+               box%fc(i+1, j, 1, f_elec) - &
+               box%fc(i, j+1, 2, f_elec)) * inv_dr
 
           box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + (src + sflux) * dt(1)
           box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src * dt(1)
@@ -555,9 +531,10 @@ contains
     use m_a2_prolong
     type(a2_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: refine_info
-    integer                      :: lvl, i, id, p_id
+    integer                      :: lvl, i, id, p_id, t_id
 
     do lvl = 1, tree%highest_lvl
+       !$omp do private(id, p_id, t_id)
        do i = 1, size(refine_info%lvls(lvl)%add)
           id = refine_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
@@ -565,7 +542,9 @@ contains
           call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pion)
           call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
+       !$omp end do
 
+       !$omp do private(id)
        do i = 1, size(refine_info%lvls(lvl)%add)
           id = refine_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_elec, &
@@ -575,6 +554,7 @@ contains
           call a2_gc_box(tree%boxes, id, i_phi, &
                mg2_sides_rb, mg%sides_bc)
        end do
+       !$omp end do
     end do
   end subroutine prolong_to_new_boxes
 
@@ -590,8 +570,6 @@ contains
 
     select case (nb)
     case (a2_neighb_lowy)
-       ! bc_type = af_bc_dirichlet
-       ! box%cc(1:nc, 0, iv) = -applied_field * domain_length
        bc_type = af_bc_neumann
        box%cc(1:nc, 0, iv) = applied_field
     case (a2_neighb_highy)
@@ -631,4 +609,4 @@ contains
     end if
   end function koren_mlim
 
-end program
+end program simple_streamer_2d
