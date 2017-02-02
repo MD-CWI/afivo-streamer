@@ -45,7 +45,7 @@ program simple_streamer_2d
   real(dp), parameter :: end_time      = 8e-9_dp
   real(dp), parameter :: dt_output     = 20e-11_dp
   real(dp), parameter :: dt_max        = 20e-11_dp
-  integer, parameter  :: ref_per_steps = 10
+  integer, parameter  :: ref_per_steps = 2
   integer, parameter  :: box_size      = 8
 
   ! Physical parameters
@@ -164,22 +164,15 @@ program simple_streamer_2d
         call compute_fld(tree, .true.)
      end do
 
-     ! Restrict the i_pion value of the children of a box to the box (e.g., in 2D,
-     ! average the values at the four children to get the value for the parent)
+     ! Restrict the i_pion and i_elec values of the children of a box to the box
+     ! (e.g., in 2D, average the values at the four children to get the value
+     ! for the parent)
      call a2_restrict_tree(tree, i_pion)
      call a2_restrict_tree(tree, i_elec)
 
      ! Fill ghost cells for i_pion and i_elec
      call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_dirichlet_zero)
      call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_dirichlet_zero)
-
-     output_count = output_count + 1
-     write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
-
-     ! Write the cell centered data of a tree to a Silo file. Only the
-     ! leaves of the tree are used
-     call a2_write_silo(tree, fname, output_count, time, dir="output")
-
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
@@ -199,13 +192,6 @@ program simple_streamer_2d
         ! Compute the field on the new mesh
         call compute_fld(tree, .true.)
      end if
-
-     output_count = output_count + 1
-     write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
-
-     ! Write the cell centered data of a tree to a Silo file. Only the
-     ! leaves of the tree are used
-     call a2_write_silo(tree, fname, output_count, time, dir="output")
   end do
 
   ! "Destroy" the data in a tree. Since we don't use pointers, you can also
