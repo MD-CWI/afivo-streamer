@@ -5,12 +5,7 @@
 !> differences, and for the drift the Koren flux limiter is used. Time stepping
 !> is done with the explicit trapezoidal rule.
 program drift_diffusion_$Dd
-  use m_a$D_types
-  use m_a$D_core
-  use m_a$D_output
-  use m_a$D_utils
-  use m_a$D_ghostcell
-  use m_a$D_restrict
+  use m_a$D_all
 
   implicit none
 
@@ -313,7 +308,6 @@ contains
   !> This routine computes the x-fluxes and y-fluxes interior (advective part)
   !> with the Koren limiter
   subroutine fluxes_koren(boxes, id)
-    use m_a$D_prolong
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
     real(dp)                     :: gradp, gradc, gradn
@@ -428,7 +422,6 @@ contains
 
   ! Linear prolongation of i_phi values to new children
   subroutine prolong_to_new_children(tree, refine_info)
-    use m_a$D_prolong
     type(a$D_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: refine_info
     integer                      :: lvl, i, id, p_id

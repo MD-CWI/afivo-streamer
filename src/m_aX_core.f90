@@ -10,7 +10,6 @@ module m_a$D_core
   public :: a$D_destroy
   public :: a$D_set_base
   public :: a$D_tidy_up
-  public :: set_leaves_parents
   public :: a$D_resize_box_storage
   public :: a$D_adjust_refinement
   public :: a$D_consistent_fluxes

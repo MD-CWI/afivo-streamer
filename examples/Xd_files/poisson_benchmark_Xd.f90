@@ -4,12 +4,7 @@
 !> This program can be used to benchmark the multigrid routines. For simplicity,
 !> it does not compare results with a known solution.
 program poisson_benchmark_$Dd
-  use m_a$D_types
-  use m_a$D_core
-  use m_a$D_multigrid
-  use m_a$D_utils
-  use m_a$D_ghostcell
-  use m_a$D_output
+  use m_a$D_all
 
   implicit none
 

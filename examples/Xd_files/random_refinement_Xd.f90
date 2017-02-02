@@ -4,11 +4,7 @@
 !> This example shows how to create an AMR tree, perform random refinement,
 !> write output files, and how to fill ghost cells.
 program random_refinement_$Dd
-  use m_a$D_types
-  use m_a$D_core
-  use m_a$D_utils
-  use m_a$D_ghostcell
-  use m_a$D_output
+  use m_a$D_all
 
   implicit none
 

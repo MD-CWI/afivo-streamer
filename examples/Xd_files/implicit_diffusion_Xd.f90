@@ -4,13 +4,7 @@
 !> An implicit diffusion example, showing how the multigrid methods can be used
 !> to solve the diffusion equation with a backward Euler scheme.
 program implicit_diffusion_$Dd
-  use m_a$D_types
-  use m_a$D_core
-  use m_a$D_ghostcell
-  use m_a$D_utils
-  use m_a$D_output
-  use m_a$D_restrict
-  use m_a$D_multigrid
+  use m_a$D_all
 
   implicit none
 

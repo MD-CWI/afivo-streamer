@@ -4,11 +4,7 @@
 !> Example showing how to use multigrid and compare with an analytic solution. A
 !> standard 5-point Laplacian is used.
 program poisson_basic_$Dd
-  use m_a$D_types
-  use m_a$D_core
-  use m_a$D_multigrid
-  use m_a$D_utils
-  use m_a$D_output
+  use m_a$D_all
   use m_gaussians
 
   implicit none

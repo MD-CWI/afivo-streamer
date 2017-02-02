@@ -3,11 +3,7 @@
 !> Example showing how to use multigrid and compare with an analytic solution. A
 !> standard 5-point Laplacian is used in cylindrical coordinates.
 program poisson_cyl
-  use m_a2_types
-  use m_a2_core
-  use m_a2_multigrid
-  use m_a2_utils
-  use m_a2_output
+  use m_a2_all
   use m_gaussians
 
   implicit none
