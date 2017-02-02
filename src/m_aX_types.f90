@@ -383,29 +383,29 @@ contains
     integer                   :: i, j, k, nb, nb_id
     integer                   :: nbs_perm(size(nbs))
 
-    nb_id = id
+    if (size(nbs) == 0) then
+       nb_id = id
+    else
+       do i = 1, size(nbs)
+          nb_id = id
 
-    do i = 1, size(nbs)
-       ! Check if path exists starting from nbs(i)
-       do j = 1, size(nbs)
-          ! k starts at i and runs over the neighbors
-          k = 1 + mod(i + j - 2, size(nbs))
-          nb = nbs(k)
+          ! Check if path exists starting from nbs(i)
+          do j = 1, size(nbs)
+             ! k starts at i and runs over the neighbors
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
 
-          nb_id = boxes(nb_id)%neighbors(nb)
-          if (nb_id <= af_no_box) exit
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
        end do
+    end if
 
-       if (nb_id > af_no_box) then
-          exit ! Found it
-       else
-          nb_id = id            ! Start again from id
-       end if
-    end do
-
-    ! For a corner neighbor in 3D, try again using the permuted neighbor list
-    ! to covers all paths
-    if (nb_id <= af_no_box .and. size(nbs) == 3) then
+    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
+    ! covers all paths
+    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
        nbs_perm = nbs([2,1,3])
 
        do i = 1, size(nbs)
