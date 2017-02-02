@@ -34,7 +34,7 @@ program test_reduction
   nb_list(:, 1) = 1
 
   ! Create the base mesh
-  call a2_set_base(tree, ix_list, nb_list)
+  call a2_set_base(tree, 1, ix_list, nb_list)
 
   ! Set variables on base
   call a2_loop_box(tree, set_random_values)

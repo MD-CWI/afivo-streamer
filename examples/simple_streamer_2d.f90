@@ -233,7 +233,7 @@ contains
     nb_list(a2_neighb_highx, id) = id ! idem
 
     ! Create the base mesh
-    call a2_set_base(tree, ix_list, nb_list)
+    call a2_set_base(tree, 1, ix_list, nb_list)
 
   end subroutine init_tree
 

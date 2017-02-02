@@ -27,11 +27,11 @@ program test_init
 
   ixs_2d = 1                    ! Box at 1,1
   nbs_2d = 1                    ! Periodic
-  call a2_set_base(tree_2d, ixs_2d, nbs_2d)
+  call a2_set_base(tree_2d, 1, ixs_2d, nbs_2d)
 
   ixs_3d = 1                    ! Box at 1,1,1
   nbs_3d = 1                    ! Periodic
-  call a3_set_base(tree_3d, ixs_3d, nbs_3d)
+  call a3_set_base(tree_3d, 1, ixs_3d, nbs_3d)
 
   n_lvl = 4
 

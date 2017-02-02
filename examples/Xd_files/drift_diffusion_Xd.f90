@@ -46,7 +46,7 @@ program drift_diffusion_$Dd
   nb_list(:, id) = id           ! Box is periodic, so its own neighbor
 
   ! Create the base mesh, using the box indices and their neighbor information
-  call a$D_set_base(tree, ix_list, nb_list)
+  call a$D_set_base(tree, 1, ix_list, nb_list)
 
   output_cnt = 0
   time       = 0

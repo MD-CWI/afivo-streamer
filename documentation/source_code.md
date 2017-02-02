@@ -28,6 +28,7 @@ modules have 3D equivalents with the prefix `a3_`.
 
 Module name | Prefix | Description
 ---|---|---
+`m_afivo_types` | `af_` | Dimension-independent types and constants
 `m_a2_core` | `a2_` | Core routines to construct and refine the mesh
 `m_a2_types` | `a2_` | Dimension-dependent types and routines related to indexing
 `m_a2_utils` | `a2_` | All kinds of different 'helper' routines for Afivo

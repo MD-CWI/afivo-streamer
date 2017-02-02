@@ -55,7 +55,7 @@ program random_refinement_$Dd
   nb_list(a$D_neighb_lowx, 1)  = n_boxes_base
 
   ! Create the base mesh, using the box indices and their neighbor information
-  call a$D_set_base(tree, ix_list, nb_list)
+  call a$D_set_base(tree, n_boxes_base, ix_list, nb_list)
   call a$D_print_info(tree)
 
   ! Set variables on base by using the helper functions a$D_loop_box(tree, sub)

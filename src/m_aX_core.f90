@@ -19,7 +19,7 @@ contains
   !> Initialize a $Dd tree type.
   subroutine a$D_init(tree, n_cell, n_var_cell, n_var_face, dr, r_min, &
        lvl_limit, n_boxes, coarsen_to, coord, cc_names, fc_names, mem_limit_gb)
-    type(a$D_t), intent(out)        :: tree       !< The tree to initialize
+    type(a$D_t), intent(inout)      :: tree       !< The tree to initialize
     integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
     integer, intent(in)            :: n_var_cell !< Number of cell-centered variables
     integer, intent(in)            :: n_var_face !< Number of face-centered variables
@@ -41,7 +41,6 @@ contains
     !> Names of face-centered variables
     character(len=*), intent(in), optional :: fc_names(:)
 
-
     integer                        :: lvl_limit_a, n_boxes_a, coarsen_to_a
     real(dp)                       :: r_min_a($D), gb_limit
     integer                        :: n, lvl, min_lvl, coord_a, box_bytes
@@ -54,6 +53,7 @@ contains
     coord_a = af_xyz;  if (present(coord)) coord_a = coord
     gb_limit = 16;     if (present(mem_limit_gb)) gb_limit = mem_limit_gb
 
+    if (tree%ready)       stop "a$D_init: tree was already initialized"
     if (n_cell < 2)       stop "a$D_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "a$D_init: n_cell should be even"
     if (n_var_cell <= 0)  stop "a$D_init: n_var_cell should be > 0"
@@ -69,11 +69,11 @@ contains
 
     if (coarsen_to_a > 0) then
        ! Determine number of lvls for subtree
-       ! TODO: remove subtree in future
+       !> @todo remove subtree in future
        min_lvl = 1 - nint(log(real(n_cell, dp)/coarsen_to_a)/log(2.0_dp))
 
        if (2**(1-min_lvl) * coarsen_to_a /= n_cell) &
-            stop "a$D_set_base: cannot coarsen to given value"
+            stop "a$D_init: cannot coarsen to given value"
     else
        min_lvl = 1
     end if
@@ -130,17 +130,15 @@ contains
   !> just let a tree get out of scope
   subroutine a$D_destroy(tree)
     type(a$D_t), intent(inout) :: tree
-    integer                   :: lvl
 
-    if (.not. tree%ready) stop "a$D_destroy: Tree was not fully initialized"
-
+    if (.not. tree%ready) stop "a$D_destroy: Tree not fully initialized"
     deallocate(tree%boxes)
-    do lvl = lbound(tree%lvls, 1), tree%lvl_limit
-       deallocate(tree%lvls(lvl)%ids)
-       deallocate(tree%lvls(lvl)%leaves)
-       deallocate(tree%lvls(lvl)%parents)
-    end do
+    deallocate(tree%lvls)
+    deallocate(tree%cc_names)
+    deallocate(tree%fc_names)
+
     tree%highest_id = 0
+    tree%ready      = .false.
   end subroutine a$D_destroy
 
   !> Create the base level of the tree, ix_list(:, id) stores the spatial index
@@ -149,25 +147,35 @@ contains
   !> have to be specified. Periodic boundaries only have to be specified from
   !> one side. A default value of af_no_box in the nb_list is converted to a
   !> physical boundary with index of -1.
-  subroutine a$D_set_base(tree, ix_list, nb_list)
-    type(a$D_t), intent(inout)  :: tree          !< Tree for which we set the base
-    integer, intent(in)        :: ix_list(:, :) !< List of spatial indices for the initial boxes
-    integer, intent(inout)     :: nb_list(:, :) !< Neighbors for the initial boxes
-    integer                    :: n_boxes, n, id, nb, nb_id
+  subroutine a$D_set_base(tree, n_boxes, ix_list, nb_list)
+    !> Tree for which we set the base
+    type(a$D_t), intent(inout)  :: tree
+    !> Number of boxes on coarse grid
+    integer, intent(in)        :: n_boxes
+    !> List of spatial indices for the initial boxes
+    integer, intent(in)        :: ix_list($D, n_boxes)
+    !> Neighbors for the initial boxes
+    integer, intent(inout), optional :: nb_list(a$D_num_neighbors, n_boxes)
+    integer                    :: n, id, nb, nb_id
     integer                    :: ix($D), lvl, offset
     integer                    :: ix_min($D), ix_max($D), nb_ix($D)
+    integer                    :: nb_used(a$D_num_neighbors, size(ix_list, 2))
 #if $D == 2
     integer, allocatable       :: id_array(:, :)
 #elif $D == 3
     integer, allocatable       :: id_array(:, :, :)
 #endif
 
-    n_boxes = size(ix_list, 2)
-
     if (n_boxes < 1) stop "a$D_set_base: need at least one box"
     if (any(ix_list < 1)) stop "a$D_set_base: need all ix_list > 0"
     if (tree%highest_id > 0)  stop "a$D_set_base: this tree already has boxes"
     if (.not. allocated(tree%lvls)) stop "a$D_set_base: tree not initialized"
+
+    if (present(nb_list)) then
+       nb_used = nb_list
+    else
+       nb_used = af_no_box      ! Default value
+    end if
 
     ! Create an array covering the coarse grid, in which boxes are indicated by
     ! their id.
@@ -211,25 +219,25 @@ contains
 
           if (nb_id /= af_no_box) then
              ! Neighbor present, so store id
-             nb_list(nb, id) = nb_id
+             nb_used(nb, id) = nb_id
           else
              ! A periodic or boundary condition
-             nb_id = nb_list(nb, id)
+             nb_id = nb_used(nb, id)
 
              if (nb_id > af_no_box) then
                 ! If periodic, copy connectivity information to other box
-                nb_list(a$D_neighb_rev(nb), nb_id) = id
+                nb_used(a$D_neighb_rev(nb), nb_id) = id
              else if (nb_id == af_no_box) then
                 ! The value af_no_box is converted to -1, indicating the default
                 ! boundary condition
-                nb_list(nb, id) = -1
+                nb_used(nb, id) = -1
              end if
           end if
 
        end do
     end do
 
-    if (any(nb_list == af_no_box)) stop "a$D_set_base: unresolved neighbors"
+    if (any(nb_used == af_no_box)) stop "a$D_set_base: unresolved neighbors"
 
     ! Check if we have enough space, if not, increase space
     if (n_boxes > size(tree%boxes(:))) then
@@ -259,10 +267,10 @@ contains
           tree%boxes(id)%children(:) = af_no_box ! Gets overwritten, see below
 
           ! Connectivity is the same for all lvls
-          where (nb_list(:, n) > af_no_box)
-             tree%boxes(id)%neighbors = nb_list(:, n) + offset
+          where (nb_used(:, n) > af_no_box)
+             tree%boxes(id)%neighbors = nb_used(:, n) + offset
           elsewhere
-             tree%boxes(id)%neighbors = nb_list(:, n)
+             tree%boxes(id)%neighbors = nb_used(:, n)
           end where
 
           call init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
@@ -422,6 +430,10 @@ contains
     allocate(box%cc(0:n_cell+1, 0:n_cell+1, 0:n_cell+1, n_cc))
     allocate(box%fc(n_cell+1,   n_cell+1,   n_cell+1, $D, n_fc))
 #endif
+
+    ! Initialize to zero
+    box%cc = 0
+    box%fc = 0
   end subroutine init_box
 
   !> Deallocate data storage for a box and mark inactive

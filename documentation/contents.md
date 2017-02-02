@@ -19,6 +19,10 @@
 * [Working with multigrid](documentation/multigrid.md)
 * [Writing and viewing output](documentation/writing_viewing_output.md)
 
+# Examples
+
+* A list of @ref examples-page
+
 # Other
 
 * [Related projects](documentation/other_projects.md)
