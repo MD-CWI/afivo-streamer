@@ -1,28 +1,36 @@
 # Quadtree and octree grids
 
-Afivo uses so-called quadtree (2D) or octree (3D) grids. A quadtree grid in
-Afvio consists of boxes (i.e., blocks) of $N \times N$ cells, with $N$ an
-even number. A user can for example select to use boxes of $4 \times 4$ cells, see @ref documentation/coarse_grid.md.
+# Introduction
 
-A box in a quadtree grid can be refined by adding four \emph{child} boxes.
-These children contain the same number of cells but half the grid spacing, so
-that they together have the same area as their parent. Each of the children can
-again be refined, and so on, as illustrated in figure
-\ref{fig:quadtree-comp-domain}. There can be up to 30 refinement levels in
-Afivo. So-called \emph{proper nesting} or \emph{2:1 balance} is ensured, which
-means that neighboring boxes differ by at most one refinement level.
+In Afivo so-called [quadtree](https://en.wikipedia.org/wiki/Quadtree) (2D)
+or [octree](https://en.wikipedia.org/wiki/Octree) (3D) grids are used.
 
-The coarse grid, which defines the computational domain, can then be constructed
-from one or more of these boxes, see figure~\ref{fig:quadtree-comp-domain} and
-section \ref{sec:coarse-grid}.
+# Quadtree grids
 
-Two types of variables are stored: cell-centered variables and face-centered
-variables. When initializing Afivo, the user has to set the number of these
-variables. For the cell-centered variables, each box has one layer of ghost
-cells, as discussed in section~\ref{sec:ghost-cell}.
+A quadtree grid in Afvio consists of boxes (i.e., blocks) of \f$N \times N\f$
+cells, with \f$N\f$ an even number. An example of a quadtree grid with boxes of
+\f$4 \times 4\f$ cells is shown below.
 
-  \includegraphics[width=0.9\textwidth]{visit/mesh_example.pdf}
-  \caption{Left: example of a coarse grid consisting of two boxes of
-    $4 \times 4$ cells. The middle and right figure show how the boxes can be
-    refined, by covering them with four `child' boxes.}
+![](mesh_example.png)
+
+A box in a quadtree grid can be refined by covering it with four refined boxes
+('children'). These children contain the same number of cells as their parent,
+but half the grid spacing. Each of the children can again be refined, as
+illustrated above. In Afivo so-called *proper nesting* or *2:1 balance* is
+ensured, which means that neighboring boxes differ by at most one refinement
+level.
+
+# Octree grids
+
+Octrees are the 3D equivalent of quadtrees. When a box is refined, it is covered
+by eight children instead of four in 2D. Some of the other differences are
+summarized in the table below.
+
+Property | Quadtree | Octree
+---|---|---
+Children of a box | 4 | 8
+Number of corners | 4 | 8
+Number of faces | 0 | 6
+Number of edges | 4 | 12
+
 
