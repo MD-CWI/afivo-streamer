@@ -11,6 +11,9 @@ PROGS	:= random_refinement_2d random_refinement_3d poisson_basic_2d poisson_basi
 
 .PHONY: all clean
 
+# Keep 2d and 3d source files
+.PRECIOUS: %_2d.f90 %_3d.f90
+
 all:	$(PROGS)
 
 clean:
@@ -19,11 +22,11 @@ clean:
 $(OUTDIR):
 		mkdir -p $@
 
-%_2d.f90: %_Xd.f90
+%_2d.f90: Xd_files/%_Xd.f90
 	@echo "*** $< has changed, regenerating $@ ***"
 	@$(PPROCESS_2D)
 
-%_3d.f90: %_Xd.f90
+%_3d.f90: Xd_files/%_Xd.f90
 	@echo "*** $< has changed, regenerating $@ ***"
 	@$(PPROCESS_3D)
 
