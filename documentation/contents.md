@@ -4,7 +4,6 @@
 
 * [Why Afivo?](documentation/why_afivo.md)
 * [Quadtree and octree grids](documentation/quadtree_octree.md)
-* [Related projects & alternatives](documentation/other_projects.md)
 
 # How-to guides
 
@@ -21,6 +20,7 @@
 
 # Other
 
+* [Related projects](documentation/other_projects.md)
 * [FAQ](documentation/faq.md)
 * [Authors](documentation/authors.md)
 * [Bibliography](@ref citelist)
