@@ -2,13 +2,13 @@
 
 [TOC]
 
-# What does Afivo stand for?
+# What does Afivo stand for? {#afivo-name}
 
-Adaptive Finite Volume Octree. Note that these names do not describe the full
-functionality of the framework, since you can also use e.g., quadtrees or finite
-difference methods.
+"Adaptive Finite Volume Octree". Note that these names do not
+describe the full functionality of the framework, since you can also use e.g.,
+quadtrees or finite difference methods.
 
-# Why no MPI?
+# Why no MPI? {#why-no-mpi}
 
 There are a couple of reasons for this:
 
