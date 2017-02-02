@@ -9,7 +9,6 @@ module m_a$D_ghostcell
   public :: a$D_gc_tree
   public :: a$D_gc_ids
   public :: a$D_gc_box
-  public :: a$D_gc_box_corner
   public :: a$D_bc_dirichlet_zero
   public :: a$D_bc_neumann_zero
   public :: a$D_gc_interp
@@ -18,6 +17,7 @@ module m_a$D_ghostcell
   public :: a$D_gc2_box
   public :: a$D_gc2_prolong_linear
   public :: a$D_bc2_neumann_zero
+  public :: a$D_bc2_dirichlet_zero
 
 contains
 
@@ -48,19 +48,28 @@ contains
     procedure(a$D_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
     integer                      :: i
 
-    !$omp parallel private(i)
     !$omp do
     do i = 1, size(ids)
        call a$D_gc_box(boxes, ids(i), iv, subr_rb, subr_bc)
-       call a$D_gc_box_corner(boxes, ids(i), iv)
     end do
     !$omp end do
-    !$omp end parallel
   end subroutine a$D_gc_ids
+
+  !> Fill ghost cells for variable iv
+  subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
+    integer, intent(in)          :: id       !< Id of box for which we set ghost cells
+    integer, intent(in)          :: iv       !< Variable for which ghost cells are set
+    procedure(a$D_subr_rb)       :: subr_rb  !< Procedure called at refinement boundaries
+    procedure(a$D_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
+
+    call a$D_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
+    call a$D_gc_box_corner(boxes, id, iv)
+  end subroutine a$D_gc_box
 
   !> Fill ghost cells for variable iv on the sides of a box, using subr_rb on
   !> refinement boundaries and subr_bc on physical boundaries.
-  subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)          :: id       !< Id of box for which we set ghost cells
     integer, intent(in)          :: iv       !< Variable for which ghost cells are set
@@ -90,10 +99,11 @@ contains
        end if
     end do
 
-  end subroutine a$D_gc_box
+  end subroutine a$D_gc_box_sides
 
   !> Fill corner ghost cells for variable iv on corners/edges of a box. If there
-  !> is no box to copy the data from, use linear extrapolation.
+  !> is no box to copy the data from, use linear extrapolation. This routine
+  !> assumes ghost cells on the sides of the box are available.
   subroutine a$D_gc_box_corner(boxes, id, iv)
     type(box$D_t), intent(inout)  :: boxes(:)              !< List of all the boxes
     integer, intent(in)          :: id                    !< Id of box for which we set ghost cells
@@ -128,16 +138,15 @@ contains
     do n = 1, a$D_num_children
        ! Check whether there is a neighbor, and find its index
        nb_id = a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
-       lo    = a$D_child_high_01(:, n) * (boxes(id)%n_cell + 1)
+       lo    = a$D_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then
-          dnb   = a$D_neighb_offset(a$D_nb_adj_child(:, n))
+          dnb = 2 * a$D_child_dix(:, n) - 1
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, lo, iv)
        else
           call a$D_corner_gc_extrap(boxes(id), lo, iv)
        end if
     end do
-
   end subroutine a$D_gc_box_corner
 
   subroutine bc_to_gc(box, nb, iv, bc_type)
@@ -709,6 +718,43 @@ contains
 #endif
     end select
   end subroutine a$D_bc2_neumann_zero
+
+  ! This fills second ghost cells near physical boundaries using Neumann zero
+  subroutine a$D_bc2_dirichlet_zero(boxes, id, nb, iv, gc_side, nc)
+    type(box$D_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: id, nb, iv, nc
+#if $D == 2
+    real(dp), intent(out)       :: gc_side(nc)
+#elif $D == 3
+    real(dp), intent(out)       :: gc_side(nc, nc)
+#endif
+
+    select case (nb)
+#if $D == 2
+    case (a2_neighb_lowx)
+       gc_side = -boxes(id)%cc(2, 1:nc, iv)
+    case (a2_neighb_highx)
+       gc_side = -boxes(id)%cc(nc-1, 1:nc, iv)
+    case (a2_neighb_lowy)
+       gc_side = -boxes(id)%cc(1:nc, 2, iv)
+    case (a2_neighb_highy)
+       gc_side = -boxes(id)%cc(1:nc, nc-1, iv)
+#elif $D == 3
+    case (a3_neighb_lowx)
+       gc_side = -boxes(id)%cc(2, 1:nc, 1:nc, iv)
+    case (a3_neighb_highx)
+       gc_side = -boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
+    case (a3_neighb_lowy)
+       gc_side = -boxes(id)%cc(1:nc, 2, 1:nc, iv)
+    case (a3_neighb_highy)
+       gc_side = -boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
+    case (a3_neighb_lowz)
+       gc_side = -boxes(id)%cc(1:nc, 1:nc, 2, iv)
+    case (a3_neighb_highz)
+       gc_side = -boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
+#endif
+    end select
+  end subroutine a$D_bc2_dirichlet_zero
 
   !> This fills corner ghost cells using linear extrapolation. The ghost cells
   !> on the sides already need to be filled.
