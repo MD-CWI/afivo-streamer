@@ -48,11 +48,11 @@ contains
     procedure(a$D_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
     integer                      :: i
 
-    !$omp do
+    !$omp parallel do
     do i = 1, size(ids)
        call a$D_gc_box(boxes, ids(i), iv, subr_rb, subr_bc)
     end do
-    !$omp end do
+    !$omp end parallel do
   end subroutine a$D_gc_ids
 
   !> Fill ghost cells for variable iv

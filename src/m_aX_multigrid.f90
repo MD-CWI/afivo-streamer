@@ -443,11 +443,11 @@ contains
     integer                     :: n, i
 
     do n = 1, 2 * n_cycle
-       !$omp do
+       !$omp parallel do
        do i = 1, size(ids)
           call mg%box_gsrb(boxes(ids(i)), n, mg)
        end do
-       !$omp end do
+       !$omp end parallel do
 
        call a$D_gc_ids(boxes, ids, mg%i_phi, &
             mg%sides_rb, mg%sides_bc)
