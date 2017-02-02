@@ -19,7 +19,6 @@ program poisson_benchmark_$Dd
   integer            :: mg_iter, n_args
   integer            :: n_cell, n_iterations, max_ref_lvl
   integer            :: ix_list($D, n_boxes_base)
-  integer            :: nb_list(a$D_num_neighbors, n_boxes_base)
   real(dp)           :: dr, time
   character(len=100) :: fname, arg_string
   type(mg$D_t)        :: mg
@@ -73,11 +72,8 @@ program poisson_benchmark_$Dd
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
   ix_list(:, 1) = [DTIMES(1)]       ! Set index of box 1
 
-  ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
-
   ! Create the base mesh, using the box indices and their neighbor information
-  call a$D_set_base(tree, ix_list, nb_list)
+  call a$D_set_base(tree, 1, ix_list)
 
   call system_clock(t_start, count_rate)
   do

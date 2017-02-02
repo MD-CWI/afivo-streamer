@@ -22,7 +22,6 @@ program poisson_basic_$Dd
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
   integer            :: ix_list($D, n_boxes_base)
-  integer            :: nb_list(a$D_num_neighbors, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg$D_t)       :: mg
@@ -56,11 +55,8 @@ program poisson_basic_$Dd
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
   ix_list(:, 1) = [DTIMES(1)]         ! Set index of box 1
 
-  ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
-
   ! Create the base mesh, using the box indices and their neighbor information
-  call a$D_set_base(tree, ix_list, nb_list)
+  call a$D_set_base(tree, 1, ix_list)
 
   call system_clock(t_start, count_rate)
   do
@@ -154,7 +150,7 @@ contains
        ! which is related to the fourth derivative of the solution.
        drhs = dr2 * box%cc(IJK, i_rhs)
 
-       if (abs(drhs) > 1e-3_dp) then
+       if (abs(drhs) > 1e-3_dp .and. box%lvl < 5) then
           cell_flags(IJK) = af_do_ref
        else
           cell_flags(IJK) = af_keep_ref

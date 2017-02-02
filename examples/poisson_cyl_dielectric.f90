@@ -22,7 +22,6 @@ program poisson_cyl_dielectric
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
-  integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg2_t)        :: mg
@@ -53,11 +52,8 @@ program poisson_cyl_dielectric
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
   ix_list(:, 1) = [1,1]         ! Set index of box 1
 
-  ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
-
   ! Create the base mesh, using the box indices and their neighbor information
-  call a2_set_base(tree, ix_list, nb_list)
+  call a2_set_base(tree, 1, ix_list)
   call a2_print_info(tree)
 
   call system_clock(t_start, count_rate)
