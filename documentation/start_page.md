@@ -10,4 +10,4 @@ Have a look at the @ref doc-contents to get started with Afivo.
 **References / how to cite**
 
 * \cite Nijdam_Teunissen_2016 Paper in which Afivo was first used
-* \cite afivo_arXiv Paper describing Afivo
+* \cite afivo_paper Paper describing Afivo
