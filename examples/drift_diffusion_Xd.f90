@@ -339,7 +339,6 @@ contains
          nc)                       ! box%n_cell
 
     do dim = 1, $D
-       ! This array is used to write code for dim = 1, 2, ...
        dix(:) = 0
        dix(dim) = 1
 
