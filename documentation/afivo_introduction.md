@@ -5,10 +5,10 @@
 # What is Afivo? {#what-is-afivo}
 
 Afivo is a framework for simulations on adaptively
-refined [quadtree and octree](@ref quadtree_octree.md) grids. Because Afivo has
-no built-in support for specific physics applications a user has to write
-his/her own numerical methods. Some key features/characteristics of the
-framework are:
+refined [quadtree and octree](@ref documentation/quadtree_octree.md) grids.
+Because Afivo has no built-in support for specific physics applications a user
+has to write his/her own numerical methods. Some key features/characteristics of
+the framework are:
 
 * Adaptively refined quadtree and octree grids
 * OpenMP parallelization

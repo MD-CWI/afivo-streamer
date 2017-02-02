@@ -23,6 +23,7 @@ program computational_domain_$Dd
   ix_list(:, 1) = [1, 1, 1]     ! Box 1 at [1, 1, 1]
   ix_list(:, 2) = [2, 1, 1]     ! Box 2 at [2, 1, 1]
 #endif
+
   call a$D_init(tree, n_cell, n_var_cc, n_var_fc, dr)
   call a$D_set_base(tree, n_boxes, ix_list)
   call a$D_write_vtk(tree, "computational_domain_$Dd_1", dir="output")
@@ -36,7 +37,7 @@ program computational_domain_$Dd
   ix_list(:, 1) = [1, 1, 1]     ! Box 1 at [1, 1, 1]
   ix_list(:, 2) = [1, 2, 1]     ! Box 2 at [1, 2, 1]
 #endif
-  nb_list(:, :) = af_no_box     ! Afivo resolves the connectivity
+
   call a$D_init(tree, n_cell, n_var_cc, n_var_fc, dr)
   call a$D_set_base(tree, n_boxes, ix_list)
   call a$D_write_vtk(tree, "computational_domain_$Dd_2", dir="output")
@@ -50,6 +51,7 @@ program computational_domain_$Dd
   ix_list(:, 1) = [1, 1, 1]     ! Box 1 at [1, 1, 1]
   ix_list(:, 2) = [2, 1, 1]     ! Box 2 at [2, 1, 1]
 #endif
+
   nb_list(:, :) = af_no_box       ! Start with default value
   nb_list(a$D_neighb_lowx, 1) = 2 ! Box 1's lower x-neighbor is box 2
   nb_list(a$D_neighb_lowy, 1) = 1 ! Box 1 is periodic in y-direction
@@ -58,6 +60,7 @@ program computational_domain_$Dd
   nb_list(a$D_neighb_lowz, 1) = 1
   nb_list(a$D_neighb_lowz, 2) = 2
 #endif
+
   call a$D_init(tree, n_cell, n_var_cc, n_var_fc, dr)
   call a$D_set_base(tree, n_boxes, ix_list, nb_list)
   call a$D_write_vtk(tree, "computational_domain_$Dd_3", dir="output")
