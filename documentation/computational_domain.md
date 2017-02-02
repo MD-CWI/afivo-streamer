@@ -1,4 +1,4 @@
-# Defining the coarse grid
+# Defining the computational domain
 
 In Afivo the coarsest mesh, which covers the full computational domain, is not
 supposed to change. To create this mesh there is a routine

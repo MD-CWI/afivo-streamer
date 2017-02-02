@@ -47,7 +47,6 @@ Pattern | Replacement 2D | Replacement 3D
 ---|---|---
 `$D` | 2 | 3
 `IJK` | `i, j` | `i, j, k`
-`do KJI_DO(a,b)` | `do j=a,b; do i=a,b` | `do k=a,b; do j=a,b; do i=a,b`
 
 To simplify writing loops, the following patterns are defined in
 `cpp_macros_2d.h` and `cpp_macros_3d.h`:
@@ -67,7 +66,7 @@ To simplify writing loops, the following patterns are defined in
     2D: xx, xx
     3D: xx, xx, xx
 
-Furthermore, blocks specific for 2D and 3D can be written as:
+Furthermore, blocks of code specific for 2D and 3D can be written as:
 
     #if $D == 2
         ...
