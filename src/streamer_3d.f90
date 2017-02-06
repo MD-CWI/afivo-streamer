@@ -159,7 +159,6 @@ contains
     real(dp)                  :: dr
     integer                   :: id
     integer                   :: ix_list(3, 1) ! Spatial indices of initial boxes
-    integer                   :: nb_list(6, 1) ! Neighbors of initial boxes
     integer                   :: n_boxes_init = 1000
 
     dr = ST_domain_len / ST_box_size
@@ -171,10 +170,9 @@ contains
     ! Set up geometry
     id             = 1          ! One box ...
     ix_list(:, id) = [1,1,1]    ! With index 1,1,1 ...
-    nb_list(:, id) = -1         ! And neighbors -1 (physical boundary)
 
     ! Create the base mesh
-    call a3_set_base(tree, ix_list, nb_list)
+    call a3_set_base(tree, 1, ix_list)
 
   end subroutine init_tree
 
@@ -301,12 +299,12 @@ contains
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
-             fld(1) = 0.5_dp * (box%fx(i, j, k, electric_fld) + &
-                  box%fx(i+1, j, k, electric_fld))
-             fld(2) = 0.5_dp * (box%fy(i, j, k, electric_fld) + &
-                  box%fy(i, j+1, k, electric_fld))
-             fld(3) = 0.5_dp * (box%fz(i, j, k, electric_fld) + &
-                  box%fz(i, j, k+1, electric_fld))
+             fld(1) = 0.5_dp * (box%fc(i, j, k, 1, electric_fld) + &
+                  box%fc(i+1, j, k, 1, electric_fld))
+             fld(2) = 0.5_dp * (box%fc(i, j, k, 2, electric_fld) + &
+                  box%fc(i, j+1, k, 2, electric_fld))
+             fld(3) = 0.5_dp * (box%fc(i, j, k, 3, electric_fld) + &
+                  box%fc(i, j, k+1, 3, electric_fld))
 
              fld_norm = box%cc(i, j, k, i_electric_fld)
              mobility = LT_get_col(ST_td_tbl, i_mobility, fld_norm)
@@ -420,17 +418,17 @@ contains
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-    box%fx(:, :, :, electric_fld) = inv_dr * &
+    box%fc(:, 1:nc, 1:nc, 1, electric_fld) = inv_dr * &
          (box%cc(0:nc, 1:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, 1:nc, i_phi))
-    box%fy(:, :, :, electric_fld) = inv_dr * &
+    box%fc(1:nc, :, 1:nc, 2, electric_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, 1:nc, i_phi) - box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
-    box%fz(:, :, :, electric_fld) = inv_dr * &
+    box%fc(1:nc, 1:nc, :, 3, electric_fld) = inv_dr * &
          (box%cc(1:nc, 1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
 
     box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fx(1:nc, 1:nc, 1:nc, electric_fld) + box%fx(2:nc+1, 1:nc, 1:nc, electric_fld))**2 + &
-         (box%fy(1:nc, 1:nc, 1:nc, electric_fld) + box%fy(1:nc, 2:nc+1, 1:nc, electric_fld))**2 + &
-         (box%fz(1:nc, 1:nc, 1:nc, electric_fld) + box%fz(1:nc, 1:nc, 2:nc+1, electric_fld))**2)
+         (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))**2 + &
+         (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))**2 + &
+         (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))**2)
   end subroutine electric_field_from_potential
 
   !> This fills ghost cells near physical boundaries for the potential
@@ -494,7 +492,7 @@ contains
              loc        = LT_get_loc(ST_td_tbl, fld_avg)
              mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
              diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
-             fld        = boxes(id)%fx(i, j, k, electric_fld)
+             fld        = boxes(id)%fc(i, j, k, 1, electric_fld)
              v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_electron) - &
                   boxes(id)%cc(i-1, j, k, i_electron)
@@ -506,7 +504,7 @@ contains
                    tmp = boxes(id)%cc(i+1, j, k, i_electron)
                 end if
                 gradn = tmp - boxes(id)%cc(i, j, k, i_electron)
-                boxes(id)%fx(i, j, k, flux_elec) = v_drift * &
+                boxes(id)%fc(i, j, k, 1, flux_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_electron) - koren_mlim(gradc, gradn))
              else                  ! v_drift > 0
                 if (i == 1) then
@@ -515,13 +513,13 @@ contains
                    tmp = boxes(id)%cc(i-2, j, k, i_electron)
                 end if
                 gradp = boxes(id)%cc(i-1, j, k, i_electron) - tmp
-                boxes(id)%fx(i, j, k, flux_elec) = v_drift * &
+                boxes(id)%fc(i, j, k, 1, flux_elec) = v_drift * &
                      (boxes(id)%cc(i-1, j, k, i_electron) + koren_mlim(gradc, gradp))
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
              ! scaled by 1/dx
-             boxes(id)%fx(i, j, k, flux_elec) = boxes(id)%fx(i, j, k, flux_elec) - &
+             boxes(id)%fc(i, j, k, 1, flux_elec) = boxes(id)%fc(i, j, k, 1, flux_elec) - &
                   diff_coeff * gradc * inv_dr
           end do
        end do
@@ -536,7 +534,7 @@ contains
              loc        = LT_get_loc(ST_td_tbl, fld_avg)
              mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
              diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
-             fld        = boxes(id)%fy(i, j, k, electric_fld)
+             fld        = boxes(id)%fc(i, j, k, 2, electric_fld)
              v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_electron) - &
                   boxes(id)%cc(i, j-1, k, i_electron)
@@ -548,7 +546,7 @@ contains
                    tmp = boxes(id)%cc(i, j+1, k, i_electron)
                 end if
                 gradn = tmp - boxes(id)%cc(i, j, k, i_electron)
-                boxes(id)%fy(i, j, k, flux_elec) = v_drift * &
+                boxes(id)%fc(i, j, k, 2, flux_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_electron) - koren_mlim(gradc, gradn))
              else                  ! v_drift > 0
                 if (j == 1) then
@@ -557,13 +555,13 @@ contains
                    tmp = boxes(id)%cc(i, j-2, k, i_electron)
                 end if
                 gradp = boxes(id)%cc(i, j-1, k, i_electron) - tmp
-                boxes(id)%fy(i, j, k, flux_elec) = v_drift * &
+                boxes(id)%fc(i, j, k, 2, flux_elec) = v_drift * &
                      (boxes(id)%cc(i, j-1, k, i_electron) + koren_mlim(gradc, gradp))
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
              ! scaled by 1/dx
-             boxes(id)%fy(i, j, k, flux_elec) = boxes(id)%fy(i, j, k, flux_elec) - &
+             boxes(id)%fc(i, j, k, 2, flux_elec) = boxes(id)%fc(i, j, k, 2, flux_elec) - &
                   diff_coeff * gradc * inv_dr
           end do
        end do
@@ -578,7 +576,7 @@ contains
              loc        = LT_get_loc(ST_td_tbl, fld_avg)
              mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
              diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
-             fld        = boxes(id)%fz(i, j, k, electric_fld)
+             fld        = boxes(id)%fc(i, j, k, 3, electric_fld)
              v_drift    = -mobility * fld
              gradc      = boxes(id)%cc(i, j, k, i_electron) - &
                   boxes(id)%cc(i, j, k-1, i_electron)
@@ -590,7 +588,7 @@ contains
                    tmp = boxes(id)%cc(i, j, k+1, i_electron)
                 end if
                 gradn = tmp - boxes(id)%cc(i, j, k, i_electron)
-                boxes(id)%fz(i, j, k, flux_elec) = v_drift * &
+                boxes(id)%fc(i, j, k, 3, flux_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k, i_electron) - koren_mlim(gradc, gradn))
              else                  ! v_drift > 0
                 if (k == 1) then
@@ -599,13 +597,13 @@ contains
                    tmp = boxes(id)%cc(i, j, k-2, i_electron)
                 end if
                 gradp = boxes(id)%cc(i, j, k-1, i_electron) - tmp
-                boxes(id)%fz(i, j, k, flux_elec) = v_drift * &
+                boxes(id)%fc(i, j, k, 3, flux_elec) = v_drift * &
                      (boxes(id)%cc(i, j, k-1, i_electron) + koren_mlim(gradc, gradp))
              end if
 
              ! Diffusive part with 2-nd order explicit method. dif_f has to be
              ! scaled by 1/dx
-             boxes(id)%fz(i, j, k, flux_elec) = boxes(id)%fz(i, j, k, flux_elec) - &
+             boxes(id)%fc(i, j, k, 3, flux_elec) = boxes(id)%fc(i, j, k, 3, flux_elec) - &
                   diff_coeff * gradc * inv_dr
           end do
        end do
@@ -647,9 +645,9 @@ contains
 
              ! Contribution of flux
              sflux = &
-                  box%fy(i, j, k, flux_elec) - box%fy(i, j+1, k, flux_elec) + &
-                  box%fx(i, j, k, flux_elec) - box%fx(i+1, j, k, flux_elec) + &
-                  box%fz(i, j, k, flux_elec) - box%fz(i, j, k+1, flux_elec)
+                  box%fc(i, j, k, 2, flux_elec) - box%fc(i, j+1, k, 2, flux_elec) + &
+                  box%fc(i, j, k, 1, flux_elec) - box%fc(i+1, j, k, 1, flux_elec) + &
+                  box%fc(i, j, k, 3, flux_elec) - box%fc(i, j, k+1, 3, flux_elec)
              sflux = sflux * inv_dr * dt(1)
 
              ! Source term
