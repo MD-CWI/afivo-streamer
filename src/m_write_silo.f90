@@ -89,13 +89,14 @@ contains
     if (ierr /= 0) print *, "Error writing ", name2
   end subroutine SILO_set_time_varying
 
-  subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr)
+  subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr, n_gc)
     character(len=*), intent(in) :: gridname
-    integer, intent(in)          :: dbix, n_dim, N_r(:)
+    integer, intent(in)          :: dbix, n_dim, N_r(:), n_gc
     real(dp), intent(in)         :: r_min(:), dr(:)
 
     real(dp), allocatable        :: x_coords(:), y_coords(:), z_coords(:)
     integer                      :: i, ierr, iostat, dboptix
+    integer                      :: lo_offset(n_dim), hi_offset(n_dim)
 
     interface
        function dbputqm(dbid, name, lname, xname, lxname, yname, &
@@ -107,6 +108,11 @@ contains
          real(c_double) :: x(*), y(*), z(*)
          character(kind=c_char) :: name(*), xname(*), yname(*), zname(*)
        end function dbputqm
+
+       integer (c_int) function dbaddiopt(optlist_id, option, ivalue)
+         use, intrinsic :: iso_c_binding
+         integer(c_int), intent(in) :: optlist_id, option, ivalue(*)
+       end function dbaddiopt
     end interface
 
     if (n_dim < 1 .or. n_dim > 3) then
@@ -140,15 +146,26 @@ contains
     ! Make option list
     ierr = dbmkoptlist(20, dboptix)
     if (ierr /= 0) print *, &
-            "Error creating options list in SILO_add_grid ", dboptix
+         "Error creating options list in SILO_add_grid ", dboptix
 
     ! Set integer options
-    ierr = dbaddiopt(dboptix, DBOPT_NSPACE, n_dim)
+    ierr = dbaddiopt(dboptix, DBOPT_NSPACE, [n_dim])
     if (ierr /= 0) print *, &
-            "Error dbaddiopt is SILO_add_grid: DBOPT_NSPACE", ierr
-    ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, 1)
+            "Error dbaddiopt in SILO_add_grid: DBOPT_NSPACE", ierr
+
+    ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, [1])
     if (ierr /= 0) print *, &
-            "Error dbaddiopt is SILO_add_grid: DBOPT_HIDE_FROM_GUI", ierr
+         "Error dbaddiopt in SILO_add_grid: DBOPT_HIDE_FROM_GUI", ierr
+
+    lo_offset = n_gc
+    hi_offset = n_gc
+
+    ierr = dbaddiopt(dboptix, DBOPT_HI_OFFSET, hi_offset)
+    if (ierr /= 0) print *, &
+         "Error dbaddiopt in SILO_add_grid: DBOPT_HI_OFFSET", ierr
+    ierr = dbaddiopt(dboptix, DBOPT_LO_OFFSET, lo_offset)
+    if (ierr /= 0) print *, &
+         "Error dbaddiopt in SILO_add_grid: DBOPT_LO_OFFSET", ierr
 
     ! Write the grid structure
     ierr = dbputqm(dbix, trim(gridname), len_trim(gridname), &

@@ -29,12 +29,12 @@ contains
     integer, parameter    :: my_unit = 100
     character(len=100)    :: fmt_string
     character(len=400)    :: fname
-    integer               :: i, j, n_vars, dim_unused, n_points(3)
+    integer               :: i, j, n_cc, dim_unused, n_points(3)
     real(dp)              :: r($D), dvec(3)
     real(dp)              :: v1($D), v2($D)
     real(dp), allocatable :: pixel_data(:, :, :)
 
-    n_vars      = size(ivs)
+    n_cc      = size(ivs)
 #if $D == 2
     dvec(1:2)   = r_max(1:2) - r_min(1:2)
     dvec(3)     = 0
@@ -62,12 +62,12 @@ contains
     end select
 #endif
 
-    allocate(pixel_data(n_vars, n_pixels(1), n_pixels(2)))
+    allocate(pixel_data(n_cc, n_pixels(1), n_pixels(2)))
 
     do j = 1, n_pixels(2)
        do i = 1, n_pixels(1)
           r = r_min + (i-1) * v1 + (j-1) * v2
-          pixel_data(:, i, j) = a$D_interp2(tree, r, ivs, n_vars)
+          pixel_data(:, i, j) = a$D_interp2(tree, r, ivs, n_cc)
        end do
     end do
 
@@ -102,7 +102,7 @@ contains
     write(my_unit, '(A,3E16.8)') "SPACING ", v1 + v2
 #endif
     write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
-    do i = 1, n_vars
+    do i = 1, n_cc
        write(my_unit, '(A)') "SCALARS " // &
             trim(tree%cc_names(ivs(i))) // " double 1"
        write(my_unit, '(A)') "LOOKUP_TABLE default"
@@ -288,9 +288,10 @@ contains
     character(len=100), allocatable :: grid_list(:), var_list(:, :), var_names(:)
     character(len=400)              :: fname
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
-    integer                         :: n_vars, i0, j0, dbix, n_cc
+    integer                         :: n_cc, dbix
     integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
     integer                         :: n_cycle_val
+    integer                         :: lo($D), hi($D), vlo($D), vhi($D)
     integer, allocatable            :: ids(:), nb_ids(:), icc_val(:)
     logical, allocatable            :: box_done(:)
     real(dp)                        :: dr($D), r_min($D), time_val
@@ -300,7 +301,7 @@ contains
 #elif $D == 3
     integer, allocatable            :: box_list(:,:,:), new_box_list(:,:,:)
     real(dp), allocatable           :: var_data(:,:,:,:)
-    integer                         :: k0, nz, nz_prev, iz
+    integer                         :: nz, nz_prev, iz
 #endif
 
     if (.not. tree%ready) stop "Tree not ready"
@@ -321,14 +322,13 @@ contains
     var_names(1:n_cc) = tree%cc_names(icc_val)
 
     nc = tree%n_cell
-    n_vars = n_cc
     n_grids_max = 0
     do lvl = 1, tree%highest_lvl
        n_grids_max = n_grids_max + size(tree%lvls(lvl)%leaves)
     end do
 
     allocate(grid_list(n_grids_max))
-    allocate(var_list(n_vars, n_grids_max))
+    allocate(var_list(n_cc, n_grids_max))
     allocate(box_done(tree%highest_id))
     box_done = .false.
 
@@ -441,31 +441,40 @@ contains
              if (nx == nx_prev .and. ny == ny_prev) exit
           end do
 
-          allocate(var_data(nx*nc, ny*nc, n_vars))
+          ! Include ghost cells around block
+          allocate(var_data(0:nx*nc+1, 0:ny*nc+1, n_cc))
 
           do ix = 1, nx
              do iy = 1, ny
                 id = box_list(ix, iy)
-                i0 = 1 + (ix-1) * nc
-                j0 = 1 + (iy-1) * nc
 
-                var_data(i0:i0+nc-1, j0:j0+nc-1, 1:n_cc) = &
-                     tree%boxes(id)%cc(1:nc, 1:nc, icc_val)
+                ! Include ghost cells on block boundaries
+                lo(:) = 1
+                where ([ix, iy] == 1) lo(:) = 0
+
+                hi = nc
+                where ([ix, iy] == [nx, ny]) hi(:) = nc+1
+
+                vlo = lo + ([ix, iy]-1) * nc
+                vhi = hi + ([ix, iy]-1) * nc
+
+                var_data(vlo(1):vhi(1), vlo(2):vhi(2), 1:n_cc) = &
+                     tree%boxes(id)%cc(lo(1):hi(1), lo(2):hi(2), icc_val)
              end do
           end do
 
           id = box_list(1, 1)
           dr = tree%boxes(id)%dr
-          r_min = tree%boxes(id)%r_min
+          r_min = tree%boxes(id)%r_min - dr
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 2, &
-               [nx*nc + 1, ny*nc + 1], r_min, dr)
-          do iv = 1, n_vars
+               [nx*nc + 3, ny*nc + 3], r_min, dr, 1)
+          do iv = 1, n_cc
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, iv), .true.), [nx*nc, ny*nc])
+                  pack(var_data(:, :, iv), .true.), [nx*nc+2, ny*nc+2])
           end do
 
           deallocate(var_data)
@@ -587,32 +596,45 @@ contains
              if (nx == nx_prev .and. ny == ny_prev .and. nz == nz_prev) exit
           end do
 
-          allocate(var_data(nx * nc, ny * nc, nz * nc, n_vars))
+          ! Include ghost cells around block
+          allocate(var_data(0:nx*nc+1, 0:ny*nc+1, 0:nz*nc+1, n_cc))
+          ! allocate(var_data(nx*nc, ny*nc, nz*nc, n_cc))
+
           do iz = 1, nz
              do ix = 1, nx
                 do iy = 1, ny
                    id = box_list(ix, iy, iz)
-                   i0 = 1 + (ix-1) * nc
-                   j0 = 1 + (iy-1) * nc
-                   k0 = 1 + (iz-1) * nc
-                   var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, 1:n_cc) = &
-                        tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, icc_val)
+
+                   ! Include ghost cells on block boundaries
+                   lo(:) = 1
+                   where ([ix, iy, iz] == 1) lo(:) = 0
+
+                   hi = nc
+                   where ([ix, iy, iz] == [nx, ny, nz]) hi(:) = nc+1
+
+                   vlo = lo + ([ix, iy, iz]-1) * nc
+                   vhi = hi + ([ix, iy, iz]-1) * nc
+
+                   var_data(vlo(1):vhi(1), vlo(2):vhi(2), vlo(3):vhi(3), 1:n_cc) = &
+                        tree%boxes(id)%cc(lo(1):hi(1), lo(2):hi(2), &
+                        lo(3):hi(3), icc_val)
                 end do
              end do
           end do
 
           id = box_list(1, 1, 1)
           dr = tree%boxes(id)%dr
-          r_min = tree%boxes(id)%r_min
+          r_min = tree%boxes(id)%r_min - dr
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 3, &
-               [nx*nc + 1, ny*nc + 1, nz*nc + 1], r_min, dr)
-          do iv = 1, n_vars
+               [nx*nc + 3, ny*nc + 3, nz*nc + 3], r_min, dr, 1)
+
+          do iv = 1, n_cc
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, :, iv), .true.), [nx*nc, ny*nc, nz*nc])
+                  pack(var_data(:, :, :, iv), .true.), [nx*nc+2, ny*nc+2, nz*nc+2])
           end do
 
           deallocate(var_data)
@@ -624,7 +646,7 @@ contains
 
     call SILO_set_mmesh_grid(dbix, amr_name, grid_list(1:i_grid), &
          n_cycle_val, time_val)
-    do iv = 1, n_vars
+    do iv = 1, n_cc
        call SILO_set_mmesh_var(dbix, trim(var_names(iv)), amr_name, &
             var_list(iv, 1:i_grid), n_cycle_val, time_val)
     end do
