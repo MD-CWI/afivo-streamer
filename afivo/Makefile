@@ -9,6 +9,8 @@ all:	$(SRC_DIRS)
 
 doc:    $(SRC_DIRS)
 	@doxygen
+	@echo "Done generating documentation, open it with e.g.:"
+	@echo "firefox documentation/html/index.html"
 
 clean:	$(CLEANSRC)
 

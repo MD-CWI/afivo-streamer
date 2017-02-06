@@ -3,7 +3,7 @@
  Current maximum level:           1
  Maximum allowed level:          20
  Number of boxes used:            1
- Memory limit(boxes):        610081
+ Memory limit(boxes):        636103
  Memory limit(GByte):      0.10E+01
  Highest id in box list:          1
  Size of box list:              100
@@ -19,7 +19,7 @@
  Current maximum level:           1
  Maximum allowed level:          20
  Number of boxes used:            1
- Memory limit(boxes):         81246
+ Memory limit(boxes):         82596
  Memory limit(GByte):      0.10E+01
  Highest id in box list:          1
  Size of box list:              100

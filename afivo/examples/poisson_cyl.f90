@@ -3,11 +3,7 @@
 !> Example showing how to use multigrid and compare with an analytic solution. A
 !> standard 5-point Laplacian is used in cylindrical coordinates.
 program poisson_cyl
-  use m_a2_types
-  use m_a2_core
-  use m_a2_multigrid
-  use m_a2_utils
-  use m_a2_output
+  use m_a2_all
   use m_gaussians
 
   implicit none
@@ -25,7 +21,6 @@ program poisson_cyl
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
-  integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg2_t)        :: mg
@@ -56,11 +51,8 @@ program poisson_cyl
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
   ix_list(:, 1) = [1,1]         ! Set index of box 1
 
-  ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
-
   ! Create the base mesh, using the box indices and their neighbor information
-  call a2_set_base(tree, ix_list, nb_list)
+  call a2_set_base(tree, 1, ix_list)
   call a2_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -93,9 +85,9 @@ program poisson_cyl
   mg%box_corr     => mg2_auto_corr
 
   ! Initialize the multigrid options. This performs some basics checks and sets
-  ! default values where necessary. This routine does not initialize the
-  ! multigrid variables i_phi, i_rhs and i_tmp. These variables will be
-  ! initialized at the first call of mg2_fas_fmg
+  ! default values where necessary.
+  ! This routine does not initialize the multigrid variables i_phi, i_rhs
+  ! and i_tmp. These variables will be initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   print *, "Multigrid iteration | max residual | max error"

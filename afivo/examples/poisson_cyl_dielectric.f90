@@ -3,11 +3,7 @@
 !> Example showing how to use m_a2_multigrid in cylindrical coordinates with an abrubt
 !> change in "eps", and compare with an analytic solution.
 program poisson_cyl_dielectric
-  use m_a2_types
-  use m_a2_core
-  use m_a2_multigrid
-  use m_a2_utils
-  use m_a2_output
+  use m_a2_all
   use m_gaussians
 
   implicit none
@@ -26,11 +22,10 @@ program poisson_cyl_dielectric
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
-  integer            :: nb_list(4, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
-  type(gauss_t)      :: gs
   type(mg2_t)        :: mg
+  type(gauss_t)      :: gs
   integer            :: count_rate,t_start, t_end
 
   print *, "Running poisson_cyl_dielectric"
@@ -57,11 +52,8 @@ program poisson_cyl_dielectric
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
   ix_list(:, 1) = [1,1]         ! Set index of box 1
 
-  ! Set neighbors for box one, negative values indicate a physical boundary
-  nb_list(:, 1) = -1            ! Dirichlet zero -> -1
-
   ! Create the base mesh, using the box indices and their neighbor information
-  call a2_set_base(tree, ix_list, nb_list)
+  call a2_set_base(tree, 1, ix_list)
   call a2_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -97,8 +89,7 @@ program poisson_cyl_dielectric
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
-  ! and i_tmp. These variables will be initialized at the first call
-  ! of mg2_fas_fmg
+  ! and i_tmp. These variables will be initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
   print *, "Multigrid iteration | max residual | max error"
@@ -235,8 +226,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           rz = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - &
-               gauss_value(gs, rz)
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gs, rz)
        end do
     end do
   end subroutine set_err
