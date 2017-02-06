@@ -414,6 +414,7 @@ contains
     end if
 
     call SILO_create_file(trim(fname), dbix)
+    call SILO_set_time_varying(dbix)
     call SILO_mkdir(dbix, meshdir)
     i_grid = 0
 

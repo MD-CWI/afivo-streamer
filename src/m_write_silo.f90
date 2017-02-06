@@ -15,6 +15,7 @@ module m_write_silo
   public :: SILO_create_file
   public :: SILO_open_file
   public :: SILO_close_file
+  public :: SILO_set_time_varying
   public :: SILO_add_grid
   public :: SILO_add_var
   public :: SILO_set_mmesh_grid
@@ -62,6 +63,31 @@ contains
     if (ierr /= 0) print *, &
             "Error creating directory ", dirname
   end subroutine SILO_mkdir
+
+  !> Write two entries to the Silo file so that Visit treats it as a
+  !> time-varying database
+  subroutine SILO_set_time_varying(dbix)
+    integer, intent(in)         :: dbix
+    integer                     :: ierr
+    integer, parameter          :: int_bool(1) = 1
+    integer, parameter          :: dims(1) = 1
+    character(len=*), parameter :: name1       = "/ConnectivityIsTimeVarying"
+    character(len=*), parameter :: name2       = "/MetadataIsTimeVarying"
+
+    interface
+       integer function dbwrite(dbid, varname, lvarname, var, dims, &
+            ndims, datatype)
+         use, intrinsic :: iso_c_binding
+         integer(c_int) :: dbid, var(*), lvarname, dims(*), ndims, datatype
+         character(kind=c_char) :: varname(*)
+       end function dbwrite
+    end interface
+
+    ierr = DBWrite(dbix, name1, len(name1), int_bool, dims, 1, DB_INT);
+    if (ierr /= 0) print *, "Error writing ", name1
+    ierr = DBWrite(dbix, name2, len(name2), int_bool, dims, 1, DB_INT);
+    if (ierr /= 0) print *, "Error writing ", name2
+  end subroutine SILO_set_time_varying
 
   subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr)
     character(len=*), intent(in) :: gridname
