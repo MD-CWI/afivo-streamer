@@ -433,49 +433,32 @@ contains
 
   ! Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
+    use m_flux_schemes
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp)                    :: inv_dr, gradp, gradc, gradn
-    real(dp)                    :: v_drift
-    real(dp)                    :: fld
+    real(dp)                    :: inv_dr
     real(dp)                    :: cc(-1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
-    integer                     :: i, j, nc, dim, dix(2)
+    real(dp), allocatable       :: v(:, :, :), dc(:, :, :)
+    integer                     :: nc
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+
+    allocate(v(1:nc+1, 1:nc+1, 2))
+    allocate(dc(1:nc+1, 1:nc+1, 2))
 
     call a2_gc_box(boxes, id, i_elec, a2_gc_interp_lim, &
          a2_bc_dirichlet_zero)
     call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong_linear, &
          a2_bc2_dirichlet_zero, cc, nc)
 
-    do dim = 1, 2
-       dix(:) = 0
-       dix(dim) = 1
+    v = -mobility * boxes(id)%fc(:, :, :, f_fld)
+    dc = diffusion_c
 
-       do j = 1, nc+dix(2)
-          do i = 1, nc+dix(1)
-             fld        = boxes(id)%fc(i, j, dim, f_fld)
-             v_drift    = -mobility * fld
-             gradc      = cc(i, j) - cc(i-dix(1), j-dix(2))
+    call flux_koren_2d(cc, v, nc, 2)
+    call flux_diff_2d(cc, dc, inv_dr, nc, 2)
 
-             if (v_drift < 0.0_dp) then
-                gradn = cc(i+dix(1), j+dix(2)) - cc(i, j)
-                boxes(id)%fc(i, j, dim, f_elec) = v_drift * &
-                     (cc(i, j) - koren_mlim(gradc, gradn))
-             else                  ! v_drift > 0
-                gradp = cc(i-dix(1), j-dix(2)) - cc(i-2*dix(1), j-2*dix(2))
-                boxes(id)%fc(i, j, dim, f_elec) = v_drift * &
-                     (cc(i-dix(1), j-dix(2)) + koren_mlim(gradc, gradp))
-             end if
-
-             ! Diffusive part with 2-nd order explicit method
-             boxes(id)%fc(i, j, dim, f_elec) = &
-                  boxes(id)%fc(i, j, dim, f_elec) - &
-                  diffusion_c * gradc * inv_dr
-          end do
-       end do
-    end do
+    boxes(id)%fc(:, :, :, f_elec) = v + dc
   end subroutine fluxes_koren
 
   ! Take average of new and old electron/ion density for explicit trapezoidal rule
