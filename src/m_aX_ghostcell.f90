@@ -484,17 +484,19 @@ contains
   !> layer of ghost cells). Use subr_rb on refinement boundaries and subr_bc
   !> on physical boundaries.
   subroutine a$D_gc2_box(boxes, id, iv, subr_rb, subr_bc, cc, nc)
-    type(box$D_t), intent(inout) :: boxes(:)        !< List of all the boxes
-    integer, intent(in)          :: id              !< Id of box for which we set ghost cells
-    integer, intent(in)          :: iv              !< Variable for which ghost cells are set
-    procedure(a$D_subr_egc)      :: subr_rb         !< Procedure called at refinement boundaries
-    procedure(a$D_subr_egc)      :: subr_bc         !< Procedure called at physical boundaries
-    integer, intent(in)          :: nc              !< box%n_cell
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
+    integer, intent(in)          :: id       !< Id of box for which we set ghost cells
+    integer, intent(in)          :: iv       !< Variable for which ghost cells are set
+    procedure(a$D_subr_egc)      :: subr_rb  !< Procedure called at refinement boundaries
+    procedure(a$D_subr_egc)      :: subr_bc  !< Procedure called at physical boundaries
+    integer, intent(in)          :: nc       !< box%n_cell
     !> The data with extra ghost cells
 #if $D   == 2
     real(dp), intent(out)        :: cc(-1:nc+2, -1:nc+2)
+    real(dp)                     :: gc(1:nc)
 #elif $D == 3
     real(dp), intent(out)        :: cc(-1:nc+2, -1:nc+2, -1:nc+2)
+    real(dp)                     :: gc(1:nc, 1:nc)
 #endif
     integer                      :: nb, nb_id, nb_dim, lo($D), hi($D)
 
@@ -505,39 +507,28 @@ contains
 #endif
 
     do nb = 1, a$D_num_neighbors
+       nb_id = boxes(id)%neighbors(nb)
+
+       if (nb_id > af_no_box) then
+          call sides2_from_nb(boxes(nb_id), nb, iv, gc, nc)
+       else if (nb_id == af_no_box) then
+          call subr_rb(boxes, id, nb, iv, gc, nc)
+       else
+          call subr_bc(boxes, id, nb, iv, gc, nc)
+       end if
+
+       ! Determine ghost cell indices
        nb_dim = a$D_neighb_dim(nb)
        lo(:) = 1
        hi(:) = boxes(id)%n_cell
        lo(nb_dim) = -1 + a$D_neighb_high_01(nb) * (boxes(id)%n_cell + 3)
        hi(nb_dim) = lo(nb_dim)
 
-       nb_id = boxes(id)%neighbors(nb)
-
-       if (nb_id > af_no_box) then
 #if $D == 2
-          call sides2_from_nb(boxes(nb_id), nb, iv, &
-               cc(lo(1):hi(1), lo(2):hi(2)), nc)
+       cc(lo(1):hi(1), lo(2):hi(2)) = reshape(gc, 1 + hi - lo)
 #elif $D == 3
-          call sides2_from_nb(boxes(nb_id), nb, iv, &
-               cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), nc)
+       cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = reshape(gc, 1 + hi - lo)
 #endif
-       else if (nb_id == af_no_box) then
-#if $D == 2
-          call subr_rb(boxes, id, nb, iv, &
-               cc(lo(1):hi(1), lo(2):hi(2)), nc)
-#elif $D == 3
-          call subr_rb(boxes, id, nb, iv, &
-               cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), nc)
-#endif
-       else
-#if $D == 2
-          call subr_bc(boxes, id, nb, iv, &
-               cc(lo(1):hi(1), lo(2):hi(2)), nc)
-#elif $D == 3
-          call subr_bc(boxes, id, nb, iv, &
-               cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), nc)
-#endif
-       end if
     end do
   end subroutine a$D_gc2_box
 

@@ -1,10 +1,9 @@
 #include "../src/cpp_macros_$Dd.h"
-!> \example drift_diffusion_$Dd.f90
+!> \example advection_$Dd.f90
 !>
-!> A drift-diffusion example. Diffusion is implemented with centered
-!> differences, and for the drift the Koren flux limiter is used. Time stepping
-!> is done with the explicit trapezoidal rule.
-program drift_diffusion_$Dd
+!> An advection example using the Koren flux limiter. Time stepping is done with
+!> the explicit trapezoidal rule.
+program advection_$Dd
   use m_a$D_all
 
   implicit none
@@ -25,11 +24,11 @@ program drift_diffusion_$Dd
   integer            :: i, id, n, n_steps
   real(dp)           :: dt, time, end_time, p_err, n_err, sum_phi
   real(dp)           :: dt_adapt, dt_output
-  real(dp)           :: diff_coeff, velocity($D), dr_min($D)
+  real(dp)           :: velocity($D), dr_min($D)
   character(len=100) :: fname
   integer            :: count_rate, t_start, t_end
 
-  print *, "Running drift_diffusion_$Dd"
+  print *, "Running advection_$Dd"
   print *, "Number of threads", af_get_max_threads()
 
   ! Initialize tree
@@ -53,7 +52,6 @@ program drift_diffusion_$Dd
   dt_adapt   = 0.01_dp
   dt_output  = 0.05_dp
   end_time   = 1.5_dp
-  diff_coeff = 0.0_dp
   velocity(:) = 0.0_dp
   velocity(1) = 1.0_dp
   velocity(2) = -1.0_dp
@@ -114,23 +112,22 @@ program drift_diffusion_$Dd
   do
      time_steps = time_steps + 1
      dr_min  = a$D_min_dr(tree)
-     dt      = 0.5_dp / (2 * diff_coeff * sum(1/dr_min**2) + &
-          sum(abs(velocity/dr_min)) + epsilon(1.0_dp))
+     dt      = 0.5_dp / (sum(abs(velocity/dr_min)) + epsilon(1.0_dp))
 
      n_steps = ceiling(dt_adapt/dt)
      dt      = dt_adapt / n_steps
 
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "drift_diffusion_$Dd_", output_cnt
+        write(fname, "(A,I0)") "advection_$Dd_", output_cnt
 
         ! Call procedure set_error (see below) for each box in tree, with argument time
         call a$D_loop_box_arg(tree, set_error, [time])
 
         ! Write the cell centered data of tree to a vtk unstructured file fname.
         ! Only the leaves of the tree are used
-        ! call a$D_write_vtk(tree, trim(fname), output_cnt, time, &
-             ! ixs_fc=[1], dir="output")
+        call a$D_write_vtk(tree, trim(fname), output_cnt, time, &
+             ixs_fc=[1], dir="output")
 
         ! Find maximum and minimum values of cc(..., i_err) and cc(..., i_phi).
         ! By default, only loop over leaves, and ghost cells are not used.
@@ -277,47 +274,19 @@ contains
     end select
   end function solution
 
-  !> Modified implementation of Koren limiter, to avoid division or the min/max
-  !> functions, which can be problematic / expensive. In most literature, you
-  !> have r = ga / gb (ratio of gradients). Then the limiter phi(r) is
-  !> multiplied with gb. With this implementation, you get phi(r) * gb
-  elemental function koren_mlim(ga, gb)
-    real(dp), intent(in) :: ga  ! Density gradient (numerator)
-    real(dp), intent(in) :: gb  ! Density gradient (denominator)
-    real(dp), parameter  :: sixth = 1/6.0_dp
-    real(dp)             :: koren_mlim, t1, t2
-
-    t1 = ga * ga                ! Two temporary variables,
-    t2 = ga * gb                ! so that we do not need sign()
-
-    if (t2 <= 0) then
-       ! ga and gb have different sign: local minimum/maximum
-       koren_mlim = 0
-    else if (t1 >= 2.5_dp * t2) then
-       ! (1+2*ga/gb)/6 => 1, limiter has value 1
-       koren_mlim = gb
-    else if (t1 > 0.25_dp * t2) then
-       ! 1 > ga/gb > 1/4, limiter has value (1+2*ga/gb)/6
-       koren_mlim = sixth * (gb + 2*ga)
-    else
-       ! 0 < ga/gb < 1/4, limiter has value ga/gb
-       koren_mlim = ga
-    end if
-  end function koren_mlim
-
   !> This routine computes the x-fluxes and y-fluxes interior (advective part)
   !> with the Koren limiter
   subroutine fluxes_koren(boxes, id)
+    use m_flux_schemes
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
-    real(dp)                     :: gradp, gradc, gradn
-    real(dp)                     :: inv_dr
-    integer                      :: dim, dix($D), IJK, nc
+    integer                      :: nc
     real(dp), allocatable        :: cc(DTIMES(:))
+    real(dp), allocatable        :: v(DTIMES(:), :)
 
     nc     = boxes(id)%n_cell
-    inv_dr = 1/boxes(id)%dr
     allocate(cc(DTIMES(-1:nc+2)))
+    allocate(v(DTIMES(1:nc+1), $D))
 
     call a$D_gc_box(boxes, id, i_phi, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
@@ -332,58 +301,21 @@ contains
          cc, &                  ! The enlarged box with ghost cells
          nc)                       ! box%n_cell
 
-    do dim = 1, $D
-       dix(:) = 0
-       dix(dim) = 1
-
 #if $D == 2
-       do j = 1, nc+dix(2)
-          do i = 1, nc+dix(1)
-             gradc = cc(i, j) - cc(i-dix(1), j-dix(2))
+    v(:, :, 1) = velocity(1)
+    v(:, :, 2) = velocity(2)
 
-             if (velocity(dim) < 0.0_dp) then
-                gradn = cc(i+dix(1), j+dix(2)) - cc(i, j)
-                boxes(id)%fc(i, j, dim, i_phi) = velocity(dim) * &
-                     (cc(i, j) - koren_mlim(gradc, gradn))
-             else                  ! velocity(dim) > 0
-                gradp = cc(i-dix(1), j-dix(2)) - cc(i-2*dix(1), j-2*dix(2))
-                boxes(id)%fc(i, j, dim, i_phi) = velocity(dim) * &
-                     (cc(i-dix(1), j-dix(2)) + koren_mlim(gradc, gradp))
-             end if
-
-             ! Diffusive part with 2-nd order explicit method
-             boxes(id)%fc(i, j, dim, i_phi) = &
-                  boxes(id)%fc(i, j, dim, i_phi) - &
-                  diff_coeff * gradc * inv_dr
-          end do
-       end do
+    call flux_koren_2d(cc, v, nc, 2)
+    boxes(id)%fc(:, :, :, i_phi) = v
 #elif $D == 3
-       do k = 1, nc+dix(3)
-          do j = 1, nc+dix(2)
-             do i = 1, nc+dix(1)
-                gradc = cc(i, j, k) - cc(i-dix(1), j-dix(2), k-dix(3))
+    v(:, :, :, 1) = velocity(1)
+    v(:, :, :, 2) = velocity(2)
+    v(:, :, :, 3) = velocity(3)
 
-                if (velocity(dim) < 0.0_dp) then
-                   gradn = cc(i+dix(1), j+dix(2), k+dix(3)) - cc(i, j, k)
-                   boxes(id)%fc(i, j, k, dim, i_phi) = velocity(dim) * &
-                        (cc(i, j, k) - koren_mlim(gradc, gradn))
-                else                  ! velocity(dim) > 0
-                   gradp = cc(i-dix(1), j-dix(2), k-dix(3)) - &
-                        cc(i-2*dix(1), j-2*dix(2), k-2*dix(3))
-                   boxes(id)%fc(i, j, k, dim, i_phi) = velocity(dim) * &
-                        (cc(i-dix(1), j-dix(2), k-dix(3)) + &
-                        koren_mlim(gradc, gradp))
-                end if
-
-                ! Diffusive part with 2-nd order explicit method
-                boxes(id)%fc(i, j, k, dim, i_phi) = &
-                     boxes(id)%fc(i, j, k, dim, i_phi) - &
-                     diff_coeff * gradc * inv_dr
-             end do
-          end do
-       end do
+    call flux_koren_3d(cc, v, nc, 2)
+    boxes(id)%fc(:, :, :, :, i_phi) = v
 #endif
-    end do
+
   end subroutine fluxes_koren
 
   !> This routine computes the update of the solution per box
@@ -445,4 +377,4 @@ contains
     end do
   end subroutine prolong_to_new_children
 
-end program drift_diffusion_$Dd
+end program advection_$Dd
