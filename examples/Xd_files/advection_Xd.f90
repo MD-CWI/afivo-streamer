@@ -126,8 +126,7 @@ program advection_$Dd
 
         ! Write the cell centered data of tree to a vtk unstructured file fname.
         ! Only the leaves of the tree are used
-        call a$D_write_vtk(tree, trim(fname), output_cnt, time, &
-             ixs_fc=[1], dir="output")
+        call a$D_write_vtk(tree, trim(fname), output_cnt, time, dir="output")
 
         ! Find maximum and minimum values of cc(..., i_err) and cc(..., i_phi).
         ! By default, only loop over leaves, and ghost cells are not used.
