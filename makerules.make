@@ -1,3 +1,6 @@
+# Disable built in rules
+.SUFFIXES:
+
 COMPILER = gfortran
 
 ifeq ($(COMPILER), gfortran)
