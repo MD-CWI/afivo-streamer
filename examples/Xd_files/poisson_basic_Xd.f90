@@ -79,17 +79,13 @@ program poisson_basic_$Dd
 
   call a$D_print_info(tree)
 
-  ! This writes a VTK output file containing the cell-centered values of the
-  ! leaves of the tree (the boxes not covered by refinement).
-  write(fname, "(A,I0)") "poisson_basic_$Dd_", 0
-  call a$D_write_vtk(tree, trim(fname), dir="output")
-
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   mg%i_phi        = i_phi       ! Solution variable
   mg%i_rhs        = i_rhs       ! Right-hand side variable
   mg%i_tmp        = i_tmp       ! Variable for temporary space
   mg%sides_bc     => sides_bc   ! Method for boundary conditions
+
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
   ! first call of mg$D_fas_fmg
