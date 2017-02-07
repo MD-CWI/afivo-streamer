@@ -228,9 +228,9 @@ contains
                 ! If periodic, copy connectivity information to other box
                 nb_used(a$D_neighb_rev(nb), nb_id) = id
              else if (nb_id == af_no_box) then
-                ! The value af_no_box is converted to -1, indicating the default
-                ! boundary condition
-                nb_used(nb, id) = -1
+                ! The value af_no_box is converted to af_phys_boundary,
+                ! indicating the default boundary condition
+                nb_used(nb, id) = af_phys_boundary
              end if
           end if
 
