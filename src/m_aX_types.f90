@@ -44,6 +44,10 @@ module m_a$D_types
   integer, parameter :: a2_neighb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
   ! Which neighbors have a lower index
   logical, parameter :: a2_neighb_low(4) = [.true., .false., .true., .false.]
+  ! The low neighbors
+  integer, parameter :: a2_low_neighbs(2) = [1, 3]
+  ! The high neighbors
+  integer, parameter :: a2_high_neighbs(2) = [2, 4]
   ! Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: a2_neighb_high_01(4) = [0, 1, 0, 1]
   ! Opposite of nb_low, but now as -1,1 integers
@@ -109,6 +113,10 @@ module m_a$D_types
   ! Which neighbors have a lower index
   logical, parameter :: a3_neighb_low(6) = &
        [.true., .false., .true., .false., .true., .false.]
+  ! The low neighbors
+  integer, parameter :: a3_low_neighbs(3) = [1, 3, 5]
+  ! The high neighbors
+  integer, parameter :: a3_high_neighbs(3) = [2, 4, 6]
   ! Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: a3_neighb_high_01(6) = [0, 1, 0, 1, 0, 1]
   ! Opposite of nb_low, but now as -1,1 integers
@@ -324,6 +332,33 @@ contains
     type(box$D_t), intent(in) :: box
     a$D_has_children = (box%children(1) /= af_no_box)
   end function a$D_has_children
+
+  !> Return .true. where there is a physical or periodic pure
+  pure function a$D_is_boundary(boxes, id, nbs) result(boundary)
+    type(box$D_t), intent(in) :: boxes(:) !< List of boxes
+    integer, intent(in)       :: id       !< Box to inspect
+    integer, intent(in)       :: nbs(:)   !< Neighbor directions
+    logical                   :: boundary(size(nbs))
+    integer                   :: n, nb, nb_id, dim, dix
+
+    do n = 1, size(nbs)
+       nb = nbs(n)
+       nb_id = boxes(id)%neighbors(nb)
+
+       if (nb_id <= af_no_box) then
+          boundary(n) = .true.
+       else                        ! Check for periodic boundary
+          dim = a$D_neighb_dim(nb)
+          dix = boxes(nb_id)%ix(dim) - boxes(id)%ix(dim)
+          if (dix /= a$D_neighb_high_pm(nb)) then
+             boundary(n) = .true.
+          else
+             boundary(n) = .false.
+          end if
+       end if
+    end do
+
+  end function a$D_is_boundary
 
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 and one at

@@ -292,6 +292,8 @@ contains
     integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
     integer                         :: n_cycle_val
     integer                         :: lo($D), hi($D), vlo($D), vhi($D)
+    integer                         :: blo($D), bhi($D)
+    logical                         :: lo_bnd($D), hi_bnd($D)
     integer, allocatable            :: ids(:), nb_ids(:), icc_val(:)
     logical, allocatable            :: box_done(:)
     real(dp)                        :: dr($D), r_min($D), time_val
@@ -441,40 +443,55 @@ contains
              if (nx == nx_prev .and. ny == ny_prev) exit
           end do
 
-          ! Include ghost cells around block
-          allocate(var_data(0:nx*nc+1, 0:ny*nc+1, n_cc))
+          ! Check for (periodic) boundaries (this could give problems for
+          ! complex geometries, e.g. a triangle block)
+          id     = box_list(1, 1)
+          lo_bnd = a$D_is_boundary(tree%boxes, id, a$D_low_neighbs)
+
+          id = box_list(nx, ny)
+          hi_bnd = a$D_is_boundary(tree%boxes, id, a$D_high_neighbs)
+
+          lo(:) = 1
+          where (.not. lo_bnd) lo = lo - 1
+
+          hi = [nx, ny] * nc
+          where (.not. hi_bnd) hi = hi + 1
+
+          ! Include ghost cells around internal boundaries
+          allocate(var_data(lo(1):hi(1), lo(2):hi(2), n_cc))
 
           do ix = 1, nx
              do iy = 1, ny
                 id = box_list(ix, iy)
 
-                ! Include ghost cells on block boundaries
-                lo(:) = 1
-                where ([ix, iy] == 1) lo(:) = 0
+                ! Include ghost cells on internal block boundaries
+                blo = 1
+                where ([ix, iy] == 1 .and. .not. lo_bnd) blo = 0
 
-                hi = nc
-                where ([ix, iy] == [nx, ny]) hi(:) = nc+1
+                bhi = nc
+                where ([ix, iy] == [nx, ny] .and. .not. hi_bnd) bhi = nc+1
 
-                vlo = lo + ([ix, iy]-1) * nc
-                vhi = hi + ([ix, iy]-1) * nc
+                vlo = blo + ([ix, iy]-1) * nc
+                vhi = bhi + ([ix, iy]-1) * nc
 
                 var_data(vlo(1):vhi(1), vlo(2):vhi(2), 1:n_cc) = &
-                     tree%boxes(id)%cc(lo(1):hi(1), lo(2):hi(2), icc_val)
+                     tree%boxes(id)%cc(blo(1):bhi(1), blo(2):bhi(2), icc_val)
              end do
           end do
 
           id = box_list(1, 1)
           dr = tree%boxes(id)%dr
-          r_min = tree%boxes(id)%r_min - dr
+          r_min = tree%boxes(id)%r_min - (1 - lo) * dr
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 2, &
-               [nx*nc + 3, ny*nc + 3], r_min, dr, 1)
+               hi - lo + 2, r_min, dr, 1-lo, hi - [nx, ny] * nc)
+
           do iv = 1, n_cc
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, iv), .true.), [nx*nc+2, ny*nc+2])
+                  pack(var_data(:, :, iv), .true.), hi-lo+1)
           end do
 
           deallocate(var_data)
@@ -596,45 +613,59 @@ contains
              if (nx == nx_prev .and. ny == ny_prev .and. nz == nz_prev) exit
           end do
 
-          ! Include ghost cells around block
-          allocate(var_data(0:nx*nc+1, 0:ny*nc+1, 0:nz*nc+1, n_cc))
-          ! allocate(var_data(nx*nc, ny*nc, nz*nc, n_cc))
+          ! Check for (periodic) boundaries (this could give problems for
+          ! complex geometries, e.g. a triangle block)
+          id     = box_list(1, 1, 1)
+          lo_bnd = a$D_is_boundary(tree%boxes, id, a$D_low_neighbs)
+
+          id = box_list(nx, ny, nz)
+          hi_bnd = a$D_is_boundary(tree%boxes, id, a$D_high_neighbs)
+
+          lo(:) = 1
+          where (.not. lo_bnd) lo = lo - 1
+
+          hi = [nx, ny, nz] * nc
+          where (.not. hi_bnd) hi = hi + 1
+
+          ! Include ghost cells around internal boundaries
+          allocate(var_data(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3), n_cc))
 
           do iz = 1, nz
              do ix = 1, nx
                 do iy = 1, ny
-                   id = box_list(ix, iy, iz)
+                   id     = box_list(ix, iy, iz)
 
-                   ! Include ghost cells on block boundaries
-                   lo(:) = 1
-                   where ([ix, iy, iz] == 1) lo(:) = 0
+                   ! Include ghost cells on internal block boundaries
+                   blo = 1
+                   where ([ix, iy, iz] == 1 .and. .not. lo_bnd) blo = 0
 
-                   hi = nc
-                   where ([ix, iy, iz] == [nx, ny, nz]) hi(:) = nc+1
+                   bhi = nc
+                   where ([ix, iy, iz] == [nx, ny, nz] &
+                        .and. .not. hi_bnd) bhi = nc+1
 
-                   vlo = lo + ([ix, iy, iz]-1) * nc
-                   vhi = hi + ([ix, iy, iz]-1) * nc
+                   vlo = blo + ([ix, iy, iz]-1) * nc
+                   vhi = bhi + ([ix, iy, iz]-1) * nc
 
                    var_data(vlo(1):vhi(1), vlo(2):vhi(2), vlo(3):vhi(3), 1:n_cc) = &
-                        tree%boxes(id)%cc(lo(1):hi(1), lo(2):hi(2), &
-                        lo(3):hi(3), icc_val)
+                        tree%boxes(id)%cc(blo(1):bhi(1), blo(2):bhi(2), &
+                        blo(3):bhi(3), icc_val)
                 end do
              end do
           end do
 
           id = box_list(1, 1, 1)
           dr = tree%boxes(id)%dr
-          r_min = tree%boxes(id)%r_min - dr
+          r_min = tree%boxes(id)%r_min - (1 - lo) * dr
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 3, &
-               [nx*nc + 3, ny*nc + 3, nz*nc + 3], r_min, dr, 1)
+               hi - lo + 2, r_min, dr, 1-lo, hi-[nx, ny, nz]*nc)
 
           do iv = 1, n_cc
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, :, iv), .true.), [nx*nc+2, ny*nc+2, nz*nc+2])
+                  pack(var_data(:, :, :, iv), .true.), hi-lo+1)
           end do
 
           deallocate(var_data)
@@ -648,7 +679,7 @@ contains
          n_cycle_val, time_val)
     do iv = 1, n_cc
        call SILO_set_mmesh_var(dbix, trim(var_names(iv)), amr_name, &
-            var_list(iv, 1:i_grid), n_cycle_val, time_val)
+            var_list(iv, 1:i_grid))
     end do
     call SILO_close_file(dbix)
     print *, "a$D_write_silo: written " // trim(fname)
