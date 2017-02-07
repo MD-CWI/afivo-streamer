@@ -29,12 +29,12 @@ contains
     integer, parameter    :: my_unit = 100
     character(len=100)    :: fmt_string
     character(len=400)    :: fname
-    integer               :: i, j, n_vars, dim_unused, n_points(3)
+    integer               :: i, j, n_cc, dim_unused, n_points(3)
     real(dp)              :: r($D), dvec(3)
     real(dp)              :: v1($D), v2($D)
     real(dp), allocatable :: pixel_data(:, :, :)
 
-    n_vars      = size(ivs)
+    n_cc      = size(ivs)
 #if $D == 2
     dvec(1:2)   = r_max(1:2) - r_min(1:2)
     dvec(3)     = 0
@@ -62,12 +62,12 @@ contains
     end select
 #endif
 
-    allocate(pixel_data(n_vars, n_pixels(1), n_pixels(2)))
+    allocate(pixel_data(n_cc, n_pixels(1), n_pixels(2)))
 
     do j = 1, n_pixels(2)
        do i = 1, n_pixels(1)
           r = r_min + (i-1) * v1 + (j-1) * v2
-          pixel_data(:, i, j) = a$D_interp2(tree, r, ivs, n_vars)
+          pixel_data(:, i, j) = a$D_interp2(tree, r, ivs, n_cc)
        end do
     end do
 
@@ -102,7 +102,7 @@ contains
     write(my_unit, '(A,3E16.8)') "SPACING ", v1 + v2
 #endif
     write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
-    do i = 1, n_vars
+    do i = 1, n_cc
        write(my_unit, '(A)') "SCALARS " // &
             trim(tree%cc_names(ivs(i))) // " double 1"
        write(my_unit, '(A)') "LOOKUP_TABLE default"
@@ -113,7 +113,7 @@ contains
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
   !> leaves of the tree are used
-  subroutine a$D_write_vtk(tree, filename, n_cycle, time, ixs_cc, ixs_fc, dir)
+  subroutine a$D_write_vtk(tree, filename, n_cycle, time, ixs_cc, dir)
     use m_vtk
 
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
@@ -122,21 +122,19 @@ contains
     real(dp), intent(in), optional :: time        !< Time for output file
     integer, intent(in), optional :: ixs_cc(:)   !< Oncly include these cell variables
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
-    integer, intent(in), optional :: ixs_fc(:)   !< Oncly include these face variables
 
     integer                       :: lvl, bc, bn, n, n_cells, n_nodes
     integer                       :: ig, i, j, id, n_ix, c_ix, n_grids
     integer                       :: cell_ix, node_ix, n_cycle_val
-    integer                       :: n_cc, n_fc
+    integer                       :: n_cc
     integer, parameter            :: n_ch = a$D_num_children
     integer                       :: nodes_per_box, cells_per_box
     real(dp)                      :: time_val
     real(dp), allocatable         :: coords(:), cc_vars(:,:)
     integer, allocatable          :: offsets(:), connects(:)
-    integer, allocatable          :: cell_types(:), icc_val(:), ifc_val(:)
+    integer, allocatable          :: cell_types(:), icc_val(:)
     type(vtk_t)                   :: vtkf
     character(len=400)            :: fname
-    character(len=100)            :: tmp_name
     character(len=100), allocatable :: var_names(:)
 #if $D == 3
     integer                       :: k, bn2
@@ -154,37 +152,10 @@ contains
        icc_val = [(i, i = 1, tree%n_var_cell)]
     end if
 
-    if (present(ixs_fc)) then
-       if (maxval(ixs_fc) > tree%n_var_cell .or. &
-            minval(ixs_fc) < 1) stop "a$D_write_silo: wrong indices given (ixs_fc)"
-       ifc_val = ixs_fc
-    else
-       allocate(ifc_val(0))
-    end if
-
     n_cc = size(icc_val)
-    n_fc = size(ifc_val)
 
-    allocate(var_names(n_cc + n_fc * $D))
+    allocate(var_names(n_cc))
     var_names(1:n_cc) = tree%cc_names(icc_val)
-
-    do i = 1, n_fc
-       n = n_cc + (i-1)*$D
-       tmp_name = tree%fc_names(ifc_val(i))
-#if $D == 2
-       if (tree%coord_t == af_cyl) then
-          var_names(n+1) = trim(tmp_name) // "_r"
-          var_names(n+2) = trim(tmp_name) // "_z"
-       else
-          var_names(n+1) = trim(tmp_name) // "_x"
-          var_names(n+2) = trim(tmp_name) // "_y"
-       end if
-#elif $D == 3
-       var_names(n+1) = trim(tmp_name) // "_x"
-       var_names(n+2) = trim(tmp_name) // "_y"
-       var_names(n+3) = trim(tmp_name) // "_z"
-#endif
-    end do
 
     bc            = tree%n_cell     ! number of Box Cells
     bn            = tree%n_cell + 1 ! number of Box Nodes
@@ -199,7 +170,7 @@ contains
     n_cells = cells_per_box * n_grids
 
     allocate(coords($D * n_nodes))
-    allocate(cc_vars(n_cells, n_cc + n_fc * $D))
+    allocate(cc_vars(n_cells, n_cc))
     allocate(offsets(cells_per_box * n_grids))
     allocate(cell_types(cells_per_box * n_grids))
     allocate(connects(n_ch * cells_per_box * n_grids))
@@ -235,10 +206,6 @@ contains
                 n_ix                      = node_ix + (j-1) * bn + i - 1
                 c_ix                      = cell_ix + (j-1) * bc + i
                 cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, icc_val)
-                cc_vars(c_ix, n_cc+1::$D) = &
-                     0.5_dp * sum(tree%boxes(id)%fc(i:i+1, j, 1, ifc_val))
-                cc_vars(c_ix, n_cc+2::$D) = &
-                     0.5_dp * sum(tree%boxes(id)%fc(i, j:j+1, 2, ifc_val))
                 offsets(c_ix)             = a$D_num_children * c_ix
                 connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1]
              end do
@@ -263,12 +230,6 @@ contains
                    c_ix                      = cell_ix + (k-1) * bc**2 + &
                         (j-1) * bc + i
                    cc_vars(c_ix, 1:n_cc)     = tree%boxes(id)%cc(i, j, k, icc_val)
-                   cc_vars(c_ix, n_cc+1::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fc(i:i+1, j, k, 1, ifc_val))
-                   cc_vars(c_ix, n_cc+2::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fc(i, j:j+1, k, 2, ifc_val))
-                   cc_vars(c_ix, n_cc+3::$D) = &
-                        0.5_dp * sum(tree%boxes(id)%fc(i, j, k:k+1, 3, ifc_val))
                    offsets(c_ix)             = 8 * c_ix
                    connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = &
                         [n_ix, n_ix+1, n_ix+bn, n_ix+bn+1, &
@@ -299,7 +260,7 @@ contains
     call vtk_unstr_con_xml(vtkf, connects, offsets, cell_types, n_cells)
     call vtk_dat_xml(vtkf, "CellData", .true.)
 
-    do n = 1, n_cc + n_fc * $D
+    do n = 1, n_cc
        call vtk_var_r8_xml(vtkf, trim(var_names(n)), cc_vars(:, n), n_cells)
     end do
 
@@ -312,7 +273,7 @@ contains
 
   !> Write the cell centered data of a tree to a Silo file. Only the
   !> leaves of the tree are used
-  subroutine a$D_write_silo(tree, filename, n_cycle, time, ixs_cc, ixs_fc, dir)
+  subroutine a$D_write_silo(tree, filename, n_cycle, time, ixs_cc, dir)
     use m_write_silo
 
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
@@ -321,18 +282,19 @@ contains
     real(dp), intent(in), optional :: time        !< Time for output file
     integer, intent(in), optional :: ixs_cc(:)      !< Oncly include these cell variables
     character(len=*), optional, intent(in) :: dir !< Directory to place files in
-    integer, intent(in), optional :: ixs_fc(:)      !< Oncly include these face variables
 
     character(len=*), parameter     :: grid_name = "gg"
     character(len=*), parameter     :: amr_name  = "mesh", meshdir = "data"
-    character(len=100)              :: tmp_name
     character(len=100), allocatable :: grid_list(:), var_list(:, :), var_names(:)
     character(len=400)              :: fname
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
-    integer                         :: n, n_vars, i0, j0, dbix, n_cc, n_fc
+    integer                         :: n_cc, dbix
     integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
     integer                         :: n_cycle_val
-    integer, allocatable            :: ids(:), nb_ids(:), icc_val(:), ifc_val(:)
+    integer                         :: lo($D), hi($D), vlo($D), vhi($D)
+    integer                         :: blo($D), bhi($D)
+    logical                         :: lo_bnd($D), hi_bnd($D)
+    integer, allocatable            :: ids(:), nb_ids(:), icc_val(:)
     logical, allocatable            :: box_done(:)
     real(dp)                        :: dr($D), r_min($D), time_val
 #if $D == 2
@@ -341,7 +303,7 @@ contains
 #elif $D == 3
     integer, allocatable            :: box_list(:,:,:), new_box_list(:,:,:)
     real(dp), allocatable           :: var_data(:,:,:,:)
-    integer                         :: k0, nz, nz_prev, iz
+    integer                         :: nz, nz_prev, iz
 #endif
 
     if (.not. tree%ready) stop "Tree not ready"
@@ -356,47 +318,19 @@ contains
        icc_val = [(i, i = 1, tree%n_var_cell)]
     end if
 
-    if (present(ixs_fc)) then
-       if (maxval(ixs_fc) > tree%n_var_cell .or. &
-            minval(ixs_fc) < 1) stop "a$D_write_silo: wrong indices given (ixs_fc)"
-       ifc_val = ixs_fc
-    else
-       allocate(ifc_val(0))
-    end if
-
     n_cc = size(icc_val)
-    n_fc = size(ifc_val)
 
-    allocate(var_names(n_cc + n_fc * $D))
+    allocate(var_names(n_cc))
     var_names(1:n_cc) = tree%cc_names(icc_val)
 
-    do i = 1, n_fc
-       n = n_cc + (i-1)*$D
-       tmp_name = tree%fc_names(ifc_val(i))
-#if $D == 2
-       if (tree%coord_t == af_cyl) then
-          var_names(n+1) = trim(tmp_name) // "_r"
-          var_names(n+2) = trim(tmp_name) // "_z"
-       else
-          var_names(n+1) = trim(tmp_name) // "_x"
-          var_names(n+2) = trim(tmp_name) // "_y"
-       end if
-#elif $D == 3
-       var_names(n+1) = trim(tmp_name) // "_x"
-       var_names(n+2) = trim(tmp_name) // "_y"
-       var_names(n+3) = trim(tmp_name) // "_z"
-#endif
-    end do
-
     nc = tree%n_cell
-    n_vars = n_cc + n_fc * $D
     n_grids_max = 0
     do lvl = 1, tree%highest_lvl
        n_grids_max = n_grids_max + size(tree%lvls(lvl)%leaves)
     end do
 
     allocate(grid_list(n_grids_max))
-    allocate(var_list(n_vars, n_grids_max))
+    allocate(var_list(n_cc, n_grids_max))
     allocate(box_done(tree%highest_id))
     box_done = .false.
 
@@ -414,6 +348,7 @@ contains
     end if
 
     call SILO_create_file(trim(fname), dbix)
+    call SILO_set_time_varying(dbix)
     call SILO_mkdir(dbix, meshdir)
     i_grid = 0
 
@@ -508,35 +443,55 @@ contains
              if (nx == nx_prev .and. ny == ny_prev) exit
           end do
 
-          allocate(var_data(nx * nc, ny * nc, n_vars))
+          ! Check for (periodic) boundaries (this could give problems for
+          ! complex geometries, e.g. a triangle block)
+          id     = box_list(1, 1)
+          lo_bnd = a$D_phys_boundary(tree%boxes, id, a$D_low_neighbs)
+
+          id = box_list(nx, ny)
+          hi_bnd = a$D_phys_boundary(tree%boxes, id, a$D_high_neighbs)
+
+          lo(:) = 1
+          where (.not. lo_bnd) lo = lo - 1
+
+          hi = [nx, ny] * nc
+          where (.not. hi_bnd) hi = hi + 1
+
+          ! Include ghost cells around internal boundaries
+          allocate(var_data(lo(1):hi(1), lo(2):hi(2), n_cc))
+
           do ix = 1, nx
              do iy = 1, ny
                 id = box_list(ix, iy)
-                i0 = 1 + (ix-1) * nc
-                j0 = 1 + (iy-1) * nc
-                var_data(i0:i0+nc-1, j0:j0+nc-1, 1:n_cc) = &
-                     tree%boxes(id)%cc(1:nc, 1:nc, icc_val)
-                var_data(i0:i0+nc-1, j0:j0+nc-1, n_cc+1::$D) = &
-                     0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1, ifc_val) + &
-                     tree%boxes(id)%fc(2:nc+1, 1:nc, 1, ifc_val))
-                var_data(i0:i0+nc-1, j0:j0+nc-1, n_cc+2::$D) = &
-                     0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 2, ifc_val) + &
-                     tree%boxes(id)%fc(1:nc, 2:nc+1, 2, ifc_val))
+
+                ! Include ghost cells on internal block boundaries
+                blo = 1
+                where ([ix, iy] == 1 .and. .not. lo_bnd) blo = 0
+
+                bhi = nc
+                where ([ix, iy] == [nx, ny] .and. .not. hi_bnd) bhi = nc+1
+
+                vlo = blo + ([ix, iy]-1) * nc
+                vhi = bhi + ([ix, iy]-1) * nc
+
+                var_data(vlo(1):vhi(1), vlo(2):vhi(2), 1:n_cc) = &
+                     tree%boxes(id)%cc(blo(1):bhi(1), blo(2):bhi(2), icc_val)
              end do
           end do
 
           id = box_list(1, 1)
           dr = tree%boxes(id)%dr
-          r_min = tree%boxes(id)%r_min
+          r_min = tree%boxes(id)%r_min - (1 - lo) * dr
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 2, &
-               [nx*nc + 1, ny*nc + 1], r_min, dr)
-          do iv = 1, n_vars
+               hi - lo + 2, r_min, dr, 1-lo, hi - [nx, ny] * nc)
+
+          do iv = 1, n_cc
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, iv), .true.), [nx*nc, ny*nc])
+                  pack(var_data(:, :, iv), .true.), hi-lo+1)
           end do
 
           deallocate(var_data)
@@ -658,41 +613,59 @@ contains
              if (nx == nx_prev .and. ny == ny_prev .and. nz == nz_prev) exit
           end do
 
-          allocate(var_data(nx * nc, ny * nc, nz * nc, n_vars))
+          ! Check for (periodic) boundaries (this could give problems for
+          ! complex geometries, e.g. a triangle block)
+          id     = box_list(1, 1, 1)
+          lo_bnd = a$D_phys_boundary(tree%boxes, id, a$D_low_neighbs)
+
+          id = box_list(nx, ny, nz)
+          hi_bnd = a$D_phys_boundary(tree%boxes, id, a$D_high_neighbs)
+
+          lo(:) = 1
+          where (.not. lo_bnd) lo = lo - 1
+
+          hi = [nx, ny, nz] * nc
+          where (.not. hi_bnd) hi = hi + 1
+
+          ! Include ghost cells around internal boundaries
+          allocate(var_data(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3), n_cc))
+
           do iz = 1, nz
              do ix = 1, nx
                 do iy = 1, ny
-                   id = box_list(ix, iy, iz)
-                   i0 = 1 + (ix-1) * nc
-                   j0 = 1 + (iy-1) * nc
-                   k0 = 1 + (iz-1) * nc
-                   var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, 1:n_cc) = &
-                        tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, icc_val)
-                   var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+1::$D) = &
-                        0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1:nc, 1, ifc_val) + &
-                        tree%boxes(id)%fc(2:nc+1, 1:nc, 1:nc, 1, ifc_val))
-                   var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+2::$D) = &
-                        0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1:nc, 2, ifc_val) + &
-                        tree%boxes(id)%fc(1:nc, 2:nc+1, 1:nc, 2, ifc_val))
-                   var_data(i0:i0+nc-1, j0:j0+nc-1, k0:k0+nc-1, n_cc+3::$D) = &
-                        0.5_dp * (tree%boxes(id)%fc(1:nc, 1:nc, 1:nc, 3, ifc_val) + &
-                        tree%boxes(id)%fc(1:nc, 1:nc, 2:nc+1, 3, ifc_val))
+                   id     = box_list(ix, iy, iz)
+
+                   ! Include ghost cells on internal block boundaries
+                   blo = 1
+                   where ([ix, iy, iz] == 1 .and. .not. lo_bnd) blo = 0
+
+                   bhi = nc
+                   where ([ix, iy, iz] == [nx, ny, nz] &
+                        .and. .not. hi_bnd) bhi = nc+1
+
+                   vlo = blo + ([ix, iy, iz]-1) * nc
+                   vhi = bhi + ([ix, iy, iz]-1) * nc
+
+                   var_data(vlo(1):vhi(1), vlo(2):vhi(2), vlo(3):vhi(3), 1:n_cc) = &
+                        tree%boxes(id)%cc(blo(1):bhi(1), blo(2):bhi(2), &
+                        blo(3):bhi(3), icc_val)
                 end do
              end do
           end do
 
           id = box_list(1, 1, 1)
           dr = tree%boxes(id)%dr
-          r_min = tree%boxes(id)%r_min
+          r_min = tree%boxes(id)%r_min - (1 - lo) * dr
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 3, &
-               [nx*nc + 1, ny*nc + 1, nz*nc + 1], r_min, dr)
-          do iv = 1, n_vars
+               hi - lo + 2, r_min, dr, 1-lo, hi-[nx, ny, nz]*nc)
+
+          do iv = 1, n_cc
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, :, iv), .true.), [nx*nc, ny*nc, nz*nc])
+                  pack(var_data(:, :, :, iv), .true.), hi-lo+1)
           end do
 
           deallocate(var_data)
@@ -704,9 +677,9 @@ contains
 
     call SILO_set_mmesh_grid(dbix, amr_name, grid_list(1:i_grid), &
          n_cycle_val, time_val)
-    do iv = 1, n_vars
+    do iv = 1, n_cc
        call SILO_set_mmesh_var(dbix, trim(var_names(iv)), amr_name, &
-            var_list(iv, 1:i_grid), n_cycle_val, time_val)
+            var_list(iv, 1:i_grid))
     end do
     call SILO_close_file(dbix)
     print *, "a$D_write_silo: written " // trim(fname)

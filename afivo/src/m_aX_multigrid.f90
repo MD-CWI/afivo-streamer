@@ -449,8 +449,7 @@ contains
        end do
        !$omp end parallel do
 
-       call a$D_gc_ids(boxes, ids, mg%i_phi, &
-            mg%sides_rb, mg%sides_bc)
+       call a$D_gc_ids(boxes, ids, mg%i_phi, mg%sides_rb, mg%sides_bc)
     end do
   end subroutine gsrb_boxes
 
@@ -533,7 +532,7 @@ contains
     type(mg$D_t), intent(in)   :: mg
     integer                    :: i, id, p_id
 
-    ! In case ghost cells are not filled, fill them here to be sure
+    ! Fill ghost cells here to be sure
     if (lvl == tree%highest_lvl) then
        call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
             mg%sides_rb, mg%sides_bc)

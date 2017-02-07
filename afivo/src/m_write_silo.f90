@@ -15,6 +15,7 @@ module m_write_silo
   public :: SILO_create_file
   public :: SILO_open_file
   public :: SILO_close_file
+  public :: SILO_set_time_varying
   public :: SILO_add_grid
   public :: SILO_add_var
   public :: SILO_set_mmesh_grid
@@ -63,11 +64,37 @@ contains
             "Error creating directory ", dirname
   end subroutine SILO_mkdir
 
-  subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr)
+  !> Write two entries to the Silo file so that Visit treats it as a
+  !> time-varying database
+  subroutine SILO_set_time_varying(dbix)
+    integer, intent(in)         :: dbix
+    integer                     :: ierr
+    integer, parameter          :: int_bool(1) = 1
+    integer, parameter          :: dims(1) = 1
+    character(len=*), parameter :: name1       = "/ConnectivityIsTimeVarying"
+    character(len=*), parameter :: name2       = "/MetadataIsTimeVarying"
+
+    interface
+       integer function dbwrite(dbid, varname, lvarname, var, dims, &
+            ndims, datatype)
+         use, intrinsic :: iso_c_binding
+         integer(c_int) :: dbid, var(*), lvarname, dims(*), ndims, datatype
+         character(kind=c_char) :: varname(*)
+       end function dbwrite
+    end interface
+
+    ierr = DBWrite(dbix, name1, len(name1), int_bool, dims, 1, DB_INT);
+    if (ierr /= 0) print *, "Error writing ", name1
+    ierr = DBWrite(dbix, name2, len(name2), int_bool, dims, 1, DB_INT);
+    if (ierr /= 0) print *, "Error writing ", name2
+  end subroutine SILO_set_time_varying
+
+  subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr, &
+       lo_offset, hi_offset)
     character(len=*), intent(in) :: gridname
     integer, intent(in)          :: dbix, n_dim, N_r(:)
+    integer, intent(in)          :: lo_offset(n_dim), hi_offset(n_dim)
     real(dp), intent(in)         :: r_min(:), dr(:)
-
     real(dp), allocatable        :: x_coords(:), y_coords(:), z_coords(:)
     integer                      :: i, ierr, iostat, dboptix
 
@@ -81,6 +108,11 @@ contains
          real(c_double) :: x(*), y(*), z(*)
          character(kind=c_char) :: name(*), xname(*), yname(*), zname(*)
        end function dbputqm
+
+       integer (c_int) function dbaddiopt(optlist_id, option, ivalue)
+         use, intrinsic :: iso_c_binding
+         integer(c_int), intent(in) :: optlist_id, option, ivalue(*)
+       end function dbaddiopt
     end interface
 
     if (n_dim < 1 .or. n_dim > 3) then
@@ -114,15 +146,20 @@ contains
     ! Make option list
     ierr = dbmkoptlist(20, dboptix)
     if (ierr /= 0) print *, &
-            "Error creating options list in SILO_add_grid ", dboptix
+         "Error creating options list in SILO_add_grid ", dboptix
 
     ! Set integer options
-    ierr = dbaddiopt(dboptix, DBOPT_NSPACE, n_dim)
+    ierr = dbaddiopt(dboptix, DBOPT_NSPACE, [n_dim])
     if (ierr /= 0) print *, &
-            "Error dbaddiopt is SILO_add_grid: DBOPT_NSPACE", ierr
-    ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, 1)
+            "Error dbaddiopt in SILO_add_grid: DBOPT_NSPACE", ierr
+
+    ierr = dbaddiopt(dboptix, DBOPT_LO_OFFSET, lo_offset)
     if (ierr /= 0) print *, &
-            "Error dbaddiopt is SILO_add_grid: DBOPT_HIDE_FROM_GUI", ierr
+         "Error dbaddiopt in SILO_add_grid: DBOPT_LO_OFFSET", ierr
+
+    ierr = dbaddiopt(dboptix, DBOPT_HI_OFFSET, hi_offset)
+    if (ierr /= 0) print *, &
+         "Error dbaddiopt in SILO_add_grid: DBOPT_HI_OFFSET", ierr
 
     ! Write the grid structure
     ierr = dbputqm(dbix, trim(gridname), len_trim(gridname), &
@@ -225,15 +262,17 @@ contains
     end do
 
     old_str_len  = dbset2dstrlen(name_len)
-    m_types      = DB_QUADMESH
+    m_types      = DB_QUAD_RECT
     name_lengths = name_len
 
     ierr = dbmkoptlist(10, dboptix)
+
     if (present(n_cycle)) then
        ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
        if (ierr /= 0) print *, &
                "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_CYCLE", ierr
     end if
+
     if (present(time)) then
        ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
        if (ierr /= 0) print *, &
@@ -251,12 +290,9 @@ contains
     length = dbset2dstrlen(old_str_len)
   end subroutine SILO_set_mmesh_grid
 
-  subroutine SILO_set_mmesh_var(dbix, mvname, mmname, &
-       datanames, n_cycle, time)
+  subroutine SILO_set_mmesh_var(dbix, mvname, mmname, datanames)
     character(len=*), intent(in)   :: mvname, mmname, datanames(:)
     integer, intent(in)            :: dbix
-    integer, intent(in), optional  :: n_cycle
-    real(dp), intent(in), optional :: time
 
     integer                        :: i, ierr, dboptix, iostat,length
     integer                        :: old_str_len, n_grids, name_len, total_len
@@ -296,16 +332,7 @@ contains
     ierr = dbmkoptlist(10, dboptix)
     if (ierr /= 0) print *, &
             "Error creating options list in SILO_set_mmesh_var", ierr
-    if (present(n_cycle)) then
-       ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
-       if (ierr /= 0) print *, &
-               "Error dbaddiopt is SILO_set_mmesh_var: DBOPT_CYCLE", ierr
-    end if
-    if (present(time)) then
-       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
-       if (ierr /= 0) print *, &
-               "Error dbaddiopt is SILO_set_mmesh_var: DBOPT_DTIME", ierr
-    end if
+
     ierr = dbaddcopt(dboptix, DBOPT_MMESH_NAME, &
          trim(mmname), len_trim(mmname))
     if (ierr /= 0) print *, &
