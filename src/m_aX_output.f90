@@ -446,10 +446,10 @@ contains
           ! Check for (periodic) boundaries (this could give problems for
           ! complex geometries, e.g. a triangle block)
           id     = box_list(1, 1)
-          lo_bnd = a$D_is_boundary(tree%boxes, id, a$D_low_neighbs)
+          lo_bnd = a$D_phys_boundary(tree%boxes, id, a$D_low_neighbs)
 
           id = box_list(nx, ny)
-          hi_bnd = a$D_is_boundary(tree%boxes, id, a$D_high_neighbs)
+          hi_bnd = a$D_phys_boundary(tree%boxes, id, a$D_high_neighbs)
 
           lo(:) = 1
           where (.not. lo_bnd) lo = lo - 1
@@ -616,10 +616,10 @@ contains
           ! Check for (periodic) boundaries (this could give problems for
           ! complex geometries, e.g. a triangle block)
           id     = box_list(1, 1, 1)
-          lo_bnd = a$D_is_boundary(tree%boxes, id, a$D_low_neighbs)
+          lo_bnd = a$D_phys_boundary(tree%boxes, id, a$D_low_neighbs)
 
           id = box_list(nx, ny, nz)
-          hi_bnd = a$D_is_boundary(tree%boxes, id, a$D_high_neighbs)
+          hi_bnd = a$D_phys_boundary(tree%boxes, id, a$D_high_neighbs)
 
           lo(:) = 1
           where (.not. lo_bnd) lo = lo - 1

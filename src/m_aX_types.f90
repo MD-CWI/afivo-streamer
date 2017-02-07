@@ -333,23 +333,32 @@ contains
     a$D_has_children = (box%children(1) /= af_no_box)
   end function a$D_has_children
 
-  !> Return .true. where there is a physical or periodic pure
-  pure function a$D_is_boundary(boxes, id, nbs) result(boundary)
+  !> Return .true. where there is a physical/periodic boundary
+  pure function a$D_phys_boundary(boxes, id, nbs) result(boundary)
     type(box$D_t), intent(in) :: boxes(:) !< List of boxes
     integer, intent(in)       :: id       !< Box to inspect
     integer, intent(in)       :: nbs(:)   !< Neighbor directions
     logical                   :: boundary(size(nbs))
-    integer                   :: n, nb, nb_id, dim, dix
+    integer                   :: n, nb, p_id, nb_id, dim, dix
 
     do n = 1, size(nbs)
        nb = nbs(n)
        nb_id = boxes(id)%neighbors(nb)
 
-       if (nb_id <= af_no_box) then
-          boundary(n) = .true.
-       else                        ! Check for periodic boundary
+       if (nb_id < af_no_box) then
+          boundary(n) = .true.  ! Physical boundary
+       else
           dim = a$D_neighb_dim(nb)
-          dix = boxes(nb_id)%ix(dim) - boxes(id)%ix(dim)
+
+          if (nb_id == af_no_box) then
+             ! Refinement boundary, have to check parent
+             p_id = boxes(id)%parent
+             nb_id = boxes(p_id)%neighbors(nb)
+             dix = boxes(nb_id)%ix(dim) - boxes(p_id)%ix(dim)
+          else                  ! Normal neighbor
+             dix = boxes(nb_id)%ix(dim) - boxes(id)%ix(dim)
+          end if
+
           if (dix /= a$D_neighb_high_pm(nb)) then
              boundary(n) = .true.
           else
@@ -358,7 +367,7 @@ contains
        end if
     end do
 
-  end function a$D_is_boundary
+  end function a$D_phys_boundary
 
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 and one at
