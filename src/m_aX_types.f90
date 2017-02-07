@@ -298,7 +298,8 @@ contains
        write(*, "(A,I10)") " Box size (cells):       ", tree%n_cell
        write(*, "(A,I10)") " Number of cc variables: ", tree%n_var_cell
        write(*, "(A,I10)") " Number of fc variables: ", tree%n_var_face
-       write(*, "(A,I10)") " Type of coordinates:    ", tree%coord_t
+       write(*, "(A,A15)") " Type of coordinates:    ", &
+            af_coord_names(tree%coord_t)
        write(*, "(A,$DE12.4)") " min. coords:        ", tree%r_base
        write(*, "(A,2E12.4)")  " dx at min/max level ", tree%dr_base, a$D_min_dr(tree)
        write(*, "(A)") ""

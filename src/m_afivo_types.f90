@@ -27,21 +27,28 @@ module m_afivo_types
   !> Special value indicating there is no box
   integer, parameter :: af_no_box = 0
 
+  !> Special value indicating a physical (non-periodic) boundary
+  integer, parameter :: af_phys_boundary = -1
+
   !> Each box contains a tag, for which bits can be set. This is the initial
   !> value, which should not be used by the user
   integer, parameter :: af_init_tag = -huge(1)
 
   !> Default coordinate system
-  integer, parameter :: af_xyz = 0
+  integer, parameter :: af_xyz = 1
 
   !> Cylindrical coordinate system
-  integer, parameter :: af_cyl = 1
+  integer, parameter :: af_cyl = 2
+
+  !> Names of coordinate systems
+  character(len=*), parameter :: af_coord_names(2) = &
+       ["Cartesian  ", "Cylindrical"]
 
   !> Value to indicate a Dirichlet boundary condition
-  integer, parameter :: af_bc_dirichlet = -1
+  integer, parameter :: af_bc_dirichlet = -10
 
   !> Value to indicate a Neumann boundary condition
-  integer, parameter :: af_bc_neumann = -2
+  integer, parameter :: af_bc_neumann = -11
 
   !> Maximum length of the names of variables
   integer, parameter :: af_nlen = 20
