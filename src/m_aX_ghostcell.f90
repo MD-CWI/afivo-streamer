@@ -23,48 +23,57 @@ contains
 
   !> Fill ghost cells for variables iv on the sides of all boxes, using
   !> subr_rb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a$D_gc_tree(tree, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_tree(tree, iv, subr_rb, subr_bc, corners)
     type(a$D_t), intent(inout) :: tree    !< Tree to fill ghost cells on
     integer, intent(in)        :: iv      !< Variable for which ghost cells are set
     procedure(a$D_subr_rb)     :: subr_rb !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)     :: subr_bc !< Procedure called at physical boundaries
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
     integer                    :: lvl
 
     if (.not. tree%ready) stop "Tree not ready"
 
     do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, iv, subr_rb, subr_bc)
+       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, iv, &
+            subr_rb, subr_bc, corners)
     end do
   end subroutine a$D_gc_tree
 
   !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
   !> on refinement boundaries and subr_bc on physical boundaries. This routine
   !> assumes that ghost cells on other ids have been set already.
-  subroutine a$D_gc_ids(boxes, ids, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_ids(boxes, ids, iv, subr_rb, subr_bc, corners)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)          :: ids(:)   !< Ids of boxes for which we set ghost cells
     integer, intent(in)          :: iv       !< Variable for which ghost cells are set
     procedure(a$D_subr_rb)       :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
     integer                      :: i
 
     !$omp parallel do
     do i = 1, size(ids)
-       call a$D_gc_box(boxes, ids(i), iv, subr_rb, subr_bc)
+       call a$D_gc_box(boxes, ids(i), iv, subr_rb, subr_bc, corners)
     end do
     !$omp end parallel do
   end subroutine a$D_gc_ids
 
   !> Fill ghost cells for variable iv
-  subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc, corners)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)          :: id       !< Id of box for which we set ghost cells
     integer, intent(in)          :: iv       !< Variable for which ghost cells are set
     procedure(a$D_subr_rb)       :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
+    logical :: do_corners
 
     call a$D_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
-    call a$D_gc_box_corner(boxes, id, iv)
+
+    do_corners = .true.
+    if (present(corners)) do_corners = corners
+
+    if (do_corners) call a$D_gc_box_corner(boxes, id, iv)
   end subroutine a$D_gc_box
 
   !> Fill ghost cells for variable iv on the sides of a box, using subr_rb on
