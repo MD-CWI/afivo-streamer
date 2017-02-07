@@ -5,6 +5,7 @@ program streamer_$Dd
   use m_a$D_all
   use m_streamer
   use m_field_$Dd
+  use m_init_cond_$Dd
 
   implicit none
 
@@ -17,21 +18,16 @@ program streamer_$Dd
   type(mg$D_t)           :: mg        ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
-  ! How many multigrid FMG cycles we perform per time step
-  integer, parameter     :: n_fmg_cycles = 1
+  integer :: output_cnt = 0 ! Number of output files written
 
-  call ST_create_config(cfg)
-  call CFG_read()
-  call ST_load_config()
+  call CFG_update_from_arguments(cfg)
+  call ST_initialize(cfg)
+  call ST_load_transport_data(cfg)
+  call field_initialize(cfg, mg)
+  call init_cond_initialize(cfg, $D)
 
-  fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_output.cfg"
+  fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_out.cfg"
   call CFG_write(cfg, trim(fname))
-
-  ! Initialize the transport coefficients
-  call ST_load_transport_data()
-
-  ! Set the initial conditions from the configuration
-  call ST_get_init_cond($D)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -41,19 +37,16 @@ program streamer_$Dd
   mg%i_tmp = i_electric_fld
   mg%i_rhs = i_rhs
 
-  ! Routines to use for filling ghost cell on physical boundaries
-  mg%sides_bc    => sides_bc_potential
-
   ! This routine always needs to be called when using multigrid
   call mg$D_init_mg(mg)
 
-  ST_out_cnt = 0 ! Number of output files written
+  output_cnt = 0 ! Number of output files written
   ST_time    = 0 ! Simulation time (all times are in s)
 
   ! Set up the initial conditions
   do
-     call a$D_loop_box(tree, set_initial_condition)
-     call compute_electric_field(tree, n_fmg_cycles, .false.)
+     call a$D_loop_box(tree, init_cond_set_box)
+     call field_compute(tree, mg, .false.)
      call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
      if (ref_info%n_add == 0) exit
   end do
@@ -65,7 +58,7 @@ program streamer_$Dd
 
   do
      ! Get a new time step, which is at most dt_amr
-     call a$D_reduction_vec(tree, get_max_dt, ST_get_min, &
+     call a$D_reduction_vec(tree, get_max_dt, get_min, &
           [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
      ST_dt = minval(ST_dt_vec)
 
@@ -74,11 +67,11 @@ program streamer_$Dd
         ST_time = ST_end_time + 1.0_dp
      end if
 
-     ! Every ST_dt_out, write output
-     if (ST_out_cnt * ST_dt_out <= ST_time) then
+     ! Every ST_dt_output, write output
+     if (output_cnt * ST_dt_output <= ST_time) then
         write_out = .true.
-        ST_out_cnt = ST_out_cnt + 1
-        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", ST_out_cnt
+        output_cnt = output_cnt + 1
+        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
      else
         write_out = .false.
      end if
@@ -107,7 +100,7 @@ program streamer_$Dd
            call a$D_loop_box_arg(tree, update_solution, [ST_dt], .true.)
 
            ! Compute new field on first iteration
-           if (i == 1) call compute_electric_field(tree, n_fmg_cycles, .true.)
+           if (i == 1) call field_compute(tree, mg, .true.)
         end do
 
         ST_time = ST_time - ST_dt        ! Go back one time step
@@ -116,7 +109,7 @@ program streamer_$Dd
         call a$D_loop_box(tree, average_density)
 
         ! Compute field with new density
-        call compute_electric_field(tree, n_fmg_cycles, .true.)
+        call field_compute(tree, mg, .true.)
      end do
 
      ! Restrict the electron and ion densities before refinement
@@ -127,8 +120,8 @@ program streamer_$Dd
      call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
      call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
-     ! if (write_out) call a$D_write_silo(tree, fname, ST_out_cnt, &
-          ! ST_time, dir=ST_output_dir)
+     if (write_out) call a$D_write_silo(tree, fname, output_cnt, &
+          ST_time, dir=ST_output_dir)
 
      call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
 
@@ -137,7 +130,7 @@ program streamer_$Dd
         call prolong_to_new_boxes(tree, ref_info)
 
         ! Compute the field on the new mesh
-        call compute_electric_field(tree, n_fmg_cycles, .true.)
+        call field_compute(tree, mg, .true.)
      end if
 
   end do
@@ -153,7 +146,7 @@ contains
     ! Variables used below to initialize tree
     real(dp)                  :: dr
     integer                   :: id
-    integer                   :: ix_list(2, 1) ! Spatial indices of initial boxes
+    integer                   :: ix_list($D, 1) ! Spatial indices of initial boxes
     integer                   :: n_boxes_init = 1000
 
     dr = ST_domain_len / ST_box_size
@@ -170,7 +163,7 @@ contains
 
     ! Set up geometry
     id             = 1          ! One box ...
-    ix_list(:, id) = [1,1]      ! With index 1,1 ...
+    ix_list(:, id) = 1          ! With index 1,1 ...
 
     ! Create the base mesh
     call a$D_set_base(tree, 1, ix_list)
@@ -180,6 +173,7 @@ contains
   ! This routine sets the cell refinement flags for box
   subroutine refine_routine(box, cell_flags)
     use m_geometry
+    use m_init_cond_$Dd
     type(box$D_t), intent(in) :: box
     ! Refinement flags for the cells of the box
     integer, intent(out)     :: &
@@ -194,39 +188,39 @@ contains
     dx2     = box%dr**2
 
     do KJI_DO(1,nc)
-          fld   = box%cc(IJK, i_electric_fld)
-          alpha = LT_get_col(ST_td_tbl, i_alpha, fld)
-          ! The refinement is based on the ionization length
-          adx   = box%dr * alpha
+       fld   = box%cc(IJK, i_electric_fld)
+       alpha = LT_get_col(ST_td_tbl, i_alpha, fld)
+       ! The refinement is based on the ionization length
+       adx   = box%dr * alpha
 
-          ! The refinement is also based on the intensity of the source term.
-          ! Here we estimate the curvature of phi (given by dx**2 *
-          ! Laplacian(phi))
-          cphi = dx2 * abs(box%cc(IJK, i_rhs))
+       ! The refinement is also based on the intensity of the source term.
+       ! Here we estimate the curvature of phi (given by dx**2 *
+       ! Laplacian(phi))
+       cphi = dx2 * abs(box%cc(IJK, i_rhs))
 
-          if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
-             cell_flags(IJK) = af_do_ref
-          else if (adx < 0.125_dp * ST_refine_adx .and. &
-               cphi < 0.0625_dp * ST_refine_cphi &
-               .and. dx < ST_derefine_dx) then
-             cell_flags(IJK) = af_rm_ref
-          else
-             cell_flags(IJK) = af_keep_ref
-          end if
+       if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
+          cell_flags(IJK) = af_do_ref
+       else if (adx < 0.125_dp * ST_refine_adx .and. &
+            cphi < 0.0625_dp * ST_refine_cphi &
+            .and. dx < ST_derefine_dx) then
+          cell_flags(IJK) = af_rm_ref
+       else
+          cell_flags(IJK) = af_keep_ref
+       end if
 
-          ! Refine around the initial conditions
-          if (ST_time < ST_refine_init_time) then
-             do n = 1, ST_init_cond%n_cond
-                dist = GM_dist_line(a$D_r_cc(box, [IJK]), &
-                     ST_init_cond%seed_r0(:, n), &
-                     ST_init_cond%seed_r1(:, n), 2)
-                if (dist - ST_init_cond%seed_width(n) < 2 * dx &
-                     .and. box%dr > ST_refine_init_fac * &
-                     ST_init_cond%seed_width(n)) then
-                   cell_flags(IJK) = af_do_ref
-                end if
-             end do
-          end if
+       ! Refine around the initial conditions
+       if (ST_time < ST_refine_init_time) then
+          do n = 1, init_conds%n_cond
+             dist = GM_dist_line(a$D_r_cc(box, [IJK]), &
+                  init_conds%seed_r0(:, n), &
+                  init_conds%seed_r1(:, n), $D)
+             if (dist - init_conds%seed_width(n) < 2 * dx &
+                  .and. box%dr > ST_refine_init_fac * &
+                  init_conds%seed_width(n)) then
+                cell_flags(IJK) = af_do_ref
+             end if
+          end do
+       end if
 
     end do; CLOSE_DO
 
@@ -238,43 +232,6 @@ contains
     end if
 
   end subroutine refine_routine
-
-  !> Sets the initial condition
-  subroutine set_initial_condition(box)
-    use m_geometry
-    type(box$D_t), intent(inout) :: box
-    integer                     :: IJK, n, nc
-    real(dp)                    :: rr($D)
-    real(dp)                    :: density
-
-    nc = box%n_cell
-    box%cc(DTIMES(:), i_electron) = ST_init_cond%background_density
-    box%cc(DTIMES(:), i_pos_ion)  = ST_init_cond%background_density
-    box%cc(DTIMES(:), i_phi)      = 0 ! Inital potential set to zero
-
-    do KJI_DO(0,nc+1)
-          rr   = a$D_r_cc(box, [IJK])
-
-          do n = 1, ST_init_cond%n_cond
-             density = ST_init_cond%seed_density(n) * &
-                  GM_density_line(rr, ST_init_cond%seed_r0(:, n), &
-                  ST_init_cond%seed_r1(:, n), $D, &
-                  ST_init_cond%seed_width(n), &
-                  ST_init_cond%seed_falloff(n))
-
-             ! Add electrons and/or ions depending on the seed charge type
-             ! (positive, negative or neutral)
-             if (ST_init_cond%seed_charge_type(n) <= 0) then
-                box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + density
-             end if
-
-             if (ST_init_cond%seed_charge_type(n) >= 0) then
-                box%cc(IJK, i_pos_ion) = box%cc(IJK, i_pos_ion) + density
-             end if
-          end do
-    end do; CLOSE_DO
-
-  end subroutine set_initial_condition
 
   !> Get maximum time step based on e.g. CFL criteria
   function get_max_dt(box, n_cond) result(dt_vec)
@@ -324,45 +281,13 @@ contains
 
   end function get_max_dt
 
-  !> Compute electric field on the tree. First perform multigrid to get electric
-  ! potential, then take numerical gradient to geld field.
-  subroutine compute_electric_field(tree, n_cycles, have_guess)
-    use m_units_constants
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: n_cycles
-    logical, intent(in)       :: have_guess
-    real(dp), parameter       :: fac = UC_elem_charge / UC_eps0
-    integer                   :: lvl, i, id, nc
+  function get_min(a, b, n) result(min_vec)
+    integer, intent(in)  :: n
+    real(dp), intent(in) :: a(n), b(n)
+    real(dp)             :: min_vec(n)
 
-    nc = tree%n_cell
-
-    ! Set the source term (rhs)
-    !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          tree%boxes(id)%cc(DTIMES(:), i_rhs) = fac * (&
-               tree%boxes(id)%cc(DTIMES(:), i_electron) - &
-               tree%boxes(id)%cc(DTIMES(:), i_pos_ion))
-       end do
-       !$omp end do nowait
-    end do
-    !$omp end parallel
-
-    call ST_set_voltage(ST_time)
-
-    ! Perform n_cycles fmg cycles (logicals: store residual, first call)
-    do i = 1, n_cycles
-       call mg$D_fas_fmg(tree, mg, .false., have_guess .or. i > 1)
-    end do
-
-    ! Compute field from potential
-    call a$D_loop_box(tree, field_from_potential)
-
-    ! Set the field norm also in ghost cells
-    call a$D_gc_tree(tree, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
-  end subroutine compute_electric_field
+    min_vec = min(a, b)
+  end function get_min
 
   !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
@@ -468,41 +393,41 @@ contains
 #endif
 
     do KJI_DO(1,nc)
-          fld   = box%cc(IJK, i_electric_fld)
-          loc   = LT_get_loc(ST_td_tbl, fld)
-          alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-          eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
-          mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+       fld   = box%cc(IJK, i_electric_fld)
+       loc   = LT_get_loc(ST_td_tbl, fld)
+       alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+       eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
+       mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-          ! Contribution of flux
+       ! Contribution of flux
 #if $D == 2
-          if (ST_cylindrical) then
-             ! Weighting of flux contribution for cylindrical coordinates
-             rfac(:) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          else
-             rfac(:) = 1.0_dp
-          end if
+       if (ST_cylindrical) then
+          ! Weighting of flux contribution for cylindrical coordinates
+          rfac(:) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+       else
+          rfac(:) = 1.0_dp
+       end if
 
-          sflux = (box%fc(i, j, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
-               rfac(1) * box%fc(i, j, 1, flux_elec) - &
-               rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt(1)
+       sflux = (box%fc(i, j, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
+            rfac(1) * box%fc(i, j, 1, flux_elec) - &
+            rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt(1)
 #elif $D == 3
-          sflux = (sum(box%fc(i, j, k, :, flux_elec) - &
-               box%fc(i+1, j, k, 1, flux_elec) - &
-               box%fc(i, j+1, k, 2, flux_elec) - &
-               box%fc(i, j, k+1, 3, flux_elec))) * inv_dr * dt(1)
+       sflux = (sum(box%fc(i, j, k, :, flux_elec) - &
+            box%fc(i+1, j, k, 1, flux_elec) - &
+            box%fc(i, j+1, k, 2, flux_elec) - &
+            box%fc(i, j, k+1, 3, flux_elec))) * inv_dr * dt(1)
 #endif
 
-          ! Source term
-          src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt(1)
+       ! Source term
+       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt(1)
 
-          if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt(1)
+       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt(1)
 
-          ! Add flux and source term
-          box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + sflux + src
+       ! Add flux and source term
+       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + sflux + src
 
-          ! Add source term
-          box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + src
+       ! Add source term
+       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + src
 
     end do; CLOSE_DO
   end subroutine update_solution
@@ -547,14 +472,14 @@ contains
     nc = box%n_cell
 
     do KJI_DO(1,nc)
-          fld      = box%cc(IJK, i_electric_fld)
-          loc      = LT_get_loc(ST_td_tbl, fld)
-          alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-          mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+       fld      = box%cc(IJK, i_electric_fld)
+       loc      = LT_get_loc(ST_td_tbl, fld)
+       alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+       mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-          tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
-          if (tmp < 0) tmp = 0
-          box%cc(IJK, i_photo) = tmp
+       tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
+       if (tmp < 0) tmp = 0
+       box%cc(IJK, i_photo) = tmp
     end do; CLOSE_DO
   end subroutine set_photoionization_rate
 
@@ -587,7 +512,7 @@ contains
                mg%sides_rb, mg%sides_bc)
        end do
        !$omp end parallel do
-     end do
+    end do
   end subroutine prolong_to_new_boxes
 
 end program streamer_$Dd

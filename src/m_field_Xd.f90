@@ -1,3 +1,4 @@
+#include "../afivo/src/cpp_macros_$Dd.h"
 module m_field_$Dd
   use m_streamer
   use m_a$D_all
@@ -6,46 +7,35 @@ module m_field_$Dd
   private
 
   ! Start modifying the vertical background field after this time
-  real(dp), protected :: ST_electric_fld_y_mod_t0
+  real(dp), protected :: field_mod_t0 = 1e99_dp
 
   ! Amplitude of sinusoidal modification
-  real(dp), protected :: ST_electric_fld_y_sin_amplitude
+  real(dp), protected :: field_sin_amplitude = 0.0_dp
 
   ! Frequency (Hz) of sinusoidal modification
-  real(dp), protected :: ST_electric_fld_y_sin_freq
+  real(dp), protected :: field_sin_freq = 0.0_dp
 
   ! Linear derivative of background field
-  real(dp), protected :: ST_electric_fld_y_lin_deriv
+  real(dp), protected :: field_lin_deriv = 0.0_dp
 
   ! Decay time of background field
-  real(dp), protected :: ST_electric_fld_y_decay
+  real(dp), protected :: field_decay_time = huge(1.0_dp)
 
-  ! Start modifying the horizontal background field after this time
-  real(dp), protected :: ST_electric_fld_x_mod_t0
-
-  ! Amplitude of sinusoidal modification
-  real(dp), protected :: ST_electric_fld_x_sin_amplitude
-
-  ! Frequency (Hz) of sinusoidal modification
-  real(dp), protected :: ST_electric_fld_x_sin_freq
-
-  ! Linear derivative of background field
-  real(dp), protected :: ST_electric_fld_x_lin_deriv
-
-  ! Decay time of background field
-  real(dp), protected :: ST_electric_fld_x_decay
-
-    ! The applied electric field (vertical direction)
-  real(dp), protected :: ST_applied_electric_fld_y
-
-  ! The applied electric field (horizontal direction)
-  real(dp), protected :: ST_applied_electric_fld_x
+  ! The applied electric field (vertical direction)
+  real(dp), protected :: field_amplitude = 1.0e6_dp
 
   ! The applied voltage (vertical direction)
-  real(dp), protected :: ST_applied_voltage
+  real(dp), protected :: field_voltage
 
-  public :: field_bc_select
+  character(ST_slen) :: field_bc_type = "homogeneous"
+
+  public :: field_initialize
+  public :: field_compute
   public :: field_from_potential
+  public :: field_get_amplitude
+  public :: field_set_voltage
+
+  public :: field_bc_homogeneous
 
 contains
 
@@ -54,42 +44,90 @@ contains
     type(CFG_t), intent(inout)  :: cfg !< Settings
     type(mg$D_t), intent(inout) :: mg  !< Multigrid option struct
 
-    call CFG_add(ST_config, "electric_fld_y_mod_t0", 1.0e99_dp, &
+    call CFG_add_get(cfg, "field_mod_t0", field_mod_t0, &
          "Modify electric field after this time (s)")
-    call CFG_add(ST_config, "electric_fld_y_sin_amplitude", 0.0_dp, &
+    call CFG_add_get(cfg, "field_sin_amplitude", field_sin_amplitude, &
          "Amplitude of sinusoidal modification (V/m)")
-    call CFG_add(ST_config, "electric_fld_y_sin_freq", 0.2e9_dp, &
+    call CFG_add_get(cfg, "field_sin_freq", field_sin_freq, &
          "Frequency of sinusoidal modification (Hz)")
-    call CFG_add(ST_config, "electric_fld_y_lin_deriv", 0.0_dp, &
+    call CFG_add_get(cfg, "field_lin_deriv", field_lin_deriv, &
          "Linear derivative of field [V/(ms)]")
-    call CFG_add(ST_config, "electric_fld_y_decay", huge(1.0_dp), &
+    call CFG_add_get(cfg, "field_decay_time", field_decay_time, &
          "Decay time of field (s)")
-
-    call CFG_add(cfg, "applied_electric_fld_y", applied_electric_fld_y.0d7, &
+    call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
          "The applied electric field (V/m) (vertical)")
-    call CFG_add(cfg, "applied_electric_fld_x", 0.0d0, &
-         "The applied electric field (V/m) (horizontal)")
+    call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
+         "Type of boundary condition to use (homogeneous, ...)")
 
-    call CFG_add(ST_config, "electric_fld_x_mod_t0", 1.0e99_dp, &
-         "Modify electric field after this time (s)")
-    call CFG_add(ST_config, "electric_fld_x_sin_amplitude", 0.0_dp, &
-         "Amplitude of sinusoidal modification (V/m)")
-    call CFG_add(ST_config, "electric_fld_x_sin_freq", 0.2e9_dp, &
-         "Frequency of sinusoidal modification (Hz)")
-    call CFG_add(ST_config, "electric_fld_x_lin_deriv", 0.0_dp, &
-         "Linear derivative of field [V/(ms)]")
-    call CFG_add(ST_config, "electric_fld_x_decay", huge(1.0_dp), &
-         "Decay time of field (s)")
+    field_voltage = -ST_domain_len * field_amplitude
 
-    ST_applied_voltage = -ST_domain_len * ST_applied_electric_fld_y
-
-    select case (ST_field_bc)
+    select case (field_bc_type)
     case ("homogeneous")
        mg%sides_bc => field_bc_homogeneous
     case default
        error stop "field_bc_select error: invalid condition"
     end select
   end subroutine field_initialize
+
+  !> Compute electric field on the tree. First perform multigrid to get electric
+  !> potential, then take numerical gradient to geld field.
+  subroutine field_compute(tree, mg, have_guess)
+    use m_units_constants
+    type(a$D_t), intent(inout) :: tree
+    type(mg$D_t), intent(in)   :: mg ! Multigrid option struct
+    logical, intent(in)        :: have_guess
+    real(dp), parameter        :: fac = UC_elem_charge / UC_eps0
+    integer                    :: lvl, i, id, nc
+
+    nc = tree%n_cell
+
+    ! Set the source term (rhs)
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          tree%boxes(id)%cc(DTIMES(:), i_rhs) = fac * (&
+               tree%boxes(id)%cc(DTIMES(:), i_electron) - &
+               tree%boxes(id)%cc(DTIMES(:), i_pos_ion))
+       end do
+       !$omp end do nowait
+    end do
+    !$omp end parallel
+
+    call field_set_voltage(ST_time)
+    call mg$D_fas_fmg(tree, mg, .false., have_guess)
+
+    ! Compute field from potential
+    call a$D_loop_box(tree, field_from_potential)
+
+    ! Set the field norm also in ghost cells
+    call a$D_gc_tree(tree, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
+  end subroutine field_compute
+
+  !> Compute the electric field at a given time
+  function field_get_amplitude(time) result(electric_fld)
+    use m_units_constants
+    real(dp), intent(in) :: time
+    real(dp)             :: electric_fld, t_rel
+
+    t_rel = time - field_mod_t0
+    if (t_rel > 0) then
+       electric_fld = field_amplitude * exp(-t_rel/field_decay_time) + &
+            t_rel * field_lin_deriv + &
+            field_sin_amplitude * &
+            sin(t_rel * field_sin_freq * 2 * UC_pi)
+    else
+       electric_fld = field_amplitude
+    end if
+  end function field_get_amplitude
+
+  !> Compute the voltage at a given time
+  subroutine field_set_voltage(time)
+    real(dp), intent(in) :: time
+
+    field_voltage = -ST_domain_len * field_get_amplitude(time)
+  end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential
   subroutine field_bc_homogeneous(box, nb, iv, bc_type)
@@ -114,7 +152,7 @@ contains
        box%cc(1:nc,    0, iv) = 0
     case (a$D_neighb_highy)
        bc_type = af_bc_dirichlet
-       box%cc(1:nc, nc+1, iv) = ST_applied_voltage
+       box%cc(1:nc, nc+1, iv) = field_voltage
 #elif $D == 3
     case (a3_neighb_lowx)
        bc_type = af_bc_neumann
@@ -133,7 +171,7 @@ contains
        box%cc(1:nc, 1:nc,    0, iv) = 0
     case (a3_neighb_highz)
        bc_type = af_bc_dirichlet
-       box%cc(1:nc, 1:nc, nc+1, iv) = ST_applied_voltage
+       box%cc(1:nc, 1:nc, nc+1, iv) = field_voltage
 #endif
     end select
 
