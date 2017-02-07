@@ -2,15 +2,9 @@
 !> Program to perform $Dd streamer simulations in Cartesian and cylindrical coordinates
 program streamer_$Dd
 
-  use m_a$D_types
-  use m_a$D_core
-  use m_a$D_ghostcell
-  use m_a$D_utils
-  use m_a$D_restrict
-  use m_a$D_multigrid
-  use m_a$D_output
-  use m_write_silo
+  use m_a$D_all
   use m_streamer
+  use m_field_$Dd
 
   implicit none
 
@@ -18,13 +12,20 @@ program streamer_$Dd
   character(len=ST_slen) :: fname
   logical                :: write_out
 
-  type(a$D_t)             :: tree ! This contains the full grid information
-  type(mg$D_t)            :: mg   ! Multigrid option struct
+  type(CFG_t)            :: cfg ! The configuration for the simulation
+  type(a$D_t)            :: tree      ! This contains the full grid information
+  type(mg$D_t)           :: mg        ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
-  call ST_create_config()
-  call ST_read_config_files()
+  ! How many multigrid FMG cycles we perform per time step
+  integer, parameter     :: n_fmg_cycles = 1
+
+  call ST_create_config(cfg)
+  call CFG_read()
   call ST_load_config()
+
+  fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_output.cfg"
+  call CFG_write(cfg, trim(fname))
 
   ! Initialize the transport coefficients
   call ST_load_transport_data()
@@ -36,12 +37,12 @@ program streamer_$Dd
   call init_tree(tree)
 
   ! Set the multigrid options. First define the variables to use
-  mg%i_phi        = i_phi
-  mg%i_tmp        = i_electric_fld
-  mg%i_rhs        = i_rhs
+  mg%i_phi = i_phi
+  mg%i_tmp = i_electric_fld
+  mg%i_rhs = i_rhs
 
-  ! Routines to use for ...
-  mg%sides_bc    => sides_bc_potential ! Filling ghost cell on physical boundaries
+  ! Routines to use for filling ghost cell on physical boundaries
+  mg%sides_bc    => sides_bc_potential
 
   ! This routine always needs to be called when using multigrid
   call mg$D_init_mg(mg)
@@ -357,101 +358,11 @@ contains
     end do
 
     ! Compute field from potential
-    call a$D_loop_box(tree, electric_field_from_potential)
+    call a$D_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
     call a$D_gc_tree(tree, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
   end subroutine compute_electric_field
-
-  !> Compute electric field from electrical potential
-  subroutine electric_field_from_potential(box)
-    type(box$D_t), intent(inout) :: box
-    integer                     :: nc
-    real(dp)                    :: inv_dr
-
-    nc     = box%n_cell
-    inv_dr = 1 / box%dr
-
-#if $D == 2
-    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
-
-    box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 2, electric_fld))**2)
-#elif $D == 3
-    box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
-         box%cc(1:nc+1, 1:nc, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
-         box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
-         box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
-
-    box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
-         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))**2)
-#endif
-
-  end subroutine electric_field_from_potential
-
-  !> This fills ghost cells near physical boundaries for the potential
-  subroutine sides_bc_potential(box, nb, iv, bc_type)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction for the boundary condition
-    integer, intent(in)         :: iv ! Index of variable
-    integer, intent(out)        :: bc_type ! Type of boundary condition
-    integer                     :: nc
-
-    nc = box%n_cell
-
-    select case (nb)
-#if $D == 2
-    case (a$D_neighb_lowx)
-       bc_type = af_bc_neumann
-       box%cc(   0, 1:nc, iv) = 0
-    case (a$D_neighb_highx)
-       bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, iv) = 0
-    case (a$D_neighb_lowy)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc,    0, iv) = 0
-    case (a$D_neighb_highy)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc, nc+1, iv) = ST_applied_voltage
-#elif $D == 3
-    case (a3_neighb_lowx)
-       bc_type = af_bc_neumann
-       box%cc(   0, 1:nc, 1:nc, iv) = 0
-    case (a3_neighb_highx)
-       bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, 1:nc, iv) = 0
-    case (a3_neighb_lowy)
-       bc_type = af_bc_neumann
-       box%cc(1:nc,    0, 1:nc, iv) = 0
-    case (a3_neighb_highy)
-       bc_type = af_bc_neumann
-       box%cc(1:nc, nc+1, 1:nc, iv) = 0
-    case (a3_neighb_lowz)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc, 1:nc,    0, iv) = 0
-    case (a3_neighb_highz)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc, 1:nc, nc+1, iv) = ST_applied_voltage
-#endif
-    end select
-
-  end subroutine sides_bc_potential
 
   !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
