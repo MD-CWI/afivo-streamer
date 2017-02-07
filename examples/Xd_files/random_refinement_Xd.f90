@@ -75,7 +75,7 @@ program random_refinement_$Dd
      ! leaves of the tree (the boxes not covered by refinement).
      ! Variables are the names given as the third argument.
      write(fname, "(A,I0)") "random_refinement_$Dd_", iter
-     call a$D_write_vtk(tree, trim(fname), dir="output")
+     call a$D_write_silo(tree, trim(fname), dir="output", n_cycle=iter)
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can
