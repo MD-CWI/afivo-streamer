@@ -301,7 +301,7 @@ contains
     call CFG_add(ST_config, "refine_max_dx", 1.0e-3_dp, &
          "The grid spacing will always be smaller than this value")
 
-    call CFG_add(ST_config, "refine_adx", 0.8_dp, &
+    call CFG_add(ST_config, "refine_adx", 1.0_dp, &
          "Refine if alpha*dx is larger than this value")
     call CFG_add(ST_config, "refine_cphi", 1e99_dp, &
          "Refine if the curvature in phi is larger than this value")
@@ -586,6 +586,14 @@ contains
        electric_fld = ST_applied_electric_fld_y
     end if
   end function ST_get_electric_field
+
+  function ST_get_min(a, b, n) result(min_vec)
+    integer, intent(in)  :: n
+    real(dp), intent(in) :: a(n), b(n)
+    real(dp)             :: min_vec(n)
+
+    min_vec = min(a, b)
+  end function ST_get_min
 
   !> Compute the voltage at a given time
   subroutine ST_set_voltage(time)
