@@ -21,8 +21,6 @@ program streamer_2d
   type(mg2_t)            :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
-  logical, parameter :: ST_cylindrical = .false.
-
   call ST_create_config()
   call ST_read_config_files()
   call ST_load_config()
@@ -362,9 +360,9 @@ contains
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-    box%fc(:, 1:nc, 1, electric_fld) = inv_dr * &
+    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, :, 2, electric_fld) = inv_dr * &
+    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
 
     box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
@@ -402,56 +400,47 @@ contains
 
   !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
-    use m_units_constants
+    use m_flux_schemes
     type(box2_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp)                    :: inv_dr, gradp, gradc, gradn
-    real(dp)                    :: mobility, diff_coeff, v_drift
-    real(dp)                    :: fld
+    real(dp)                    :: inv_dr, fld_x, fld_y
     real(dp)                    :: cc(-1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
-    integer                     :: i, j, nc, dim, dix(2)
-    type(LT_loc_t)              :: loc
+    real(dp), allocatable       :: v(:, :, :), dc(:, :, :)
+    integer                     :: nc, n, m
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+
+    allocate(v(1:nc+1, 1:nc+1, 2))
+    allocate(dc(1:nc+1, 1:nc+1, 2))
 
     ! Fill ghost cells
     call a2_gc_box(boxes, id, i_electron, a2_gc_interp_lim, a2_bc_neumann_zero)
     call a2_gc2_box(boxes, id, i_electron, a2_gc2_prolong_linear, &
          a2_bc2_neumann_zero, cc, nc)
 
-    do dim = 1, 2
-       dix(:) = 0
-       dix(dim) = 1
+    ! We use the average field to compute the mobility and diffusion coefficient
+    ! at the interface
+    do n = 1, nc+1
+       do m = 1, nc
+          fld_x       = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
+               boxes(id)%cc(n, m, i_electric_fld))
+          v(n, m, 1)  = -LT_get_col(ST_td_tbl, i_mobility, fld_x) * &
+               boxes(id)%fc(n, m, 1, electric_fld)
+          dc(n, m, 1) = LT_get_col(ST_td_tbl, i_diffusion, fld_x)
 
-       do j = 1, nc+dix(2)
-          do i = 1, nc+dix(1)
-             fld        = boxes(id)%fc(i, j, dim, electric_fld)
-             loc        = LT_get_loc(ST_td_tbl, fld)
-             mobility   = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
-             diff_coeff = LT_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
-             v_drift    = -mobility * fld
-             gradc      = cc(i, j) - cc(i-dix(1), j-dix(2))
-
-             if (v_drift < 0.0_dp) then
-                gradn = cc(i+dix(1), j+dix(2)) - cc(i, j)
-                boxes(id)%fc(i, j, dim, flux_elec) = v_drift * &
-                     (cc(i, j) - koren_mlim(gradc, gradn))
-             else                  ! v_drift > 0
-                gradp = cc(i-dix(1), j-dix(2)) - cc(i-2*dix(1), j-2*dix(2))
-                boxes(id)%fc(i, j, dim, flux_elec) = v_drift * &
-                     (cc(i-dix(1), j-dix(2)) + koren_mlim(gradc, gradp))
-             end if
-
-             ! Diffusive part with 2-nd order explicit method. dif_f has to be
-             ! scaled by 1/dx
-             boxes(id)%fc(i, j, dim, flux_elec) = &
-                  boxes(id)%fc(i, j, dim, flux_elec) - &
-                  diff_coeff * gradc * inv_dr
-          end do
+          fld_y       = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
+               boxes(id)%cc(m, n, i_electric_fld))
+          v(m, n, 2)  = -LT_get_col(ST_td_tbl, i_mobility, fld_y) * &
+               boxes(id)%fc(m, n, 2, electric_fld)
+          dc(m, n, 2) = LT_get_col(ST_td_tbl, i_diffusion, fld_y)
        end do
     end do
 
+    call flux_koren_2d(cc, v, nc, 2)
+    call flux_diff_2d(cc, dc, inv_dr, nc, 2)
+
+    boxes(id)%fc(:, :, :, flux_elec) = v !+ dc
   end subroutine fluxes_koren
 
   !> Take average of new and old electron/ion density for explicit trapezoidal rule
@@ -480,9 +469,9 @@ contains
        do i = 1, nc
           fld   = box%cc(i,j, i_electric_fld)
           loc   = LT_get_loc(ST_td_tbl, fld)
-          alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+          alpha = 0 * LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
           eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
-          mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+          mu    = 0 * LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
           ! Contribution of flux
           if (ST_cylindrical) then
@@ -567,14 +556,17 @@ contains
     integer                      :: lvl, i, id, p_id
 
     do lvl = 1, tree%highest_lvl
+       !$omp parallel do private(id, p_id)
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a2_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a2_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
+          call a2_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
+       !$omp end parallel do
 
+       !$omp parallel do private(id)
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a2_gc_box(tree%boxes, id, i_electron, &
@@ -582,9 +574,10 @@ contains
           call a2_gc_box(tree%boxes, id, i_pos_ion, &
                a2_gc_interp_lim, a2_bc_neumann_zero)
           call a2_gc_box(tree%boxes, id, i_phi, &
-               mg2_sides_rb, mg%sides_bc)
+               mg%sides_rb, mg%sides_bc)
        end do
-    end do
+       !$omp end parallel do
+     end do
   end subroutine prolong_to_new_boxes
 
 end program streamer_2d

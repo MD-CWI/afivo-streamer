@@ -65,6 +65,9 @@ module m_streamer
   integer, parameter :: i_alpha     = 3 ! Ionization coeff (1/m)
   integer, parameter :: i_eta       = 4 ! Attachment coeff (1/m)
 
+  ! Whether cylindrical coordinates are used
+  logical :: ST_cylindrical = .false.
+
   ! How many multigrid FMG cycles we perform per time step
   integer, parameter :: n_fmg_cycles = 1
 
@@ -226,6 +229,8 @@ contains
   !> Create the configuration file with default values
   subroutine ST_create_config()
 
+    call CFG_add(ST_config, "cylindrical", .false., &
+         "Whether cylindrical coordinates are used (only in 2D)")
     call CFG_add(ST_config, "end_time", 10.0d-9, &
          "The desired endtime (s) of the simulation")
     call CFG_add(ST_config, "simulation_name", "sim", &
@@ -516,6 +521,7 @@ contains
   subroutine ST_load_config()
     character(len=ST_slen)    :: tmp_name
 
+    call CFG_get(ST_config, "cylindrical", ST_cylindrical)
     call CFG_get(ST_config, "end_time", ST_end_time)
     call CFG_get(ST_config, "box_size", ST_box_size)
     call CFG_get(ST_config, "output_dir", ST_output_dir)
