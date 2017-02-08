@@ -679,7 +679,7 @@ contains
          n_cycle_val, time_val)
     do iv = 1, n_cc
        call SILO_set_mmesh_var(dbix, trim(var_names(iv)), amr_name, &
-            var_list(iv, 1:i_grid))
+            var_list(iv, 1:i_grid), n_cycle_val, time_val)
     end do
     call SILO_close_file(dbix)
     print *, "a$D_write_silo: written " // trim(fname)

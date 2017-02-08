@@ -23,48 +23,57 @@ contains
 
   !> Fill ghost cells for variables iv on the sides of all boxes, using
   !> subr_rb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a$D_gc_tree(tree, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_tree(tree, iv, subr_rb, subr_bc, corners)
     type(a$D_t), intent(inout) :: tree    !< Tree to fill ghost cells on
     integer, intent(in)        :: iv      !< Variable for which ghost cells are set
     procedure(a$D_subr_rb)     :: subr_rb !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)     :: subr_bc !< Procedure called at physical boundaries
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
     integer                    :: lvl
 
     if (.not. tree%ready) stop "Tree not ready"
 
     do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, iv, subr_rb, subr_bc)
+       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, iv, &
+            subr_rb, subr_bc, corners)
     end do
   end subroutine a$D_gc_tree
 
   !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
   !> on refinement boundaries and subr_bc on physical boundaries. This routine
   !> assumes that ghost cells on other ids have been set already.
-  subroutine a$D_gc_ids(boxes, ids, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_ids(boxes, ids, iv, subr_rb, subr_bc, corners)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)          :: ids(:)   !< Ids of boxes for which we set ghost cells
     integer, intent(in)          :: iv       !< Variable for which ghost cells are set
     procedure(a$D_subr_rb)       :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
     integer                      :: i
 
     !$omp parallel do
     do i = 1, size(ids)
-       call a$D_gc_box(boxes, ids(i), iv, subr_rb, subr_bc)
+       call a$D_gc_box(boxes, ids(i), iv, subr_rb, subr_bc, corners)
     end do
     !$omp end parallel do
   end subroutine a$D_gc_ids
 
   !> Fill ghost cells for variable iv
-  subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_box(boxes, id, iv, subr_rb, subr_bc, corners)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all the boxes
     integer, intent(in)          :: id       !< Id of box for which we set ghost cells
     integer, intent(in)          :: iv       !< Variable for which ghost cells are set
     procedure(a$D_subr_rb)       :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
+    logical :: do_corners
 
     call a$D_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
-    call a$D_gc_box_corner(boxes, id, iv)
+
+    do_corners = .true.
+    if (present(corners)) do_corners = corners
+
+    if (do_corners) call a$D_gc_box_corner(boxes, id, iv)
   end subroutine a$D_gc_box
 
   !> Fill ghost cells for variable iv on the sides of a box, using subr_rb on
@@ -119,7 +128,7 @@ contains
        dim = a3_edge_dim(n)
 
        ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(boxes, id, a3_nb_adj_edge(:, n))
+       nb_id = get_diag_neighb_id(boxes, id, a3_nb_adj_edge(:, n))
 
        lo = a3_edge_min_ix(:, n) * (boxes(id)%n_cell + 1)
        lo(dim) = 1
@@ -137,7 +146,7 @@ contains
 
     do n = 1, a$D_num_children
        ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
+       nb_id = get_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
        lo    = a$D_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then
@@ -148,6 +157,57 @@ contains
        end if
     end do
   end subroutine a$D_gc_box_corner
+
+  !> Get diagonal neighbors. Returns the index of the neighbor if found,
+  !> otherwise the result nb_id <= af_no_box.
+  pure function get_diag_neighb_id(boxes, id, nbs) result(nb_id)
+    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
+    integer, intent(in)       :: id       !< Start index
+    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
+    integer                   :: i, j, k, nb, nb_id
+    integer                   :: nbs_perm(size(nbs))
+
+    if (size(nbs) == 0) then
+       nb_id = id
+    else
+       do i = 1, size(nbs)
+          nb_id = id
+
+          ! Check if path exists starting from nbs(i)
+          do j = 1, size(nbs)
+             ! k starts at i and runs over the neighbors
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
+    ! covers all paths
+    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
+       nbs_perm = nbs([2,1,3])
+
+       do i = 1, size(nbs)
+          nb_id = id
+
+          do j = 1, size(nbs)
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+  end function get_diag_neighb_id
 
   subroutine bc_to_gc(box, nb, iv, bc_type)
     type(box$D_t), intent(inout)  :: box
@@ -800,9 +860,6 @@ contains
     ! Diagional neighbor index
     ic = lo + di
     ix = lo
-
-    ! print *, ix, di, dim, o_dims
-    ! print *, lo
 
     do n = 1, box%n_cell
        ia(dim) = n
