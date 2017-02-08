@@ -290,9 +290,12 @@ contains
     length = dbset2dstrlen(old_str_len)
   end subroutine SILO_set_mmesh_grid
 
-  subroutine SILO_set_mmesh_var(dbix, mvname, mmname, datanames)
+  subroutine SILO_set_mmesh_var(dbix, mvname, mmname, datanames, n_cycle, time)
     character(len=*), intent(in)   :: mvname, mmname, datanames(:)
     integer, intent(in)            :: dbix
+    integer, intent(in), optional  :: n_cycle
+    real(dp), intent(in), optional :: time
+
 
     integer                        :: i, ierr, dboptix, iostat,length
     integer                        :: old_str_len, n_grids, name_len, total_len
@@ -332,6 +335,18 @@ contains
     ierr = dbmkoptlist(10, dboptix)
     if (ierr /= 0) print *, &
             "Error creating options list in SILO_set_mmesh_var", ierr
+
+    if (present(n_cycle)) then
+       ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
+       if (ierr /= 0) print *, &
+               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_CYCLE", ierr
+    end if
+
+    if (present(time)) then
+       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+       if (ierr /= 0) print *, &
+               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_DTIME", ierr
+    end if
 
     ierr = dbaddcopt(dboptix, DBOPT_MMESH_NAME, &
          trim(mmname), len_trim(mmname))
