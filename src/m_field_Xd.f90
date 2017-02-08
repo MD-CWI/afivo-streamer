@@ -6,26 +6,35 @@ module m_field_$Dd
   implicit none
   private
 
-  ! Start modifying the vertical background field after this time
-  real(dp), protected :: field_mod_t0 = 1e99_dp
+  !> Start modifying the vertical background field after this time
+  real(dp) :: field_mod_t0 = 1e99_dp
 
-  ! Amplitude of sinusoidal modification
-  real(dp), protected :: field_sin_amplitude = 0.0_dp
+  !> Amplitude of sinusoidal modification
+  real(dp) :: field_sin_amplitude = 0.0_dp
 
-  ! Frequency (Hz) of sinusoidal modification
-  real(dp), protected :: field_sin_freq = 0.0_dp
+  !> Frequency (Hz) of sinusoidal modification
+  real(dp) :: field_sin_freq = 0.0_dp
 
-  ! Linear derivative of background field
-  real(dp), protected :: field_lin_deriv = 0.0_dp
+  !> Linear derivative of background field
+  real(dp) :: field_lin_deriv = 0.0_dp
 
-  ! Decay time of background field
-  real(dp), protected :: field_decay_time = huge(1.0_dp)
+  !> Decay time of background field
+  real(dp) :: field_decay_time = huge(1.0_dp)
 
-  ! The applied electric field (vertical direction)
-  real(dp), protected :: field_amplitude = 1.0e6_dp
+  !> The applied electric field (vertical direction)
+  real(dp) :: field_amplitude = 1.0e6_dp
 
-  ! The applied voltage (vertical direction)
-  real(dp), protected :: field_voltage
+  !> The applied voltage (vertical direction)
+  real(dp) :: field_voltage
+
+  !> Drop-off radius
+  real(dp) :: field_dropoff_radius = 1e-3_dp
+
+  !> Relative width over which the potential drops
+  real(dp) :: field_dropoff_relwidth = 0.5_dp
+
+  !> Location from which the field drops off (set below)
+  real(dp) :: field_dropoff_pos(2) = 0.0_dp
 
   character(ST_slen) :: field_bc_type = "homogeneous"
 
@@ -36,6 +45,7 @@ module m_field_$Dd
   public :: field_set_voltage
 
   public :: field_bc_homogeneous
+  public :: field_bc_dropoff
 
 contains
 
@@ -64,6 +74,19 @@ contains
     select case (field_bc_type)
     case ("homogeneous")
        mg%sides_bc => field_bc_homogeneous
+    case ("dropoff")
+       if (ST_cylindrical) then
+          field_dropoff_pos(:) = 0.0_dp
+       else
+          field_dropoff_pos(:) = 0.5_dp
+       end if
+
+       call CFG_add_get(cfg, "field_dropoff_radius", field_dropoff_radius, &
+            "Potential stays constant up to this radius")
+       call CFG_add_get(cfg, "field_dropoff_relwidth", field_dropoff_relwidth, &
+            "Relative width over which the potential drops")
+
+       mg%sides_bc => field_bc_dropoff
     case default
        error stop "field_bc_select error: invalid condition"
     end select
@@ -176,6 +199,62 @@ contains
     end select
 
   end subroutine field_bc_homogeneous
+
+  subroutine field_bc_dropoff(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)          :: nb      ! Direction for the boundary condition
+    integer, intent(in)          :: iv      ! Index of variable
+    integer, intent(out)         :: bc_type ! Type of boundary condition
+    integer                      :: nc, i
+#if $D == 3
+    integer                      :: j
+#endif
+    real(dp)                     :: rr($D), rdist
+
+    nc = box%n_cell
+
+    select case (nb)
+#if $D == 2
+    case (a2_neighb_highy)
+       bc_type = af_bc_dirichlet
+
+       do i = 1, nc
+          rr = a2_r_cc(box, [i, 0])
+          rdist = abs(rr(1) - field_dropoff_pos(1))
+          rdist = (rdist - field_dropoff_radius) / &
+               (field_dropoff_relwidth * ST_domain_len)
+
+          if (rdist < 0) then
+             box%cc(i, nc+1, iv) = field_voltage
+          else
+             box%cc(i, nc+1, iv) = field_voltage * &
+                  max(0.0_dp, (1 - rdist))
+          end if
+       end do
+#elif $D == 3
+    case (a3_neighb_highz)
+       bc_type = af_bc_dirichlet
+
+       do j = 1, nc
+          do i = 1, nc
+             rr = a3_r_cc(box, [i, j, 0])
+             rdist = norm2(rr(1:2) - field_dropoff_pos(1:2))
+             rdist = (rdist - field_dropoff_radius) / &
+                  (field_dropoff_relwidth * ST_domain_len)
+
+             if (rdist < 0) then
+                box%cc(i, j, nc+1, iv) = field_voltage
+             else
+                box%cc(i, j, nc+1, iv) = field_voltage * &
+                     max(0.0_dp, (1 - rdist))
+             end if
+          end do
+       end do
+#endif
+    case default
+       call field_bc_homogeneous(box, nb, iv, bc_type)
+    end select
+  end subroutine field_bc_dropoff
 
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
