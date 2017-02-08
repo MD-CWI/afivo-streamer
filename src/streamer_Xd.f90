@@ -417,10 +417,10 @@ contains
             rfac(1) * box%fc(i, j, 1, flux_elec) - &
             rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt(1)
 #elif $D == 3
-       sflux = (sum(box%fc(i, j, k, :, flux_elec) - &
+       sflux = (sum(box%fc(i, j, k, 1:3, flux_elec)) - &
             box%fc(i+1, j, k, 1, flux_elec) - &
             box%fc(i, j+1, k, 2, flux_elec) - &
-            box%fc(i, j, k+1, 3, flux_elec))) * inv_dr * dt(1)
+            box%fc(i, j, k+1, 3, flux_elec)) * inv_dr * dt(1)
 #endif
 
        ! Source term
