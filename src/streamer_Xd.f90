@@ -37,6 +37,11 @@ program streamer_$Dd
   mg%i_tmp = i_electric_fld
   mg%i_rhs = i_rhs
 
+  ! This automatically handles cylindrical symmetry
+  mg%box_op => mg$D_auto_op
+  mg%box_gsrb => mg$D_auto_gsrb
+  mg%box_corr => mg$D_auto_corr
+
   ! This routine always needs to be called when using multigrid
   call mg$D_init_mg(mg)
 
