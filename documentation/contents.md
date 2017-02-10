@@ -6,6 +6,7 @@
 * [Quadtree and octree grids](documentation/quadtree_octree.md)
 * [Important data structures](documentation/data_structures.md)
 * [Source code structure](documentation/source_code.md)
+* [Terminology and variable names](documentation/terminology.md)
 
 # How-to guides
 
