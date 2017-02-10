@@ -483,10 +483,11 @@ contains
     type(box$D_t), intent(inout) :: box      !< Box to operate on
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    real(dp), optional, intent(in) :: gc_scalar
+    real(dp), optional, intent(in) :: gc_scalar !< Scalar value for ghost cells
 #if $D == 2
-    real(dp), optional, intent(in) :: gc_array(box%n_cell)
+    real(dp), optional, intent(in) :: gc_array(box%n_cell) !< Array for ghost cells
 #elif $D == 3
+    !> Array for ghost cells
     real(dp), optional, intent(in) :: gc_array(box%n_cell, box%n_cell)
 #endif
     integer                     :: nc

@@ -513,7 +513,7 @@ contains
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
   subroutine a$D_adjust_refinement(tree, ref_subr, ref_info, ref_buffer)
-    type(a$D_t), intent(inout)      :: tree        !< Tree
+    type(a$D_t), intent(inout)      :: tree        !< The tree to adjust
     procedure(a$D_subr_ref)         :: ref_subr    !< Refinement function
     type(ref_info_t), intent(inout) :: ref_info    !< Information about refinement
     integer, intent(in), optional   :: ref_buffer  !< Buffer width (in cells)

@@ -17,7 +17,7 @@ contains
   function a$D_interp1(tree, r, ivs, n_var) result(vals)
     use m_a$D_utils, only: a$D_get_loc, a$D_r_loc
     type(a$D_t), intent(in) :: tree !< Parent box
-    real(dp), intent(in)    :: r($D)
+    real(dp), intent(in)    :: r($D) !< Where to interpolate
     integer, intent(in)     :: n_var     !< Number of variables
     integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
     real(dp)                :: vals(n_var)
@@ -73,7 +73,7 @@ contains
   function a$D_interp2(tree, r, ivs, n_var) result(vals)
     use m_a$D_utils, only: a$D_get_loc, a$D_r_loc
     type(a$D_t), intent(in) :: tree !< Parent box
-    real(dp), intent(in)    :: r($D)
+    real(dp), intent(in)    :: r($D) !< Where to interpolate
     integer, intent(in)     :: n_var     !< Number of variables
     integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
     real(dp)                :: vals(n_var)

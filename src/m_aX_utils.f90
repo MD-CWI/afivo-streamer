@@ -189,7 +189,7 @@ contains
   !> do not go to a finer level than highest_lvl. If there is no box containing rr,
   !> return a location of -1
   pure function a$D_get_loc(tree, rr, highest_lvl) result(loc)
-    type(a$D_t), intent(in)       :: tree   !< Tree
+    type(a$D_t), intent(in)       :: tree   !< Full grid
     real(dp), intent(in)          :: rr($D) !< Coordinate
     integer, intent(in), optional :: highest_lvl !< Maximum level of box
     type(a$D_loc_t)               :: loc    !< Location of cell
@@ -368,11 +368,13 @@ contains
     integer                :: i, id, lvl
 
     interface
+       !> Function that returns a scalar
        real(dp) function box_func(box)
          import
          type(box$D_t), intent(in) :: box
        end function box_func
 
+       !> Reduction method (e.g., min, max, sum)
        real(dp) function reduction(a, b)
          import
          real(dp), intent(in) :: a, b
@@ -404,13 +406,14 @@ contains
   subroutine a$D_reduction_vec(tree, box_func, reduction, init_val, &
        out_val, n_vals)
     type(a$D_t), intent(in) :: tree             !< Tree to do the reduction on
-    integer, intent(in)     :: n_vals
+    integer, intent(in)     :: n_vals           !< Size of vector
     real(dp), intent(in)    :: init_val(n_vals) !< Initial value for the reduction
     real(dp), intent(out)   :: out_val(n_vals)  !< Result of the reduction
     real(dp)                :: tmp(n_vals), my_val(n_vals)
     integer                 :: i, id, lvl
 
     interface
+       !> Function that returns a vector
        function box_func(box, n_vals) result(vec)
          import
          type(box$D_t), intent(in) :: box
@@ -418,6 +421,7 @@ contains
          real(dp)                  :: vec(n_vals)
        end function box_func
 
+       !> Reduction method (e.g., min, max, sum)
        function reduction(vec_1, vec_2, n_vals) result(vec)
          import
          integer, intent(in)  :: n_vals
@@ -460,6 +464,7 @@ contains
     type(a$D_loc_t)             :: my_loc
 
     interface
+       !> Subroutine that returns a scalar and a cell index
        subroutine box_subr(box, val, ix)
          import
          type(box$D_t), intent(in) :: box
@@ -467,6 +472,7 @@ contains
          integer, intent(out)     :: ix($D)
        end subroutine box_subr
 
+       !> Reduction method (e.g., min, max, sum)
        real(dp) function reduction(a, b)
          import
          real(dp), intent(in) :: a, b
@@ -510,10 +516,10 @@ contains
   !> Find maximum value of cc(..., iv). By default, only loop over leaves, and
   !> ghost cells are not used.
   subroutine a$D_tree_max_cc(tree, iv, cc_max, include_parents)
-    type(a$D_t), intent(in)       :: tree
-    integer, intent(in)           :: iv
-    real(dp), intent(out)         :: cc_max
-    logical, intent(in), optional :: include_parents
+    type(a$D_t), intent(in)       :: tree !< Full grid
+    integer, intent(in)           :: iv !< Index of variable
+    real(dp), intent(out)         :: cc_max !< Maximum value
+    logical, intent(in), optional :: include_parents !< Include parent boxes
     logical                       :: only_leaves
     real(dp)                      :: tmp, my_max
     integer                       :: i, id, lvl, nc
@@ -564,10 +570,10 @@ contains
   !> Find minimum value of cc(..., iv). By default, only loop over leaves, and
   !> ghost cells are not used.
   subroutine a$D_tree_min_cc(tree, iv, cc_min, include_parents)
-    type(a$D_t), intent(in)       :: tree
-    integer, intent(in)           :: iv
-    real(dp), intent(out)         :: cc_min
-    logical, intent(in), optional :: include_parents
+    type(a$D_t), intent(in)       :: tree !< Full grid
+    integer, intent(in)           :: iv !< Index of variable
+    real(dp), intent(out)         :: cc_min !< Maximum value
+    logical, intent(in), optional :: include_parents !< Include parent boxes
     logical                       :: only_leaves
     real(dp)                      :: tmp, my_min
     integer                       :: i, id, lvl, nc
@@ -617,9 +623,9 @@ contains
   !> Find weighted sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
   subroutine a$D_tree_sum_cc(tree, iv, cc_sum)
-    type(a$D_t), intent(in) :: tree
-    integer, intent(in)    :: iv
-    real(dp), intent(out)  :: cc_sum
+    type(a$D_t), intent(in) :: tree !< Full grid
+    integer, intent(in)    :: iv !< Index of variable
+    real(dp), intent(out)  :: cc_sum !< Volume-integrated sum of variable
     real(dp)               :: tmp, my_sum, fac
     integer                :: i, id, lvl, nc
 
@@ -677,8 +683,9 @@ contains
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: iv_from, iv_to
+    type(box$D_t), intent(inout) :: box !< Operate on this box
+    integer, intent(in)         :: iv_from !< From this variable
+    integer, intent(in)         :: iv_to !< To this variable
 #if $D == 2
     box%fc(:,:,:, iv_to) = box%fc(:,:,:, iv_from)
 #elif $D == 3
@@ -688,8 +695,10 @@ contains
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to) for all ids
   subroutine a$D_boxes_copy_fc(boxes, ids, iv_from, iv_to)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: ids(:), iv_from, iv_to
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: ids(:) !< Operate on these boxes
+    integer, intent(in)         :: iv_from !< From this variable
+    integer, intent(in)         :: iv_to !< To this variable
     integer                     :: i
 
     !$omp parallel do
@@ -701,8 +710,9 @@ contains
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to) for full tree
   subroutine a$D_tree_copy_fc(tree, iv_from, iv_to)
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)       :: iv_from, iv_to
+    type(a$D_t), intent(inout) :: tree !< Full grid
+    integer, intent(in)       :: iv_from !< From this variable
+    integer, intent(in)       :: iv_to !< To this variable
     integer                   :: lvl
 
     if (.not. tree%ready) stop "Tree not ready"
@@ -713,10 +723,10 @@ contains
 
   !> Return n_cell at lvl. For all lvls >= 1, n_cell has the same value, but
   !> for lvls <= 0, n_cell changes.
-  !> TODO: remove this in future
+  !> @todo remove this in future
   pure function a$D_n_cell(tree, lvl) result(n_cell)
-    type(a$D_t), intent(in) :: tree
-    integer, intent(in)    :: lvl
+    type(a$D_t), intent(in) :: tree !< Full grid
+    integer, intent(in)    :: lvl !< Refinement level
     integer                :: n_cell !< Output: n_cell at lvl
 
     if (lvl >= 1) then

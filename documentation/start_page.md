@@ -1,7 +1,8 @@
 # Afivo
 
 This is the documentation for **Afivo**, which is a framework for simulations on
-adaptively refined [quadtree and octree grids](@ref quadtree_octree.md).
+adaptively
+refined [quadtree and octree grids](@ref documentation/quadtree_octree.md).
 
 Have a look at the @ref doc-contents to get started with Afivo.
 

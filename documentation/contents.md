@@ -17,7 +17,8 @@
 * [Filling ghost cells](documentation/filling_ghost_cells.md)
 * [Performing grid refinement](documentation/grid_refinement.md)
 * [Running in parallel](documentation/parallelization.md)
-* [Working with multigrid](documentation/multigrid.md)
+* [Multigrid overview](documentation/multigrid.md)
+* [Multigrid tutorial](documentation/multigrid_tutorial.md)
 * [Writing and viewing output](documentation/writing_viewing_output.md)
 
 # Examples

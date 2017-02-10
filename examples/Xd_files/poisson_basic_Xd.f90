@@ -31,6 +31,7 @@ program poisson_basic_$Dd
   print *, "Running poisson_basic_$Dd"
   print *, "Number of threads", af_get_max_threads()
 
+  !>! [Gauss_init]
   ! The manufactured solution exists of Gaussians
   ! Amplitudes:  [1.0_dp, 1.0_dp]
   ! Sigmas    :  [0.04_dp, 0.04_dp]
@@ -38,10 +39,12 @@ program poisson_basic_$Dd
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
        reshape([DTIMES(0.25_dp), &
        DTIMES(0.75_dp)], [$D,2]))
+  !>! [Gauss_init]
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
 
+  !>! [a2_init]
   ! Initialize tree
   call a$D_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
@@ -50,15 +53,19 @@ program poisson_basic_$Dd
        dr, &           ! Distance between cells on base level
        coarsen_to=2, & ! Add coarsened levels for multigrid
        cc_names=["phi", "rhs", "err", "tmp"]) ! Variable names
+  !>! [a2_init]
 
+  !>! [a2_set_base]
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
   ix_list(:, 1) = [DTIMES(1)]         ! Set index of box 1
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a$D_set_base(tree, 1, ix_list)
+  !>! [a2_set_base]
 
   call system_clock(t_start, count_rate)
+  !>! [set_refinement]
   do
      ! For each box, set the initial conditions
      call a$D_loop_box(tree, set_initial_condition)
@@ -72,6 +79,7 @@ program poisson_basic_$Dd
      ! If no new boxes have been added, exit the loop
      if (refine_info%n_add == 0) exit
   end do
+  !>! [set_refinement]
   call system_clock(t_end, count_rate)
 
   write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
@@ -111,10 +119,12 @@ program poisson_basic_$Dd
      write(*,"(I8,13x,2(Es14.5))") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
+     !>! [write_output]
      ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_basic_$Dd_", mg_iter
      call a$D_write_vtk(tree, trim(fname), dir="output")
+     !>! [write_output]
   end do
   call system_clock(t_end, count_rate)
 
@@ -129,6 +139,7 @@ program poisson_basic_$Dd
 
 contains
 
+  !>! [refine_routine]
   ! Return the refinement flags for box
   subroutine refine_routine(box, cell_flags)
     type(box$D_t), intent(in) :: box
@@ -153,7 +164,9 @@ contains
        end if
     end do; CLOSE_DO
   end subroutine refine_routine
+  !>! [refine_routine]
 
+  !>! [set_initial_condition]
   ! This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
     type(box$D_t), intent(inout) :: box
@@ -170,7 +183,9 @@ contains
        box%cc(IJK, i_rhs) = gauss_laplacian(gs, rr)
     end do; CLOSE_DO
   end subroutine set_initial_condition
+  !>! [set_initial_condition]
 
+  !>! [set_error]
   ! Set the error compared to the analytic solution
   subroutine set_error(box)
     type(box$D_t), intent(inout) :: box
@@ -183,6 +198,7 @@ contains
        box%cc(IJK, i_err) = box%cc(IJK, i_phi) - gauss_value(gs, rr)
     end do; CLOSE_DO
   end subroutine set_error
+  !>! [set_error]
 
   ! This routine sets boundary conditions for a box, by filling its ghost cells
   ! with approriate values.

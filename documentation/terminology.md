@@ -6,8 +6,9 @@ Here the most important terminology and variable names are collected.
 
 Term | Description
 ---|---
-quadtree/octree | See @ref `quadtree_octree.md`
-box | A box contains \f$N^D\f$ grid cells, where \f$D\f$ is the problem dimension and \f$N\f$ is e.g. 8 or 16, see @ref `data_structures.md`
+AMR | Adaptive Mesh Refinement
+quadtree/octree | Afivo uses adaptively refined grids of the [quadtree and octree](@ref documentation/quadtree_octree.md) type
+box | A box contains \f$N^D\f$ grid cells, where \f$D\f$ is the problem dimension and \f$N\f$ is e.g. 8 or 16, see @ref documentation/data_structures.md
 tree | The full grid, containing all the boxes at all refinement levels
 neighbors | A box can have neighbors (adjacent boxes at the same refinement level) in the x, y, and z-direction
 parent | When a box is refined, it becomes a parent (since it now has refined 'children')
