@@ -246,11 +246,11 @@ contains
 #endif
   end function child_that_contains
 
-  !> Get the location of "loc"
+  !> Get the coordinate of the cell-center at loc
   pure function a$D_r_loc(tree, loc) result(r)
-    type(a$D_t), intent(in)     :: tree
-    type(a$D_loc_t), intent(in) :: loc
-    real(dp)                   :: r($D)
+    type(a$D_t), intent(in)     :: tree !< Full grid
+    type(a$D_loc_t), intent(in) :: loc !< Location object
+    real(dp)                   :: r($D) !< Coordinate at cell center
     r = tree%boxes(loc%id)%r_min + &
          (loc%ix-0.5_dp) * tree%boxes(loc%id)%dr
   end function a$D_r_loc
