@@ -637,11 +637,11 @@ contains
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    integer, intent(in)         :: nc
+    integer, intent(in)         :: nc        !< Box n_cell
 #if $D == 2
-    real(dp), intent(out)       :: gc_side(nc)
+    real(dp), intent(out)       :: gc_side(nc) !< Ghost cells on side
 #elif $D == 3
-    real(dp), intent(out)       :: gc_side(nc, nc)
+    real(dp), intent(out)       :: gc_side(nc, nc) !< Ghost cells on side
 #endif
     integer                     :: ix, i, j
     integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
@@ -735,12 +735,15 @@ contains
 
   ! This fills second ghost cells near physical boundaries using Neumann zero
   subroutine a$D_bc2_neumann_zero(boxes, id, nb, iv, gc_side, nc)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv, nc
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: id        !< Id of box
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
+    integer, intent(in)         :: nc        !< Box n_cell
 #if $D == 2
-    real(dp), intent(out)       :: gc_side(nc)
+    real(dp), intent(out)       :: gc_side(nc) !< Ghost cells on side
 #elif $D == 3
-    real(dp), intent(out)       :: gc_side(nc, nc)
+    real(dp), intent(out)       :: gc_side(nc, nc) !< Ghost cells on side
 #endif
 
     select case (nb)
@@ -810,9 +813,9 @@ contains
   !> This fills corner ghost cells using linear extrapolation. The ghost cells
   !> on the sides already need to be filled.
   subroutine a$D_corner_gc_extrap(box, ix, iv)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)          :: ix($D)
-    integer, intent(in)          :: iv
+    type(box$D_t), intent(inout) :: box !< Box to fill ghost cells for
+    integer, intent(in)          :: ix($D) !< Cell-index of corner
+    integer, intent(in)          :: iv     !< Variable to fill
     integer                      :: di($D)
 
     di = 1 - 2 * iand(ix, 1)    ! 0 -> di = 1, nc+1 -> di = -1
@@ -835,10 +838,10 @@ contains
   !> the sides already need to be filled. This routine basically performs the
   !> same operation as a$D_corner_gc_extrap does in 2D.
   subroutine a3_edge_gc_extrap(box, lo, dim, iv)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)          :: lo($D)
+    type(box$D_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)          :: lo($D) !< Lowest index of edge ghost cells
     integer, intent(in)          :: dim !< Dimension parallel to edge
-    integer, intent(in)          :: iv
+    integer, intent(in)          :: iv !< Variable to fill
     integer                      :: di($D), ix($D), ia($D), ib($D), ic($D)
     integer                      :: n, o_dims($D-1)
 

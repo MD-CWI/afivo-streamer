@@ -52,7 +52,7 @@ module m_a$D_multigrid
      subroutine mg$D_box_op(box, i_out, mg)
        import
        type(box$D_t), intent(inout) :: box !< The box to operate on
-       type(mg$D_t), intent(in)     :: mg
+       type(mg$D_t), intent(in)     :: mg !< Multigrid options
        integer, intent(in)         :: i_out !< Index of output variable
      end subroutine mg$D_box_op
 
@@ -60,7 +60,7 @@ module m_a$D_multigrid
      subroutine mg$D_box_gsrb(box, redblack_cntr, mg)
        import
        type(box$D_t), intent(inout) :: box !< The box to operate on
-       type(mg$D_t), intent(in)     :: mg
+       type(mg$D_t), intent(in)     :: mg !< Multigrid options
        integer, intent(in)         :: redblack_cntr !< Iteration counter
      end subroutine mg$D_box_gsrb
 
@@ -68,7 +68,7 @@ module m_a$D_multigrid
        import
        type(box$D_t), intent(inout) :: box_c
        type(box$D_t), intent(in)    :: box_p
-       type(mg$D_t), intent(in)     :: mg
+       type(mg$D_t), intent(in)     :: mg !< Multigrid options
      end subroutine mg$D_box_corr
 
      subroutine mg$D_box_rstr(box_c, box_p, iv, mg)
@@ -76,7 +76,7 @@ module m_a$D_multigrid
        type(box$D_t), intent(in)    :: box_c !< Child box to restrict
        type(box$D_t), intent(inout) :: box_p !< Parent box to restrict to
        integer, intent(in)         :: iv    !< Variable to restrict
-       type(mg$D_t), intent(in)     :: mg
+       type(mg$D_t), intent(in)     :: mg !< Multigrid options
      end subroutine mg$D_box_rstr
   end interface
 
@@ -407,9 +407,9 @@ contains
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
   subroutine correct_children(boxes, ids, mg)
-    type(box$D_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: ids(:)
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)         :: ids(:) !< Operate on these boxes
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, id, nc, i_c, c_id
 
     !$omp parallel do private(id, nc, i_c, c_id)
@@ -437,10 +437,11 @@ contains
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
     use m_a$D_ghostcell, only: a$D_gc_ids
-    type(box$D_t), intent(inout) :: boxes(:)
-    type(mg$D_t), intent(in)     :: mg
-    integer, intent(in)         :: ids(:), n_cycle
-    integer                     :: n, i
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    type(mg$D_t), intent(in)     :: mg       !< Multigrid options
+    integer, intent(in)          :: ids(:)   !< Operate on these boxes
+    integer, intent(in)          :: n_cycle  !< Number of cycles to perform
+    integer                      :: n, i
 
     do n = 1, 2 * n_cycle
        !$omp parallel do
@@ -458,9 +459,9 @@ contains
   subroutine update_coarse(tree, lvl, mg)
     use m_a$D_utils, only: a$D_n_cell, a$D_box_add_cc, a$D_box_copy_cc
     use m_a$D_ghostcell, only: a$D_gc_ids
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)        :: lvl
-    type(mg$D_t), intent(in)   :: mg
+    type(a$D_t), intent(inout) :: tree !< Tree containing full grid
+    integer, intent(in)        :: lvl !< Update coarse values at lvl-1
+    type(mg$D_t), intent(in)   :: mg !< Multigrid options
     integer                    :: i, id, p_id, nc
 #if $D == 2
     real(dp), allocatable :: tmp(:,:)
@@ -527,9 +528,9 @@ contains
   subroutine set_coarse_phi_rhs(tree, lvl, mg)
     use m_a$D_ghostcell, only: a$D_gc_ids
     use m_a$D_utils, only: a$D_box_add_cc
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)        :: lvl
-    type(mg$D_t), intent(in)   :: mg
+    type(a$D_t), intent(inout) :: tree !< Tree containing full grid
+    integer, intent(in)        :: lvl !< Update coarse values at lvl-1
+    type(mg$D_t), intent(in)   :: mg !< Multigrid options
     integer                    :: i, id, p_id
 
     ! Fill ghost cells here to be sure
@@ -566,8 +567,8 @@ contains
   !> Set the initial guess for phi and restrict the rhs
   subroutine init_phi_rhs(tree, mg)
     use m_a$D_utils, only: a$D_box_clear_cc
-    type(a$D_t), intent(inout) :: tree
-    type(mg$D_t), intent(in)   :: mg
+    type(a$D_t), intent(inout) :: tree !< Full grid
+    type(mg$D_t), intent(in)   :: mg !< Multigrid options
     integer                    :: i, id, p_id, lvl, min_lvl
 
     ! Start from phi = 0 and restrict rhs
@@ -590,8 +591,8 @@ contains
   end subroutine init_phi_rhs
 
   subroutine residual_box(box, mg)
-    type(box$D_t), intent(inout) :: box
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(inout) :: box !< Operate on this box
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: nc
 
     call mg%box_op(box, mg%i_tmp, mg)
@@ -607,9 +608,9 @@ contains
 
   !> Based on the box type, apply a Gauss-Seidel relaxation scheme
   subroutine mg$D_auto_gsrb(box, redblack_cntr, mg)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: redblack_cntr
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: redblack_cntr !< Iteration count
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
 
     if (box%tag == af_init_tag) call mg$D_set_box_tag(box, mg)
 
@@ -642,9 +643,9 @@ contains
 
   !> Based on the box type, apply the approriate Laplace operator
   subroutine mg$D_auto_op(box, i_out, mg)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: i_out
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(inout) :: box !< Operate on this box
+    integer, intent(in)         :: i_out !< Index of output variable
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
 
     if (box%tag == af_init_tag) call mg$D_set_box_tag(box, mg)
 
@@ -677,10 +678,10 @@ contains
 
   !> Based on the box type, apply the approriate Laplace operator
   subroutine mg$D_auto_rstr(box_c, box_p, iv, mg)
-    type(box$D_t), intent(in)    :: box_c
-    type(box$D_t), intent(inout) :: box_p
-    integer, intent(in)         :: iv
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(in)    :: box_c !< Child box
+    type(box$D_t), intent(inout) :: box_p !< Parent box
+    integer, intent(in)         :: iv !< Index of variable
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
 
     ! We can only restrict after gsrb, so tag should always be set
     if (box_c%tag == af_init_tag) stop "mg$D_auto_rstr: box_c tag not set"
@@ -695,9 +696,9 @@ contains
 
   !> Based on the box type, correct the solution of the children
   subroutine mg$D_auto_corr(box_p, box_c, mg)
-    type(box$D_t), intent(inout) :: box_c
-    type(box$D_t), intent(in)    :: box_p
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(inout) :: box_c !< Child box
+    type(box$D_t), intent(in)    :: box_p !< Parent box
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
 
     if (box_c%tag == af_init_tag) call mg$D_set_box_tag(box_c, mg)
 
@@ -712,10 +713,10 @@ contains
   end subroutine mg$D_auto_corr
 
   subroutine mg$D_set_box_tag(box, mg)
-    type(box$D_t), intent(inout) :: box
-    type(mg$D_t), intent(in)     :: mg
-    real(dp) :: a, b
-    logical :: is_lsf, is_deps, is_eps
+    type(box$D_t), intent(inout) :: box !< Box to operate on
+    type(mg$D_t), intent(in)     :: mg  !< Multigrid options
+    real(dp)                     :: a, b
+    logical                      :: is_lsf, is_deps, is_eps
 
     is_lsf = .false.
     is_eps = .false.
@@ -754,9 +755,9 @@ contains
 
   subroutine mg$D_box_corr_lpl(box_p, box_c, mg)
     use m_a$D_prolong
-    type(box$D_t), intent(inout) :: box_c
-    type(box$D_t), intent(in)    :: box_p
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(inout) :: box_c !< Child box
+    type(box$D_t), intent(in)    :: box_p !< Parent box
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
 
     call a$D_prolong_linear(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
   end subroutine mg$D_box_corr_lpl
@@ -765,7 +766,7 @@ contains
   subroutine mg$D_box_gsrb_lpl(box, redblack_cntr, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg$D_t), intent(in)     :: mg
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, i0, j, nc, i_phi, i_rhs
     real(dp)                    :: dx2
 #if $D == 3
@@ -810,7 +811,7 @@ contains
   subroutine mg$D_box_lpl(box, i_out, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg$D_t), intent(in)     :: mg
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, j, nc, i_phi
     real(dp)                    :: inv_dr_sq
 #if $D == 3
@@ -849,7 +850,7 @@ contains
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
-    type(mg$D_t), intent(in)       :: mg
+    type(mg$D_t), intent(in)       :: mg !< Multigrid options
 
     call a$D_restrict_box(box_c, box_p, iv)
   end subroutine mg$D_box_rstr_lpl
@@ -857,7 +858,7 @@ contains
   subroutine mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg$D_t), intent(in)     :: mg
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, i0, j, nc, i_phi, i_eps, i_rhs
     real(dp)                    :: dx2, u(2*$D), a0, a(2*$D), c(2*$D)
 #if $D == 3
@@ -913,7 +914,7 @@ contains
   subroutine mg$D_box_lpld(box, i_out, mg)
     type(box$D_t), intent(inout) :: box   !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg$D_t), intent(in)     :: mg
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, j, nc, i_phi, i_eps
     real(dp)                    :: inv_dr_sq, a0, u0, u(2*$D), a(2*$D)
 #if $D == 3
@@ -963,9 +964,9 @@ contains
   end subroutine mg$D_box_lpld
 
   subroutine mg$D_box_corr_lpld(box_p, box_c, mg)
-    type(box$D_t), intent(inout)  :: box_c
-    type(box$D_t), intent(in)     :: box_p
-    type(mg$D_t), intent(in)      :: mg
+    type(box$D_t), intent(inout)  :: box_c !< Child box
+    type(box$D_t), intent(in)     :: box_p !< Parent box
+    type(mg$D_t), intent(in)      :: mg !< Multigrid options
     integer                      :: ix_offset($D), i_phi, i_corr, i_eps
     integer                      :: nc, i, j, i_c1, i_c2, j_c1, j_c2
     real(dp)                     :: u0, u($D), a0, a($D)
@@ -1065,9 +1066,9 @@ contains
   end subroutine lsf_dist_val
 
   subroutine mg$D_box_corr_lpllsf(box_p, box_c, mg)
-    type(box$D_t), intent(inout) :: box_c
-    type(box$D_t), intent(in)    :: box_p
-    type(mg$D_t), intent(in)     :: mg
+    type(box$D_t), intent(inout) :: box_c !< Child box
+    type(box$D_t), intent(in)    :: box_p !< Parent box
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i_phi, i_corr, i_lsf, ix_offset($D)
     integer                     :: nc, i, j, i_c1, i_c2, j_c1, j_c2
     real(dp)                    :: v_a(3), v_b(3), val($D+1), dist($D+1), c($D+1)
@@ -1150,7 +1151,7 @@ contains
   subroutine mg$D_box_gsrb_lpllsf(box, redblack_cntr, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg$D_t), intent(in)     :: mg
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, i0, j, nc, i_phi, i_rhs, i_lsf, i_bval
     real(dp)                    :: dx2, dd(2*$D), val(2*$D), v_a(3), v_b(3)
 #if $D == 3
@@ -1230,7 +1231,7 @@ contains
   subroutine mg$D_box_lpllsf(box, i_out, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg$D_t), intent(in)     :: mg
+    type(mg$D_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, j, nc, i_phi, i_lsf, i_bval
     real(dp)                    :: inv_dr_sq, dd(2*$D), val(2*$D)
     real(dp)                    :: f0, v_a(3), v_b(3)
@@ -1304,7 +1305,7 @@ contains
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
-    type(mg$D_t), intent(in)       :: mg
+    type(mg$D_t), intent(in)       :: mg !< Multigrid options
     integer                       :: i, j, i_f, j_f, i_c, j_c
     integer                       :: hnc, ix_offset($D), n_ch
 #if $D == 2
@@ -1372,7 +1373,7 @@ contains
   subroutine mg2_box_gsrb_clpl(box, redblack_cntr, mg)
     type(box2_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg2_t), intent(in)     :: mg
+    type(mg2_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, i0, j, nc, i_phi, i_rhs, ioff
     real(dp)                    :: dx2, rfac(2)
 
@@ -1401,7 +1402,7 @@ contains
   subroutine mg2_box_clpl(box, i_out, mg)
     type(box2_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg2_t), intent(in)     :: mg
+    type(mg2_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, j, nc, i_phi, ioff
     real(dp)                    :: inv_dr_sq, rfac(2)
 
@@ -1426,7 +1427,7 @@ contains
   subroutine mg2_box_clpld(box, i_out, mg)
     type(box2_t), intent(inout) :: box   !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg2_t), intent(in)     :: mg
+    type(mg2_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, j, nc, i_phi, i_eps, ioff
     real(dp)                    :: inv_dr_sq, a0, u0, u(4), a(4), rfac(4)
 
@@ -1458,7 +1459,7 @@ contains
   subroutine mg2_box_gsrb_clpld(box, redblack_cntr, mg)
     type(box2_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg2_t), intent(in)     :: mg
+    type(mg2_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, i0, j, nc, i_phi, i_eps, i_rhs, ioff
     real(dp)                    :: dx2, u(4), a0, a(4), c(4), rfac(4)
 
