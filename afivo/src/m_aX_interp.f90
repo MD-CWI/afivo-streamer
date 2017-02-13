@@ -14,7 +14,7 @@ contains
 
   !> Using linear interpolation to get a value at r
   function a$D_interp1(tree, r, ivs, n_var) result(vals)
-    use m_a$D_utils, only: a$D_get_loc, a$D_r_loc
+    use m_a$D_utils, only: a$D_get_id_at
     type(a$D_t), intent(in) :: tree !< Parent box
     real(dp), intent(in)    :: r($D) !< Where to interpolate
     integer, intent(in)     :: n_var     !< Number of variables
@@ -22,25 +22,18 @@ contains
     real(dp)                :: vals(n_var)
     integer                 :: i, iv, id, ix($D)
     real(dp)                :: r_loc($D), dvec($D), ovec($D), w(DTIMES(2))
-    type(a$D_loc_t)         :: loc  !< Location of cell
 
-    loc   = a$D_get_loc(tree, r)
-    id    = loc%id
+    id = a$D_get_id_at(tree, r)
 
     if (id <= af_no_box) then
        print *, "a$D_interp1: point outside domain", r
        stop
     end if
 
-    r_loc = a$D_r_loc(tree, loc)
-    ix    = loc%ix
+    ! Compute ix such that r lies between cell centers at ix and ix + 1
+    ix = nint((r - tree%boxes(id)%r_min) / tree%boxes(id)%dr)
+    r_loc = a$D_r_cc(tree%boxes(id), ix)
     dvec  = r - r_loc
-
-    ! Compute ix such that r lies between ix and ix + 1
-    where (r < r_loc)
-       ix   = ix - 1
-       dvec = dvec + tree%boxes(id)%dr
-    end where
 
     ! Normalize dvec to a value [0, 1]
     dvec = dvec / tree%boxes(id)%dr

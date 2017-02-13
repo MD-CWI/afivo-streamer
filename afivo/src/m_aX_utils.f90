@@ -32,6 +32,7 @@ module m_a$D_utils
   public :: a$D_tree_copy_fc
 
   ! Public functions
+  public :: a$D_get_id_at
   public :: a$D_get_loc
   public :: a$D_r_loc
   public :: a$D_r_inside
@@ -185,16 +186,16 @@ contains
     end if
   end function a$D_r_inside
 
-  !> Get the location of the finest cell containing rr. If highest_lvl is present,
-  !> do not go to a finer level than highest_lvl. If there is no box containing rr,
+  !> Get the id of the finest box containing rr. If highest_lvl is present, do
+  !> not go to a finer level than highest_lvl. If there is no box containing rr,
   !> return a location of -1
-  pure function a$D_get_loc(tree, rr, highest_lvl) result(loc)
-    type(a$D_t), intent(in)       :: tree   !< Full grid
-    real(dp), intent(in)          :: rr($D) !< Coordinate
+  pure function a$D_get_id_at(tree, rr, highest_lvl) result(id)
+    type(a$D_t), intent(in)       :: tree        !< Full grid
+    real(dp), intent(in)          :: rr($D)      !< Coordinate
     integer, intent(in), optional :: highest_lvl !< Maximum level of box
-    type(a$D_loc_t)               :: loc    !< Location of cell
+    integer                       :: id !< Id of finest box containing rr
 
-    integer                       :: i, id, i_ch, lvl_max
+    integer                       :: i, i_ch, lvl_max
 
     lvl_max = tree%lvl_limit
     if (present(highest_lvl)) lvl_max = highest_lvl
@@ -205,28 +206,42 @@ contains
        if (a$D_r_inside(tree%boxes(id), rr)) exit
     end do
 
-    ! If not inside any box, return
     if (i > size(tree%lvls(1)%ids)) then
-       loc%id = -1
-       loc%ix = -1
-       return
+       ! Not inside any box
+       id = -1
+    else
+       ! Jump into children for as long as possible
+       do
+          if (tree%boxes(id)%lvl >= lvl_max .or. &
+               .not. a$D_has_children(tree%boxes(id))) exit
+          i_ch = child_that_contains(tree%boxes(id), rr)
+          id = tree%boxes(id)%children(i_ch)
+       end do
     end if
 
-    ! Jump into children for as long as possible
-    do
-       if (tree%boxes(id)%lvl >= lvl_max .or. &
-            .not. a$D_has_children(tree%boxes(id))) exit
-       i_ch = child_that_contains(tree%boxes(id), rr)
-       id = tree%boxes(id)%children(i_ch)
-    end do
+  end function a$D_get_id_at
 
-    loc%id = id
-    loc%ix = a$D_cc_ix(tree%boxes(id), rr)
+  !> Get the location of the finest cell containing rr. If highest_lvl is present,
+  !> do not go to a finer level than highest_lvl. If there is no box containing rr,
+  !> return a location of -1
+  pure function a$D_get_loc(tree, rr, highest_lvl) result(loc)
+    type(a$D_t), intent(in)       :: tree   !< Full grid
+    real(dp), intent(in)          :: rr($D) !< Coordinate
+    integer, intent(in), optional :: highest_lvl !< Maximum level of box
+    type(a$D_loc_t)               :: loc    !< Location of cell
 
-    ! This way, we don't have to care about points exactly on the boundaries of
-    ! a box (which could get a ghost cell index)
-    where (loc%ix < 1) loc%ix = 1
-    where (loc%ix > tree%n_cell) loc%ix = tree%n_cell
+    loc%id = a$D_get_id_at(tree, rr, highest_lvl)
+
+    if (loc%id == -1) then
+       loc%ix = -1
+    else
+       loc%ix = a$D_cc_ix(tree%boxes(loc%id), rr)
+
+       ! Fix indices for points exactly on the boundaries of a box (which could
+       ! get a ghost cell index)
+       where (loc%ix < 1) loc%ix = 1
+       where (loc%ix > tree%n_cell) loc%ix = tree%n_cell
+    end if
   end function a$D_get_loc
 
   !> For a box with children that contains rr, find in which child rr lies
