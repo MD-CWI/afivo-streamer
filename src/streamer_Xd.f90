@@ -9,7 +9,7 @@ program streamer_$Dd
 
   implicit none
 
-  integer                :: i, n
+  integer                :: i, it
   character(len=ST_slen) :: fname
   logical                :: write_out
 
@@ -61,7 +61,7 @@ program streamer_$Dd
   if (ST_photoi_enabled) &
        call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
 
-  do
+  do it = 1, huge(1)
      ! Get a new time step, which is at most dt_amr
      call a$D_reduction_vec(tree, get_max_dt, get_min, &
           [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
@@ -69,75 +69,79 @@ program streamer_$Dd
 
      if (ST_dt < 1e-14) then
         print *, "ST_dt getting too small, instability?"
-        ST_time = ST_end_time + 1.0_dp
+        exit
      end if
 
+     if (ST_time > ST_end_time) exit
+
      ! Every ST_dt_output, write output
-     if (output_cnt * ST_dt_output <= ST_time) then
-        write_out = .true.
+     if (output_cnt * ST_dt_output <= ST_time + ST_dt) then
+        write_out  = .true.
+        ST_dt      = output_cnt * ST_dt_output - ST_time
         output_cnt = output_cnt + 1
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
      else
         write_out = .false.
      end if
 
-     if (ST_time > ST_end_time) exit
+     if (ST_photoi_enabled) &
+          call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
 
-     ! We perform n_steps between mesh-refinements
-     do n = 1, ST_refine_per_steps
+     ! Copy previous solution
+     call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
+     call a$D_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
 
-        if (ST_photoi_enabled) &
-             call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
+     ! Two forward Euler steps over ST_dt
+     do i = 1, 2
+        ST_time = ST_time + ST_dt
 
-        ! Copy previous solution
-        call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
-        call a$D_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
+        ! First calculate fluxes
+        call a$D_loop_boxes(tree, fluxes_koren, .true.)
+        call a$D_consistent_fluxes(tree, [flux_elec])
 
-        ! Two forward Euler steps over ST_dt
-        do i = 1, 2
-           ST_time = ST_time + ST_dt
+        ! Update the solution
+        call a$D_loop_box_arg(tree, update_solution, [ST_dt], .true.)
 
-           ! First calculate fluxes
-           call a$D_loop_boxes(tree, fluxes_koren, .true.)
-           call a$D_consistent_fluxes(tree, [flux_elec])
-
-           ! Update the solution
-           call a$D_loop_box_arg(tree, update_solution, [ST_dt], .true.)
-
-           ! Compute new field on first iteration
-           if (i == 1) call field_compute(tree, mg, .true.)
-        end do
-
-        ST_time = ST_time - ST_dt        ! Go back one time step
-
-        ! Take average of phi_old and phi (explicit trapezoidal rule)
-        call a$D_loop_box(tree, average_density)
-
-        ! Compute field with new density
-        call field_compute(tree, mg, .true.)
+        ! Compute new field on first iteration
+        if (i == 1) call field_compute(tree, mg, .true.)
      end do
 
-     ! Restrict the electron and ion densities before refinement
-     call a$D_restrict_tree(tree, i_electron)
-     call a$D_restrict_tree(tree, i_pos_ion)
+     ST_time = ST_time - ST_dt        ! Go back one time step
 
-     ! Fill ghost cells before refinement
-     call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-     call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+     ! Take average of phi_old and phi (explicit trapezoidal rule)
+     call a$D_loop_box(tree, average_density)
 
-     if (write_out) call a$D_write_silo(tree, fname, output_cnt, &
-          ST_time, dir=ST_output_dir)
+     ! Compute field with new density
+     call field_compute(tree, mg, .true.)
 
-     call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
+     if (write_out) then
+        call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
-     if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
-        ! For boxes which just have been refined, set data on their children
-        call prolong_to_new_boxes(tree, ref_info)
-
-        ! Compute the field on the new mesh
-        call field_compute(tree, mg, .true.)
+        call a$D_write_silo(tree, fname, output_cnt, &
+             ST_time, dir=ST_output_dir)
      end if
 
+     if (mod(it, ST_refine_per_steps) == 1) then
+        ! Restrict the electron and ion densities before refinement
+        call a$D_restrict_tree(tree, i_electron)
+        call a$D_restrict_tree(tree, i_pos_ion)
+
+        ! Fill ghost cells before refinement
+        call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+
+        call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
+
+        if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
+           ! For boxes which just have been refined, set data on their children
+           call prolong_to_new_boxes(tree, ref_info)
+
+           ! Compute the field on the new mesh
+           call field_compute(tree, mg, .true.)
+        end if
+
+     end if
   end do
 
   call a$D_destroy(tree)
