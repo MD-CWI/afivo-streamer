@@ -17,7 +17,7 @@ contains
   !> should have one identical coordinate (i.e., they differ in two
   !> coordinates).
   subroutine a$D_write_plane(tree, filename, ivs, r_min, r_max, n_pixels, dir)
-    use m_a$D_interp, only: a$D_interp1, a$D_interp2
+    use m_a$D_interp, only: a$D_interp1
     type(a$D_t), intent(in)       :: tree        !< Tree to write out
     character(len=*), intent(in) :: filename    !< Filename for the vtk file
     integer, intent(in)          :: ivs(:)      !< Variables to write
@@ -67,7 +67,7 @@ contains
     do j = 1, n_pixels(2)
        do i = 1, n_pixels(1)
           r = r_min + (i-1) * v1 + (j-1) * v2
-          pixel_data(:, i, j) = a$D_interp2(tree, r, ivs, n_cc)
+          pixel_data(:, i, j) = a$D_interp1(tree, r, ivs, n_cc)
        end do
     end do
 
