@@ -1,10 +1,17 @@
 # Examples {#examples-page}
 
+The examples listed can be run from the `examples` folder. They are
+automatically compiled after typing `make`.
+
 # Basic
 
+* @ref computational_domain_2d.f90 "2D", @ref computational_domain_3d.f90 "3D":
+  How to define the computational domain
 * @ref random_refinement_2d.f90 "2D", @ref random_refinement_3d.f90 "3D": Examples
   that show how to create an AMR tree, perform refinement at random, write
   output files, and how to fill ghost cells
+* @ref boundary_conditions_2d.f90 "2D", @ref boundary_conditions_3d.f90 "3D":
+  How to write a routine for boundary conditions
 
 # Drift-diffusion
 

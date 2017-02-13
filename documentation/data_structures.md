@@ -4,7 +4,7 @@
 
 A *box* is the basic mesh unit in Afivo, see `m_a2_types::box2_t` and
 `m_a3_types::box3_t`. Each box consists of \f$N^D\f$ grid cells, where \f$N\f$
-has to be an even number and \f$D\f$ is the spatial dimension. 
+has to be an even number and \f$D\f$ is the spatial dimension.
 
 Two types of cell data are supported: cell-centered (cc) data and face-centered
 (fc) data. For example, in 2D `cc(i, j, n)` selects the nth variable at cell
@@ -13,7 +13,7 @@ direction dim. A box contains one layer of ghost cells for its cell-centered
 variables, are illustrated in the figure below. How these ghost cells are filled
 is discussed in @ref documentation/filling_ghost_cells.md.
 
-![Location and indices of the cell-centered variables (black dots) and the face-centered variables in the x-direction (red dots) for a box of 2x2 cells.](loc_cc_fx.png)
+![Location and indices of the cell-centered variables (black dots) and the face-centered variables in the x-direction (red dots) for a box of 2x2 cells.](location_cc_fx.png)
 
 Boxes store their neighbors, their children and their parent. A special value
 `m_afivo_types::af_no_box` (which is zero) is used to indicate that a parent,
