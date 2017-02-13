@@ -143,6 +143,18 @@ module m_streamer
   ! Time between writing output
   real(dp), protected :: ST_dt_output = 1.0e-10_dp
 
+  ! Write output along a line
+  logical, protected :: ST_lineout_write = .false.
+
+  ! Use this many points for lineout data
+  integer, protected :: ST_lineout_npoints = 500
+
+  ! Relative position of line minimum coordinate
+  real(dp) :: ST_lineout_rmin(3) = 0.0_dp
+
+  ! Relative position of line maximum coordinate
+  real(dp) :: ST_lineout_rmax(3) = 1.0_dp
+
   ! Current time
   real(dp)  :: ST_time
 
@@ -184,6 +196,15 @@ contains
          "The timestep for writing output (s)")
     call CFG_add_get(cfg, "dt_max", ST_dt_max, &
          "The maximum timestep (s)")
+
+    call CFG_add_get(cfg, "lineout_write", ST_lineout_write, &
+         "Write output along a line")
+    call CFG_add_get(cfg, "lineout_npoints", ST_lineout_npoints, &
+         "Use this many points for lineout data")
+    call CFG_add_get(cfg, "lineout_rmin", ST_lineout_rmin, &
+         "Relative position of line minimum coordinate")
+    call CFG_add_get(cfg, "lineout_rmax", ST_lineout_rmax, &
+         "Relative position of line maximum coordinate")
 
     call CFG_add_get(cfg, "refine_per_steps", ST_refine_per_steps, &
          "The number of steps after which the mesh is updated")

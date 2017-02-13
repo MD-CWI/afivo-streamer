@@ -79,7 +79,6 @@ program streamer_$Dd
         write_out  = .true.
         ST_dt      = output_cnt * ST_dt_output - ST_time
         output_cnt = output_cnt + 1
-        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
      else
         write_out = .false.
      end if
@@ -115,11 +114,23 @@ program streamer_$Dd
      call field_compute(tree, mg, .true.)
 
      if (write_out) then
+        ! Fill ghost cells before writing output
         call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
+        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
         call a$D_write_silo(tree, fname, output_cnt, &
              ST_time, dir=ST_output_dir)
+
+        if (ST_lineout_write) then
+           write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
+                "_line_", output_cnt
+           call a$D_write_line(tree, trim(fname), &
+                [i_electron, i_pos_ion, i_phi, i_electric_fld], &
+                r_min = ST_lineout_rmin(1:$D) * ST_domain_len, &
+                r_max = ST_lineout_rmax(1:$D) * ST_domain_len, &
+                n_points=ST_lineout_npoints, dir=ST_output_dir)
+        end if
      end if
 
      if (mod(it, ST_refine_per_steps) == 1) then
