@@ -9,9 +9,81 @@ module m_a$D_output
 
   public :: a$D_write_vtk
   public :: a$D_write_silo
+  public :: a$D_write_line
   public :: a$D_write_plane
 
 contains
+
+  subroutine add_dir_to_fname(filename, dir, out_name)
+    character(len=*), intent(in)           :: filename
+    character(len=*), optional, intent(in) :: dir
+    character(len=*), intent(inout)        :: out_name
+    integer                                :: i
+
+    ! Construct file name
+    if (present(dir)) then
+       i = len_trim(dir)
+       if (i > 0) then
+          if (dir(i:i) == "/") then ! Dir has trailing slash
+             out_name = trim(dir) // trim(filename)
+          else
+             out_name = trim(dir) // "/" // trim(filename)
+          end if
+       end if
+    end if
+  end subroutine add_dir_to_fname
+
+  !> Write line data in a text file
+  subroutine a$D_write_line(tree, filename, ivs, r_min, r_max, n_points, dir)
+    use m_a$D_interp, only: a$D_interp1
+    type(a$D_t), intent(in)       :: tree        !< Tree to write out
+    character(len=*), intent(in) :: filename    !< Filename for the vtk file
+    integer, intent(in)          :: ivs(:)      !< Variables to write
+    real(dp), intent(in)         :: r_min($D)   !< Minimum coordinate of line
+    real(dp), intent(in)         :: r_max($D)   !< Maximum coordinate of line
+    integer, intent(in)          :: n_points !< Number of points along line
+    character(len=*), optional, intent(in) :: dir !< Directory to place files in
+
+    integer, parameter    :: my_unit = 100
+    character(len=400)    :: fname
+    integer               :: i, n_cc
+    real(dp)              :: r($D), dr_vec($D)
+    real(dp), allocatable :: line_data(:, :)
+
+    n_cc = size(ivs)
+    dr_vec = (r_max - r_min) / max(1, n_points-1)
+
+    allocate(line_data(n_cc+$D, n_points))
+
+    !$omp parallel do private(r)
+    do i = 1, n_points
+       r = r_min + (i-1) * dr_vec
+       line_data(1:$D, i) = r
+       line_data($D+1:$D+n_cc, i) = a$D_interp1(tree, r, ivs, n_cc)
+    end do
+    !$omp end parallel do
+
+    call add_dir_to_fname(trim(filename) // ".txt", dir, fname)
+
+    ! Write header
+    open(my_unit, file=trim(fname), action="write")
+#if $D == 2
+    write(my_unit, '(A)', advance="no") "# x y"
+#elif $D == 3
+    write(my_unit, '(A)', advance="no") "# x y z"
+#endif
+    do i = 1, n_cc
+       write(my_unit, '(A)', advance="no") " "//trim(tree%cc_names(ivs(i)))
+    end do
+    write(my_unit, '(A)') ""
+
+    ! Write data
+    do i = 1, n_points
+       write(my_unit, *) line_data(:, i)
+    end do
+
+    close(my_unit)
+  end subroutine a$D_write_line
 
   !> Write data in a plane (2D) to a VTK ASCII file. In 3D, r_min and r_max
   !> should have one identical coordinate (i.e., they differ in two
@@ -64,28 +136,20 @@ contains
 
     allocate(pixel_data(n_cc, n_pixels(1), n_pixels(2)))
 
+    !$omp parallel do private(i, r)
     do j = 1, n_pixels(2)
        do i = 1, n_pixels(1)
           r = r_min + (i-1) * v1 + (j-1) * v2
           pixel_data(:, i, j) = a$D_interp1(tree, r, ivs, n_cc)
        end do
     end do
+    !$omp end parallel do
 
     ! Construct format string. Write one row at a time
     write(fmt_string, '(A,I0,A)') '(', n_pixels(1), 'E16.8)'
 
     ! Construct file name
-    fname = trim(filename) // ".vtk"
-    if (present(dir)) then
-       i = len_trim(dir)
-       if (i > 0) then
-          if (dir(i:i) == "/") then ! Dir has trailing slash
-             fname = trim(dir) // trim(fname)
-          else
-             fname = trim(dir) // "/" // trim(fname)
-          end if
-       end if
-    end if
+    call add_dir_to_fname(trim(filename) // ".vtk", dir, fname)
 
     open(my_unit, file=trim(fname), action="write")
     write(my_unit, '(A)') "# vtk DataFile Version 2.0"
@@ -241,18 +305,7 @@ contains
        end do
     end do
 
-    fname = trim(filename) // ".vtu"
-
-    if (present(dir)) then
-       i = len_trim(dir)
-       if (i > 0) then
-          if (dir(i:i) == "/") then ! Dir has trailing slash
-             fname = trim(dir) // trim(fname)
-          else
-             fname = trim(dir) // "/" // trim(fname)
-          end if
-       end if
-    end if
+    call add_dir_to_fname(trim(filename) // ".vtu", dir, fname)
 
     call vtk_ini_xml(vtkf, trim(fname), 'UnstructuredGrid')
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
