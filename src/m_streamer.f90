@@ -173,9 +173,10 @@ module m_streamer
 contains
 
   !> Create the configuration file with default values
-  subroutine ST_initialize(cfg)
+  subroutine ST_initialize(cfg, ndim)
     use m_config
     type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
+    integer, intent(in) :: ndim !< Number of dimensions
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
@@ -201,9 +202,9 @@ contains
          "Write output along a line")
     call CFG_add_get(cfg, "lineout_npoints", ST_lineout_npoints, &
          "Use this many points for lineout data")
-    call CFG_add_get(cfg, "lineout_rmin", ST_lineout_rmin, &
+    call CFG_add_get(cfg, "lineout_rmin", ST_lineout_rmin(1:ndim), &
          "Relative position of line minimum coordinate")
-    call CFG_add_get(cfg, "lineout_rmax", ST_lineout_rmax, &
+    call CFG_add_get(cfg, "lineout_rmax", ST_lineout_rmax(1:ndim), &
          "Relative position of line maximum coordinate")
 
     call CFG_add_get(cfg, "refine_per_steps", ST_refine_per_steps, &

@@ -21,7 +21,7 @@ program streamer_$Dd
   integer :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
-  call ST_initialize(cfg)
+  call ST_initialize(cfg, $D)
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
   call init_cond_initialize(cfg, $D)
