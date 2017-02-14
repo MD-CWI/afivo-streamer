@@ -1,7 +1,5 @@
 !> This module can be used to construct solutions consisting of one or more
 !> Gaussians.
-!>
-!> Author: Jannis Teunissen
 module m_gaussians
 
   implicit none

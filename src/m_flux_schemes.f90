@@ -94,7 +94,7 @@ contains
     integer, intent(in)   :: nc               !< Number of cells
     integer, intent(in)   :: ngc              !< Number of ghost cells
     real(dp), intent(in)  :: cc(1-ngc:nc+ngc) !< Cell-centered values
-    !< Input: velocities at interfaces, output: fluxes
+    !> Input: velocities at interfaces, output: fluxes
     real(dp), intent(inout)  :: v(1:nc+1)
     real(dp)              :: gradp, gradc, gradn
     integer               :: n
@@ -118,7 +118,7 @@ contains
     integer, intent(in)     :: ngc                     !< Number of ghost cells
     !> Cell-centered values
     real(dp), intent(in)    :: cc(1-ngc:nc+ngc, 1-ngc:nc+ngc)
-    !< Input: velocities at interfaces, output: fluxes
+    !> Input: velocities at interfaces, output: fluxes
     real(dp), intent(inout)    :: v(1:nc+1, 1:nc+1, 2)
     real(dp)                :: cc_1d(1-ngc:nc+ngc), v_1d(1:nc+1)
     integer                 :: n
@@ -143,7 +143,7 @@ contains
     integer, intent(in)     :: ngc
     !> Cell-centered values
     real(dp), intent(in)    :: cc(1-ngc:nc+ngc, 1-ngc:nc+ngc, 1-ngc:nc+ngc)
-    !< Input: velocities at interfaces, output: fluxes
+    !> Input: velocities at interfaces, output: fluxes
     real(dp), intent(inout)    :: v(1:nc+1, 1:nc+1, 1:nc+1, 3)
     real(dp)                :: cc_1d(1-ngc:nc+ngc), v_1d(1:nc+1)
     integer                 :: n, m

@@ -1,3 +1,4 @@
+#include "cpp_macros_$Dd.h"
 !> This module contains routines related to point-based interpolation, which can
 !> be useful when you want to have output at given points. The interpolation for
 !> meshes is called prolongation, see m_aX_prolong.
@@ -8,125 +9,63 @@ module m_a$D_interp
   private
 
   public :: a$D_interp1
-  public :: a$D_interp2
 
 contains
 
-  !> Using second order interpolation to get a value at r. The result is not
-  !> continuous at cell boundaries.
+  !> Using linear interpolation to get a value at r
   function a$D_interp1(tree, r, ivs, n_var) result(vals)
-    use m_a$D_utils, only: a$D_get_loc, a$D_r_loc
+    use m_a$D_utils, only: a$D_get_id_at
     type(a$D_t), intent(in) :: tree !< Parent box
-    real(dp), intent(in)    :: r($D)
+    real(dp), intent(in)    :: r($D) !< Where to interpolate
     integer, intent(in)     :: n_var     !< Number of variables
     integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
     real(dp)                :: vals(n_var)
-    integer                 :: i, j, id, dix($D)
-    real(dp)                :: f0(n_var), grad(n_var, $D)
-    real(dp)                :: r_loc($D), dvec($D)
-#if $D  == 3
-    integer                 :: k
-#endif
-    type(a$D_loc_t)         :: loc  !< Location of cell
+    integer                 :: i, iv, id, ix($D)
+    real(dp)                :: r_loc($D), dvec($D), ovec($D), w(DTIMES(2))
 
-    loc   = a$D_get_loc(tree, r)
-    id    = loc%id
+    id = a$D_get_id_at(tree, r)
 
     if (id <= af_no_box) then
        print *, "a$D_interp1: point outside domain", r
        stop
     end if
 
-    r_loc = a$D_r_loc(tree, loc)
-    dvec  = (r - r_loc) / tree%boxes(id)%dr
-    i     = loc%ix(1)
-    j     = loc%ix(2)
-#if $D == 3
-    k     = loc%ix(3)
-#endif
-    where (dvec > 0)
-       dix = 0
-    elsewhere
-       dix = -1
-    end where
+    ! Compute ix such that r lies between cell centers at ix and ix + 1
+    ix = nint((r - tree%boxes(id)%r_min) / tree%boxes(id)%dr)
+    r_loc = a$D_r_cc(tree%boxes(id), ix)
+    dvec  = r - r_loc
 
+    ! Normalize dvec to a value [0, 1]
+    dvec = dvec / tree%boxes(id)%dr
+    ovec = 1 - dvec
+
+    ! Compute weights of linear interpolation
 #if $D == 2
-    f0        = tree%boxes(id)%cc(i, j, ivs)
-    grad(:, 1) = tree%boxes(id)%cc(i+dix(1)+1, j, ivs) - &
-         tree%boxes(id)%cc(i+dix(1), j, ivs)
-    grad(:, 2)   = tree%boxes(id)%cc(i, j+dix(2)+1, ivs) - &
-         tree%boxes(id)%cc(i, j+dix(2), ivs)
+    w(1, 1) = ovec(1) * ovec(2)
+    w(2, 1) = dvec(1) * ovec(2)
+    w(1, 2) = ovec(1) * dvec(2)
+    w(2, 2) = dvec(1) * dvec(2)
 #elif $D == 3
-    f0        = tree%boxes(id)%cc(i, j, k, ivs)
-    grad(:, 1)   = tree%boxes(id)%cc(i+dix(1)+1, j, k, ivs) - &
-         tree%boxes(id)%cc(i+dix(1), j, k, ivs)
-    grad(:, 2)   = tree%boxes(id)%cc(i, j+dix(2)+1, k, ivs) - &
-         tree%boxes(id)%cc(i, j+dix(2), k, ivs)
-    grad(:, 3)   = tree%boxes(id)%cc(i, j, k+dix(3)+1, ivs) - &
-         tree%boxes(id)%cc(i, j, k+dix(3), ivs)
+    w(1, 1, 1) = ovec(1) * ovec(2) * ovec(3)
+    w(2, 1, 1) = dvec(1) * ovec(2) * ovec(3)
+    w(1, 2, 1) = ovec(1) * dvec(2) * ovec(3)
+    w(2, 2, 1) = dvec(1) * dvec(2) * ovec(3)
+    w(1, 1, 2) = ovec(1) * ovec(2) * dvec(3)
+    w(2, 1, 2) = dvec(1) * ovec(2) * dvec(3)
+    w(1, 2, 2) = ovec(1) * dvec(2) * dvec(3)
+    w(2, 2, 2) = dvec(1) * dvec(2) * dvec(3)
 #endif
-    vals = f0 + matmul(grad, dvec)
+
+    do i = 1, size(ivs)
+       iv = ivs(i)
+#if $D == 2
+       vals(i) = sum(w * tree%boxes(id)%cc(ix(1):ix(1)+1, &
+            ix(2):ix(2)+1, iv))
+#elif $D == 3
+       vals(i) = sum(w * tree%boxes(id)%cc(ix(1):ix(1)+1, &
+            ix(2):ix(2)+1, ix(3):ix(3)+1, iv))
+#endif
+     end do
   end function a$D_interp1
-
-  !> Using second order interpolation to get a value at r. The result is not
-  !> continuous at cell boundaries.
-  function a$D_interp2(tree, r, ivs, n_var) result(vals)
-    use m_a$D_utils, only: a$D_get_loc, a$D_r_loc
-    type(a$D_t), intent(in) :: tree !< Parent box
-    real(dp), intent(in)    :: r($D)
-    integer, intent(in)     :: n_var     !< Number of variables
-    integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
-    real(dp)                :: vals(n_var)
-    integer                 :: i, j, id
-    real(dp)                :: f0(n_var), grad(n_var, $D), second(n_var, $D)
-    real(dp)                :: r_loc($D), dvec($D)
-#if $D  == 3
-    integer                 :: k
-#endif
-    type(a$D_loc_t)         :: loc  !< Location of cell
-
-    loc   = a$D_get_loc(tree, r)
-    id    = loc%id
-
-    if (id <= af_no_box) then
-       print *, "a$D_interp2: point outside domain", r
-       stop
-    end if
-
-    r_loc = a$D_r_loc(tree, loc)
-    dvec  = (r - r_loc) / tree%boxes(id)%dr
-    i     = loc%ix(1)
-    j     = loc%ix(2)
-#if $D == 3
-    k     = loc%ix(3)
-#endif
-
-#if $D == 2
-    f0           = tree%boxes(id)%cc(i, j, ivs)
-    grad(:, 1)   = 0.5_dp * (tree%boxes(id)%cc(i+1, j, ivs) - &
-         tree%boxes(id)%cc(i-1, j, ivs))
-    grad(:, 2)   = 0.5_dp * (tree%boxes(id)%cc(i, j+1, ivs) - &
-         tree%boxes(id)%cc(i, j-1, ivs))
-    second(:, 1) = tree%boxes(id)%cc(i-1, j, ivs) - &
-         2 * f0 + tree%boxes(id)%cc(i+1, j, ivs)
-    second(:, 2) = tree%boxes(id)%cc(i, j-1, ivs) - &
-         2 * f0 + tree%boxes(id)%cc(i, j+1, ivs)
-#elif $D == 3
-    f0           = tree%boxes(id)%cc(i, j, k, ivs)
-    grad(:, 1)   = 0.5_dp * (tree%boxes(id)%cc(i+1, j, k, ivs) - &
-         tree%boxes(id)%cc(i-1, j, k, ivs))
-    grad(:, 2)   = 0.5_dp * (tree%boxes(id)%cc(i, j+1, k, ivs) - &
-         tree%boxes(id)%cc(i, j-1, k, ivs))
-    grad(:, 3)   = 0.5_dp * (tree%boxes(id)%cc(i, j, k+1, ivs) - &
-         tree%boxes(id)%cc(i, j, k-1, ivs))
-    second(:, 1) = tree%boxes(id)%cc(i-1, j, k, ivs) - &
-         2 * f0 + tree%boxes(id)%cc(i+1, j, k, ivs)
-    second(:, 2) = tree%boxes(id)%cc(i, j-1, k, ivs) - &
-         2 * f0 + tree%boxes(id)%cc(i, j+1, k, ivs)
-    second(:, 3) = tree%boxes(id)%cc(i, j, k-1, ivs) - &
-         2 * f0 + tree%boxes(id)%cc(i, j, k+1, ivs)
-#endif
-    vals = f0 + matmul(grad, dvec) + 0.5_dp * matmul(second, dvec**2)
-  end function a$D_interp2
 
 end module m_a$D_interp

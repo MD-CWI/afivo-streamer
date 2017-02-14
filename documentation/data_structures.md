@@ -4,22 +4,25 @@
 
 A *box* is the basic mesh unit in Afivo, see `m_a2_types::box2_t` and
 `m_a3_types::box3_t`. Each box consists of \f$N^D\f$ grid cells, where \f$N\f$
-has to be an even number and \f$D\f$ is the spatial dimension. 
+has to be an even number and \f$D\f$ is the spatial dimension.
 
-Two types of cell data are supported by default: cell-centered (cc) data and
-face-centered (fc) data. For example, in 2D `cc(i, j, n)` selects the nth
-variable at cell (i,j), whereas `fc(i, j, dim, n)` selects the nth face-centered
-variable in direction dim.
+Two types of cell data are supported: cell-centered (cc) data and face-centered
+(fc) data. For example, in 2D `cc(i, j, n)` selects the nth variable at cell
+(i,j), whereas `fc(i, j, dim, n)` selects the nth face-centered variable in
+direction dim. A box contains one layer of ghost cells for its cell-centered
+variables, are illustrated in the figure below. How these ghost cells are filled
+is discussed in @ref documentation/filling_ghost_cells.md.
+
+![Location and indices of the cell-centered variables (black dots) and the face-centered variables in the x-direction (red dots) for a box of 2x2 cells.](location_cc_fx.png)
 
 Boxes store their neighbors, their children and their parent. A special value
 `m_afivo_types::af_no_box` (which is zero) is used to indicate that a parent,
 child or neighbor does not exist. In the case of neighbors, physical boundary
-conditions are specified by negative numbers.
+conditions are specified by `m_afivo_types::af_phys_boundary` (which is -1).
 
 Furthermore, boxes contain some `convenience` information, such at their
 refinement level, minimum coordinate and spatial index.
 
-![Location and indices of the cell-centered variables (black dots) and the face-centered variables in the x-direction (red dots) for a box of 2x2 cells.](loc_cc_fx.png)
 
 # Level data type {#main-level-type}
 

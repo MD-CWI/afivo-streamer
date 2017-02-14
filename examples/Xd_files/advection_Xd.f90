@@ -167,11 +167,14 @@ program advection_$Dd
      ! Fill ghost cells for variable i_phi
      call a$D_gc_tree(tree, i_phi, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
+     !> [adjust_refinement]
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement. On input, the tree should be balanced. On output, the tree is
      ! still balanced, and its refinement is updated (with at most one level per
      ! call).
      call a$D_adjust_refinement(tree, refine_routine, refine_info, 2)
+     !> [adjust_refinement]
+
 
      ! Prolongation of i_phi values to new children (see below)
      call prolong_to_new_children(tree, refine_info)
@@ -189,6 +192,7 @@ program advection_$Dd
 
 contains
 
+  !> [refine_routine]
   !> Set refinement flags for box
   subroutine refine_routine(box, cell_flags)
     type(box$D_t), intent(in) :: box
@@ -224,6 +228,7 @@ contains
        end if
     end do; CLOSE_DO
   end subroutine refine_routine
+  !> [refine_routine]
 
   !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
@@ -351,6 +356,7 @@ contains
          box%cc(DTIMES(:), i_phi_old))
   end subroutine average_phi
 
+  !> [prolong_to_new_children]
   ! Linear prolongation of i_phi values to new children
   subroutine prolong_to_new_children(tree, refine_info)
     type(a$D_t), intent(inout)    :: tree
@@ -375,5 +381,6 @@ contains
             a$D_gc_interp_lim, a$D_bc_neumann_zero)
     end do
   end subroutine prolong_to_new_children
+  !> [prolong_to_new_children]
 
 end program advection_$Dd
