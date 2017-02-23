@@ -123,7 +123,7 @@ program streamer_$Dd
              ST_time, dir=ST_output_dir)
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_log.txt"
-        call write_log_file(tree, fname, output_cnt)
+        call write_log_file(tree, fname, output_cnt, ST_output_dir)
 
         if (ST_lineout_write) then
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
@@ -538,33 +538,42 @@ contains
     end do
   end subroutine prolong_to_new_boxes
 
-  subroutine write_log_file(tree, filename, out_cnt)
+  subroutine write_log_file(tree, filename, out_cnt, dir)
     type(a$D_t), intent(in)      :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt
+    character(len=*), intent(in) :: dir
+    character(len=ST_slen)       :: fname
+    character(len=20)            :: fmt
     integer, parameter           :: my_unit = 123
-    real(dp) :: sum_elec, sum_pos_ion
-    real(dp) :: max_elec, max_field
+    real(dp)                     :: sum_elec, sum_pos_ion
+    real(dp)                     :: max_elec, max_field
+    type(a$D_loc_t)              :: loc_elec, loc_field
+
+    call a$D_prepend_directory(filename, dir, fname)
 
     if (out_cnt == 1) then
-       open(my_unit, file=trim(filename), action="write")
+       open(my_unit, file=trim(fname), action="write")
 #if $D == 2
        write(my_unit, *) "# it time dt sum(n_e) sum(n_i) max(E) x y max(n_e) x y "
+       fmt = "(I6,10E16.8)"
 #elif $D == 3
        write(my_unit, *) "# it time dt sum(n_e) sum(n_i) max(E) x y z max(n_e) x y z"
+       fmt = "(I6,12E16.8)"
 #endif
        close(my_unit)
     end if
 
     call a$D_tree_sum_cc(tree, i_electron, sum_elec)
     call a$D_tree_sum_cc(tree, i_pos_ion, sum_pos_ion)
-    call a$D_tree_max_cc(tree, i_electron, max_elec)
-    call a$D_tree_max_cc(tree, i_electric_fld, max_field)
+    call a$D_tree_max_cc(tree, i_electron, max_elec, loc_elec)
+    call a$D_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
 
-    open(my_unit, file=trim(filename), action="write", &
+    open(my_unit, file=trim(fname), action="write", &
          position="append")
-    write(my_unit, *) out_cnt, ST_time, ST_dt, sum_elec, sum_pos_ion, &
-         max_field, max_elec
+    write(my_unit, fmt) out_cnt, ST_time, ST_dt, sum_elec, sum_pos_ion, &
+         max_field, a$D_r_loc(tree, loc_field), max_elec, &
+         a$D_r_loc(tree, loc_elec)
     close(my_unit)
 
   end subroutine write_log_file
