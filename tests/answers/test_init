@@ -10,7 +10,7 @@
  Box size (cells):                8
  Number of cc variables:          1
  Number of fc variables:          1
- Type of coordinates:             0
+ Type of coordinates:        Cartesian  
  min. coords:          0.0000E+00  0.0000E+00
  dx at min/max level   0.1000E+01  0.1000E+01
 
@@ -26,7 +26,7 @@
  Box size (cells):                8
  Number of cc variables:          1
  Number of fc variables:          1
- Type of coordinates:             0
+ Type of coordinates:        Cartesian  
  min. coords:          0.0000E+00  0.0000E+00  0.0000E+00
  dx at min/max level   0.1000E+01  0.1000E+01
 
