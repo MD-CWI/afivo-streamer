@@ -1,3 +1,4 @@
+#include "cpp_macros_$Dd.h"
 !> This module contains all kinds of different 'helper' routines for Afivo. If
 !> the number of routines for a particular topic becomes large, they should
 !> probably be put in a separate module.
@@ -486,29 +487,31 @@ contains
 
   !> A general scalar reduction method, that returns the location of the
   !> minimum/maximum value found
-  subroutine a$D_reduction_loc(tree, box_subr, reduction, &
+  subroutine a$D_reduction_loc(tree, iv, box_subr, reduction, &
        init_val, out_val, out_loc)
     type(a$D_t), intent(in)      :: tree     !< Tree to do the reduction on
-    real(dp), intent(in)        :: init_val !< Initial value for the reduction
-    real(dp), intent(out)       :: out_val  !< Result of the reduction
+    integer, intent(in)          :: iv       !< Variable to operate on (can be ignored)
+    real(dp), intent(in)         :: init_val !< Initial value for the reduction
+    real(dp), intent(out)        :: out_val  !< Result of the reduction
     type(a$D_loc_t), intent(out) :: out_loc  !< Location
-    real(dp)                    :: tmp, new_val, my_val
-    integer                     :: i, id, lvl, tmp_ix($D)
-    type(a$D_loc_t)             :: my_loc
+    real(dp)                     :: tmp, new_val, my_val
+    integer                      :: i, id, lvl, tmp_ix($D)
+    type(a$D_loc_t)              :: my_loc
 
     interface
        !> Subroutine that returns a scalar and a cell index
-       subroutine box_subr(box, val, ix)
+       subroutine box_subr(box, iv, val, ix)
          import
          type(box$D_t), intent(in) :: box
-         real(dp), intent(out)    :: val
-         integer, intent(out)     :: ix($D)
+         integer, intent(in)       :: iv
+         real(dp), intent(out)     :: val
+         integer, intent(out)      :: ix($D)
        end subroutine box_subr
 
        !> Reduction method (e.g., min, max, sum)
        real(dp) function reduction(a, b)
          import
-         real(dp), intent(in) :: a, b
+         real(dp), intent(in)      :: a, b
        end function reduction
     end interface
 
@@ -524,7 +527,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call box_subr(tree%boxes(id), tmp, tmp_ix)
+          call box_subr(tree%boxes(id), iv, tmp, tmp_ix)
           new_val = reduction(tmp, my_val)
           if (abs(new_val - my_val) > 0) then
              my_loc%id = id
@@ -548,110 +551,78 @@ contains
 
   !> Find maximum value of cc(..., iv). By default, only loop over leaves, and
   !> ghost cells are not used.
-  subroutine a$D_tree_max_cc(tree, iv, cc_max, include_parents)
-    type(a$D_t), intent(in)       :: tree !< Full grid
-    integer, intent(in)           :: iv !< Index of variable
-    real(dp), intent(out)         :: cc_max !< Maximum value
-    logical, intent(in), optional :: include_parents !< Include parent boxes
-    logical                       :: only_leaves
-    real(dp)                      :: tmp, my_max
-    integer                       :: i, id, lvl, nc
+  subroutine a$D_tree_max_cc(tree, iv, cc_max, loc)
+    type(a$D_t), intent(in)      :: tree   !< Full grid
+    integer, intent(in)          :: iv     !< Index of variable
+    real(dp), intent(out)        :: cc_max !< Maximum value
+    !> Location of maximum
+    type(a$D_loc_t), intent(out), optional :: loc
+    type(a$D_loc_t)                        :: tmp_loc
 
-    if (.not. tree%ready) stop "Tree not ready"
-    only_leaves = .true.
-    if (present(include_parents)) only_leaves = .not. include_parents
-    my_max = -huge(1.0_dp)
-
-    !$omp parallel reduction(max: my_max) private(lvl, i, id, nc, tmp)
-    if (only_leaves) then
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-          !$omp do
-          do i = 1, size(tree%lvls(lvl)%leaves)
-             id = tree%lvls(lvl)%leaves(i)
-             nc = tree%boxes(id)%n_cell
-#if $D == 2
-             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
-#elif $D == 3
-             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
-#endif
-             if (tmp > my_max) my_max = tmp
-          end do
-          !$omp end do
-       end do
-    else
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-          !$omp do
-          do i = 1, size(tree%lvls(lvl)%ids)
-             id = tree%lvls(lvl)%ids(i)
-             nc = tree%boxes(id)%n_cell
-#if $D == 2
-             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
-#elif $D == 3
-             tmp = maxval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
-#endif
-             if (tmp > my_max) my_max = tmp
-          end do
-          !$omp end do
-       end do
-    end if
-    !$omp end parallel
-
-
-    cc_max = my_max
+    call a$D_reduction_loc(tree, iv, box_max_cc, reduce_max, &
+         -huge(1.0_dp)/10, cc_max, tmp_loc)
+    if (present(loc)) loc = tmp_loc
   end subroutine a$D_tree_max_cc
 
   !> Find minimum value of cc(..., iv). By default, only loop over leaves, and
   !> ghost cells are not used.
-  subroutine a$D_tree_min_cc(tree, iv, cc_min, include_parents)
-    type(a$D_t), intent(in)       :: tree !< Full grid
-    integer, intent(in)           :: iv !< Index of variable
-    real(dp), intent(out)         :: cc_min !< Maximum value
-    logical, intent(in), optional :: include_parents !< Include parent boxes
-    logical                       :: only_leaves
-    real(dp)                      :: tmp, my_min
-    integer                       :: i, id, lvl, nc
+  subroutine a$D_tree_min_cc(tree, iv, cc_min, loc)
+    type(a$D_t), intent(in)      :: tree   !< Full grid
+    integer, intent(in)          :: iv     !< Index of variable
+    real(dp), intent(out)        :: cc_min !< Minimum value
+    !> Location of minimum
+    type(a$D_loc_t), intent(out), optional :: loc
+    type(a$D_loc_t)                        :: tmp_loc
 
-    if (.not. tree%ready) stop "Tree not ready"
-    only_leaves = .true.
-    if (present(include_parents)) only_leaves = .not. include_parents
-    my_min = huge(1.0_dp)
+    call a$D_reduction_loc(tree, iv, box_min_cc, reduce_min, &
+         huge(1.0_dp)/10, cc_min, tmp_loc)
 
-    !$omp parallel reduction(min: my_min) private(lvl, i, id, nc, tmp)
-    if (only_leaves) then
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-          !$omp do
-          do i = 1, size(tree%lvls(lvl)%leaves)
-             id = tree%lvls(lvl)%leaves(i)
-             nc = tree%boxes(id)%n_cell
-#if $D == 2
-             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
-#elif $D == 3
-             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
-#endif
-             if (tmp < my_min) my_min = tmp
-          end do
-          !$omp end do
-       end do
-    else
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
-          !$omp do
-          do i = 1, size(tree%lvls(lvl)%ids)
-             id = tree%lvls(lvl)%ids(i)
-             nc = tree%boxes(id)%n_cell
-#if $D == 2
-             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, iv))
-#elif $D == 3
-             tmp = minval(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
-#endif
-             if (tmp < my_min) my_min = tmp
-          end do
-          !$omp end do
-       end do
-    end if
-    !$omp end parallel
-
-    cc_min = my_min
+    if (present(loc)) loc = tmp_loc
   end subroutine a$D_tree_min_cc
+
+  subroutine box_max_cc(box, iv, val, ix)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)       :: iv
+    real(dp), intent(out)     :: val
+    integer, intent(out)      :: ix($D)
+    integer                   :: nc
+
+    nc = box%n_cell
+#if $D == 2
+    ix = maxloc(box%cc(1:nc, 1:nc, iv))
+    val = box%cc(ix(1), ix(2), iv)
+#elif $D == 3
+    ix = maxloc(box%cc(1:nc, 1:nc, 1:nc, iv))
+    val = box%cc(ix(1), ix(2), ix(3), iv)
+#endif
+  end subroutine box_max_cc
+
+  subroutine box_min_cc(box, iv, val, ix)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)       :: iv
+    real(dp), intent(out)     :: val
+    integer, intent(out)      :: ix($D)
+    integer                   :: nc
+
+    nc = box%n_cell
+#if $D == 2
+    ix = maxloc(box%cc(1:nc, 1:nc, iv))
+    val = box%cc(ix(1), ix(2), iv)
+#elif $D == 3
+    ix = maxloc(box%cc(1:nc, 1:nc, 1:nc, iv))
+    val = box%cc(ix(1), ix(2), ix(3), iv)
+#endif
+  end subroutine box_min_cc
+
+  real(dp) function reduce_max(a, b)
+    real(dp), intent(in) :: a, b
+    reduce_max = max(a, b)
+  end function reduce_max
+
+  real(dp) function reduce_min(a, b)
+    real(dp), intent(in) :: a, b
+    reduce_min = min(a, b)
+  end function reduce_min
 
   !> Find weighted sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
