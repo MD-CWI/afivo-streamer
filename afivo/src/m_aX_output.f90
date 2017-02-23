@@ -7,6 +7,7 @@ module m_a$D_output
   implicit none
   private
 
+  public :: a$D_prepend_directory
   public :: a$D_write_vtk
   public :: a$D_write_silo
   public :: a$D_write_line
@@ -14,7 +15,7 @@ module m_a$D_output
 
 contains
 
-  subroutine add_dir_to_fname(filename, dir, out_name)
+  subroutine a$D_prepend_directory(filename, dir, out_name)
     character(len=*), intent(in)           :: filename
     character(len=*), optional, intent(in) :: dir
     character(len=*), intent(inout)        :: out_name
@@ -31,7 +32,7 @@ contains
           end if
        end if
     end if
-  end subroutine add_dir_to_fname
+  end subroutine a$D_prepend_directory
 
   !> Write line data in a text file
   subroutine a$D_write_line(tree, filename, ivs, r_min, r_max, n_points, dir)
@@ -63,7 +64,7 @@ contains
     end do
     !$omp end parallel do
 
-    call add_dir_to_fname(trim(filename) // ".txt", dir, fname)
+    call a$D_prepend_directory(trim(filename) // ".txt", dir, fname)
 
     ! Write header
     open(my_unit, file=trim(fname), action="write")
@@ -149,7 +150,7 @@ contains
     write(fmt_string, '(A,I0,A)') '(', n_pixels(1), 'E16.8)'
 
     ! Construct file name
-    call add_dir_to_fname(trim(filename) // ".vtk", dir, fname)
+    call a$D_prepend_directory(trim(filename) // ".vtk", dir, fname)
 
     open(my_unit, file=trim(fname), action="write")
     write(my_unit, '(A)') "# vtk DataFile Version 2.0"
@@ -305,7 +306,7 @@ contains
        end do
     end do
 
-    call add_dir_to_fname(trim(filename) // ".vtu", dir, fname)
+    call a$D_prepend_directory(trim(filename) // ".vtu", dir, fname)
 
     call vtk_ini_xml(vtkf, trim(fname), 'UnstructuredGrid')
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)

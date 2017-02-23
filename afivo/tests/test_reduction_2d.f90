@@ -50,9 +50,9 @@ program test_reduction
      call a2_reduction(tree, box_max, max_ab, -huge(1.0_dp), max_val)
      call a2_reduction(tree, box_min, min_ab,  huge(1.0_dp), min_val)
      print *, "2 - max/min", max_val, min_val
-     call a2_reduction_loc(tree, box_max_ix, max_ab, -huge(1.0_dp), &
+     call a2_reduction_loc(tree, i_phi, box_max_ix, max_ab, -huge(1.0_dp), &
           max_val, max_loc)
-     call a2_reduction_loc(tree, box_min_ix, min_ab,  huge(1.0_dp), &
+     call a2_reduction_loc(tree, i_phi, box_min_ix, min_ab,  huge(1.0_dp), &
           min_val, min_loc)
      print *, "3 - max/min", max_val, min_val
      print *, "4 - max/min", tree%boxes(max_loc%id)%cc(max_loc%ix(1), &
@@ -69,20 +69,22 @@ contains
     box_max = maxval(box%cc(1:box%n_cell, 1:box%n_cell, i_phi))
   end function box_max
 
-  subroutine box_max_ix(box, val, ix)
+  subroutine box_max_ix(box, iv, val, ix)
     type(box2_t), intent(in) :: box
+    integer, intent(in) :: iv
     real(dp), intent(out) :: val
     integer, intent(out) :: ix(2)
-    ix = maxloc(box%cc(1:box%n_cell, 1:box%n_cell, i_phi))
-    val = box%cc(ix(1), ix(2), i_phi)
+    ix = maxloc(box%cc(1:box%n_cell, 1:box%n_cell, iv))
+    val = box%cc(ix(1), ix(2), iv)
   end subroutine box_max_ix
 
-  subroutine box_min_ix(box, val, ix)
+  subroutine box_min_ix(box, iv, val, ix)
     type(box2_t), intent(in) :: box
+    integer, intent(in) :: iv
     real(dp), intent(out) :: val
     integer, intent(out) :: ix(2)
-    ix = minloc(box%cc(1:box%n_cell, 1:box%n_cell, i_phi))
-    val = box%cc(ix(1), ix(2), i_phi)
+    ix = minloc(box%cc(1:box%n_cell, 1:box%n_cell, iv))
+    val = box%cc(ix(1), ix(2), iv)
   end subroutine box_min_ix
 
   real(dp) function box_min(box)
