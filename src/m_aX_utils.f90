@@ -12,6 +12,7 @@ module m_a$D_utils
   public :: a$D_loop_box_arg
   public :: a$D_loop_boxes
   public :: a$D_loop_boxes_arg
+  public :: a$D_tree_clear_cc
   public :: a$D_box_clear_cc
   public :: a$D_box_add_cc
   public :: a$D_box_sub_cc
@@ -270,10 +271,27 @@ contains
          (loc%ix-0.5_dp) * tree%boxes(loc%id)%dr
   end function a$D_r_loc
 
+  subroutine a$D_tree_clear_cc(tree, iv)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: iv !< Variable to clear
+    integer                    :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call a$D_box_clear_cc(tree%boxes(id), iv)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_clear_cc
+
   !> Set cc(..., iv) = 0
   subroutine a$D_box_clear_cc(box, iv)
     type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: iv
+    integer, intent(in)         :: iv !< Variable to clear
 #if $D == 2
     box%cc(:,:, iv) = 0
 #elif $D == 3
