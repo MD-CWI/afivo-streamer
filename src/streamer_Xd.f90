@@ -122,6 +122,9 @@ program streamer_$Dd
         call a$D_write_silo(tree, fname, output_cnt, &
              ST_time, dir=ST_output_dir)
 
+        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_log.txt"
+        call write_log_file(tree, fname, output_cnt)
+
         if (ST_lineout_write) then
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
                 "_line_", output_cnt
@@ -534,5 +537,36 @@ contains
        !$omp end parallel do
     end do
   end subroutine prolong_to_new_boxes
+
+  subroutine write_log_file(tree, filename, out_cnt)
+    type(a$D_t), intent(in)      :: tree
+    character(len=*), intent(in) :: filename
+    integer, intent(in)          :: out_cnt
+    integer, parameter           :: my_unit = 123
+    real(dp) :: sum_elec, sum_pos_ion
+    real(dp) :: max_elec, max_field
+
+    if (out_cnt == 1) then
+       open(my_unit, file=trim(filename), action="write")
+#if $D == 2
+       write(my_unit, *) "# it time dt sum(n_e) sum(n_i) max(E) x y max(n_e) x y "
+#elif $D == 3
+       write(my_unit, *) "# it time dt sum(n_e) sum(n_i) max(E) x y z max(n_e) x y z"
+#endif
+       close(my_unit)
+    end if
+
+    call a$D_tree_sum_cc(tree, i_electron, sum_elec)
+    call a$D_tree_sum_cc(tree, i_pos_ion, sum_pos_ion)
+    call a$D_tree_max_cc(tree, i_electron, max_elec)
+    call a$D_tree_max_cc(tree, i_electric_fld, max_field)
+
+    open(my_unit, file=trim(filename), action="write", &
+         position="append")
+    write(my_unit, *) out_cnt, ST_time, ST_dt, sum_elec, sum_pos_ion, &
+         max_field, max_elec
+    close(my_unit)
+
+  end subroutine write_log_file
 
 end program streamer_$Dd
