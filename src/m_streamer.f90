@@ -1,27 +1,8 @@
-!> Module  that contains subroutines to handle with configuration files
-!!
-!! * Creating configuration files
-!! * Reading configuration files
-!! * Loading configuration files
-!! * Setting the initial conditions from the configuration
-!!
-!! Further it contains a subroutine for
-!! * loading the transport data
-!! * Setting  the voltage on fixed time
-!!
-!! Moreover, it contains several pre-defined variables like 
-!!
+!> This module contains several pre-defined variables like:
 !! * Indices of cell-centered variables
 !! * Names of the cell-centered variables
 !! * Indices of face-centered variables
 !! * Indices of transport data
-!! * How many multigrid FMG cycles we perform per time step
-!!
-!! The subroutines and variables are used by the examples:
-!! * streamer_2d
-!! * streamer_3d
-!! * streamer_cyl
-!!
 module m_streamer
 
   use m_config
@@ -284,7 +265,7 @@ contains
     data_name = "efield[V/m]_vs_mu[m2/Vs]"
     call CFG_add_get(cfg, "td_mobility_name", data_name, &
          "The name of the mobility coefficient")
-    call TD_get_td_from_file(td_file, gas_name, &
+    call TD_get_from_file(td_file, gas_name, &
          trim(data_name), x_data, y_data)
     y_data = y_data * mobility_fac
     call LT_set_col(ST_td_tbl, i_mobility, x_data, y_data)
@@ -292,7 +273,7 @@ contains
     data_name = "efield[V/m]_vs_dif[m2/s]"
     call CFG_add_get(cfg, "td_diffusion_name", data_name, &
          "The name of the diffusion coefficient")
-    call TD_get_td_from_file(td_file, gas_name, &
+    call TD_get_from_file(td_file, gas_name, &
          trim(data_name), x_data, y_data)
     y_data = y_data * diffusion_fac
     call LT_set_col(ST_td_tbl, i_diffusion, x_data, y_data)
@@ -300,7 +281,7 @@ contains
     data_name = "efield[V/m]_vs_alpha[1/m]"
     call CFG_add_get(cfg, "td_alpha_name", data_name, &
          "The name of the eff. ionization coeff.")
-    call TD_get_td_from_file(td_file, gas_name, &
+    call TD_get_from_file(td_file, gas_name, &
          trim(data_name), x_data, y_data)
     y_data = y_data * alpha_fac
     call LT_set_col(ST_td_tbl, i_alpha, x_data, y_data)
@@ -308,7 +289,7 @@ contains
     data_name = "efield[V/m]_vs_eta[1/m]"
     call CFG_add_get(cfg, "td_eta_name", data_name, &
          "The name of the eff. attachment coeff.")
-    call TD_get_td_from_file(td_file, gas_name, &
+    call TD_get_from_file(td_file, gas_name, &
          trim(data_name), x_data, y_data)
     y_data = y_data * eta_fac
     call LT_set_col(ST_td_tbl, i_eta, x_data, y_data)
