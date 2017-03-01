@@ -546,33 +546,43 @@ contains
     character(len=ST_slen)       :: fname
     character(len=20)            :: fmt
     integer, parameter           :: my_unit = 123
+    real(dp)                     :: velocity
+    real(dp), save               :: prev_pos($D) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field
     type(a$D_loc_t)              :: loc_elec, loc_field
 
     call a$D_prepend_directory(filename, dir, fname)
 
-    if (out_cnt == 1) then
-       open(my_unit, file=trim(fname), action="write")
-#if $D == 2
-       write(my_unit, *) "# it time dt sum(n_e) sum(n_i) max(E) x y max(n_e) x y "
-       fmt = "(I6,10E16.8)"
-#elif $D == 3
-       write(my_unit, *) "# it time dt sum(n_e) sum(n_i) max(E) x y z max(n_e) x y z"
-       fmt = "(I6,12E16.8)"
-#endif
-       close(my_unit)
-    end if
-
     call a$D_tree_sum_cc(tree, i_electron, sum_elec)
     call a$D_tree_sum_cc(tree, i_pos_ion, sum_pos_ion)
     call a$D_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call a$D_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
 
+    if (out_cnt == 1) then
+       open(my_unit, file=trim(fname), action="write")
+#if $D == 2
+       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) "&
+            &"max(E) x y max(n_e) x y"
+       fmt = "(I6,11E16.8)"
+#elif $D == 3
+       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) "&
+            &"max(E) x y z max(n_e) x y z"
+       fmt = "(I6,13E16.8)"
+#endif
+       close(my_unit)
+
+       ! Start with velocity zero
+       prev_pos = a$D_r_loc(tree, loc_field)
+    end if
+
+    velocity = norm2(a$D_r_loc(tree, loc_field) - prev_pos) / ST_dt_output
+    prev_pos = a$D_r_loc(tree, loc_field)
+
     open(my_unit, file=trim(fname), action="write", &
          position="append")
-    write(my_unit, fmt) out_cnt, ST_time, ST_dt, sum_elec, sum_pos_ion, &
-         max_field, a$D_r_loc(tree, loc_field), max_elec, &
+    write(my_unit, fmt) out_cnt, ST_time, ST_dt, velocity, sum_elec, &
+         sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
          a$D_r_loc(tree, loc_elec)
     close(my_unit)
 
