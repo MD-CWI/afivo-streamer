@@ -45,7 +45,8 @@ module m_field_$Dd
   public :: field_set_voltage
 
   public :: field_bc_homogeneous
-  public :: field_bc_dropoff
+  public :: field_bc_dropoff_lin
+  public :: field_bc_dropoff_log
 
 contains
 
@@ -69,24 +70,32 @@ contains
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
          "Type of boundary condition to use (homogeneous, ...)")
 
+    call CFG_add_get(cfg, "field_dropoff_radius", field_dropoff_radius, &
+         "Potential stays constant up to this radius")
+    call CFG_add_get(cfg, "field_dropoff_relwidth", field_dropoff_relwidth, &
+         "Relative width over which the potential drops")
+
     field_voltage = -ST_domain_len * field_amplitude
 
     select case (field_bc_type)
     case ("homogeneous")
        mg%sides_bc => field_bc_homogeneous
-    case ("dropoff")
+    case ("dropoff_lin")
        if (ST_cylindrical) then
           field_dropoff_pos(:) = 0.0_dp
        else
           field_dropoff_pos(:) = 0.5_dp
        end if
 
-       call CFG_add_get(cfg, "field_dropoff_radius", field_dropoff_radius, &
-            "Potential stays constant up to this radius")
-       call CFG_add_get(cfg, "field_dropoff_relwidth", field_dropoff_relwidth, &
-            "Relative width over which the potential drops")
+       mg%sides_bc => field_bc_dropoff_lin
+    case ("dropoff_log")
+       if (ST_cylindrical) then
+          field_dropoff_pos(:) = 0.0_dp
+       else
+          field_dropoff_pos(:) = 0.5_dp
+       end if
 
-       mg%sides_bc => field_bc_dropoff
+       mg%sides_bc => field_bc_dropoff_log
     case default
        error stop "field_bc_select error: invalid condition"
     end select
@@ -200,7 +209,7 @@ contains
 
   end subroutine field_bc_homogeneous
 
-  subroutine field_bc_dropoff(box, nb, iv, bc_type)
+  subroutine field_bc_dropoff_lin(box, nb, iv, bc_type)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)          :: nb      ! Direction for the boundary condition
     integer, intent(in)          :: iv      ! Index of variable
@@ -254,7 +263,60 @@ contains
     case default
        call field_bc_homogeneous(box, nb, iv, bc_type)
     end select
-  end subroutine field_bc_dropoff
+  end subroutine field_bc_dropoff_lin
+
+  subroutine field_bc_dropoff_log(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)          :: nb      ! Direction for the boundary condition
+    integer, intent(in)          :: iv      ! Index of variable
+    integer, intent(out)         :: bc_type ! Type of boundary condition
+    integer                      :: nc, i
+#if $D == 3
+    integer                      :: j
+#endif
+    real(dp)                     :: rr($D), rdist, tmp
+
+    nc = box%n_cell
+    tmp = field_dropoff_relwidth * ST_domain_len
+
+    select case (nb)
+#if $D == 2
+    case (a2_neighb_highy)
+       bc_type = af_bc_dirichlet
+
+       do i = 1, nc
+          rr = a2_r_cc(box, [i, 0])
+          rdist = abs(rr(1) - field_dropoff_pos(1))
+
+          if (rdist < field_dropoff_radius) then
+             box%cc(i, nc+1, iv) = field_voltage
+          else
+             box%cc(i, nc+1, iv) = field_voltage * &
+                  log(1 + tmp/rdist) / log(1 + tmp/field_dropoff_radius)
+          end if
+       end do
+#elif $D == 3
+    case (a3_neighb_highz)
+       bc_type = af_bc_dirichlet
+
+       do j = 1, nc
+          do i = 1, nc
+             rr = a3_r_cc(box, [i, j, 0])
+             rdist = norm2(rr(1:2) - field_dropoff_pos(1:2))
+
+             if (rdist < field_dropoff_radius) then
+                box%cc(i, j, nc+1, iv) = field_voltage
+             else
+                box%cc(i, j, nc+1, iv) = field_voltage * &
+                     log(1 + tmp/rdist) / log(1 + tmp/field_dropoff_radius)
+             end if
+          end do
+       end do
+#endif
+    case default
+       call field_bc_homogeneous(box, nb, iv, bc_type)
+    end select
+  end subroutine field_bc_dropoff_log
 
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
