@@ -544,7 +544,7 @@ contains
     integer, intent(in)          :: out_cnt
     character(len=*), intent(in) :: dir
     character(len=ST_slen)       :: fname
-    character(len=20)            :: fmt
+    character(len=20), save      :: fmt
     integer, parameter           :: my_unit = 123
     real(dp)                     :: velocity
     real(dp), save               :: prev_pos($D) = 0
