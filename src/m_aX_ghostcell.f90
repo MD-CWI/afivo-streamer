@@ -11,6 +11,7 @@ module m_a$D_ghostcell
   public :: a$D_gc_box
   public :: a$D_bc_dirichlet_zero
   public :: a$D_bc_neumann_zero
+  public :: a$D_bc_continuous
   public :: a$D_gc_interp
   public :: a$D_gc_prolong_copy
   public :: a$D_gc_interp_lim
@@ -214,23 +215,32 @@ contains
     integer, intent(in)          :: iv                    !< Variable to fill
     integer, intent(in)          :: nb                    !< Neighbor direction
     integer, intent(in)          :: bc_type               !< Type of b.c.
-    real(dp)                     :: c1, c2
+    real(dp)                     :: c0, c1, c2
     integer                      :: nc
 
     nc = box%n_cell
 
-    ! If we call the interior point x, and the ghost point y, then a Dirichlet
-    ! boundary value b can be imposed as:
-    ! y = -x + 2*b
-    ! A Neumann b.c. can be imposed as y = x +/- dx * b
-    ! Below, we set coefficients c1 and c2 to handle both cases
+    ! If we call the interior point x1, x2 and the ghost point x0, then a
+    ! Dirichlet boundary value b can be imposed as:
+    ! x0 = -x1 + 2*b
+    ! A Neumann b.c. can be imposed as:
+    ! x0 = x1 +/- dx * b
+    ! A continuous boundary (same slope) as:
+    ! x0 = 2 * x1 - x2
+    ! Below, we set coefficients to handle these cases
     select case (bc_type)
     case (af_bc_dirichlet)
+       c0 = 2
        c1 = -1
-       c2 = 2
+       c2 = 0
     case (af_bc_neumann)
+       c0 = box%dr * a$D_neighb_high_pm(nb) ! This gives a + or - sign
        c1 = 1
-       c2 = box%dr * a$D_neighb_high_pm(nb) ! This gives a + or - sign
+       c2 = 0
+    case (af_bc_continuous)
+       c0 = 0
+       c1 = 2
+       c2 = -1
     case default
        stop "fill_bc: unknown boundary condition"
     end select
@@ -239,35 +249,55 @@ contains
 #if $D == 2
     case (a2_neighb_lowx)
        box%cc(0, 1:nc, iv) = &
-            c2 * box%cc(0, 1:nc, iv) + c1 * box%cc(1, 1:nc, iv)
+            c0 * box%cc(0, 1:nc, iv) + &
+            c1 * box%cc(1, 1:nc, iv) + &
+            c2 * box%cc(2, 1:nc, iv)
     case (a2_neighb_highx)
        box%cc(nc+1, 1:nc, iv) = &
-            c2 * box%cc(nc+1, 1:nc, iv) + c1 * box%cc(nc, 1:nc, iv)
+            c0 * box%cc(nc+1, 1:nc, iv) + &
+            c1 * box%cc(nc, 1:nc, iv) + &
+            c2 * box%cc(nc-1, 1:nc, iv)
     case (a2_neighb_lowy)
        box%cc(1:nc, 0, iv) = &
-            c2 * box%cc(1:nc, 0, iv) + c1 * box%cc(1:nc, 1, iv)
+            c0 * box%cc(1:nc, 0, iv) + &
+            c1 * box%cc(1:nc, 1, iv) + &
+            c2 * box%cc(1:nc, 2, iv)
     case (a2_neighb_highy)
        box%cc(1:nc, nc+1, iv) = &
-            c2 * box%cc(1:nc, nc+1, iv) + c1 * box%cc(1:nc, nc, iv)
+            c0 * box%cc(1:nc, nc+1, iv) + &
+            c1 * box%cc(1:nc, nc, iv) + &
+            c2 * box%cc(1:nc, nc-1, iv)
 #elif $D == 3
     case (a3_neighb_lowx)
        box%cc(0, 1:nc, 1:nc, iv) = &
-            c2 * box%cc(0, 1:nc, 1:nc, iv) + c1 * box%cc(1, 1:nc, 1:nc, iv)
+            c0 * box%cc(0, 1:nc, 1:nc, iv) + &
+            c1 * box%cc(1, 1:nc, 1:nc, iv) + &
+            c2 * box%cc(2, 1:nc, 1:nc, iv)
     case (a3_neighb_highx)
        box%cc(nc+1, 1:nc, 1:nc, iv) = &
-            c2 * box%cc(nc+1, 1:nc, 1:nc, iv) + c1 * box%cc(nc, 1:nc, 1:nc, iv)
+            c0 * box%cc(nc+1, 1:nc, 1:nc, iv) + &
+            c1 * box%cc(nc, 1:nc, 1:nc, iv) + &
+            c2 * box%cc(nc-1, 1:nc, 1:nc, iv)
     case (a3_neighb_lowy)
        box%cc(1:nc, 0, 1:nc, iv) = &
-            c2 * box%cc(1:nc, 0, 1:nc, iv) + c1 * box%cc(1:nc, 1, 1:nc, iv)
+            c0 * box%cc(1:nc, 0, 1:nc, iv) + &
+            c1 * box%cc(1:nc, 1, 1:nc, iv) + &
+            c2 * box%cc(1:nc, 2, 1:nc, iv)
     case (a3_neighb_highy)
        box%cc(1:nc, nc+1, 1:nc, iv) = &
-            c2 * box%cc(1:nc, nc+1, 1:nc, iv) + c1 * box%cc(1:nc, nc, 1:nc, iv)
+            c0 * box%cc(1:nc, nc+1, 1:nc, iv) + &
+            c1 * box%cc(1:nc, nc, 1:nc, iv) + &
+            c2 * box%cc(1:nc, nc-1, 1:nc, iv)
     case (a3_neighb_lowz)
        box%cc(1:nc, 1:nc, 0, iv) = &
-            c2 * box%cc(1:nc, 1:nc, 0, iv) + c1 * box%cc(1:nc, 1:nc, 1, iv)
+            c0 * box%cc(1:nc, 1:nc, 0, iv) + &
+            c1 * box%cc(1:nc, 1:nc, 1, iv) + &
+            c2 * box%cc(1:nc, 1:nc, 2, iv)
     case (a3_neighb_highz)
        box%cc(1:nc, 1:nc, nc+1, iv) = &
-            c2 * box%cc(1:nc, 1:nc, nc+1, iv) + c1 * box%cc(1:nc, 1:nc, nc, iv)
+            c0 * box%cc(1:nc, 1:nc, nc+1, iv) + &
+            c1 * box%cc(1:nc, 1:nc, nc, iv) + &
+            c2 * box%cc(1:nc, 1:nc, nc-1, iv)
 #endif
     end select
   end subroutine bc_to_gc
@@ -517,6 +547,17 @@ contains
     bc_type = af_bc_dirichlet
     call a$D_set_box_gc(box, nb, iv, 0.0_dp)
   end subroutine a$D_bc_dirichlet_zero
+
+  ! This fills ghost cells near physical boundaries using the same slope
+  subroutine a$D_bc_continuous(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: nb, iv
+    integer, intent(out)        :: bc_type
+
+    bc_type = af_bc_continuous
+    ! Set values to zero (to prevent problems with NaN)
+    call a$D_set_box_gc(box, nb, iv, 0.0_dp)
+  end subroutine a$D_bc_continuous
 
   subroutine copy_from_nb(box, box_nb, dnb, lo, hi, iv)
     type(box$D_t), intent(inout) :: box     !< Box on which to fill ghost cells

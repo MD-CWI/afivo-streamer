@@ -50,6 +50,9 @@ module m_afivo_types
   !> Value to indicate a Neumann boundary condition
   integer, parameter :: af_bc_neumann = -11
 
+  !> Value to indicate a continuous boundary condition
+  integer, parameter :: af_bc_continuous = -12
+
   !> Maximum length of the names of variables
   integer, parameter :: af_nlen = 20
 
