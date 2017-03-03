@@ -11,7 +11,8 @@ PROGS := random_refinement_2d random_refinement_3d poisson_basic_2d		\
 poisson_basic_3d poisson_cyl poisson_cyl_dielectric poisson_benchmark_2d	\
 poisson_benchmark_3d advection_2d advection_3d implicit_diffusion_2d		\
 implicit_diffusion_3d simple_streamer_2d computational_domain_2d		\
-computational_domain_3d boundary_conditions_2d boundary_conditions_3d
+computational_domain_3d boundary_conditions_2d boundary_conditions_3d		\
+poisson_neumann_2d poisson_neumann_3d
 
 .PHONY: all clean
 
