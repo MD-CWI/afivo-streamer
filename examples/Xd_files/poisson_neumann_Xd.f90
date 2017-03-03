@@ -58,7 +58,7 @@ program poisson_neumann_$Dd
      ! The second argument is a subroutine that is called for each box that can
      ! be refined or derefined, and it should set refinement flags. Information
      ! about the changes in refinement are returned in the third argument.
-     call a$D_adjust_refinement(tree, refine_routine, refine_info)
+     call a$D_adjust_refinement(tree, refine_routine, refine_info, 0)
 
      ! If no new boxes have been added, exit the loop
      if (refine_info%n_add == 0) exit
@@ -108,7 +108,8 @@ contains
     type(box$D_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(DTIMES(box%n_cell))
 
-    if (box%lvl < 3 .and. all(box%r_min < 0.5_dp)) then
+    ! Refine around one corner
+    if (box%lvl <= 4 .and. all(box%r_min < 0.25_dp)) then
        cell_flags(DTIMES(:)) = af_do_ref
     else
        cell_flags(DTIMES(:)) = af_keep_ref
