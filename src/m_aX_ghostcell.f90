@@ -866,12 +866,12 @@ contains
          + box%cc(ix(1), ix(2)+di(2), iv) &
          - box%cc(ix(1)+di(1), ix(2)+di(2), iv)
 #elif $D == 3
-    box%cc(ix(1), ix(2), ix(3), iv) = box%cc(ix(1)+di(1), ix(2), ix(3), iv) &
-         + box%cc(ix(1), ix(2)+di(2), ix(3), iv) &
-         + box%cc(ix(1), ix(2), ix(3)+di(3), iv) &
-         - 2 * box%cc(ix(1)+di(1), ix(2)+di(2), ix(3)+di(3), iv)
+    box%cc(ix(1), ix(2), ix(3), iv) = &
+         box%cc(ix(1), ix(2)+di(2), ix(3)+di(3), iv) + &
+         box%cc(ix(1)+di(1), ix(2), ix(3)+di(3), iv) + &
+         box%cc(ix(1)+di(1), ix(2)+di(2), ix(3), iv) - 2 * &
+         box%cc(ix(1)+di(1), ix(2)+di(2), ix(3)+di(3), iv)
 #endif
-
   end subroutine a$D_corner_gc_extrap
 
 #if $D == 3
