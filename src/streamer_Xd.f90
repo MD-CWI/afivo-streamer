@@ -546,7 +546,7 @@ contains
     character(len=ST_slen)       :: fname
     character(len=20), save      :: fmt
     integer, parameter           :: my_unit = 123
-    real(dp)                     :: velocity
+    real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos($D) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field
@@ -558,6 +558,10 @@ contains
     call a$D_tree_sum_cc(tree, i_pos_ion, sum_pos_ion)
     call a$D_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call a$D_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+
+    call a$D_reduction_vec(tree, get_max_dt, get_min, &
+         [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
+    dt = minval(ST_dt_vec)
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")
@@ -581,7 +585,7 @@ contains
 
     open(my_unit, file=trim(fname), action="write", &
          position="append")
-    write(my_unit, fmt) out_cnt, ST_time, ST_dt, velocity, sum_elec, &
+    write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
          a$D_r_loc(tree, loc_elec)
     close(my_unit)
