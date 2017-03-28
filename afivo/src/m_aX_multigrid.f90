@@ -436,22 +436,28 @@ contains
   end subroutine correct_children
 
   subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
-    use m_a$D_ghostcell, only: a$D_gc_ids
+    use m_a$D_ghostcell, only: a$D_gc_box
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     type(mg$D_t), intent(in)     :: mg       !< Multigrid options
     integer, intent(in)          :: ids(:)   !< Operate on these boxes
     integer, intent(in)          :: n_cycle  !< Number of cycles to perform
     integer                      :: n, i
 
+    !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
-       !$omp parallel do
+       !$omp do
        do i = 1, size(ids)
           call mg%box_gsrb(boxes(ids(i)), n, mg)
        end do
-       !$omp end parallel do
+       !$omp end do
 
-       call a$D_gc_ids(boxes, ids, mg%i_phi, mg%sides_rb, mg%sides_bc)
+       !$omp do
+       do i = 1, size(ids)
+          call a$D_gc_box(boxes, ids(i), mg%i_phi, mg%sides_rb, mg%sides_bc)
+       end do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine gsrb_boxes
 
   ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the

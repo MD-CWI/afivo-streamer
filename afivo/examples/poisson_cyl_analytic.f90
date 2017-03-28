@@ -1,42 +1,44 @@
-!> \example poisson_cyl.f90
+!> \example poisson_cyl_analytic_analytic.f90
 !>
-!> Example showing how to use multigrid and compare with an analytic solution,
-!> using the method of manufactured solutions. A standard 5-point Laplacian is
-!> used in cylindrical coordinates.
-program poisson_cyl
+!> Example showing how to use multigrid and compare with an analytic solution. A
+!> standard 5-point Laplacian is used in cylindrical coordinates.
+program poisson_cyl_analytic
   use m_a2_all
-  use m_gaussians
 
   implicit none
 
   integer, parameter :: box_size = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 10
-  integer, parameter :: n_var_cell = 4
+  integer, parameter :: n_var_cell = 5
   integer, parameter :: i_phi = 1
   integer, parameter :: i_rhs = 2
   integer, parameter :: i_err = 3
-  integer, parameter :: i_tmp = 4
+  integer, parameter :: i_sol = 4
+  integer, parameter :: i_tmp = 5
+
+  real(dp), parameter :: domain_len = 1.25e-2_dp
+  real(dp), parameter :: pi = acos(-1.0_dp)
+  real(dp), parameter :: sigma = 4e-4_dp * sqrt(0.5_dp)
+  real(dp), parameter :: rz_source(2) = [0.0_dp, 0.5_dp] * domain_len
+  real(dp), parameter :: epsilon_source = 8.85e-12_dp
+  real(dp), parameter :: Q_source = 3e18_dp * 1.6022e-19_dp * &
+       sigma**3 * sqrt(2 * pi)**3
 
   type(a2_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
   integer            :: ix_list(2, n_boxes_base)
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: dr, residu(2), anal_err(2), max_val
   character(len=100) :: fname
   type(mg2_t)        :: mg
-  type(gauss_t)      :: gs
   integer            :: count_rate,t_start, t_end
 
-  print *, "Running poisson_cyl"
+  print *, "Running poisson_cyl_analytic"
   print *, "Number of threads", af_get_max_threads()
 
-  ! The manufactured solution exists of two Gaussians, which are stored in gs
-  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
-
   ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
+  dr = 1.25e-2_dp / box_size
 
   ! Initialize tree
   call a2_init(tree, & ! Tree to initialize
@@ -46,7 +48,7 @@ program poisson_cyl
        dr, &           ! Distance between cells on base level
        coarsen_to=2, & ! Add coarsened levels for multigrid
        coord=af_cyl, & ! Cylindrical coordinates
-       cc_names=["phi", "rhs", "err", "tmp"]) ! Variable names
+       cc_names=["phi", "rhs", "err", "sol", "tmp"]) ! Variable names
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
@@ -91,7 +93,7 @@ program poisson_cyl
   ! and i_tmp. These variables will be initialized at the first call of mg2_fas_fmg
   call mg2_init_mg(mg)
 
-  print *, "Multigrid iteration | max residual | max error"
+  print *, "Multigrid iteration | max residual | max rel. error"
   call system_clock(t_start, count_rate)
 
   do mg_iter = 1, n_iterations
@@ -108,10 +110,13 @@ program poisson_cyl
      call a2_tree_max_cc(tree, i_tmp, residu(2))
      call a2_tree_min_cc(tree, i_err, anal_err(1))
      call a2_tree_max_cc(tree, i_err, anal_err(2))
+     call a2_tree_max_cc(tree, i_phi, max_val)
+     anal_err = anal_err / max_val
+
      write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
-     write(fname, "(A,I0)") "poisson_cyl_", mg_iter
+     write(fname, "(A,I0)") "poisson_cyl_analytic_", mg_iter
      call a2_write_vtk(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
@@ -142,7 +147,7 @@ contains
           crv = box%dr**2 * abs(box%cc(i, j, i_rhs))
 
           ! And refine if it exceeds a threshold
-          if (crv > 5.0e-4_dp) then
+          if (crv > 1e-1_dp .and. box%lvl < 10) then
              cell_flags(i, j) = af_do_ref
           else
              cell_flags(i, j) = af_keep_ref
@@ -161,11 +166,31 @@ contains
 
     do j = 0, nc+1
        do i = 0, nc+1
-          rz = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_rhs) = gauss_laplacian_cyl(gs, rz)
+          rz = a2_r_cc(box, [i,j]) - rz_source
+
+          ! Gaussian source term
+          box%cc(i, j, i_rhs) = - Q_source * &
+               exp(-sum(rz**2) / (2 * sigma**2)) / &
+               (sigma**3 * sqrt(2 * pi)**3 * epsilon_source)
        end do
     end do
   end subroutine set_init_cond
+
+  real(dp) function solution(rz_in)
+    real(dp), intent(in) :: rz_in(2)
+    real(dp) :: d, erf_d
+
+    d = norm2(rz_in - rz_source)
+
+    ! Take limit when d -> 0
+    if (d < sqrt(epsilon(1.0d0))) then
+       erf_d = sqrt(2.0_dp/pi) / sigma
+    else
+       erf_d = erf(d * sqrt(0.5_dp) / sigma) / d
+    end if
+
+    solution = erf_d * Q_source / (4 * pi * epsilon_source)
+  end function solution
 
   ! Compute error compared to the analytic solution
   subroutine set_err(box)
@@ -177,7 +202,8 @@ contains
     do j = 1, nc
        do i = 1, nc
           rz = a2_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gs, rz)
+          box%cc(i, j, i_sol) = solution(rz)
+          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - box%cc(i, j, i_sol)
        end do
     end do
   end subroutine set_err
@@ -204,21 +230,21 @@ contains
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_value(gs, rz)
+          box%cc(nc+1, n, iv) = solution(rz)
        end do
     case (a2_neighb_lowy)
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_value(gs, rz)
+          box%cc(n, 0, iv) = solution(rz)
        end do
     case (a2_neighb_highy)
        bc_type = af_bc_dirichlet
        do n = 1, nc
           rz = a2_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_value(gs, rz)
+          box%cc(n, nc+1, iv) = solution(rz)
        end do
     end select
   end subroutine sides_bc
 
-end program poisson_cyl
+end program poisson_cyl_analytic
