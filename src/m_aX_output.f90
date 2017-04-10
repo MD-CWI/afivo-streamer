@@ -10,6 +10,7 @@ module m_a$D_output
   public :: a$D_prepend_directory
   public :: a$D_write_tree
   public :: a$D_read_tree
+  public :: a$D_tree_copy_variable
   public :: a$D_write_vtk
   public :: a$D_write_silo
   public :: a$D_write_line
@@ -161,6 +162,47 @@ contains
 
     close(my_unit)
   end subroutine a$D_read_tree
+
+  subroutine a$D_tree_copy_variable(tree_from, ivs_from, tree_to, ivs_to)
+    use m_a$D_interp
+    type(a$D_t), intent(in)    :: tree_from   !< Copy from this grid
+    integer, intent(in)        :: ivs_from(:) !< From these variable
+    type(a$D_t), intent(inout) :: tree_to     !< Copy to this grid
+    integer, intent(in)        :: ivs_to(:)   !< To these variable
+    integer                    :: lvl, id, n, nc, i, j, k
+    real(dp)                   :: rr($D)
+
+    !$omp parallel private(lvl, id, n, nc, i, j, k, rr)
+    do lvl = 1, tree_to%highest_lvl
+       !$omp do
+       do n = 1, size(tree_to%lvls(lvl)%leaves)
+          id = tree_to%lvls(lvl)%leaves(n)
+          nc = tree_to%boxes(id)%n_cell
+#if $D == 2
+          do j = 1, nc
+             do i = 1, nc
+                rr = a$D_r_cc(tree_to%boxes(id), [i, j])
+                tree_to%boxes(id)%cc(i, j, ivs_to) = &
+                     a$D_interp1(tree_from, rr, [ivs_from], size(ivs_from))
+             end do
+          end do
+#elif $D == 3
+          do k = 1, nc
+             do j = 1, nc
+                do i = 1, nc
+                   rr = a$D_r_cc(tree_to%boxes(id), [i, j, k])
+                   tree_to%boxes(id)%cc(i, j, k, ivs_to) = &
+                        a$D_interp1(tree_from, rr, [ivs_from], size(ivs_from))
+                end do
+             end do
+          end do
+#endif
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+  end subroutine a$D_tree_copy_variable
 
   !> Write line data in a text file
   subroutine a$D_write_line(tree, filename, ivs, r_min, r_max, n_points, dir)
