@@ -7,6 +7,7 @@ module m_a$D_core
   private
 
   public :: a$D_init
+  public :: a$D_init_box
   public :: a$D_destroy
   public :: a$D_set_base
   public :: a$D_tidy_up
@@ -273,7 +274,7 @@ contains
              tree%boxes(id)%neighbors = nb_used(:, n)
           end where
 
-          call init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+          call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
 
@@ -415,7 +416,7 @@ contains
 
   !> Mark box as active and allocate data storage for a box, for its cell- and
   !> face-centered data
-  subroutine init_box(box, n_cell, n_cc, n_fc)
+  subroutine a$D_init_box(box, n_cell, n_cc, n_fc)
     type(box$D_t), intent(inout) :: box !< Box for which we allocate memory
     integer, intent(in)         :: n_cell !< Number of cells per dimension in the box
     integer, intent(in)         :: n_cc   !< Number of cell-centered variables
@@ -434,7 +435,7 @@ contains
     ! Initialize to zero
     box%cc = 0
     box%fc = 0
-  end subroutine init_box
+  end subroutine a$D_init_box
 
   !> Deallocate data storage for a box and mark inactive
   subroutine clear_box(box)
@@ -1029,7 +1030,7 @@ contains
        boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
             a$D_child_dix(:,i) * boxes(id)%n_cell
 
-       call init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
+       call a$D_init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
     end do
 
     ! Set boundary conditions at children
