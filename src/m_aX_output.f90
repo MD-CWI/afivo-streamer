@@ -78,7 +78,6 @@ contains
     end do
 
     do id = 1, tree%highest_id
-      print *, "write", id
       write(my_unit) tree%boxes(id)%lvl     !< level of the box
       write(my_unit) tree%boxes(id)%in_use  !< is the box in use?
       write(my_unit) tree%boxes(id)%tag     !< for the user
@@ -94,6 +93,7 @@ contains
     end do
 
     close(my_unit)
+    print *, "a$D_write_tree: written " // trim(fname)
   end subroutine a$D_write_tree
 
   !> Read full tree in binary format
@@ -140,12 +140,9 @@ contains
       read(my_unit) tree%lvls(lvl)%parents
     end do
 
-    print *, "allocating", tree%box_limit
-    allocate(tree%boxes(tree%box_limit))
-    print *, "done"
+    allocate(tree%boxes(tree%highest_id))
 
     do id = 1, tree%highest_id
-      print *, "read", id
       call a$D_init_box(tree%boxes(id), tree%n_cell, &
            tree%n_var_cell, tree%n_var_face)
       read(my_unit) tree%boxes(id)%lvl     !< level of the box

@@ -53,12 +53,6 @@ program boundary_conditions_$Dd
 
      write(fname, "(A,I0)") "boundary_conditions_$Dd_", iter
      call a$D_write_vtk(tree, trim(fname), dir="output")
-
-     call a$D_write_tree(tree, trim(fname), dir="output")
-     print *, "Write done, reading"
-     call a$D_read_tree(tree, "output/" // trim(fname) // ".dat")
-     print *, "after"
-     ! call a$D_print_info(tree)
   end do
 
 contains
