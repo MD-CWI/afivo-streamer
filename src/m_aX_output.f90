@@ -81,9 +81,11 @@ contains
     do id = 1, tree%highest_id
       write(my_unit) tree%boxes(id)%in_use  !< is the box in use?
       if (.not. tree%boxes(id)%in_use) cycle
+
+      write(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
       write(my_unit) tree%boxes(id)%lvl     !< level of the box
       write(my_unit) tree%boxes(id)%tag     !< for the user
-      write(my_unit) tree%boxes(id)%ix($D)  !< index in the domain
+      write(my_unit) tree%boxes(id)%ix      !< index in the domain
       write(my_unit) tree%boxes(id)%parent  !< index of parent in box list
       write(my_unit) tree%boxes(id)%children
       write(my_unit) tree%boxes(id)%neighbors
@@ -142,17 +144,26 @@ contains
       read(my_unit) tree%lvls(lvl)%parents
     end do
 
+    do lvl = tree%highest_lvl+1, tree%lvl_limit
+      allocate(tree%lvls(lvl)%ids(0))
+      allocate(tree%lvls(lvl)%leaves(0))
+      allocate(tree%lvls(lvl)%parents(0))
+    end do
+
     allocate(tree%boxes(tree%highest_id))
 
     do id = 1, tree%highest_id
       read(my_unit) tree%boxes(id)%in_use  !< is the box in use?
       if (.not. tree%boxes(id)%in_use) cycle
 
-      call a$D_init_box(tree%boxes(id), tree%n_cell, &
-           tree%n_var_cell, tree%n_var_face)
+      ! Some boxes can have a different size
+      read(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
+      call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+          tree%n_var_cell, tree%n_var_face)
+
       read(my_unit) tree%boxes(id)%lvl     !< level of the box
       read(my_unit) tree%boxes(id)%tag     !< for the user
-      read(my_unit) tree%boxes(id)%ix($D)  !< index in the domain
+      read(my_unit) tree%boxes(id)%ix      !< index in the domain
       read(my_unit) tree%boxes(id)%parent  !< index of parent in box list
       read(my_unit) tree%boxes(id)%children
       read(my_unit) tree%boxes(id)%neighbors
