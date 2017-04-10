@@ -127,6 +127,9 @@ module m_streamer
   ! Write output along a line
   logical, protected :: ST_lineout_write = .false.
 
+  ! Write binary output files (to resume later)
+  logical, protected :: ST_datfile_write = .false.
+
   ! Use this many points for lineout data
   integer, protected :: ST_lineout_npoints = 500
 
@@ -181,6 +184,8 @@ contains
 
     call CFG_add_get(cfg, "lineout_write", ST_lineout_write, &
          "Write output along a line")
+    call CFG_add_get(cfg, "datfile_write", ST_datfile_write, &
+         "Write binary output files (to resume later)")
     call CFG_add_get(cfg, "lineout_npoints", ST_lineout_npoints, &
          "Use this many points for lineout data")
     call CFG_add_get(cfg, "lineout_rmin", ST_lineout_rmin(1:ndim), &

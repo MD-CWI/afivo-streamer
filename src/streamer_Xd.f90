@@ -125,6 +125,10 @@ program streamer_$Dd
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_log.txt"
         call write_log_file(tree, fname, output_cnt, ST_output_dir)
 
+        if (ST_datfile_write) then
+           call a$D_write_tree(tree, fname, ST_output_dir)
+        end if
+
         if (ST_lineout_write) then
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
                 "_line_", output_cnt
