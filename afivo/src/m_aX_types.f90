@@ -182,12 +182,12 @@ module m_a$D_types
      integer                    :: coord_t    !< Type of coordinates
      real(dp)                   :: r_base($D) !< min. coords of box at index (1,1)
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
-     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
-     type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
      !> Names of cell-centered variables
      character(len=af_nlen), allocatable :: cc_names(:)
      !> Names of face-centered variables
      character(len=af_nlen), allocatable :: fc_names(:)
+     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
+     type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
   end type a$D_t
 
   !> Type specifying the location of a cell
