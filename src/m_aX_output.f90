@@ -34,6 +34,8 @@ contains
              out_name = trim(dir) // "/" // trim(filename)
           end if
        end if
+    else
+       out_name = filename
     end if
   end subroutine a$D_prepend_directory
 
