@@ -33,7 +33,7 @@ contains
     ierr = dbcreate(trim(filename), len_trim(filename), DB_CLOBBER, &
          DB_LOCAL, fileinfo, len_trim(fileinfo), DB_TYPE, dbix)
     if (ierr /= 0) then
-       print *, "Error creating file", trim(filename)
+       print *, "Error creating file ", trim(filename)
        error stop
     end if
   end subroutine SILO_create_file
@@ -45,7 +45,7 @@ contains
     ierr = dbopen(trim(filename), len_trim(filename), DB_TYPE, &
          DB_APPEND, dbix)
     if (ierr /= 0) then
-       print *, "Error opening file", trim(filename)
+       print *, "Error opening file ", trim(filename)
        error stop
     end if
   end subroutine SILO_open_file
