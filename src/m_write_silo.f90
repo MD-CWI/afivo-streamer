@@ -32,7 +32,10 @@ contains
     fileinfo = "A silo file"
     ierr = dbcreate(trim(filename), len_trim(filename), DB_CLOBBER, &
          DB_LOCAL, fileinfo, len_trim(fileinfo), DB_TYPE, dbix)
-    if (ierr /= 0) print *, "Error creating file", trim(filename)
+    if (ierr /= 0) then
+       print *, "Error creating file", trim(filename)
+       error stop
+    end if
   end subroutine SILO_create_file
 
   subroutine SILO_open_file(filename, dbix)
@@ -41,8 +44,10 @@ contains
 
     ierr = dbopen(trim(filename), len_trim(filename), DB_TYPE, &
          DB_APPEND, dbix)
-    if (ierr /= 0) print *, &
-            "Error opening file", trim(filename)
+    if (ierr /= 0) then
+       print *, "Error opening file", trim(filename)
+       error stop
+    end if
   end subroutine SILO_open_file
 
   subroutine SILO_close_file(dbix)
@@ -50,8 +55,10 @@ contains
     integer :: ierr
 
     ierr = dbclose(dbix)
-    if (ierr /= 0) print *, &
-            "Error closing file with index", dbix
+    if (ierr /= 0) then
+       print *, "Error closing file with index", dbix
+       error stop
+    end if
   end subroutine SILO_close_file
 
   subroutine SILO_mkdir(dbix, dirname)
@@ -60,8 +67,10 @@ contains
     integer :: ierr, iostat
 
     ierr = dbmkdir(dbix, trim(dirname), len_trim(dirname), iostat)
-    if (ierr /= 0) print *, &
-            "Error creating directory ", dirname
+    if (ierr /= 0) then
+       print *, "Error creating directory ", dirname
+       error stop
+    end if
   end subroutine SILO_mkdir
 
   !> Write two entries to the Silo file so that Visit treats it as a
@@ -84,9 +93,9 @@ contains
     end interface
 
     ierr = DBWrite(dbix, name1, len(name1), int_bool, dims, 1, DB_INT);
-    if (ierr /= 0) print *, "Error writing ", name1
+    if (ierr /= 0) print *, "Error writing ", trim(name1)
     ierr = DBWrite(dbix, name2, len(name2), int_bool, dims, 1, DB_INT);
-    if (ierr /= 0) print *, "Error writing ", name2
+    if (ierr /= 0) print *, "Error writing ", trim(name2)
   end subroutine SILO_set_time_varying
 
   subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr, &
@@ -195,32 +204,30 @@ contains
     end interface
 
     if (size(d_packed) /= product(d_shape)) then
-       print *, "Error: d_packed does not correspond to d_shape"
-       return
+       error stop "Error: d_packed does not correspond to d_shape"
     end if
 
     if (size(d_shape) < 1 .or. size(d_shape) > 3) then
-       print *, "Error: size(d_shape) < 1 or size(d_shape) > 3"
-       return
+       error stop "Error: size(d_shape) < 1 or size(d_shape) > 3"
     end if
 
     ierr = dbmkoptlist(10, dboptix)
-    if (ierr /= 0) print *, &
-            "Error creating options list in SILO_add_var ", dboptix
+    if (ierr /= 0) then
+       error stop "Error creating options list in SILO_add_var"
+    end if
+
     ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, 1)
-    if (ierr /= 0) print *, &
-            "Error dbaddiopt is SILO_add_var: DBOPT_HIDE_FROM_GUI", ierr
 
     ! Write the data to the grid
     ierr = dbputqv1(dbix, trim(dataname), len_trim(dataname), &
          trim(gridname), len_trim(gridname), d_packed, d_shape, &
          size(d_shape), dummy, 0, DB_DOUBLE, DB_ZONECENT, dboptix, iostat)
-    if (ierr /= 0) print *, &
-            "Error dbputqv1 is SILO_add_var", ierr
+    if (ierr /= 0) then
+       print *, "Error dbputqv1 in SILO_add_var", ierr
+       error stop
+    end if
 
     ierr = dbfreeoptlist(dboptix)
-    if (ierr /= 0) print *, &
-            "Error dbfreeoptlist is SILO_add_var", ierr
   end subroutine SILO_add_var
 
   subroutine SILO_set_mmesh_grid(dbix, mmname, gridnames, n_cycle, time)
@@ -247,8 +254,7 @@ contains
 
     n_grids = size(gridnames)
     if (n_grids < 1) then
-       print *, "Error, too few grids (<1)"
-       return
+       error stop "SILO_set_mmesh_grid: error too few grids (<1)"
     end if
 
     name_len  = len(gridnames(1))
@@ -269,24 +275,19 @@ contains
 
     if (present(n_cycle)) then
        ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
-       if (ierr /= 0) print *, &
-               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_CYCLE", ierr
     end if
 
     if (present(time)) then
        ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
-       if (ierr /= 0) print *, &
-               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_DTIME", ierr
     end if
 
     ierr = dbputmmesh(dbix, trim(mmname), len_trim(mmname), n_grids, &
          mnames(1:total_len), name_lengths, m_types, dboptix, iostat)
-    if (ierr /= 0) print *, &
-            "Error calling dbputmmesh", ierr
+    if (ierr /= 0) then
+       error stop "Error calling dbputmmesh"
+    end if
 
     ierr = dbfreeoptlist(dboptix)
-    if (ierr /= 0) print *, &
-            "Error dbfreeoptlist is SILO_set_mmesh_grid", ierr
     length = dbset2dstrlen(old_str_len)
   end subroutine SILO_set_mmesh_grid
 
@@ -315,8 +316,7 @@ contains
 
     n_grids = size(datanames)
     if (n_grids < 1) then
-       print *, "Error, too few grids (<1)"
-       return
+       error stop "SILO_set_mmesh_var: error too few grids (<1)"
     end if
 
     name_len = len(datanames(1))
@@ -333,19 +333,16 @@ contains
     name_lengths = name_len
 
     ierr = dbmkoptlist(10, dboptix)
-    if (ierr /= 0) print *, &
-            "Error creating options list in SILO_set_mmesh_var", ierr
+    if (ierr /= 0) then
+       error stop "Error creating options list in SILO_set_mmesh_var"
+    end if
 
     if (present(n_cycle)) then
        ierr = dbaddiopt(dboptix, DBOPT_CYCLE, n_cycle)
-       if (ierr /= 0) print *, &
-               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_CYCLE", ierr
     end if
 
     if (present(time)) then
        ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
-       if (ierr /= 0) print *, &
-               "Error dbaddiopt is SILO_set_mmesh_grid: DBOPT_DTIME", ierr
     end if
 
     ierr = dbaddcopt(dboptix, DBOPT_MMESH_NAME, &
@@ -355,12 +352,11 @@ contains
 
     ierr = dbputmvar(dbix, trim(mvname), len_trim(mvname), n_grids, &
          dnames(1:total_len), name_lengths, m_types, dboptix, iostat)
-    if (ierr /= 0) print *, &
-            "Error calling dbputmvar", ierr
+    if (ierr /= 0) then
+       error stop "Error calling dbputmvar"
+    end if
 
     ierr = dbfreeoptlist(dboptix)
-    if (ierr /= 0) print *, &
-            "Error dbfreeoptlist is SILO_set_mmesh_var", ierr
     length = dbset2dstrlen(old_str_len)
   end subroutine SILO_set_mmesh_var
 
