@@ -65,7 +65,7 @@ program streamer_$Dd
      ! Get a new time step, which is at most dt_amr
      call a$D_reduction_vec(tree, get_max_dt, get_min, &
           [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
-     ST_dt = minval(ST_dt_vec)
+     ST_dt = 0.9_dp * minval(ST_dt_vec)
 
      if (ST_dt < 1e-14) then
         print *, "ST_dt getting too small, instability?"
@@ -86,6 +86,10 @@ program streamer_$Dd
      if (ST_photoi_enabled) &
           call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
 
+     !> @todo Implement source terms analytically/second order
+     ! Before doing fluxes, add half of source term
+     call a$D_loop_box_arg(tree, add_sources, [0.5_dp * ST_dt], .true.)
+
      ! Copy previous solution
      call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
      call a$D_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
@@ -95,11 +99,11 @@ program streamer_$Dd
         ST_time = ST_time + ST_dt
 
         ! First calculate fluxes
-        call a$D_loop_boxes(tree, fluxes_koren, .true.)
+        call a$D_loop_boxes(tree, compute_fluxes_koren, .true.)
         call a$D_consistent_fluxes(tree, [flux_elec])
 
         ! Update the solution
-        call a$D_loop_box_arg(tree, update_solution, [ST_dt], .true.)
+        call a$D_loop_box_arg(tree, add_fluxes, [ST_dt], .true.)
 
         ! Compute new field on first iteration
         if (i == 1) call field_compute(tree, mg, .true.)
@@ -112,6 +116,9 @@ program streamer_$Dd
 
      ! Compute field with new density
      call field_compute(tree, mg, .true.)
+
+     ! Add other half of source term (will not affect field)
+     call a$D_loop_box_arg(tree, add_sources, [0.5_dp * ST_dt], .true.)
 
      if (write_out) then
         ! Fill ghost cells before writing output
@@ -317,7 +324,7 @@ contains
   end function get_min
 
   !> Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_koren(boxes, id)
+  subroutine compute_fluxes_koren(boxes, id)
     use m_flux_schemes
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
@@ -389,7 +396,7 @@ contains
     call flux_diff_$Dd(cc, dc, inv_dr, nc, 2)
 
     boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
-  end subroutine fluxes_koren
+  end subroutine compute_fluxes_koren
 
   !> Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_density(box)
@@ -400,18 +407,16 @@ contains
          (box%cc(DTIMES(:), i_pos_ion)  + box%cc(DTIMES(:), i_pos_ion_old))
   end subroutine average_density
 
-  !> Advance solution over dt based on the fluxes / source term, using forward Euler
-  subroutine update_solution(box, dt)
+  !> Advance solution over dt based on the fluxes
+  subroutine add_fluxes(box, dt)
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: dt(:)
-    real(dp)                     :: inv_dr, src, fld
-    real(dp)                     :: alpha, eta, sflux, mu
+    real(dp)                     :: inv_dr, sflux
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
 #endif
     integer                      :: IJK, nc
-    type(LT_loc_t)               :: loc
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
@@ -420,12 +425,6 @@ contains
 #endif
 
     do KJI_DO(1,nc)
-       fld   = box%cc(IJK, i_electric_fld)
-       loc   = LT_get_loc(ST_td_tbl, fld)
-       alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-       eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
-       mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
-
        ! Contribution of flux
 #if $D == 2
        if (ST_cylindrical) then
@@ -445,19 +444,37 @@ contains
             box%fc(i, j, k+1, 3, flux_elec)) * inv_dr * dt(1)
 #endif
 
-       ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt(1)
-
-       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt(1)
-
-       ! Add flux and source term
-       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + sflux + src
-
-       ! Add source term
-       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + src
-
+       ! Add flux
+       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + sflux
     end do; CLOSE_DO
-  end subroutine update_solution
+  end subroutine add_fluxes
+
+  subroutine add_sources(box, dt)
+    type(box$D_t), intent(inout) :: box
+    real(dp), intent(in)         :: dt(:)
+    real(dp)                     :: src, fld, alpha, eta, mu
+    integer                      :: IJK, nc
+    type(LT_loc_t)               :: loc
+
+    nc  = box%n_cell
+
+    do KJI_DO(1,nc)
+       fld   = box%cc(IJK, i_electric_fld)
+       loc   = LT_get_loc(ST_td_tbl, fld)
+       alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+       eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
+       mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+
+       ! Source term
+       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
+       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo)
+
+       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + &
+            src * dt(1)
+       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + &
+            src * dt(1)
+    end do; CLOSE_DO
+  end subroutine add_sources
 
   !> Sets the photoionization
   subroutine set_photoionization(tree, eta, num_photons, dt)
