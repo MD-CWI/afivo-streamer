@@ -92,18 +92,19 @@ contains
        nb_id = boxes(id)%neighbors(nb)
 
        if (nb_id > af_no_box) then
-          ! Compute index range
-          nb_dim = a$D_neighb_dim(nb)
-          lo(:) = 1
-          hi(:) = boxes(id)%n_cell
+          ! There is a neighbor
+          nb_dim     = a$D_neighb_dim(nb)
+          lo(:)      = 1
+          hi(:)      = boxes(id)%n_cell
           lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell + 1)
           hi(nb_dim) = lo(nb_dim)
-
-          dnb = a$D_neighb_offset([nb])
+          dnb        = a$D_neighb_offset([nb])
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
        else if (nb_id == af_no_box) then
+          ! Refinement boundary
           call subr_rb(boxes, id, nb, iv)
        else
+          ! Physical boundary
           call subr_bc(boxes(id), nb, iv, bc_type)
           call bc_to_gc(boxes(id), nb, iv, bc_type)
        end if
