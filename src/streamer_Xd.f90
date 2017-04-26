@@ -452,11 +452,11 @@ contains
   subroutine add_sources(box, dt)
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: dt(:)
-    real(dp)                     :: src, fld, alpha, eta, mu
+    real(dp)                     :: src, fld, alpha, eta, mu, growth_fac
     integer                      :: IJK, nc
     type(LT_loc_t)               :: loc
 
-    nc  = box%n_cell
+    nc     = box%n_cell
 
     do KJI_DO(1,nc)
        fld   = box%cc(IJK, i_electric_fld)
@@ -466,13 +466,15 @@ contains
        mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
        ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
-       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo)
+       growth_fac = exp(fld * mu * (alpha - eta) * dt(1))
+       src = box%cc(IJK, i_electron) * (growth_fac - 1.0_dp)
 
-       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + &
-            src * dt(1)
-       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + &
-            src * dt(1)
+       if (ST_photoi_enabled) then
+          src = src + box%cc(IJK, i_photo) * dt(1)
+       end if
+
+       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + src
+       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + src
     end do; CLOSE_DO
   end subroutine add_sources
 
