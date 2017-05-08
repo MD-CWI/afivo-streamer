@@ -825,6 +825,8 @@ contains
   !> Given the cell refinement flags of a box, set the refinement flag for that
   !> box and potentially also its neighbors (in case of refinement near a
   !> boundary).
+  !>
+  !> @todo Simplify this routine
   subroutine cell_to_ref_flags(cell_flags, nc, ref_flags, tree, id, &
        ref_buffer)
     use m_a$D_utils, only: a$D_get_loc

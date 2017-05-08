@@ -26,7 +26,8 @@ module m_a$D_multigrid
      integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
      integer :: n_cycle_base = -1 !< Number of relaxation cycles at bottom level
 
-     logical :: initialized  = .false.
+     logical :: initialized = .false. !< Whether the structure has been initialized
+     logical :: use_corners = .false. !< Does the smoother use corner ghost cells
 
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(a$D_subr_bc), pointer, nopass   :: sides_bc => null()
@@ -453,7 +454,8 @@ contains
 
        !$omp do
        do i = 1, size(ids)
-          call a$D_gc_box(boxes, ids(i), mg%i_phi, mg%sides_rb, mg%sides_bc)
+          call a$D_gc_box(boxes, ids(i), mg%i_phi, mg%sides_rb, &
+               mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle))
        end do
        !$omp end do
     end do
