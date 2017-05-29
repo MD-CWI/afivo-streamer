@@ -88,7 +88,7 @@ program test_photoionization
   call sim_rng%set_seed(rng_seed)
   call set_photoionization(tree, num_photons)
   write(fname, "(A,I0,A,L1,L1,I0,A)") "pho_", nint(1e3_dp * gas_pressure), "_", &
-       use_const_dx, use_cyl, nint(100 * grid_factor), ".silo"
+       use_const_dx, use_cyl, nint(100 * grid_factor)
   call a2_write_silo(tree, fname)
   call a2_tree_sum_cc(tree, i_photo, sum_pho)
   print *, "Sum photoionization", sum_pho
