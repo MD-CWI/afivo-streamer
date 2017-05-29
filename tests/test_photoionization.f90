@@ -10,6 +10,7 @@ program test_photoionization
   implicit none
 
   integer, parameter  :: box_size     = 8
+  integer, parameter :: i8 = selected_int_kind(18)
   real(dp), parameter :: frac_O2      = 0.2_dp
   real(dp), parameter :: domain_len   = 8e-3_dp
   real(dp), parameter :: dr           = domain_len / box_size
@@ -22,7 +23,7 @@ program test_photoionization
   real(dp) :: grid_factor
   logical  :: use_const_dx
   logical  :: use_cyl
-  integer  :: rng_seed(4)  = [234, 45, 843, 234]
+  integer(i8) :: rng_seed(2)  = [189023890123_i8, 348978834_i8]
   integer  :: num_photons
 
   type(a2_t)          :: tree
@@ -32,7 +33,6 @@ program test_photoionization
 
   integer             :: n, id
   integer             :: ix_list(2, 1) ! Spatial indices of initial boxes
-  integer             :: nb_list(4, 1) ! Neighbors of initial boxes
   real(dp)            :: sum_pho
 
   character(len=100) :: fname, tmp
@@ -76,13 +76,12 @@ program test_photoionization
   ! Set up geometry
   id             = 1          ! One box ...
   ix_list(:, id) = [1,1]      ! With index 1,1 ...
-  nb_list(:, id) = -1         ! And neighbors -1 (physical boundary)
 
   ! Create the base mesh
-  call a2_set_base(tree, ix_list, nb_list)
+  call a2_set_base(tree, 1, ix_list)
 
   do n = 1, 20
-     call a2_adjust_refinement(tree, refine_routine, ref_info)
+     call a2_adjust_refinement(tree, refine_routine, ref_info, 0)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -99,13 +98,14 @@ program test_photoionization
 contains
 
   ! Refinement function
-  subroutine refine_routine(boxes, id, refine_flag)
-    type(box2_t), intent(in) :: boxes(:)
-    integer, intent(in)      :: id
-    integer, intent(inout)   :: refine_flag
+  subroutine refine_routine(box, cell_flags)
+    type(box2_t), intent(in) :: box
+    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
 
-    if (boxes(id)%dr > 1.0e-3_dp * domain_len) then
-       refine_flag = af_do_ref
+    if (box%dr > 1.0e-3_dp * domain_len) then
+       cell_flags = af_do_ref
+    else
+       cell_flags = af_keep_ref
     end if
 
   end subroutine refine_routine
