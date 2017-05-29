@@ -40,6 +40,11 @@ program test_photoionization
   if (command_argument_count() < 4) then
      print *, "Need >5 arguments: num_photons pressure grid_fac", &
           " const_dx cylindrical [seed]"
+     print *, "num_photons:   number of photons"
+     print *, "pressure:      gas pressure (bar), assuming standard temperature"
+     print *, "grid_fac:      parameter that controls at which grid level photons are absorbed."
+     print *, "(e.g., 0.3 means roughly 30% of photons is absorbed within one grid spacing)"
+     print *, "const_dx:      Absorp photons on one level (true) or use adaptive absorption?"
      stop
   end if
 

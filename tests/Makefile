@@ -5,7 +5,7 @@ LIBS	:= afivo silo streamer
 
 include ../afivo/makerules.make
 
-TESTS	:= test_photoionization
+TESTS	:= test_photoionization test_m_photons
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
