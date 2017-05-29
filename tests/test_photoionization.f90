@@ -1,3 +1,5 @@
+!> Test the photoionization module by using a delta function as a source term,
+!> so that the analytic solution is known.
 program test_photoionization
   use m_a2_types
   use m_a2_core
@@ -135,6 +137,7 @@ contains
     real(dp), intent(in)        :: coeff(:)
     integer                     :: i, j, nc
     real(dp)                    :: xy(2), xy_rel(2), r
+    real(dp), parameter         :: xy_src(2) = [0.0_dp, 0.5_dp * domain_len]
     real(dp), parameter         :: pi = acos(-1.0_dp)
 
     nc = box%n_cell
@@ -142,24 +145,32 @@ contains
     do j = 0, nc+1
        do i = 0, nc+1
           xy = a2_r_cc(box, [i,j])
-          xy_rel = xy - [0.0_dp, 0.5_dp * domain_len]
+          xy_rel = xy - xy_src
           r = norm2(xy_rel)
 
           if (use_cyl) then
+             ! Set analytic solution (for delta function)
              box%cc(i, j, i_sol) = coeff(1) / (4 * pi * r**2) * &
                   photoi_absorption_func_air(r, gas_pressure * frac_O2)
 
+             ! Set source term for photons (delta function)
              if (r < box%dr) then
+                ! There will be two cells within a distance dr of the source,
+                ! hence the factor 0.5
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / &
                      (2 * pi * (0.5_dp * box%dr) * box%dr**2)
              else
                 box%cc(i, j, i_src) = 0.0_dp
              end if
           else
+             ! Set analytic solution (for delta function)
              box%cc(i, j, i_sol) = coeff(1) / (2 * pi * r) * &
                   photoi_absorption_func_air(r, gas_pressure * frac_O2)
 
+             ! Set source term for photons (delta function)
              if (r < box%dr) then
+                ! There will be two cells within a distance dr of the source,
+                ! hence the factor 0.5
                 box%cc(i, j, i_src) = 0.5_dp * coeff(1) / box%dr**2
              else
                 box%cc(i, j, i_src) = 0.0_dp
