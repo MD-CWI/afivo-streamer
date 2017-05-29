@@ -360,6 +360,9 @@ contains
        ! depends on the typical length scale for absorption.
        pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
 
+       print *, "Photons will be absorved at level", pho_lvl
+       print *, "with grid spacing", a2_lvl_dr(tree, pho_lvl)
+
        !$omp parallel do
        do n = 1, n_used
           ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), pho_lvl)
