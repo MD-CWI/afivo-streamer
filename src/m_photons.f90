@@ -26,7 +26,11 @@ module m_photons
 
 contains
 
-  !> Compute the photonization table for air
+  !> Compute the photonization table for air. If the absorption function is
+  !> f(r), this table contains r as a function of F (the cumulative absorption
+  !> function, between 0 and 1). Later on a distance can be sampled by drawing a
+  !> uniform 0,1 random number and finding the corresponding distance. The table
+  !> constructed up to max_dist; we can ignore photons that fly very far.
   subroutine photoi_get_table_air(photoi_tbl, p_O2, max_dist)
     !< The photonization table
     type(photoi_tbl_t), intent(inout) :: photoi_tbl
@@ -38,14 +42,17 @@ contains
     integer               :: n
     integer, parameter    :: tbl_size  = 500
     real(dp), allocatable :: fsum(:), dist(:)
-    real(dp)              :: dF, drdF, r, F, frac_guess
+    real(dp)              :: dF, drdF, r, F, Fmax_guess
 
-    ! First estimate which fraction of photons are within max_dist
-    frac_guess = 1.0_dp
+    ! First estimate which fraction of photons are within max_dist (start with
+    ! the upper bound of 1.0)
+    Fmax_guess = 1.0_dp
 
     ! 5 loops should be enough for a good guess
     do n = 1, 5
-       dF = frac_guess / (tbl_size-1)
+       ! When Fmax_guess decreases so will dF, since we keep the number of
+       ! points the same
+       dF = Fmax_guess / (tbl_size-1)
        r  = 0
        F  = 0
 
@@ -55,7 +62,8 @@ contains
           F = F + df
 
           if (r > max_dist) then
-             frac_guess = F
+             ! A better estimate for the upper bound
+             Fmax_guess = F
              exit
           end if
        end do
@@ -66,10 +74,11 @@ contains
     allocate(dist(2 * tbl_size))
 
     ! Now create table
-    dF = frac_guess / (tbl_size-1)
+    dF = Fmax_guess / (tbl_size-1)
     dist(1) = 0
     fsum(1) = 0
 
+    ! Compute r(F) for F = dF, 2 dF, 3 dF, ...
     do n = 2, 2 * tbl_size
        drdF = rk4_drdF(dist(n-1), dF, p_O2)
        fsum(n) = fsum(n-1) + dF
@@ -80,7 +89,7 @@ contains
     if (n > tbl_size + 10) &
          stop "photoi_get_table_air: integration accuracy fail"
 
-    ! Scale table to lie between 0 and 1
+    ! Scale table to lie between 0 and 1 (later on we have to correct for this)
     photoi_tbl%frac_in_tbl = fsum(n-1)
     fsum(1:n-1) = fsum(1:n-1) / fsum(n-1)
 
@@ -117,6 +126,7 @@ contains
     rk4_drdF = one_sixth * sum_drdF
   end function rk4_drdF
 
+  !> The absorption function for photons in air according to Zheleznyak's model
   real(dp) function photoi_absorption_func_air(dist, p_O2)
     use m_units_constants
     real(dp), intent(in) :: dist   !< Distance
@@ -128,16 +138,18 @@ contains
 
     r = p_O2 * dist
     if (r * (c0 + c1) < eps) then
-       ! Use limit
+       ! Use limit to prevent over/underflow
        photoi_absorption_func_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
             * p_O2 / log(c1/c0)
     else if (r * c0 > -log(eps)) then
+       ! Use limit to prevent over/underflow
        photoi_absorption_func_air = eps
     else
        photoi_absorption_func_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
     end if
   end function photoi_absorption_func_air
 
+  !> Determine the lowest level at which the grid spacing is smaller than 'length'.
   integer function get_lvl_length(dr_base, length)
     real(dp), intent(in) :: dr_base !< cell spacing at lvl 1
     real(dp), intent(in) :: length  !< Some length
@@ -152,6 +164,7 @@ contains
     end if
   end function get_lvl_length
 
+  !> As get_lvl_length but with a random choice between lvl and lvl-1
   integer function get_rlvl_length(dr_base, length, rng)
     use m_random
     real(dp), intent(in) :: dr_base   !< cell spacing at lvl 1
@@ -171,6 +184,8 @@ contains
     end if
   end function get_rlvl_length
 
+  !> Given a list of photon production positions (xyz_in), compute where they
+  !> end up (xyz_out).
   subroutine photoi_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
     use m_lookup_table
     use m_random
@@ -220,7 +235,9 @@ contains
     !$omp end parallel
   end subroutine photoi_do_absorption
 
-  subroutine photoi_set_src_2d(tree, pi_tbl, rng, num_photons, &
+  !> Set the source term due to photoionization for 2D models. At most
+  !> max_photons discrete photons are produced.
+  subroutine photoi_set_src_2d(tree, pi_tbl, rng, max_photons, &
        i_src, i_photo, fac_dx, const_dx, use_cyl, min_dx, dt)
     use m_random
     use m_a2_types
@@ -233,8 +250,8 @@ contains
     type(a2_t), intent(inout)  :: tree   !< Tree
     type(photoi_tbl_t)         :: pi_tbl !< Table to sample abs. lengths
     type(RNG_t), intent(inout) :: rng    !< Random number generator
-    !> How many discrete photons to use
-    integer, intent(in)        :: num_photons
+    !> Maximum number of discrete photons to use
+    integer, intent(in)        :: max_photons
     !> Input variable that contains photon production per cell
     integer, intent(in)        :: i_src
     !> Input variable that contains photoionization source rate
@@ -268,11 +285,11 @@ contains
     call a2_tree_sum_cc(tree, i_src, sum_production)
 
     if (present(dt)) then
-       ! Create "physical" photons when less than num_photons are produced
-       fac = min(dt, num_photons / (sum_production + epsilon(1.0_dp)))
+       ! Create "physical" photons when less than max_photons are produced
+       fac = min(dt, max_photons / (sum_production + epsilon(1.0_dp)))
     else
-       ! Create approximately num_photons
-       fac = num_photons / (sum_production + epsilon(1.0_dp))
+       ! Create approximately max_photons
+       fac = max_photons / (sum_production + epsilon(1.0_dp))
     end if
 
     ! Allocate a bit more space because of stochastic production
@@ -454,7 +471,7 @@ contains
     !$omp end parallel
   end subroutine photoi_set_src_2d
 
-  subroutine photoi_set_src_3d(tree, pi_tbl, rng, num_photons, &
+  subroutine photoi_set_src_3d(tree, pi_tbl, rng, max_photons, &
        i_src, i_photo, fac_dx, const_dx, min_dx, dt)
     use m_random
     use m_a3_types
@@ -467,8 +484,8 @@ contains
     type(a3_t), intent(inout)   :: tree   !< Tree
     type(photoi_tbl_t)          :: pi_tbl !< Table to sample abs. lengths
     type(RNG_t), intent(inout)  :: rng    !< Random number generator
-    !> How many discrete photons to use
-    integer, intent(in)         :: num_photons
+    !> Maximum number of discrete photons to use
+    integer, intent(in)         :: max_photons
     !> Input variable that contains photon production per cell
     integer, intent(in)         :: i_src
     !> Input variable that contains photoionization source rate
@@ -499,11 +516,11 @@ contains
     call a3_tree_sum_cc(tree, i_src, sum_production)
 
     if (present(dt)) then
-       ! Create "physical" photons when less than num_photons are produced
-       fac = min(dt, num_photons / (sum_production + epsilon(1.0_dp)))
+       ! Create "physical" photons when less than max_photons are produced
+       fac = min(dt, max_photons / (sum_production + epsilon(1.0_dp)))
     else
-       ! Create approximately num_photons
-       fac = num_photons / (sum_production + epsilon(1.0_dp))
+       ! Create approximately max_photons
+       fac = max_photons / (sum_production + epsilon(1.0_dp))
     end if
 
     ! Allocate a bit more space because of stochastic production
