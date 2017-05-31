@@ -28,6 +28,7 @@ module m_a$D_utils
   public :: a$D_reduction_loc
   public :: a$D_tree_max_cc
   public :: a$D_tree_min_cc
+  public :: a$D_tree_max_fc
   public :: a$D_tree_sum_cc
   public :: a$D_box_copy_fc
   public :: a$D_boxes_copy_fc
@@ -580,6 +581,25 @@ contains
     if (present(loc)) loc = tmp_loc
   end subroutine a$D_tree_min_cc
 
+  !> Find maximum value of fc(..., dim, iv). By default, only loop over leaves.
+  subroutine a$D_tree_max_fc(tree, dim, iv, fc_max, loc)
+    type(a$D_t), intent(in)      :: tree   !< Full grid
+    integer, intent(in)          :: dim    !< Flux dimension
+    integer, intent(in)          :: iv     !< Index of face variable
+    real(dp), intent(out)        :: fc_max !< Maximum value
+    !> Location of maximum
+    type(a$D_loc_t), intent(out), optional :: loc
+    type(a$D_loc_t)                        :: tmp_loc
+    integer                                :: dim_iv
+
+    ! Encode dim and iv in a single variable
+    dim_iv = (dim-1) * tree%n_var_face + iv - 1
+
+    call a$D_reduction_loc(tree, dim_iv, box_max_fc, reduce_max, &
+         -huge(1.0_dp)/10, fc_max, tmp_loc)
+    if (present(loc)) loc = tmp_loc
+  end subroutine a$D_tree_max_fc
+
   subroutine box_max_cc(box, iv, val, ix)
     type(box$D_t), intent(in) :: box
     integer, intent(in)       :: iv
@@ -613,6 +633,37 @@ contains
     val = box%cc(ix(1), ix(2), ix(3), iv)
 #endif
   end subroutine box_min_cc
+
+  subroutine box_max_fc(box, dim_iv, val, ix)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)       :: dim_iv
+    real(dp), intent(out)     :: val
+    integer, intent(out)      :: ix($D)
+    integer                   :: dim, iv, n_fc, nc, dix($D)
+
+    nc     = box%n_cell
+    dix(:) = 0
+
+#if $D == 2
+    n_fc = size(box%fc, 4)
+
+    ! Decode dim and iv
+    dim      = dim_iv / n_fc + 1
+    iv       = dim_iv - (dim-1) * n_fc + 1
+    ! Also include fluxes at 'upper' boundary
+    dix(dim) = 1
+    ix       = maxloc(box%fc(1:nc+dix(1), 1:nc+dix(2), dim, iv))
+    val      = box%fc(ix(1), ix(2), dim, iv)
+#elif $D == 3
+    n_fc     = size(box%fc, 5)
+    ! Decode dim and iv
+    dim      = dim_iv / n_fc + 1
+    dix(dim) = 1
+    iv       = dim_iv - (dim-1) * n_fc + 1
+    ix       = maxloc(box%fc(1:nc+dix(1), 1:nc+dix(2), 1:nc+dix(3), dim, iv))
+    val      = box%fc(ix(1), ix(2), ix(3), dim, iv)
+#endif
+  end subroutine box_max_fc
 
   real(dp) function reduce_max(a, b)
     real(dp), intent(in) :: a, b
