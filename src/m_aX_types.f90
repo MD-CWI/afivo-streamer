@@ -449,6 +449,16 @@ contains
     r = box%r_min + (cc_ix-0.5_dp) * box%dr
   end function a$D_r_cc
 
+  !> Get the location of the face parallel to dim with index fc_ix
+  pure function a$D_r_fc(box, dim, fc_ix) result(r)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)       :: dim
+    integer, intent(in)       :: fc_ix($D)
+    real(dp)                  :: r($D)
+    r      = box%r_min + (fc_ix-0.5_dp) * box%dr
+    r(dim) = r(dim) - 0.5_dp * box%dr
+  end function a$D_r_fc
+
   !> Get a general location with index cc_ix (like a$D_r_cc but using reals)
   pure function a$D_rr_cc(box, cc_ix) result(r)
     type(box$D_t), intent(in) :: box
