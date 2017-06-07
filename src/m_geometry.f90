@@ -8,18 +8,18 @@ module m_geometry
 
   integer, parameter :: dp = kind(0.0d0)
 
-  integer, parameter :: GM_sigmoid_t    = 1
-  integer, parameter :: GM_gaussian_t   = 2
-  integer, parameter :: GM_smoothstep_t = 3
-  integer, parameter :: GM_step_t       = 4
-  integer, parameter :: GM_laser_t      = 5
+  !integer, parameter :: GM_sigmoid_t    = 1
+  !integer, parameter :: GM_gaussian_t   = 2
+  !integer, parameter :: GM_smoothstep_t = 3
+  !integer, parameter :: GM_step_t       = 4
+  !integer, parameter :: GM_laser_t      = 5
 
   ! Public types
-  public :: GM_sigmoid_t
-  public :: GM_gaussian_t
-  public :: GM_smoothstep_t
-  public :: GM_step_t
-  public :: GM_laser_t
+!  public :: GM_sigmoid_t
+!  public :: GM_gaussian_t
+!  public :: GM_smoothstep_t
+!  public :: GM_step_t
+!  public :: GM_laser_t
 
   ! Public methods
   public :: GM_dist_line
@@ -61,22 +61,23 @@ contains
   function GM_density_line(r, r0, r1, n_dim, width, falloff_t) result(val)
     integer, intent(in)  :: n_dim
     real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim), width
-    integer, intent(in)  :: falloff_t
+!   integer, intent(in)  :: falloff_t
+    character(len=100), intent(in)  :: falloff_t
     real(dp)             :: dist, val, dist_vec(n_dim)
 
     dist_vec = GM_dist_vec_line(r, r0, r1, n_dim)
     dist = norm2(dist_vec)
 
     select case (falloff_t)
-    case (GM_sigmoid_t)
+    case ('sigmoid')
        val  = GM_sigmoid(dist, width)
-    case (GM_gaussian_t)
+    case ('gaussian')
        val  = GM_gaussian(dist, width)
-    case (GM_smoothstep_t)
+    case ('smoothstep')
        val  = GM_smoothstep(dist, width)
-    case (GM_step_t)
+    case ('step')
        val  = GM_step(dist, width)
-    case (GM_laser_t)
+    case ('laser')
        val  = GM_laser(dist_vec, width, n_dim)
     case default
        val  = 0
