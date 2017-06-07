@@ -331,10 +331,16 @@ contains
   !> Return .true. if a box has children
   elemental logical function a$D_has_children(box)
     type(box$D_t), intent(in) :: box
+
+    ! Boxes are either fully refined or not, so we only need to check one of the
+    ! children
     a$D_has_children = (box%children(1) /= af_no_box)
   end function a$D_has_children
 
-  !> Return .true. where there is a physical/periodic boundary
+  !> Return .true. where there is a physical/periodic boundary. Detecting
+  !> physical boundaries is straightforward (simply test whether neighbors(i) <
+  !> af_no_box), but periodic boundaries require a comparison of their spatial
+  !> index.
   pure function a$D_phys_boundary(boxes, id, nbs) result(boundary)
     type(box$D_t), intent(in) :: boxes(:) !< List of boxes
     integer, intent(in)       :: id       !< Box to inspect
@@ -348,19 +354,23 @@ contains
 
        if (nb_id < af_no_box) then
           boundary(n) = .true.  ! Physical boundary
-       else
+       else                     ! There could be a periodic boundary
           dim = a$D_neighb_dim(nb)
 
           if (nb_id == af_no_box) then
-             ! Refinement boundary, have to check parent
+             ! Refinement boundary, compute index difference on parent (which is
+             ! guaranteed to be there)
              p_id = boxes(id)%parent
              nb_id = boxes(p_id)%neighbors(nb)
              dix = boxes(nb_id)%ix(dim) - boxes(p_id)%ix(dim)
-          else                  ! Normal neighbor
+          else
+             ! Normal neighbor, compute index difference
              dix = boxes(nb_id)%ix(dim) - boxes(id)%ix(dim)
           end if
 
           if (dix /= a$D_neighb_high_pm(nb)) then
+             ! The difference in index is not the expected +-1, so a periodic
+             ! boundary
              boundary(n) = .true.
           else
              boundary(n) = .false.
