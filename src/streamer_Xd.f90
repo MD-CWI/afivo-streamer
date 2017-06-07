@@ -228,8 +228,7 @@ contains
        if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
           cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp * ST_refine_adx .and. &
-            cphi < 0.0625_dp * ST_refine_cphi &
-            .and. dx < ST_derefine_dx) then
+            cphi < ST_derefine_cphi .and. dx < ST_derefine_dx) then
           cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref

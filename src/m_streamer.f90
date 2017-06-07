@@ -91,6 +91,9 @@ module m_streamer
   ! Refine if the curvature in phi is larger than this value
   real(dp), protected :: ST_refine_cphi = 1e99_dp
 
+  ! Allow derefinement if the curvature in phi is smaller than this value
+  real(dp), protected :: ST_derefine_cphi = 1e99_dp
+
   ! Only derefine if grid spacing if smaller than this value
   real(dp), protected :: ST_derefine_dx = 1e-4_dp
 
@@ -204,6 +207,8 @@ contains
          "Refine if alpha*dx is larger than this value")
     call CFG_add_get(cfg, "refine_cphi", ST_refine_cphi, &
          "Refine if the curvature in phi is larger than this value")
+    call CFG_add_get(cfg, "derefine_cphi", ST_derefine_cphi, &
+         "Allow derefinement if the curvature in phi is smaller than this value")
     call CFG_add_get(cfg, "derefine_dx", ST_derefine_dx, &
          "Only derefine if grid spacing if smaller than this value")
     call CFG_add_get(cfg, "refine_init_time", ST_refine_init_time, &
