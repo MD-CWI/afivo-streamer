@@ -417,6 +417,57 @@ contains
     nb_ix(nb_dim) = nb_ix(nb_dim) - a$D_neighb_high_pm(nb) * box%n_cell
   end function a$D_get_ix_on_neighb
 
+  !> Get diagonal neighbors. Returns the index of the neighbor if found,
+  !> otherwise the result nb_id <= af_no_box.
+  pure function a$D_diag_neighb_id(boxes, id, nbs) result(nb_id)
+    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
+    integer, intent(in)       :: id       !< Start index
+    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
+    integer                   :: i, j, k, nb, nb_id
+    integer                   :: nbs_perm(size(nbs))
+
+    if (size(nbs) == 0) then
+       nb_id = id
+    else
+       do i = 1, size(nbs)
+          nb_id = id
+
+          ! Check if path exists starting from nbs(i)
+          do j = 1, size(nbs)
+             ! k starts at i and runs over the neighbors
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
+    ! covers all paths
+    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
+       nbs_perm = nbs([2,1,3])
+
+       do i = 1, size(nbs)
+          nb_id = id
+
+          do j = 1, size(nbs)
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+  end function a$D_diag_neighb_id
+
   !> Given a list of neighbor directions, compute the index offset
   pure function a$D_neighb_offset(nbs) result(dix)
     integer, intent(in) :: nbs(:) !< List of neighbor directions

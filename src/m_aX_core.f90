@@ -506,28 +506,32 @@ contains
     call move_alloc(boxes_cpy, tree%boxes)
   end subroutine a$D_resize_box_storage
 
-  !> Adjust the refinement of a tree using the user-supplied ref_subr. If the
-  !> argument n_changes is present, it contains the number of boxes that were
-  !> (de)refined.
+  !> Adjust the refinement of a tree using the user-supplied ref_subr. The
+  !> optional argument ref_buffer controls over how many cells neighbors are
+  !> affected by refinement flags.
   !>
-  !> This routine sets the bit af_bit_new_children for each box that is refined.
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
-  subroutine a$D_adjust_refinement(tree, ref_subr, ref_info, ref_buffer)
+  subroutine a$D_adjust_refinement(tree, ref_subr, ref_info, ref_buffer, keep_buffer)
     type(a$D_t), intent(inout)      :: tree        !< The tree to adjust
     procedure(a$D_subr_ref)         :: ref_subr    !< Refinement function
     type(ref_info_t), intent(inout) :: ref_info    !< Information about refinement
     integer, intent(in), optional   :: ref_buffer  !< Buffer width (in cells)
+    logical, intent(in), optional   :: keep_buffer !< Use buffer for 'keep refinement' flags
     integer                         :: lvl, id, i, c_ids(a$D_num_children)
     integer                         :: highest_id_prev, highest_id_req
     integer, allocatable            :: ref_flags(:)
     integer                         :: num_new_boxes, total_num_boxes
     integer                         :: new_size, ref_buffer_val
+    logical                         :: keep_buffer_val
 
     if (.not. tree%ready) stop "Tree not ready"
 
-    ref_buffer_val = 2          ! Default buffer width (in cells) around refinement
+    ref_buffer_val = 1          ! Default buffer width (in cells) around refinement
     if (present(ref_buffer)) ref_buffer_val = ref_buffer
+    keep_buffer_val = .false.   ! Do not use a buffer for 'keep refinement' flags
+    if (present(keep_buffer)) keep_buffer_val = keep_buffer
+
     if (ref_buffer_val < 0) &
          error stop "a$D_adjust_refinement: ref_buffer < 0"
     if (ref_buffer_val > tree%n_cell) &
@@ -541,7 +545,8 @@ contains
     allocate(ref_flags(highest_id_prev))
 
     ! Set refinement values for all boxes
-    call consistent_ref_flags(tree, ref_flags, ref_subr, ref_buffer_val)
+    call consistent_ref_flags(tree, ref_flags, ref_subr, &
+         ref_buffer_val, keep_buffer_val)
 
     ! Compute number of new boxes
     num_new_boxes = a$D_num_children * count(ref_flags == af_refine)
@@ -697,12 +702,14 @@ contains
   !> base level, and it cannot refine above tree%lvl_limit. The argument
   !> ref_flags is changed: for boxes that will be refined it holds af_refine,
   !> for boxes that will be derefined it holds af_derefine
-  subroutine consistent_ref_flags(tree, ref_flags, ref_subr, ref_buffer)
+  subroutine consistent_ref_flags(tree, ref_flags, ref_subr, &
+       ref_buffer, keep_buffer)
     use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     type(a$D_t), intent(inout) :: tree         !< Tree for which we set refinement flags
-    integer, intent(inout)    :: ref_flags(:) !< List of refinement flags for all boxes(:)
+    integer, intent(inout)     :: ref_flags(:) !< List of refinement flags for all boxes(:)
     procedure(a$D_subr_ref)    :: ref_subr     !< User-supplied refinement function.
-    integer, intent(in)       :: ref_buffer   !< Buffer width (in cells)
+    integer, intent(in)        :: ref_buffer   !< Buffer width (in cells)
+    logical, intent(in)        :: keep_buffer  !< Also buffer 'keep refinement' flags
 
     integer              :: lvl, i, id, c_ids(a$D_num_children)
     integer              :: nb, p_id, nb_id, p_nb_id
@@ -735,7 +742,7 @@ contains
 
           call ref_subr(tree%boxes(id), cell_flags)
           call cell_to_ref_flags(cell_flags, tree%n_cell, &
-                  tmp_flags(:, thread_id), tree, id, ref_buffer)
+               tmp_flags(:, thread_id), tree, id, ref_buffer, keep_buffer)
 
           ! If the parent exists, and this is the first child, set refinement
           ! flags for the parent
@@ -744,7 +751,7 @@ contains
              p_id = tree%boxes(id)%parent
              call ref_subr(tree%boxes(p_id), cell_flags)
              call cell_to_ref_flags(cell_flags, tree%n_cell, &
-                  tmp_flags(:, thread_id), tree, p_id, ref_buffer)
+                  tmp_flags(:, thread_id), tree, p_id, ref_buffer, keep_buffer)
           end if
        end do
        !$omp end do
@@ -825,10 +832,8 @@ contains
   !> Given the cell refinement flags of a box, set the refinement flag for that
   !> box and potentially also its neighbors (in case of refinement near a
   !> boundary).
-  !>
-  !> @todo Simplify this routine
   subroutine cell_to_ref_flags(cell_flags, nc, ref_flags, tree, id, &
-       ref_buffer)
+       ref_buffer, keep_buffer)
     use m_a$D_utils, only: a$D_get_loc
     integer, intent(in)     :: nc                     !< n_cell for the box
 #if $D == 2
@@ -840,17 +845,8 @@ contains
     type(a$D_t), intent(in) :: tree                   !< Full tree
     integer, intent(in)     :: id                     !< Which box is considered
     integer, intent(in)     :: ref_buffer             !< Buffer cells around refinement
-
-#if $D == 2
-    integer         :: i, j
-#elif $D == 3
-    integer         :: i, j, k
-#endif
-    integer         :: dim, nb_id, dix($D, -1:1)
-    integer         :: nb_dix($D, 3**$D), d_nb(3**$D)
-    integer         :: n, ix($D), nb, dist
-    real(dp)        :: r_in_nb($D), r_center($D), d_to_nb
-    type(a$D_loc_t) :: loc
+    logical, intent(in)     :: keep_buffer            !< Buffer around 'keep refinement' flags
+    integer                 :: ix0($D), ix1($D), n, nb, dim, nb_id
 
     if (minval(cell_flags) < af_rm_ref .or. &
          maxval(cell_flags) > af_do_ref) then
@@ -858,129 +854,107 @@ contains
     end if
 
     ! Check whether the box needs to be refined or keep its refinement
-    !> @todo Check whether the procedure works correctly with periodic boundaries
     if (any(cell_flags == af_do_ref)) then
-
-       ! Compute the distance between flagged cells and neighbors
-       d_nb(:)    = huge(1)
-       n          = 1
-
-       ! Check for periodic boundaries. First set the cases were the change in
-       ! index is zero
-       dix(:, 0) = 0
-
-       do nb = 1, a$D_num_neighbors
-          nb_id = tree%boxes(id)%neighbors(nb)
-          dim   = (nb + 1)/2
-
-          ! +1 for a high and -1 for a low neighbor
-          i     = a$D_neighb_high_pm(nb)
-
-          ! If a neighbor is not present yet, it's parent will automatically be
-          ! flagged for refinement.
-          if (nb_id > af_no_box) then
-             ! This will not equal i near a periodic boundary
-             dix(dim, i) = tree%boxes(nb_id)%ix(dim) - &
-                  tree%boxes(id)%ix(dim)
-          else
-             dix(dim, i) = i
-          end if
-       end do
-
-       ! Define the offsets of all the neighbors (including diagonal ones), and
-       ! including the box itself for convenience of notation
-#if $D == 2
-       do j = -1, 1
-          do i = -1, 1
-             nb_dix(:, n) = [dix(1, i), dix(2, j)]
-             n            = n + 1
-          end do
-       end do
-
-       ! Update the distance between refined cells and neighbors
-       do j = 1, nc
-          do i = 1, nc
-             ix = [i, j]
-             if (cell_flags(i, j) == af_do_ref) then
-                do nb = 1, 3**$D
-                   dist = floor(dist_to_nb_box(ix, nb_dix(:, nb), nc))
-                   d_nb(nb) = min(d_nb(nb), dist)
-                end do
-             end if
-          end do
-       end do
-#elif $D == 3
-       do k = -1, 1
-          do j = -1, 1
-             do i = -1, 1
-                nb_dix(:, n) = [dix(1, i), dix(2, j), dix(3, k)]
-                n            = n + 1
-             end do
-          end do
-       end do
-
-       do k = 1, nc
-          do j = 1, nc
-             do i = 1, nc
-                ix = [i, j, k]
-                if (cell_flags(i, j, k) == af_do_ref) then
-                   do nb = 1, 3**$D
-                      dist = floor(dist_to_nb_box(ix, nb_dix(:, nb), nc))
-                      d_nb(nb) = min(d_nb(nb), dist)
-                   end do
-                end if
-             end do
-          end do
-       end do
-#endif
-
-       ! Locate each neighbor to be refined (including the box itself) and mark
-       ! for refinement
-       r_center = a$D_r_center(tree%boxes(id))
-       d_to_nb  = nc * tree%boxes(id)%dr
-
-       do nb = 1, 3**$D
-          if (d_nb(nb) <= ref_buffer) then
-             ! Define a position inside the neighbor box
-             r_in_nb = r_center + nb_dix(:, nb) * d_to_nb
-
-             ! Search up to current refinement level
-             loc = a$D_get_loc(tree, r_in_nb, tree%boxes(id)%lvl)
-
-             ! If found, mark for refinement
-             if (loc%id /= -1) then
-                ref_flags(loc%id) = af_do_ref
-             end if
-          end if
-       end do
+       ref_flags(id) = af_do_ref
     else if (any(cell_flags == af_keep_ref)) then
-       ! The refinement flag could already have been set through a neighbor
        ref_flags(id) = max(ref_flags(id), af_keep_ref)
     else    ! All flags are af_rm_ref
-       ! The refinement flag could already have been set through a neighbor
        ref_flags(id) = max(ref_flags(id), af_rm_ref)
     end if
 
+    if (ref_buffer <= 0) return ! No need to check neighbors
+
+    ! Check whether neighbors also require refinement, which happens when cells
+    ! close to the neighbor are flagged.
+    do nb = 1, a$D_num_neighbors
+       nb_id = tree%boxes(id)%neighbors(nb)
+
+       ! Skip neighbors that are not there
+       if (nb_id <= af_no_box) cycle
+
+       ! Compute index range relevant for neighbor
+       ix0 = 1
+       ix1 = nc
+       dim = a$D_neighb_dim(nb)
+
+       if (a$D_neighb_low(nb)) then
+          ix1(dim) = ref_buffer
+       else
+          ix0(dim) = nc - ref_buffer + 1
+       end if
+
+#if $D == 2
+       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
+          ref_flags(nb_id) = af_do_ref
+       else if (keep_buffer .and. &
+            any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_keep_ref)) then
+          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
+       end if
+#elif $D == 3
+       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
+            ix0(3):ix1(3)) == af_do_ref)) then
+          ref_flags(nb_id) = af_do_ref
+       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
+            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
+          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
+       end if
+#endif
+    end do
+
+#if $D == 3
+    ! Check neighbors on the edges
+    do n = 1, a3_num_edges
+       ! Check whether there is a neighbor, and find its index
+       nb_id = a$D_diag_neighb_id(tree%boxes, id, a3_nb_adj_edge(:, n))
+       if (nb_id <= af_no_box) cycle
+
+       ! Compute index range relevant for neighbor. This is currently a 3d
+       ! rectangle, whereas is should perhaps have a triangle-like shape
+       dim      = a3_edge_dim(n) ! Dimension parallel to edge
+       ix0      = 1 + a3_edge_min_ix(:, n) * (nc-ref_buffer)
+       ix1      = ix0 + ref_buffer - 1
+       ix0(dim) = 1
+       ix1(dim) = nc
+
+       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
+            ix0(3):ix1(3)) == af_do_ref)) then
+          ref_flags(nb_id) = af_do_ref
+       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
+            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
+          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
+       end if
+    end do
+#endif
+
+    ! Check corners
+    do n = 1, a$D_num_children
+       ! Check whether there is a neighbor, and find its index
+       nb_id = a$D_diag_neighb_id(tree%boxes, id, a$D_nb_adj_child(:, n))
+       if (nb_id <= af_no_box) cycle
+
+       ! Compute index range relevant for neighbor (a 3d cube)
+       ix0 = 1 + a$D_child_dix(:, n) * (nc-ref_buffer)
+       ix1 = ix0 + ref_buffer - 1
+
+#if $D == 2
+       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
+          ref_flags(nb_id) = af_do_ref
+       else if (keep_buffer .and. &
+            any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_keep_ref)) then
+          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
+       end if
+#elif $D == 3
+       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
+            ix0(3):ix1(3)) == af_do_ref)) then
+          ref_flags(nb_id) = af_do_ref
+       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
+            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
+          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
+       end if
+#endif
+    end do
+
   end subroutine cell_to_ref_flags
-
-  !> Compute distance between a cell and another box at nb_dix * nc
-  function dist_to_nb_box(cc_ix, nb_dix, nc) result(dist_real)
-    integer, intent(in) :: cc_ix($D)  !< Index of cell
-    integer, intent(in) :: nb_dix($D) !< Offset of neighbor box
-    integer, intent(in) :: nc         !< Number of cells per box dimension
-    integer             :: dist($D), i_min($D), i_max($D)
-    real(dp)            :: dist_real
-
-    ! Compute i_min and i_max for other box
-    i_min = 1 + nb_dix * nc
-    i_max = i_min + nc - 1
-    dist  = 0
-
-    where (cc_ix < i_min) dist = i_min - cc_ix
-    where (cc_ix > i_max) dist = cc_ix - i_max
-
-    dist_real = norm2(real(dist, dp))
-  end function dist_to_nb_box
 
   !> Remove the children of box id
   subroutine remove_children(boxes, id)
