@@ -527,7 +527,7 @@ contains
 
     if (.not. tree%ready) stop "Tree not ready"
 
-    ref_buffer_val = 1          ! Default buffer width (in cells) around refinement
+    ref_buffer_val = 0          ! Default buffer width (in cells) around refinement
     if (present(ref_buffer)) ref_buffer_val = ref_buffer
     keep_buffer_val = .false.   ! Do not use a buffer for 'keep refinement' flags
     if (present(keep_buffer)) keep_buffer_val = keep_buffer
@@ -711,7 +711,7 @@ contains
     integer, intent(in)        :: ref_buffer   !< Buffer width (in cells)
     logical, intent(in)        :: keep_buffer  !< Also buffer 'keep refinement' flags
 
-    integer              :: lvl, i, id, c_ids(a$D_num_children)
+    integer              :: lvl, i, i_ch, ch_id, id, c_ids(a$D_num_children)
     integer              :: nb, p_id, nb_id, p_nb_id
     integer              :: lvl_limit, thread_id
     integer, allocatable :: tmp_flags(:, :)
@@ -732,7 +732,7 @@ contains
     ! Set refinement flags on all leaves and their immediate parents (on other
     ! boxes the flags would not matter)
 
-    !$omp parallel private(lvl, i, id, p_id, cell_flags, thread_id)
+    !$omp parallel private(lvl, i, id, p_id, cell_flags, thread_id, i_ch, ch_id)
     thread_id = omp_get_thread_num() + 1
 
     do lvl = 1, tree%highest_lvl
@@ -744,14 +744,21 @@ contains
           call cell_to_ref_flags(cell_flags, tree%n_cell, &
                tmp_flags(:, thread_id), tree, id, ref_buffer, keep_buffer)
 
-          ! If the parent exists, and this is the first child, set refinement
-          ! flags for the parent
-          if (tree%boxes(id)%lvl > 1 .and. &
-               a$D_ix_to_ichild(tree%boxes(id)%ix) == 1) then
+          ! If the parent exists, and this is the first child which is itself
+          ! not refined, set refinement flags for the parent
+          if (tree%boxes(id)%lvl > 1) then
              p_id = tree%boxes(id)%parent
-             call ref_subr(tree%boxes(p_id), cell_flags)
-             call cell_to_ref_flags(cell_flags, tree%n_cell, &
-                  tmp_flags(:, thread_id), tree, p_id, ref_buffer, keep_buffer)
+             do i_ch = 1, a$D_ix_to_ichild(tree%boxes(id)%ix)-1
+                ch_id = tree%boxes(p_id)%children(i_ch)
+                if (.not. a$D_has_children(tree%boxes(ch_id))) exit
+             end do
+
+             if (i_ch == a$D_ix_to_ichild(tree%boxes(id)%ix)) then
+                ! This is the first child which is itself not refined
+                call ref_subr(tree%boxes(p_id), cell_flags)
+                call cell_to_ref_flags(cell_flags, tree%n_cell, &
+                     tmp_flags(:, thread_id), tree, p_id, ref_buffer, keep_buffer)
+             end if
           end if
        end do
        !$omp end do
