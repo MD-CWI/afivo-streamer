@@ -12,7 +12,7 @@ program advection_$Dd
   integer, parameter  :: i_phi      = 1
   integer, parameter  :: i_phi_old  = 2
   integer, parameter  :: i_err      = 3
-  integer, parameter  :: sol_type   = 1
+  integer, parameter  :: sol_type   = 2
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr         = domain_len / box_size
 
@@ -82,7 +82,7 @@ program advection_$Dd
      call a$D_adjust_refinement(tree, &           ! tree
           refine_routine, & ! Refinement function
           refine_info, &    ! Information about refinement
-          2)                ! Buffer width (in cells)
+          1)                ! Buffer width (in cells)
 
      ! If no new boxes have been added, exit the loop
      if (refine_info%n_add == 0) exit
@@ -172,7 +172,7 @@ program advection_$Dd
      ! refinement. On input, the tree should be balanced. On output, the tree is
      ! still balanced, and its refinement is updated (with at most one level per
      ! call).
-     call a$D_adjust_refinement(tree, refine_routine, refine_info, 2)
+     call a$D_adjust_refinement(tree, refine_routine, refine_info, 1)
      !> [adjust_refinement]
 
 
