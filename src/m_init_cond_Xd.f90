@@ -15,7 +15,9 @@ module m_init_cond_$Dd
      real(dp), allocatable :: seed_density(:)
      integer, allocatable  :: seed_charge_type(:)
      real(dp), allocatable :: seed_width(:)
-     integer, allocatable  :: seed_falloff(:)
+     !integer, allocatable  :: seed_falloff(:)
+     
+     character(ST_slen), allocatable  ::   seed_falloff(:)
   end type initcnd_t
 
   ! This will contain the initial conditions
@@ -48,9 +50,12 @@ contains
          "Type of seed: neutral (0), ions (1) or electrons (-1)", .true.)
     call CFG_add(cfg, "seed_width", [0.25d-3], &
          "Seed width (m)", .true.)
-    call CFG_add(cfg, "seed_falloff", [3], &
-         "Fallof type for seed, see m_geometry.f90", .true.)
-
+    !call CFG_add(cfg, "seed_falloff", [3], &
+    !     "Fallof type for seed, see m_geometry.f90", .true.)
+    
+    call CFG_add(cfg, "seed_falloff", ['smoothstep'], &
+         "Fallof type for seed, sigmoid, gaussian, smoothstep, step, laser, see m_geometry.f90, default=smoothstep", .true.)
+         
     call CFG_get_size(cfg, "seed_density", n_cond)
     ic%n_cond = n_cond
 
@@ -69,7 +74,7 @@ contains
     call CFG_get_size(cfg, "seed_width", varsize)
     if (varsize /= n_cond) &
          stop "seed_width variable has incompatible size"
-
+    
     allocate(ic%seed_density(n_cond))
     allocate(ic%seed_charge_type(n_cond))
     allocate(ic%seed_r0(n_dim, n_cond))
@@ -89,7 +94,7 @@ contains
     call CFG_get(cfg, "seed_charge_type", ic%seed_charge_type)
     call CFG_get(cfg, "seed_width", ic%seed_width)
     call CFG_get(cfg, "seed_falloff", ic%seed_falloff)
-
+    
     init_conds = ic
 
   end subroutine init_cond_initialize
