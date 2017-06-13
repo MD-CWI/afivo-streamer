@@ -92,18 +92,19 @@ contains
        nb_id = boxes(id)%neighbors(nb)
 
        if (nb_id > af_no_box) then
-          ! Compute index range
-          nb_dim = a$D_neighb_dim(nb)
-          lo(:) = 1
-          hi(:) = boxes(id)%n_cell
+          ! There is a neighbor
+          nb_dim     = a$D_neighb_dim(nb)
+          lo(:)      = 1
+          hi(:)      = boxes(id)%n_cell
           lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell + 1)
           hi(nb_dim) = lo(nb_dim)
-
-          dnb = a$D_neighb_offset([nb])
+          dnb        = a$D_neighb_offset([nb])
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
        else if (nb_id == af_no_box) then
+          ! Refinement boundary
           call subr_rb(boxes, id, nb, iv)
        else
+          ! Physical boundary
           call subr_bc(boxes(id), nb, iv, bc_type)
           call bc_to_gc(boxes(id), nb, iv, bc_type)
        end if
@@ -129,7 +130,7 @@ contains
        dim = a3_edge_dim(n)
 
        ! Check whether there is a neighbor, and find its index
-       nb_id = get_diag_neighb_id(boxes, id, a3_nb_adj_edge(:, n))
+       nb_id = a$D_diag_neighb_id(boxes, id, a3_nb_adj_edge(:, n))
 
        lo = a3_edge_min_ix(:, n) * (boxes(id)%n_cell + 1)
        lo(dim) = 1
@@ -147,7 +148,7 @@ contains
 
     do n = 1, a$D_num_children
        ! Check whether there is a neighbor, and find its index
-       nb_id = get_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
+       nb_id = a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
        lo    = a$D_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then
@@ -158,57 +159,6 @@ contains
        end if
     end do
   end subroutine a$D_gc_box_corner
-
-  !> Get diagonal neighbors. Returns the index of the neighbor if found,
-  !> otherwise the result nb_id <= af_no_box.
-  pure function get_diag_neighb_id(boxes, id, nbs) result(nb_id)
-    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
-    integer, intent(in)       :: id       !< Start index
-    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
-    integer                   :: i, j, k, nb, nb_id
-    integer                   :: nbs_perm(size(nbs))
-
-    if (size(nbs) == 0) then
-       nb_id = id
-    else
-       do i = 1, size(nbs)
-          nb_id = id
-
-          ! Check if path exists starting from nbs(i)
-          do j = 1, size(nbs)
-             ! k starts at i and runs over the neighbors
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
-          end do
-
-          if (nb_id > af_no_box) exit ! Found it
-       end do
-    end if
-
-    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
-    ! covers all paths
-    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
-       nbs_perm = nbs([2,1,3])
-
-       do i = 1, size(nbs)
-          nb_id = id
-
-          do j = 1, size(nbs)
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
-          end do
-
-          if (nb_id > af_no_box) exit ! Found it
-       end do
-    end if
-
-  end function get_diag_neighb_id
 
   subroutine bc_to_gc(box, nb, iv, bc_type)
     type(box$D_t), intent(inout)  :: box
