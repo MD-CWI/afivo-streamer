@@ -1,25 +1,12 @@
-!> Module that provides routines for geometric operations and calculations
+!> Module that provides routines for geometric operations and calculations.
+!> Methods and types have a prefix GM_, short for 'geometry'.
 module m_geometry
 
 ! TODO: Describe methods. Till now those GM methods are not used elsewhere
-! TODO: GM stands for Geometry?? 
   implicit none
   private
 
   integer, parameter :: dp = kind(0.0d0)
-
-  !integer, parameter :: GM_sigmoid_t    = 1
-  !integer, parameter :: GM_gaussian_t   = 2
-  !integer, parameter :: GM_smoothstep_t = 3
-  !integer, parameter :: GM_step_t       = 4
-  !integer, parameter :: GM_laser_t      = 5
-
-  ! Public types
-!  public :: GM_sigmoid_t
-!  public :: GM_gaussian_t
-!  public :: GM_smoothstep_t
-!  public :: GM_step_t
-!  public :: GM_laser_t
 
   ! Public methods
   public :: GM_dist_line
@@ -59,11 +46,10 @@ contains
   end function GM_dist_line
 
   function GM_density_line(r, r0, r1, n_dim, width, falloff_t) result(val)
-    integer, intent(in)  :: n_dim
-    real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim), width
-!   integer, intent(in)  :: falloff_t
-    character(len=100), intent(in)  :: falloff_t
-    real(dp)             :: dist, val, dist_vec(n_dim)
+    integer, intent(in)          :: n_dim
+    real(dp), intent(in)         :: r(n_dim), r0(n_dim), r1(n_dim), width
+    character(len=*), intent(in) :: falloff_t
+    real(dp)                     :: dist, val, dist_vec(n_dim)
 
     dist_vec = GM_dist_vec_line(r, r0, r1, n_dim)
     dist = norm2(dist_vec)
@@ -80,7 +66,9 @@ contains
     case ('laser')
        val  = GM_laser(dist_vec, width, n_dim)
     case default
-       val  = 0
+       print *, "GM_density_line: unknown fall-off type: ", trim(falloff_t)
+       print *, "Valid options: sigmoid, gaussian, smoothstep, step, laser"
+       stop
     end select
   end function GM_density_line
 

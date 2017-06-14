@@ -8,16 +8,14 @@ module m_init_cond_$Dd
 
   ! Type to store initial conditions in
   type initcnd_t
-     real(dp)              :: background_density
-     integer               :: n_cond
-     real(dp), allocatable :: seed_r0(:, :)
-     real(dp), allocatable :: seed_r1(:, :)
-     real(dp), allocatable :: seed_density(:)
-     integer, allocatable  :: seed_charge_type(:)
-     real(dp), allocatable :: seed_width(:)
-     !integer, allocatable  :: seed_falloff(:)
-     
-     character(ST_slen), allocatable  ::   seed_falloff(:)
+     real(dp)                        :: background_density
+     integer                         :: n_cond
+     real(dp), allocatable           :: seed_r0(:, :)
+     real(dp), allocatable           :: seed_r1(:, :)
+     real(dp), allocatable           :: seed_density(:)
+     integer, allocatable            :: seed_charge_type(:)
+     real(dp), allocatable           :: seed_width(:)
+     character(ST_slen), allocatable :: seed_falloff(:)
   end type initcnd_t
 
   ! This will contain the initial conditions
@@ -50,12 +48,10 @@ contains
          "Type of seed: neutral (0), ions (1) or electrons (-1)", .true.)
     call CFG_add(cfg, "seed_width", [0.25d-3], &
          "Seed width (m)", .true.)
-    !call CFG_add(cfg, "seed_falloff", [3], &
-    !     "Fallof type for seed, see m_geometry.f90", .true.)
-    
     call CFG_add(cfg, "seed_falloff", ['smoothstep'], &
-         "Fallof type for seed, sigmoid, gaussian, smoothstep, step, laser, see m_geometry.f90, default=smoothstep", .true.)
-         
+         "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser), "&
+         &"default=smoothstep", .true.)
+
     call CFG_get_size(cfg, "seed_density", n_cond)
     ic%n_cond = n_cond
 
