@@ -88,6 +88,9 @@ module m_streamer
   ! Refine if alpha*dx is larger than this value
   real(dp), protected :: ST_refine_adx = 1.0_dp
 
+  ! For refinement, use alpha(f * E)/f, where f is this factor
+  real(dp), protected :: ST_refine_adx_fac = 1.0_dp
+
   ! Refine if the curvature in phi is larger than this value
   real(dp), protected :: ST_refine_cphi = 1e99_dp
 
@@ -205,6 +208,8 @@ contains
 
     call CFG_add_get(cfg, "refine_adx", ST_refine_adx, &
          "Refine if alpha*dx is larger than this value")
+    call CFG_add_get(cfg, "refine_adx_fac", ST_refine_adx_fac, &
+         "For refinement, use alpha(f * E)/f, where f is this factor")
     call CFG_add_get(cfg, "refine_cphi", ST_refine_cphi, &
          "Refine if the curvature in phi is larger than this value")
     call CFG_add_get(cfg, "derefine_cphi", ST_derefine_cphi, &

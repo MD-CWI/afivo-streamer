@@ -52,7 +52,7 @@ program streamer_$Dd
   do
      call a$D_loop_box(tree, init_cond_set_box)
      call field_compute(tree, mg, .false.)
-     call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
+     call a$D_adjust_refinement(tree, refine_routine, ref_info, 3, .true.)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -149,7 +149,7 @@ program streamer_$Dd
         call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
-        call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
+        call a$D_adjust_refinement(tree, refine_routine, ref_info, 3, .true.)
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! For boxes which just have been refined, set data on their children
@@ -216,8 +216,8 @@ contains
 
     do KJI_DO(1,nc)
        fld   = box%cc(IJK, i_electric_fld)
-       alpha = LT_get_col(ST_td_tbl, i_alpha, fld)
-       ! The refinement is based on the ionization length
+       alpha = LT_get_col(ST_td_tbl, i_alpha, ST_refine_adx_fac * fld) / &
+            ST_refine_adx_fac
        adx   = box%dr * alpha
 
        ! The refinement is also based on the intensity of the source term.
