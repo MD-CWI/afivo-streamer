@@ -36,3 +36,9 @@ tests/results/*
 /examples/simple_streamer_2d
 external_libraries/*
 documentation/html/*
+*.dat
+*.vtk
+/examples/particles_to_grid_2d
+/examples/particles_to_grid_3d
+/examples/particles_to_grid_2d.f90
+/examples/particles_to_grid_3d.f90
