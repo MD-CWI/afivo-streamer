@@ -863,6 +863,8 @@ contains
     call a$D_restrict_box(box_c, box_p, iv)
   end subroutine mg$D_box_rstr_lpl
 
+  !> Perform Gauss-Seidel relaxation on a box. Epsilon can have a jump at cell
+  !> faces.
   subroutine mg$D_box_gsrb_lpld(box, redblack_cntr, mg)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
@@ -918,7 +920,7 @@ contains
 #endif
   end subroutine mg$D_box_gsrb_lpld
 
-  !> Perform Laplacian operator on a box
+  !> Perform Laplacian operator on a box where epsilon varies on cell faces
   subroutine mg$D_box_lpld(box, i_out, mg)
     type(box$D_t), intent(inout) :: box   !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
@@ -971,6 +973,8 @@ contains
 
   end subroutine mg$D_box_lpld
 
+  !> Correct fine grid values based on the change in the coarse grid, in the
+  !> case of a jump in epsilon
   subroutine mg$D_box_corr_lpld(box_p, box_c, mg)
     type(box$D_t), intent(inout)  :: box_c !< Child box
     type(box$D_t), intent(in)     :: box_p !< Parent box
@@ -982,7 +986,6 @@ contains
     integer                      :: k, k_c1, k_c2
     real(dp), parameter          :: third = 1/3.0_dp
 #endif
-
 
     nc = box_c%n_cell
     ix_offset = a$D_get_child_offset(box_c)
@@ -1007,6 +1010,7 @@ contains
           a(1) = box_p%cc(i_c2, j_c1, i_eps)
           a(2) = box_p%cc(i_c1, j_c2, i_eps)
 
+          ! Get value of phi at coarse cell faces, and average
           box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + 0.5_dp * &
                sum( (a0*u0 + a(:)*u(:)) / (a0 + a(:)) )
        end do
@@ -1031,6 +1035,7 @@ contains
              a(2) = box_p%cc(i_c1, j_c2, k_c1, i_eps)
              a(3) = box_p%cc(i_c1, j_c1, k_c2, i_eps)
 
+             ! Get value of phi at coarse cell faces, and average
              box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + third * &
                   sum((a0*u0 + a(:) * (1.5_dp * u(:) - 0.5_dp * u0)) / &
                   (a0 + a(:)))
