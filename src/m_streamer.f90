@@ -106,6 +106,18 @@ module m_streamer
   ! Refine until dx is smaller than this factor times the seed width
   real(dp), protected :: ST_refine_init_fac = 0.25_dp
 
+  ! Refine a region up to this grid spacing
+  real(dp), protected, allocatable :: ST_refine_regions_dr(:)
+
+  ! Refine regions up to this simulation time
+  real(dp), protected, allocatable :: ST_refine_regions_tstop(:)
+
+  ! Minimum coordinate of the refinement regions
+  real(dp), protected, allocatable :: ST_refine_regions_rmin(:,:)
+
+  ! Maximum coordinate of the refinement regions
+  real(dp), protected, allocatable :: ST_refine_regions_rmax(:,:)
+
   ! Current time step
   real(dp) :: ST_dt
 
@@ -165,8 +177,11 @@ contains
   !> Create the configuration file with default values
   subroutine ST_initialize(cfg, ndim)
     use m_config
-    type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
-    integer, intent(in) :: ndim !< Number of dimensions
+    type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
+    integer, intent(in)        :: ndim !< Number of dimensions
+    integer                    :: n
+    real(dp)                   :: vec(ndim)
+    real(dp), allocatable      :: dbuffer(:)
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
@@ -220,6 +235,30 @@ contains
          "Refine around initial conditions up to this time")
     call CFG_add_get(cfg, "refine_init_fac", ST_refine_init_fac, &
          "Refine until dx is smaller than this factor times the seed width")
+
+    call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
+         "Refine regions up to this grid spacing", .true.)
+    call CFG_add(cfg, "refine_regions_tstop", [-1.0e99_dp], &
+         "Refine regions up to this simulation time", .true.)
+    vec = 0.0_dp
+    call CFG_add(cfg, "refine_regions_rmin", vec, &
+         "Minimum coordinate of the refinement regions", .true.)
+    call CFG_add(cfg, "refine_regions_rmax", vec, &
+         "Maximum coordinate of the refinement regions", .true.)
+
+    call CFG_get_size(cfg, "refine_regions_dr", n)
+    allocate(ST_refine_regions_dr(n))
+    allocate(ST_refine_regions_tstop(n))
+    allocate(ST_refine_regions_rmin(ndim, n))
+    allocate(ST_refine_regions_rmax(ndim, n))
+    allocate(dbuffer(ndim * n))
+
+    call CFG_get(cfg, "refine_regions_dr", ST_refine_regions_dr)
+    call CFG_get(cfg, "refine_regions_tstop", ST_refine_regions_tstop)
+    call CFG_get(cfg, "refine_regions_rmin", dbuffer)
+    ST_refine_regions_rmin = reshape(dbuffer, [ndim, n])
+    call CFG_get(cfg, "refine_regions_rmax", dbuffer)
+    ST_refine_regions_rmax = reshape(dbuffer, [ndim, n])
 
     call CFG_add_get(cfg, "photoi_enabled", ST_photoi_enabled, &
          "Whether photoionization is enabled")

@@ -208,7 +208,7 @@ contains
     integer                  :: IJK, n, nc
     real(dp)                 :: cphi, dx, dx2
     real(dp)                 :: alpha, adx, fld
-    real(dp)                 :: dist
+    real(dp)                 :: dist, rmin($D), rmax($D)
 
     nc      = box%n_cell
     dx      = box%dr
@@ -249,6 +249,20 @@ contains
        end if
 
     end do; CLOSE_DO
+
+    ! Check fixed refinements
+    rmin = box%r_min
+    rmax = box%r_min + box%dr * box%n_cell
+
+    do n = 1, size(ST_refine_regions_dr)
+       if (ST_time <= ST_refine_regions_tstop(n) .and. &
+            dx > ST_refine_regions_dr(n) .and. all(&
+            rmax >= ST_refine_regions_rmin(:, n) .and. &
+            rmin <= ST_refine_regions_rmax(:, n))) then
+          ! Mark just the center cell to prevent refining neighbors
+          cell_flags(DTIMES(nc/2)) = af_do_ref
+       end if
+    end do
 
     ! Make sure we don't have or get a too fine or too coarse grid
     if (dx > ST_refine_max_dx) then
