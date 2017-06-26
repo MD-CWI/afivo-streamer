@@ -494,13 +494,27 @@ contains
     ! ionization rate.
     call a$D_loop_box_arg(tree, set_photoionization_rate, [eta * quench_fac], .true.)
 
+    if (ST_photoi_physical_photons) then
 #if $D == 2
-    call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-         i_photo, i_photo, 0.25e-3_dp, .true., ST_cylindrical, 1e-9_dp, dt)
+       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
+            i_photo, i_photo, ST_photoi_absorp_fac, &
+            .true., ST_cylindrical, 1e-9_dp, dt)
 #elif $D == 3
-    call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-         i_photo, i_photo, 0.25e-3_dp, .true., 1e-9_dp, dt)
+       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
+            i_photo, i_photo, ST_photoi_absorp_fac, &
+            .true., 1e-9_dp, dt)
 #endif
+    else
+#if $D == 2
+       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
+            i_photo, i_photo, ST_photoi_absorp_fac, &
+            .true., ST_cylindrical, 1e-9_dp)
+#elif $D == 3
+       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
+            i_photo, i_photo, ST_photoi_absorp_fac, &
+            .true., 1e-9_dp)
+#endif
+    end if
 
   end subroutine set_photoionization
 

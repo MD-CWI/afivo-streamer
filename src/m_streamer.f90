@@ -58,11 +58,17 @@ module m_streamer
   ! Whether we use phototionization
   logical, protected :: ST_photoi_enabled = .false.
 
+  ! Whether physical photons are used
+  logical, protected :: ST_photoi_physical_photons = .true.
+
   ! Oxygen fraction
   real(dp), protected :: ST_photoi_frac_O2 = 0.2_dp
 
   ! Photoionization efficiency
   real(dp), protected :: ST_photoi_eta = 0.05_dp
+
+  ! At which grid spacing photons are absorbed compared to their mean distance
+  real(dp), protected :: ST_photoi_absorp_fac = 0.25_dp
 
   ! Number of photons to use
   integer, protected :: ST_photoi_num_photons = 100*1000
@@ -262,12 +268,17 @@ contains
 
     call CFG_add_get(cfg, "photoi_enabled", ST_photoi_enabled, &
          "Whether photoionization is enabled")
+    call CFG_add_get(cfg, "photoi_physical_photons", &
+         ST_photoi_physical_photons, &
+         "Whether physical photons are used")
     call CFG_add_get(cfg, "photoi_frac_O2", ST_photoi_frac_O2, &
          "Fraction of oxygen (0-1)")
     call CFG_add_get(cfg, "photoi_eta", ST_photoi_eta, &
          "Photoionization efficiency factor, typically around 0.05")
+    call CFG_add_get(cfg, "photoi_absorp_fac", ST_photoi_absorp_fac, &
+         "At which grid spacing photons are absorbed compared to their mean distance")
     call CFG_add_get(cfg, "photoi_num_photons", ST_photoi_num_photons, &
-         "Number of discrete photons to use for photoionization")
+         "Maximum number of discrete photons to use")
 
   end subroutine ST_initialize
 
