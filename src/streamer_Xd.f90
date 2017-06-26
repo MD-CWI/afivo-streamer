@@ -65,7 +65,10 @@ program streamer_$Dd
      ! Get a new time step, which is at most dt_amr
      call a$D_reduction_vec(tree, get_max_dt, get_min, &
           [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
-     ST_dt = 0.9_dp * minval(ST_dt_vec)
+
+     ! Combine dt_cfg and dt_diff
+     ST_dt = min(ST_dt_vec(ST_ix_drt), &
+          1/sum(1.0_dp/ST_dt_vec([ST_ix_cfl, ST_ix_diff])))
 
      if (ST_dt < 1e-14) then
         print *, "ST_dt getting too small, instability?"
@@ -578,7 +581,10 @@ contains
 
     call a$D_reduction_vec(tree, get_max_dt, get_min, &
          [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
-    dt = minval(ST_dt_vec)
+
+    ! Combine dt_cfg and dt_diff
+    dt = min(ST_dt_vec(ST_ix_drt), &
+         1/sum(1.0_dp/ST_dt_vec([ST_ix_cfl, ST_ix_diff])))
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")
