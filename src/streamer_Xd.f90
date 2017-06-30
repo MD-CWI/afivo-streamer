@@ -554,9 +554,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
        !$omp end parallel do
 
