@@ -143,7 +143,7 @@ program streamer_$Dd
         end if
      end if
 
-     if (mod(it, ST_refine_per_steps) == 1) then
+     if (mod(it, ST_refine_per_steps) == 0) then
         ! Restrict the electron and ion densities before refinement
         call a$D_restrict_tree(tree, i_electron)
         call a$D_restrict_tree(tree, i_pos_ion)
