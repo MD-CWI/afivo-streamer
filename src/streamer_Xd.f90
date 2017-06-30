@@ -585,8 +585,8 @@ contains
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos($D) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
-    real(dp)                     :: max_elec, max_field
-    type(a$D_loc_t)              :: loc_elec, loc_field
+    real(dp)                     :: max_elec, max_field, max_Er
+    type(a$D_loc_t)              :: loc_elec, loc_field, loc_Er
 
     call a$D_prepend_directory(filename, dir, fname)
 
@@ -594,6 +594,7 @@ contains
     call a$D_tree_sum_cc(tree, i_pos_ion, sum_pos_ion)
     call a$D_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call a$D_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+    call a$D_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
 
     call a$D_reduction_vec(tree, get_max_dt, get_min, &
          [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
@@ -606,8 +607,8 @@ contains
        open(my_unit, file=trim(fname), action="write")
 #if $D == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y"
-       fmt = "(I6,11E16.8)"
+            "max(E) x y max(n_e) x y max(E_r) x y"
+       fmt = "(I6,14E16.8)"
 #elif $D == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y z max(n_e) x y z"
@@ -624,9 +625,15 @@ contains
 
     open(my_unit, file=trim(fname), action="write", &
          position="append")
+#if $D == 2
+    write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
+         sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
+         a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er)
+#elif $D == 3
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
          a$D_r_loc(tree, loc_elec)
+#endif
     close(my_unit)
 
   end subroutine write_log_file
