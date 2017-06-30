@@ -82,6 +82,9 @@ module m_streamer
   ! Output directory
   character(len=ST_slen), protected :: ST_output_dir = "output"
 
+  ! The refinement buffer width in cells (around flagged cells)
+  integer, protected :: ST_refine_buffer_width = 4
+
   ! The number of steps after which the mesh is updated
   integer, protected :: ST_refine_per_steps = 2
 
@@ -220,6 +223,8 @@ contains
     call CFG_add_get(cfg, "lineout_rmax", ST_lineout_rmax(1:ndim), &
          "Relative position of line maximum coordinate")
 
+    call CFG_add_get(cfg, "refine_buffer_width", ST_refine_buffer_width, &
+         "The refinement buffer width in cells (around flagged cells)")
     call CFG_add_get(cfg, "refine_per_steps", ST_refine_per_steps, &
          "The number of steps after which the mesh is updated")
     call CFG_add_get(cfg, "refine_min_dx", ST_refine_min_dx, &
