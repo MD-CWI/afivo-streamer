@@ -605,12 +605,12 @@ contains
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")
 #if $D == 2
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) "&
-            &"max(E) x y max(n_e) x y"
+       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
+            "max(E) x y max(n_e) x y"
        fmt = "(I6,11E16.8)"
 #elif $D == 3
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) "&
-            &"max(E) x y z max(n_e) x y z"
+       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
+            "max(E) x y z max(n_e) x y z"
        fmt = "(I6,13E16.8)"
 #endif
        close(my_unit)
