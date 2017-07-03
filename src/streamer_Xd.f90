@@ -57,6 +57,7 @@ program streamer_$Dd
      if (ref_info%n_add == 0) exit
   end do
 
+  print *, "Number of threads", af_get_max_threads()
   call a$D_print_info(tree)
 
   if (ST_photoi_enabled) &
