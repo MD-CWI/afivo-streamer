@@ -1,3 +1,4 @@
+.DS_Store
 *.mod
 *.o
 *.vtu
@@ -42,3 +43,8 @@ documentation/html/*
 /examples/particles_to_grid_3d
 /examples/particles_to_grid_2d.f90
 /examples/particles_to_grid_3d.f90
+/examples/casper_test
+/examples/dielectric_2d
+/examples/dielectric_2d.f90
+/examples/dielectric_3d
+/examples/dielectric_3d.f90
