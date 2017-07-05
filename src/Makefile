@@ -30,6 +30,9 @@ clean:
 	@echo "*** $< has changed, regenerating $@ ***"
 	@$(PPROCESS_3D)
 
+# Keep intermediate files for inspection
+.PRECIOUS: %_2d.f90 %_3d.f90
+
 # How to get executables from .o object files
 ../%: %.o
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
