@@ -193,13 +193,14 @@ contains
   subroutine ST_initialize(cfg, ndim)
     use m_config
     use omp_lib
+    use m_afivo_types
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n
     real(dp)                   :: vec(ndim)
     real(dp), allocatable      :: dbuffer(:)
 
-    n = omp_get_num_threads()
+    n = af_get_max_threads()
     allocate(ST_dt_matrix(ST_dt_num_cond, n))
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &

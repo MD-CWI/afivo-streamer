@@ -64,11 +64,8 @@ program streamer_$Dd
   if (ST_photoi_enabled) &
        call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
 
-  ! Determine the initial time step (by updating with dt = 0.0)
-  ST_dt_matrix = ST_dt_max
-  call a$D_loop_boxes(tree, fluxes_koren, .true.)
-  call a$D_loop_box_arg(tree, update_solution, [0.0_dp, 1.0_dp], .true.)
-  ST_dt   = ST_dt_safety_factor * minval(ST_dt_matrix)
+  ! Start from small time step
+  ST_dt   = ST_dt_min
   dt_prev = ST_dt
 
   do it = 1, huge(1)
@@ -101,7 +98,7 @@ program streamer_$Dd
         call a$D_consistent_fluxes(tree, [flux_elec])
 
         ! Update the solution
-        call a$D_loop_box_arg(tree, update_solution, [ST_dt, i-1.0_dp], .true.)
+        call a$D_loop_box_arg(tree, update_solution, [ST_dt, i-1.5_dp], .true.)
 
         ! Compute new field on first iteration
         if (i == 1) call field_compute(tree, mg, .true.)
@@ -109,20 +106,19 @@ program streamer_$Dd
 
      ST_time = ST_time - ST_dt        ! Go back one time step
 
-     ! Determine next time step (can increase at most by 10%)
-     ST_dt = min(1.1_dp * dt_prev, ST_dt_safety_factor * minval(ST_dt_matrix))
+     ! Take average of phi_old and phi (explicit trapezoidal rule)
+     call a$D_loop_box(tree, average_density)
+     ! Compute field with new density
+     call field_compute(tree, mg, .true.)
+
+     ! Determine next time step
+     ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * minval(ST_dt_matrix))
      dt_prev = ST_dt
 
      if (ST_dt < ST_dt_min) then
-        print *, "ST_dt getting too small, instability?", ST_dt, minval(ST_dt_matrix), dt_prev
+        print *, "ST_dt getting too small, instability?", ST_dt
         error stop
      end if
-
-     ! Take average of phi_old and phi (explicit trapezoidal rule)
-     call a$D_loop_box(tree, average_density)
-
-     ! Compute field with new density
-     call field_compute(tree, mg, .true.)
 
      if (write_out) then
         ! Fill ghost cells before writing output
