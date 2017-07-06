@@ -26,7 +26,7 @@ contains
     loc = a$D_get_loc(tree, rr)
 
     if (loc%id == -1) then
-       print *, "a$D_interp0_to_grid error, no box at ", rr
+       print *, "a$D_interp0 error, no box at ", rr
        stop
     end if
     
