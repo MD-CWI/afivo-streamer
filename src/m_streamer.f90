@@ -133,8 +133,8 @@ module m_streamer
   ! Number of time step restrictions
   integer, parameter :: ST_dt_num_cond = 3
 
-  ! Array of time step restrictions
-  real(dp) :: ST_dt_vec(ST_dt_num_cond)
+  ! Array of time step restrictions per thread
+  real(dp), allocatable :: ST_dt_matrix(:, :)
 
   ! Index of CFL condition
   integer, parameter :: ST_ix_cfl = 1
@@ -145,8 +145,14 @@ module m_streamer
   ! Index of dielectric relaxation time condition
   integer, parameter :: ST_ix_drt = 3
 
+  ! Safety factor for the time step
+  real(dp) :: ST_dt_safety_factor = 0.9_dp
+
   ! Maximum allowed time step
   real(dp), protected :: ST_dt_max = 1.0e-11_dp
+
+  ! Minimum allowed time step
+  real(dp), protected :: ST_dt_min = 1.0e-14_dp
 
   ! Time between writing output
   real(dp), protected :: ST_dt_output = 1.0e-10_dp
@@ -186,11 +192,15 @@ contains
   !> Create the configuration file with default values
   subroutine ST_initialize(cfg, ndim)
     use m_config
+    use omp_lib
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n
     real(dp)                   :: vec(ndim)
     real(dp), allocatable      :: dbuffer(:)
+
+    n = omp_get_num_threads()
+    allocate(ST_dt_matrix(ST_dt_num_cond, n))
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
@@ -211,6 +221,10 @@ contains
          "The timestep for writing output (s)")
     call CFG_add_get(cfg, "dt_max", ST_dt_max, &
          "The maximum timestep (s)")
+    call CFG_add_get(cfg, "dt_min", ST_dt_min, &
+         "The minimum timestep (s)")
+    call CFG_add_get(cfg, "dt_safety_factor", ST_dt_safety_factor, &
+         "Safety factor for the time step")
 
     call CFG_add_get(cfg, "lineout_write", ST_lineout_write, &
          "Write output along a line")

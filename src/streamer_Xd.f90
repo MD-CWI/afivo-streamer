@@ -12,6 +12,7 @@ program streamer_$Dd
   integer                :: i, it
   character(len=ST_slen) :: fname
   logical                :: write_out
+  real(dp)               :: dt_prev
 
   type(CFG_t)            :: cfg ! The configuration for the simulation
   type(a$D_t)            :: tree      ! This contains the full grid information
@@ -45,8 +46,8 @@ program streamer_$Dd
   ! This routine always needs to be called when using multigrid
   call mg$D_init_mg(mg)
 
-  output_cnt = 0 ! Number of output files written
-  ST_time    = 0 ! Simulation time (all times are in s)
+  output_cnt      = 0         ! Number of output files written
+  ST_time         = 0         ! Simulation time (all times are in s)
 
   ! Set up the initial conditions
   do
@@ -63,20 +64,14 @@ program streamer_$Dd
   if (ST_photoi_enabled) &
        call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
 
+  ! Determine the initial time step (by updating with dt = 0.0)
+  ST_dt_matrix = ST_dt_max
+  call a$D_loop_boxes(tree, fluxes_koren, .true.)
+  call a$D_loop_box_arg(tree, update_solution, [0.0_dp, 1.0_dp], .true.)
+  ST_dt   = ST_dt_safety_factor * minval(ST_dt_matrix)
+  dt_prev = ST_dt
+
   do it = 1, huge(1)
-     ! Get a new time step, which is at most dt_amr
-     call a$D_reduction_vec(tree, get_max_dt, get_min, &
-          [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
-
-     ! Combine dt_cfg and dt_diff
-     ST_dt = min(ST_dt_vec(ST_ix_drt), &
-          1/sum(1.0_dp/ST_dt_vec([ST_ix_cfl, ST_ix_diff])))
-
-     if (ST_dt < 1e-14) then
-        print *, "ST_dt getting too small, instability?"
-        exit
-     end if
-
      if (ST_time > ST_end_time) exit
 
      ! Every ST_dt_output, write output
@@ -95,6 +90,8 @@ program streamer_$Dd
      call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
      call a$D_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
 
+     ST_dt_matrix = ST_dt_max      ! Maximum time step
+
      ! Two forward Euler steps over ST_dt
      do i = 1, 2
         ST_time = ST_time + ST_dt
@@ -104,13 +101,22 @@ program streamer_$Dd
         call a$D_consistent_fluxes(tree, [flux_elec])
 
         ! Update the solution
-        call a$D_loop_box_arg(tree, update_solution, [ST_dt], .true.)
+        call a$D_loop_box_arg(tree, update_solution, [ST_dt, i-1.0_dp], .true.)
 
         ! Compute new field on first iteration
         if (i == 1) call field_compute(tree, mg, .true.)
      end do
 
      ST_time = ST_time - ST_dt        ! Go back one time step
+
+     ! Determine next time step (can increase at most by 10%)
+     ST_dt = min(1.1_dp * dt_prev, ST_dt_safety_factor * minval(ST_dt_matrix))
+     dt_prev = ST_dt
+
+     if (ST_dt < ST_dt_min) then
+        print *, "ST_dt getting too small, instability?", ST_dt, minval(ST_dt_matrix), dt_prev
+        error stop
+     end if
 
      ! Take average of phi_old and phi (explicit trapezoidal rule)
      call a$D_loop_box(tree, average_density)
@@ -279,54 +285,6 @@ contains
 
   end subroutine refine_routine
 
-  !> Get maximum time step based on e.g. CFL criteria
-  function get_max_dt(box, n_cond) result(dt_vec)
-    use m_units_constants
-    type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: n_cond
-    integer                  :: IJK, nc
-    real(dp)                 :: fld($D), fld_norm, mobility, diffusion_c
-    real(dp)                 :: dt_vec(n_cond)
-
-    nc = box%n_cell
-    dt_vec = ST_dt_max
-
-    do KJI_DO(1,nc)
-#if $D == 2
-       fld(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
-            box%fc(i+1, j, 1, electric_fld))
-       fld(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
-            box%fc(i, j+1, 2, electric_fld))
-#elif $D == 3
-       fld(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
-            box%fc(i+1, j, k, 1, electric_fld))
-       fld(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
-            box%fc(i, j+1, k, 2, electric_fld))
-       fld(3) = 0.5_dp * (box%fc(IJK, 3, electric_fld) + &
-            box%fc(i, j, k+1, 3, electric_fld))
-#endif
-
-
-       fld_norm = box%cc(IJK, i_electric_fld)
-       mobility = LT_get_col(ST_td_tbl, i_mobility, fld_norm)
-       diffusion_c = LT_get_col(ST_td_tbl, i_diffusion, fld_norm)
-
-       ! The 0.5 is here because of the explicit trapezoidal rule
-       dt_vec(ST_ix_cfl) = min(dt_vec(ST_ix_cfl), &
-            0.5_dp/sum(abs(fld * mobility) / box%dr))
-
-       ! Dielectric relaxation time
-       dt_vec(ST_ix_drt) = min(dt_vec(ST_ix_drt), &
-            UC_eps0 / (UC_elem_charge * mobility * &
-            max(box%cc(IJK, i_electron), epsilon(1.0_dp))))
-
-       ! Diffusion condition
-       dt_vec(ST_ix_diff) = min(dt_vec(ST_ix_diff), &
-            0.25_dp * box%dr**2 / max(diffusion_c, epsilon(1.0_dp)))
-    end do; CLOSE_DO
-
-  end function get_max_dt
-
   function get_min(a, b, n) result(min_vec)
     integer, intent(in)  :: n
     real(dp), intent(in) :: a(n), b(n)
@@ -420,17 +378,23 @@ contains
   end subroutine average_density
 
   !> Advance solution over dt based on the fluxes / source term, using forward Euler
-  subroutine update_solution(box, dt)
+  subroutine update_solution(box, args)
+    use omp_lib
+    use m_units_constants
     type(box$D_t), intent(inout) :: box
-    real(dp), intent(in)         :: dt(:)
-    real(dp)                     :: inv_dr, src, fld
-    real(dp)                     :: alpha, eta, sflux, mu
+    real(dp), intent(in)         :: args(:)
+    real(dp)                     :: dt, check_dt, inv_dr, src, fld, fld_vec($D)
+    real(dp)                     :: alpha, eta, sflux, mu, diff
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
 #endif
-    integer                      :: IJK, nc
+    integer                      :: IJK, nc, tid
     type(LT_loc_t)               :: loc
+
+    tid      = omp_get_thread_num() + 1
+    dt       = args(1)
+    check_dt = args(2)
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
@@ -456,24 +420,57 @@ contains
 
        sflux = (box%fc(i, j, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
             rfac(1) * box%fc(i, j, 1, flux_elec) - &
-            rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt(1)
+            rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt
 #elif $D == 3
        sflux = (sum(box%fc(i, j, k, 1:3, flux_elec)) - &
             box%fc(i+1, j, k, 1, flux_elec) - &
             box%fc(i, j+1, k, 2, flux_elec) - &
-            box%fc(i, j, k+1, 3, flux_elec)) * inv_dr * dt(1)
+            box%fc(i, j, k+1, 3, flux_elec)) * inv_dr * dt
 #endif
 
        ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt(1)
+       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt
 
-       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt(1)
+       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt
 
        ! Add flux and source term
        box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + sflux + src
 
        ! Add source term
        box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + src
+
+       ! Possible determine new time step restriction
+       if (check_dt > 0) then
+#if $D == 2
+          fld_vec(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
+               box%fc(i+1, j, 1, electric_fld))
+          fld_vec(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
+               box%fc(i, j+1, 2, electric_fld))
+#elif $D == 3
+          fld_vec(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
+               box%fc(i+1, j, k, 1, electric_fld))
+          fld_vec(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
+               box%fc(i, j+1, k, 2, electric_fld))
+          fld_vec(3) = 0.5_dp * (box%fc(IJK, 3, electric_fld) + &
+               box%fc(i, j, k+1, 3, electric_fld))
+#endif
+
+          diff = LT_get_col(ST_td_tbl, i_diffusion, fld)
+
+          ! CFL condition
+          ! The 0.5 is here because of the explicit trapezoidal rule
+          ST_dt_matrix(ST_ix_cfl, tid) = min(ST_dt_matrix(ST_ix_cfl, tid), &
+               0.5_dp/sum(abs(fld_vec * mu) * inv_dr))
+
+          ! Dielectric relaxation time
+          ST_dt_matrix(ST_ix_drt, tid) = min(ST_dt_matrix(ST_ix_drt, tid), &
+               UC_eps0 / (UC_elem_charge * mu * &
+               max(box%cc(IJK, i_electron), epsilon(1.0_dp))))
+
+          ! Diffusion condition
+          ST_dt_matrix(ST_ix_diff, tid) = min(ST_dt_matrix(ST_ix_diff, tid), &
+               box%dr**2 / max(2 * $D * diff, epsilon(1.0_dp)))
+       end if
 
     end do; CLOSE_DO
   end subroutine update_solution
@@ -597,12 +594,7 @@ contains
     call a$D_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
     call a$D_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
 
-    call a$D_reduction_vec(tree, get_max_dt, get_min, &
-         [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
-
-    ! Combine dt_cfg and dt_diff
-    dt = min(ST_dt_vec(ST_ix_drt), &
-         1/sum(1.0_dp/ST_dt_vec([ST_ix_cfl, ST_ix_diff])))
+    dt = ST_dt_safety_factor * minval(ST_dt_matrix)
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")
