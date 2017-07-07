@@ -310,8 +310,11 @@ contains
     allocate(dc(DTIMES(1:nc+1), $D))
     allocate(cc(DTIMES(-1:nc+2)))
 
-    ! Fill ghost cells
-    call a$D_gc_box(boxes, id, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+    ! Fill ghost cells on the sides of boxes (no corners)
+    call a$D_gc_box(boxes, id, i_electron, a$D_gc_interp_lim, &
+         a$D_bc_neumann_zero, .false.)
+
+    ! Fill cc with interior data plus a second layer of ghost cells
     call a$D_gc2_box(boxes, id, i_electron, a$D_gc2_prolong_linear, &
          a$D_bc2_neumann_zero, cc, nc)
 
