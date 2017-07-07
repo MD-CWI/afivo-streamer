@@ -187,6 +187,9 @@ module m_streamer
   ! Pressure of the gas in bar
   real(dp), protected :: ST_gas_pressure = 1.0_dp
 
+  ! Number of V-cycles to perform per time step
+  integer, protected :: ST_multigrid_num_vcycles = 2
+
 contains
 
   !> Create the configuration file with default values
@@ -217,6 +220,9 @@ contains
          "The length of the domain (m)")
     call CFG_add_get(cfg, "gas_pressure", ST_gas_pressure, &
          "The gas pressure (bar), used for photoionization")
+
+    call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
+         "Number of V-cycles to perform per time step")
 
     call CFG_add_get(cfg, "dt_output", ST_dt_output, &
          "The timestep for writing output (s)")

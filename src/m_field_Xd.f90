@@ -128,7 +128,16 @@ contains
     !$omp end parallel
 
     call field_set_voltage(ST_time)
-    call mg$D_fas_fmg(tree, mg, .false., have_guess)
+
+    if (.not. have_guess) then
+       ! Perform a FMG cycle when we have no guess
+       call mg$D_fas_fmg(tree, mg, .false., have_guess)
+    else
+       ! Perform cheaper V-cycles
+       do i = 1, ST_multigrid_num_vcycles
+          call mg$D_fas_vcycle(tree, mg, .false.)
+       end do
+    end if
 
     ! Compute field from potential
     call a$D_loop_box(tree, field_from_potential)
