@@ -9,6 +9,7 @@ module m_init_cond_$Dd
   ! Type to store initial conditions in
   type initcnd_t
      real(dp)                        :: background_density
+     real(dp)                        :: stochastic_density
      integer                         :: n_cond
      real(dp), allocatable           :: seed_r0(:, :)
      real(dp), allocatable           :: seed_r1(:, :)
@@ -23,6 +24,7 @@ module m_init_cond_$Dd
 
   public :: init_cond_initialize
   public :: init_cond_set_box
+  public :: init_cond_stochastic_density
 
 contains
 
@@ -38,6 +40,8 @@ contains
 
     call CFG_add(cfg, "background_density", 0.0_dp, &
          "The background ion and electron density (1/m3)")
+    call CFG_add(cfg, "stochastic_density", 0.0_dp, &
+         "Stochastic background density (1/m3)")
     call CFG_add(cfg, "seed_density", [1.0e15_dp], &
          "Initial density of the seed (1/m3)", .true.)
     call CFG_add(cfg, "seed_rel_r0", [DTIMES(0.5_dp)], &
@@ -70,7 +74,7 @@ contains
     call CFG_get_size(cfg, "seed_width", varsize)
     if (varsize /= n_cond) &
          stop "seed_width variable has incompatible size"
-    
+
     allocate(ic%seed_density(n_cond))
     allocate(ic%seed_charge_type(n_cond))
     allocate(ic%seed_r0(n_dim, n_cond))
@@ -86,14 +90,80 @@ contains
     ic%seed_r1 = dlen * reshape(tmp_vec, [n_dim, n_cond])
 
     call CFG_get(cfg, "background_density", ic%background_density)
+    call CFG_get(cfg, "stochastic_density", ic%stochastic_density)
     call CFG_get(cfg, "seed_density", ic%seed_density)
     call CFG_get(cfg, "seed_charge_type", ic%seed_charge_type)
     call CFG_get(cfg, "seed_width", ic%seed_width)
     call CFG_get(cfg, "seed_falloff", ic%seed_falloff)
-    
+
     init_conds = ic
 
   end subroutine init_cond_initialize
+
+  !> Add a stochastic background density to the electrons and ions. Note: this
+  !> routine temporarily uses variable i_rhs
+  subroutine init_cond_stochastic_density(tree)
+    use m_a$D_ghostcell, only: a$D_bc_neumann_zero
+    use m_a$D_prolong
+    type(a$D_t), intent(inout) :: tree
+    integer                    :: my_lvl, lvl, i, id
+
+    ! Determine at which level to create the background density. This is the
+    ! highest level that is fully refined
+    do my_lvl = 1, tree%highest_lvl
+       if (size(tree%lvls(my_lvl)%leaves) > 0) exit
+    end do
+
+    ! Use i_rhs to store the stochastic density at this level
+    call a$D_tree_clear_cc(tree, i_rhs)
+    do i = 1, size(tree%lvls(my_lvl)%ids)
+       id = tree%lvls(my_lvl)%ids(i)
+       call set_stochastic_density(tree%boxes(id))
+    end do
+
+    ! Prolong to finer levels. The coarser (hidden) levels are set at the end.
+    do lvl = my_lvl, tree%highest_lvl-1
+       do i = 1, size(tree%lvls(lvl)%parents)
+          id = tree%lvls(lvl)%parents(i)
+          call a$D_gc_box(tree%boxes, id, i_rhs, &
+               a$D_gc_interp, a$D_bc_neumann_zero)
+       end do
+
+       do i = 1, size(tree%lvls(lvl)%parents)
+          id = tree%lvls(lvl)%parents(i)
+          call a$D_prolong_linear_from(tree%boxes, id, i_rhs, add=.true.)
+       end do
+
+    end do
+
+    ! Finally, add the stochastic density to the electrons and ions
+    do lvl = my_lvl, tree%highest_lvl
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call a$D_box_add_cc(tree%boxes(id), i_rhs, i_electron)
+          call a$D_box_add_cc(tree%boxes(id), i_rhs, i_pos_ion)
+       end do
+    end do
+
+    ! Restrict and fill ghost cells
+    call a$D_restrict_tree(tree, i_electron)
+    call a$D_restrict_tree(tree, i_pos_ion)
+    call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+    call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+
+  end subroutine init_cond_stochastic_density
+
+  subroutine set_stochastic_density(box)
+    type(box$D_t), intent(inout) :: box
+    integer                      :: IJK
+    real(dp)                     :: density
+
+    do KJI_DO(1,box%n_cell)
+       call random_number(density)
+       density = density * init_conds%stochastic_density
+       box%cc(IJK, i_rhs) = density
+    end do; CLOSE_DO
+  end subroutine set_stochastic_density
 
   !> Sets the initial condition
   subroutine init_cond_set_box(box)
