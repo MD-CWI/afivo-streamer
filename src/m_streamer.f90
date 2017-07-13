@@ -34,6 +34,9 @@ module m_streamer
        [character(len=12) :: "electron", "pos_ion", "electron_old", &
        "pos_ion_old", "phi", "electric_fld", "rhs", "pho"]
 
+  ! Indices of variables to be included in output
+  integer, allocatable :: vars_for_output(:)
+
   ! ** Indices of face-centered variables **
   integer, parameter :: n_var_face   = 2 ! Number of variables
   integer, parameter :: flux_elec    = 1 ! Electron flux
@@ -305,6 +308,14 @@ contains
          "At which grid spacing photons are absorbed compared to their mean distance")
     call CFG_add_get(cfg, "photoi_num_photons", ST_photoi_num_photons, &
          "Maximum number of discrete photons to use")
+
+    if (ST_photoi_enabled) then
+      vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
+           i_electric_fld, i_photo]
+    else
+      vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
+           i_electric_fld]
+    end if
 
   end subroutine ST_initialize
 

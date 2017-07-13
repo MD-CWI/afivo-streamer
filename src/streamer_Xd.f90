@@ -126,8 +126,8 @@ program streamer_$Dd
         call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
-        call a$D_write_silo(tree, fname, output_cnt, &
-             ST_time, dir=ST_output_dir)
+        call a$D_write_silo(tree, fname, output_cnt, ST_time, &
+             vars_for_output, dir=ST_output_dir)
 
         if (ST_datfile_write) then
            call a$D_write_tree(tree, fname, ST_output_dir)
