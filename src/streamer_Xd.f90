@@ -102,14 +102,23 @@ program streamer_$Dd
         ! Update the solution
         call a$D_loop_box_arg(tree, update_solution, [ST_dt, i-1.5_dp], .true.)
 
-        ! Compute new field on first iteration
-        if (i == 1) call field_compute(tree, mg, .true.)
+        if (i == 1) then
+           ! Compute new field on first iteration
+           call field_compute(tree, mg, .true.)
+
+           ! Coarse densities might be required for ghost cells
+           call a$D_restrict_tree(tree, i_electron)
+        end if
      end do
 
      ST_time = ST_time - ST_dt        ! Go back one time step
 
      ! Take average of phi_old and phi (explicit trapezoidal rule)
      call a$D_loop_box(tree, average_density)
+
+     ! Coarse densities might be required for ghost cells
+     call a$D_restrict_tree(tree, i_electron)
+
      ! Compute field with new density
      call field_compute(tree, mg, .true.)
 
