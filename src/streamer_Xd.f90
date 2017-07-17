@@ -573,9 +573,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a$D_gc_box(tree%boxes, id, i_electron, &
-               a$D_gc_interp, a$D_bc_neumann_zero)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero)
           call a$D_gc_box(tree%boxes, id, i_pos_ion, &
-               a$D_gc_interp, a$D_bc_neumann_zero)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero)
           call a$D_gc_box(tree%boxes, id, i_phi, &
                mg%sides_rb, mg%sides_bc)
        end do
