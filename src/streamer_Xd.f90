@@ -133,8 +133,8 @@ program streamer_$Dd
 
      if (write_out) then
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_electron, a$D_gc_interp, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp, a$D_bc_neumann_zero)
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
         call a$D_write_silo(tree, fname, output_cnt, ST_time, &
@@ -164,8 +164,8 @@ program streamer_$Dd
         call a$D_restrict_tree(tree, i_pos_ion)
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_electron, a$D_gc_interp, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp, a$D_bc_neumann_zero)
 
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
@@ -322,7 +322,7 @@ contains
     allocate(cc(DTIMES(-1:nc+2)))
 
     ! Fill ghost cells on the sides of boxes (no corners)
-    call a$D_gc_box(boxes, id, i_electron, a$D_gc_interp_lim, &
+    call a$D_gc_box(boxes, id, i_electron, a$D_gc_interp, &
          a$D_bc_neumann_zero, .false.)
 
     ! Fill cc with interior data plus a second layer of ghost cells
