@@ -557,29 +557,31 @@ contains
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id, p_id
 
+    !$omp parallel private(lvl, i, id, p_id)
     do lvl = 1, tree%highest_lvl
-       !$omp parallel do private(id, p_id)
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
+          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
-       !$omp end parallel do
+       !$omp end do
 
-       !$omp parallel do private(id)
+       !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a$D_gc_box(tree%boxes, id, i_electron, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero)
+               a$D_gc_interp, a$D_bc_neumann_zero)
           call a$D_gc_box(tree%boxes, id, i_pos_ion, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero)
+               a$D_gc_interp, a$D_bc_neumann_zero)
           call a$D_gc_box(tree%boxes, id, i_phi, &
                mg%sides_rb, mg%sides_bc)
        end do
-       !$omp end parallel do
+       !$omp end do
     end do
+    !$omp end parallel
   end subroutine prolong_to_new_boxes
 
   subroutine write_log_file(tree, filename, out_cnt, dir)
