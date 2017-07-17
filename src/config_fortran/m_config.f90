@@ -65,26 +65,26 @@ module m_config
 
   !> Interface to add variables to the configuration
   interface CFG_add
-     module procedure :: add_real, add_real_array
-     module procedure :: add_int, add_int_array
-     module procedure :: add_string, add_string_array
-     module procedure :: add_logic, add_logic_array
+     module procedure  add_real, add_real_array
+     module procedure  add_int, add_int_array
+     module procedure  add_string, add_string_array
+     module procedure  add_logic, add_logic_array
   end interface CFG_add
 
   !> Interface to get variables from the configuration
   interface CFG_get
-     module procedure :: get_real, get_real_array
-     module procedure :: get_int, get_int_array
-     module procedure :: get_logic, get_logic_array
-     module procedure :: get_string, get_string_array
+     module procedure  get_real, get_real_array
+     module procedure  get_int, get_int_array
+     module procedure  get_logic, get_logic_array
+     module procedure  get_string, get_string_array
   end interface CFG_get
 
   !> Interface to get variables from the configuration
   interface CFG_add_get
-     module procedure :: add_get_real, add_get_real_array
-     module procedure :: add_get_int, add_get_int_array
-     module procedure :: add_get_logic, add_get_logic_array
-     module procedure :: add_get_string, add_get_string_array
+     module procedure  add_get_real, add_get_real_array
+     module procedure  add_get_int, add_get_int_array
+     module procedure  add_get_logic, add_get_logic_array
+     module procedure  add_get_string, add_get_string_array
   end interface CFG_add_get
 
   ! Public types
@@ -173,6 +173,7 @@ contains
     character(len=CFG_name_len)   :: line_fmt
     character(len=CFG_string_len) :: err_string
     character(len=CFG_string_len) :: line
+    logical                       :: append
 
     open(my_unit, FILE=trim(filename), status = "OLD", &
          action="READ", err=998, iostat=io_state)
@@ -211,7 +212,13 @@ contains
           end if
        end if
 
-       var_name = line(1 : equal_sign_ix - 1) ! Set variable name
+       if (line(equal_sign_ix-1:equal_sign_ix) == '+=') then
+          append = .true.
+          var_name = line(1 : equal_sign_ix - 2) ! Set variable name
+       else
+          append = .false.
+          var_name = line(1 : equal_sign_ix - 1) ! Set variable name
+       end if
 
        ! If there is no indent, reset to no category
        if (var_name(1:1) /= " " .and. var_name(1:1) /= char(9)) then
@@ -238,8 +245,17 @@ contains
                "Not yet created", ix, .false.)
           cfg%vars(ix)%stored_data = line
        else
-          cfg%vars(ix)%stored_data = line
-          call read_variable(cfg%vars(ix))
+          if (append) then
+             cfg%vars(ix)%stored_data = &
+                  trim(cfg%vars(ix)%stored_data) // ', ' // trim(line)
+          else
+             cfg%vars(ix)%stored_data = line
+          end if
+          
+          ! If type is known, read in values
+          if (cfg%vars(ix)%var_type /= CFG_unknown_type) then
+             call read_variable(cfg%vars(ix))
+          end if
        end if
     end do
 
@@ -263,9 +279,20 @@ contains
          CFG_max_array_size, n_entries, ix_start, ix_end)
 
     if (var%var_size /= n_entries) then
+
        if (.not. var%dynamic_size) then
-          call handle_error("read_variable: variable [" // &
-               & trim(var%var_name) // "] has the wrong size")
+          ! Allow strings of length 1 to be automatically concatenated
+          if (var%var_type == CFG_string_type .and. var%var_size == 1) then
+             var%char_data(1) = trim(var%stored_data(ix_start(1):ix_end(1)))
+             do n = 2, n_entries
+                var%char_data(1) = trim(var%char_data(1)) // &
+                     trim(var%stored_data(ix_start(n):ix_end(n)))
+             end do
+             return                ! Leave routine
+          else
+             call handle_error("read_variable: variable [" // &
+                  & trim(var%var_name) // "] has the wrong size")
+          end if
        else
           var%var_size = n_entries
           call resize_storage(var)
