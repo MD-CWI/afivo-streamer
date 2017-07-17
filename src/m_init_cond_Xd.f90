@@ -108,6 +108,8 @@ contains
     type(a$D_t), intent(inout) :: tree
     integer                    :: my_lvl, lvl, i, id
 
+    if (init_conds%stochastic_density <= 0.0_dp) return
+
     ! Determine at which level to create the background density. This is the
     ! highest level that is fully refined
     do my_lvl = 1, tree%highest_lvl
@@ -116,10 +118,12 @@ contains
 
     ! Use i_rhs to store the stochastic density at this level
     call a$D_tree_clear_cc(tree, i_rhs)
+    !$omp do private(id)
     do i = 1, size(tree%lvls(my_lvl)%ids)
        id = tree%lvls(my_lvl)%ids(i)
        call set_stochastic_density(tree%boxes(id))
     end do
+    !$omp end do
 
     ! Prolong to finer levels. The coarser (hidden) levels are set at the end.
     do lvl = my_lvl, tree%highest_lvl-1
@@ -154,13 +158,17 @@ contains
   end subroutine init_cond_stochastic_density
 
   subroutine set_stochastic_density(box)
+    use omp_lib
+    use m_streamer, only: ST_prng
     type(box$D_t), intent(inout) :: box
-    integer                      :: IJK
+    integer                      :: proc_id, IJK
     real(dp)                     :: density
 
+    proc_id = 1+omp_get_thread_num()
+
     do KJI_DO(1,box%n_cell)
-       call random_number(density)
-       density = density * init_conds%stochastic_density
+       density = ST_prng%rngs(proc_id)%unif_01() * &
+            init_conds%stochastic_density
        box%cc(IJK, i_rhs) = density
     end do; CLOSE_DO
   end subroutine set_stochastic_density

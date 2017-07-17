@@ -56,7 +56,10 @@ module m_streamer
   type(lookup_table_t), protected :: ST_td_tbl
 
   ! Random number generator
-  type(RNG_t) :: ST_rng
+  type(rng_t) :: ST_rng
+
+  ! Parallel random number generator
+  type(prng_t) :: ST_prng
 
   ! Whether we use phototionization
   logical, protected :: ST_photoi_enabled = .false.
@@ -197,17 +200,21 @@ contains
 
   !> Create the configuration file with default values
   subroutine ST_initialize(cfg, ndim)
+    use iso_fortran_env, only: int64
     use m_config
     use omp_lib
     use m_afivo_types
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
-    integer                    :: n
+    integer                    :: n, n_threads
     real(dp)                   :: vec(ndim)
     real(dp), allocatable      :: dbuffer(:)
+    integer                    :: rng_int4_seed(4) = &
+         [8123, 91234, 12399, 293434]
+    integer(int64)             :: rng_int8_seed(2)
 
-    n = af_get_max_threads()
-    allocate(ST_dt_matrix(ST_dt_num_cond, n))
+    n_threads = af_get_max_threads()
+    allocate(ST_dt_matrix(ST_dt_num_cond, n_threads))
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
@@ -309,6 +316,12 @@ contains
     call CFG_add_get(cfg, "photoi_num_photons", ST_photoi_num_photons, &
          "Maximum number of discrete photons to use")
 
+    call CFG_add_get(cfg, "photoi_rng_seed", rng_int4_seed, &
+         "Seed for the photoionization random number generator")
+    rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
+    call ST_rng%set_seed(rng_int8_seed)
+    call ST_prng%init_parallel(n_threads, ST_rng)
+
     if (ST_photoi_enabled) then
       vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
            i_electric_fld, i_photo]
@@ -321,7 +334,6 @@ contains
 
   !> Initialize the transport coefficients
   subroutine ST_load_transport_data(cfg)
-    use iso_fortran_env, only: int64
     use m_transport_data
     use m_config
 
@@ -330,9 +342,6 @@ contains
     character(len=ST_slen)     :: td_file = "td_input_file.txt"
     character(len=ST_slen)     :: gas_name         = "AIR"
     integer                    :: table_size       = 1000
-    integer                    :: rng_int4_seed(4) = &
-         [8123, 91234, 12399, 293434]
-    integer(int64)             :: rng_int8_seed(2)
     real(dp)                   :: max_electric_fld = 3e7_dp
     real(dp)                   :: alpha_fac        = 1.0_dp
     real(dp)                   :: eta_fac          = 1.0_dp
@@ -398,11 +407,6 @@ contains
 
     ! Create table for photoionization
     if (ST_photoi_enabled) then
-       call CFG_add_get(cfg, "photoi_rng_seed", rng_int4_seed, &
-            "Seed for the photoionization random number generator")
-       rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
-       call ST_rng%set_seed(rng_int8_seed)
-
        call photoi_get_table_air(ST_photoi_tbl, ST_photoi_frac_O2 * &
             ST_gas_pressure, 2 * ST_domain_len)
     end if
