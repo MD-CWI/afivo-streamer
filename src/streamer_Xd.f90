@@ -412,6 +412,7 @@ contains
     real(dp), intent(in)         :: args(:)
     real(dp)                     :: dt, check_dt, inv_dr, src, fld, fld_vec($D)
     real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
+    real(dp)                     :: dt_cfl, dt_dif, dt_drt
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
@@ -499,18 +500,27 @@ contains
           diff = LT_get_col(ST_td_tbl, i_diffusion, fld)
 
           ! CFL condition
-          ! The 0.5 is here because of the explicit trapezoidal rule
-          ST_dt_matrix(ST_ix_cfl, tid) = min(ST_dt_matrix(ST_ix_cfl, tid), &
-               0.5_dp/sum(abs(fld_vec * mu) * inv_dr))
-
-          ! Dielectric relaxation time
-          ST_dt_matrix(ST_ix_drt, tid) = min(ST_dt_matrix(ST_ix_drt, tid), &
-               UC_eps0 / (UC_elem_charge * mu * &
-               max(box%cc(IJK, i_electron), epsilon(1.0_dp))))
-
+          dt_cfl = 1.0_dp/sum(abs(fld_vec * &
+               max(mu, abs(ST_ion_mobility))) * inv_dr)
           ! Diffusion condition
+          dt_dif = box%dr**2 / max(2 * $D * max(diff, ST_ion_diffusion), &
+               epsilon(1.0_dp))
+          ! Dielectric relaxation time
+          dt_drt = UC_eps0 / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
+               max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
+
+          ! Take the minimum of the CFL condition with Courant number 0.5 and
+          ! the combined CFL-diffusion condition with Courant number 1.0. The
+          ! 0.5 is emperical, to have good accuracy (and TVD/positivity) in
+          ! combination with the explicit trapezoidal rule
+          dt_cfl = min(0.5_dp * dt_cfl, 1/(1/dt_cfl + 1/dt_dif))
+
+          ST_dt_matrix(ST_ix_cfl, tid) = min(ST_dt_matrix(ST_ix_cfl, tid), &
+               dt_cfl)
+          ST_dt_matrix(ST_ix_drt, tid) = min(ST_dt_matrix(ST_ix_drt, tid), &
+               dt_drt)
           ST_dt_matrix(ST_ix_diff, tid) = min(ST_dt_matrix(ST_ix_diff, tid), &
-               box%dr**2 / max(2 * $D * diff, epsilon(1.0_dp)))
+               dt_dif)
        end if
 
     end do; CLOSE_DO
