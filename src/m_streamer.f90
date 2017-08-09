@@ -273,6 +273,9 @@ contains
     call CFG_add_get(cfg, "refine_max_dx", ST_refine_max_dx, &
          "The grid spacing will always be smaller than this value")
 
+    if (ST_refine_min_dx > ST_refine_max_dx) &
+         error stop "Cannot have refine_min_dx < refine_max_dx"
+
     call CFG_add_get(cfg, "refine_adx", ST_refine_adx, &
          "Refine if alpha*dx is larger than this value")
     call CFG_add_get(cfg, "refine_adx_fac", ST_refine_adx_fac, &

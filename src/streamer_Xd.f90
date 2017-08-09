@@ -424,11 +424,11 @@ contains
     dt       = args(1)
     check_dt = args(2)
 
-    nc      = box%n_cell
-    inv_dr  = 1/box%dr
-    f_ion = 0.0_dp
+    nc     = box%n_cell
+    inv_dr = 1/box%dr
+    f_ion  = 0.0_dp
 #if $D == 2
-    ioff    = (box%ix(1)-1) * nc
+    ioff   = (box%ix(1)-1) * nc
 #endif
 
     do KJI_DO(1,nc)
