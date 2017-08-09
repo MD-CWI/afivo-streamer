@@ -38,9 +38,10 @@ module m_streamer
   integer, allocatable :: vars_for_output(:)
 
   ! ** Indices of face-centered variables **
-  integer, parameter :: n_var_face   = 2 ! Number of variables
+  integer, parameter :: n_var_face   = 3 ! Number of variables
   integer, parameter :: flux_elec    = 1 ! Electron flux
-  integer, parameter :: electric_fld = 2 ! Electric field vector
+  integer, parameter :: flux_ion     = 2 ! Positive ion flux
+  integer, parameter :: electric_fld = 3 ! Electric field vector
 
   ! ** Indices of transport data **
   integer, parameter :: n_var_td    = 4 ! Number of transport coefficients
@@ -54,6 +55,15 @@ module m_streamer
 
   ! Table with transport data vs electric field
   type(lookup_table_t), protected :: ST_td_tbl
+
+  !> The diffusion coefficient for positive ions (m2/s)
+  real(dp) :: ST_ion_diffusion = 0.0_dp
+
+  !> The mobility of positive ions (m2/Vs)
+  real(dp) :: ST_ion_mobility = 0.0_dp
+
+  !> Whether to update ions (depends on ion diffusion/mobility)
+  logical :: ST_update_ions = .false.
 
   ! Random number generator
   type(rng_t) :: ST_rng
@@ -354,6 +364,13 @@ contains
          "Input file with transport data")
     call CFG_add_get(cfg, "gas_name", gas_name, &
          "The name of the gas mixture used")
+
+    call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
+         "The mobility of positive ions (m2/Vs)")
+    call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
+         "The diffusion coefficient for positive ions (m2/s)")
+
+    ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
 
     call CFG_add_get(cfg, "lookup_table_size", table_size, &
          "The transport data table size in the fluid model")

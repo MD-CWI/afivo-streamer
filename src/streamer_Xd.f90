@@ -70,7 +70,7 @@ program streamer_$Dd
   ST_dt   = ST_dt_min
   dt_prev = ST_dt
 
-  do it = 1, huge(1)
+  do it = 1, huge(1)-1
      if (ST_time > ST_end_time) exit
 
      ! Every ST_dt_output, write output
@@ -292,22 +292,17 @@ contains
 
   end subroutine refine_routine
 
-  function get_min(a, b, n) result(min_vec)
-    integer, intent(in)  :: n
-    real(dp), intent(in) :: a(n), b(n)
-    real(dp)             :: min_vec(n)
-
-    min_vec = min(a, b)
-  end function get_min
-
   !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
     use m_flux_schemes
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
     real(dp)                     :: inv_dr, fld
+    ! Velocities at cell faces
     real(dp), allocatable        :: v(DTIMES(:), :)
+    ! Diffusion coefficients at cell faces
     real(dp), allocatable        :: dc(DTIMES(:), :)
+    ! Cell-centered densities
     real(dp), allocatable        :: cc(DTIMES(:))
     integer                      :: nc, n, m
 #if $D == 3
@@ -376,6 +371,28 @@ contains
     call flux_diff_$Dd(cc, dc, inv_dr, nc, 2)
 
     boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
+
+    if (ST_update_ions) then
+       ! Use a constant diffusion coefficient for ions
+       dc = ST_ion_diffusion
+
+       ! Use a constant mobility for ions
+       v(DTIMES(:), 1:$D) = ST_ion_mobility * &
+            boxes(id)%fc(DTIMES(:), 1:$D, electric_fld)
+
+       ! Fill ghost cells on the sides of boxes (no corners)
+       call a$D_gc_box(boxes, id, i_pos_ion, a$D_gc_interp_lim, &
+            a$D_bc_neumann_zero, .false.)
+
+       ! Fill cc with interior data plus a second layer of ghost cells
+       call a$D_gc2_box(boxes, id, i_pos_ion, a$D_gc2_prolong_linear, &
+            a$D_bc2_neumann_zero, cc, nc)
+
+       call flux_koren_$Dd(cc, v, nc, 2)
+       call flux_diff_$Dd(cc, dc, inv_dr, nc, 2)
+
+       boxes(id)%fc(DTIMES(:), :, flux_ion) = v + dc
+    end if
   end subroutine fluxes_koren
 
   !> Take average of new and old electron/ion density for explicit trapezoidal rule
@@ -394,7 +411,7 @@ contains
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: args(:)
     real(dp)                     :: dt, check_dt, inv_dr, src, fld, fld_vec($D)
-    real(dp)                     :: alpha, eta, sflux, mu, diff
+    real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
@@ -406,10 +423,11 @@ contains
     dt       = args(1)
     check_dt = args(2)
 
-    nc     = box%n_cell
-    inv_dr = 1/box%dr
+    nc      = box%n_cell
+    inv_dr  = 1/box%dr
+    f_ion = 0.0_dp
 #if $D == 2
-    ioff   = (box%ix(1)-1) * nc
+    ioff    = (box%ix(1)-1) * nc
 #endif
 
     do KJI_DO(1,nc)
@@ -428,15 +446,28 @@ contains
           rfac(:) = 1.0_dp
        end if
 
-       sflux = (box%fc(i, j, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
+       f_elec = (box%fc(i, j, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
             rfac(1) * box%fc(i, j, 1, flux_elec) - &
             rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt
 #elif $D == 3
-       sflux = (sum(box%fc(i, j, k, 1:3, flux_elec)) - &
+       f_elec = (sum(box%fc(i, j, k, 1:3, flux_elec)) - &
             box%fc(i+1, j, k, 1, flux_elec) - &
             box%fc(i, j+1, k, 2, flux_elec) - &
             box%fc(i, j, k+1, 3, flux_elec)) * inv_dr * dt
 #endif
+
+       if (ST_update_ions) then
+#if $D == 2
+          f_ion = (box%fc(i, j, 2, flux_ion) - box%fc(i, j+1, 2, flux_ion) + &
+               rfac(1) * box%fc(i, j, 1, flux_ion) - &
+               rfac(2) * box%fc(i+1, j, 1, flux_ion)) * inv_dr * dt
+#elif $D == 3
+          f_ion = (sum(box%fc(i, j, k, 1:3, flux_ion)) - &
+               box%fc(i+1, j, k, 1, flux_ion) - &
+               box%fc(i, j+1, k, 2, flux_ion) - &
+               box%fc(i, j, k+1, 3, flux_ion)) * inv_dr * dt
+#endif
+       end if
 
        ! Source term
        src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt
@@ -444,10 +475,10 @@ contains
        if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt
 
        ! Add flux and source term
-       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + sflux + src
+       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
 
-       ! Add source term
-       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + src
+       ! Add flux and source term
+       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
 
        ! Possible determine new time step restriction
        if (check_dt > 0) then
