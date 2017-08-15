@@ -322,12 +322,18 @@ contains
          "Whether physical photons are used")
     call CFG_add_get(cfg, "photoi_frac_O2", ST_photoi_frac_O2, &
          "Fraction of oxygen (0-1)")
+    if (ST_photoi_frac_O2 <= 0.0_dp) error stop "photoi_frac_O2 <= 0.0"
+    if (ST_photoi_frac_O2 > 1.0_dp) error stop "photoi_frac_O2 > 1.0"
     call CFG_add_get(cfg, "photoi_eta", ST_photoi_eta, &
          "Photoionization efficiency factor, typically around 0.05")
+    if (ST_photoi_eta <= 0.0_dp) error stop "photoi_eta <= 0.0"
+    if (ST_photoi_eta > 1.0_dp) error stop "photoi_eta > 1.0"
     call CFG_add_get(cfg, "photoi_absorp_fac", ST_photoi_absorp_fac, &
          "At which grid spacing photons are absorbed compared to their mean distance")
+    if (ST_photoi_absorp_fac <= 0.0_dp) error stop "photoi_absorp_fac <= 0.0"
     call CFG_add_get(cfg, "photoi_num_photons", ST_photoi_num_photons, &
          "Maximum number of discrete photons to use")
+    if (ST_photoi_num_photons < 1) error stop "photoi_num_photons < 1"
 
     call CFG_add_get(cfg, "photoi_rng_seed", rng_int4_seed, &
          "Seed for the photoionization random number generator")
