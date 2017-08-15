@@ -1,8 +1,6 @@
 !> Module that provides routines for operations on photons
 module m_photons
 
-! TODO: describe the meaning of the subroutines.
-
   use m_lookup_table
 
   implicit none
@@ -18,6 +16,7 @@ module m_photons
   public :: photoi_tbl_t
 
   ! Public methods
+  public :: photoi_print_grid_spacing
   public :: photoi_get_table_air
   public :: photoi_do_absorption
   public :: photoi_absorption_func_air
@@ -25,6 +24,25 @@ module m_photons
   public :: photoi_set_src_3d
 
 contains
+
+  !> Print the grid spacing used for the absorption of photons
+  subroutine photoi_print_grid_spacing(pi_tbl, dr_base, fac_dx)
+    type(photoi_tbl_t), intent(in) :: pi_tbl
+    real(dp), intent(in)           :: dr_base
+    real(dp), intent(in)           :: fac_dx
+    real(dp)                       :: lengthscale, dx
+    integer                        :: lvl
+
+    ! Get a typical length scale for the absorption of photons
+    lengthscale = LT_get_col(pi_tbl%tbl, 1, fac_dx)
+
+    ! Determine at which level we estimate the photoionization source term. This
+    ! depends on the typical length scale for absorption.
+    lvl = get_lvl_length(dr_base, lengthscale)
+    dx  = dr_base * (0.5_dp**(lvl-1))
+
+    write(*, "(A,E12.3)") " Photoionization spacing: ", dx
+  end subroutine photoi_print_grid_spacing
 
   !> Compute the photonization table for air. If the absorption function is
   !> f(r), this table contains r as a function of F (the cumulative absorption
@@ -274,7 +292,7 @@ contains
     real(dp)                    :: tmp, dr, fac, dist, r(3)
     real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
-    real(dp), allocatable       :: xyz_dst(:, :)
+    real(dp), allocatable       :: xyz_abs(:, :)
     real(dp), parameter         :: pi = acos(-1.0_dp)
     type(PRNG_t)                :: prng
     type(a2_loc_t), allocatable :: ph_loc(:)
@@ -336,7 +354,8 @@ contains
                    !$omp end critical
 
                    ! Location of production
-                   r(1:2) = a2_r_cc(tree%boxes(id), [i, j])
+                   ! TODO: not all from cell center
+                   r(1:2) = a2_rr_cc(tree%boxes(id), [i-0.5_dp, j+0.0_dp])
                    r(3) = 0
 
                    do n = 1, n_create
@@ -350,23 +369,23 @@ contains
     end do
     !$omp end parallel
 
-    allocate(xyz_dst(3, n_used))
+    allocate(xyz_abs(3, n_used))
     allocate(ph_loc(n_used))
 
 
     if (use_cyl) then
        ! Get location of absorbption
-       call photoi_do_absorption(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
+       call photoi_do_absorption(xyz_src, xyz_abs, 3, n_used, pi_tbl%tbl, rng)
 
        !$omp do
        do n = 1, n_used
           ! Set x coordinate to radius (norm of 1st and 3rd coord.)
-          xyz_dst(1, n) = sqrt(xyz_dst(1, n)**2 + xyz_dst(3, n)**2)
+          xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(3, n)**2)
        end do
        !$omp end do
     else
        ! Get location of absorbption
-       call photoi_do_absorption(xyz_src, xyz_dst, 2, n_used, pi_tbl%tbl, rng)
+       call photoi_do_absorption(xyz_src, xyz_abs, 2, n_used, pi_tbl%tbl, rng)
     end if
 
     if (const_dx) then
@@ -379,7 +398,7 @@ contains
 
        !$omp parallel do
        do n = 1, n_used
-          ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), pho_lvl)
+          ph_loc(n) = a2_get_loc(tree, xyz_abs(1:2, n), pho_lvl)
        end do
        !$omp end parallel do
     else
@@ -388,10 +407,10 @@ contains
        proc_id = 1+omp_get_thread_num()
        !$omp do
        do n = 1, n_used
-          dist = norm2(xyz_dst(1:2, n) - xyz_src(1:2, n))
+          dist = norm2(xyz_abs(1:2, n) - xyz_src(1:2, n))
           lvl = get_rlvl_length(tree%dr_base, fac_dx * dist, prng%rngs(proc_id))
           if (lvl > highest_lvl) lvl = highest_lvl
-          ph_loc(n) = a2_get_loc(tree, xyz_dst(1:2, n), lvl)
+          ph_loc(n) = a2_get_loc(tree, xyz_abs(1:2, n), lvl)
        end do
        !$omp end do
        !$omp end parallel
@@ -503,7 +522,7 @@ contains
     real(dp)                    :: tmp, dr, fac, dist
     real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
-    real(dp), allocatable       :: xyz_dst(:, :)
+    real(dp), allocatable       :: xyz_abs(:, :)
     type(PRNG_t)                :: prng
     type(a3_loc_t), allocatable :: ph_loc(:)
 
@@ -569,11 +588,11 @@ contains
     end do
     !$omp end parallel
 
-    allocate(xyz_dst(3, n_used))
+    allocate(xyz_abs(3, n_used))
     allocate(ph_loc(n_used))
 
     ! Get location of absorption
-    call photoi_do_absorption(xyz_src, xyz_dst, 3, n_used, pi_tbl%tbl, rng)
+    call photoi_do_absorption(xyz_src, xyz_abs, 3, n_used, pi_tbl%tbl, rng)
 
     if (const_dx) then
        ! Get a typical length scale for the absorption of photons
@@ -585,7 +604,7 @@ contains
 
        !$omp parallel do
        do n = 1, n_used
-          ph_loc(n) = a3_get_loc(tree, xyz_dst(:, n), pho_lvl)
+          ph_loc(n) = a3_get_loc(tree, xyz_abs(:, n), pho_lvl)
        end do
        !$omp end parallel do
     else
@@ -594,10 +613,10 @@ contains
        proc_id = 1+omp_get_thread_num()
        !$omp do
        do n = 1, n_used
-          dist = norm2(xyz_dst(:, n) - xyz_src(:, n))
+          dist = norm2(xyz_abs(:, n) - xyz_src(:, n))
           lvl = get_rlvl_length(tree%dr_base, fac_dx * dist, prng%rngs(proc_id))
           if (lvl > highest_lvl) lvl = highest_lvl
-          ph_loc(n) = a3_get_loc(tree, xyz_dst(:, n), lvl)
+          ph_loc(n) = a3_get_loc(tree, xyz_abs(:, n), lvl)
        end do
        !$omp end do
        !$omp end parallel

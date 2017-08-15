@@ -63,8 +63,11 @@ program streamer_$Dd
   print *, "Number of threads", af_get_max_threads()
   call a$D_print_info(tree)
 
-  if (ST_photoi_enabled) &
-       call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
+  if (ST_photoi_enabled) then
+     call photoi_print_grid_spacing(ST_photoi_tbl, tree%dr_base, &
+          ST_photoi_absorp_fac)
+     call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
+  end if
 
   ! Start from small time step
   ST_dt   = ST_dt_min
