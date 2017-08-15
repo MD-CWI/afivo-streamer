@@ -336,7 +336,13 @@ contains
     if (ST_photoi_num_photons < 1) error stop "photoi_num_photons < 1"
 
     call CFG_add_get(cfg, "photoi_rng_seed", rng_int4_seed, &
-         "Seed for the photoionization random number generator")
+         "Seed for random numbers. If all zero, generate from clock.")
+
+    if (all(rng_int4_seed == 0)) then
+       rng_int4_seed = get_random_seed()
+       print *, "RNG seed: ", rng_int4_seed
+    end if
+
     rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
     call ST_rng%set_seed(rng_int8_seed)
     call ST_prng%init_parallel(n_threads, ST_rng)
@@ -350,6 +356,17 @@ contains
     end if
 
   end subroutine ST_initialize
+
+  !> Get a random seed based on the current time
+  function get_random_seed() result(seed)
+    integer :: seed(4)
+    integer :: time, i
+
+    call system_clock(time)
+    do i = 1, 4
+       seed(i) = ishftc(time, i*8)
+    end do
+  end function get_random_seed
 
   !> Initialize the transport coefficients
   subroutine ST_load_transport_data(cfg)
