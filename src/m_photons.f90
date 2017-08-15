@@ -358,8 +358,7 @@ contains
                       r(1)   = prng%rngs(proc_id)%unif_01()
                       r(2)   = prng%rngs(proc_id)%unif_01()
                       r(1:2) = a2_rr_cc(tree%boxes(id), [i, j] - 0.5_dp + r(1:2))
-                      r(3)   = 0
-                      xyz_src(:, i_ph+n) = r
+                      xyz_src(:, i_ph+n) = [r(1), 0.0_dp, r(2)]
                    end do
                 end if
              end do
@@ -374,13 +373,15 @@ contains
 
 
     if (use_cyl) then
-       ! Get location of absorbption
+       ! Get location of absorption. On input, xyz is set to (r, 0, z). On
+       ! output, the coordinates thus correspond to (x, y, z)
        call photoi_do_absorption(xyz_src, xyz_abs, 3, n_used, pi_tbl%tbl, rng)
 
        !$omp do
        do n = 1, n_used
-          ! Set x coordinate to radius (norm of 1st and 3rd coord.)
-          xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(3, n)**2)
+          ! Convert back to (r,z) coordinates
+          xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(2, n)**2)
+          xyz_abs(2, n) = xyz_abs(3, n)
        end do
        !$omp end do
     else
