@@ -353,12 +353,12 @@ contains
                    n_used = n_used + n_create
                    !$omp end critical
 
-                   ! Location of production
-                   ! TODO: not all from cell center
-                   r(1:2) = a2_rr_cc(tree%boxes(id), [i-0.5_dp, j+0.0_dp])
-                   r(3) = 0
-
                    do n = 1, n_create
+                      ! Location of production randomly chosen in cell
+                      r(1)   = prng%rngs(proc_id)%unif_01()
+                      r(2)   = prng%rngs(proc_id)%unif_01()
+                      r(1:2) = a2_rr_cc(tree%boxes(id), [i, j] - 0.5_dp + r(1:2))
+                      r(3)   = 0
                       xyz_src(:, i_ph+n) = r
                    end do
                 end if
@@ -519,7 +519,7 @@ contains
     integer                     :: i, j, k, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl, highest_lvl, min_lvl
-    real(dp)                    :: tmp, dr, fac, dist
+    real(dp)                    :: tmp, dr, fac, dist, r(3)
     real(dp)                    :: sum_production, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
@@ -545,7 +545,7 @@ contains
     ! Now loop over all leaves and create photons using random numbers
     n_used = 0
 
-    !$omp parallel private(lvl, ix, id, i, j, k, n, dr, i_ph, &
+    !$omp parallel private(lvl, ix, id, i, j, k, n, r, dr, i_ph, &
     !$omp proc_id, tmp, n_create)
     !$omp single
     n_procs = omp_get_num_threads()
@@ -576,8 +576,12 @@ contains
                       !$omp end critical
 
                       do n = 1, n_create
-                         xyz_src(:, i_ph+n) = &
-                              a3_r_cc(tree%boxes(id), [i, j, k])
+                         ! Location of production randomly chosen in cell
+                         r(1)   = prng%rngs(proc_id)%unif_01()
+                         r(2)   = prng%rngs(proc_id)%unif_01()
+                         r(3)   = prng%rngs(proc_id)%unif_01()
+                         xyz_src(:, i_ph+n) = a3_rr_cc(tree%boxes(id), &
+                              [i, j, k] - 0.5_dp + r(1:3))
                       end do
                    end if
                 end do
