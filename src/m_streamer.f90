@@ -71,30 +71,6 @@ module m_streamer
   ! Parallel random number generator
   type(prng_t) :: ST_prng
 
-  ! Whether we use phototionization
-  logical, protected :: ST_photoi_enabled = .false.
-
-  ! Whether physical photons are used
-  logical, protected :: ST_photoi_physical_photons = .true.
-
-  ! Whether adaptive adsorption is used (varying grid spacing)
-  logical, protected :: ST_photoi_const_dx = .true.
-
-  ! Oxygen fraction
-  real(dp), protected :: ST_photoi_frac_O2 = 0.2_dp
-
-  ! Photoionization efficiency
-  real(dp), protected :: ST_photoi_eta = 0.05_dp
-
-  ! At which grid spacing photons are absorbed compared to their mean distance
-  real(dp), protected :: ST_photoi_absorp_fac = 0.25_dp
-
-  ! Number of photons to use
-  integer, protected :: ST_photoi_num_photons = 100*1000
-
-  ! Table for photoionization
-  type(photoi_tbl_t), protected :: ST_photoi_tbl
-
   ! Name of the simulations
   character(len=ST_slen), protected :: ST_simulation_name = "sim"
 
@@ -217,6 +193,7 @@ contains
     use m_config
     use omp_lib
     use m_afivo_types
+    use m_photons
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
@@ -318,30 +295,7 @@ contains
     call CFG_get(cfg, "refine_regions_rmax", dbuffer)
     ST_refine_regions_rmax = reshape(dbuffer, [ndim, n])
 
-    call CFG_add_get(cfg, "photoi_enabled", ST_photoi_enabled, &
-         "Whether photoionization is enabled")
-    call CFG_add_get(cfg, "photoi_physical_photons", &
-         ST_photoi_physical_photons, &
-         "Whether physical photons are used")
-    call CFG_add_get(cfg, "photoi_const_dx", &
-         ST_photoi_const_dx, &
-         "Whether a constant grid spacing is used for photoionization")
-    call CFG_add_get(cfg, "photoi_frac_O2", ST_photoi_frac_O2, &
-         "Fraction of oxygen (0-1)")
-    if (ST_photoi_frac_O2 <= 0.0_dp) error stop "photoi_frac_O2 <= 0.0"
-    if (ST_photoi_frac_O2 > 1.0_dp) error stop "photoi_frac_O2 > 1.0"
-    call CFG_add_get(cfg, "photoi_eta", ST_photoi_eta, &
-         "Photoionization efficiency factor, typically around 0.05")
-    if (ST_photoi_eta <= 0.0_dp) error stop "photoi_eta <= 0.0"
-    if (ST_photoi_eta > 1.0_dp) error stop "photoi_eta > 1.0"
-    call CFG_add_get(cfg, "photoi_absorp_fac", ST_photoi_absorp_fac, &
-         "At which grid spacing photons are absorbed compared to their mean distance")
-    if (ST_photoi_absorp_fac <= 0.0_dp) error stop "photoi_absorp_fac <= 0.0"
-    call CFG_add_get(cfg, "photoi_num_photons", ST_photoi_num_photons, &
-         "Maximum number of discrete photons to use")
-    if (ST_photoi_num_photons < 1) error stop "photoi_num_photons < 1"
-
-    call CFG_add_get(cfg, "photoi_rng_seed", rng_int4_seed, &
+    call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
          "Seed for random numbers. If all zero, generate from clock.")
 
     if (all(rng_int4_seed == 0)) then
@@ -353,7 +307,9 @@ contains
     call ST_rng%set_seed(rng_int8_seed)
     call ST_prng%init_parallel(n_threads, ST_rng)
 
-    if (ST_photoi_enabled) then
+    call photoi_initialize(cfg, ST_gas_pressure, ST_domain_len)
+
+    if (photoi_enabled) then
       vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
            i_electric_fld, i_photo]
     else
@@ -453,12 +409,6 @@ contains
          trim(data_name), x_data, y_data)
     y_data = y_data * eta_fac
     call LT_set_col(ST_td_tbl, i_eta, x_data, y_data)
-
-    ! Create table for photoionization
-    if (ST_photoi_enabled) then
-       call photoi_get_table_air(ST_photoi_tbl, ST_photoi_frac_O2 * &
-            ST_gas_pressure, 2 * ST_domain_len)
-    end if
 
   end subroutine ST_load_transport_data
 

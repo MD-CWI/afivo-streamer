@@ -63,10 +63,9 @@ program streamer_$Dd
   print *, "Number of threads", af_get_max_threads()
   call a$D_print_info(tree)
 
-  if (ST_photoi_enabled) then
-     call photoi_print_grid_spacing(ST_photoi_tbl, tree%dr_base, &
-          ST_photoi_absorp_fac)
-     call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
+  if (photoi_enabled) then
+     call photoi_print_grid_spacing(tree%dr_base)
+     call set_photoionization(tree, photoi_eta)
   end if
 
   ! Start from small time step
@@ -85,8 +84,8 @@ program streamer_$Dd
         write_out = .false.
      end if
 
-     if (ST_photoi_enabled) &
-          call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
+     if (photoi_enabled) &
+          call set_photoionization(tree, photoi_eta, ST_dt)
 
      ! Copy previous solution
      call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
@@ -476,7 +475,7 @@ contains
        ! Source term
        src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt
 
-       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt
+       if (photoi_enabled) src = src + box%cc(IJK, i_photo) * dt
 
        ! Add flux and source term
        box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
@@ -530,15 +529,14 @@ contains
   end subroutine update_solution
 
   !> Sets the photoionization
-  subroutine set_photoionization(tree, eta, num_photons, dt)
+  subroutine set_photoionization(tree, eta, dt)
     use m_units_constants
 
-    type(a$D_t), intent(inout) :: tree
-    real(dp), intent(in)      :: eta
+    type(a$D_t), intent(inout)     :: tree
+    real(dp), intent(in)           :: eta
     real(dp), intent(in), optional :: dt
-    integer, intent(in)       :: num_photons
-    real(dp), parameter       :: p_quench = 30.0e-3_dp
-    real(dp)                  :: quench_fac
+    real(dp), parameter            :: p_quench = 30.0e-3_dp
+    real(dp)                       :: quench_fac
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
@@ -548,25 +546,17 @@ contains
     ! ionization rate.
     call a$D_loop_box_arg(tree, set_photoionization_rate, [eta * quench_fac], .true.)
 
-    if (ST_photoi_physical_photons) then
+    if (photoi_physical_photons) then
 #if $D == 2
-       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-            i_photo, i_photo, ST_photoi_absorp_fac, &
-            ST_photoi_const_dx, ST_cylindrical, 1e-9_dp, dt)
+       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo, ST_cylindrical, dt)
 #elif $D == 3
-       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-            i_photo, i_photo, ST_photoi_absorp_fac, &
-            ST_photoi_const_dx, 1e-9_dp, dt)
+       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo, dt)
 #endif
     else
 #if $D == 2
-       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-            i_photo, i_photo, ST_photoi_absorp_fac, &
-            ST_photoi_const_dx, ST_cylindrical, 1e-9_dp)
+       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo, ST_cylindrical)
 #elif $D == 3
-       call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-            i_photo, i_photo, ST_photoi_absorp_fac, &
-            ST_photoi_const_dx, 1e-9_dp)
+       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo)
 #endif
     end if
 
