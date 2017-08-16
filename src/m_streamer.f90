@@ -18,21 +18,20 @@ module m_streamer
   integer, parameter :: ST_slen = 200
 
   ! ** Indices of cell-centered variables **
-  integer, parameter :: n_var_cell     = 9 ! Number of variables
-  integer, parameter :: i_electron     = 1 ! Electron density
-  integer, parameter :: i_pos_ion      = 2 ! Positive ion density
-  integer, parameter :: i_electron_old = 3 ! For time-stepping scheme
-  integer, parameter :: i_pos_ion_old  = 4 ! For time-stepping scheme
-  integer, parameter :: i_phi          = 5 ! Electrical potential
-  integer, parameter :: i_electric_fld = 6 ! Electric field norm
-  integer, parameter :: i_rhs          = 7 ! Source term Poisson
-  integer, parameter :: i_photo        = 8 ! Phototionization rate
-  integer, parameter :: i_tmp          = 9 ! Temporary variable
+  integer, protected :: n_var_cell     = 0  ! Number of variables
+  integer, protected :: i_electron     = -1 ! Electron density
+  integer, protected :: i_pos_ion      = -1 ! Positive ion density
+  integer, protected :: i_electron_old = -1 ! For time-stepping scheme
+  integer, protected :: i_pos_ion_old  = -1 ! For time-stepping scheme
+  integer, protected :: i_phi          = -1 ! Electrical potential
+  integer, protected :: i_electric_fld = -1 ! Electric field norm
+  integer, protected :: i_rhs          = -1 ! Source term Poisson
+
+  ! Optional variable (when using photoionization)
+  integer :: i_photo        = -1 ! Photoionization rate
 
   ! Names of the cell-centered variables
-  character(len=12) :: ST_cc_names(n_var_cell) = &
-       [character(len=12) :: "electron", "pos_ion", "electron_old", &
-       "pos_ion_old", "phi", "electric_fld", "rhs", "pho", "tmp"]
+  character(len=12), allocatable :: ST_cc_names(:)
 
   ! Indices of variables to be included in output
   integer, allocatable :: vars_for_output(:)
@@ -190,6 +189,27 @@ module m_streamer
 
 contains
 
+  integer function ST_add_cc_variable(name, include_in_output)
+    character(len=*), intent(in) :: name
+    logical, intent(in)          :: include_in_output
+    integer                      :: i, n
+
+    ST_cc_names = [character(len=12) :: &
+         (ST_cc_names(i), i=1,n_var_cell), name]
+
+    if (include_in_output) then
+       if (allocated(vars_for_output)) then
+          n = size(vars_for_output)
+       else
+          n = 0
+       end if
+       vars_for_output = [(vars_for_output(i), i=1,n), n_var_cell+1]
+    end if
+
+    ST_add_cc_variable = n_var_cell + 1
+    n_var_cell         = n_var_cell + 1
+  end function ST_add_cc_variable
+
   !> Create the configuration file with default values
   subroutine ST_initialize(cfg, ndim)
     use iso_fortran_env, only: int64
@@ -204,6 +224,14 @@ contains
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
+
+    i_electron = ST_add_cc_variable("electron", .true.)
+    i_pos_ion = ST_add_cc_variable("pos_ion", .true.)
+    i_electron_old = ST_add_cc_variable("electron_old", .false.)
+    i_pos_ion_old = ST_add_cc_variable("pos_ion_old", .false.)
+    i_phi = ST_add_cc_variable("phi", .true.)
+    i_electric_fld = ST_add_cc_variable("electric_fld", .true.)
+    i_rhs = ST_add_cc_variable("rhs", .true.)
 
     n_threads = af_get_max_threads()
     allocate(ST_dt_matrix(ST_dt_num_cond, n_threads))

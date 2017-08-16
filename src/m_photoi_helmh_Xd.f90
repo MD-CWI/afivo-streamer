@@ -1,5 +1,15 @@
 #include "../afivo/src/cpp_macros_$Dd.h"
 !> Module for photoionization with the Helmholtz approximation
+!>
+!> The equations solved are nabla^2 phi_i - lambda_i^2 * phi_i = f, where f is
+!> the photon production term, and there can be modes i = 1, ..., N. The photon
+!> absorption term is then given by sum(c_i * phi_i).
+!>
+!> For the case N=2, the following coefficients can be used:
+!> lambdas = 4425.36_dp, 750.06_dp 1/(m bar)
+!> coeffs = 337555.5_dp, 19972.0_dp 1/(m bar)^2
+!>
+!> TODO: look up values for the case N=3
 module m_photoi_helmh_$Dd
   use m_a$D_all
   use m_streamer
@@ -9,8 +19,11 @@ module m_photoi_helmh_$Dd
 
   type(mg$D_t) :: mg_helm       ! Multigrid option struct
 
-  ! Used internally by the routines
-  real(dp)              :: lambda
+  ! Lambda squared, used internally by the routines
+  real(dp) :: lambda2
+
+  !> How many V-cycles to perform to update each mode
+  integer :: num_vcycles = 2
 
   !> Number of Helmholtz modes to include
   integer               :: n_modes = 2
@@ -19,8 +32,13 @@ module m_photoi_helmh_$Dd
   !> Weights corresponding to the lambdas; unit 1/(m bar)^2
   real(dp), allocatable :: coeffs(:)
 
+  integer, allocatable :: i_modes(:)
+
+  logical :: have_guess = .false.
+
   public :: photoi_helmh_initialize
   public :: photoi_helmh_compute
+  public :: photoi_helmh_bc
 
 contains
 
@@ -29,7 +47,9 @@ contains
     use m_config
     use m_units_constants
     type(CFG_t), intent(inout) :: cfg
-    logical, intent(in) :: is_used
+    logical, intent(in)        :: is_used
+    integer                    :: n
+    character(len=12)          :: name
 
     call CFG_add(cfg, "photoi_helmh%lambdas", [4425.36_dp, 750.06_dp], &
          "Lambdas to use for lpl(phi) - lambda*phi = f; unit 1/(m bar)", &
@@ -38,18 +58,30 @@ contains
          "Weights corresponding to the lambdas; unit 1/(m bar)^2", &
          .true.)
 
+    call CFG_add(cfg, "photoi_helmh%num_vcycles", num_vcycles, &
+         "How many V-cycles to perform to update each mode")
+
     if (is_used) then
        call CFG_get_size(cfg, "photoi_helmh%lambdas", n_modes)
        allocate(lambdas(n_modes))
        allocate(coeffs(n_modes))
        call CFG_get(cfg, "photoi_helmh%lambdas", lambdas)
        call CFG_get(cfg, "photoi_helmh%coeffs", coeffs)
+       call CFG_get(cfg, "photoi_helmh%num_vcycles", num_vcycles)
 
-       lambdas = lambdas * ST_gas_pressure
-       coeffs = coeffs * ST_gas_pressure**2
+       ! Convert to correct units by multiplying with pressure in bar
+       lambdas = lambdas * ST_gas_pressure  ! 1/m
+       coeffs  = coeffs * ST_gas_pressure**2 ! 1/m^2
+
+       ! Add required variables
+       allocate(i_modes(n_modes))
+       do n = 1, n_modes
+          write(name, "(A,I0)") "helmh_", n
+          i_modes(n) = ST_add_cc_variable(trim(name), .false.)
+       end do
 
        ! Now set the multigrid options
-       mg_helm%i_phi = i_tmp
+       mg_helm%i_phi = i_modes(1) ! Will updated later on
        mg_helm%i_rhs = i_electron_old
        mg_helm%i_tmp = i_pos_ion_old
 
@@ -81,8 +113,18 @@ contains
     call a$D_tree_clear_cc(tree, i_photo)
 
     do n = 1, n_modes
-       lambda = lambdas(n)
-       call mg$D_fas_fmg(tree, mg_helm, .false., .false.)
+       lambda2 = lambdas(n)**2
+
+       mg_helm%i_phi = i_modes(n)
+
+       if (.not. have_guess) then
+          call mg$D_fas_fmg(tree, mg_helm, .false., have_guess)
+       else
+          have_guess = .true.
+          do i = 1, num_vcycles
+             call mg$D_fas_vcycle(tree, mg_helm, .false.)
+          end do
+       end if
 
        !$omp parallel private(lvl, i, id)
        do lvl = 1, tree%highest_lvl
@@ -91,13 +133,37 @@ contains
              id = tree%lvls(lvl)%leaves(i)
              tree%boxes(id)%cc(DTIMES(:), i_photo) = &
                   tree%boxes(id)%cc(DTIMES(:), i_photo) - &
-                  coeffs(n) * tree%boxes(id)%cc(DTIMES(:), i_tmp)
+                  coeffs(n) * tree%boxes(id)%cc(DTIMES(:), i_modes(n))
           end do
           !$omp end do
        end do
        !$omp end parallel
     end do
   end subroutine photoi_helmh_compute
+
+  subroutine photoi_helmh_bc(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: nb ! Direction for the boundary condition
+    integer, intent(in)         :: iv ! Index of variable
+    integer, intent(out)        :: bc_type ! Type of boundary condition
+    integer                     :: nc
+
+    nc = box%n_cell
+
+    select case (nb)
+    case (a$D_neighb_lowx, a$D_neighb_highx)
+       call a$D_bc_neumann_zero(box, nb, iv, bc_type)
+#if $D == 2
+    case (a$D_neighb_lowy, a$D_neighb_highy)
+       call a$D_bc_dirichlet_zero(box, nb, iv, bc_type)
+#elif $D == 3
+    case (a$D_neighb_lowy, a$D_neighb_highy)
+       call a$D_bc_neumann_zero(box, nb, iv, bc_type)
+    case (a$D_neighb_lowz, a$D_neighb_highz)
+       call a$D_bc_dirichlet_zero(box, nb, iv, bc_type)
+#endif
+    end select
+  end subroutine photoi_helmh_bc
 
 #if $D == 2
   !> Perform cylindrical Laplacian operator on a box
@@ -121,7 +187,7 @@ contains
                rfac(2) * box%cc(i+1, j, i_phi) + &
                box%cc(i, j-1, i_phi) + box%cc(i, j+1, i_phi) - &
                4 * box%cc(i, j, i_phi)) * inv_dr_sq - &
-               lambda * box%cc(i, j, i_phi)
+               lambda2 * box%cc(i, j, i_phi)
        end do
     end do
   end subroutine helmholtz_cyl_operator
@@ -146,7 +212,7 @@ contains
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
           rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          box%cc(i, j, i_phi) = 1/(4 + lambda * dx2) * ( &
+          box%cc(i, j, i_phi) = 1/(4 + lambda2 * dx2) * ( &
                rfac(1) * box%cc(i-1, j, i_phi) + &
                rfac(2) * box%cc(i+1, j, i_phi) + &
                box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
@@ -177,7 +243,7 @@ contains
           box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
                box%cc(i+1, j, i_phi) + box%cc(i, j-1, i_phi) + &
                box%cc(i, j+1, i_phi) - 4 * box%cc(i, j, i_phi)) - &
-               lambda * box%cc(i, j, i_phi)
+               lambda2 * box%cc(i, j, i_phi)
        end do
     end do
 #elif $D == 3
@@ -188,7 +254,7 @@ contains
                   box%cc(i+1, j, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
                   box%cc(i, j+1, k, i_phi) + box%cc(i, j, k-1, i_phi) + &
                   box%cc(i, j, k+1, i_phi) - 6 * box%cc(i, j, k, i_phi)) - &
-                  lambda * box%cc(i, j, k, i_phi)
+                  lambda2 * box%cc(i, j, k, i_phi)
           end do
        end do
     end do
@@ -217,7 +283,7 @@ contains
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 1/(4 + lambda * dx2) * ( &
+          box%cc(i, j, i_phi) = 1/(4 + lambda2 * dx2) * ( &
                box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
                box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
                dx2 * box%cc(i, j, i_rhs))
@@ -228,7 +294,7 @@ contains
        do j = 1, nc
           i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
           do i = i0, nc, 2
-             box%cc(i, j, k, i_phi) = 1/(6 + lambda * dx2) * ( &
+             box%cc(i, j, k, i_phi) = 1/(6 + lambda2 * dx2) * ( &
                   box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
                   box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
                   box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &
