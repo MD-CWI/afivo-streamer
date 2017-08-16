@@ -112,6 +112,7 @@ module m_config
   public :: CFG_write_markdown
   public :: CFG_read_file
   public :: CFG_update_from_arguments
+  public :: CFG_clear
 
 contains
 
@@ -175,14 +176,11 @@ contains
     character(len=CFG_string_len) :: line
     logical                       :: append
 
-    open(my_unit, FILE=trim(filename), status = "OLD", &
-         action="READ", err=998, iostat=io_state)
-    line_number = 0
-
+    open(my_unit, file=trim(filename), status="old", action="read")
     write(line_fmt, "(A,I0,A)") "(A", CFG_string_len, ")"
 
-    ! Default category is empty
-    category = ""
+    category    = "" ! Default category is empty
+    line_number = 0
 
     do
        read(my_unit, FMT=trim(line_fmt), ERR=998, end=999) line
@@ -220,8 +218,8 @@ contains
           var_name = line(1 : equal_sign_ix - 1) ! Set variable name
        end if
 
-       ! If there is no indent, reset to no category
-       if (var_name(1:1) /= " " .and. var_name(1:1) /= char(9)) then
+       ! If there are less than two spaces or a tab, reset to no category
+       if (var_name(1:2) /= " " .and. var_name(1:1) /= char(9)) then
           category = ""
        end if
 
@@ -251,7 +249,7 @@ contains
           else
              cfg%vars(ix)%stored_data = line
           end if
-          
+
           ! If type is known, read in values
           if (cfg%vars(ix)%var_type /= CFG_unknown_type) then
              call read_variable(cfg%vars(ix))
@@ -259,8 +257,10 @@ contains
        end if
     end do
 
-998 write(err_string, *) "io_state = ", io_state, " while reading from ", &
-         trim(filename), " at line ", line_number
+    ! Error handling
+998 write(err_string, "(A,I0,A,I0)") " IOSTAT = ", io_state, &
+         " while reading from " // trim(filename) // " at line ", &
+         line_number
     call handle_error("CFG_read_file:" // err_string)
 
     ! Routine ends here if the end of "filename" is reached
@@ -383,7 +383,7 @@ contains
        myUnit = output_unit
     else
        myUnit = 333
-       open(myUnit, FILE=filename, ACTION="WRITE", ERR=999, IOSTAT=io_state)
+       open(myUnit, FILE=filename, ACTION="WRITE")
     end if
 
     category      = ""
@@ -482,7 +482,7 @@ contains
        myUnit = output_unit
     else
        myUnit = 333
-       open(myUnit, FILE=filename, ACTION="WRITE", ERR=999, IOSTAT=io_state)
+       open(myUnit, FILE=filename, ACTION="WRITE")
     end if
 
     category      = ""
@@ -1178,5 +1178,18 @@ contains
        marker = left
     end if
   end subroutine parition_var_list
+
+  !> Clear all data from a CFG_t object, so that it can be reused. Note that
+  !> this also happens automatically when such an object goes out of scope.
+  subroutine CFG_clear(cfg)
+      implicit none
+      type(CFG_t) :: cfg
+
+      cfg%sorted   = .false.
+      cfg%num_vars = 0
+      if(allocated(cfg%vars)) then
+          deallocate(cfg%vars)
+      endif
+    end subroutine CFG_clear
 
 end module m_config
