@@ -7,7 +7,6 @@ module m_streamer
 
   use m_config
   use m_random
-  use m_photons
   use m_lookup_table
 
   implicit none
@@ -19,7 +18,7 @@ module m_streamer
   integer, parameter :: ST_slen = 200
 
   ! ** Indices of cell-centered variables **
-  integer, parameter :: n_var_cell     = 8 ! Number of variables
+  integer, parameter :: n_var_cell     = 9 ! Number of variables
   integer, parameter :: i_electron     = 1 ! Electron density
   integer, parameter :: i_pos_ion      = 2 ! Positive ion density
   integer, parameter :: i_electron_old = 3 ! For time-stepping scheme
@@ -28,11 +27,12 @@ module m_streamer
   integer, parameter :: i_electric_fld = 6 ! Electric field norm
   integer, parameter :: i_rhs          = 7 ! Source term Poisson
   integer, parameter :: i_photo        = 8 ! Phototionization rate
+  integer, parameter :: i_tmp          = 9 ! Temporary variable
 
   ! Names of the cell-centered variables
   character(len=12) :: ST_cc_names(n_var_cell) = &
        [character(len=12) :: "electron", "pos_ion", "electron_old", &
-       "pos_ion_old", "phi", "electric_fld", "rhs", "pho"]
+       "pos_ion_old", "phi", "electric_fld", "rhs", "pho", "tmp"]
 
   ! Indices of variables to be included in output
   integer, allocatable :: vars_for_output(:)
@@ -182,6 +182,9 @@ module m_streamer
   ! Pressure of the gas in bar
   real(dp), protected :: ST_gas_pressure = 1.0_dp
 
+  ! Fraction of O2
+  real(dp), protected :: ST_gas_frac_O2 = 0.2_dp
+
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2
 
@@ -193,7 +196,6 @@ contains
     use m_config
     use omp_lib
     use m_afivo_types
-    use m_photons
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
@@ -220,6 +222,8 @@ contains
          "The length of the domain (m)")
     call CFG_add_get(cfg, "gas_pressure", ST_gas_pressure, &
          "The gas pressure (bar), used for photoionization")
+    call CFG_add_get(cfg, "gas_frac_O2", ST_gas_frac_O2, &
+         "Fraction of O2, used for photoionization")
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
@@ -306,16 +310,6 @@ contains
     rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
     call ST_rng%set_seed(rng_int8_seed)
     call ST_prng%init_parallel(n_threads, ST_rng)
-
-    call photoi_initialize(cfg, ST_gas_pressure, ST_domain_len)
-
-    if (photoi_enabled) then
-      vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
-           i_electric_fld, i_photo]
-    else
-      vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
-           i_electric_fld]
-    end if
 
   end subroutine ST_initialize
 

@@ -1,6 +1,6 @@
 !> Module that provides routines for operations on photons
-module m_photons
-
+module m_photoi_mc
+  use m_streamer
   use m_lookup_table
 
   implicit none
@@ -8,121 +8,104 @@ module m_photons
 
   integer, parameter :: dp = kind(0.0d0)
 
-  type photoi_tbl_t
+  type phmc_tbl_t
      type(lookup_table_t) :: tbl           !< The lookup table
      real(dp)             :: frac_in_tbl   !< Fraction photons in table
-  end type photoi_tbl_t
-
-  ! Whether we use phototionization
-  logical, public, protected :: photoi_enabled = .false.
+  end type phmc_tbl_t
 
   ! Whether physical photons are used
-  logical, public, protected :: photoi_physical_photons = .true.
+  logical, public, protected :: phmc_physical_photons = .true.
 
   ! Whether a constant or adaptive grid spacing is usedn
-  logical, protected :: photoi_const_dx = .true.
+  logical, protected :: phmc_const_dx = .true.
 
   ! Minimum grid spacing for photoionization
-  real(dp), protected :: photoi_min_dx = 1e-9_dp
-
-  ! Oxygen fraction
-  real(dp), protected :: photoi_frac_O2 = 0.2_dp
-
-  ! Photoionization efficiency
-  real(dp), public, protected :: photoi_eta = 0.05_dp
+  real(dp), protected :: phmc_min_dx = 1e-9_dp
 
   ! At which grid spacing photons are absorbed compared to their mean distance
-  real(dp), protected :: photoi_absorp_fac = 0.25_dp
+  real(dp), protected :: phmc_absorp_fac = 0.25_dp
 
   ! Number of photons to use
-  integer, protected :: photoi_num_photons = 100*1000
+  integer, protected :: phmc_num_photons = 100*1000
 
   ! Table for photoionization
-  type(photoi_tbl_t), public, protected :: photoi_tbl
+  type(phmc_tbl_t), public, protected :: phmc_tbl
 
-  public :: photoi_tbl_t
+  public :: phmc_tbl_t
 
   ! Public methods
-  public :: photoi_initialize
-  public :: photoi_print_grid_spacing
-  public :: photoi_get_table_air
-  public :: photoi_do_absorption
-  public :: photoi_absorption_func_air
-  public :: photoi_set_src_2d
-  public :: photoi_set_src_3d
+  public :: phmc_initialize
+  public :: phmc_print_grid_spacing
+  public :: phmc_get_table_air
+  public :: phmc_do_absorption
+  public :: phmc_absorption_func_air
+  public :: phmc_set_src_2d
+  public :: phmc_set_src_3d
 
 contains
 
   !> Initialize photoionization parameters
-  subroutine photoi_initialize(cfg, gas_pressure, domain_len)
+  subroutine phmc_initialize(cfg, is_used)
     use m_config
+    use m_streamer
     type(CFG_t), intent(inout) :: cfg          !< The configuration for the simulation
-    real(dp), intent(in)       :: gas_pressure !< Gas pressure (bar)
-    real(dp), intent(in)       :: domain_len   !< Typical length of domain (m)
+    logical, intent(in) :: is_used
 
-    call CFG_add_get(cfg, "photoi%enabled", photoi_enabled, &
-         "Whether photoionization is enabled")
-    call CFG_add_get(cfg, "photoi%physical_photons", &
-         photoi_physical_photons, &
+    call CFG_add_get(cfg, "photoi_mc%physical_photons", &
+         phmc_physical_photons, &
          "Whether physical photons are used")
-    call CFG_add_get(cfg, "photoi%const_dx", &
-         photoi_const_dx, &
+    call CFG_add_get(cfg, "photoi_mc%const_dx", &
+         phmc_const_dx, &
          "Whether a constant grid spacing is used for photoionization")
-    call CFG_add_get(cfg, "photoi%min_dx", &
-         photoi_min_dx, &
+    call CFG_add_get(cfg, "photoi_mc%min_dx", &
+         phmc_min_dx, &
          "Minimum grid spacing for photoionization")
-    call CFG_add_get(cfg, "photoi%frac_O2", photoi_frac_O2, &
-         "Fraction of oxygen (0-1)")
-    if (photoi_frac_O2 <= 0.0_dp) error stop "photoi%frac_O2 <= 0.0"
-    if (photoi_frac_O2 > 1.0_dp) error stop "photoi%frac_O2 > 1.0"
-    call CFG_add_get(cfg, "photoi%eta", photoi_eta, &
-         "Photoionization efficiency factor, typically around 0.05")
-    if (photoi_eta <= 0.0_dp) error stop "photoi%eta <= 0.0"
-    if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
-    call CFG_add_get(cfg, "photoi%absorp_fac", photoi_absorp_fac, &
+    call CFG_add_get(cfg, "photoi_mc%absorp_fac", phmc_absorp_fac, &
          "At which grid spacing photons are absorbed compared to their mean distance")
-    if (photoi_absorp_fac <= 0.0_dp) error stop "photoi%absorp_fac <= 0.0"
-    call CFG_add_get(cfg, "photoi%num_photons", photoi_num_photons, &
+    if (phmc_absorp_fac <= 0.0_dp) error stop "photoi_mc%absorp_fac <= 0.0"
+    call CFG_add_get(cfg, "photoi_mc%num_photons", phmc_num_photons, &
          "Maximum number of discrete photons to use")
-    if (photoi_num_photons < 1) error stop "photoi%num_photons < 1"
+    if (phmc_num_photons < 1) error stop "photoi_mc%num_photons < 1"
 
-    ! Create table for photoionization
-    if (photoi_enabled) then
-       call photoi_get_table_air(photoi_tbl, photoi_frac_O2 * &
-            gas_pressure, 2 * domain_len)
+    if (is_used) then
+       ! Create table for photoionization
+       call phmc_get_table_air(phmc_tbl, ST_gas_frac_O2 * &
+            ST_gas_pressure, 2 * ST_domain_len)
+
+       call phmc_print_grid_spacing(ST_domain_len/ST_box_size)
     end if
 
-  end subroutine photoi_initialize
+  end subroutine phmc_initialize
 
   !> Print the grid spacing used for the absorption of photons
-  subroutine photoi_print_grid_spacing(dr_base)
+  subroutine phmc_print_grid_spacing(dr_base)
     real(dp), intent(in)           :: dr_base
     real(dp)                       :: lengthscale, dx
     integer                        :: lvl
 
     ! Get a typical length scale for the absorption of photons
-    lengthscale = LT_get_col(photoi_tbl%tbl, 1, photoi_absorp_fac)
+    lengthscale = LT_get_col(phmc_tbl%tbl, 1, phmc_absorp_fac)
 
     ! Determine at which level we estimate the photoionization source term. This
     ! depends on the typical length scale for absorption.
     lvl = get_lvl_length(dr_base, lengthscale)
     dx  = dr_base * (0.5_dp**(lvl-1))
 
-    if (photoi_const_dx) then
-       write(*, "(A,E12.3)") " Photoionization constant spacing: ", dx
+    if (phmc_const_dx) then
+       write(*, "(A,E12.3)") " Monte-Carlo photoionization spacing: ", dx
     else
-       write(*, "(A)") " Photoionization uses adaptive spacing"
+       write(*, "(A)") " Monte-Carlo photoionization uses adaptive spacing"
     end if
-  end subroutine photoi_print_grid_spacing
+  end subroutine phmc_print_grid_spacing
 
   !> Compute the photonization table for air. If the absorption function is
   !> f(r), this table contains r as a function of F (the cumulative absorption
   !> function, between 0 and 1). Later on a distance can be sampled by drawing a
   !> uniform 0,1 random number and finding the corresponding distance. The table
   !> constructed up to max_dist; we can ignore photons that fly very far.
-  subroutine photoi_get_table_air(photoi_tbl, p_O2, max_dist)
+  subroutine phmc_get_table_air(phmc_tbl, p_O2, max_dist)
     !< The photonization table
-    type(photoi_tbl_t), intent(inout) :: photoi_tbl
+    type(phmc_tbl_t), intent(inout) :: phmc_tbl
     !< Partial pressure of oxygen (bar)
     real(dp), intent(in)              :: p_O2
     !< Maximum distance in lookup table
@@ -176,18 +159,18 @@ contains
     end do
 
     if (n > tbl_size + 10) &
-         stop "photoi_get_table_air: integration accuracy fail"
+         stop "phmc_get_table_air: integration accuracy fail"
 
     ! Scale table to lie between 0 and 1 (later on we have to correct for this)
-    photoi_tbl%frac_in_tbl = fsum(n-1)
+    phmc_tbl%frac_in_tbl = fsum(n-1)
     fsum(1:n-1) = fsum(1:n-1) / fsum(n-1)
 
-    photoi_tbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
-    call LT_set_col(photoi_tbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
+    phmc_tbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
+    call LT_set_col(phmc_tbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
 
     write(*, "(A,E12.3,A)") " Average photon absorption length", &
          1e3_dp * sum(dist(1:n-1))/(n-1), " mm"
-  end subroutine photoi_get_table_air
+  end subroutine phmc_get_table_air
 
   !> Runge Kutta 4 method
   real(dp) function rk4_drdF(r, dF, p_O2)
@@ -199,19 +182,19 @@ contains
     real(dp), parameter  :: one_sixth = 1 / 6.0_dp
 
     ! Step 1 (at initial r)
-    drdF = 1 / photoi_absorption_func_air(r, p_O2)
+    drdF = 1 / phmc_absorption_func_air(r, p_O2)
     sum_drdF = drdF
 
     ! Step 2 (at initial r + dr/2)
-    drdF = 1 / photoi_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / phmc_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 3 (at initial r + dr/2)
-    drdF = 1 / photoi_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / phmc_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 4 (at initial r + dr)
-    drdF = 1 / photoi_absorption_func_air(r + dF * drdF, p_O2)
+    drdF = 1 / phmc_absorption_func_air(r + dF * drdF, p_O2)
     sum_drdF = sum_drdF + drdF
 
     ! Combine r derivatives at steps
@@ -219,7 +202,7 @@ contains
   end function rk4_drdF
 
   !> The absorption function for photons in air according to Zheleznyak's model
-  real(dp) function photoi_absorption_func_air(dist, p_O2)
+  real(dp) function phmc_absorption_func_air(dist, p_O2)
     use m_units_constants
     real(dp), intent(in) :: dist   !< Distance
     real(dp), intent(in) :: p_O2   !< Partial pressure of oxygen (bar)
@@ -231,15 +214,15 @@ contains
     r = p_O2 * dist
     if (r * (c0 + c1) < eps) then
        ! Use limit to prevent over/underflow
-       photoi_absorption_func_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
+       phmc_absorption_func_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
             * p_O2 / log(c1/c0)
     else if (r * c0 > -log(eps)) then
        ! Use limit to prevent over/underflow
-       photoi_absorption_func_air = eps
+       phmc_absorption_func_air = eps
     else
-       photoi_absorption_func_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
+       phmc_absorption_func_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
     end if
-  end function photoi_absorption_func_air
+  end function phmc_absorption_func_air
 
   !> Determine the lowest level at which the grid spacing is smaller than 'length'.
   integer function get_lvl_length(dr_base, length)
@@ -278,7 +261,7 @@ contains
 
   !> Given a list of photon production positions (xyz_in), compute where they
   !> end up (xyz_out).
-  subroutine photoi_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
+  subroutine phmc_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
     use m_lookup_table
     use m_random
     use omp_lib
@@ -321,15 +304,15 @@ contains
        end do
        !$omp end do
     else
-       print *, "photoi_do_absorption: unknown n_dim", n_dim
+       print *, "phmc_do_absorption: unknown n_dim", n_dim
        stop
     end if
     !$omp end parallel
-  end subroutine photoi_do_absorption
+  end subroutine phmc_do_absorption
 
   !> Set the source term due to photoionization for 2D models. At most
-  !> photoi_num_photons discrete photons are produced.
-  subroutine photoi_set_src_2d(tree, rng, &
+  !> phmc_num_photons discrete photons are produced.
+  subroutine phmc_set_src_2d(tree, rng, &
        i_src, i_photo, use_cyl, dt)
     use m_random
     use m_a2_types
@@ -368,11 +351,11 @@ contains
     call a2_tree_sum_cc(tree, i_src, sum_production)
 
     if (present(dt)) then
-       ! Create "physical" photons when less than photoi_num_photons are produced
-       fac = min(dt, photoi_num_photons / (sum_production + epsilon(1.0_dp)))
+       ! Create "physical" photons when less than phmc_num_photons are produced
+       fac = min(dt, phmc_num_photons / (sum_production + epsilon(1.0_dp)))
     else
-       ! Create approximately photoi_num_photons
-       fac = photoi_num_photons / (sum_production + epsilon(1.0_dp))
+       ! Create approximately phmc_num_photons
+       fac = phmc_num_photons / (sum_production + epsilon(1.0_dp))
     end if
 
     ! Allocate a bit more space because of stochastic production
@@ -440,7 +423,7 @@ contains
     if (use_cyl) then
        ! Get location of absorption. On input, xyz is set to (r, 0, z). On
        ! output, the coordinates thus correspond to (x, y, z)
-       call photoi_do_absorption(xyz_src, xyz_abs, 3, n_used, photoi_tbl%tbl, rng)
+       call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, rng)
 
        !$omp do
        do n = 1, n_used
@@ -452,12 +435,12 @@ contains
        !$omp end do
     else
        ! Get location of absorbption
-       call photoi_do_absorption(xyz_src, xyz_abs, 2, n_used, photoi_tbl%tbl, rng)
+       call phmc_do_absorption(xyz_src, xyz_abs, 2, n_used, phmc_tbl%tbl, rng)
     end if
 
-    if (photoi_const_dx) then
+    if (phmc_const_dx) then
        ! Get a typical length scale for the absorption of photons
-       pi_lengthscale = LT_get_col(photoi_tbl%tbl, 1, photoi_absorp_fac)
+       pi_lengthscale = LT_get_col(phmc_tbl%tbl, 1, phmc_absorp_fac)
 
        ! Determine at which level we estimate the photoionization source term. This
        ! depends on the typical length scale for absorption.
@@ -473,8 +456,8 @@ contains
        proc_id = 1+omp_get_thread_num()
        !$omp do
        do n = 1, n_used
-          dist = photoi_absorp_fac * norm2(xyz_abs(1:2, n) - xyz_src(1:2, n))
-          if (dist < photoi_min_dx) dist = photoi_min_dx
+          dist = phmc_absorp_fac * norm2(xyz_abs(1:2, n) - xyz_src(1:2, n))
+          if (dist < phmc_min_dx) dist = phmc_min_dx
           lvl = get_rlvl_length(tree%dr_base, dist, prng%rngs(proc_id))
           ph_loc(n) = a2_get_loc(tree, xyz_abs(1:2, n), lvl)
        end do
@@ -508,7 +491,7 @@ contains
              r(1:2) = a2_r_cc(tree%boxes(id), [i, j])
              tree%boxes(id)%cc(i, j, i_photo) = &
                   tree%boxes(id)%cc(i, j, i_photo) + &
-                  photoi_tbl%frac_in_tbl/(tmp * dr**2 * r(1))
+                  phmc_tbl%frac_in_tbl/(tmp * dr**2 * r(1))
           end if
        end do
     else
@@ -520,13 +503,13 @@ contains
              dr = tree%boxes(id)%dr
              tree%boxes(id)%cc(i, j, i_photo) = &
                   tree%boxes(id)%cc(i, j, i_photo) + &
-                  photoi_tbl%frac_in_tbl/(fac * dr**2)
+                  phmc_tbl%frac_in_tbl/(fac * dr**2)
           end if
        end do
     end if
 
     ! Set ghost cells on highest level with photon source
-    if (photoi_const_dx) then
+    if (phmc_const_dx) then
        min_lvl = pho_lvl
     else
        min_lvl = 1
@@ -551,9 +534,9 @@ contains
        !$omp end do
     end do
     !$omp end parallel
-  end subroutine photoi_set_src_2d
+  end subroutine phmc_set_src_2d
 
-  subroutine photoi_set_src_3d(tree, rng, &
+  subroutine phmc_set_src_3d(tree, rng, &
        i_src, i_photo, dt)
     use m_random
     use m_a3_types
@@ -589,11 +572,11 @@ contains
     call a3_tree_sum_cc(tree, i_src, sum_production)
 
     if (present(dt)) then
-       ! Create "physical" photons when less than photoi_num_photons are produced
-       fac = min(dt, photoi_num_photons / (sum_production + epsilon(1.0_dp)))
+       ! Create "physical" photons when less than phmc_num_photons are produced
+       fac = min(dt, phmc_num_photons / (sum_production + epsilon(1.0_dp)))
     else
-       ! Create approximately photoi_num_photons
-       fac = photoi_num_photons / (sum_production + epsilon(1.0_dp))
+       ! Create approximately phmc_num_photons
+       fac = phmc_num_photons / (sum_production + epsilon(1.0_dp))
     end if
 
     ! Allocate a bit more space because of stochastic production
@@ -653,11 +636,11 @@ contains
     allocate(ph_loc(n_used))
 
     ! Get location of absorption
-    call photoi_do_absorption(xyz_src, xyz_abs, 3, n_used, photoi_tbl%tbl, rng)
+    call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, rng)
 
-    if (photoi_const_dx) then
+    if (phmc_const_dx) then
        ! Get a typical length scale for the absorption of photons
-       pi_lengthscale = LT_get_col(photoi_tbl%tbl, 1, photoi_absorp_fac)
+       pi_lengthscale = LT_get_col(phmc_tbl%tbl, 1, phmc_absorp_fac)
 
        ! Determine at which level we estimate the photoionization source term. This
        ! depends on the typical length scale for absorption.
@@ -674,8 +657,8 @@ contains
        !$omp do
        do n = 1, n_used
           dist = norm2(xyz_abs(:, n) - xyz_src(:, n))
-          if (dist < photoi_min_dx) dist = photoi_min_dx
-          lvl = get_rlvl_length(tree%dr_base, photoi_absorp_fac * dist, prng%rngs(proc_id))
+          if (dist < phmc_min_dx) dist = phmc_min_dx
+          lvl = get_rlvl_length(tree%dr_base, phmc_absorp_fac * dist, prng%rngs(proc_id))
           ph_loc(n) = a3_get_loc(tree, xyz_abs(:, n), lvl)
        end do
        !$omp end do
@@ -705,12 +688,12 @@ contains
           dr = tree%boxes(id)%dr
           tree%boxes(id)%cc(i, j, k, i_photo) = &
                tree%boxes(id)%cc(i, j, k, i_photo) + &
-               photoi_tbl%frac_in_tbl/(fac * dr**3)
+               phmc_tbl%frac_in_tbl/(fac * dr**3)
        end if
     end do
 
     ! Set ghost cells on highest level with photon source
-    if (photoi_const_dx) then
+    if (phmc_const_dx) then
        min_lvl = pho_lvl
     else
        min_lvl = 1
@@ -735,6 +718,6 @@ contains
        !$omp end do
     end do
     !$omp end parallel
-  end subroutine photoi_set_src_3d
+  end subroutine phmc_set_src_3d
 
-end module m_photons
+end module m_photoi_mc

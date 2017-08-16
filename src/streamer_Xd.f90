@@ -6,6 +6,7 @@ program streamer_$Dd
   use m_streamer
   use m_field_$Dd
   use m_init_cond_$Dd
+  use m_photoi_$Dd
 
   implicit none
 
@@ -23,6 +24,16 @@ program streamer_$Dd
 
   call CFG_update_from_arguments(cfg)
   call ST_initialize(cfg, $D)
+  call photoi_initialize(cfg)
+
+  if (photoi_enabled) then
+     vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
+          i_electric_fld, i_photo]
+  else
+     vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
+          i_electric_fld]
+  end if
+
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
   call init_cond_initialize(cfg, $D)
@@ -63,11 +74,6 @@ program streamer_$Dd
   print *, "Number of threads", af_get_max_threads()
   call a$D_print_info(tree)
 
-  if (photoi_enabled) then
-     call photoi_print_grid_spacing(tree%dr_base)
-     call set_photoionization(tree, photoi_eta)
-  end if
-
   ! Start from small time step
   ST_dt   = ST_dt_min
   dt_prev = ST_dt
@@ -84,8 +90,9 @@ program streamer_$Dd
         write_out = .false.
      end if
 
-     if (photoi_enabled) &
-          call set_photoionization(tree, photoi_eta, ST_dt)
+     if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+        call photoi_set_src(tree, ST_dt)
+     end if
 
      ! Copy previous solution
      call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
@@ -138,6 +145,8 @@ program streamer_$Dd
         call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         if (photoi_enabled) then
+           call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
+           call a$D_restrict_tree(tree, i_photo)
            call a$D_gc_tree(tree, i_photo, a$D_gc_interp, a$D_bc_neumann_zero)
         end if
 
@@ -530,62 +539,6 @@ contains
 
     end do; CLOSE_DO
   end subroutine update_solution
-
-  !> Sets the photoionization
-  subroutine set_photoionization(tree, eta, dt)
-    use m_units_constants
-
-    type(a$D_t), intent(inout)     :: tree
-    real(dp), intent(in)           :: eta
-    real(dp), intent(in), optional :: dt
-    real(dp), parameter            :: p_quench = 30.0e-3_dp
-    real(dp)                       :: quench_fac
-
-    ! Compute quench factor, because some excited species will be quenched by
-    ! collisions, preventing the emission of a UV photon
-    quench_fac = p_quench / (ST_gas_pressure + p_quench)
-
-    ! Set photon production rate per cell, which is proportional to the
-    ! ionization rate.
-    call a$D_loop_box_arg(tree, set_photoionization_rate, [eta * quench_fac], .true.)
-
-    if (photoi_physical_photons) then
-#if $D == 2
-       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo, ST_cylindrical, dt)
-#elif $D == 3
-       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo, dt)
-#endif
-    else
-#if $D == 2
-       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo, ST_cylindrical)
-#elif $D == 3
-       call photoi_set_src_$Dd(tree, ST_rng, i_photo, i_photo)
-#endif
-    end if
-
-  end subroutine set_photoionization
-
-  !> Sets the photoionization_rate
-  subroutine set_photoionization_rate(box, coeff)
-    type(box$D_t), intent(inout) :: box
-    real(dp), intent(in)        :: coeff(:)
-    integer                     :: IJK, nc
-    real(dp)                    :: fld, alpha, mobility, tmp
-    type(LT_loc_t)              :: loc
-
-    nc = box%n_cell
-
-    do KJI_DO(1,nc)
-       fld      = box%cc(IJK, i_electric_fld)
-       loc      = LT_get_loc(ST_td_tbl, fld)
-       alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-       mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
-
-       tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
-       if (tmp < 0) tmp = 0
-       box%cc(IJK, i_photo) = tmp
-    end do; CLOSE_DO
-  end subroutine set_photoionization_rate
 
   !> For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
