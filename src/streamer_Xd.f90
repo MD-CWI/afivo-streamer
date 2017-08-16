@@ -137,6 +137,9 @@ program streamer_$Dd
         ! Fill ghost cells before writing output
         call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        if (photoi_enabled) then
+           call a$D_gc_tree(tree, i_photo, a$D_gc_interp, a$D_bc_neumann_zero)
+        end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
         call a$D_write_silo(tree, fname, output_cnt, ST_time, &
