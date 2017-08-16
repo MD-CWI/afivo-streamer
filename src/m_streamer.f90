@@ -77,6 +77,9 @@ module m_streamer
   ! Whether physical photons are used
   logical, protected :: ST_photoi_physical_photons = .true.
 
+  ! Whether adaptive adsorption is used (varying grid spacing)
+  logical, protected :: ST_photoi_const_dx = .true.
+
   ! Oxygen fraction
   real(dp), protected :: ST_photoi_frac_O2 = 0.2_dp
 
@@ -320,6 +323,9 @@ contains
     call CFG_add_get(cfg, "photoi_physical_photons", &
          ST_photoi_physical_photons, &
          "Whether physical photons are used")
+    call CFG_add_get(cfg, "photoi_const_dx", &
+         ST_photoi_const_dx, &
+         "Whether a constant grid spacing is used for photoionization")
     call CFG_add_get(cfg, "photoi_frac_O2", ST_photoi_frac_O2, &
          "Fraction of oxygen (0-1)")
     if (ST_photoi_frac_O2 <= 0.0_dp) error stop "photoi_frac_O2 <= 0.0"

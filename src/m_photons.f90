@@ -113,6 +113,9 @@ contains
 
     photoi_tbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
     call LT_set_col(photoi_tbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
+
+    write(*, "(A,E12.3,A)") " Average photon absorption length", &
+         1e3_dp * sum(dist(1:n-1))/(n-1), " mm"
   end subroutine photoi_get_table_air
 
   !> Runge Kutta 4 method
@@ -382,6 +385,7 @@ contains
           ! Convert back to (r,z) coordinates
           xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(2, n)**2)
           xyz_abs(2, n) = xyz_abs(3, n)
+          xyz_src(2, n) = xyz_src(3, n)
        end do
        !$omp end do
     else

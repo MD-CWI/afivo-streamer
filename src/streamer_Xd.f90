@@ -552,21 +552,21 @@ contains
 #if $D == 2
        call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
             i_photo, i_photo, ST_photoi_absorp_fac, &
-            .true., ST_cylindrical, 1e-9_dp, dt)
+            ST_photoi_const_dx, ST_cylindrical, 1e-9_dp, dt)
 #elif $D == 3
        call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
             i_photo, i_photo, ST_photoi_absorp_fac, &
-            .true., 1e-9_dp, dt)
+            ST_photoi_const_dx, 1e-9_dp, dt)
 #endif
     else
 #if $D == 2
        call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
             i_photo, i_photo, ST_photoi_absorp_fac, &
-            .true., ST_cylindrical, 1e-9_dp)
+            ST_photoi_const_dx, ST_cylindrical, 1e-9_dp)
 #elif $D == 3
        call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
             i_photo, i_photo, ST_photoi_absorp_fac, &
-            .true., 1e-9_dp)
+            ST_photoi_const_dx, 1e-9_dp)
 #endif
     end if
 
