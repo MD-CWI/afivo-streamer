@@ -26,14 +26,6 @@ program streamer_$Dd
   call ST_initialize(cfg, $D)
   call photoi_initialize(cfg)
 
-  if (photoi_enabled) then
-     vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
-          i_electric_fld, i_photo]
-  else
-     vars_for_output = [i_electron, i_pos_ion, i_rhs, i_phi, &
-          i_electric_fld]
-  end if
-
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
   call init_cond_initialize(cfg, $D)
@@ -556,6 +548,9 @@ contains
           call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_electron)
           call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
           call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
+          if (photoi_enabled) then
+             call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
+          end if
        end do
        !$omp end do
 
@@ -568,6 +563,10 @@ contains
                a$D_gc_interp_lim, a$D_bc_neumann_zero)
           call a$D_gc_box(tree%boxes, id, i_phi, &
                mg%sides_rb, mg%sides_bc)
+          if (photoi_enabled) then
+             call a$D_gc_box(tree%boxes, id, i_photo, &
+               a$D_gc_interp, photoi_helmh_bc)
+          end if
        end do
        !$omp end do
     end do

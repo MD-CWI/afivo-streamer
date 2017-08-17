@@ -23,6 +23,8 @@ module m_photoi_$Dd
 
   public :: photoi_initialize
   public :: photoi_set_src
+  ! Imported from Helmholtz module
+  public :: photoi_helmh_bc
 
 contains
 
@@ -41,6 +43,10 @@ contains
          "Photoionization efficiency factor, typically around 0.05-0.1")
     if (photoi_eta <= 0.0_dp) error stop "photoi%eta <= 0.0"
     if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
+
+    if (photoi_enabled) then
+       i_photo = ST_add_cc_variable("photo", .true.)
+    end if
 
     select case (photoi_method)
        case ("helmholtz")
