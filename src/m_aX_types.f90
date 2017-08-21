@@ -289,6 +289,7 @@ contains
        write(*, "(A,I10)") " Current maximum level:  ", tree%highest_lvl
        write(*, "(A,I10)") " Maximum allowed level:  ", tree%lvl_limit
        write(*, "(A,I10)") " Number of boxes used:   ", a$D_num_boxes_used(tree)
+       write(*, "(A,I10)") " Number of leaves used:  ", a$D_num_leaves_used(tree)
        write(*, "(A,I10)") " Memory limit(boxes):    ", tree%box_limit
        write(*, "(A,E10.2)") " Memory limit(GByte):    ", &
             tree%box_limit * 0.5_dp**30 * &
@@ -327,6 +328,23 @@ contains
        n_boxes = n_boxes + size(tree%lvls(lvl)%ids)
     end do
   end function a$D_num_boxes_used
+
+  pure function a$D_num_leaves_used(tree) result(n_boxes)
+    type(a$D_t), intent(in) :: tree
+    integer                 :: n_boxes, lvl
+
+    n_boxes = 0
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       n_boxes = n_boxes + size(tree%lvls(lvl)%leaves)
+    end do
+  end function a$D_num_leaves_used
+
+  pure function a$D_num_cells_used(tree) result(n_cells)
+    type(a$D_t), intent(in) :: tree
+    integer                 :: n_cells, lvl
+
+    n_cells = a$D_num_leaves_used(tree) * tree%n_cell**$D
+  end function a$D_num_cells_used
 
   !> Return .true. if a box has children
   elemental logical function a$D_has_children(box)
