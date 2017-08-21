@@ -48,3 +48,11 @@ documentation/html/*
 /examples/dielectric_2d.f90
 /examples/dielectric_3d
 /examples/dielectric_3d.f90
+/examples/ghostcell_benchmark_2d
+/examples/ghostcell_benchmark_2d.f90
+/examples/ghostcell_benchmark_3d
+/examples/ghostcell_benchmark_3d.f90
+/examples/poisson_helmholtz_2d
+/examples/poisson_helmholtz_2d.f90
+/examples/poisson_helmholtz_3d
+/examples/poisson_helmholtz_3d.f90
