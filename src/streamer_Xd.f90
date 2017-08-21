@@ -601,12 +601,12 @@ contains
        open(my_unit, file=trim(fname), action="write")
 #if $D == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y"
-       fmt = "(I6,14E16.8)"
+            "max(E) x y max(n_e) x y max(E_r) x y n_cells"
+       fmt = "(I6,14E16.8,I6)"
 #elif $D == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z"
-       fmt = "(I6,13E16.8)"
+            "max(E) x y z max(n_e) x y z n_cells"
+       fmt = "(I6,13E16.8,I6)"
 #endif
        close(my_unit)
 
@@ -622,11 +622,12 @@ contains
 #if $D == 2
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er)
+         a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er), &
+         a$D_num_cells_used(tree)
 #elif $D == 3
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec)
+         a$D_r_loc(tree, loc_elec), a$D_num_cells_used(tree)
 #endif
     close(my_unit)
 
