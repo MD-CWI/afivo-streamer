@@ -11,6 +11,7 @@ module m_a$D_restrict
   public :: a$D_restrict_to_boxes
   public :: a$D_restrict_tree
   public :: a$D_restrict_box
+  public :: a$D_restrict_box_face
 
 contains
 
@@ -126,5 +127,61 @@ contains
     end do
 #endif
   end subroutine a$D_restrict_box
+
+  !> Restriction of face-centered variables from child to parent
+  subroutine a$D_restrict_box_face(box_c, box_p, ivf, ivf_to)
+    type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
+    type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
+    integer, intent(in)           :: ivf            !< Face-variable to restrict
+    integer, intent(in), optional :: ivf_to         !< Destination (if /= ivf)
+    integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
+    integer                       :: hnc, ix_offset($D)
+#if $D == 2
+    real(dp)                      :: w1, w2
+#elif $D == 3
+    integer                       :: k, k_f, k_c
+#endif
+
+    hnc       = ishft(box_c%n_cell, -1) ! n_cell / 2
+    ix_offset = a$D_get_child_offset(box_c)
+
+    if (present(ivf_to)) then
+       i_dest = ivf_to
+    else
+       i_dest = ivf
+    end if
+
+    if (box_p%coord_t == af_cyl) &
+         stop "restrict_box_face not implemented for cylindrical case"
+
+#if $D == 2
+    do j = 1, hnc
+       j_c = ix_offset(2) + j
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = ix_offset(1) + i
+          i_f = 2 * i - 1
+
+          box_p%fc(i_c, j_c, 1, i_dest) = 0.5_dp * &
+               sum(box_c%fc(i_f, j_f:j_f+1, 1, ivf))
+          if (i == hnc) then
+             box_p%fc(i_c+1, j_c, 1, i_dest) = 0.5_dp * &
+               sum(box_c%fc(i_f+2, j_f:j_f+1, 1, ivf))
+          end if
+
+          box_p%fc(i_c, j_c, 2, i_dest) = 0.5_dp * &
+               sum(box_c%fc(i_f:i_f+1, j_f, 2, ivf))
+          if (j == hnc) then
+             box_p%fc(i_c, j_c+1, 2, i_dest) = 0.5_dp * &
+               sum(box_c%fc(i_f:i_f+1, j_f+2, 2, ivf))
+          end if
+
+       end do
+    end do
+#elif $D == 3
+    if (box_p%coord_t == af_cyl) &
+         stop "restrict_box_face not implemented for 3D case"
+#endif
+  end subroutine a$D_restrict_box_face
 
 end module m_a$D_restrict
