@@ -101,7 +101,7 @@ program streamer_$Dd
         call a$D_consistent_fluxes(tree, [flux_elec])
 
         ! Update the solution
-        call a$D_loop_box_arg(tree, update_solution, [ST_dt, i-1.5_dp], .true.)
+        call a$D_loop_box_arg(tree, update_solution, [ST_dt, real(i, dp)], .true.)
 
         if (i == 1) then
            ! Compute new field on first iteration
@@ -136,6 +136,12 @@ program streamer_$Dd
         ! Fill ghost cells before writing output
         call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+
+        if (ST_output_src_term) then
+           call a$D_restrict_tree(tree, i_src)
+           call a$D_gc_tree(tree, i_src, a$D_gc_interp, a$D_bc_neumann_zero)
+        end if
+
         if (photoi_enabled) then
            call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
            call a$D_restrict_tree(tree, i_photo)
@@ -165,9 +171,14 @@ program streamer_$Dd
      end if
 
      if (mod(it, ST_refine_per_steps) == 0) then
-        ! Restrict the electron and ion densities before refinement
+        ! Restrict electron and ion densities before refinement
         call a$D_restrict_tree(tree, i_electron)
         call a$D_restrict_tree(tree, i_pos_ion)
+
+        if (ST_output_src_term .and. ST_output_src_decay_rate > 0) then
+           ! Have to set src term on coarse grids as well
+           call a$D_restrict_tree(tree, i_src)
+        end if
 
         ! Fill ghost cells before refinement
         call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
@@ -416,19 +427,19 @@ contains
     use m_units_constants
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: args(:)
-    real(dp)                     :: dt, check_dt, inv_dr, src, fld, fld_vec($D)
+    real(dp)                     :: dt, inv_dr, src, fld, fld_vec($D)
     real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
     real(dp)                     :: dt_cfl, dt_dif, dt_drt
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
 #endif
-    integer                      :: IJK, nc, tid
+    integer                      :: IJK, nc, tid, i_step
     type(LT_loc_t)               :: loc
 
     tid      = omp_get_thread_num() + 1
     dt       = args(1)
-    check_dt = args(2)
+    i_step   = nint(args(2))
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
@@ -477,9 +488,22 @@ contains
        end if
 
        ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt
+       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
 
-       if (photoi_enabled) src = src + box%cc(IJK, i_photo) * dt
+       if (photoi_enabled) src = src + box%cc(IJK, i_photo)
+
+       if (i_step == 1 .and. ST_output_src_term) then
+          if (ST_output_src_decay_rate < 0) then
+             ! No time-averaging
+             box%cc(IJK, i_src) = src
+          else
+             ! Approximate exp(-t*rate) as 1-t*rate
+             box%cc(IJK, i_src) = (1 - dt * ST_output_src_decay_rate) * box%cc(IJK, i_src) + &
+                  src
+          end if
+       end if
+
+       src = src * dt
 
        ! Add flux and source term
        box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
@@ -488,7 +512,7 @@ contains
        box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
 
        ! Possible determine new time step restriction
-       if (check_dt > 0) then
+       if (i_step == 2) then
 #if $D == 2
           fld_vec(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
                box%fc(i+1, j, 1, electric_fld))
@@ -551,6 +575,9 @@ contains
           if (photoi_enabled) then
              call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
           end if
+          if (ST_output_src_term) then
+             call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_src)
+          end if
        end do
        !$omp end do
 
@@ -566,6 +593,10 @@ contains
           if (photoi_enabled) then
              call a$D_gc_box(tree%boxes, id, i_photo, &
                a$D_gc_interp, photoi_helmh_bc)
+          end if
+          if (ST_output_src_term) then
+             call a$D_gc_box(tree%boxes, id, i_src, &
+               a$D_gc_interp, a$D_bc_neumann_zero)
           end if
        end do
        !$omp end do

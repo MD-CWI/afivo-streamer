@@ -28,7 +28,10 @@ module m_streamer
   integer, protected :: i_rhs          = -1 ! Source term Poisson
 
   ! Optional variable (when using photoionization)
-  integer :: i_photo        = -1 ! Photoionization rate
+  integer :: i_photo = -1 ! Photoionization rate
+
+  ! Optional variable (to show ionization source term)
+  integer :: i_src = -1 ! Source term
 
   ! Names of the cell-centered variables
   character(len=12), allocatable :: ST_cc_names(:)
@@ -37,10 +40,10 @@ module m_streamer
   integer, allocatable :: vars_for_output(:)
 
   ! ** Indices of face-centered variables **
-  integer, parameter :: n_var_face   = 3 ! Number of variables
-  integer, parameter :: flux_elec    = 1 ! Electron flux
-  integer, parameter :: flux_ion     = 2 ! Positive ion flux
-  integer, parameter :: electric_fld = 3 ! Electric field vector
+  integer, protected :: n_var_face   = 0 ! Number of variables
+  integer, protected :: flux_elec    = -1 ! Electron flux
+  integer, protected :: flux_ion     = -1 ! Positive ion flux
+  integer, protected :: electric_fld = -1 ! Electric field vector
 
   ! ** Indices of transport data **
   integer, parameter :: n_var_td    = 4 ! Number of transport coefficients
@@ -151,6 +154,12 @@ module m_streamer
   ! Time between writing output
   real(dp), protected :: ST_dt_output = 1.0e-10_dp
 
+  ! Include ionization source term in output
+  logical, protected :: ST_output_src_term = .false.
+
+  ! If positive: decay rate for source term (1/s) for time-averaged values
+  real(dp), protected :: ST_output_src_decay_rate = -1.0_dp
+
   ! Write output along a line
   logical, protected :: ST_lineout_write = .false.
 
@@ -210,6 +219,11 @@ contains
     n_var_cell         = n_var_cell + 1
   end function ST_add_cc_variable
 
+  integer function ST_add_fc_variable()
+    ST_add_fc_variable = n_var_face + 1
+    n_var_face         = n_var_face + 1
+  end function ST_add_fc_variable
+
   !> Create the configuration file with default values
   subroutine ST_initialize(cfg, ndim)
     use iso_fortran_env, only: int64
@@ -219,7 +233,7 @@ contains
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
-    real(dp)                   :: vec(ndim)
+    real(dp)                   :: vec(ndim), tmp
     real(dp), allocatable      :: dbuffer(:)
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
@@ -232,6 +246,19 @@ contains
     i_phi = ST_add_cc_variable("phi", .true.)
     i_electric_fld = ST_add_cc_variable("electric_fld", .true.)
     i_rhs = ST_add_cc_variable("rhs", .true.)
+
+    flux_elec = ST_add_fc_variable()
+    electric_fld = ST_add_fc_variable()
+
+    call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
+         "The mobility of positive ions (m2/Vs)")
+    call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
+         "The diffusion coefficient for positive ions (m2/s)")
+
+    ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
+    if (ST_update_ions) then
+       flux_ion = ST_add_fc_variable()
+    end if
 
     n_threads = af_get_max_threads()
     allocate(ST_dt_matrix(ST_dt_num_cond, n_threads))
@@ -264,6 +291,18 @@ contains
          "The minimum timestep (s)")
     call CFG_add_get(cfg, "dt_safety_factor", ST_dt_safety_factor, &
          "Safety factor for the time step")
+
+    call CFG_add_get(cfg, "output_src_term", ST_output_src_term, &
+         "Include ionization source term in output")
+
+    tmp = 1/ST_output_src_decay_rate
+    call CFG_add_get(cfg, "output_src_decay_time", tmp, &
+         "If positive: decay time for source term (s) for time-averaged values")
+    ST_output_src_decay_rate = 1/tmp
+
+    if (ST_output_src_term) then
+       i_src = ST_add_cc_variable("src", .true.)
+    end if
 
     call CFG_add_get(cfg, "lineout_write", ST_lineout_write, &
          "Write output along a line")
@@ -374,13 +413,6 @@ contains
          "Input file with transport data")
     call CFG_add_get(cfg, "gas_name", gas_name, &
          "The name of the gas mixture used")
-
-    call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
-         "The mobility of positive ions (m2/Vs)")
-    call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
-         "The diffusion coefficient for positive ions (m2/s)")
-
-    ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
 
     call CFG_add_get(cfg, "lookup_table_size", table_size, &
          "The transport data table size in the fluid model")
