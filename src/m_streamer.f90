@@ -33,8 +33,10 @@ module m_streamer
   ! Optional variable (to show ionization source term)
   integer :: i_src = -1 ! Source term
 
+  integer, parameter :: name_len = 12
+
   ! Names of the cell-centered variables
-  character(len=12), allocatable :: ST_cc_names(:)
+  character(len=name_len), allocatable :: ST_cc_names(:)
 
   ! Indices of variables to be included in output
   integer, allocatable :: vars_for_output(:)
@@ -170,10 +172,25 @@ module m_streamer
   integer, protected :: ST_lineout_npoints = 500
 
   ! Relative position of line minimum coordinate
-  real(dp) :: ST_lineout_rmin(3) = 0.0_dp
+  real(dp), protected :: ST_lineout_rmin(3) = 0.0_dp
 
   ! Relative position of line maximum coordinate
-  real(dp) :: ST_lineout_rmax(3) = 1.0_dp
+  real(dp), protected :: ST_lineout_rmax(3) = 1.0_dp
+
+  ! Write uniform output in a plane
+  logical, protected :: ST_plane_write = .false.
+
+  ! Which variable to include in plane
+  integer, protected :: ST_plane_ivar
+
+  ! Use this many points for plane data
+  integer, protected :: ST_plane_npixels(2) = [64, 64]
+
+  ! Relative position of plane minimum coordinate
+  real(dp), protected :: ST_plane_rmin(3) = 0.0_dp
+
+  ! Relative position of plane maximum coordinate
+  real(dp), protected :: ST_plane_rmax(3) = 1.0_dp
 
   ! Current time
   real(dp)  :: ST_time
@@ -203,7 +220,7 @@ contains
     logical, intent(in)          :: include_in_output
     integer                      :: i, n
 
-    ST_cc_names = [character(len=12) :: &
+    ST_cc_names = [character(len=name_len) :: &
          (ST_cc_names(i), i=1,n_var_cell), name]
 
     if (include_in_output) then
@@ -218,6 +235,20 @@ contains
     ST_add_cc_variable = n_var_cell + 1
     n_var_cell         = n_var_cell + 1
   end function ST_add_cc_variable
+
+  integer function ST_cc_var_index(name)
+    character(len=*), intent(in) :: name
+    integer :: n
+
+    ST_cc_var_index = -1
+    do n = 1, size(ST_cc_names)
+       if (ST_cc_names(n) == name) then
+          ST_cc_var_index = n
+          exit
+       end if
+    end do
+
+  end function ST_cc_var_index
 
   integer function ST_add_fc_variable()
     ST_add_fc_variable = n_var_face + 1
@@ -235,6 +266,7 @@ contains
     integer                    :: n, n_threads
     real(dp)                   :: vec(ndim), tmp
     real(dp), allocatable      :: dbuffer(:)
+    character(len=name_len)    :: varname
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
@@ -304,16 +336,29 @@ contains
        i_src = ST_add_cc_variable("src", .true.)
     end if
 
-    call CFG_add_get(cfg, "lineout_write", ST_lineout_write, &
+    call CFG_add_get(cfg, "lineout%write", ST_lineout_write, &
          "Write output along a line")
     call CFG_add_get(cfg, "datfile_write", ST_datfile_write, &
          "Write binary output files (to resume later)")
-    call CFG_add_get(cfg, "lineout_npoints", ST_lineout_npoints, &
+    call CFG_add_get(cfg, "lineout%npoints", ST_lineout_npoints, &
          "Use this many points for lineout data")
-    call CFG_add_get(cfg, "lineout_rmin", ST_lineout_rmin(1:ndim), &
+    call CFG_add_get(cfg, "lineout%rmin", ST_lineout_rmin(1:ndim), &
          "Relative position of line minimum coordinate")
-    call CFG_add_get(cfg, "lineout_rmax", ST_lineout_rmax(1:ndim), &
+    call CFG_add_get(cfg, "lineout%rmax", ST_lineout_rmax(1:ndim), &
          "Relative position of line maximum coordinate")
+
+    call CFG_add_get(cfg, "plane%write", ST_plane_write, &
+         "Write uniform output in a plane")
+    varname = "electron"
+    call CFG_add_get(cfg, "plane%varname", varname, &
+         "Names of variable to write in a plane")
+    ST_plane_ivar = ST_cc_var_index(varname)
+    call CFG_add_get(cfg, "plane%npixels", ST_plane_npixels, &
+         "Use this many pixels for plane data")
+    call CFG_add_get(cfg, "plane%rmin", ST_plane_rmin(1:ndim), &
+         "Relative position of plane minimum coordinate")
+    call CFG_add_get(cfg, "plane%rmax", ST_plane_rmax(1:ndim), &
+         "Relative position of plane maximum coordinate")
 
     call CFG_add_get(cfg, "refine_buffer_width", ST_refine_buffer_width, &
          "The refinement buffer width in cells (around flagged cells)")

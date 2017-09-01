@@ -159,6 +159,15 @@ program streamer_$Dd
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_log.txt"
         call write_log_file(tree, fname, output_cnt, ST_output_dir)
 
+        if (ST_plane_write) then
+           write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
+                "_plane_", output_cnt
+           call a$D_write_plane(tree, fname, [ST_plane_ivar], &
+                ST_plane_rmin * ST_domain_len, &
+                ST_plane_rmax * ST_domain_len, &
+                ST_plane_npixels, ST_output_dir)
+        end if
+
         if (ST_lineout_write) then
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
                 "_line_", output_cnt
@@ -176,8 +185,10 @@ program streamer_$Dd
         call a$D_restrict_tree(tree, i_pos_ion)
 
         if (ST_output_src_term .and. ST_output_src_decay_rate > 0) then
-           ! Have to set src term on coarse grids as well
+           ! Have to set src term on coarse grids as well, and fill ghost cells
+           ! before prolongation
            call a$D_restrict_tree(tree, i_src)
+           call a$D_gc_tree(tree, i_src, a$D_gc_interp, a$D_bc_neumann_zero)
         end if
 
         ! Fill ghost cells before refinement
@@ -489,7 +500,6 @@ contains
 
        ! Source term
        src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
-
        if (photoi_enabled) src = src + box%cc(IJK, i_photo)
 
        if (i_step == 1 .and. ST_output_src_term) then
@@ -498,11 +508,12 @@ contains
              box%cc(IJK, i_src) = src
           else
              ! Approximate exp(-t*rate) as 1-t*rate
-             box%cc(IJK, i_src) = (1 - dt * ST_output_src_decay_rate) * box%cc(IJK, i_src) + &
-                  src
+             box%cc(IJK, i_src) = (1 - dt * ST_output_src_decay_rate) * &
+                  box%cc(IJK, i_src) + src * dt
           end if
        end if
 
+       ! Convert to density
        src = src * dt
 
        ! Add flux and source term
