@@ -694,9 +694,10 @@ contains
   end subroutine write_log_file
 
   subroutine print_status()
-    write(*, "(F7.3,A,I0,A,E10.3,A,E10.3,A,E10.3)") &
+    write(*, "(F7.2,A,I0,A,E10.3,A,E10.3,A,E10.3,A,E10.3)") &
              100 * ST_time / ST_end_time, "% it: ", it, &
-             " t:", ST_time, " dt:", ST_dt, " wc:", wc_time
+             " t:", ST_time, " dt:", ST_dt, " wc:", wc_time, &
+             " ncell:", real(a$D_num_cells_used(tree), dp)
   end subroutine print_status
 
 
