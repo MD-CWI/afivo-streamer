@@ -10,14 +10,16 @@ program streamer_$Dd
 
   implicit none
 
+  integer, parameter     :: int8 = selected_int_kind(18)
+  integer(int8)          :: t_start, t_current, count_rate
+  real(dp)               :: wc_time, inv_count_rate, time_last_print
   integer                :: i, it
   character(len=ST_slen) :: fname
   logical                :: write_out
   real(dp)               :: dt_prev
-
-  type(CFG_t)            :: cfg ! The configuration for the simulation
-  type(a$D_t)            :: tree      ! This contains the full grid information
-  type(mg$D_t)           :: mg        ! Multigrid option struct
+  type(CFG_t)            :: cfg  ! The configuration for the simulation
+  type(a$D_t)            :: tree ! This contains the full grid information
+  type(mg$D_t)           :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
   integer :: output_cnt = 0 ! Number of output files written
@@ -70,8 +72,23 @@ program streamer_$Dd
   ST_dt   = ST_dt_min
   dt_prev = ST_dt
 
+  ! Initial wall clock time
+  call system_clock(t_start, count_rate)
+  inv_count_rate = 1.0_dp / count_rate
+  time_last_print = -1e10_dp
+
   do it = 1, huge(1)-1
-     if (ST_time > ST_end_time) exit
+     if (ST_time >= ST_end_time) exit
+
+     ! Update wall clock time
+     call system_clock(t_current)
+     wc_time = (t_current - t_start) * inv_count_rate
+
+     ! Every ST_print_status_interval, print some info about progress
+     if (wc_time - time_last_print > ST_print_status_sec) then
+        call print_status()
+        time_last_print = wc_time
+     end if
 
      ! Every ST_dt_output, write output
      if (output_cnt * ST_dt_output <= ST_time + ST_dt) then
@@ -209,6 +226,7 @@ program streamer_$Dd
      end if
   end do
 
+  call print_status()
   call a$D_destroy(tree)
 
 contains
@@ -603,11 +621,11 @@ contains
                mg%sides_rb, mg%sides_bc)
           if (photoi_enabled) then
              call a$D_gc_box(tree%boxes, id, i_photo, &
-               a$D_gc_interp, photoi_helmh_bc)
+                  a$D_gc_interp, photoi_helmh_bc)
           end if
           if (ST_output_src_term) then
              call a$D_gc_box(tree%boxes, id, i_src, &
-               a$D_gc_interp, a$D_bc_neumann_zero)
+                  a$D_gc_interp, a$D_bc_neumann_zero)
           end if
        end do
        !$omp end do
@@ -643,12 +661,12 @@ contains
        open(my_unit, file=trim(fname), action="write")
 #if $D == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y n_cells"
-       fmt = "(I6,14E16.8,I6)"
+            "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells"
+       fmt = "(I6,15E16.8,I12)"
 #elif $D == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z n_cells"
-       fmt = "(I6,13E16.8,I6)"
+            "max(E) x y z max(n_e) x y z wc_time n_cells"
+       fmt = "(I6,14E16.8,I12)"
 #endif
        close(my_unit)
 
@@ -665,14 +683,21 @@ contains
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
          a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er), &
-         a$D_num_cells_used(tree)
+         wc_time, a$D_num_cells_used(tree)
 #elif $D == 3
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec), a$D_num_cells_used(tree)
+         a$D_r_loc(tree, loc_elec), wc_time, a$D_num_cells_used(tree)
 #endif
     close(my_unit)
 
   end subroutine write_log_file
+
+  subroutine print_status()
+    write(*, "(F7.3,A,I0,A,E10.3,A,E10.3,A,E10.3)") &
+             100 * ST_time / ST_end_time, "% it: ", it, &
+             " t:", ST_time, " dt:", ST_dt, " wc:", wc_time
+  end subroutine print_status
+
 
 end program streamer_$Dd
