@@ -2,6 +2,7 @@
 module m_field_$Dd
   use m_streamer
   use m_a$D_all
+  use m_flux_schemes_$Dd
 
   implicit none
   private
@@ -143,7 +144,7 @@ contains
     call a$D_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call a$D_gc_tree(tree, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
+    call a$D_gc_tree(tree, i_eps, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
   end subroutine field_compute
 
   !> Compute the electric field at a given time
@@ -330,42 +331,40 @@ contains
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
     type(box$D_t), intent(inout) :: box
-    integer                     :: nc
-    real(dp)                    :: inv_dr
+    integer                      :: nc, IJK
+    real(dp)                     :: inv_dr, Ex, Ey
+#if $D == 3
+    real(dp)                     :: Ez
+#endif
 
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
+    do KJI_DO(1,nc+1)
 #if $D == 2
-    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
-
-    box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 2, electric_fld))**2)
+       box%fc(IJK, 1, electric_fld) = -gradient_2d(box, 2, [IJK], 1, i_phi)
+       box%fc(IJK, 2, electric_fld) = -gradient_2d(box, 2, [IJK], 3, i_phi)
 #elif $D == 3
-    box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
-         box%cc(1:nc+1, 1:nc, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
-         box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
-         box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
-
-    box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
-         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))**2)
+       box%fc(IJK, 1, electric_fld) = -gradient_3d(box, 2, [IJK], 1, i_phi)
+       box%fc(IJK, 2, electric_fld) = -gradient_3d(box, 2, [IJK], 3, i_phi)
+       box%fc(IJK, 3, electric_fld) = -gradient_3d(box, 2, [IJK], 5, i_phi)
 #endif
+    end do; CLOSE_DO
+
+
+
+    do KJI_DO(1,nc)
+#if $D == 2
+       Ex = 0.5_dp*(box%fc(IJK, 1, electric_fld) + box%fc(i+1, j, 1, electric_fld))
+       Ey = 0.5_dp*(box%fc(IJK, 2, electric_fld) + box%fc(i, j+1, 2, electric_fld))
+       box%cc(IJK, i_electric_fld) = sqrt(Ex**2+Ey**2)
+#elif $D == 3
+       Ex = 0.5_dp*(box%fc(IJK, 1, electric_fld) + box%fc(i+1, j, k, 1, electric_fld))
+       Ey = 0.5_dp*(box%fc(IJK, 2, electric_fld) + box%fc(i, j+1, k, 2, electric_fld))
+       Ez = 0.5_dp*(box%fc(IJK, 3, electric_fld) + box%fc(i, j, k+1, 3, electric_fld))
+       box%cc(IJK, i_electric_fld) = sqrt(Ex**2+Ey**2+Ez**2)
+#endif
+    end do; CLOSE_DO
 
   end subroutine field_from_potential
 

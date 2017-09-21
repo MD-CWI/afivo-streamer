@@ -1,5 +1,4 @@
-SRC_ND := m_afivo_types.f90 m_morton.f90 m_vtk.f90 m_write_silo.f90	\
-	m_flux_schemes.f90
+SRC_ND := m_afivo_types.f90 m_morton.f90 m_vtk.f90 m_write_silo.f90
 SRC_XD	:= m_aX_types.f90 m_aX_core.f90 m_aX_output.f90 m_aX_ghostcell.f90 \
 	m_aX_restrict.f90 m_aX_prolong.f90 m_aX_utils.f90 \
 	m_aX_multigrid.f90 m_aX_interp.f90 m_aX_all.f90

@@ -21,6 +21,7 @@ module m_a$D_multigrid
      integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
      integer :: i_lsf        = -1 !< Optional variable for level set function
      integer :: i_bval       = -1 !< Optional variable for boundary value
+     integer :: sigma_rhs    = -1 !< Optional variable for surface on rhs
 
      integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
      integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
@@ -142,7 +143,7 @@ contains
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg$D_sides_rb
-    if (.not. associated(mg%box_op))   mg%box_op => mg$D_box_lpl
+    if (.not. associated(mg%box_op))   mg%box_op   => mg$D_box_lpl
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg$D_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg$D_box_corr_lpl
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg$D_box_rstr_lpl
@@ -191,7 +192,7 @@ contains
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
-          call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+          call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_eps, mg%i_phi, &
                mg%sides_rb, mg%sides_bc)
        end if
 
@@ -236,7 +237,7 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells after correction
-       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_eps, mg%i_phi, &
             mg%sides_rb, mg%sides_bc)
 
        ! Upwards relaxation
@@ -262,15 +263,20 @@ contains
   !> Basically, we extrapolate from the fine cells to a corner point, and then
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
-  subroutine mg$D_sides_rb(boxes, id, nb, iv)
+  subroutine mg$D_sides_rb(boxes, id, nb, i_eps, iv, med)
     use m_a$D_ghostcell, only: a$D_gc_prolong_copy
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, dix, i, di, j, dj
-#if $D == 3
-    integer                     :: k, dk
+    type(box$D_t), intent(inout)    :: boxes(:) !< List of all boxes
+    integer, intent(in)             :: id        !< Id of box
+    integer, intent(in)             :: nb        !< Ghost cell direction
+    integer, intent(in), optional   :: i_eps     
+    integer, intent(in)             :: iv        !< Ghost cell variable
+    real(dp), intent(in), optional  :: med
+    integer                         :: nc, ix, dix, i, di, j, dj
+#if $D == 2
+    real(dp)                        :: inv_eps(-1:1, -1:1) 
+#elif $D == 3
+    integer                         :: k, dk
+    real(dp)                        :: inv_eps(-1:1, -1:1, -1:1)
 #endif
 
     nc = boxes(id)%n_cell
@@ -283,50 +289,46 @@ contains
        dix = -1
     end if
 
-    call a$D_gc_prolong_copy(boxes, id, nb, iv)
+    call a$D_gc_prolong_copy(boxes, id, nb, iv, i_eps = i_eps)
 
-    select case (a$D_neighb_dim(nb))
+
 #if $D == 2
+    select case (a$D_neighb_dim(nb))
     case (1)
        i = ix
        di = dix
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
-
-          ! Bilinear extrapolation (using 4 points)
-          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
-               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
-               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
-
-          ! Extrapolation using 3 points
-          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-          !      boxes(id)%cc(i, j, iv) - 0.25_dp * &
-          !      (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv))
-
-          ! Extrapolation using 2 points
-          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-          !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
-          !      boxes(id)%cc(i+di, j+dj, iv)
+          inv_eps(-1:1, -1:1) = 1.0_dp
+          if (maxval(boxes(id)%cc(:, :, i_eps)) > minval(boxes(id)%cc(:, :, i_eps))) then
+            inv_eps(-1:1, -1:1) = 1.0_dp/boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)
+          end if
+          ! Bilinear 4 point extrapolation
+          boxes(id)%cc(i-di, j, iv) = (0.5_dp * boxes(id)%cc(i-di, j, iv)*inv_eps(-1,0) + &
+               1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &
+               0.375_dp * (boxes(id)%cc(i+di, j, iv)*inv_eps(1,0) + boxes(id)%cc(i, j+dj, iv)*inv_eps(0,1)) + &
+               0.125_dp * boxes(id)%cc(i+di, j+dj, iv)*inv_eps(1,1))/(0.5_dp*inv_eps(-1,0) + 1.125_dp*inv_eps(0,0) - &
+               0.375_dp * (inv_eps(1,0) + inv_eps(0,1)) + 0.125_dp * inv_eps(1,1) )
        end do
     case (2)
        j = ix
        dj = dix
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
-
-          ! Bilinear extrapolation (using 4 points)
-          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
-               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
-               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
-               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
-
-          ! Extrapolation using 2 points
-          ! boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
-          !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
-          !      boxes(id)%cc(i+di, j+dj, iv)
+          inv_eps(-1:1, -1:1) = 1.0_dp
+          if (maxval(boxes(id)%cc(:, :, i_eps)) > minval(boxes(id)%cc(:, :, i_eps))) then
+            inv_eps(-1:1, -1:1) = 1.0_dp/boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)
+          end if
+          ! Bilinear 4 point extrapolation
+          boxes(id)%cc(i, j-dj, iv) = (0.5_dp * boxes(id)%cc(i, j-dj, iv)*inv_eps(0,-1) + &
+               1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &
+               0.375_dp * (boxes(id)%cc(i+di, j, iv)*inv_eps(1,0) + boxes(id)%cc(i, j+dj, iv)*inv_eps(0,1)) + &
+               0.125_dp * boxes(id)%cc(i+di, j+dj, iv)*inv_eps(1,1))/(0.5_dp*inv_eps(0,-1) + 1.125_dp*inv_eps(0,0) - &
+               0.375_dp * (inv_eps(1,0) + inv_eps(0,1)) + 0.125_dp * inv_eps(1,1) )
        end do
+    end select
 #elif $D == 3
+    select case (a$D_neighb_dim(nb))
     case (1)
        i = ix
        di = dix
@@ -403,8 +405,8 @@ contains
                   0.25_dp * boxes(id)%cc(i+di, j+dj, k+dk, iv)
           end do
        end do
-#endif
     end select
+#endif
 
   end subroutine mg$D_sides_rb
 
@@ -456,7 +458,7 @@ contains
 
        !$omp do
        do i = 1, size(ids)
-          call a$D_gc_box(boxes, ids(i), mg%i_phi, mg%sides_rb, &
+          call a$D_gc_box(boxes, ids(i), mg%i_eps, mg%i_phi, mg%sides_rb, &
                mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle))
        end do
        !$omp end do
@@ -511,7 +513,7 @@ contains
     end do
     !$omp end parallel do
 
-    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
+    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_eps, mg%i_phi, &
          mg%sides_rb, mg%sides_bc)
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
@@ -545,7 +547,7 @@ contains
 
     ! Fill ghost cells here to be sure
     if (lvl == tree%highest_lvl) then
-       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_eps, mg%i_phi, &
             mg%sides_rb, mg%sides_bc)
     end if
 
@@ -560,7 +562,7 @@ contains
     end do
     !$omp end parallel do
 
-    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
+    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_eps, mg%i_phi, &
          mg%sides_rb, mg%sides_bc)
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
@@ -769,7 +771,7 @@ contains
     type(box$D_t), intent(in)    :: box_p !< Parent box
     type(mg$D_t), intent(in)     :: mg !< Multigrid options
 
-    call a$D_prolong_linear(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
+    call a$D_prolong_sparse(box_p, box_c, iv = mg%i_tmp, iv_to = mg%i_phi, add=.true., i_eps = mg%i_eps)
   end subroutine mg$D_box_corr_lpl
 
   !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
@@ -856,13 +858,13 @@ contains
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg$D_box_rstr_lpl(box_c, box_p, iv, mg)
-    use m_a$D_restrict, only: a$D_restrict_box
+    use m_a$D_restrict, only: a$D_restrict_box_cont
     type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
     integer, intent(in)           :: iv            !< Variable to restrict
     type(mg$D_t), intent(in)       :: mg !< Multigrid options
 
-    call a$D_restrict_box(box_c, box_p, iv)
+    call a$D_restrict_box_cont(box_c, box_p, iv, i_eps = mg%i_eps)
   end subroutine mg$D_box_rstr_lpl
 
   !> Perform Gauss-Seidel relaxation on a box. Epsilon can have a jump at cell
@@ -871,17 +873,19 @@ contains
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
     type(mg$D_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, i0, j, nc, i_phi, i_eps, i_rhs
+    integer                     :: i, i0, j, nc, i_phi, i_eps, i_rhs, sigma_rhs
     real(dp)                    :: dx2, u(2*$D), a0, a(2*$D), c(2*$D)
+    real(dp)                     :: xharm_eps(0:1), yharm_eps(0:1), x_surf(0:1), y_surf(0:1)
 #if $D == 3
     integer                     :: k
 #endif
 
-    dx2   = box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_eps = mg%i_eps
-    i_rhs = mg%i_rhs
+    dx2       = box%dr**2
+    nc        = box%n_cell
+    i_phi     = mg%i_phi
+    i_eps     = mg%i_eps
+    i_rhs     = mg%i_rhs
+    sigma_rhs = mg%sigma_rhs
 
     ! The parity of redblack_cntr determines which cells we use. If
     ! redblack_cntr is even, we use the even cells and vice versa.
@@ -889,15 +893,18 @@ contains
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
-          a0 = box%cc(i, j, i_eps) ! value of eps at i,j
-          u(1:2) = box%cc(i-1:i+1:2, j, i_phi) ! values at neighbors
-          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
-          u(3:4) = box%cc(i, j-1:j+1:2, i_phi)
-          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
-          c(:) = 2 * a0 * a(:) / (a0 + a(:))
+         xharm_eps(0:1) = 2*box%cc(i:i+1, j, i_eps)*box%cc(i-1:i, j, i_eps) / &
+                              (box%cc(i:i+1, j, i_eps)+box%cc(i-1:i, j, i_eps))
+         yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
+                              (box%cc(i, j:j+1, i_eps)+box%cc(i, j-1:j, i_eps))
+   
+         x_surf(0:1) = xharm_eps(0:1)*box%fc(i:i+1, j, 1, sigma_rhs)/box%cc(i:i+1, j, i_eps)
+         y_surf(0:1) = yharm_eps(0:1)*box%fc(i, j:j+1, 2, sigma_rhs)/box%cc(i, j:j+1, i_eps)
 
-          box%cc(i, j, i_phi) = &
-               (sum(c(:) * u(:)) - dx2 * box%cc(i, j, i_rhs)) / sum(c(:))
+         box%cc(i, j, i_phi) = (xharm_eps(1)*box%cc(i+1, j, i_phi) + xharm_eps(0)*box%cc(i-1, j, i_phi) + &
+              yharm_eps(1)*box%cc(i, j+1, i_phi) + yharm_eps(0)*box%cc(i, j-1, i_phi) - &
+              dx2 * box%cc(i, j, i_rhs) - box%dr*0.5*(sum(x_surf(:)) + sum(y_surf(:)))) / &
+              (sum(xharm_eps(:))+sum(yharm_eps(:)))
        end do
     end do
 #elif $D == 3
@@ -924,13 +931,14 @@ contains
 
   !> Perform Laplacian operator on a box where epsilon varies on cell faces
   subroutine mg$D_box_lpld(box, i_out, mg)
-    type(box$D_t), intent(inout) :: box   !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg$D_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, j, nc, i_phi, i_eps
-    real(dp)                    :: inv_dr_sq, a0, u0, u(2*$D), a(2*$D)
+    type(box$D_t), intent(inout)  :: box   !< Box to operate on
+    integer, intent(in)           :: i_out !< Index of variable to store Laplacian in
+    type(mg$D_t), intent(in)      :: mg !< Multigrid options
+    integer                       :: i, j, nc, i_phi, i_eps, sigma_rhs
+    real(dp)                      :: inv_dr_sq, a0, u0, u(2*$D), a(2*$D)
+    real(dp)                     :: xharm_eps(0:1), yharm_eps(0:1), x_surf(0:1), y_surf(0:1)
 #if $D == 3
-    integer                     :: k
+    integer                       :: k
 #endif
 
 
@@ -938,19 +946,23 @@ contains
     inv_dr_sq = 1 / box%dr**2
     i_phi     = mg%i_phi
     i_eps     = mg%i_eps
+    sigma_rhs = mg%sigma_rhs
 
 #if $D == 2
     do j = 1, nc
        do i = 1, nc
-          u0 = box%cc(i, j, i_phi)
-          a0 = box%cc(i, j, i_eps)
-          u(1:2) = box%cc(i-1:i+1:2, j, i_phi)
-          u(3:4) = box%cc(i, j-1:j+1:2, i_phi)
-          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
-          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+         a0 = box%cc(i, j, i_phi)
+         xharm_eps(0:1) = 2*box%cc(i:i+1, j, i_eps)*box%cc(i-1:i, j, i_eps) / &
+                              (box%cc(i:i+1, j, i_eps)+box%cc(i-1:i, j, i_eps))
+         yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
+                              (box%cc(i, j:j+1, i_eps)+box%cc(i, j-1:j, i_eps))
+         x_surf(0:1) = xharm_eps(0:1)*box%fc(i:i+1, j, 1, sigma_rhs)/box%cc(i:i+1, j, i_eps)
+         y_surf(0:1) = yharm_eps(0:1)*box%fc(i, j:j+1, 2, sigma_rhs)/box%cc(i, j:j+1, i_eps)
 
-          box%cc(i, j, i_out) = inv_dr_sq * 2 * &
-               sum(a0*a(:)/(a0 + a(:)) * (u(:) - u0))
+         box%cc(i, j, i_out) = inv_dr_sq*(xharm_eps(1)*(box%cc(i+1, j, i_phi)-a0) - &
+              xharm_eps(0)*(a0-box%cc(i-1, j, i_phi)) + &
+              yharm_eps(1)*(box%cc(i, j+1, i_phi)-a0) - yharm_eps(0)*(a0-box%cc(i, j-1, i_phi))) - &
+              0.5*(sum(x_surf(:)) + sum(y_surf(:)))/box%dr
        end do
     end do
 #elif $D == 3
@@ -978,73 +990,13 @@ contains
   !> Correct fine grid values based on the change in the coarse grid, in the
   !> case of a jump in epsilon
   subroutine mg$D_box_corr_lpld(box_p, box_c, mg)
+    use m_a$D_prolong
     type(box$D_t), intent(inout)  :: box_c !< Child box
     type(box$D_t), intent(in)     :: box_p !< Parent box
     type(mg$D_t), intent(in)      :: mg !< Multigrid options
-    integer                      :: ix_offset($D), i_phi, i_corr, i_eps
-    integer                      :: nc, i, j, i_c1, i_c2, j_c1, j_c2
-    real(dp)                     :: u0, u($D), a0, a($D)
-#if $D == 3
-    integer                      :: k, k_c1, k_c2
-    real(dp), parameter          :: third = 1/3.0_dp
-#endif
-
-    nc = box_c%n_cell
-    ix_offset = a$D_get_child_offset(box_c)
-    i_phi = mg%i_phi
-    i_corr = mg%i_tmp
-    i_eps = mg%i_eps
-
-    ! In these loops, we calculate the closest coarse index (_c1), and the
-    ! one-but-closest (_c2). The fine cell lies in between.
-#if $D == 2
-    do j = 1, nc
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-          u0 = box_p%cc(i_c1, j_c1, i_corr)
-          a0 = box_p%cc(i_c1, j_c1, i_eps)
-          u(1) = box_p%cc(i_c2, j_c1, i_corr)
-          u(2) = box_p%cc(i_c1, j_c2, i_corr)
-          a(1) = box_p%cc(i_c2, j_c1, i_eps)
-          a(2) = box_p%cc(i_c1, j_c2, i_eps)
-
-          ! Get value of phi at coarse cell faces, and average
-          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + 0.5_dp * &
-               sum( (a0*u0 + a(:)*u(:)) / (a0 + a(:)) )
-       end do
-    end do
-#elif $D == 3
-    do k = 1, nc
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-             u0 = box_p%cc(i_c1, j_c1, k_c1, i_corr)
-             u(1) = box_p%cc(i_c2, j_c1, k_c1, i_corr)
-             u(2) = box_p%cc(i_c1, j_c2, k_c1, i_corr)
-             u(3) = box_p%cc(i_c1, j_c1, k_c2, i_corr)
-             a0 = box_p%cc(i_c1, j_c1, k_c1, i_eps)
-             a(1) = box_p%cc(i_c2, j_c1, k_c1, i_eps)
-             a(2) = box_p%cc(i_c1, j_c2, k_c1, i_eps)
-             a(3) = box_p%cc(i_c1, j_c1, k_c2, i_eps)
-
-             ! Get value of phi at coarse cell faces, and average
-             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + third * &
-                  sum((a0*u0 + a(:) * (1.5_dp * u(:) - 0.5_dp * u0)) / &
-                  (a0 + a(:)))
-          end do
-       end do
-    end do
-#endif
+      
+    call a$D_prolong_sparse(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true., i_eps = mg%i_eps)
+  
   end subroutine mg$D_box_corr_lpld
 
   ! Below: multigrid operators for internal boundary conditions. A level set

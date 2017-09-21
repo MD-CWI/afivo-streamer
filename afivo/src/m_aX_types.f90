@@ -240,37 +240,43 @@ module m_a$D_types
      end subroutine a$D_subr_boxes_arg
 
      !> To fill ghost cells near refinement boundaries.
-     subroutine a$D_subr_rb(boxes, id, nb, iv)
+     subroutine a$D_subr_rb(boxes, id, nb, i_eps, iv, med)
        import
-       type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
-       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
-       integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled
-       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
+       type(box$D_t), intent(inout)    :: boxes(:) !< Array with all boxes
+       integer, intent(in)             :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)             :: nb       !< Neighbor direction in which ghost cells need to be filled
+       integer, intent(in), optional   :: i_eps
+       integer, intent(in)             :: iv       !< Variable for which ghost cells are filled
+       real(dp), intent(in), optional  :: med
      end subroutine a$D_subr_rb
 
      !> To fill ghost cells near physical boundaries
      subroutine a$D_subr_bc(box, nb, iv, bc_type)
        import
        type(box$D_t), intent(inout)  :: box     !< Box that needs b.c.
-       integer, intent(in)          :: nb      !< Direction
-       integer, intent(in)          :: iv      !< Index of variable
-       integer, intent(out)         :: bc_type !< Type of b.c.
+       integer, intent(in)           :: nb      !< Direction
+       integer, intent(in)           :: iv      !< Index of variable
+       integer, intent(out)          :: bc_type !< Type of b.c.
      end subroutine a$D_subr_bc
 
      !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries
-     subroutine a$D_subr_egc(boxes, id, nb, iv, gc_data, nc)
+     subroutine a$D_subr_egc(boxes, id, nb, i_eps, iv, gc_data, nc, med)
        import
-       type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
-       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
-       integer, intent(in)         :: nb       !< Neighbor direction
-       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
-       integer, intent(in)         :: nc       !< box%n_cell (this is purely for convenience)
+       type(box$D_t), intent(inout)   :: boxes(:) !< Array with all boxes
+       integer, intent(in)            :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)            :: nb       !< Neighbor direction
+       integer, intent(in), optional  :: i_eps
+       real(dp), intent(in), optional :: med
+       integer, intent(in)            :: iv       !< Variable for which ghost cells are filled
+       integer, intent(in)            :: nc       !< box%n_cell (this is purely for convenience)
 #if $D == 2
-       real(dp), intent(out)       :: gc_data(nc) !< The requested ghost cells
+       real(dp), intent(out)          :: gc_data(nc) !< The requested ghost cells
 #elif $D == 3
-       real(dp), intent(out)       :: gc_data(nc, nc) !< The requested ghost cells
+       real(dp), intent(out)          :: gc_data(nc, nc) !< The requested ghost cells
 #endif
      end subroutine a$D_subr_egc
+     
+     
   end interface
 
 contains
@@ -569,10 +575,10 @@ contains
   end function a$D_lvl_dr
 
   subroutine a$D_set_box_gc(box, nb, iv, gc_scalar, gc_array)
-    type(box$D_t), intent(inout) :: box      !< Box to operate on
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    real(dp), optional, intent(in) :: gc_scalar !< Scalar value for ghost cells
+    type(box$D_t), intent(inout)   :: box      !< Box to operate on
+    integer, intent(in)            :: nb        !< Ghost cell direction
+    integer, intent(in)            :: iv        !< Ghost cell variable(s)
+    real(dp), optional, intent(in) :: gc_scalar !< "Scalar" value for ghost cells
 #if $D == 2
     real(dp), optional, intent(in) :: gc_array(box%n_cell) !< Array for ghost cells
 #elif $D == 3
@@ -639,6 +645,70 @@ contains
        stop "a$D_set_box_gc: requires gc_scalar or gc_array"
     end if
   end subroutine a$D_set_box_gc
+  
+  subroutine a$D_set_box_gc_fc(box, nb, s_iv, gc_scalar, gc_array)
+    type(box$D_t), intent(inout) :: box      !< Box to operate on
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: s_iv        !< Ghost cell variable
+    real(dp), optional, intent(in) :: gc_scalar(1:$D) !< "Scalar" value for ghost cells
+#if $D == 2
+    real(dp), optional, intent(in) :: gc_array(box%n_cell, 1:2) !< Array for ghost cells
+#elif $D == 3
+    !> Array for ghost cells
+    real(dp), optional, intent(in) :: gc_array(box%n_cell, box%n_cell, 1:3)
+#endif
+    integer                     :: nc, i
+
+    nc = box%n_cell
+
+    if (present(gc_array)) then
+       select case (nb)
+#if $D == 2
+       case (a2_neighb_lowx)
+       case (a2_neighb_highx)
+          box%fc(nc+1, 1:nc, :, s_iv) = gc_array
+       case (a2_neighb_lowy)
+       case (a2_neighb_highy)
+          box%fc(1:nc, nc+1, :, s_iv) = gc_array
+#elif $D == 3
+       case (a3_neighb_lowx)
+       case (a3_neighb_highx)
+          box%fc(nc+1, 1:nc, 1:nc, :, s_iv) = gc_array
+       case (a3_neighb_lowy)
+       case (a3_neighb_highy)
+          box%fc(1:nc, nc+1, 1:nc, :, s_iv) = gc_array
+       case (a3_neighb_lowz)
+       case (a3_neighb_highz)
+          box%fc(1:nc, 1:nc, nc+1, :, s_iv) = gc_array
+#endif
+       end select
+    else if (present(gc_scalar)) then
+      do i = 1, $D
+        select case (nb)
+#if $D == 2
+        case (a2_neighb_lowx)
+        case (a2_neighb_highx)
+           box%fc(nc+1, 1:nc, i, s_iv) = gc_scalar(i)
+        case (a2_neighb_lowy)
+        case (a2_neighb_highy)
+           box%fc(1:nc, nc+1, i, s_iv) = gc_scalar(i)
+#elif $D == 3
+        case (a3_neighb_lowx)
+        case (a3_neighb_highx)
+           box%fc(nc+1, 1:nc, 1:nc, i, s_iv) = gc_scalar(i)
+        case (a3_neighb_lowy)
+        case (a3_neighb_highy)
+           box%fc(1:nc, nc+1, 1:nc, i, s_iv) = gc_scalar(i)
+        case (a3_neighb_lowz)
+        case (a3_neighb_highz)
+           box%fc(1:nc, 1:nc, nc+1, i, s_iv) = gc_scalar(i)
+#endif
+        end select
+     end do
+    else
+       stop "a$D_set_box_gc_fc: requires gc_scalar or gc_array"
+    end if
+  end subroutine a$D_set_box_gc_fc
 
 #if $D == 2
   !> Get the radius of the cell center with first index i

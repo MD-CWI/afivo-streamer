@@ -26,6 +26,7 @@ module m_streamer
   integer, protected :: i_phi          = -1 ! Electrical potential
   integer, protected :: i_electric_fld = -1 ! Electric field norm
   integer, protected :: i_rhs          = -1 ! Source term Poisson
+  integer, protected :: i_eps          = -1 ! Dielectric epsilon
 
   ! Optional variable (when using photoionization)
   integer :: i_photo = -1 ! Photoionization rate
@@ -46,6 +47,10 @@ module m_streamer
   integer, protected :: flux_elec    = -1 ! Electron flux
   integer, protected :: flux_ion     = -1 ! Positive ion flux
   integer, protected :: electric_fld = -1 ! Electric field vector
+  integer, protected :: sigma_rhs    = -1 ! Surface source term
+  
+  ! Names of the face-centered variables
+  character(len=name_len), allocatable :: ST_fc_names(:)
 
   ! ** Indices of transport data **
   integer, parameter :: n_var_td    = 4 ! Number of transport coefficients
@@ -209,6 +214,15 @@ module m_streamer
 
   ! Fraction of O2
   real(dp), protected :: ST_gas_frac_O2 = 0.2_dp
+  
+  ! Dielectric conductivity
+  real(dp), protected :: ST_DI_cond = 10e-8 
+  
+  ! Temperature of gas and dielectric
+  real(dp), protected :: ST_tmp = 230.0_dp 
+  
+  ! Epsilon of dielectric
+  real(dp), protected :: ST_epsilon_die = 10.0_dp
 
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2
@@ -235,6 +249,27 @@ contains
     ST_add_cc_variable = n_var_cell + 1
     n_var_cell         = n_var_cell + 1
   end function ST_add_cc_variable
+  
+  integer function ST_add_fc_variable(name, include_in_output)
+    character(len=*), intent(in) :: name
+    logical, intent(in)          :: include_in_output
+    integer                      :: i, n
+
+    ST_fc_names = [character(len=name_len) :: &
+         (ST_fc_names(i), i=1,n_var_face), name]
+
+    if (include_in_output) then
+       if (allocated(vars_for_output)) then
+          n = size(vars_for_output)
+       else
+          n = 0
+       end if
+       vars_for_output = [(vars_for_output(i), i=1,n), n_var_face+1]
+    end if
+
+    ST_add_fc_variable = n_var_face + 1
+    n_var_face         = n_var_face + 1
+  end function ST_add_fc_variable
 
   integer function ST_cc_var_index(name)
     character(len=*), intent(in) :: name
@@ -249,11 +284,22 @@ contains
     end do
 
   end function ST_cc_var_index
+  
+  integer function ST_fc_var_index(name)
+    character(len=*), intent(in) :: name
+    integer :: n
 
-  integer function ST_add_fc_variable()
-    ST_add_fc_variable = n_var_face + 1
-    n_var_face         = n_var_face + 1
-  end function ST_add_fc_variable
+    ST_fc_var_index = -1
+    do n = 1, size(ST_fc_names)
+       if (ST_fc_names(n) == name) then
+          ST_fc_var_index = n
+          exit
+       end if
+    end do
+
+  end function ST_fc_var_index
+
+
 
   !> Create the configuration file with default values
   subroutine ST_initialize(cfg, ndim)
@@ -271,25 +317,31 @@ contains
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
 
-    i_electron = ST_add_cc_variable("electron", .true.)
-    i_pos_ion = ST_add_cc_variable("pos_ion", .true.)
+    i_electron     = ST_add_cc_variable("electron", .true.)
+    i_pos_ion      = ST_add_cc_variable("pos_ion", .true.)
     i_electron_old = ST_add_cc_variable("electron_old", .false.)
-    i_pos_ion_old = ST_add_cc_variable("pos_ion_old", .false.)
-    i_phi = ST_add_cc_variable("phi", .true.)
+    i_pos_ion_old  = ST_add_cc_variable("pos_ion_old", .false.)
+    i_phi          = ST_add_cc_variable("phi", .true.)
     i_electric_fld = ST_add_cc_variable("electric_fld", .true.)
-    i_rhs = ST_add_cc_variable("rhs", .true.)
+    i_rhs          = ST_add_cc_variable("rhs", .true.)
+    i_eps          = ST_add_cc_variable("eps", .true.)
+    
+    flux_elec      = ST_add_fc_variable("flux_elec", .false.)  
+    electric_fld   = ST_add_fc_variable("electric_fld", .false.)
+    sigma_rhs      = ST_add_fc_variable("sigma_rhs", .true.)
 
-    flux_elec = ST_add_fc_variable()
-    electric_fld = ST_add_fc_variable()
 
     call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
          "The mobility of positive ions (m2/Vs)")
     call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
          "The diffusion coefficient for positive ions (m2/s)")
+         
+    call CFG_add_get(cfg, "DI_cond", ST_DI_cond, &
+         "Conductivity of dielectric (S/m)")
 
     ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
     if (ST_update_ions) then
-       flux_ion = ST_add_fc_variable()
+       flux_ion = ST_add_fc_variable("flux_ion", .false.)
     end if
 
     n_threads = af_get_max_threads()
@@ -311,6 +363,11 @@ contains
          "The gas pressure (bar), used for photoionization")
     call CFG_add_get(cfg, "gas_frac_O2", ST_gas_frac_O2, &
          "Fraction of O2, used for photoionization")
+    call CFG_add_get(cfg, "temp", ST_tmp, &
+              "Temperature of gas and dielectric")
+         
+    call CFG_add_get(cfg, "epsilon_die", ST_epsilon_die, &
+         "Permittivity of the dielectric")
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")

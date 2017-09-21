@@ -40,7 +40,10 @@ module m_a$D_utils
   public :: a$D_r_loc
   public :: a$D_r_inside
   public :: a$D_n_cell
-
+  public :: a$D_harm_w
+  public :: a$D_heaviside
+  public :: a$D_border
+  
 contains
 
   !> Call procedure for each box in tree
@@ -188,6 +191,48 @@ contains
        inside = all(r >= box%r_min) .and. all(r <= r_max)
     end if
   end function a$D_r_inside
+  
+  elemental function a$D_heaviside(value, med) result(val)
+     real(dp), intent(in)           :: value
+     real(dp), intent(in)           :: med
+     real(dp)                       :: val
+
+     if(value > med) then
+       val = 0.0_dp
+     else
+       val = 1.0_dp
+     end if
+
+
+   end function a$D_heaviside
+   
+   elemental function a$D_border(val1, val2, med) result(bol)
+      real(dp), intent(in)           :: val1, val2
+      real(dp), intent(in)           :: med
+      logical                        :: bol
+
+      if ((val1 - med) * (val2 - med) < 0) then
+        bol = .true.
+      else if (val1 == med .and. val2 > med) then
+        bol = .true.
+      else if (val1 > med .and. val2 == med) then
+        bol = .true.
+      else        
+        bol = .false.
+      end if
+
+
+    end function a$D_border
+   
+   !> Returns the harmonic average weighted by f2
+   pure function a$D_harm_w(val1, val2, f2) result(val)
+     real(dp), intent(in)  :: val1, val2
+     real(dp), intent(in)  :: f2 
+     real(dp)              :: val  
+    
+     val = val1*val2/(val1*f2 + val2*(1-f2))
+
+   end function  a$D_harm_w
 
   !> Get the id of the finest box containing rr. If highest_lvl is present, do
   !> not go to a finer level than highest_lvl. If there is no box containing rr,

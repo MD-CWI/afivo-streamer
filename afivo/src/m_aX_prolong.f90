@@ -8,6 +8,7 @@ module m_a$D_prolong
 
   public :: a$D_prolong_copy_from
   public :: a$D_prolong_copy
+  public :: a$D_prolong_copy_fc
   public :: a$D_prolong_linear_from
   public :: a$D_prolong_sparse
   public :: a$D_prolong_linear
@@ -33,7 +34,7 @@ contains
   end subroutine a$D_prolong_copy_from
 
   !> Partial prolongation to a child (from parent) using injection (simply copy value)
-  subroutine a$D_prolong_copy(box_p, box_c, iv, iv_to, low, high, add)
+  subroutine a$D_prolong_copy(box_p, box_c, iv, iv_to, low, high, add, i_eps)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box
     integer, intent(in)           :: iv       !< Variable to fill
@@ -41,6 +42,7 @@ contains
     integer, intent(in), optional :: low($D) !< Min cell index at child
     integer, intent(in), optional :: high($D) !< Max cell index at child
     logical, intent(in), optional :: add      !< Add to old values
+    integer, intent(in), optional :: i_eps !< Max cell index at child
     logical                       :: add_to
     integer                       :: nc, ix_offset($D), ivc
     integer                       :: i, j, i_c1, j_c1, lo($D), hi($D)
@@ -67,6 +69,8 @@ contains
                   box_p%cc(i_c1, j_c1, iv)
           end do
        end do
+       
+       
 #elif $D == 3
        do k = lo(3), hi(3)
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
@@ -89,6 +93,9 @@ contains
              box_c%cc(i, j, ivc) = box_p%cc(i_c1, j_c1, iv)
           end do
        end do
+       
+    
+       
 #elif $D == 3
        do k = lo(3), hi(3)
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
@@ -103,12 +110,107 @@ contains
 #endif
     end if
   end subroutine a$D_prolong_copy
+  
+  
+  
+  
+  subroutine a$D_prolong_copy_fc(box_p, box_c, s_iv, i_eps, med, s_iv_to, low, high, add)
+    use m_a$D_utils, only: a$D_border
+    type(box$D_t), intent(in)      :: box_p !< Parent box
+    type(box$D_t), intent(inout)   :: box_c !< Child box
+    integer, intent(in)            :: s_iv       !< Variable to fill
+    real(dp), intent(in), optional :: med      !< eps that defines boundary
+    integer, intent(in), optional  :: i_eps
+    integer, intent(in), optional  :: s_iv_to    !< Destination variable
+    integer, intent(in), optional  :: low($D) !< Min cell index at child
+    integer, intent(in), optional  :: high($D) !< Max cell index at child
+    logical, intent(in), optional  :: add      !< Add to old values
+    logical                        :: add_to
+    integer                        :: nc, ix_offset($D), s_ivc
+    integer                        :: i, j, i_c1, j_c1, lo($D), hi($D)
+#if $D == 3
+    integer                        :: k, k_c1
+#endif
+
+    nc   = box_c%n_cell
+    add_to = .false.; if (present(add)) add_to = add
+    s_ivc = s_iv; if (present(s_iv_to)) s_ivc = s_iv_to
+    lo   = 1; if (present(low)) lo = low
+    hi   = nc; if (present(high)) hi = high
+
+    ! Offset of child w.r.t. parent
+    ix_offset = a$D_get_child_offset(box_c)
+
+    if (add_to) then
+#if $D == 2
+       do j = lo(2), hi(2)
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          do i = lo(1), hi(1)
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             
+             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i-1, j, i_eps), med)) then
+               box_c%fc(i, j, 1, s_ivc) = box_c%fc(i, j, 1, s_ivc) + box_p%fc(i_c1, j_c1, 1, s_iv)
+             end if
+             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), med)) then
+               box_c%fc(i, j, 2, s_ivc) = box_c%fc(i, j, 1, s_ivc) + box_p%fc(i_c1, j_c1, 2, s_iv)
+             end if
+          end do
+       end do
+#elif $D == 3
+       do k = lo(3), hi(3)
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          do j = lo(2), hi(2)
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             do i = lo(1), hi(1)
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+
+             end do
+          end do
+       end do
+#endif
+    else
+#if $D == 2
+       do j = lo(2), hi(2)
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          do i = lo(1), hi(1)
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             
+             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i-1, j, i_eps), med)) then
+               box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
+             end if
+             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), med)) then
+               box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
+             end if
+             
+          end do
+       end do
+#elif $D == 3
+       do k = lo(3), hi(3)
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          do j = lo(2), hi(2)
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             do i = lo(1), hi(1)
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+
+             end do
+          end do
+       end do
+#endif
+    end if
+  end subroutine a$D_prolong_copy_fc
+  
+  
+  
+  
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
-  subroutine a$D_prolong_linear_from(boxes, id, iv, iv_to, add)
+  subroutine a$D_prolong_linear_from(boxes, id, iv, iv_to, add, i_eps, med)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Box whose children we will fill
+    integer, intent(in), optional :: i_eps
+    real(dp), intent(in), optional :: med
     integer, intent(in)           :: iv       !< Variable that is filled
     integer, intent(in), optional :: iv_to    !< Destination variable
     logical, intent(in), optional :: add      !< Add to old values
@@ -117,33 +219,36 @@ contains
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == af_no_box) cycle
-       call a$D_prolong_linear(boxes(id), boxes(c_id), iv, iv_to, add)
+       call a$D_prolong_linear(boxes(id), boxes(c_id), iv, iv_to, add, i_eps = i_eps, med = med)
     end do
   end subroutine a$D_prolong_linear_from
 
   !> Prolongation to a child (from parent) using linear interpolation. We use
   !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
   !> corner ghost cells.
-  subroutine a$D_prolong_sparse(box_p, box_c, iv, iv_to, add)
+  subroutine a$D_prolong_sparse(box_p, box_c, iv, iv_to, add, i_eps)
     type(box$D_t), intent(in)      :: box_p !< Parent box
     type(box$D_t), intent(inout)   :: box_c !< Child box
     integer, intent(in)           :: iv       !< Variable to fill
     integer, intent(in), optional :: iv_to    !< Destination variable
     logical, intent(in), optional :: add      !< Add to old values
+    integer, intent(in), optional :: i_eps
     integer                       :: hnc, nc, ix_offset($D), ivc
     integer                       :: i, j, i_c, i_f, j_c, j_f
     real(dp)                      :: f0, flx, fhx, fly, fhy
     logical                       :: add_to
-#if $D == 3
+#if $D == 2
+    real(dp)                      :: inv_eps(-1:1, -1:1)
+#elif $D == 3
     real(dp)                      :: flz, fhz
     integer                       :: k, k_c, k_f
 #endif
-
     nc        = box_c%n_cell
     hnc       = ishft(box_c%n_cell, -1)
     ix_offset = a$D_get_child_offset(box_c)
     add_to    = .false.; if (present(add)) add_to = add
     ivc       = iv; if (present(iv_to)) ivc = iv_to
+    
 
     if (.not. add_to) then
 #if $D == 2
@@ -152,6 +257,9 @@ contains
        box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
 #endif
     end if
+    
+
+
 
 #if $D == 2
     do j = 1, hnc
@@ -161,20 +269,22 @@ contains
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
 
-          f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)
-          flx = 0.25_dp * box_p%cc(i_c-1, j_c, iv)
-          fhx = 0.25_dp * box_p%cc(i_c+1, j_c, iv)
-          fly = 0.25_dp * box_p%cc(i_c, j_c-1, iv)
-          fhy = 0.25_dp * box_p%cc(i_c, j_c+1, iv)
+          inv_eps(-1:1, -1:1) = 1.0_dp/box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)
 
-          box_c%cc(i_f,   j_f,   ivc) = f0 + flx + fly &
-               + box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f0 + fhx + fly &
-               + box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f0 + flx + fhy &
-               + box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fhx + fhy &
-               + box_c%cc(i_f+1, j_f+1, ivc)
+          f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)*inv_eps(0, 0)
+          flx = 0.25_dp * box_p%cc(i_c-1, j_c, iv)*inv_eps(-1, 0)
+          fhx = 0.25_dp * box_p%cc(i_c+1, j_c, iv)*inv_eps(1, 0)
+          fly = 0.25_dp * box_p%cc(i_c, j_c-1, iv)*inv_eps(0, -1)
+          fhy = 0.25_dp * box_p%cc(i_c, j_c+1, iv)*inv_eps(0, 1)
+
+          box_c%cc(i_f,   j_f,   ivc) = box_c%cc(i_f,   j_f,   ivc) + &
+               (f0 + flx + fly)/(0.5_dp*inv_eps(0, 0)+0.25_dp*inv_eps(-1,0)+0.25_dp*inv_eps(0,-1))                
+          box_c%cc(i_f+1, j_f,   ivc) = box_c%cc(i_f+1, j_f,   ivc) + &
+               (f0 + fhx + fly)/(0.5_dp*inv_eps(0, 0)+0.25_dp*inv_eps(1,0)+0.25_dp*inv_eps(0,-1))
+          box_c%cc(i_f,   j_f+1, ivc) = box_c%cc(i_f,   j_f+1, ivc) + &
+               (f0 + flx + fhy)/(0.5_dp*inv_eps(0, 0)+0.25_dp*inv_eps(-1,0)+0.25_dp*inv_eps(0,1)) 
+          box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + &
+               (f0 + fhx + fhy)/(0.5_dp*inv_eps(0, 0)+0.25_dp*inv_eps(1,0)+0.25_dp*inv_eps(0,1))
        end do
     end do
 #elif $D == 3
@@ -219,12 +329,15 @@ contains
   end subroutine a$D_prolong_sparse
 
   !> Bi/trilinear prolongation to a child (from parent)
-  subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add)
+  subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add, i_eps, med)
+    use m_a$D_utils, only:a$D_heaviside 
     type(box$D_t), intent(in)     :: box_p !< Parent box
     type(box$D_t), intent(inout)  :: box_c !< Child box
     integer, intent(in)           :: iv    !< Variable to fill
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
+    integer, intent(in), optional  :: i_eps
+    real(dp), intent(in), optional :: med
     integer                       :: hnc, nc, ix_offset($D), ivc
     integer                       :: i, j, i_c, i_f, j_c, j_f
     logical                       :: add_to
@@ -232,6 +345,7 @@ contains
     real(dp)                      :: f0, flx, fhx, fly, fhy
     real(dp)                      :: fll, fhl, flh, fhh
     real(dp), parameter           :: f1  = 1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
+    real(dp)                      :: in_out(-1:1, -1:1)
 #elif $D == 3
     real(dp)                      :: f000, f00l, f0l0, f0ll, fl00, fl0l, fll0
     real(dp)                      :: flll, f00h, f0h0, f0hh, fh00, fh0h, fhh0
@@ -263,25 +377,33 @@ contains
        do i = 1, hnc
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
+          
+          in_out(-1:1, -1:1) = a$D_heaviside(box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps), med)
+          
 
-          f0 = f9 * box_p%cc(i_c, j_c, iv)
-          flx = f3 * box_p%cc(i_c-1, j_c, iv)
-          fhx = f3 * box_p%cc(i_c+1, j_c, iv)
-          fly = f3 * box_p%cc(i_c, j_c-1, iv)
-          fhy = f3 * box_p%cc(i_c, j_c+1, iv)
-          fll = f1 * box_p%cc(i_c-1, j_c-1, iv)
-          fhl = f1 * box_p%cc(i_c+1, j_c-1, iv)
-          flh = f1 * box_p%cc(i_c-1, j_c+1, iv)
-          fhh = f1 * box_p%cc(i_c+1, j_c+1, iv)
-
-          box_c%cc(i_f,   j_f,   ivc) = f0 + flx + fly + fll &
-               + box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f0 + fhx + fly + fhl &
-               + box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f0 + flx + fhy + flh &
-               + box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fhx + fhy + fhh &
-               + box_c%cc(i_f+1, j_f+1, ivc)
+          f0 = f9 * box_p%cc(i_c, j_c, iv)*in_out(0,0)
+          flx = f3 * box_p%cc(i_c-1, j_c, iv)*in_out(-1,0)
+          fhx = f3 * box_p%cc(i_c+1, j_c, iv)*in_out(1,0)
+          fly = f3 * box_p%cc(i_c, j_c-1, iv)*in_out(0,-1)
+          fhy = f3 * box_p%cc(i_c, j_c+1, iv)*in_out(0,1)
+          fll = f1 * box_p%cc(i_c-1, j_c-1, iv)*in_out(-1,-1)
+          fhl = f1 * box_p%cc(i_c+1, j_c-1, iv)*in_out(1,-1)
+          flh = f1 * box_p%cc(i_c-1, j_c+1, iv)*in_out(-1,1)
+          fhh = f1 * box_p%cc(i_c+1, j_c+1, iv)*in_out(1,1)
+          
+          if(in_out(0,0) > 0.0_dp) then
+            box_c%cc(i_f, j_f, ivc) = box_c%cc(i_f, j_f, ivc) + (f0 + flx + fly + fll)/&
+                (f0*in_out(0,0) + flx*in_out(-1,0) + fly*in_out(0,-1) + fll*in_out(-1,-1))
+               
+            box_c%cc(i_f+1, j_f, ivc) = box_c%cc(i_f+1, j_f, ivc) + (f0 + fhx + fly + fhl)/&
+                (f0*in_out(0,0) + fhx*in_out(1,0) + fly*in_out(0,-1) + fhl*in_out(1,-1))
+               
+            box_c%cc(i_f, j_f+1, ivc) = box_c%cc(i_f, j_f+1, ivc) + (f0 + flx + fhy + flh)/&
+                (f0*in_out(0,0) + flx*in_out(-1,0) + fhy*in_out(0,1) + flh*in_out(-1,1))
+               
+            box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + (f0 + fhx + fhy + fhh)/&
+                (f0*in_out(0,0) + fhx*in_out(1,0) + fhy*in_out(0,1) + fhh*in_out(1,1))  
+          end if  
        end do
     end do
 #elif $D == 3

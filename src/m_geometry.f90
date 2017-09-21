@@ -15,6 +15,7 @@ module m_geometry
   public :: GM_sigmoid
   public :: GM_gaussian
   public :: GM_smoothstep
+  public :: DI_interior
 
 contains
 
@@ -129,5 +130,23 @@ contains
        val = exp(1-(dy**2 + dxz**2)/width**2)
     end if
   end function GM_laser
+  
+  function DI_interior(DI_shape, DI_center, DI_axis, n_dim, rr) result(check)
+    character(len=*), intent(in) :: DI_shape
+    integer, intent(in)          :: n_dim
+    real(dp), intent(in)         :: DI_center(n_dim), DI_axis(n_dim), rr(n_dim)
+    logical                      :: check
+
+    select case (DI_shape)
+    case ('elliptic')
+       check = sum(((rr - DI_center)**2) / DI_axis**2) < 1.0_dp  
+    case ('square')
+       check = all(abs(rr-DI_center) < DI_axis)
+    case default
+       print *, "die_type: unknown shape: ", trim(DI_shape)
+       print *, "Valid options: square, elliptic"
+       stop
+    end select 
+  end function DI_interior
 
 end module m_geometry

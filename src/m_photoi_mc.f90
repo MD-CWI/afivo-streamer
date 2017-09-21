@@ -521,7 +521,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_gc_box(tree%boxes, id, i_photo, &
+          call a2_gc_box(tree%boxes, id, i_eps, i_photo, &
                a2_gc_interp, a2_bc_neumann_zero)
        end do
        !$omp end do
@@ -529,7 +529,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong_linear_from(tree%boxes, id, i_photo, add=.true.)
+          call a2_prolong_linear_from(tree%boxes, id, iv = i_photo, add=.true.)
        end do
        !$omp end do
     end do
@@ -705,7 +705,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_gc_box(tree%boxes, id, i_photo, &
+          call a3_gc_box(tree%boxes, id, i_eps, i_photo, &
                a3_gc_interp, a3_bc_neumann_zero)
        end do
        !$omp end do
@@ -713,7 +713,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_prolong_linear_from(tree%boxes, id, i_photo, add=.true.)
+          call a3_prolong_linear_from(tree%boxes, id, iv = i_photo, add=.true.)
        end do
        !$omp end do
     end do
