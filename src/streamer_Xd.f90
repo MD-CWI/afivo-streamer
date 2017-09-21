@@ -639,7 +639,7 @@ contains
     integer, intent(in)          :: out_cnt
     character(len=*), intent(in) :: dir
     character(len=ST_slen)       :: fname
-    character(len=20), save      :: fmt
+    character(len=30), save      :: fmt
     integer, parameter           :: my_unit = 123
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos($D) = 0
@@ -661,12 +661,12 @@ contains
        open(my_unit, file=trim(fname), action="write")
 #if $D == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells"
-       fmt = "(I6,15E16.8,I12)"
+            "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells min(dx) highest(lvl)"
+       fmt = "(I6,15E16.8,I12,1E16.8,I3)"
 #elif $D == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z wc_time n_cells"
-       fmt = "(I6,14E16.8,I12)"
+            "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
+       fmt = "(I6,14E16.8,I12,1E16.8,I3)"
 #endif
        close(my_unit)
 
@@ -683,11 +683,11 @@ contains
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
          a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er), &
-         wc_time, a$D_num_cells_used(tree)
+         wc_time, a$D_num_cells_used(tree), a$D_min_dr(tree),tree%highest_lvl
 #elif $D == 3
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec), wc_time, a$D_num_cells_used(tree)
+         a$D_r_loc(tree, loc_elec), wc_time, a$D_num_cells_used(tree), a$D_min_dr(tree),tree%highest_lvl
 #endif
     close(my_unit)
 
