@@ -130,7 +130,13 @@ contains
              i_f = 2 * i - 1
              
              in_out(0:1, 0:1) = a$D_heaviside(box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps), med)
-             box_p%cc(i_c, j_c, i_dest) = (sum(in_out(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))) / sum(in_out(:,:))
+             if (sum(in_out(:,:)) < epsilon(1.0_dp)) then
+               box_p%cc(i_c, j_c, i_dest) = sum(in_out(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))  / &
+                 sum(in_out(:,:))
+             else
+               box_p%cc(i_c, j_c, i_dest) = box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
+             end if
+
           end do
        end do
     endif

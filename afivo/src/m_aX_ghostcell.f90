@@ -623,10 +623,11 @@ contains
   !> Get a second layer of ghost cell data (the 'normal' routines give just one
   !> layer of ghost cells). Use subr_rb on refinement boundaries and subr_bc
   !> on physical boundaries.
-  subroutine a$D_gc2_box(boxes, id, i_eps, iv, subr_rb, subr_bc, cc, nc)
+  subroutine a$D_gc2_box(boxes, id, i_eps, iv, subr_rb, subr_bc, cc, nc, med)
     type(box$D_t), intent(inout)    :: boxes(:) !< List of all the boxes
     integer, intent(in)             :: id       !< Id of box for which we set ghost cells
     integer, intent(in), optional   :: i_eps
+    real(dp), intent(in), optional  :: med
     integer, intent(in)             :: iv       !< Variable for which ghost cells are set
     procedure(a$D_subr_egc)         :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_egc)         :: subr_bc  !< Procedure called at physical boundaries
@@ -655,7 +656,7 @@ contains
        if (nb_id > af_no_box) then
           call sides2_from_nb(boxes(nb_id), nb, iv, gc, nc)
        else if (nb_id == af_no_box) then
-          call subr_rb(boxes, id, nb, i_eps, iv, gc, nc)
+          call subr_rb(boxes, id, nb, i_eps, iv, gc, nc, med)
        else
           call subr_bc(boxes, id, nb, i_eps, iv, gc, nc)
        end if

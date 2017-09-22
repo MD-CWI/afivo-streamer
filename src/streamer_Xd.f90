@@ -395,7 +395,7 @@ contains
          a$D_bc_dirichlet_zero_fc, med)
          
     call a$D_gc2_box(boxes, id, i_eps, i_electron, a$D_gc2_prolong_linear, &
-         a$D_bc2_dirichlet_mirror, cc, nc)
+         a$D_bc2_dirichlet_mirror, cc, nc, med)
 
     
 
@@ -666,14 +666,14 @@ contains
           p_id = tree%boxes(id)%parent
           
           call define_DI(tree%boxes(id)) ! For dielectric re-shaping
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron, i_eps = i_eps)
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron, i_eps = i_eps, med = med)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps, med = med)
           call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps)
           if (photoi_enabled) then
-             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps)
+             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps, med = med)
           end if
           if (ST_output_src_term) then
-             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_src, i_eps = i_eps)
+             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_src, i_eps = i_eps, med = med)
           end if
           call define_DI(tree%boxes(id))
        end do
