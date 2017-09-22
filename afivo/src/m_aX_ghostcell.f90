@@ -731,7 +731,7 @@ contains
     integer, intent(in)            :: nc        !< Box n_cell
 #if $D == 2
     real(dp), intent(out)         :: gc_side(nc) !< Ghost cells on side
-    real(dp)                      :: in_out(-1:1, -1:1)
+    real(dp)                      :: w
 #elif $D == 3
     real(dp), intent(out)       :: gc_side(nc, nc) !< Ghost cells on side
 #endif
@@ -755,12 +755,17 @@ contains
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          gc_side(j) = (0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, iv) * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, iv) * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
-               (0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
                0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med))
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
+          if (w > epsilon(1.0_dp)) then
+            gc_side(j) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+                 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / w
+          else
+            gc_side(j) = 0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv) + 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
+                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)
+          end if
        end do
     case (2)
        j_c1 = ix_offset(2) + ishft(ix+1, -1) ! (j+1)/2
@@ -768,12 +773,17 @@ contains
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-          gc_side(i) = (0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, iv) * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, iv) * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
-               (0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
                0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med))
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
+          if (w > epsilon(1.0_dp)) then
+            gc_side(i) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+                 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / w
+          else
+             gc_side(i) = 0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv) + 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
+                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)
+          end if
        end do
 #elif $D==3
     case (1)
