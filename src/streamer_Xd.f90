@@ -313,11 +313,11 @@ contains
                      gradient_$Dd(box, 2, [IJK], 6, i_phi))
 #endif           
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7) .or. &
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 8) .or. &
           (adx + cphi) * dot_product(Efld, grad_n) > 0.3_dp * (norm2(Efld) * norm2(grad_n))) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx &
-          .and. (eps_max == eps_min .or. box%lvl >= 7) .and. (adx + cphi)*dot_product(Efld, grad_n) <= &
+          .and. (eps_max == eps_min .or. box%lvl >= 8) .and. (adx + cphi)*dot_product(Efld, grad_n) <= &
           0.0375_dp * (norm2(Efld)*norm2(grad_n))) then
             cell_flags(IJK) = af_rm_ref
        else
