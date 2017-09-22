@@ -48,11 +48,11 @@ contains
     real(dp), allocatable      :: tmp_vec(:)
     type(initcnd_t)            :: ic
 
-    call CFG_add(cfg, "background_density", 0.0_dp, &
+    call CFG_add(cfg, "background_density", 1.0e14_dp, &
          "The background ion and electron density (1/m3)")
     call CFG_add(cfg, "stochastic_density", 0.0_dp, &
          "Stochastic background density (1/m3)")
-    call CFG_add(cfg, "seed_density", [1.0e15_dp], &
+    call CFG_add(cfg, "seed_density", [1.0e16_dp], &
          "Initial density of the seed (1/m3)", .true.)
     call CFG_add(cfg, "seed_rel_r0", [DTIMES(0.5_dp)], &
          "The relative start position of the initial seed", .true.)
@@ -72,7 +72,7 @@ contains
          "Relative axis(sides or semi-axis) size of the dielectric", .true.)
     call CFG_add(cfg, "die_type", ['elliptic'], &
          "Geometric shape of dielectric (square, elliptic)", .true.)
-    call CFG_add(cfg, "die_density", [1.0e12_dp], &
+    call CFG_add(cfg, "die_density", [0.0e1_dp], &
          "Density of the dielectric(1/m3)", .true.)
 
     call CFG_get_size(cfg, "seed_density", n_cond)

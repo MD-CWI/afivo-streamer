@@ -90,10 +90,9 @@ contains
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           do i = lo(1), hi(1)
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             box_c%cc(i, j, ivc) = box_p%cc(i_c1, j_c1, iv)
+             box_c%cc(i, j, ivc) = box_p%cc(i_c1, j_c1, iv) * box_c%cc(i, j, i_eps)/box_p%cc(i_c1, j_c1, i_eps)
           end do
        end do
-       
     
        
 #elif $D == 3

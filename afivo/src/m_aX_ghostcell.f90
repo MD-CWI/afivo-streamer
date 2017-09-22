@@ -141,10 +141,11 @@ contains
     real(dp), intent(in), optional :: med
     procedure(a$D_subr_rb)         :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)         :: subr_bc  !< Procedure called at physical boundaries
-    integer                        :: nb, nb_id, bc_type
+    integer                        :: nb, nb_id, bc_type, i
     integer                        :: nb_dim, lo($D), hi($D), dnb($D)
 
-    do nb = 1, a$D_num_neighbors
+    do i = 1, $D
+       nb = 2 * i
        nb_id = boxes(id)%neighbors(nb)
 
        if (nb_id > af_no_box) then
@@ -155,7 +156,7 @@ contains
           lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell + 1)
           hi(nb_dim) = lo(nb_dim)
           dnb        = a$D_neighb_offset([nb])
-          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, s_iv)
+          call copy_from_nb_fc(boxes(id), boxes(nb_id), dnb, lo, hi, s_iv)
        else if (nb_id == af_no_box) then
           ! Refinement boundary
           call subr_rb(boxes, id, nb, i_eps, s_iv, med)
@@ -309,7 +310,7 @@ contains
   end subroutine bc_to_gc
 
   !> Partial prolongation to the ghost cells of box id from parent
-  subroutine a$D_gc_prolong_copy(boxes, id, nb, iv, i_eps)
+  subroutine a$D_gc_prolong_copy(boxes, id, nb, i_eps, iv)
     use m_a$D_prolong, only: a$D_prolong_copy
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
@@ -619,6 +620,28 @@ contains
          box_nb%cc(nlo(1):nhi(1), nlo(2):nhi(2), nlo(3):nhi(3), iv)
 #endif
   end subroutine copy_from_nb
+  
+  subroutine copy_from_nb_fc(box, box_nb, dnb, lo, hi, s_iv)
+    type(box$D_t), intent(inout) :: box     !< Box on which to fill ghost cells
+    type(box$D_t), intent(in)    :: box_nb  !< Neighbouring box
+    integer, intent(in)          :: dnb($D) !< Neighbor spatial index offset
+    integer, intent(in)          :: lo($D)  !< Ghost cell low index
+    integer, intent(in)          :: hi($D)  !< Ghost cell high index
+    integer, intent(in)          :: s_iv      !< Ghost cell variable
+    integer                      :: nlo($D), nhi($D)
+
+    ! Get indices on neighbor
+    nlo = lo - dnb * box%n_cell
+    nhi = hi - dnb * box%n_cell
+
+#if $D == 2
+    box%fc(lo(1):hi(1), lo(2):hi(2), :, s_iv) = &
+         box_nb%fc(nlo(1):nhi(1), nlo(2):nhi(2), :, s_iv)
+#elif $D == 3
+    box%fc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3), :, s_iv) = &
+         box_nb%fc(nlo(1):nhi(1), nlo(2):nhi(2), nlo(3):nhi(3), :, s_iv)
+#endif
+  end subroutine copy_from_nb_fc
 
   !> Get a second layer of ghost cell data (the 'normal' routines give just one
   !> layer of ghost cells). Use subr_rb on refinement boundaries and subr_bc

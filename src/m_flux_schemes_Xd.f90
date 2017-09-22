@@ -167,8 +167,9 @@ contains
         s_C     = box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
                   , a2_neighb_dim(dir), sigma_rhs)
         grad    = a2_neighb_high_pm(dir)*(inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &
-                  box%cc(ix(1), ix(2), iv)) - 0.5_dp*s_C/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps)) * &
-                  harm_ep/box%cc(ix(1), ix(2), i_eps)
+                  box%cc(ix(1), ix(2), iv)) - &
+                  0.5_dp*s_C/box%cc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir), i_eps)) * &
+                  harm_ep/box%cc(ix(1)+n_ix(1)*(1-a2_neighb_high_01(dir)), ix(2)+n_ix(2)*(1-a2_neighb_high_01(dir)), i_eps)
       else if (cc_num == 1) then
         fac   = 0.5_dp * box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir),&
                 a2_neighb_dim(dir), sigma_rhs)/(box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2) + &

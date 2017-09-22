@@ -289,7 +289,7 @@ contains
        dix = -1
     end if
 
-    call a$D_gc_prolong_copy(boxes, id, nb, iv, i_eps = i_eps)
+    call a$D_gc_prolong_copy(boxes, id, nb, i_eps = i_eps, iv = iv)
 
 
 #if $D == 2

@@ -215,14 +215,8 @@ module m_streamer
   ! Fraction of O2
   real(dp), protected :: ST_gas_frac_O2 = 0.2_dp
   
-  ! Dielectric conductivity
-  real(dp), protected :: ST_DI_cond = 10e-8 
-  
-  ! Temperature of gas and dielectric
-  real(dp), protected :: ST_tmp = 230.0_dp 
-  
   ! Epsilon of dielectric
-  real(dp), protected :: ST_epsilon_die = 10.0_dp
+  real(dp), protected :: ST_epsilon_die = 5.0_dp
 
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2
@@ -336,8 +330,6 @@ contains
     call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
          "The diffusion coefficient for positive ions (m2/s)")
          
-    call CFG_add_get(cfg, "DI_cond", ST_DI_cond, &
-         "Conductivity of dielectric (S/m)")
 
     ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
     if (ST_update_ions) then
@@ -363,8 +355,6 @@ contains
          "The gas pressure (bar), used for photoionization")
     call CFG_add_get(cfg, "gas_frac_O2", ST_gas_frac_O2, &
          "Fraction of O2, used for photoionization")
-    call CFG_add_get(cfg, "temp", ST_tmp, &
-              "Temperature of gas and dielectric")
          
     call CFG_add_get(cfg, "epsilon_die", ST_epsilon_die, &
          "Permittivity of the dielectric")
