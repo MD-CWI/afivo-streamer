@@ -313,15 +313,19 @@ contains
                      gradient_$Dd(box, 2, [IJK], 6, i_phi))
 #endif           
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 8) .or. &
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7) .or. &
           (adx + cphi) * dot_product(Efld, grad_n) > 0.3_dp * (norm2(Efld) * norm2(grad_n))) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx &
-          .and. (eps_max == eps_min .or. box%lvl >= 8) .and. (adx + cphi)*dot_product(Efld, grad_n) <= &
+          .and. (eps_max == eps_min .or. box%lvl >= 7) .and. (adx + cphi)*dot_product(Efld, grad_n) <= &
           0.0375_dp * (norm2(Efld)*norm2(grad_n))) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
+       end if
+       
+       if (eps_max > eps_min .and. sqrt(adx + cphi) > 0.8_dp) then
+         cell_flags(IJK) = af_do_ref
        end if
 
        ! Refine around the initial conditions
@@ -353,6 +357,7 @@ contains
           cell_flags(DTIMES(nc/2)) = af_do_ref
        end if
     end do
+    
 
     ! Make sure we don't have or get a too fine or too coarse a grid
     if (dx > ST_refine_max_dx) then
@@ -360,6 +365,8 @@ contains
     else if (dx < 2 * ST_refine_min_dx) then
        where(cell_flags == af_do_ref) cell_flags = af_keep_ref
     end if
+    
+
 
   end subroutine refine_routine
 
@@ -489,7 +496,7 @@ contains
     real(dp), intent(in)         :: args(:)
     real(dp)                     :: dt, inv_dr, src, fld, fld_vec($D), s_flow($D)
     real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
-    real(dp)                     :: dt_cfl, dt_dif, dt_drt
+    real(dp)                     :: dt_cfl, dt_dif, dt_drt, s_fac
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
@@ -555,6 +562,22 @@ contains
            box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * s_flow(2) 
          end if  
        end if
+       
+       ! Smoothening of "sharp" edges in respect to surface charge
+       if (a$D_border(box%cc(IJK, i_eps), box%cc(i-1, j, i_eps), med) .and. &
+          a$D_border(box%cc(IJK, i_eps), box%cc(i, j-1, i_eps), med) .and. &
+          box%fc(IJK, 2, sigma_rhs) >= box%fc(IJK, 1, sigma_rhs)) then
+         s_fac = 0.25_dp*box%fc(IJK, 2, sigma_rhs) * (box%fc(IJK, 2, sigma_rhs) - box%fc(IJK, 1, sigma_rhs)) / &
+               (box%fc(IJK, 2, sigma_rhs) + box%fc(IJK, 1, sigma_rhs) + epsilon(1.0_dp))
+         box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + s_fac
+         box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) - s_fac
+         else if(a$D_border(box%cc(IJK, i_eps), box%cc(i-1, j, i_eps), med) .and. &
+          a$D_border(box%cc(IJK, i_eps), box%cc(i, j-1, i_eps), med)) then
+         s_fac = 0.25_dp*box%fc(IJK, 1, sigma_rhs) * (box%fc(IJK, 1, sigma_rhs) - box%fc(IJK, 2, sigma_rhs)) / &
+               (box%fc(IJK, 2, sigma_rhs) + box%fc(IJK, 1, sigma_rhs) + epsilon(1.0_dp))
+         box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) - s_fac
+         box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + s_fac
+       end if
         
               
 #elif $D == 3
@@ -603,10 +626,12 @@ contains
        src  = src * dt
 
        ! Add flux and source term
-       box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
+       if (box%cc(IJK, i_eps) <= med) then
+         box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
        
-       ! Add flux and source term
-       box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
+         ! Add flux and source term
+         box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
+       end if
 
        ! Possible determine new time step restriction
        if (i_step == 2) then

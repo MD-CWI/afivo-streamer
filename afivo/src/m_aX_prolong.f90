@@ -90,7 +90,7 @@ contains
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           do i = lo(1), hi(1)
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             box_c%cc(i, j, ivc) = box_p%cc(i_c1, j_c1, iv)
+             box_c%cc(i, j, ivc) = box_p%cc(i_c1, j_c1, iv)! * box_p%cc(i_c1, j_c1, i_eps)/box_c%cc(i, j, i_eps)
           end do
        end do
     
@@ -390,19 +390,31 @@ contains
           flh = f1 * box_p%cc(i_c-1, j_c+1, iv)*in_out(-1,1)
           fhh = f1 * box_p%cc(i_c+1, j_c+1, iv)*in_out(1,1)
           
-          if(in_out(0,0) > 0.0_dp) then
+          if (box_c%cc(i_f, j_f, i_eps) <= med) then
             box_c%cc(i_f, j_f, ivc) = box_c%cc(i_f, j_f, ivc) + (f0 + flx + fly + fll)/&
                 (f0*in_out(0,0) + flx*in_out(-1,0) + fly*in_out(0,-1) + fll*in_out(-1,-1))
-               
+          else
+            box_c%cc(i_f, j_f, ivc) = 0.0_dp
+          end if
+          if (box_c%cc(i_f+1, j_f, i_eps) <= med) then   
             box_c%cc(i_f+1, j_f, ivc) = box_c%cc(i_f+1, j_f, ivc) + (f0 + fhx + fly + fhl)/&
                 (f0*in_out(0,0) + fhx*in_out(1,0) + fly*in_out(0,-1) + fhl*in_out(1,-1))
-               
+          else
+            box_c%cc(i_f+1, j_f, ivc) = 0.0_dp
+          end if
+          if (box_c%cc(i_f, j_f+1, i_eps) <= med) then      
             box_c%cc(i_f, j_f+1, ivc) = box_c%cc(i_f, j_f+1, ivc) + (f0 + flx + fhy + flh)/&
                 (f0*in_out(0,0) + flx*in_out(-1,0) + fhy*in_out(0,1) + flh*in_out(-1,1))
-               
+          else
+            box_c%cc(i_f, j_f+1, ivc) = 0.0_dp
+          end if 
+          if (box_c%cc(i_f+1, j_f+1, i_eps) <= med) then                
             box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + (f0 + fhx + fhy + fhh)/&
-                (f0*in_out(0,0) + fhx*in_out(1,0) + fhy*in_out(0,1) + fhh*in_out(1,1))  
-          end if  
+                (f0*in_out(0,0) + fhx*in_out(1,0) + fhy*in_out(0,1) + fhh*in_out(1,1)) 
+          else
+            box_c%cc(i_f+1, j_f+1, ivc) = 0.0_dp
+          end if 
+                
        end do
     end do
 #elif $D == 3

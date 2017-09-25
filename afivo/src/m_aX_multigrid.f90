@@ -448,18 +448,29 @@ contains
     integer, intent(in)          :: n_cycle  !< Number of cycles to perform
     integer                      :: n, i
 
+
     !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
           call mg%box_gsrb(boxes(ids(i)), n, mg)
+#if $D == 2     
+          if (n == 2*n_cycle .and. maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) &
+             > minval(boxes(ids(i))%cc(:, :, mg%i_eps))) then
+            call mg%box_gsrb(boxes(ids(i)), 2*n_cycle + 1, mg)
+            call mg%box_gsrb(boxes(ids(i)), 2*n_cycle + 2, mg)
+          end if
+#endif
        end do
        !$omp end do
 
        !$omp do
        do i = 1, size(ids)
+#if $D == 2  
           call a$D_gc_box(boxes, ids(i), mg%i_eps, mg%i_phi, mg%sides_rb, &
-               mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle))
+               mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle .or. &
+               maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))))
+#endif
        end do
        !$omp end do
     end do

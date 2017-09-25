@@ -141,11 +141,12 @@ contains
     end do
   end subroutine photoi_helmh_compute
 
-  subroutine photoi_helmh_bc(box, nb, iv, bc_type)
+  subroutine photoi_helmh_bc(box, nb, iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
+    integer, intent(in), optional   :: i_eps
     integer                     :: nc
 
     nc = box%n_cell

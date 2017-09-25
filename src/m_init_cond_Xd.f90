@@ -63,8 +63,7 @@ contains
     call CFG_add(cfg, "seed_width", [0.25d-3], &
          "Seed width (m)", .true.)
     call CFG_add(cfg, "seed_falloff", ['smoothstep'], &
-         "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser), "&
-         &"default=smoothstep", .true.)
+         "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)", .true.)
          
     call CFG_add(cfg, "die_rel_center",[DTIMES(0.5_dp)], &
          "Relative central position of the dielectric", .true.)
@@ -289,22 +288,28 @@ contains
        end do
     end do; CLOSE_DO
  
-    do KJI_DO(0, nc+1)
+    if (maxval(box%cc(DTIMES(:), i_eps)) > minval(box%cc(DTIMES(:), i_eps))) then  
+      
+      do KJI_DO(0, nc+1)
 
-       if(maxval([IJK]) < nc+1 .and. minval([IJK])> 0) then
+         if(maxval([IJK]) < nc+1 .and. minval([IJK])> 0) then
 #if $D == 2
-         if(box%cc(IJK, i_eps) > med .and. (box%cc(i-1, j, i_eps) <= med .and. box%cc(i+1, j, i_eps) <= med) ) then
-           box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i-1, j, i_eps), box%cc(i+1, j, i_eps), 0.5_dp)
-         end if
+           if(box%cc(IJK, i_eps) > med .and. (box%cc(i-1, j, i_eps) <= med .and. box%cc(i+1, j, i_eps) <= med) ) then
+             box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i-1, j, i_eps), box%cc(i+1, j, i_eps), 0.5_dp)
+           end if
         
-         if(box%cc(IJK, i_eps) > med .and. (box%cc(i, j-1, i_eps) <= med .and. box%cc(i, j+1, i_eps) <= med) ) then
-           box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i, j-1, i_eps), box%cc(i, j+1, i_eps), 0.5_dp)
-         end if
+           if(box%cc(IJK, i_eps) > med .and. (box%cc(i, j-1, i_eps) <= med .and. box%cc(i, j+1, i_eps) <= med) ) then
+             box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i, j-1, i_eps), box%cc(i, j+1, i_eps), 0.5_dp)
+           end if
+           
 #elif $D == 3
 
 #endif
-       end if
-    end do; CLOSE_DO
+         end if
+      end do; CLOSE_DO
+    
+    end if
+
 
 
   end subroutine define_DI
@@ -345,10 +350,11 @@ contains
   
   
 
-  subroutine a$D_bc_dirichlet_mirror(box, nb, iv, bc_type)
+  subroutine a$D_bc_dirichlet_mirror(box, nb, iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb, iv
     integer, intent(out)        :: bc_type
+    integer, intent(in), optional   :: i_eps
 
     bc_type = af_bc_dirichlet
     call a$D_set_box_gc(box, nb, iv, init_conds%background_density)
@@ -394,10 +400,11 @@ contains
 
   end subroutine a$D_bc2_dirichlet_mirror
   
-  subroutine a$D_bc_dirichlet_zero_fc(box, nb, s_iv, bc_type)
+  subroutine a$D_bc_dirichlet_zero_fc(box, nb, s_iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb, s_iv
     integer, intent(out)        :: bc_type
+    integer, intent(in), optional   :: i_eps
 
     bc_type = af_bc_dirichlet
     call a$D_set_box_gc_fc(box, nb, s_iv, gc_scalar = [DTIMES(0.0_dp)])

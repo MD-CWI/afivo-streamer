@@ -166,18 +166,23 @@ contains
 
   !> Compute the voltage at a given time
   subroutine field_set_voltage(time)
+    use m_init_cond_$Dd
     real(dp), intent(in) :: time
 
     field_voltage = -ST_domain_len * field_get_amplitude(time)
+
   end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential
-  subroutine field_bc_homogeneous(box, nb, iv, bc_type)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction for the boundary condition
-    integer, intent(in)         :: iv ! Index of variable
-    integer, intent(out)        :: bc_type ! Type of boundary condition
-    integer                     :: nc
+  subroutine field_bc_homogeneous(box, nb, iv, bc_type, i_eps)
+    use m_init_cond_$Dd
+    type(box$D_t), intent(inout)  :: box
+    integer, intent(in)           :: nb ! Direction for the boundary condition
+    integer, intent(in)           :: iv ! Index of variable
+    integer, intent(in), optional :: i_eps
+    integer, intent(out)          :: bc_type ! Type of boundary condition
+    integer                       :: nc
+
 
     nc = box%n_cell
 
@@ -219,12 +224,13 @@ contains
 
   end subroutine field_bc_homogeneous
 
-  subroutine field_bc_dropoff_lin(box, nb, iv, bc_type)
+  subroutine field_bc_dropoff_lin(box, nb, iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)          :: nb      ! Direction for the boundary condition
     integer, intent(in)          :: iv      ! Index of variable
     integer, intent(out)         :: bc_type ! Type of boundary condition
     integer                      :: nc, i
+    integer, intent(in), optional   :: i_eps
 #if $D == 3
     integer                      :: j
 #endif
@@ -275,11 +281,12 @@ contains
     end select
   end subroutine field_bc_dropoff_lin
 
-  subroutine field_bc_dropoff_log(box, nb, iv, bc_type)
+  subroutine field_bc_dropoff_log(box, nb, iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)          :: nb      ! Direction for the boundary condition
     integer, intent(in)          :: iv      ! Index of variable
     integer, intent(out)         :: bc_type ! Type of boundary condition
+    integer, intent(in), optional   :: i_eps
     integer                      :: nc, i
 #if $D == 3
     integer                      :: j

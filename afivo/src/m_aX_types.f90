@@ -251,12 +251,13 @@ module m_a$D_types
      end subroutine a$D_subr_rb
 
      !> To fill ghost cells near physical boundaries
-     subroutine a$D_subr_bc(box, nb, iv, bc_type)
+     subroutine a$D_subr_bc(box, nb, iv, bc_type, i_eps)
        import
        type(box$D_t), intent(inout)  :: box     !< Box that needs b.c.
        integer, intent(in)           :: nb      !< Direction
        integer, intent(in)           :: iv      !< Index of variable
        integer, intent(out)          :: bc_type !< Type of b.c.
+       integer, intent(in), optional   :: i_eps
      end subroutine a$D_subr_bc
 
      !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries

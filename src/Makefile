@@ -46,8 +46,8 @@ streamer_2d.o: m_streamer.o m_geometry.o m_flux_schemes_2d.o
 streamer_3d.o: m_streamer.o m_geometry.o m_flux_schemes_3d.o
 streamer_2d.o: m_field_2d.o m_init_cond_2d.o m_photoi_2d.o
 streamer_3d.o: m_field_3d.o m_init_cond_3d.o m_photoi_3d.o
-m_field_2d.o: m_streamer.o m_units_constants.o m_flux_schemes_2d.o
-m_field_3d.o: m_streamer.o m_units_constants.o m_flux_schemes_3d.o
+m_field_2d.o: m_streamer.o m_units_constants.o m_flux_schemes_2d.o m_init_cond_2d.o
+m_field_3d.o: m_streamer.o m_units_constants.o m_flux_schemes_3d.o m_init_cond_3d.o
 m_init_cond_2d.o m_flux_schemes_2d.o: m_streamer.o m_units_constants.o
 m_init_cond_3d.o m_flux_schemes_3d.o: m_streamer.o m_units_constants.o
 m_photoi_helmh_2d.o m_photoi_helmh_3d.o: m_streamer.o m_units_constants.o

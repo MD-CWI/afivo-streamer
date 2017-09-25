@@ -126,7 +126,7 @@ contains
           call subr_rb(boxes, id, nb, i_eps = i_eps, iv = iv)
        else
           ! Physical boundary
-          call subr_bc(boxes(id), nb, iv, bc_type)
+          call subr_bc(boxes(id), nb, iv, bc_type, i_eps = i_eps)
           call bc_to_gc(boxes(id), nb, iv, bc_type)
        end if
     end do
@@ -162,7 +162,7 @@ contains
           call subr_rb(boxes, id, nb, i_eps, s_iv, med)
        else
           ! Physical boundary
-          call subr_bc(boxes(id), nb, s_iv, bc_type)
+          call subr_bc(boxes(id), nb, s_iv, bc_type = bc_type, i_eps = i_eps)
           call bc_to_gc(boxes(id), nb, s_iv, bc_type)
        end if
     end do
@@ -326,7 +326,7 @@ contains
     lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
     hi(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
 
-    call a$D_prolong_copy(boxes(p_id), boxes(id), iv, low=lo, high=hi, i_eps = i_eps)
+    call a$D_prolong_copy(boxes(p_id), boxes(id), iv = iv, low=lo, high=hi, i_eps = i_eps)
   end subroutine a$D_gc_prolong_copy
   
   subroutine a$D_gc_prolong_copy_fc(boxes, id, nb, i_eps, s_iv, med)
@@ -569,30 +569,33 @@ contains
   end subroutine a$D_gc_interp_lim
 
   ! This fills ghost cells near physical boundaries using Neumann zero
-  subroutine a$D_bc_neumann_zero(box, nb, iv, bc_type)
+  subroutine a$D_bc_neumann_zero(box, nb, iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb, iv
     integer, intent(out)        :: bc_type
+    integer, intent(in), optional   :: i_eps
 
     bc_type = af_bc_neumann
     call a$D_set_box_gc(box, nb, iv, 0.0_dp)
   end subroutine a$D_bc_neumann_zero
 
   ! This fills ghost cells near physical boundaries using Neumann zero
-  subroutine a$D_bc_dirichlet_zero(box, nb, iv, bc_type)
+  subroutine a$D_bc_dirichlet_zero(box, nb, iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb, iv
     integer, intent(out)        :: bc_type
+    integer, intent(in), optional   :: i_eps
 
     bc_type = af_bc_dirichlet
     call a$D_set_box_gc(box, nb, iv, 0.0_dp)
   end subroutine a$D_bc_dirichlet_zero
 
   ! This fills ghost cells near physical boundaries using the same slope
-  subroutine a$D_bc_continuous(box, nb, iv, bc_type)
+  subroutine a$D_bc_continuous(box, nb, iv, bc_type, i_eps)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb, iv
     integer, intent(out)        :: bc_type
+    integer, intent(in), optional   :: i_eps
 
     bc_type = af_bc_continuous
     ! Set values to zero (to prevent problems with NaN)

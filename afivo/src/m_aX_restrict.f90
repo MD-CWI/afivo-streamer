@@ -131,8 +131,11 @@ contains
              
              in_out(0:1, 0:1) = a$D_heaviside(box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps), med)
              if (sum(in_out(:,:)) > epsilon(1.0_dp)) then
-               box_p%cc(i_c, j_c, i_dest) = sum(in_out(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))  / &
-                 sum(in_out(:,:))
+               if (box_p%cc(i_c, j_c, i_eps) <= med) then
+                 box_p%cc(i_c, j_c, i_dest) = sum(in_out(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv)) / sum(in_out(:,:))
+               else
+                 box_p%cc(i_c, j_c, i_dest) = sum((1-in_out(0:1, 0:1))*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv)) / sum(1-in_out(:,:))
+               end if
              else
                box_p%cc(i_c, j_c, i_dest) = 0.25_dp*sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
              end if
