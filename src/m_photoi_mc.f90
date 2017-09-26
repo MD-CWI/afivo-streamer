@@ -37,10 +37,14 @@ module m_photoi_mc
   public :: phmc_initialize
   public :: phmc_print_grid_spacing
   public :: phmc_get_table_air
-  public :: phmc_do_absorption
+  public :: phmc_do_absorption2
+  public :: phmc_do_absorption3
   public :: phmc_absorption_func_air
   public :: phmc_set_src_2d
   public :: phmc_set_src_3d
+  public :: DI_photon_abs2
+  public :: DI_photon_abs3
+  
 
 contains
 
@@ -261,19 +265,22 @@ contains
 
   !> Given a list of photon production positions (xyz_in), compute where they
   !> end up (xyz_out).
-  subroutine phmc_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
+  subroutine phmc_do_absorption2(xyz_in, xyz_out, n_photons, tbl, rng, tree)
     use m_lookup_table
     use m_random
     use omp_lib
+    use m_a2_types
+    use m_a2_utils
+    
     integer, intent(in)              :: n_photons !< Number of photons
     !< Input (x,y,z) values
-    real(dp), intent(in)             :: xyz_in(3, n_photons)
+    real(dp), intent(in)             :: xyz_in(2, n_photons)
     !< Output (x,y,z) values
-    real(dp), intent(out)            :: xyz_out(3, n_photons)
-    integer, intent(in)              :: n_dim     !< 2 or 3 dimensional
+    real(dp), intent(out)            :: xyz_out(2, n_photons)
     !< Lookup table
     type(lookup_table_t), intent(in) :: tbl
     type(RNG_t), intent(inout)       :: rng       !< Random number geneator
+    type(a2_t), intent(in)           :: tree   !< Tree
     integer                          :: n, n_procs, proc_id
     real(dp)                         :: rr, dist
     type(PRNG_t)                     :: prng
@@ -286,29 +293,58 @@ contains
 
     proc_id = 1+omp_get_thread_num()
 
-    if (n_dim == 2) then
-       !$omp do
-       do n = 1, n_photons
-          rr = prng%rngs(proc_id)%unif_01()
-          dist = LT_get_col(tbl, 1, rr)
-          xyz_out(1:n_dim, n) =  xyz_in(1:n_dim, n) + &
-               prng%rngs(proc_id)%circle(dist)
-       end do
-       !$omp end do
-    else if (n_dim == 3) then
-       !$omp do
-       do n = 1, n_photons
-          rr = prng%rngs(proc_id)%unif_01()
-          dist = LT_get_col(tbl, 1, rr)
-          xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
-       end do
-       !$omp end do
-    else
-       print *, "phmc_do_absorption: unknown n_dim", n_dim
-       stop
-    end if
+    !$omp do
+    do n = 1, n_photons
+      rr = prng%rngs(proc_id)%unif_01()
+      dist = LT_get_col(tbl, 1, rr)
+      xyz_out(1:2, n) =  xyz_in(1:2, n) + &
+           prng%rngs(proc_id)%circle(dist)
+      call DI_photon_abs2(xyz_in(1:2, n), xyz_out(1:2, n), tree)           
+    end do
+    !$omp end do
+
     !$omp end parallel
-  end subroutine phmc_do_absorption
+  end subroutine phmc_do_absorption2
+  
+  subroutine phmc_do_absorption3(xyz_in, xyz_out, n_photons, tbl, rng, tree)
+    use m_lookup_table
+    use m_random
+    use omp_lib
+    use m_a3_types
+    use m_a3_utils
+    
+    integer, intent(in)              :: n_photons !< Number of photons
+    !< Input (x,y,z) values
+    real(dp), intent(in)             :: xyz_in(3, n_photons)
+    !< Output (x,y,z) values
+    real(dp), intent(out)            :: xyz_out(3, n_photons)
+    !< Lookup table
+    type(lookup_table_t), intent(in) :: tbl
+    type(RNG_t), intent(inout)       :: rng       !< Random number geneator
+    type(a3_t), intent(in)           :: tree   !< Tree
+    integer                          :: n, n_procs, proc_id
+    real(dp)                         :: rr, dist
+    type(PRNG_t)                     :: prng
+
+    !$omp parallel private(n, rr, dist, proc_id)
+    !$omp single
+    n_procs = omp_get_num_threads()
+    call prng%init_parallel(n_procs, rng)
+    !$omp end single
+
+    proc_id = 1+omp_get_thread_num()
+
+   !$omp do
+    do n = 1, n_photons
+        rr = prng%rngs(proc_id)%unif_01()
+        dist = LT_get_col(tbl, 1, rr)
+        xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
+        call DI_photon_abs3(xyz_in(1:3, n), xyz_out(1:3, n), tree)
+     end do
+   !$omp end do
+   !$omp end parallel
+  end subroutine phmc_do_absorption3
+  
 
   !> Set the source term due to photoionization for 2D models. At most
   !> phmc_num_photons discrete photons are produced.
@@ -338,7 +374,7 @@ contains
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
     real(dp)                    :: tmp, dr, fac, dist, r(3)
-    real(dp)                    :: sum_production, pi_lengthscale
+    real(dp)                    :: sum_production, pi_lengthscale, med
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
     real(dp), parameter         :: pi = acos(-1.0_dp)
@@ -346,6 +382,7 @@ contains
     type(a2_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
+    med = a2_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
 
     ! Compute the sum of photon production
     call a2_tree_sum_cc(tree, i_src, sum_production)
@@ -423,7 +460,7 @@ contains
     if (use_cyl) then
        ! Get location of absorption. On input, xyz is set to (r, 0, z). On
        ! output, the coordinates thus correspond to (x, y, z)
-       call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, rng)
+       call phmc_do_absorption2(xyz_src, xyz_abs, n_used, phmc_tbl%tbl, rng, tree)
 
        !$omp do
        do n = 1, n_used
@@ -435,7 +472,7 @@ contains
        !$omp end do
     else
        ! Get location of absorbption
-       call phmc_do_absorption(xyz_src, xyz_abs, 2, n_used, phmc_tbl%tbl, rng)
+       call phmc_do_absorption2(xyz_src, xyz_abs, n_used, phmc_tbl%tbl, rng, tree)
     end if
 
     if (phmc_const_dx) then
@@ -529,7 +566,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong_linear_from(tree%boxes, id, iv = i_photo, add=.true.)
+          call a2_prolong_linear_from(tree%boxes, id, iv = i_photo, add=.true., i_eps = i_eps, med = med)
        end do
        !$omp end do
     end do
@@ -560,13 +597,14 @@ contains
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl, min_lvl
     real(dp)                    :: tmp, dr, fac, dist, r(3)
-    real(dp)                    :: sum_production, pi_lengthscale
+    real(dp)                    :: sum_production, pi_lengthscale, med
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
     type(PRNG_t)                :: prng
     type(a3_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
+    med = a3_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
 
     ! Compute the sum of photon production
     call a3_tree_sum_cc(tree, i_src, sum_production)
@@ -609,7 +647,7 @@ contains
                    if (prng%rngs(proc_id)%unif_01() < tmp - n_create) &
                         n_create = n_create + 1
 
-                   if (n_create > 0) then
+                   if (n_create > 0 .and. tree%boxes(id)%cc(i, j, k, i_eps) <= med ) then
                       !$omp critical
                       i_ph = n_used
                       n_used = n_used + n_create
@@ -636,7 +674,7 @@ contains
     allocate(ph_loc(n_used))
 
     ! Get location of absorption
-    call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, rng)
+    call phmc_do_absorption3(xyz_src, xyz_abs, n_used, phmc_tbl%tbl, rng, tree)
 
     if (phmc_const_dx) then
        ! Get a typical length scale for the absorption of photons
@@ -713,11 +751,71 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_prolong_linear_from(tree%boxes, id, iv = i_photo, add=.true.)
+          call a3_prolong_linear_from(tree%boxes, id, iv = i_photo, add=.true., i_eps = i_eps, med = med)
        end do
        !$omp end do
     end do
     !$omp end parallel
   end subroutine phmc_set_src_3d
+
+  subroutine DI_photon_abs2(start_pos, end_pos, tree)
+      use m_a2_types
+      use m_a2_utils, only:a2_get_id_at
+      type(a2_t), intent(in)           :: tree
+      type(box2_t)                     :: box
+      real(dp), intent(in)             :: start_pos(2)
+      real(dp), intent(inout)          :: end_pos(2)
+      integer                          :: n_sample, i, ii, ind(2)
+      real(dp)                         :: abs_pos(2), temp(2), start_copy(2)
+    
+      start_copy = start_pos
+      do ii = 1, 2  
+        abs_pos = (end_pos - start_copy)*i/n_sample
+        temp = start_copy
+            do i = 1, 35
+               abs_pos = start_copy + (end_pos - start_copy)*i/n_sample
+               box = tree%boxes(a2_get_id_at(tree, abs_pos)) 
+               ind = a2_cc_ix(box, abs_pos)     
+                  if (box%cc(ind(1), ind(2), i_eps)> 1.1_dp) then
+                     end_pos = abs_pos
+                     start_copy = temp
+                     exit
+                  else 
+                     temp = abs_pos
+                  end if        
+            end do
+      end do
+    end subroutine DI_photon_abs2
+    
+    subroutine DI_photon_abs3(start_pos, end_pos, tree)
+        use m_a3_types
+        use m_a3_utils, only:a3_get_id_at
+        type(a3_t), intent(in)           :: tree
+        type(box3_t)                     :: box
+        real(dp), intent(in)             :: start_pos(3)
+        real(dp), intent(inout)          :: end_pos(3)
+        integer                          :: n_sample, i, ii, ind(3)
+        real(dp)                         :: abs_pos(3), temp(3), start_copy(3)
+ 
+        start_copy = start_pos
+        do ii = 1, 2  
+          abs_pos = (end_pos - start_copy)*i/n_sample
+          temp = start_pos
+              do i = 1, 35
+                 abs_pos = start_copy + (end_pos - start_copy)*i/n_sample
+                 box = tree%boxes(a3_get_id_at(tree, abs_pos))
+                 ind = a3_cc_ix(box, abs_pos)
+                     if (box%cc(ind(1), ind(2), ind(3), i_eps)> 1.1_dp) then
+                       end_pos = abs_pos
+                       start_copy = temp
+                       exit
+                    else 
+                       temp = abs_pos
+                    end if
+              end do
+        end do
+      end subroutine DI_photon_abs3
+    
+
 
 end module m_photoi_mc

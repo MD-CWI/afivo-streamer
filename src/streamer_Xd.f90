@@ -11,12 +11,17 @@ program streamer_$Dd
   use m_units_constants
 
   implicit none
-
+  
+  integer, parameter     :: int8 = selected_int_kind(18)
+  integer(int8)          :: t_start, t_current, count_rate
+  real(dp)               :: wc_time, inv_count_rate, time_last_print
   integer                :: i, it
   character(len=ST_slen) :: fname
   logical                :: write_out
   real(dp)               :: dt_prev, med
   real(dp), parameter    :: fac = UC_elem_charge / UC_eps0
+  
+  
 
   type(CFG_t)            :: cfg ! The configuration for the simulation
   type(a$D_t)            :: tree      ! This contains the full grid information
@@ -78,9 +83,26 @@ program streamer_$Dd
   ! Start from small time step
   ST_dt   = ST_dt_min
   dt_prev = ST_dt
+  
+  ! Initial wall clock time
+  call system_clock(t_start, count_rate)
+  inv_count_rate = 1.0_dp / count_rate
+  time_last_print = -1e10_dp
+
+  
 
   do it = 1, huge(1)-1
-     if (ST_time > ST_end_time) exit
+     if (ST_time >= ST_end_time) exit
+     
+     ! Update wall clock time
+     call system_clock(t_current)
+     wc_time = (t_current - t_start) * inv_count_rate
+
+     ! Every ST_print_status_interval, print some info about progress
+     if (wc_time - time_last_print > ST_print_status_sec) then
+        call print_status()
+        time_last_print = wc_time
+     end if
 
      ! Every ST_dt_output, write output
      if (output_cnt * ST_dt_output <= ST_time + ST_dt) then
@@ -149,8 +171,8 @@ program streamer_$Dd
 
      if (write_out) then
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror)
 
         if (ST_output_src_term) then
            call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
@@ -210,8 +232,8 @@ program streamer_$Dd
         end if
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror)
 
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
@@ -227,6 +249,7 @@ program streamer_$Dd
      end if
   end do
 
+  call print_status()
   call a$D_destroy(tree)
 
 contains
@@ -313,20 +336,15 @@ contains
                      gradient_$Dd(box, 2, [IJK], 6, i_phi))
 #endif           
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7) .or. &
-          (adx + cphi) * dot_product(Efld, grad_n) > 0.3_dp * (norm2(Efld) * norm2(grad_n))) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7)) then
             cell_flags(IJK) = af_do_ref
-       else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx &
-          .and. (eps_max == eps_min .or. box%lvl >= 7) .and. (adx + cphi)*dot_product(Efld, grad_n) <= &
-          0.0375_dp * (norm2(Efld)*norm2(grad_n))) then
+       else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
+          .and. (eps_max == eps_min .or. box%lvl >= 7)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
        end if
        
-       if (eps_max > eps_min .and. sqrt(adx + cphi) > 0.8_dp) then
-         cell_flags(IJK) = af_do_ref
-       end if
 
        ! Refine around the initial conditions
        if (ST_time < ST_refine_init_time) then
@@ -395,7 +413,7 @@ contains
     allocate(sigma(DTIMES(0:nc+2), $D))
 
     ! Fill ghost cells on the sides of boxes (no corners)
-    call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp_lim, &
+    call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp, &
          a$D_bc_dirichlet_mirror, .false.)
          
     call a$D_gc_box_fc(boxes, id, i_eps, sigma_rhs, a$D_gc_prolong_copy_fc, &
@@ -469,7 +487,7 @@ contains
             boxes(id)%fc(DTIMES(:), 1:$D, electric_fld)
 
        ! Fill ghost cells on the sides of boxes (no corners)
-       call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp_lim, &
+       call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp, &
             a$D_bc_dirichlet_mirror, .false.)
 
        call flux_koren_$Dd(cc, v, nc, inv_dr)
@@ -695,7 +713,7 @@ contains
           call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps, med = med)
           call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps)
           if (photoi_enabled) then
-             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps, med = med)
+             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_photo, i_eps = i_eps, med = med)
           end if
           if (ST_output_src_term) then
              call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_src, i_eps = i_eps, med = med)
@@ -708,9 +726,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a$D_gc_box(tree%boxes, id, i_eps, i_electron, &
-               a$D_gc_interp_lim, a$D_bc_dirichlet_mirror)
+               a$D_gc_interp, a$D_bc_dirichlet_mirror)
           call a$D_gc_box(tree%boxes, id, i_eps, i_pos_ion, &
-               a$D_gc_interp_lim, a$D_bc_dirichlet_mirror)
+               a$D_gc_interp, a$D_bc_dirichlet_mirror)
           call a$D_gc_box(tree%boxes, id, i_eps, i_phi, &
                mg%sides_rb, mg%sides_bc)
           if (photoi_enabled) then
@@ -755,12 +773,12 @@ contains
        open(my_unit, file=trim(fname), action="write")
 #if $D == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y n_cells"
-       fmt = "(I6,14E16.8,I6)"
+            "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells"
+       fmt = "(I6,15E16.8,I12)"
 #elif $D == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z n_cells"
-       fmt = "(I6,13E16.8,I6)"
+            "max(E) x y z max(n_e) x y z wc_time n_cells"
+       fmt = "(I6,14E16.8,I12)"
 #endif
        close(my_unit)
 
@@ -777,14 +795,21 @@ contains
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
          a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er), &
-         a$D_num_cells_used(tree)
+         wc_time, a$D_num_cells_used(tree)
 #elif $D == 3
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec), a$D_num_cells_used(tree)
+         a$D_r_loc(tree, loc_elec), wc_time, a$D_num_cells_used(tree)
 #endif
     close(my_unit)
 
   end subroutine write_log_file
+  
+  subroutine print_status()
+    write(*, "(F7.3,A,I0,A,E10.3,A,E10.3,A,E10.3)") &
+             100 * ST_time / ST_end_time, "% it: ", it, &
+             " t:", ST_time, " dt:", ST_dt, " wc:", wc_time
+  end subroutine print_status
+  
 
 end program streamer_$Dd

@@ -362,13 +362,13 @@ contains
 
     do KJI_DO(1,nc)
 #if $D == 2
-       Ex = 0.5_dp*(box%fc(IJK, 1, electric_fld) + box%fc(i+1, j, 1, electric_fld))
-       Ey = 0.5_dp*(box%fc(IJK, 2, electric_fld) + box%fc(i, j+1, 2, electric_fld))
+       Ex = -0.5_dp*(gradient_2d(box, 2, [IJK], 1, i_phi) + gradient_2d(box, 2, [IJK], 2, i_phi))
+       Ey = -0.5_dp*(gradient_2d(box, 2, [IJK], 3, i_phi) + gradient_2d(box, 2, [IJK], 4, i_phi))
        box%cc(IJK, i_electric_fld) = sqrt(Ex**2+Ey**2)
 #elif $D == 3
-       Ex = 0.5_dp*(box%fc(IJK, 1, electric_fld) + box%fc(i+1, j, k, 1, electric_fld))
-       Ey = 0.5_dp*(box%fc(IJK, 2, electric_fld) + box%fc(i, j+1, k, 2, electric_fld))
-       Ez = 0.5_dp*(box%fc(IJK, 3, electric_fld) + box%fc(i, j, k+1, 3, electric_fld))
+       Ex = -0.5_dp*(gradient_3d(box, 2, [IJK], 1, i_phi) + gradient_3d(box, 2, [IJK], 2, i_phi))
+       Ey = -0.5_dp*(gradient_3d(box, 2, [IJK], 3, i_phi) + gradient_3d(box, 2, [IJK], 4, i_phi))
+       Ez = -0.5_dp*(gradient_3d(box, 2, [IJK], 5, i_phi) + gradient_3d(box, 2, [IJK], 6, i_phi))
        box%cc(IJK, i_electric_fld) = sqrt(Ex**2+Ey**2+Ez**2)
 #endif
     end do; CLOSE_DO

@@ -139,7 +139,17 @@ contains
 
     select case (DI_shape)
     case ('elliptic')
-       check = sum(((rr - DI_center)**2) / DI_axis**2) < 1.0_dp  
+       check = sum(((rr - DI_center)**2) / DI_axis**2) < 1.0_dp
+    case ('elliptic_rot1')
+#if $D == 2
+       check = ((rr(1) + rr(2) - DI_center(1))**2) / DI_axis(1)**2  + & 
+             ((rr(2) - rr(2) - DI_center(2))**2) / DI_axis(2)**2 < 2.0_dp 
+#endif   
+    case ('elliptic_rot2')
+#if $D == 2
+       check = ((rr(1) - rr(2) + DI_center(1))**2) / DI_axis(1)**2 + & 
+             ((rr(2) + rr(2) + DI_center(2))**2) / DI_axis(2)**2 < 2.0_dp 
+#endif
     case ('square')
        check = all(abs(rr-DI_center) < DI_axis)
     case default
