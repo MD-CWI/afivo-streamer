@@ -90,6 +90,9 @@ module m_streamer
     real(dp), protected :: ST_print_status_sec = 5.0_dp
   
 
+  ! Print status every this many seconds
+  real(dp), protected :: ST_print_status_sec = 60.0_dp
+
   ! The refinement buffer width in cells (around flagged cells)
   integer, protected :: ST_refine_buffer_width = 4
 
@@ -352,7 +355,7 @@ contains
     call CFG_add_get(cfg, "output_dir", ST_output_dir, &
          "Directory where the output should be written")
     call CFG_add_get(cfg, "print_status_sec", ST_print_status_sec, &
-         "Print status every this many seconds") 
+         "Print status every this many seconds")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
          "The number of grid cells per coordinate in a box")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &

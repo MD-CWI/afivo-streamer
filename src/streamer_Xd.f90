@@ -11,7 +11,7 @@ program streamer_$Dd
   use m_units_constants
 
   implicit none
-  
+
   integer, parameter     :: int8 = selected_int_kind(18)
   integer(int8)          :: t_start, t_current, count_rate
   real(dp)               :: wc_time, inv_count_rate, time_last_print
@@ -26,6 +26,7 @@ program streamer_$Dd
   type(CFG_t)            :: cfg ! The configuration for the simulation
   type(a$D_t)            :: tree      ! This contains the full grid information
   type(mg$D_t)           :: mg        ! Multigrid option struct
+
   type(ref_info_t)       :: ref_info
 
   integer :: output_cnt = 0 ! Number of output files written
@@ -91,9 +92,14 @@ program streamer_$Dd
 
   
 
+  ! Initial wall clock time
+  call system_clock(t_start, count_rate)
+  inv_count_rate = 1.0_dp / count_rate
+  time_last_print = -1e10_dp
+
   do it = 1, huge(1)-1
      if (ST_time >= ST_end_time) exit
-     
+
      ! Update wall clock time
      call system_clock(t_current)
      wc_time = (t_current - t_start) * inv_count_rate
@@ -751,7 +757,7 @@ contains
     integer, intent(in)          :: out_cnt
     character(len=*), intent(in) :: dir
     character(len=ST_slen)       :: fname
-    character(len=20), save      :: fmt
+    character(len=30), save      :: fmt
     integer, parameter           :: my_unit = 123
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos($D) = 0
@@ -773,12 +779,12 @@ contains
        open(my_unit, file=trim(fname), action="write")
 #if $D == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells"
-       fmt = "(I6,15E16.8,I12)"
+            "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells min(dx) highest(lvl)"
+       fmt = "(I6,15E16.8,I12,1E16.8,I3)"
 #elif $D == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z wc_time n_cells"
-       fmt = "(I6,14E16.8,I12)"
+            "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
+       fmt = "(I6,14E16.8,I12,1E16.8,I3)"
 #endif
        close(my_unit)
 
@@ -795,11 +801,11 @@ contains
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
          a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er), &
-         wc_time, a$D_num_cells_used(tree)
+         wc_time, a$D_num_cells_used(tree), a$D_min_dr(tree),tree%highest_lvl
 #elif $D == 3
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec), wc_time, a$D_num_cells_used(tree)
+         a$D_r_loc(tree, loc_elec), wc_time, a$D_num_cells_used(tree), a$D_min_dr(tree),tree%highest_lvl
 #endif
     close(my_unit)
 
@@ -811,5 +817,13 @@ contains
              " t:", ST_time, " dt:", ST_dt, " wc:", wc_time
   end subroutine print_status
   
+
+  subroutine print_status()
+    write(*, "(F7.2,A,I0,A,E10.3,A,E10.3,A,E10.3,A,E10.3)") &
+             100 * ST_time / ST_end_time, "% it: ", it, &
+             " t:", ST_time, " dt:", ST_dt, " wc:", wc_time, &
+             " ncell:", real(a$D_num_cells_used(tree), dp)
+  end subroutine print_status
+
 
 end program streamer_$Dd
