@@ -760,7 +760,7 @@ contains
 
   subroutine DI_photon_abs2(start_pos, end_pos, tree)
       use m_a2_types
-      use m_a2_utils, only:a2_get_id_at
+      use m_a2_utils, only:a2_get_id_at, a2_harm_w
       type(a2_t), intent(in)           :: tree
       type(box2_t)                     :: box
       real(dp), intent(in)             :: start_pos(2)
@@ -776,7 +776,7 @@ contains
                abs_pos = start_copy + (end_pos - start_copy)*i/n_sample
                box = tree%boxes(a2_get_id_at(tree, abs_pos)) 
                ind = a2_cc_ix(box, abs_pos)     
-                  if (box%cc(ind(1), ind(2), i_eps)> 1.1_dp) then
+                  if (box%cc(ind(1), ind(2), i_eps) > a2_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp) ) then
                      end_pos = abs_pos
                      start_copy = temp
                      exit
@@ -789,7 +789,7 @@ contains
     
     subroutine DI_photon_abs3(start_pos, end_pos, tree)
         use m_a3_types
-        use m_a3_utils, only:a3_get_id_at
+        use m_a3_utils, only:a3_get_id_at, a3_harm_w
         type(a3_t), intent(in)           :: tree
         type(box3_t)                     :: box
         real(dp), intent(in)             :: start_pos(3)
@@ -805,7 +805,7 @@ contains
                  abs_pos = start_copy + (end_pos - start_copy)*i/n_sample
                  box = tree%boxes(a3_get_id_at(tree, abs_pos))
                  ind = a3_cc_ix(box, abs_pos)
-                     if (box%cc(ind(1), ind(2), ind(3), i_eps)> 1.1_dp) then
+                     if (box%cc(ind(1), ind(2), ind(3), i_eps) > a3_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)) then
                        end_pos = abs_pos
                        start_copy = temp
                        exit

@@ -87,10 +87,6 @@ module m_streamer
   character(len=ST_slen), protected :: ST_output_dir = "output"
   
   ! Print status every this many seconds
-    real(dp), protected :: ST_print_status_sec = 5.0_dp
-  
-
-  ! Print status every this many seconds
   real(dp), protected :: ST_print_status_sec = 60.0_dp
 
   ! The refinement buffer width in cells (around flagged cells)
@@ -224,6 +220,9 @@ module m_streamer
   
   ! Epsilon of dielectric
   real(dp), protected :: ST_epsilon_die = 5.0_dp
+  
+  ! Photoemission yield (from 10e-7 to 1)
+  real(dp), protected :: ST_phe_yield = 10e-3_dp
 
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2
@@ -364,6 +363,8 @@ contains
          "The gas pressure (bar), used for photoionization")
     call CFG_add_get(cfg, "gas_frac_O2", ST_gas_frac_O2, &
          "Fraction of O2, used for photoionization")
+    call CFG_add_get(cfg, "photoemission_yield", ST_phe_yield, &
+         "Photoemission yield of the dielectric")
          
     call CFG_add_get(cfg, "epsilon_die", ST_epsilon_die, &
          "Permittivity of the dielectric")

@@ -20,7 +20,7 @@ module m_field_$Dd
   real(dp) :: field_lin_deriv = 0.0_dp
 
   !> Decay time of background field
-  real(dp) :: field_decay_time = huge(1.0_dp)
+  real(dp) :: field_decay_time = 1e99_dp
 
   !> The applied electric field (vertical direction)
   real(dp) :: field_amplitude = 1.0e6_dp
@@ -106,6 +106,7 @@ contains
   !> potential, then take numerical gradient to geld field.
   subroutine field_compute(tree, mg, have_guess)
     use m_units_constants
+    use m_a$D_utils, only:a$D_harm_w
     type(a$D_t), intent(inout) :: tree
     type(mg$D_t), intent(in)   :: mg ! Multigrid option struct
     logical, intent(in)        :: have_guess
@@ -144,7 +145,8 @@ contains
     call a$D_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call a$D_gc_tree(tree, i_eps, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
+    call a$D_gc_tree(tree, i_eps, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero, med = &
+            a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp) )
   end subroutine field_compute
 
   !> Compute the electric field at a given time

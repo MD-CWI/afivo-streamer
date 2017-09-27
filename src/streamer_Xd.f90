@@ -177,18 +177,18 @@ program streamer_$Dd
 
      if (write_out) then
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
 
         if (ST_output_src_term) then
            call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp, a$D_bc_neumann_zero)
+           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp, a$D_bc_neumann_zero, med = med)
         end if
 
         if (photoi_enabled) then
            call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
            call a$D_restrict_tree(tree, i_photo, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp, a$D_bc_neumann_zero)
+           call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp, a$D_bc_neumann_zero, med = med)
         end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
@@ -234,12 +234,12 @@ program streamer_$Dd
            ! Have to set src term on coarse grids as well, and fill ghost cells
            ! before prolongation
            call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp, a$D_bc_neumann_zero)
+           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp, a$D_bc_neumann_zero, med = med)
         end if
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
 
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
@@ -420,7 +420,7 @@ contains
 
     ! Fill ghost cells on the sides of boxes (no corners)
     call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp, &
-         a$D_bc_dirichlet_mirror, .false.)
+         a$D_bc_dirichlet_mirror, .false., med = med)
          
     call a$D_gc_box_fc(boxes, id, i_eps, sigma_rhs, a$D_gc_prolong_copy_fc, &
          a$D_bc_dirichlet_zero_fc, med)
@@ -494,7 +494,7 @@ contains
 
        ! Fill ghost cells on the sides of boxes (no corners)
        call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp, &
-            a$D_bc_dirichlet_mirror, .false.)
+            a$D_bc_dirichlet_mirror, .false., med = med)
 
        call flux_koren_$Dd(cc, v, nc, inv_dr)
        call flux_diff_$Dd(boxes(id), dc, i_pos_ion)
@@ -519,13 +519,13 @@ contains
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: args(:)
     real(dp)                     :: dt, inv_dr, src, fld, fld_vec($D), s_flow($D)
-    real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
+    real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff, rand
     real(dp)                     :: dt_cfl, dt_dif, dt_drt, s_fac
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
 #endif
-    integer                      :: IJK, nc, tid, i_step
+    integer                      :: IJK, nc, tid, i_step, n, flag, ix($D), count_rate, time, dir
     type(LT_loc_t)               :: loc
 
     tid      = omp_get_thread_num() + 1
@@ -547,6 +547,7 @@ contains
        eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)*a$D_heaviside(box%cc(IJK, i_eps), med)
        mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
        f_elec = 0.0_dp
+       flag = 0
 
        ! Contribution of flux
 #if $D == 2
@@ -633,7 +634,30 @@ contains
 
        ! Source term
        src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
-       if (photoi_enabled .and. box%cc(IJK, i_eps) <= med) src = src + box%cc(IJK, i_photo)
+       if (photoi_enabled .and. box%cc(IJK, i_eps) <= med) then
+         src = src + box%cc(IJK, i_photo)
+       else if (photoi_enabled .and. box%cc(IJK, i_eps) > med) then
+         src = 0.0_dp
+         do n = 1, 10    
+           call system_clock(time, count_rate)         
+           call random_seed(time)
+           call random_number(rand)
+           dir = int(1+rand*(a$D_num_neighbors-1))
+           ix = a$D_neighb_dix(:, dir)
+#if $D == 2
+           if (box%cc(i+ix(1), j+ix(2), i_eps) <= med) then
+             flag = 1
+             exit
+           end if    
+#elif $D == 3
+           if (box%cc(i+ix(1), j+ix(2), k+ix(3), i_eps) <= med) then
+             flag = 1 
+             exit        
+           end if  
+#endif
+
+         end do
+       end if
 
        if (i_step == 1 .and. ST_output_src_term) then
           if (ST_output_src_decay_rate < 0) then
@@ -649,12 +673,24 @@ contains
        ! Convert to density
        src  = src * dt
 
-       ! Add flux and source term
-       if (box%cc(IJK, i_eps) <= med) then
-         box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
-       
-         ! Add flux and source term
-         box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
+
+       if (flag == 1) then ! Add photoemission effect
+#if $D == 2
+         box%cc(i+ix(1), j+ix(2), i_electron) = box%cc(i+ix(1), j+ix(2), i_electron) + &
+                                              box%cc(IJK, i_photo) * ST_phe_yield
+         box%fc(max(i, i+ix(1)), max(j, j+ix(2)), dir, sigma_rhs) = &
+               box%fc(max(i, i+ix(1)), max(j, j+ix(2)), dir, sigma_rhs) - box%cc(IJK, i_photo) * ST_phe_yield * box%dr
+#elif $D == 3
+         box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) = box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) + &
+                                                       box%cc(IJK, i_photo) * ST_phe_yield
+#endif
+       else
+         if (box%cc(IJK, i_eps) <= med) then
+           ! Add flux and source term
+           box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
+
+           box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
+         end if
        end if
 
        ! Possible determine new time step restriction
@@ -732,18 +768,18 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a$D_gc_box(tree%boxes, id, i_eps, i_electron, &
-               a$D_gc_interp, a$D_bc_dirichlet_mirror)
+               a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
           call a$D_gc_box(tree%boxes, id, i_eps, i_pos_ion, &
-               a$D_gc_interp, a$D_bc_dirichlet_mirror)
+               a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
           call a$D_gc_box(tree%boxes, id, i_eps, i_phi, &
-               mg%sides_rb, mg%sides_bc)
+               mg%sides_rb, mg%sides_bc, med = med)
           if (photoi_enabled) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_photo, &
-               a$D_gc_interp, photoi_helmh_bc)
+               a$D_gc_interp, photoi_helmh_bc, med = med)
           end if
           if (ST_output_src_term) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_src, &
-               a$D_gc_interp, a$D_bc_neumann_zero)
+               a$D_gc_interp, a$D_bc_neumann_zero, med = med)
           end if
        end do
        !$omp end do
@@ -810,12 +846,6 @@ contains
     close(my_unit)
 
   end subroutine write_log_file
-  
-  subroutine print_status()
-    write(*, "(F7.3,A,I0,A,E10.3,A,E10.3,A,E10.3)") &
-             100 * ST_time / ST_end_time, "% it: ", it, &
-             " t:", ST_time, " dt:", ST_dt, " wc:", wc_time
-  end subroutine print_status
   
 
   subroutine print_status()

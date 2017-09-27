@@ -26,27 +26,28 @@ contains
 
   !> Fill ghost cells for variables iv on the sides of all boxes, using
   !> subr_rb on refinement boundaries and subr_bc on physical boundaries
-  subroutine a$D_gc_tree(tree, i_eps, iv, subr_rb, subr_bc, corners)
+  subroutine a$D_gc_tree(tree, i_eps, iv, subr_rb, subr_bc, corners, med)
     type(a$D_t), intent(inout)    :: tree    !< Tree to fill ghost cells on
     integer, intent(in), optional :: i_eps
     integer, intent(in)           :: iv      !< Variable for which ghost cells are set
     procedure(a$D_subr_rb)        :: subr_rb !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)        :: subr_bc !< Procedure called at physical boundaries
     logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
+    real(dp), intent(in), optional :: med
     integer                       :: lvl
 
     if (.not. tree%ready) stop "Tree not ready"
 
     do lvl = lbound(tree%lvls, 1), tree%highest_lvl
        call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, i_eps, iv, &
-            subr_rb, subr_bc, corners)
+            subr_rb, subr_bc, corners, med)
     end do
   end subroutine a$D_gc_tree
 
   !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
   !> on refinement boundaries and subr_bc on physical boundaries. This routine
   !> assumes that ghost cells on other ids have been set already.
-  subroutine a$D_gc_ids(boxes, ids, i_eps, iv, subr_rb, subr_bc, corners)
+  subroutine a$D_gc_ids(boxes, ids, i_eps, iv, subr_rb, subr_bc, corners, med)
     type(box$D_t), intent(inout)   :: boxes(:) !< List of all the boxes
     integer, intent(in)            :: ids(:)   !< Ids of boxes for which we set ghost cells
     integer, intent(in), optional  :: i_eps
@@ -54,28 +55,30 @@ contains
     procedure(a$D_subr_rb)         :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)         :: subr_bc  !< Procedure called at physical boundaries
     logical, intent(in), optional  :: corners !< Fill corner ghost cells (default: yes)
+    real(dp), intent(in), optional :: med
     integer                        :: i
 
     !$omp parallel do
     do i = 1, size(ids) 
-      call a$D_gc_box(boxes, ids(i), i_eps, iv, subr_rb, subr_bc, corners)
+      call a$D_gc_box(boxes, ids(i), i_eps, iv, subr_rb, subr_bc, corners, med = med)
     end do
     !$omp end parallel do
   end subroutine a$D_gc_ids
 
   !> Fill ghost cells for variable iv
-  subroutine a$D_gc_box(boxes, id, i_eps, iv, subr_rb, subr_bc, corners)
+  subroutine a$D_gc_box(boxes, id, i_eps, iv, subr_rb, subr_bc, corners, med)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all the boxes
     integer, intent(in)           :: id       !< Id of box for which we set ghost cells
     integer, intent(in)           :: iv       !< Variable for which ghost cells are set
     integer, intent(in), optional :: i_eps
+    real(dp), intent(in), optional :: med
     procedure(a$D_subr_rb)        :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)        :: subr_bc  !< Procedure called at physical boundaries
     logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
     logical :: do_corners
 
 
-    call a$D_gc_box_sides(boxes, id, i_eps, iv, subr_rb, subr_bc)
+    call a$D_gc_box_sides(boxes, id, i_eps, iv, subr_rb, subr_bc, med = med)
 
 
     do_corners = .true.
@@ -99,11 +102,12 @@ contains
 
   !> Fill ghost cells for variable iv on the sides of a box, using subr_rb on
   !> refinement boundaries and subr_bc on physical boundaries.
-  subroutine a$D_gc_box_sides(boxes, id, i_eps, iv, subr_rb, subr_bc)
+  subroutine a$D_gc_box_sides(boxes, id, i_eps, iv, subr_rb, subr_bc, med)
     type(box$D_t), intent(inout)   :: boxes(:) !< List of all the boxes
     integer, intent(in)            :: id       !< Id of box for which we set ghost cells
     integer, intent(in)            :: iv       !< Variable for which ghost cells are set
     integer, intent(in), optional  :: i_eps
+    real(dp), intent(in), optional :: med
     procedure(a$D_subr_rb)         :: subr_rb  !< Procedure called at refinement boundaries
     procedure(a$D_subr_bc)         :: subr_bc  !< Procedure called at physical boundaries
     integer                        :: nb, nb_id, bc_type
@@ -123,7 +127,7 @@ contains
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
        else if (nb_id == af_no_box) then
           ! Refinement boundary
-          call subr_rb(boxes, id, nb, i_eps = i_eps, iv = iv)
+          call subr_rb(boxes, id, nb, i_eps = i_eps, iv = iv, med = med)
        else
           ! Physical boundary
           call subr_bc(boxes(id), nb, iv, bc_type, i_eps = i_eps)
@@ -352,6 +356,7 @@ contains
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries
   subroutine a$D_gc_interp(boxes, id, nb, i_eps, iv, med)
+    use m_a$D_utils, only:a$D_heaviside 
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)            :: id        !< Id of box
     integer, intent(in)            :: nb        !< Ghost cell direction
@@ -389,25 +394,45 @@ contains
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          f0 = 0.5_dp/boxes(p_nb_id)%cc(ix_c, j_c1, i_eps)
-          f1 = sixth/boxes(p_nb_id)%cc(ix_c, j_c2, i_eps)
-          f2 = third/boxes(p_nb_id)%cc(ix_f, j, i_eps)
-          boxes(id)%cc(ix, j, iv) = &
-               (f0 * boxes(p_nb_id)%cc(ix_c, j_c1, iv) + &
-               f1 * boxes(p_nb_id)%cc(ix_c, j_c2, iv) + &
-               f2 * boxes(id)%cc(ix_f, j, iv))/(f0 + f1 +f2)
+          f0 = 0.5_dp*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med)
+          f1 = sixth*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), med)
+          f2 = third*a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med)
+          if (f0 + f1 + f2 > epsilon(1.0_dp)) then
+            if (boxes(id)%cc(ix, j, i_eps) <= med ) then
+              boxes(id)%cc(ix, j, iv) = &
+                 (f0 * boxes(p_nb_id)%cc(ix_c, j_c1, iv) + &
+                 f1 * boxes(p_nb_id)%cc(ix_c, j_c2, iv) + &
+                 f2 * boxes(id)%cc(ix_f, j, iv))/(f0 + f1 +f2)
+            else
+              boxes(id)%cc(ix, j, iv) = 0.01_dp
+            end if
+          else
+            boxes(id)%cc(ix, j, iv) = 0.5_dp * boxes(p_nb_id)%cc(ix_c, j_c1, iv) + &
+               sixth * boxes(p_nb_id)%cc(ix_c, j_c2, iv) + &
+               third * boxes(id)%cc(ix_f, j, iv)   
+          end if
        end do
     case (2)
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          f0 = 0.5_dp/boxes(p_nb_id)%cc(i_c1, ix_c, i_eps)
-          f1 = sixth/boxes(p_nb_id)%cc(i_c2, ix_c, i_eps)
-          f2 = third/boxes(p_nb_id)%cc(i, ix_f, i_eps)
-          boxes(id)%cc(i, ix, iv) = &
-               (f0 * boxes(p_nb_id)%cc(i_c1, ix_c, iv) + &
-               f1 * boxes(p_nb_id)%cc(i_c2, ix_c, iv) + &
-               f2 * boxes(id)%cc(i, ix_f, iv))/(f0 + f1 +f2)
+          f0 = 0.5_dp * a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med)
+          f1 = sixth * a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med)
+          f2 = third * a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med)
+          if (f0 + f1 + f2 > epsilon(1.0_dp)) then
+            if (boxes(id)%cc(i, ix, i_eps) <= med ) then
+              boxes(id)%cc(i, ix, iv) = &
+                 (f0 * boxes(p_nb_id)%cc(i_c1, ix_c, iv) + &
+                 f1 * boxes(p_nb_id)%cc(i_c2, ix_c, iv) + &
+                 f2 * boxes(id)%cc(i, ix_f, iv))/(f0 + f1 +f2)
+            else
+              boxes(id)%cc(i, ix, iv) = 0.01_dp
+            end if
+          else
+            boxes(id)%cc(i, ix, iv) = 0.5_dp * boxes(p_nb_id)%cc(i_c1, ix_c, iv) + &
+               sixth * boxes(p_nb_id)%cc(i_c2, ix_c, iv) + &
+               third * boxes(id)%cc(i, ix_f, iv)   
+          end if
        end do
 #elif $D==3
     case (1)
