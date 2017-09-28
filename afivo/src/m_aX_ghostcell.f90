@@ -526,14 +526,17 @@ contains
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
           if (boxes(id)%cc(ix, j, i_eps) <= med) then
             c1 = boxes(p_nb_id)%cc(ix_c, j_c1, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med)
-            c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med)
+            c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), med)
             boxes(id)%cc(ix, j, iv) = (0.5_dp * c1 + sixth * c2 + &
                  third * boxes(id)%cc(ix_f, j, iv)*a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med)) / &
-                 (a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med) + &
-                 a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med) + &
-                 a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med) + epsilon(1.0_dp))
-            !if (boxes(id)%cc(ix, j, iv) > 1.5_dp * c1 .and. c1 > 0.0_dp) boxes(id)%cc(ix, j, iv) = 1.5_dp * c1
-            !if (boxes(id)%cc(ix, j, iv) > 1.5_dp * c2 .and. c2 > 0.0_dp) boxes(id)%cc(ix, j, iv) = 1.5_dp * c2
+                 (0.5_dp*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med) + &
+                 sixth * a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), med) + &
+                 third * a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med) + epsilon(1.0_dp))
+            if (boxes(id)%cc(ix, j, iv) > 2 * c1 .and. c1 > 0.0_dp) then
+               boxes(id)%cc(ix, j, iv) = 2 * c1
+            else if (boxes(id)%cc(ix, j, iv) > 2 * c2 .and. c2 > 0.0_dp) then
+               boxes(id)%cc(ix, j, iv) = 2 * c2
+            end if
           else
             boxes(id)%cc(ix, j, iv) = 0.01_dp
           end if
@@ -546,12 +549,15 @@ contains
            c1 = boxes(p_nb_id)%cc(i_c1, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med)
            c2 = boxes(p_nb_id)%cc(i_c2, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med)
            boxes(id)%cc(i, ix, iv) = (0.5_dp * c1 + sixth * c2 + &
-                 third * boxes(id)%cc(i, ix_f, iv)*a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med)) / &
-                 (a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med) + &
-                 a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med) + &
-                 a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med) + epsilon(1.0_dp))
-            !if (boxes(id)%cc(i, ix, iv) > 1.5_dp * c1 .and. c1 > 0.0_dp) boxes(id)%cc(i, ix, iv) = 1.5_dp * c1
-            !if (boxes(id)%cc(i, ix, iv) > 1.5_dp * c2 .and. c2 > 0.0_dp) boxes(id)%cc(i, ix, iv) = 1.5_dp * c2
+                 third * boxes(id)%cc(i, ix_f, iv)*a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med)) / & 
+                 (0.5_dp * a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med) +  &
+                 sixth * a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med) + &
+                 third * a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med) + epsilon(1.0_dp))
+            if (boxes(id)%cc(i, ix, iv) > 2 * c1 .and. c1 > 0.0_dp) then
+               boxes(id)%cc(i, ix, iv) = 2 * c1
+            else if (boxes(id)%cc(i, ix, iv) > 2 * c2 .and. c2 > 0.0_dp) then
+               boxes(id)%cc(i, ix, iv) = 2 * c2
+            end if
           else
             boxes(id)%cc(i, ix, iv) = 0.01_dp
           end if
@@ -826,14 +832,10 @@ contains
           w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
                0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
                0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
-          if (w > epsilon(1.0_dp)) then
-            gc_side(j) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-                 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / w
-          else
-            gc_side(j) = 0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv) + 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
-                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)
-          end if
+          gc_side(j) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
+               (w+epsilon(1.0_dp))
        end do
     case (2)
        j_c1 = ix_offset(2) + ishft(ix+1, -1) ! (j+1)/2
@@ -844,14 +846,10 @@ contains
           w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
                0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
                0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
-          if (w > epsilon(1.0_dp)) then
-            gc_side(i) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-                 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / w
-          else
-             gc_side(i) = 0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv) + 0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
-                 0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)
-          end if
+          gc_side(i) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
+               (w+epsilon(1.0_dp))
        end do
 #elif $D==3
     case (1)

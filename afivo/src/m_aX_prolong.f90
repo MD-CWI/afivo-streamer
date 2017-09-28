@@ -391,51 +391,31 @@ contains
           fhh = f1 * box_p%cc(i_c+1, j_c+1, iv)*in_out(1,1)
           
           if (box_c%cc(i_f, j_f, i_eps) <= med) then
-            if (in_out(0,0)+in_out(-1,0)+in_out(0,-1)+in_out(-1,-1) > epsilon(1.0_dp)) then
-              box_c%cc(i_f, j_f, ivc) = box_c%cc(i_f, j_f, ivc) + (f0 + flx + fly + fll)/&
-                  (f9*in_out(0,0) + f3*in_out(-1,0) + f3*in_out(0,-1) + f1*in_out(-1,-1))
-            else
-              box_c%cc(i_f, j_f, ivc) = box_c%cc(i_f, j_f, ivc) + (fhx + fhy + fhh) / &
-                  (f3*in_out(1,0) + f3*in_out(0,1) + f1*in_out(1,1))
-            endif
+            box_c%cc(i_f, j_f, ivc) = box_c%cc(i_f, j_f, ivc) + (f0 + flx + fly + fll)/&
+                (f9*in_out(0,0) + f3*in_out(-1,0) + f3*in_out(0,-1) + f1*in_out(-1,-1) + epsilon(1.0_dp))
           else
-              box_c%cc(i_f, j_f, ivc) = 0.0_dp
+              box_c%cc(i_f, j_f, ivc) = 0.01_dp
           end if
           
           if (box_c%cc(i_f+1, j_f, i_eps) <= med) then 
-            if (in_out(0,0)+in_out(1,0)+in_out(0,-1)+in_out(1,-1) > epsilon(1.0_dp)) then  
-              box_c%cc(i_f+1, j_f, ivc) = box_c%cc(i_f+1, j_f, ivc) + (f0 + fhx + fly + fhl)/&
-                  (f9*in_out(0,0) + f3*in_out(1,0) + f3*in_out(0,-1) + f1*in_out(1,-1))
-            else
-              box_c%cc(i_f+1, j_f, ivc) = box_c%cc(i_f+1, j_f, ivc) + (flx + fhy + flh) / &
-                  (f3*in_out(-1,0) + f3*in_out(0,1) + f1*in_out(-1,1))
-            endif
+            box_c%cc(i_f+1, j_f, ivc) = box_c%cc(i_f+1, j_f, ivc) + (f0 + fhx + fly + fhl)/&
+                (f9*in_out(0,0) + f3*in_out(1,0) + f3*in_out(0,-1) + f1*in_out(1,-1) + epsilon(1.0_dp))
           else
-            box_c%cc(i_f+1, j_f, ivc) = 0.0_dp
+            box_c%cc(i_f+1, j_f, ivc) = 0.01_dp
           end if
           
-          if (box_c%cc(i_f, j_f+1, i_eps) <= med) then  
-            if (in_out(0,0)+in_out(-1,0)+in_out(0,1)+in_out(-1,1) > epsilon(1.0_dp)) then     
-              box_c%cc(i_f, j_f+1, ivc) = box_c%cc(i_f, j_f+1, ivc) + (f0 + flx + fhy + flh)/&
-                  (f9*in_out(0,0) + f3*in_out(-1,0) + f3*in_out(0,1) + f1*in_out(-1,1))
-            else
-              box_c%cc(i_f, j_f+1, ivc) = box_c%cc(i_f, j_f+1, ivc) + (fhx + fly + fhl) / &
-                  (f3*in_out(1,0) + f3*in_out(0,-1) + f1*in_out(1,-1))
-            end if
+          if (box_c%cc(i_f, j_f+1, i_eps) <= med) then     
+            box_c%cc(i_f, j_f+1, ivc) = box_c%cc(i_f, j_f+1, ivc) + (f0 + flx + fhy + flh)/&
+                (f9*in_out(0,0) + f3*in_out(-1,0) + f3*in_out(0,1) + f1*in_out(-1,1) + epsilon(1.0_dp))
           else
-            box_c%cc(i_f, j_f+1, ivc) = 0.0_dp
+            box_c%cc(i_f, j_f+1, ivc) = 0.01_dp
           end if 
              
-          if (box_c%cc(i_f+1, j_f+1, i_eps) <= med) then
-            if (in_out(0,0)+in_out(1,0)+in_out(0,1)+in_out(1,1) > epsilon(1.0_dp)) then     
-              box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + (f0 + fhx + fhy + fhh)/&
-                  (f9*in_out(0,0) + f3*in_out(1,0) + f3*in_out(0,1) + f1*in_out(1,1)) 
-            else
-              box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + (flx + fly + fll) / &
-                  (f3*in_out(-1,0) + f3*in_out(0,-1) + f1*in_out(-1,-1))
-            end if
+          if (box_c%cc(i_f+1, j_f+1, i_eps) <= med) then    
+            box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + (f0 + fhx + fhy + fhh)/&
+                (f9*in_out(0,0) + f3*in_out(1,0) + f3*in_out(0,1) + f1*in_out(1,1) + epsilon(1.0_dp)) 
           else
-            box_c%cc(i_f+1, j_f+1, ivc) = 0.0_dp
+            box_c%cc(i_f+1, j_f+1, ivc) = 0.01_dp
           end if 
                 
        end do
