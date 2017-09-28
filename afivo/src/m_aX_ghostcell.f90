@@ -486,6 +486,7 @@ contains
   !> near refinement boundaries. The ghost values are less than twice the coarse
   !> values.
   subroutine a$D_gc_interp_lim(boxes, id, nb, i_eps, iv, med)
+    use m_a$D_utils, only:a$D_heaviside
     type(box$D_t), intent(inout)   :: boxes(:) !< List of all boxes
     integer, intent(in)            :: id        !< Id of box
     integer, intent(in)            :: nb        !< Ghost cell direction
@@ -523,21 +524,37 @@ contains
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          c1 = boxes(p_nb_id)%cc(ix_c, j_c1, iv)
-          c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)
-          boxes(id)%cc(ix, j, iv) = 0.5_dp * c1 + sixth * c2 + &
-               third * boxes(id)%cc(ix_f, j, iv)
-          if (boxes(id)%cc(ix, j, iv) > 2 * c1) boxes(id)%cc(ix, j, iv) = 2 * c1
+          if (boxes(id)%cc(ix, j, i_eps) <= med) then
+            c1 = boxes(p_nb_id)%cc(ix_c, j_c1, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med)
+            c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med)
+            boxes(id)%cc(ix, j, iv) = (0.5_dp * c1 + sixth * c2 + &
+                 third * boxes(id)%cc(ix_f, j, iv)*a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med)) / &
+                 (a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med) + &
+                 a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med) + &
+                 a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med) + epsilon(1.0_dp))
+            !if (boxes(id)%cc(ix, j, iv) > 1.5_dp * c1 .and. c1 > 0.0_dp) boxes(id)%cc(ix, j, iv) = 1.5_dp * c1
+            !if (boxes(id)%cc(ix, j, iv) > 1.5_dp * c2 .and. c2 > 0.0_dp) boxes(id)%cc(ix, j, iv) = 1.5_dp * c2
+          else
+            boxes(id)%cc(ix, j, iv) = 0.01_dp
+          end if
        end do
     case (2)
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          c1 = boxes(p_nb_id)%cc(i_c1, ix_c, iv)
-          c2 = boxes(p_nb_id)%cc(i_c2, ix_c, iv)
-          boxes(id)%cc(i, ix, iv) = 0.5_dp * c1 + sixth * c2 + &
-               third * boxes(id)%cc(i, ix_f, iv)
-          if (boxes(id)%cc(i, ix, iv) > 2 * c1) boxes(id)%cc(i, ix, iv) = 2 * c1
+          if (boxes(id)%cc(i, ix, i_eps) <= med) then
+           c1 = boxes(p_nb_id)%cc(i_c1, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med)
+           c2 = boxes(p_nb_id)%cc(i_c2, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med)
+           boxes(id)%cc(i, ix, iv) = (0.5_dp * c1 + sixth * c2 + &
+                 third * boxes(id)%cc(i, ix_f, iv)*a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med)) / &
+                 (a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med) + &
+                 a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med) + &
+                 a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med) + epsilon(1.0_dp))
+            !if (boxes(id)%cc(i, ix, iv) > 1.5_dp * c1 .and. c1 > 0.0_dp) boxes(id)%cc(i, ix, iv) = 1.5_dp * c1
+            !if (boxes(id)%cc(i, ix, iv) > 1.5_dp * c2 .and. c2 > 0.0_dp) boxes(id)%cc(i, ix, iv) = 1.5_dp * c2
+          else
+            boxes(id)%cc(i, ix, iv) = 0.01_dp
+          end if
        end do
 #elif $D==3
     case (1)

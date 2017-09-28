@@ -177,18 +177,18 @@ program streamer_$Dd
 
      if (write_out) then
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror, med = med)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror, med = med)
 
         if (ST_output_src_term) then
            call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp, a$D_bc_neumann_zero, med = med)
+           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
         end if
 
         if (photoi_enabled) then
            call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
            call a$D_restrict_tree(tree, i_photo, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp, a$D_bc_neumann_zero, med = med)
+           call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
         end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
@@ -234,12 +234,12 @@ program streamer_$Dd
            ! Have to set src term on coarse grids as well, and fill ghost cells
            ! before prolongation
            call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp, a$D_bc_neumann_zero, med = med)
+           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
         end if
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror, med = med)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_dirichlet_mirror, med = med)
 
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
@@ -419,7 +419,7 @@ contains
     allocate(sigma(DTIMES(0:nc+2), $D))
 
     ! Fill ghost cells on the sides of boxes (no corners)
-    call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp, &
+    call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp_lim, &
          a$D_bc_dirichlet_mirror, .false., med = med)
          
     call a$D_gc_box_fc(boxes, id, i_eps, sigma_rhs, a$D_gc_prolong_copy_fc, &
@@ -493,7 +493,7 @@ contains
             boxes(id)%fc(DTIMES(:), 1:$D, electric_fld)
 
        ! Fill ghost cells on the sides of boxes (no corners)
-       call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp, &
+       call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp_lim, &
             a$D_bc_dirichlet_mirror, .false., med = med)
 
        call flux_koren_$Dd(cc, v, nc, inv_dr)
@@ -768,18 +768,18 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a$D_gc_box(tree%boxes, id, i_eps, i_electron, &
-               a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
+               a$D_gc_interp_lim, a$D_bc_dirichlet_mirror, med = med)
           call a$D_gc_box(tree%boxes, id, i_eps, i_pos_ion, &
-               a$D_gc_interp, a$D_bc_dirichlet_mirror, med = med)
+               a$D_gc_interp_lim, a$D_bc_dirichlet_mirror, med = med)
           call a$D_gc_box(tree%boxes, id, i_eps, i_phi, &
                mg%sides_rb, mg%sides_bc, med = med)
           if (photoi_enabled) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_photo, &
-               a$D_gc_interp, photoi_helmh_bc, med = med)
+               a$D_gc_interp_lim, photoi_helmh_bc, med = med)
           end if
           if (ST_output_src_term) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_src, &
-               a$D_gc_interp, a$D_bc_neumann_zero, med = med)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
           end if
        end do
        !$omp end do
