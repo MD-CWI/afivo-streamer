@@ -299,10 +299,8 @@ contains
        di = dix
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
-          inv_eps(-1:1, -1:1) = 1.0_dp
-          if (maxval(boxes(id)%cc(:, :, i_eps)) > minval(boxes(id)%cc(:, :, i_eps))) then
-            inv_eps(-1:1, -1:1) = 1.0_dp/boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)
-          end if
+          inv_eps(-1:1, -1:1) = 2*(boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)*boxes(id)%cc(i-di, j, i_eps))/&
+                                (boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)+boxes(id)%cc(i-di, j, i_eps))
           ! Bilinear 4 point extrapolation
           boxes(id)%cc(i-di, j, iv) = (0.5_dp * boxes(id)%cc(i-di, j, iv)*inv_eps(-1,0) + &
                1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &
@@ -315,10 +313,8 @@ contains
        dj = dix
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
-          inv_eps(-1:1, -1:1) = 1.0_dp
-          if (maxval(boxes(id)%cc(:, :, i_eps)) > minval(boxes(id)%cc(:, :, i_eps))) then
-            inv_eps(-1:1, -1:1) = 1.0_dp/boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)
-          end if
+          inv_eps(-1:1, -1:1) = 2*(boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)*boxes(id)%cc(i, j-dj, i_eps))/&
+                                (boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)+boxes(id)%cc(i, j-dj, i_eps))
           ! Bilinear 4 point extrapolation
           boxes(id)%cc(i, j-dj, iv) = (0.5_dp * boxes(id)%cc(i, j-dj, iv)*inv_eps(0,-1) + &
                1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &
@@ -468,8 +464,8 @@ contains
        do i = 1, size(ids)
 #if $D == 2  
           call a$D_gc_box(boxes, ids(i), mg%i_eps, mg%i_phi, mg%sides_rb, &
-               mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle .or. &
-               maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))))
+               mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle))! .or. &
+               !maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))))
 #endif
        end do
        !$omp end do
@@ -909,8 +905,8 @@ contains
          yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
                               (box%cc(i, j:j+1, i_eps)+box%cc(i, j-1:j, i_eps))
    
-         x_surf(0:1) = xharm_eps(0:1)*box%fc(i:i+1, j, 1, sigma_rhs)/box%cc(i:i+1, j, i_eps)
-         y_surf(0:1) = yharm_eps(0:1)*box%fc(i, j:j+1, 2, sigma_rhs)/box%cc(i, j:j+1, i_eps)
+         x_surf(0:1) = xharm_eps(0:1)*box%fc(i:i+1, j, 1, sigma_rhs)/box%cc(i-1:i+1:2, j, i_eps)
+         y_surf(0:1) = yharm_eps(0:1)*box%fc(i, j:j+1, 2, sigma_rhs)/box%cc(i, j-1:j+1:2, i_eps)
 
          box%cc(i, j, i_phi) = (xharm_eps(1)*box%cc(i+1, j, i_phi) + xharm_eps(0)*box%cc(i-1, j, i_phi) + &
               yharm_eps(1)*box%cc(i, j+1, i_phi) + yharm_eps(0)*box%cc(i, j-1, i_phi) - &
@@ -947,7 +943,7 @@ contains
     type(mg$D_t), intent(in)      :: mg !< Multigrid options
     integer                       :: i, j, nc, i_phi, i_eps, sigma_rhs
     real(dp)                      :: inv_dr_sq, a0, u0, u(2*$D), a(2*$D)
-    real(dp)                     :: xharm_eps(0:1), yharm_eps(0:1), x_surf(0:1), y_surf(0:1)
+    real(dp)                     :: xharm_eps(0:1), yharm_eps(0:1)
 #if $D == 3
     integer                       :: k
 #endif
@@ -967,13 +963,11 @@ contains
                               (box%cc(i:i+1, j, i_eps)+box%cc(i-1:i, j, i_eps))
          yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
                               (box%cc(i, j:j+1, i_eps)+box%cc(i, j-1:j, i_eps))
-         x_surf(0:1) = xharm_eps(0:1)*box%fc(i:i+1, j, 1, sigma_rhs)/box%cc(i:i+1, j, i_eps)
-         y_surf(0:1) = yharm_eps(0:1)*box%fc(i, j:j+1, 2, sigma_rhs)/box%cc(i, j:j+1, i_eps)
 
-         box%cc(i, j, i_out) = inv_dr_sq*(xharm_eps(1)*(box%cc(i+1, j, i_phi)-a0) - &
-              xharm_eps(0)*(a0-box%cc(i-1, j, i_phi)) + &
-              yharm_eps(1)*(box%cc(i, j+1, i_phi)-a0) - yharm_eps(0)*(a0-box%cc(i, j-1, i_phi))) - &
-              0.5*(sum(x_surf(:)) + sum(y_surf(:)))/box%dr
+         box%cc(i, j, i_out) = (xharm_eps(1)*gradient_$Dd(box, [i, j], 2, i_phi, i_eps, sigma_rhs) - &
+                               xharm_eps(0)*gradient_$Dd(box, [i, j], 1, i_phi, i_eps, sigma_rhs) + &
+                               yharm_eps(1)*gradient_$Dd(box, [i, j], 4, i_phi, i_eps, sigma_rhs) - &
+                               yharm_eps(0)*gradient_$Dd(box, [i, j], 3, i_phi, i_eps, sigma_rhs))/box%dr
        end do
     end do
 #elif $D == 3
@@ -997,6 +991,27 @@ contains
 #endif
 
   end subroutine mg$D_box_lpld
+  
+  function gradient_$Dd(box, ix, dir, iv, i_eps, sigma_rhs) result(grad)
+    type(box$D_t), intent(in)         :: box
+    integer, intent(in)               :: ix($D), dir, iv, i_eps, sigma_rhs
+    real(dp)                          :: grad, inv_dr, s_C, harm_ep
+    integer                           :: n_ix($D)
+    
+    n_ix      = a$D_neighb_dix(:, dir)
+    inv_dr    = 1/box%dr
+
+#if $D == 2
+
+    harm_ep = 2.0_dp*box%cc(ix(1), ix(2), i_eps)*box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps) / &
+              (box%cc(ix(1), ix(2), i_eps)+box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps))           
+    s_C     = box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
+              , a2_neighb_dim(dir), sigma_rhs)/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps)
+    grad    = a2_neighb_high_pm(dir)*(inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &
+              box%cc(ix(1), ix(2), iv)) - 0.5_dp*s_C)
+#endif
+
+  end function gradient_$Dd
 
   !> Correct fine grid values based on the change in the coarse grid, in the
   !> case of a jump in epsilon
