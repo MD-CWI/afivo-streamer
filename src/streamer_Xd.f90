@@ -561,14 +561,22 @@ contains
        if (box%cc(IJK, i_eps) <= med) then
          
          if (box%cc(i-1, j, i_eps) > med) then
-           s_flow(1) = dt * (rfac(1) * box%fc(IJK, 1, flux_elec) - &
-               rfac(2) * box%fc(i+1, j, 1, flux_elec)) 
-           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * s_flow(1) 
+           if (i > 1) then
+             s_flow(1) = dt * (rfac(1) * box%fc(i-1, j, 1, flux_elec) - &
+                 rfac(2) * box%fc(IJK, 1, flux_elec)) 
+           else
+             s_flow(1) = 0.0_dp
+           end if
+           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
          end if
          if (box%cc(i, j-1, i_eps) > med) then
-           s_flow(2) = dt * (box%fc(IJK, 2, flux_elec) - &
-               box%fc(i, j+1, 2, flux_elec)) 
-           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * s_flow(2) 
+           if (j > 1) then
+             s_flow(2) = dt * (box%fc(i, j-1, 2, flux_elec) - &
+                 box%fc(IJK, 2, flux_elec))
+           else
+             s_flow(2) = 0.0_dp
+           end if 
+           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
          end if  
          
          f_elec    = (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
@@ -579,30 +587,15 @@ contains
          if (box%cc(i-1, j, i_eps) <= med) then
            s_flow(1) = dt * (rfac(1) * box%fc(IJK, 1, flux_elec) - &
                rfac(2) * box%fc(i+1, j, 1, flux_elec)) 
-           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * s_flow(1) 
+           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
          end if
          if (box%cc(i, j-1, i_eps) <= med) then
            s_flow(2) = dt * (box%fc(IJK, 2, flux_elec) - &
                box%fc(i, j+1, 2, flux_elec)) 
-           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * s_flow(2) 
+           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
          end if  
        end if
        
-       ! Smoothening of "sharp" edges in respect to surface charge
-       if (a$D_border(box%cc(IJK, i_eps), box%cc(i-1, j, i_eps), med) .and. &
-          a$D_border(box%cc(IJK, i_eps), box%cc(i, j-1, i_eps), med) .and. &
-          box%fc(IJK, 2, sigma_rhs) >= box%fc(IJK, 1, sigma_rhs)) then
-         s_fac = 0.25_dp*box%fc(IJK, 2, sigma_rhs) * (box%fc(IJK, 2, sigma_rhs) - box%fc(IJK, 1, sigma_rhs)) / &
-               (box%fc(IJK, 2, sigma_rhs) + box%fc(IJK, 1, sigma_rhs) + epsilon(1.0_dp))
-         box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + s_fac
-         box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) - s_fac
-         else if(a$D_border(box%cc(IJK, i_eps), box%cc(i-1, j, i_eps), med) .and. &
-          a$D_border(box%cc(IJK, i_eps), box%cc(i, j-1, i_eps), med)) then
-         s_fac = 0.25_dp*box%fc(IJK, 1, sigma_rhs) * (box%fc(IJK, 1, sigma_rhs) - box%fc(IJK, 2, sigma_rhs)) / &
-               (box%fc(IJK, 2, sigma_rhs) + box%fc(IJK, 1, sigma_rhs) + epsilon(1.0_dp))
-         box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) - s_fac
-         box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + s_fac
-       end if
         
               
 #elif $D == 3

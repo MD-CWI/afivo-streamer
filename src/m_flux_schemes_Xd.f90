@@ -163,19 +163,22 @@ contains
     if (cc_num == 2) then
       harm_ep = 2.0_dp*box%cc(ix(1), ix(2), i_eps)*box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps) / &
                 (box%cc(ix(1), ix(2), i_eps)+box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps))           
-      s_C     = 0.0_dp!box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
-                !, a2_neighb_dim(dir), sigma_rhs)/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps)
+      s_C     = box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
+                , a2_neighb_dim(dir), sigma_rhs)/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps)
       grad    = a2_neighb_high_pm(dir)*(inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &
                 box%cc(ix(1), ix(2), iv)) - 0.5_dp*s_C) * &
-                harm_ep/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps) 
+                harm_ep/box%cc(ix(1), ix(2), i_eps) 
     else if (cc_num == 1) then
       fac   = 0.5_dp * box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir),&
               a2_neighb_dim(dir), sigma_rhs)/(box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2) + &
               n_ix(2)*a2_neighb_high_01(dir), a2_neighb_dim(dir), sigma_rhs) + &
               box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv)/inv_dr + epsilon(1.0_dp))
-      
-      grad  = inv_dr*a2_neighb_high_pm(dir)*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv)-box%cc(ix(1), ix(2), iv))
+        
+      grad  = inv_dr*a2_neighb_high_pm(dir)*(box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2) + &
+              n_ix(2)*a2_neighb_high_01(dir), a2_neighb_dim(dir), sigma_rhs)*inv_dr + &
+              box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv)-box%cc(ix(1), ix(2), iv)) / (1-fac)
     end if
+
 
 
 #elif $D == 3
