@@ -13,10 +13,10 @@ module m_photoi_$Dd
   logical, protected, public :: photoi_enabled = .false.
 
   ! Which photoionization method to use (helmholtz, montecarlo)
-  character(len=ST_slen) :: photoi_method = 'helmholtz'
+  character(len=ST_slen) :: photoi_method = 'montecarlo'
 
   ! Photoionization efficiency factor, typically around 0.05-0.1
-  real(dp) :: photoi_eta = 0.05_dp
+  real(dp) :: photoi_eta = 0.1_dp
 
   ! Update photoionization every N time step
   integer, protected, public :: photoi_per_steps = 10

@@ -770,10 +770,10 @@ contains
     
       start_copy = start_pos
       do ii = 1, 2  
-        abs_pos = (end_pos - start_copy)*i/n_sample
         temp = start_copy
             do i = 1, 35
-               abs_pos = start_copy + (end_pos - start_copy)*i/n_sample
+               abs_pos = start_copy + (end_pos - start_copy)*i/35_dp
+               if (a2_get_id_at(tree, abs_pos) == -1) exit
                box = tree%boxes(a2_get_id_at(tree, abs_pos)) 
                ind = a2_cc_ix(box, abs_pos)     
                   if (box%cc(ind(1), ind(2), i_eps) > a2_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp) ) then

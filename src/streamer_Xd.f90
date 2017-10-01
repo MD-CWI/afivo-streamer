@@ -629,8 +629,7 @@ contains
        src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
        if (photoi_enabled .and. box%cc(IJK, i_eps) <= med) then
          src = src + box%cc(IJK, i_photo)
-       else if (photoi_enabled .and. box%cc(IJK, i_eps) > med) then
-         src = 0.0_dp
+       else if (photoi_enabled .and. box%cc(IJK, i_eps) > med .and. box%cc(IJK, i_photo) > 0.0_dp) then
          do n = 1, 10    
            call system_clock(time, count_rate)         
            call random_seed(time)
@@ -650,6 +649,8 @@ contains
 #endif
 
          end do
+       else
+         src = 0.0_dp
        end if
 
        if (i_step == 1 .and. ST_output_src_term) then
@@ -670,9 +671,9 @@ contains
        if (flag == 1) then ! Add photoemission effect
 #if $D == 2
          box%cc(i+ix(1), j+ix(2), i_electron) = box%cc(i+ix(1), j+ix(2), i_electron) + &
-                                              box%cc(IJK, i_photo) * ST_phe_yield
+                                              box%cc(IJK, i_photo) * ST_phe_yield * dt
          box%fc(max(i, i+ix(1)), max(j, j+ix(2)), dir, sigma_rhs) = &
-               box%fc(max(i, i+ix(1)), max(j, j+ix(2)), dir, sigma_rhs) - box%cc(IJK, i_photo) * ST_phe_yield * box%dr
+               box%fc(max(i, i+ix(1)), max(j, j+ix(2)), dir, sigma_rhs) - box%cc(IJK, i_photo) * ST_phe_yield * box%dr * dt
 #elif $D == 3
          box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) = box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) + &
                                                        box%cc(IJK, i_photo) * ST_phe_yield
