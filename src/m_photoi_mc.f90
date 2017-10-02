@@ -765,15 +765,20 @@ contains
       type(box2_t)                     :: box
       real(dp), intent(in)             :: start_pos(2)
       real(dp), intent(inout)          :: end_pos(2)
-      integer                          :: n_sample, i, ii, ind(2)
+      integer                          :: n_sample, i, ii, ind(2), out_flag
       real(dp)                         :: abs_pos(2), temp(2), start_copy(2)
-    
+      
+      out_flag = 0
       start_copy = start_pos
-      do ii = 1, 2  
+      do ii = 1, 3
+        if (out_flag == 1) exit  
         temp = start_copy
-            do i = 1, 35
-               abs_pos = start_copy + (end_pos - start_copy)*i/35_dp
-               if (a2_get_id_at(tree, abs_pos) == -1) exit
+            do i = 1, 18
+               abs_pos = start_copy + (end_pos - start_copy)*i/18_dp
+               if (a2_get_id_at(tree, abs_pos) == -1) then
+                 out_flag = 1
+                 exit
+               end if
                box = tree%boxes(a2_get_id_at(tree, abs_pos)) 
                ind = a2_cc_ix(box, abs_pos)     
                   if (box%cc(ind(1), ind(2), i_eps) > a2_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp) ) then
@@ -798,10 +803,10 @@ contains
         real(dp)                         :: abs_pos(3), temp(3), start_copy(3)
  
         start_copy = start_pos
-        do ii = 1, 2  
+        do ii = 1, 3  
           abs_pos = (end_pos - start_copy)*i/n_sample
           temp = start_pos
-              do i = 1, 35
+              do i = 1, 20
                  abs_pos = start_copy + (end_pos - start_copy)*i/n_sample
                  box = tree%boxes(a3_get_id_at(tree, abs_pos))
                  ind = a3_cc_ix(box, abs_pos)

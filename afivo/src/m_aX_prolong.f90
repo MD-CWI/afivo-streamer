@@ -135,7 +135,7 @@ contains
     add_to = .false.; if (present(add)) add_to = add
     s_ivc = s_iv; if (present(s_iv_to)) s_ivc = s_iv_to
     lo   = 1; if (present(low)) lo = low
-    hi   = nc; if (present(high)) hi = high
+    hi   = nc+1; if (present(high)) hi = high
 
     ! Offset of child w.r.t. parent
     ix_offset = a$D_get_child_offset(box_c)
@@ -175,11 +175,33 @@ contains
           do i = lo(1), hi(1)
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              
-             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i-1, j, i_eps), med)) then
-               box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
+             if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1-1, j_c1, i_eps), med)) then
+               if (i_c1 == 1) then
+                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), med)) then
+                   box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
+                 end if
+               else             
+                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), med)) then
+                   box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
+                 else if (a$D_border(box_c%cc(i-2, j, i_eps), box_c%cc(i-1, j, i_eps), med)) then
+                   box_c%fc(i-1, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv) 
+                 end if
+               end if
              end if
-             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), med)) then
-               box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
+             
+             
+             if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1, j_c1-1, i_eps), med)) then
+               if (j_c1 == 1) then
+                 if (a$D_border(box_c%cc(i, j-1, i_eps), box_c%cc(i, j, i_eps), med)) then
+                   box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
+                 end if
+               else             
+                 if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), med)) then
+                   box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
+                 else if (a$D_border(box_c%cc(i, j-2, i_eps), box_c%cc(i, j-1, i_eps), med)) then
+                   box_c%fc(i, j-1, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv) 
+                 end if
+               end if
              end if
              
           end do
@@ -237,7 +259,7 @@ contains
     real(dp)                      :: f0, flx, fhx, fly, fhy
     logical                       :: add_to
 #if $D == 2
-    real(dp)                      :: inv_eps(-1:1, -1:1, 4)
+    real(dp)                      :: inv_eps(-1:1, -1:1)
 #elif $D == 3
     real(dp)                      :: flz, fhz
     integer                       :: k, k_c, k_f
@@ -268,35 +290,24 @@ contains
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
 
-          inv_eps(-1:1, -1:1, 1) = 0.5_dp*(box_c%cc(i_f, j_f, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f, j_f, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-          inv_eps(-1:1, -1:1, 2) = 0.5_dp*(box_c%cc(i_f+1, j_f, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f+1, j_f, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-          inv_eps(-1:1, -1:1, 3) = 0.5_dp*(box_c%cc(i_f, j_f+1, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f, j_f+1, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-          inv_eps(-1:1, -1:1, 4) = 0.5_dp*(box_c%cc(i_f+1, j_f+1, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f+1, j_f+1, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
+          inv_eps(-1:1, -1:1) = 1.0_dp/box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)
 
           !inv_eps(:,:,:) = 1.0_dp
 
-          f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)
-          flx = 0.25_dp * box_p%cc(i_c-1, j_c, iv)
-          fhx = 0.25_dp * box_p%cc(i_c+1, j_c, iv)
-          fly = 0.25_dp * box_p%cc(i_c, j_c-1, iv)
-          fhy = 0.25_dp * box_p%cc(i_c, j_c+1, iv)
+          f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)*inv_eps(0, 0)
+          flx = 0.25_dp * box_p%cc(i_c-1, j_c, iv)*inv_eps(-1, 0)
+          fhx = 0.25_dp * box_p%cc(i_c+1, j_c, iv)*inv_eps(1, 0)
+          fly = 0.25_dp * box_p%cc(i_c, j_c-1, iv)*inv_eps(0, -1)
+          fhy = 0.25_dp * box_p%cc(i_c, j_c+1, iv)*inv_eps(0, 1)
 
           box_c%cc(i_f,   j_f,   ivc) = box_c%cc(i_f,   j_f,   ivc) + &
-               (f0*inv_eps(0,0,1) + flx*inv_eps(-1,0,1) + fly*inv_eps(0,-1,1))/&
-               (0.5_dp*inv_eps(0, 0,1)+0.25_dp*inv_eps(-1,0,1)+0.25_dp*inv_eps(0,-1,1))                
+               (f0 + flx + fly)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(-1,0)+0.25_dp*inv_eps(0,-1))                
           box_c%cc(i_f+1, j_f,   ivc) = box_c%cc(i_f+1, j_f,   ivc) + &
-               (f0*inv_eps(0,0,2) + fhx*inv_eps(1,0,2) + fly*inv_eps(0,-1,2))/&
-               (0.5_dp*inv_eps(0, 0,2)+0.25_dp*inv_eps(1,0,2)+0.25_dp*inv_eps(0,-1,2))
+               (f0 + fhx + fly)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(1,0)+0.25_dp*inv_eps(0,-1))
           box_c%cc(i_f,   j_f+1, ivc) = box_c%cc(i_f,   j_f+1, ivc) + &
-               (f0*inv_eps(0, 0,3) + flx*inv_eps(-1,0,3) + fhy*inv_eps(0,1,3))/&
-               (0.5_dp*inv_eps(0, 0,3)+0.25_dp*inv_eps(-1,0,3)+0.25_dp*inv_eps(0,1,3)) 
+               (f0 + flx + fhy)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(-1,0)+0.25_dp*inv_eps(0,1)) 
           box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + &
-               (f0*inv_eps(0, 0,4) + fhx*inv_eps(1,0,4) + fhy*inv_eps(0,1,4))/&
-               (0.5_dp*inv_eps(0, 0,4)+0.25_dp*inv_eps(1,0,4)+0.25_dp*inv_eps(0,1,4))
+               (f0 + fhx + fhy)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(1,0)+0.25_dp*inv_eps(0,1))
        end do
     end do
 #elif $D == 3

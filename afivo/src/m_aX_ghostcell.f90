@@ -157,7 +157,7 @@ contains
           nb_dim     = a$D_neighb_dim(nb)
           lo(:)      = 1
           hi(:)      = boxes(id)%n_cell
-          lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell + 1)
+          lo(nb_dim) = a$D_neighb_high_01(nb) * boxes(id)%n_cell + 1
           hi(nb_dim) = lo(nb_dim)
           dnb        = a$D_neighb_offset([nb])
           call copy_from_nb_fc(boxes(id), boxes(nb_id), dnb, lo, hi, s_iv)
@@ -906,11 +906,12 @@ contains
   end subroutine a$D_gc2_prolong_linear
 
   ! This fills second ghost cells near physical boundaries using Neumann zero
-  subroutine a$D_bc2_neumann_zero(boxes, id, nb, i_eps, iv, gc_side, nc)
+  subroutine a$D_bc2_neumann_zero(boxes, id, nb, i_eps, iv, gc_side, nc, med)
     type(box$D_t), intent(inout)    :: boxes(:) !< List of all boxes
     integer, intent(in)             :: id        !< Id of box
     integer, intent(in)             :: nb        !< Ghost cell direction
     integer, intent(in), optional   :: i_eps
+    real(dp), intent(in), optional  :: med
     integer, intent(in)             :: iv        !< Ghost cell variable
     integer, intent(in)             :: nc        !< Box n_cell
 #if $D == 2

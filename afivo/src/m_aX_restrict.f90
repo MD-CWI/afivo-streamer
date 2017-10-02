@@ -280,13 +280,27 @@ contains
           do i = 1, hnc
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
+              
+             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c-1, j_c, i_eps), med)) then    
+               if (i_f == 1) then
+                 box_p%fc(i_c, j_c, 1, i_dest) = 0.5_dp*sum(box_c%fc(i_f:i_f+1, j_f, 1, s_iv)) + &
+                                               0.5_dp*sum(box_c%fc(i_f:i_f+1, j_f+1, 1, s_iv))
+               else       
+                 box_p%fc(i_c, j_c, 1, i_dest) = 0.5_dp*sum(box_c%fc(i_f-1:i_f+1, j_f, 1, s_iv)) + &
+                                               0.5_dp*sum(box_c%fc(i_f-1:i_f+1, j_f+1, 1, s_iv))
+               end if
+             end if
+               
+             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c, j_c-1, i_eps), med)) then    
+               if (j_f == 1) then
+                 box_p%fc(i_c, j_c, 2, i_dest) = 0.5_dp*sum(box_c%fc(i_f, j_f:j_f+1, 2, s_iv)) + &
+                                               0.5_dp*sum(box_c%fc(i_f+1, j_f:j_f+1, 2, s_iv))
+               else       
+                 box_p%fc(i_c, j_c, 2, i_dest) = 0.5_dp*sum(box_c%fc(i_f, j_f-1:j_f+1, 2, s_iv)) + &
+                                               0.5_dp*sum(box_c%fc(i_f+1, j_f-1:j_f+1, 2, s_iv))
+               end if
+             end if
              
-             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c-1, j_c, i_eps), med)) then
-               box_p%fc(i_c, j_c, 1, i_dest) = sum(box_c%fc(i_f:i_f+1, j_f:j_f+1, 1, s_iv))
-             end if
-             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c, j_c-1, i_eps), med)) then
-               box_p%fc(i_c, j_c, 2, i_dest) = sum(box_c%fc(i_f:i_f+1, j_f:j_f+1, 2, s_iv))
-             end if
           end do
        end do
     endif
