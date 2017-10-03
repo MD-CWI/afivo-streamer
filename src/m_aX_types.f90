@@ -341,7 +341,7 @@ contains
 
   pure function a$D_num_cells_used(tree) result(n_cells)
     type(a$D_t), intent(in) :: tree
-    integer                 :: n_cells, lvl
+    integer                 :: n_cells
 
     n_cells = a$D_num_leaves_used(tree) * tree%n_cell**$D
   end function a$D_num_cells_used

@@ -136,9 +136,7 @@ contains
     integer, intent(in), optional :: ivf_to         !< Destination (if /= ivf)
     integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
     integer                       :: hnc, ix_offset($D)
-#if $D == 2
-    real(dp)                      :: w1, w2
-#elif $D == 3
+#if $D == 3
     integer                       :: k, k_f, k_c
 #endif
 
