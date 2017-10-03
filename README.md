@@ -65,15 +65,18 @@ folder.
 
 ## References / how to cite
 
-A paper specifically showcasing `afivo-streamer` is in the works. The first
-paper in which the code was used is:
-
-[The role of free electrons in the guiding of positive streamers](http://dx.doi.org/10.1088/0963-0252/25/4/044001),
-S. Nijdam, J. Teunissen, E. Takahashi, U. Ebert, Plasma Sources Sci. Technol.
-(2016)
-
-More information about the photoionization method can be found in chapter 11 of:
-
-[3D Simulations and Analysis of Pulsed Discharges](http://repository.tue.nl/801516),
-J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
-
+* Paper about Afivo-streamer: [Simulating streamer discharges in 3D with the
+  parallel adaptive Afivo framework](https://doi.org/10.1088/1361-6463/aa8faf),
+  J. Teunissen and U. Ebert, J. Phys. D.: Appl. Phys. (2017)
+* First paper using Afivo-streamer: [The role of free electrons in the guiding
+  of positive streamers](http://dx.doi.org/10.1088/0963-0252/25/4/044001), S.
+  Nijdam, J. Teunissen, E. Takahashi, U. Ebert, Plasma Sources Sci. Technol.
+  (2016)
+* Paper about Afivo: [Afivo: a framework for quadtree/octree AMR with
+  shared-memory parallelization and geometric multigrid
+  methods](https://arxiv.org/abs/1701.04329), J. Teunissen, U. Ebert, subm. to
+  CPC
+* More information about the photoionization method can be found in chapter 11
+  of: [3D Simulations and Analysis of Pulsed
+  Discharges](http://repository.tue.nl/801516), J. Teunissen, PhD Thesis,
+  Eindhoven University of Technology, 2015.
