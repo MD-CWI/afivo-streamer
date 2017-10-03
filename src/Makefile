@@ -41,28 +41,93 @@ m_a3_%.f90: m_aX_%.f90
 	@echo "*** $< has changed, regenerating $@ ***"
 	@$(PPROCESS_3D)
 
-# Dependency information
-m_a2_all.o:		$(filter-out m_a2_all.o, $(OBJS_2D))
-m_a2_core.o:		m_morton.o m_a2_types.o m_a2_utils.o
-m_a2_output.o:		m_vtk.o m_write_silo.o m_a2_types.o m_a2_interp.o m_a2_core.o
-m_a2_ghostcell.o:	m_a2_types.o m_a2_prolong.o
-m_a2_restrict.o:	m_a2_types.o
-m_a2_prolong.o:		m_a2_types.o
-m_a2_interp.o:		m_a2_utils.o
-m_a2_utils.o:		m_a2_types.o
-m_a2_multigrid.o:	m_a2_types.o m_a2_utils.o m_a2_ghostcell.o
-m_a2_types.o:		m_afivo_types.o
-
-m_a3_all.o:		$(filter-out m_a3_all.o, $(OBJS_3D))
-m_a3_core.o:		m_morton.o m_a3_types.o m_a3_utils.o
-m_a3_output.o:		m_vtk.o m_write_silo.o m_a3_types.o m_a3_interp.o m_a3_core.o
-m_a3_ghostcell.o:	m_a3_types.o m_a3_prolong.o
-m_a3_restrict.o:	m_a3_types.o
-m_a3_prolong.o:		m_a3_types.o
-m_a3_interp.o:		m_a3_utils.o
-m_a3_utils.o:		m_a3_types.o
-m_a3_multigrid.o:	m_a3_types.o m_a3_utils.o m_a3_ghostcell.o
-m_a3_types.o:		m_afivo_types.o
-
+# Requires Silo for compilation
 m_write_silo.o:		INCDIRS += ../external_libraries/silo/include
 m_write_silo.o:		FFLAGS += -Wno-implicit-interface
+
+# Dependency information (generated with list_dependencies.sh)
+m_a2_all.o: m_a2_core.mod
+m_a2_all.o: m_a2_ghostcell.mod
+m_a2_all.o: m_a2_interp.mod
+m_a2_all.o: m_a2_multigrid.mod
+m_a2_all.o: m_a2_output.mod
+m_a2_all.o: m_a2_prolong.mod
+m_a2_all.o: m_a2_restrict.mod
+m_a2_all.o: m_a2_types.mod
+m_a2_all.o: m_a2_utils.mod
+m_a2_core.o: m_a2_types.mod
+m_a2_core.o: m_a2_utils.mod
+m_a2_core.o: m_morton.mod
+m_a2_gc.o: m_a2_prolong.mod
+m_a2_gc.o: m_a2_t.mod
+m_a2_ghostcell.o: m_a2_prolong.mod
+m_a2_ghostcell.o: m_a2_types.mod
+m_a2_interp.o: m_a2_types.mod
+m_a2_interp.o: m_a2_utils.mod
+m_a2_io.o: m_a2_interp.mod
+m_a2_io.o: m_a2_t.mod
+m_a2_io.o: m_vtk.mod
+m_a2_io.o: m_write_silo.mod
+m_a2_mg.o: m_a2_gc.mod
+m_a2_mg.o: m_a2_prolong.mod
+m_a2_mg.o: m_a2_restrict.mod
+m_a2_mg.o: m_a2_t.mod
+m_a2_mg.o: m_a2_utils.mod
+m_a2_multigrid.o: m_a2_ghostcell.mod
+m_a2_multigrid.o: m_a2_prolong.mod
+m_a2_multigrid.o: m_a2_restrict.mod
+m_a2_multigrid.o: m_a2_types.mod
+m_a2_multigrid.o: m_a2_utils.mod
+m_a2_output.o: m_a2_core.mod
+m_a2_output.o: m_a2_interp.mod
+m_a2_output.o: m_a2_types.mod
+m_a2_output.o: m_vtk.mod
+m_a2_output.o: m_write_silo.mod
+m_a2_prolong.o: m_a2_types.mod
+m_a2_restrict.o: m_a2_types.mod
+m_a2_t.o: m_af_t.mod
+m_a2_types.o: m_afivo_types.mod
+m_a2_utils.o: m_a2_types.mod
+
+m_a3_all.o: m_a3_core.mod
+m_a3_all.o: m_a3_ghostcell.mod
+m_a3_all.o: m_a3_interp.mod
+m_a3_all.o: m_a3_multigrid.mod
+m_a3_all.o: m_a3_output.mod
+m_a3_all.o: m_a3_prolong.mod
+m_a3_all.o: m_a3_restrict.mod
+m_a3_all.o: m_a3_types.mod
+m_a3_all.o: m_a3_utils.mod
+m_a3_core.o: m_a3_types.mod
+m_a3_core.o: m_a3_utils.mod
+m_a3_core.o: m_morton.mod
+m_a3_gc.o: m_a3_prolong.mod
+m_a3_gc.o: m_a3_t.mod
+m_a3_ghostcell.o: m_a3_prolong.mod
+m_a3_ghostcell.o: m_a3_types.mod
+m_a3_interp.o: m_a3_types.mod
+m_a3_interp.o: m_a3_utils.mod
+m_a3_io.o: m_a3_interp.mod
+m_a3_io.o: m_a3_t.mod
+m_a3_io.o: m_vtk.mod
+m_a3_io.o: m_write_silo.mod
+m_a3_mg.o: m_a3_gc.mod
+m_a3_mg.o: m_a3_prolong.mod
+m_a3_mg.o: m_a3_restrict.mod
+m_a3_mg.o: m_a3_t.mod
+m_a3_mg.o: m_a3_utils.mod
+m_a3_multigrid.o: m_a3_ghostcell.mod
+m_a3_multigrid.o: m_a3_prolong.mod
+m_a3_multigrid.o: m_a3_restrict.mod
+m_a3_multigrid.o: m_a3_types.mod
+m_a3_multigrid.o: m_a3_utils.mod
+m_a3_output.o: m_a3_core.mod
+m_a3_output.o: m_a3_interp.mod
+m_a3_output.o: m_a3_types.mod
+m_a3_output.o: m_vtk.mod
+m_a3_output.o: m_write_silo.mod
+m_a3_prolong.o: m_a3_types.mod
+m_a3_restrict.o: m_a3_types.mod
+m_a3_t.o: m_af_t.mod
+m_a3_types.o: m_afivo_types.mod
+m_a3_utils.o: m_a3_types.mod
