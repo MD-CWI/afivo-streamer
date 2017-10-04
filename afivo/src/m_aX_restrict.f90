@@ -210,8 +210,7 @@ contains
           do i = 1, hnc
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
-             inv_eps(0:1, 0:1) = (box_p%cc(i_c, j_c, i_eps)+box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps))/&
-                                 (box_p%cc(i_c, j_c, i_eps)*box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps))
+             inv_eps(0:1, 0:1) = 1.0_dp/box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps)
              
              box_p%cc(i_c, j_c, i_dest) = sum(inv_eps(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv)) / sum(inv_eps(:,:))
           end do

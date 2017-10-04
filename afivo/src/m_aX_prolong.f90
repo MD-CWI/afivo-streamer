@@ -176,7 +176,7 @@ contains
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              
              if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1-1, j_c1, i_eps), med)) then
-               if (i_c1 == 1) then
+               if (i == 1) then
                  if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), med)) then
                    box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
                  end if
@@ -191,7 +191,7 @@ contains
              
              
              if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1, j_c1-1, i_eps), med)) then
-               if (j_c1 == 1) then
+               if (j == 1) then
                  if (a$D_border(box_c%cc(i, j-1, i_eps), box_c%cc(i, j, i_eps), med)) then
                    box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
                  end if

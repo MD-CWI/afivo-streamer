@@ -222,7 +222,7 @@ module m_streamer
   real(dp), protected :: ST_epsilon_die = 5.0_dp
   
   ! Photoemission yield (from 10e-7 to 1)
-  real(dp), protected :: ST_phe_yield = 10e-1_dp
+  real(dp), protected :: ST_phe_yield = 10e-5_dp
 
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2

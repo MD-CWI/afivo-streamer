@@ -235,6 +235,7 @@ contains
     box%fc(DTIMES(:), :, sigma_rhs) = 0.0_dp
     box%cc(DTIMES(:), i_phi)        = 0.0_dp ! Inital potential set to zero
     box%cc(DTIMES(:), i_eps)        = 1.0_dp ! Base permitivity
+    !box%cc(DTIMES(:), i_photo)      = 0.0_dp
 
     do KJI_DO(0,nc+1)
        rr   = a$D_r_cc(box, [IJK])
@@ -279,11 +280,11 @@ contains
        rr = a$D_r_cc(box, [IJK])
        f = vol_frac_inside(box, [IJK])
        do n = 1, init_conds%n_die
-         if(DI_interior(init_conds%die_type(n), init_conds%die_center(:,n), &
-            init_conds%die_axis(:,n), $D,rr(:))) then
-               box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
-               box%cc(IJK, i_electron)   = init_conds%die_density(n)
-               box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
+         box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
+         if (f > 0.5_dp) then
+           box%cc(IJK, i_electron)   = init_conds%die_density(n)
+           box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
+           box%cc(IJK, i_photo)      = 0.0_dp
          end if
        end do
     end do; CLOSE_DO

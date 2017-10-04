@@ -13,7 +13,7 @@ module m_photoi_$Dd
   logical, protected, public :: photoi_enabled = .false.
 
   ! Which photoionization method to use (helmholtz, montecarlo)
-  character(len=ST_slen) :: photoi_method = 'montecarlo'
+  character(len=ST_slen) :: photoi_method = 'helmholtz'
 
   ! Photoionization efficiency factor, typically around 0.05-0.1
   real(dp) :: photoi_eta = 0.1_dp
@@ -67,7 +67,7 @@ contains
 
     type(a$D_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
-    real(dp), parameter            :: p_quench = 30.0e-3_dp
+    real(dp), parameter            :: p_quench = 40.0e-3_dp
     real(dp)                       :: quench_fac
 
     ! Compute quench factor, because some excited species will be quenched by
@@ -119,7 +119,8 @@ contains
        alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
        mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-       tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
+       tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)  * &
+             a$D_heaviside(box%cc(IJK, i_eps), a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp))
        if (tmp < 0) tmp = 0
        box%cc(IJK, i_electron_old) = tmp
     end do; CLOSE_DO

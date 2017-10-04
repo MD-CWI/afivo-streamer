@@ -267,7 +267,7 @@ contains
     ! Variables used below to initialize tree
     real(dp)                  :: dr
     integer                   :: id
-    integer                   :: ix_list($D, 1) ! Spatial indices of initial boxes
+    integer                   :: ix_list($D, 2) ! Spatial indices of initial boxes
     integer                   :: n_boxes_init = 1000
 
     dr = ST_domain_len / ST_box_size
@@ -283,11 +283,17 @@ contains
     end if
 
     ! Set up geometry
-    id             = 1          ! One box ...
-    ix_list(:, id) = 1          ! With index 1,1 ...
+    id             = 2          
+#if $D == 2
+    ix_list(:, 1) = [1, 1]     
+    ix_list(:, 2) = [1, 2]
+#elif $D == 3
+    ix_list(:, 1) = [1, 1, 1]     
+    ix_list(:, 2) = [1, 1, 2]
+#endif
 
     ! Create the base mesh
-    call a$D_set_base(tree, 1, ix_list)
+    call a$D_set_base(tree, 2, ix_list)
 
   end subroutine init_tree
 
@@ -316,36 +322,36 @@ contains
        cphi = dx2 * abs(box%cc(IJK, i_rhs)) / ST_refine_cphi
        
        
-#if $D == 2 
-         grad_n(1) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 1, i_electron) + &
-                     gradient_$Dd(box, 1, [IJK], 2, i_electron))
-         grad_n(2) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 3, i_electron) + &
-                     gradient_$Dd(box, 1, [IJK], 4, i_electron))
+!#if $D == 2 
+ !        grad_n(1) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 1, i_electron) + &
+!                     gradient_$Dd(box, 1, [IJK], 2, i_electron))
+!         grad_n(2) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 3, i_electron) + &
+!                     gradient_$Dd(box, 1, [IJK], 4, i_electron))
 
-         Efld(1)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 1, i_phi) + &
-                     gradient_$Dd(box, 2, [IJK], 2, i_phi))
-         Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 3, i_phi) + &
-                     gradient_$Dd(box, 2, [IJK], 4, i_phi))
-#elif $D == 3
-         grad_n(1) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 1, i_electron) + &
-                     gradient_$Dd(box, 1, [IJK], 2, i_electron))
-         grad_n(2) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 3, i_electron) + &
-                     gradient_$Dd(box, 1, [IJK], 4, i_electron))
-         grad_n(3) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 5, i_electron) + &
-                     gradient_$Dd(box, 1, [IJK], 6, i_electron))
+!         Efld(1)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 1, i_phi) + &
+ !                    gradient_$Dd(box, 2, [IJK], 2, i_phi))
+  !       Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 3, i_phi) + &
+  !                   gradient_$Dd(box, 2, [IJK], 4, i_phi))
+!#elif $D == 3
+!         grad_n(1) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 1, i_electron) + &
+ !                    gradient_$Dd(box, 1, [IJK], 2, i_electron))
+  !       grad_n(2) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 3, i_electron) + &
+  !                   gradient_$Dd(box, 1, [IJK], 4, i_electron))
+  !       grad_n(3) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 5, i_electron) + &
+  !                   gradient_$Dd(box, 1, [IJK], 6, i_electron))
 
-         Efld(1)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 1, i_phi) + &
-                     gradient_$Dd(box, 2, [IJK], 2, i_phi))
-         Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 3, i_phi) + &
-                     gradient_$Dd(box, 2, [IJK], 4, i_phi))
-         Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 5, i_phi) + &
-                     gradient_$Dd(box, 2, [IJK], 6, i_phi))
-#endif           
+   !      Efld(1)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 1, i_phi) + &
+    !                 gradient_$Dd(box, 2, [IJK], 2, i_phi))
+     !    Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 3, i_phi) + &
+      !               gradient_$Dd(box, 2, [IJK], 4, i_phi))
+       !  Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 5, i_phi) + &
+        !             gradient_$Dd(box, 2, [IJK], 6, i_phi))
+!#endif           
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5)) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 7)) then
+          .and. (eps_max == eps_min .or. box%lvl >= 5)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -449,31 +455,16 @@ contains
        fld = abs(boxes(id)%fc(IJK, 1, electric_fld))
        v(IJK, 1)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
             boxes(id)%fc(IJK, 1, electric_fld)
-       if (boxes(id)%cc(IJK, i_eps) > med .and. boxes(id)%cc(i-1, j, k, i_eps) <= med) then
-         v(IJK, 1) = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-              (boxes(id)%fc(IJK, 1, electric_fld)*boxes(id)%cc(IJK, i_eps) - &
-              boxes(id)%fc(IJK, 1, sigma_rhs))/boxes(id)%cc(i-1, j, k, i_eps)
-       end if
        dc(IJK, 1) = LT_get_col(ST_td_tbl, i_diffusion, fld)
 
        fld = abs(boxes(id)%fc(IJK, 2, electric_fld))
        v(IJK, 2)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
             boxes(id)%fc(IJK, 2, electric_fld)
-       if (boxes(id)%cc(IJK, i_eps) > med .and. boxes(id)%cc(i, j-1, k, i_eps) <= med) then
-         v(IJK, 2) = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-              (boxes(id)%fc(IJK, 2, electric_fld)*boxes(id)%cc(IJK, i_eps) - &
-              boxes(id)%fc(IJK, 2, sigma_rhs))/boxes(id)%cc(i, j-1, k, i_eps)
-        end if
        dc(IJK, 2) = LT_get_col(ST_td_tbl, i_diffusion, fld)
 
        fld = abs(boxes(id)%fc(IJK, 3, electric_fld))
        v(IJK, 3)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
             boxes(id)%fc(IJK, 3, electric_fld)
-       if (boxes(id)%cc(IJK, i_eps) > med .and. boxes(id)%cc(i-1, j, k, i_eps) <= med) then
-         v(IJK, 1) = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-              (boxes(id)%fc(IJK, 1, electric_fld)*boxes(id)%cc(IJK, i_eps) - &
-              boxes(id)%fc(IJK, 1, sigma_rhs))/boxes(id)%cc(i-1, j, k, i_eps)
-       end if
        dc(IJK, 3) = LT_get_col(ST_td_tbl, i_diffusion, fld)
 #endif
     end do; CLOSE_DO
@@ -579,14 +570,13 @@ contains
            box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
          end if  
          
-         f_elec    = (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
-               rfac(1) * box%fc(IJK, 1, flux_elec) - &
-               rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt 
+         f_elec    = (sum(box%fc(IJK, :, flux_elec)) - box%fc(i, j+1, 2, flux_elec) - &
+               box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt 
        else 
          f_elec    = 0.0_dp
          if (box%cc(i-1, j, i_eps) <= med) then
-           s_flow(1) = dt * (rfac(1) * box%fc(IJK, 1, flux_elec) - &
-               rfac(2) * box%fc(i+1, j, 1, flux_elec)) 
+           s_flow(1) = dt * (box%fc(IJK, 1, flux_elec) - &
+               box%fc(i+1, j, 1, flux_elec)) 
            box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
          end if
          if (box%cc(i, j-1, i_eps) <= med) then
@@ -600,15 +590,57 @@ contains
               
 #elif $D == 3
 
-       if (box%cc(IJK, i_eps) <= med) then
-         f_elec = (sum(box%fc(IJK, 1:3, flux_elec)) - &
-              box%fc(i+1, j, k, 1, flux_elec) - &
-              box%fc(i, j+1, k, 2, flux_elec) - &
-              box%fc(i, j, k+1, 3, flux_elec)) * inv_dr * dt
-       else
-         f_elec = 0.0_dp
-       end if
+     if (box%cc(IJK, i_eps) <= med) then
+       if (box%cc(i-1, j, k, i_eps) > med) then
+         if (i > 1) then
+           s_flow(1) = dt * (box%fc(i-1, j, k, 1, flux_elec) - &
+           box%fc(IJK, 1, flux_elec)) 
+         else
+           s_flow(1) = 0.0_dp
+         end if
+         box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
+  end if
+  if (box%cc(i, j-1, k, i_eps) > med) then
+    if (j > 1) then
+      s_flow(2) = dt * (box%fc(i, j-1, k, 2, flux_elec) - &
+          box%fc(IJK, 2, flux_elec))
+    else
+      s_flow(2) = 0.0_dp
+    end if 
+    box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
+  end if  
+  if (box%cc(i, j, k-1, i_eps) > med) then
+    if (k > 1) then
+      s_flow(3) = dt * (box%fc(i, j, k-1, 3, flux_elec) - &
+          box%fc(IJK, 3, flux_elec))
+    else
+      s_flow(3) = 0.0_dp
+    end if 
+    box%fc(IJK, 3, sigma_rhs) = box%fc(IJK, 3, sigma_rhs) + fac * max(s_flow(3), 0.0_dp) 
+  end if  
+  
+  f_elec    = (sum(box%fc(IJK, :, flux_elec)) - box%fc(i, j+1, k, 2, flux_elec) - &
+        box%fc(i+1, j, k, 1, flux_elec) - box%fc(i, j, k+1, 3, flux_elec) ) * inv_dr * dt 
+else 
+  f_elec    = 0.0_dp
+  if (box%cc(i-1, j, k, i_eps) <= med) then
+    s_flow(1) = dt * (box%fc(IJK, 1, flux_elec) - &
+        box%fc(i+1, j, k, 1, flux_elec)) 
+    box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
+  end if
+  if (box%cc(i, j-1, k, i_eps) <= med) then
+    s_flow(2) = dt * (box%fc(IJK, 2, flux_elec) - &
+        box%fc(i, j+1, k, 2, flux_elec)) 
+    box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
+  end if  
+  if (box%cc(i, j, k-1, i_eps) <= med) then
+    s_flow(3) = dt * (box%fc(IJK, 3, flux_elec) - &
+        box%fc(i, j, k+1, 3, flux_elec)) 
+    box%fc(IJK, 3, sigma_rhs) = box%fc(IJK, 3, sigma_rhs) + fac * max(s_flow(3), 0.0_dp) 
+  end if 
+end if
 
+ 
 
 #endif
 
@@ -626,11 +658,11 @@ contains
        end if
 
        ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
+       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * a$D_heaviside(box%cc(IJK, i_eps), med)
        if (photoi_enabled .and. box%cc(IJK, i_eps) <= med) then
          src = src + box%cc(IJK, i_photo)
        else if (photoi_enabled .and. box%cc(IJK, i_eps) > med .and. box%cc(IJK, i_photo) > 0.0_dp) then
-         do n = 1, 10    
+         do n = 1, 4    
            call system_clock(time, count_rate)         
            call random_seed(time)
            call random_number(rand)
@@ -643,24 +675,24 @@ contains
            end if    
 #elif $D == 3
            if (box%cc(i+ix(1), j+ix(2), k+ix(3), i_eps) <= med) then
-             flag = 1 
+            flag = 1 
              exit        
            end if  
 #endif
-
          end do
        else if (box%cc(IJK, i_eps) > med) then
            src = 0.0_dp
        end if
 
+
        if (i_step == 1 .and. ST_output_src_term) then
           if (ST_output_src_decay_rate < 0) then
              ! No time-averaging
-             box%cc(IJK, i_src) = src
+             box%cc(IJK, i_src) = src  * a$D_heaviside(box%cc(IJK, i_eps), med)
           else
              ! Approximate exp(-t*rate) as 1-t*rate
-             box%cc(IJK, i_src) = (1 - dt * ST_output_src_decay_rate) * &
-                  box%cc(IJK, i_src) + src * dt
+             box%cc(IJK, i_src) = ((1 - dt * ST_output_src_decay_rate) * &
+                  box%cc(IJK, i_src) + src * dt )* a$D_heaviside(box%cc(IJK, i_eps), med)
           end if
        end if
 
@@ -769,7 +801,7 @@ contains
                mg%sides_rb, mg%sides_bc, med = med)
           if (photoi_enabled) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_photo, &
-               a$D_gc_interp_lim, photoi_helmh_bc, med = med)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
           end if
           if (ST_output_src_term) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_src, &
