@@ -321,37 +321,12 @@ contains
        adx   = box%dr * alpha / ST_refine_adx
        cphi = dx2 * abs(box%cc(IJK, i_rhs)) / ST_refine_cphi
        
+              
        
-!#if $D == 2 
- !        grad_n(1) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 1, i_electron) + &
-!                     gradient_$Dd(box, 1, [IJK], 2, i_electron))
-!         grad_n(2) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 3, i_electron) + &
-!                     gradient_$Dd(box, 1, [IJK], 4, i_electron))
-
-!         Efld(1)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 1, i_phi) + &
- !                    gradient_$Dd(box, 2, [IJK], 2, i_phi))
-  !       Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 3, i_phi) + &
-  !                   gradient_$Dd(box, 2, [IJK], 4, i_phi))
-!#elif $D == 3
-!         grad_n(1) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 1, i_electron) + &
- !                    gradient_$Dd(box, 1, [IJK], 2, i_electron))
-  !       grad_n(2) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 3, i_electron) + &
-  !                   gradient_$Dd(box, 1, [IJK], 4, i_electron))
-  !       grad_n(3) = 0.5_dp*(gradient_$Dd(box, 1, [IJK], 5, i_electron) + &
-  !                   gradient_$Dd(box, 1, [IJK], 6, i_electron))
-
-   !      Efld(1)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 1, i_phi) + &
-    !                 gradient_$Dd(box, 2, [IJK], 2, i_phi))
-     !    Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 3, i_phi) + &
-      !               gradient_$Dd(box, 2, [IJK], 4, i_phi))
-       !  Efld(2)   = 0.5_dp*(gradient_$Dd(box, 2, [IJK], 5, i_phi) + &
-        !             gradient_$Dd(box, 2, [IJK], 6, i_phi))
-!#endif           
-       
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7)) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 5)) then
+          .and. (eps_max == eps_min .or. box%lvl >= 7)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -552,36 +527,34 @@ contains
        if (box%cc(IJK, i_eps) <= med) then
          
          if (box%cc(i-1, j, i_eps) > med) then
-           if (i > 1) then
-             s_flow(1) = dt * (rfac(1) * box%fc(i-1, j, 1, flux_elec) - &
-                 rfac(2) * box%fc(IJK, 1, flux_elec)) 
-           else
-             s_flow(1) = 0.0_dp
-           end if
-           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
+           s_flow(1) = - dt  * box%fc(IJK, 1, flux_elec) * &
+                       (1.0_dp - 0.25_dp * box%fc(IJK, 1, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))  
+           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)
+           f_elec = f_elec - (s_flow(1) + box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
+         else
+           f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec) * &
+                    (1.0_dp - 0.25_dp * box%fc(i+1, j, 1, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))) * inv_dr * dt          
          end if
-         if (box%cc(i, j-1, i_eps) > med) then
-           if (j > 1) then
-             s_flow(2) = dt * (box%fc(i, j-1, 2, flux_elec) - &
-                 box%fc(IJK, 2, flux_elec))
-           else
-             s_flow(2) = 0.0_dp
-           end if 
-           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
-         end if  
          
-         f_elec    = (sum(box%fc(IJK, :, flux_elec)) - box%fc(i, j+1, 2, flux_elec) - &
-               box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt 
+         if (box%cc(i, j-1, i_eps) > med) then
+           s_flow(2) = - dt  * box%fc(IJK, 2, flux_elec) * &
+                       (1.0_dp - 0.25_dp * box%fc(IJK, 2, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))  
+           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
+           f_elec = f_elec - (s_flow(2) + box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
+         else
+           f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) * &
+                    (1.0_dp - 0.25_dp * box%fc(i, j+1, 2, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))) * inv_dr * dt          
+         end if
        else 
          f_elec    = 0.0_dp
          if (box%cc(i-1, j, i_eps) <= med) then
-           s_flow(1) = dt * (box%fc(IJK, 1, flux_elec) - &
-               box%fc(i+1, j, 1, flux_elec)) 
+           s_flow(1) = dt * (box%fc(IJK, 1, flux_elec) * &
+                       (1.0_dp - 0.25_dp * box%fc(IJK, 1, sigma_rhs)/(box%cc(i-1, j, i_electron)*box%dr))) 
            box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
          end if
          if (box%cc(i, j-1, i_eps) <= med) then
-           s_flow(2) = dt * (box%fc(IJK, 2, flux_elec) - &
-               box%fc(i, j+1, 2, flux_elec)) 
+           s_flow(2) = dt * (box%fc(IJK, 2, flux_elec) * &
+                       (1.0_dp - 0.25_dp * box%fc(IJK, 2, sigma_rhs)/(box%cc(i, j-1, i_electron)*box%dr))) 
            box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
          end if  
        end if
@@ -661,7 +634,7 @@ end if
        src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * a$D_heaviside(box%cc(IJK, i_eps), med)
        if (photoi_enabled .and. box%cc(IJK, i_eps) <= med) then
          src = src + box%cc(IJK, i_photo)
-       else if (photoi_enabled .and. box%cc(IJK, i_eps) > med .and. box%cc(IJK, i_photo) > 0.0_dp) then
+       else if (photoi_enabled .and. box%cc(IJK, i_eps) > med) then
          do n = 1, 4    
            call system_clock(time, count_rate)         
            call random_seed(time)
@@ -688,7 +661,7 @@ end if
        if (i_step == 1 .and. ST_output_src_term) then
           if (ST_output_src_decay_rate < 0) then
              ! No time-averaging
-             box%cc(IJK, i_src) = src  * a$D_heaviside(box%cc(IJK, i_eps), med)
+             box%cc(IJK, i_src) = src * a$D_heaviside(box%cc(IJK, i_eps), med)
           else
              ! Approximate exp(-t*rate) as 1-t*rate
              box%cc(IJK, i_src) = ((1 - dt * ST_output_src_decay_rate) * &
@@ -777,6 +750,7 @@ end if
           p_id = tree%boxes(id)%parent
           
           call define_DI(tree%boxes(id)) ! For dielectric re-shaping
+          call a$D_prolong_copy_fc(tree%boxes(p_id), tree%boxes(id), sigma_rhs, i_eps = i_eps, med = med)
           call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron, i_eps = i_eps, med = med)
           call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps, med = med)
           call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps)
