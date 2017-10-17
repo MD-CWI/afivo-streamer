@@ -281,10 +281,9 @@ contains
        f = vol_frac_inside(box, [IJK])
        do n = 1, init_conds%n_die
          box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
-         if (f > 0.5_dp) then
+         if (f > 1.0_dp - epsilon(1.0_dp)) then
            box%cc(IJK, i_electron)   = init_conds%die_density(n)
            box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
-           box%cc(IJK, i_photo)      = 0.0_dp
          end if
        end do
     end do; CLOSE_DO

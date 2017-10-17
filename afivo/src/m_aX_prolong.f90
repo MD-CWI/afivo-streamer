@@ -364,6 +364,7 @@ contains
     integer                       :: hnc, nc, ix_offset($D), ivc
     integer                       :: i, j, i_c, i_f, j_c, j_f
     logical                       :: add_to
+    real(dp)                      :: eps_max
 #if $D == 2
     real(dp)                      :: f0, flx, fhx, fly, fhy
     real(dp)                      :: fll, fhl, flh, fhh
@@ -384,6 +385,7 @@ contains
     ix_offset = a$D_get_child_offset(box_c)
     add_to    = .false.; if (present(add)) add_to = add
     ivc       = iv; if (present(iv_to)) ivc = iv_to
+    eps_max   = -1.0_dp/(1-2.0_dp/med)
 
     if (.not. add_to) then
 #if $D == 2
@@ -401,7 +403,7 @@ contains
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
           
-          in_out(-1:1, -1:1) = a$D_heaviside(box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps), med)
+          in_out(-1:1, -1:1) = a$D_heaviside(box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps), eps_max)
           
 
           f0 = f9 * box_p%cc(i_c, j_c, iv)*in_out(0,0)

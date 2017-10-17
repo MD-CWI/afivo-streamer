@@ -286,10 +286,10 @@ contains
     id             = 2          
 #if $D == 2
     ix_list(:, 1) = [1, 1]     
-    ix_list(:, 2) = [1, 2]
+    ix_list(:, 2) = [2, 1]
 #elif $D == 3
     ix_list(:, 1) = [1, 1, 1]     
-    ix_list(:, 2) = [1, 1, 2]
+    ix_list(:, 2) = [2, 1, 1]
 #endif
 
     ! Create the base mesh
@@ -323,10 +323,10 @@ contains
        
               
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5)) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 7)) then
+          .and. (eps_max == eps_min .or. box%lvl >= 5)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -509,8 +509,8 @@ contains
     do KJI_DO(1,nc)
        fld   = box%cc(IJK, i_electric_fld)
        loc   = LT_get_loc(ST_td_tbl, fld)
-       alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)*a$D_heaviside(box%cc(IJK, i_eps), med)
-       eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)*a$D_heaviside(box%cc(IJK, i_eps), med)
+       alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+       eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
        mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
        f_elec = 0.0_dp
        flag = 0
@@ -527,34 +527,28 @@ contains
        if (box%cc(IJK, i_eps) <= med) then
          
          if (box%cc(i-1, j, i_eps) > med) then
-           s_flow(1) = - dt  * box%fc(IJK, 1, flux_elec) * &
-                       (1.0_dp - 0.25_dp * box%fc(IJK, 1, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))  
+           s_flow(1) = - dt  * box%fc(IJK, 1, flux_elec) 
            box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)
            f_elec = f_elec - (s_flow(1) + box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
          else
-           f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec) * &
-                    (1.0_dp - 0.25_dp * box%fc(i+1, j, 1, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))) * inv_dr * dt          
+           f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt          
          end if
          
          if (box%cc(i, j-1, i_eps) > med) then
-           s_flow(2) = - dt  * box%fc(IJK, 2, flux_elec) * &
-                       (1.0_dp - 0.25_dp * box%fc(IJK, 2, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))  
+           s_flow(2) = - dt  * box%fc(IJK, 2, flux_elec) 
            box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
            f_elec = f_elec - (s_flow(2) + box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
          else
-           f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) * &
-                    (1.0_dp - 0.25_dp * box%fc(i, j+1, 2, sigma_rhs)/(box%cc(IJK, i_electron)*box%dr))) * inv_dr * dt          
+           f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec)) * inv_dr * dt          
          end if
        else 
          f_elec    = 0.0_dp
          if (box%cc(i-1, j, i_eps) <= med) then
-           s_flow(1) = dt * (box%fc(IJK, 1, flux_elec) * &
-                       (1.0_dp - 0.25_dp * box%fc(IJK, 1, sigma_rhs)/(box%cc(i-1, j, i_electron)*box%dr))) 
+           s_flow(1) = dt * box%fc(IJK, 1, flux_elec) 
            box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
          end if
          if (box%cc(i, j-1, i_eps) <= med) then
-           s_flow(2) = dt * (box%fc(IJK, 2, flux_elec) * &
-                       (1.0_dp - 0.25_dp * box%fc(IJK, 2, sigma_rhs)/(box%cc(i, j-1, i_electron)*box%dr))) 
+           s_flow(2) = dt * box%fc(IJK, 2, flux_elec)
            box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
          end if  
        end if
@@ -631,7 +625,7 @@ end if
        end if
 
        ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * a$D_heaviside(box%cc(IJK, i_eps), med)
+       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
        if (photoi_enabled .and. box%cc(IJK, i_eps) <= med) then
          src = src + box%cc(IJK, i_photo)
        else if (photoi_enabled .and. box%cc(IJK, i_eps) > med) then
@@ -661,11 +655,11 @@ end if
        if (i_step == 1 .and. ST_output_src_term) then
           if (ST_output_src_decay_rate < 0) then
              ! No time-averaging
-             box%cc(IJK, i_src) = src * a$D_heaviside(box%cc(IJK, i_eps), med)
+             box%cc(IJK, i_src) = src * a$D_heaviside(box%cc(IJK, i_eps), ST_epsilon_die)
           else
              ! Approximate exp(-t*rate) as 1-t*rate
              box%cc(IJK, i_src) = ((1 - dt * ST_output_src_decay_rate) * &
-                  box%cc(IJK, i_src) + src * dt )* a$D_heaviside(box%cc(IJK, i_eps), med)
+                  box%cc(IJK, i_src) + src * dt )* a$D_heaviside(box%cc(IJK, i_eps), ST_epsilon_die)
           end if
        end if
 
@@ -684,10 +678,9 @@ end if
                                                        box%cc(IJK, i_photo) * ST_phe_yield * dt
 #endif
        else
-         if (box%cc(IJK, i_eps) <= med) then
+         if (box%cc(IJK, i_eps) < ST_epsilon_die) then
            ! Add flux and source term
            box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + f_elec + src
-
            box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
          end if
        end if

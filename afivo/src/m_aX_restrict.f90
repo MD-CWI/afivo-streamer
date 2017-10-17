@@ -89,6 +89,7 @@ contains
     real(dp), intent(in), optional  :: med
     integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
     integer                       :: hnc, ix_offset($D)
+    real(dp)                        :: eps_max
 #if $D == 2
     real(dp)                      :: w1, w2
     real(dp)                      :: in_out(0:1, 0:1)
@@ -105,6 +106,7 @@ contains
        i_dest = iv
     end if
 
+    eps_max = -1.0_dp/(1-2.0_dp/med)
 #if $D == 2
     if (box_p%coord_t == af_cyl) then
        do j = 1, hnc
@@ -114,7 +116,7 @@ contains
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
              
-             in_out(0:1, 0:1) = a$D_heaviside(box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps), med) 
+             in_out(0:1, 0:1) = a$D_heaviside(box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps), eps_max) 
 
              call a2_cyl_child_weights(box_p, i, w1, w2)
              box_p%cc(i_c, j_c, i_dest) = (w1 * sum(in_out(0, 0:1)*box_c%cc(i_f, j_f:j_f+1, iv)) + &
@@ -129,7 +131,7 @@ contains
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
              
-             in_out(0:1, 0:1) = a$D_heaviside(box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps), med)
+             in_out(0:1, 0:1) = a$D_heaviside(box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps), eps_max)
              if (sum(in_out(:,:)) > epsilon(1.0_dp)) then
                if (box_p%cc(i_c, j_c, i_eps) <= med) then
                  box_p%cc(i_c, j_c, i_dest) = sum(in_out(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv)) / sum(in_out(:,:))
@@ -163,7 +165,6 @@ contains
  
  
   subroutine a$D_restrict_box_cont(box_c, box_p, iv, iv_to, i_eps)
-    use m_a$D_utils, only:a$D_heaviside 
     type(box$D_t), intent(in)       :: box_c         !< Child box to restrict
     type(box$D_t), intent(inout)    :: box_p         !< Parent box to restrict to
     integer, intent(in)             :: iv            !< Variable to restrict

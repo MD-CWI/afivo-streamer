@@ -367,6 +367,7 @@ contains
     integer                        :: i_c1, i_c2, j_c1, j_c2, p_nb_id
     integer                        :: p_id, ix_offset($D)
     real(dp), parameter            :: sixth=1/6.0_dp, third=1/3.0_dp
+    real(dp)                       :: eps_max
 #if $D == 2
     real(dp)                       :: f0, f1, f2
 #elif $D == 3
@@ -388,17 +389,18 @@ contains
        ix_c = 1
     end if
 
+    eps_max = -1.0_dp/(1-2.0_dp/med)
     select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          f0 = 0.5_dp*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med)
-          f1 = sixth*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), med)
-          f2 = third*a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med)
+          f0 = 0.5_dp*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), eps_max)
+          f1 = sixth*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), eps_max)
+          f2 = third*a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), eps_max)
           if (f0 + f1 + f2 > epsilon(1.0_dp)) then
-            if (boxes(id)%cc(ix, j, i_eps) <= med ) then
+            if (boxes(id)%cc(ix, j, i_eps) < eps_max ) then
               boxes(id)%cc(ix, j, iv) = &
                  (f0 * boxes(p_nb_id)%cc(ix_c, j_c1, iv) + &
                  f1 * boxes(p_nb_id)%cc(ix_c, j_c2, iv) + &
@@ -416,11 +418,11 @@ contains
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          f0 = 0.5_dp * a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med)
-          f1 = sixth * a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med)
-          f2 = third * a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med)
+          f0 = 0.5_dp * a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), eps_max)
+          f1 = sixth * a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), eps_max)
+          f2 = third * a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), eps_max)
           if (f0 + f1 + f2 > epsilon(1.0_dp)) then
-            if (boxes(id)%cc(i, ix, i_eps) <= med ) then
+            if (boxes(id)%cc(i, ix, i_eps) < eps_max ) then
               boxes(id)%cc(i, ix, iv) = &
                  (f0 * boxes(p_nb_id)%cc(i_c1, ix_c, iv) + &
                  f1 * boxes(p_nb_id)%cc(i_c2, ix_c, iv) + &
@@ -496,7 +498,7 @@ contains
     integer                        :: nc, ix, ix_c, ix_f, i, j
     integer                        :: i_c1, i_c2, j_c1, j_c2, p_nb_id
     integer                        :: p_id, ix_offset($D)
-    real(dp)                       :: c1, c2
+    real(dp)                       :: c1, c2, eps_max
     real(dp), parameter            :: sixth=1/6.0_dp, third=1/3.0_dp
 #if $D == 3
     integer                        :: k_c1, k_c2, k
@@ -518,20 +520,21 @@ contains
        ix_c = 1
     end if
 
+    eps_max = -1.0_dp/(1-2.0_dp/med)
     select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          if (boxes(id)%cc(ix, j, i_eps) <= med) then
-            c1 = boxes(p_nb_id)%cc(ix_c, j_c1, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med)
-            c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), med)
+          if (boxes(id)%cc(ix, j, i_eps) < eps_max) then
+            c1 = boxes(p_nb_id)%cc(ix_c, j_c1, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), eps_max)
+            c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), eps_max)
             boxes(id)%cc(ix, j, iv) = (0.5_dp * c1 + sixth * c2 + &
-                 third * boxes(id)%cc(ix_f, j, iv)*a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med)) / &
-                 (0.5_dp*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), med) + &
-                 sixth * a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), med) + &
-                 third * a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), med) + epsilon(1.0_dp))
+                 third * boxes(id)%cc(ix_f, j, iv)*a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), eps_max)) / &
+                 (0.5_dp*a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c1, i_eps), eps_max) + &
+                 sixth * a2_heaviside(boxes(p_nb_id)%cc(ix_c, j_c2, i_eps), eps_max) + &
+                 third * a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), eps_max) + epsilon(1.0_dp))
             if (boxes(id)%cc(ix, j, iv) > 2 * c1 .and. c1 > 0.0_dp) then
                boxes(id)%cc(ix, j, iv) = 2 * c1
             else if (boxes(id)%cc(ix, j, iv) > 2 * c2 .and. c2 > 0.0_dp) then
@@ -545,14 +548,14 @@ contains
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          if (boxes(id)%cc(i, ix, i_eps) <= med) then
-           c1 = boxes(p_nb_id)%cc(i_c1, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med)
-           c2 = boxes(p_nb_id)%cc(i_c2, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med)
+          if (boxes(id)%cc(i, ix, i_eps) < eps_max) then
+           c1 = boxes(p_nb_id)%cc(i_c1, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), eps_max)
+           c2 = boxes(p_nb_id)%cc(i_c2, ix_c, iv)*a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), eps_max)
            boxes(id)%cc(i, ix, iv) = (0.5_dp * c1 + sixth * c2 + &
-                 third * boxes(id)%cc(i, ix_f, iv)*a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med)) / & 
-                 (0.5_dp * a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), med) +  &
-                 sixth * a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), med) + &
-                 third * a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), med) + epsilon(1.0_dp))
+                 third * boxes(id)%cc(i, ix_f, iv)*a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), eps_max)) / & 
+                 (0.5_dp * a2_heaviside(boxes(p_nb_id)%cc(i_c1, ix_c, i_eps), eps_max) +  &
+                 sixth * a2_heaviside(boxes(p_nb_id)%cc(i_c2, ix_c, i_eps), eps_max) + &
+                 third * a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), eps_max) + epsilon(1.0_dp))
             if (boxes(id)%cc(i, ix, iv) > 2 * c1 .and. c1 > 0.0_dp) then
                boxes(id)%cc(i, ix, iv) = 2 * c1
             else if (boxes(id)%cc(i, ix, iv) > 2 * c2 .and. c2 > 0.0_dp) then
@@ -803,6 +806,7 @@ contains
     real(dp), intent(in), optional :: med
     integer, intent(in)            :: iv        !< Ghost cell variable
     integer, intent(in)            :: nc        !< Box n_cell
+    real(dp)                       :: eps_max
 #if $D == 2
     real(dp), intent(out)         :: gc_side(nc) !< Ghost cells on side
     real(dp)                      :: w
@@ -820,7 +824,7 @@ contains
     p_nb_id   = boxes(p_id)%neighbors(nb)
     ix_offset = a$D_get_child_offset(boxes(id), nb)
     ix        = a$D_neighb_high_01(nb) * (nc+3) - 1 ! -1 or nc+2
-
+    eps_max   = -1.0_dp/(1-2.0_dp/med)
     select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
@@ -829,12 +833,12 @@ contains
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
-          gc_side(j) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
+          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)
+          gc_side(j) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)) / &
                (w+epsilon(1.0_dp))
        end do
     case (2)
@@ -843,12 +847,12 @@ contains
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
-          gc_side(i) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
+          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)
+          gc_side(i) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)) / &
                (w+epsilon(1.0_dp))
        end do
 #elif $D==3

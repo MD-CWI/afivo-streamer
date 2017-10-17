@@ -192,12 +192,12 @@ contains
     end if
   end function a$D_r_inside
   
-  elemental function a$D_heaviside(value, med) result(val)
+  elemental function a$D_heaviside(value, center) result(val)
      real(dp), intent(in)           :: value
-     real(dp), intent(in)           :: med
+     real(dp), intent(in)           :: center
      real(dp)                       :: val
 
-     if(value > med) then
+     if(value >= center) then
        val = 0.0_dp
      else
        val = 1.0_dp
