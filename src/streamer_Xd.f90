@@ -286,10 +286,10 @@ contains
     id             = 2          
 #if $D == 2
     ix_list(:, 1) = [1, 1]     
-    ix_list(:, 2) = [2, 1]
+    ix_list(:, 2) = [1, 2]
 #elif $D == 3
     ix_list(:, 1) = [1, 1, 1]     
-    ix_list(:, 2) = [2, 1, 1]
+    ix_list(:, 2) = [1, 1, 2]
 #endif
 
     ! Create the base mesh
@@ -323,10 +323,10 @@ contains
        
               
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 6)) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 5)) then
+          .and. (eps_max == eps_min .or. box%lvl >= 6)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -524,36 +524,35 @@ contains
           rfac(:) = 1.0_dp
        end if
        
-       if (box%cc(IJK, i_eps) <= med) then
+       if (box%cc(IJK, i_eps) < ST_epsilon_die) then
          
-         if (box%cc(i-1, j, i_eps) > med) then
+         if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
            s_flow(1) = - dt  * box%fc(IJK, 1, flux_elec) 
            box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)
            f_elec = f_elec - (s_flow(1) + box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
          else
            f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt          
          end if
-         
-         if (box%cc(i, j-1, i_eps) > med) then
+         if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
            s_flow(2) = - dt  * box%fc(IJK, 2, flux_elec) 
            box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
            f_elec = f_elec - (s_flow(2) + box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
          else
            f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec)) * inv_dr * dt          
          end if
+         
        else 
-         f_elec    = 0.0_dp
-         if (box%cc(i-1, j, i_eps) <= med) then
-           s_flow(1) = dt * box%fc(IJK, 1, flux_elec) 
-           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
+         
+         if (box%cc(i-1, j, i_eps) < ST_epsilon_die) then
+           s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
+           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)         
          end if
-         if (box%cc(i, j-1, i_eps) <= med) then
-           s_flow(2) = dt * box%fc(IJK, 2, flux_elec)
-           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
-         end if  
+         if (box%cc(i, j-1, i_eps) < ST_epsilon_die) then
+           s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
+           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
+         end if
+         
        end if
-       
-        
               
 #elif $D == 3
 
@@ -626,9 +625,9 @@ end if
 
        ! Source term
        src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
-       if (photoi_enabled .and. box%cc(IJK, i_eps) <= med) then
+       if (photoi_enabled .and. box%cc(IJK, i_eps) < ST_epsilon_die) then
          src = src + box%cc(IJK, i_photo)
-       else if (photoi_enabled .and. box%cc(IJK, i_eps) > med) then
+       else if (photoi_enabled .and. box%cc(IJK, i_eps) == ST_epsilon_die) then
          do n = 1, 4    
            call system_clock(time, count_rate)         
            call random_seed(time)
@@ -636,12 +635,12 @@ end if
            dir = int(1+rand*(a$D_num_neighbors-1))
            ix = a$D_neighb_dix(:, dir)
 #if $D == 2
-           if (box%cc(i+ix(1), j+ix(2), i_eps) <= med) then
+           if (box%cc(i+ix(1), j+ix(2), i_eps) < ST_epsilon_die) then
              flag = 1
              exit
            end if    
 #elif $D == 3
-           if (box%cc(i+ix(1), j+ix(2), k+ix(3), i_eps) <= med) then
+           if (box%cc(i+ix(1), j+ix(2), k+ix(3), i_eps) < ST_epsilon_die) then
             flag = 1 
              exit        
            end if  
@@ -671,8 +670,8 @@ end if
 #if $D == 2
          box%cc(i+ix(1), j+ix(2), i_electron) = box%cc(i+ix(1), j+ix(2), i_electron) + &
                                               box%cc(IJK, i_photo) * ST_phe_yield * dt
-         box%fc(max(i, i+ix(1)), max(j, j+ix(2)), dir, sigma_rhs) = &
-               box%fc(max(i, i+ix(1)), max(j, j+ix(2)), dir, sigma_rhs) - box%cc(IJK, i_photo) * ST_phe_yield * box%dr * dt
+         box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+(dir-1)/2, sigma_rhs) = &
+               box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+(dir-1)/2, sigma_rhs) - box%cc(IJK, i_photo) * ST_phe_yield * box%dr * dt
 #elif $D == 3
          box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) = box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) + &
                                                        box%cc(IJK, i_photo) * ST_phe_yield * dt

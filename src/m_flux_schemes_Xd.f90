@@ -145,26 +145,28 @@ contains
   end function koren_mlim
   
   !> Return the gradient off cell centered variable iv in a direction dir from inside cell ix
-  !> IMPORTANT : for cc_num 2 it is assumed here that s_iv(1) is negative charge and s_iv(2) positive
   function gradient_$Dd(box, cc_num, ix, dir, iv) result(grad)
     type(box$D_t), intent(in)         :: box
-    integer, intent(in)               :: cc_num !< 2 if cc is assumed continuous 1 otherwise
+    integer, intent(in)               :: cc_num 
     integer, intent(in)               :: ix($D), dir, iv
-    real(dp)                          :: grad, inv_dr, s_C, harm_ep, med, fac
+    real(dp)                          :: grad, inv_dr, s_C, harm_ep, fac, f, f_n, theta
     integer                           :: n_ix($D)
     
     n_ix      = a$D_neighb_dix(:, dir)
     inv_dr    = 1/box%dr
-    med       = a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
  
 
 #if $D == 2
     
     if (cc_num == 2) then
+      
+            
       harm_ep = 2.0_dp*box%cc(ix(1), ix(2), i_eps)*box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps) / &
                 (box%cc(ix(1), ix(2), i_eps)+box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps))           
       s_C     = box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
                 , a2_neighb_dim(dir), sigma_rhs)/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps)
+      
+      
       grad    = a2_neighb_high_pm(dir)*(inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &
                 box%cc(ix(1), ix(2), iv)) - 0.5_dp*s_C) * &
                 harm_ep/box%cc(ix(1), ix(2), i_eps) 
@@ -183,7 +185,7 @@ contains
 
 #elif $D == 3
 
-    if (a$D_border(box%cc(ix(1), ix(2), ix(3), i_eps), box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), ix(3)+n_ix(3), i_eps), med)) then
+
       if (cc_num == 2) then
         harm_ep = 2.0_dp*box%cc(ix(1), ix(2), ix(3), i_eps)*box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), ix(3)+n_ix(3), i_eps)/&
                   (box%cc(ix(1), ix(2), ix(3), i_eps)+box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), ix(3)+n_ix(3), i_eps))           
@@ -203,10 +205,6 @@ contains
                 n_ix(2)*a3_neighb_high_01(dir), ix(3)+n_ix(3)*a3_neighb_high_01(dir), a3_neighb_dim(dir), sigma_rhs)*inv_dr &
                 +box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), ix(3)+n_ix(3), iv)-box%cc(ix(1), ix(2), ix(3), iv)) / (1-fac)
       end if
-    else
-      grad      = inv_dr*a3_neighb_high_pm(dir)*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), ix(3)+n_ix(3), iv)-&
-                  box%cc(ix(1), ix(2), ix(3), iv))
-    end if
 
 #endif
 

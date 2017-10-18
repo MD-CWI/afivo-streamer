@@ -133,7 +133,7 @@ contains
              
              in_out(0:1, 0:1) = a$D_heaviside(box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps), eps_max)
              if (sum(in_out(:,:)) > epsilon(1.0_dp)) then
-               if (box_p%cc(i_c, j_c, i_eps) <= med) then
+               if (box_p%cc(i_c, j_c, i_eps) < eps_max) then
                  box_p%cc(i_c, j_c, i_dest) = sum(in_out(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv)) / sum(in_out(:,:))
                else
                  box_p%cc(i_c, j_c, i_dest) = sum((1-in_out(0:1, 0:1))*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv)) / sum(1-in_out(:,:))
@@ -247,6 +247,7 @@ contains
     real(dp), intent(in), optional  :: med
     integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
     integer                       :: hnc, ix_offset($D), ii
+    real(dp)                      :: eps_max
 #if $D == 2
     real(dp)                      :: w1, w2
 #elif $D == 3
@@ -261,6 +262,8 @@ contains
     else
        i_dest = s_iv
     end if
+    
+    eps_max   = -1.0_dp/(1-2.0_dp/med)
 
 #if $D == 2
     if (box_p%coord_t == af_cyl) then
@@ -281,7 +284,7 @@ contains
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
               
-             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c-1, j_c, i_eps), med)) then    
+             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c-1, j_c, i_eps), eps_max)) then    
                if (i_f == 1) then
                  box_p%fc(i_c, j_c, 1, i_dest) = 0.5_dp*sum(box_c%fc(i_f:i_f+1, j_f, 1, s_iv)) + &
                                                0.5_dp*sum(box_c%fc(i_f:i_f+1, j_f+1, 1, s_iv))
@@ -291,7 +294,7 @@ contains
                end if
              end if
                
-             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c, j_c-1, i_eps), med)) then    
+             if (a$D_border(box_p%cc(i_c, j_c, i_eps), box_p%cc(i_c, j_c-1, i_eps), eps_max)) then    
                if (j_f == 1) then
                  box_p%fc(i_c, j_c, 2, i_dest) = 0.5_dp*sum(box_c%fc(i_f, j_f:j_f+1, 2, s_iv)) + &
                                                0.5_dp*sum(box_c%fc(i_f+1, j_f:j_f+1, 2, s_iv))

@@ -127,6 +127,7 @@ contains
     logical                        :: add_to
     integer                        :: nc, ix_offset($D), s_ivc
     integer                        :: i, j, i_c1, j_c1, lo($D), hi($D)
+    real(dp)                       :: eps_max
 #if $D == 3
     integer                        :: k, k_c1
 #endif
@@ -136,7 +137,8 @@ contains
     s_ivc = s_iv; if (present(s_iv_to)) s_ivc = s_iv_to
     lo   = 1; if (present(low)) lo = low
     hi   = nc+1; if (present(high)) hi = high
-
+    eps_max   = -1.0_dp/(1-2.0_dp/med)
+    
     ! Offset of child w.r.t. parent
     ix_offset = a$D_get_child_offset(box_c)
 
@@ -147,10 +149,10 @@ contains
           do i = lo(1), hi(1)
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              
-             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i-1, j, i_eps), med)) then
+             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i-1, j, i_eps), eps_max)) then
                box_c%fc(i, j, 1, s_ivc) = box_c%fc(i, j, 1, s_ivc) + box_p%fc(i_c1, j_c1, 1, s_iv)
              end if
-             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), med)) then
+             if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), eps_max)) then
                box_c%fc(i, j, 2, s_ivc) = box_c%fc(i, j, 1, s_ivc) + box_p%fc(i_c1, j_c1, 2, s_iv)
              end if
           end do
@@ -175,30 +177,30 @@ contains
           do i = lo(1), hi(1)
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              
-             if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1-1, j_c1, i_eps), med)) then
+             if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1-1, j_c1, i_eps), eps_max)) then
                if (i == 1) then
-                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), med)) then
+                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
                    box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
                  end if
                else             
-                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), med)) then
+                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
                    box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
-                 else if (a$D_border(box_c%cc(i-2, j, i_eps), box_c%cc(i-1, j, i_eps), med)) then
+                 else if (a$D_border(box_c%cc(i-2, j, i_eps), box_c%cc(i-1, j, i_eps), eps_max)) then
                    box_c%fc(i-1, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv) 
                  end if
                end if
              end if
              
              
-             if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1, j_c1-1, i_eps), med)) then
+             if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1, j_c1-1, i_eps), eps_max)) then
                if (j == 1) then
-                 if (a$D_border(box_c%cc(i, j-1, i_eps), box_c%cc(i, j, i_eps), med)) then
+                 if (a$D_border(box_c%cc(i, j-1, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
                    box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
                  end if
                else             
-                 if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), med)) then
+                 if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), eps_max)) then
                    box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
-                 else if (a$D_border(box_c%cc(i, j-2, i_eps), box_c%cc(i, j-1, i_eps), med)) then
+                 else if (a$D_border(box_c%cc(i, j-2, i_eps), box_c%cc(i, j-1, i_eps), eps_max)) then
                    box_c%fc(i, j-1, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv) 
                  end if
                end if
@@ -416,28 +418,28 @@ contains
           flh = f1 * box_p%cc(i_c-1, j_c+1, iv)*in_out(-1,1)
           fhh = f1 * box_p%cc(i_c+1, j_c+1, iv)*in_out(1,1)
           
-          if (box_c%cc(i_f, j_f, i_eps) <= med) then
+          if (box_c%cc(i_f, j_f, i_eps) < eps_max) then
             box_c%cc(i_f, j_f, ivc) = box_c%cc(i_f, j_f, ivc) + (f0 + flx + fly + fll)/&
                 (f9*in_out(0,0) + f3*in_out(-1,0) + f3*in_out(0,-1) + f1*in_out(-1,-1) + epsilon(1.0_dp))
           else
               box_c%cc(i_f, j_f, ivc) = 0.01_dp
           end if
           
-          if (box_c%cc(i_f+1, j_f, i_eps) <= med) then 
+          if (box_c%cc(i_f+1, j_f, i_eps) < eps_max) then 
             box_c%cc(i_f+1, j_f, ivc) = box_c%cc(i_f+1, j_f, ivc) + (f0 + fhx + fly + fhl)/&
                 (f9*in_out(0,0) + f3*in_out(1,0) + f3*in_out(0,-1) + f1*in_out(1,-1) + epsilon(1.0_dp))
           else
             box_c%cc(i_f+1, j_f, ivc) = 0.01_dp
           end if
           
-          if (box_c%cc(i_f, j_f+1, i_eps) <= med) then     
+          if (box_c%cc(i_f, j_f+1, i_eps) < eps_max) then     
             box_c%cc(i_f, j_f+1, ivc) = box_c%cc(i_f, j_f+1, ivc) + (f0 + flx + fhy + flh)/&
                 (f9*in_out(0,0) + f3*in_out(-1,0) + f3*in_out(0,1) + f1*in_out(-1,1) + epsilon(1.0_dp))
           else
             box_c%cc(i_f, j_f+1, ivc) = 0.01_dp
           end if 
              
-          if (box_c%cc(i_f+1, j_f+1, i_eps) <= med) then    
+          if (box_c%cc(i_f+1, j_f+1, i_eps) < eps_max) then    
             box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + (f0 + fhx + fhy + fhh)/&
                 (f9*in_out(0,0) + f3*in_out(1,0) + f3*in_out(0,1) + f1*in_out(1,1) + epsilon(1.0_dp)) 
           else

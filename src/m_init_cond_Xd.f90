@@ -211,7 +211,7 @@ contains
     proc_id = 1+omp_get_thread_num()
 
     do KJI_DO(1,box%n_cell)
-      if(box%cc(IJK, i_eps) <= med) then
+      if(box%cc(IJK, i_eps) < ST_epsilon_die) then
         density = ST_prng%rngs(proc_id)%unif_01() * &
         init_conds%stochastic_density
         box%cc(IJK, i_rhs) = density
@@ -281,7 +281,7 @@ contains
        f = vol_frac_inside(box, [IJK])
        do n = 1, init_conds%n_die
          box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
-         if (f > 1.0_dp - epsilon(1.0_dp)) then
+         if (f == 1.0_dp) then
            box%cc(IJK, i_electron)   = init_conds%die_density(n)
            box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
          end if
@@ -294,11 +294,13 @@ contains
 
          if(maxval([IJK]) < nc+1 .and. minval([IJK])> 0) then
 #if $D == 2
-           if(box%cc(IJK, i_eps) > med .and. (box%cc(i-1, j, i_eps) <= med .and. box%cc(i+1, j, i_eps) <= med) ) then
+           if (box%cc(IJK, i_eps) == ST_epsilon_die .and. &
+              (box%cc(i-1, j, i_eps) < ST_epsilon_die .and. box%cc(i+1, j, i_eps) < ST_epsilon_die) ) then
              box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i-1, j, i_eps), box%cc(i+1, j, i_eps), 0.5_dp)
            end if
         
-           if(box%cc(IJK, i_eps) > med .and. (box%cc(i, j-1, i_eps) <= med .and. box%cc(i, j+1, i_eps) <= med) ) then
+           if (box%cc(IJK, i_eps) == ST_epsilon_die .and. &
+              (box%cc(i, j-1, i_eps) < ST_epsilon_die .and. box%cc(i, j+1, i_eps) < ST_epsilon_die) ) then
              box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i, j-1, i_eps), box%cc(i, j+1, i_eps), 0.5_dp)
            end if
            

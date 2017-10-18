@@ -168,10 +168,11 @@ contains
 
 #if $D == 2
   !> Perform cylindrical Laplacian operator on a box
-  subroutine helmholtz_cyl_operator(box, i_out, mg)
+  subroutine helmholtz_cyl_operator(box, i_out, mg, eps_val)
     type(box2_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
     type(mg2_t), intent(in)     :: mg !< Multigrid options
+    real(dp), intent(in), optional :: eps_val
     integer                     :: i, j, nc, i_phi, ioff
     real(dp)                    :: inv_dr_sq, rfac(2)
 
@@ -224,10 +225,11 @@ contains
 #endif
 
   !> Perform Helmholtz operator on a box
-  subroutine helmholtz_operator(box, i_out, mg)
+  subroutine helmholtz_operator(box, i_out, mg, eps_val)
     type(box$D_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
     type(mg$D_t), intent(in)     :: mg !< Multigrid options
+    real(dp), intent(in), optional :: eps_val
     integer                     :: i, j, nc, i_phi
     real(dp)                    :: inv_dr_sq
 #if $D == 3
