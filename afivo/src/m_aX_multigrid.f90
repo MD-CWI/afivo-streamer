@@ -999,10 +999,7 @@ contains
     n_ix      = a$D_neighb_dix(:, dir)
     inv_dr    = 1/box%dr
 
-#if $D == 2
-
-    harm_ep = 2.0_dp*box%cc(ix(1), ix(2), i_eps)*box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps) / &
-              (box%cc(ix(1), ix(2), i_eps)+box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps))           
+#if $D == 2         
     s_C     = box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
               , a2_neighb_dim(dir), sigma_rhs)/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps)
     grad    = a2_neighb_high_pm(dir)*(inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &

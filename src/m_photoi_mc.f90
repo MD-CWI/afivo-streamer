@@ -383,7 +383,7 @@ contains
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl
     real(dp)                    :: tmp, dr, fac, dist, r(3)
-    real(dp)                    :: sum_production, pi_lengthscale, med
+    real(dp)                    :: sum_production, pi_lengthscale, eps_max
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
     real(dp), parameter         :: pi = acos(-1.0_dp)
@@ -391,7 +391,7 @@ contains
     type(a2_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
-    med = a2_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
+    eps_max = ST_epsilon_die
 
     ! Compute the sum of photon production
     call a2_tree_sum_cc(tree, i_src, sum_production)
@@ -569,14 +569,14 @@ contains
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           call a2_gc_box(tree%boxes, id, i_eps, i_photo, &
-               a2_gc_interp, a2_bc_neumann_zero, med = med)
+               a2_gc_interp, a2_bc_neumann_zero, med = eps_max)
        end do
        !$omp end do
 
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a2_prolong_linear_from(tree%boxes, id, i_photo, add=.true., i_eps = i_eps, med = med)
+          call a2_prolong_linear_from(tree%boxes, id, i_photo, add=.true., i_eps = i_eps, eps_max = eps_max)
        end do
        !$omp end do
     end do
@@ -607,14 +607,14 @@ contains
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl, min_lvl
     real(dp)                    :: tmp, dr, fac, dist, r(3)
-    real(dp)                    :: sum_production, pi_lengthscale, med
+    real(dp)                    :: sum_production, pi_lengthscale, eps_max
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
     type(PRNG_t)                :: prng
     type(a3_loc_t), allocatable :: ph_loc(:)
 
     nc = tree%n_cell
-    med = a3_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
+    eps_max = ST_epsilon_die
 
     ! Compute the sum of photon production
     call a3_tree_sum_cc(tree, i_src, sum_production)
@@ -754,14 +754,14 @@ contains
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
           call a3_gc_box(tree%boxes, id, i_eps, i_photo, &
-               a3_gc_interp, a3_bc_neumann_zero, med = med)
+               a3_gc_interp, a3_bc_neumann_zero, med = eps_max)
        end do
        !$omp end do
        
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a3_prolong_linear_from(tree%boxes, id, i_photo, add=.true., i_eps = i_eps, med = med)
+          call a3_prolong_linear_from(tree%boxes, id, i_photo, add=.true., i_eps = i_eps, eps_max = eps_max)
        end do
        !$omp end do
     end do

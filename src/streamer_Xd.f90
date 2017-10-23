@@ -63,7 +63,7 @@ program streamer_$Dd
 
   output_cnt      = 0         ! Number of output files written
   ST_time         = 0         ! Simulation time (all times are in s)
-  med = a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
+  !med = a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
   
 
   ! Set up the initial conditions
@@ -146,8 +146,8 @@ program streamer_$Dd
            call field_compute(tree, mg, .true.)
 
            ! Coarse densities might be required for ghost cells
-           call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = med)
-           call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = med, s_flag = .true.)
+           call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = ST_epsilon_die)
+           call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = ST_epsilon_die, s_flag = .true.)
         end if
      end do
      
@@ -159,8 +159,8 @@ program streamer_$Dd
      call a$D_loop_box(tree, average_density)
 
      ! Coarse densities might be required for ghost cells
-     call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = med)
-     call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = med, s_flag = .true.)
+     call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = ST_epsilon_die)
+     call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = ST_epsilon_die, s_flag = .true.)
 
      ! Compute field with new density
      call field_compute(tree, mg, .true.)
@@ -177,18 +177,18 @@ program streamer_$Dd
 
      if (write_out) then
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
 
         if (ST_output_src_term) then
            call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
         end if
 
         if (photoi_enabled) then
            call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
            call a$D_restrict_tree(tree, i_photo, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+           call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
         end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
@@ -226,20 +226,20 @@ program streamer_$Dd
 
      if (mod(it, ST_refine_per_steps) == 0) then
         ! Restrict electron and ion densities before refinement
-        call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = med)
-        call a$D_restrict_tree(tree, i_pos_ion, i_eps = i_eps, med = med)
-        call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = med, s_flag = .true.)
+        call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = ST_epsilon_die)
+        call a$D_restrict_tree(tree, i_pos_ion, i_eps = i_eps, med = ST_epsilon_die)
+        call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = ST_epsilon_die, s_flag = .true.)
 
         if (ST_output_src_term .and. ST_output_src_decay_rate > 0) then
            ! Have to set src term on coarse grids as well, and fill ghost cells
            ! before prolongation
-           call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+           call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = ST_epsilon_die)
+           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
         end if
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
 
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
@@ -401,13 +401,13 @@ contains
 
     ! Fill ghost cells on the sides of boxes (no corners)
     call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp_lim, &
-         a$D_bc_neumann_zero, .false., med = med)
+         a$D_bc_neumann_zero, .false., ST_epsilon_die)
          
     call a$D_gc_box_fc(boxes, id, i_eps, sigma_rhs, a$D_gc_prolong_copy_fc, &
-         a$D_bc_dirichlet_zero_fc, med)
+         a$D_bc_dirichlet_zero_fc, ST_epsilon_die)
          
     call a$D_gc2_box(boxes, id, i_eps, i_electron, a$D_gc2_prolong_linear, &
-         a$D_bc2_neumann_zero, cc, nc, med)
+         a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die)
 
     
 
@@ -460,7 +460,7 @@ contains
 
        ! Fill ghost cells on the sides of boxes (no corners)
        call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp_lim, &
-            a$D_bc_neumann_zero, .false., med = med)
+            a$D_bc_neumann_zero, .false., med = ST_epsilon_die)
 
        call flux_koren_$Dd(cc, v, nc, inv_dr)
        call flux_diff_$Dd(boxes(id), dc, i_pos_ion)
@@ -527,16 +527,16 @@ contains
        if (box%cc(IJK, i_eps) < ST_epsilon_die) then
          
          if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
-           s_flow(1) = - dt  * box%fc(IJK, 1, flux_elec) 
-           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)
-           f_elec = f_elec - (s_flow(1) + box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
+           s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
+           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(-s_flow(1), 0.0_dp)
+           f_elec = f_elec + (s_flow(1) - box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
          else
            f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt          
          end if
          if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
-           s_flow(2) = - dt  * box%fc(IJK, 2, flux_elec) 
-           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
-           f_elec = f_elec - (s_flow(2) + box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
+           s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
+           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(-s_flow(2), 0.0_dp)
+           f_elec = f_elec + (s_flow(2) - box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
          else
            f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec)) * inv_dr * dt          
          end if
@@ -646,7 +646,7 @@ end if
            end if  
 #endif
          end do
-       else if (box%cc(IJK, i_eps) > med) then
+       else if (box%cc(IJK, i_eps) > ST_epsilon_die) then
            src = 0.0_dp
        end if
 
@@ -742,17 +742,17 @@ end if
           p_id = tree%boxes(id)%parent
           
           call define_DI(tree%boxes(id)) ! For dielectric re-shaping
-          call a$D_prolong_copy_fc(tree%boxes(p_id), tree%boxes(id), sigma_rhs, i_eps = i_eps, med = med)
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron, i_eps = i_eps, med = med)
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps, med = med)
+          call a$D_prolong_copy_fc(tree%boxes(p_id), tree%boxes(id), sigma_rhs, i_eps = i_eps, med = ST_epsilon_die)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron, i_eps = i_eps, eps_max = ST_epsilon_die)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps, eps_max = ST_epsilon_die)
           call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps)
           if (photoi_enabled) then
-             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_photo, i_eps = i_eps, med = med)
+             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_photo, i_eps = i_eps, eps_max = ST_epsilon_die)
           end if
           if (ST_output_src_term) then
-             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_src, i_eps = i_eps, med = med)
+             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_src, i_eps = i_eps, eps_max = ST_epsilon_die)
           end if
-          call define_DI(tree%boxes(id))
+          !call define_DI(tree%boxes(id))
        end do
        !$omp end do
 
@@ -760,18 +760,18 @@ end if
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           call a$D_gc_box(tree%boxes, id, i_eps, i_electron, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
           call a$D_gc_box(tree%boxes, id, i_eps, i_pos_ion, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
           call a$D_gc_box(tree%boxes, id, i_eps, i_phi, &
-               mg%sides_rb, mg%sides_bc, med = med)
+               mg%sides_rb, mg%sides_bc, med = ST_epsilon_die)
           if (photoi_enabled) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_photo, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
           end if
           if (ST_output_src_term) then
              call a$D_gc_box(tree%boxes, id, i_eps, i_src, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = med)
+               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
           end if
        end do
        !$omp end do

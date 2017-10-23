@@ -71,7 +71,7 @@ contains
          "Relative axis(sides or semi-axis) size of the dielectric", .true.)
     call CFG_add(cfg, "die_type", ['elliptic'], &
          "Geometric shape of dielectric (square, elliptic)", .true.)
-    call CFG_add(cfg, "die_density", [0.0e1_dp], &
+    call CFG_add(cfg, "die_density", [0.001e1_dp], &
          "Density of the dielectric(1/m3)", .true.)
 
     call CFG_get_size(cfg, "seed_density", n_cond)
@@ -268,13 +268,11 @@ contains
 
     type(box$D_t), intent(inout)    :: box
     integer                         :: IJK, n, nc
-    real(dp)                        :: rr($D), dr, f, med
+    real(dp)                        :: rr($D), dr, f
     
     nc = box%n_cell
     dr = box%dr 
     box%cc(DTIMES(:), i_eps)      = 1.0_dp ! Base permitivity
-    med = a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
-
 
     do KJI_DO(0, nc+1)
        rr = a$D_r_cc(box, [IJK])
@@ -282,6 +280,7 @@ contains
        do n = 1, init_conds%n_die
          box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
          if (f == 1.0_dp) then
+           !box%cc(IJK, i_eps)        = ST_epsilon_die
            box%cc(IJK, i_electron)   = init_conds%die_density(n)
            box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
          end if

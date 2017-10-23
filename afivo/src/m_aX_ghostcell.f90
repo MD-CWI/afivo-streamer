@@ -487,18 +487,18 @@ contains
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries. The ghost values are less than twice the coarse
   !> values.
-  subroutine a$D_gc_interp_lim(boxes, id, nb, i_eps, iv, med)
+  subroutine a$D_gc_interp_lim(boxes, id, nb, i_eps, iv, eps_max)
     use m_a$D_utils, only:a$D_heaviside
     type(box$D_t), intent(inout)   :: boxes(:) !< List of all boxes
     integer, intent(in)            :: id        !< Id of box
     integer, intent(in)            :: nb        !< Ghost cell direction
     integer, intent(in), optional  :: i_eps
-    real(dp), intent(in), optional :: med
+    real(dp), intent(in), optional :: eps_max
     integer, intent(in)            :: iv        !< Ghost cell variable
     integer                        :: nc, ix, ix_c, ix_f, i, j
     integer                        :: i_c1, i_c2, j_c1, j_c2, p_nb_id
     integer                        :: p_id, ix_offset($D)
-    real(dp)                       :: c1, c2, eps_max
+    real(dp)                       :: c1, c2
     real(dp), parameter            :: sixth=1/6.0_dp, third=1/3.0_dp
 #if $D == 3
     integer                        :: k_c1, k_c2, k
@@ -520,7 +520,7 @@ contains
        ix_c = 1
     end if
 
-    eps_max = -1.0_dp/(1-2.0_dp/med)
+
     select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
@@ -537,8 +537,6 @@ contains
                  third * a2_heaviside(boxes(id)%cc(ix_f, j, i_eps), eps_max) + epsilon(1.0_dp))
             if (boxes(id)%cc(ix, j, iv) > 2 * c1 .and. c1 > 0.0_dp) then
                boxes(id)%cc(ix, j, iv) = 2 * c1
-            else if (boxes(id)%cc(ix, j, iv) > 2 * c2 .and. c2 > 0.0_dp) then
-               boxes(id)%cc(ix, j, iv) = 2 * c2
             end if
           else
             boxes(id)%cc(ix, j, iv) = 0.01_dp
@@ -558,8 +556,6 @@ contains
                  third * a2_heaviside(boxes(id)%cc(i, ix_f, i_eps), eps_max) + epsilon(1.0_dp))
             if (boxes(id)%cc(i, ix, iv) > 2 * c1 .and. c1 > 0.0_dp) then
                boxes(id)%cc(i, ix, iv) = 2 * c1
-            else if (boxes(id)%cc(i, ix, iv) > 2 * c2 .and. c2 > 0.0_dp) then
-               boxes(id)%cc(i, ix, iv) = 2 * c2
             end if
           else
             boxes(id)%cc(i, ix, iv) = 0.01_dp
@@ -806,7 +802,6 @@ contains
     real(dp), intent(in), optional :: med
     integer, intent(in)            :: iv        !< Ghost cell variable
     integer, intent(in)            :: nc        !< Box n_cell
-    real(dp)                       :: eps_max
 #if $D == 2
     real(dp), intent(out)         :: gc_side(nc) !< Ghost cells on side
     real(dp)                      :: w
@@ -824,7 +819,6 @@ contains
     p_nb_id   = boxes(p_id)%neighbors(nb)
     ix_offset = a$D_get_child_offset(boxes(id), nb)
     ix        = a$D_neighb_high_01(nb) * (nc+3) - 1 ! -1 or nc+2
-    eps_max   = -1.0_dp/(1-2.0_dp/med)
     select case (a$D_neighb_dim(nb))
 #if $D == 2
     case (1)
@@ -833,12 +827,12 @@ contains
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)
-          gc_side(j) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)) / &
+          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
+          gc_side(j) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
                (w+epsilon(1.0_dp))
        end do
     case (2)
@@ -847,12 +841,12 @@ contains
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
           i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
-               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)
-          gc_side(i) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), eps_max) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), eps_max) + &
-               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), eps_max)) / &
+          w = 0.5_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+               0.25_dp * a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)
+          gc_side(i) = (0.5_dp*boxes(p_nb_id)%cc(i_c1, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c2, j_c1, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c2, j_c1, i_eps), med) + &
+               0.25_dp*boxes(p_nb_id)%cc(i_c1, j_c2, iv)*a$D_heaviside(boxes(p_nb_id)%cc(i_c1, j_c2, i_eps), med)) / &
                (w+epsilon(1.0_dp))
        end do
 #elif $D==3

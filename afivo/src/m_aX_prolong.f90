@@ -178,32 +178,32 @@ contains
              i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
              
              if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1-1, j_c1, i_eps), eps_max)) then
-               if (i == 1) then
-                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
-                   box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
-                 end if
-               else             
-                 if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
-                   box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
-                 else if (a$D_border(box_c%cc(i-2, j, i_eps), box_c%cc(i-1, j, i_eps), eps_max)) then
-                   box_c%fc(i-1, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv) 
-                 end if
+               !if (i == 1) then
+               if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
+                 box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
                end if
+                 !else             
+                 !if (a$D_border(box_c%cc(i-1, j, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
+                  ! box_c%fc(i, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv)
+                 !else if (a$D_border(box_c%cc(i-2, j, i_eps), box_c%cc(i-1, j, i_eps), eps_max)) then
+                  ! box_c%fc(i-1, j, 1, s_ivc) = box_p%fc(i_c1, j_c1, 1, s_iv) 
+                 !end if
+                 !end if
              end if
              
              
              if (a$D_border(box_p%cc(i_c1, j_c1, i_eps), box_p%cc(i_c1, j_c1-1, i_eps), eps_max)) then
-               if (j == 1) then
-                 if (a$D_border(box_c%cc(i, j-1, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
-                   box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
-                 end if
-               else             
-                 if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), eps_max)) then
-                   box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
-                 else if (a$D_border(box_c%cc(i, j-2, i_eps), box_c%cc(i, j-1, i_eps), eps_max)) then
-                   box_c%fc(i, j-1, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv) 
-                 end if
+               !if (j == 1) then
+               if (a$D_border(box_c%cc(i, j-1, i_eps), box_c%cc(i, j, i_eps), eps_max)) then
+                 box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
                end if
+                 !else             
+                 !if (a$D_border(box_c%cc(i, j, i_eps), box_c%cc(i, j-1, i_eps), eps_max)) then
+                  ! box_c%fc(i, j, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv)
+              !   else if (a$D_border(box_c%cc(i, j-2, i_eps), box_c%cc(i, j-1, i_eps), eps_max)) then
+               !    box_c%fc(i, j-1, 2, s_ivc) = box_p%fc(i_c1, j_c1, 2, s_iv) 
+                ! end if
+               !end if
              end if
              
           end do
@@ -229,11 +229,11 @@ contains
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
-  subroutine a$D_prolong_linear_from(boxes, id, iv, iv_to, add, i_eps, med)
+  subroutine a$D_prolong_linear_from(boxes, id, iv, iv_to, add, i_eps, eps_max)
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Box whose children we will fill
     integer, intent(in), optional :: i_eps
-    real(dp), intent(in), optional :: med
+    real(dp), intent(in), optional :: eps_max
     integer, intent(in)           :: iv       !< Variable that is filled
     integer, intent(in), optional :: iv_to    !< Destination variable
     logical, intent(in), optional :: add      !< Add to old values
@@ -242,7 +242,7 @@ contains
     do i_c = 1, a$D_num_children
        c_id = boxes(id)%children(i_c)
        if (c_id == af_no_box) cycle
-       call a$D_prolong_linear(boxes(id), boxes(c_id), iv, iv_to, add, i_eps = i_eps, med = med)
+       call a$D_prolong_linear(boxes(id), boxes(c_id), iv, iv_to, add, i_eps = i_eps, eps_max = eps_max)
     end do
   end subroutine a$D_prolong_linear_from
 
@@ -261,7 +261,7 @@ contains
     real(dp)                      :: f0, flx, fhx, fly, fhy
     logical                       :: add_to
 #if $D == 2
-    real(dp)                      :: inv_eps(-1:1, -1:1)
+    real(dp)                      :: inv_eps(-1:1, -1:1, 2*$D), eps_harm(-1:1, -1:1)
 #elif $D == 3
     real(dp)                      :: flz, fhz
     integer                       :: k, k_c, k_f
@@ -292,24 +292,38 @@ contains
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
 
-          inv_eps(-1:1, -1:1) = 1.0_dp/box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)
+          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f, j_f, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
+                                     (box_c%cc(i_f, j_f, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
+          inv_eps(-1:1, -1:1, 1) = 1.0_dp/abs(box_c%cc(i_f, j_f, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
+          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f+1, j_f, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
+                                     (box_c%cc(i_f+1, j_f, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
+          inv_eps(-1:1, -1:1, 2) = 1.0_dp/abs(box_c%cc(i_f+1, j_f, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
+          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f, j_f+1, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
+                                     (box_c%cc(i_f, j_f+1, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
+          inv_eps(-1:1, -1:1, 3) = 1.0_dp/abs(box_c%cc(i_f, j_f+1, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
+          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f+1, j_f+1, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
+                                     (box_c%cc(i_f+1, j_f+1, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
+          inv_eps(-1:1, -1:1, 4) = 1.0_dp/abs(box_c%cc(i_f+1, j_f+1, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
 
-          !inv_eps(:,:,:) = 1.0_dp
 
-          f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)*inv_eps(0, 0)
-          flx = 0.25_dp * box_p%cc(i_c-1, j_c, iv)*inv_eps(-1, 0)
-          fhx = 0.25_dp * box_p%cc(i_c+1, j_c, iv)*inv_eps(1, 0)
-          fly = 0.25_dp * box_p%cc(i_c, j_c-1, iv)*inv_eps(0, -1)
-          fhy = 0.25_dp * box_p%cc(i_c, j_c+1, iv)*inv_eps(0, 1)
+          f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)
+          flx = 0.25_dp * box_p%cc(i_c-1, j_c, iv)
+          fhx = 0.25_dp * box_p%cc(i_c+1, j_c, iv)
+          fly = 0.25_dp * box_p%cc(i_c, j_c-1, iv)
+          fhy = 0.25_dp * box_p%cc(i_c, j_c+1, iv)
 
           box_c%cc(i_f,   j_f,   ivc) = box_c%cc(i_f,   j_f,   ivc) + &
-               (f0 + flx + fly)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(-1,0)+0.25_dp*inv_eps(0,-1))                
+               (f0*inv_eps(0,0,1) + flx*inv_eps(-1,0,1) + fly*inv_eps(0,-1,1))/&
+               (0.5_dp*inv_eps(0,0,1)+0.25_dp*inv_eps(-1,0,1)+0.25_dp*inv_eps(0,-1,1))                
           box_c%cc(i_f+1, j_f,   ivc) = box_c%cc(i_f+1, j_f,   ivc) + &
-               (f0 + fhx + fly)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(1,0)+0.25_dp*inv_eps(0,-1))
+               (f0*inv_eps(0,0,2) + fhx*inv_eps(1,0,2) + fly*inv_eps(0,-1,2))/&
+               (0.5_dp*inv_eps(0,0,2)+0.25_dp*inv_eps(1,0,2)+0.25_dp*inv_eps(0,-1,2))
           box_c%cc(i_f,   j_f+1, ivc) = box_c%cc(i_f,   j_f+1, ivc) + &
-               (f0 + flx + fhy)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(-1,0)+0.25_dp*inv_eps(0,1)) 
+               (f0*inv_eps(0,0,3) + flx*inv_eps(-1,0,3) + fhy*inv_eps(0,1,3))/&
+               (0.5_dp*inv_eps(0,0,3)+0.25_dp*inv_eps(-1,0,3)+0.25_dp*inv_eps(0,1,3)) 
           box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + &
-               (f0 + fhx + fhy)/(0.5_dp*inv_eps(0,0)+0.25_dp*inv_eps(1,0)+0.25_dp*inv_eps(0,1))
+               (f0*inv_eps(0,0,4) + fhx*inv_eps(1,0,4) + fhy*inv_eps(0,1,4))/&
+               (0.5_dp*inv_eps(0,0,4)+0.25_dp*inv_eps(1,0,4)+0.25_dp*inv_eps(0,1,4))
        end do
     end do
 #elif $D == 3
@@ -354,7 +368,7 @@ contains
   end subroutine a$D_prolong_sparse
 
   !> Bi/trilinear prolongation to a child (from parent)
-  subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add, i_eps, med)
+  subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add, i_eps, eps_max)
     use m_a$D_utils, only:a$D_heaviside 
     type(box$D_t), intent(in)     :: box_p !< Parent box
     type(box$D_t), intent(inout)  :: box_c !< Child box
@@ -362,11 +376,10 @@ contains
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
     integer, intent(in), optional  :: i_eps
-    real(dp), intent(in), optional :: med
+    real(dp), intent(in), optional :: eps_max
     integer                       :: hnc, nc, ix_offset($D), ivc
     integer                       :: i, j, i_c, i_f, j_c, j_f
     logical                       :: add_to
-    real(dp)                      :: eps_max
 #if $D == 2
     real(dp)                      :: f0, flx, fhx, fly, fhy
     real(dp)                      :: fll, fhl, flh, fhh
@@ -387,7 +400,6 @@ contains
     ix_offset = a$D_get_child_offset(box_c)
     add_to    = .false.; if (present(add)) add_to = add
     ivc       = iv; if (present(iv_to)) ivc = iv_to
-    eps_max   = -1.0_dp/(1-2.0_dp/med)
 
     if (.not. add_to) then
 #if $D == 2

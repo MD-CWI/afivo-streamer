@@ -206,16 +206,14 @@ contains
 
    end function a$D_heaviside
    
-   elemental function a$D_border(val1, val2, med) result(bol)
+   elemental function a$D_border(val1, val2, eps_max) result(bol)
       real(dp), intent(in)           :: val1, val2
-      real(dp), intent(in)           :: med
+      real(dp), intent(in)           :: eps_max
       logical                        :: bol
 
-      if ((val1 - med) * (val2 - med) < 0) then
+      if (val1 == eps_max .and. val2 < eps_max) then
         bol = .true.
-      else if (val1 == med .and. val2 > med) then
-        bol = .true.
-      else if (val1 > med .and. val2 == med) then
+      else if (val2 == eps_max .and. val1 < eps_max) then
         bol = .true.
       else        
         bol = .false.
