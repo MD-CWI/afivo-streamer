@@ -65,14 +65,16 @@ contains
     call CFG_add(cfg, "seed_falloff", ['smoothstep'], &
          "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)", .true.)
          
+    call CFG_add(cfg, "die_density", [1.0e-2_dp], &
+         "Density of the dielectric(1/m3)")
+    call CFG_add(cfg, "die_type", ['elliptic'], &
+         "Geometric shape of dielectric (square, elliptic)", .true.)     
     call CFG_add(cfg, "die_rel_center",[DTIMES(0.5_dp)], &
          "Relative central position of the dielectric", .true.)
     call CFG_add(cfg, "die_rel_axis",[DTIMES(0.5_dp)], &
          "Relative axis(sides or semi-axis) size of the dielectric", .true.)
-    call CFG_add(cfg, "die_type", ['elliptic'], &
-         "Geometric shape of dielectric (square, elliptic)", .true.)
-    call CFG_add(cfg, "die_density", [0.001e1_dp], &
-         "Density of the dielectric(1/m3)", .true.)
+
+
 
     call CFG_get_size(cfg, "seed_density", n_cond)
     ic%n_cond = n_cond
