@@ -50,6 +50,8 @@ contains
 
     call CFG_add(cfg, "background_density", 1.0e14_dp, &
          "The background ion and electron density (1/m3)")
+    call CFG_add(cfg, "die_density", 1.0e-2_dp, &
+         "Density of the dielectric(1/m3)")
     call CFG_add(cfg, "stochastic_density", 0.0_dp, &
          "Stochastic background density (1/m3)")
     call CFG_add(cfg, "seed_density", [1.0e16_dp], &
@@ -65,8 +67,7 @@ contains
     call CFG_add(cfg, "seed_falloff", ['smoothstep'], &
          "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)", .true.)
          
-    call CFG_add(cfg, "die_density", [1.0e-2_dp], &
-         "Density of the dielectric(1/m3)")
+
     call CFG_add(cfg, "die_type", ['elliptic'], &
          "Geometric shape of dielectric (square, elliptic)", .true.)     
     call CFG_add(cfg, "die_rel_center",[DTIMES(0.5_dp)], &
@@ -280,9 +281,9 @@ contains
        rr = a$D_r_cc(box, [IJK])
        f = vol_frac_inside(box, [IJK])
        do n = 1, init_conds%n_die
-         box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
+         !box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
          if (f == 1.0_dp) then
-           !box%cc(IJK, i_eps)        = ST_epsilon_die
+           box%cc(IJK, i_eps)        = ST_epsilon_die
            box%cc(IJK, i_electron)   = init_conds%die_density(n)
            box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
          end if

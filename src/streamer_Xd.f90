@@ -323,10 +323,10 @@ contains
        
               
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 6)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5)) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 6)) then
+          .and. (eps_max == eps_min .or. box%lvl >= 5)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -386,8 +386,6 @@ contains
     real(dp), allocatable        :: dc(DTIMES(:), :)
     ! Cell-centered densities
     real(dp), allocatable        :: cc(DTIMES(:))
-    real(dp), allocatable        :: eps(DTIMES(:))
-    real(dp), allocatable        :: sigma(DTIMES(:), :)
     integer                      :: nc, IJK
 
     nc     = boxes(id)%n_cell
@@ -396,8 +394,6 @@ contains
     allocate(v(DTIMES(1:nc+1), $D))
     allocate(dc(DTIMES(1:nc+1), $D))
     allocate(cc(DTIMES(-1:nc+2)))
-    allocate(eps(DTIMES(-1:nc+2)))
-    allocate(sigma(DTIMES(0:nc+2), $D))
 
     ! Fill ghost cells on the sides of boxes (no corners)
     call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp_lim, &
@@ -459,8 +455,15 @@ contains
             boxes(id)%fc(DTIMES(:), 1:$D, electric_fld)
 
        ! Fill ghost cells on the sides of boxes (no corners)
+       
        call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp_lim, &
-            a$D_bc_neumann_zero, .false., med = ST_epsilon_die)
+            a$D_bc_neumann_zero, .false., ST_epsilon_die)
+            
+       deallocate(cc)
+       allocate(cc(DTIMES(-1:nc+2)))
+         
+       call a$D_gc2_box(boxes, id, i_eps, i_pos_ion, a$D_gc2_prolong_linear, &
+             a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die) 
 
        call flux_koren_$Dd(cc, v, nc, inv_dr)
        call flux_diff_$Dd(boxes(id), dc, i_pos_ion)
@@ -500,20 +503,20 @@ contains
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
-    f_ion  = 0.0_dp
     
 #if $D == 2
     ioff   = (box%ix(1)-1) * nc
 #endif
 
     do KJI_DO(1,nc)
-       fld   = box%cc(IJK, i_electric_fld)
-       loc   = LT_get_loc(ST_td_tbl, fld)
-       alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-       eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
-       mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+       fld    = box%cc(IJK, i_electric_fld)
+       loc    = LT_get_loc(ST_td_tbl, fld)
+       alpha  = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+       eta    = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
+       mu     = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
        f_elec = 0.0_dp
-       flag = 0
+       f_ion  = 0.0_dp
+       flag   = 0
 
        ! Contribution of flux
 #if $D == 2
@@ -612,9 +615,34 @@ end if
 
        if (ST_update_ions) then
 #if $D == 2
-          f_ion = (box%fc(i, j, 2, flux_ion) - box%fc(i, j+1, 2, flux_ion) + &
-               rfac(1) * box%fc(i, j, 1, flux_ion) - &
-               rfac(2) * box%fc(i+1, j, 1, flux_ion)) * inv_dr * dt
+         if (box%cc(IJK, i_eps) < ST_epsilon_die) then
+  
+           if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
+             s_flow(1) = dt  * box%fc(IJK, 1, flux_ion) 
+             box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) - fac * max(-s_flow(1), 0.0_dp)
+             f_ion = f_ion + (s_flow(1) - box%fc(i+1, j, 1, flux_ion) * dt ) * inv_dr
+           else
+             f_ion = f_ion + (box%fc(IJK, 1, flux_ion) - box%fc(i+1, j, 1, flux_ion)) * inv_dr * dt          
+           end if
+           if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
+             s_flow(2) = dt  * box%fc(IJK, 2, flux_ion) 
+             box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) - fac * max(-s_flow(2), 0.0_dp)
+             f_ion = f_ion + (s_flow(2) - box%fc(i, j+1, 2, flux_ion) * dt) * inv_dr
+           else
+             f_ion = f_ion + (box%fc(IJK, 2, flux_ion) - box%fc(i, j+1, 2, flux_ion)) * inv_dr * dt          
+           end if
+  
+         else 
+  
+           if (box%cc(i-1, j, i_eps) < ST_epsilon_die) then
+             s_flow(1) = dt  * box%fc(IJK, 1, flux_ion) 
+             box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) - fac * max(s_flow(1), 0.0_dp)         
+           end if
+           if (box%cc(i, j-1, i_eps) < ST_epsilon_die) then
+             s_flow(2) = dt  * box%fc(IJK, 2, flux_ion) 
+             box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) - fac * max(s_flow(2), 0.0_dp)
+           end if
+         end if
 #elif $D == 3
           f_ion = (sum(box%fc(i, j, k, 1:3, flux_ion)) - &
                box%fc(i+1, j, k, 1, flux_ion) - &
