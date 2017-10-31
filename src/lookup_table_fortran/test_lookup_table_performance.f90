@@ -27,7 +27,7 @@ program test
 
   print *, "Testing m_lookup_table.f90 implementation..."
   print *, ""
-  print *, " *** Vectorized calls (one call for all the data) ***"
+  print *, " *** Get one column with LT_get_col ***"
   print *, "Iteration    table_size   max. difference"
 
   table_size = min_table_size
@@ -39,8 +39,8 @@ program test
      table_size = table_size * 2
      if (table_size > test_size) exit
 
-     ! Create lookup table, last two arguments are optional (defaults 1.0 and 1)
-     ! First arguments are min x, max x, num points
+     ! Create a lookup table between x_values(1) and x_values(test_size), using
+     ! table_size rows and one column
      lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 1)
 
      ! Add the data to the table
@@ -65,7 +65,7 @@ program test
 
   print *, ""
   print *, "Testing multiple column mode (2 columns)"
-  print *, " *** Vectorized calls (one call for all the data) ***"
+  print *, " *** Get all columns with LT_get_mcol ***"
   print *, "Iteration    table_size   max. difference"
 
   table_size = min_table_size
@@ -77,8 +77,8 @@ program test
      table_size = table_size * 2
      if (table_size > test_size) exit
 
-     ! Create lookup table, last two arguments are optional (defaults 1.0 and 1)
-     ! First arguments are min x, max x, num points
+     ! Create a lookup table between x_values(1) and x_values(test_size), using
+     ! table_size rows and one column
      lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 2)
 
      ! Add the data to the table

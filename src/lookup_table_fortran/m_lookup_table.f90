@@ -13,7 +13,6 @@ module m_lookup_table
   !> The lookup table type. There can be one or more columns, for which values
   !> can be looked up for a given 'x-coordinate'.
   type lookup_table_t
-     private
      integer  :: n_rows !< The number of rows
      integer  :: n_cols !< The number of columns
      real(dp) :: x_min  !< The minimum lookup coordinate
@@ -43,15 +42,12 @@ module m_lookup_table
   public :: LT_get_xdata        ! Get the x-values of a table
   public :: LT_get_spaced_data  ! Convert values to regularly spaced
   public :: LT_set_col          ! Set one table column
-  public :: LT_add_to_col       ! Add to a table column
   public :: LT_add_col          ! Add a column
   public :: LT_get_loc          ! Get the index (row) of a value
   public :: LT_get_col          ! Interpolate one column
   public :: LT_get_mcol         ! Interpolate multiple columns
   public :: LT_get_col_at_loc   ! Get one column at location
   public :: LT_get_mcol_at_loc  ! Get multiple columns at location
-  public :: LT_get_num_rows
-  public :: LT_get_num_cols
   public :: LT_get_data         ! Get all the data of the table
   public :: LT_lin_interp_list  ! Linearly interpolate a list
   public :: LT_to_file          ! Store lookup table in file
@@ -67,8 +63,8 @@ contains
     integer, intent(in)  :: n_cols !< Number of variables that will be looked up
     type(lookup_table_t) :: my_lt
 
-    if (x_max <= x_min) print *, "set_xdata: x_max should be > x_min"
-    if (n_rows <= 1)    print *, "set_xdata: n_rows should be bigger than 1"
+    if (x_max <= x_min) stop "set_xdata: x_max should be > x_min"
+    if (n_rows <= 1)    stop "set_xdata: n_rows should be bigger than 1"
 
     my_lt%n_rows = n_rows
     my_lt%x_min  = x_min
@@ -83,7 +79,7 @@ contains
   end function LT_create
 
   !> Returns the x-coordinates of the lookup table
-  function LT_get_xdata(my_lt) result(xdata)
+  pure function LT_get_xdata(my_lt) result(xdata)
     type(lookup_table_t), intent(in) :: my_lt
     real(dp)                    :: xdata(my_lt%n_rows)
     integer                     :: ix
@@ -94,7 +90,7 @@ contains
   end function LT_get_xdata
 
   !> Linearly interpolate the (x, y) input data to the new_x coordinates
-  function LT_get_spaced_data(in_x, in_y, new_x) result(out_yy)
+  pure function LT_get_spaced_data(in_x, in_y, new_x) result(out_yy)
     real(dp), intent(in) :: in_x(:), in_y(:), new_x(:)
     real(dp)             :: out_yy(size(new_x))
     integer              :: ix
@@ -105,7 +101,7 @@ contains
 
   !> Fill the column with index col_ix using the linearly interpolated (x, y)
   !> data
-  subroutine LT_set_col(my_lt, col_ix, x, y)
+  pure subroutine LT_set_col(my_lt, col_ix, x, y)
     type(lookup_table_t), intent(inout) :: my_lt
     integer, intent(in)                 :: col_ix
     real(dp), intent(in)                :: x(:), y(:)
@@ -115,7 +111,7 @@ contains
   end subroutine LT_set_col
 
   !> Add a new column by linearly interpolating the (x, y) data
-  subroutine LT_add_col(my_lt, x, y)
+  pure subroutine LT_add_col(my_lt, x, y)
     type(lookup_table_t), intent(inout) :: my_lt
     real(dp), intent(in)                :: x(:), y(:)
     type(lookup_table_t)                :: temp_lt
@@ -131,16 +127,6 @@ contains
     my_lt%cols_rows(my_lt%n_cols, :)   = LT_get_spaced_data(x, y, LT_get_xdata(my_lt))
     my_lt%rows_cols(:, my_lt%n_cols)   = my_lt%cols_rows(my_lt%n_cols, :)
   end subroutine LT_add_col
-
-  !> Add the (x,y) data to a given column
-  subroutine LT_add_to_col(my_lt, col_ix, x, y)
-    type(lookup_table_t), intent(inout) :: my_lt
-    integer, intent(in)            :: col_ix
-    real(dp), intent(in)           :: x(:), y(:)
-    my_lt%cols_rows(col_ix, :) = &
-         my_lt%cols_rows(col_ix, :) + LT_get_spaced_data(x, y, LT_get_xdata(my_lt))
-    my_lt%rows_cols(:, col_ix) = my_lt%cols_rows(col_ix, :)
-  end subroutine LT_add_to_col
 
   !> Get a location in the lookup table
   elemental function LT_get_loc(my_lt, x) result(my_loc)
@@ -164,7 +150,7 @@ contains
   end function LT_get_loc
 
   !> Get the values of all columns at x
-  function LT_get_mcol(my_lt, x) result(col_values)
+  pure function LT_get_mcol(my_lt, x) result(col_values)
     type(lookup_table_t), intent(in) :: my_lt
     real(dp), intent(in)             :: x
     real(dp)                         :: col_values(my_lt%n_cols)
@@ -187,7 +173,7 @@ contains
   end function LT_get_col
 
   !> Get the values of all columns at a location
-  function LT_get_mcol_at_loc(my_lt, loc) result(col_values)
+  pure function LT_get_mcol_at_loc(my_lt, loc) result(col_values)
     type(lookup_table_t), intent(in) :: my_lt
     type(LT_loc_t), intent(in)       :: loc
     real(dp)                         :: col_values(my_lt%n_cols)
@@ -207,20 +193,8 @@ contains
          (1-loc%low_frac) * my_lt%rows_cols(loc%low_ix+1, col_ix)
   end function LT_get_col_at_loc
 
-  !> Return the number of rows
-  integer function LT_get_num_rows(my_lt)
-    type(lookup_table_t), intent(in) :: my_lt
-    LT_get_num_rows = my_lt%n_rows
-  end function LT_get_num_rows
-
-  !> Return the number of columns
-  integer function LT_get_num_cols(my_lt)
-    type(lookup_table_t), intent(in) :: my_lt
-    LT_get_num_cols = size(my_lt%cols_rows, 1)
-  end function LT_get_num_cols
-
   !> Get the x-coordinates and the columns of the lookup table
-  subroutine LT_get_data(my_lt, x_data, cols_rows)
+  pure subroutine LT_get_data(my_lt, x_data, cols_rows)
     type(lookup_table_t), intent(in) :: my_lt
     real(dp), intent(out)            :: x_data(:), cols_rows(:, :)
 
@@ -234,7 +208,7 @@ contains
   ! then the value becomes the value at the left side of D,
   ! if x_value is right of domain D,
   ! then the value becomes the value at the rigth side of D
-  subroutine LT_lin_interp_list(x_list, y_list, x_value, y_value)
+  pure subroutine LT_lin_interp_list(x_list, y_list, x_value, y_value)
     use m_find_index
     real(dp), intent(in)  :: x_list(:), y_list(:)
     real(dp), intent(in)  :: x_value

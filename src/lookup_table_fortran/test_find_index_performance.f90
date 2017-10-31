@@ -15,6 +15,9 @@ program performance_test
   real(dp)              :: t_bsearch, t_adaptive
 
   allocate(search_vals(n_finds))
+
+  print *, "Number of lookups: ", n_finds
+  print *, ""
   print *, "Test size | correct? | t_linear | t_bsearch | t_adaptive"
 
   do test_size = min_size, max_size, delta_size
