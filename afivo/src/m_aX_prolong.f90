@@ -137,7 +137,7 @@ contains
     s_ivc = s_iv; if (present(s_iv_to)) s_ivc = s_iv_to
     lo   = 1; if (present(low)) lo = low
     hi   = nc+1; if (present(high)) hi = high
-    eps_max   = -1.0_dp/(1-2.0_dp/med)
+    eps_max   = med
     
     ! Offset of child w.r.t. parent
     ix_offset = a$D_get_child_offset(box_c)
@@ -261,7 +261,7 @@ contains
     real(dp)                      :: f0, flx, fhx, fly, fhy
     logical                       :: add_to
 #if $D == 2
-    real(dp)                      :: inv_eps(-1:1, -1:1, 2*$D), eps_harm(-1:1, -1:1)
+    real(dp)                      :: inv_eps(-1:1, -1:1, 2*$D)
 #elif $D == 3
     real(dp)                      :: flz, fhz
     integer                       :: k, k_c, k_f
@@ -291,19 +291,18 @@ contains
        do i = 1, hnc
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
+          
+          inv_eps(-1:1, -1:1, 1) = 1-abs(box_c%cc(i_f, j_f, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
+                                   (box_c%cc(i_f, j_f, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
+                                   
+          inv_eps(-1:1, -1:1, 2) = 1-abs(box_c%cc(i_f+1, j_f, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
+                                   (box_c%cc(i_f+1, j_f, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
 
-          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f, j_f, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
-                                     (box_c%cc(i_f, j_f, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-          inv_eps(-1:1, -1:1, 1) = 1.0_dp/abs(box_c%cc(i_f, j_f, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
-          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f+1, j_f, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
-                                     (box_c%cc(i_f+1, j_f, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-          inv_eps(-1:1, -1:1, 2) = 1.0_dp/abs(box_c%cc(i_f+1, j_f, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
-          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f, j_f+1, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
-                                     (box_c%cc(i_f, j_f+1, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-          inv_eps(-1:1, -1:1, 3) = 1.0_dp/abs(box_c%cc(i_f, j_f+1, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
-          eps_harm(-1:1, -1:1)   = 2*box_c%cc(i_f+1, j_f+1, i_eps)*box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps)/&
-                                     (box_c%cc(i_f+1, j_f+1, i_eps)+box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-          inv_eps(-1:1, -1:1, 4) = 1.0_dp/abs(box_c%cc(i_f+1, j_f+1, i_eps) - eps_harm(-1:1, -1:1)+epsilon(1.0_dp))
+          inv_eps(-1:1, -1:1, 3) = 1-abs(box_c%cc(i_f, j_f+1, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
+                                   (box_c%cc(i_f, j_f+1, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
+
+          inv_eps(-1:1, -1:1, 4) = 1-abs(box_c%cc(i_f+1, j_f+1, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
+                                   (box_c%cc(i_f+1, j_f+1, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
 
 
           f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)
@@ -324,6 +323,7 @@ contains
           box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + &
                (f0*inv_eps(0,0,4) + fhx*inv_eps(1,0,4) + fhy*inv_eps(0,1,4))/&
                (0.5_dp*inv_eps(0,0,4)+0.25_dp*inv_eps(1,0,4)+0.25_dp*inv_eps(0,1,4))
+
        end do
     end do
 #elif $D == 3

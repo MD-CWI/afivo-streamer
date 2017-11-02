@@ -299,7 +299,8 @@ contains
        di = dix
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
-          inv_eps(-1:1, -1:1) = 1.0_dp/boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)
+          inv_eps(-1:1, -1:1) = 1.0_dp-abs(boxes(id)%cc(i-di, j, iv) - boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))/&
+                                (boxes(id)%cc(i-di, j, iv) + boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))
           ! Bilinear 4 point extrapolation
           boxes(id)%cc(i-di, j, iv) = (0.5_dp * boxes(id)%cc(i-di, j, iv)*inv_eps(-1,0) + &
                1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &
@@ -312,7 +313,8 @@ contains
        dj = dix
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
-          inv_eps(-1:1, -1:1) = 1.0_dp/boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps)
+          inv_eps(-1:1, -1:1) = 1.0_dp-abs(boxes(id)%cc(i, j-dj, iv) - boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))/&
+                                (boxes(id)%cc(i, j-dj, iv) + boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))
           ! Bilinear 4 point extrapolation
           boxes(id)%cc(i, j-dj, iv) = (0.5_dp * boxes(id)%cc(i, j-dj, iv)*inv_eps(0,-1) + &
                1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &

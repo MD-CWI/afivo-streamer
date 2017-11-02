@@ -106,7 +106,7 @@ contains
        i_dest = iv
     end if
 
-    eps_max = -1.0_dp/(1-2.0_dp/med)
+    eps_max = med 
 #if $D == 2
     if (box_p%coord_t == af_cyl) then
        do j = 1, hnc
@@ -263,7 +263,7 @@ contains
        i_dest = s_iv
     end if
     
-    eps_max   = -1.0_dp/(1-2.0_dp/med)
+    eps_max   = med
 
 #if $D == 2
     if (box_p%coord_t == af_cyl) then

@@ -181,13 +181,13 @@ program streamer_$Dd
         call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
 
         if (ST_output_src_term) then
-           call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = med)
+           call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = ST_epsilon_die)
            call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
         end if
 
         if (photoi_enabled) then
            call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
-           call a$D_restrict_tree(tree, i_photo, i_eps = i_eps, med = med)
+           call a$D_restrict_tree(tree, i_photo, i_eps = i_eps, med = ST_epsilon_die)
            call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
         end if
 
@@ -323,10 +323,10 @@ contains
        
               
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 8)) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 5)) then
+          .and. (eps_max == eps_min .or. box%lvl >= 9)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
