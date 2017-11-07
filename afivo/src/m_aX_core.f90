@@ -14,6 +14,7 @@ module m_a$D_core
   public :: a$D_resize_box_storage
   public :: a$D_adjust_refinement
   public :: a$D_consistent_fluxes
+  public :: flux_from_children
 
 contains
 

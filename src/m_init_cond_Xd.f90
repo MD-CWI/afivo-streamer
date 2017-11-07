@@ -23,6 +23,7 @@ module m_init_cond_$Dd
      real(dp), allocatable           :: die_center(:,:)
      real(dp), allocatable           :: die_axis(:,:)
      character(ST_slen), allocatable :: die_type(:)
+     real(dp), allocatable           :: geo_parameter(:)
   end type initcnd_t
 
   ! This will contain the initial conditions
@@ -35,6 +36,9 @@ module m_init_cond_$Dd
   public :: a$D_bc_dirichlet_mirror
   public :: a$D_bc_dirichlet_zero_fc
   public :: a$D_bc2_dirichlet_mirror
+  public :: a$D_loop_box_arg_DI
+  public :: a$D_consistent_fluxes_DI
+  public :: a$D_loop_boxes_DI
   
 contains
 
@@ -73,6 +77,8 @@ contains
          "Relative central position of the dielectric", .true.)
     call CFG_add(cfg, "die_rel_axis",[DTIMES(0.5_dp)], &
          "Relative axis(sides or semi-axis) size of the dielectric", .true.)
+    call CFG_add(cfg, "geo_parameter",[0.25_dp], &
+         "Extra geometrical parameter, required for some geometries ", .true.)    
 
 
 
@@ -104,6 +110,10 @@ contains
     call CFG_get_size(cfg, "die_rel_axis", varsize)
     if (varsize /= n_dim * n_die) &
          stop "die_rel_axis variable has incompatible size"
+         
+    call CFG_get_size(cfg, "geo_parameter", varsize)
+    if (varsize /= n_die) &
+         stop "geo_parameter variable has incompatible size"
 
     allocate(ic%seed_density(n_cond))
     allocate(ic%die_density(n_die))
@@ -115,6 +125,7 @@ contains
     allocate(ic%die_type(n_die))
     allocate(ic%die_center(n_dim, n_die))
     allocate(ic%die_axis(n_dim, n_die))
+    allocate(ic%geo_parameter(n_die))
 
     allocate(tmp_vec(n_dim * n_cond))
     call CFG_get(cfg, "seed_rel_r0", tmp_vec)
@@ -139,6 +150,8 @@ contains
     call CFG_get(cfg, "seed_width", ic%seed_width)
     call CFG_get(cfg, "seed_falloff", ic%seed_falloff)
     call CFG_get(cfg, "die_type", ic%die_type)
+    call CFG_get(cfg, "geo_parameter", ic%geo_parameter)
+    
 
     init_conds = ic
 
@@ -282,7 +295,6 @@ contains
        do n = 1, init_conds%n_die
          box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
          if (f == 1.0_dp) then
-           !box%cc(IJK, i_eps)        = ST_epsilon_die
            box%cc(IJK, i_electron)   = init_conds%die_density(n)
            box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
          end if
@@ -414,6 +426,106 @@ contains
 
   end subroutine a$D_bc_dirichlet_zero_fc
   
+  !> Call procedure for each box in tree (not fully inside the dielectric), with argument rarg
+  subroutine a$D_loop_box_arg_DI(tree, my_procedure, rarg, leaves_only)
+    type(a$D_t), intent(inout)     :: tree
+    procedure(a$D_subr_arg)        :: my_procedure
+    real(dp), intent(in)          :: rarg(:)
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
+    integer                       :: lvl, i, id
+
+    if (.not. tree%ready) stop "Tree not ready"
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             if (minval(tree%boxes(id)%cc(DTIMES(:), i_eps)) /= ST_epsilon_die) then
+               call my_procedure(tree%boxes(id), rarg)
+             end if
+          end do
+          !$omp end do
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             if (minval(tree%boxes(id)%cc(DTIMES(:), i_eps)) /= ST_epsilon_die) then
+               call my_procedure(tree%boxes(id), rarg)
+             end if
+          end do
+          !$omp end do
+       end if
+    end do
+    !$omp end parallel
+  end subroutine a$D_loop_box_arg_DI
+  
+  subroutine a$D_consistent_fluxes_DI(tree, f_ixs)
+    type(a$D_t), intent(inout)     :: tree         !< Tree to operate on
+    integer, intent(in)           :: f_ixs(:)     !< Indices of the fluxes
+    integer                       :: lvl, i, id, nb, nb_id
+
+    if (.not. tree%ready) stop "Tree not ready"
+    !$omp parallel private(lvl, i, id, nb, nb_id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl-1
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%parents)
+          id = tree%lvls(lvl)%parents(i)
+          do nb = 1, a$D_num_neighbors
+             nb_id = tree%boxes(id)%neighbors(nb)
+
+             ! If the neighbor exists and has no children, set flux
+             if (nb_id > af_no_box) then
+                if (.not. a$D_has_children(tree%boxes(nb_id)) .and. &
+                   minval(tree%boxes(nb_id)%cc(DTIMES(:), i_eps)) /= ST_epsilon_die) then
+                  call flux_from_children(tree%boxes, id, nb, f_ixs)
+                end if
+             end if
+          end do
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_consistent_fluxes_DI
+  
+  !> Used for flux_elec and flux_ion
+  subroutine a$D_loop_boxes_DI(tree, my_procedure, leaves_only)
+    type(a$D_t), intent(inout)     :: tree
+    procedure(a$D_subr_boxes)      :: my_procedure
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
+    integer                       :: lvl, i, id
+
+    if (.not. tree%ready) stop "Tree not ready"
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             if (minval(tree%boxes(id)%cc(DTIMES(:), i_eps)) /= ST_epsilon_die) then
+               call my_procedure(tree%boxes, id)
+             end if
+          end do
+          !$omp end do
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             if (minval(tree%boxes(id)%cc(DTIMES(:), i_eps)) /= ST_epsilon_die) then
+               call my_procedure(tree%boxes, id)
+             end if
+          end do
+          !$omp end do
+       end if
+    end do
+    !$omp end parallel
+  end subroutine a$D_loop_boxes_DI
   
 
 end module m_init_cond_$Dd

@@ -120,7 +120,7 @@ contains
        mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
        tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)  * &
-             a$D_heaviside(box%cc(IJK, i_eps), a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp))
+             a$D_heaviside(box%cc(IJK, i_eps), ST_epsilon_die)
        if (tmp < 0) tmp = 0
        box%cc(IJK, i_electron_old) = tmp
     end do; CLOSE_DO

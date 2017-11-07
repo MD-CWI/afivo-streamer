@@ -131,27 +131,24 @@ contains
     end if
   end function GM_laser
   
-  function DI_interior(DI_shape, DI_center, DI_axis, n_dim, rr) result(check)
-    character(len=*), intent(in) :: DI_shape
-    integer, intent(in)          :: n_dim
-    real(dp), intent(in)         :: DI_center(n_dim), DI_axis(n_dim), rr(n_dim)
-    logical                      :: check
+  function DI_interior(DI_shape, DI_center, DI_axis, n_dim, rr, param) result(check)
+    character(len=*), intent(in)   :: DI_shape
+    integer, intent(in)            :: n_dim
+    real(dp), intent(in), optional :: param
+    real(dp), intent(in)           :: DI_center(n_dim), DI_axis(n_dim), rr(n_dim)
+    logical                        :: check
 
     select case (DI_shape)
     case ('elliptic')
        check = sum(((rr - DI_center)**2) / DI_axis**2) < 1.0_dp
-    case ('elliptic_rot1')
-#if $D == 2
-       check = ((rr(1) + rr(2) - DI_center(1))**2) / DI_axis(1)**2  + & 
-             ((rr(2) - rr(2) - DI_center(2))**2) / DI_axis(2)**2 < 2.0_dp 
-#endif   
-    case ('elliptic_rot2')
-#if $D == 2
-       check = ((rr(1) - rr(2) + DI_center(1))**2) / DI_axis(1)**2 + & 
-             ((rr(2) + rr(2) + DI_center(2))**2) / DI_axis(2)**2 < 2.0_dp 
-#endif
     case ('square')
        check = all(abs(rr-DI_center) < DI_axis)
+    case ('trapz')
+      if(n_dim == 2) then
+         check = all(abs(rr-DI_center) < DI_axis) .or. (abs(rr(1)-DI_center(1)) > DI_axis(1) .and. &
+               abs(rr(1)-DI_center(1)) < DI_axis(1)+param .and. &
+               rr(2)-DI_center(2) < 2*(DI_axis(2)/param)*(DI_axis(1)-rr(1))+DI_axis(2)) 
+      end if
     case default
        print *, "die_type: unknown shape: ", trim(DI_shape)
        print *, "Valid options: square, elliptic"

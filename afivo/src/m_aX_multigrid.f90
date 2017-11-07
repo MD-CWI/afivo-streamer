@@ -442,21 +442,24 @@ contains
     type(mg$D_t), intent(in)     :: mg       !< Multigrid options
     integer, intent(in)          :: ids(:)   !< Operate on these boxes
     integer, intent(in)          :: n_cycle  !< Number of cycles to perform
-    integer                      :: n, i
+    integer                      :: n, i, j
+    
 
-
-    !$omp parallel private(n, i)
+    !$omp parallel private(n, i, j)
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
-          call mg%box_gsrb(boxes(ids(i)), n, mg)
-#if $D == 2     
-          if (n == 2*n_cycle .and. maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) &
-             > minval(boxes(ids(i))%cc(:, :, mg%i_eps))) then
-            call mg%box_gsrb(boxes(ids(i)), 2*n_cycle + 1, mg)
-            call mg%box_gsrb(boxes(ids(i)), 2*n_cycle + 2, mg)
-          end if
+#if $D == 2
+         if ( maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))) then
+#elif $D == 3
+         if ( maxval(boxes(ids(i))%cc(:, :, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, :, mg%i_eps))) then
 #endif
+           do j = 1, 5
+             call mg%box_gsrb(boxes(ids(i)), 5*n - j + 1, mg)
+           end do
+         else
+           call mg%box_gsrb(boxes(ids(i)), n, mg)
+         end if
        end do
        !$omp end do
 

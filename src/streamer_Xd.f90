@@ -30,6 +30,7 @@ program streamer_$Dd
   type(ref_info_t)       :: ref_info
 
   integer :: output_cnt = 0 ! Number of output files written
+  integer :: max_lvl
 
   call CFG_update_from_arguments(cfg)
   call ST_initialize(cfg, $D)
@@ -51,6 +52,7 @@ program streamer_$Dd
   mg%i_rhs     = i_rhs
   mg%i_eps     = i_eps
   mg%sigma_rhs = sigma_rhs
+            
   
 
   ! This automatically handles cylindrical symmetry
@@ -135,11 +137,14 @@ program streamer_$Dd
         
 
         ! First calculate fluxes
-        call a$D_loop_boxes(tree, fluxes_koren, .true.)
-        call a$D_consistent_fluxes(tree, [flux_elec])
+        call a$D_loop_boxes_DI(tree, fluxes_koren, .true.)
+        call a$D_consistent_fluxes_DI(tree, [flux_elec])
+        if (ST_update_ions) then
+          call a$D_consistent_fluxes_DI(tree, [flux_ion])
+        end if
         
         ! Update the solution
-        call a$D_loop_box_arg(tree, update_solution, [ST_dt, real(i, dp)], .true.)
+        call a$D_loop_box_arg_DI(tree, update_solution, [ST_dt, real(i, dp)], .true.)
         
         if (i == 1) then
            ! Compute new field on first iteration
@@ -155,7 +160,7 @@ program streamer_$Dd
      ST_time = ST_time - ST_dt        ! Go back one time step
      
 
-     ! Take average of n and sigma (explicit trapezoidal rule)
+     ! Take average of densities (explicit trapezoidal rule)
      call a$D_loop_box(tree, average_density)
 
      ! Coarse densities might be required for ghost cells
@@ -241,6 +246,7 @@ program streamer_$Dd
         call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
         call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
 
+        max_lvl = tree%highest_lvl
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
 
@@ -323,10 +329,11 @@ contains
        
               
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 8)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7) &
+           .or. (eps_max > eps_min .and. max_lvl > 7 .and. box%lvl < max_lvl)) then
             cell_flags(IJK) = af_do_ref
-       else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 9)) then
+       else if (adx < 0.3_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
+          .and. (eps_max == eps_min .or. box%lvl >= 8)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -715,17 +722,12 @@ end if
        ! Possible determine new time step restriction
        if (i_step == 2) then
 #if $D == 2
-          fld_vec(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
-               box%fc(i+1, j, 1, electric_fld))
-          fld_vec(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
-               box%fc(i, j+1, 2, electric_fld))
+          fld_vec(1) = 0.5_dp*(gradient_2d(box, 2, [IJK], 1, i_phi) + gradient_2d(box, 2, [IJK], 2, i_phi))
+          fld_vec(2) = 0.5_dp*(gradient_2d(box, 2, [IJK], 3, i_phi) + gradient_2d(box, 2, [IJK], 4, i_phi))
 #elif $D == 3
-          fld_vec(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
-               box%fc(i+1, j, k, 1, electric_fld))
-          fld_vec(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
-               box%fc(i, j+1, k, 2, electric_fld))
-          fld_vec(3) = 0.5_dp * (box%fc(IJK, 3, electric_fld) + &
-               box%fc(i, j, k+1, 3, electric_fld))
+          fld_vec(1) = 0.5_dp*(gradient_3d(box, 2, [IJK], 1, i_phi) + gradient_3d(box, 2, [IJK], 2, i_phi))
+          fld_vec(2) = 0.5_dp*(gradient_3d(box, 2, [IJK], 3, i_phi) + gradient_3d(box, 2, [IJK], 4, i_phi))
+          fld_vec(2) = 0.5_dp*(gradient_3d(box, 2, [IJK], 5, i_phi) + gradient_3d(box, 2, [IJK], 6, i_phi))
 #endif
 
           diff = LT_get_col(ST_td_tbl, i_diffusion, fld)
