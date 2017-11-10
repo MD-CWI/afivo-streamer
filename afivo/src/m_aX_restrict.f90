@@ -174,7 +174,6 @@ contains
     integer                       :: hnc, ix_offset($D)
 #if $D == 2
     real(dp)                      :: w1, w2
-    real(dp)                      :: inv_eps(0:1, 0:1)
 #elif $D == 3
     integer                       :: k, k_f, k_c
 #endif
@@ -197,11 +196,11 @@ contains
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
              
-             inv_eps(0:1, 0:1) = 1.0_dp/box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps)
+
 
              call a2_cyl_child_weights(box_p, i, w1, w2)
-             box_p%cc(i_c, j_c, i_dest) = (w1 * sum(inv_eps(0, 0:1)*box_c%cc(i_f, j_f:j_f+1, iv)) + &
-                  w2 * sum(inv_eps(1, 0:1)*box_c%cc(i_f+1, j_f:j_f+1, iv))) / sum(inv_eps(:,:))
+             box_p%cc(i_c, j_c, i_dest) = 0.25_dp*(w1 * sum(box_c%cc(i_f, j_f:j_f+1, iv)) + &
+                  w2 * sum(box_c%cc(i_f+1, j_f:j_f+1, iv)))
           end do
        end do
     else
@@ -211,9 +210,8 @@ contains
           do i = 1, hnc
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
-             inv_eps(0:1, 0:1) = 1.0_dp/box_c%cc(i_f:i_f+1, j_f:j_f+1, i_eps)
              
-             box_p%cc(i_c, j_c, i_dest) = sum(inv_eps(0:1, 0:1)*box_c%cc(i_f:i_f+1, j_f:j_f+1, iv)) / sum(inv_eps(:,:))
+             box_p%cc(i_c, j_c, i_dest) = 0.25_dp*sum(box_c%cc(i_f:i_f+1, j_f:j_f+1, iv))
           end do
        end do
     endif

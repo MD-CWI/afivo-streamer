@@ -260,9 +260,7 @@ contains
     integer                       :: i, j, i_c, i_f, j_c, j_f
     real(dp)                      :: f0, flx, fhx, fly, fhy
     logical                       :: add_to
-#if $D == 2
-    real(dp)                      :: inv_eps(-1:1, -1:1, 2*$D)
-#elif $D == 3
+#if $D == 3
     real(dp)                      :: flz, fhz
     integer                       :: k, k_c, k_f
 #endif
@@ -283,7 +281,6 @@ contains
     
 
 
-
 #if $D == 2
     do j = 1, hnc
        j_c = j + ix_offset(2)
@@ -292,17 +289,6 @@ contains
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
           
-          inv_eps(-1:1, -1:1, 1) = 1-abs(box_c%cc(i_f, j_f, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f, j_f, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-                                   
-          inv_eps(-1:1, -1:1, 2) = 1-abs(box_c%cc(i_f+1, j_f, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f+1, j_f, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-
-          inv_eps(-1:1, -1:1, 3) = 1-abs(box_c%cc(i_f, j_f+1, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f, j_f+1, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
-
-          inv_eps(-1:1, -1:1, 4) = 1-abs(box_c%cc(i_f+1, j_f+1, i_eps) - box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))/&
-                                   (box_c%cc(i_f+1, j_f+1, i_eps) + box_p%cc(i_c-1:i_c+1, j_c-1:j_c+1, i_eps))
 
 
           f0 = 0.5_dp * box_p%cc(i_c, j_c, iv)
@@ -311,18 +297,10 @@ contains
           fly = 0.25_dp * box_p%cc(i_c, j_c-1, iv)
           fhy = 0.25_dp * box_p%cc(i_c, j_c+1, iv)
 
-          box_c%cc(i_f,   j_f,   ivc) = box_c%cc(i_f,   j_f,   ivc) + &
-               (f0*inv_eps(0,0,1) + flx*inv_eps(-1,0,1) + fly*inv_eps(0,-1,1))/&
-               (0.5_dp*inv_eps(0,0,1)+0.25_dp*inv_eps(-1,0,1)+0.25_dp*inv_eps(0,-1,1))                
-          box_c%cc(i_f+1, j_f,   ivc) = box_c%cc(i_f+1, j_f,   ivc) + &
-               (f0*inv_eps(0,0,2) + fhx*inv_eps(1,0,2) + fly*inv_eps(0,-1,2))/&
-               (0.5_dp*inv_eps(0,0,2)+0.25_dp*inv_eps(1,0,2)+0.25_dp*inv_eps(0,-1,2))
-          box_c%cc(i_f,   j_f+1, ivc) = box_c%cc(i_f,   j_f+1, ivc) + &
-               (f0*inv_eps(0,0,3) + flx*inv_eps(-1,0,3) + fhy*inv_eps(0,1,3))/&
-               (0.5_dp*inv_eps(0,0,3)+0.25_dp*inv_eps(-1,0,3)+0.25_dp*inv_eps(0,1,3)) 
-          box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + &
-               (f0*inv_eps(0,0,4) + fhx*inv_eps(1,0,4) + fhy*inv_eps(0,1,4))/&
-               (0.5_dp*inv_eps(0,0,4)+0.25_dp*inv_eps(1,0,4)+0.25_dp*inv_eps(0,1,4))
+          box_c%cc(i_f,   j_f,   ivc) = box_c%cc(i_f,   j_f,   ivc) + f0 + flx + fly                
+          box_c%cc(i_f+1, j_f,   ivc) = box_c%cc(i_f+1, j_f,   ivc) + f0 + fhx + fly
+          box_c%cc(i_f,   j_f+1, ivc) = box_c%cc(i_f,   j_f+1, ivc) + f0 + flx + fhy
+          box_c%cc(i_f+1, j_f+1, ivc) = box_c%cc(i_f+1, j_f+1, ivc) + f0 + fhx + fhy
 
        end do
     end do

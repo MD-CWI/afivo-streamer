@@ -137,9 +137,9 @@ contains
     if (.not. associated(mg%sides_bc)) stop "mg$D_init_mg: sides_bc not set"
 
     ! Check whether these are set, otherwise use default
-    if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
-    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
-    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 4
+    if (mg%n_cycle_down < 0)           mg%n_cycle_down = 20
+    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 20
+    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 20
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg$D_sides_rb
@@ -299,28 +299,23 @@ contains
        di = dix
        do j = 1, nc
           dj = -1 + 2 * iand(j, 1)
-          inv_eps(-1:1, -1:1) = 1.0_dp-abs(boxes(id)%cc(i-di, j, iv) - boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))/&
-                                (boxes(id)%cc(i-di, j, iv) + boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))
           ! Bilinear 4 point extrapolation
-          boxes(id)%cc(i-di, j, iv) = (0.5_dp * boxes(id)%cc(i-di, j, iv)*inv_eps(-1,0) + &
-               1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &
-               0.375_dp * (boxes(id)%cc(i+di, j, iv)*inv_eps(1,0) + boxes(id)%cc(i, j+dj, iv)*inv_eps(0,1)) + &
-               0.125_dp * boxes(id)%cc(i+di, j+dj, iv)*inv_eps(1,1))/(0.5_dp*inv_eps(-1,0) + 1.125_dp*inv_eps(0,0) - &
-               0.375_dp * (inv_eps(1,0) + inv_eps(0,1)) + 0.125_dp * inv_eps(1,1) )
+          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+               1.125_dp * boxes(id)%cc(i, j, iv) - &
+               0.375_dp * (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) + &
+               0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
        end do
     case (2)
        j = ix
        dj = dix
        do i = 1, nc
           di = -1 + 2 * iand(i, 1)
-          inv_eps(-1:1, -1:1) = 1.0_dp-abs(boxes(id)%cc(i, j-dj, iv) - boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))/&
-                                (boxes(id)%cc(i, j-dj, iv) + boxes(id)%cc(i-di:i+di:di, j-dj:j+dj:dj, i_eps))
+
           ! Bilinear 4 point extrapolation
-          boxes(id)%cc(i, j-dj, iv) = (0.5_dp * boxes(id)%cc(i, j-dj, iv)*inv_eps(0,-1) + &
-               1.125_dp * boxes(id)%cc(i, j, iv)*inv_eps(0,0) - &
-               0.375_dp * (boxes(id)%cc(i+di, j, iv)*inv_eps(1,0) + boxes(id)%cc(i, j+dj, iv)*inv_eps(0,1)) + &
-               0.125_dp * boxes(id)%cc(i+di, j+dj, iv)*inv_eps(1,1))/(0.5_dp*inv_eps(0,-1) + 1.125_dp*inv_eps(0,0) - &
-               0.375_dp * (inv_eps(1,0) + inv_eps(0,1)) + 0.125_dp * inv_eps(1,1) )
+          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
+               1.125_dp * boxes(id)%cc(i, j, iv) - &
+               0.375_dp * (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) + &
+               0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
        end do
     end select
 #elif $D == 3
@@ -449,17 +444,17 @@ contains
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
-#if $D == 2
-         if ( maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))) then
-#elif $D == 3
-         if ( maxval(boxes(ids(i))%cc(:, :, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, :, mg%i_eps))) then
-#endif
-           do j = 1, 5
-             call mg%box_gsrb(boxes(ids(i)), 5*n - j + 1, mg)
-           end do
-         else
+!#if $D == 2
+!         if ( maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))) then
+!#elif $D == 3
+!         if ( maxval(boxes(ids(i))%cc(:, :, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, :, mg%i_eps))) then
+!#endif
+ !          do j = 1, 5
+  !           call mg%box_gsrb(boxes(ids(i)), 5*n - j + 1, mg)
+   !        end do
+    !     else
            call mg%box_gsrb(boxes(ids(i)), n, mg)
-         end if
+     !    end if
        end do
        !$omp end do
 
