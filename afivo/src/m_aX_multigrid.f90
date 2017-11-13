@@ -137,9 +137,9 @@ contains
     if (.not. associated(mg%sides_bc)) stop "mg$D_init_mg: sides_bc not set"
 
     ! Check whether these are set, otherwise use default
-    if (mg%n_cycle_down < 0)           mg%n_cycle_down = 20
-    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 20
-    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 20
+    if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
+    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
+    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 4
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg$D_sides_rb
@@ -437,24 +437,29 @@ contains
     type(mg$D_t), intent(in)     :: mg       !< Multigrid options
     integer, intent(in)          :: ids(:)   !< Operate on these boxes
     integer, intent(in)          :: n_cycle  !< Number of cycles to perform
+    real(dp)                     :: eps_max, eps_min
     integer                      :: n, i, j
     
+
 
     !$omp parallel private(n, i, j)
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
-!#if $D == 2
-!         if ( maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))) then
-!#elif $D == 3
-!         if ( maxval(boxes(ids(i))%cc(:, :, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, :, mg%i_eps))) then
-!#endif
- !          do j = 1, 5
-  !           call mg%box_gsrb(boxes(ids(i)), 5*n - j + 1, mg)
-   !        end do
-    !     else
+#if $D == 2
+       eps_max = maxval(boxes(ids(i))%cc(:, :, mg%i_eps))
+       eps_min = minval(boxes(ids(i))%cc(:, :, mg%i_eps))
+#elif $D == 3
+       eps_max = maxval(boxes(ids(i))%cc(:, :, :, mg%i_eps))
+       eps_min = minval(boxes(ids(i))%cc(:, :, :, mg%i_eps))
+#endif
+         if (eps_max > eps_min) then
+           do j = 1, 2
+             call mg%box_gsrb(boxes(ids(i)), 2*n - j + 1, mg)
+           end do
+         else
            call mg%box_gsrb(boxes(ids(i)), n, mg)
-     !    end if
+         end if
        end do
        !$omp end do
 
@@ -462,8 +467,8 @@ contains
        do i = 1, size(ids)
 #if $D == 2  
           call a$D_gc_box(boxes, ids(i), mg%i_eps, mg%i_phi, mg%sides_rb, &
-               mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle))! .or. &
-               !maxval(boxes(ids(i))%cc(:, :, mg%i_eps)) > minval(boxes(ids(i))%cc(:, :, mg%i_eps))))
+               mg%sides_bc, (mg%use_corners .or. (n == 2 * n_cycle .and. eps_min == eps_max )) .or. &
+               (eps_max > eps_min .and. n == 4 * n_cycle))
 #endif
        end do
        !$omp end do

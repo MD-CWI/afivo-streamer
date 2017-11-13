@@ -329,11 +329,11 @@ contains
        
               
        
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 7) &
-           .or. (eps_max > eps_min .and. max_lvl > 7 .and. box%lvl < max_lvl)) then
+       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5) &
+           .or. (eps_max > eps_min .and. max_lvl > 5 .and. box%lvl < max_lvl)) then
             cell_flags(IJK) = af_do_ref
        else if (adx < 0.3_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 8)) then
+          .and. (eps_max == eps_min .or. box%lvl >= 6)) then
             cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -496,7 +496,7 @@ contains
     real(dp), intent(in)         :: args(:)
     real(dp)                     :: dt, inv_dr, src, fld, fld_vec($D), s_flow($D)
     real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff, rand
-    real(dp)                     :: dt_cfl, dt_dif, dt_drt, s_fac
+    real(dp)                     :: dt_cfl, dt_dif, dt_drt, s_fac, max_eps, min_eps
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
@@ -507,6 +507,8 @@ contains
     tid      = omp_get_thread_num() + 1
     dt       = args(1)
     i_step   = nint(args(2))
+    max_eps  = maxval(box%cc(DTIMES(:), i_eps))
+    min_eps  = minval(box%cc(DTIMES(:), i_eps))
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
@@ -534,34 +536,37 @@ contains
           rfac(:) = 1.0_dp
        end if
        
-       if (box%cc(IJK, i_eps) < ST_epsilon_die) then
+       if (max_eps > min_eps) then
+         if (box%cc(IJK, i_eps) < ST_epsilon_die) then
          
-         if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
-           s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
-           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(-s_flow(1), 0.0_dp)
-           f_elec = f_elec + (s_flow(1) - box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
-         else
-           f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt          
-         end if
-         if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
-           s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
-           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(-s_flow(2), 0.0_dp)
-           f_elec = f_elec + (s_flow(2) - box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
-         else
-           f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec)) * inv_dr * dt          
-         end if
+           if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
+             s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
+             box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(-s_flow(1), 0.0_dp)
+             f_elec = f_elec + (s_flow(1) - box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
+           else
+             f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt          
+           end if
+           if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
+             s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
+             box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(-s_flow(2), 0.0_dp)
+             f_elec = f_elec + (s_flow(2) - box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
+           else
+             f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec)) * inv_dr * dt          
+           end if
+         else 
          
-       else 
-         
-         if (box%cc(i-1, j, i_eps) < ST_epsilon_die) then
-           s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
-           box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)         
+           if (box%cc(i-1, j, i_eps) < ST_epsilon_die) then
+             s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
+             box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)         
+           end if
+           if (box%cc(i, j-1, i_eps) < ST_epsilon_die) then
+             s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
+             box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
+           end if
          end if
-         if (box%cc(i, j-1, i_eps) < ST_epsilon_die) then
-           s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
-           box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
-         end if
-         
+       else
+         f_elec = (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + box%fc(IJK, 1, flux_elec) &
+                   - box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt  
        end if
               
 #elif $D == 3

@@ -239,6 +239,7 @@ contains
   !> Sets the initial condition
   subroutine init_cond_set_box(box)
     use m_geometry
+    use m_units_constants
     type(box$D_t), intent(inout) :: box
     integer                     :: IJK, n, nc
     real(dp)                    :: rr($D)
@@ -249,7 +250,7 @@ contains
     box%cc(DTIMES(:), i_pos_ion)    = init_conds%background_density
     box%fc(DTIMES(:), :, sigma_rhs) = 0.0_dp
     box%cc(DTIMES(:), i_phi)        = 0.0_dp ! Inital potential set to zero
-    box%cc(DTIMES(:), i_eps)        = 1.0_dp ! Base permitivity
+    !box%cc(DTIMES(:), i_eps)        = 1.0_dp ! Base permitivity
     !box%cc(DTIMES(:), i_photo)      = 0.0_dp
 
     do KJI_DO(0,nc+1)
@@ -276,6 +277,17 @@ contains
     
     call define_DI(box)
 
+#if $D == 2    
+    do KJI_DO(1, nc+1)
+      if (box%cc(IJK, i_eps) == ST_epsilon_die .and. box%cc(i-1, j, i_eps) < ST_epsilon_die) then
+        box%fc(IJK, 1, sigma_rhs) = (UC_elem_charge / UC_eps0) * UC_ice_surf_charge
+      end if
+      if (box%cc(IJK, i_eps) == ST_epsilon_die .and. box%cc(i, j-1, i_eps) < ST_epsilon_die) then
+        box%fc(IJK, 2, sigma_rhs) = (UC_elem_charge / UC_eps0) * UC_ice_surf_charge
+      end if   
+    end do; CLOSE_DO
+#endif
+
   end subroutine init_cond_set_box
   
   
@@ -287,7 +299,6 @@ contains
     
     nc = box%n_cell
     dr = box%dr 
-    box%cc(DTIMES(:), i_eps)      = 1.0_dp ! Base permitivity
 
     do KJI_DO(0, nc+1)
        rr = a$D_r_cc(box, [IJK])

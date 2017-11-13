@@ -19,6 +19,7 @@ module m_units_constants
   real(dp), parameter :: UC_N2_mass          = 28.0D0 * UC_atomic_mass ! The mass of a N2 molecule
   real(dp), parameter :: UC_lightspeed       = 299792458d0             ! the speed of light in m/s
   real(dp), parameter :: UC_boltzmann_const  = 1.3806503d-23           ! the Boltzmann constant
+  real(dp), parameter :: UC_ice_surf_charge  = 18 * 7.9d18             ! natural surface charge number of ice in m-3 (aproximate)
   real(dp), parameter :: UC_bohr_radius      = 5.29d-11                ! the Bohr radius (m)
   real(dp), parameter :: UC_torr_to_bar      = 133.322368 * 1.0D-5     ! one Torr in units of bar
   real(dp), parameter :: UC_elec_q_over_eps0 = UC_elec_charge / UC_eps0
