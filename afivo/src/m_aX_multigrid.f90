@@ -289,7 +289,7 @@ contains
        dix = -1
     end if
 
-    call a$D_gc_prolong_copy(boxes, id, nb, i_eps = i_eps, iv = iv)
+    call a$D_gc_prolong_copy(boxes, id, nb, iv = iv)
 
 
 #if $D == 2
@@ -447,15 +447,20 @@ contains
        !$omp do
        do i = 1, size(ids)
 #if $D == 2
-       eps_max = maxval(boxes(ids(i))%cc(:, :, mg%i_eps))
-       eps_min = minval(boxes(ids(i))%cc(:, :, mg%i_eps))
+       if (mg%i_eps == -1) then
+         eps_max = 1.0_dp
+         eps_min = 1.0_dp
+       else
+         eps_max = maxval(boxes(ids(i))%cc(:, :, mg%i_eps))
+         eps_min = minval(boxes(ids(i))%cc(:, :, mg%i_eps))
+       end if
 #elif $D == 3
        eps_max = maxval(boxes(ids(i))%cc(:, :, :, mg%i_eps))
        eps_min = minval(boxes(ids(i))%cc(:, :, :, mg%i_eps))
 #endif
          if (eps_max > eps_min) then
            do j = 1, 2
-             call mg%box_gsrb(boxes(ids(i)), 2*n - j + 1, mg)
+             call mg%box_gsrb(boxes(ids(i)), 2*n + j - 2, mg)
            end do
          else
            call mg%box_gsrb(boxes(ids(i)), n, mg)
@@ -903,14 +908,21 @@ contains
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
-         xharm_eps(0:1) = 2*box%cc(i:i+1, j, i_eps)*box%cc(i-1:i, j, i_eps) / &
-                              (box%cc(i:i+1, j, i_eps)+box%cc(i-1:i, j, i_eps))
-         yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
-                              (box%cc(i, j:j+1, i_eps)+box%cc(i, j-1:j, i_eps))
+         
+         if (i_eps == -1) then
+           xharm_eps(0:1) = 1.0_dp
+           yharm_eps(0:1) = 1.0_dp
+           x_surf(0:1)    = 1.0_dp
+           y_surf(0:1)    = 1.0_dp
+         else         
+           xharm_eps(0:1) = 2*box%cc(i:i+1, j, i_eps)*box%cc(i-1:i, j, i_eps) / &
+                                (box%cc(i:i+1, j, i_eps)+box%cc(i-1:i, j, i_eps))
+           yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
+                                (box%cc(i, j:j+1, i_eps)+box%cc(i, j-1:j, i_eps))
+           x_surf(0:1) = xharm_eps(0:1)*box%fc(i:i+1, j, 1, sigma_rhs)/box%cc(i-1:i+1:2, j, i_eps)
+           y_surf(0:1) = yharm_eps(0:1)*box%fc(i, j:j+1, 2, sigma_rhs)/box%cc(i, j-1:j+1:2, i_eps)
+         end if
    
-         x_surf(0:1) = xharm_eps(0:1)*box%fc(i:i+1, j, 1, sigma_rhs)/box%cc(i-1:i+1:2, j, i_eps)
-         y_surf(0:1) = yharm_eps(0:1)*box%fc(i, j:j+1, 2, sigma_rhs)/box%cc(i, j-1:j+1:2, i_eps)
-
          box%cc(i, j, i_phi) = (xharm_eps(1)*box%cc(i+1, j, i_phi) + xharm_eps(0)*box%cc(i-1, j, i_phi) + &
               yharm_eps(1)*box%cc(i, j+1, i_phi) + yharm_eps(0)*box%cc(i, j-1, i_phi) - &
               dx2 * box%cc(i, j, i_rhs) - box%dr*0.5*(sum(x_surf(:)) + sum(y_surf(:)))) / &
@@ -962,10 +974,16 @@ contains
     do j = 1, nc
        do i = 1, nc
          a0 = box%cc(i, j, i_phi)
-         xharm_eps(0:1) = 2*box%cc(i:i+1, j, i_eps)*box%cc(i-1:i, j, i_eps) / &
+         
+         if (i_eps == -1) then
+           xharm_eps(0:1) = 1.0_dp
+           yharm_eps(0:1) = 1.0_dp
+         else
+           xharm_eps(0:1) = 2*box%cc(i:i+1, j, i_eps)*box%cc(i-1:i, j, i_eps) / &
                               (box%cc(i:i+1, j, i_eps)+box%cc(i-1:i, j, i_eps))
-         yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
+           yharm_eps(0:1) = 2*box%cc(i, j:j+1, i_eps)*box%cc(i, j-1:j, i_eps) / &
                               (box%cc(i, j:j+1, i_eps)+box%cc(i, j-1:j, i_eps))
+         end if
 
          box%cc(i, j, i_out) = (xharm_eps(1)*gradient_$Dd(box, [i, j], 2, i_phi, i_eps, sigma_rhs) - &
                                xharm_eps(0)*gradient_$Dd(box, [i, j], 1, i_phi, i_eps, sigma_rhs) + &
@@ -1004,11 +1022,16 @@ contains
     n_ix      = a$D_neighb_dix(:, dir)
     inv_dr    = 1/box%dr
 
-#if $D == 2         
-    s_C     = box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
+#if $D == 2
+    if (i_eps == -1) then
+      grad    = a2_neighb_high_pm(dir)*inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &
+                box%cc(ix(1), ix(2), iv))
+    else        
+      s_C     = box%fc(ix(1)+n_ix(1)*a2_neighb_high_01(dir), ix(2)+n_ix(2)*a2_neighb_high_01(dir) &
               , a2_neighb_dim(dir), sigma_rhs)/box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), i_eps)
-    grad    = a2_neighb_high_pm(dir)*(inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &
+      grad    = a2_neighb_high_pm(dir)*(inv_dr*(box%cc(ix(1)+n_ix(1), ix(2)+n_ix(2), iv) - &
               box%cc(ix(1), ix(2), iv)) - 0.5_dp*s_C)
+    end if
 #endif
 
   end function gradient_$Dd

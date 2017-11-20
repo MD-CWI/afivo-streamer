@@ -84,6 +84,7 @@ contains
        mg_helm%i_phi = i_modes(1) ! Will updated later on
        mg_helm%i_rhs = i_electron_old
        mg_helm%i_tmp = i_pos_ion_old
+       mg_helm%i_eps = -1
 
        ! Todo: check what good b.c. are
        mg_helm%sides_bc => a$D_bc_dirichlet_zero

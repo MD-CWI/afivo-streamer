@@ -39,6 +39,7 @@ module m_init_cond_$Dd
   public :: a$D_loop_box_arg_DI
   public :: a$D_consistent_fluxes_DI
   public :: a$D_loop_boxes_DI
+  public :: eps01_gc2
   
 contains
 
@@ -277,17 +278,6 @@ contains
     
     call define_DI(box)
 
-#if $D == 2    
-    do KJI_DO(1, nc+1)
-      if (box%cc(IJK, i_eps) == ST_epsilon_die .and. box%cc(i-1, j, i_eps) < ST_epsilon_die) then
-        box%fc(IJK, 1, sigma_rhs) = (UC_elem_charge / UC_eps0) * UC_ice_surf_charge
-      end if
-      if (box%cc(IJK, i_eps) == ST_epsilon_die .and. box%cc(i, j-1, i_eps) < ST_epsilon_die) then
-        box%fc(IJK, 2, sigma_rhs) = (UC_elem_charge / UC_eps0) * UC_ice_surf_charge
-      end if   
-    end do; CLOSE_DO
-#endif
-
   end subroutine init_cond_set_box
   
   
@@ -371,6 +361,33 @@ contains
     
     vol_frac_inside = in_counts / (8.0_dp)**$D
   end function vol_frac_inside
+  
+  function eps01_gc2(box)
+
+    type(box$D_t), intent(in)    :: box
+    integer                         :: IJK, n, nc
+    real(dp)                        :: rr($D), dr, f 
+    real(dp)                        :: eps01_gc2(DTIMES(-1:box%n_cell+2))
+  
+    
+    nc = box%n_cell
+    dr = box%dr 
+
+    do KJI_DO(-1, nc+2)
+       rr = a$D_r_cc(box, [IJK])
+       f = vol_frac_inside(box, [IJK])
+       if (maxval([IJK]) < nc+1 .and. minval([IJK])> 0) then
+         eps01_gc2(IJK) = box%cc(IJK, i_eps)
+       else
+         do n = 1, init_conds%n_die
+           eps01_gc2(IJK)        = a$D_heaviside(a$D_harm_w(1.0_dp, ST_epsilon_die, f), ST_epsilon_die)
+         end do
+       end if
+    end do; CLOSE_DO
+
+
+
+  end function eps01_gc2
   
   
   

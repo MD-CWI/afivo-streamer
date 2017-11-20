@@ -314,13 +314,12 @@ contains
   end subroutine bc_to_gc
 
   !> Partial prolongation to the ghost cells of box id from parent
-  subroutine a$D_gc_prolong_copy(boxes, id, nb, i_eps, iv)
+  subroutine a$D_gc_prolong_copy(boxes, id, nb, iv)
     use m_a$D_prolong, only: a$D_prolong_copy
     type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
     integer, intent(in)           :: nb       !< Neighbor to get data from
-    integer, intent(in), optional :: i_eps
     integer                       :: p_id, nb_dim, lo($D), hi($D)
 
     p_id       = boxes(id)%parent
@@ -330,7 +329,7 @@ contains
     lo(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
     hi(nb_dim) = a$D_neighb_high_01(nb) * (boxes(id)%n_cell+1)
 
-    call a$D_prolong_copy(boxes(p_id), boxes(id), iv = iv, low=lo, high=hi, i_eps = i_eps)
+    call a$D_prolong_copy(boxes(p_id), boxes(id), iv = iv, low=lo, high=hi)
   end subroutine a$D_gc_prolong_copy
   
   subroutine a$D_gc_prolong_copy_fc(boxes, id, nb, i_eps, s_iv, med)
@@ -696,7 +695,7 @@ contains
   !> Get a second layer of ghost cell data (the 'normal' routines give just one
   !> layer of ghost cells). Use subr_rb on refinement boundaries and subr_bc
   !> on physical boundaries.
-  subroutine a$D_gc2_box(boxes, id, i_eps, iv, subr_rb, subr_bc, cc, nc, med)
+  subroutine a$D_gc2_box(boxes, id, i_eps, iv, subr_rb, subr_bc, cc, nc, med, eps)
     type(box$D_t), intent(inout)    :: boxes(:) !< List of all the boxes
     integer, intent(in)             :: id       !< Id of box for which we set ghost cells
     integer, intent(in), optional   :: i_eps
@@ -708,9 +707,11 @@ contains
     !> The data with extra ghost cells
 #if $D   == 2
     real(dp), intent(out)           :: cc(-1:nc+2, -1:nc+2)
+    real(dp), intent(in)            :: eps(-1:nc+2, -1:nc+2)
     real(dp)                        :: gc(1:nc)
 #elif $D == 3
     real(dp), intent(out)           :: cc(-1:nc+2, -1:nc+2, -1:nc+2)
+    real(dp), intent(in)            :: eps(-1:nc+2, -1:nc+2, -1:nc+2)
     real(dp)                        :: gc(1:nc, 1:nc)
 #endif
     integer                         :: nb, nb_id, nb_dim, lo($D), hi($D)
@@ -743,9 +744,9 @@ contains
 
 
 #if $D == 2
-         cc(lo(1):hi(1), lo(2):hi(2)) = reshape(gc, 1 + hi - lo)
+         cc(lo(1):hi(1), lo(2):hi(2)) = reshape(gc, 1 + hi - lo) * eps(lo(1):hi(1), lo(2):hi(2))
 #elif $D == 3
-         cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = reshape(gc, 1 + hi - lo)
+         cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = reshape(gc, 1 + hi - lo) * eps(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
 #endif
     end do
   end subroutine a$D_gc2_box

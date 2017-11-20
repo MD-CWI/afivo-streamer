@@ -325,14 +325,14 @@ contains
        fld   = box%cc(IJK, i_electric_fld)
        alpha = LT_get_col(ST_td_tbl, i_alpha, ST_refine_adx_fac * fld) / ST_refine_adx_fac
        adx   = box%dr * alpha / ST_refine_adx
-       cphi = dx2 * abs(box%cc(IJK, i_rhs)) / ST_refine_cphi
+       cphi  = dx2 * abs(box%cc(IJK, i_rhs)) / ST_refine_cphi
        
               
        
        if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5) &
            .or. (eps_max > eps_min .and. max_lvl > 5 .and. box%lvl < max_lvl)) then
             cell_flags(IJK) = af_do_ref
-       else if (adx < 0.3_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
+       else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
           .and. (eps_max == eps_min .or. box%lvl >= 6)) then
             cell_flags(IJK) = af_rm_ref
        else
@@ -392,7 +392,7 @@ contains
     ! Diffusion coefficients at cell faces
     real(dp), allocatable        :: dc(DTIMES(:), :)
     ! Cell-centered densities
-    real(dp), allocatable        :: cc(DTIMES(:))
+    real(dp), allocatable        :: cc(DTIMES(:)), eps(DTIMES(:))
     integer                      :: nc, IJK
 
     nc     = boxes(id)%n_cell
@@ -401,6 +401,9 @@ contains
     allocate(v(DTIMES(1:nc+1), $D))
     allocate(dc(DTIMES(1:nc+1), $D))
     allocate(cc(DTIMES(-1:nc+2)))
+    allocate(eps(DTIMES(-1:nc+2)))
+    
+    eps = eps01_gc2(boxes(id))
 
     ! Fill ghost cells on the sides of boxes (no corners)
     call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp_lim, &
@@ -410,7 +413,7 @@ contains
          a$D_bc_dirichlet_zero_fc, ST_epsilon_die)
          
     call a$D_gc2_box(boxes, id, i_eps, i_electron, a$D_gc2_prolong_linear, &
-         a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die)
+         a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die, eps)
 
     
 
@@ -470,7 +473,7 @@ contains
        allocate(cc(DTIMES(-1:nc+2)))
          
        call a$D_gc2_box(boxes, id, i_eps, i_pos_ion, a$D_gc2_prolong_linear, &
-             a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die) 
+             a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die, eps) 
 
        call flux_koren_$Dd(cc, v, nc, inv_dr)
        call flux_diff_$Dd(boxes(id), dc, i_pos_ion)
@@ -710,8 +713,9 @@ end if
 #if $D == 2
          box%cc(i+ix(1), j+ix(2), i_electron) = box%cc(i+ix(1), j+ix(2), i_electron) + &
                                               box%cc(IJK, i_photo) * ST_phe_yield * dt
-         box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+(dir-1)/2, sigma_rhs) = &
-               box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+(dir-1)/2, sigma_rhs) - box%cc(IJK, i_photo) * ST_phe_yield * box%dr * dt
+         box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+int((dir-1)/2), sigma_rhs) = &
+               box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+(dir-1)/2, sigma_rhs) - &
+               fac * box%cc(IJK, i_photo) * ST_phe_yield * box%dr * dt
 #elif $D == 3
          box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) = box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) + &
                                                        box%cc(IJK, i_photo) * ST_phe_yield * dt
@@ -738,11 +742,11 @@ end if
           diff = LT_get_col(ST_td_tbl, i_diffusion, fld)
 
           ! CFL condition
-          dt_cfl = 1.0_dp/sum(abs(fld_vec * max(mu, abs(ST_ion_mobility), epsilon(1.0_dp))) * inv_dr)
+          dt_cfl = max_eps / sum(abs(fld_vec * max(mu, abs(ST_ion_mobility), epsilon(1.0_dp))) * inv_dr)
           ! Diffusion condition
           dt_dif = box%dr**2 / max(2 * $D * max(diff, ST_ion_diffusion), epsilon(1.0_dp))
           ! Dielectric relaxation time
-          dt_drt = UC_eps0 / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
+          dt_drt = UC_eps0 * max_eps / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
                max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
 
           ! Take the minimum of the CFL condition with Courant number 0.5 and
