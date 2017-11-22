@@ -608,9 +608,11 @@ contains
 
     tree%highest_lvl = lvl
 
-    ! Update leaves and parents for the last level, because we might have
-    ! removed a refinement lvl.
-    call set_leaves_parents(tree%boxes, tree%lvls(tree%highest_lvl+1))
+    ! We still have to update leaves and parents for the last level, which is
+    ! either lvl+1 or lvl_limit. Note that lvl+1 is empty now, but maybe it was
+    ! not not empty before, and that lvl_limit is skipped in the above loop.
+    lvl = min(lvl+1, tree%lvl_limit)
+    call set_leaves_parents(tree%boxes, tree%lvls(lvl))
 
     ! Set information about the refinement
     call set_ref_info(tree, ref_flags, ref_info)
