@@ -24,6 +24,9 @@ module m_photoi_helmh_$Dd
 
   !> How many V-cycles to perform to update each mode
   integer :: num_vcycles = 2
+  
+  !> Which parameters are chosen (Luque or Bourdon)
+  character(len=8):: author = 'Luque'
 
   !> Number of Helmholtz modes to include
   integer               :: n_modes = 2
@@ -51,10 +54,17 @@ contains
     integer                    :: n
     character(len=12)          :: name
 
-    call CFG_add(cfg, "photoi_helmh%lambdas", [4425.36_dp, 750.06_dp], &
+    call CFG_add(cfg, "photoi_helmh%author", author, &
+         "Luque or Bourdon coeffients are used?")
+    !> The default is Luque
+    !> Bourdon two terms lambdas in SI units are: [7305.62,44081.25]
+    !> Bourdon two terms coeffs in SI units are: [11814508.38,998607256]   
+    !> Bourdon three terms lambdas in SI units are: [4147.85   10950.93  66755.67]  
+    !> bourdon three terms coeffs in SI units are: [ 1117314.935  28692377.5  2748842283 ]
+    call CFG_add(cfg, "photoi_helmh%lambdas", [4425.38_dp, 750.06_dp], &
          "Lambdas to use for lpl(phi) - lambda*phi = f; unit 1/(m bar)", &
          .true.)
-    call CFG_add(cfg, "photoi_helmh%coeffs", [337555.5_dp, 19972.0_dp], &
+    call CFG_add(cfg, "photoi_helmh%coeffs", [337557.38_dp, 19972.14_dp], &
          "Weights corresponding to the lambdas; unit 1/(m bar)^2", &
          .true.)
 
@@ -68,10 +78,32 @@ contains
        call CFG_get(cfg, "photoi_helmh%lambdas", lambdas)
        call CFG_get(cfg, "photoi_helmh%coeffs", coeffs)
        call CFG_get(cfg, "photoi_helmh%num_vcycles", num_vcycles)
-
-       ! Convert to correct units by multiplying with pressure in bar
-       lambdas = lambdas * ST_gas_pressure  ! 1/m
-       coeffs  = coeffs * ST_gas_pressure**2 ! 1/m^2
+       call CFG_get(cfg, "photoi_helmh%author", author)
+    
+    
+       select case (author)
+          case ("Luque")
+          !> Convert to correct units by multiplying with pressure in bar for Luque parameters
+          lambdas = lambdas * ST_gas_pressure  ! 1/m
+          coeffs  = coeffs * ST_gas_pressure**2 ! 1/m^2  
+          print *, author
+          print *, "lambdas * gas_pressure", lambdas
+          print *, "coeffs * gas_pressure", coeffs     
+          case ("Bourdon")
+          !> Convert to correct units by multiplying with pressure in bar for Bourdon parameters
+          lambdas = lambdas * ST_gas_frac_O2 * ST_gas_pressure  ! 1/m
+          !> important note: in the case of Bourdon coeffs must be multiplied by photoi_eta, however we do not multiply it here
+          !> but it is considered in set_photoionization_rate calculation as [photoi_eta * quench_fac] please check m_photoi_Xd.f90
+          !> note that for Luque photoi_eta must be 1.0 (since we must Not multiply coeffs of Luque by photoi_eta)
+          coeffs  = coeffs * (ST_gas_frac_O2 * ST_gas_pressure)**2 ! 1/m^2
+          print *, author
+          print *, "lambdas * O2_pressure", lambdas
+          print *, "coeffs * O2_pressure", coeffs    
+             
+          case default
+             print *, "Unknown photoi_helmh_author: ", trim(author)
+             error stop
+       end select
 
        ! Add required variables
        allocate(i_modes(n_modes))

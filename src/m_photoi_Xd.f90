@@ -15,7 +15,7 @@ module m_photoi_$Dd
   ! Which photoionization method to use (helmholtz, montecarlo)
   character(len=ST_slen) :: photoi_method = 'helmholtz'
 
-  ! Photoionization efficiency factor, typically around 0.05-0.1
+  ! Photoionization efficiency factor, typically around 0.05-0.1, not for Helmholtz-Luque should be 1.0
   real(dp) :: photoi_eta = 0.05_dp
 
   ! Update photoionization every N time step
