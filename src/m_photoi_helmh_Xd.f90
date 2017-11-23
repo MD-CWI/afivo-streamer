@@ -86,9 +86,9 @@ contains
           !> Convert to correct units by multiplying with pressure in bar for Luque parameters
           lambdas = lambdas * ST_gas_pressure  ! 1/m
           coeffs  = coeffs * ST_gas_pressure**2 ! 1/m^2  
-          print *, author
-          print *, "lambdas * gas_pressure", lambdas
-          print *, "coeffs * gas_pressure", coeffs     
+          !print *, author
+          !print *, "lambdas * gas_pressure", lambdas
+          !print *, "coeffs * gas_pressure", coeffs     
           case ("Bourdon")
           !> Convert to correct units by multiplying with pressure in bar for Bourdon parameters
           lambdas = lambdas * ST_gas_frac_O2 * ST_gas_pressure  ! 1/m
@@ -96,9 +96,9 @@ contains
           !> but it is considered in set_photoionization_rate calculation as [photoi_eta * quench_fac] please check m_photoi_Xd.f90
           !> note that for Luque photoi_eta must be 1.0 (since we must Not multiply coeffs of Luque by photoi_eta)
           coeffs  = coeffs * (ST_gas_frac_O2 * ST_gas_pressure)**2 ! 1/m^2
-          print *, author
-          print *, "lambdas * O2_pressure", lambdas
-          print *, "coeffs * O2_pressure", coeffs    
+          !print *, author
+          !print *, "lambdas * O2_pressure", lambdas
+          !print *, "coeffs * O2_pressure", coeffs    
              
           case default
              print *, "Unknown photoi_helmh_author: ", trim(author)
