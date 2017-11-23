@@ -67,7 +67,7 @@ contains
 
     type(a$D_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
-    real(dp), parameter            :: p_quench = 30.0e-3_dp
+    real(dp), parameter            :: p_quench = 40.0e-3_dp
     real(dp)                       :: quench_fac
 
     ! Compute quench factor, because some excited species will be quenched by
