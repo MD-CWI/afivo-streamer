@@ -143,6 +143,18 @@ module m_a$D_types
        0,0,0, 1,0,0, 0,1,0, 1,1,0], [3,12])
 #endif
 
+  !> Collection of methods for a cell-centered variable
+  type a$D_cc_methods
+     !> Prolongation method
+     procedure(a$D_subr_prolong), pointer, nopass :: prolong => null()
+     !> Restriction method
+     procedure(a$D_subr_restrict), pointer, nopass :: restrict => null()
+     !> Boundary condition routine
+     procedure(a$D_subr_bc), pointer, nopass :: bc => null()
+     !> Refinement boundary routine
+     procedure(a$D_subr_rb), pointer, nopass :: rb => null()
+  end type a$D_cc_methods
+
   !> The basic building block of afivo: a box with cell-centered and face
   !> centered data, and information about its position, neighbors, children etc.
   type box$D_t
@@ -182,10 +194,18 @@ module m_a$D_types
      integer                    :: coord_t    !< Type of coordinates
      real(dp)                   :: r_base($D) !< min. coords of box at index (1,1)
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
+
      !> Names of cell-centered variables
      character(len=af_nlen), allocatable :: cc_names(:)
      !> Names of face-centered variables
      character(len=af_nlen), allocatable :: fc_names(:)
+
+     !> Methods for cell-centered variables
+     type(a$D_cc_methods), allocatable :: cc_methods(:)
+
+     !> For which cell-centered variables methods have been set
+     logical, allocatable :: has_cc_method(:)
+
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
   end type a$D_t
@@ -271,6 +291,25 @@ module m_a$D_types
        real(dp), intent(out)       :: gc_data(nc, nc) !< The requested ghost cells
 #endif
      end subroutine a$D_subr_egc
+
+     !> Subroutine for prolongation
+     subroutine a$D_subr_prolong(box_p, box_c, iv, iv_to, add)
+       import
+       type(box$D_t), intent(in)     :: box_p !< Parent box
+       type(box$D_t), intent(inout)  :: box_c !< Child box
+       integer, intent(in)           :: iv    !< Variable to fill
+       integer, intent(in), optional :: iv_to !< Destination variable
+       logical, intent(in), optional :: add   !< Add to old values
+     end subroutine a$D_subr_prolong
+
+     !> Subroutine for restriction
+     subroutine a$D_subr_restrict(box_c, box_p, iv, iv_to)
+       import
+       type(box$D_t), intent(in)     :: box_c !< Child box to restrict
+       type(box$D_t), intent(inout)  :: box_p !< Parent box to restrict to
+       integer, intent(in)           :: iv    !< Variable to restrict
+       integer, intent(in), optional :: iv_to !< Destination (if /= iv)
+     end subroutine a$D_subr_restrict
   end interface
 
 contains

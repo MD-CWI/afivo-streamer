@@ -55,6 +55,9 @@ m_a2_all.o: m_a2_prolong.mod
 m_a2_all.o: m_a2_restrict.mod
 m_a2_all.o: m_a2_types.mod
 m_a2_all.o: m_a2_utils.mod
+m_a2_core.o: m_a2_ghostcell.mod
+m_a2_core.o: m_a2_prolong.mod
+m_a2_core.o: m_a2_restrict.mod
 m_a2_core.o: m_a2_types.mod
 m_a2_core.o: m_a2_utils.mod
 m_a2_core.o: m_morton.mod
@@ -88,7 +91,6 @@ m_a2_restrict.o: m_a2_types.mod
 m_a2_t.o: m_af_t.mod
 m_a2_types.o: m_afivo_types.mod
 m_a2_utils.o: m_a2_types.mod
-
 m_a3_all.o: m_a3_core.mod
 m_a3_all.o: m_a3_ghostcell.mod
 m_a3_all.o: m_a3_interp.mod
@@ -98,6 +100,9 @@ m_a3_all.o: m_a3_prolong.mod
 m_a3_all.o: m_a3_restrict.mod
 m_a3_all.o: m_a3_types.mod
 m_a3_all.o: m_a3_utils.mod
+m_a3_core.o: m_a3_ghostcell.mod
+m_a3_core.o: m_a3_prolong.mod
+m_a3_core.o: m_a3_restrict.mod
 m_a3_core.o: m_a3_types.mod
 m_a3_core.o: m_a3_utils.mod
 m_a3_core.o: m_morton.mod

@@ -7,6 +7,7 @@ module m_a$D_core
   private
 
   public :: a$D_init
+  public :: a$D_set_cc_methods
   public :: a$D_init_box
   public :: a$D_destroy
   public :: a$D_set_base
@@ -125,7 +126,47 @@ contains
           write(tree%fc_names(n), "(A,I0)") "flux", n
        end do
     end if
+
+    ! Initialize cell-centered methods (default is the null pointer)
+    allocate(tree%cc_methods(n_var_cell))
+    allocate(tree%has_cc_method(n_var_cell))
+    tree%has_cc_method(:) = .false.
   end subroutine a$D_init
+
+  !> Set the methods for a cell-centered variable
+  subroutine a$D_set_cc_methods(tree, iv, bc, rb, prolong, restrict)
+    use m_a$D_ghostcell, only: a$D_gc_interp
+    use m_a$D_prolong, only: a$D_prolong_linear
+    use m_a$D_restrict, only: a$D_restrict_box
+    type(a$D_t), intent(inout)             :: tree
+    integer, intent(in)                    :: iv
+    procedure(a$D_subr_bc)                 :: bc       !< Boundary condition method
+    procedure(a$D_subr_rb), optional       :: rb       !< Refinement boundary method
+    procedure(a$D_subr_prolong), optional  :: prolong  !< Prolongation method
+    procedure(a$D_subr_restrict), optional :: restrict !< Restriction method
+
+    tree%cc_methods(iv)%bc => bc
+
+    if (present(rb)) then
+       tree%cc_methods(iv)%rb => rb
+    else
+       tree%cc_methods(iv)%rb => a$D_gc_interp
+    end if
+
+    if (present(prolong)) then
+       tree%cc_methods(iv)%prolong => prolong
+    else
+       tree%cc_methods(iv)%prolong => a$D_prolong_linear
+    end if
+
+    if (present(restrict)) then
+       tree%cc_methods(iv)%restrict => restrict
+    else
+       tree%cc_methods(iv)%restrict => a$D_restrict_box
+    end if
+
+    tree%has_cc_method(iv) = .true.
+  end subroutine a$D_set_cc_methods
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
   !> just let a tree get out of scope
@@ -586,6 +627,7 @@ contains
                   tree%n_var_cell, tree%n_var_face)
           else if (ref_flags(id) == af_derefine) then
              ! Remove children
+             call auto_restrict(tree, id)
              call remove_children(tree%boxes, id)
           end if
        end do
@@ -617,7 +659,71 @@ contains
     ! Set information about the refinement
     call set_ref_info(tree, ref_flags, ref_info)
 
+    call auto_prolong(tree, ref_info)
+
   end subroutine a$D_adjust_refinement
+
+  !> Try to automatically restrict to box with index id
+  subroutine auto_restrict(tree, id)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: id
+    integer                    :: iv, i_ch, ch_id
+
+    if (.not. any(tree%has_cc_method(:))) return
+
+    do iv = 1, tree%n_var_cell
+       if (tree%has_cc_method(iv)) then
+          do i_ch = 1, a$D_num_children
+             ch_id = tree%boxes(id)%children(i_ch)
+             call tree%cc_methods(iv)%restrict(tree%boxes(ch_id), &
+                  tree%boxes(id), iv)
+          end do
+       end if
+    end do
+  end subroutine auto_restrict
+
+  !> Try to automatically prolong to all new boxes
+  subroutine auto_prolong(tree, ref_info)
+    use m_a$D_ghostcell, only: a$D_gc_box
+    type(a$D_t), intent(inout)    :: tree
+    type(ref_info_t), intent(in) :: ref_info
+    integer                      :: lvl, i, iv, id, p_id
+
+    ! Skip this routine when it won't do anything
+    if (.not. any(tree%has_cc_method(:)) .or. ref_info%n_add == 0) then
+       return
+    end if
+
+    !$omp parallel private(lvl, i, id, p_id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          p_id = tree%boxes(id)%parent
+
+          do iv = 1, tree%n_var_cell
+             if (tree%has_cc_method(iv)) then
+                call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
+                     tree%boxes(id), iv)
+             end if
+          end do
+       end do
+       !$omp end do
+
+       !$omp do
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          do iv = 1, tree%n_var_cell
+             if (tree%has_cc_method(iv)) then
+                call a$D_gc_box(tree%boxes, id, iv, &
+                     tree%cc_methods(iv)%rb, tree%cc_methods(iv)%bc)
+             end if
+          end do
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine auto_prolong
 
   !> Set information about the refinement for all "normal" levels (>= 1)
   subroutine set_ref_info(tree, ref_flags, ref_info)
