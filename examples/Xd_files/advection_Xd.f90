@@ -12,7 +12,7 @@ program advection_$Dd
   integer, parameter  :: i_phi      = 1
   integer, parameter  :: i_phi_old  = 2
   integer, parameter  :: i_err      = 3
-  integer, parameter  :: sol_type   = 2
+  integer, parameter  :: sol_type   = 1
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr         = domain_len / box_size
 
@@ -35,9 +35,11 @@ program advection_$Dd
   call a$D_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        n_var_cell=3, & ! Number of cell-centered variables
-       n_var_face=2, & ! Number of face-centered variables
+       n_var_face=1, & ! Number of face-centered variables
        dr=dr, &        ! Distance between cells on base level
        cc_names=["phi", "old", "err"]) ! Variable names
+
+  call a$D_set_cc_methods(tree, i_phi, a$D_bc_neumann_zero, a$D_gc_interp_lim)
 
   ! Set up geometry
   id             = 1
@@ -174,10 +176,6 @@ program advection_$Dd
      ! call).
      call a$D_adjust_refinement(tree, refine_routine, refine_info, 1)
      !> [adjust_refinement]
-
-
-     ! Prolongation of i_phi values to new children (see below)
-     call prolong_to_new_children(tree, refine_info)
   end do
 
   call system_clock(t_end,count_rate)
@@ -355,32 +353,5 @@ contains
     box%cc(DTIMES(:), i_phi) = 0.5_dp * (box%cc(DTIMES(:), i_phi) + &
          box%cc(DTIMES(:), i_phi_old))
   end subroutine average_phi
-
-  !> [prolong_to_new_children]
-  ! Linear prolongation of i_phi values to new children
-  subroutine prolong_to_new_children(tree, refine_info)
-    type(a$D_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: refine_info
-    integer                      :: lvl, i, id, p_id
-
-    do lvl = 1, tree%highest_lvl
-       !$omp parallel do private(id, p_id)
-       do i = 1, size(refine_info%lvls(lvl)%add)
-          id = refine_info%lvls(lvl)%add(i)
-          p_id = tree%boxes(id)%parent
-
-          ! Linear prolongation will not strictly conserve phi
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
-       end do
-       !$omp end parallel do
-
-       ! Fill ghost cells for variables i_phi on the sides of a box, using
-       ! a$D_gc_interp_lim on refinement boundaries and a$D_bc_neumann_zero
-       ! on physical boundaries
-       call a$D_gc_ids(tree%boxes, refine_info%lvls(lvl)%add, i_phi, &
-            a$D_gc_interp_lim, a$D_bc_neumann_zero)
-    end do
-  end subroutine prolong_to_new_children
-  !> [prolong_to_new_children]
 
 end program advection_$Dd
