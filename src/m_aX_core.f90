@@ -138,8 +138,8 @@ contains
     use m_a$D_ghostcell, only: a$D_gc_interp
     use m_a$D_prolong, only: a$D_prolong_linear
     use m_a$D_restrict, only: a$D_restrict_box
-    type(a$D_t), intent(inout)             :: tree
-    integer, intent(in)                    :: iv
+    type(a$D_t), intent(inout)             :: tree     !< Tree to operate on
+    integer, intent(in)                    :: iv       !< Index of variable
     procedure(a$D_subr_bc)                 :: bc       !< Boundary condition method
     procedure(a$D_subr_rb), optional       :: rb       !< Refinement boundary method
     procedure(a$D_subr_prolong), optional  :: prolong  !< Prolongation method
