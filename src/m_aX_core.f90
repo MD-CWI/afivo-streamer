@@ -697,7 +697,7 @@ contains
        return
     end if
 
-    !$omp parallel private(lvl, i, id, p_id)
+    !$omp parallel private(lvl, i, n, iv, id, p_id)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
