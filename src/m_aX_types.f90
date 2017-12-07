@@ -205,6 +205,8 @@ module m_a$D_types
 
      !> For which cell-centered variables methods have been set
      logical, allocatable :: has_cc_method(:)
+     !> Indices of cell-centered variables with methods
+     integer, allocatable :: cc_method_vars(:)
 
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes

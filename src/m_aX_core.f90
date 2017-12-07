@@ -131,6 +131,7 @@ contains
     allocate(tree%cc_methods(n_var_cell))
     allocate(tree%has_cc_method(n_var_cell))
     tree%has_cc_method(:) = .false.
+    allocate(tree%cc_method_vars(0))
   end subroutine a$D_init
 
   !> Set the methods for a cell-centered variable
@@ -144,7 +145,7 @@ contains
     procedure(a$D_subr_rb), optional       :: rb       !< Refinement boundary method
     procedure(a$D_subr_prolong), optional  :: prolong  !< Prolongation method
     procedure(a$D_subr_restrict), optional :: restrict !< Restriction method
-
+    integer                                :: i, n
     tree%cc_methods(iv)%bc => bc
 
     if (present(rb)) then
@@ -166,6 +167,8 @@ contains
     end if
 
     tree%has_cc_method(iv) = .true.
+    n = size(tree%cc_method_vars)
+    tree%cc_method_vars = [(tree%cc_method_vars(i), i=1,n), iv]
   end subroutine a$D_set_cc_methods
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
@@ -687,7 +690,7 @@ contains
     use m_a$D_ghostcell, only: a$D_gc_box
     type(a$D_t), intent(inout)    :: tree
     type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, iv, id, p_id
+    integer                      :: lvl, i, n, iv, id, p_id
 
     ! Skip this routine when it won't do anything
     if (.not. any(tree%has_cc_method(:)) .or. ref_info%n_add == 0) then
@@ -701,11 +704,10 @@ contains
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
 
-          do iv = 1, tree%n_var_cell
-             if (tree%has_cc_method(iv)) then
-                call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
-                     tree%boxes(id), iv)
-             end if
+          do n = 1, size(tree%cc_method_vars)
+             iv = tree%cc_method_vars(n)
+             call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
+                  tree%boxes(id), iv)
           end do
        end do
        !$omp end do
@@ -713,12 +715,7 @@ contains
        !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          do iv = 1, tree%n_var_cell
-             if (tree%has_cc_method(iv)) then
-                call a$D_gc_box(tree%boxes, id, iv, &
-                     tree%cc_methods(iv)%rb, tree%cc_methods(iv)%bc)
-             end if
-          end do
+          call a$D_gc_box(tree, id, [tree%cc_method_vars])
        end do
        !$omp end do
     end do
