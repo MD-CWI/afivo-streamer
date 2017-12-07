@@ -27,7 +27,7 @@ module m_a$D_ghostcell
   end interface a$D_gc_tree
 
   interface a$D_gc_ids
-     module procedure a$D_gc_ids_iv, a$D_gc_ids_ivs
+     module procedure a$D_gc_ids_iv, a$D_gc_ids_ivs, a$D_gc_ids_v1
   end interface a$D_gc_ids
 
   interface a$D_gc_box
@@ -131,6 +131,25 @@ contains
     end do
     !$omp end parallel do
   end subroutine a$D_gc_ids_iv
+
+  !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
+  !> on refinement boundaries and subr_bc on physical boundaries. This routine
+  !> assumes that ghost cells on other ids have been set already.
+  subroutine a$D_gc_ids_v1(boxes, ids, iv, subr_rb, subr_bc, corners)
+    type(box$D_t), intent(inout)     :: boxes(:) !< List of all the boxes
+    integer, intent(in)              :: ids(:)   !< Ids of boxes for which we set ghost cells
+    integer, intent(in)              :: iv       !< Variable for which ghost cells are set
+    procedure(a$D_subr_rb), optional :: subr_rb  !< Procedure called at refinement boundaries
+    procedure(a$D_subr_bc), optional :: subr_bc  !< Procedure called at physical boundaries
+    logical, intent(in), optional    :: corners  !< Fill corner ghost cells (default: yes)
+    integer                          :: i
+
+    !$omp parallel do
+    do i = 1, size(ids)
+       call a$D_gc_box(boxes, ids(i), iv, subr_rb, subr_bc, corners)
+    end do
+    !$omp end parallel do
+  end subroutine a$D_gc_ids_v1
 
   !> Fill ghost cells for variables ivs
   subroutine a$D_gc_box_ivs(tree, id, ivs, subr_rb, subr_bc, corners)
