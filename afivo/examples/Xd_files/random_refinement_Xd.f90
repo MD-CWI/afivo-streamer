@@ -35,6 +35,8 @@ program random_refinement_$Dd
        dr, &           ! Distance between cells on base level
        cc_names = ["phi"])      ! Optional: names of cell-centered variables
 
+  call a$D_set_cc_methods(tree, 1, a$D_bc_dirichlet_zero)
+
   ! Set up geometry.
   ! Neighbors for the boxes are stored in nb_list
   nb_list(:, :) = af_no_box     ! Default value
@@ -93,9 +95,6 @@ program random_refinement_$Dd
                                 "# removed boxes", ref_info%n_rm,  &
                                 "# boxes used   ", boxes_used,     &
                                 " highest level ", tree%highest_lvl
-
-     ! Newly added boxes should be initialized, which is done in this routine.
-     call prolong_to_new_children(tree, ref_info)
   end do
   call system_clock(t_end, count_rate)
 
@@ -144,28 +143,5 @@ contains
        box%cc(IJK, i_phi) = sin(0.5_dp * rr(1)) * cos(rr(2))
     end do; CLOSE_DO
   end subroutine set_init_cond
-
-  ! Set values on newly added boxes
-  subroutine prolong_to_new_children(tree, ref_info)
-    use m_a$D_prolong
-    type(a$D_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, id, p_id
-
-    do lvl = 1, tree%highest_lvl
-       ! For each newly added box ...
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          ! Use prolongation to set the values of variable i_phi
-          id = ref_info%lvls(lvl)%add(i)
-          p_id = tree%boxes(id)%parent
-
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
-       end do
-
-       ! After values have been set on this level, fill ghost cells
-       call a$D_gc_ids(tree%boxes, ref_info%lvls(lvl)%add, i_phi, &
-            a$D_gc_interp, a$D_bc_dirichlet_zero)
-    end do
-  end subroutine prolong_to_new_children
 
 end program random_refinement_$Dd

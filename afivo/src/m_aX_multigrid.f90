@@ -191,7 +191,7 @@ contains
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
-          call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+          call a$D_gc_ids(tree, tree%lvls(lvl)%ids, mg%i_phi, &
                mg%sides_rb, mg%sides_bc)
        end if
 
@@ -219,7 +219,7 @@ contains
 
     do lvl = max_lvl,  min_lvl+1, -1
        ! Downwards relaxation
-       call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
+       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
 
        ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
        ! correction later
@@ -227,7 +227,7 @@ contains
     end do
 
     lvl = min_lvl
-    call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_base)
+    call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg%n_cycle_base)
 
     ! Do the upwards part of the v-cycle in the tree
     do lvl = min_lvl+1, max_lvl
@@ -236,11 +236,11 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells after correction
-       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+       call a$D_gc_ids(tree, tree%lvls(lvl)%ids, mg%i_phi, &
             mg%sides_rb, mg%sides_bc)
 
        ! Upwards relaxation
-       call gsrb_boxes(tree%boxes, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
+       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
     end do
 
     if (set_residual) then
@@ -438,25 +438,25 @@ contains
     !$omp end parallel do
   end subroutine correct_children
 
-  subroutine gsrb_boxes(boxes, ids, mg, n_cycle)
+  subroutine gsrb_boxes(tree, ids, mg, n_cycle)
     use m_a$D_ghostcell, only: a$D_gc_box
-    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
-    type(mg$D_t), intent(in)     :: mg       !< Multigrid options
-    integer, intent(in)          :: ids(:)   !< Operate on these boxes
-    integer, intent(in)          :: n_cycle  !< Number of cycles to perform
-    integer                      :: n, i
+    type(a$D_t), intent(inout) :: tree    !< Tree containing full grid
+    type(mg$D_t), intent(in)   :: mg      !< Multigrid options
+    integer, intent(in)        :: ids(:)  !< Operate on these boxes
+    integer, intent(in)        :: n_cycle !< Number of cycles to perform
+    integer                    :: n, i
 
     !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
        !$omp do
        do i = 1, size(ids)
-          call mg%box_gsrb(boxes(ids(i)), n, mg)
+          call mg%box_gsrb(tree%boxes(ids(i)), n, mg)
        end do
        !$omp end do
 
        !$omp do
        do i = 1, size(ids)
-          call a$D_gc_box(boxes, ids(i), mg%i_phi, mg%sides_rb, &
+          call a$D_gc_box(tree, ids(i), mg%i_phi, mg%sides_rb, &
                mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle))
        end do
        !$omp end do
@@ -511,7 +511,7 @@ contains
     end do
     !$omp end parallel do
 
-    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
+    call a$D_gc_ids(tree, tree%lvls(lvl-1)%ids, mg%i_phi, &
          mg%sides_rb, mg%sides_bc)
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
@@ -545,7 +545,7 @@ contains
 
     ! Fill ghost cells here to be sure
     if (lvl == tree%highest_lvl) then
-       call a$D_gc_ids(tree%boxes, tree%lvls(lvl)%ids, mg%i_phi, &
+       call a$D_gc_ids(tree, tree%lvls(lvl)%ids, mg%i_phi, &
             mg%sides_rb, mg%sides_bc)
     end if
 
@@ -560,7 +560,7 @@ contains
     end do
     !$omp end parallel do
 
-    call a$D_gc_ids(tree%boxes, tree%lvls(lvl-1)%ids, mg%i_phi, &
+    call a$D_gc_ids(tree, tree%lvls(lvl-1)%ids, mg%i_phi, &
          mg%sides_rb, mg%sides_bc)
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
