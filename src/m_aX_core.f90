@@ -1,3 +1,4 @@
+#include "cpp_macros_$Dd.h"
 !> This module contains the core routines of Afivo, namely those that deal with
 !> initializing and changing the quadtree/octree mesh.
 module m_a$D_core
@@ -318,6 +319,8 @@ contains
              tree%boxes(id)%neighbors = nb_used(:, n)
           end where
 
+          tree%boxes(id)%neighbor_mat = af_no_box
+
           call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
@@ -340,10 +343,60 @@ contains
        end if
     end do
 
+    ! Set the diagonal neighbors
+    do lvl = lbound(tree%lvls, 1), 1
+       do n = 1, n_boxes
+          id = tree%lvls(lvl)%ids(n)
+          call set_neighbor_mat(tree%boxes, id)
+       end do
+    end do
+
     tree%highest_lvl = 1
     tree%ready = .true.
 
   end subroutine a$D_set_base
+
+  subroutine set_neighbor_mat(boxes, id)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of boxes
+    integer, intent(in)          :: id       !< Index of box
+    integer                      :: IJK, directions($D), ndir, nb_id
+
+    do KJI_DO(-1,1)
+       if (boxes(id)%neighbor_mat(IJK) /= af_no_box) cycle
+
+       ndir = 0
+
+       if (i /= 0) then
+          ndir = ndir + 1
+          directions(ndir) = a$D_neighb_lowx + (i + 1)/2
+       end if
+
+       if (j /= 0) then
+          ndir = ndir + 1
+          directions(ndir) = a$D_neighb_lowy + (j + 1)/2
+       end if
+
+#if $D == 3
+       if (k /= 0) then
+          ndir = ndir + 1
+          directions(ndir) = a$D_neighb_lowz + (k + 1)/2
+       end if
+#endif
+
+       boxes(id)%neighbor_mat(IJK) = &
+            a$D_diag_neighb_id(boxes, id, directions(1:ndir))
+
+       nb_id = boxes(id)%neighbor_mat(IJK)
+       if (nb_id > af_no_box) then
+#if $D == 2
+          boxes(nb_id)%neighbor_mat(-i, -j) = id
+#elif $D == 3
+          boxes(nb_id)%neighbor_mat(-i, -j, -k) = id
+#endif
+       end if
+    end do; CLOSE_DO
+
+  end subroutine set_neighbor_mat
 
   !> Reorder and resize the list of boxes
   subroutine a$D_tidy_up(tree, max_hole_frac, n_clean_min)
@@ -354,7 +407,7 @@ contains
     !> Reorganize memory if at least this many boxes can be cleaned up
     integer, intent(in)            :: n_clean_min
     real(dp)                       :: hole_frac
-    integer                        :: n, lvl, id, n_clean
+    integer                        :: n, lvl, id, n_clean, IJK
     integer                        :: highest_id, n_used, n_stored, n_used_lvl
     integer, allocatable           :: ixs_sort(:), ixs_map(:)
     type(box$D_t), allocatable      :: boxes_cpy(:)
@@ -409,6 +462,13 @@ contains
           where (boxes_cpy(n)%neighbors > af_no_box)
              boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
           end where
+
+          do KJI_DO(-1, 1)
+             if (boxes_cpy(n)%neighbor_mat(IJK) > af_no_box) then
+                boxes_cpy(n)%neighbor_mat(IJK) = &
+                     ixs_map(boxes_cpy(n)%neighbor_mat(IJK))
+             end if
+          end do; CLOSE_DO
        end do
 
        tree%boxes(1:n_used) = boxes_cpy ! Copy ordered data
@@ -646,6 +706,13 @@ contains
        do i = 1, size(tree%lvls(lvl+1)%ids)
           id = tree%lvls(lvl+1)%ids(i)
           if (id > highest_id_prev) call set_neighbs_$Dd(tree%boxes, id)
+       end do
+
+       ! Do this also for diagonal neighbors
+       do i = 1, size(tree%lvls(lvl+1)%ids)
+          id = tree%lvls(lvl+1)%ids(i)
+          if (id > highest_id_prev) call set_neighbor_mat(tree%boxes, id)
+          print *, id, " - ", tree%boxes(id)%neighbor_mat
        end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
@@ -1072,10 +1139,11 @@ contains
   subroutine remove_children(boxes, id)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id       !< Id of box whose children will be removed
-    integer                     :: ic, c_id, nb_id, nb_rev, nb
+    integer                     :: ic, c_id, nb_id, nb_rev, nb, IJK
 
     do ic = 1, a$D_num_children
        c_id = boxes(id)%children(ic)
+       print *, "removing", c_id
 
        ! Remove from neighbors
        do nb = 1, a$D_num_neighbors
@@ -1085,6 +1153,17 @@ contains
              boxes(nb_id)%neighbors(nb_rev) = af_no_box
           end if
        end do
+
+       do KJI_DO(-1,1)
+          nb_id = boxes(c_id)%neighbor_mat(IJK)
+          if (nb_id > af_no_box) then
+#if $D == 2
+             boxes(nb_id)%neighbor_mat(-i, -j) = af_no_box
+#elif $D == 3
+             boxes(nb_id)%neighbor_mat(-i, -j, -k) = af_no_box
+#endif
+          end if
+       end do; CLOSE_DO
 
        call clear_box(boxes(c_id))
     end do
@@ -1112,6 +1191,8 @@ contains
        boxes(c_id)%tag       = af_init_tag
        boxes(c_id)%children  = af_no_box
        boxes(c_id)%neighbors = af_no_box
+       boxes(c_id)%neighbor_mat = af_no_box
+       boxes(c_id)%neighbor_mat(DTIMES(0)) = c_id
        boxes(c_id)%n_cell    = boxes(id)%n_cell
        boxes(c_id)%coord_t   = boxes(id)%coord_t
        boxes(c_id)%dr        = 0.5_dp * boxes(id)%dr

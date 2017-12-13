@@ -131,6 +131,11 @@ module m_a$D_types
   ! Coordinate parallel to edge
   integer, parameter :: a3_edge_dim(12) = &
        [1,1,1,1, 2,2,2,2, 3,3,3,3]
+  ! Direction of edge
+  integer, parameter :: a3_edge_dir(3, 12) = reshape( &
+       [0,-1,-1, 0,1,-1, 0,-1,1, 0,1,1, &
+       -1,0,-1, 1,0,-1, -1,0,1, 1,0,1, &
+       -1,-1,0, 1,-1,0, -1,1,0, 1,1,0], [3, 12])
   ! Neighbors adjacent to edges
   integer, parameter :: a3_nb_adj_edge(2, 12) = reshape( &
        [3,5, 4,5, 3,6, 4,6, &
@@ -167,6 +172,12 @@ module m_a$D_types
      integer               :: children(a$D_num_children)
      !> index of neighbors in box list
      integer               :: neighbors(a$D_num_neighbors)
+     !> matrix with neighbors (including diagonal ones)
+#if $D == 2
+     integer               :: neighbor_mat(-1:1, -1:1)
+#elif $D == 3
+     integer               :: neighbor_mat(-1:1, -1:1, -1:1)
+#endif
      integer               :: n_cell    !< number of cells per dimension
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box

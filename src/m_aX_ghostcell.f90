@@ -296,7 +296,8 @@ contains
        dim = a3_edge_dim(n)
 
        ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(boxes, id, a3_nb_adj_edge(:, n))
+       nb_id = boxes(id)%neighbor_mat(a3_edge_dir(1, n), &
+            a3_edge_dir(2, n), a3_edge_dir(3, n))
 
        lo = a3_edge_min_ix(:, n) * (boxes(id)%n_cell + 1)
        lo(dim) = 1
@@ -314,11 +315,22 @@ contains
 
     do n = 1, a$D_num_children
        ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
+       dnb   = 2 * a$D_child_dix(:, n) - 1
+#if $D == 2
+       nb_id = boxes(id)%neighbor_mat(dnb(1), dnb(2))
+#elif $D == 3
+       nb_id = boxes(id)%neighbor_mat(dnb(1), dnb(2), dnb(3))
+#endif
+       if (nb_id /= a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))) then
+          print *, "error", id
+          print *, nb_id, a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
+          print *, boxes(id)%ix
+          print *, boxes(nb_id)%ix
+          stop
+       end if
        lo    = a$D_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then
-          dnb = 2 * a$D_child_dix(:, n) - 1
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, lo, iv)
        else
           call a$D_corner_gc_extrap(boxes(id), lo, iv)
