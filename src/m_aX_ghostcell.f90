@@ -321,13 +321,6 @@ contains
 #elif $D == 3
        nb_id = boxes(id)%neighbor_mat(dnb(1), dnb(2), dnb(3))
 #endif
-       if (nb_id /= a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))) then
-          print *, "error", id
-          print *, nb_id, a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
-          print *, boxes(id)%ix
-          print *, boxes(nb_id)%ix
-          stop
-       end if
        lo    = a$D_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then

@@ -182,6 +182,9 @@ contains
     deallocate(tree%lvls)
     deallocate(tree%cc_names)
     deallocate(tree%fc_names)
+    deallocate(tree%cc_methods)
+    deallocate(tree%has_cc_method)
+    deallocate(tree%cc_method_vars)
 
     tree%highest_id = 0
     tree%ready      = .false.
@@ -387,6 +390,7 @@ contains
             a$D_diag_neighb_id(boxes, id, directions(1:ndir))
 
        nb_id = boxes(id)%neighbor_mat(IJK)
+
        if (nb_id > af_no_box) then
 #if $D == 2
           boxes(nb_id)%neighbor_mat(-i, -j) = id
@@ -555,11 +559,31 @@ contains
   subroutine set_neighbs_$Dd(boxes, id)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    integer                     :: nb, nb_id
+    integer                     :: nb, nb_id, IJK
+
+    do KJI_DO(-1, 1)
+       if (boxes(id)%neighbor_mat(IJK) == af_no_box) then
+          nb_id = find_neighb_$Dd(boxes, id, [IJK])
+          if (nb_id > af_no_box) then
+             boxes(id)%neighbor_mat(IJK) = nb_id
+#if $D == 2
+             boxes(nb_id)%neighbor_mat(-i, -j) = id
+#elif $D == 3
+             boxes(nb_id)%neighbor_mat(-i, -j, -k) = id
+#endif
+          end if
+       end if
+    end do; CLOSE_DO
 
     do nb = 1, a$D_num_neighbors
        if (boxes(id)%neighbors(nb) == af_no_box) then
-          nb_id = find_neighb_$Dd(boxes, id, nb)
+#if $D == 2
+          nb_id = boxes(id)%neighbor_mat(a$D_neighb_dix(1, nb), &
+               a$D_neighb_dix(2, nb))
+#elif $D == 3
+          nb_id = boxes(id)%neighbor_mat(a$D_neighb_dix(1, nb), &
+               a$D_neighb_dix(2, nb), a$D_neighb_dix(3, nb))
+#endif
           if (nb_id > af_no_box) then
              boxes(id)%neighbors(nb) = nb_id
              boxes(nb_id)%neighbors(a$D_neighb_rev(nb)) = id
@@ -568,25 +592,36 @@ contains
     end do
   end subroutine set_neighbs_$Dd
 
-  !> Get the id of neighbor nb of boxes(id), through its parent
-  function find_neighb_$Dd(boxes, id, nb) result(nb_id)
+  !> Get the id of all neighbors of boxes(id), through its parent
+  function find_neighb_$Dd(boxes, id, dix) result(nb_id)
     type(box$D_t), intent(in) :: boxes(:) !< List with all the boxes
-    integer, intent(in)      :: id       !< Box whose neighbor we are looking for
-    integer, intent(in)      :: nb       !< Neighbor index
-    integer                  :: nb_id, p_id, c_ix, d, old_pid
+    integer, intent(in)       :: id       !< Box whose neighbor we are looking for
+    integer, intent(in)       :: dix($D)
+    integer                   :: nb_id, p_id, c_ix, dix_c($D)
 
-    p_id    = boxes(id)%parent
-    old_pid = p_id
-    c_ix    = a$D_ix_to_ichild(boxes(id)%ix)
-    d       = a$D_neighb_dim(nb)
+    p_id = boxes(id)%parent
+    c_ix = a$D_ix_to_ichild(boxes(id)%ix)
 
-    ! Check if neighbor is in same direction as ix is (low/high). If so,
-    ! use neighbor of parent
-    if (a$D_child_low(d, c_ix) .eqv. a$D_neighb_low(nb)) &
-         p_id = boxes(p_id)%neighbors(nb)
+    ! Check if neighbor is in same direction as dix is (low/high). If so, use
+    ! neighbor of parent
+    where ((dix == -1) .eqv. a$D_child_low(:, c_ix))
+       dix_c = dix
+    elsewhere
+       dix_c = 0
+    end where
 
-    ! The child ix of the neighbor is reversed in direction d
-    nb_id = boxes(p_id)%children(a$D_child_rev(c_ix, d))
+#if $D == 2
+    p_id = boxes(p_id)%neighbor_mat(dix_c(1), dix_c(2))
+#elif $D == 3
+    p_id = boxes(p_id)%neighbor_mat(dix_c(1), dix_c(2), dix_c(3))
+#endif
+
+    if (p_id <= af_no_box) then
+       nb_id = p_id
+    else
+       c_ix = a$D_ix_to_ichild(boxes(id)%ix + dix)
+       nb_id = boxes(p_id)%children(c_ix)
+    end if
   end function find_neighb_$Dd
 
   !> Resize box storage to new_size
@@ -706,13 +741,6 @@ contains
        do i = 1, size(tree%lvls(lvl+1)%ids)
           id = tree%lvls(lvl+1)%ids(i)
           if (id > highest_id_prev) call set_neighbs_$Dd(tree%boxes, id)
-       end do
-
-       ! Do this also for diagonal neighbors
-       do i = 1, size(tree%lvls(lvl+1)%ids)
-          id = tree%lvls(lvl+1)%ids(i)
-          if (id > highest_id_prev) call set_neighbor_mat(tree%boxes, id)
-          print *, id, " - ", tree%boxes(id)%neighbor_mat
        end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
@@ -1143,7 +1171,6 @@ contains
 
     do ic = 1, a$D_num_children
        c_id = boxes(id)%children(ic)
-       print *, "removing", c_id
 
        ! Remove from neighbors
        do nb = 1, a$D_num_neighbors
@@ -1207,6 +1234,7 @@ contains
        if (boxes(id)%neighbors(nb) < af_no_box) then
           child_nb = c_ids(a$D_child_adj_nb(:, nb)) ! Neighboring children
           boxes(child_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
+          stop "TODO neighbors boundary condition"
        end if
     end do
   end subroutine add_children
