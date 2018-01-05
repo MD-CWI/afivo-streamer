@@ -387,7 +387,7 @@ contains
 #endif
 
        boxes(id)%neighbor_mat(IJK) = &
-            a$D_diag_neighb_id(boxes, id, directions(1:ndir))
+            find_neighb_id(boxes, id, directions(1:ndir))
 
        nb_id = boxes(id)%neighbor_mat(IJK)
 
@@ -401,6 +401,59 @@ contains
     end do; CLOSE_DO
 
   end subroutine set_neighbor_mat
+
+  !> Find direct, diagonal and edge neighbors. Returns the index of the neighbor
+  !> if found, otherwise the result is nb_id <= af_no_box.
+  pure function find_neighb_id(boxes, id, nbs) result(nb_id)
+    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
+    integer, intent(in)       :: id       !< Start index
+    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
+    integer                   :: i, j, k, nb, nb_id
+    integer                   :: nbs_perm(size(nbs))
+
+    nb_id = id
+
+    if (size(nbs) == 0) then
+       return
+    else
+       do i = 1, size(nbs)
+          nb_id = id
+
+          ! Check if path exists starting from nbs(i)
+          do j = 1, size(nbs)
+             ! k starts at i and runs over the neighbors
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
+    ! covers all paths
+    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
+       nbs_perm = nbs([2,1,3])
+
+       do i = 1, size(nbs)
+          nb_id = id
+
+          do j = 1, size(nbs)
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+  end function find_neighb_id
 
   !> Reorder and resize the list of boxes
   subroutine a$D_tidy_up(tree, max_hole_frac, n_clean_min)
@@ -1053,7 +1106,7 @@ contains
     integer, intent(in)     :: id                     !< Which box is considered
     integer, intent(in)     :: ref_buffer             !< Buffer cells around refinement
     logical, intent(in)     :: keep_buffer            !< Buffer around 'keep refinement' flags
-    integer                 :: ix0($D), ix1($D), n, nb, dim, nb_id
+    integer                 :: ix0($D), ix1($D), IJK, nb_id
 
     if (minval(cell_flags) < af_rm_ref .or. &
          maxval(cell_flags) > af_do_ref) then
@@ -1073,8 +1126,10 @@ contains
 
     ! Check whether neighbors also require refinement, which happens when cells
     ! close to the neighbor are flagged.
-    do nb = 1, a$D_num_neighbors
-       nb_id = tree%boxes(id)%neighbors(nb)
+    do KJI_DO(-1,1)
+       if (all([IJK] == 0)) cycle
+
+       nb_id = tree%boxes(id)%neighbor_mat(IJK)
 
        ! Skip neighbors that are not there
        if (nb_id <= af_no_box) cycle
@@ -1082,66 +1137,13 @@ contains
        ! Compute index range relevant for neighbor
        ix0 = 1
        ix1 = nc
-       dim = a$D_neighb_dim(nb)
-
-       if (a$D_neighb_low(nb)) then
-          ix1(dim) = ref_buffer
-       else
-          ix0(dim) = nc - ref_buffer + 1
-       end if
-
-#if $D == 2
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. &
-            any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
-       end if
-#elif $D == 3
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
-            ix0(3):ix1(3)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
-            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
-       end if
-#endif
-    end do
-
-#if $D == 3
-    ! Check neighbors on the edges
-    do n = 1, a3_num_edges
-       ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(tree%boxes, id, a3_nb_adj_edge(:, n))
-       if (nb_id <= af_no_box) cycle
-
-       ! Compute index range relevant for neighbor. This is currently a 3d
-       ! rectangle, whereas is should perhaps have a triangle-like shape
-       dim      = a3_edge_dim(n) ! Dimension parallel to edge
-       ix0      = 1 + a3_edge_min_ix(:, n) * (nc-ref_buffer)
-       ix1      = ix0 + ref_buffer - 1
-       ix0(dim) = 1
-       ix1(dim) = nc
-
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
-            ix0(3):ix1(3)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
-            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
-       end if
-    end do
-#endif
-
-    ! Check corners
-    do n = 1, a$D_num_children
-       ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(tree%boxes, id, a$D_nb_adj_child(:, n))
-       if (nb_id <= af_no_box) cycle
-
-       ! Compute index range relevant for neighbor (a 3d cube)
-       ix0 = 1 + a$D_child_dix(:, n) * (nc-ref_buffer)
-       ix1 = ix0 + ref_buffer - 1
+       where ([IJK] == 1)
+          ix0 = nc - ref_buffer + 1
+          ix1 = nc
+       elsewhere ([IJK] == -1)
+          ix0 = 1
+          ix1 = ref_buffer
+       end where
 
 #if $D == 2
        if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
@@ -1159,7 +1161,7 @@ contains
           ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
        end if
 #endif
-    end do
+    end do; CLOSE_DO
 
   end subroutine cell_to_ref_flags
 
@@ -1205,7 +1207,8 @@ contains
     integer, intent(in)         :: c_ids(a$D_num_children) !< Free ids for the children
     integer, intent(in)         :: n_cc                   !< Number of cell-centered variables
     integer, intent(in)         :: n_fc                   !< Number of face-centered variables
-    integer                     :: i, nb, child_nb(2**($D-1)), c_id, c_ix_base($D)
+    integer                     :: i, nb, child_nb(2**($D-1))
+    integer                     :: c_id, c_ix_base($D), dix($D)
 
     boxes(id)%children = c_ids
     c_ix_base          = 2 * boxes(id)%ix - 1
@@ -1234,7 +1237,14 @@ contains
        if (boxes(id)%neighbors(nb) < af_no_box) then
           child_nb = c_ids(a$D_child_adj_nb(:, nb)) ! Neighboring children
           boxes(child_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
-          stop "TODO neighbors boundary condition"
+          dix = a$D_neighb_dix(:, nb)
+#if $D == 2
+          boxes(child_nb)%neighbor_mat(dix(1), dix(2)) = &
+               boxes(id)%neighbors(nb)
+#elif $D == 3
+          boxes(child_nb)%neighbor_mat(dix(1), dix(2), dix(3)) = &
+               boxes(id)%neighbors(nb)
+#endif
        end if
     end do
   end subroutine add_children
