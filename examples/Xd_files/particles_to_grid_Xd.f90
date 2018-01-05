@@ -7,17 +7,18 @@ program particles_to_grid_$Dd
 
   implicit none
 
-  integer, parameter  :: box_size   = 16
-  integer, parameter  :: i_phi      = 1
-  integer, parameter :: n_particles = 1000*1000
-  real(dp), parameter :: domain_len = 2.0_dp
-  real(dp), parameter :: r_min($D) = -0.5_dp * domain_len
-  real(dp), parameter :: dr         = domain_len / box_size
+  integer, parameter    :: box_size    = 8
+  integer, parameter    :: i_phi       = 1
+  integer, parameter    :: n_particles = 50*1000*1000
+  real(dp), parameter   :: domain_len  = 1.0_dp
+  real(dp), parameter   :: r_min($D)   = -0.5_dp * domain_len
+  real(dp), parameter   :: dr          = domain_len / box_size
   real(dp), allocatable :: particles(:, :)
 
   type(a$D_t)        :: tree
   type(ref_info_t)   :: refine_info
   integer            :: n, id, ix_list($D, 1)
+  integer            :: count_rate, t_start, t_end
 
   print *, "Running particles_to_grid_$Dd"
   print *, "Number of threads", af_get_max_threads()
@@ -45,19 +46,30 @@ program particles_to_grid_$Dd
 
   allocate(particles($D, n_particles))
 
+  call random_number(particles(:, :))
+
   do n = 1, n_particles
-     call random_number(particles(:, n))
      particles(:, n) = (particles(:, n) - 0.5_dp) * domain_len
+     ! particles(:, n) = (sqrt(particles(:, n)) - 0.5_dp) * domain_len
   end do
 
+  call system_clock(t_start, count_rate)
   call add_particles(tree, particles, n_particles, 0)
+  call a$D_restrict_tree(tree, i_phi)
   call a$D_gc_tree(tree, i_phi, a$D_gc_interp, a$D_bc_neumann_zero)
+  call system_clock(t_end, count_rate)
+  print *, "zeroth order: ", (t_end-t_start) / real(count_rate, dp), " seconds"
   call a$D_write_silo(tree, "particles_to_grid_0", 1, 0.0_dp, dir="output")
 
   call a$D_tree_clear_cc(tree, i_phi)
 
+  call system_clock(t_start, count_rate)
   call add_particles(tree, particles, n_particles, 1)
+  call a$D_interp1_copy_gc(tree, i_phi)
+  call a$D_restrict_tree(tree, i_phi)
   call a$D_gc_tree(tree, i_phi, a$D_gc_interp, a$D_bc_neumann_zero)
+  call system_clock(t_end, count_rate)
+  print *, "first order: ", (t_end-t_start) / real(count_rate, dp), " seconds"
   call a$D_write_silo(tree, "particles_to_grid_1", 1, 0.0_dp, dir="output")
 
 contains
@@ -66,7 +78,7 @@ contains
     type(box$D_t), intent(in) :: box
     integer, intent(out)      :: cell_flags(DTIMES(box%n_cell))
 
-    if (box%r_min(1) < 0.0_dp .and. box%lvl <= 5) then
+    if (all(box%r_min < 0.0_dp) .and. box%lvl <= 3) then
        cell_flags(DTIMES(:)) = af_do_ref
     else
        cell_flags(DTIMES(:)) = af_keep_ref

@@ -11,7 +11,6 @@ module m_a$D_interp
   public :: a$D_interp0
   public :: a$D_interp1
   public :: a$D_interp0_to_grid
-  public :: a$D_interp1_to_grid
 
 contains
 
@@ -92,7 +91,7 @@ contains
        vals(i) = sum(w * tree%boxes(id)%cc(ix(1):ix(1)+1, &
             ix(2):ix(2)+1, ix(3):ix(3)+1, iv))
 #endif
-     end do
+    end do
   end function a$D_interp1
 
   !> Add 'amount' to the grid cell nearest to rr
@@ -134,72 +133,5 @@ contains
          actual_amount
 #endif
   end subroutine a$D_interp0_to_grid
-
-  !> Add 'amount' to the cell centers around rr, using linear interpolation
-  subroutine a$D_interp1_to_grid(tree, rr, iv, amount, to_density)
-    use m_a$D_utils, only: a$D_get_id_at
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)        :: iv         !< Index of variable
-    real(dp), intent(in)       :: rr($D)     !< Location
-    real(dp), intent(in)       :: amount     !< How much to add
-    logical, intent(in)        :: to_density !< If true, divide by cell volume
-    real(dp)                   :: actual_amount, inv_dr, tmp($D)
-    real(dp)                   :: wu($D), wl($D), w(DTIMES(2))
-    integer                    :: id, ix($D), nc
-    logical                    :: rb_low($D), rb_high($D)
-
-    id = a$D_get_id_at(tree, rr)
-
-    if (id == -1) then
-       print *, "a$D_interp1_to_grid error, no box at ", rr
-       stop
-    end if
-
-    nc     = tree%boxes(id)%n_cell
-    inv_dr = 1.0_dp/tree%boxes(id)%dr
-    tmp    = (rr - tree%boxes(id)%r_min) * inv_dr + 0.5_dp
-    ix     = floor(tmp)
-    wu     = tmp - ix
-    wl     = 1 - wu
-
-#if $D == 2
-    w(:, 1) = [wl(1), wu(1)] * wl(2)
-    w(:, 2) = [wl(1), wu(1)] * wu(2)
-#elif $D == 3
-#endif
-
-    !> @todo Support cylindrical coordinates
-    if (to_density) then
-       actual_amount = amount / tree%boxes(id)%dr**$D
-    else
-       actual_amount = amount
-    end if
-
-    if (any(ix == 0) .or. any(ix == nc)) then
-       ix = ceiling((rr - tree%boxes(id)%r_min) * inv_dr)
-
-       ! Apply special method near refinement boundaries
-#if $D == 2
-       tree%boxes(id)%cc(ix(1), ix(2), iv) = &
-            tree%boxes(id)%cc(ix(1), ix(2), iv) + &
-            actual_amount
-#elif $D == 3
-       tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) = &
-            tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) + &
-            actual_amount
-#endif
-    else
-       ! Linear interpolation
-#if $D == 2
-       tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
-            tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
-            w * actual_amount
-#elif $D == 3
-       ! tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) = &
-       !      tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) + &
-       !      actual_amount
-#endif
-    end if
-  end subroutine a$D_interp1_to_grid
 
 end module m_a$D_interp
