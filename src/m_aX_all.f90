@@ -10,6 +10,7 @@ module m_a$D_all
   use m_a$D_restrict
   use m_a$D_types
   use m_a$D_utils
+  use m_a$D_particles
 
   implicit none
   public

@@ -15,6 +15,8 @@ module m_a$D_utils
   public :: a$D_loop_boxes_arg
   public :: a$D_tree_clear_cc
   public :: a$D_box_clear_cc
+  public :: a$D_tree_clear_ghostcells
+  public :: a$D_box_clear_ghostcells
   public :: a$D_box_add_cc
   public :: a$D_box_sub_cc
   public :: a$D_box_times_cc
@@ -300,6 +302,46 @@ contains
     box%cc(:,:,:, iv) = 0
 #endif
   end subroutine a$D_box_clear_cc
+
+  subroutine a$D_tree_clear_ghostcells(tree, iv)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: iv !< Variable to clear
+    integer                    :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call a$D_box_clear_ghostcells(tree%boxes(id), iv)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_clear_ghostcells
+
+  !> Set cc(..., iv) = 0
+  subroutine a$D_box_clear_ghostcells(box, iv)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)          :: iv !< Variable to clear
+    integer                      :: nc
+
+    nc = box%n_cell
+
+#if $D == 2
+    box%cc(0, :, iv)       = 0
+    box%cc(nc+1, :, iv)    = 0
+    box%cc(:, 0, iv)       = 0
+    box%cc(:, nc+1, iv)    = 0
+#elif $D == 3
+    box%cc(0, :, :, iv)    = 0
+    box%cc(nc+1, :, :, iv) = 0
+    box%cc(:, 0, :, iv)    = 0
+    box%cc(:, nc+1, :, iv) = 0
+    box%cc(:, :, 0, iv)    = 0
+    box%cc(:, :, nc+1, iv) = 0
+#endif
+  end subroutine a$D_box_clear_ghostcells
 
   !> Add cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_add_cc(box, iv_from, iv_to)

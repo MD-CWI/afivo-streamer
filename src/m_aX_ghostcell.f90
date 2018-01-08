@@ -175,7 +175,7 @@ contains
        else if (tree%has_cc_method(iv)) then
           use_rb => tree%cc_methods(iv)%rb
        else
-          error stop "a$D_gc_box: no rb method stored"
+          error stop "a$D_gc_box: no refinement boundary method stored"
        end if
 
        if (present(subr_bc)) then
@@ -183,7 +183,7 @@ contains
        else if (tree%has_cc_method(iv)) then
           use_bc => tree%cc_methods(iv)%bc
        else
-          error stop "a$D_gc_box: no bc method stored"
+          error stop "a$D_gc_box: no boundary condition stored"
        end if
 
        call a$D_gc_box_sides(tree%boxes, id, iv, use_rb, use_bc)
@@ -208,7 +208,7 @@ contains
     else if (tree%has_cc_method(iv)) then
        use_rb => tree%cc_methods(iv)%rb
     else
-       error stop "a$D_gc_ids: no rb method stored"
+       error stop "a$D_gc_box: no refinement boundary method stored"
     end if
 
     if (present(subr_bc)) then
@@ -216,7 +216,7 @@ contains
     else if (tree%has_cc_method(iv)) then
        use_bc => tree%cc_methods(iv)%bc
     else
-       error stop "a$D_gc_ids: no bc method stored"
+       error stop "a$D_gc_box: no boundary condition stored"
     end if
 
     do_corners = .true.
