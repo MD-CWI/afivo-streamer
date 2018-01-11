@@ -61,7 +61,7 @@ contains
        box_threads(m) = current_thread
        current_work  = current_work + npart_per_box(m)
 
-       if (current_work >= work_left/threads_left) then
+       if (current_work > work_left/threads_left) then
           current_thread = current_thread + 1
           threads_left   = threads_left - 1
           work_left      = work_left - current_work
