@@ -194,13 +194,31 @@ contains
   !> Get the id of the finest box containing rr. If highest_lvl is present, do
   !> not go to a finer level than highest_lvl. If there is no box containing rr,
   !> return a location of -1
-  pure function a$D_get_id_at(tree, rr, highest_lvl) result(id)
+  pure function a$D_get_id_at(tree, rr, highest_lvl, guess) result(id)
     type(a$D_t), intent(in)       :: tree        !< Full grid
     real(dp), intent(in)          :: rr($D)      !< Coordinate
     integer, intent(in), optional :: highest_lvl !< Maximum level of box
-    integer                       :: id !< Id of finest box containing rr
+    integer, intent(in), optional :: guess       !< Guess of box id, cannot be used with highest_lvl
+    integer                       :: id          !< Id of finest box containing rr
 
     integer                       :: i, i_ch, lvl_max
+
+    if (present(guess)) then
+       id = guess
+       if (id > 0 .and. id < tree%highest_id) then
+          if (tree%boxes(id)%in_use .and. &
+               a$D_r_inside(tree%boxes(id), rr)) then
+
+             ! Jump into potential children for as long as possible
+             do while (a$D_has_children(tree%boxes(id)))
+                i_ch = child_that_contains(tree%boxes(id), rr)
+                id = tree%boxes(id)%children(i_ch)
+             end do
+
+             ! return             ! Exit routine
+          end if
+       end if
+    end if
 
     lvl_max = tree%lvl_limit
     if (present(highest_lvl)) lvl_max = highest_lvl
@@ -229,13 +247,15 @@ contains
   !> Get the location of the finest cell containing rr. If highest_lvl is present,
   !> do not go to a finer level than highest_lvl. If there is no box containing rr,
   !> return a location of -1
-  pure function a$D_get_loc(tree, rr, highest_lvl) result(loc)
-    type(a$D_t), intent(in)       :: tree   !< Full grid
-    real(dp), intent(in)          :: rr($D) !< Coordinate
+  pure function a$D_get_loc(tree, rr, highest_lvl, guess) result(loc)
+    type(a$D_t), intent(in)       :: tree        !< Full grid
+    real(dp), intent(in)          :: rr($D)      !< Coordinate
     integer, intent(in), optional :: highest_lvl !< Maximum level of box
-    type(a$D_loc_t)               :: loc    !< Location of cell
+    !> Guess of box id, cannot be used with highest_lvl
+    integer, intent(in), optional :: guess
+    type(a$D_loc_t)               :: loc         !< Location of cell
 
-    loc%id = a$D_get_id_at(tree, rr, highest_lvl)
+    loc%id = a$D_get_id_at(tree, rr, highest_lvl, guess)
 
     if (loc%id == -1) then
        loc%ix = -1

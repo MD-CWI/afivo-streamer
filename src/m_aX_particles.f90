@@ -15,16 +15,19 @@ contains
   !> Map a list of particles to a density. The order can be zero (map particle
   !> to the containing cell) or one (use bi/tri-linear interpolation). Note that
   !> ghost cells are automatically filled by this routine.
-  subroutine a$D_particles_to_grid(tree, iv, coords, weights, n_particles, order)
+  subroutine a$D_particles_to_grid(tree, iv, coords, weights, n_particles, &
+       order, id_guess)
     use m_a$D_restrict, only: a$D_restrict_tree
     use m_a$D_ghostcell, only: a$D_gc_tree
     use m_a$D_utils, only: a$D_get_id_at, a$D_tree_clear_ghostcells
-    type(a$D_t), intent(inout) :: tree
-    integer, intent(in)        :: iv !< Variable to store particle density
-    integer, intent(in)        :: n_particles !< The number of particles
-    real(dp), intent(in)       :: coords($D, n_particles) !< The particle coordinates
-    real(dp), intent(in)       :: weights(n_particles) !< Weights for the particles
-    integer, intent(in)        :: order !< Which order of interpolation to use
+    type(a$D_t), intent(inout)       :: tree
+    integer, intent(in)              :: iv                      !< Variable to store density
+    integer, intent(in)              :: n_particles             !< The number of particles
+    real(dp), intent(in)             :: coords($D, n_particles) !< The particle coordinates
+    real(dp), intent(in)             :: weights(n_particles)    !< Weights for the particles
+    integer, intent(in)              :: order                   !< Order of interpolation
+    !> Guess for box id containing particle, set to 0 where no guess is available
+    integer, intent(inout), optional :: id_guess(n_particles)
 
     integer              :: n, m
     integer              :: current_thread, current_work
@@ -41,15 +44,26 @@ contains
 
     npart_per_box(:) = 0
 
-    !$omp parallel do reduction(+:npart_per_box)
-    do n = 1, n_particles
-       ids(n) = a$D_get_id_at(tree, coords(:, n))
-       npart_per_box(ids(n)) = npart_per_box(ids(n)) + 1
-    end do
-    !$omp end parallel do
+    if (present(id_guess)) then
+       !$omp parallel do reduction(+:npart_per_box)
+       do n = 1, n_particles
+          ids(n)                = a$D_get_id_at(tree, coords(:, n), &
+               guess=id_guess(n))
+          id_guess(n)           = ids(n)
+          npart_per_box(ids(n)) = npart_per_box(ids(n)) + 1
+       end do
+       !$omp end parallel do
+    else
+       !$omp parallel do reduction(+:npart_per_box)
+       do n = 1, n_particles
+          ids(n)                = a$D_get_id_at(tree, coords(:, n))
+          npart_per_box(ids(n)) = npart_per_box(ids(n)) + 1
+       end do
+       !$omp end parallel do
+    end if
 
     if (sum(npart_per_box(-1:0)) > 0) then
-       error stop "Particles outside computational domain"
+       error stop "a$D_particles_to_grid: some are outside domain"
     end if
 
     threads_left   = af_get_max_threads()
