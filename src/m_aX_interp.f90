@@ -39,17 +39,18 @@ contains
   end function a$D_interp0
 
   !> Using linear interpolation to get a value at r
-  function a$D_interp1(tree, r, ivs, n_var) result(vals)
+  function a$D_interp1(tree, r, ivs, n_var, id_guess) result(vals)
     use m_a$D_utils, only: a$D_get_id_at
-    type(a$D_t), intent(in) :: tree !< Parent box
-    real(dp), intent(in)    :: r($D) !< Where to interpolate
-    integer, intent(in)     :: n_var     !< Number of variables
-    integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
-    real(dp)                :: vals(n_var)
-    integer                 :: i, iv, id, ix($D)
-    real(dp)                :: r_loc($D), dvec($D), ovec($D), w(DTIMES(2))
+    type(a$D_t), intent(in)       :: tree       !< Parent box
+    real(dp), intent(in)          :: r($D)      !< Where to interpolate
+    integer, intent(in)           :: n_var      !< Number of variables
+    integer, intent(in)           :: ivs(n_var) !< Variables to interpolate
+    integer, intent(in), optional :: id_guess   !< Guess for box id
+    real(dp)                      :: vals(n_var)
+    integer                       :: i, iv, id, ix($D)
+    real(dp)                      :: r_loc($D), dvec($D), ovec($D), w(DTIMES(2))
 
-    id = a$D_get_id_at(tree, r)
+    id = a$D_get_id_at(tree, r, id_guess)
 
     if (id <= af_no_box) then
        print *, "a$D_interp1: point outside domain", r
