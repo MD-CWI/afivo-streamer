@@ -63,6 +63,18 @@ contains
     end if
 
     if (sum(npart_per_box(-1:0)) > 0) then
+       print *, "a$D_particles_to_grid: some are outside domain"
+       m = 0
+       do n = 1, n_particles
+          if (ids(n) <= af_no_box) then
+             print *, n, coords(:, n)
+             m = m + 1
+          end if
+          if (m > 10) then
+             print *, "..."
+             exit
+          end if
+       end do
        error stop "a$D_particles_to_grid: some are outside domain"
     end if
 
