@@ -16,7 +16,7 @@ contains
   !> to the containing cell) or one (use bi/tri-linear interpolation). Note that
   !> ghost cells are automatically filled by this routine.
   subroutine a$D_particles_to_grid(tree, iv, coords, weights, n_particles, &
-       order, id_guess)
+       order, id_guess, density)
     use m_a$D_restrict, only: a$D_restrict_tree
     use m_a$D_ghostcell, only: a$D_gc_tree
     use m_a$D_utils, only: a$D_get_id_at, a$D_tree_clear_ghostcells
@@ -28,6 +28,8 @@ contains
     integer, intent(in)              :: order                   !< Order of interpolation
     !> Guess for box id containing particle, set to 0 where no guess is available
     integer, intent(inout), optional :: id_guess(n_particles)
+    !> Divide by cell area/volume (default: true)
+    logical, intent(in), optional    :: density
 
     integer              :: n, m
     integer              :: current_thread, current_work
@@ -36,6 +38,7 @@ contains
     integer, allocatable :: npart_per_box(:)
     integer, allocatable :: box_threads(:)
     integer, allocatable :: threads(:)
+    logical              :: as_density
 
     allocate(ids(n_particles))
     allocate(npart_per_box(-1:tree%highest_id))
@@ -43,6 +46,8 @@ contains
     allocate(threads(n_particles))
 
     npart_per_box(:) = 0
+    as_density = .true.
+    if (present(density)) as_density = density
 
     if (present(id_guess)) then
        !$omp parallel do reduction(+:npart_per_box)
@@ -107,10 +112,10 @@ contains
     select case (order)
     case (0)
        call particles_to_grid_0(tree, iv, coords, weights, ids, &
-            threads, n_particles)
+            threads, n_particles, as_density)
     case (1)
        call particles_to_grid_1(tree, iv, coords, weights, ids, &
-            threads, n_particles)
+            threads, n_particles, as_density)
        call tree_add_from_ghostcells(tree, iv)
     case default
        error stop "a$D_particles_to_grid: Invalid interpolation order"
@@ -121,7 +126,7 @@ contains
   end subroutine a$D_particles_to_grid
 
   subroutine particles_to_grid_0(tree, iv, coords, weights, ids, &
-       threads, n_particles)
+       threads, n_particles, density)
     use omp_lib
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)        :: iv !< Variable to store particle density
@@ -130,6 +135,7 @@ contains
     real(dp), intent(in)       :: weights(n_particles)
     integer, intent(in)        :: ids(n_particles)
     integer, intent(in)        :: threads(n_particles)
+    logical, intent(in)        :: density
     integer                    :: n, thread_id, ix($D)
 
     !$omp parallel private(n, thread_id, ix)
@@ -145,15 +151,27 @@ contains
        where (ix < 1) ix = 1
        where (ix > tree%n_cell) ix = tree%n_cell
 
+       if (density) then
 #if $D == 2
-       tree%boxes(ids(n))%cc(ix(1), ix(2), iv) = &
-            tree%boxes(ids(n))%cc(ix(1), ix(2), iv) + &
-            weights(n) / tree%boxes(ids(n))%dr**$D
+          tree%boxes(ids(n))%cc(ix(1), ix(2), iv) = &
+               tree%boxes(ids(n))%cc(ix(1), ix(2), iv) + &
+               weights(n) / tree%boxes(ids(n))%dr**$D
 #elif $D == 3
-       tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) = &
-            tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) + &
-            weights(n) / tree%boxes(ids(n))%dr**$D
+          tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) = &
+               tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) + &
+               weights(n) / tree%boxes(ids(n))%dr**$D
 #endif
+       else
+#if $D == 2
+          tree%boxes(ids(n))%cc(ix(1), ix(2), iv) = &
+               tree%boxes(ids(n))%cc(ix(1), ix(2), iv) + &
+               weights(n)
+#elif $D == 3
+          tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) = &
+               tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) + &
+               weights(n)
+#endif
+       end if
     end do
     !$omp end parallel
   end subroutine particles_to_grid_0
@@ -161,7 +179,7 @@ contains
   !> Add weights to the cell centers using linear interpolation @todo Support
   !> cylindrical coordinates
   subroutine particles_to_grid_1(tree, iv, coords, weights, ids, &
-       threads, n_particles)
+       threads, n_particles, density)
     use omp_lib
     type(a$D_t), intent(inout) :: tree
     integer, intent(in)        :: iv !< Variable to store particle density
@@ -170,6 +188,7 @@ contains
     real(dp), intent(in)       :: weights(n_particles)
     integer, intent(in)        :: ids(n_particles)
     integer, intent(in)        :: threads(n_particles)
+    logical, intent(in)        :: density
     real(dp)                   :: tmp($D), inv_dr
     real(dp)                   :: wu($D), wl($D), w(DTIMES(2))
     integer                    :: id, ix($D), n, thread_id
@@ -198,15 +217,27 @@ contains
 #endif
 
        ! Linear interpolation
+       if (density) then
 #if $D == 2
-       tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
-            tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
-            w * weights(n) / tree%boxes(id)%dr**$D
+          tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
+               tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
+               w * weights(n) / tree%boxes(id)%dr**$D
 #elif $D == 3
-       tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) = &
-            tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) + &
-            w * weights(n) / tree%boxes(id)%dr**$D
+          tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) = &
+               tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) + &
+               w * weights(n) / tree%boxes(id)%dr**$D
 #endif
+       else
+#if $D == 2
+          tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
+               tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
+               w * weights(n)
+#elif $D == 3
+          tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) = &
+               tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) + &
+               w * weights(n)
+#endif
+       end if
     end do
     !$omp end parallel
 
