@@ -19,6 +19,8 @@ module m_a$D_utils
   public :: a$D_box_clear_ghostcells
   public :: a$D_box_add_cc
   public :: a$D_box_sub_cc
+  public :: a$D_tree_times_cc
+  public :: a$D_tree_apply
   public :: a$D_box_times_cc
   public :: a$D_box_lincomb_cc
   public :: a$D_box_copy_cc_to
@@ -384,6 +386,69 @@ contains
     box%cc(:,:,:, iv_to) = box%cc(:,:,:, iv_to) - box%cc(:,:,:, iv_from)
 #endif
   end subroutine a$D_box_sub_cc
+
+  !> Perform cc(..., iv_a) = cc(..., iv_a) 'op' cc(..., iv_b), where 'op' can be
+  !> '+', '*' or '/'
+  subroutine a$D_tree_apply(tree, iv_a, iv_b, op, eps)
+    type(a$D_t), intent(inout)     :: tree
+    integer, intent(in)            :: iv_a, iv_b
+    character(len=*), intent(in)   :: op
+    real(dp), intent(in), optional :: eps !< Min value for division
+    integer                        :: lvl, i, id
+    real(dp)                       :: use_eps
+
+    use_eps = sqrt(tiny(1.0_dp))
+    if (present(eps)) use_eps = eps
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          select case (op)
+          case ('+')
+             tree%boxes(id)%cc(DTIMES(:), iv_a) = &
+                  tree%boxes(id)%cc(DTIMES(:), iv_a) + &
+                  tree%boxes(id)%cc(DTIMES(:), iv_b)
+          case ('*')
+             tree%boxes(id)%cc(DTIMES(:), iv_a) = &
+                  tree%boxes(id)%cc(DTIMES(:), iv_a) * &
+                  tree%boxes(id)%cc(DTIMES(:), iv_b)
+          case ('/')
+             tree%boxes(id)%cc(DTIMES(:), iv_a) = &
+                  tree%boxes(id)%cc(DTIMES(:), iv_a) / &
+                  max(tree%boxes(id)%cc(DTIMES(:), iv_b), eps)
+          case default
+             error stop "a$D_tree_apply: unknown operand"
+          end select
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_apply
+
+  subroutine a$D_tree_times_cc(tree, ivs, facs)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: ivs(:)
+    real(dp), intent(in)       :: facs(:)
+    integer                    :: lvl, i, id, n
+
+    if (size(ivs) /= size(facs)) &
+         error stop "a$D_times_cc: invalid array size"
+
+    !$omp parallel private(lvl, i, id, n)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          do n = 1, size(ivs)
+             call a$D_box_times_cc(tree%boxes(id), facs(n), ivs(n))
+          end do
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_times_cc
 
   !> Multipy cc(..., iv) with a
   subroutine a$D_box_times_cc(box, a, iv)
