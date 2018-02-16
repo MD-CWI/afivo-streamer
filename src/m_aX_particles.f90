@@ -16,7 +16,7 @@ contains
   !> to the containing cell) or one (use bi/tri-linear interpolation). Note that
   !> ghost cells are automatically filled by this routine.
   subroutine a$D_particles_to_grid(tree, iv, coords, weights, n_particles, &
-       order, id_guess, density)
+       order, id_guess, density, fill_gc)
     use m_a$D_restrict, only: a$D_restrict_tree
     use m_a$D_ghostcell, only: a$D_gc_tree
     use m_a$D_utils, only: a$D_get_id_at, a$D_tree_clear_ghostcells
@@ -30,6 +30,8 @@ contains
     integer, intent(inout), optional :: id_guess(n_particles)
     !> Divide by cell area/volume (default: true)
     logical, intent(in), optional    :: density
+    !> Fill ghost cells afterwards (default: true)
+    logical, intent(in), optional    :: fill_gc
 
     integer              :: n, m
     integer              :: current_thread, current_work
@@ -39,6 +41,7 @@ contains
     integer, allocatable :: box_threads(:)
     integer, allocatable :: threads(:)
     logical              :: as_density
+    logical              :: fill_gc_at_end
 
     allocate(ids(n_particles))
     allocate(npart_per_box(-1:tree%highest_id))
@@ -48,6 +51,8 @@ contains
     npart_per_box(:) = 0
     as_density = .true.
     if (present(density)) as_density = density
+    fill_gc_at_end = .true.
+    if (present(fill_gc)) fill_gc_at_end = fill_gc
 
     if (present(id_guess)) then
        !$omp parallel do reduction(+:npart_per_box)
@@ -122,7 +127,16 @@ contains
     end select
 
     call a$D_restrict_tree(tree, iv)
-    call a$D_gc_tree(tree, iv)
+
+    if (fill_gc_at_end) then
+       if (.not. tree%has_cc_method(iv)) then
+          print *, "Variable with index ", iv, "has no cc_method"
+          print *, "do this with call a$D_set_cc_methods(tree, iv, ...)"
+          error stop "a$D_particles_to_grid: no ghost cell method defined"
+       else
+          call a$D_gc_tree(tree, iv)
+       end if
+    end if
   end subroutine a$D_particles_to_grid
 
   subroutine particles_to_grid_0(tree, iv, coords, weights, ids, &
