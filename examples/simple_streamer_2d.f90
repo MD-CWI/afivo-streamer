@@ -11,7 +11,7 @@ program simple_streamer_2d
   use m_a2_multigrid
   use m_a2_output
   use m_write_silo
-  use m_a2_prolong, onLy: a2_prolong_copy_from
+  use m_a2_prolong
 
   implicit none
 
@@ -68,6 +68,9 @@ program simple_streamer_2d
   real(dp) :: time
   integer  :: output_count
 
+  ! To test charge conservation
+  real(dp) :: sum_elec, sum_pion
+
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
 
@@ -81,6 +84,12 @@ program simple_streamer_2d
 
   ! This routine always needs to be called when using multigrid
   call mg2_init_mg(mg)
+
+  call a2_set_cc_methods(tree, i_elec, a2_bc_dirichlet_zero, &
+       a2_gc_interp_lim, a2_prolong_limit)
+  call a2_set_cc_methods(tree, i_pion, a2_bc_dirichlet_zero, &
+       a2_gc_interp_lim, a2_prolong_limit)
+  call a2_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
 
   output_count = 0 ! Number of output files written
   time    = 0 ! Simulation time (all times are in s)
@@ -131,6 +140,10 @@ program simple_streamer_2d
         ! Write the cell centered data of a tree to a Silo file. Only the
         ! leaves of the tree are used
         call a2_write_silo(tree, fname, output_count, time, dir="output")
+
+        call a2_tree_sum_cc(tree, i_elec, sum_elec)
+        call a2_tree_sum_cc(tree, i_pion, sum_pion)
+        print *, "sum(pion-elec)/sum(pion)", (sum_pion - sum_elec)/sum_pion
      end if
 
      if (time > end_time) exit
@@ -164,15 +177,9 @@ program simple_streamer_2d
         call compute_fld(tree, .true.)
      end do
 
-     ! Restrict the i_pion and i_elec values of the children of a box to the box
-     ! (e.g., in 2D, average the values at the four children to get the value
-     ! for the parent)
-     call a2_restrict_tree(tree, i_pion)
-     call a2_restrict_tree(tree, i_elec)
-
      ! Fill ghost cells for i_pion and i_elec
-     call a2_gc_tree(tree, i_elec, a2_gc_interp_lim, a2_bc_dirichlet_zero)
-     call a2_gc_tree(tree, i_pion, a2_gc_interp_lim, a2_bc_dirichlet_zero)
+     call a2_gc_tree(tree, i_elec)
+     call a2_gc_tree(tree, i_pion)
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
@@ -186,17 +193,10 @@ program simple_streamer_2d
           4)                    ! Buffer width (in cells)
 
      if (refine_info%n_add > 0 .or. refine_info%n_rm > 0) then
-        ! For boxes which just have been refined, set data on their children
-        call prolong_to_new_boxes(tree, refine_info)
-
         ! Compute the field on the new mesh
         call compute_fld(tree, .true.)
      end if
   end do
-
-  ! "Destroy" the data in a tree. Since we don't use pointers, you can also
-  ! just let a tree get out of scope
-  call a2_destroy(tree)
 
 contains
 
@@ -495,38 +495,6 @@ contains
 
   end subroutine update_solution
 
-  ! For each box that gets refined, set data on its children using this routine
-  subroutine prolong_to_new_boxes(tree, refine_info)
-    use m_a2_prolong
-    type(a2_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: refine_info
-    integer                      :: lvl, i, id, p_id, t_id
-
-    do lvl = 1, tree%highest_lvl
-       !$omp do private(id, p_id, t_id)
-       do i = 1, size(refine_info%lvls(lvl)%add)
-          id = refine_info%lvls(lvl)%add(i)
-          p_id = tree%boxes(id)%parent
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_elec)
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pion)
-          call a2_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
-       end do
-       !$omp end do
-
-       !$omp do private(id)
-       do i = 1, size(refine_info%lvls(lvl)%add)
-          id = refine_info%lvls(lvl)%add(i)
-          call a2_gc_box(tree%boxes, id, i_elec, &
-               a2_gc_interp_lim, a2_bc_neumann_zero)
-          call a2_gc_box(tree%boxes, id, i_pion, &
-               a2_gc_interp_lim, a2_bc_neumann_zero)
-          call a2_gc_box(tree%boxes, id, i_phi, &
-               mg2_sides_rb, mg%sides_bc)
-       end do
-       !$omp end do
-    end do
-  end subroutine prolong_to_new_boxes
-
   !> This fills ghost cells near physical boundaries for the potential
   subroutine sides_bc_pot(box, nb, iv, bc_type)
     type(box2_t), intent(inout) :: box
@@ -548,34 +516,5 @@ contains
        stop "sides_bc_pot: unspecified boundary"
     end select
   end subroutine sides_bc_pot
-
-  !> Modified implementation of Koren limiter, to avoid division and the min/max
-  !> functions, which can be problematic / expensive. In most literature, you
-  !> have r = a / b (ratio of gradients). Then the limiter phi(r) is multiplied
-  !> with b. With this implementation, you get phi(r) * b
-  elemental function koren_mlim(a, b) result(bphi)
-    real(dp), intent(in) :: a  !< Density gradient (numerator)
-    real(dp), intent(in) :: b  !< Density gradient (denominator)
-    real(dp), parameter  :: sixth = 1/6.0_dp
-    real(dp)             :: bphi, aa, ab
-
-    aa = a * a
-    ab = a * b
-
-    if (ab <= 0) then
-       ! a and b have different sign or one of them is zero, so r is either 0,
-       ! inf or negative (special case a == b == 0 is ignored)
-       bphi = 0
-    else if (aa <= 0.25_dp * ab) then
-       ! 0 < a/b <= 1/4, limiter has value a/b
-       bphi = a
-    else if (aa <= 2.5_dp * ab) then
-       ! 1/4 < a/b <= 2.5, limiter has value (1+2*a/b)/6
-       bphi = sixth * (b + 2*a)
-    else
-       ! (1+2*a/b)/6 >= 1, limiter has value 1
-       bphi = b
-    end if
-  end function koren_mlim
 
 end program simple_streamer_2d
