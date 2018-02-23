@@ -175,7 +175,7 @@ contains
        else if (tree%has_cc_method(iv)) then
           use_rb => tree%cc_methods(iv)%rb
        else
-          error stop "a$D_gc_box: no rb method stored"
+          error stop "a$D_gc_box: no refinement boundary method stored"
        end if
 
        if (present(subr_bc)) then
@@ -183,7 +183,7 @@ contains
        else if (tree%has_cc_method(iv)) then
           use_bc => tree%cc_methods(iv)%bc
        else
-          error stop "a$D_gc_box: no bc method stored"
+          error stop "a$D_gc_box: no boundary condition stored"
        end if
 
        call a$D_gc_box_sides(tree%boxes, id, iv, use_rb, use_bc)
@@ -208,7 +208,7 @@ contains
     else if (tree%has_cc_method(iv)) then
        use_rb => tree%cc_methods(iv)%rb
     else
-       error stop "a$D_gc_ids: no rb method stored"
+       error stop "a$D_gc_box: no refinement boundary method stored"
     end if
 
     if (present(subr_bc)) then
@@ -216,7 +216,7 @@ contains
     else if (tree%has_cc_method(iv)) then
        use_bc => tree%cc_methods(iv)%bc
     else
-       error stop "a$D_gc_ids: no bc method stored"
+       error stop "a$D_gc_box: no boundary condition stored"
     end if
 
     do_corners = .true.
@@ -296,7 +296,8 @@ contains
        dim = a3_edge_dim(n)
 
        ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(boxes, id, a3_nb_adj_edge(:, n))
+       nb_id = boxes(id)%neighbor_mat(a3_edge_dir(1, n), &
+            a3_edge_dir(2, n), a3_edge_dir(3, n))
 
        lo = a3_edge_min_ix(:, n) * (boxes(id)%n_cell + 1)
        lo(dim) = 1
@@ -314,11 +315,15 @@ contains
 
     do n = 1, a$D_num_children
        ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(boxes, id, a$D_nb_adj_child(:, n))
+       dnb   = 2 * a$D_child_dix(:, n) - 1
+#if $D == 2
+       nb_id = boxes(id)%neighbor_mat(dnb(1), dnb(2))
+#elif $D == 3
+       nb_id = boxes(id)%neighbor_mat(dnb(1), dnb(2), dnb(3))
+#endif
        lo    = a$D_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then
-          dnb = 2 * a$D_child_dix(:, n) - 1
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, lo, iv)
        else
           call a$D_corner_gc_extrap(boxes(id), lo, iv)

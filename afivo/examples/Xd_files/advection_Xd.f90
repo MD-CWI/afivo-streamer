@@ -22,7 +22,8 @@ program advection_$Dd
   integer            :: nb_list(a$D_num_neighbors, 1)
   integer            :: refine_steps, time_steps, output_cnt
   integer            :: i, id, n, n_steps
-  real(dp)           :: dt, time, end_time, p_err, n_err, sum_phi
+  real(dp)           :: dt, time, end_time, p_err, n_err
+  real(dp)           :: sum_phi, sum_phi_t0
   real(dp)           :: dt_adapt, dt_output
   real(dp)           :: velocity($D), dr_min($D)
   character(len=100) :: fname
@@ -39,7 +40,8 @@ program advection_$Dd
        dr=dr, &        ! Distance between cells on base level
        cc_names=["phi", "old", "err"]) ! Variable names
 
-  call a$D_set_cc_methods(tree, i_phi, a$D_bc_neumann_zero, a$D_gc_interp_lim)
+  call a$D_set_cc_methods(tree, i_phi, a$D_bc_neumann_zero, a$D_gc_interp_lim, &
+       prolong=a$D_prolong_limit)
 
   ! Set up geometry
   id             = 1
@@ -52,8 +54,8 @@ program advection_$Dd
   output_cnt = 0
   time       = 0
   dt_adapt   = 0.01_dp
-  dt_output  = 0.05_dp
-  end_time   = 1.5_dp
+  dt_output  = 0.1_dp
+  end_time   = 5.0_dp
   velocity(:) = 0.0_dp
   velocity(1) = 1.0_dp
   velocity(2) = -1.0_dp
@@ -110,6 +112,8 @@ program advection_$Dd
   call system_clock(t_start, count_rate)
   time_steps = 0
 
+  call a$D_tree_sum_cc(tree, i_phi, sum_phi_t0)
+
   ! Starting simulation
   do
      time_steps = time_steps + 1
@@ -137,7 +141,7 @@ program advection_$Dd
         call a$D_tree_sum_cc(tree, i_phi, sum_phi)
         write(*,"(2(A,1x,Es12.4,2x))")  &
              " max error:", max(p_err, abs(n_err)), &
-             "sum phi:  ", sum_phi
+             "conservation error:  ", (sum_phi - sum_phi_t0) / sum_phi_t0
      end if
 
      if (time > end_time) exit

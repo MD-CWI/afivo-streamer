@@ -11,8 +11,11 @@ module m_a$D_prolong
   public :: a$D_prolong_linear_from
   public :: a$D_prolong_sparse
   public :: a$D_prolong_linear
-  public :: a$D_prolong_quadratic_from
-  public :: a$D_prolong_quadratic
+  ! public :: a$D_prolong_quadratic_from
+  ! public :: a$D_prolong_quadratic
+
+  public :: a$D_prolong_limit
+  public :: a$D_prolong_linear_cons
 
 contains
 
@@ -218,6 +221,223 @@ contains
 #endif
   end subroutine a$D_prolong_sparse
 
+  ! Prolong with a limited slope in the coarse cells, which takes the minimum of
+  ! the left/right slopes if they have the same sign (else it is zero). This
+  ! procedure is conservative.
+  subroutine a$D_prolong_limit(box_p, box_c, iv, iv_to, add)
+    type(box$D_t), intent(in)     :: box_p !< Parent box
+    type(box$D_t), intent(inout)  :: box_c !< Child box
+    integer, intent(in)           :: iv    !< Variable to fill
+    integer, intent(in), optional :: iv_to !< Destination variable
+    logical, intent(in), optional :: add   !< Add to old values
+    integer                       :: hnc, nc, ix_offset($D), ivc
+    integer                       :: i, j, i_c, i_f, j_c, j_f
+    real(dp)                      :: f0, fxL, fxR, fyL, fyR, fx, fy
+    logical                       :: add_to
+#if $D == 3
+    real(dp)                      :: fzL, fzR, fz
+    integer                       :: k, k_c, k_f
+#endif
+
+    nc        = box_c%n_cell
+    hnc       = ishft(box_c%n_cell, -1)
+    ix_offset = a$D_get_child_offset(box_c)
+    add_to    = .false.; if (present(add)) add_to = add
+    ivc       = iv; if (present(iv_to)) ivc = iv_to
+
+    if (.not. add_to) then
+#if $D == 2
+       box_c%cc(1:nc, 1:nc, ivc) = 0
+#elif $D == 3
+       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
+#endif
+    end if
+
+#if $D == 2
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
+
+          f0 = box_p%cc(i_c, j_c, iv)
+          fxL = f0 - box_p%cc(i_c-1, j_c, iv)
+          fxR = box_p%cc(i_c+1, j_c, iv) - f0
+          fyL = f0 - box_p%cc(i_c, j_c-1, iv)
+          fyR = box_p%cc(i_c, j_c+1, iv) - f0
+
+          fx = 0.25_dp * limit_slope(fxL, fxR)
+          fy = 0.25_dp * limit_slope(fyL, fyR)
+
+          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
+               + box_c%cc(i_f,   j_f,   ivc)
+          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy &
+               + box_c%cc(i_f+1, j_f,   ivc)
+          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy &
+               + box_c%cc(i_f,   j_f+1, ivc)
+          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy &
+               + box_c%cc(i_f+1, j_f+1, ivc)
+       end do
+    end do
+#elif $D == 3
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f0  = box_p%cc(i_c,   j_c,   k_c,   iv)
+             fxL = f0 - box_p%cc(i_c-1, j_c,   k_c,   iv)
+             fxR = box_p%cc(i_c+1, j_c,   k_c,   iv) - f0
+             fyL = f0 - box_p%cc(i_c,   j_c-1, k_c,   iv)
+             fyR = box_p%cc(i_c,   j_c+1, k_c,   iv) - f0
+             fzL = f0 - box_p%cc(i_c,   j_c,   k_c-1, iv)
+             fzR = box_p%cc(i_c,   j_c,   k_c+1, iv) - f0
+
+             fx = 0.25_dp * limit_slope(fxL, fxR)
+             fy = 0.25_dp * limit_slope(fyL, fyR)
+             fz = 0.25_dp * limit_slope(fzL, fzR)
+
+             box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - &
+                  fy - fz + box_c%cc(i_f,   j_f,   k_f,   ivc)
+             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - &
+                  fy - fz + box_c%cc(i_f+1, j_f,   k_f,   ivc)
+             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + &
+                  fy - fz + box_c%cc(i_f,   j_f+1, k_f,   ivc)
+             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + &
+                  fy - fz + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
+             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - &
+                  fy + fz + box_c%cc(i_f,   j_f,   k_f+1, ivc)
+             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - &
+                  fy + fz + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
+             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + &
+                  fy + fz + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
+             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + &
+                  fy + fz + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
+          end do
+       end do
+    end do
+#endif
+  contains
+
+    ! Take minimum of two slopes if they have the same sign, else take zero
+    elemental function limit_slope(ll, rr) result(slope)
+      real(dp), intent(in) :: ll, rr
+      real(dp)             :: slope
+
+      if (ll * rr < 0) then
+         slope = 0.0_dp
+      else if (ll * ll < rr * rr) then
+         slope = ll
+      else
+         slope = rr
+      end if
+    end function limit_slope
+
+  end subroutine a$D_prolong_limit
+
+  ! Prolong with a linear (unlimited) slope in the coarse cells, which can
+  ! result in negative densities. This procedure is conservative.
+  subroutine a$D_prolong_linear_cons(box_p, box_c, iv, iv_to, add)
+    type(box$D_t), intent(in)     :: box_p !< Parent box
+    type(box$D_t), intent(inout)  :: box_c !< Child box
+    integer, intent(in)           :: iv    !< Variable to fill
+    integer, intent(in), optional :: iv_to !< Destination variable
+    logical, intent(in), optional :: add   !< Add to old values
+    integer                       :: hnc, nc, ix_offset($D), ivc
+    integer                       :: i, j, i_c, i_f, j_c, j_f
+    real(dp)                      :: f0, fx, fy
+    logical                       :: add_to
+#if $D == 3
+    real(dp)                      :: fz
+    integer                       :: k, k_c, k_f
+#endif
+
+    nc        = box_c%n_cell
+    hnc       = ishft(box_c%n_cell, -1)
+    ix_offset = a$D_get_child_offset(box_c)
+    add_to    = .false.; if (present(add)) add_to = add
+    ivc       = iv; if (present(iv_to)) ivc = iv_to
+
+    if (.not. add_to) then
+#if $D == 2
+       box_c%cc(1:nc, 1:nc, ivc) = 0
+#elif $D == 3
+       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
+#endif
+    end if
+
+#if $D == 2
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
+
+          f0 = box_p%cc(i_c, j_c, iv)
+          fx = 0.125_dp * (box_p%cc(i_c+1, j_c, iv) - &
+               box_p%cc(i_c-1, j_c, iv))
+          fy = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
+               box_p%cc(i_c, j_c-1, iv))
+
+          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
+               + box_c%cc(i_f,   j_f,   ivc)
+          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy &
+               + box_c%cc(i_f+1, j_f,   ivc)
+          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy &
+               + box_c%cc(i_f,   j_f+1, ivc)
+          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy &
+               + box_c%cc(i_f+1, j_f+1, ivc)
+       end do
+    end do
+#elif $D == 3
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f0 = box_p%cc(i_c, j_c, k_c, iv)
+             fx = 0.125_dp * (box_p%cc(i_c+1, j_c,   k_c,   iv) - &
+                  box_p%cc(i_c-1, j_c,   k_c,   iv))
+             fy = 0.125_dp * (box_p%cc(i_c,   j_c+1, k_c,   iv) - &
+                  box_p%cc(i_c,   j_c-1, k_c,   iv))
+             fz = 0.125_dp * (box_p%cc(i_c,   j_c,   k_c+1, iv) - &
+                  box_p%cc(i_c,   j_c,   k_c-1, iv))
+
+             box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - &
+                  fy - fz + box_c%cc(i_f,   j_f,   k_f,   ivc)
+             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - &
+                  fy - fz + box_c%cc(i_f+1, j_f,   k_f,   ivc)
+             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + &
+                  fy - fz + box_c%cc(i_f,   j_f+1, k_f,   ivc)
+             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + &
+                  fy - fz + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
+             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - &
+                  fy + fz + box_c%cc(i_f,   j_f,   k_f+1, ivc)
+             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - &
+                  fy + fz + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
+             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + &
+                  fy + fz + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
+             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + &
+                  fy + fz + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
+          end do
+       end do
+    end do
+#endif
+
+  end subroutine a$D_prolong_linear_cons
+
   !> Bi/trilinear prolongation to a child (from parent)
   subroutine a$D_prolong_linear(box_p, box_c, iv, iv_to, add)
     type(box$D_t), intent(in)     :: box_p !< Parent box
@@ -358,142 +578,142 @@ contains
 #endif
   end subroutine a$D_prolong_linear
 
-  !> Quadratic prolongation to children. We use stencils that do not require
-  !> corner ghost cells.
-  subroutine a$D_prolong_quadratic_from(boxes, id, iv, iv_to, add)
-    type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
-    integer, intent(in)           :: id       !< Box whose children we will fill
-    integer, intent(in)           :: iv       !< Variable that is filled
-    integer, intent(in), optional :: iv_to    !< Destination variable
-    logical, intent(in), optional :: add      !< Add to old values
-    integer                       :: i_c, c_id
+  ! !> Quadratic prolongation to children. We use stencils that do not require
+  ! !> corner ghost cells.
+  ! subroutine a$D_prolong_quadratic_from(boxes, id, iv, iv_to, add)
+  !   type(box$D_t), intent(inout)  :: boxes(:) !< List of all boxes
+  !   integer, intent(in)           :: id       !< Box whose children we will fill
+  !   integer, intent(in)           :: iv       !< Variable that is filled
+  !   integer, intent(in), optional :: iv_to    !< Destination variable
+  !   logical, intent(in), optional :: add      !< Add to old values
+  !   integer                       :: i_c, c_id
 
-    do i_c = 1, a$D_num_children
-       c_id = boxes(id)%children(i_c)
-       if (c_id == af_no_box) cycle
-       call a$D_prolong_quadratic(boxes(id), boxes(c_id), iv, iv_to, add)
-    end do
-  end subroutine a$D_prolong_quadratic_from
+  !   do i_c = 1, a$D_num_children
+  !      c_id = boxes(id)%children(i_c)
+  !      if (c_id == af_no_box) cycle
+  !      call a$D_prolong_quadratic(boxes(id), boxes(c_id), iv, iv_to, add)
+  !   end do
+  ! end subroutine a$D_prolong_quadratic_from
 
-  !> Prolongation to a child (from parent) using quadratic interpolation (using
-  !> a local Taylor approximation)
-  !> \todo Mixed derivatives in 3D version
-  subroutine a$D_prolong_quadratic(box_p, box_c, iv, iv_to, add)
-    type(box$D_t), intent(in)      :: box_p !< Parent box
-    type(box$D_t), intent(inout)   :: box_c !< Child box
-    integer, intent(in)           :: iv       !< Variable to fill
-    integer, intent(in), optional :: iv_to    !< Destination variable
-    logical, intent(in), optional :: add      !< Add to old values
-    logical                      :: add_to
-    integer                      :: hnc, ix_offset($D)
-    integer                      :: i, j, nc, ivc
-    integer                      :: i_c, i_f, j_c, j_f
-    real(dp)                     :: f0, fx, fy, fxx, fyy, f2
-#if $D == 2
-    real(dp)                     :: fxy(2**$D)
-#elif $D == 3
-    real(dp)                     :: fz, fzz
-    integer                      :: k, k_c, k_f
-#endif
+!   !> Prolongation to a child (from parent) using quadratic interpolation (using
+!   !> a local Taylor approximation)
+!   !> \todo Mixed derivatives in 3D version
+!   subroutine a$D_prolong_quadratic(box_p, box_c, iv, iv_to, add)
+!     type(box$D_t), intent(in)      :: box_p !< Parent box
+!     type(box$D_t), intent(inout)   :: box_c !< Child box
+!     integer, intent(in)           :: iv       !< Variable to fill
+!     integer, intent(in), optional :: iv_to    !< Destination variable
+!     logical, intent(in), optional :: add      !< Add to old values
+!     logical                      :: add_to
+!     integer                      :: hnc, ix_offset($D)
+!     integer                      :: i, j, nc, ivc
+!     integer                      :: i_c, i_f, j_c, j_f
+!     real(dp)                     :: f0, fx, fy, fxx, fyy, f2
+! #if $D == 2
+!     real(dp)                     :: fxy(2**$D)
+! #elif $D == 3
+!     real(dp)                     :: fz, fzz
+!     integer                      :: k, k_c, k_f
+! #endif
 
-    nc        = box_c%n_cell
-    hnc       = ishft(box_c%n_cell, -1)
-    ix_offset = a$D_get_child_offset(box_c)
-    add_to    = .false.; if (present(add)) add_to = add
-    ivc       = iv; if (present(iv_to)) ivc = iv_to
+!     nc        = box_c%n_cell
+!     hnc       = ishft(box_c%n_cell, -1)
+!     ix_offset = a$D_get_child_offset(box_c)
+!     add_to    = .false.; if (present(add)) add_to = add
+!     ivc       = iv; if (present(iv_to)) ivc = iv_to
 
-    if (.not. add_to) then
-#if $D == 2
-       box_c%cc(1:nc, 1:nc, ivc) = 0
-#elif $D == 3
-       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
-#endif
-    end if
+!     if (.not. add_to) then
+! #if $D == 2
+!        box_c%cc(1:nc, 1:nc, ivc) = 0
+! #elif $D == 3
+!        box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
+! #endif
+!     end if
 
-#if $D == 2
-    do j = 1, hnc
-       j_c = j + ix_offset(2)
-       j_f = 2 * j - 1
-       do i = 1, hnc
-          i_c = i + ix_offset(1)
-          i_f = 2 * i - 1
+! #if $D == 2
+!     do j = 1, hnc
+!        j_c = j + ix_offset(2)
+!        j_f = 2 * j - 1
+!        do i = 1, hnc
+!           i_c = i + ix_offset(1)
+!           i_f = 2 * i - 1
 
-          f0 = box_p%cc(i_c, j_c, iv)
-          fx = 0.125_dp * (box_p%cc(i_c+1, j_c, iv) - &
-               box_p%cc(i_c-1, j_c, iv))
-          fy = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
-               box_p%cc(i_c, j_c-1, iv))
-          fxx = 0.03125_dp * (box_p%cc(i_c-1, j_c, iv) - &
-               2 * f0 + box_p%cc(i_c+1, j_c, iv))
-          fyy = 0.03125_dp * (box_p%cc(i_c, j_c-1, iv) - &
-               2 * f0 + box_p%cc(i_c, j_c+1, iv))
-          f2 = fxx + fyy
+!           f0 = box_p%cc(i_c, j_c, iv)
+!           fx = 0.125_dp * (box_p%cc(i_c+1, j_c, iv) - &
+!                box_p%cc(i_c-1, j_c, iv))
+!           fy = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
+!                box_p%cc(i_c, j_c-1, iv))
+!           fxx = 0.03125_dp * (box_p%cc(i_c-1, j_c, iv) - &
+!                2 * f0 + box_p%cc(i_c+1, j_c, iv))
+!           fyy = 0.03125_dp * (box_p%cc(i_c, j_c-1, iv) - &
+!                2 * f0 + box_p%cc(i_c, j_c+1, iv))
+!           f2 = fxx + fyy
 
-          fxy(1) = 0.0625_dp * (box_p%cc(i_c-1, j_c-1, iv) + f0 - &
-               box_p%cc(i_c-1, j_c, iv) - box_p%cc(i_c, j_c-1, iv))
-          fxy(2) = 0.0625_dp * (box_p%cc(i_c+1, j_c-1, iv) + f0 - &
-               box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c-1, iv))
-          fxy(3) = 0.0625_dp * (box_p%cc(i_c-1, j_c+1, iv) + f0 - &
-               box_p%cc(i_c-1, j_c, iv) - box_p%cc(i_c, j_c+1, iv))
-          fxy(4) = 0.0625_dp * (box_p%cc(i_c+1, j_c+1, iv) + f0 - &
-               box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c+1, iv))
+!           fxy(1) = 0.0625_dp * (box_p%cc(i_c-1, j_c-1, iv) + f0 - &
+!                box_p%cc(i_c-1, j_c, iv) - box_p%cc(i_c, j_c-1, iv))
+!           fxy(2) = 0.0625_dp * (box_p%cc(i_c+1, j_c-1, iv) + f0 - &
+!                box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c-1, iv))
+!           fxy(3) = 0.0625_dp * (box_p%cc(i_c-1, j_c+1, iv) + f0 - &
+!                box_p%cc(i_c-1, j_c, iv) - box_p%cc(i_c, j_c+1, iv))
+!           fxy(4) = 0.0625_dp * (box_p%cc(i_c+1, j_c+1, iv) + f0 - &
+!                box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c+1, iv))
 
-          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy + f2 + fxy(1) + &
-               box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy + f2 + fxy(2) + &
-               box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy + f2 + fxy(3) + &
-               box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy + f2 + fxy(4) + &
-               box_c%cc(i_f+1, j_f+1, ivc)
-       end do
-    end do
-#elif $D == 3
-    do k = 1, hnc
-       k_c = k + ix_offset(3)
-       k_f = 2 * k - 1
-       do j = 1, hnc
-          j_c = j + ix_offset(2)
-          j_f = 2 * j - 1
-          do i = 1, hnc
-             i_c = i + ix_offset(1)
-             i_f = 2 * i - 1
+!           box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy + f2 + fxy(1) + &
+!                box_c%cc(i_f,   j_f,   ivc)
+!           box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy + f2 + fxy(2) + &
+!                box_c%cc(i_f+1, j_f,   ivc)
+!           box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy + f2 + fxy(3) + &
+!                box_c%cc(i_f,   j_f+1, ivc)
+!           box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy + f2 + fxy(4) + &
+!                box_c%cc(i_f+1, j_f+1, ivc)
+!        end do
+!     end do
+! #elif $D == 3
+!     do k = 1, hnc
+!        k_c = k + ix_offset(3)
+!        k_f = 2 * k - 1
+!        do j = 1, hnc
+!           j_c = j + ix_offset(2)
+!           j_f = 2 * j - 1
+!           do i = 1, hnc
+!              i_c = i + ix_offset(1)
+!              i_f = 2 * i - 1
 
-             f0 = box_p%cc(i_c, j_c, k_c, iv)
-             fx = 0.125_dp * (box_p%cc(i_c+1, j_c, k_c, iv) - &
-                  box_p%cc(i_c-1, j_c, k_c, iv))
-             fy = 0.125_dp * (box_p%cc(i_c, j_c+1, k_c, iv) - &
-                  box_p%cc(i_c, j_c-1, k_c, iv))
-             fz = 0.125_dp * (box_p%cc(i_c, j_c, k_c+1, iv) - &
-                  box_p%cc(i_c, j_c, k_c-1, iv))
-             fxx = 0.03125_dp * (box_p%cc(i_c-1, j_c, k_c, iv) - &
-                  2 * f0 + box_p%cc(i_c+1, j_c, k_c, iv))
-             fyy = 0.03125_dp * (box_p%cc(i_c, j_c-1, k_c, iv) - &
-                  2 * f0 + box_p%cc(i_c, j_c+1, k_c, iv))
-             fzz = 0.03125_dp * (box_p%cc(i_c, j_c, k_c-1, iv) - &
-                  2 * f0 + box_p%cc(i_c, j_c, k_c+1, iv))
-             f2 = fxx + fyy + fzz
+!              f0 = box_p%cc(i_c, j_c, k_c, iv)
+!              fx = 0.125_dp * (box_p%cc(i_c+1, j_c, k_c, iv) - &
+!                   box_p%cc(i_c-1, j_c, k_c, iv))
+!              fy = 0.125_dp * (box_p%cc(i_c, j_c+1, k_c, iv) - &
+!                   box_p%cc(i_c, j_c-1, k_c, iv))
+!              fz = 0.125_dp * (box_p%cc(i_c, j_c, k_c+1, iv) - &
+!                   box_p%cc(i_c, j_c, k_c-1, iv))
+!              fxx = 0.03125_dp * (box_p%cc(i_c-1, j_c, k_c, iv) - &
+!                   2 * f0 + box_p%cc(i_c+1, j_c, k_c, iv))
+!              fyy = 0.03125_dp * (box_p%cc(i_c, j_c-1, k_c, iv) - &
+!                   2 * f0 + box_p%cc(i_c, j_c+1, k_c, iv))
+!              fzz = 0.03125_dp * (box_p%cc(i_c, j_c, k_c-1, iv) - &
+!                   2 * f0 + box_p%cc(i_c, j_c, k_c+1, iv))
+!              f2 = fxx + fyy + fzz
 
-             box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - fy - fz + f2 + &
-                  box_c%cc(i_f,   j_f,   k_f,   ivc)
-             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - fy - fz + f2 + &
-                  box_c%cc(i_f+1, j_f,   k_f,   ivc)
-             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + fy - fz + f2 + &
-                  box_c%cc(i_f,   j_f+1, k_f,   ivc)
-             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + fy - fz + f2 + &
-                  box_c%cc(i_f+1, j_f+1, k_f,   ivc)
-             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - fy + fz + f2 + &
-                  box_c%cc(i_f,   j_f,   k_f+1, ivc)
-             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - fy + fz + f2 + &
-                  box_c%cc(i_f+1, j_f,   k_f+1, ivc)
-             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + fy + fz + f2 + &
-                  box_c%cc(i_f,   j_f+1, k_f+1, ivc)
-             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + fy + fz + f2 + &
-                  box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
-          end do
-       end do
-    end do
-#endif
-  end subroutine a$D_prolong_quadratic
+!              box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - fy - fz + f2 + &
+!                   box_c%cc(i_f,   j_f,   k_f,   ivc)
+!              box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - fy - fz + f2 + &
+!                   box_c%cc(i_f+1, j_f,   k_f,   ivc)
+!              box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + fy - fz + f2 + &
+!                   box_c%cc(i_f,   j_f+1, k_f,   ivc)
+!              box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + fy - fz + f2 + &
+!                   box_c%cc(i_f+1, j_f+1, k_f,   ivc)
+!              box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - fy + fz + f2 + &
+!                   box_c%cc(i_f,   j_f,   k_f+1, ivc)
+!              box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - fy + fz + f2 + &
+!                   box_c%cc(i_f+1, j_f,   k_f+1, ivc)
+!              box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + fy + fz + f2 + &
+!                   box_c%cc(i_f,   j_f+1, k_f+1, ivc)
+!              box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + fy + fz + f2 + &
+!                   box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
+!           end do
+!        end do
+!     end do
+! #endif
+!   end subroutine a$D_prolong_quadratic
 
 end module m_a$D_prolong

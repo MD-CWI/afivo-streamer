@@ -16,7 +16,7 @@ program random_refinement_$Dd
   integer, parameter   :: box_size     = 8
   integer, parameter   :: i_phi        = 1
   type(ref_info_t)     :: ref_info
-  real(dp)             :: dr
+  real(dp)             :: dr, sum_phi_t0, sum_phi
   character(len=40)    :: fname
   integer              :: count_rate,t_start,t_end
 
@@ -35,7 +35,8 @@ program random_refinement_$Dd
        dr, &           ! Distance between cells on base level
        cc_names = ["phi"])      ! Optional: names of cell-centered variables
 
-  call a$D_set_cc_methods(tree, 1, a$D_bc_dirichlet_zero)
+  call a$D_set_cc_methods(tree, 1, a$D_bc_dirichlet_zero, &
+       prolong=a$D_prolong_linear_cons)
 
   ! Set up geometry.
   ! Neighbors for the boxes are stored in nb_list
@@ -70,6 +71,8 @@ program random_refinement_$Dd
   ! cells near physical boundaries.
   call a$D_gc_tree(tree, i_phi, a$D_gc_interp, a$D_bc_dirichlet_zero)
 
+  call a$D_tree_sum_cc(tree, i_phi, sum_phi_t0)
+
   call system_clock(t_start, count_rate)
   boxes_used = 1
   do iter = 1, 15
@@ -90,6 +93,8 @@ program random_refinement_$Dd
      ! iteration process
      call a$D_adjust_refinement(tree, ref_routine, ref_info, ref_buffer=0)
 
+     call a$D_tree_sum_cc(tree, i_phi, sum_phi)
+     write(*, "(A,E10.2)") " conservation error: ", sum_phi - sum_phi_t0
      boxes_used = boxes_used + ref_info%n_add - ref_info%n_rm
      write(*,'(4(3x,A,1x,i6))') "# new     boxes", ref_info%n_add, &
                                 "# removed boxes", ref_info%n_rm,  &

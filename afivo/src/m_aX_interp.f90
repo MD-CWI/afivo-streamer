@@ -8,7 +8,8 @@ module m_a$D_interp
   implicit none
   private
 
-  public :: a$D_interp0, a$D_interp1
+  public :: a$D_interp0
+  public :: a$D_interp1
   public :: a$D_interp0_to_grid
 
 contains
@@ -22,33 +23,34 @@ contains
     integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
     real(dp)                :: vals(n_var)
     type(a$D_loc_t)         :: loc
-    
+
     loc = a$D_get_loc(tree, rr)
 
     if (loc%id == -1) then
        print *, "a$D_interp0 error, no box at ", rr
        stop
     end if
-    
+
 #if $D == 2
     vals = tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), ivs)
 #elif $D == 3
     vals = tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), loc%ix(3), ivs)
-#endif    
+#endif
   end function a$D_interp0
 
   !> Using linear interpolation to get a value at r
-  function a$D_interp1(tree, r, ivs, n_var) result(vals)
+  function a$D_interp1(tree, r, ivs, n_var, id_guess) result(vals)
     use m_a$D_utils, only: a$D_get_id_at
-    type(a$D_t), intent(in) :: tree !< Parent box
-    real(dp), intent(in)    :: r($D) !< Where to interpolate
-    integer, intent(in)     :: n_var     !< Number of variables
-    integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
-    real(dp)                :: vals(n_var)
-    integer                 :: i, iv, id, ix($D)
-    real(dp)                :: r_loc($D), dvec($D), ovec($D), w(DTIMES(2))
+    type(a$D_t), intent(in)       :: tree       !< Parent box
+    real(dp), intent(in)          :: r($D)      !< Where to interpolate
+    integer, intent(in)           :: n_var      !< Number of variables
+    integer, intent(in)           :: ivs(n_var) !< Variables to interpolate
+    integer, intent(in), optional :: id_guess   !< Guess for box id
+    real(dp)                      :: vals(n_var)
+    integer                       :: i, iv, id, ix($D)
+    real(dp)                      :: r_loc($D), dvec($D), ovec($D), w(DTIMES(2))
 
-    id = a$D_get_id_at(tree, r)
+    id = a$D_get_id_at(tree, r, id_guess)
 
     if (id <= af_no_box) then
        print *, "a$D_interp1: point outside domain", r
@@ -90,7 +92,7 @@ contains
        vals(i) = sum(w * tree%boxes(id)%cc(ix(1):ix(1)+1, &
             ix(2):ix(2)+1, ix(3):ix(3)+1, iv))
 #endif
-     end do
+    end do
   end function a$D_interp1
 
   !> Add 'amount' to the grid cell nearest to rr

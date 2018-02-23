@@ -17,12 +17,8 @@ module m_a$D_types
   integer, parameter :: a2_child_lowx_highy = 3
   integer, parameter :: a2_child_highx_highy = 4
 
-  ! Neighboring indices for each child
-  integer, parameter :: a2_child_neighbs(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
   ! Index offset for each child
   integer, parameter :: a2_child_dix(2, 4) = reshape([0,0,1,0,0,1,1,1], [2,4])
-  ! Reverse child index in each direction
-  integer, parameter :: a2_child_rev(4, 2) = reshape([2,1,4,3,3,4,1,2], [4,2])
   ! Children adjacent to a neighbor
   integer, parameter :: a2_child_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
   ! Neighbors adjacent to a child
@@ -69,17 +65,10 @@ module m_a$D_types
   integer, parameter :: a3_child_lowx_highy_highz = 7
   integer, parameter :: a3_child_highx_highy_highz = 8
 
-  ! Neighboring indices for each child
-  integer, parameter :: a3_child_neighbs(3, 8) = reshape( &
-       [1,3,5, 2,3,5, 1,4,5, 2,4,5, &
-       1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
   ! Index offset for each child
   integer, parameter :: a3_child_dix(3, 8) = reshape( &
        [0,0,0, 1,0,0, 0,1,0, 1,1,0, &
        0,0,1, 1,0,1, 0,1,1, 1,1,1], [3,8])
-  ! Reverse child index in each direction
-  integer, parameter :: a3_child_rev(8, 3) = reshape( &
-       [2,1,4,3,6,5,8,7, 3,4,1,2,7,8,5,6, 5,6,7,8,1,2,3,4], [8,3])
   ! Children adjacent to a neighbor
   integer, parameter :: a3_child_adj_nb(4, 6) = reshape( &
        [1,3,5,7, 2,4,6,8, 1,2,5,6, 3,4,7,8, 1,2,3,4, 5,6,7,8], [4,6])
@@ -131,6 +120,11 @@ module m_a$D_types
   ! Coordinate parallel to edge
   integer, parameter :: a3_edge_dim(12) = &
        [1,1,1,1, 2,2,2,2, 3,3,3,3]
+  ! Direction of edge
+  integer, parameter :: a3_edge_dir(3, 12) = reshape( &
+       [0,-1,-1, 0,1,-1, 0,-1,1, 0,1,1, &
+       -1,0,-1, 1,0,-1, -1,0,1, 1,0,1, &
+       -1,-1,0, 1,-1,0, -1,1,0, 1,1,0], [3, 12])
   ! Neighbors adjacent to edges
   integer, parameter :: a3_nb_adj_edge(2, 12) = reshape( &
        [3,5, 4,5, 3,6, 4,6, &
@@ -167,6 +161,12 @@ module m_a$D_types
      integer               :: children(a$D_num_children)
      !> index of neighbors in box list
      integer               :: neighbors(a$D_num_neighbors)
+     !> matrix with neighbors (including diagonal ones)
+#if $D == 2
+     integer               :: neighbor_mat(-1:1, -1:1)
+#elif $D == 3
+     integer               :: neighbor_mat(-1:1, -1:1, -1:1)
+#endif
      integer               :: n_cell    !< number of cells per dimension
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box
@@ -475,57 +475,6 @@ contains
     nb_ix         = ix
     nb_ix(nb_dim) = nb_ix(nb_dim) - a$D_neighb_high_pm(nb) * box%n_cell
   end function a$D_get_ix_on_neighb
-
-  !> Get diagonal neighbors. Returns the index of the neighbor if found,
-  !> otherwise the result nb_id <= af_no_box.
-  pure function a$D_diag_neighb_id(boxes, id, nbs) result(nb_id)
-    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
-    integer, intent(in)       :: id       !< Start index
-    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
-    integer                   :: i, j, k, nb, nb_id
-    integer                   :: nbs_perm(size(nbs))
-
-    if (size(nbs) == 0) then
-       nb_id = id
-    else
-       do i = 1, size(nbs)
-          nb_id = id
-
-          ! Check if path exists starting from nbs(i)
-          do j = 1, size(nbs)
-             ! k starts at i and runs over the neighbors
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
-          end do
-
-          if (nb_id > af_no_box) exit ! Found it
-       end do
-    end if
-
-    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
-    ! covers all paths
-    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
-       nbs_perm = nbs([2,1,3])
-
-       do i = 1, size(nbs)
-          nb_id = id
-
-          do j = 1, size(nbs)
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
-          end do
-
-          if (nb_id > af_no_box) exit ! Found it
-       end do
-    end if
-
-  end function a$D_diag_neighb_id
 
   !> Given a list of neighbor directions, compute the index offset
   pure function a$D_neighb_offset(nbs) result(dix)
