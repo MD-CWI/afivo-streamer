@@ -51,6 +51,21 @@ program streamer_$Dd
   ! This routine always needs to be called when using multigrid
   call mg$D_init_mg(mg)
 
+  call a$D_set_cc_methods(tree, i_electron, &
+       a$D_bc_neumann_zero, a$D_gc_interp_lim, a$D_prolong_limit)
+  call a$D_set_cc_methods(tree, i_pos_ion, &
+       a$D_bc_neumann_zero, a$D_gc_interp_lim, a$D_prolong_limit)
+  call a$D_set_cc_methods(tree, i_phi, &
+       mg%sides_bc, mg%sides_rb)
+  if (photoi_enabled) then
+     call a$D_set_cc_methods(tree, i_photo, &
+       photoi_helmh_bc, a$D_gc_interp)
+  end if
+  if (ST_output_src_term) then
+     call a$D_set_cc_methods(tree, i_src, &
+       a$D_bc_neumann_zero, a$D_gc_interp)
+  end if
+
   output_cnt      = 0         ! Number of output files written
   ST_time         = 0         ! Simulation time (all times are in s)
 
@@ -151,18 +166,17 @@ program streamer_$Dd
 
      if (write_out) then
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, [i_electron, i_pos_ion])
 
         if (ST_output_src_term) then
            call a$D_restrict_tree(tree, i_src)
-           call a$D_gc_tree(tree, i_src, a$D_gc_interp, a$D_bc_neumann_zero)
+           call a$D_gc_tree(tree, i_src)
         end if
 
         if (photoi_enabled) then
            call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
            call a$D_restrict_tree(tree, i_photo)
-           call a$D_gc_tree(tree, i_photo, a$D_gc_interp, a$D_bc_neumann_zero)
+           call a$D_gc_tree(tree, i_photo)
         end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
@@ -205,20 +219,16 @@ program streamer_$Dd
            ! Have to set src term on coarse grids as well, and fill ghost cells
            ! before prolongation
            call a$D_restrict_tree(tree, i_src)
-           call a$D_gc_tree(tree, i_src, a$D_gc_interp, a$D_bc_neumann_zero)
+           call a$D_gc_tree(tree, i_src)
         end if
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, [i_electron, i_pos_ion])
 
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
-           ! For boxes which just have been refined, set data on their children
-           call prolong_to_new_boxes(tree, ref_info)
-
            ! Compute the field on the new mesh
            call field_compute(tree, mg, .true.)
         end if
@@ -584,54 +594,6 @@ contains
 
     end do; CLOSE_DO
   end subroutine update_solution
-
-  !> For each box that gets refined, set data on its children using this routine
-  subroutine prolong_to_new_boxes(tree, ref_info)
-    use m_a$D_prolong
-    type(a$D_t), intent(inout)    :: tree
-    type(ref_info_t), intent(in) :: ref_info
-    integer                      :: lvl, i, id, p_id
-
-    !$omp parallel private(lvl, i, id, p_id)
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          p_id = tree%boxes(id)%parent
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
-          if (photoi_enabled) then
-             call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
-          end if
-          if (ST_output_src_term) then
-             call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_src)
-          end if
-       end do
-       !$omp end do
-
-       !$omp do
-       do i = 1, size(ref_info%lvls(lvl)%add)
-          id = ref_info%lvls(lvl)%add(i)
-          call a$D_gc_box(tree%boxes, id, i_electron, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero)
-          call a$D_gc_box(tree%boxes, id, i_pos_ion, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero)
-          call a$D_gc_box(tree%boxes, id, i_phi, &
-               mg%sides_rb, mg%sides_bc)
-          if (photoi_enabled) then
-             call a$D_gc_box(tree%boxes, id, i_photo, &
-                  a$D_gc_interp, photoi_helmh_bc)
-          end if
-          if (ST_output_src_term) then
-             call a$D_gc_box(tree%boxes, id, i_src, &
-                  a$D_gc_interp, a$D_bc_neumann_zero)
-          end if
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
-  end subroutine prolong_to_new_boxes
 
   subroutine write_log_file(tree, filename, out_cnt, dir)
     type(a$D_t), intent(in)      :: tree
