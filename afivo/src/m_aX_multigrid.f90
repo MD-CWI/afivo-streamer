@@ -251,7 +251,7 @@ contains
              id = tree%lvls(lvl)%ids(i)
              call residual_box(tree%boxes(id), mg)
           end do
-          !$omd end do nowait
+          !$omp end do nowait
        end do
        !$omp end parallel
     end if
