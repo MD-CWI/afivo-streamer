@@ -45,7 +45,7 @@ contains
     if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
 
     if (photoi_enabled) then
-       i_photo = ST_add_cc_variable("photo", .true.)
+       i_photo = ST_add_cc_variable("photo", .not. ST_small_output)
     end if
 
     select case (photoi_method)

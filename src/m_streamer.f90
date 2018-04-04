@@ -41,6 +41,9 @@ module m_streamer
   ! Indices of variables to be included in output
   integer, allocatable :: vars_for_output(:)
 
+  ! If true, only include n_e, n_i and |E| in output files
+  logical :: ST_small_output = .false.
+
   ! ** Indices of face-centered variables **
   integer, protected :: n_var_face   = 0 ! Number of variables
   integer, protected :: flux_elec    = -1 ! Electron flux
@@ -274,13 +277,16 @@ contains
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
 
+    call CFG_add_get(cfg, "small_output", ST_small_output, &
+         "If true, only include n_e, n_i and |E| in output files")
+
     i_electron = ST_add_cc_variable("electron", .true.)
     i_pos_ion = ST_add_cc_variable("pos_ion", .true.)
     i_electron_old = ST_add_cc_variable("electron_old", .false.)
     i_pos_ion_old = ST_add_cc_variable("pos_ion_old", .false.)
-    i_phi = ST_add_cc_variable("phi", .true.)
+    i_phi = ST_add_cc_variable("phi", .not. ST_small_output)
     i_electric_fld = ST_add_cc_variable("electric_fld", .true.)
-    i_rhs = ST_add_cc_variable("rhs", .true.)
+    i_rhs = ST_add_cc_variable("rhs", .not. ST_small_output)
 
     flux_elec = ST_add_fc_variable()
     electric_fld = ST_add_fc_variable()
