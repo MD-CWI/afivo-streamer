@@ -16,7 +16,7 @@ program streamer_$Dd
   integer                :: i, it
   character(len=ST_slen) :: fname
   logical                :: write_out
-  real(dp)               :: dt_prev
+  real(dp)               :: dt_prev, photoi_prev_time
   type(CFG_t)            :: cfg  ! The configuration for the simulation
   type(a$D_t)            :: tree ! This contains the full grid information
   type(mg$D_t)           :: mg   ! Multigrid option struct
@@ -66,8 +66,9 @@ program streamer_$Dd
        a$D_bc_neumann_zero, a$D_gc_interp)
   end if
 
-  output_cnt      = 0         ! Number of output files written
-  ST_time         = 0         ! Simulation time (all times are in s)
+  output_cnt       = 0 ! Number of output files written
+  ST_time          = 0 ! Simulation time (all times are in s)
+  photoi_prev_time = 0 ! Time of last photoionization computation
 
   ! Set up the initial conditions
   do
@@ -115,7 +116,8 @@ program streamer_$Dd
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-        call photoi_set_src(tree, ST_dt)
+        call photoi_set_src(tree, ST_time - photoi_prev_time)
+        photoi_prev_time = ST_time
      end if
 
      ! Copy previous solution
