@@ -305,12 +305,13 @@ module m_a$D_types
      end subroutine a$D_subr_prolong
 
      !> Subroutine for restriction
-     subroutine a$D_subr_restrict(box_c, box_p, iv, iv_to)
+     subroutine a$D_subr_restrict(box_c, box_p, iv, iv_to, use_geometry)
        import
        type(box$D_t), intent(in)     :: box_c !< Child box to restrict
        type(box$D_t), intent(inout)  :: box_p !< Parent box to restrict to
        integer, intent(in)           :: iv    !< Variable to restrict
        integer, intent(in), optional :: iv_to !< Destination (if /= iv)
+       logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
      end subroutine a$D_subr_restrict
   end interface
 
