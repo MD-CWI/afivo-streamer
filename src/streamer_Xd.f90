@@ -163,7 +163,8 @@ program streamer_$Dd
 
      if (ST_dt < ST_dt_min) then
         print *, "ST_dt getting too small, instability?", ST_dt
-        error stop
+        write_out = .true.
+        output_cnt = output_cnt + 1
      end if
 
      if (write_out) then
@@ -211,6 +212,8 @@ program streamer_$Dd
                 n_points=ST_lineout_npoints, dir=ST_output_dir)
         end if
      end if
+
+     if (ST_dt < ST_dt_min) error stop "dt too small"
 
      if (mod(it, ST_refine_per_steps) == 0) then
         ! Restrict electron and ion densities before refinement
@@ -551,6 +554,14 @@ contains
 
        ! Add flux and source term
        box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
+
+       ! Limit electron density (for efficiency, and to resolve some
+       ! instabilities)
+       src = box%cc(IJK, i_electron) - ST_limit_elec_dens
+       if (src > 0) then
+          box%cc(IJK, i_electron) = box%cc(IJK, i_electron) - src
+          box%cc(IJK, i_pos_ion) = box%cc(IJK, i_pos_ion) - src
+       end if
 
        ! Possible determine new time step restriction
        if (i_step == 2) then

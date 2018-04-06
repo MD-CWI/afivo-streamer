@@ -94,7 +94,7 @@ module m_streamer
   integer, protected :: ST_refine_per_steps = 2
 
   ! The grid spacing will always be larger than this value
-  real(dp), protected :: ST_refine_min_dx = 1.0e-6_dp
+  real(dp), protected :: ST_refine_min_dx = 1.0e-7_dp
 
   ! The grid spacing will always be smaller than this value
   real(dp), protected :: ST_refine_max_dx = 1.0e-3_dp
@@ -134,6 +134,8 @@ module m_streamer
 
   ! Current time step
   real(dp) :: ST_dt
+
+  real(dp), protected :: ST_limit_elec_dens = 1e100_dp
 
   ! Number of time step restrictions
   integer, parameter :: ST_dt_num_cond = 3
@@ -325,6 +327,9 @@ contains
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
+
+    call CFG_add_get(cfg, "limit_elec_dens", ST_limit_elec_dens, &
+         "Limit electron densities to this value (1/m3)")
 
     call CFG_add_get(cfg, "dt_output", ST_dt_output, &
          "The timestep for writing output (s)")
