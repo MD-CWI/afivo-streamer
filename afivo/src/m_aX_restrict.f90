@@ -61,13 +61,15 @@ contains
   end subroutine a$D_restrict_tree
 
   !> Restriction of child box (box_c) to its parent (box_p)
-  subroutine a$D_restrict_box(box_c, box_p, iv, iv_to)
-    type(box$D_t), intent(in)      :: box_c         !< Child box to restrict
-    type(box$D_t), intent(inout)   :: box_p         !< Parent box to restrict to
-    integer, intent(in)           :: iv            !< Variable to restrict
-    integer, intent(in), optional :: iv_to         !< Destination (if /= iv)
+  subroutine a$D_restrict_box(box_c, box_p, iv, iv_to, use_geometry)
+    type(box$D_t), intent(in)     :: box_c !< Child box to restrict
+    type(box$D_t), intent(inout)  :: box_p !< Parent box to restrict to
+    integer, intent(in)           :: iv     !< Variable to restrict
+    integer, intent(in), optional :: iv_to  !< Destination (if /= iv)
+    logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
     integer                       :: i, j, i_f, j_f, i_c, j_c, i_dest
     integer                       :: hnc, ix_offset($D)
+    logical                       :: use_geom
 #if $D == 2
     real(dp)                      :: w1, w2
 #elif $D == 3
@@ -83,8 +85,14 @@ contains
        i_dest = iv
     end if
 
+    if (present(use_geometry)) then
+       use_geom = use_geometry
+    else
+       use_geom = .true.
+    end if
+
 #if $D == 2
-    if (box_p%coord_t == af_cyl) then
+    if (box_p%coord_t == af_cyl .and. use_geom) then
        do j = 1, hnc
           j_c = ix_offset(2) + j
           j_f = 2 * j - 1

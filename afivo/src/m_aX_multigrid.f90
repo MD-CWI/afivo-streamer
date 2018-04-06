@@ -862,7 +862,9 @@ contains
     integer, intent(in)           :: iv            !< Variable to restrict
     type(mg$D_t), intent(in)       :: mg !< Multigrid options
 
-    call a$D_restrict_box(box_c, box_p, iv)
+    ! Don't use geometry for restriction, since this is inconsistent with the
+    ! filling of ghost cells near refinement boundaries
+    call a$D_restrict_box(box_c, box_p, iv, use_geometry=.false.)
   end subroutine mg$D_box_rstr_lpl
 
   !> Perform Gauss-Seidel relaxation on a box. Epsilon can have a jump at cell

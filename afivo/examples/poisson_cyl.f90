@@ -33,7 +33,7 @@ program poisson_cyl
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
+       reshape([0.0_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
