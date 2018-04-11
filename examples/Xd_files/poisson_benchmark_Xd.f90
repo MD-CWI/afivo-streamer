@@ -108,13 +108,19 @@ program poisson_benchmark_$Dd
   ! and i_tmp. These variables will be initialized at the first call of mg$D_fas_fmg
   call mg$D_init_mg(mg)
 
+  ! A first warm-up call
+  call mg$D_fas_fmg(tree, mg, .false., .false.)
+
   ! Do the actual benchmarking
   call system_clock(t_start, count_rate)
   do mg_iter = 1, n_iterations
      ! Perform a FAS-FMG cycle (full approximation scheme, full multigrid). The
      ! third argument controls whether the residual is stored in i_tmp. The
      ! fourth argument controls whether to improve the current solution.
-     call mg$D_fas_fmg(tree, mg, .true., mg_iter>1)
+     call mg$D_fas_fmg(tree, mg, .false., mg_iter>1)
+
+     ! This uses a V-cycle instead of an FMG-cycle
+     ! call mg$D_fas_vcycle(tree, mg, .false.)
 
      ! If uncommented, this writes Silo output files containing the
      ! cell-centered values of the leaves of the tree
@@ -131,8 +137,8 @@ program poisson_benchmark_$Dd
 
   ! This writes a Silo output file containing the cell-centered values of the
   ! leaves of the tree (the boxes not covered by refinement).
-  fname = "poisson_benchmark_$Dd"
-  call a$D_write_silo(tree, trim(fname), dir="output")
+  ! fname = "poisson_benchmark_$Dd"
+  ! call a$D_write_silo(tree, trim(fname), dir="output")
 
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
