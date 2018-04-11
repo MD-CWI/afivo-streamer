@@ -388,6 +388,28 @@ contains
     n_cells = a$D_num_leaves_used(tree) * tree%n_cell**$D
   end function a$D_num_cells_used
 
+  pure function a$D_total_volume(tree) result(vol)
+    type(a$D_t), intent(in) :: tree
+    real(dp)                :: vol
+    integer                 :: i, id
+    real(dp)                :: r0, r1, box_len
+    real(dp), parameter     :: pi = acos(-1.0_dp)
+
+    box_len = tree%n_cell * tree%dr_base
+
+    if (tree%coord_t == af_cyl) then
+       vol     = 0.0_dp
+       do i = 1, size(tree%lvls(1)%ids)
+          id  = tree%lvls(1)%ids(i)
+          r0  = tree%boxes(id)%r_min(1)
+          r1  = r0 + box_len
+          vol = vol + pi * (r1**2 - r0**2) * box_len
+       end do
+    else
+       vol = size(tree%lvls(1)%ids) * (box_len)**$D
+    end if
+  end function a$D_total_volume
+
   !> Return .true. if a box has children
   elemental logical function a$D_has_children(box)
     type(box$D_t), intent(in) :: box
