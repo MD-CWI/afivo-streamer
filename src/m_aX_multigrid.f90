@@ -1,3 +1,4 @@
+#include "../src/cpp_macros_$Dd.h"
 !> This module contains the geometric multigrid routines that come with Afivo
 module m_a$D_multigrid
   use m_a$D_types
@@ -28,6 +29,7 @@ module m_a$D_multigrid
 
      logical :: initialized = .false. !< Whether the structure has been initialized
      logical :: use_corners = .false. !< Does the smoother use corner ghost cells
+     logical :: subtract_mean = .false. !< Whether to subtract mean from solution
 
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(a$D_subr_bc), pointer, nopass   :: sides_bc => null()
@@ -206,11 +208,13 @@ contains
   !> cells on output
   subroutine mg$D_fas_vcycle(tree, mg, set_residual, highest_lvl)
     use m_a$D_ghostcell, only: a$D_gc_ids
+    use m_a$D_utils, only: a$D_tree_sum_cc
     type(a$D_t), intent(inout)    :: tree         !< Tree to do multigrid on
     type(mg$D_t), intent(in)      :: mg           !< Multigrid options
     logical, intent(in)           :: set_residual !< If true, store residual in i_tmp
     integer, intent(in), optional :: highest_lvl  !< Maximum level for V-cycle
     integer                       :: lvl, min_lvl, i, id, max_lvl
+    real(dp)                      :: sum_phi, mean_phi
 
     call check_mg(mg)           ! Check whether mg options are set
     min_lvl = lbound(tree%lvls, 1)
@@ -255,6 +259,25 @@ contains
        end do
        !$omp end parallel
     end if
+
+    ! Subtract the mean of phi, for example when doing a fully periodic
+    ! simulation. Note that the integrated r.h.s. term should also be zero then.
+    if (mg%subtract_mean) then
+       call a$D_tree_sum_cc(tree, mg%i_phi, sum_phi)
+       mean_phi = sum_phi / a$D_total_volume(tree)
+       !$omp parallel private(lvl, i, id)
+       do lvl = min_lvl, max_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             id = tree%lvls(lvl)%ids(i)
+             tree%boxes(id)%cc(DTIMES(:), mg%i_phi) = &
+                  tree%boxes(id)%cc(DTIMES(:), mg%i_phi) - mean_phi
+          end do
+          !$omp end do nowait
+       end do
+       !$omp end parallel
+    end if
+
   end subroutine mg$D_fas_vcycle
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
