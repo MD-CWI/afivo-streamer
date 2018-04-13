@@ -14,7 +14,8 @@ implicit_diffusion_3d simple_streamer_2d computational_domain_2d		\
 computational_domain_3d boundary_conditions_2d boundary_conditions_3d		\
 poisson_neumann_2d poisson_neumann_3d poisson_cyl_analytic particles_to_grid_2d	\
 particles_to_grid_3d dielectric_2d dielectric_3d ghostcell_benchmark_2d		\
-ghostcell_benchmark_3d poisson_helmholtz_2d poisson_helmholtz_3d
+ghostcell_benchmark_3d poisson_helmholtz_2d poisson_helmholtz_3d		\
+particles_gravity_2d particles_gravity_3d
 
 .PHONY: all clean
 
