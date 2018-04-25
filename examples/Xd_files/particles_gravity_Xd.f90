@@ -136,8 +136,8 @@ program particles_gravity_$Dd
      dt      = min(1.1 * dt_prev, dt_output, &
           0.5_dp * a$D_min_dr(tree) / max_vel)
      dt_prev = dt
-     ! call compute_total_energy(tree, coordinates, velocities, &
-     !      ids, n_particles)
+     call compute_total_energy(tree, coordinates, velocities, &
+          ids, n_particles)
 
      if (modulo(n, 5) == 0) then
         call a$D_adjust_refinement(tree, refine_routine, refine_info, 2)
@@ -174,7 +174,7 @@ contains
     do n = 1, n_particles
        phi = a$D_interp1(tree, x(:, n), [i_phi], 1, ids(n))
        sum_ken = sum_ken + 0.5_dp * sum(v(:, n)**2)
-       sum_phi = sum_phi + phi(1)
+       sum_phi = sum_phi + 0.5_dp * phi(1)
     end do
     print *, "sum energy", sum_ken, sum_phi, sum_ken+sum_phi
   end subroutine compute_total_energy
