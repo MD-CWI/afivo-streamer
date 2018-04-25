@@ -9,7 +9,7 @@ program particles_gravity_$Dd
 
   integer            :: n
   integer, parameter :: box_size    = 8
-  integer, parameter :: n_particles = 100*1000*1000
+  integer, parameter :: n_particles = 100*1000
   integer, parameter :: particles_per_cell = 100
   integer, parameter :: max_refinement_lvl = 7
   integer, parameter :: i_phi       = 1
