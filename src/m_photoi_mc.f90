@@ -308,6 +308,8 @@ contains
        stop
     end if
     !$omp end parallel
+
+    call prng%update_seed(rng)
   end subroutine phmc_do_absorption
 
   !> Set the source term due to photoionization for 2D models. At most
@@ -534,6 +536,8 @@ contains
        !$omp end do
     end do
     !$omp end parallel
+
+    call prng%update_seed(rng)
   end subroutine phmc_set_src_2d
 
   subroutine phmc_set_src_3d(tree, rng, &
@@ -718,6 +722,8 @@ contains
        !$omp end do
     end do
     !$omp end parallel
+
+    call prng%update_seed(rng)
   end subroutine phmc_set_src_3d
 
 end module m_photoi_mc
