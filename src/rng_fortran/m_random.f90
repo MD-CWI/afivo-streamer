@@ -18,11 +18,12 @@ module m_random
   type rng_t
      !> The rng state (always use your own seed)
      integer(i8), private       :: s(2) = [123456789_i8, 987654321_i8]
+     integer(i8), private       :: separator(32) ! Separate cache lines (parallel use)
    contains
      procedure, non_overridable :: set_seed    ! Seed the generator
      procedure, non_overridable :: jump        ! Jump function (see below)
-     procedure, non_overridable :: int4        ! 4-byte random integer
-     procedure, non_overridable :: int8        ! 8-byte random integer
+     procedure, non_overridable :: int_4       ! 4-byte random integer
+     procedure, non_overridable :: int_8       ! 8-byte random integer
      procedure, non_overridable :: unif_01     ! Uniform (0,1] real
      procedure, non_overridable :: two_normals ! Two normal(0,1) samples
      procedure, non_overridable :: poisson     ! Sample from Poisson-dist.
@@ -36,6 +37,7 @@ module m_random
      type(rng_t), allocatable :: rngs(:)
    contains
      procedure, non_overridable :: init_parallel
+     procedure, non_overridable :: update_seed
   end type prng_t
 
   public :: rng_t
@@ -59,12 +61,29 @@ contains
     end do
   end subroutine init_parallel
 
+  !> Parallel RNG instances are often used temporarily. This routine can
+  !> afterwards be used to update the seed of the user's sequential RNG.
+  subroutine update_seed(self, rng)
+    class(prng_t), intent(inout) :: self
+    type(rng_t), intent(inout)   :: rng
+    integer                      :: n
+
+    do n = 1, size(self%rngs)
+      ! Perform exclusive-or with each parallel rng
+      rng%s(1) = ieor(rng%s(1), self%rngs(n)%s(1))
+      rng%s(2) = ieor(rng%s(2), self%rngs(n)%s(2))
+    end do
+  end subroutine update_seed
+
   !> Set a seed for the rng
   subroutine set_seed(self, the_seed)
     class(rng_t), intent(inout) :: self
     integer(i8), intent(in)     :: the_seed(2)
 
     self%s = the_seed
+
+    ! Simulate calls to next() to improve randomness of first number
+    call self%jump()
   end subroutine set_seed
 
   ! This is the jump function for the generator. It is equivalent
@@ -93,16 +112,16 @@ contains
   end subroutine jump
 
   !> Return 4-byte integer
-  integer(i4) function int4(self)
+  integer(i4) function int_4(self)
     class(rng_t), intent(inout) :: self
-    int4 = int(self%next(), i4)
-  end function int4
+    int_4 = int(self%next(), i4)
+  end function int_4
 
   !> Return 8-byte integer
-  integer(i8) function int8(self)
+  integer(i8) function int_8(self)
     class(rng_t), intent(inout) :: self
-    int8 = self%next()
-  end function int8
+    int_8 = self%next()
+  end function int_8
 
   !> Get a uniform [0,1) random real (double precision)
   real(dp) function unif_01(self)
