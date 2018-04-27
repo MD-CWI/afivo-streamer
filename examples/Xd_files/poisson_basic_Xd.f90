@@ -120,10 +120,10 @@ program poisson_basic_$Dd
           maxval(abs(anal_err))
 
      !> [write_output]
-     ! This writes a VTK output file containing the cell-centered values of the
+     ! This writes a Silo output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      write(fname, "(A,I0)") "poisson_basic_$Dd_", mg_iter
-     call a$D_write_vtk(tree, trim(fname), dir="output")
+     call a$D_write_silo(tree, trim(fname), dir="output")
      !> [write_output]
   end do
   call system_clock(t_end, count_rate)
