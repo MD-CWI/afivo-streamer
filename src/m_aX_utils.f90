@@ -753,10 +753,10 @@ contains
 
     nc = box%n_cell
 #if $D == 2
-    ix = maxloc(box%cc(1:nc, 1:nc, iv))
+    ix = minloc(box%cc(1:nc, 1:nc, iv))
     val = box%cc(ix(1), ix(2), iv)
 #elif $D == 3
-    ix = maxloc(box%cc(1:nc, 1:nc, 1:nc, iv))
+    ix = minloc(box%cc(1:nc, 1:nc, 1:nc, iv))
     val = box%cc(ix(1), ix(2), ix(3), iv)
 #endif
   end subroutine box_min_cc
