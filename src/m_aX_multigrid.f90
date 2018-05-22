@@ -281,11 +281,160 @@ contains
   end subroutine mg$D_fas_vcycle
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
-  !>
+  subroutine mg$D_sides_rb(boxes, id, nb, iv)
+    use m_a$D_ghostcell, only: a$D_gc_prolong_copy
+    type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)          :: id       !< Id of box
+    integer, intent(in)          :: nb       !< Ghost cell direction
+    integer, intent(in)          :: iv       !< Ghost cell variable
+    integer                      :: nc, ix, dix, i, di, j, dj, co($D)
+    integer                      :: hnc, p_id, p_nb_id
+    real(dp)                     :: grad($D-1)
+#if $D == 2
+    real(dp)                     :: tmp(0:boxes(id)%n_cell/2+1)
+    real(dp)                     :: gc(boxes(id)%n_cell)
+#elif $D == 3
+    integer                      :: k, dk
+    real(dp)                     :: tmp(0:boxes(id)%n_cell/2+1, 0:boxes(id)%n_cell/2+1)
+    real(dp)                     :: gc(boxes(id)%n_cell, boxes(id)%n_cell)
+#endif
+
+    nc = boxes(id)%n_cell
+    hnc = nc/2
+
+    p_id = boxes(id)%parent
+    p_nb_id = boxes(p_id)%neighbors(nb)
+    co = a$D_get_child_offset(boxes(id))
+
+    associate(box => boxes(p_nb_id))
+      ! First fill a temporary array with data next to the fine grid
+      select case (nb)
+#if $D == 2
+      case (a$D_neighb_lowx)
+         tmp = box%cc(nc, co(2):co(2)+hnc+1, iv)
+      case (a$D_neighb_highx)
+         tmp = box%cc(1, co(2):co(2)+hnc+1, iv)
+      case (a$D_neighb_lowy)
+         tmp = box%cc(co(1):co(1)+hnc+1, nc, iv)
+      case (a$D_neighb_highy)
+         tmp = box%cc(co(1):co(1)+hnc+1, 1, iv)
+#elif $D == 3
+      case (a$D_neighb_lowx)
+         tmp = box%cc(nc, co(2):co(2)+hnc+1, co(3):co(3)+hnc+1, iv)
+      case (a$D_neighb_highx)
+         tmp = box%cc(1, co(2):co(2)+hnc+1, co(3):co(3)+hnc+1, iv)
+      case (a$D_neighb_lowy)
+         tmp = box%cc(co(1):co(1)+hnc+1, nc, co(3):co(3)+hnc+1, iv)
+      case (a$D_neighb_highy)
+         tmp = box%cc(co(1):co(1)+hnc+1, 1, co(3):co(3)+hnc+1, iv)
+      case (a$D_neighb_lowz)
+         tmp = box%cc(co(1):co(1)+hnc+1, co(2):co(2)+hnc+1, nc, iv)
+      case (a$D_neighb_highz)
+         tmp = box%cc(co(1):co(1)+hnc+1, co(2):co(2)+hnc+1, 1, iv)
+#endif
+      end select
+    end associate
+
+    ! Now interpolate the coarse grid data to obtain values 'straight' next to
+    ! the fine grid points
+#if $D == 2
+    do i = 1, hnc
+       grad(1) = 0.125_dp * (tmp(i+1) - tmp(i-1))
+       gc(2*i-1) = tmp(i) - grad(1)
+       gc(2*i) = tmp(i) + grad(1)
+    end do
+#elif $D == 3
+    do j = 1, hnc
+       do i = 1, hnc
+          grad(1)          = 0.125_dp * (tmp(i+1, j) - tmp(i-1, j))
+          grad(2)          = 0.125_dp * (tmp(i, j+1) - tmp(i, j-1))
+          gc(2*i-1, 2*j-1) = tmp(i, j) - grad(1) - grad(2)
+          gc(2*i, 2*j-1)   = tmp(i, j) + grad(1) - grad(2)
+          gc(2*i-1, 2*j)   = tmp(i, j) - grad(1) + grad(2)
+          gc(2*i, 2*j)     = tmp(i, j) + grad(1) + grad(2)
+       end do
+    end do
+#endif
+
+    if (a$D_neighb_low(nb)) then
+       ix = 1
+       dix = 1
+    else
+       ix = nc
+       dix = -1
+    end if
+
+    select case (a$D_neighb_dim(nb))
+#if $D == 2
+    case (1)
+       i = ix
+       di = dix
+       do j = 1, nc
+          dj = -1 + 2 * iand(j, 1)
+          boxes(id)%cc(i-di, j, iv) = 0.5_dp * gc(j) &
+               + 0.75_dp * boxes(id)%cc(i, j, iv) &
+               - 0.25_dp * boxes(id)%cc(i+di, j, iv)
+       end do
+    case (2)
+       j = ix
+       dj = dix
+       do i = 1, nc
+          di = -1 + 2 * iand(i, 1)
+          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * gc(i) &
+               + 0.75_dp * boxes(id)%cc(i, j, iv) &
+               - 0.25_dp * boxes(id)%cc(i, j+dj, iv)
+       end do
+#elif $D == 3
+    case (1)
+       i = ix
+       di = dix
+       do k = 1, nc
+          dk = -1 + 2 * iand(k, 1)
+          do j = 1, nc
+             dj = -1 + 2 * iand(j, 1)
+             boxes(id)%cc(i-di, j, k, iv) = &
+                  0.5_dp * gc(j, k) + &
+                  0.75_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * boxes(id)%cc(i+di, j, k, iv)
+          end do
+       end do
+    case (2)
+       j = ix
+       dj = dix
+       do k = 1, nc
+          dk = -1 + 2 * iand(k, 1)
+          do i = 1, nc
+             di = -1 + 2 * iand(i, 1)
+             boxes(id)%cc(i, j-dj, k, iv) = &
+                  0.5_dp * gc(i, k) + &
+                  0.75_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * boxes(id)%cc(i, j+dj, k, iv)
+          end do
+       end do
+    case (3)
+       k = ix
+       dk = dix
+       do j = 1, nc
+          dj = -1 + 2 * iand(j, 1)
+          do i = 1, nc
+             di = -1 + 2 * iand(i, 1)
+             boxes(id)%cc(i, j, k-dk, iv) = &
+                  0.5_dp * gc(i, j) + &
+                  0.75_dp * boxes(id)%cc(i, j, k, iv) - &
+                  0.25_dp * boxes(id)%cc(i, j, k+dk, iv)
+          end do
+       end do
+#endif
+    end select
+
+  end subroutine mg$D_sides_rb
+
+  !> Fill ghost cells near refinement boundaries which preserves diffusive
+  !> fluxes. This routine does not do interpolation of coarse grid values.
   !> Basically, we extrapolate from the fine cells to a corner point, and then
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
-  subroutine mg$D_sides_rb(boxes, id, nb, iv)
+  subroutine mg$D_sides_rb_old(boxes, id, nb, iv)
     use m_a$D_ghostcell, only: a$D_gc_prolong_copy
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
@@ -429,7 +578,7 @@ contains
 #endif
     end select
 
-  end subroutine mg$D_sides_rb
+  end subroutine mg$D_sides_rb_old
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
   subroutine correct_children(boxes, ids, mg)
