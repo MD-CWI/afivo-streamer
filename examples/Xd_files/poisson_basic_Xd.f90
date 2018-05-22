@@ -12,11 +12,13 @@ program poisson_basic_$Dd
   integer, parameter :: box_size = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 10
-  integer, parameter :: n_var_cell = 4
+  integer, parameter :: n_var_cell = 6
   integer, parameter :: i_phi = 1
   integer, parameter :: i_rhs = 2
   integer, parameter :: i_err = 3
   integer, parameter :: i_tmp = 4
+  integer, parameter :: i_gradx = 5
+  integer, parameter :: i_egradx = 6
 
   type(a$D_t)        :: tree
   type(ref_info_t)   :: refine_info
@@ -52,7 +54,7 @@ program poisson_basic_$Dd
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
        coarsen_to=2, & ! Add coarsened levels for multigrid
-       cc_names=["phi", "rhs", "err", "tmp"]) ! Variable names
+       cc_names=["phi", "rhs", "err", "tmp", "Dx ", "eDx"]) ! Variable names
   !> [a2_init]
 
   !> [a2_set_base]
@@ -171,7 +173,7 @@ contains
   subroutine set_initial_condition(box)
     type(box$D_t), intent(inout) :: box
     integer                     :: IJK, nc
-    real(dp)                    :: rr($D)
+    real(dp)                    :: rr($D), grad($D)
 
     nc = box%n_cell
 
@@ -181,6 +183,8 @@ contains
 
        ! And set the rhs values
        box%cc(IJK, i_rhs) = gauss_laplacian(gs, rr)
+       call gauss_gradient(gs, rr, grad)
+       box%cc(IJK, i_gradx) = grad(1)
     end do; CLOSE_DO
   end subroutine set_initial_condition
   !> [set_initial_condition]
@@ -190,12 +194,23 @@ contains
   subroutine set_error(box)
     type(box$D_t), intent(inout) :: box
     integer                     :: IJK, nc
-    real(dp)                    :: rr($D)
+    real(dp)                    :: rr($D), dx, gradx
 
     nc = box%n_cell
+    dx = box%dr
+
     do KJI_DO(1,nc)
        rr = a$D_r_cc(box, [IJK])
        box%cc(IJK, i_err) = box%cc(IJK, i_phi) - gauss_value(gs, rr)
+#if $D == 2
+       gradx = 0.5_dp * (box%cc(i+1, j, i_phi) - &
+            box%cc(i-1, j, i_phi)) / dx
+#elif $D == 3
+       gradx = 0.5_dp * (box%cc(i+1, j, k, i_phi) - &
+            box%cc(i-1, j, k, i_phi)) / dx
+#endif
+       box%cc(IJK, i_egradx) = gradx - box%cc(IJK, i_gradx)
+
     end do; CLOSE_DO
   end subroutine set_error
   !> [set_error]
