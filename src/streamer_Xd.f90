@@ -9,6 +9,10 @@ program streamer_$Dd
   use m_photoi_$Dd
   use m_flux_schemes_$Dd
   use m_units_constants
+  use m_DI_restrict_$Dd
+  use m_DI_prolong_$Dd
+  use m_DI_ghostcell_$Dd
+
 
   implicit none
 
@@ -50,9 +54,7 @@ program streamer_$Dd
   mg%i_phi     = i_phi
   mg%i_tmp     = i_electric_fld
   mg%i_rhs     = i_rhs
-  mg%i_eps     = i_eps
-  mg%sigma_rhs = sigma_rhs
-            
+  mg%i_eps     = i_eps            
   
 
   ! This automatically handles cylindrical symmetry
@@ -65,7 +67,6 @@ program streamer_$Dd
 
   output_cnt      = 0         ! Number of output files written
   ST_time         = 0         ! Simulation time (all times are in s)
-  !med = a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp)
   
 
   ! Set up the initial conditions
@@ -151,8 +152,9 @@ program streamer_$Dd
            call field_compute(tree, mg, .true.)
 
            ! Coarse densities might be required for ghost cells
-           call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = ST_epsilon_die)
-           call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = ST_epsilon_die, s_flag = .true.)
+           call a$D_restrict_tree_DI(tree, i_electron, i_eps = i_eps, eps_DI = ST_epsilon_die)
+           call a$D_restrict_tree_DI(tree, i_pos_ion, i_eps = i_eps, eps_DI = ST_epsilon_die)
+           call a$D_restrict_tree_DI(tree, sigma_rhs, i_eps = i_eps, eps_DI = ST_epsilon_die, s_flag = .true.)
         end if
      end do
      
@@ -164,8 +166,10 @@ program streamer_$Dd
      call a$D_loop_box(tree, average_density)
 
      ! Coarse densities might be required for ghost cells
-     call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = ST_epsilon_die)
-     call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = ST_epsilon_die, s_flag = .true.)
+     call a$D_restrict_tree_DI(tree, i_electron, i_eps = i_eps, eps_DI = ST_epsilon_die)
+     call a$D_restrict_tree_DI(tree, i_pos_ion, i_eps = i_eps, eps_DI = ST_epsilon_die)
+     call a$D_restrict_tree_DI(tree, sigma_rhs, i_eps = i_eps, eps_DI = ST_epsilon_die, s_flag = .true.)
+
 
      ! Compute field with new density
      call field_compute(tree, mg, .true.)
@@ -182,18 +186,21 @@ program streamer_$Dd
 
      if (write_out) then
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+        call a$D_gc_tree_DI(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, a$D_gc_interp_lim_DI, ST_epsilon_die)
+        call a$D_gc_tree_DI(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, a$D_gc_interp_lim_DI, ST_epsilon_die)
+        call a$D_gc_tree_DI(tree, i_eps, sigma_rhs, a$D_gc_interp_lim, a$D_bc_neumann_zero, &
+                            a$D_gc_prolong_copy_DI_fc, ST_epsilon_die, surf = .true.)
+
 
         if (ST_output_src_term) then
-           call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = ST_epsilon_die)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+           call a$D_restrict_tree(tree, i_src)
+           call a$D_gc_tree(tree, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         end if
 
         if (photoi_enabled) then
-           call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
-           call a$D_restrict_tree(tree, i_photo, i_eps = i_eps, med = ST_epsilon_die)
-           call a$D_gc_tree(tree, i_eps, i_photo, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+          call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
+          call a$D_restrict_tree(tree, i_photo)
+          call a$D_gc_tree(tree, i_photo, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
@@ -231,20 +238,23 @@ program streamer_$Dd
 
      if (mod(it, ST_refine_per_steps) == 0) then
         ! Restrict electron and ion densities before refinement
-        call a$D_restrict_tree(tree, i_electron, i_eps = i_eps, med = ST_epsilon_die)
-        call a$D_restrict_tree(tree, i_pos_ion, i_eps = i_eps, med = ST_epsilon_die)
-        call a$D_restrict_tree(tree, sigma_rhs, i_eps = i_eps, med = ST_epsilon_die, s_flag = .true.)
+        call a$D_restrict_tree_DI(tree, i_electron, i_eps = i_eps, eps_DI = ST_epsilon_die)
+        call a$D_restrict_tree_DI(tree, i_pos_ion, i_eps = i_eps,  eps_DI = ST_epsilon_die)
+        call a$D_restrict_tree_DI(tree, sigma_rhs, i_eps = i_eps, eps_DI = ST_epsilon_die, s_flag = .true.)
 
         if (ST_output_src_term .and. ST_output_src_decay_rate > 0) then
            ! Have to set src term on coarse grids as well, and fill ghost cells
            ! before prolongation
-           call a$D_restrict_tree(tree, i_src, i_eps = i_eps, med = ST_epsilon_die)
-           call a$D_gc_tree(tree, i_eps, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+           call a$D_restrict_tree(tree, i_src)
+           call a$D_gc_tree(tree, i_src, a$D_gc_interp_lim, a$D_bc_neumann_zero)
         end if
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
-        call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+        call a$D_gc_tree_DI(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, a$D_gc_interp_lim_DI, ST_epsilon_die)
+        call a$D_gc_tree_DI(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, a$D_gc_interp_lim_DI, ST_epsilon_die)
+        call a$D_gc_tree_DI(tree, i_eps, sigma_rhs, a$D_gc_interp_lim, a$D_bc_neumann_zero, &
+                            a$D_gc_prolong_copy_DI_fc, ST_epsilon_die, surf = .true.)
+
 
         max_lvl = tree%highest_lvl
         call a$D_adjust_refinement(tree, refine_routine, ref_info, &
@@ -273,7 +283,7 @@ contains
     ! Variables used below to initialize tree
     real(dp)                  :: dr
     integer                   :: id
-    integer                   :: ix_list($D, 2) ! Spatial indices of initial boxes
+    integer                   :: ix_list($D, 1) ! Spatial indices of initial boxes
     integer                   :: n_boxes_init = 1000
 
     dr = ST_domain_len / ST_box_size
@@ -289,17 +299,16 @@ contains
     end if
 
     ! Set up geometry
-    id             = 2          
+    id             = 1          
 #if $D == 2
     ix_list(:, 1) = [1, 1]     
-    ix_list(:, 2) = [1, 2]
 #elif $D == 3
     ix_list(:, 1) = [1, 1, 1]     
-    ix_list(:, 2) = [1, 1, 2]
+    !ix_list(:, 2) = [1, 1, 2]
 #endif
 
     ! Create the base mesh
-    call a$D_set_base(tree, 2, ix_list)
+    call a$D_set_base(tree, 1, ix_list)
 
   end subroutine init_tree
 
@@ -310,32 +319,41 @@ contains
     type(box$D_t), intent(in) :: box
     ! Refinement flags for the cells of the box
     integer, intent(out)     :: cell_flags(DTIMES(box%n_cell))
-    integer                  :: IJK, n, nc
+    integer                  :: IJK, n, nc, m
     real(dp)                 :: cphi, dx, dx2
     real(dp)                 :: alpha, adx, fld, eps_max, eps_min
     real(dp)                 :: dist, rmin($D), rmax($D), grad_n($D), Efld($D)
 
+    m       = 0
     nc      = box%n_cell
     dx      = box%dr
     dx2     = box%dr**2
     eps_max = maxval(box%cc(DTIMES(:), i_eps))
     eps_min = minval(box%cc(DTIMES(:), i_eps))
+    if (eps_max > eps_min) m = 1 
 
-    do KJI_DO(1,nc)
+    do KJI_DO(1-m,nc+m)
        fld   = box%cc(IJK, i_electric_fld)
-       alpha = LT_get_col(ST_td_tbl, i_alpha, ST_refine_adx_fac * fld) / ST_refine_adx_fac
+       alpha =  a$D_delta(box%cc(IJK, i_eps), ST_epsilon_die) * &
+                LT_get_col(ST_td_tbl, i_alpha, ST_refine_adx_fac * fld) / ST_refine_adx_fac
        adx   = box%dr * alpha / ST_refine_adx
        cphi  = dx2 * abs(box%cc(IJK, i_rhs)) / ST_refine_cphi
-       
-              
-       
-       if (adx + cphi > 1.0_dp .or. (eps_max > eps_min .and. box%lvl < 5) &
-           .or. (eps_max > eps_min .and. max_lvl > 5 .and. box%lvl < max_lvl)) then
-            cell_flags(IJK) = af_do_ref
-       else if (adx < 0.125_dp .and. cphi < 1.0_dp .and. dx < ST_derefine_dx  &
-          .and. (eps_max == eps_min .or. box%lvl >= 6)) then
+           
+     
+       if ((adx + cphi > 1.0_dp .and. eps_max == eps_min) .or. (eps_max > eps_min .and. max_lvl > 3 .and. adx > 0.5_dp)) then
+          if(min(IJK) > 0 .and. max(IJK) <= nc) cell_flags(IJK) = af_do_ref
+       else if (adx < 0.125_dp .and. dx < ST_derefine_dx  &
+          .and. (eps_max == eps_min .or. box%lvl >= 4) .and. (eps_max == eps_min .or. adx < 0.08_dp)) then
+#if $D == 2
+          if (min(IJK) == 0) then     
+            cell_flags(min(i+1, nc), min(j+1, nc)) = af_keep_ref 
+          else if (max(IJK) > nc) then
+            cell_flags(max(i-1, 1), max(j-1, 1)) = af_keep_ref     
+          else     
             cell_flags(IJK) = af_rm_ref
-       else
+          end if
+#endif  
+       else if (min(IJK) > 0 .and. max(IJK) <= nc) then
           cell_flags(IJK) = af_keep_ref
        end if
        
@@ -349,7 +367,7 @@ contains
              if (dist - init_conds%seed_width(n) < 2 * dx &
                   .and. box%dr > ST_refine_init_fac * &
                   init_conds%seed_width(n)) then
-                cell_flags(IJK) = af_do_ref
+               if(min(IJK) > 0 .and. max(IJK) <= nc) cell_flags(IJK) = af_do_ref
              end if
           end do
        end if
@@ -379,8 +397,8 @@ contains
     end if
     
 
-
   end subroutine refine_routine
+
 
   !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
@@ -406,14 +424,14 @@ contains
     eps = eps01_gc2(boxes(id))
 
     ! Fill ghost cells on the sides of boxes (no corners)
-    call a$D_gc_box(boxes, id, i_eps, i_electron, a$D_gc_interp_lim, &
-         a$D_bc_neumann_zero, .false., ST_epsilon_die)
+    call a$D_gc_box_DI(boxes, id, i_eps, i_electron, a$D_gc_interp_lim_DI, &
+         a$D_bc_neumann_zero, ST_epsilon_die, .false.)
          
-    call a$D_gc_box_fc(boxes, id, i_eps, sigma_rhs, a$D_gc_prolong_copy_fc, &
+    call a$D_gc_box_DI_fc(boxes, id, i_eps, sigma_rhs, a$D_gc_prolong_copy_DI_fc, &
          a$D_bc_dirichlet_zero_fc, ST_epsilon_die)
          
-    call a$D_gc2_box(boxes, id, i_eps, i_electron, a$D_gc2_prolong_linear, &
-         a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die, eps)
+    call a$D_gc2_box_DI(boxes, id, i_eps, i_electron, a$D_gc2_prolong_linear_DI, &
+         a$D_bc2_neumann_zero_DI, cc, nc, ST_epsilon_die, eps)
 
     
 
@@ -466,14 +484,15 @@ contains
 
        ! Fill ghost cells on the sides of boxes (no corners)
        
-       call a$D_gc_box(boxes, id, i_eps, i_pos_ion, a$D_gc_interp_lim, &
-            a$D_bc_neumann_zero, .false., ST_epsilon_die)
+       call a$D_gc_box_DI(boxes, id, i_eps, i_pos_ion, a$D_gc_interp_lim_DI, &
+            a$D_bc_neumann_zero, ST_epsilon_die, .false.)
             
        deallocate(cc)
        allocate(cc(DTIMES(-1:nc+2)))
          
-       call a$D_gc2_box(boxes, id, i_eps, i_pos_ion, a$D_gc2_prolong_linear, &
-             a$D_bc2_neumann_zero, cc, nc, ST_epsilon_die, eps) 
+       call a$D_gc2_box_DI(boxes, id, i_eps, i_pos_ion, a$D_gc2_prolong_linear_DI, &
+             a$D_bc2_neumann_zero_DI, cc, nc, ST_epsilon_die, eps) 
+
 
        call flux_koren_$Dd(cc, v, nc, inv_dr)
        call flux_diff_$Dd(boxes(id), dc, i_pos_ion)
@@ -541,31 +560,27 @@ contains
        
        if (max_eps > min_eps) then
          if (box%cc(IJK, i_eps) < ST_epsilon_die) then
-         
            if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
              s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
              box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(-s_flow(1), 0.0_dp)
              f_elec = f_elec + (s_flow(1) - box%fc(i+1, j, 1, flux_elec) * dt ) * inv_dr
+           else if (box%cc(i+1, j, i_eps) == ST_epsilon_die) then
+             s_flow(1) = dt  * box%fc(i+1, j, 1, flux_elec)
+             box%fc(i+1, j, 1, sigma_rhs) = box%fc(i+1, j, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)
            else
              f_elec = f_elec + (box%fc(IJK, 1, flux_elec) - box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt          
            end if
+           
            if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
              s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
              box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(-s_flow(2), 0.0_dp)
              f_elec = f_elec + (s_flow(2) - box%fc(i, j+1, 2, flux_elec) * dt) * inv_dr
+           else if (box%cc(i, j+1, i_eps) == ST_epsilon_die) then
+             s_flow(2) = dt  * box%fc(i, j+1, 2, flux_elec)
+             box%fc(i, j+1, 2, sigma_rhs) = box%fc(i, j+1, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
            else
              f_elec = f_elec + (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec)) * inv_dr * dt          
-           end if
-         else 
-         
-           if (box%cc(i-1, j, i_eps) < ST_epsilon_die) then
-             s_flow(1) = dt  * box%fc(IJK, 1, flux_elec) 
-             box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp)         
-           end if
-           if (box%cc(i, j-1, i_eps) < ST_epsilon_die) then
-             s_flow(2) = dt  * box%fc(IJK, 2, flux_elec) 
-             box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp)
-           end if
+           end if 
          end if
        else
          f_elec = (box%fc(IJK, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + box%fc(IJK, 1, flux_elec) &
@@ -574,89 +589,37 @@ contains
               
 #elif $D == 3
 
-     if (box%cc(IJK, i_eps) <= med) then
-       if (box%cc(i-1, j, k, i_eps) > med) then
-         if (i > 1) then
-           s_flow(1) = dt * (box%fc(i-1, j, k, 1, flux_elec) - &
-           box%fc(IJK, 1, flux_elec)) 
-         else
-           s_flow(1) = 0.0_dp
-         end if
-         box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
-  end if
-  if (box%cc(i, j-1, k, i_eps) > med) then
-    if (j > 1) then
-      s_flow(2) = dt * (box%fc(i, j-1, k, 2, flux_elec) - &
-          box%fc(IJK, 2, flux_elec))
-    else
-      s_flow(2) = 0.0_dp
-    end if 
-    box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
-  end if  
-  if (box%cc(i, j, k-1, i_eps) > med) then
-    if (k > 1) then
-      s_flow(3) = dt * (box%fc(i, j, k-1, 3, flux_elec) - &
-          box%fc(IJK, 3, flux_elec))
-    else
-      s_flow(3) = 0.0_dp
-    end if 
-    box%fc(IJK, 3, sigma_rhs) = box%fc(IJK, 3, sigma_rhs) + fac * max(s_flow(3), 0.0_dp) 
-  end if  
-  
-  f_elec    = (sum(box%fc(IJK, :, flux_elec)) - box%fc(i, j+1, k, 2, flux_elec) - &
-        box%fc(i+1, j, k, 1, flux_elec) - box%fc(i, j, k+1, 3, flux_elec) ) * inv_dr * dt 
-else 
-  f_elec    = 0.0_dp
-  if (box%cc(i-1, j, k, i_eps) <= med) then
-    s_flow(1) = dt * (box%fc(IJK, 1, flux_elec) - &
-        box%fc(i+1, j, k, 1, flux_elec)) 
-    box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) + fac * max(s_flow(1), 0.0_dp) 
-  end if
-  if (box%cc(i, j-1, k, i_eps) <= med) then
-    s_flow(2) = dt * (box%fc(IJK, 2, flux_elec) - &
-        box%fc(i, j+1, k, 2, flux_elec)) 
-    box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) + fac * max(s_flow(2), 0.0_dp) 
-  end if  
-  if (box%cc(i, j, k-1, i_eps) <= med) then
-    s_flow(3) = dt * (box%fc(IJK, 3, flux_elec) - &
-        box%fc(i, j, k+1, 3, flux_elec)) 
-    box%fc(IJK, 3, sigma_rhs) = box%fc(IJK, 3, sigma_rhs) + fac * max(s_flow(3), 0.0_dp) 
-  end if 
-end if
-
- 
-
 #endif
 
        if (ST_update_ions) then
 #if $D == 2
-         if (box%cc(IJK, i_eps) < ST_epsilon_die) then
-  
-           if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
-             s_flow(1) = dt  * box%fc(IJK, 1, flux_ion) 
-             box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) - fac * max(-s_flow(1), 0.0_dp)
-             f_ion = f_ion + (s_flow(1) - box%fc(i+1, j, 1, flux_ion) * dt ) * inv_dr
-           else
-             f_ion = f_ion + (box%fc(IJK, 1, flux_ion) - box%fc(i+1, j, 1, flux_ion)) * inv_dr * dt          
+         if (max_eps > min_eps) then
+           if (box%cc(IJK, i_eps) < ST_epsilon_die) then
+             if (box%cc(i-1, j, i_eps) == ST_epsilon_die) then
+               s_flow(1) = dt  * box%fc(IJK, 1, flux_ion) 
+               box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) - fac * max(-s_flow(1), 0.0_dp)
+               f_ion = f_ion + (s_flow(1) - box%fc(i+1, j, 1, flux_ion) * dt ) * inv_dr
+             else if (box%cc(i+1, j, i_eps) == ST_epsilon_die) then
+               s_flow(1) = dt  * box%fc(i+1, j, 1, flux_ion)
+               box%fc(i+1, j, 1, sigma_rhs) = box%fc(i+1, j, 1, sigma_rhs) - fac * max(s_flow(1), 0.0_dp)
+             else
+               f_ion = f_ion + (box%fc(IJK, 1, flux_ion) - box%fc(i+1, j, 1, flux_ion)) * inv_dr * dt          
+             end if
+    
+             if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
+               s_flow(2) = dt  * box%fc(IJK, 2, flux_ion) 
+               box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) - fac * max(-s_flow(2), 0.0_dp)
+               f_ion = f_ion + (s_flow(2) - box%fc(i, j+1, 2, flux_ion) * dt) * inv_dr
+             else if (box%cc(i, j+1, i_eps) == ST_epsilon_die) then
+               s_flow(2) = dt  * box%fc(i, j+1, 2, flux_ion)
+               box%fc(i, j+1, 2, sigma_rhs) = box%fc(i, j+1, 2, sigma_rhs) - fac * max(s_flow(2), 0.0_dp)
+             else
+              f_ion = f_ion + (box%fc(IJK, 2, flux_ion) - box%fc(i, j+1, 2, flux_ion)) * inv_dr * dt          
+             end if 
            end if
-           if (box%cc(i, j-1, i_eps) == ST_epsilon_die) then
-             s_flow(2) = dt  * box%fc(IJK, 2, flux_ion) 
-             box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) - fac * max(-s_flow(2), 0.0_dp)
-             f_ion = f_ion + (s_flow(2) - box%fc(i, j+1, 2, flux_ion) * dt) * inv_dr
-           else
-             f_ion = f_ion + (box%fc(IJK, 2, flux_ion) - box%fc(i, j+1, 2, flux_ion)) * inv_dr * dt          
-           end if
-  
-         else 
-  
-           if (box%cc(i-1, j, i_eps) < ST_epsilon_die) then
-             s_flow(1) = dt  * box%fc(IJK, 1, flux_ion) 
-             box%fc(IJK, 1, sigma_rhs) = box%fc(IJK, 1, sigma_rhs) - fac * max(s_flow(1), 0.0_dp)         
-           end if
-           if (box%cc(i, j-1, i_eps) < ST_epsilon_die) then
-             s_flow(2) = dt  * box%fc(IJK, 2, flux_ion) 
-             box%fc(IJK, 2, sigma_rhs) = box%fc(IJK, 2, sigma_rhs) - fac * max(s_flow(2), 0.0_dp)
-           end if
+         else
+           f_ion = (box%fc(IJK, 2, flux_ion) - box%fc(i, j+1, 2, flux_ion) + box%fc(IJK, 1, flux_ion) &
+                     - box%fc(i+1, j, 1, flux_ion)) * inv_dr * dt  
          end if
 #elif $D == 3
           f_ion = (sum(box%fc(i, j, k, 1:3, flux_ion)) - &
@@ -671,11 +634,11 @@ end if
        if (photoi_enabled .and. box%cc(IJK, i_eps) < ST_epsilon_die) then
          src = src + box%cc(IJK, i_photo)
        else if (photoi_enabled .and. box%cc(IJK, i_eps) == ST_epsilon_die) then
-         do n = 1, 4    
+         do n = 1, 8    
            call system_clock(time, count_rate)         
            call random_seed(time)
            call random_number(rand)
-           dir = int(1+rand*(a$D_num_neighbors-1))
+           dir = 1+int(rand*(a$D_num_neighbors))
            ix = a$D_neighb_dix(:, dir)
 #if $D == 2
            if (box%cc(i+ix(1), j+ix(2), i_eps) < ST_epsilon_die) then
@@ -697,11 +660,11 @@ end if
        if (i_step == 1 .and. ST_output_src_term) then
           if (ST_output_src_decay_rate < 0) then
              ! No time-averaging
-             box%cc(IJK, i_src) = src * a$D_heaviside(box%cc(IJK, i_eps), ST_epsilon_die)
+             box%cc(IJK, i_src) = src * a$D_delta(box%cc(IJK, i_eps), ST_epsilon_die)
           else
              ! Approximate exp(-t*rate) as 1-t*rate
              box%cc(IJK, i_src) = ((1 - dt * ST_output_src_decay_rate) * &
-                  box%cc(IJK, i_src) + src * dt )* a$D_heaviside(box%cc(IJK, i_eps), ST_epsilon_die)
+                  box%cc(IJK, i_src) + src * dt )* a$D_delta(box%cc(IJK, i_eps), ST_epsilon_die)
           end if
        end if
 
@@ -712,13 +675,13 @@ end if
        if (flag == 1) then ! Add photoemission effect
 #if $D == 2
          box%cc(i+ix(1), j+ix(2), i_electron) = box%cc(i+ix(1), j+ix(2), i_electron) + &
-                                              box%cc(IJK, i_photo) * ST_phe_yield * dt
+                                              box%cc(IJK, i_photo) * dt
          box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+int((dir-1)/2), sigma_rhs) = &
                box%fc(max(i, i+ix(1)), max(j, j+ix(2)), 1+(dir-1)/2, sigma_rhs) - &
-               fac * box%cc(IJK, i_photo) * ST_phe_yield * box%dr * dt
+               fac * box%cc(IJK, i_photo) * box%dr * dt
 #elif $D == 3
          box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) = box%cc(i+ix(1), j+ix(2), k+ix(3), i_electron) + &
-                                                       box%cc(IJK, i_photo) * ST_phe_yield * dt
+                                                       box%cc(IJK, i_photo) * dt
 #endif
        else
          if (box%cc(IJK, i_eps) < ST_epsilon_die) then
@@ -781,15 +744,15 @@ end if
           p_id = tree%boxes(id)%parent
           
           call define_DI(tree%boxes(id)) ! For dielectric re-shaping
-          call a$D_prolong_copy_fc(tree%boxes(p_id), tree%boxes(id), sigma_rhs, i_eps = i_eps, med = ST_epsilon_die)
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron, i_eps = i_eps, eps_max = ST_epsilon_die)
-          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps, eps_max = ST_epsilon_die)
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi, i_eps = i_eps)
+          call a$D_prolong_copy_DI_fc(tree%boxes(p_id), tree%boxes(id), sigma_rhs, i_eps = i_eps, eps_DI = ST_epsilon_die)
+          call a$D_prolong_limit_DI(tree%boxes(p_id), tree%boxes(id), i_electron, i_eps = i_eps, eps_DI = ST_epsilon_die)
+          call a$D_prolong_limit_DI(tree%boxes(p_id), tree%boxes(id), i_pos_ion, i_eps = i_eps, eps_DI = ST_epsilon_die)
+          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
           if (photoi_enabled) then
-             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_photo, i_eps = i_eps, eps_max = ST_epsilon_die)
+             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_photo)
           end if
           if (ST_output_src_term) then
-             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_src, i_eps = i_eps, eps_max = ST_epsilon_die)
+             call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_src)
           end if
           !call define_DI(tree%boxes(id))
        end do
@@ -798,19 +761,20 @@ end if
        !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call a$D_gc_box(tree%boxes, id, i_eps, i_electron, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
-          call a$D_gc_box(tree%boxes, id, i_eps, i_pos_ion, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
-          call a$D_gc_box(tree%boxes, id, i_eps, i_phi, &
-               mg%sides_rb, mg%sides_bc, med = ST_epsilon_die)
+          call a$D_gc_box_DI(tree%boxes, id, i_eps, i_electron, &
+                      a$D_gc_interp_lim_DI, a$D_bc_neumann_zero, ST_epsilon_die)
+          call a$D_gc_box_DI(tree%boxes, id, i_eps, i_pos_ion, &
+                         a$D_gc_interp_lim_DI, a$D_bc_neumann_zero, ST_epsilon_die)
+          call a$D_gc_box(tree%boxes, id, i_phi, &
+                         mg%sides_rb, mg%sides_bc)
           if (photoi_enabled) then
-             call a$D_gc_box(tree%boxes, id, i_eps, i_photo, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+             call a$D_gc_box(tree%boxes, id, i_photo, &
+                         a$D_gc_interp_lim, a$D_bc_neumann_zero)
           end if
+
           if (ST_output_src_term) then
-             call a$D_gc_box(tree%boxes, id, i_eps, i_src, &
-               a$D_gc_interp_lim, a$D_bc_neumann_zero, med = ST_epsilon_die)
+             call a$D_gc_box(tree%boxes, id, i_src, &
+               a$D_gc_interp_lim, a$D_bc_neumann_zero)
           end if
        end do
        !$omp end do

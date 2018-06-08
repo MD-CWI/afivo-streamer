@@ -15,14 +15,20 @@ module m_a$D_utils
   public :: a$D_loop_boxes_arg
   public :: a$D_tree_clear_cc
   public :: a$D_box_clear_cc
+  public :: a$D_tree_clear_ghostcells
+  public :: a$D_box_clear_ghostcells
   public :: a$D_box_add_cc
   public :: a$D_box_sub_cc
+  public :: a$D_tree_times_cc
+  public :: a$D_tree_apply
   public :: a$D_box_times_cc
   public :: a$D_box_lincomb_cc
   public :: a$D_box_copy_cc_to
   public :: a$D_box_copy_cc
   public :: a$D_boxes_copy_cc
   public :: a$D_tree_copy_cc
+  public :: a$D_tree_clear_fc
+  public :: a$D_box_clear_fc
   public :: a$D_reduction
   public :: a$D_reduction_vec
   public :: a$D_reduction_loc
@@ -41,9 +47,9 @@ module m_a$D_utils
   public :: a$D_r_inside
   public :: a$D_n_cell
   public :: a$D_harm_w
-  public :: a$D_heaviside
+  public :: a$D_delta
   public :: a$D_border
-  
+
 contains
 
   !> Call procedure for each box in tree
@@ -191,57 +197,35 @@ contains
        inside = all(r >= box%r_min) .and. all(r <= r_max)
     end if
   end function a$D_r_inside
-  
-  elemental function a$D_heaviside(value, center) result(val)
-     real(dp), intent(in)           :: value
-     real(dp), intent(in)           :: center
-     real(dp)                       :: val
-
-     if(value >= center) then
-       val = 0.0_dp
-     else
-       val = 1.0_dp
-     end if
-
-
-   end function a$D_heaviside
-   
-   elemental function a$D_border(val1, val2, eps_max) result(bol)
-      real(dp), intent(in)           :: val1, val2
-      real(dp), intent(in)           :: eps_max
-      logical                        :: bol
-
-      if (val1 == eps_max .and. val2 < eps_max) then
-        bol = .true.
-      else if (val2 == eps_max .and. val1 < eps_max) then
-        bol = .true.
-      else        
-        bol = .false.
-      end if
-
-
-    end function a$D_border
-   
-   !> Returns the harmonic average weighted by f2
-   pure function a$D_harm_w(val1, val2, f2) result(val)
-     real(dp), intent(in)  :: val1, val2
-     real(dp), intent(in)  :: f2 
-     real(dp)              :: val  
-    
-     val = val1*val2/(val1*f2 + val2*(1-f2))
-
-   end function  a$D_harm_w
 
   !> Get the id of the finest box containing rr. If highest_lvl is present, do
   !> not go to a finer level than highest_lvl. If there is no box containing rr,
   !> return a location of -1
-  pure function a$D_get_id_at(tree, rr, highest_lvl) result(id)
+  pure function a$D_get_id_at(tree, rr, highest_lvl, guess) result(id)
     type(a$D_t), intent(in)       :: tree        !< Full grid
     real(dp), intent(in)          :: rr($D)      !< Coordinate
     integer, intent(in), optional :: highest_lvl !< Maximum level of box
-    integer                       :: id !< Id of finest box containing rr
+    integer, intent(in), optional :: guess       !< Guess of box id, cannot be used with highest_lvl
+    integer                       :: id          !< Id of finest box containing rr
 
     integer                       :: i, i_ch, lvl_max
+
+    if (present(guess)) then
+       id = guess
+       if (id > 0 .and. id < tree%highest_id) then
+          if (tree%boxes(id)%in_use .and. &
+               a$D_r_inside(tree%boxes(id), rr)) then
+
+             ! Jump into potential children for as long as possible
+             do while (a$D_has_children(tree%boxes(id)))
+                i_ch = child_that_contains(tree%boxes(id), rr)
+                id = tree%boxes(id)%children(i_ch)
+             end do
+
+             ! return             ! Exit routine
+          end if
+       end if
+    end if
 
     lvl_max = tree%lvl_limit
     if (present(highest_lvl)) lvl_max = highest_lvl
@@ -270,13 +254,15 @@ contains
   !> Get the location of the finest cell containing rr. If highest_lvl is present,
   !> do not go to a finer level than highest_lvl. If there is no box containing rr,
   !> return a location of -1
-  pure function a$D_get_loc(tree, rr, highest_lvl) result(loc)
-    type(a$D_t), intent(in)       :: tree   !< Full grid
-    real(dp), intent(in)          :: rr($D) !< Coordinate
+  pure function a$D_get_loc(tree, rr, highest_lvl, guess) result(loc)
+    type(a$D_t), intent(in)       :: tree        !< Full grid
+    real(dp), intent(in)          :: rr($D)      !< Coordinate
     integer, intent(in), optional :: highest_lvl !< Maximum level of box
-    type(a$D_loc_t)               :: loc    !< Location of cell
+    !> Guess of box id, cannot be used with highest_lvl
+    integer, intent(in), optional :: guess
+    type(a$D_loc_t)               :: loc         !< Location of cell
 
-    loc%id = a$D_get_id_at(tree, rr, highest_lvl)
+    loc%id = a$D_get_id_at(tree, rr, highest_lvl, guess)
 
     if (loc%id == -1) then
        loc%ix = -1
@@ -344,6 +330,46 @@ contains
 #endif
   end subroutine a$D_box_clear_cc
 
+  subroutine a$D_tree_clear_ghostcells(tree, iv)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: iv !< Variable to clear
+    integer                    :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call a$D_box_clear_ghostcells(tree%boxes(id), iv)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_clear_ghostcells
+
+  !> Set cc(..., iv) = 0
+  subroutine a$D_box_clear_ghostcells(box, iv)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)          :: iv !< Variable to clear
+    integer                      :: nc
+
+    nc = box%n_cell
+
+#if $D == 2
+    box%cc(0, :, iv)       = 0
+    box%cc(nc+1, :, iv)    = 0
+    box%cc(:, 0, iv)       = 0
+    box%cc(:, nc+1, iv)    = 0
+#elif $D == 3
+    box%cc(0, :, :, iv)    = 0
+    box%cc(nc+1, :, :, iv) = 0
+    box%cc(:, 0, :, iv)    = 0
+    box%cc(:, nc+1, :, iv) = 0
+    box%cc(:, :, 0, iv)    = 0
+    box%cc(:, :, nc+1, iv) = 0
+#endif
+  end subroutine a$D_box_clear_ghostcells
+
   !> Add cc(..., iv_from) to box%cc(..., iv_to)
   subroutine a$D_box_add_cc(box, iv_from, iv_to)
     type(box$D_t), intent(inout) :: box
@@ -365,6 +391,69 @@ contains
     box%cc(:,:,:, iv_to) = box%cc(:,:,:, iv_to) - box%cc(:,:,:, iv_from)
 #endif
   end subroutine a$D_box_sub_cc
+
+  !> Perform cc(..., iv_a) = cc(..., iv_a) 'op' cc(..., iv_b), where 'op' can be
+  !> '+', '*' or '/'
+  subroutine a$D_tree_apply(tree, iv_a, iv_b, op, eps)
+    type(a$D_t), intent(inout)     :: tree
+    integer, intent(in)            :: iv_a, iv_b
+    character(len=*), intent(in)   :: op
+    real(dp), intent(in), optional :: eps !< Min value for division
+    integer                        :: lvl, i, id
+    real(dp)                       :: use_eps
+
+    use_eps = sqrt(tiny(1.0_dp))
+    if (present(eps)) use_eps = eps
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          select case (op)
+          case ('+')
+             tree%boxes(id)%cc(DTIMES(:), iv_a) = &
+                  tree%boxes(id)%cc(DTIMES(:), iv_a) + &
+                  tree%boxes(id)%cc(DTIMES(:), iv_b)
+          case ('*')
+             tree%boxes(id)%cc(DTIMES(:), iv_a) = &
+                  tree%boxes(id)%cc(DTIMES(:), iv_a) * &
+                  tree%boxes(id)%cc(DTIMES(:), iv_b)
+          case ('/')
+             tree%boxes(id)%cc(DTIMES(:), iv_a) = &
+                  tree%boxes(id)%cc(DTIMES(:), iv_a) / &
+                  max(tree%boxes(id)%cc(DTIMES(:), iv_b), eps)
+          case default
+             error stop "a$D_tree_apply: unknown operand"
+          end select
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_apply
+
+  subroutine a$D_tree_times_cc(tree, ivs, facs)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: ivs(:)
+    real(dp), intent(in)       :: facs(:)
+    integer                    :: lvl, i, id, n
+
+    if (size(ivs) /= size(facs)) &
+         error stop "a$D_times_cc: invalid array size"
+
+    !$omp parallel private(lvl, i, id, n)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          do n = 1, size(ivs)
+             call a$D_box_times_cc(tree%boxes(id), facs(n), ivs(n))
+          end do
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_times_cc
 
   !> Multipy cc(..., iv) with a
   subroutine a$D_box_times_cc(box, a, iv)
@@ -778,6 +867,22 @@ contains
     end function sum_2pr_box
 #endif
   end subroutine a$D_tree_sum_cc
+  
+  elemental function a$D_border(val1, val2, eps_max) result(bol)
+     real(dp), intent(in)           :: val1, val2
+     real(dp), intent(in)           :: eps_max
+     logical                        :: bol
+
+     if (val1 == eps_max .and. val2 < eps_max) then
+       bol = .true.
+     else if (val2 == eps_max .and. val1 < eps_max) then
+       bol = .true.
+     else        
+       bol = .false.
+     end if
+
+
+   end function a$D_border
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to)
   subroutine a$D_box_copy_fc(box, iv_from, iv_to)
@@ -833,5 +938,58 @@ contains
        n_cell = tree%n_cell / (2**(1-lvl))
     end if
   end function a$D_n_cell
+  
+  elemental function a$D_delta(value, center) result(val)
+     real(dp), intent(in)           :: value
+     real(dp), intent(in)           :: center
+     real(dp)                       :: val
+
+     if(value >= center) then
+       val = 0.0_dp
+     else
+       val = 1.0_dp
+     end if
+
+
+   end function a$D_delta
+  
+  !> Returns the harmonic average weighted by f2
+  pure function a$D_harm_w(val1, val2, f2) result(val)
+    real(dp), intent(in)  :: val1, val2
+    real(dp), intent(in)  :: f2 
+    real(dp)              :: val  
+   
+    val = val1*val2/(val1*f2 + val2*(1-f2))
+
+  end function  a$D_harm_w
+  
+  subroutine a$D_tree_clear_fc(tree, s_iv)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: s_iv !< Variable to clear
+    integer                    :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call a$D_box_clear_fc(tree%boxes(id), s_iv)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine a$D_tree_clear_fc
+
+  !> Set fc(..., s_iv) = 0
+  subroutine a$D_box_clear_fc(box, s_iv)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)         :: s_iv !< Variable to clear
+#if $D == 2
+    box%fc(:,:, :, s_iv) = 0
+#elif $D == 3
+    box%fc(:,:,:, :, s_iv) = 0
+#endif
+  end subroutine a$D_box_clear_fc
+  
 
 end module m_a$D_utils

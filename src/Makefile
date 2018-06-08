@@ -9,7 +9,8 @@ OBJS := m_units_constants.o m_config.o m_lookup_table.o m_random.o		\
 	m_find_index.o m_photoi_mc.o m_streamer.o m_geometry.o m_transport_data.o	\
 	m_field_2d.o m_field_3d.o m_init_cond_2d.o m_init_cond_3d.o		\
 	m_photoi_helmh_2d.o m_photoi_helmh_3d.o m_photoi_2d.o m_photoi_3d.o		\
-	m_flux_schemes_2d.o m_flux_schemes_3d.o
+	m_flux_schemes_2d.o m_flux_schemes_3d.o m_DI_ghostcell_2d.o m_DI_prolong_2d.o \
+	m_DI_restrict_2d.o m_DI_ghostcell_3d.o m_DI_prolong_3d.o m_DI_restrict_3d.o
 	
 
 PROGS	:= ../streamer_2d ../streamer_3d
@@ -42,22 +43,22 @@ clean:
 
 # Dependency information
 $(PROGS): 		../afivo/src/libafivo.a libstreamer.a
-streamer_2d.o: m_streamer.o m_geometry.o m_flux_schemes_2d.o
-streamer_3d.o: m_streamer.o m_geometry.o m_flux_schemes_3d.o
-streamer_2d.o: m_field_2d.o m_init_cond_2d.o m_photoi_2d.o
-streamer_3d.o: m_field_3d.o m_init_cond_3d.o m_photoi_3d.o
+streamer_2d.o: m_streamer.o m_geometry.o m_flux_schemes_2d.o m_field_2d.o m_init_cond_2d.o m_photoi_2d.o m_DI_ghostcell_2d.o m_DI_prolong_2d.o m_DI_restrict_2d.o
+streamer_3d.o: m_streamer.o m_geometry.o m_flux_schemes_3d.o m_field_3d.o m_init_cond_3d.o m_photoi_3d.o m_DI_ghostcell_3d.o m_DI_prolong_3d.o m_DI_restrict_3d.o
 m_field_2d.o: m_streamer.o m_units_constants.o m_flux_schemes_2d.o m_init_cond_2d.o
 m_field_3d.o: m_streamer.o m_units_constants.o m_flux_schemes_3d.o m_init_cond_3d.o
-m_init_cond_2d.o m_flux_schemes_2d.o: m_streamer.o m_units_constants.o
-m_init_cond_3d.o m_flux_schemes_3d.o: m_streamer.o m_units_constants.o
+m_init_cond_2d.o: m_streamer.o m_units_constants.o m_DI_ghostcell_2d.o m_DI_prolong_2d.o m_DI_restrict_2d.o
+m_init_cond_3d.o: m_streamer.o m_units_constants.o m_DI_ghostcell_3d.o m_DI_prolong_3d.o m_DI_restrict_3d.o
+m_flux_schemes_2d.o m_flux_schemes_2d.o: m_streamer.o m_units_constants.o
 m_photoi_helmh_2d.o m_photoi_helmh_3d.o: m_streamer.o m_units_constants.o
 m_lookup_table.o:	m_find_index.o
 m_streamer.o:		m_transport_data.o m_lookup_table.o m_config.o m_random.o
-m_photoi_mc.o:		m_lookup_table.o m_units_constants.o m_random.o m_streamer.o
+m_photoi_mc.o:		m_lookup_table.o m_units_constants.o m_random.o m_streamer.o m_DI_ghostcell_2d.o m_DI_prolong_2d.o m_DI_ghostcell_3d.o m_DI_prolong_3d.o
 m_photoi_2d.o: m_photoi_mc.o m_photoi_helmh_2d.o
 m_photoi_3d.o: m_photoi_mc.o m_photoi_helmh_3d.o
+m_DI_ghostcell_2d.o: m_DI_prolong_2d.o
+m_DI_ghostcell_3d.o: m_DI_prolong_3d.o
 
 # Hide some incorrect warnings
 m_photoi_helmh_2d.o m_photoi_helmh_3d.o: FFLAGS += -Wno-unused-function
 m_photoi_2d.o m_photoi_3d.o: FFLAGS += -Wno-unused-function
-

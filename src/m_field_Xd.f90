@@ -111,19 +111,45 @@ contains
     type(mg$D_t), intent(in)   :: mg ! Multigrid option struct
     logical, intent(in)        :: have_guess
     real(dp), parameter        :: fac = UC_elem_charge / UC_eps0
-    integer                    :: lvl, i, id, nc
+    integer                    :: lvl, IJK, id, nc, l, ncb
+    real(dp)                   :: inv_dr
 
     nc = tree%n_cell
 
     ! Set the source term (rhs)
-    !$omp parallel private(lvl, i, id)
+    !$omp parallel private(lvl, l, i, j, id)
     do lvl = 1, tree%highest_lvl
        !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
+       do l = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(l)
           tree%boxes(id)%cc(DTIMES(:), i_rhs) = fac * (&
                tree%boxes(id)%cc(DTIMES(:), i_electron) - &
                tree%boxes(id)%cc(DTIMES(:), i_pos_ion))
+          ncb    = tree%boxes(id)%n_cell
+          inv_dr = 1.0_dp/tree%boxes(id)%dr
+#if $D==2          
+          do KJI_DO(1, nc)
+            if(tree%boxes(id)%cc(IJK, i_eps) == ST_epsilon_die) then
+              if(tree%boxes(id)%cc(i-1, j, i_eps) < ST_epsilon_die) then
+                 tree%boxes(id)%cc(IJK, i_rhs) = tree%boxes(id)%cc(IJK, i_rhs) + &
+                          0.5*inv_dr*tree%boxes(id)%fc(IJK, 1, sigma_rhs)
+              end if
+              if(tree%boxes(id)%cc(i+1, j, i_eps) < ST_epsilon_die) then
+                 tree%boxes(id)%cc(IJK, i_rhs) = tree%boxes(id)%cc(IJK, i_rhs) + &
+                          0.5*inv_dr*tree%boxes(id)%fc(i+1, j, 1, sigma_rhs)
+              end if
+            
+              if(tree%boxes(id)%cc(i, j-1, i_eps) < ST_epsilon_die) then
+                 tree%boxes(id)%cc(IJK, i_rhs) = tree%boxes(id)%cc(IJK, i_rhs) + &
+                          0.5*inv_dr*tree%boxes(id)%fc(IJK, 2, sigma_rhs)
+              end if
+              if(tree%boxes(id)%cc(i, j+1, i_eps) < ST_epsilon_die) then
+                 tree%boxes(id)%cc(IJK, i_rhs) = tree%boxes(id)%cc(IJK, i_rhs) + &
+                          0.5*inv_dr*tree%boxes(id)%fc(i, j+1, 2, sigma_rhs)
+              end if
+            end if
+          end do; CLOSE_DO
+#endif
        end do
        !$omp end do nowait
     end do
@@ -145,8 +171,7 @@ contains
     call a$D_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call a$D_gc_tree(tree, i_eps, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero, med = &
-            a$D_harm_w(1.0_dp, ST_epsilon_die, 0.5_dp) )
+    call a$D_gc_tree(tree, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
   end subroutine field_compute
 
   !> Compute the electric field at a given time
@@ -176,12 +201,11 @@ contains
   end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential
-  subroutine field_bc_homogeneous(box, nb, iv, bc_type, i_eps)
+  subroutine field_bc_homogeneous(box, nb, iv, bc_type)
     use m_init_cond_$Dd
     type(box$D_t), intent(inout)  :: box
     integer, intent(in)           :: nb ! Direction for the boundary condition
     integer, intent(in)           :: iv ! Index of variable
-    integer, intent(in), optional :: i_eps
     integer, intent(out)          :: bc_type ! Type of boundary condition
     integer                       :: nc
 
@@ -226,13 +250,12 @@ contains
 
   end subroutine field_bc_homogeneous
 
-  subroutine field_bc_dropoff_lin(box, nb, iv, bc_type, i_eps)
+  subroutine field_bc_dropoff_lin(box, nb, iv, bc_type)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)          :: nb      ! Direction for the boundary condition
     integer, intent(in)          :: iv      ! Index of variable
     integer, intent(out)         :: bc_type ! Type of boundary condition
     integer                      :: nc, i
-    integer, intent(in), optional   :: i_eps
 #if $D == 3
     integer                      :: j
 #endif
@@ -283,12 +306,11 @@ contains
     end select
   end subroutine field_bc_dropoff_lin
 
-  subroutine field_bc_dropoff_log(box, nb, iv, bc_type, i_eps)
+  subroutine field_bc_dropoff_log(box, nb, iv, bc_type)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)          :: nb      ! Direction for the boundary condition
     integer, intent(in)          :: iv      ! Index of variable
     integer, intent(out)         :: bc_type ! Type of boundary condition
-    integer, intent(in), optional   :: i_eps
     integer                      :: nc, i
 #if $D == 3
     integer                      :: j

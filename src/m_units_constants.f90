@@ -23,5 +23,9 @@ module m_units_constants
   real(dp), parameter :: UC_torr_to_bar      = 133.322368 * 1.0D-5     ! one Torr in units of bar
   real(dp), parameter :: UC_elec_q_over_eps0 = UC_elec_charge / UC_eps0
   real(dp), parameter :: UC_elec_q_over_m    = UC_elec_charge / UC_elec_mass
+  real(dp), parameter :: UC_N2_tau0          = 4.2d-8                  ! SPS of N2 decay time
+  real(dp), parameter :: UC_N2_N2_qfr        = 0.4d+9                  ! SPS quenching freq. with N2
+  real(dp), parameter :: UC_N2_O2_qfr        = 0.9d+10                 ! SPS quenching freq. with O2
+  
 
 end module m_units_constants

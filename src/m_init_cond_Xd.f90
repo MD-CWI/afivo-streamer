@@ -4,6 +4,7 @@ module m_init_cond_$Dd
   use m_a$D_all
   use m_geometry
 
+
   implicit none
   private
 
@@ -18,12 +19,10 @@ module m_init_cond_$Dd
      integer, allocatable            :: seed_charge_type(:)
      real(dp), allocatable           :: seed_width(:)
      character(ST_slen), allocatable :: seed_falloff(:)
-     integer                         :: n_die
-     real(dp), allocatable           :: die_density(:)
-     real(dp), allocatable           :: die_center(:,:)
-     real(dp), allocatable           :: die_axis(:,:)
-     character(ST_slen), allocatable :: die_type(:)
-     real(dp), allocatable           :: geo_parameter(:)
+     character(ST_slen)              :: die_type    
+     real(dp), allocatable           :: die_center(:)
+     real(dp), allocatable           :: die_axis(:)
+     real(dp)                        :: geo_parameter
   end type initcnd_t
 
   ! This will contain the initial conditions
@@ -33,9 +32,7 @@ module m_init_cond_$Dd
   public :: init_cond_set_box
   public :: init_cond_stochastic_density
   public :: define_DI
-  public :: a$D_bc_dirichlet_mirror
   public :: a$D_bc_dirichlet_zero_fc
-  public :: a$D_bc2_dirichlet_mirror
   public :: a$D_loop_box_arg_DI
   public :: a$D_consistent_fluxes_DI
   public :: a$D_loop_boxes_DI
@@ -48,7 +45,7 @@ contains
     type(CFG_t), intent(inout) :: cfg !< Settings
     integer, intent(in)        :: n_dim
 
-    integer                    :: n_cond, n_die, varsize
+    integer                    :: n_cond, varsize
     real(dp)                   :: dlen
     real(dp), allocatable      :: tmp_vec(:)
     type(initcnd_t)            :: ic
@@ -70,10 +67,9 @@ contains
     call CFG_add(cfg, "seed_falloff", ['smoothstep'], &
          "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)", .true.)
          
-    call CFG_add(cfg, "die_density", [0.001e1_dp], &
-         "Density of the dielectric(1/m3)", .true.)
-    call CFG_add(cfg, "die_type", ['elliptic'], &
-         "Geometric shape of dielectric (square, elliptic)", .true.)     
+
+    call CFG_add(cfg, "die_type", ['square'], &
+         "Geometric shape of dielectric (square, elliptic, trapz)")     
     call CFG_add(cfg, "die_rel_center",[DTIMES(0.5_dp)], &
          "Relative central position of the dielectric", .true.)
     call CFG_add(cfg, "die_rel_axis",[DTIMES(0.5_dp)], &
@@ -83,10 +79,9 @@ contains
 
 
 
+
     call CFG_get_size(cfg, "seed_density", n_cond)
     ic%n_cond = n_cond
-    call CFG_get_size(cfg, "die_density", n_die)
-    ic%n_die = n_die
 
     call CFG_get_size(cfg, "seed_rel_r0", varsize)
     if (varsize /= n_dim * n_cond) &
@@ -105,28 +100,21 @@ contains
          stop "seed_width variable has incompatible size"
          
     call CFG_get_size(cfg, "die_rel_center", varsize)
-    if (varsize /= n_dim * n_die) &
+    if (varsize /= n_dim) &
          stop "die_rel_center variable has incompatible size"
 
     call CFG_get_size(cfg, "die_rel_axis", varsize)
-    if (varsize /= n_dim * n_die) &
+    if (varsize /= n_dim) &
          stop "die_rel_axis variable has incompatible size"
-         
-    call CFG_get_size(cfg, "geo_parameter", varsize)
-    if (varsize /= n_die) &
-         stop "geo_parameter variable has incompatible size"
 
     allocate(ic%seed_density(n_cond))
-    allocate(ic%die_density(n_die))
     allocate(ic%seed_charge_type(n_cond))
     allocate(ic%seed_r0(n_dim, n_cond))
     allocate(ic%seed_r1(n_dim, n_cond))
     allocate(ic%seed_width(n_cond))
     allocate(ic%seed_falloff(n_cond))
-    allocate(ic%die_type(n_die))
-    allocate(ic%die_center(n_dim, n_die))
-    allocate(ic%die_axis(n_dim, n_die))
-    allocate(ic%geo_parameter(n_die))
+    allocate(ic%die_center(n_dim))
+    allocate(ic%die_axis(n_dim))
 
     allocate(tmp_vec(n_dim * n_cond))
     call CFG_get(cfg, "seed_rel_r0", tmp_vec)
@@ -135,25 +123,24 @@ contains
     call CFG_get(cfg, "seed_rel_r1", tmp_vec)
     ic%seed_r1 = dlen * reshape(tmp_vec, [n_dim, n_cond])
    
+    
     deallocate(tmp_vec)
-    allocate(tmp_vec(n_dim * n_die))
+    allocate(tmp_vec(n_dim))
     call CFG_get(cfg, "die_rel_center", tmp_vec)
-    ic%die_center = dlen * reshape(tmp_vec, [n_dim, n_die])
+    ic%die_center = dlen * tmp_vec
     call CFG_get(cfg, "die_rel_axis", tmp_vec)
-    ic%die_axis = dlen * reshape(tmp_vec, [n_dim, n_die])
+    ic%die_axis = dlen * tmp_vec
 
     
     call CFG_get(cfg, "background_density", ic%background_density)
     call CFG_get(cfg, "stochastic_density", ic%stochastic_density)
     call CFG_get(cfg, "seed_density", ic%seed_density)
-    call CFG_get(cfg, "die_density", ic%die_density)
     call CFG_get(cfg, "seed_charge_type", ic%seed_charge_type)
     call CFG_get(cfg, "seed_width", ic%seed_width)
     call CFG_get(cfg, "seed_falloff", ic%seed_falloff)
-    call CFG_get(cfg, "die_type", ic%die_type)
     call CFG_get(cfg, "geo_parameter", ic%geo_parameter)
+    call CFG_get(cfg, "die_type", ic%die_type)
     
-
     init_conds = ic
 
   end subroutine init_cond_initialize
@@ -161,8 +148,9 @@ contains
   !> Add a stochastic background density to the electrons and ions. Note: this
   !> routine temporarily uses variable i_rhs
   subroutine init_cond_stochastic_density(tree)
-    use m_a$D_ghostcell, only: a$D_bc_neumann_zero
-    use m_a$D_prolong
+    use m_DI_prolong_$Dd
+    use m_DI_restrict_$Dd
+    use m_DI_ghostcell_$Dd
     type(a$D_t), intent(inout) :: tree
     integer                    :: my_lvl, lvl, i, id
 
@@ -187,13 +175,13 @@ contains
     do lvl = my_lvl, tree%highest_lvl-1
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a$D_gc_box(tree%boxes, id, i_eps, i_rhs, &
-               a$D_gc_interp, a$D_bc_neumann_zero)
+          call a$D_gc_box_DI(tree%boxes, id, i_eps, i_rhs, &
+               a$D_gc_interp_lim_DI, a$D_bc_neumann_zero, ST_epsilon_die)
        end do
 
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a$D_prolong_linear_from(tree%boxes, id, i_eps, i_rhs, add=.true.)
+          call a$D_prolong_linear_from_DI(tree%boxes, id, i_rhs, i_eps = i_eps, eps_DI = ST_epsilon_die, add = .true.)
        end do
 
     end do
@@ -208,10 +196,10 @@ contains
     end do
 
     ! Restrict and fill ghost cells
-    call a$D_restrict_tree(tree, i_electron)
-    call a$D_restrict_tree(tree, i_pos_ion)
-    call a$D_gc_tree(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-    call a$D_gc_tree(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+    call a$D_restrict_tree_DI(tree, i_electron, i_eps = i_eps, eps_DI = ST_epsilon_die, s_flag = .false.)
+    call a$D_restrict_tree_DI(tree, i_pos_ion, i_eps = i_eps, eps_DI = ST_epsilon_die, s_flag = .false.)
+    call a$D_gc_tree_DI(tree, i_eps, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero, a$D_gc_interp_lim_DI, eps_DI = ST_epsilon_die)
+    call a$D_gc_tree_DI(tree, i_eps, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero, a$D_gc_interp_lim_DI, eps_DI = ST_epsilon_die)
 
   end subroutine init_cond_stochastic_density
 
@@ -241,38 +229,43 @@ contains
   subroutine init_cond_set_box(box)
     use m_geometry
     use m_units_constants
+
     type(box$D_t), intent(inout) :: box
     integer                     :: IJK, n, nc
     real(dp)                    :: rr($D)
     real(dp)                    :: density
+    character(len=100)  :: input_file
+    type(lookup_table_t)    :: FL_lkp
+    type(LT_loc_t)             :: loc
+    integer             :: FL_if_elec, FL_if_ion
+    real(dp), allocatable   :: x_data(:), y_data(:)  
 
     nc = box%n_cell
     box%cc(DTIMES(:), i_electron)   = init_conds%background_density
     box%cc(DTIMES(:), i_pos_ion)    = init_conds%background_density
     box%fc(DTIMES(:), :, sigma_rhs) = 0.0_dp
     box%cc(DTIMES(:), i_phi)        = 0.0_dp ! Inital potential set to zero
-    !box%cc(DTIMES(:), i_eps)        = 1.0_dp ! Base permitivity
-    !box%cc(DTIMES(:), i_photo)      = 0.0_dp
+    
+    
 
     do KJI_DO(0,nc+1)
        rr   = a$D_r_cc(box, [IJK])
-
        do n = 1, init_conds%n_cond
-          density = init_conds%seed_density(n) * &
-               GM_density_line(rr, init_conds%seed_r0(:, n), &
-               init_conds%seed_r1(:, n), $D, &
-               init_conds%seed_width(n), &
-               init_conds%seed_falloff(n))
+         density = init_conds%seed_density(n) * &
+              GM_density_line(rr, init_conds%seed_r0(:, n), &
+              init_conds%seed_r1(:, n), $D, &
+              init_conds%seed_width(n), &
+              init_conds%seed_falloff(n))
 
-          ! Add electrons and/or ions depending on the seed charge type
-          ! (positive, negative or neutral)
-          if (init_conds%seed_charge_type(n) <= 0) then
+           ! Add electrons and/or ions depending on the seed charge type
+           ! (positive, negative or neutral)
+           if (init_conds%seed_charge_type(n) <= 0) then
              box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + density
-          end if
+           end if
 
-          if (init_conds%seed_charge_type(n) >= 0) then
+           if (init_conds%seed_charge_type(n) >= 0) then
              box%cc(IJK, i_pos_ion) = box%cc(IJK, i_pos_ion) + density
-          end if
+           end if
        end do
     end do; CLOSE_DO
     
@@ -293,40 +286,36 @@ contains
     do KJI_DO(0, nc+1)
        rr = a$D_r_cc(box, [IJK])
        f = vol_frac_inside(box, [IJK])
-       do n = 1, init_conds%n_die
-         box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
-         if (f == 1.0_dp) then
-           box%cc(IJK, i_electron)   = init_conds%die_density(n)
-           box%cc(IJK, i_pos_ion)    = init_conds%die_density(n)
-         end if
-       end do
+       box%cc(IJK, i_eps)        = a$D_harm_w(1.0_dp, ST_epsilon_die, f)
+       if (f == 1.0_dp) then
+         box%cc(IJK, i_electron)   = 0.0_dp
+         box%cc(IJK, i_pos_ion)    = 0.0_dp
+       end if
     end do; CLOSE_DO
  
-    if (maxval(box%cc(DTIMES(:), i_eps)) > minval(box%cc(DTIMES(:), i_eps))) then  
+ !   if (maxval(box%cc(DTIMES(:), i_eps)) > minval(box%cc(DTIMES(:), i_eps))) then  
       
-      do KJI_DO(0, nc+1)
-
-         if(maxval([IJK]) < nc+1 .and. minval([IJK])> 0) then
-#if $D == 2
-           if (box%cc(IJK, i_eps) == ST_epsilon_die .and. &
-              (box%cc(i-1, j, i_eps) < ST_epsilon_die .and. box%cc(i+1, j, i_eps) < ST_epsilon_die) ) then
-             box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i-1, j, i_eps), box%cc(i+1, j, i_eps), 0.5_dp)
-           end if
-        
-           if (box%cc(IJK, i_eps) == ST_epsilon_die .and. &
-              (box%cc(i, j-1, i_eps) < ST_epsilon_die .and. box%cc(i, j+1, i_eps) < ST_epsilon_die) ) then
-             box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i, j-1, i_eps), box%cc(i, j+1, i_eps), 0.5_dp)
-           end if
+!      do KJI_DO(0, nc+1)
+!
+!         if(maxval([IJK]) < nc+1 .and. minval([IJK])> 0) then
+!#if $D == 2
+!           if (box%cc(IJK, i_eps) == ST_epsilon_die .and. &
+!              (box%cc(i-1, j, i_eps) < ST_epsilon_die .and. box%cc(i+1, j, i_eps) < ST_epsilon_die) ) then
+!             box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i-1, j, i_eps), box%cc(i+1, j, i_eps), 0.5_dp)
+!           end if
+!        
+!           if (box%cc(IJK, i_eps) == ST_epsilon_die .and. &
+!              (box%cc(i, j-1, i_eps) < ST_epsilon_die .and. box%cc(i, j+1, i_eps) < ST_epsilon_die) ) then
+!             box%cc(IJK, i_eps) = a$D_harm_w(box%cc(i, j-1, i_eps), box%cc(i, j+1, i_eps), 0.5_dp)
+!           end if
            
-#elif $D == 3
+!#elif $D == 3
 
-#endif
-         end if
-      end do; CLOSE_DO
+!#endif
+ !        end if
+  !    end do; CLOSE_DO
     
-    end if
-
-
+   ! end if
 
   end subroutine define_DI
   
@@ -336,7 +325,7 @@ contains
     type(box$D_t), intent(in) :: box
     integer, intent(in)       :: ix($D)
     real(dp)                  :: dr, rr($D), r($D), in_counts
-    integer                   :: IJK, n
+    integer                   :: IJK
     
     dr = box%dr
     rr = a$D_r_cc(box, ix)
@@ -351,21 +340,19 @@ contains
       r(2) = rr(2) + j*dr/8.0d0 - dr/2.0d0 - dr/16.0d0
       r(3) = rr(3) + k*dr/8.0d0 - dr/2.0d0 - dr/16.0d0
 #endif
-        do n = 1, init_conds%n_die
-          if (DI_interior(init_conds%die_type(n), init_conds%die_center(:,n), &
-            init_conds%die_axis(:,n), $D, r(:))) then
-              in_counts=in_counts+1.0_dp
-          end if
-        end do
+      if (DI_interior(init_conds%die_type, init_conds%die_center(:), &
+         init_conds%die_axis(:), $D, r(:))) then
+        in_counts=in_counts+1.0_dp
+      end if
     end do; CLOSE_DO
     
     vol_frac_inside = in_counts / (8.0_dp)**$D
   end function vol_frac_inside
   
-  function eps01_gc2(box)
+  function eps01_gc2(box) !> Including 2nd ghost cell, return 0 for inside, 1 for outside
 
     type(box$D_t), intent(in)    :: box
-    integer                         :: IJK, n, nc
+    integer                         :: IJK, nc
     real(dp)                        :: rr($D), dr, f 
     real(dp)                        :: eps01_gc2(DTIMES(-1:box%n_cell+2))
   
@@ -377,77 +364,20 @@ contains
        rr = a$D_r_cc(box, [IJK])
        f = vol_frac_inside(box, [IJK])
        if (maxval([IJK]) < nc+1 .and. minval([IJK])> 0) then
-         eps01_gc2(IJK) = box%cc(IJK, i_eps)
+         eps01_gc2(IJK) = a$D_delta(box%cc(IJK, i_eps),ST_epsilon_die)
        else
-         do n = 1, init_conds%n_die
-           eps01_gc2(IJK)        = a$D_heaviside(a$D_harm_w(1.0_dp, ST_epsilon_die, f), ST_epsilon_die)
-         end do
+         eps01_gc2(IJK) = a$D_delta(a$D_harm_w(1.0_dp, ST_epsilon_die, f), ST_epsilon_die)
        end if
     end do; CLOSE_DO
 
 
 
   end function eps01_gc2
-  
-  
-  
-  
-
-  subroutine a$D_bc_dirichlet_mirror(box, nb, iv, bc_type, i_eps)
-    type(box$D_t), intent(inout) :: box
-    integer, intent(in)         :: nb, iv
-    integer, intent(out)        :: bc_type
-    integer, intent(in), optional   :: i_eps
-
-    bc_type = af_bc_dirichlet
-    call a$D_set_box_gc(box, nb, iv, init_conds%background_density)
-
-  end subroutine a$D_bc_dirichlet_mirror
-  
-  subroutine a$D_bc2_dirichlet_mirror(boxes, id, nb, i_eps, iv, gc_side, nc, med)
-    type(box$D_t), intent(inout)   :: boxes(:)
-    integer, intent(in)            :: id, nb, iv, nc
-    integer, intent(in), optional  :: i_eps
-    real(dp), intent(in), optional :: med
-#if $D == 2
-    real(dp), intent(out)          :: gc_side(nc)
-#elif $D == 3
-    real(dp), intent(out)          :: gc_side(nc, nc)
-#endif
-
-    select case (nb)
-#if $D == 2
-    case (a2_neighb_lowx)
-       gc_side = -boxes(id)%cc(2, 1:nc, iv) + 2.0_dp * init_conds%background_density
-    case (a2_neighb_highx)
-       gc_side = -boxes(id)%cc(nc-1, 1:nc, iv) + 2.0_dp * init_conds%background_density
-    case (a2_neighb_lowy)
-       gc_side = -boxes(id)%cc(1:nc, 2, iv) + 2.0_dp * init_conds%background_density
-    case (a2_neighb_highy)
-       gc_side = -boxes(id)%cc(1:nc, nc-1, iv) + 2.0_dp * init_conds%background_density
-#elif $D == 3
-    case (a3_neighb_lowx)
-       gc_side = -boxes(id)%cc(2, 1:nc, 1:nc, iv) + 2.0_dp * init_conds%background_density
-    case (a3_neighb_highx)
-       gc_side = -boxes(id)%cc(nc-1, 1:nc, 1:nc, iv) + 2.0_dp * init_conds%background_density
-    case (a3_neighb_lowy)
-       gc_side = -boxes(id)%cc(1:nc, 2, 1:nc, iv) + 2.0_dp * init_conds%background_density
-    case (a3_neighb_highy)
-       gc_side = -boxes(id)%cc(1:nc, nc-1, 1:nc, iv) + 2.0_dp * init_conds%background_density
-    case (a3_neighb_lowz)
-       gc_side = -boxes(id)%cc(1:nc, 1:nc, 2, iv) + 2.0_dp * init_conds%background_density
-    case (a3_neighb_highz)
-       gc_side = -boxes(id)%cc(1:nc, 1:nc, nc-1, iv) + 2.0_dp * init_conds%background_density
-#endif
-    end select
-
-  end subroutine a$D_bc2_dirichlet_mirror
-  
-  subroutine a$D_bc_dirichlet_zero_fc(box, nb, s_iv, bc_type, i_eps)
+   
+  subroutine a$D_bc_dirichlet_zero_fc(box, nb, s_iv, bc_type)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb, s_iv
     integer, intent(out)        :: bc_type
-    integer, intent(in), optional   :: i_eps
 
     bc_type = af_bc_dirichlet
     call a$D_set_box_gc_fc(box, nb, s_iv, gc_scalar = [DTIMES(0.0_dp)])

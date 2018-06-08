@@ -1,3 +1,4 @@
+#include "cpp_macros_$Dd.h"
 !> This module contains the core routines of Afivo, namely those that deal with
 !> initializing and changing the quadtree/octree mesh.
 module m_a$D_core
@@ -7,6 +8,7 @@ module m_a$D_core
   private
 
   public :: a$D_init
+  public :: a$D_set_cc_methods
   public :: a$D_init_box
   public :: a$D_destroy
   public :: a$D_set_base
@@ -126,7 +128,50 @@ contains
           write(tree%fc_names(n), "(A,I0)") "flux", n
        end do
     end if
+
+    ! Initialize cell-centered methods (default is the null pointer)
+    allocate(tree%cc_methods(n_var_cell))
+    allocate(tree%has_cc_method(n_var_cell))
+    tree%has_cc_method(:) = .false.
+    allocate(tree%cc_method_vars(0))
   end subroutine a$D_init
+
+  !> Set the methods for a cell-centered variable
+  subroutine a$D_set_cc_methods(tree, iv, bc, rb, prolong, restrict)
+    use m_a$D_ghostcell, only: a$D_gc_interp
+    use m_a$D_prolong, only: a$D_prolong_linear
+    use m_a$D_restrict, only: a$D_restrict_box
+    type(a$D_t), intent(inout)             :: tree     !< Tree to operate on
+    integer, intent(in)                    :: iv       !< Index of variable
+    procedure(a$D_subr_bc)                 :: bc       !< Boundary condition method
+    procedure(a$D_subr_rb), optional       :: rb       !< Refinement boundary method
+    procedure(a$D_subr_prolong), optional  :: prolong  !< Prolongation method
+    procedure(a$D_subr_restrict), optional :: restrict !< Restriction method
+    integer                                :: i, n
+    tree%cc_methods(iv)%bc => bc
+
+    if (present(rb)) then
+       tree%cc_methods(iv)%rb => rb
+    else
+       tree%cc_methods(iv)%rb => a$D_gc_interp
+    end if
+
+    if (present(prolong)) then
+       tree%cc_methods(iv)%prolong => prolong
+    else
+       tree%cc_methods(iv)%prolong => a$D_prolong_linear
+    end if
+
+    if (present(restrict)) then
+       tree%cc_methods(iv)%restrict => restrict
+    else
+       tree%cc_methods(iv)%restrict => a$D_restrict_box
+    end if
+
+    tree%has_cc_method(iv) = .true.
+    n = size(tree%cc_method_vars)
+    tree%cc_method_vars = [(tree%cc_method_vars(i), i=1,n), iv]
+  end subroutine a$D_set_cc_methods
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
   !> just let a tree get out of scope
@@ -138,6 +183,9 @@ contains
     deallocate(tree%lvls)
     deallocate(tree%cc_names)
     deallocate(tree%fc_names)
+    deallocate(tree%cc_methods)
+    deallocate(tree%has_cc_method)
+    deallocate(tree%cc_method_vars)
 
     tree%highest_id = 0
     tree%ready      = .false.
@@ -275,6 +323,8 @@ contains
              tree%boxes(id)%neighbors = nb_used(:, n)
           end where
 
+          tree%boxes(id)%neighbor_mat = af_no_box
+
           call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
@@ -297,10 +347,114 @@ contains
        end if
     end do
 
+    ! Set the diagonal neighbors
+    do lvl = lbound(tree%lvls, 1), 1
+       do n = 1, n_boxes
+          id = tree%lvls(lvl)%ids(n)
+          call set_neighbor_mat(tree%boxes, id)
+       end do
+    end do
+
     tree%highest_lvl = 1
     tree%ready = .true.
 
   end subroutine a$D_set_base
+
+  subroutine set_neighbor_mat(boxes, id)
+    type(box$D_t), intent(inout) :: boxes(:) !< List of boxes
+    integer, intent(in)          :: id       !< Index of box
+    integer                      :: IJK, directions($D), ndir, nb_id
+
+    do KJI_DO(-1,1)
+       if (boxes(id)%neighbor_mat(IJK) /= af_no_box) cycle
+
+       ndir = 0
+
+       if (i /= 0) then
+          ndir = ndir + 1
+          directions(ndir) = a$D_neighb_lowx + (i + 1)/2
+       end if
+
+       if (j /= 0) then
+          ndir = ndir + 1
+          directions(ndir) = a$D_neighb_lowy + (j + 1)/2
+       end if
+
+#if $D == 3
+       if (k /= 0) then
+          ndir = ndir + 1
+          directions(ndir) = a$D_neighb_lowz + (k + 1)/2
+       end if
+#endif
+
+       boxes(id)%neighbor_mat(IJK) = &
+            find_neighb_id(boxes, id, directions(1:ndir))
+
+       nb_id = boxes(id)%neighbor_mat(IJK)
+
+       if (nb_id > af_no_box) then
+#if $D == 2
+          boxes(nb_id)%neighbor_mat(-i, -j) = id
+#elif $D == 3
+          boxes(nb_id)%neighbor_mat(-i, -j, -k) = id
+#endif
+       end if
+    end do; CLOSE_DO
+
+  end subroutine set_neighbor_mat
+
+  !> Find direct, diagonal and edge neighbors. Returns the index of the neighbor
+  !> if found, otherwise the result is nb_id <= af_no_box.
+  pure function find_neighb_id(boxes, id, nbs) result(nb_id)
+    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
+    integer, intent(in)       :: id       !< Start index
+    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
+    integer                   :: i, j, k, nb, nb_id
+    integer                   :: nbs_perm(size(nbs))
+
+    nb_id = id
+
+    if (size(nbs) == 0) then
+       return
+    else
+       do i = 1, size(nbs)
+          nb_id = id
+
+          ! Check if path exists starting from nbs(i)
+          do j = 1, size(nbs)
+             ! k starts at i and runs over the neighbors
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
+    ! covers all paths
+    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
+       nbs_perm = nbs([2,1,3])
+
+       do i = 1, size(nbs)
+          nb_id = id
+
+          do j = 1, size(nbs)
+             k = 1 + mod(i + j - 2, size(nbs))
+             nb = nbs(k)
+
+             nb_id = boxes(nb_id)%neighbors(nb)
+             if (nb_id <= af_no_box) exit
+          end do
+
+          if (nb_id > af_no_box) exit ! Found it
+       end do
+    end if
+
+  end function find_neighb_id
 
   !> Reorder and resize the list of boxes
   subroutine a$D_tidy_up(tree, max_hole_frac, n_clean_min)
@@ -311,7 +465,7 @@ contains
     !> Reorganize memory if at least this many boxes can be cleaned up
     integer, intent(in)            :: n_clean_min
     real(dp)                       :: hole_frac
-    integer                        :: n, lvl, id, n_clean
+    integer                        :: n, lvl, id, n_clean, IJK
     integer                        :: highest_id, n_used, n_stored, n_used_lvl
     integer, allocatable           :: ixs_sort(:), ixs_map(:)
     type(box$D_t), allocatable      :: boxes_cpy(:)
@@ -366,6 +520,13 @@ contains
           where (boxes_cpy(n)%neighbors > af_no_box)
              boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
           end where
+
+          do KJI_DO(-1, 1)
+             if (boxes_cpy(n)%neighbor_mat(IJK) > af_no_box) then
+                boxes_cpy(n)%neighbor_mat(IJK) = &
+                     ixs_map(boxes_cpy(n)%neighbor_mat(IJK))
+             end if
+          end do; CLOSE_DO
        end do
 
        tree%boxes(1:n_used) = boxes_cpy ! Copy ordered data
@@ -452,11 +613,31 @@ contains
   subroutine set_neighbs_$Dd(boxes, id)
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    integer                     :: nb, nb_id
+    integer                     :: nb, nb_id, IJK
+
+    do KJI_DO(-1, 1)
+       if (boxes(id)%neighbor_mat(IJK) == af_no_box) then
+          nb_id = find_neighb_$Dd(boxes, id, [IJK])
+          if (nb_id > af_no_box) then
+             boxes(id)%neighbor_mat(IJK) = nb_id
+#if $D == 2
+             boxes(nb_id)%neighbor_mat(-i, -j) = id
+#elif $D == 3
+             boxes(nb_id)%neighbor_mat(-i, -j, -k) = id
+#endif
+          end if
+       end if
+    end do; CLOSE_DO
 
     do nb = 1, a$D_num_neighbors
        if (boxes(id)%neighbors(nb) == af_no_box) then
-          nb_id = find_neighb_$Dd(boxes, id, nb)
+#if $D == 2
+          nb_id = boxes(id)%neighbor_mat(a$D_neighb_dix(1, nb), &
+               a$D_neighb_dix(2, nb))
+#elif $D == 3
+          nb_id = boxes(id)%neighbor_mat(a$D_neighb_dix(1, nb), &
+               a$D_neighb_dix(2, nb), a$D_neighb_dix(3, nb))
+#endif
           if (nb_id > af_no_box) then
              boxes(id)%neighbors(nb) = nb_id
              boxes(nb_id)%neighbors(a$D_neighb_rev(nb)) = id
@@ -465,25 +646,36 @@ contains
     end do
   end subroutine set_neighbs_$Dd
 
-  !> Get the id of neighbor nb of boxes(id), through its parent
-  function find_neighb_$Dd(boxes, id, nb) result(nb_id)
+  !> Get the id of all neighbors of boxes(id), through its parent
+  function find_neighb_$Dd(boxes, id, dix) result(nb_id)
     type(box$D_t), intent(in) :: boxes(:) !< List with all the boxes
-    integer, intent(in)      :: id       !< Box whose neighbor we are looking for
-    integer, intent(in)      :: nb       !< Neighbor index
-    integer                  :: nb_id, p_id, c_ix, d, old_pid
+    integer, intent(in)       :: id       !< Box whose neighbor we are looking for
+    integer, intent(in)       :: dix($D)
+    integer                   :: nb_id, p_id, c_ix, dix_c($D)
 
-    p_id    = boxes(id)%parent
-    old_pid = p_id
-    c_ix    = a$D_ix_to_ichild(boxes(id)%ix)
-    d       = a$D_neighb_dim(nb)
+    p_id = boxes(id)%parent
+    c_ix = a$D_ix_to_ichild(boxes(id)%ix)
 
-    ! Check if neighbor is in same direction as ix is (low/high). If so,
-    ! use neighbor of parent
-    if (a$D_child_low(d, c_ix) .eqv. a$D_neighb_low(nb)) &
-         p_id = boxes(p_id)%neighbors(nb)
+    ! Check if neighbor is in same direction as dix is (low/high). If so, use
+    ! neighbor of parent
+    where ((dix == -1) .eqv. a$D_child_low(:, c_ix))
+       dix_c = dix
+    elsewhere
+       dix_c = 0
+    end where
 
-    ! The child ix of the neighbor is reversed in direction d
-    nb_id = boxes(p_id)%children(a$D_child_rev(c_ix, d))
+#if $D == 2
+    p_id = boxes(p_id)%neighbor_mat(dix_c(1), dix_c(2))
+#elif $D == 3
+    p_id = boxes(p_id)%neighbor_mat(dix_c(1), dix_c(2), dix_c(3))
+#endif
+
+    if (p_id <= af_no_box) then
+       nb_id = p_id
+    else
+       c_ix = a$D_ix_to_ichild(boxes(id)%ix + dix)
+       nb_id = boxes(p_id)%children(c_ix)
+    end if
   end function find_neighb_$Dd
 
   !> Resize box storage to new_size
@@ -587,6 +779,7 @@ contains
                   tree%n_var_cell, tree%n_var_face)
           else if (ref_flags(id) == af_derefine) then
              ! Remove children
+             call auto_restrict(tree, id)
              call remove_children(tree%boxes, id)
           end if
        end do
@@ -609,14 +802,74 @@ contains
 
     tree%highest_lvl = lvl
 
-    ! Update leaves and parents for the last level, because we might have
-    ! removed a refinement lvl.
-    call set_leaves_parents(tree%boxes, tree%lvls(tree%highest_lvl+1))
+    ! We still have to update leaves and parents for the last level, which is
+    ! either lvl+1 or lvl_limit. Note that lvl+1 is empty now, but maybe it was
+    ! not not empty before, and that lvl_limit is skipped in the above loop.
+    lvl = min(lvl+1, tree%lvl_limit)
+    call set_leaves_parents(tree%boxes, tree%lvls(lvl))
 
     ! Set information about the refinement
     call set_ref_info(tree, ref_flags, ref_info)
 
+    call auto_prolong(tree, ref_info)
+
   end subroutine a$D_adjust_refinement
+
+  !> Try to automatically restrict to box with index id
+  subroutine auto_restrict(tree, id)
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: id
+    integer                    :: iv, i_ch, ch_id
+
+    if (.not. any(tree%has_cc_method(:))) return
+
+    do iv = 1, tree%n_var_cell
+       if (tree%has_cc_method(iv)) then
+          do i_ch = 1, a$D_num_children
+             ch_id = tree%boxes(id)%children(i_ch)
+             call tree%cc_methods(iv)%restrict(tree%boxes(ch_id), &
+                  tree%boxes(id), iv)
+          end do
+       end if
+    end do
+  end subroutine auto_restrict
+
+  !> Try to automatically prolong to all new boxes
+  subroutine auto_prolong(tree, ref_info)
+    use m_a$D_ghostcell, only: a$D_gc_box
+    type(a$D_t), intent(inout)    :: tree
+    type(ref_info_t), intent(in) :: ref_info
+    integer                      :: lvl, i, n, iv, id, p_id
+
+    ! Skip this routine when it won't do anything
+    if (.not. any(tree%has_cc_method(:)) .or. ref_info%n_add == 0) then
+       return
+    end if
+
+    !$omp parallel private(lvl, i, n, iv, id, p_id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          p_id = tree%boxes(id)%parent
+
+          do n = 1, size(tree%cc_method_vars)
+             iv = tree%cc_method_vars(n)
+             call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
+                  tree%boxes(id), iv)
+          end do
+       end do
+       !$omp end do
+
+       !$omp do
+       do i = 1, size(ref_info%lvls(lvl)%add)
+          id = ref_info%lvls(lvl)%add(i)
+          call a$D_gc_box(tree, id, [tree%cc_method_vars])
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine auto_prolong
 
   !> Set information about the refinement for all "normal" levels (>= 1)
   subroutine set_ref_info(tree, ref_flags, ref_info)
@@ -854,7 +1107,7 @@ contains
     integer, intent(in)     :: id                     !< Which box is considered
     integer, intent(in)     :: ref_buffer             !< Buffer cells around refinement
     logical, intent(in)     :: keep_buffer            !< Buffer around 'keep refinement' flags
-    integer                 :: ix0($D), ix1($D), n, nb, dim, nb_id
+    integer                 :: ix0($D), ix1($D), IJK, nb_id
 
     if (minval(cell_flags) < af_rm_ref .or. &
          maxval(cell_flags) > af_do_ref) then
@@ -874,8 +1127,10 @@ contains
 
     ! Check whether neighbors also require refinement, which happens when cells
     ! close to the neighbor are flagged.
-    do nb = 1, a$D_num_neighbors
-       nb_id = tree%boxes(id)%neighbors(nb)
+    do KJI_DO(-1,1)
+       if (all([IJK] == 0)) cycle
+
+       nb_id = tree%boxes(id)%neighbor_mat(IJK)
 
        ! Skip neighbors that are not there
        if (nb_id <= af_no_box) cycle
@@ -883,66 +1138,13 @@ contains
        ! Compute index range relevant for neighbor
        ix0 = 1
        ix1 = nc
-       dim = a$D_neighb_dim(nb)
-
-       if (a$D_neighb_low(nb)) then
-          ix1(dim) = ref_buffer
-       else
-          ix0(dim) = nc - ref_buffer + 1
-       end if
-
-#if $D == 2
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. &
-            any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
-       end if
-#elif $D == 3
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
-            ix0(3):ix1(3)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
-            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
-       end if
-#endif
-    end do
-
-#if $D == 3
-    ! Check neighbors on the edges
-    do n = 1, a3_num_edges
-       ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(tree%boxes, id, a3_nb_adj_edge(:, n))
-       if (nb_id <= af_no_box) cycle
-
-       ! Compute index range relevant for neighbor. This is currently a 3d
-       ! rectangle, whereas is should perhaps have a triangle-like shape
-       dim      = a3_edge_dim(n) ! Dimension parallel to edge
-       ix0      = 1 + a3_edge_min_ix(:, n) * (nc-ref_buffer)
-       ix1      = ix0 + ref_buffer - 1
-       ix0(dim) = 1
-       ix1(dim) = nc
-
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
-            ix0(3):ix1(3)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
-            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
-       end if
-    end do
-#endif
-
-    ! Check corners
-    do n = 1, a$D_num_children
-       ! Check whether there is a neighbor, and find its index
-       nb_id = a$D_diag_neighb_id(tree%boxes, id, a$D_nb_adj_child(:, n))
-       if (nb_id <= af_no_box) cycle
-
-       ! Compute index range relevant for neighbor (a 3d cube)
-       ix0 = 1 + a$D_child_dix(:, n) * (nc-ref_buffer)
-       ix1 = ix0 + ref_buffer - 1
+       where ([IJK] == 1)
+          ix0 = nc - ref_buffer + 1
+          ix1 = nc
+       elsewhere ([IJK] == -1)
+          ix0 = 1
+          ix1 = ref_buffer
+       end where
 
 #if $D == 2
        if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
@@ -960,7 +1162,7 @@ contains
           ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
        end if
 #endif
-    end do
+    end do; CLOSE_DO
 
   end subroutine cell_to_ref_flags
 
@@ -968,7 +1170,7 @@ contains
   subroutine remove_children(boxes, id)
     type(box$D_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id       !< Id of box whose children will be removed
-    integer                     :: ic, c_id, nb_id, nb_rev, nb
+    integer                     :: ic, c_id, nb_id, nb_rev, nb, IJK
 
     do ic = 1, a$D_num_children
        c_id = boxes(id)%children(ic)
@@ -981,6 +1183,17 @@ contains
              boxes(nb_id)%neighbors(nb_rev) = af_no_box
           end if
        end do
+
+       do KJI_DO(-1,1)
+          nb_id = boxes(c_id)%neighbor_mat(IJK)
+          if (nb_id > af_no_box) then
+#if $D == 2
+             boxes(nb_id)%neighbor_mat(-i, -j) = af_no_box
+#elif $D == 3
+             boxes(nb_id)%neighbor_mat(-i, -j, -k) = af_no_box
+#endif
+          end if
+       end do; CLOSE_DO
 
        call clear_box(boxes(c_id))
     end do
@@ -995,7 +1208,8 @@ contains
     integer, intent(in)         :: c_ids(a$D_num_children) !< Free ids for the children
     integer, intent(in)         :: n_cc                   !< Number of cell-centered variables
     integer, intent(in)         :: n_fc                   !< Number of face-centered variables
-    integer                     :: i, nb, child_nb(2**($D-1)), c_id, c_ix_base($D)
+    integer                     :: i, nb, child_nb(2**($D-1))
+    integer                     :: c_id, c_ix_base($D), dix($D)
 
     boxes(id)%children = c_ids
     c_ix_base          = 2 * boxes(id)%ix - 1
@@ -1008,6 +1222,8 @@ contains
        boxes(c_id)%tag       = af_init_tag
        boxes(c_id)%children  = af_no_box
        boxes(c_id)%neighbors = af_no_box
+       boxes(c_id)%neighbor_mat = af_no_box
+       boxes(c_id)%neighbor_mat(DTIMES(0)) = c_id
        boxes(c_id)%n_cell    = boxes(id)%n_cell
        boxes(c_id)%coord_t   = boxes(id)%coord_t
        boxes(c_id)%dr        = 0.5_dp * boxes(id)%dr
@@ -1022,6 +1238,14 @@ contains
        if (boxes(id)%neighbors(nb) < af_no_box) then
           child_nb = c_ids(a$D_child_adj_nb(:, nb)) ! Neighboring children
           boxes(child_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
+          dix = a$D_neighb_dix(:, nb)
+#if $D == 2
+          boxes(child_nb)%neighbor_mat(dix(1), dix(2)) = &
+               boxes(id)%neighbors(nb)
+#elif $D == 3
+          boxes(child_nb)%neighbor_mat(dix(1), dix(2), dix(3)) = &
+               boxes(id)%neighbors(nb)
+#endif
        end if
     end do
   end subroutine add_children

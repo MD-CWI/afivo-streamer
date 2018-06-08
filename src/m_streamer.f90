@@ -28,8 +28,10 @@ module m_streamer
   integer, protected :: i_rhs          = -1 ! Source term Poisson
   integer, protected :: i_eps          = -1 ! Dielectric epsilon
 
-  ! Optional variable (when using photoionization)
-  integer :: i_photo = -1 ! Photoionization rate
+  ! Optional variables (when using photoionization)
+  integer :: i_photo     = -1 ! Photoionization rate
+  integer :: i_photo_low = -1 ! Photoionization rate (low energy photons)
+  integer :: surf_photo  = -1 ! Photoemission rate
 
   ! Optional variable (to show ionization source term)
   integer :: i_src = -1 ! Source term
@@ -54,16 +56,22 @@ module m_streamer
 
   ! ** Indices of transport data **
   integer, parameter :: n_var_td    = 4 ! Number of transport coefficients
+  integer, parameter :: n_var_ex    = 1 ! Number of excited species in the model (for < 12 eV photons)
   integer, parameter :: i_mobility  = 1 ! Electron mobility
   integer, parameter :: i_diffusion = 2 ! Electron diffusion constant
   integer, parameter :: i_alpha     = 3 ! Ionization coeff (1/m)
   integer, parameter :: i_eta       = 4 ! Attachment coeff (1/m)
+  integer, parameter :: i_ex_N2     = 1 ! Excitation rate for N2 (m3/s)
 
   ! Whether cylindrical coordinates are used
   logical :: ST_cylindrical = .false.
 
   ! Table with transport data vs electric field
   type(lookup_table_t), protected :: ST_td_tbl
+    
+  ! Table with excitation data vs electric field (for < 12 eV & > 2 eV photon emission)
+  type(lookup_table_t), protected :: ST_ex_tbl
+    
 
   !> The diffusion coefficient for positive ions (m2/s)
   real(dp) :: ST_ion_diffusion = 0.0_dp
@@ -221,8 +229,17 @@ module m_streamer
   ! Epsilon of dielectric
   real(dp), protected :: ST_epsilon_die = 5.0_dp
   
-  ! Photoemission yield (from 10e-7 to 1)
-  real(dp), protected :: ST_phe_yield = 10e-5_dp
+  ! Photoemission yield for high energy photons (from 10e-2 to 1)
+  real(dp), protected :: ST_phe_yield_high = 10e-1_dp
+  
+  ! Photoemission yield for loew energy photons (from 10e-7 to 10e-2)
+  real(dp), protected :: ST_phe_yield_low = 10e-3_dp
+  
+  ! Work function (eV)
+  real(dp), protected :: ST_work_fun = 1.7_dp
+  
+  ! Secondary emission (ion bombardment) coefficient
+  real(dp), protected :: ST_gamma = 0.1_dp
 
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2
@@ -363,8 +380,11 @@ contains
          "The gas pressure (bar), used for photoionization")
     call CFG_add_get(cfg, "gas_frac_O2", ST_gas_frac_O2, &
          "Fraction of O2, used for photoionization")
-    call CFG_add_get(cfg, "photoemission_yield", ST_phe_yield, &
-         "Photoemission yield of the dielectric")
+    call CFG_add_get(cfg, "photoemission_yield_high", ST_phe_yield_high, &
+         "Photoemission yield (high energy) of the dielectric")    
+    call CFG_add_get(cfg, "photoemission_yield_low", ST_phe_yield_low, &
+         "Photoemission yield (low energy) of the dielectric")
+
          
     call CFG_add_get(cfg, "epsilon_die", ST_epsilon_die, &
          "Permittivity of the dielectric")
@@ -567,5 +587,41 @@ contains
     call LT_set_col(ST_td_tbl, i_eta, x_data, y_data)
 
   end subroutine ST_load_transport_data
+  
+  !> Initialize the excitation coefficients (low energy photons)
+   subroutine ST_load_excitation_data(cfg)
+     use m_transport_data
+     use m_config
+
+     type(CFG_t), intent(inout) :: cfg
+
+     character(len=ST_slen)     :: ex_file = "ex_input_file.txt"
+     character(len=ST_slen)     :: gas_name         = "AIR"
+     integer                    :: table_size       = 1000
+     real(dp)                   :: max_electric_fld = 7e7_dp
+     !real(dp)                   :: eta_fac          = 1.0_dp
+     real(dp), allocatable      :: x_data(:), y_data(:)
+     character(len=ST_slen)     :: data_name
+
+     call CFG_add_get(cfg, "excitation_data_file", ex_file, &
+          "Input file with excitation data (for photoemission)")
+     call CFG_get(cfg, "gas_name", gas_name)
+
+     call CFG_add_get(cfg, "lookup_table_size_ex", table_size, &
+          "The excitation data table size in the fluid model")
+     call CFG_get(cfg, "lookup_table_max_electric_fld", max_electric_fld)
+
+     ! Create a lookup table for the model coefficients
+     ST_ex_tbl = LT_create(0.0_dp, max_electric_fld, table_size, n_var_ex)
+
+     ! Fill table with data
+     data_name = "efield[V/m]_vs_exrate_N2[m3/s]"
+     call CFG_add_get(cfg, "exrate_N2_name", data_name, &
+          "The name of the excitation rate for N2")
+     call TD_get_from_file(ex_file, gas_name, &
+          trim(data_name), x_data, y_data)
+     call LT_set_col(ST_ex_tbl, i_ex_N2, x_data, y_data)
+
+   end subroutine ST_load_excitation_data
 
 end module m_streamer

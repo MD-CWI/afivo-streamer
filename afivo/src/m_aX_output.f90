@@ -573,9 +573,10 @@ contains
     procedure(subr_add_vars), optional :: add_vars !< Optional routine to add extra variables
     character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
 
-    character(len=*), parameter     :: grid_name = "gg"
+    character(len=*), parameter     :: grid_name = "gg", block_prefix = "blk_"
     character(len=*), parameter     :: amr_name  = "mesh", meshdir = "data"
-    character(len=100), allocatable :: grid_list(:), var_list(:, :), var_names(:)
+    character(len=100), allocatable :: grid_list(:), grid_list_block(:)
+    character(len=100), allocatable :: var_list(:, :), var_names(:)
     character(len=400)              :: fname
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
     integer                         :: n_cc, n_add, dbix
@@ -628,6 +629,7 @@ contains
     end do
 
     allocate(grid_list(n_grids_max))
+    allocate(grid_list_block(n_grids_max))
     allocate(var_list(n_cc+n_add, n_grids_max))
     allocate(box_done(tree%highest_id))
     box_done = .false.
@@ -784,6 +786,10 @@ contains
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 2, &
                hi - lo + 2, r_min, dr, 1-lo, hi - [nx, ny] * nc)
+          write(grid_list_block(i_grid), "(A,I0)") meshdir // '/' // block_prefix &
+               // grid_name, i_grid
+          call SILO_add_grid(dbix, grid_list_block(i_grid), 2, [nx+1, ny+1], &
+               tree%boxes(id)%r_min, nc*dr, [0, 0], [0, 0])
 
           do iv = 1, n_cc+n_add
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
@@ -962,6 +968,10 @@ contains
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 3, &
                hi - lo + 2, r_min, dr, 1-lo, hi-[nx, ny, nz]*nc)
+          write(grid_list_block(i_grid), "(A,I0)") meshdir // '/' // block_prefix // &
+               grid_name, i_grid
+          call SILO_add_grid(dbix, grid_list_block(i_grid), 3, [nx+1, ny+1, nz+1], &
+               tree%boxes(id)%r_min, nc*dr, [0, 0, 0], [0, 0, 0])
 
           do iv = 1, n_cc+n_add
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
@@ -983,6 +993,9 @@ contains
        call SILO_set_mmesh_var(dbix, trim(var_names(iv)), amr_name, &
             var_list(iv, 1:i_grid), n_cycle_val, time_val)
     end do
+
+    call SILO_set_mmesh_grid(dbix, block_prefix // amr_name, &
+         grid_list_block(1:i_grid), n_cycle_val, time_val)
     call SILO_close_file(dbix)
     print *, "a$D_write_silo: written " // trim(fname)
   end subroutine a$D_write_silo

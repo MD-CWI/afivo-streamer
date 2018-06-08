@@ -5,7 +5,8 @@ COMPILER = gfortran
 
 ifeq ($(COMPILER), gfortran)
 	FC 	:= gfortran
-	FFLAGS	:= -O2 -std=f2008 -fopenmp -Wall -Wextra -Wimplicit-interface -Wshadow
+	FFLAGS	:= -O2 -std=f2008 -fopenmp -Wall -Wextra -Wimplicit-interface \
+	-Wshadow -Wno-unused-dummy-argument
 	ifeq ($(DEBUG), 1)
 		FFLAGS += -O0 -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
 		-pedantic -finit-real=snan
@@ -25,6 +26,11 @@ endif
 # How to get .o object files from .f90 source files
 %.o: %.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
+
+# How to get .mod files from .f90 source files (remake only if they have been
+# removed, otherwise assume they are up to date)
+%.mod: %.f90 %.o
+	@test -f $@ || $(FC) -c -o $(@:.mod=.o) $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
 
 # How to get executables from .o object files
 %: %.o

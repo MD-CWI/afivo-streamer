@@ -17,12 +17,8 @@ module m_a$D_types
   integer, parameter :: a2_child_lowx_highy = 3
   integer, parameter :: a2_child_highx_highy = 4
 
-  ! Neighboring indices for each child
-  integer, parameter :: a2_child_neighbs(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
   ! Index offset for each child
   integer, parameter :: a2_child_dix(2, 4) = reshape([0,0,1,0,0,1,1,1], [2,4])
-  ! Reverse child index in each direction
-  integer, parameter :: a2_child_rev(4, 2) = reshape([2,1,4,3,3,4,1,2], [4,2])
   ! Children adjacent to a neighbor
   integer, parameter :: a2_child_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
   ! Neighbors adjacent to a child
@@ -69,17 +65,10 @@ module m_a$D_types
   integer, parameter :: a3_child_lowx_highy_highz = 7
   integer, parameter :: a3_child_highx_highy_highz = 8
 
-  ! Neighboring indices for each child
-  integer, parameter :: a3_child_neighbs(3, 8) = reshape( &
-       [1,3,5, 2,3,5, 1,4,5, 2,4,5, &
-       1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
   ! Index offset for each child
   integer, parameter :: a3_child_dix(3, 8) = reshape( &
        [0,0,0, 1,0,0, 0,1,0, 1,1,0, &
        0,0,1, 1,0,1, 0,1,1, 1,1,1], [3,8])
-  ! Reverse child index in each direction
-  integer, parameter :: a3_child_rev(8, 3) = reshape( &
-       [2,1,4,3,6,5,8,7, 3,4,1,2,7,8,5,6, 5,6,7,8,1,2,3,4], [8,3])
   ! Children adjacent to a neighbor
   integer, parameter :: a3_child_adj_nb(4, 6) = reshape( &
        [1,3,5,7, 2,4,6,8, 1,2,5,6, 3,4,7,8, 1,2,3,4, 5,6,7,8], [4,6])
@@ -131,6 +120,11 @@ module m_a$D_types
   ! Coordinate parallel to edge
   integer, parameter :: a3_edge_dim(12) = &
        [1,1,1,1, 2,2,2,2, 3,3,3,3]
+  ! Direction of edge
+  integer, parameter :: a3_edge_dir(3, 12) = reshape( &
+       [0,-1,-1, 0,1,-1, 0,-1,1, 0,1,1, &
+       -1,0,-1, 1,0,-1, -1,0,1, 1,0,1, &
+       -1,-1,0, 1,-1,0, -1,1,0, 1,1,0], [3, 12])
   ! Neighbors adjacent to edges
   integer, parameter :: a3_nb_adj_edge(2, 12) = reshape( &
        [3,5, 4,5, 3,6, 4,6, &
@@ -142,6 +136,18 @@ module m_a$D_types
        0,0,0, 1,0,0, 0,0,1, 1,0,1, &
        0,0,0, 1,0,0, 0,1,0, 1,1,0], [3,12])
 #endif
+
+  !> Collection of methods for a cell-centered variable
+  type a$D_cc_methods
+     !> Prolongation method
+     procedure(a$D_subr_prolong), pointer, nopass :: prolong => null()
+     !> Restriction method
+     procedure(a$D_subr_restrict), pointer, nopass :: restrict => null()
+     !> Boundary condition routine
+     procedure(a$D_subr_bc), pointer, nopass :: bc => null()
+     !> Refinement boundary routine
+     procedure(a$D_subr_rb), pointer, nopass :: rb => null()
+  end type a$D_cc_methods
 
   !> The basic building block of afivo: a box with cell-centered and face
   !> centered data, and information about its position, neighbors, children etc.
@@ -155,6 +161,12 @@ module m_a$D_types
      integer               :: children(a$D_num_children)
      !> index of neighbors in box list
      integer               :: neighbors(a$D_num_neighbors)
+     !> matrix with neighbors (including diagonal ones)
+#if $D == 2
+     integer               :: neighbor_mat(-1:1, -1:1)
+#elif $D == 3
+     integer               :: neighbor_mat(-1:1, -1:1, -1:1)
+#endif
      integer               :: n_cell    !< number of cells per dimension
      real(dp)              :: dr        !< width/height of a cell
      real(dp)              :: r_min($D) !< min coords. of box
@@ -182,10 +194,20 @@ module m_a$D_types
      integer                    :: coord_t    !< Type of coordinates
      real(dp)                   :: r_base($D) !< min. coords of box at index (1,1)
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
+
      !> Names of cell-centered variables
      character(len=af_nlen), allocatable :: cc_names(:)
      !> Names of face-centered variables
      character(len=af_nlen), allocatable :: fc_names(:)
+
+     !> Methods for cell-centered variables
+     type(a$D_cc_methods), allocatable :: cc_methods(:)
+
+     !> For which cell-centered variables methods have been set
+     logical, allocatable :: has_cc_method(:)
+     !> Indices of cell-centered variables with methods
+     integer, allocatable :: cc_method_vars(:)
+
      type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
      type(box$D_t), allocatable :: boxes(:)   !< list of all boxes
   end type a$D_t
@@ -240,44 +262,56 @@ module m_a$D_types
      end subroutine a$D_subr_boxes_arg
 
      !> To fill ghost cells near refinement boundaries.
-     subroutine a$D_subr_rb(boxes, id, nb, i_eps, iv, med)
+     subroutine a$D_subr_rb(boxes, id, nb, iv)
        import
-       type(box$D_t), intent(inout)    :: boxes(:) !< Array with all boxes
-       integer, intent(in)             :: id       !< Id of the box that needs to have ghost cells filled
-       integer, intent(in)             :: nb       !< Neighbor direction in which ghost cells need to be filled
-       integer, intent(in), optional   :: i_eps
-       integer, intent(in)             :: iv       !< Variable for which ghost cells are filled
-       real(dp), intent(in), optional  :: med
+       type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
+       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled
+       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
      end subroutine a$D_subr_rb
 
      !> To fill ghost cells near physical boundaries
-     subroutine a$D_subr_bc(box, nb, iv, bc_type, i_eps)
+     subroutine a$D_subr_bc(box, nb, iv, bc_type)
        import
        type(box$D_t), intent(inout)  :: box     !< Box that needs b.c.
-       integer, intent(in)           :: nb      !< Direction
-       integer, intent(in)           :: iv      !< Index of variable
-       integer, intent(out)          :: bc_type !< Type of b.c.
-       integer, intent(in), optional   :: i_eps
+       integer, intent(in)          :: nb      !< Direction
+       integer, intent(in)          :: iv      !< Index of variable
+       integer, intent(out)         :: bc_type !< Type of b.c.
      end subroutine a$D_subr_bc
 
      !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries
-     subroutine a$D_subr_egc(boxes, id, nb, i_eps, iv, gc_data, nc, med)
+     subroutine a$D_subr_egc(boxes, id, nb, iv, gc_data, nc)
        import
-       type(box$D_t), intent(inout)   :: boxes(:) !< Array with all boxes
-       integer, intent(in)            :: id       !< Id of the box that needs to have ghost cells filled
-       integer, intent(in)            :: nb       !< Neighbor direction
-       integer, intent(in), optional  :: i_eps
-       real(dp), intent(in), optional :: med
-       integer, intent(in)            :: iv       !< Variable for which ghost cells are filled
-       integer, intent(in)            :: nc       !< box%n_cell (this is purely for convenience)
+       type(box$D_t), intent(inout) :: boxes(:) !< Array with all boxes
+       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)         :: nb       !< Neighbor direction
+       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
+       integer, intent(in)         :: nc       !< box%n_cell (this is purely for convenience)
 #if $D == 2
-       real(dp), intent(out)          :: gc_data(nc) !< The requested ghost cells
+       real(dp), intent(out)       :: gc_data(nc) !< The requested ghost cells
 #elif $D == 3
-       real(dp), intent(out)          :: gc_data(nc, nc) !< The requested ghost cells
+       real(dp), intent(out)       :: gc_data(nc, nc) !< The requested ghost cells
 #endif
      end subroutine a$D_subr_egc
-     
-     
+
+     !> Subroutine for prolongation
+     subroutine a$D_subr_prolong(box_p, box_c, iv, iv_to, add)
+       import
+       type(box$D_t), intent(in)     :: box_p !< Parent box
+       type(box$D_t), intent(inout)  :: box_c !< Child box
+       integer, intent(in)           :: iv    !< Variable to fill
+       integer, intent(in), optional :: iv_to !< Destination variable
+       logical, intent(in), optional :: add   !< Add to old values
+     end subroutine a$D_subr_prolong
+
+     !> Subroutine for restriction
+     subroutine a$D_subr_restrict(box_c, box_p, iv, iv_to)
+       import
+       type(box$D_t), intent(in)     :: box_c !< Child box to restrict
+       type(box$D_t), intent(inout)  :: box_p !< Parent box to restrict to
+       integer, intent(in)           :: iv    !< Variable to restrict
+       integer, intent(in), optional :: iv_to !< Destination (if /= iv)
+     end subroutine a$D_subr_restrict
   end interface
 
 contains
@@ -348,7 +382,7 @@ contains
 
   pure function a$D_num_cells_used(tree) result(n_cells)
     type(a$D_t), intent(in) :: tree
-    integer                 :: n_cells, lvl
+    integer                 :: n_cells
 
     n_cells = a$D_num_leaves_used(tree) * tree%n_cell**$D
   end function a$D_num_cells_used
@@ -442,57 +476,6 @@ contains
     nb_ix(nb_dim) = nb_ix(nb_dim) - a$D_neighb_high_pm(nb) * box%n_cell
   end function a$D_get_ix_on_neighb
 
-  !> Get diagonal neighbors. Returns the index of the neighbor if found,
-  !> otherwise the result nb_id <= af_no_box.
-  pure function a$D_diag_neighb_id(boxes, id, nbs) result(nb_id)
-    type(box$D_t), intent(in) :: boxes(:) !< List of all the boxes
-    integer, intent(in)       :: id       !< Start index
-    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
-    integer                   :: i, j, k, nb, nb_id
-    integer                   :: nbs_perm(size(nbs))
-
-    if (size(nbs) == 0) then
-       nb_id = id
-    else
-       do i = 1, size(nbs)
-          nb_id = id
-
-          ! Check if path exists starting from nbs(i)
-          do j = 1, size(nbs)
-             ! k starts at i and runs over the neighbors
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
-          end do
-
-          if (nb_id > af_no_box) exit ! Found it
-       end do
-    end if
-
-    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
-    ! covers all paths
-    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
-       nbs_perm = nbs([2,1,3])
-
-       do i = 1, size(nbs)
-          nb_id = id
-
-          do j = 1, size(nbs)
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
-          end do
-
-          if (nb_id > af_no_box) exit ! Found it
-       end do
-    end if
-
-  end function a$D_diag_neighb_id
-
   !> Given a list of neighbor directions, compute the index offset
   pure function a$D_neighb_offset(nbs) result(dix)
     integer, intent(in) :: nbs(:) !< List of neighbor directions
@@ -576,10 +559,10 @@ contains
   end function a$D_lvl_dr
 
   subroutine a$D_set_box_gc(box, nb, iv, gc_scalar, gc_array)
-    type(box$D_t), intent(inout)   :: box      !< Box to operate on
-    integer, intent(in)            :: nb        !< Ghost cell direction
-    integer, intent(in)            :: iv        !< Ghost cell variable(s)
-    real(dp), optional, intent(in) :: gc_scalar !< "Scalar" value for ghost cells
+    type(box$D_t), intent(inout) :: box      !< Box to operate on
+    integer, intent(in)         :: nb        !< Ghost cell direction
+    integer, intent(in)         :: iv        !< Ghost cell variable
+    real(dp), optional, intent(in) :: gc_scalar !< Scalar value for ghost cells
 #if $D == 2
     real(dp), optional, intent(in) :: gc_array(box%n_cell) !< Array for ghost cells
 #elif $D == 3
