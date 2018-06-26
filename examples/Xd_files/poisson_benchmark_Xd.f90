@@ -19,7 +19,7 @@ program poisson_benchmark_$Dd
   integer            :: mg_iter, n_args
   integer            :: n_cell, n_iterations, max_ref_lvl
   integer            :: ix_list($D, n_boxes_base)
-  real(dp)           :: dr, time
+  real(dp)           :: dr, time, runtime
   character(len=100) :: fname, arg_string
   type(mg$D_t)        :: mg
   integer            :: count_rate,t_start, t_end
@@ -35,7 +35,7 @@ program poisson_benchmark_$Dd
      read(arg_string, *) n_cell
   else
      print *, "No arguments specified, using default values"
-     print *, "Usage: ./poisson_benchmark_$Dd n_cell max_ref_lvl n_iterations"
+     print *, "Usage: ./poisson_benchmark_$Dd n_cell max_ref_lvl runtime(s)"
      n_cell = 16
   end if
 
@@ -48,14 +48,15 @@ program poisson_benchmark_$Dd
 
   if (n_args >= 3) then
      call get_command_argument(3, arg_string)
-     read(arg_string, *) n_iterations
+     read(arg_string, *) runtime
+     if (runtime < 1e-3_dp) stop "Run time should be > 1e-3 seconds"
   else
-     n_iterations = 100
+     runtime = 10
   end if
 
   print *, "Box size:           ", n_cell
   print *, "Max refinement lvl: ", max_ref_lvl
-  print *, "Num iterations:     ", n_iterations
+  print *, "Run time (s):       ", runtime
 
   dr = 1.0_dp / n_cell
 
@@ -108,8 +109,20 @@ program poisson_benchmark_$Dd
   ! and i_tmp. These variables will be initialized at the first call of mg$D_fas_fmg
   call mg$D_init_mg(mg)
 
-  ! A first warm-up call
-  call mg$D_fas_fmg(tree, mg, .false., .false.)
+  ! Warm-up call
+  call mg$D_fas_fmg(tree, mg, .false., mg_iter>1)
+
+  ! Test how long cycles take to determine the number of cycles
+  n_iterations = 1000
+  call system_clock(t_start, count_rate)
+  do mg_iter = 1, n_iterations
+     call mg$D_fas_fmg(tree, mg, .false., mg_iter>1)
+     call system_clock(t_end, count_rate)
+     time = (t_end-t_start) / real(count_rate, dp)
+     if (time > 0.2_dp * runtime) exit
+  end do
+
+  n_iterations = ceiling((runtime/time) * mg_iter)
 
   ! Do the actual benchmarking
   call system_clock(t_start, count_rate)
