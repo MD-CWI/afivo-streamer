@@ -13,6 +13,11 @@ module m_a$D_multigrid
   integer, parameter, public :: mg_ceps_box   = 3 !< Box with constant eps /= 1
   integer, parameter, public :: mg_veps_box   = 4 !< Box with varying eps (on face)
 
+  ! Labels for the different steps of a multigrid cycle
+  integer, parameter :: mg_cycle_down = 1
+  integer, parameter :: mg_cycle_base = 2
+  integer, parameter :: mg_cycle_up   = 3
+
   !> Type to store multigrid options in
   type, public :: mg$D_t
      integer :: i_phi        = -1 !< Variable holding solution
@@ -223,7 +228,7 @@ contains
 
     do lvl = max_lvl,  min_lvl+1, -1
        ! Downwards relaxation
-       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg%n_cycle_down)
+       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_down)
 
        ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
        ! correction later
@@ -231,7 +236,7 @@ contains
     end do
 
     lvl = min_lvl
-    call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg%n_cycle_base)
+    call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_base)
 
     ! Do the upwards part of the v-cycle in the tree
     do lvl = min_lvl+1, max_lvl
@@ -244,7 +249,7 @@ contains
             mg%sides_rb, mg%sides_bc)
 
        ! Upwards relaxation
-       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg%n_cycle_up)
+       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_up)
     end do
 
     if (set_residual) then
@@ -610,13 +615,25 @@ contains
     !$omp end parallel do
   end subroutine correct_children
 
-  subroutine gsrb_boxes(tree, ids, mg, n_cycle)
+  subroutine gsrb_boxes(tree, ids, mg, type_cycle)
     use m_a$D_ghostcell, only: a$D_gc_box
-    type(a$D_t), intent(inout) :: tree    !< Tree containing full grid
-    type(mg$D_t), intent(in)   :: mg      !< Multigrid options
-    integer, intent(in)        :: ids(:)  !< Operate on these boxes
-    integer, intent(in)        :: n_cycle !< Number of cycles to perform
-    integer                    :: n, i
+    type(a$D_t), intent(inout) :: tree       !< Tree containing full grid
+    type(mg$D_t), intent(in)   :: mg         !< Multigrid options
+    integer, intent(in)        :: ids(:)     !< Operate on these boxes
+    integer, intent(in)        :: type_cycle !< Type of cycle to perform
+    integer                    :: n, i, n_cycle
+    logical                    :: use_corners
+
+    select case (type_cycle)
+    case (mg_cycle_down)
+       n_cycle = mg%n_cycle_down
+    case (mg_cycle_up)
+       n_cycle = mg%n_cycle_up
+    case (mg_cycle_base)
+       n_cycle = mg%n_cycle_base
+    case default
+       error stop "gsrb_boxes: invalid cycle type"
+    end select
 
     !$omp parallel private(n, i)
     do n = 1, 2 * n_cycle
@@ -626,10 +643,13 @@ contains
        end do
        !$omp end do
 
+       use_corners = mg%use_corners .or. &
+            (type_cycle /= mg_cycle_down .and. n == 2 * n_cycle)
+
        !$omp do
        do i = 1, size(ids)
           call a$D_gc_box(tree, ids(i), mg%i_phi, mg%sides_rb, &
-               mg%sides_bc, (mg%use_corners .or. n == 2 * n_cycle))
+               mg%sides_bc, use_corners)
        end do
        !$omp end do
     end do
