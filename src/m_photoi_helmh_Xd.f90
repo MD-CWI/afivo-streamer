@@ -22,9 +22,12 @@ module m_photoi_helmh_$Dd
   ! Lambda squared, used internally by the routines
   real(dp) :: lambda2
 
-  !> How many V-cycles to perform to update each mode
-  integer :: num_vcycles = 2
-  
+  !> Maximum number of FMG cycles to perform to update each mode
+  integer, parameter :: max_fmg_cycles = 10
+
+  !> Maximum residual relative to max(|rhs|)
+  real(dp) :: max_rel_residual = 1.0d-2
+
   !> Which parameters are chosen (Luque or Bourdon)
   character(len=8):: author = 'Luque'
 
@@ -37,9 +40,8 @@ module m_photoi_helmh_$Dd
 
   integer, allocatable :: i_modes(:)
 
-  logical :: have_guess = .false.
-
   public :: photoi_helmh_initialize
+  public :: photoi_helmh_set_methods
   public :: photoi_helmh_compute
   public :: photoi_helmh_bc
 
@@ -68,8 +70,8 @@ contains
          "Weights corresponding to the lambdas; unit 1/(m bar)^2", &
          .true.)
 
-    call CFG_add(cfg, "photoi_helmh%num_vcycles", num_vcycles, &
-         "How many V-cycles to perform to update each mode")
+    call CFG_add(cfg, "photoi_helmh%max_rel_residual", max_rel_residual, &
+         "Maximum residual relative to max(|rhs|)")
 
     if (is_used) then
        call CFG_get_size(cfg, "photoi_helmh%lambdas", n_modes)
@@ -77,18 +79,17 @@ contains
        allocate(coeffs(n_modes))
        call CFG_get(cfg, "photoi_helmh%lambdas", lambdas)
        call CFG_get(cfg, "photoi_helmh%coeffs", coeffs)
-       call CFG_get(cfg, "photoi_helmh%num_vcycles", num_vcycles)
+       call CFG_get(cfg, "photoi_helmh%max_rel_residual", max_rel_residual)
        call CFG_get(cfg, "photoi_helmh%author", author)
-    
-    
+
        select case (author)
           case ("Luque")
           !> Convert to correct units by multiplying with pressure in bar for Luque parameters
           lambdas = lambdas * ST_gas_pressure  ! 1/m
-          coeffs  = coeffs * ST_gas_pressure**2 ! 1/m^2  
+          coeffs  = coeffs * ST_gas_pressure**2 ! 1/m^2
           !print *, author
           !print *, "lambdas * gas_pressure", lambdas
-          !print *, "coeffs * gas_pressure", coeffs     
+          !print *, "coeffs * gas_pressure", coeffs
           case ("Bourdon")
           !> Convert to correct units by multiplying with pressure in bar for Bourdon parameters
           lambdas = lambdas * ST_gas_frac_O2 * ST_gas_pressure  ! 1/m
@@ -137,26 +138,39 @@ contains
     end if
   end subroutine photoi_helmh_initialize
 
+  subroutine photoi_helmh_set_methods(tree)
+    type(a$D_t), intent(inout) :: tree
+    integer                    :: n
+
+    do n = 1, n_modes
+       call a$D_set_cc_methods(tree, i_modes(n), &
+            photoi_helmh_bc, a$D_gc_interp)
+    end do
+  end subroutine photoi_helmh_set_methods
+
   subroutine photoi_helmh_compute(tree)
     type(a$D_t), intent(inout) :: tree
 
     integer :: n, lvl, i, id
+    real(dp) :: residu(2), rhs(2), max_rhs
 
     call a$D_tree_clear_cc(tree, i_photo)
 
+    call a$D_tree_min_cc(tree, mg_helm%i_rhs, rhs(1))
+    call a$D_tree_max_cc(tree, mg_helm%i_rhs, rhs(2))
+    max_rhs = maxval(abs(rhs))
+
     do n = 1, n_modes
        lambda2 = lambdas(n)**2
-
        mg_helm%i_phi = i_modes(n)
 
-       if (.not. have_guess) then
-          call mg$D_fas_fmg(tree, mg_helm, .false., have_guess)
-       else
-          have_guess = .true.
-          do i = 1, num_vcycles
-             call mg$D_fas_vcycle(tree, mg_helm, .false.)
-          end do
-       end if
+       do i = 1, max_fmg_cycles
+          call mg$D_fas_fmg(tree, mg_helm, .true., .true.)
+          call a$D_tree_min_cc(tree, mg_helm%i_tmp, residu(1))
+          call a$D_tree_max_cc(tree, mg_helm%i_tmp, residu(2))
+          ! print *, n, i, maxval(abs(residu))/max_rhs
+          if (maxval(abs(residu))/max_rhs < max_rel_residual) exit
+       end do
 
        !$omp parallel private(lvl, i, id)
        do lvl = 1, tree%highest_lvl
@@ -173,6 +187,7 @@ contains
     end do
   end subroutine photoi_helmh_compute
 
+  !> @todo Think about good boundary conditions for Helmholtz equations
   subroutine photoi_helmh_bc(box, nb, iv, bc_type)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
@@ -338,5 +353,3 @@ contains
   end subroutine helmholtz_gsrb
 
 end module m_photoi_helmh_$Dd
-
-

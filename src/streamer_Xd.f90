@@ -57,13 +57,12 @@ program streamer_$Dd
        a$D_bc_neumann_zero, a$D_gc_interp_lim, a$D_prolong_limit)
   call a$D_set_cc_methods(tree, i_phi, &
        mg%sides_bc, mg%sides_rb)
-  if (photoi_enabled) then
-     call a$D_set_cc_methods(tree, i_photo, &
-       photoi_helmh_bc, a$D_gc_interp)
-  end if
   if (ST_output_src_term) then
      call a$D_set_cc_methods(tree, i_src, &
        a$D_bc_neumann_zero, a$D_gc_interp)
+  end if
+  if (photoi_enabled) then
+     call photoi_set_methods(tree)
   end if
 
   output_cnt       = 0 ! Number of output files written

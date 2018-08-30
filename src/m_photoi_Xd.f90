@@ -22,9 +22,8 @@ module m_photoi_$Dd
   integer, protected, public :: photoi_per_steps = 10
 
   public :: photoi_initialize
+  public :: photoi_set_methods
   public :: photoi_set_src
-  ! Imported from Helmholtz module
-  public :: photoi_helmh_bc
 
 contains
 
@@ -60,6 +59,21 @@ contains
           error stop
     end select
   end subroutine photoi_initialize
+
+  subroutine photoi_set_methods(tree)
+    type(a$D_t), intent(inout) :: tree
+    call a$D_set_cc_methods(tree, i_photo, photoi_helmh_bc, a$D_gc_interp)
+
+    select case (photoi_method)
+    case ("helmholtz")
+       call photoi_helmh_set_methods(tree)
+    case ("montecarlo")
+       continue
+    case default
+       print *, "Unknown photoi_method: ", trim(photoi_method)
+       error stop
+    end select
+  end subroutine photoi_set_methods
 
   !> Sets the photoionization
   subroutine photoi_set_src(tree, dt)
