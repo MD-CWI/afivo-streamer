@@ -31,6 +31,7 @@ module m_a$D_utils
   public :: a$D_reduction_vec
   public :: a$D_reduction_loc
   public :: a$D_tree_max_cc
+  public :: a$D_tree_maxabs_cc
   public :: a$D_tree_min_cc
   public :: a$D_tree_max_fc
   public :: a$D_tree_sum_cc
@@ -692,6 +693,21 @@ contains
     if (present(loc)) loc = tmp_loc
   end subroutine a$D_tree_max_cc
 
+  !> Find maximum value of abs(cc(..., iv)). By default, only loop over leaves,
+  !> and ghost cells are not used.
+  subroutine a$D_tree_maxabs_cc(tree, iv, cc_max, loc)
+    type(a$D_t), intent(in)      :: tree   !< Full grid
+    integer, intent(in)          :: iv     !< Index of variable
+    real(dp), intent(out)        :: cc_max !< Maximum value
+    !> Location of maximum
+    type(a$D_loc_t), intent(out), optional :: loc
+    type(a$D_loc_t)                        :: tmp_loc
+
+    call a$D_reduction_loc(tree, iv, box_maxabs_cc, reduce_max, &
+         -huge(1.0_dp)/10, cc_max, tmp_loc)
+    if (present(loc)) loc = tmp_loc
+  end subroutine a$D_tree_maxabs_cc
+
   !> Find minimum value of cc(..., iv). By default, only loop over leaves, and
   !> ghost cells are not used.
   subroutine a$D_tree_min_cc(tree, iv, cc_min, loc)
@@ -743,6 +759,23 @@ contains
     val = box%cc(ix(1), ix(2), ix(3), iv)
 #endif
   end subroutine box_max_cc
+
+  subroutine box_maxabs_cc(box, iv, val, ix)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)       :: iv
+    real(dp), intent(out)     :: val
+    integer, intent(out)      :: ix($D)
+    integer                   :: nc
+
+    nc = box%n_cell
+#if $D == 2
+    ix = maxloc(abs(box%cc(1:nc, 1:nc, iv)))
+    val = abs(box%cc(ix(1), ix(2), iv))
+#elif $D == 3
+    ix = maxloc(abs(box%cc(1:nc, 1:nc, 1:nc, iv)))
+    val = abs(box%cc(ix(1), ix(2), ix(3), iv))
+#endif
+  end subroutine box_maxabs_cc
 
   subroutine box_min_cc(box, iv, val, ix)
     type(box$D_t), intent(in) :: box
