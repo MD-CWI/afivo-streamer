@@ -1056,7 +1056,11 @@ contains
 
     ! Don't use geometry for restriction, since this is inconsistent with the
     ! filling of ghost cells near refinement boundaries
-    call a$D_restrict_box(box_c, box_p, iv, use_geometry=.false.)
+    if (iv == mg%i_phi) then
+       call a$D_restrict_box(box_c, box_p, iv, use_geometry=.false.)
+    else
+       call a$D_restrict_box(box_c, box_p, iv, use_geometry=.true.)
+    end if
   end subroutine mg$D_box_rstr_lpl
 
   !> Perform Gauss-Seidel relaxation on a box. Epsilon can have a jump at cell
