@@ -152,13 +152,12 @@ contains
     type(a$D_t), intent(inout) :: tree
 
     integer :: n, lvl, i, id
-    real(dp) :: residu(2), rhs(2), max_rhs
+    real(dp) :: residu, max_rhs
 
     call a$D_tree_clear_cc(tree, i_photo)
 
-    call a$D_tree_min_cc(tree, mg_helm%i_rhs, rhs(1))
-    call a$D_tree_max_cc(tree, mg_helm%i_rhs, rhs(2))
-    max_rhs = maxval(abs(rhs))
+    call a$D_tree_maxabs_cc(tree, mg_helm%i_rhs, max_rhs)
+    max_rhs = max(max_rhs, sqrt(epsilon(1.0_dp)))
 
     do n = 1, n_modes
        lambda2 = lambdas(n)**2
@@ -166,10 +165,9 @@ contains
 
        do i = 1, max_fmg_cycles
           call mg$D_fas_fmg(tree, mg_helm, .true., .true.)
-          call a$D_tree_min_cc(tree, mg_helm%i_tmp, residu(1))
-          call a$D_tree_max_cc(tree, mg_helm%i_tmp, residu(2))
-          ! print *, n, i, maxval(abs(residu))/max_rhs
-          if (maxval(abs(residu))/max_rhs < max_rel_residual) exit
+          call a$D_tree_maxabs_cc(tree, mg_helm%i_tmp, residu)
+          ! print *, n, i, residu/max_rhs
+          if (residu/max_rhs < max_rel_residual) exit
        end do
 
        !$omp parallel private(lvl, i, id)
