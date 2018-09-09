@@ -100,7 +100,7 @@ contains
              i_c = ix_offset(1) + i
              i_f = 2 * i - 1
 
-             call a2_cyl_child_weights(box_p, i, w1, w2)
+             call a2_cyl_child_weights(box_p, i_c, w1, w2)
              box_p%cc(i_c, j_c, i_dest) = 0.25_dp * (&
                   w1 * sum(box_c%cc(i_f, j_f:j_f+1, iv)) + &
                   w2 * sum(box_c%cc(i_f+1, j_f:j_f+1, iv)))
