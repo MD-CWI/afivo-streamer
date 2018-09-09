@@ -221,9 +221,8 @@ contains
 #endif
   end subroutine a$D_prolong_sparse
 
-  ! Prolong with a limited slope in the coarse cells, which takes the minimum of
-  ! the left/right slopes if they have the same sign (else it is zero). This
-  ! procedure is conservative.
+  ! Conservative prolongation using the gradient the coarse cells, and limited
+  ! to preserve positivity
   subroutine a$D_prolong_limit(box_p, box_c, iv, iv_to, add)
     type(box$D_t), intent(in)     :: box_p !< Parent box
     type(box$D_t), intent(inout)  :: box_c !< Child box
@@ -232,10 +231,10 @@ contains
     logical, intent(in), optional :: add   !< Add to old values
     integer                       :: hnc, nc, ix_offset($D), ivc
     integer                       :: i, j, i_c, i_f, j_c, j_f
-    real(dp)                      :: f0, fxL, fxR, fyL, fyR, fx, fy
+    real(dp)                      :: f0, fx, fy, tmp
     logical                       :: add_to
 #if $D == 3
-    real(dp)                      :: fzL, fzR, fz
+    real(dp)                      :: fz
     integer                       :: k, k_c, k_f
 #endif
 
@@ -262,13 +261,27 @@ contains
           i_f = 2 * i - 1
 
           f0 = box_p%cc(i_c, j_c, iv)
-          fxL = f0 - box_p%cc(i_c-1, j_c, iv)
-          fxR = box_p%cc(i_c+1, j_c, iv) - f0
-          fyL = f0 - box_p%cc(i_c, j_c-1, iv)
-          fyR = box_p%cc(i_c, j_c+1, iv) - f0
+          fx = 0.125_dp * (box_p%cc(i_c+1, j_c, iv) - &
+               box_p%cc(i_c-1, j_c, iv))
+          fy = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
+               box_p%cc(i_c, j_c-1, iv))
 
-          fx = 0.25_dp * limit_slope(fxL, fxR)
-          fy = 0.25_dp * limit_slope(fyL, fyR)
+          if (box_p%coord_t == af_cyl) then
+             ! Ensure densities stay positive
+             tmp = abs(0.5_dp * f0 / (1 + 0.25_dp * box_p%dr / &
+                  a2_cyl_radius_cc(box_p, i_c)))
+             if (abs(fx) > tmp) fx = sign(tmp, fx)
+             if (abs(fy) > tmp) fy = sign(tmp, fy)
+
+             ! Correction for cylindrical coordinates
+             f0 = f0 - 0.25_dp * box_p%dr * fx / &
+                  a$D_cyl_radius_cc(box_p, i_c)
+          else
+             ! Ensure densities stay positive
+             tmp = abs(0.5_dp * f0)
+             if (abs(fx) > tmp) fx = sign(tmp, fx)
+             if (abs(fy) > tmp) fy = sign(tmp, fy)
+          end if
 
           box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
                + box_c%cc(i_f,   j_f,   ivc)
@@ -291,17 +304,19 @@ contains
              i_c = i + ix_offset(1)
              i_f = 2 * i - 1
 
-             f0  = box_p%cc(i_c,   j_c,   k_c,   iv)
-             fxL = f0 - box_p%cc(i_c-1, j_c,   k_c,   iv)
-             fxR = box_p%cc(i_c+1, j_c,   k_c,   iv) - f0
-             fyL = f0 - box_p%cc(i_c,   j_c-1, k_c,   iv)
-             fyR = box_p%cc(i_c,   j_c+1, k_c,   iv) - f0
-             fzL = f0 - box_p%cc(i_c,   j_c,   k_c-1, iv)
-             fzR = box_p%cc(i_c,   j_c,   k_c+1, iv) - f0
+             f0 = box_p%cc(i_c, j_c, k_c, iv)
+             fx = 0.125_dp * (box_p%cc(i_c+1, j_c,   k_c,   iv) - &
+                  box_p%cc(i_c-1, j_c,   k_c,   iv))
+             fy = 0.125_dp * (box_p%cc(i_c,   j_c+1, k_c,   iv) - &
+                  box_p%cc(i_c,   j_c-1, k_c,   iv))
+             fz = 0.125_dp * (box_p%cc(i_c,   j_c,   k_c+1, iv) - &
+                  box_p%cc(i_c,   j_c,   k_c-1, iv))
 
-             fx = 0.25_dp * limit_slope(fxL, fxR)
-             fy = 0.25_dp * limit_slope(fyL, fyR)
-             fz = 0.25_dp * limit_slope(fzL, fzR)
+             ! Ensure densities stay positive
+             tmp = abs(f0/3.0_dp)
+             if (abs(fx) > tmp) fx = sign(tmp, fx)
+             if (abs(fy) > tmp) fy = sign(tmp, fy)
+             if (abs(fz) > tmp) fz = sign(tmp, fz)
 
              box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - &
                   fy - fz + box_c%cc(i_f,   j_f,   k_f,   ivc)
@@ -323,21 +338,21 @@ contains
        end do
     end do
 #endif
-  contains
+  ! contains
 
     ! Take minimum of two slopes if they have the same sign, else take zero
-    elemental function limit_slope(ll, rr) result(slope)
-      real(dp), intent(in) :: ll, rr
-      real(dp)             :: slope
+    ! elemental function limit_slope(ll, rr) result(slope)
+    !   real(dp), intent(in) :: ll, rr
+    !   real(dp)             :: slope
 
-      if (ll * rr < 0) then
-         slope = 0.0_dp
-      else if (ll * ll < rr * rr) then
-         slope = ll
-      else
-         slope = rr
-      end if
-    end function limit_slope
+    !   if (ll * rr < 0) then
+    !      slope = 0.0_dp
+    !   else if (ll * ll < rr * rr) then
+    !      slope = ll
+    !   else
+    !      slope = rr
+    !   end if
+    ! end function limit_slope
 
   end subroutine a$D_prolong_limit
 
@@ -385,6 +400,12 @@ contains
                box_p%cc(i_c-1, j_c, iv))
           fy = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
                box_p%cc(i_c, j_c-1, iv))
+
+          if (box_p%coord_t == af_cyl) then
+             ! Conservative prolongation for cylindrical coords
+             f0 = f0 - 0.25_dp * box_p%dr * fx / &
+                  a$D_cyl_radius_cc(box_p, i_c)
+          end if
 
           box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
                + box_c%cc(i_f,   j_f,   ivc)
