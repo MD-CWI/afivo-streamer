@@ -8,17 +8,18 @@ program random_refinement_$Dd
 
   implicit none
 
-  type(a$D_t)           :: tree
-  integer              :: id, iter, boxes_used
-  integer, parameter   :: n_boxes_base = 2
-  integer              :: ix_list($D, n_boxes_base)
-  integer              :: nb_list(a$D_num_neighbors, n_boxes_base)
-  integer, parameter   :: box_size     = 8
-  integer, parameter   :: i_phi        = 1
-  type(ref_info_t)     :: ref_info
-  real(dp)             :: dr, sum_phi_t0, sum_phi
-  character(len=40)    :: fname
-  integer              :: count_rate,t_start,t_end
+  type(a$D_t)        :: tree
+  integer            :: id, iter, boxes_used
+  integer, parameter :: n_boxes_base = 2
+  integer, parameter :: coord_type   = af_xyz ! af_xyz or af_cyl
+  integer            :: ix_list($D, n_boxes_base)
+  integer            :: nb_list(a$D_num_neighbors, n_boxes_base)
+  integer, parameter :: box_size     = 8
+  integer, parameter :: i_phi        = 1
+  type(ref_info_t)   :: ref_info
+  real(dp)           :: dr, sum_phi_t0, sum_phi
+  character(len=40)  :: fname
+  integer            :: count_rate,t_start,t_end
 
   write(*,'(A)') 'program random_refinement_$Dd'
 
@@ -33,10 +34,11 @@ program random_refinement_$Dd
        1, &            ! Number of cell-centered variables
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
+       coord=coord_type, &
        cc_names = ["phi"])      ! Optional: names of cell-centered variables
 
   call a$D_set_cc_methods(tree, 1, a$D_bc_dirichlet_zero, &
-       prolong=a$D_prolong_linear_cons)
+       prolong=a$D_prolong_linear)
 
   ! Set up geometry.
   ! Neighbors for the boxes are stored in nb_list
@@ -145,7 +147,7 @@ contains
        rr = a$D_r_cc(box, [IJK])
 
        ! Set the values at each cell according to some function
-       box%cc(IJK, i_phi) = sin(0.5_dp * rr(1)) * cos(rr(2))
+       box%cc(IJK, i_phi) = sin(0.5_dp * rr(1))**2 * cos(rr(2))**2
     end do; CLOSE_DO
   end subroutine set_init_cond
 

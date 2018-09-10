@@ -13,6 +13,8 @@ program advection_$Dd
   integer, parameter  :: i_phi_old  = 2
   integer, parameter  :: i_err      = 3
   integer, parameter  :: sol_type   = 1
+  ! Set coord_type to af_cyl to test conservation in cyl. coordinates
+  integer, parameter  :: coord_type = af_xyz
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr         = domain_len / box_size
 
@@ -38,6 +40,7 @@ program advection_$Dd
        n_var_cell=3, & ! Number of cell-centered variables
        n_var_face=1, & ! Number of face-centered variables
        dr=dr, &        ! Distance between cells on base level
+       coord=coord_type, &
        cc_names=["phi", "old", "err"]) ! Variable names
 
   call a$D_set_cc_methods(tree, i_phi, a$D_bc_neumann_zero, a$D_gc_interp_lim, &
@@ -47,6 +50,9 @@ program advection_$Dd
   id             = 1
   ix_list(:, id) = 1            ! Set index of box
   nb_list(:, id) = id           ! Box is periodic, so its own neighbor
+  if (coord_type == af_cyl) then
+     nb_list(a$D_neighb_lowx, id) = -1
+  end if
 
   ! Create the base mesh, using the box indices and their neighbor information
   call a$D_set_base(tree, 1, ix_list, nb_list)
@@ -221,7 +227,7 @@ contains
             6 * box%cc(i, j, k, i_phi)) * box%dr
 #endif
 
-       if (box%lvl < 2 .or. diff > 0.5e-3_dp .and. box%lvl < 5) then
+       if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 5) then
           cell_flags(IJK) = af_do_ref
        else if (diff < 0.1_dp * 0.1e-3_dp) then
           cell_flags(IJK) = af_rm_ref
@@ -330,16 +336,38 @@ contains
     real(dp), intent(in)         :: dt(:)
     real(dp)                     :: inv_dr
     integer                      :: IJK, nc
+#if $D == 2
+    real(dp)                     :: tmp, w1, w2
+#endif
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
 
 #if $D == 2
-    forall (i = 1:nc, j = 1:nc)
-       box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + dt(1) * inv_dr * ( &
-            box%fc(i, j, 1, i_phi) - box%fc(i+1, j, 1, i_phi) + &
-            box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi))
-    end forall
+    if (coord_type == af_cyl) then
+       do j = 1, nc
+          do i = 1, nc
+             tmp = 0.5_dp * box%dr / a2_cyl_radius_cc(box, i)
+             w1 = 1 - tmp
+             w2 = 1 + tmp
+
+             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + &
+                  dt(1) * inv_dr * ( &
+                  w1 * box%fc(i, j, 1, i_phi) - &
+                  w2 * box%fc(i+1, j, 1, i_phi) + &
+                  box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi))
+          end do
+       end do
+    else
+       do j = 1, nc
+          do i = 1, nc
+             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + &
+                  dt(1) * inv_dr * ( &
+                  box%fc(i, j, 1, i_phi) - box%fc(i+1, j, 1, i_phi) + &
+                  box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi))
+          end do
+       end do
+    end if
 #elif $D == 3
     forall (i = 1:nc, j = 1:nc, k = 1:nc)
        box%cc(i, j, k, i_phi) = box%cc(i, j, k, i_phi) + dt(1) * inv_dr * ( &

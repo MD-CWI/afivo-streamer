@@ -1054,11 +1054,12 @@ contains
     integer, intent(in)           :: iv            !< Variable to restrict
     type(mg$D_t), intent(in)       :: mg !< Multigrid options
 
-    ! Don't use geometry for restriction, since this is inconsistent with the
-    ! filling of ghost cells near refinement boundaries
     if (iv == mg%i_phi) then
+       ! Don't use geometry for restriction, since this is inconsistent with the
+       ! filling of ghost cells near refinement boundaries
        call a$D_restrict_box(box_c, box_p, iv, use_geometry=.false.)
     else
+       ! For the right-hand side, use the geometry
        call a$D_restrict_box(box_c, box_p, iv, use_geometry=.true.)
     end if
   end subroutine mg$D_box_rstr_lpl
