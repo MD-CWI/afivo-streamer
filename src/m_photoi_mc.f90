@@ -337,10 +337,12 @@ contains
 
     integer                     :: lvl, ix, id, nc, min_lvl
     integer                     :: i, j, n, n_create, n_used, i_ph
-    integer                     :: proc_id, n_procs
+    integer                     :: proc_id, n_procs, my_num_photons
     integer                     :: pho_lvl
     real(dp)                    :: tmp, dr, fac, dist, r(3)
     real(dp)                    :: sum_production, pi_lengthscale
+    integer, allocatable        :: photons_per_thread(:), photon_thread(:)
+    integer, allocatable        :: ix_offset(:)
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
     real(dp), parameter         :: pi = acos(-1.0_dp)
@@ -361,20 +363,21 @@ contains
     end if
 
     ! Allocate a bit more space because of stochastic production
-    allocate(xyz_src(3, nint(1.2_dp * fac * sum_production + 1000)))
+    n = nint(1.2_dp * fac * sum_production + 1000)
+    allocate(xyz_src(3, n))
+    allocate(photon_thread(n))
 
     ! Now loop over all leaves and create photons using random numbers
     n_used = 0
 
-    !$omp parallel private(lvl, ix, id, i, j, n, r, dr, i_ph, proc_id, &
-    !$omp tmp, n_create)
-
-    !$omp single
-    n_procs = omp_get_num_threads()
+    n_procs = omp_get_max_threads()
     call prng%init_parallel(n_procs, rng)
-    !$omp end single
+    allocate(photons_per_thread(n_procs))
 
+    !$omp parallel private(lvl, ix, id, i, j, n, r, dr, i_ph, proc_id, &
+    !$omp tmp, n_create, my_num_photons)
     proc_id = 1+omp_get_thread_num()
+    my_num_photons = 0
 
     do lvl = 1, tree%highest_lvl
        dr = a2_lvl_dr(tree, lvl)
@@ -402,6 +405,7 @@ contains
                    i_ph = n_used
                    n_used = n_used + n_create
                    !$omp end critical
+                   my_num_photons = my_num_photons + n_create
 
                    do n = 1, n_create
                       ! Location of production randomly chosen in cell
@@ -409,6 +413,7 @@ contains
                       r(2)   = prng%rngs(proc_id)%unif_01()
                       r(1:2) = a2_rr_cc(tree%boxes(id), [i, j] - 0.5_dp + r(1:2))
                       xyz_src(:, i_ph+n) = [r(1), 0.0_dp, r(2)]
+                      photon_thread(i_ph+n) = proc_id
                    end do
                 end if
              end do
@@ -416,12 +421,30 @@ contains
        end do
        !$omp end do nowait
     end do
+    photons_per_thread(proc_id) = my_num_photons
     !$omp end parallel
 
     allocate(xyz_abs(3, n_used))
     allocate(ph_loc(n_used))
 
+    ! Sort the xyz_src array so that runs are deterministic (the order in which
+    ! the threads write is not deterministic)
+    allocate(ix_offset(n_procs))
+    ix_offset(1) = 0
+    do n = 2, n_procs
+       ix_offset(n) = ix_offset(n-1) + photons_per_thread(n-1)
+    end do
 
+    photons_per_thread = 0
+    do n = 1, n_used
+       i = photon_thread(n)
+       photons_per_thread(i) = photons_per_thread(i) + 1
+       j = ix_offset(i) + photons_per_thread(i)
+       xyz_abs(:, j) = xyz_src(:, n)
+    end do
+    xyz_src(:, 1:n_used) = xyz_abs(:, 1:n_used)
+
+    ! TODO: fix 2D Cartesian case
     if (use_cyl) then
        ! Get location of absorption. On input, xyz is set to (r, 0, z). On
        ! output, the coordinates thus correspond to (x, y, z)
