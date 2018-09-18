@@ -1,7 +1,7 @@
 #include "../afivo/src/cpp_macros_$Dd.h"
 !> Top-module for photoionization, which can make use of different methods
 module m_photoi_$Dd
-  use m_photoi_mc
+  use m_photoi_mc_$Dd
   use m_photoi_helmh_$Dd
   use m_a$D_all
   use m_streamer
@@ -103,14 +103,16 @@ contains
           call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
                i_photo, ST_cylindrical, dt)
 #elif $D == 3
-          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, i_photo, dt)
+          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
+               i_photo, .false., dt)
 #endif
        else
 #if $D == 2
           call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
                i_photo, ST_cylindrical)
 #elif $D == 3
-          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, i_photo)
+          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
+               i_photo, .false.)
 #endif
        end if
     end select

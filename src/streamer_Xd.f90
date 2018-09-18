@@ -160,7 +160,7 @@ program streamer_$Dd
      ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * minval(ST_dt_matrix))
      dt_prev = ST_dt
 
-     if (ST_dt < ST_dt_min) then
+     if (ST_dt < ST_dt_min .and. .not. write_out) then
         print *, "ST_dt getting too small, instability?", ST_dt
         write_out = .true.
         output_cnt = output_cnt + 1
