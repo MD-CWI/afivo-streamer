@@ -36,6 +36,9 @@ module m_field_$Dd
   !> Location from which the field drops off (set below)
   real(dp) :: field_dropoff_pos(2) = 0.0_dp
 
+  real(dp) :: phi_quadr_a1 = 1.0e6_dp
+  real(dp) :: phi_quadr_a2 = -1.0e6_dp / 2.5e-2_dp
+
   character(ST_slen) :: field_bc_type = "homogeneous"
 
   public :: field_initialize
@@ -96,6 +99,8 @@ contains
        end if
 
        mg%sides_bc => field_bc_dropoff_log
+    case ("point_charge")
+       mg%sides_bc => field_bc_point_charge
     case default
        error stop "field_bc_select error: invalid condition"
     end select
@@ -327,11 +332,67 @@ contains
     end select
   end subroutine field_bc_dropoff_log
 
+  !> Create a field of the form E = E_0 - c / r^2
+  subroutine field_bc_point_charge(box, nb, iv, bc_type)
+    type(box$D_t), intent(inout) :: box
+    integer, intent(in)          :: nb      ! Direction for the boundary condition
+    integer, intent(in)          :: iv      ! Index of variable
+    integer, intent(out)         :: bc_type ! Type of boundary condition
+    integer                      :: nc, i, j
+    real(dp)                     :: rr($D)
+    real(dp)                     :: phi_min, phi_max
+
+    nc = box%n_cell
+    bc_type = af_bc_dirichlet
+    phi_min = 0.0_dp
+    phi_max = phi_quadr_a1 * ST_domain_len + phi_quadr_a2 * ST_domain_len**2
+
+    select case (nb)
+#if $D == 2
+    ! case (a2_neighb_lowx)
+    !    do j = 1, nc
+    !       rr = a2_rr_cc(box, [0.5_dp, j+0.0_dp])
+    !       box%cc(0, j, iv) = point_phi(rr)
+    !    end do
+    case (a2_neighb_highx)
+       do j = 1, nc
+          rr = a2_rr_cc(box, [nc+0.5_dp, j+0.0_dp])
+          box%cc(nc+1, j, iv) = point_phi(rr)
+       end do
+    case (a2_neighb_lowy)
+       do i = 1, nc
+          rr = a2_rr_cc(box, [i+0.0_dp, 0.5_dp])
+          box%cc(i, 0, iv) = point_phi(rr)
+       end do
+    case (a2_neighb_highy)
+       do i = 1, nc
+          rr = a2_rr_cc(box, [i+0.0_dp, nc+0.5_dp])
+          box%cc(i, nc+1, iv) = point_phi(rr)
+       end do
+#elif $D == 3
+#endif
+    case default
+       call field_bc_homogeneous(box, nb, iv, bc_type)
+    end select
+  end subroutine field_bc_point_charge
+
+  real(dp) function point_phi(r)
+    real(dp), intent(in)         :: r($D)
+    real(dp), parameter          :: point_c0 = 5e2_dp
+#if $D == 2
+    real(dp), parameter          :: point_r0(*) = [0.0_dp, 3.0e-2_dp]
+#elif $D == 3
+    real(dp), parameter          :: point_r0(*) = [0.0_dp, 0.0_dp, -1.0e-2_dp]
+#endif
+
+    point_phi = point_c0/norm2(r-point_r0)
+  end function point_phi
+
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
     type(box$D_t), intent(inout) :: box
-    integer                     :: nc
-    real(dp)                    :: inv_dr
+    integer                      :: nc
+    real(dp)                     :: inv_dr
 
     nc     = box%n_cell
     inv_dr = 1 / box%dr
