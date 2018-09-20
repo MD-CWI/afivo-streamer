@@ -118,8 +118,7 @@ contains
        mg_helm%i_rhs = i_electron_old
        mg_helm%i_tmp = i_pos_ion_old
 
-       ! Todo: check what good b.c. are
-       mg_helm%sides_bc => a$D_bc_dirichlet_zero
+       mg_helm%sides_bc => photoi_helmh_bc
 
 #if $D == 2
        if (ST_cylindrical) then
@@ -144,7 +143,7 @@ contains
 
     do n = 1, n_modes
        call a$D_set_cc_methods(tree, i_modes(n), &
-            photoi_helmh_bc, a$D_gc_interp)
+            photoi_helmh_bc, mg$D_sides_rb)
     end do
   end subroutine photoi_helmh_set_methods
 
@@ -185,7 +184,10 @@ contains
     end do
   end subroutine photoi_helmh_compute
 
-  !> @todo Think about good boundary conditions for Helmholtz equations
+  !> @todo Think about good (and efficient) boundary conditions for Helmholtz
+  !> equations, see also Bourdon et al. PSST 2017. Setting a Dirichlet zero b.c.
+  !> is inaccurate if the streamer gets close to that boundary, otherwise it
+  !> should be quite reasonable.
   subroutine photoi_helmh_bc(box, nb, iv, bc_type)
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
