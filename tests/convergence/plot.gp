@@ -11,6 +11,7 @@ set style data lines
 set key outside
 set terminal pdf enhanced size 15cm,9cm
 
+set ylabel "E (V/m)"
 set xlabel "t (ns)"
 set xrange [1.5:]
 
