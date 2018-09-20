@@ -15,6 +15,7 @@ program streamer_$Dd
   real(dp)               :: wc_time, inv_count_rate, time_last_print
   integer                :: i, it
   character(len=ST_slen) :: fname
+  character(len=name_len) :: prolong_method
   logical                :: write_out
   real(dp)               :: dt_prev, photoi_prev_time
   type(CFG_t)            :: cfg  ! The configuration for the simulation
@@ -22,15 +23,35 @@ program streamer_$Dd
   type(mg$D_t)           :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
+  ! Method used to prolong (interpolate) densities
+  procedure(a$D_subr_prolong), pointer :: prolong_density => null()
+
   integer :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
+  call check_path_writable(ST_output_dir)
   call ST_initialize(cfg, $D)
   call photoi_initialize(cfg)
 
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
   call init_cond_initialize(cfg, $D)
+
+  prolong_method = "limit"
+  call CFG_add_get(cfg, "prolong_density", prolong_method, &
+       "Density prolongation method (limit, linear, linear_cons, sparse)")
+  select case (prolong_method)
+  case ("limit")
+     prolong_density => a$D_prolong_limit
+  case ("linear")
+     prolong_density => a$D_prolong_linear
+  case ("linear_cons")
+     prolong_density => a$D_prolong_linear_cons
+  case ("sparse")
+     prolong_density => a$D_prolong_sparse
+  case default
+     error stop "Unknown prolong_density method"
+  end select
 
   fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_out.cfg"
   call CFG_write(cfg, trim(fname))
@@ -52,14 +73,14 @@ program streamer_$Dd
   call mg$D_init_mg(mg)
 
   call a$D_set_cc_methods(tree, i_electron, &
-       a$D_bc_neumann_zero, a$D_gc_interp_lim, a$D_prolong_limit)
+       a$D_bc_neumann_zero, a$D_gc_interp_lim, prolong_density)
   call a$D_set_cc_methods(tree, i_pos_ion, &
-       a$D_bc_neumann_zero, a$D_gc_interp_lim, a$D_prolong_limit)
+       a$D_bc_neumann_zero, a$D_gc_interp_lim, prolong_density)
   call a$D_set_cc_methods(tree, i_phi, &
        mg%sides_bc, mg%sides_rb)
   if (ST_output_src_term) then
      call a$D_set_cc_methods(tree, i_src, &
-       a$D_bc_neumann_zero, a$D_gc_interp)
+          a$D_bc_neumann_zero, a$D_gc_interp)
   end if
   if (photoi_enabled) then
      call photoi_set_methods(tree)
@@ -167,23 +188,25 @@ program streamer_$Dd
      end if
 
      if (write_out) then
-        ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, [i_electron, i_pos_ion])
+        if (ST_silo_write) then
+           ! Fill ghost cells before writing output
+           call a$D_gc_tree(tree, [i_electron, i_pos_ion])
 
-        if (ST_output_src_term) then
-           call a$D_restrict_tree(tree, i_src)
-           call a$D_gc_tree(tree, i_src)
+           if (ST_output_src_term) then
+              call a$D_restrict_tree(tree, i_src)
+              call a$D_gc_tree(tree, i_src)
+           end if
+
+           if (photoi_enabled) then
+              call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
+              call a$D_restrict_tree(tree, i_photo)
+              call a$D_gc_tree(tree, i_photo)
+           end if
+
+           write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
+           call a$D_write_silo(tree, fname, output_cnt, ST_time, &
+                vars_for_output, dir=ST_output_dir)
         end if
-
-        if (photoi_enabled) then
-           call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
-           call a$D_restrict_tree(tree, i_photo)
-           call a$D_gc_tree(tree, i_photo)
-        end if
-
-        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
-        call a$D_write_silo(tree, fname, output_cnt, ST_time, &
-             vars_for_output, dir=ST_output_dir)
 
         if (ST_datfile_write) then
            call a$D_write_tree(tree, fname, ST_output_dir)
@@ -669,10 +692,21 @@ contains
 
   subroutine print_status()
     write(*, "(F7.2,A,I0,A,E10.3,A,E10.3,A,E10.3,A,E10.3)") &
-             100 * ST_time / ST_end_time, "% it: ", it, &
-             " t:", ST_time, " dt:", ST_dt, " wc:", wc_time, &
-             " ncell:", real(a$D_num_cells_used(tree), dp)
+         100 * ST_time / ST_end_time, "% it: ", it, &
+         " t:", ST_time, " dt:", ST_dt, " wc:", wc_time, &
+         " ncell:", real(a$D_num_cells_used(tree), dp)
   end subroutine print_status
 
+  subroutine check_path_writable(pathname)
+    character(len=*), intent(in) :: pathname
+    integer                      :: my_unit, iostate
+    open(newunit=my_unit, file=trim(pathname)//"/DUMMY", iostat=iostate)
+    if (iostate /= 0) then
+       print *, "Output directory: " // trim(pathname)
+       error stop "Directory not writable (does it exist?)"
+    else
+       close(my_unit, status='delete')
+    end if
+  end subroutine check_path_writable
 
 end program streamer_$Dd

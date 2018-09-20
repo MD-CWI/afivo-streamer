@@ -173,6 +173,9 @@ module m_streamer
   ! Write output along a line
   logical, protected :: ST_lineout_write = .false.
 
+  ! Write Silo output
+  logical, protected :: ST_silo_write = .true.
+
   ! Write binary output files (to resume later)
   logical, protected :: ST_datfile_write = .false.
 
@@ -354,6 +357,8 @@ contains
 
     call CFG_add_get(cfg, "lineout%write", ST_lineout_write, &
          "Write output along a line")
+    call CFG_add_get(cfg, "silo_write", ST_silo_write, &
+         "Write silo output")
     call CFG_add_get(cfg, "datfile_write", ST_datfile_write, &
          "Write binary output files (to resume later)")
     call CFG_add_get(cfg, "lineout%npoints", ST_lineout_npoints, &
