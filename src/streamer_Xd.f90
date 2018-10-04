@@ -29,7 +29,6 @@ program streamer_$Dd
   integer :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
-  call check_path_writable(ST_output_dir)
   call ST_initialize(cfg, $D)
   call photoi_initialize(cfg)
 
@@ -52,6 +51,8 @@ program streamer_$Dd
   case default
      error stop "Unknown prolong_density method"
   end select
+
+  call check_path_writable(ST_output_dir)
 
   fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_out.cfg"
   call CFG_write(cfg, trim(fname))
