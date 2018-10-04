@@ -615,11 +615,10 @@ contains
           dt_drt = UC_eps0 / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
                max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
 
-          ! Take the minimum of the CFL condition with Courant number 0.5 and
-          ! the combined CFL-diffusion condition with Courant number 1.0. The
-          ! 0.5 is emperical, to have good accuracy (and TVD/positivity) in
+          ! Take the combined CFL-diffusion condition with Courant number 0.5.
+          ! The 0.5 is emperical, to have good accuracy (and TVD/positivity) in
           ! combination with the explicit trapezoidal rule
-          dt_cfl = min(0.5_dp * dt_cfl, 1/(1/dt_cfl + 1/dt_dif))
+          dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
 
           ST_dt_matrix(ST_ix_cfl, tid) = min(ST_dt_matrix(ST_ix_cfl, tid), &
                dt_cfl)
