@@ -145,7 +145,7 @@ program streamer_$Dd
      call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
      call a$D_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
 
-     ST_dt_matrix = ST_dt_max      ! Maximum time step
+     ST_dt_matrix(1:ST_dt_num_cond, :) = ST_dt_max      ! Maximum time step
 
      ! Two forward Euler steps over ST_dt
      do i = 1, 2
@@ -179,7 +179,8 @@ program streamer_$Dd
      call field_compute(tree, mg, .true.)
 
      ! Determine next time step
-     ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * minval(ST_dt_matrix))
+     ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * &
+          minval(ST_dt_matrix(1:ST_dt_num_cond, :)))
      dt_prev = ST_dt
 
      if (ST_dt < ST_dt_min .and. .not. write_out) then
@@ -653,7 +654,7 @@ contains
     call a$D_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
     call a$D_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
 
-    dt = ST_dt_safety_factor * minval(ST_dt_matrix)
+    dt = ST_dt_safety_factor * minval(ST_dt_matrix(1:ST_dt_num_cond, :))
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")

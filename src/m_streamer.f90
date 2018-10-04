@@ -307,7 +307,8 @@ contains
     end if
 
     n_threads = af_get_max_threads()
-    allocate(ST_dt_matrix(ST_dt_num_cond, n_threads))
+    ! Prevent cache invalidation issues by enlarging the array
+    allocate(ST_dt_matrix(ST_dt_num_cond+32, n_threads))
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
