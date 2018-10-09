@@ -120,6 +120,9 @@ module m_streamer
   ! Refine until dx is smaller than this factor times the seed width
   real(dp), protected :: ST_refine_init_fac = 0.25_dp
 
+  ! Minimum electron density for adding grid refinement
+  real(dp), protected :: ST_refine_min_dens = -1.0e99_dp
+
   ! Refine a region up to this grid spacing
   real(dp), protected, allocatable :: ST_refine_regions_dr(:)
 
@@ -408,6 +411,8 @@ contains
          "Refine around initial conditions up to this time")
     call CFG_add_get(cfg, "refine_init_fac", ST_refine_init_fac, &
          "Refine until dx is smaller than this factor times the seed width")
+    call CFG_add_get(cfg, "refine_min_dens", ST_refine_min_dens, &
+         "Minimum electron density for adding grid refinement")
 
     call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
          "Refine regions up to this grid spacing", .true.)

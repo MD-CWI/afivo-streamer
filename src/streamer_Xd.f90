@@ -311,7 +311,7 @@ contains
          cell_flags(DTIMES(box%n_cell))
     integer                  :: IJK, n, nc
     real(dp)                 :: cphi, dx, dx2
-    real(dp)                 :: alpha, adx, fld
+    real(dp)                 :: alpha, adx, fld, elec_dens
     real(dp)                 :: dist, rmin($D), rmax($D)
 
     nc      = box%n_cell
@@ -323,13 +323,15 @@ contains
        alpha = LT_get_col(ST_td_tbl, i_alpha, ST_refine_adx_fac * fld) / &
             ST_refine_adx_fac
        adx   = box%dr * alpha
+       elec_dens = box%cc(IJK, i_electron)
 
        ! The refinement is also based on the intensity of the source term.
        ! Here we estimate the curvature of phi (given by dx**2 *
        ! Laplacian(phi))
        cphi = dx2 * abs(box%cc(IJK, i_rhs))
 
-       if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
+       if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1 .and. &
+            elec_dens > ST_refine_min_dens) then
           cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp * ST_refine_adx .and. &
             cphi < ST_derefine_cphi .and. dx < ST_derefine_dx) then
