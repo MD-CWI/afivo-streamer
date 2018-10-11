@@ -12,6 +12,9 @@ module m_field_$Dd
   !> Stop modifying the vertical background field after this time
   real(dp) :: field_mod_t1 = 1e99_dp
 
+  !> Add this uniform background field (V/m)
+  real(dp) :: field_background($D) = 0.0_dp
+
   !> Amplitude of sinusoidal modification
   real(dp) :: field_sin_amplitude = 0.0_dp
 
@@ -65,6 +68,8 @@ contains
          "Modify electric field after this time (s)")
     call CFG_add_get(cfg, "field_mod_t1", field_mod_t1, &
          "Modify electric field up to this time (s)")
+    call CFG_add_get(cfg, "field_background", field_background, &
+         "Add this uniform background field (V/m)")
     call CFG_add_get(cfg, "field_sin_amplitude", field_sin_amplitude, &
          "Amplitude of sinusoidal modification (V/m)")
     call CFG_add_get(cfg, "field_sin_freq", field_sin_freq, &
@@ -406,9 +411,11 @@ contains
 
 #if $D == 2
     box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
+         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi)) + &
+         field_background(1)
     box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
+         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi)) + &
+         field_background(2)
 
     box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
          (box%fc(1:nc, 1:nc, 1, electric_fld) + &
@@ -418,13 +425,16 @@ contains
 #elif $D == 3
     box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr * &
          (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
-         box%cc(1:nc+1, 1:nc, 1:nc, i_phi))
+         box%cc(1:nc+1, 1:nc, 1:nc, i_phi)) + &
+         field_background(1)
     box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr * &
          (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
-         box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
+         box%cc(1:nc, 1:nc+1, 1:nc, i_phi)) + &
+         field_background(2)
     box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr * &
          (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
-         box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
+         box%cc(1:nc, 1:nc, 1:nc+1, i_phi)) + &
+         field_background(3)
 
     box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
          (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
