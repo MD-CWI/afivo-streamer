@@ -9,6 +9,9 @@ module m_field_$Dd
   !> Start modifying the vertical background field after this time
   real(dp) :: field_mod_t0 = 1e99_dp
 
+  !> Stop modifying the vertical background field after this time
+  real(dp) :: field_mod_t1 = 1e99_dp
+
   !> Amplitude of sinusoidal modification
   real(dp) :: field_sin_amplitude = 0.0_dp
 
@@ -60,6 +63,8 @@ contains
 
     call CFG_add_get(cfg, "field_mod_t0", field_mod_t0, &
          "Modify electric field after this time (s)")
+    call CFG_add_get(cfg, "field_mod_t1", field_mod_t1, &
+         "Modify electric field up to this time (s)")
     call CFG_add_get(cfg, "field_sin_amplitude", field_sin_amplitude, &
          "Amplitude of sinusoidal modification (V/m)")
     call CFG_add_get(cfg, "field_sin_freq", field_sin_freq, &
@@ -158,6 +163,8 @@ contains
     real(dp)             :: electric_fld, t_rel
 
     t_rel = time - field_mod_t0
+    t_rel = min(t_rel, field_mod_t1-field_mod_t0)
+
     if (t_rel > 0) then
        electric_fld = field_amplitude * exp(-t_rel/field_decay_time) + &
             t_rel * field_lin_deriv + &
