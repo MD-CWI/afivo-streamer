@@ -14,6 +14,7 @@ module m_init_cond_$Dd
      real(dp), allocatable           :: seed_r0(:, :)
      real(dp), allocatable           :: seed_r1(:, :)
      real(dp), allocatable           :: seed_density(:)
+     real(dp), allocatable           :: seed_density2(:)
      integer, allocatable            :: seed_charge_type(:)
      real(dp), allocatable           :: seed_width(:)
      character(ST_slen), allocatable :: seed_falloff(:)
@@ -76,6 +77,7 @@ contains
          stop "seed_width variable has incompatible size"
 
     allocate(ic%seed_density(n_cond))
+    allocate(ic%seed_density2(n_cond))
     allocate(ic%seed_charge_type(n_cond))
     allocate(ic%seed_r0(n_dim, n_cond))
     allocate(ic%seed_r1(n_dim, n_cond))
@@ -95,6 +97,11 @@ contains
     call CFG_get(cfg, "seed_charge_type", ic%seed_charge_type)
     call CFG_get(cfg, "seed_width", ic%seed_width)
     call CFG_get(cfg, "seed_falloff", ic%seed_falloff)
+
+    ! Keep density at endpoint the same by default
+    call CFG_add(cfg, "seed_density2", ic%seed_density, &
+         "Initial density of the seed at other endpoint (1/m3)", .true.)
+    call CFG_get(cfg, "seed_density2", ic%seed_density2)
 
     init_conds = ic
 
@@ -190,9 +197,9 @@ contains
        rr   = a$D_r_cc(box, [IJK])
 
        do n = 1, init_conds%n_cond
-          density = init_conds%seed_density(n) * &
-               GM_density_line(rr, init_conds%seed_r0(:, n), &
-               init_conds%seed_r1(:, n), $D, &
+          density = GM_density_line(rr, init_conds%seed_r0(:, n), &
+               init_conds%seed_r1(:, n), &
+               init_conds%seed_density(n), init_conds%seed_density2(n), $D, &
                init_conds%seed_width(n), &
                init_conds%seed_falloff(n))
 

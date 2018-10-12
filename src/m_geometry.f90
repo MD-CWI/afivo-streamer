@@ -20,38 +20,44 @@ contains
 
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1
-  function GM_dist_vec_line(r, r0, r1, n_dim) result(dist_vec)
-    integer, intent(in)  :: n_dim
-    real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim)
-    real(dp)             :: line_len2, temp
-    real(dp)             :: dist_vec(n_dim)
+  subroutine GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
+    integer, intent(in)   :: n_dim
+    real(dp), intent(in)  :: r(n_dim), r0(n_dim), r1(n_dim)
+    real(dp), intent(out) :: dist_vec(n_dim)
+    real(dp), intent(out) :: frac !< Fraction [0,1] along line
+    real(dp)              :: line_len2
 
     line_len2 = sum((r1 - r0)**2)
-    temp = sum((r - r0) * (r1 - r0))
+    frac = sum((r - r0) * (r1 - r0))
 
-    if (temp <= 0.0_dp) then
+    if (frac <= 0.0_dp) then
+       frac = 0.0_dp
        dist_vec = r - r0
-    else if (temp >= line_len2) then
+    else if (frac >= line_len2) then
+       frac = 1.0_dp
        dist_vec = r - r1
     else
-       dist_vec = r - (r0 + temp/line_len2 * (r1 - r0))
+       dist_vec = r - (r0 + frac/line_len2 * (r1 - r0))
+       frac = sqrt(frac / line_len2)
     end if
-  end function GM_dist_vec_line
+  end subroutine GM_dist_vec_line
 
   function GM_dist_line(r, r0, r1, n_dim) result(dist)
     integer, intent(in)  :: n_dim
     real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim)
-    real(dp)             :: dist
-    dist = norm2(GM_dist_vec_line(r, r0, r1, n_dim))
+    real(dp)             :: dist, dist_vec(n_dim), frac
+    call GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
+    dist = norm2(dist_vec)
   end function GM_dist_line
 
-  function GM_density_line(r, r0, r1, n_dim, width, falloff_t) result(val)
+  function GM_density_line(r, r0, r1, n_0, n_1, n_dim, width, falloff_t) result(val)
     integer, intent(in)          :: n_dim
     real(dp), intent(in)         :: r(n_dim), r0(n_dim), r1(n_dim), width
+    real(dp), intent(in)         :: n_0, n_1
     character(len=*), intent(in) :: falloff_t
-    real(dp)                     :: dist, val, dist_vec(n_dim)
+    real(dp)                     :: dist, val, dist_vec(n_dim), frac
 
-    dist_vec = GM_dist_vec_line(r, r0, r1, n_dim)
+    call GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
     dist = norm2(dist_vec)
 
     select case (falloff_t)
@@ -70,6 +76,9 @@ contains
        print *, "Valid options: sigmoid, gaussian, smoothstep, step, laser"
        stop
     end select
+
+    ! Interpolate density between start and endpoint
+    val = val * (frac * n_0 + (1-frac) * n_1)
   end function GM_density_line
 
   function GM_sigmoid(dist, width) result(val)
