@@ -4,6 +4,11 @@ This is a collection of streamer models based on
 [Afivo](https://github.com/jannisteunissen/afivo). A 2D, a 3D and a cylindrical
 model are included.
 
+## News/updates
+
+* In November/December 2018 I (Jannis) am planning to improve this code a bit so
+  that it becomes easier to write custom user applications.
+
 ## How to use
 
 ### Step 1: Get the code
@@ -12,10 +17,10 @@ Using `git`:
 
     git clone https://gitlab.com/MD-CWI-NL/afivo-streamer.git
 
-Alternatively,
-a
-[zip of the latest version](https://gitlab.com/MD-CWI-NL/afivo-streamer/repository/archive.zip?ref=master) can
-be downloaded, but this is not recommended, since there is no update mechanism.
+Alternatively, a [zip of the latest
+version](https://gitlab.com/MD-CWI-NL/afivo-streamer/repository/archive.zip?ref=master)
+can be downloaded, but this is not recommended, since there is no update
+mechanism.
 
 ### Step 2: Compile
 
@@ -36,16 +41,16 @@ configuration files, like
 
 Options from later files will override those from earlier files.
 
-Output can be written in
-the [Silo](https://wci.llnl.gov/simulation/computer-codes/silo) or VTK
-unstructured
+Output can be written in the
+[Silo](https://wci.llnl.gov/simulation/computer-codes/silo) or VTK unstructured
 format. [Visit](https://wci.llnl.gov/simulation/computer-codes/visit/downloads)
 is the recommended tool to visualize the output.
 
 ### Requirements
 
-* A unix-like system, e.g. `GNU/Linux`
+* A unix-like system (e.g., GNU/Linux)
 * Gfortran 4.8 or newer
+* git (recommended)
 
 ## Getting input data (transport coefficients)
 
@@ -66,17 +71,14 @@ folder.
 ## References / how to cite
 
 * Paper about Afivo-streamer: [Simulating streamer discharges in 3D with the
-  parallel adaptive Afivo framework](https://doi.org/10.1088/1361-6463/aa8faf),
-  J. Teunissen and U. Ebert, J. Phys. D.: Appl. Phys. (2017)
+  parallel adaptive Afivo framework](https://doi.org/10.1088/1361-6463/aa8faf)
 * First paper using Afivo-streamer: [The role of free electrons in the guiding
-  of positive streamers](http://dx.doi.org/10.1088/0963-0252/25/4/044001), S.
-  Nijdam, J. Teunissen, E. Takahashi, U. Ebert, Plasma Sources Sci. Technol.
-  (2016)
+  of positive streamers](http://dx.doi.org/10.1088/0963-0252/25/4/044001)
 * Paper about Afivo: [Afivo: a framework for quadtree/octree AMR with
   shared-memory parallelization and geometric multigrid
-  methods](https://arxiv.org/abs/1701.04329), J. Teunissen, U. Ebert, subm. to
-  CPC
+  methods](https://doi.org/10.1016/j.cpc.2018.06.018)
+  [arXiv](https://arxiv.org/abs/1701.04329)
 * More information about the photoionization method can be found in chapter 11
   of: [3D Simulations and Analysis of Pulsed
-  Discharges](http://repository.tue.nl/801516), J. Teunissen, PhD Thesis,
-  Eindhoven University of Technology, 2015.
+  Discharges](https://research.tue.nl/en/publications/3d-simulations-and-analysis-of-pulsed-discharges),
+  J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
