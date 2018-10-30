@@ -42,6 +42,11 @@ module m_field_$Dd
   !> Location from which the field drops off (set below)
   real(dp) :: field_dropoff_pos(2) = 0.0_dp
 
+  logical  :: field_stability_search    = .false.
+  real(dp) :: field_stability_zmin      = 0.2_dp
+  real(dp) :: field_stability_zmax      = 1.0_dp
+  real(dp) :: field_stability_threshold = 3e6_dp
+
   real(dp) :: phi_quadr_a1 = 1.0e6_dp
   real(dp) :: phi_quadr_a2 = -1.0e6_dp / 2.5e-2_dp
 
@@ -82,6 +87,15 @@ contains
          "The applied electric field (V/m) (vertical)")
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
          "Type of boundary condition to use (homogeneous, ...)")
+
+    call CFG_add_get(cfg, "field_stability_search", field_stability_search, &
+         "If true, enable mode to search stability field")
+    call CFG_add_get(cfg, "field_stability_zmin", field_stability_zmin, &
+         "Start lowering background field above this relative position")
+    call CFG_add_get(cfg, "field_stability_zmax", field_stability_zmax, &
+         "At this relative position the background field will be zero")
+    call CFG_add_get(cfg, "field_stability_threshold", field_stability_threshold, &
+         "Use location of maximal field if above this threshold (V/m)")
 
     call CFG_add_get(cfg, "field_dropoff_radius", field_dropoff_radius, &
          "Potential stays constant up to this radius")
@@ -142,7 +156,7 @@ contains
     end do
     !$omp end parallel
 
-    call field_set_voltage(ST_time)
+    call field_set_voltage(tree, ST_time)
 
     if (.not. have_guess) then
        ! Perform a FMG cycle when we have no guess
@@ -162,10 +176,13 @@ contains
   end subroutine field_compute
 
   !> Compute the electric field at a given time
-  function field_get_amplitude(time) result(electric_fld)
+  function field_get_amplitude(tree, time) result(electric_fld)
     use m_units_constants
-    real(dp), intent(in) :: time
-    real(dp)             :: electric_fld, t_rel
+    type(a$D_t), intent(in) :: tree
+    real(dp), intent(in)    :: time
+    real(dp)                :: electric_fld, t_rel
+    type(a$D_loc_t)         :: loc_field
+    real(dp)                :: r($D), zrel, max_fld
 
     t_rel = time - field_mod_t0
     t_rel = min(t_rel, field_mod_t1-field_mod_t0)
@@ -175,16 +192,30 @@ contains
             t_rel * field_lin_deriv + &
             field_sin_amplitude * &
             sin(t_rel * field_sin_freq * 2 * UC_pi)
+    else if (field_stability_search) then
+       call a$D_tree_max_cc(tree, i_electric_fld, max_fld, loc_field)
+       r = a$D_r_loc(tree, loc_field)
+       zrel = r($D) / ST_domain_len
+       zrel = (zrel - field_stability_zmin) / &
+            (field_stability_zmax - field_stability_zmin)
+
+       if (zrel > 0.0_dp .and. max_fld > field_stability_threshold) then
+          electric_fld = (1 - zrel) * field_amplitude
+       else
+          electric_fld = field_amplitude
+       end if
     else
        electric_fld = field_amplitude
     end if
+
   end function field_get_amplitude
 
   !> Compute the voltage at a given time
-  subroutine field_set_voltage(time)
-    real(dp), intent(in) :: time
+  subroutine field_set_voltage(tree, time)
+    type(a$D_t), intent(in) :: tree
+    real(dp), intent(in)    :: time
 
-    field_voltage = -ST_domain_len * field_get_amplitude(time)
+    field_voltage = -ST_domain_len * field_get_amplitude(tree, time)
   end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential
