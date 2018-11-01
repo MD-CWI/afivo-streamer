@@ -218,6 +218,9 @@ module m_streamer
   ! The length of the (square) domain
   real(dp), protected :: ST_domain_len = 16e-3_dp
 
+  ! Whether the domain is periodic in the x (and y)
+  logical, protected :: ST_periodic = .false.
+
   ! Pressure of the gas in bar
   real(dp), protected :: ST_gas_pressure = 1.0_dp
 
@@ -327,6 +330,8 @@ contains
          "The number of grid cells per coordinate in a box")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &
          "The length of the domain (m)")
+    call CFG_add_get(cfg, "periodic", ST_periodic, &
+         "Whether the domain is periodic")
     call CFG_add_get(cfg, "gas_pressure", ST_gas_pressure, &
          "The gas pressure (bar), used for photoionization")
     call CFG_add_get(cfg, "gas_frac_O2", ST_gas_frac_O2, &

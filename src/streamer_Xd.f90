@@ -278,6 +278,7 @@ contains
     real(dp)                  :: dr
     integer                   :: id
     integer                   :: ix_list($D, 1) ! Spatial indices of initial boxes
+    integer                   :: nb_list(2*$D, 1) ! Index of neighbors
     integer                   :: n_boxes_init = 1000
 
     dr = ST_domain_len / ST_box_size
@@ -296,8 +297,20 @@ contains
     id             = 1          ! One box ...
     ix_list(:, id) = 1          ! With index 1,1 ...
 
-    ! Create the base mesh
-    call a$D_set_base(tree, 1, ix_list)
+    if (ST_periodic) then
+       if (ST_cylindrical) error stop "Cannot have periodic cylindrical domain"
+       nb_list(:, 1)                = -1
+       nb_list(a$D_neighb_lowx, 1)  = 1
+       nb_list(a$D_neighb_highx, 1) = 1
+#if $D == 3
+       nb_list(a$D_neighb_lowy, 1)  = 1
+       nb_list(a$D_neighb_highy, 1) = 1
+#endif
+       call a$D_set_base(tree, 1, ix_list, nb_list)
+    else
+       ! Create the base mesh
+       call a$D_set_base(tree, 1, ix_list)
+    end if
 
   end subroutine init_tree
 
