@@ -47,8 +47,12 @@ module m_field_$Dd
   real(dp) :: field_stability_zmax      = 1.0_dp
   real(dp) :: field_stability_threshold = 3e6_dp
 
-  real(dp) :: phi_quadr_a1 = 1.0e6_dp
-  real(dp) :: phi_quadr_a2 = -1.0e6_dp / 2.5e-2_dp
+  real(dp) :: field_point_charge = 0.0_dp
+#if $D == 2
+  real(dp) :: field_point_r0($D) = [0.0_dp, -1.0_dp]
+#elif $D == 3
+  real(dp) :: field_point_r0($D) = [0.0_dp, 0.0_dp, -1.0_dp]
+#endif
 
   character(ST_slen) :: field_bc_type = "homogeneous"
 
@@ -96,6 +100,11 @@ contains
          "At this relative position the background field will be zero")
     call CFG_add_get(cfg, "field_stability_threshold", field_stability_threshold, &
          "Use location of maximal field if above this threshold (V/m)")
+
+    call CFG_add_get(cfg, "field_point_charge", field_point_charge, &
+         "Charge (in C) of point charge")
+    call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
+         "Relative position of point charge (outside domain)")
 
     call CFG_add_get(cfg, "field_dropoff_radius", field_dropoff_radius, &
          "Potential stays constant up to this radius")
@@ -377,59 +386,55 @@ contains
 
   !> Create a field of the form E = E_0 - c / r^2
   subroutine field_bc_point_charge(box, nb, iv, bc_type)
+    use m_units_constants
     type(box$D_t), intent(inout) :: box
     integer, intent(in)          :: nb      ! Direction for the boundary condition
     integer, intent(in)          :: iv      ! Index of variable
     integer, intent(out)         :: bc_type ! Type of boundary condition
     integer                      :: nc, i, j
-    real(dp)                     :: rr($D)
-    real(dp)                     :: phi_min, phi_max
+    real(dp)                     :: rr($D), r0($D), r1($D), q
 
     nc = box%n_cell
     bc_type = af_bc_dirichlet
-    phi_min = 0.0_dp
-    phi_max = phi_quadr_a1 * ST_domain_len + phi_quadr_a2 * ST_domain_len**2
+    q = field_point_charge / (4 * UC_pi * UC_eps0)
+    r0 = field_point_r0 * ST_domain_len
+    r1 = r0
+    r1($D) = -r0($D)
 
     select case (nb)
 #if $D == 2
-    ! case (a2_neighb_lowx)
-    !    do j = 1, nc
-    !       rr = a2_rr_cc(box, [0.5_dp, j+0.0_dp])
-    !       box%cc(0, j, iv) = point_phi(rr)
-    !    end do
+    case (a$D_neighb_lowx)
+       if (ST_cylindrical) then
+          bc_type = af_bc_neumann
+          box%cc(0, 1:nc, iv) = 0
+       else
+          do j = 1, nc
+             rr = a2_rr_cc(box, [0.5_dp, j+0.0_dp])
+             box%cc(0, j, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
+          end do
+       end if
     case (a2_neighb_highx)
        do j = 1, nc
           rr = a2_rr_cc(box, [nc+0.5_dp, j+0.0_dp])
-          box%cc(nc+1, j, iv) = point_phi(rr)
+          box%cc(nc+1, j, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
        end do
     case (a2_neighb_lowy)
        do i = 1, nc
           rr = a2_rr_cc(box, [i+0.0_dp, 0.5_dp])
-          box%cc(i, 0, iv) = point_phi(rr)
+          box%cc(i, 0, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
        end do
     case (a2_neighb_highy)
        do i = 1, nc
           rr = a2_rr_cc(box, [i+0.0_dp, nc+0.5_dp])
-          box%cc(i, nc+1, iv) = point_phi(rr)
+          box%cc(i, nc+1, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
        end do
 #elif $D == 3
 #endif
     case default
+       error stop "Not implemented"
        call field_bc_homogeneous(box, nb, iv, bc_type)
     end select
   end subroutine field_bc_point_charge
-
-  real(dp) function point_phi(r)
-    real(dp), intent(in)         :: r($D)
-    real(dp), parameter          :: point_c0 = 5e2_dp
-#if $D == 2
-    real(dp), parameter          :: point_r0(*) = [0.0_dp, 3.0e-2_dp]
-#elif $D == 3
-    real(dp), parameter          :: point_r0(*) = [0.0_dp, 0.0_dp, -1.0e-2_dp]
-#endif
-
-    point_phi = point_c0/norm2(r-point_r0)
-  end function point_phi
 
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
