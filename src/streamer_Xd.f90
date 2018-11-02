@@ -152,7 +152,7 @@ program streamer_$Dd
         ST_time = ST_time + ST_dt
 
         ! First calculate fluxes
-        call a$D_loop_boxes(tree, fluxes_koren, .true.)
+        call a$D_loop_boxes_arg(tree, fluxes_koren, [ST_dt], .true.)
         call a$D_consistent_fluxes(tree, [flux_elec])
 
         ! Update the solution
@@ -181,6 +181,7 @@ program streamer_$Dd
      ! Determine next time step
      ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * &
           minval(ST_dt_matrix(1:ST_dt_num_cond, :)))
+     print *, minval(ST_dt_matrix(1:ST_dt_num_cond, :), dim=2)
      dt_prev = ST_dt
 
      if (ST_dt < ST_dt_min .and. .not. write_out) then
@@ -393,17 +394,22 @@ contains
   end subroutine refine_routine
 
   !> Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_koren(boxes, id)
+  subroutine fluxes_koren(boxes, id, rargs)
     use m_flux_schemes
+    use m_units_constants
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
+    real(dp), intent(in)         :: rargs(:)
     real(dp)                     :: inv_dr, fld
     ! Velocities at cell faces
     real(dp), allocatable        :: v(DTIMES(:), :)
     ! Diffusion coefficients at cell faces
     real(dp), allocatable        :: dc(DTIMES(:), :)
+    ! Maximal fluxes at cell faces
+    real(dp), allocatable        :: fmax(DTIMES(:), :)
     ! Cell-centered densities
     real(dp), allocatable        :: cc(DTIMES(:))
+    real(dp)                     :: mu, fld_face, drt_fac, tmp
     integer                      :: nc, n, m
 #if $D == 3
     integer                      :: l
@@ -411,10 +417,15 @@ contains
 
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
+    drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * rargs(1))
 
     allocate(v(DTIMES(1:nc+1), $D))
     allocate(dc(DTIMES(1:nc+1), $D))
     allocate(cc(DTIMES(-1:nc+2)))
+    allocate(fmax(DTIMES(1:nc+1), $D))
+    if (ST_drt_limit_flux) then
+       fmax = 0.0_dp
+    end if
 
     ! Fill ghost cells on the sides of boxes (no corners)
     call a$D_gc_box(boxes, id, i_electron, a$D_gc_interp_lim, &
@@ -431,46 +442,122 @@ contains
 #if $D == 2
           fld       = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
                boxes(id)%cc(n, m, i_electric_fld))
-          v(n, m, 1)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-               boxes(id)%fc(n, m, 1, electric_fld)
+          mu = LT_get_col(ST_td_tbl, i_mobility, fld)
+          fld_face = boxes(id)%fc(n, m, 1, electric_fld)
+          v(n, m, 1)  = -mu * fld_face
           dc(n, m, 1) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+
+          if (ST_drt_limit_flux) then
+             tmp = abs(cc(n-1, m) - cc(n, m))/max(cc(n-1, m), cc(n, m))
+             tmp = max(fld, tmp * inv_dr * dc(n, m, 1) / mu)
+             fmax(n, m, 1) = drt_fac * tmp
+          end if
+
+          if (abs(fld_face) > ST_diffusion_field_limit .and. &
+               (cc(n-1, m) - cc(n, m)) * fld_face > 0.0_dp) then
+             dc(n, m, 1) = 0.0_dp
+          end if
 
           fld       = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
                boxes(id)%cc(m, n, i_electric_fld))
-          v(m, n, 2)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-               boxes(id)%fc(m, n, 2, electric_fld)
+          mu = LT_get_col(ST_td_tbl, i_mobility, fld)
+          fld_face = boxes(id)%fc(m, n, 2, electric_fld)
+          v(m, n, 2)  = -mu * fld_face
           dc(m, n, 2) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+
+          if (ST_drt_limit_flux) then
+             tmp = abs(cc(m, n-1) - cc(m, n))/max(cc(m, n-1), cc(m, n))
+             tmp = max(fld, tmp * inv_dr * dc(m, n, 2) / mu)
+             fmax(m, n, 2) = drt_fac * tmp
+          end if
+
+          if (abs(fld_face) > ST_diffusion_field_limit .and. &
+               (cc(m, n-1) - cc(m, n)) * fld_face > 0.0_dp) then
+             dc(m, n, 2) = 0.0_dp
+          end if
 #elif $D == 3
           do l = 1, nc
              fld = 0.5_dp * (&
                   boxes(id)%cc(n-1, m, l, i_electric_fld) + &
                   boxes(id)%cc(n, m, l, i_electric_fld))
-             v(n, m, l, 1)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-                  boxes(id)%fc(n, m, l, 1, electric_fld)
+             mu = LT_get_col(ST_td_tbl, i_mobility, fld)
+             fld_face = boxes(id)%fc(n, m, l, 1, electric_fld)
+             v(n, m, l, 1)  = -mu * fld_face
              dc(n, m, l, 1) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+
+             if (ST_drt_limit_flux) then
+                tmp = abs(cc(n-1, m, l) - cc(n, m, l)) / &
+                     max(cc(n-1, m, l), cc(n, m, l))
+                tmp = max(fld, tmp * inv_dr * dc(n, m, l, 1) / mu)
+                fmax(n, m, l, 1) = drt_fac * tmp
+             end if
+
+             if (abs(fld_face) > ST_diffusion_field_limit .and. &
+                  (cc(n-1, m, l) - cc(n, m, l)) * fld_face > 0.0_dp) then
+                dc(n, m, l, 1) = 0.0_dp
+             end if
 
              fld = 0.5_dp * (&
                   boxes(id)%cc(m, n-1, l, i_electric_fld) + &
                   boxes(id)%cc(m, n, l, i_electric_fld))
-             v(m, n, l, 2)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-                  boxes(id)%fc(m, n, l, 2, electric_fld)
+             mu = LT_get_col(ST_td_tbl, i_mobility, fld)
+             fld_face = boxes(id)%fc(m, n, l, 2, electric_fld)
+             v(m, n, l, 2)  = -mu * fld_face
              dc(m, n, l, 2) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+
+             if (ST_drt_limit_flux) then
+                tmp = abs(cc(m, n-1, l) - cc(m, n, l)) / &
+                     max(cc(m, n-1, l), cc(m, n, l))
+                tmp = max(fld, tmp * inv_dr * dc(m, n, l, 2) / mu)
+                fmax(m, n, l, 2) = drt_fac * tmp
+             end if
+
+             if (abs(fld_face) > ST_diffusion_field_limit .and. &
+                  (cc(m, n-1, l) - cc(m, n, l)) * fld_face > 0.0_dp) then
+                dc(m, n, l, 2) = 0.0_dp
+             end if
 
              fld = 0.5_dp * (&
                   boxes(id)%cc(m, l, n-1, i_electric_fld) + &
                   boxes(id)%cc(m, l, n, i_electric_fld))
-             v(m, l, n, 3)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-                  boxes(id)%fc(m, l, n, 3, electric_fld)
+             mu = LT_get_col(ST_td_tbl, i_mobility, fld)
+             fld_face = boxes(id)%fc(m, l, n, 3, electric_fld)
+             v(m, l, n, 3)  = -mu * fld_face
              dc(m, l, n, 3) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+
+             if (ST_drt_limit_flux) then
+                tmp = abs(cc(m, l, n-1) - cc(m, l, n)) / &
+                     max(cc(m, l, n-1), cc(m, l, n))
+                tmp = max(fld, tmp * inv_dr * dc(m, l, n, 3) / mu)
+                fmax(m, l, n, 3) = drt_fac * tmp
+             end if
+
+             if (abs(fld_face) > ST_diffusion_field_limit .and. &
+                  (cc(m, l, n-1) - cc(m, l, n)) * fld_face > 0.0_dp) then
+                dc(m, l, n, 3) = 0.0_dp
+             end if
           end do
 #endif
        end do
     end do
 
+    if (ST_max_velocity > 0.0_dp) then
+       where (abs(v) > ST_max_velocity)
+          v = sign(ST_max_velocity, v)
+       end where
+    end if
+
     call flux_koren_$Dd(cc, v, nc, 2)
     call flux_diff_$Dd(cc, dc, inv_dr, nc, 2)
 
     boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
+
+    if (ST_drt_limit_flux) then
+       where (abs(boxes(id)%fc(DTIMES(:), :, flux_elec)) > fmax)
+          boxes(id)%fc(DTIMES(:), :, flux_elec) = &
+               sign(fmax, boxes(id)%fc(DTIMES(:), :, flux_elec))
+       end where
+    end if
 
     if (ST_update_ions) then
        ! Use a constant diffusion coefficient for ions
@@ -513,6 +600,7 @@ contains
     real(dp)                     :: dt, inv_dr, src, fld, fld_vec($D)
     real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
     real(dp)                     :: dt_cfl, dt_dif, dt_drt
+    real(dp)                     :: tmp_vec($D)
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
@@ -537,6 +625,10 @@ contains
        alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
        eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
        mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+
+       if (abs(fld) > ST_max_field) then
+          alpha = extrap_alpha(abs(fld))
+       end if
 
        ! Contribution of flux
 #if $D == 2
@@ -571,7 +663,17 @@ contains
        end if
 
        ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta)
+       if (box%cc(IJK, i_electron) < ST_src_min_density) then
+          src = 0.0_dp
+       else
+          if (ST_max_src > 0) then
+             src = min(fld * mu * (alpha - eta), ST_max_src) * &
+                  box%cc(IJK, i_electron)
+          else
+             src = fld * mu * (alpha - eta) * box%cc(IJK, i_electron)
+          end if
+       end if
+
        if (photoi_enabled) src = src + box%cc(IJK, i_photo)
 
        if (i_step == 1 .and. ST_output_src_term) then
@@ -594,14 +696,6 @@ contains
        ! Add flux and source term
        box%cc(IJK, i_pos_ion)  = box%cc(IJK, i_pos_ion) + f_ion + src
 
-       ! Limit electron density (for efficiency, and to resolve some
-       ! instabilities)
-       src = box%cc(IJK, i_electron) - ST_limit_elec_dens
-       if (src > 0) then
-          box%cc(IJK, i_electron) = box%cc(IJK, i_electron) - src
-          box%cc(IJK, i_pos_ion) = box%cc(IJK, i_pos_ion) - src
-       end if
-
        ! Possible determine new time step restriction
        if (i_step == 2) then
 #if $D == 2
@@ -621,14 +715,27 @@ contains
           diff = LT_get_col(ST_td_tbl, i_diffusion, fld)
 
           ! CFL condition
-          dt_cfl = 1.0_dp/sum(abs(fld_vec * &
-               max(mu, abs(ST_ion_mobility))) * inv_dr)
+          if (ST_max_velocity > 0) then
+             tmp_vec = abs(fld_vec * max(mu, abs(ST_ion_mobility)))
+             where (tmp_vec > ST_max_velocity) tmp_vec = ST_max_velocity
+             dt_cfl = 1.0_dp/sum(tmp_vec * inv_dr)
+          else
+             dt_cfl = 1.0_dp/sum(abs(fld_vec * &
+                  max(mu, abs(ST_ion_mobility))) * inv_dr)
+          end if
+
           ! Diffusion condition
           dt_dif = box%dr**2 / max(2 * $D * max(diff, ST_ion_diffusion), &
                epsilon(1.0_dp))
+
           ! Dielectric relaxation time
-          dt_drt = UC_eps0 / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
-               max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
+          if (ST_drt_limit_flux .and. fld < ST_drt_limit_flux_Emax) then
+             dt_drt = UC_eps0 / (UC_elem_charge * abs(ST_ion_mobility) * &
+                  max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
+          else
+             dt_drt = UC_eps0 / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
+                  max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
+          end if
 
           ! Take the combined CFL-diffusion condition with Courant number 0.5.
           ! The 0.5 is emperical, to have good accuracy (and TVD/positivity) in
@@ -644,6 +751,12 @@ contains
        end if
 
     end do; CLOSE_DO
+
+    where (box%cc(DTIMES(1:nc), i_electron) < ST_elec_density_threshold)
+       box%cc(DTIMES(1:nc), i_pos_ion) = box%cc(DTIMES(1:nc), i_pos_ion) - &
+            box%cc(DTIMES(1:nc), i_electron)
+       box%cc(DTIMES(1:nc), i_electron) = 0.0_dp
+    end where
   end subroutine update_solution
 
   subroutine write_log_file(tree, filename, out_cnt, dir)
@@ -724,5 +837,13 @@ contains
        close(my_unit, status='delete')
     end if
   end subroutine check_path_writable
+
+  !> Extrapolate the ionization coefficient
+  elemental real(dp) function extrap_alpha(fld)
+    real(dp), intent(in) :: fld
+    ! Linear extrapolation
+    extrap_alpha = ST_extrap_src_y0 + ST_extrap_src_dydx * &
+         (fld - ST_max_field)
+  end function extrap_alpha
 
 end program streamer_$Dd

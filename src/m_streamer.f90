@@ -63,6 +63,9 @@ module m_streamer
   ! Table with transport data vs electric field
   type(lookup_table_t), protected :: ST_td_tbl
 
+  !> Maximal electric field for the lookup table
+  real(dp), protected :: ST_max_field = 3e7_dp
+
   !> The diffusion coefficient for positive ions (m2/s)
   real(dp) :: ST_ion_diffusion = 0.0_dp
 
@@ -138,7 +141,17 @@ module m_streamer
   ! Current time step
   real(dp) :: ST_dt
 
-  real(dp), protected :: ST_limit_elec_dens = 1e100_dp
+  logical, protected :: ST_drt_limit_flux = .false.
+
+  real(dp), protected :: ST_drt_limit_flux_Emax = 1e10_dp
+
+  real(dp), protected :: ST_elec_density_threshold = -1.0e100_dp
+  real(dp), protected :: ST_src_min_density = -1.0e100_dp
+  real(dp), protected :: ST_src_max_field = -1.0_dp
+  real(dp), protected :: ST_max_src = -1.0_dp
+  real(dp), protected :: ST_velocity_max_field = -1.0_dp
+  real(dp), protected :: ST_max_velocity = -1.0_dp
+  real(dp), protected :: ST_diffusion_field_limit = 1.0e100_dp
 
   ! Number of time step restrictions
   integer, parameter :: ST_dt_num_cond = 3
@@ -229,6 +242,10 @@ module m_streamer
 
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2
+
+  ! Used for the extrapolation of the ionization coefficient
+  real(dp), protected :: ST_extrap_src_dydx
+  real(dp), protected :: ST_extrap_src_y0
 
 contains
 
@@ -340,8 +357,20 @@ contains
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
 
-    call CFG_add_get(cfg, "limit_elec_dens", ST_limit_elec_dens, &
-         "Limit electron densities to this value (1/m3)")
+    call CFG_add_get(cfg, "fixes%drt_limit_flux", ST_drt_limit_flux, &
+         "Avoid dielectric relaxation time step constraint by limiting flux")
+    call CFG_add_get(cfg, "fixes%drt_limit_flux_Emax", ST_drt_limit_flux_Emax, &
+         "Compute electron impact ionization source based on fluxes")
+    call CFG_add_get(cfg, "fixes%velocity_max_field", ST_velocity_max_field, &
+         "If positive, limit velocities to the value in this field (V/m)")
+    call CFG_add_get(cfg, "fixes%src_max_field", ST_src_max_field, &
+         "If positive, limit ionization to the value in this field (V/m)")
+    call CFG_add_get(cfg, "fixes%src_min_density", ST_src_min_density, &
+         "Disable impact ionization source below this density")
+    call CFG_add_get(cfg, "fixes%elec_density_threshold", ST_elec_density_threshold, &
+         "Set densities below this value to zero (1/m3)")
+    call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
+         "Disable diffusion parallel to fields above this threshold (V/m)")
 
     call CFG_add_get(cfg, "dt_output", ST_dt_output, &
          "The timestep for writing output (s)")
@@ -474,15 +503,14 @@ contains
     use m_config
 
     type(CFG_t), intent(inout) :: cfg
-
-    character(len=ST_slen)     :: td_file = "td_input_file.txt"
-    character(len=ST_slen)     :: gas_name         = "AIR"
-    integer                    :: table_size       = 1000
-    real(dp)                   :: max_electric_fld = 3e7_dp
-    real(dp)                   :: alpha_fac        = 1.0_dp
-    real(dp)                   :: eta_fac          = 1.0_dp
-    real(dp)                   :: mobility_fac     = 1.0_dp
-    real(dp)                   :: diffusion_fac    = 1.0_dp
+    character(len=ST_slen)     :: td_file       = "td_input_file.txt"
+    character(len=ST_slen)     :: gas_name      = "AIR"
+    integer                    :: table_size    = 1000
+    real(dp)                   :: alpha_fac     = 1.0_dp
+    real(dp)                   :: eta_fac       = 1.0_dp
+    real(dp)                   :: mobility_fac  = 1.0_dp
+    real(dp)                   :: diffusion_fac = 1.0_dp
+    real(dp)                   :: x(2), y(2)
     real(dp), allocatable      :: x_data(:), y_data(:)
     character(len=ST_slen)     :: data_name
 
@@ -493,7 +521,7 @@ contains
 
     call CFG_add_get(cfg, "lookup_table_size", table_size, &
          "The transport data table size in the fluid model")
-    call CFG_add_get(cfg, "lookup_table_max_electric_fld", max_electric_fld, &
+    call CFG_add_get(cfg, "lookup_table_max_electric_fld", ST_max_field, &
          "The maximum electric field in the fluid model coefficients")
 
     call CFG_add_get(cfg, "td_alpha_fac", alpha_fac, &
@@ -506,7 +534,7 @@ contains
          "Modify diffusion by this factor")
 
     ! Create a lookup table for the model coefficients
-    ST_td_tbl = LT_create(0.0_dp, max_electric_fld, table_size, n_var_td)
+    ST_td_tbl = LT_create(0.0_dp, ST_max_field, table_size, n_var_td)
 
     ! Fill table with data
     data_name = "efield[V/m]_vs_mu[m2/Vs]"
@@ -540,6 +568,27 @@ contains
          trim(data_name), x_data, y_data)
     y_data = y_data * eta_fac
     call LT_set_col(ST_td_tbl, i_eta, x_data, y_data)
+
+    ! Determine extrapolation coefficients for transport data
+    x = [ST_max_field, 0.8_dp * ST_max_field]
+
+    ! Linear extrapolation for ionization coefficient
+    y = LT_get_col(ST_td_tbl, i_alpha, x)
+
+    ST_extrap_src_dydx = (y(2) - y(1)) / (x(2) - x(1))
+    ST_extrap_src_y0   = y(2)
+
+    ! Set maximal velocity if velocity_max_field is given
+    if (ST_velocity_max_field > 0) then
+       ST_max_velocity = ST_velocity_max_field * &
+            LT_get_col(ST_td_tbl, i_mobility, ST_velocity_max_field)
+    end if
+
+    if (ST_src_max_field > 0) then
+       ST_max_src = ST_src_max_field * &
+            LT_get_col(ST_td_tbl, i_mobility, ST_src_max_field) * &
+            LT_get_col(ST_td_tbl, i_alpha, ST_src_max_field)
+    end if
 
   end subroutine ST_load_transport_data
 
