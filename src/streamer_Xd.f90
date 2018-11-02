@@ -409,6 +409,7 @@ contains
     ! Cell-centered densities
     real(dp), allocatable        :: cc(DTIMES(:))
     real(dp)                     :: mu, fld_face, drt_fac, tmp
+    real(dp)                     :: nsmall
     integer                      :: nc, n, m
 #if $D == 3
     integer                      :: l
@@ -417,6 +418,7 @@ contains
     nc     = boxes(id)%n_cell
     inv_dr = 1/boxes(id)%dr
     drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * rargs(1))
+    nsmall = 1.0_dp ! A small density
 
     allocate(v(DTIMES(1:nc+1), $D))
     allocate(dc(DTIMES(1:nc+1), $D))
@@ -447,7 +449,7 @@ contains
           dc(n, m, 1) = LT_get_col(ST_td_tbl, i_diffusion, fld)
 
           if (ST_drt_limit_flux) then
-             tmp = abs(cc(n-1, m) - cc(n, m))/max(cc(n-1, m), cc(n, m))
+             tmp = abs(cc(n-1, m) - cc(n, m))/max(cc(n-1, m), cc(n, m), nsmall)
              tmp = max(fld, tmp * inv_dr * dc(n, m, 1) / mu)
              fmax(n, m, 1) = drt_fac * tmp
           end if
@@ -465,7 +467,7 @@ contains
           dc(m, n, 2) = LT_get_col(ST_td_tbl, i_diffusion, fld)
 
           if (ST_drt_limit_flux) then
-             tmp = abs(cc(m, n-1) - cc(m, n))/max(cc(m, n-1), cc(m, n))
+             tmp = abs(cc(m, n-1) - cc(m, n))/max(cc(m, n-1), cc(m, n), nsmall)
              tmp = max(fld, tmp * inv_dr * dc(m, n, 2) / mu)
              fmax(m, n, 2) = drt_fac * tmp
           end if
@@ -486,7 +488,7 @@ contains
 
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(n-1, m, l) - cc(n, m, l)) / &
-                     max(cc(n-1, m, l), cc(n, m, l))
+                     max(cc(n-1, m, l), cc(n, m, l), nsmall)
                 tmp = max(fld, tmp * inv_dr * dc(n, m, l, 1) / mu)
                 fmax(n, m, l, 1) = drt_fac * tmp
              end if
@@ -506,7 +508,7 @@ contains
 
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(m, n-1, l) - cc(m, n, l)) / &
-                     max(cc(m, n-1, l), cc(m, n, l))
+                     max(cc(m, n-1, l), cc(m, n, l), nsmall)
                 tmp = max(fld, tmp * inv_dr * dc(m, n, l, 2) / mu)
                 fmax(m, n, l, 2) = drt_fac * tmp
              end if
@@ -526,7 +528,7 @@ contains
 
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(m, l, n-1) - cc(m, l, n)) / &
-                     max(cc(m, l, n-1), cc(m, l, n))
+                     max(cc(m, l, n-1), cc(m, l, n), nsmall)
                 tmp = max(fld, tmp * inv_dr * dc(m, l, n, 3) / mu)
                 fmax(m, l, n, 3) = drt_fac * tmp
              end if
