@@ -181,7 +181,6 @@ program streamer_$Dd
      ! Determine next time step
      ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * &
           minval(ST_dt_matrix(1:ST_dt_num_cond, :)))
-     print *, minval(ST_dt_matrix(1:ST_dt_num_cond, :), dim=2)
      dt_prev = ST_dt
 
      if (ST_dt < ST_dt_min .and. .not. write_out) then
