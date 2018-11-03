@@ -731,8 +731,8 @@ contains
 
           ! Dielectric relaxation time
           if (ST_drt_limit_flux .and. fld < ST_drt_limit_flux_Emax) then
-             dt_drt = UC_eps0 / (UC_elem_charge * abs(ST_ion_mobility) * &
-                  max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
+             dt_drt = UC_eps0 / max(UC_elem_charge * abs(ST_ion_mobility) * &
+                  box%cc(IJK, i_electron), epsilon(1.0_dp))
           else
              dt_drt = UC_eps0 / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
                   max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
