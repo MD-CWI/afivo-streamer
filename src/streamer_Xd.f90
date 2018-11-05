@@ -601,7 +601,7 @@ contains
     real(dp)                     :: dt, inv_dr, src, fld, fld_vec($D)
     real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
     real(dp)                     :: dt_cfl, dt_dif, dt_drt
-    real(dp)                     :: tmp_vec($D)
+    real(dp)                     :: tmp_vec($D), dvol
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
@@ -663,16 +663,26 @@ contains
 #endif
        end if
 
+#if $D == 2
+       if (ST_cylindrical) then
+          dvol = 2 * acos(-1.0_dp) * a$D_cyl_radius_cc(box, i) * box%dr**2
+       else
+          dvol = box%dr**2
+       end if
+#elif $D == 3
+       dvol = box%dr**3
+#endif
+
        ! Source term
        if (box%cc(IJK, i_electron) < ST_src_min_density) then
           src = 0.0_dp
+       else if (box%cc(IJK, i_electron) * dvol < ST_src_min_count) then
+          src = 0.0_dp
+       else if (ST_max_src > 0) then
+          src = min(fld * mu * (alpha - eta), ST_max_src) * &
+               box%cc(IJK, i_electron)
        else
-          if (ST_max_src > 0) then
-             src = min(fld * mu * (alpha - eta), ST_max_src) * &
-                  box%cc(IJK, i_electron)
-          else
-             src = fld * mu * (alpha - eta) * box%cc(IJK, i_electron)
-          end if
+          src = fld * mu * (alpha - eta) * box%cc(IJK, i_electron)
        end if
 
        if (photoi_enabled) src = src + box%cc(IJK, i_photo)
