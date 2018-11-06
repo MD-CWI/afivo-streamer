@@ -676,6 +676,8 @@ contains
        ! Source term
        if (box%cc(IJK, i_electron) < ST_src_min_density) then
           src = 0.0_dp
+       else if (box%cc(IJK, i_electron) > ST_src_max_density) then
+          src = 0.0_dp
        else if (box%cc(IJK, i_electron) * dvol < ST_src_min_count) then
           src = 0.0_dp
        else if (ST_max_src > 0) then

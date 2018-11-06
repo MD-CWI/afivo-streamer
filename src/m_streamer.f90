@@ -147,6 +147,7 @@ module m_streamer
 
   real(dp), protected :: ST_elec_density_threshold = -1.0e100_dp
   real(dp), protected :: ST_src_min_density = -1.0e100_dp
+  real(dp), protected :: ST_src_max_density = 1.0e100_dp
   real(dp), protected :: ST_src_min_count = -1.0_dp
   real(dp), protected :: ST_src_max_field = -1.0_dp
   real(dp), protected :: ST_max_src = -1.0_dp
@@ -368,6 +369,8 @@ contains
          "If positive, limit ionization to the value in this field (V/m)")
     call CFG_add_get(cfg, "fixes%src_min_density", ST_src_min_density, &
          "Disable impact ionization source below this density")
+    call CFG_add_get(cfg, "fixes%src_max_density", ST_src_max_density, &
+         "Disable impact ionization source above this density")
     call CFG_add_get(cfg, "fixes%src_min_count", ST_src_min_count, &
          "Disable impact ionization source below this electron count")
     call CFG_add_get(cfg, "fixes%elec_density_threshold", ST_elec_density_threshold, &
