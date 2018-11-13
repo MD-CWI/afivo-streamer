@@ -3,9 +3,6 @@
 # Get all occurrences of use m_... in source files
 deps="$(grep -r -e "use m_" --include \*.f90)"
 
-# Remove m_aX_... entries
-deps=$(echo "$deps" | sed 's/^m_aX_.*$//')
-
 # Remove comments
 deps=$(echo "$deps" | sed 's/!.*$//')
 

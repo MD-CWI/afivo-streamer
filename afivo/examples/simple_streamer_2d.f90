@@ -3,22 +3,22 @@
 !> A simplified model for ionization waves and/or streamers in 2D
 program simple_streamer_2d
 
-  use m_a2_types
-  use m_a2_core
-  use m_a2_ghostcell
-  use m_a2_utils
-  use m_a2_restrict
-  use m_a2_multigrid
-  use m_a2_output
+  use m_af_types
+  use m_af_core
+  use m_af_ghostcell
+  use m_af_utils
+  use m_af_restrict
+  use m_af_multigrid
+  use m_af_output
   use m_write_silo
-  use m_a2_prolong
+  use m_af_prolong
 
   implicit none
 
   integer            :: i, n
   character(len=100) :: fname
-  type(a2_t)         :: tree ! This contains the full grid information
-  type(mg2_t)        :: mg   ! Multigrid option struct
+  type(af_t)         :: tree ! This contains the full grid information
+  type(mg_t)        :: mg   ! Multigrid option struct
   type(ref_info_t)   :: refine_info
 
   ! Indices of cell-centered variables
@@ -83,13 +83,13 @@ program simple_streamer_2d
   mg%sides_bc => sides_bc_pot ! Filling ghost cell on physical boundaries
 
   ! This routine always needs to be called when using multigrid
-  call mg2_init_mg(mg)
+  call mg_init_mg(mg)
 
-  call a2_set_cc_methods(tree, i_elec, a2_bc_dirichlet_zero, &
-       a2_gc_interp_lim, a2_prolong_limit)
-  call a2_set_cc_methods(tree, i_pion, a2_bc_dirichlet_zero, &
-       a2_gc_interp_lim, a2_prolong_limit)
-  call a2_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
+  call af_set_cc_methods(tree, i_elec, af_bc_dirichlet_zero, &
+       af_gc_interp_lim, af_prolong_limit)
+  call af_set_cc_methods(tree, i_pion, af_bc_dirichlet_zero, &
+       af_gc_interp_lim, af_prolong_limit)
+  call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
 
   output_count = 0 ! Number of output files written
   time    = 0 ! Simulation time (all times are in s)
@@ -97,7 +97,7 @@ program simple_streamer_2d
   ! Set up the initial conditions
   do
      ! For each box in tree, set the initial conditions
-     call a2_loop_box(tree, set_initial_condition)
+     call af_loop_box(tree, set_initial_condition)
 
      ! Compute electric field on the tree.
      ! First perform multigrid to get electric potential,
@@ -106,10 +106,10 @@ program simple_streamer_2d
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
-     ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
+     ! Routine af_adjust_refinement sets the bit af_bit_new_children for each box
      ! that is refined.  On input, the tree should be balanced. On output,
      ! the tree is still balanced, and its refinement is updated (with at most
-     call a2_adjust_refinement(tree, &               ! tree
+     call af_adjust_refinement(tree, &               ! tree
           refinement_routine, & ! Refinement function
           refine_info)          ! Information about refinement
 
@@ -117,11 +117,11 @@ program simple_streamer_2d
      if (refine_info%n_add == 0 .and. refine_info%n_rm == 0) exit
   end do
 
-  call a2_print_info(tree)
+  call af_print_info(tree)
 
   do
      ! Get a new time step, which is at most dt_max
-     call a2_reduction(tree, &    ! Tree to do the reduction on
+     call af_reduction(tree, &    ! Tree to do the reduction on
           max_dt, &  ! function
           get_min, & ! function
           dt_max, &  ! Initial value for the reduction
@@ -139,10 +139,10 @@ program simple_streamer_2d
 
         ! Write the cell centered data of a tree to a Silo file. Only the
         ! leaves of the tree are used
-        call a2_write_silo(tree, fname, output_count, time, dir="output")
+        call af_write_silo(tree, fname, output_count, time, dir="output")
 
-        call a2_tree_sum_cc(tree, i_elec, sum_elec)
-        call a2_tree_sum_cc(tree, i_pion, sum_pion)
+        call af_tree_sum_cc(tree, i_elec, sum_elec)
+        call af_tree_sum_cc(tree, i_pion, sum_pion)
         print *, "sum(pion-elec)/sum(pion)", (sum_pion - sum_elec)/sum_pion
      end if
 
@@ -153,17 +153,17 @@ program simple_streamer_2d
         time = time + dt
 
         ! Copy previous solution
-        call a2_tree_copy_cc(tree, i_elec, i_elec_old)
-        call a2_tree_copy_cc(tree, i_pion, i_pion_old)
+        call af_tree_copy_cc(tree, i_elec, i_elec_old)
+        call af_tree_copy_cc(tree, i_pion, i_pion_old)
 
         ! Two forward Euler steps over dt
         do i = 1, 2
            ! First calculate fluxes
-           call a2_loop_boxes(tree, fluxes_koren, leaves_only=.true.)
-           call a2_consistent_fluxes(tree, [f_elec])
+           call af_loop_boxes(tree, fluxes_koren, leaves_only=.true.)
+           call af_consistent_fluxes(tree, [f_elec])
 
            ! Update the solution
-           call a2_loop_box_arg(tree, update_solution, [dt], &
+           call af_loop_box_arg(tree, update_solution, [dt], &
                 leaves_only=.true.)
 
            ! Compute new field on first iteration
@@ -171,23 +171,23 @@ program simple_streamer_2d
         end do
 
         ! Take average of phi_old and phi (explicit trapezoidal rule)
-        call a2_loop_box(tree, average_dens)
+        call af_loop_box(tree, average_dens)
 
         ! Compute field with new density
         call compute_fld(tree, .true.)
      end do
 
      ! Fill ghost cells for i_pion and i_elec
-     call a2_gc_tree(tree, i_elec)
-     call a2_gc_tree(tree, i_pion)
+     call af_gc_tree(tree, i_elec)
+     call af_gc_tree(tree, i_pion)
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
-     ! Routine a2_adjust_refinement sets the bit af_bit_new_children for each box
+     ! Routine af_adjust_refinement sets the bit af_bit_new_children for each box
      ! that is refined.  On input, the tree should be balanced. On output,
      ! the tree is still balanced, and its refinement is updated (with at most
      ! one level per call).
-     call a2_adjust_refinement(tree, &               ! tree
+     call af_adjust_refinement(tree, &               ! tree
           refinement_routine, & ! Refinement function
           refine_info, &        ! Information about refinement
           4)                    ! Buffer width (in cells)
@@ -202,7 +202,7 @@ contains
 
   !> Initialize the AMR tree
   subroutine init_tree(tree)
-    type(a2_t), intent(inout) :: tree
+    type(af_t), intent(inout) :: tree
 
     ! Variables used below to initialize tree
     real(dp)                  :: dr
@@ -214,7 +214,7 @@ contains
     dr = domain_length / box_size
 
     ! Initialize tree
-    call a2_init(tree, &                   ! The tree to initialize
+    call af_init(tree, &                   ! The tree to initialize
          box_size, &               ! Boxes have box_size^dim cells
          n_var_cell, &             ! Number of cell-centered variables
          n_var_face, &             ! Number of face-centered variables
@@ -227,19 +227,19 @@ contains
     id             = 1          ! One box ...
     ix_list(:, id) = [1,1]      ! With index 1,1 ...
 
-    nb_list(a2_neighb_lowy, id)  = -1 ! physical boundary
-    nb_list(a2_neighb_highy, id) = -1 ! idem
-    nb_list(a2_neighb_lowx, id)  = id ! periodic boundary
-    nb_list(a2_neighb_highx, id) = id ! idem
+    nb_list(af_neighb_lowy, id)  = -1 ! physical boundary
+    nb_list(af_neighb_highy, id) = -1 ! idem
+    nb_list(af_neighb_lowx, id)  = id ! periodic boundary
+    nb_list(af_neighb_highx, id) = id ! idem
 
     ! Create the base mesh
-    call a2_set_base(tree, 1, ix_list, nb_list)
+    call af_set_base(tree, 1, ix_list, nb_list)
 
   end subroutine init_tree
 
   !> This routine sets the refinement flag for boxes(id)
   subroutine refinement_routine(box, cell_flags)
-    type(box2_t), intent(in) :: box
+    type(box_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
     integer                  :: i, j, nc
     real(dp)                 :: dx, dens, fld, adx, xy(2)
@@ -249,7 +249,7 @@ contains
 
     do j = 1, nc
        do i = 1, nc
-          xy   = a2_r_cc(box, [i,j])
+          xy   = af_r_cc(box, [i,j])
           dens = box%cc(i, j, i_elec)
           fld = box%cc(i, j, i_fld)
           adx = get_alpha(fld) * dx
@@ -277,7 +277,7 @@ contains
 
   !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
-    type(box2_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     integer                     :: i, j, nc
     real(dp)                    :: xy(2), normal_rands(2)
 
@@ -285,7 +285,7 @@ contains
 
     do j = 0, nc+1
        do i = 0, nc+1
-          xy   = a2_r_cc(box, [i,j])
+          xy   = af_r_cc(box, [i,j])
 
           if (xy(2) > init_y_min .and. xy(2) < init_y_max) then
              ! Approximate Poisson distribution with normal distribution
@@ -328,7 +328,7 @@ contains
 
   !> Get maximum time step based on e.g. CFL criteria
   real(dp) function max_dt(box)
-    type(box2_t), intent(in) :: box
+    type(box_t), intent(in) :: box
     real(dp), parameter    :: UC_eps0        = 8.8541878176d-12
     real(dp), parameter    :: UC_elem_charge = 1.6022d-19
     integer :: i, j, nc
@@ -379,7 +379,7 @@ contains
   ! Compute electric field on the tree. First perform multigrid to get electric
   ! potential, then take numerical gradient to geld field.
   subroutine compute_fld(tree, have_guess)
-    type(a2_t), intent(inout) :: tree
+    type(af_t), intent(inout) :: tree
     logical, intent(in)       :: have_guess
     real(dp), parameter       :: fac = 1.6021766208e-19_dp / 8.8541878176e-12_dp
     integer                   :: lvl, i, id, nc
@@ -401,18 +401,18 @@ contains
     !$omp end parallel
 
     ! Perform an FMG cycle (logicals: store residual, first call)
-    call mg2_fas_fmg(tree, mg, .false., have_guess)
+    call mg_fas_fmg(tree, mg, .false., have_guess)
 
     ! Compute field from potential
-    call a2_loop_box(tree, fld_from_pot)
+    call af_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call a2_gc_tree(tree, i_fld, a2_gc_interp, a2_bc_neumann_zero)
+    call af_gc_tree(tree, i_fld, af_gc_interp, af_bc_neumann_zero)
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
   subroutine fld_from_pot(box)
-    type(box2_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     integer                     :: nc
     real(dp)                    :: inv_dr
 
@@ -434,7 +434,7 @@ contains
   ! Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
     use m_flux_schemes
-    type(box2_t), intent(inout) :: boxes(:)
+    type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp)                    :: inv_dr
     real(dp)                    :: cc(-1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
@@ -447,10 +447,10 @@ contains
     allocate(v(1:nc+1, 1:nc+1, 2))
     allocate(dc(1:nc+1, 1:nc+1, 2))
 
-    call a2_gc_box(boxes, id, i_elec, a2_gc_interp_lim, &
-         a2_bc_dirichlet_zero)
-    call a2_gc2_box(boxes, id, i_elec, a2_gc2_prolong_linear, &
-         a2_bc2_dirichlet_zero, cc, nc)
+    call af_gc_box(boxes, id, i_elec, af_gc_interp_lim, &
+         af_bc_dirichlet_zero)
+    call af_gc2_box(boxes, id, i_elec, af_gc2_prolong_linear, &
+         af_bc2_dirichlet_zero, cc, nc)
 
     v = -mobility * boxes(id)%fc(:, :, :, f_fld)
     dc = diffusion_c
@@ -463,14 +463,14 @@ contains
 
   ! Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_dens(box)
-    type(box2_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     box%cc(:, :, i_elec) = 0.5_dp * (box%cc(:, :, i_elec) + box%cc(:, :, i_elec_old))
     box%cc(:, :, i_pion) = 0.5_dp * (box%cc(:, :, i_pion) + box%cc(:, :, i_pion_old))
   end subroutine average_dens
 
   ! Advance solution over dt based on the fluxes / source term, using forward Euler
   subroutine update_solution(box, dt)
-    type(box2_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
     real(dp)                    :: inv_dr, src, sflux, fld
     real(dp)                    :: alpha
@@ -497,7 +497,7 @@ contains
 
   !> This fills ghost cells near physical boundaries for the potential
   subroutine sides_bc_pot(box, nb, iv, bc_type)
-    type(box2_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
@@ -506,10 +506,10 @@ contains
     nc = box%n_cell
 
     select case (nb)
-    case (a2_neighb_lowy)
+    case (af_neighb_lowy)
        bc_type = af_bc_neumann
        box%cc(1:nc, 0, iv) = applied_field
-    case (a2_neighb_highy)
+    case (af_neighb_highy)
        bc_type = af_bc_dirichlet
        box%cc(1:nc, nc+1, iv) = 0
     case default
