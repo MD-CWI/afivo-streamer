@@ -1,26 +1,23 @@
-A5_DIR  := ..
-INCDIRS	:= $(A5_DIR)/src
-LIBDIRS := $(A5_DIR)/src $(A5_DIR)/external_libraries/silo/lib
+AF_DIR  := ..
+LIBDIRS := $(AF_DIR)/external_libraries/silo/lib
 LIBS	:= afivo silo
 OUTDIR	:= output
 
-include $(A5_DIR)/makerules.make
-
-# All program sources (the .f90 files except modules)
-PROGS := random_refinement_2d random_refinement_3d poisson_basic_2d		\
-poisson_basic_3d poisson_cyl poisson_cyl_dielectric poisson_benchmark_2d	\
-poisson_benchmark_3d advection_2d advection_3d implicit_diffusion_2d		\
-implicit_diffusion_3d simple_streamer_2d computational_domain_2d		\
-computational_domain_3d boundary_conditions_2d boundary_conditions_3d		\
-poisson_neumann_2d poisson_neumann_3d poisson_cyl_analytic particles_to_grid_2d	\
-particles_to_grid_3d dielectric_2d dielectric_3d ghostcell_benchmark_2d		\
-ghostcell_benchmark_3d poisson_helmholtz_2d poisson_helmholtz_3d		\
-particles_gravity_2d particles_gravity_3d poisson_helmholtz_cyl
+include $(AF_DIR)/src/makerules.make
 
 .PHONY: all clean
 
-# Keep 2d and 3d source files
-.PRECIOUS: %_2d.f90 %_3d.f90
+PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
+implicit_diffusion computational_domain boundary_conditions poisson_neumann	\
+particles_to_grid poisson_dielectric ghostcell_benchmark poisson_helmholtz	\
+particles_gravity
+
+PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric	\
+simple_streamer_2d poisson_cyl_analytic poisson_helmholtz_cyl
+
+PROGS_3D := $(PROGS_XD:%=%_3d)
+
+PROGS := $(PROGS_2D) $(PROGS_3D)
 
 all:	$(PROGS)
 
@@ -28,18 +25,26 @@ clean:
 	$(RM) $(PROGS) *.o *.mod
 
 $(OUTDIR):
-		mkdir -p $@
+	mkdir -p $@
 
-%_2d.f90: Xd_files/%_Xd.f90
-	@echo "*** $< has changed, regenerating $@ ***"
-	@$(PPROCESS_2D)
+# Set flags for 2d and 3d version of programs
+$(PROGS_2D): $(AF_DIR)/lib_2d/libafivo.a | $(OUTDIR)
+$(PROGS_2D): INCDIRS+=$(AF_DIR)/lib_2d
+$(PROGS_2D): LIBDIRS+=$(AF_DIR)/lib_2d
+$(PROGS_2D): FFLAGS += -DNDIM=2
 
-%_3d.f90: Xd_files/%_Xd.f90
-	@echo "*** $< has changed, regenerating $@ ***"
-	@$(PPROCESS_3D)
+$(PROGS_3D): $(AF_DIR)/lib_3d/libafivo.a | $(OUTDIR)
+$(PROGS_3D): INCDIRS+=$(AF_DIR)/lib_3d
+$(PROGS_3D): LIBDIRS+=$(AF_DIR)/lib_3d
+$(PROGS_3D): FFLAGS += -DNDIM=3
 
-# Dependency information
-$(PROGS): $(A5_DIR)/src/libafivo.a | $(OUTDIR)
+# How to create executables
+%_2d: %_Xd.f90
+	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
+	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
+%_3d: %_Xd.f90
+	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
+	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 
 # Poisson programs and objects depend on m_gaussians
 PROGS_POIS	:= $(filter poisson_%, $(PROGS))

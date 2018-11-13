@@ -1,6 +1,6 @@
 !> This module contains the basic dimension-independent types and constants that
 !> are used in Afivo, together with some basic routines. Dimension-dependent
-!> types and constant are place in m_a2_types and m_a3_types.
+!> types and constant are place in m_af_types and m_af_types.
 module m_afivo_types
 
   implicit none

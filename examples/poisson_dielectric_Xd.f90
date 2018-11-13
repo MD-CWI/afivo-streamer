@@ -1,9 +1,9 @@
-!> \example poisson_cyl.f90
+#include "../src/cpp_macros.h"
+!> \example dielectric_Xd.f90
 !>
-!> Example showing how to use multigrid and compare with an analytic solution,
-!> using the method of manufactured solutions. A standard 5-point Laplacian is
-!> used in cylindrical coordinates.
-program poisson_cyl
+!> Example showing how to include a dielectric object. Warning: the
+!> functionality is not fully ready
+program dielectric_test
   use m_af_all
   use m_gaussians
 
@@ -15,25 +15,26 @@ program poisson_cyl
   integer, parameter :: n_var_cell = 4
   integer, parameter :: i_phi = 1
   integer, parameter :: i_rhs = 2
-  integer, parameter :: i_err = 3
-  integer, parameter :: i_tmp = 4
+  integer, parameter :: i_tmp = 3
+  integer, parameter :: i_eps = 4
 
-  type(af_t)         :: tree
+  ! The dielectric constant used in this example
+  double precision, parameter :: epsilon_high = 10.0_dp
+
+  type(af_t)        :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
-  integer            :: ix_list(2, n_boxes_base)
-  real(dp)           :: dr, residu(2), anal_err(2)
+  integer            :: ix_list(NDIM, n_boxes_base)
+  real(dp)           :: dr, residu(2)
   character(len=100) :: fname
   type(mg_t)        :: mg
-  type(gauss_t)      :: gs
-  integer            :: count_rate,t_start, t_end
+  integer            :: count_rate, t_start, t_end
 
-  print *, "Running poisson_cyl"
+  print *, "****************************************"
+  print *, "Warning: functionality demonstrated here is not fully ready"
+  print *, "For large epsilon, convergence will probably be slow"
+  print *, "****************************************"
   print *, "Number of threads", af_get_max_threads()
-
-  ! The manufactured solution exists of two Gaussians, which are stored in gs
-  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([0.0_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
@@ -45,12 +46,11 @@ program poisson_cyl
        0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
        coarsen_to=2, & ! Add coarsened levels for multigrid
-       coord=af_cyl, & ! Cylindrical coordinates
-       cc_names=["phi", "rhs", "err", "tmp"]) ! Variable names
+       cc_names=["phi", "rhs", "tmp", "eps"]) ! Variable names
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [1,1]         ! Set index of box 1
+  ix_list(:, 1) = 1             ! Set index of box 1
 
   ! Create the base mesh, using the box indices and their neighbor information
   call af_set_base(tree, 1, ix_list)
@@ -69,6 +69,11 @@ program poisson_cyl
   end do
   call system_clock(t_end, count_rate)
 
+  ! Average epsilon on coarse grids. In the future, it could be better to define
+  ! epsilon on cell faces, and to perform this restriction in a matrix fashion:
+  ! A_coarse = M_restrict * A_fine * M_prolong (A = matrix operator, M = matrix)
+  call af_restrict_tree(tree, i_eps)
+
   write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
        (t_end-t_start) / real(count_rate,dp), " seconds"
 
@@ -78,7 +83,8 @@ program poisson_cyl
   mg%i_phi        = i_phi       ! Solution variable
   mg%i_rhs        = i_rhs       ! Right-hand side variable
   mg%i_tmp        = i_tmp       ! Variable for temporary space
-  mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
+  mg%i_eps        = i_eps       ! Variable for epsilon coefficient
+  mg%sides_bc     => sides_bc
 
   ! Automatically detect the right methods
   mg%box_op       => mg_auto_op
@@ -100,19 +106,13 @@ program poisson_cyl
      ! fourth argument controls whether to improve the current solution.
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
 
-     ! Compute the error compared to the analytic solution
-     call af_loop_box(tree, set_err)
-
      ! Determine the minimum and maximum residual and error
      call af_tree_min_cc(tree, i_tmp, residu(1))
      call af_tree_max_cc(tree, i_tmp, residu(2))
-     call af_tree_min_cc(tree, i_err, anal_err(1))
-     call af_tree_max_cc(tree, i_err, anal_err(2))
-     write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
-          maxval(abs(anal_err))
+     write(*,"(I8,Es14.5)") mg_iter, maxval(abs(residu))
 
-     write(fname, "(A,I0)") "poisson_cyl_", mg_iter
-     call af_write_vtk(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "dielectric_" // DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
@@ -130,95 +130,72 @@ contains
   ! Set refinement flags for box
   subroutine ref_routine(box, cell_flags)
     type(box_t), intent(in) :: box
-    integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
-    integer                  :: i, j, nc
-    real(dp)                 :: crv
+    integer, intent(out)     :: cell_flags(DTIMES(box%n_cell))
+    real(dp)                 :: eps_min, eps_max
 
-    nc = box%n_cell
+    eps_min = minval(box%cc(DTIMES(:), i_eps))
+    eps_max = maxval(box%cc(DTIMES(:), i_eps))
 
-    ! Compute the "curvature" in phi
-    do j = 1, nc
-       do i = 1, nc
-          crv = box%dr**2 * abs(box%cc(i, j, i_rhs))
-
-          ! And refine if it exceeds a threshold
-          if (crv > 5.0e-4_dp) then
-             cell_flags(i, j) = af_do_ref
-          else
-             cell_flags(i, j) = af_keep_ref
-          end if
-       end do
-    end do
+    if ((box%lvl < 7 .and. eps_max > eps_min) .or. box%lvl < 3) then
+       cell_flags(DTIMES(:)) = af_do_ref
+    else
+       cell_flags(DTIMES(:)) = af_keep_ref
+    end if
   end subroutine ref_routine
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
     type(box_t), intent(inout) :: box
-    integer                     :: i, j, nc
-    real(dp)                    :: rz(2)
+    integer                      :: IJK, nc
+    real(dp)                     :: rr(NDIM)
+    real(dp)                     :: ellips_fac(NDIM)
 
     nc = box%n_cell
+    dr = box%dr
 
-    do j = 0, nc+1
-       do i = 0, nc+1
-          rz = af_r_cc(box, [i,j])
-          box%cc(i, j, i_rhs) = gauss_laplacian_cyl(gs, rz)
-       end do
-    end do
+    ! Create ellipsoidal shape
+    ellips_fac(2:) = 3.0_dp
+    ellips_fac(1)  = 1.0_dp
+
+    do KJI_DO(0,nc+1)
+       rr = af_r_cc(box, [IJK])
+
+       ! Change epsilon in part of the domain
+       if (norm2((rr - 0.5_dp) * ellips_fac) < 0.25_dp) then
+          box%cc(IJK, i_eps) = epsilon_high
+       else
+          box%cc(IJK, i_eps) = 1.0_dp
+       end if
+
+       box%cc(IJK, i_rhs) = 0.0d0
+       box%cc(IJK, i_phi) = 0.0d0
+    end do; CLOSE_DO
+
   end subroutine set_init_cond
 
-  ! Compute error compared to the analytic solution
-  subroutine set_err(box)
-    type(box_t), intent(inout) :: box
-    integer                     :: i, j, nc
-    real(dp)                    :: rz(2)
-
-    nc = box%n_cell
-    do j = 1, nc
-       do i = 1, nc
-          rz = af_r_cc(box, [i,j])
-          box%cc(i, j, i_err) = box%cc(i, j, i_phi) - gauss_value(gs, rz)
-       end do
-    end do
-  end subroutine set_err
-
-  ! This routine sets boundary conditions for a box, by filling its ghost cells
-  ! with approriate values. Note that on the axis (a boundary in the lower-x
-  ! direction) we should use a Neumann zero condition in cylindrical
-  ! coordinates.
   subroutine sides_bc(box, nb, iv, bc_type)
+    use m_af_ghostcell
     type(box_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
-    real(dp)                    :: rz(2)
-    integer                     :: n, nc
+    integer                     :: nc
 
     nc = box%n_cell
 
     select case (nb)
-    case (af_neighb_lowx)             ! Neumann zero on axis
-       bc_type = af_bc_neumann
-       box%cc(0, 1:nc, iv) = 0
-    case (af_neighb_highx)             ! Use solution on other boundaries
+    case (af_neighb_lowx)
+       call af_bc_dirichlet_zero(box, nb, iv, bc_type)
+    case (af_neighb_highx)
        bc_type = af_bc_dirichlet
-       do n = 1, nc
-          rz = af_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_value(gs, rz)
-       end do
-    case (af_neighb_lowy)
-       bc_type = af_bc_dirichlet
-       do n = 1, nc
-          rz = af_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_value(gs, rz)
-       end do
-    case (af_neighb_highy)
-       bc_type = af_bc_dirichlet
-       do n = 1, nc
-          rz = af_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_value(gs, rz)
-       end do
+#if NDIM == 2
+       box%cc(nc+1, 1:nc, iv) = 1.0_dp
+#elif NDIM == 3
+       box%cc(nc+1, 1:nc, 1:nc, iv) = 1.0_dp
+#endif
+    case default
+       call af_bc_neumann_zero(box, nb, iv, bc_type)
     end select
   end subroutine sides_bc
 
-end program poisson_cyl
+end program dielectric_test

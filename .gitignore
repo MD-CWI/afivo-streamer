@@ -56,3 +56,17 @@ documentation/html/*
 /examples/poisson_helmholtz_2d.f90
 /examples/poisson_helmholtz_3d
 /examples/poisson_helmholtz_3d.f90
+/examples/particles_gravity_2d
+/examples/particles_gravity_3d
+/examples/poisson_dielectric_2d
+/examples/poisson_dielectric_3d
+/examples/poisson_helmholtz_cyl
+/tests/test_ghostcell_2d
+/tests/test_ghostcell_3d
+/tests/test_morton_2d
+/tests/test_morton_3d
+/tests/test_reduction_3d
+/tests/test_refinement_2d
+/tests/test_refinement_3d
+/tests/test_types_2d
+/tests/test_types_3d
