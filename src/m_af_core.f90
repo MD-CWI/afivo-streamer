@@ -613,14 +613,14 @@ contains
   end subroutine clear_box
 
   ! Set the neighbors of id (using their parent)
-  subroutine set_neighbs_NDIMd(boxes, id)
+  subroutine set_neighbs(boxes, id)
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     integer                     :: nb, nb_id, IJK
 
     do KJI_DO(-1, 1)
        if (boxes(id)%neighbor_mat(IJK) == af_no_box) then
-          nb_id = find_neighb_NDIMd(boxes, id, [IJK])
+          nb_id = find_neighb(boxes, id, [IJK])
           if (nb_id > af_no_box) then
              boxes(id)%neighbor_mat(IJK) = nb_id
 #if NDIM == 2
@@ -647,10 +647,10 @@ contains
           end if
        end if
     end do
-  end subroutine set_neighbs_NDIMd
+  end subroutine set_neighbs
 
   !> Get the id of all neighbors of boxes(id), through its parent
-  function find_neighb_NDIMd(boxes, id, dix) result(nb_id)
+  function find_neighb(boxes, id, dix) result(nb_id)
     type(box_t), intent(in) :: boxes(:) !< List with all the boxes
     integer, intent(in)       :: id       !< Box whose neighbor we are looking for
     integer, intent(in)       :: dix(NDIM)
@@ -679,7 +679,7 @@ contains
        c_ix = af_ix_to_ichild(boxes(id)%ix + dix)
        nb_id = boxes(p_id)%children(c_ix)
     end if
-  end function find_neighb_NDIMd
+  end function find_neighb
 
   !> Resize box storage to new_size
   subroutine af_resize_box_storage(tree, new_size)
@@ -797,7 +797,7 @@ contains
        ! Update connectivity of new children (id > highest_id_prev)
        do i = 1, size(tree%lvls(lvl+1)%ids)
           id = tree%lvls(lvl+1)%ids(i)
-          if (id > highest_id_prev) call set_neighbs_NDIMd(tree%boxes, id)
+          if (id > highest_id_prev) call set_neighbs(tree%boxes, id)
        end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
