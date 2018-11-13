@@ -1,12 +1,12 @@
-#include "../afivo/src/cpp_macros_$Dd.h"
-!> Program to perform $Dd streamer simulations in Cartesian and cylindrical coordinates
-program streamer_$Dd
+#include "../afivo/src/cpp_macros.h"
+!> Program to perform NDIMd streamer simulations in Cartesian and cylindrical coordinates
+program streamer
 
-  use m_a$D_all
+  use m_af_all
   use m_streamer
-  use m_field_$Dd
-  use m_init_cond_$Dd
-  use m_photoi_$Dd
+  use m_field
+  use m_init_cond
+  use m_photoi
 
   implicit none
 
@@ -19,35 +19,35 @@ program streamer_$Dd
   logical                :: write_out
   real(dp)               :: dt_prev, photoi_prev_time
   type(CFG_t)            :: cfg  ! The configuration for the simulation
-  type(a$D_t)            :: tree ! This contains the full grid information
-  type(mg$D_t)           :: mg   ! Multigrid option struct
+  type(af_t)            :: tree ! This contains the full grid information
+  type(mg_t)           :: mg   ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
   ! Method used to prolong (interpolate) densities
-  procedure(a$D_subr_prolong), pointer :: prolong_density => null()
+  procedure(af_subr_prolong), pointer :: prolong_density => null()
 
   integer :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
-  call ST_initialize(cfg, $D)
+  call ST_initialize(cfg, NDIM)
   call photoi_initialize(cfg)
 
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
-  call init_cond_initialize(cfg, $D)
+  call init_cond_initialize(cfg, NDIM)
 
   prolong_method = "limit"
   call CFG_add_get(cfg, "prolong_density", prolong_method, &
        "Density prolongation method (limit, linear, linear_cons, sparse)")
   select case (prolong_method)
   case ("limit")
-     prolong_density => a$D_prolong_limit
+     prolong_density => af_prolong_limit
   case ("linear")
-     prolong_density => a$D_prolong_linear
+     prolong_density => af_prolong_linear
   case ("linear_cons")
-     prolong_density => a$D_prolong_linear_cons
+     prolong_density => af_prolong_linear_cons
   case ("sparse")
-     prolong_density => a$D_prolong_sparse
+     prolong_density => af_prolong_sparse
   case default
      error stop "Unknown prolong_density method"
   end select
@@ -66,22 +66,22 @@ program streamer_$Dd
   mg%i_rhs = i_rhs
 
   ! This automatically handles cylindrical symmetry
-  mg%box_op => mg$D_auto_op
-  mg%box_gsrb => mg$D_auto_gsrb
-  mg%box_corr => mg$D_auto_corr
+  mg%box_op => mg_auto_op
+  mg%box_gsrb => mg_auto_gsrb
+  mg%box_corr => mg_auto_corr
 
   ! This routine always needs to be called when using multigrid
-  call mg$D_init_mg(mg)
+  call mg_init_mg(mg)
 
-  call a$D_set_cc_methods(tree, i_electron, &
-       a$D_bc_neumann_zero, a$D_gc_interp_lim, prolong_density)
-  call a$D_set_cc_methods(tree, i_pos_ion, &
-       a$D_bc_neumann_zero, a$D_gc_interp_lim, prolong_density)
-  call a$D_set_cc_methods(tree, i_phi, &
+  call af_set_cc_methods(tree, i_electron, &
+       af_bc_neumann_zero, af_gc_interp_lim, prolong_density)
+  call af_set_cc_methods(tree, i_pos_ion, &
+       af_bc_neumann_zero, af_gc_interp_lim, prolong_density)
+  call af_set_cc_methods(tree, i_phi, &
        mg%sides_bc, mg%sides_rb)
   if (ST_output_src_term) then
-     call a$D_set_cc_methods(tree, i_src, &
-          a$D_bc_neumann_zero, a$D_gc_interp)
+     call af_set_cc_methods(tree, i_src, &
+          af_bc_neumann_zero, af_gc_interp)
   end if
   if (photoi_enabled) then
      call photoi_set_methods(tree)
@@ -93,9 +93,9 @@ program streamer_$Dd
 
   ! Set up the initial conditions
   do
-     call a$D_loop_box(tree, init_cond_set_box)
+     call af_loop_box(tree, init_cond_set_box)
      call field_compute(tree, mg, .false.)
-     call a$D_adjust_refinement(tree, refine_routine, ref_info, &
+     call af_adjust_refinement(tree, refine_routine, ref_info, &
           ST_refine_buffer_width, .true.)
      if (ref_info%n_add == 0) exit
   end do
@@ -103,7 +103,7 @@ program streamer_$Dd
   call init_cond_stochastic_density(tree)
 
   print *, "Number of threads", af_get_max_threads()
-  call a$D_print_info(tree)
+  call af_print_info(tree)
 
   ! Start from small time step
   ST_dt   = ST_dt_min
@@ -142,8 +142,8 @@ program streamer_$Dd
      end if
 
      ! Copy previous solution
-     call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
-     call a$D_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
+     call af_tree_copy_cc(tree, i_electron, i_electron_old)
+     call af_tree_copy_cc(tree, i_pos_ion, i_pos_ion_old)
 
      ST_dt_matrix(1:ST_dt_num_cond, :) = ST_dt_max      ! Maximum time step
 
@@ -152,28 +152,28 @@ program streamer_$Dd
         ST_time = ST_time + ST_dt
 
         ! First calculate fluxes
-        call a$D_loop_boxes_arg(tree, fluxes_koren, [ST_dt], .true.)
-        call a$D_consistent_fluxes(tree, [flux_elec])
+        call af_loop_boxes_arg(tree, fluxes_koren, [ST_dt], .true.)
+        call af_consistent_fluxes(tree, [flux_elec])
 
         ! Update the solution
-        call a$D_loop_box_arg(tree, update_solution, [ST_dt, real(i, dp)], .true.)
+        call af_loop_box_arg(tree, update_solution, [ST_dt, real(i, dp)], .true.)
 
         if (i == 1) then
            ! Compute new field on first iteration
            call field_compute(tree, mg, .true.)
 
            ! Coarse densities might be required for ghost cells
-           call a$D_restrict_tree(tree, i_electron)
+           call af_restrict_tree(tree, i_electron)
         end if
      end do
 
      ST_time = ST_time - ST_dt        ! Go back one time step
 
      ! Take average of phi_old and phi (explicit trapezoidal rule)
-     call a$D_loop_box(tree, average_density)
+     call af_loop_box(tree, average_density)
 
      ! Coarse densities might be required for ghost cells
-     call a$D_restrict_tree(tree, i_electron)
+     call af_restrict_tree(tree, i_electron)
 
      ! Compute field with new density
      call field_compute(tree, mg, .true.)
@@ -192,26 +192,26 @@ program streamer_$Dd
      if (write_out) then
         if (ST_silo_write) then
            ! Fill ghost cells before writing output
-           call a$D_gc_tree(tree, [i_electron, i_pos_ion])
+           call af_gc_tree(tree, [i_electron, i_pos_ion])
 
            if (ST_output_src_term) then
-              call a$D_restrict_tree(tree, i_src)
-              call a$D_gc_tree(tree, i_src)
+              call af_restrict_tree(tree, i_src)
+              call af_gc_tree(tree, i_src)
            end if
 
            if (photoi_enabled) then
               call photoi_set_src(tree, ST_dt) ! Because the mesh could have changed
-              call a$D_restrict_tree(tree, i_photo)
-              call a$D_gc_tree(tree, i_photo)
+              call af_restrict_tree(tree, i_photo)
+              call af_gc_tree(tree, i_photo)
            end if
 
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
-           call a$D_write_silo(tree, fname, output_cnt, ST_time, &
+           call af_write_silo(tree, fname, output_cnt, ST_time, &
                 vars_for_output, dir=ST_output_dir)
         end if
 
         if (ST_datfile_write) then
-           call a$D_write_tree(tree, fname, ST_output_dir)
+           call af_write_tree(tree, fname, ST_output_dir)
         end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_log.txt"
@@ -220,7 +220,7 @@ program streamer_$Dd
         if (ST_plane_write) then
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
                 "_plane_", output_cnt
-           call a$D_write_plane(tree, fname, [ST_plane_ivar], &
+           call af_write_plane(tree, fname, [ST_plane_ivar], &
                 ST_plane_rmin * ST_domain_len, &
                 ST_plane_rmax * ST_domain_len, &
                 ST_plane_npixels, ST_output_dir)
@@ -229,10 +229,10 @@ program streamer_$Dd
         if (ST_lineout_write) then
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
                 "_line_", output_cnt
-           call a$D_write_line(tree, trim(fname), &
+           call af_write_line(tree, trim(fname), &
                 [i_electron, i_pos_ion, i_phi, i_electric_fld], &
-                r_min = ST_lineout_rmin(1:$D) * ST_domain_len, &
-                r_max = ST_lineout_rmax(1:$D) * ST_domain_len, &
+                r_min = ST_lineout_rmin(1:NDIM) * ST_domain_len, &
+                r_max = ST_lineout_rmax(1:NDIM) * ST_domain_len, &
                 n_points=ST_lineout_npoints, dir=ST_output_dir)
         end if
      end if
@@ -241,20 +241,20 @@ program streamer_$Dd
 
      if (mod(it, ST_refine_per_steps) == 0) then
         ! Restrict electron and ion densities before refinement
-        call a$D_restrict_tree(tree, i_electron)
-        call a$D_restrict_tree(tree, i_pos_ion)
+        call af_restrict_tree(tree, i_electron)
+        call af_restrict_tree(tree, i_pos_ion)
 
         if (ST_output_src_term .and. ST_output_src_decay_rate > 0) then
            ! Have to set src term on coarse grids as well, and fill ghost cells
            ! before prolongation
-           call a$D_restrict_tree(tree, i_src)
-           call a$D_gc_tree(tree, i_src)
+           call af_restrict_tree(tree, i_src)
+           call af_gc_tree(tree, i_src)
         end if
 
         ! Fill ghost cells before refinement
-        call a$D_gc_tree(tree, [i_electron, i_pos_ion])
+        call af_gc_tree(tree, [i_electron, i_pos_ion])
 
-        call a$D_adjust_refinement(tree, refine_routine, ref_info, &
+        call af_adjust_refinement(tree, refine_routine, ref_info, &
              ST_refine_buffer_width, .true.)
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
@@ -266,30 +266,30 @@ program streamer_$Dd
   end do
 
   call print_status()
-  call a$D_destroy(tree)
+  call af_destroy(tree)
 
 contains
 
   !> Initialize the AMR tree
   subroutine init_tree(tree)
-    type(a$D_t), intent(inout) :: tree
+    type(af_t), intent(inout) :: tree
 
     ! Variables used below to initialize tree
     real(dp)                  :: dr
     integer                   :: id
-    integer                   :: ix_list($D, 1) ! Spatial indices of initial boxes
-    integer                   :: nb_list(2*$D, 1) ! Index of neighbors
+    integer                   :: ix_list(NDIM, 1) ! Spatial indices of initial boxes
+    integer                   :: nb_list(2*NDIM, 1) ! Index of neighbors
     integer                   :: n_boxes_init = 1000
 
     dr = ST_domain_len / ST_box_size
 
     ! Initialize tree
     if (ST_cylindrical) then
-       call a$D_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
+       call af_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
             coarsen_to=2, n_boxes=n_boxes_init, coord=af_cyl, &
             cc_names=ST_cc_names)
     else
-       call a$D_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
+       call af_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
             coarsen_to=2, n_boxes=n_boxes_init, cc_names=ST_cc_names)
     end if
 
@@ -300,16 +300,16 @@ contains
     if (ST_periodic) then
        if (ST_cylindrical) error stop "Cannot have periodic cylindrical domain"
        nb_list(:, 1)                = -1
-       nb_list(a$D_neighb_lowx, 1)  = 1
-       nb_list(a$D_neighb_highx, 1) = 1
-#if $D == 3
-       nb_list(a$D_neighb_lowy, 1)  = 1
-       nb_list(a$D_neighb_highy, 1) = 1
+       nb_list(af_neighb_lowx, 1)  = 1
+       nb_list(af_neighb_highx, 1) = 1
+#if NDIM == 3
+       nb_list(af_neighb_lowy, 1)  = 1
+       nb_list(af_neighb_highy, 1) = 1
 #endif
-       call a$D_set_base(tree, 1, ix_list, nb_list)
+       call af_set_base(tree, 1, ix_list, nb_list)
     else
        ! Create the base mesh
-       call a$D_set_base(tree, 1, ix_list)
+       call af_set_base(tree, 1, ix_list)
     end if
 
   end subroutine init_tree
@@ -317,15 +317,15 @@ contains
   ! This routine sets the cell refinement flags for box
   subroutine refine_routine(box, cell_flags)
     use m_geometry
-    use m_init_cond_$Dd
-    type(box$D_t), intent(in) :: box
+    use m_init_cond
+    type(box_t), intent(in) :: box
     ! Refinement flags for the cells of the box
     integer, intent(out)     :: &
          cell_flags(DTIMES(box%n_cell))
     integer                  :: IJK, n, nc
     real(dp)                 :: cphi, dx, dx2
     real(dp)                 :: alpha, adx, fld, elec_dens
-    real(dp)                 :: dist, rmin($D), rmax($D)
+    real(dp)                 :: dist, rmin(NDIM), rmax(NDIM)
 
     nc      = box%n_cell
     dx      = box%dr
@@ -356,9 +356,9 @@ contains
        ! Refine around the initial conditions
        if (ST_time < ST_refine_init_time) then
           do n = 1, init_conds%n_cond
-             dist = GM_dist_line(a$D_r_cc(box, [IJK]), &
+             dist = GM_dist_line(af_r_cc(box, [IJK]), &
                   init_conds%seed_r0(:, n), &
-                  init_conds%seed_r1(:, n), $D)
+                  init_conds%seed_r1(:, n), NDIM)
              if (dist - init_conds%seed_width(n) < 2 * dx &
                   .and. box%dr > ST_refine_init_fac * &
                   init_conds%seed_width(n)) then
@@ -396,7 +396,7 @@ contains
   subroutine fluxes_koren(boxes, id, rargs)
     use m_flux_schemes
     use m_units_constants
-    type(box$D_t), intent(inout) :: boxes(:)
+    type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
     real(dp), intent(in)         :: rargs(:)
     real(dp)                     :: inv_dr, fld
@@ -411,7 +411,7 @@ contains
     real(dp)                     :: mu, fld_face, drt_fac, tmp
     real(dp)                     :: nsmall
     integer                      :: nc, n, m
-#if $D == 3
+#if NDIM == 3
     integer                      :: l
 #endif
 
@@ -420,27 +420,27 @@ contains
     drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * rargs(1))
     nsmall = 1.0_dp ! A small density
 
-    allocate(v(DTIMES(1:nc+1), $D))
-    allocate(dc(DTIMES(1:nc+1), $D))
+    allocate(v(DTIMES(1:nc+1), NDIM))
+    allocate(dc(DTIMES(1:nc+1), NDIM))
     allocate(cc(DTIMES(-1:nc+2)))
-    allocate(fmax(DTIMES(1:nc+1), $D))
+    allocate(fmax(DTIMES(1:nc+1), NDIM))
     if (ST_drt_limit_flux) then
        fmax = 0.0_dp
     end if
 
     ! Fill ghost cells on the sides of boxes (no corners)
-    call a$D_gc_box(boxes, id, i_electron, a$D_gc_interp_lim, &
-         a$D_bc_neumann_zero, .false.)
+    call af_gc_box(boxes, id, i_electron, af_gc_interp_lim, &
+         af_bc_neumann_zero, .false.)
 
     ! Fill cc with interior data plus a second layer of ghost cells
-    call a$D_gc2_box(boxes, id, i_electron, a$D_gc2_prolong_linear, &
-         a$D_bc2_neumann_zero, cc, nc)
+    call af_gc2_box(boxes, id, i_electron, af_gc2_prolong_linear, &
+         af_bc2_neumann_zero, cc, nc)
 
     ! We use the average field to compute the mobility and diffusion coefficient
     ! at the interface
     do n = 1, nc+1
        do m = 1, nc
-#if $D == 2
+#if NDIM == 2
           fld       = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
                boxes(id)%cc(n, m, i_electric_fld))
           mu = LT_get_col(ST_td_tbl, i_mobility, fld)
@@ -476,7 +476,7 @@ contains
                (cc(m, n-1) - cc(m, n)) * fld_face > 0.0_dp) then
              dc(m, n, 2) = 0.0_dp
           end if
-#elif $D == 3
+#elif NDIM == 3
           do l = 1, nc
              fld = 0.5_dp * (&
                   boxes(id)%cc(n-1, m, l, i_electric_fld) + &
@@ -548,8 +548,13 @@ contains
        end where
     end if
 
-    call flux_koren_$Dd(cc, v, nc, 2)
-    call flux_diff_$Dd(cc, dc, inv_dr, nc, 2)
+#if NDIM == 2
+    call flux_koren_2d(cc, v, nc, 2)
+    call flux_diff_2d(cc, dc, inv_dr, nc, 2)
+#elif NDIM == 3
+    call flux_koren_3d(cc, v, nc, 2)
+    call flux_diff_3d(cc, dc, inv_dr, nc, 2)
+#endif
 
     boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
 
@@ -565,19 +570,24 @@ contains
        dc = ST_ion_diffusion
 
        ! Use a constant mobility for ions
-       v(DTIMES(:), 1:$D) = ST_ion_mobility * &
-            boxes(id)%fc(DTIMES(:), 1:$D, electric_fld)
+       v(DTIMES(:), 1:NDIM) = ST_ion_mobility * &
+            boxes(id)%fc(DTIMES(:), 1:NDIM, electric_fld)
 
        ! Fill ghost cells on the sides of boxes (no corners)
-       call a$D_gc_box(boxes, id, i_pos_ion, a$D_gc_interp_lim, &
-            a$D_bc_neumann_zero, .false.)
+       call af_gc_box(boxes, id, i_pos_ion, af_gc_interp_lim, &
+            af_bc_neumann_zero, .false.)
 
        ! Fill cc with interior data plus a second layer of ghost cells
-       call a$D_gc2_box(boxes, id, i_pos_ion, a$D_gc2_prolong_linear, &
-            a$D_bc2_neumann_zero, cc, nc)
+       call af_gc2_box(boxes, id, i_pos_ion, af_gc2_prolong_linear, &
+            af_bc2_neumann_zero, cc, nc)
 
-       call flux_koren_$Dd(cc, v, nc, 2)
-       call flux_diff_$Dd(cc, dc, inv_dr, nc, 2)
+#if NDIM == 2
+       call flux_koren_2d(cc, v, nc, 2)
+       call flux_diff_2d(cc, dc, inv_dr, nc, 2)
+#elif NDIM == 3
+       call flux_koren_3d(cc, v, nc, 2)
+       call flux_diff_3d(cc, dc, inv_dr, nc, 2)
+#endif
 
        boxes(id)%fc(DTIMES(:), :, flux_ion) = v + dc
     end if
@@ -585,7 +595,7 @@ contains
 
   !> Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_density(box)
-    type(box$D_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     box%cc(DTIMES(:), i_electron) = 0.5_dp *  &
          (box%cc(DTIMES(:), i_electron) + box%cc(DTIMES(:), i_electron_old))
     box%cc(DTIMES(:), i_pos_ion) = 0.5_dp * &
@@ -596,13 +606,13 @@ contains
   subroutine update_solution(box, args)
     use omp_lib
     use m_units_constants
-    type(box$D_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     real(dp), intent(in)         :: args(:)
-    real(dp)                     :: dt, inv_dr, src, fld, fld_vec($D)
+    real(dp)                     :: dt, inv_dr, src, fld, fld_vec(NDIM)
     real(dp)                     :: alpha, eta, f_elec, f_ion, mu, diff
     real(dp)                     :: dt_cfl, dt_dif, dt_drt
-    real(dp)                     :: tmp_vec($D), dvol
-#if $D == 2
+    real(dp)                     :: tmp_vec(NDIM), dvol
+#if NDIM == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
 #endif
@@ -616,7 +626,7 @@ contains
     nc     = box%n_cell
     inv_dr = 1/box%dr
     f_ion  = 0.0_dp
-#if $D == 2
+#if NDIM == 2
     ioff   = (box%ix(1)-1) * nc
 #endif
 
@@ -632,7 +642,7 @@ contains
        end if
 
        ! Contribution of flux
-#if $D == 2
+#if NDIM == 2
        if (ST_cylindrical) then
           ! Weighting of flux contribution for cylindrical coordinates
           rfac(:) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
@@ -643,7 +653,7 @@ contains
        f_elec = (box%fc(i, j, 2, flux_elec) - box%fc(i, j+1, 2, flux_elec) + &
             rfac(1) * box%fc(i, j, 1, flux_elec) - &
             rfac(2) * box%fc(i+1, j, 1, flux_elec)) * inv_dr * dt
-#elif $D == 3
+#elif NDIM == 3
        f_elec = (sum(box%fc(i, j, k, 1:3, flux_elec)) - &
             box%fc(i+1, j, k, 1, flux_elec) - &
             box%fc(i, j+1, k, 2, flux_elec) - &
@@ -651,11 +661,11 @@ contains
 #endif
 
        if (ST_update_ions) then
-#if $D == 2
+#if NDIM == 2
           f_ion = (box%fc(i, j, 2, flux_ion) - box%fc(i, j+1, 2, flux_ion) + &
                rfac(1) * box%fc(i, j, 1, flux_ion) - &
                rfac(2) * box%fc(i+1, j, 1, flux_ion)) * inv_dr * dt
-#elif $D == 3
+#elif NDIM == 3
           f_ion = (sum(box%fc(i, j, k, 1:3, flux_ion)) - &
                box%fc(i+1, j, k, 1, flux_ion) - &
                box%fc(i, j+1, k, 2, flux_ion) - &
@@ -663,13 +673,13 @@ contains
 #endif
        end if
 
-#if $D == 2
+#if NDIM == 2
        if (ST_cylindrical) then
-          dvol = 2 * acos(-1.0_dp) * a$D_cyl_radius_cc(box, i) * box%dr**2
+          dvol = 2 * acos(-1.0_dp) * af_cyl_radius_cc(box, i) * box%dr**2
        else
           dvol = box%dr**2
        end if
-#elif $D == 3
+#elif NDIM == 3
        dvol = box%dr**3
 #endif
 
@@ -711,12 +721,12 @@ contains
 
        ! Possible determine new time step restriction
        if (i_step == 2) then
-#if $D == 2
+#if NDIM == 2
           fld_vec(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
                box%fc(i+1, j, 1, electric_fld))
           fld_vec(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
                box%fc(i, j+1, 2, electric_fld))
-#elif $D == 3
+#elif NDIM == 3
           fld_vec(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
                box%fc(i+1, j, k, 1, electric_fld))
           fld_vec(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
@@ -738,7 +748,7 @@ contains
           end if
 
           ! Diffusion condition
-          dt_dif = box%dr**2 / max(2 * $D * max(diff, ST_ion_diffusion), &
+          dt_dif = box%dr**2 / max(2 * NDIM * max(diff, ST_ion_diffusion), &
                epsilon(1.0_dp))
 
           ! Dielectric relaxation time
@@ -773,7 +783,7 @@ contains
   end subroutine update_solution
 
   subroutine write_log_file(tree, filename, out_cnt, dir)
-    type(a$D_t), intent(in)      :: tree
+    type(af_t), intent(in)      :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt
     character(len=*), intent(in) :: dir
@@ -781,28 +791,28 @@ contains
     character(len=30), save      :: fmt
     integer, parameter           :: my_unit = 123
     real(dp)                     :: velocity, dt
-    real(dp), save               :: prev_pos($D) = 0
+    real(dp), save               :: prev_pos(NDIM) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field, max_Er
-    type(a$D_loc_t)              :: loc_elec, loc_field, loc_Er
+    type(af_loc_t)              :: loc_elec, loc_field, loc_Er
 
-    call a$D_prepend_directory(filename, dir, fname)
+    call af_prepend_directory(filename, dir, fname)
 
-    call a$D_tree_sum_cc(tree, i_electron, sum_elec)
-    call a$D_tree_sum_cc(tree, i_pos_ion, sum_pos_ion)
-    call a$D_tree_max_cc(tree, i_electron, max_elec, loc_elec)
-    call a$D_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-    call a$D_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
+    call af_tree_sum_cc(tree, i_electron, sum_elec)
+    call af_tree_sum_cc(tree, i_pos_ion, sum_pos_ion)
+    call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
+    call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
 
     dt = ST_dt_safety_factor * minval(ST_dt_matrix(1:ST_dt_num_cond, :))
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")
-#if $D == 2
+#if NDIM == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells min(dx) highest(lvl)"
        fmt = "(I6,15E16.8,I12,1E16.8,I3)"
-#elif $D == 3
+#elif NDIM == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
        fmt = "(I6,14E16.8,I12,1E16.8,I3)"
@@ -810,23 +820,23 @@ contains
        close(my_unit)
 
        ! Start with velocity zero
-       prev_pos = a$D_r_loc(tree, loc_field)
+       prev_pos = af_r_loc(tree, loc_field)
     end if
 
-    velocity = norm2(a$D_r_loc(tree, loc_field) - prev_pos) / ST_dt_output
-    prev_pos = a$D_r_loc(tree, loc_field)
+    velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / ST_dt_output
+    prev_pos = af_r_loc(tree, loc_field)
 
     open(my_unit, file=trim(fname), action="write", &
          position="append")
-#if $D == 2
+#if NDIM == 2
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
-         sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec), max_Er, a$D_r_loc(tree, loc_Er), &
-         wc_time, a$D_num_cells_used(tree), a$D_min_dr(tree),tree%highest_lvl
-#elif $D == 3
+         sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
+         af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), &
+         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
+#elif NDIM == 3
     write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
-         sum_pos_ion, max_field, a$D_r_loc(tree, loc_field), max_elec, &
-         a$D_r_loc(tree, loc_elec), wc_time, a$D_num_cells_used(tree), a$D_min_dr(tree),tree%highest_lvl
+         sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
+         af_r_loc(tree, loc_elec), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #endif
     close(my_unit)
 
@@ -836,7 +846,7 @@ contains
     write(*, "(F7.2,A,I0,A,E10.3,A,E10.3,A,E10.3,A,E10.3)") &
          100 * ST_time / ST_end_time, "% it: ", it, &
          " t:", ST_time, " dt:", ST_dt, " wc:", wc_time, &
-         " ncell:", real(a$D_num_cells_used(tree), dp)
+         " ncell:", real(af_num_cells_used(tree), dp)
   end subroutine print_status
 
   subroutine check_path_writable(pathname)
@@ -859,4 +869,4 @@ contains
          (fld - ST_max_field)
   end function extrap_alpha
 
-end program streamer_$Dd
+end program streamer

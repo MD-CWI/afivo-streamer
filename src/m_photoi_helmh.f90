@@ -1,4 +1,4 @@
-#include "../afivo/src/cpp_macros_$Dd.h"
+#include "../afivo/src/cpp_macros.h"
 !> Module for photoionization with the Helmholtz approximation
 !>
 !> The equations solved are nabla^2 phi_i - lambda_i^2 * phi_i = f, where f is
@@ -10,14 +10,14 @@
 !> coeffs = 337555.5_dp, 19972.0_dp 1/(m bar)^2
 !>
 !> TODO: look up values for the case N=3
-module m_photoi_helmh_$Dd
-  use m_a$D_all
+module m_photoi_helmh
+  use m_af_all
   use m_streamer
 
   implicit none
   private
 
-  type(mg$D_t) :: mg_helm       ! Multigrid option struct
+  type(mg_t) :: mg_helm       ! Multigrid option struct
 
   ! Lambda squared, used internally by the routines
   real(dp) :: lambda2
@@ -120,7 +120,7 @@ contains
 
        mg_helm%sides_bc => photoi_helmh_bc
 
-#if $D == 2
+#if NDIM == 2
        if (ST_cylindrical) then
           mg_helm%box_op => helmholtz_cyl_operator
           mg_helm%box_gsrb => helmholtz_cyl_gsrb
@@ -128,34 +128,34 @@ contains
           mg_helm%box_op => helmholtz_operator
           mg_helm%box_gsrb => helmholtz_gsrb
        end if
-#elif $D == 3
+#elif NDIM == 3
        mg_helm%box_op => helmholtz_operator
        mg_helm%box_gsrb => helmholtz_gsrb
 #endif
 
-       call mg$D_init_mg(mg_helm)
+       call mg_init_mg(mg_helm)
     end if
   end subroutine photoi_helmh_initialize
 
   subroutine photoi_helmh_set_methods(tree)
-    type(a$D_t), intent(inout) :: tree
+    type(af_t), intent(inout) :: tree
     integer                    :: n
 
     do n = 1, n_modes
-       call a$D_set_cc_methods(tree, i_modes(n), &
-            photoi_helmh_bc, mg$D_sides_rb)
+       call af_set_cc_methods(tree, i_modes(n), &
+            photoi_helmh_bc, mg_sides_rb)
     end do
   end subroutine photoi_helmh_set_methods
 
   subroutine photoi_helmh_compute(tree)
-    type(a$D_t), intent(inout) :: tree
+    type(af_t), intent(inout) :: tree
 
     integer :: n, lvl, i, id
     real(dp) :: residu, max_rhs
 
-    call a$D_tree_clear_cc(tree, i_photo)
+    call af_tree_clear_cc(tree, i_photo)
 
-    call a$D_tree_maxabs_cc(tree, mg_helm%i_rhs, max_rhs)
+    call af_tree_maxabs_cc(tree, mg_helm%i_rhs, max_rhs)
     max_rhs = max(max_rhs, sqrt(epsilon(1.0_dp)))
 
     do n = 1, n_modes
@@ -163,8 +163,8 @@ contains
        mg_helm%i_phi = i_modes(n)
 
        do i = 1, max_fmg_cycles
-          call mg$D_fas_fmg(tree, mg_helm, .true., .true.)
-          call a$D_tree_maxabs_cc(tree, mg_helm%i_tmp, residu)
+          call mg_fas_fmg(tree, mg_helm, .true., .true.)
+          call af_tree_maxabs_cc(tree, mg_helm%i_tmp, residu)
           ! print *, n, i, residu/max_rhs
           if (residu/max_rhs < max_rel_residual) exit
        end do
@@ -189,7 +189,7 @@ contains
   !> is inaccurate if the streamer gets close to that boundary, otherwise it
   !> should be quite reasonable.
   subroutine photoi_helmh_bc(box, nb, iv, bc_type)
-    type(box$D_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
     integer, intent(out)        :: bc_type ! Type of boundary condition
@@ -198,26 +198,26 @@ contains
     nc = box%n_cell
 
     select case (nb)
-    case (a$D_neighb_lowx, a$D_neighb_highx)
-       call a$D_bc_neumann_zero(box, nb, iv, bc_type)
-#if $D == 2
-    case (a$D_neighb_lowy, a$D_neighb_highy)
-       call a$D_bc_dirichlet_zero(box, nb, iv, bc_type)
-#elif $D == 3
-    case (a$D_neighb_lowy, a$D_neighb_highy)
-       call a$D_bc_neumann_zero(box, nb, iv, bc_type)
-    case (a$D_neighb_lowz, a$D_neighb_highz)
-       call a$D_bc_dirichlet_zero(box, nb, iv, bc_type)
+    case (af_neighb_lowx, af_neighb_highx)
+       call af_bc_neumann_zero(box, nb, iv, bc_type)
+#if NDIM == 2
+    case (af_neighb_lowy, af_neighb_highy)
+       call af_bc_dirichlet_zero(box, nb, iv, bc_type)
+#elif NDIM == 3
+    case (af_neighb_lowy, af_neighb_highy)
+       call af_bc_neumann_zero(box, nb, iv, bc_type)
+    case (af_neighb_lowz, af_neighb_highz)
+       call af_bc_dirichlet_zero(box, nb, iv, bc_type)
 #endif
     end select
   end subroutine photoi_helmh_bc
 
-#if $D == 2
+#if NDIM == 2
   !> Perform cylindrical Laplacian operator on a box
   subroutine helmholtz_cyl_operator(box, i_out, mg)
-    type(box2_t), intent(inout) :: box !< Box to operate on
+    type(box_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg2_t), intent(in)     :: mg !< Multigrid options
+    type(mg_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, j, nc, i_phi, ioff
     real(dp)                    :: inv_dr_sq, rfac(2)
 
@@ -241,9 +241,9 @@ contains
 
   !> Perform Gauss-Seidel relaxation on box for a cylindrical Helmholtz operator
   subroutine helmholtz_cyl_gsrb(box, redblack_cntr, mg)
-    type(box2_t), intent(inout) :: box !< Box to operate on
+    type(box_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg2_t), intent(in)     :: mg !< Multigrid options
+    type(mg_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, i0, j, nc, i_phi, i_rhs, ioff
     real(dp)                    :: dx2, rfac(2)
 
@@ -271,12 +271,12 @@ contains
 
   !> Perform Helmholtz operator on a box
   subroutine helmholtz_operator(box, i_out, mg)
-    type(box$D_t), intent(inout) :: box !< Box to operate on
+    type(box_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg$D_t), intent(in)     :: mg !< Multigrid options
+    type(mg_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, j, nc, i_phi
     real(dp)                    :: inv_dr_sq
-#if $D == 3
+#if NDIM == 3
     integer                     :: k
 #endif
 
@@ -284,7 +284,7 @@ contains
     inv_dr_sq = 1 / box%dr**2
     i_phi = mg%i_phi
 
-#if $D == 2
+#if NDIM == 2
     do j = 1, nc
        do i = 1, nc
           box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
@@ -293,7 +293,7 @@ contains
                lambda2 * box%cc(i, j, i_phi)
        end do
     end do
-#elif $D == 3
+#elif NDIM == 3
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc
@@ -310,12 +310,12 @@ contains
 
   !> Perform Gauss-Seidel relaxation on box for a Helmholtz operator
   subroutine helmholtz_gsrb(box, redblack_cntr, mg)
-    type(box$D_t), intent(inout) :: box !< Box to operate on
+    type(box_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg$D_t), intent(in)     :: mg !< Multigrid options
+    type(mg_t), intent(in)     :: mg !< Multigrid options
     integer                     :: i, i0, j, nc, i_phi, i_rhs
     real(dp)                    :: dx2
-#if $D == 3
+#if NDIM == 3
     integer                     :: k
 #endif
 
@@ -326,7 +326,7 @@ contains
 
     ! The parity of redblack_cntr determines which cells we use. If
     ! redblack_cntr is even, we use the even cells and vice versa.
-#if $D == 2
+#if NDIM == 2
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
@@ -336,7 +336,7 @@ contains
                dx2 * box%cc(i, j, i_rhs))
        end do
     end do
-#elif $D == 3
+#elif NDIM == 3
     do k = 1, nc
        do j = 1, nc
           i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
@@ -352,4 +352,4 @@ contains
 #endif
   end subroutine helmholtz_gsrb
 
-end module m_photoi_helmh_$Dd
+end module m_photoi_helmh

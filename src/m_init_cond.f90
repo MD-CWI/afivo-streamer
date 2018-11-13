@@ -1,7 +1,7 @@
-#include "../afivo/src/cpp_macros_$Dd.h"
-module m_init_cond_$Dd
+#include "../afivo/src/cpp_macros.h"
+module m_init_cond
   use m_streamer
-  use m_a$D_all
+  use m_af_all
 
   implicit none
   private
@@ -110,9 +110,9 @@ contains
   !> Add a stochastic background density to the electrons and ions. Note: this
   !> routine temporarily uses variable i_rhs
   subroutine init_cond_stochastic_density(tree)
-    use m_a$D_ghostcell, only: a$D_bc_neumann_zero
-    use m_a$D_prolong
-    type(a$D_t), intent(inout) :: tree
+    use m_af_ghostcell, only: af_bc_neumann_zero
+    use m_af_prolong
+    type(af_t), intent(inout) :: tree
     integer                    :: my_lvl, lvl, i, id
 
     if (init_conds%stochastic_density <= 0.0_dp) return
@@ -124,7 +124,7 @@ contains
     end do
 
     ! Use i_rhs to store the stochastic density at this level
-    call a$D_tree_clear_cc(tree, i_rhs)
+    call af_tree_clear_cc(tree, i_rhs)
     !$omp do private(id)
     do i = 1, size(tree%lvls(my_lvl)%ids)
        id = tree%lvls(my_lvl)%ids(i)
@@ -136,13 +136,13 @@ contains
     do lvl = my_lvl, tree%highest_lvl-1
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a$D_gc_box(tree%boxes, id, i_rhs, &
-               a$D_gc_interp, a$D_bc_neumann_zero)
+          call af_gc_box(tree%boxes, id, i_rhs, &
+               af_gc_interp, af_bc_neumann_zero)
        end do
 
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call a$D_prolong_linear_from(tree%boxes, id, i_rhs, add=.true.)
+          call af_prolong_linear_from(tree%boxes, id, i_rhs, add=.true.)
        end do
 
     end do
@@ -151,23 +151,23 @@ contains
     do lvl = my_lvl, tree%highest_lvl
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          call a$D_box_add_cc(tree%boxes(id), i_rhs, i_electron)
-          call a$D_box_add_cc(tree%boxes(id), i_rhs, i_pos_ion)
+          call af_box_add_cc(tree%boxes(id), i_rhs, i_electron)
+          call af_box_add_cc(tree%boxes(id), i_rhs, i_pos_ion)
        end do
     end do
 
     ! Restrict and fill ghost cells
-    call a$D_restrict_tree(tree, i_electron)
-    call a$D_restrict_tree(tree, i_pos_ion)
-    call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-    call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+    call af_restrict_tree(tree, i_electron)
+    call af_restrict_tree(tree, i_pos_ion)
+    call af_gc_tree(tree, i_electron, af_gc_interp_lim, af_bc_neumann_zero)
+    call af_gc_tree(tree, i_pos_ion, af_gc_interp_lim, af_bc_neumann_zero)
 
   end subroutine init_cond_stochastic_density
 
   subroutine set_stochastic_density(box)
     use omp_lib
     use m_streamer, only: ST_prng
-    type(box$D_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     integer                      :: proc_id, IJK
     real(dp)                     :: density
 
@@ -183,9 +183,9 @@ contains
   !> Sets the initial condition
   subroutine init_cond_set_box(box)
     use m_geometry
-    type(box$D_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     integer                     :: IJK, n, nc
-    real(dp)                    :: rr($D)
+    real(dp)                    :: rr(NDIM)
     real(dp)                    :: density
 
     nc = box%n_cell
@@ -194,12 +194,12 @@ contains
     box%cc(DTIMES(:), i_phi)      = 0 ! Inital potential set to zero
 
     do KJI_DO(0,nc+1)
-       rr   = a$D_r_cc(box, [IJK])
+       rr   = af_r_cc(box, [IJK])
 
        do n = 1, init_conds%n_cond
           density = GM_density_line(rr, init_conds%seed_r0(:, n), &
                init_conds%seed_r1(:, n), &
-               init_conds%seed_density(n), init_conds%seed_density2(n), $D, &
+               init_conds%seed_density(n), init_conds%seed_density2(n), NDIM, &
                init_conds%seed_width(n), &
                init_conds%seed_falloff(n))
 
@@ -217,4 +217,4 @@ contains
 
   end subroutine init_cond_set_box
 
-end module m_init_cond_$Dd
+end module m_init_cond

@@ -1,4 +1,4 @@
-SRC_DIRS	:= src afivo
+SRC_DIRS	:= build_2d build_3d afivo
 
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
@@ -28,4 +28,4 @@ output:
 		mkdir -p output
 
 # Dependecy information
-src:		afivo
+build_2d build_3d: afivo

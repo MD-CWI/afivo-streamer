@@ -1,9 +1,9 @@
-#include "../afivo/src/cpp_macros_$Dd.h"
+#include "../afivo/src/cpp_macros.h"
 !> Top-module for photoionization, which can make use of different methods
-module m_photoi_$Dd
-  use m_photoi_mc_$Dd
-  use m_photoi_helmh_$Dd
-  use m_a$D_all
+module m_photoi
+  use m_photoi_mc
+  use m_photoi_helmh
+  use m_af_all
   use m_streamer
 
   implicit none
@@ -61,8 +61,8 @@ contains
   end subroutine photoi_initialize
 
   subroutine photoi_set_methods(tree)
-    type(a$D_t), intent(inout) :: tree
-    call a$D_set_cc_methods(tree, i_photo, photoi_helmh_bc, a$D_gc_interp)
+    type(af_t), intent(inout) :: tree
+    call af_set_cc_methods(tree, i_photo, photoi_helmh_bc, af_gc_interp)
 
     select case (photoi_method)
     case ("helmholtz")
@@ -79,7 +79,7 @@ contains
   subroutine photoi_set_src(tree, dt)
     use m_units_constants
 
-    type(a$D_t), intent(inout)     :: tree
+    type(af_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
     real(dp), parameter            :: p_quench = 40.0e-3_dp
     real(dp)                       :: quench_fac
@@ -90,7 +90,7 @@ contains
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
-    call a$D_loop_box_arg(tree, set_photoionization_rate, &
+    call af_loop_box_arg(tree, set_photoionization_rate, &
          [photoi_eta * quench_fac], .true.)
 
     select case (photoi_method)
@@ -99,19 +99,19 @@ contains
        call photoi_helmh_compute(tree)
     case ("montecarlo")
        if (phmc_physical_photons) then
-#if $D == 2
-          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
+#if NDIM == 2
+          call phmc_set_src(tree, ST_rng, i_electron_old, &
                i_photo, ST_cylindrical, dt)
-#elif $D == 3
-          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
+#elif NDIM == 3
+          call phmc_set_src(tree, ST_rng, i_electron_old, &
                i_photo, .false., dt)
 #endif
        else
-#if $D == 2
-          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
+#if NDIM == 2
+          call phmc_set_src(tree, ST_rng, i_electron_old, &
                i_photo, ST_cylindrical)
-#elif $D == 3
-          call phmc_set_src_$Dd(tree, ST_rng, i_electron_old, &
+#elif NDIM == 3
+          call phmc_set_src(tree, ST_rng, i_electron_old, &
                i_photo, .false.)
 #endif
        end if
@@ -121,7 +121,7 @@ contains
 
   !> Sets the photoionization_rate
   subroutine set_photoionization_rate(box, coeff)
-    type(box$D_t), intent(inout) :: box
+    type(box_t), intent(inout) :: box
     real(dp), intent(in)        :: coeff(:)
     integer                     :: IJK, nc
     real(dp)                    :: fld, alpha, mobility, tmp
@@ -141,4 +141,4 @@ contains
     end do; CLOSE_DO
   end subroutine set_photoionization_rate
 
-end module m_photoi_$Dd
+end module m_photoi
