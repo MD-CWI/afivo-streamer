@@ -7,6 +7,7 @@ module m_af_core
   implicit none
   private
 
+  public :: af_add_cc_variable
   public :: af_init
   public :: af_set_cc_methods
   public :: af_init_box
@@ -19,9 +20,43 @@ module m_af_core
 
 contains
 
-  !> Initialize a NDIMd tree type.
+  subroutine af_add_cc_variable(tree, name, write_out, n_copies, max_lvl, cc_ix)
+    type(af_t), intent(inout)      :: tree
+    character(len=*), intent(in)   :: name
+    logical, intent(in), optional  :: write_out
+    integer, intent(in), optional  :: n_copies
+    integer, intent(in), optional  :: max_lvl
+    integer, intent(out), optional :: cc_ix
+
+    integer :: n
+    integer :: ncpy, maxlvl
+    logical :: writeout
+
+    ncpy = 1; if (present(n_copies)) ncpy = n_copies
+    writeout = .false.; if (present(write_out)) writeout = write_out
+    maxlvl = 100; if (present(max_lvl)) maxlvl = max_lvl
+
+    if (ncpy < 1) error stop "af_add_cc_variable: n_copies < 1"
+    if (max_lvl < 1) error stop "af_add_cc_variable: max_lvl < 1"
+
+    do n = 1, ncpy
+       tree%n_var_cell = tree%n_var_cell + 1
+       if (n == 1) then
+          cc_names(tree%n_var_cell)        = name
+          cc_write_output(tree%n_var_cell) = writeout
+          cc_max_level(tree%n_var_cell)    = maxlvl
+       else
+          write(cc_names(tree%n_var_cell), "(A,I0)") trim(name)//'_', n
+          cc_write_output(tree%n_var_cell) = .false.
+          cc_max_level(tree%n_var_cell)    = maxlvl
+       end if
+    end do
+
+  end subroutine af_add_cc_variable
+
+  !> Initialize a NDIM-d tree type.
   subroutine af_init(tree, n_cell, n_var_cell, n_var_face, dr, r_min, &
-       lvl_limit, n_boxes, coarsen_to, coord, cc_names, fc_names, mem_limit_gb)
+       n_boxes, coarsen_to, coord, cc_names, fc_names, mem_limit_gb)
     type(af_t), intent(inout)      :: tree       !< The tree to initialize
     integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
     integer, intent(in)            :: n_var_cell !< Number of cell-centered variables
@@ -32,8 +67,6 @@ contains
     !> Create additional coarse grids down to this size. Default is -1 (which
     !> means don't do this)
     integer, intent(in), optional  :: coarsen_to
-    !> Maximum number of levels. Default is 30
-    integer, intent(in), optional  :: lvl_limit
     !> Allocate initial storage for n_boxes. Default is 1000
     integer, intent(in), optional  :: n_boxes
     integer, intent(in), optional  :: coord !< Select coordinate type
@@ -44,12 +77,11 @@ contains
     !> Names of face-centered variables
     character(len=*), intent(in), optional :: fc_names(:)
 
-    integer                        :: lvl_limit_a, n_boxes_a, coarsen_to_a
+    integer                        :: n_boxes_a, coarsen_to_a
     real(dp)                       :: r_min_a(NDIM), gb_limit
     integer                        :: n, lvl, min_lvl, coord_a, box_bytes
 
     ! Set default arguments if not present
-    lvl_limit_a = 30;  if (present(lvl_limit)) lvl_limit_a = lvl_limit
     n_boxes_a = 1000;  if (present(n_boxes)) n_boxes_a = n_boxes
     coarsen_to_a = -1; if (present(coarsen_to)) coarsen_to_a = coarsen_to
     r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
@@ -62,27 +94,12 @@ contains
     if (n_var_cell <= 0)  stop "af_init: n_var_cell should be > 0"
     if (n_var_face < 0)   stop "af_init: n_var_face should be >= 0"
     if (n_boxes_a <= 0)   stop "af_init: n_boxes should be > 0"
-    if (lvl_limit_a <= 0) stop "af_init: lvl_limit should be > 0"
     if (gb_limit <= 0)    stop "af_init: mem_limit_gb should be > 0"
 #if NDIM == 3
     if (coord_a == af_cyl) stop "af_init: cannot have 3d cyl coords"
 #endif
 
     allocate(tree%boxes(n_boxes_a))
-
-    if (coarsen_to_a > 0) then
-       ! Determine number of lvls for subtree
-       !> @todo remove subtree in future
-       min_lvl = 1 - nint(log(real(n_cell, dp)/coarsen_to_a)/log(2.0_dp))
-
-       if (2**(1-min_lvl) * coarsen_to_a /= n_cell) &
-            stop "af_init: cannot coarsen to given value"
-    else
-       min_lvl = 1
-    end if
-
-    ! up to lvl_limit_a+1 to add dummies that are always of size zero
-    allocate(tree%lvls(min_lvl:lvl_limit_a+1))
 
     do lvl = min_lvl, lvl_limit_a+1
        allocate(tree%lvls(lvl)%ids(0))
@@ -95,9 +112,9 @@ contains
     tree%n_var_face  = n_var_face
     tree%r_base      = r_min_a
     tree%dr_base     = dr
-    tree%lvl_limit   = lvl_limit_a
     tree%highest_id  = 0
     tree%highest_lvl = 0
+    tree%lowest_lvl  = 0
     tree%coord_t     = coord_a
 
     ! Calculate size of a box
@@ -105,9 +122,6 @@ contains
     tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
 
     ! Set variable names
-    allocate(tree%cc_names(n_var_cell))
-    allocate(tree%fc_names(n_var_face))
-
     if (present(cc_names)) then
        if (size(cc_names) /= n_var_cell) &
             stop "af_init: size(cc_names) /= n_var_cell"
@@ -128,10 +142,7 @@ contains
        end do
     end if
 
-    ! Initialize cell-centered methods (default is the null pointer)
-    allocate(tree%cc_methods(n_var_cell))
-    allocate(tree%has_cc_method(n_var_cell))
-    tree%has_cc_method(:) = .false.
+    ! Initialize list of cell-centered variables with methods
     allocate(tree%cc_method_vars(0))
   end subroutine af_init
 
@@ -180,10 +191,6 @@ contains
     if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
     deallocate(tree%boxes)
     deallocate(tree%lvls)
-    deallocate(tree%cc_names)
-    deallocate(tree%fc_names)
-    deallocate(tree%cc_methods)
-    deallocate(tree%has_cc_method)
     deallocate(tree%cc_method_vars)
 
     tree%highest_id = 0

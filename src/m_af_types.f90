@@ -6,8 +6,14 @@ module m_af_types
   implicit none
   public
 
-    ! dp stands for double precision (8 byte reals)
+  ! dp stands for double precision (8 byte reals)
   integer, parameter :: dp = kind(0.0d0)
+
+  !> Highest allowed refinement level
+  integer, parameter :: af_lvl_limit = 30
+
+  !> Maximum number of variables
+  integer, parameter :: af_max_num_vars = 100
 
   !> Value indicating you want to derefine a box
   integer, parameter :: af_rm_ref = -1
@@ -254,30 +260,42 @@ module m_af_types
      logical                    :: ready = .false. !< Is tree ready for use?
      integer                    :: lvl_limit       !< maximum allowed level
      integer                    :: box_limit       !< maximum number of boxes
+     integer                    :: lowest_lvl      !< lowest level present
      integer                    :: highest_lvl     !< highest level present
      integer                    :: highest_id      !< highest box index present
      integer                    :: n_cell     !< number of cells per dimension
-     integer                    :: n_var_cell !< number of cell-centered variables
-     integer                    :: n_var_face !< number of face-centered variables
+     integer                    :: n_var_cell = 0 !< number of cell-centered variables
+     integer                    :: n_var_face = 0 !< number of face-centered variables
      integer                    :: coord_t    !< Type of coordinates
      real(dp)                   :: r_base(NDIM) !< min. coords of box at index (1,1)
      real(dp)                   :: dr_base    !< cell spacing at lvl 1
 
      !> Names of cell-centered variables
-     character(len=af_nlen), allocatable :: cc_names(:)
+     character(len=af_nlen) :: cc_names(af_max_num_vars)
+
      !> Names of face-centered variables
-     character(len=af_nlen), allocatable :: fc_names(:)
+     character(len=af_nlen) :: fc_names(af_max_num_vars)
+
+     !> Maximal refinement level for the variables
+     integer :: cc_max_level(af_max_num_vars) = af_lvl_limit
+
+     !> Whether to include the variable in the output
+     logical :: cc_write_output(af_max_num_vars) = .true.
 
      !> Methods for cell-centered variables
-     type(af_cc_methods), allocatable :: cc_methods(:)
+     type(af_cc_methods) :: cc_methods(af_max_num_vars)
 
      !> For which cell-centered variables methods have been set
-     logical, allocatable :: has_cc_method(:)
+     logical :: has_cc_method(af_max_num_vars) = .false.
+
      !> Indices of cell-centered variables with methods
      integer, allocatable :: cc_method_vars(:)
 
-     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
-     type(box_t), allocatable :: boxes(:)   !< list of all boxes
+     !> List storing the tree levels
+     type(lvl_t) :: lvls(-af_lvl_limit:af_lvl_limit)
+
+     !> List of all boxes
+     type(box_t), allocatable :: boxes(:)
   end type af_t
 
   !> Type specifying the location of a cell
