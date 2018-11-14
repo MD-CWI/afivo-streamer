@@ -8,11 +8,11 @@ program implicit_diffusion_Xd
 
   implicit none
 
-  integer, parameter :: box_size  = 8
-  integer, parameter :: i_phi     = 1
-  integer, parameter :: i_rhs     = 2
-  integer, parameter :: i_tmp     = 3
-  integer, parameter :: i_err     = 4
+  integer, parameter :: box_size = 8
+  integer            :: i_phi
+  integer            :: i_rhs
+  integer            :: i_tmp
+  integer            :: i_err
 
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr = domain_len / box_size
@@ -36,9 +36,13 @@ program implicit_diffusion_Xd
   print *, "Running implicit_diffusion_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "rhs", ix=i_rhs)
+  call af_add_cc_variable(tree, "tmp", ix=i_tmp)
+  call af_add_cc_variable(tree, "err", ix=i_err)
+
   ! Initialize tree
-  call af_init(tree, box_size, n_var_cell=4, n_var_face=1, dr=dr, &
-       cc_names=["phi", "rhs", "tmp", "err"])
+  call af_init(tree, box_size, dr=dr)
 
   ! Set up geometry
   id             = 1

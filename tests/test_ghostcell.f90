@@ -13,7 +13,8 @@ program test_init
   integer          :: i, n_lvl
   integer          :: ixs(NDIM, 1), nbs(af_num_neighbors, 1)
 
-  call af_init(tree, n_cell=8, n_var_cell=1, n_var_face=0, dr = 1.0_dp)
+  call af_add_cc_variable(tree, "phi")
+  call af_init(tree, n_cell=8, dr = 1.0_dp)
 
   ixs = 1                    ! Box at 1,1
   nbs = -1                   ! Boundary condition indicated by -1

@@ -8,8 +8,7 @@ program ghostcell_benchmark_Xd
   implicit none
 
   integer, parameter :: n_boxes_base = 1
-  integer, parameter :: n_var_cell = 1
-  integer, parameter :: i_phi = 1
+  integer            :: i_phi
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -56,13 +55,12 @@ program ghostcell_benchmark_Xd
 
   dr = 1.0_dp / n_cell
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        n_cell, &       ! A box contains box_size**DIM cells
-       n_var_cell, &   ! Number of cell-centered variables
-       0, &            ! Number of face-centered variables
-       dr, &           ! Distance between cells on base level
-       cc_names=["phi"]) ! Variable names
+       dr)             ! Distance between cells on base level
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)

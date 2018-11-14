@@ -9,16 +9,17 @@ program advection_Xd
   implicit none
 
   integer, parameter  :: box_size   = 8
-  integer, parameter  :: i_phi      = 1
-  integer, parameter  :: i_phi_old  = 2
-  integer, parameter  :: i_err      = 3
+  integer             :: i_phi
+  integer             :: i_phi_old
+  integer             :: i_err
+  integer             :: i_flux
   integer, parameter  :: sol_type   = 1
   ! Set coord_type to af_cyl to test conservation in cyl. coordinates
   integer, parameter  :: coord_type = af_xyz
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: dr         = domain_len / box_size
 
-  type(af_t)        :: tree
+  type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
   integer            :: ix_list(NDIM, 1)
   integer            :: nb_list(af_num_neighbors, 1)
@@ -34,14 +35,16 @@ program advection_Xd
   print *, "Running advection_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "old", ix=i_phi_old)
+  call af_add_cc_variable(tree, "err", ix=i_err)
+  call af_add_fc_variable(tree, "flux", ix=i_flux)
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       n_var_cell=3, & ! Number of cell-centered variables
-       n_var_face=1, & ! Number of face-centered variables
        dr=dr, &        ! Distance between cells on base level
-       coord=coord_type, &
-       cc_names=["phi", "old", "err"]) ! Variable names
+       coord=coord_type)
 
   call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp_lim, &
        prolong=af_prolong_limit)
@@ -60,7 +63,7 @@ program advection_Xd
   output_cnt = 0
   time       = 0
   dt_adapt   = 0.01_dp
-  dt_output  = 0.1_dp
+  dt_output  = 0.5_dp
   end_time   = 5.0_dp
   velocity(:) = 0.0_dp
   velocity(1) = 1.0_dp
@@ -227,7 +230,7 @@ contains
             6 * box%cc(i, j, k, i_phi)) * box%dr
 #endif
 
-       if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 5) then
+       if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 3) then
           cell_flags(IJK) = af_do_ref
        else if (diff < 0.1_dp * 0.1e-3_dp) then
           cell_flags(IJK) = af_rm_ref

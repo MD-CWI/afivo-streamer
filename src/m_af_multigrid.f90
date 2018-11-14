@@ -172,14 +172,12 @@ contains
     type(mg_t), intent(in)         :: mg   !< Multigrid options
     logical, intent(in)             :: set_residual !< If true, store residual in i_tmp
     logical, intent(in)             :: have_guess   !< If false, start from phi = 0
-    integer                         :: lvl, min_lvl
+    integer                         :: lvl
 
     call check_mg(mg)           ! Check whether mg options are set
 
-    min_lvl = lbound(tree%lvls, 1)
-
     if (have_guess) then
-       do lvl = tree%highest_lvl,  min_lvl+1, -1
+       do lvl = tree%highest_lvl,  tree%lowest_lvl+1, -1
           ! Set rhs on coarse grid and restrict phi
           call set_coarse_phi_rhs(tree, lvl, mg)
        end do
@@ -187,12 +185,12 @@ contains
        call init_phi_rhs(tree, mg)
     end if
 
-    do lvl = min_lvl, tree%highest_lvl
+    do lvl = tree%lowest_lvl, tree%highest_lvl
        ! Store phi_old in tmp
        call af_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_tmp)
 
-       if (lvl > min_lvl) then
+       if (lvl > tree%lowest_lvl) then
           ! Correct solution at this lvl using lvl-1 data
           ! phi = phi + prolong(phi_coarse - phi_old_coarse)
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
@@ -222,11 +220,11 @@ contains
     real(dp)                      :: sum_phi, mean_phi
 
     call check_mg(mg)           ! Check whether mg options are set
-    min_lvl = lbound(tree%lvls, 1)
+    min_lvl = tree%lowest_lvl
     max_lvl = tree%highest_lvl
     if (present(highest_lvl)) max_lvl = highest_lvl
 
-    do lvl = max_lvl,  min_lvl+1, -1
+    do lvl = max_lvl, min_lvl+1, -1
        ! Downwards relaxation
        call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_down)
 
@@ -434,156 +432,156 @@ contains
 
   end subroutine mg_sides_rb
 
-  !> Fill ghost cells near refinement boundaries which preserves diffusive
-  !> fluxes. This routine does not do interpolation of coarse grid values.
-  !> Basically, we extrapolate from the fine cells to a corner point, and then
-  !> take the average between this corner point and a coarse neighbor to fill
-  !> ghost cells for the fine cells.
-  subroutine mg_sides_rb_old(boxes, id, nb, iv)
-    use m_af_ghostcell, only: af_gc_prolong_copy
-    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, dix, i, di, j, dj
-#if NDIM == 3
-    integer                     :: k, dk
-#endif
+!   !> Fill ghost cells near refinement boundaries which preserves diffusive
+!   !> fluxes. This routine does not do interpolation of coarse grid values.
+!   !> Basically, we extrapolate from the fine cells to a corner point, and then
+!   !> take the average between this corner point and a coarse neighbor to fill
+!   !> ghost cells for the fine cells.
+!   subroutine mg_sides_rb_old(boxes, id, nb, iv)
+!     use m_af_ghostcell, only: af_gc_prolong_copy
+!     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
+!     integer, intent(in)         :: id        !< Id of box
+!     integer, intent(in)         :: nb        !< Ghost cell direction
+!     integer, intent(in)         :: iv        !< Ghost cell variable
+!     integer                     :: nc, ix, dix, i, di, j, dj
+! #if NDIM == 3
+!     integer                     :: k, dk
+! #endif
 
-    nc = boxes(id)%n_cell
+!     nc = boxes(id)%n_cell
 
-    if (af_neighb_low(nb)) then
-       ix = 1
-       dix = 1
-    else
-       ix = nc
-       dix = -1
-    end if
+!     if (af_neighb_low(nb)) then
+!        ix = 1
+!        dix = 1
+!     else
+!        ix = nc
+!        dix = -1
+!     end if
 
-    call af_gc_prolong_copy(boxes, id, nb, iv)
+!     call af_gc_prolong_copy(boxes, id, nb, iv)
 
-    select case (af_neighb_dim(nb))
-#if NDIM == 2
-    case (1)
-       i = ix
-       di = dix
-       do j = 1, nc
-          dj = -1 + 2 * iand(j, 1)
+!     select case (af_neighb_dim(nb))
+! #if NDIM == 2
+!     case (1)
+!        i = ix
+!        di = dix
+!        do j = 1, nc
+!           dj = -1 + 2 * iand(j, 1)
 
-          ! Bilinear extrapolation (using 4 points)
-          boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
-               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
-               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
+!           ! Bilinear extrapolation (using 4 points)
+!           boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+!                1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
+!                (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
+!                + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
 
-          ! Extrapolation using 3 points
-          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-          !      boxes(id)%cc(i, j, iv) - 0.25_dp * &
-          !      (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv))
+!           ! Extrapolation using 3 points
+!           ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+!           !      boxes(id)%cc(i, j, iv) - 0.25_dp * &
+!           !      (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv))
 
-          ! Extrapolation using 2 points
-          ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
-          !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
-          !      boxes(id)%cc(i+di, j+dj, iv)
-       end do
-    case (2)
-       j = ix
-       dj = dix
-       do i = 1, nc
-          di = -1 + 2 * iand(i, 1)
+!           ! Extrapolation using 2 points
+!           ! boxes(id)%cc(i-di, j, iv) = 0.5_dp * boxes(id)%cc(i-di, j, iv) + &
+!           !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
+!           !      boxes(id)%cc(i+di, j+dj, iv)
+!        end do
+!     case (2)
+!        j = ix
+!        dj = dix
+!        do i = 1, nc
+!           di = -1 + 2 * iand(i, 1)
 
-          ! Bilinear extrapolation (using 4 points)
-          boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
-               1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
-               (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
-               + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
+!           ! Bilinear extrapolation (using 4 points)
+!           boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
+!                1.125_dp * boxes(id)%cc(i, j, iv) - 0.375_dp * &
+!                (boxes(id)%cc(i+di, j, iv) + boxes(id)%cc(i, j+dj, iv)) &
+!                + 0.125_dp * boxes(id)%cc(i+di, j+dj, iv)
 
-          ! Extrapolation using 2 points
-          ! boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
-          !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
-          !      boxes(id)%cc(i+di, j+dj, iv)
-       end do
-#elif NDIM == 3
-    case (1)
-       i = ix
-       di = dix
-       do k = 1, nc
-          dk = -1 + 2 * iand(k, 1)
-          do j = 1, nc
-             dj = -1 + 2 * iand(j, 1)
-             ! Trilinear extrapolation (using 8 points)
-             ! boxes(id)%cc(i-di, j, k, iv) = &
-             !      0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 0.0625_dp * (&
-             !      27 * boxes(id)%cc(i, j, k, iv) &
-             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
-             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
-             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
-             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
-             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
-             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
-             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
+!           ! Extrapolation using 2 points
+!           ! boxes(id)%cc(i, j-dj, iv) = 0.5_dp * boxes(id)%cc(i, j-dj, iv) + &
+!           !      0.75_dp * boxes(id)%cc(i, j, iv) - 0.25_dp * &
+!           !      boxes(id)%cc(i+di, j+dj, iv)
+!        end do
+! #elif NDIM == 3
+!     case (1)
+!        i = ix
+!        di = dix
+!        do k = 1, nc
+!           dk = -1 + 2 * iand(k, 1)
+!           do j = 1, nc
+!              dj = -1 + 2 * iand(j, 1)
+!              ! Trilinear extrapolation (using 8 points)
+!              ! boxes(id)%cc(i-di, j, k, iv) = &
+!              !      0.5_dp * boxes(id)%cc(i-di, j, k, iv) + 0.0625_dp * (&
+!              !      27 * boxes(id)%cc(i, j, k, iv) &
+!              !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+!              !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+!              !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+!              !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+!              !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+!              !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+!              !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
 
-             ! Extrapolation using 2 points
-             boxes(id)%cc(i-di, j, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
-                  0.75_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * boxes(id)%cc(i+di, j+dj, k+dk, iv)
-          end do
-       end do
-    case (2)
-       j = ix
-       dj = dix
-       do k = 1, nc
-          dk = -1 + 2 * iand(k, 1)
-          do i = 1, nc
-             di = -1 + 2 * iand(i, 1)
+!              ! Extrapolation using 2 points
+!              boxes(id)%cc(i-di, j, k, iv) = &
+!                   0.5_dp * boxes(id)%cc(i-di, j, k, iv) + &
+!                   0.75_dp * boxes(id)%cc(i, j, k, iv) - &
+!                   0.25_dp * boxes(id)%cc(i+di, j+dj, k+dk, iv)
+!           end do
+!        end do
+!     case (2)
+!        j = ix
+!        dj = dix
+!        do k = 1, nc
+!           dk = -1 + 2 * iand(k, 1)
+!           do i = 1, nc
+!              di = -1 + 2 * iand(i, 1)
 
-             ! boxes(id)%cc(i, j-dj, k, iv) = &
-             !      0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 0.0625_dp * (&
-             !      27 * boxes(id)%cc(i, j, k, iv) &
-             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
-             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
-             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
-             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
-             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
-             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
-             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
+!              ! boxes(id)%cc(i, j-dj, k, iv) = &
+!              !      0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + 0.0625_dp * (&
+!              !      27 * boxes(id)%cc(i, j, k, iv) &
+!              !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+!              !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+!              !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+!              !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+!              !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+!              !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+!              !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
 
-             boxes(id)%cc(i, j-dj, k, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
-                  0.75_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * boxes(id)%cc(i+di, j+dj, k+dk, iv)
-          end do
-       end do
-    case (3)
-       k = ix
-       dk = dix
-       do j = 1, nc
-          dj = -1 + 2 * iand(j, 1)
-          do i = 1, nc
-             di = -1 + 2 * iand(i, 1)
+!              boxes(id)%cc(i, j-dj, k, iv) = &
+!                   0.5_dp * boxes(id)%cc(i, j-dj, k, iv) + &
+!                   0.75_dp * boxes(id)%cc(i, j, k, iv) - &
+!                   0.25_dp * boxes(id)%cc(i+di, j+dj, k+dk, iv)
+!           end do
+!        end do
+!     case (3)
+!        k = ix
+!        dk = dix
+!        do j = 1, nc
+!           dj = -1 + 2 * iand(j, 1)
+!           do i = 1, nc
+!              di = -1 + 2 * iand(i, 1)
 
-             ! boxes(id)%cc(i, j, k-dk, iv) = &
-             !      0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 0.0625_dp * (&
-             !      27 * boxes(id)%cc(i, j, k, iv) &
-             !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
-             !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
-             !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
-             !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
-             !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
-             !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
-             !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
+!              ! boxes(id)%cc(i, j, k-dk, iv) = &
+!              !      0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + 0.0625_dp * (&
+!              !      27 * boxes(id)%cc(i, j, k, iv) &
+!              !      - 9 * boxes(id)%cc(i+di, j, k, iv) &
+!              !      - 9 * boxes(id)%cc(i, j+dj, k, iv) &
+!              !      - 9 * boxes(id)%cc(i, j, k+dk, iv) &
+!              !      + 3 * boxes(id)%cc(i+di, j+dj, k, iv) &
+!              !      + 3 * boxes(id)%cc(i+di, j, k+dk, iv) &
+!              !      + 3 * boxes(id)%cc(i, j+dj, k+dk, iv) &
+!              !      - 1 * boxes(id)%cc(i+di, j+dj, k+dk, iv))
 
-             boxes(id)%cc(i, j, k-dk, iv) = &
-                  0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
-                  0.75_dp * boxes(id)%cc(i, j, k, iv) - &
-                  0.25_dp * boxes(id)%cc(i+di, j+dj, k+dk, iv)
-          end do
-       end do
-#endif
-    end select
+!              boxes(id)%cc(i, j, k-dk, iv) = &
+!                   0.5_dp * boxes(id)%cc(i, j, k-dk, iv) + &
+!                   0.75_dp * boxes(id)%cc(i, j, k, iv) - &
+!                   0.25_dp * boxes(id)%cc(i+di, j+dj, k+dk, iv)
+!           end do
+!        end do
+! #endif
+!     end select
 
-  end subroutine mg_sides_rb_old
+!   end subroutine mg_sides_rb_old
 
   ! Sets phi = phi + prolong(phi_coarse - phi_old_coarse)
   subroutine correct_children(boxes, ids, mg)
@@ -770,19 +768,16 @@ contains
   subroutine init_phi_rhs(tree, mg)
     use m_af_utils, only: af_box_clear_cc
     type(af_t), intent(inout) :: tree !< Full grid
-    type(mg_t), intent(in)   :: mg !< Multigrid options
-    integer                    :: i, id, p_id, lvl, min_lvl
-
-    ! Start from phi = 0 and restrict rhs
-    min_lvl = lbound(tree%lvls, 1)
+    type(mg_t), intent(in)    :: mg   !< Multigrid options
+    integer                   :: i, id, p_id, lvl
 
     !$omp parallel private(lvl, i, id, p_id)
-    do lvl = tree%highest_lvl,  min_lvl+1, -1
+    do lvl = tree%highest_lvl,  tree%lowest_lvl+1, -1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call af_box_clear_cc(tree%boxes(id), mg%i_phi)
-          if (lvl > min_lvl) then
+          if (lvl > tree%lowest_lvl) then
              p_id = tree%boxes(id)%parent
              call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_rhs, mg)
           end if

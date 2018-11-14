@@ -8,28 +8,28 @@ program test_reduction
 
   implicit none
 
-  type(af_t)           :: tree
-  integer              :: i
-  integer, parameter   :: n_boxes_base = 1
-  integer              :: ix_list(2, n_boxes_base)
-  integer              :: nb_list(4, n_boxes_base)
-  integer, parameter   :: box_size     = 8
-  integer, parameter   :: i_phi        = 1
-  type(ref_info_t)     :: ref_info
-  real(dp)             :: dr, max_val, min_val
-  type(af_loc_t)       :: max_loc, min_loc
+  type(af_t)         :: tree
+  integer            :: i
+  integer, parameter :: n_boxes_base = 1
+  integer            :: ix_list(NDIM, n_boxes_base)
+  integer            :: nb_list(2*NDIM, n_boxes_base)
+  integer, parameter :: box_size     = 8
+  integer            :: i_phi
+  type(ref_info_t)   :: ref_info
+  real(dp)           :: dr, max_val, min_val
+  type(af_loc_t)     :: max_loc, min_loc
 
   dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
+
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! Number of cells per coordinate in a box
-       1, &            ! Number of cell-centered variables
-       0, &            ! Number of face-centered variables
        dr)             ! Distance between cells on base level
 
   ! Set up geometry
-  ix_list(:, 1) = [1,1] ! One box at 1,1
+  ix_list(:, 1) = 1 ! One box at 1,1
 
   ! Periodic boundary conditions
   nb_list(:, 1) = 1

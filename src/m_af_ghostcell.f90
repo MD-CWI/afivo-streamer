@@ -53,12 +53,12 @@ contains
     if (present(leaves_only)) all_ids = .not. leaves_only
 
     if (all_ids) then
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       do lvl = tree%lowest_lvl, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, &
                subr_rb, subr_bc, corners)
        end do
     else
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       do lvl = tree%lowest_lvl, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, &
                subr_rb, subr_bc, corners)
        end do
@@ -82,12 +82,12 @@ contains
     if (present(leaves_only)) all_ids = .not. leaves_only
 
     if (all_ids) then
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       do lvl = tree%lowest_lvl, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%ids, iv, &
                subr_rb, subr_bc, corners)
        end do
     else
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       do lvl = tree%lowest_lvl, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%leaves, iv, &
                subr_rb, subr_bc, corners)
        end do

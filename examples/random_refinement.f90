@@ -25,17 +25,16 @@ program random_refinement_Xd
 
   print *, "Number of threads", af_get_max_threads()
 
+  call af_add_cc_variable(tree, "phi")
+
   ! The cell spacing at the coarsest grid level
   dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       1, &            ! Number of cell-centered variables
-       0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
-       coord=coord_type, &
-       cc_names = ["phi"])      ! Optional: names of cell-centered variables
+       coord=coord_type)
 
   call af_set_cc_methods(tree, 1, af_bc_dirichlet_zero, &
        prolong=af_prolong_linear)

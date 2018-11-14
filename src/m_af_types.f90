@@ -10,7 +10,10 @@ module m_af_types
   integer, parameter :: dp = kind(0.0d0)
 
   !> Highest allowed refinement level
-  integer, parameter :: af_lvl_limit = 30
+  integer, parameter :: af_max_lvl = 30
+
+  !> Lowest allowed refinement level
+  integer, parameter :: af_min_lvl = -20
 
   !> Maximum number of variables
   integer, parameter :: af_max_num_vars = 100
@@ -257,18 +260,17 @@ module m_af_types
   !> Type which stores all the boxes and levels, as well as some information
   !> about the number of boxes, variables and levels.
   type af_t
-     logical                    :: ready = .false. !< Is tree ready for use?
-     integer                    :: lvl_limit       !< maximum allowed level
-     integer                    :: box_limit       !< maximum number of boxes
-     integer                    :: lowest_lvl      !< lowest level present
-     integer                    :: highest_lvl     !< highest level present
-     integer                    :: highest_id      !< highest box index present
-     integer                    :: n_cell     !< number of cells per dimension
-     integer                    :: n_var_cell = 0 !< number of cell-centered variables
-     integer                    :: n_var_face = 0 !< number of face-centered variables
-     integer                    :: coord_t    !< Type of coordinates
-     real(dp)                   :: r_base(NDIM) !< min. coords of box at index (1,1)
-     real(dp)                   :: dr_base    !< cell spacing at lvl 1
+     logical  :: ready       = .false. !< Is tree ready for use?
+     integer  :: box_limit             !< maximum number of boxes
+     integer  :: lowest_lvl  = 1       !< lowest level present
+     integer  :: highest_lvl = 0       !< highest level present
+     integer  :: highest_id  = 0       !< highest box index present
+     integer  :: n_cell                !< number of cells per dimension
+     integer  :: n_var_cell  = 0       !< number of cell-centered variables
+     integer  :: n_var_face  = 0       !< number of face-centered variables
+     integer  :: coord_t               !< Type of coordinates
+     real(dp) :: r_base(NDIM)          !< min. coords of box at index (1,1)
+     real(dp) :: dr_base               !< cell spacing at lvl 1
 
      !> Names of cell-centered variables
      character(len=af_nlen) :: cc_names(af_max_num_vars)
@@ -277,7 +279,7 @@ module m_af_types
      character(len=af_nlen) :: fc_names(af_max_num_vars)
 
      !> Maximal refinement level for the variables
-     integer :: cc_max_level(af_max_num_vars) = af_lvl_limit
+     integer :: cc_max_level(af_max_num_vars) = af_max_lvl
 
      !> Whether to include the variable in the output
      logical :: cc_write_output(af_max_num_vars) = .true.
@@ -292,7 +294,7 @@ module m_af_types
      integer, allocatable :: cc_method_vars(:)
 
      !> List storing the tree levels
-     type(lvl_t) :: lvls(-af_lvl_limit:af_lvl_limit)
+     type(lvl_t) :: lvls(af_min_lvl:af_max_lvl)
 
      !> List of all boxes
      type(box_t), allocatable :: boxes(:)
@@ -413,7 +415,7 @@ contains
   subroutine af_print_info(tree)
     type(af_t), intent(in) :: tree !< The tree
 
-    if (.not. allocated(tree%lvls)) then
+    if (.not. allocated(tree%boxes)) then
        print *, "af_init has not been called for this tree"
     else if (.not. tree%ready) then
        print *, "af_set_base has not been called for this tree"
@@ -421,7 +423,6 @@ contains
        write(*, "(A)") ""
        write(*, "(A)") " *** af_print_info(tree) ***"
        write(*, "(A,I10)") " Current maximum level:  ", tree%highest_lvl
-       write(*, "(A,I10)") " Maximum allowed level:  ", tree%lvl_limit
        write(*, "(A,I10)") " Number of boxes used:   ", af_num_boxes_used(tree)
        write(*, "(A,I10)") " Number of leaves used:  ", af_num_leaves_used(tree)
        write(*, "(A,I10)") " Memory limit(boxes):    ", tree%box_limit
@@ -462,7 +463,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+    do lvl = tree%lowest_lvl, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%ids)
     end do
   end function af_num_boxes_used
@@ -472,7 +473,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+    do lvl = tree%lowest_lvl, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%leaves)
     end do
   end function af_num_leaves_used

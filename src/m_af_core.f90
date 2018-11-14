@@ -8,6 +8,9 @@ module m_af_core
   private
 
   public :: af_add_cc_variable
+  public :: af_add_fc_variable
+  public :: af_find_cc_variable
+  public :: af_find_fc_variable
   public :: af_init
   public :: af_set_cc_methods
   public :: af_init_box
@@ -20,47 +23,103 @@ module m_af_core
 
 contains
 
-  subroutine af_add_cc_variable(tree, name, write_out, n_copies, max_lvl, cc_ix)
+  !> Add cell-centered variable
+  subroutine af_add_cc_variable(tree, name, write_out, n_copies, max_lvl, ix)
+    !> Tree to add variable to
     type(af_t), intent(inout)      :: tree
+    !> Name of the variable
     character(len=*), intent(in)   :: name
+    !> Include variable in output
     logical, intent(in), optional  :: write_out
+    !> How many copies of variable to store (default: 1)
     integer, intent(in), optional  :: n_copies
+    !> Store variable up to this refinement level (default: af_max_lvl)
     integer, intent(in), optional  :: max_lvl
-    integer, intent(out), optional :: cc_ix
+    !> On output: index of variable
+    integer, intent(out), optional :: ix
 
     integer :: n
     integer :: ncpy, maxlvl
     logical :: writeout
 
     ncpy = 1; if (present(n_copies)) ncpy = n_copies
-    writeout = .false.; if (present(write_out)) writeout = write_out
+    writeout = .true.; if (present(write_out)) writeout = write_out
     maxlvl = 100; if (present(max_lvl)) maxlvl = max_lvl
 
     if (ncpy < 1) error stop "af_add_cc_variable: n_copies < 1"
-    if (max_lvl < 1) error stop "af_add_cc_variable: max_lvl < 1"
+    if (maxlvl < 1) error stop "af_add_cc_variable: max_lvl < 1"
 
     do n = 1, ncpy
        tree%n_var_cell = tree%n_var_cell + 1
        if (n == 1) then
-          cc_names(tree%n_var_cell)        = name
-          cc_write_output(tree%n_var_cell) = writeout
-          cc_max_level(tree%n_var_cell)    = maxlvl
+          if (present(ix)) ix = tree%n_var_cell
+          tree%cc_names(tree%n_var_cell)        = name
+          tree%cc_write_output(tree%n_var_cell) = writeout
+          tree%cc_max_level(tree%n_var_cell)    = maxlvl
        else
-          write(cc_names(tree%n_var_cell), "(A,I0)") trim(name)//'_', n
-          cc_write_output(tree%n_var_cell) = .false.
-          cc_max_level(tree%n_var_cell)    = maxlvl
+          write(tree%cc_names(tree%n_var_cell), "(A,I0)") &
+               trim(name) // '_', n
+          tree%cc_write_output(tree%n_var_cell) = .false.
+          tree%cc_max_level(tree%n_var_cell)    = maxlvl
        end if
     end do
 
   end subroutine af_add_cc_variable
 
+  !> Add face-centered variable
+  subroutine af_add_fc_variable(tree, name, ix)
+    !> Tree to add variable to
+    type(af_t), intent(inout)      :: tree
+    !> Name of the variable
+    character(len=*), intent(in)   :: name
+    !> On output: index of variable
+    integer, intent(out), optional :: ix
+
+    tree%n_var_face                       = tree%n_var_face + 1
+    tree%fc_names(tree%n_var_face)        = name
+    if (present(ix)) ix = tree%n_var_face
+  end subroutine af_add_fc_variable
+
+  !> Find index of cell-centered variable
+  integer function af_find_cc_variable(tree, name)
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: name
+    integer                      :: n
+
+    do n = 1, tree%n_var_cell
+       if (tree%cc_names(n) == name) exit
+    end do
+
+    if (n == tree%n_var_cell+1) then
+       print *, "variable name: ", trim(name)
+       error stop "af_find_cc_variable: variable not found"
+    end if
+
+    af_find_cc_variable = n
+  end function af_find_cc_variable
+
+  !> Find index of face-centered variable
+  integer function af_find_fc_variable(tree, name)
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: name
+    integer                      :: n
+
+    do n = 1, tree%n_var_face
+       if (tree%fc_names(n) == name) exit
+    end do
+
+    if (n == tree%n_var_face+1) then
+       print *, "variable name: ", trim(name)
+       error stop "af_find_fc_variable: variable not found"
+    end if
+
+    af_find_fc_variable = n
+  end function af_find_fc_variable
+
   !> Initialize a NDIM-d tree type.
-  subroutine af_init(tree, n_cell, n_var_cell, n_var_face, dr, r_min, &
-       n_boxes, coarsen_to, coord, cc_names, fc_names, mem_limit_gb)
+  subroutine af_init(tree, n_cell, dr, r_min, n_boxes, coarsen_to, coord, mem_limit_gb)
     type(af_t), intent(inout)      :: tree       !< The tree to initialize
     integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
-    integer, intent(in)            :: n_var_cell !< Number of cell-centered variables
-    integer, intent(in)            :: n_var_face !< Number of face-centered variables
     real(dp), intent(in)           :: dr         !< spacing of a cell at lvl 1
     !> Lowest coordinate of box at 1,1. Default is (0, 0)
     real(dp), intent(in), optional :: r_min(NDIM)
@@ -72,14 +131,9 @@ contains
     integer, intent(in), optional  :: coord !< Select coordinate type
     real(dp), intent(in), optional :: mem_limit_gb !< Memory limit in GByte
 
-    !> Names of cell-centered variables
-    character(len=*), intent(in), optional :: cc_names(:)
-    !> Names of face-centered variables
-    character(len=*), intent(in), optional :: fc_names(:)
-
     integer                        :: n_boxes_a, coarsen_to_a
     real(dp)                       :: r_min_a(NDIM), gb_limit
-    integer                        :: n, lvl, min_lvl, coord_a, box_bytes
+    integer                        :: lvl, coord_a, box_bytes
 
     ! Set default arguments if not present
     n_boxes_a = 1000;  if (present(n_boxes)) n_boxes_a = n_boxes
@@ -91,56 +145,43 @@ contains
     if (tree%ready)       stop "af_init: tree was already initialized"
     if (n_cell < 2)       stop "af_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "af_init: n_cell should be even"
-    if (n_var_cell <= 0)  stop "af_init: n_var_cell should be > 0"
-    if (n_var_face < 0)   stop "af_init: n_var_face should be >= 0"
     if (n_boxes_a <= 0)   stop "af_init: n_boxes should be > 0"
     if (gb_limit <= 0)    stop "af_init: mem_limit_gb should be > 0"
 #if NDIM == 3
     if (coord_a == af_cyl) stop "af_init: cannot have 3d cyl coords"
 #endif
+    if (tree%n_var_cell <= 0) stop "af_init: no cell-centered variables present"
 
     allocate(tree%boxes(n_boxes_a))
 
-    do lvl = min_lvl, lvl_limit_a+1
+    if (coarsen_to_a > 0) then
+       ! Determine number of lvls for subtree
+       !> @todo remove subtree in future
+       tree%lowest_lvl = 1 - &
+            nint(log(real(n_cell, dp)/coarsen_to_a)/log(2.0_dp))
+
+       if (2**(1-tree%lowest_lvl) * coarsen_to_a /= n_cell) &
+            stop "af_init: cannot coarsen to given value"
+    else
+       tree%lowest_lvl = 1
+    end if
+
+    do lvl = af_min_lvl, af_max_lvl
        allocate(tree%lvls(lvl)%ids(0))
        allocate(tree%lvls(lvl)%leaves(0))
        allocate(tree%lvls(lvl)%parents(0))
     end do
 
     tree%n_cell      = n_cell
-    tree%n_var_cell  = n_var_cell
-    tree%n_var_face  = n_var_face
     tree%r_base      = r_min_a
     tree%dr_base     = dr
     tree%highest_id  = 0
     tree%highest_lvl = 0
-    tree%lowest_lvl  = 0
     tree%coord_t     = coord_a
 
     ! Calculate size of a box
-    box_bytes = af_box_bytes(n_cell, n_var_cell, n_var_face)
+    box_bytes = af_box_bytes(n_cell, tree%n_var_cell, tree%n_var_face)
     tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
-
-    ! Set variable names
-    if (present(cc_names)) then
-       if (size(cc_names) /= n_var_cell) &
-            stop "af_init: size(cc_names) /= n_var_cell"
-       tree%cc_names = cc_names
-    else
-       do n = 1, n_var_cell
-          write(tree%cc_names(n), "(A,I0)") "cc_var", n
-       end do
-    end if
-
-    if (present(fc_names)) then
-       if (size(fc_names) /= n_var_face) &
-            stop "af_init: size(fc_names) /= n_var_face"
-       tree%fc_names = fc_names
-    else
-       do n = 1, n_var_face
-          write(tree%fc_names(n), "(A,I0)") "flux", n
-       end do
-    end if
 
     ! Initialize list of cell-centered variables with methods
     allocate(tree%cc_method_vars(0))
@@ -187,14 +228,24 @@ contains
   !> just let a tree get out of scope
   subroutine af_destroy(tree)
     type(af_t), intent(inout) :: tree
+    integer                   :: lvl
 
     if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
     deallocate(tree%boxes)
-    deallocate(tree%lvls)
     deallocate(tree%cc_method_vars)
 
-    tree%highest_id = 0
-    tree%ready      = .false.
+    do lvl = af_min_lvl, af_max_lvl
+       deallocate(tree%lvls(lvl)%ids)
+       deallocate(tree%lvls(lvl)%leaves)
+       deallocate(tree%lvls(lvl)%parents)
+    end do
+
+    tree%highest_lvl = 0
+    tree%lowest_lvl  = 1
+    tree%highest_id  = 0
+    tree%n_var_cell  = 0
+    tree%n_var_face  = 0
+    tree%ready       = .false.
   end subroutine af_destroy
 
   !> Create the base level of the tree, ix_list(:, id) stores the spatial index
@@ -225,7 +276,7 @@ contains
     if (n_boxes < 1) stop "af_set_base: need at least one box"
     if (any(ix_list < 1)) stop "af_set_base: need all ix_list > 0"
     if (tree%highest_id > 0)  stop "af_set_base: this tree already has boxes"
-    if (.not. allocated(tree%lvls)) stop "af_set_base: tree not initialized"
+    if (.not. allocated(tree%boxes)) stop "af_set_base: tree not initialized"
 
     if (present(nb_list)) then
        nb_used = nb_list
@@ -301,7 +352,7 @@ contains
     end if
 
     ! Create coarser levels which are copies of lvl 1
-    do lvl = lbound(tree%lvls, 1), 1
+    do lvl = tree%lowest_lvl, 1
        deallocate(tree%lvls(lvl)%ids)
        allocate(tree%lvls(lvl)%ids(n_boxes))
 
@@ -345,7 +396,7 @@ contains
           tree%lvls(lvl)%parents = tree%lvls(lvl)%ids
        end if
 
-       if (lvl > lbound(tree%lvls, 1)) then
+       if (lvl > tree%lowest_lvl) then
           tree%boxes(tree%lvls(lvl-1)%ids)%children(1) = &
                tree%lvls(lvl)%ids
           tree%boxes(tree%lvls(lvl)%ids)%parent = &
@@ -354,7 +405,7 @@ contains
     end do
 
     ! Set the diagonal neighbors
-    do lvl = lbound(tree%lvls, 1), 1
+    do lvl = tree%lowest_lvl, 1
        do n = 1, n_boxes
           id = tree%lvls(lvl)%ids(n)
           call set_neighbor_mat(tree%boxes, id)
@@ -492,7 +543,7 @@ contains
        ixs_map(0)       = 0
        n_stored         = 0
 
-       do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+       do lvl = tree%lowest_lvl, tree%highest_lvl
           n_used_lvl = size(tree%lvls(lvl)%ids)
           allocate(mortons(n_used_lvl))
           allocate(ixs_sort(n_used_lvl))
@@ -776,7 +827,7 @@ contains
        call af_resize_box_storage(tree, new_size)
     end if
 
-    do lvl = 1, tree%lvl_limit-1
+    do lvl = 1, af_max_lvl-1
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
 
@@ -813,9 +864,9 @@ contains
     tree%highest_lvl = lvl
 
     ! We still have to update leaves and parents for the last level, which is
-    ! either lvl+1 or lvl_limit. Note that lvl+1 is empty now, but maybe it was
-    ! not not empty before, and that lvl_limit is skipped in the above loop.
-    lvl = min(lvl+1, tree%lvl_limit)
+    ! either lvl+1 or af_max_lvl. Note that lvl+1 is empty now, but maybe it was
+    ! not not empty before, and that af_max_lvl is skipped in the above loop.
+    lvl = min(lvl+1, af_max_lvl)
     call set_leaves_parents(tree%boxes, tree%lvls(lvl))
 
     ! Set information about the refinement
@@ -963,7 +1014,7 @@ contains
 
   !> Given the refinement function, return consistent refinement flags, that
   !> ensure that the tree is still balanced. Furthermore, it cannot derefine the
-  !> base level, and it cannot refine above tree%lvl_limit. The argument
+  !> base level, and it cannot refine above af_max_lvl. The argument
   !> ref_flags is changed: for boxes that will be refined it holds af_refine,
   !> for boxes that will be derefined it holds af_derefine
   subroutine consistent_ref_flags(tree, ref_flags, ref_subr, &
@@ -977,7 +1028,7 @@ contains
 
     integer              :: lvl, i, i_ch, ch_id, id, c_ids(af_num_children)
     integer              :: nb, p_id, nb_id, p_nb_id
-    integer              :: lvl_limit, thread_id
+    integer              :: thread_id
     integer, allocatable :: tmp_flags(:, :)
 #if NDIM == 2
     integer              :: cell_flags(tree%n_cell, tree%n_cell)
@@ -990,7 +1041,6 @@ contains
     ! modify the refinement flags of neighbors
     allocate(tmp_flags(size(ref_flags), omp_get_max_threads()))
 
-    lvl_limit       = tree%lvl_limit
     tmp_flags(:, :) = unset_flag
 
     ! Set refinement flags on all leaves and their immediate parents (on other
@@ -1039,8 +1089,8 @@ contains
          stop "af_adjust_refinement: invalid refinement flag given"
 
     ! Cannot refine beyond max level
-    do i = 1, size(tree%lvls(lvl_limit)%ids)
-       id = tree%lvls(lvl_limit)%ids(i)
+    do i = 1, size(tree%lvls(af_max_lvl)%ids)
+       id = tree%lvls(af_max_lvl)%ids(i)
        if (ref_flags(id) == af_do_ref) ref_flags(id) = af_keep_ref
     end do
 
@@ -1289,7 +1339,7 @@ contains
 
     if (.not. tree%ready) stop "Tree not ready"
     !$omp parallel private(lvl, i, id, nb, nb_id)
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl-1
+    do lvl = tree%lowest_lvl, tree%highest_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)

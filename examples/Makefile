@@ -5,7 +5,7 @@ OUTDIR	:= output
 
 include $(AF_DIR)/src/makerules.make
 
-.PHONY: all clean
+.PHONY: all clean run
 
 PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
 implicit_diffusion computational_domain boundary_conditions poisson_neumann	\
@@ -13,7 +13,7 @@ particles_to_grid poisson_dielectric ghostcell_benchmark poisson_helmholtz	\
 particles_gravity
 
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric	\
-simple_streamer_2d poisson_cyl_analytic poisson_helmholtz_cyl
+simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl
 
 PROGS_3D := $(PROGS_XD:%=%_3d)
 
@@ -23,6 +23,9 @@ all:	$(PROGS)
 
 clean:
 	$(RM) $(PROGS) *.o *.mod
+
+run:
+	$(foreach prog, $(PROGS), echo "**Running $(prog)**"; ./$(prog);)
 
 $(OUTDIR):
 	mkdir -p $@
@@ -39,10 +42,10 @@ $(PROGS_3D): LIBDIRS+=$(AF_DIR)/lib_3d
 $(PROGS_3D): FFLAGS += -DNDIM=3
 
 # How to create executables
-%_2d: %_Xd.f90
+%_2d: %.f90
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
 	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
-%_3d: %_Xd.f90
+%_3d: %.f90
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
 	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 

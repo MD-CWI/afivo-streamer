@@ -9,10 +9,9 @@ program poisson_benchmark_Xd
   implicit none
 
   integer, parameter :: n_boxes_base = 1
-  integer, parameter :: n_var_cell = 3
-  integer, parameter :: i_phi = 1
-  integer, parameter :: i_rhs = 2
-  integer, parameter :: i_tmp = 3
+  integer            :: i_phi
+  integer            :: i_rhs
+  integer            :: i_tmp
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -20,8 +19,8 @@ program poisson_benchmark_Xd
   integer            :: n_cell, n_iterations, max_ref_lvl
   integer            :: ix_list(NDIM, n_boxes_base)
   real(dp)           :: dr, time, runtime
-  character(len=100) :: fname, arg_string
-  type(mg_t)        :: mg
+  character(len=100) :: arg_string !, fname
+  type(mg_t)         :: mg
   integer            :: count_rate,t_start, t_end
 
   print *, "Running poisson_benchmark_" // DIMNAME // ""
@@ -43,7 +42,7 @@ program poisson_benchmark_Xd
      call get_command_argument(2, arg_string)
      read(arg_string, *) max_ref_lvl
   else
-     max_ref_lvl = 4
+     max_ref_lvl = 2
   end if
 
   if (n_args >= 3) then
@@ -51,7 +50,7 @@ program poisson_benchmark_Xd
      read(arg_string, *) runtime
      if (runtime < 1e-3_dp) stop "Run time should be > 1e-3 seconds"
   else
-     runtime = 10
+     runtime = 0.2_dp
   end if
 
   print *, "Box size:           ", n_cell
@@ -60,14 +59,15 @@ program poisson_benchmark_Xd
 
   dr = 1.0_dp / n_cell
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "rhs", ix=i_rhs)
+  call af_add_cc_variable(tree, "tmp", ix=i_tmp)
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        n_cell, &       ! A box contains box_size**DIM cells
-       n_var_cell, &   ! Number of cell-centered variables
-       0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
-       coarsen_to=2, & ! Add coarsened levels for multigrid
-       cc_names=["phi", "rhs", "tmp"]) ! Variable names
+       coarsen_to=2)   ! Add coarsened levels for multigrid
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)

@@ -18,31 +18,24 @@ program simple_streamer_2d
   integer            :: i, n
   character(len=100) :: fname
   type(af_t)         :: tree ! This contains the full grid information
-  type(mg_t)        :: mg   ! Multigrid option struct
+  type(mg_t)         :: mg   ! Multigrid option struct
   type(ref_info_t)   :: refine_info
 
   ! Indices of cell-centered variables
-  integer, parameter :: n_var_cell = 7 ! Number of variables
-  integer, parameter :: i_elec     = 1 ! Electron density
-  integer, parameter :: i_pion     = 2 ! Positive ion density
-  integer, parameter :: i_elec_old = 3 ! For time-stepping scheme
-  integer, parameter :: i_pion_old = 4 ! For time-stepping scheme
-  integer, parameter :: i_phi      = 5 ! Electrical potential
-  integer, parameter :: i_fld      = 6 ! Electric field norm
-  integer, parameter :: i_rhs      = 7 ! Source term Poisson
+  integer :: i_elec     ! Electron density
+  integer :: i_pion     ! Positive ion density
+  integer :: i_elec_old ! For time-stepping scheme
+  integer :: i_pion_old ! For time-stepping scheme
+  integer :: i_phi      ! Electrical potential
+  integer :: i_fld      ! Electric field norm
+  integer :: i_rhs      ! Source term Poisson
 
   ! Indices of face-centered variables **
-  integer, parameter :: n_var_face = 2 ! Number of variables
-  integer, parameter :: f_elec     = 1 ! Electron flux
-  integer, parameter :: f_fld      = 2 ! Electric field vector
-
-  ! Names of the cell-centered variables
-  character(len=10) :: ST_cc_names(n_var_cell) = &
-       [character(len=10) :: "elec", "pion", "elec_old", &
-       "pion_old", "phi", "fld", "rhs"]
+  integer :: f_elec ! Electron flux
+  integer :: f_fld  ! Electric field vector
 
   ! Simulation parameters
-  real(dp), parameter :: end_time      = 8e-9_dp
+  real(dp), parameter :: end_time      = 3e-9_dp
   real(dp), parameter :: dt_output     = 20e-11_dp
   real(dp), parameter :: dt_max        = 20e-11_dp
   integer, parameter  :: ref_per_steps = 2
@@ -54,14 +47,14 @@ program simple_streamer_2d
   real(dp), parameter :: diffusion_c   = 0.2_dp
 
   ! Computational domain
-  real(dp), parameter :: domain_length = 10e-3_dp
+  real(dp), parameter :: domain_length = 2e-3_dp
   real(dp), parameter :: refine_max_dx = 1e-3_dp
   real(dp), parameter :: refine_min_dx = 1e-9_dp
 
   ! Settings for the initial conditions
   real(dp), parameter :: init_density = 1e15_dp
-  real(dp), parameter :: init_y_min   = 8.0e-3_dp
-  real(dp), parameter :: init_y_max   = 9.0e-3_dp
+  real(dp), parameter :: init_y_min   = 0.8_dp * domain_length
+  real(dp), parameter :: init_y_max   = 0.9_dp * domain_length
 
   ! Simulation variables
   real(dp) :: dt
@@ -70,6 +63,17 @@ program simple_streamer_2d
 
   ! To test charge conservation
   real(dp) :: sum_elec, sum_pion
+
+  call af_add_cc_variable(tree, "elec", ix=i_elec, n_copies=2)
+  i_elec_old = af_find_cc_variable(tree, "elec_2")
+  call af_add_cc_variable(tree, "pion", ix=i_pion, n_copies=2)
+  i_pion_old = af_find_cc_variable(tree, "pion_2")
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "fld", ix=i_fld)
+  call af_add_cc_variable(tree, "rhs", ix=i_rhs)
+
+  call af_add_fc_variable(tree, "f_elec", ix=f_elec)
+  call af_add_fc_variable(tree, "f_fld", ix=f_fld)
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
@@ -216,12 +220,9 @@ contains
     ! Initialize tree
     call af_init(tree, &                   ! The tree to initialize
          box_size, &               ! Boxes have box_size^dim cells
-         n_var_cell, &             ! Number of cell-centered variables
-         n_var_face, &             ! Number of face-centered variables
          dr, &                     ! spacing of a cell at lvl 1
          coarsen_to=2, &           ! Create additional coarse grids down to this size.
-         n_boxes = n_boxes_init, & ! Allocate initial storage for n_boxes.
-         cc_names=ST_cc_names)     ! Names of cell-centered variables
+         n_boxes = n_boxes_init)   ! Allocate initial storage for n_boxes.
 
     ! Set up geometry
     id             = 1          ! One box ...
