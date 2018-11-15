@@ -3,11 +3,88 @@
 !> dimension-independent types and constant are place in m_afivo_types.
 module m_af_types
 
-  ! Import dimension-independent types
-  use m_afivo_types
-
   implicit none
   public
+
+  ! dp stands for double precision (8 byte reals)
+  integer, parameter :: dp = kind(0.0d0)
+
+  !> Highest allowed refinement level
+  integer, parameter :: af_max_lvl = 30
+
+  !> Lowest allowed refinement level
+  integer, parameter :: af_min_lvl = -20
+
+  !> Maximum number of variables
+  integer, parameter :: af_max_num_vars = 100
+
+  !> Value indicating you want to derefine a box
+  integer, parameter :: af_rm_ref = -1
+
+  !> Value indicating you want to keep a box's refinement
+  integer, parameter :: af_keep_ref = 0
+
+  !> Value indicating you want to refine a box
+  integer, parameter :: af_do_ref = 1
+
+  !> The children of a box are removed (for internal use)
+  integer, parameter :: af_derefine = -2
+
+  !> A box will be refined (for internal use)
+  integer, parameter :: af_refine = 2
+
+  !> Special value indicating there is no box
+  integer, parameter :: af_no_box = 0
+
+  !> Special value indicating a physical (non-periodic) boundary
+  integer, parameter :: af_phys_boundary = -1
+
+  !> Each box contains a tag, for which bits can be set. This is the initial
+  !> value, which should not be used by the user
+  integer, parameter :: af_init_tag = -huge(1)
+
+  !> Default coordinate system
+  integer, parameter :: af_xyz = 1
+
+  !> Cylindrical coordinate system
+  integer, parameter :: af_cyl = 2
+
+  !> Names of coordinate systems
+  character(len=*), parameter :: af_coord_names(2) = &
+       ["Cartesian  ", "Cylindrical"]
+
+  !> Value to indicate a Dirichlet boundary condition
+  integer, parameter :: af_bc_dirichlet = -10
+
+  !> Value to indicate a Neumann boundary condition
+  integer, parameter :: af_bc_neumann = -11
+
+  !> Value to indicate a continuous boundary condition
+  integer, parameter :: af_bc_continuous = -12
+
+  !> Maximum length of the names of variables
+  integer, parameter :: af_nlen = 20
+
+  !> Type which contains the indices of all boxes at a refinement level, as well
+  !> as a list with all the "leaf" boxes and non-leaf (parent) boxes
+  type lvl_t
+     integer, allocatable :: ids(:)     !< indices of boxes of level
+     integer, allocatable :: leaves(:)  !< all ids(:) that are leaves
+     integer, allocatable :: parents(:) !< all ids(:) that have children
+  end type lvl_t
+
+  !> Type that contains the refinement changes in a level
+  type ref_lvl_t
+     integer, allocatable :: add(:) !< Id's of newly added boxes
+     integer, allocatable :: rm(:) !< Id's of removed boxes
+  end type ref_lvl_t
+
+  !> Type that contains the refinement changes in a tree
+  type ref_info_t
+     integer :: n_add = 0                    !< Total number of added boxes
+     integer :: n_rm = 0                     !< Total number removed boxes
+     type(ref_lvl_t), allocatable :: lvls(:) !< Information per level
+  end type ref_info_t
 
 #if NDIM == 2
   ! Numbering of children (same location as **corners**)
@@ -183,33 +260,44 @@ module m_af_types
   !> Type which stores all the boxes and levels, as well as some information
   !> about the number of boxes, variables and levels.
   type af_t
-     logical                    :: ready = .false. !< Is tree ready for use?
-     integer                    :: lvl_limit       !< maximum allowed level
-     integer                    :: box_limit       !< maximum number of boxes
-     integer                    :: highest_lvl     !< highest level present
-     integer                    :: highest_id      !< highest box index present
-     integer                    :: n_cell     !< number of cells per dimension
-     integer                    :: n_var_cell !< number of cell-centered variables
-     integer                    :: n_var_face !< number of face-centered variables
-     integer                    :: coord_t    !< Type of coordinates
-     real(dp)                   :: r_base(NDIM) !< min. coords of box at index (1,1)
-     real(dp)                   :: dr_base    !< cell spacing at lvl 1
+     logical  :: ready       = .false. !< Is tree ready for use?
+     integer  :: box_limit             !< maximum number of boxes
+     integer  :: lowest_lvl  = 1       !< lowest level present
+     integer  :: highest_lvl = 0       !< highest level present
+     integer  :: highest_id  = 0       !< highest box index present
+     integer  :: n_cell                !< number of cells per dimension
+     integer  :: n_var_cell  = 0       !< number of cell-centered variables
+     integer  :: n_var_face  = 0       !< number of face-centered variables
+     integer  :: coord_t               !< Type of coordinates
+     real(dp) :: r_base(NDIM)          !< min. coords of box at index (1,1)
+     real(dp) :: dr_base               !< cell spacing at lvl 1
 
      !> Names of cell-centered variables
-     character(len=af_nlen), allocatable :: cc_names(:)
+     character(len=af_nlen) :: cc_names(af_max_num_vars)
+
      !> Names of face-centered variables
-     character(len=af_nlen), allocatable :: fc_names(:)
+     character(len=af_nlen) :: fc_names(af_max_num_vars)
+
+     !> Maximal refinement level for the variables
+     integer :: cc_max_level(af_max_num_vars) = af_max_lvl
+
+     !> Whether to include the variable in the output
+     logical :: cc_write_output(af_max_num_vars) = .true.
 
      !> Methods for cell-centered variables
-     type(af_cc_methods), allocatable :: cc_methods(:)
+     type(af_cc_methods) :: cc_methods(af_max_num_vars)
 
      !> For which cell-centered variables methods have been set
-     logical, allocatable :: has_cc_method(:)
+     logical :: has_cc_method(af_max_num_vars) = .false.
+
      !> Indices of cell-centered variables with methods
      integer, allocatable :: cc_method_vars(:)
 
-     type(lvl_t), allocatable   :: lvls(:)    !< list storing the tree levels
-     type(box_t), allocatable :: boxes(:)   !< list of all boxes
+     !> List storing the tree levels
+     type(lvl_t) :: lvls(af_min_lvl:af_max_lvl)
+
+     !> List of all boxes
+     type(box_t), allocatable :: boxes(:)
   end type af_t
 
   !> Type specifying the location of a cell
@@ -317,11 +405,17 @@ module m_af_types
 
 contains
 
+  !> Get number of threads
+  integer function af_get_max_threads()
+    use omp_lib, only: omp_get_max_threads
+    af_get_max_threads = omp_get_max_threads()
+  end function af_get_max_threads
+
   !> Get tree info
   subroutine af_print_info(tree)
     type(af_t), intent(in) :: tree !< The tree
 
-    if (.not. allocated(tree%lvls)) then
+    if (.not. allocated(tree%boxes)) then
        print *, "af_init has not been called for this tree"
     else if (.not. tree%ready) then
        print *, "af_set_base has not been called for this tree"
@@ -329,7 +423,6 @@ contains
        write(*, "(A)") ""
        write(*, "(A)") " *** af_print_info(tree) ***"
        write(*, "(A,I10)") " Current maximum level:  ", tree%highest_lvl
-       write(*, "(A,I10)") " Maximum allowed level:  ", tree%lvl_limit
        write(*, "(A,I10)") " Number of boxes used:   ", af_num_boxes_used(tree)
        write(*, "(A,I10)") " Number of leaves used:  ", af_num_leaves_used(tree)
        write(*, "(A,I10)") " Memory limit(boxes):    ", tree%box_limit
@@ -370,7 +463,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+    do lvl = tree%lowest_lvl, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%ids)
     end do
   end function af_num_boxes_used
@@ -380,7 +473,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+    do lvl = tree%lowest_lvl, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%leaves)
     end do
   end function af_num_leaves_used

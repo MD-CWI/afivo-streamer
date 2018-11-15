@@ -8,8 +8,6 @@ program computational_domain_Xd
 
   integer    :: n_cell   = 4    ! Boxes contain n_cell^dim cells
   real(dp)   :: dr       = 1.0_dp ! Coarse grid spacing
-  integer    :: n_var_cc = 1      ! Number of cell-centered variables
-  integer    :: n_var_fc = 0      ! Number of face-centered variables
   type(af_t) :: tree             ! Will contain the quad/octree grid
 
   integer, parameter :: n_boxes = 2 ! How many boxes to add
@@ -25,7 +23,8 @@ program computational_domain_Xd
   ix_list(:, 2) = [2, 1, 1]     ! Box 2 at [2, 1, 1]
 #endif
 
-  call af_init(tree, n_cell, n_var_cc, n_var_fc, dr)
+  call af_add_cc_variable(tree, "phi")
+  call af_init(tree, n_cell, dr)
   call af_set_base(tree, n_boxes, ix_list)
   call af_write_vtk(tree, "computational_domain_" // DIMNAME // "_1", dir="output")
   call af_destroy(tree)
@@ -39,7 +38,8 @@ program computational_domain_Xd
   ix_list(:, 2) = [1, 2, 1]     ! Box 2 at [1, 2, 1]
 #endif
 
-  call af_init(tree, n_cell, n_var_cc, n_var_fc, dr)
+  call af_add_cc_variable(tree, "phi")
+  call af_init(tree, n_cell, dr)
   call af_set_base(tree, n_boxes, ix_list)
   call af_write_vtk(tree, "computational_domain_" // DIMNAME // "_2", dir="output")
   call af_destroy(tree)
@@ -62,7 +62,8 @@ program computational_domain_Xd
   nb_list(af_neighb_lowz, 2) = 2
 #endif
 
-  call af_init(tree, n_cell, n_var_cc, n_var_fc, dr)
+  call af_add_cc_variable(tree, "phi")
+  call af_init(tree, n_cell, dr)
   call af_set_base(tree, n_boxes, ix_list, nb_list)
   call af_write_vtk(tree, "computational_domain_" // DIMNAME // "_3", dir="output")
   call af_destroy(tree)

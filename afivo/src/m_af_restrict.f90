@@ -55,7 +55,7 @@ contains
     integer                       :: lvl
 
     if (.not. tree%ready) stop "Tree not ready"
-    do lvl = tree%highest_lvl-1, lbound(tree%lvls, 1), -1
+    do lvl = tree%highest_lvl-1, tree%lowest_lvl, -1
        call af_restrict_to_boxes(tree%boxes, tree%lvls(lvl)%parents, iv, iv_to)
     end do
   end subroutine af_restrict_tree

@@ -7,15 +7,14 @@ program poisson_cyl_analytic
 
   implicit none
 
-  integer, parameter :: box_size = 8
+  integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 10
-  integer, parameter :: n_var_cell = 5
-  integer, parameter :: i_phi = 1
-  integer, parameter :: i_rhs = 2
-  integer, parameter :: i_err = 3
-  integer, parameter :: i_sol = 4
-  integer, parameter :: i_tmp = 5
+  integer            :: i_phi
+  integer            :: i_rhs
+  integer            :: i_err
+  integer            :: i_sol
+  integer            :: i_tmp
 
   real(dp), parameter :: domain_len = 1.25e-2_dp
   real(dp), parameter :: pi = acos(-1.0_dp)
@@ -40,15 +39,18 @@ program poisson_cyl_analytic
   ! The cell spacing at the coarsest grid level
   dr = 1.25e-2_dp / box_size
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "rhs", ix=i_rhs)
+  call af_add_cc_variable(tree, "err", ix=i_err)
+  call af_add_cc_variable(tree, "sol", ix=i_sol)
+  call af_add_cc_variable(tree, "tmp", ix=i_tmp)
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       n_var_cell, &   ! Number of cell-centered variables
-       0, &            ! Number of face-centered variables
        dr, &           ! Distance between cells on base level
        coarsen_to=2, & ! Add coarsened levels for multigrid
-       coord=af_cyl, & ! Cylindrical coordinates
-       cc_names=["phi", "rhs", "err", "sol", "tmp"]) ! Variable names
+       coord=af_cyl)   ! Cylindrical coordinates
 
   ! Set up geometry. These indices are used to define the coordinates of a box,
   ! by default the box at [1,1] touches the origin (x,y) = (0,0)

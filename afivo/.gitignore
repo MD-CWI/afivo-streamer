@@ -70,3 +70,4 @@ documentation/html/*
 /tests/test_refinement_3d
 /tests/test_types_2d
 /tests/test_types_3d
+/examples/simple_streamer

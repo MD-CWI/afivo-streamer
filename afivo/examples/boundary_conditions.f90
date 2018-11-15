@@ -7,10 +7,10 @@ program boundary_conditions_Xd
 
   implicit none
 
-  integer, parameter :: box_size = 8
+  integer, parameter :: box_size     = 8
   integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 20
-  integer, parameter :: i_phi = 1
+  integer            :: i_phi
 
   type(af_t)        :: tree
   integer            :: iter
@@ -24,13 +24,12 @@ program boundary_conditions_Xd
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       1, &            ! Number of cell-centered variables
-       0, &            ! Number of face-centered variables
-       dr, &           ! Distance between cells on base level
-       cc_names=["phi"]) ! Variable names
+       dr)             ! Distance between cells on base level
 
   ! Set up geometry. This creates a single box, for which we need boundary
   ! conditions on all sides

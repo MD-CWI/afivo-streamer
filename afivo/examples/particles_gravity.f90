@@ -11,11 +11,11 @@ program particles_gravity_Xd
   integer, parameter :: box_size    = 8
   integer, parameter :: n_particles = 100*1000
   integer, parameter :: particles_per_cell = 100
-  integer, parameter :: max_refinement_lvl = 7
-  integer, parameter :: i_phi       = 1
-  integer, parameter :: i_rho       = 2
-  integer, parameter :: i_tmp       = 3
-  integer, parameter :: i_f(NDIM)     = [(i_tmp+n, n=1,NDIM)]
+  integer, parameter :: max_refinement_lvl = 5
+  integer :: i_phi
+  integer :: i_rho
+  integer :: i_tmp
+  integer :: i_f(NDIM)
 
   real(dp), parameter :: force_to_accel = 1.0_dp
 
@@ -23,7 +23,7 @@ program particles_gravity_Xd
   real(dp), parameter :: mean_density    = 1.0_dp
   real(dp), parameter :: particle_weight = domain_len**NDIM / n_particles
   real(dp), parameter :: dr              = domain_len / box_size
-  real(dp), parameter :: t_end           = 5.0_dp
+  real(dp), parameter :: t_end           = 0.1_dp
   real(dp), parameter :: dt_output       = 5e-2_dp
   real(dp)            :: dt              = 1.0e-2_dp
   real(dp)            :: dt_prev
@@ -46,19 +46,20 @@ program particles_gravity_Xd
   print *, "Running particles_gravity_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "rho", ix=i_rho)
+  call af_add_cc_variable(tree, "tmp", ix=i_tmp)
+  call af_add_cc_variable(tree, "fx", ix=i_f(1))
+  call af_add_cc_variable(tree, "fy", ix=i_f(2))
+#if NDIM == 3
+  call af_add_cc_variable(tree, "fz", ix=i_f(3))
+#endif
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       n_var_cell=i_f(NDIM), & ! Number of cell-centered variables
-       n_var_face=0, & ! Number of face-centered variables
        dr=dr, &        ! Distance between cells on base level
-       coarsen_to=2, &
-#if NDIM == 2
-       cc_names=["phi", "rho", "tmp", "fx ", "fy "] & ! Variable names
-#elif NDIM == 3
-       cc_names=["phi", "rho", "tmp", "fx ", "fy ", "fz "] & ! Variable names
-#endif
-       )
+       coarsen_to=2)
 
   ! Set up geometry
   id             = 1

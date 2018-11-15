@@ -11,11 +11,13 @@ program test_init
   integer          :: i, n_lvl
   integer          :: ixs(NDIM, 1), nbs(af_num_neighbors, 1)
 
+  call af_add_cc_variable(tree, "phi")
+  call af_add_fc_variable(tree, "flux")
+
   ! Call init with most options set
-  call af_init(tree, n_cell=8, n_var_cell=1, n_var_face=1, &
-       dr = 1.0_dp, r_min=[DTIMES(0.0_dp)], lvl_limit=20, &
-       n_boxes=1000, coord=af_xyz, cc_names=["phi"], &
-       fc_names=["flx"], mem_limit_gb=1.0_dp)
+  call af_init(tree, n_cell=8, &
+       dr = 1.0_dp, r_min=[DTIMES(0.0_dp)], &
+       n_boxes=1000, coord=af_xyz, mem_limit_gb=1.0_dp)
 
   ixs = 1                    ! Box at 1,1
   nbs = 1                    ! Periodic
@@ -41,7 +43,8 @@ contains
   subroutine refinement(box, cell_flags)
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
-    cell_flags = af_do_ref
+
+    if (box%lvl < 20) cell_flags = af_do_ref
   end subroutine refinement
 
   subroutine derefinement(box, cell_flags)

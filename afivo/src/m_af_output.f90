@@ -61,13 +61,14 @@ contains
     integer                                :: my_unit, lvl, id
     character(len=400)                     :: fname
 
+    error stop "af_write_tree: not complete"
+
     call af_prepend_directory(trim(filename) // ".dat", dir, fname)
 
     open(newunit=my_unit, file=trim(fname), form='unformatted', &
          access='stream', status='replace')
 
     write(my_unit) tree%ready       !< Is tree ready for use?
-    write(my_unit) tree%lvl_limit   !< maximum allowed level
     write(my_unit) tree%box_limit   !< maximum number of boxes
     write(my_unit) tree%highest_lvl !< highest level present
     write(my_unit) tree%highest_id  !< highest box index present
@@ -81,9 +82,9 @@ contains
     write(my_unit) tree%cc_names(:)
     write(my_unit) tree%fc_names(:)
 
-    write(my_unit) lbound(tree%lvls, 1) ! Will become 1 in future
+    write(my_unit) tree%lowest_lvl ! Will become 1 in future
 
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+    do lvl = tree%lowest_lvl, tree%highest_lvl
       write(my_unit) size(tree%lvls(lvl)%ids)
       write(my_unit) tree%lvls(lvl)%ids
 
@@ -127,7 +128,6 @@ contains
          access='stream', status='old', action='read')
 
     read(my_unit) tree%ready       !< Is tree ready for use?
-    read(my_unit) tree%lvl_limit   !< maximum allowed level
     read(my_unit) tree%box_limit   !< maximum number of boxes
     read(my_unit) tree%highest_lvl !< highest level present
     read(my_unit) tree%highest_id  !< highest box index present
@@ -138,15 +138,12 @@ contains
     read(my_unit) tree%r_base(:)   !< min. coords of box at index (1,1)
     read(my_unit) tree%dr_base     !< cell spacing at lvl 1
 
-    allocate(tree%cc_names(tree%n_var_cell))
-    allocate(tree%fc_names(tree%n_var_face))
     read(my_unit) tree%cc_names(:)
     read(my_unit) tree%fc_names(:)
 
     read(my_unit) lvl
-    allocate(tree%lvls(lvl:tree%lvl_limit))
 
-    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+    do lvl = tree%lowest_lvl, tree%highest_lvl
       read(my_unit) n
       allocate(tree%lvls(lvl)%ids(n))
       read(my_unit) tree%lvls(lvl)%ids
@@ -160,7 +157,7 @@ contains
       read(my_unit) tree%lvls(lvl)%parents
     end do
 
-    do lvl = tree%highest_lvl+1, tree%lvl_limit
+    do lvl = tree%highest_lvl+1, af_max_lvl
       allocate(tree%lvls(lvl)%ids(0))
       allocate(tree%lvls(lvl)%leaves(0))
       allocate(tree%lvls(lvl)%parents(0))
@@ -424,7 +421,7 @@ contains
             minval(ixs_cc) < 1) stop "af_write_vtk: wrong indices given (ixs_cc)"
        icc_val = ixs_cc
     else
-       icc_val = [(i, i = 1, tree%n_var_cell)]
+       call get_output_vars(tree, icc_val)
     end if
 
     n_cc               = size(icc_val)
@@ -610,7 +607,7 @@ contains
             minval(ixs_cc) < 1) stop "af_write_silo: wrong indices given (ixs_cc)"
        icc_val = ixs_cc
     else
-       icc_val = [(i, i = 1, tree%n_var_cell)]
+       call get_output_vars(tree, icc_val)
     end if
 
     n_cc = size(icc_val)
@@ -999,5 +996,22 @@ contains
     call SILO_close_file(dbix)
     print *, "af_write_silo: written " // trim(fname)
   end subroutine af_write_silo
+
+  subroutine get_output_vars(tree, ix_out)
+    type(af_t), intent(in)              :: tree
+    integer, allocatable, intent(inout) :: ix_out(:)
+    integer                             :: n, i
+
+    n = count(tree%cc_write_output(1:tree%n_var_cell))
+    allocate(ix_out(n))
+
+    n = 0
+    do i = 1, tree%n_var_cell
+       if (tree%cc_write_output(i)) then
+          n = n + 1
+          ix_out(n) = i
+       end if
+    end do
+  end subroutine get_output_vars
 
 end module m_af_output

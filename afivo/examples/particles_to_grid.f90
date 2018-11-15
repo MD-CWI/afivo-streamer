@@ -8,10 +8,10 @@ program particles_to_grid_Xd
   implicit none
 
   integer, parameter    :: box_size    = 8
-  integer, parameter    :: i_phi       = 1
-  integer, parameter    :: n_particles = 10*1000*1000
+  integer               :: i_phi
+  integer, parameter    :: n_particles = 100*1000
   real(dp), parameter   :: domain_len  = 1.0_dp
-  real(dp), parameter   :: r_min(NDIM)   = -0.5_dp * domain_len
+  real(dp), parameter   :: r_min(NDIM) = -0.5_dp * domain_len
   real(dp), parameter   :: dr          = domain_len / box_size
   real(dp), allocatable :: coordinates(:, :), weights(:)
 
@@ -24,13 +24,12 @@ program particles_to_grid_Xd
   print *, "Running particles_to_grid_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
+  call af_add_cc_variable(tree, "phi", ix=i_phi)
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       n_var_cell=1, & ! Number of cell-centered variables
-       n_var_face=0, & ! Number of face-centered variables
        dr=dr, &        ! Distance between cells on base level
-       cc_names=["phi"], & ! Variable names
        r_min=r_min)
 
   ! Set up geometry
