@@ -5,14 +5,13 @@
 !! * Indices of transport data
 module m_streamer
 
+  use m_af_all
   use m_config
   use m_random
   use m_lookup_table
 
   implicit none
   public
-
-  integer, parameter, private :: dp = kind(0.0d0)
 
   ! Default length of strings
   integer, parameter :: ST_slen = 200
@@ -34,12 +33,6 @@ module m_streamer
   integer :: i_src = -1 ! Source term
 
   integer, parameter :: name_len = 12
-
-  ! Names of the cell-centered variables
-  character(len=name_len), allocatable :: ST_cc_names(:)
-
-  ! Indices of variables to be included in output
-  integer, allocatable :: vars_for_output(:)
 
   ! If true, only include n_e, n_i and |E| in output files
   logical :: ST_small_output = .false.
@@ -251,52 +244,12 @@ module m_streamer
 
 contains
 
-  integer function ST_add_cc_variable(name, include_in_output)
-    character(len=*), intent(in) :: name
-    logical, intent(in)          :: include_in_output
-    integer                      :: i, n
-
-    ST_cc_names = [character(len=name_len) :: &
-         (ST_cc_names(i), i=1,n_var_cell), name]
-
-    if (include_in_output) then
-       if (allocated(vars_for_output)) then
-          n = size(vars_for_output)
-       else
-          n = 0
-       end if
-       vars_for_output = [(vars_for_output(i), i=1,n), n_var_cell+1]
-    end if
-
-    ST_add_cc_variable = n_var_cell + 1
-    n_var_cell         = n_var_cell + 1
-  end function ST_add_cc_variable
-
-  integer function ST_cc_var_index(name)
-    character(len=*), intent(in) :: name
-    integer :: n
-
-    ST_cc_var_index = -1
-    do n = 1, size(ST_cc_names)
-       if (ST_cc_names(n) == name) then
-          ST_cc_var_index = n
-          exit
-       end if
-    end do
-
-  end function ST_cc_var_index
-
-  integer function ST_add_fc_variable()
-    ST_add_fc_variable = n_var_face + 1
-    n_var_face         = n_var_face + 1
-  end function ST_add_fc_variable
-
   !> Create the configuration file with default values
-  subroutine ST_initialize(cfg, ndim)
+  subroutine ST_initialize(tree, cfg, ndim)
     use iso_fortran_env, only: int64
     use m_config
     use omp_lib
-    use m_afivo_types
+    type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
@@ -310,16 +263,16 @@ contains
     call CFG_add_get(cfg, "small_output", ST_small_output, &
          "If true, only include n_e, n_i and |E| in output files")
 
-    i_electron = ST_add_cc_variable("electron", .true.)
-    i_pos_ion = ST_add_cc_variable("pos_ion", .true.)
-    i_electron_old = ST_add_cc_variable("electron_old", .false.)
-    i_pos_ion_old = ST_add_cc_variable("pos_ion_old", .false.)
-    i_phi = ST_add_cc_variable("phi", .not. ST_small_output)
-    i_electric_fld = ST_add_cc_variable("electric_fld", .true.)
-    i_rhs = ST_add_cc_variable("rhs", .not. ST_small_output)
+    call af_add_cc_variable(tree, "electron", n_copies=2, ix=i_electron)
+    i_electron_old = af_find_cc_variable(tree, "electron_2")
+    call af_add_cc_variable(tree, "pos_ion", n_copies=2, ix=i_pos_ion)
+    i_pos_ion_old = af_find_cc_variable(tree, "pos_ion_2")
+    call af_add_cc_variable(tree, "phi", write_out=(.not. ST_small_output), ix=i_phi)
+    call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
+    call af_add_cc_variable(tree, "rhs", write_out=(.not. ST_small_output), ix=i_rhs)
 
-    flux_elec = ST_add_fc_variable()
-    electric_fld = ST_add_fc_variable()
+    call af_add_fc_variable(tree, "flux_elec", ix=flux_elec)
+    call af_add_fc_variable(tree, "field", ix=electric_fld)
 
     call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
          "The mobility of positive ions (m2/Vs)")
@@ -328,7 +281,7 @@ contains
 
     ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
     if (ST_update_ions) then
-       flux_ion = ST_add_fc_variable()
+       call af_add_fc_variable(tree, "flux_ion", ix=flux_ion)
     end if
 
     n_threads = af_get_max_threads()
@@ -396,7 +349,7 @@ contains
     ST_output_src_decay_rate = 1/tmp
 
     if (ST_output_src_term) then
-       i_src = ST_add_cc_variable("src", .true.)
+       call af_add_cc_variable(tree, "src", ix=i_src)
     end if
 
     call CFG_add_get(cfg, "lineout%write", ST_lineout_write, &
@@ -417,7 +370,7 @@ contains
     varname = "electron"
     call CFG_add_get(cfg, "plane%varname", varname, &
          "Names of variable to write in a plane")
-    ST_plane_ivar = ST_cc_var_index(varname)
+    ST_plane_ivar = af_find_cc_variable(tree, trim(varname))
     call CFG_add_get(cfg, "plane%npixels", ST_plane_npixels, &
          "Use this many pixels for plane data")
     call CFG_add_get(cfg, "plane%rmin", ST_plane_rmin(1:ndim), &

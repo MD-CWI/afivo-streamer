@@ -48,9 +48,10 @@ module m_photoi_helmh
 contains
 
   !> Initialize options for Helmholtz photoionization
-  subroutine photoi_helmh_initialize(cfg, is_used)
+  subroutine photoi_helmh_initialize(tree, cfg, is_used)
     use m_config
     use m_units_constants
+    type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     logical, intent(in)        :: is_used
     integer                    :: n
@@ -60,8 +61,8 @@ contains
          "Luque or Bourdon coeffients are used?")
     !> The default is Luque
     !> Bourdon two terms lambdas in SI units are: [7305.62,44081.25]
-    !> Bourdon two terms coeffs in SI units are: [11814508.38,998607256]   
-    !> Bourdon three terms lambdas in SI units are: [4147.85   10950.93  66755.67]  
+    !> Bourdon two terms coeffs in SI units are: [11814508.38,998607256]
+    !> Bourdon three terms lambdas in SI units are: [4147.85   10950.93  66755.67]
     !> bourdon three terms coeffs in SI units are: [ 1117314.935  28692377.5  2748842283 ]
     call CFG_add(cfg, "photoi_helmh%lambdas", [4425.38_dp, 750.06_dp], &
          "Lambdas to use for lpl(phi) - lambda*phi = f; unit 1/(m bar)", &
@@ -99,8 +100,7 @@ contains
           coeffs  = coeffs * (ST_gas_frac_O2 * ST_gas_pressure)**2 ! 1/m^2
           !print *, author
           !print *, "lambdas * O2_pressure", lambdas
-          !print *, "coeffs * O2_pressure", coeffs    
-             
+          !print *, "coeffs * O2_pressure", coeffs
           case default
              print *, "Unknown photoi_helmh_author: ", trim(author)
              error stop
@@ -110,7 +110,7 @@ contains
        allocate(i_modes(n_modes))
        do n = 1, n_modes
           write(name, "(A,I0)") "helmh_", n
-          i_modes(n) = ST_add_cc_variable(trim(name), .false.)
+          call af_add_cc_variable(tree, trim(name), write_out=.false., ix=i_modes(n))
        end do
 
        ! Now set the multigrid options

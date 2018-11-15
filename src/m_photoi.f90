@@ -28,9 +28,10 @@ module m_photoi
 contains
 
   !> Initialize photoionization parameters
-  subroutine photoi_initialize(cfg)
+  subroutine photoi_initialize(tree, cfg)
     use m_config
-    type(CFG_t), intent(inout) :: cfg          !< The configuration for the simulation
+    type(af_t), intent(inout)  :: tree
+    type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
 
     call CFG_add_get(cfg, "photoi%enabled", photoi_enabled, &
          "Whether photoionization is enabled")
@@ -44,15 +45,16 @@ contains
     if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
 
     if (photoi_enabled) then
-       i_photo = ST_add_cc_variable("photo", .not. ST_small_output)
+       call af_add_cc_variable(tree, "photo", &
+            write_out=(.not. ST_small_output), ix=i_photo)
     end if
 
     select case (photoi_method)
        case ("helmholtz")
-          call photoi_helmh_initialize(cfg, .true.)
+          call photoi_helmh_initialize(tree, cfg, .true.)
           call phmc_initialize(cfg, .false.)
        case ("montecarlo")
-          call photoi_helmh_initialize(cfg, .false.)
+          call photoi_helmh_initialize(tree, cfg, .false.)
           call phmc_initialize(cfg, .true.)
        case default
           print *, "Unknown photoi_method: ", trim(photoi_method)

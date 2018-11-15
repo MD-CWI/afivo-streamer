@@ -7,21 +7,22 @@ program streamer
   use m_field
   use m_init_cond
   use m_photoi
+  use m_chemistry
 
   implicit none
 
-  integer, parameter     :: int8 = selected_int_kind(18)
-  integer(int8)          :: t_start, t_current, count_rate
-  real(dp)               :: wc_time, inv_count_rate, time_last_print
-  integer                :: i, it
-  character(len=ST_slen) :: fname
+  integer, parameter      :: int8 = selected_int_kind(18)
+  integer(int8)           :: t_start, t_current, count_rate
+  real(dp)                :: wc_time, inv_count_rate, time_last_print
+  integer                 :: i, it
+  character(len=ST_slen)  :: fname
   character(len=name_len) :: prolong_method
-  logical                :: write_out
-  real(dp)               :: dt_prev, photoi_prev_time
-  type(CFG_t)            :: cfg  ! The configuration for the simulation
-  type(af_t)            :: tree ! This contains the full grid information
-  type(mg_t)           :: mg   ! Multigrid option struct
-  type(ref_info_t)       :: ref_info
+  logical                 :: write_out
+  real(dp)                :: dt_prev, photoi_prev_time
+  type(CFG_t)             :: cfg  ! The configuration for the simulation
+  type(af_t)              :: tree ! This contains the full grid information
+  type(mg_t)              :: mg   ! Multigrid option struct
+  type(ref_info_t)        :: ref_info
 
   ! Method used to prolong (interpolate) densities
   procedure(af_subr_prolong), pointer :: prolong_density => null()
@@ -29,11 +30,12 @@ program streamer
   integer :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
-  call ST_initialize(cfg, NDIM)
-  call photoi_initialize(cfg)
+  call ST_initialize(tree, cfg, NDIM)
+  call photoi_initialize(tree, cfg)
 
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
+  call chemistry_init(tree, cfg)
   call init_cond_initialize(cfg, NDIM)
 
   prolong_method = "limit"
@@ -206,8 +208,7 @@ program streamer
            end if
 
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
-           call af_write_silo(tree, fname, output_cnt, ST_time, &
-                vars_for_output, dir=ST_output_dir)
+           call af_write_silo(tree, fname, output_cnt, ST_time, dir=ST_output_dir)
         end if
 
         if (ST_datfile_write) then
@@ -279,18 +280,14 @@ contains
     integer                   :: id
     integer                   :: ix_list(NDIM, 1) ! Spatial indices of initial boxes
     integer                   :: nb_list(2*NDIM, 1) ! Index of neighbors
-    integer                   :: n_boxes_init = 1000
 
     dr = ST_domain_len / ST_box_size
 
     ! Initialize tree
     if (ST_cylindrical) then
-       call af_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
-            coarsen_to=2, n_boxes=n_boxes_init, coord=af_cyl, &
-            cc_names=ST_cc_names)
+       call af_init(tree, ST_box_size, dr, coarsen_to=2, coord=af_cyl)
     else
-       call af_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
-            coarsen_to=2, n_boxes=n_boxes_init, cc_names=ST_cc_names)
+       call af_init(tree, ST_box_size, dr, coarsen_to=2)
     end if
 
     ! Set up geometry

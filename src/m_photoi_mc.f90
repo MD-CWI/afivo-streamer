@@ -7,8 +7,6 @@ module m_photoi_mc
   implicit none
   private
 
-  integer, parameter :: dp = kind(0.0d0)
-
   type phmc_tbl_t
      type(lookup_table_t) :: tbl           !< The lookup table
      real(dp)             :: frac_in_tbl   !< Fraction photons in table
