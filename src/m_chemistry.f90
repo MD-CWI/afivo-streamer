@@ -1,6 +1,6 @@
 #include "../afivo/src/cpp_macros.h"
 module m_chemistry
-  use m_streamer
+  use m_types
   use m_af_all
   use m_lookup_table
 
@@ -13,27 +13,43 @@ module m_chemistry
      integer, allocatable  :: multiplicity_out(:)
      integer               :: rate_type
      real(dp), allocatable :: tbl(:, :)
-     character(len=50)      :: description
+     character(len=50)     :: description
   end type reaction_t
+
+  type fast_react_t
+     integer, allocatable  :: ix_in(:)
+     integer, allocatable  :: ix_out(:)
+     integer, allocatable  :: multiplicity_out(:)
+  end type fast_react_t
 
   integer, parameter :: constant_rate        = 1
   integer, parameter :: field_dependent_rate = 2
-  integer, parameter :: max_num_species = 100
-  integer, parameter :: max_num_reactions = 100
+  integer, parameter :: max_num_species      = 100
+  integer, parameter :: max_num_reactions    = 100
 
-  integer :: n_species = 0
-  integer :: n_reactions = 0
+  integer, public, protected :: n_species = 0
+  integer, public, protected :: n_reactions = 0
 
-  character(len=10)    :: species_list(max_num_species)
-  integer              :: species_ix(max_num_species)
-  type(reaction_t)     :: reaction_list(max_num_reactions)
-  type(lookup_table_t) :: chemtbl
+  character(len=10), public, protected :: species_list(max_num_species)
+  integer, public, protected           :: species_charge(max_num_species)
+  integer                              :: species_ix(max_num_species)
+  type(reaction_t)                     :: all_reactions(max_num_reactions)
+  type(fast_react_t)                   :: fast_react(max_num_reactions)
+  type(lookup_table_t)                 :: chemtbl
 
   integer  :: rate_table_size   = 1000
   real(dp) :: rate_min_townsend = 0.0
   real(dp) :: rate_max_townsend = 1e3_dp
 
+  integer, allocatable, protected :: charged_species_ix(:)
+  integer, allocatable, protected :: charged_species_charge(:)
+
+  public :: charged_species_ix
+  public :: charged_species_charge
+
   public :: chemistry_init
+  public :: get_rates
+  public :: get_derivatives
 
 contains
 
@@ -41,7 +57,7 @@ contains
     use m_config
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    integer                    :: n
+    integer                    :: n, i
     character(len=ST_slen)     :: reaction_file
 
     call CFG_add_get(cfg, "chemistry%rate_table_size", rate_table_size, &
@@ -61,13 +77,20 @@ contains
          rate_table_size, n_reactions)
 
     do n = 1, n_reactions
-       select case (reaction_list(n)%rate_type)
+       select case (all_reactions(n)%rate_type)
        case (constant_rate, field_dependent_rate)
           call LT_set_col(chemtbl, n, &
-               reaction_list(n)%tbl(:, 1), reaction_list(n)%tbl(:, 2))
+               all_reactions(n)%tbl(:, 1), all_reactions(n)%tbl(:, 2))
        case default
           error stop "Unknown type of reaction rate"
        end select
+    end do
+
+    ! Also store in more memory-efficient structure
+    do n = 1, n_reactions
+       fast_react(n)%ix_in            = all_reactions(n)%ix_in
+       fast_react(n)%ix_out           = all_reactions(n)%ix_out
+       fast_react(n)%multiplicity_out = all_reactions(n)%multiplicity_out
     end do
 
     do n = 1, n_species
@@ -75,12 +98,60 @@ contains
             n_copies=2, ix=species_ix(n))
     end do
 
+    ! Store list with only charged species
+    n = count(species_charge(1:n_species) /= 0)
+    allocate(charged_species_ix(n))
+    allocate(charged_species_charge(n))
+
+    i = 0
+    do n = 1, n_species
+       if (species_charge(n) /= 0) then
+          i = i + 1
+          charged_species_ix(i) = n
+          charged_species_charge(i) = species_charge(n)
+       end if
+    end do
+
   end subroutine chemistry_init
 
-  subroutine get_derivatives(box, derivs)
-    type(af_t), intent(in) :: box
-    real(dp) :: derives(DTIMES(box%n_cell))
+  !> Compute reaction rates
+  subroutine get_rates(fields, rates, n_cell)
+    integer, intent(in)   :: n_cell
+    real(dp), intent(in)  :: fields(n_cell)
+    real(dp), intent(out) :: rates(n_cell, n_reactions)
+    integer               :: n
 
+    ! This order looks inefficient, but it is faster to look up multiple
+    ! reactions at the same field
+    do n = 1, n_cell
+       rates(n, :) = LT_get_mcol(chemtbl, fields(n))
+    end do
+  end subroutine get_rates
+
+  !> Compute derivatives due to chemical reactions
+  subroutine get_derivatives(dens, rates, derivs, n_cell)
+    integer, intent(in)   :: n_cell
+    real(dp), intent(in)  :: dens(n_cell, n_species)
+    real(dp), intent(in)  :: rates(n_cell, n_reactions)
+    real(dp), intent(out) :: derivs(n_cell, n_species)
+    real(dp)              :: prate(n_cell, n_reactions)
+    integer               :: n, i, ix
+
+    derivs(:, :) = 0.0_dp
+
+    ! Loop over reactions and add to derivative
+    do n = 1, n_reactions
+       ! Determine production rate of 'full' reaction
+       prate(:, n) = rates(:, n) * &
+            product(dens(:, fast_react(n)%ix_in), dim=2)
+
+       ! Multiply with multiplicity of output species
+       do i = 1, size(fast_react(n)%ix_out)
+          ix = fast_react(n)%ix_out(i)
+          derivs(:, ix) = derivs(:, ix) + prate(:, n) * &
+               fast_react(n)%multiplicity_out(ix)
+       end do
+    end do
   end subroutine get_derivatives
 
   subroutine read_reactions(filename)
@@ -125,7 +196,7 @@ contains
        end select
 
        n_reactions                = n_reactions + 1
-       reaction_list(n_reactions) = new_reaction
+       all_reactions(n_reactions) = new_reaction
     end do
     close(my_unit)
 
@@ -212,7 +283,8 @@ contains
        if (ix == -1) then
           n_species        = n_species + 1
           ix               = n_species
-          call to_simple_ascii(trim(component), species_list(ix))
+          call to_simple_ascii(trim(component), species_list(ix), &
+               species_charge(ix))
        end if
 
        if (left_side) then
@@ -296,19 +368,24 @@ contains
   end subroutine get_fields_string
 
   !> An inefficient routine to replace *^+- characters in a string
-  subroutine to_simple_ascii(text, simple)
+  subroutine to_simple_ascii(text, simple, charge)
     character(len=*), intent(in)   :: text
     character(len=50), intent(out) :: simple
+    integer, intent(out)           :: charge
     integer                        :: n
 
+    charge = 0
     simple = ""
+
     do n = 1, len_trim(text)
        select case (text(n:n))
        case ('*')
           simple = trim(simple) // "_star"
        case ('+')
+          charge = charge + 1
           simple = trim(simple) // "_plus"
        case ('-')
+          charge = charge - 1
           simple = trim(simple) // "_min"
        case ('^')
           simple = trim(simple) // "_hat"

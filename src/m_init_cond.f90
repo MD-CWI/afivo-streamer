@@ -2,6 +2,7 @@
 module m_init_cond
   use m_streamer
   use m_af_all
+  use m_chemistry
 
   implicit none
   private
@@ -152,15 +153,15 @@ contains
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call af_box_add_cc(tree%boxes(id), i_rhs, i_electron)
-          call af_box_add_cc(tree%boxes(id), i_rhs, i_pos_ion)
+          call af_box_add_cc(tree%boxes(id), i_rhs, i_1pos_ion)
        end do
     end do
 
     ! Restrict and fill ghost cells
     call af_restrict_tree(tree, i_electron)
-    call af_restrict_tree(tree, i_pos_ion)
+    call af_restrict_tree(tree, i_1pos_ion)
     call af_gc_tree(tree, i_electron, af_gc_interp_lim, af_bc_neumann_zero)
-    call af_gc_tree(tree, i_pos_ion, af_gc_interp_lim, af_bc_neumann_zero)
+    call af_gc_tree(tree, i_1pos_ion, af_gc_interp_lim, af_bc_neumann_zero)
 
   end subroutine init_cond_stochastic_density
 
@@ -190,7 +191,7 @@ contains
 
     nc = box%n_cell
     box%cc(DTIMES(:), i_electron) = init_conds%background_density
-    box%cc(DTIMES(:), i_pos_ion)  = init_conds%background_density
+    box%cc(DTIMES(:), i_1pos_ion)  = init_conds%background_density
     box%cc(DTIMES(:), i_phi)      = 0 ! Inital potential set to zero
 
     do KJI_DO(0,nc+1)
@@ -210,7 +211,7 @@ contains
           end if
 
           if (init_conds%seed_charge_type(n) >= 0) then
-             box%cc(IJK, i_pos_ion) = box%cc(IJK, i_pos_ion) + density
+             box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_1pos_ion) + density
           end if
        end do
     end do; CLOSE_DO

@@ -4,7 +4,7 @@
 !! * Indices of face-centered variables
 !! * Indices of transport data
 module m_streamer
-
+  use m_types
   use m_af_all
   use m_config
   use m_random
@@ -13,18 +13,14 @@ module m_streamer
   implicit none
   public
 
-  ! Default length of strings
-  integer, parameter :: ST_slen = 200
-
   ! ** Indices of cell-centered variables **
   integer, protected :: n_var_cell     = 0  ! Number of variables
-  integer, protected :: i_electron     = -1 ! Electron density
-  integer, protected :: i_pos_ion      = -1 ! Positive ion density
-  integer, protected :: i_electron_old = -1 ! For time-stepping scheme
-  integer, protected :: i_pos_ion_old  = -1 ! For time-stepping scheme
   integer, protected :: i_phi          = -1 ! Electrical potential
+  integer, protected :: i_electron     = -1 ! Electron density
+  integer, protected :: i_1pos_ion     = -1 ! First positive ion species
   integer, protected :: i_electric_fld = -1 ! Electric field norm
   integer, protected :: i_rhs          = -1 ! Source term Poisson
+  integer, protected :: i_tmp          = -1 ! Temporary variable
 
   ! Optional variable (when using photoionization)
   integer :: i_photo = -1 ! Photoionization rate
@@ -249,6 +245,7 @@ contains
     use iso_fortran_env, only: int64
     use m_config
     use omp_lib
+    use m_chemistry
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
@@ -263,13 +260,23 @@ contains
     call CFG_add_get(cfg, "small_output", ST_small_output, &
          "If true, only include n_e, n_i and |E| in output files")
 
-    call af_add_cc_variable(tree, "electron", n_copies=2, ix=i_electron)
-    i_electron_old = af_find_cc_variable(tree, "electron_2")
-    call af_add_cc_variable(tree, "pos_ion", n_copies=2, ix=i_pos_ion)
-    i_pos_ion_old = af_find_cc_variable(tree, "pos_ion_2")
+    ! Set index of electrons
+    i_electron = af_find_cc_variable(tree, "e")
+
+    ! Set index of first positive ion species
+    do n = 1, n_species
+       if (species_charge(n) == 1) then
+          i_1pos_ion = n
+          exit
+       end if
+    end do
+
+    if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
+
     call af_add_cc_variable(tree, "phi", write_out=(.not. ST_small_output), ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
-    call af_add_cc_variable(tree, "rhs", write_out=(.not. ST_small_output), ix=i_rhs)
+    call af_add_cc_variable(tree, "rhs", write_out=.false., ix=i_rhs)
+    call af_add_cc_variable(tree, "tmp", write_out=.false., ix=i_tmp)
 
     call af_add_fc_variable(tree, "flux_elec", ix=flux_elec)
     call af_add_fc_variable(tree, "field", ix=electric_fld)

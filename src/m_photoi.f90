@@ -102,18 +102,18 @@ contains
     case ("montecarlo")
        if (phmc_physical_photons) then
 #if NDIM == 2
-          call phmc_set_src(tree, ST_rng, i_electron_old, &
+          call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, ST_cylindrical, dt)
 #elif NDIM == 3
-          call phmc_set_src(tree, ST_rng, i_electron_old, &
+          call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, .false., dt)
 #endif
        else
 #if NDIM == 2
-          call phmc_set_src(tree, ST_rng, i_electron_old, &
+          call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, ST_cylindrical)
 #elif NDIM == 3
-          call phmc_set_src(tree, ST_rng, i_electron_old, &
+          call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, .false.)
 #endif
        end if
@@ -124,10 +124,10 @@ contains
   !> Sets the photoionization_rate
   subroutine set_photoionization_rate(box, coeff)
     type(box_t), intent(inout) :: box
-    real(dp), intent(in)        :: coeff(:)
-    integer                     :: IJK, nc
-    real(dp)                    :: fld, alpha, mobility, tmp
-    type(LT_loc_t)              :: loc
+    real(dp), intent(in)       :: coeff(:)
+    integer                    :: IJK, nc
+    real(dp)                   :: fld, alpha, mobility, tmp
+    type(LT_loc_t)             :: loc
 
     nc = box%n_cell
 
@@ -139,7 +139,7 @@ contains
 
        tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
        if (tmp < 0) tmp = 0
-       box%cc(IJK, i_electron_old) = tmp
+       box%cc(IJK, i_rhs) = tmp
     end do; CLOSE_DO
   end subroutine set_photoionization_rate
 

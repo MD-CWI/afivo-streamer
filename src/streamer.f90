@@ -30,12 +30,12 @@ program streamer
   integer :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
+  call chemistry_init(tree, cfg)
   call ST_initialize(tree, cfg, NDIM)
   call photoi_initialize(tree, cfg)
 
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
-  call chemistry_init(tree, cfg)
   call init_cond_initialize(cfg, NDIM)
 
   prolong_method = "limit"

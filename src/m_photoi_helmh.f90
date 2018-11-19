@@ -115,8 +115,8 @@ contains
 
        ! Now set the multigrid options
        mg_helm%i_phi = i_modes(1) ! Will updated later on
-       mg_helm%i_rhs = i_electron_old
-       mg_helm%i_tmp = i_pos_ion_old
+       mg_helm%i_rhs = i_rhs
+       mg_helm%i_tmp = i_tmp
 
        mg_helm%sides_bc => photoi_helmh_bc
 
