@@ -56,11 +56,13 @@ contains
           tree%cc_names(tree%n_var_cell)        = name
           tree%cc_write_output(tree%n_var_cell) = writeout
           tree%cc_max_level(tree%n_var_cell)    = maxlvl
+          tree%cc_num_copies(tree%n_var_cell)   = ncpy
        else
           write(tree%cc_names(tree%n_var_cell), "(A,I0)") &
                trim(name) // '_', n
           tree%cc_write_output(tree%n_var_cell) = .false.
           tree%cc_max_level(tree%n_var_cell)    = maxlvl
+          tree%cc_num_copies(tree%n_var_cell)   = 1
        end if
     end do
 

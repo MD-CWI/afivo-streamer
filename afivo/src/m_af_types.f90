@@ -281,6 +281,9 @@ module m_af_types
      !> Maximal refinement level for the variables
      integer :: cc_max_level(af_max_num_vars) = af_max_lvl
 
+     !> Number of copies of the variable (for e.g. time-stepping)
+     integer :: cc_num_copies(af_max_num_vars) = 1
+
      !> Whether to include the variable in the output
      logical :: cc_write_output(af_max_num_vars) = .true.
 
