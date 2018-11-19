@@ -1,5 +1,5 @@
 program test
-  use m_lookup_table_2d
+  use m_lookup_table
   implicit none
 
   integer, parameter :: dp          = kind(0.0d0)
@@ -42,7 +42,7 @@ program test
   do j = 1, in_size(2)
      do i = 1, in_size(1)
         diff = abs(y_values(i, j) - &
-             LT2_get_col(lkp_tbl, 1, [x1(i), x2(j)]))
+             LT2_get_col(lkp_tbl, 1, x1(i), x2(j)))
         mean_diff = mean_diff + diff / product(in_size)
      end do
   end do
@@ -56,7 +56,7 @@ program test
         call random_number(xy)
         xy = xy * acos(-1.0_dp)
         diff = abs(sol(xy(1), xy(2)) - &
-             LT2_get_col(lkp_tbl, 1, xy))
+             LT2_get_col(lkp_tbl, 1, xy(1), xy(2)))
         mean_diff = mean_diff + diff / product(in_size)
      end do
   end do

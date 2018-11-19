@@ -4,18 +4,18 @@ program usage_example
   implicit none
   integer, parameter   :: dp = kind(0.0d0)
 
-  real(dp), parameter  :: x_data(4) = [1.0_dp, 2.75_dp, 3.3_dp, 5.6_dp]
-  type(lookup_table_t) :: my_lt
+  real(dp), parameter :: x_data(4) = [1.0_dp, 2.75_dp, 3.3_dp, 5.6_dp]
+  type(LT_t)          :: my_lt
 
   print *, "This program demonstrates the usage of m_lookup_table"
   print *, ""
 
   print *, "Create a lookup table with the following options"
-  print *, "   x_min  = ", x_data(1)
-  print *, "   x_max  = ", x_data(4)
-  print *, "   n_rows = ", 20
-  print *, "   n_cols = ", 2
-  my_lt = LT_create(x_data(1), x_data(4), n_rows=20, n_cols=2)
+  print *, "   x_min    = ", x_data(1)
+  print *, "   x_max    = ", x_data(4)
+  print *, "   n_points = ", 20
+  print *, "   n_cols   = ", 2
+  my_lt = LT_create(x_data(1), x_data(4), n_points=20, n_cols=2)
 
   print *, "The table input is unevenly spaced, using these x-values:"
   write(*, "(4e12.4)") x_data
@@ -41,7 +41,7 @@ program usage_example
 contains
 
   subroutine example_1(lt)
-    type(lookup_table_t), intent(in) :: lt
+    type(LT_t), intent(in) :: lt
 
     print *, "----------------------------------------"
     print *, "Example 1: Get values from a single column"
@@ -54,8 +54,8 @@ contains
   end subroutine example_1
 
   subroutine example_2(lt)
-    type(lookup_table_t), intent(in) :: lt
-    type(LT_loc_t)                   :: loc
+    type(LT_t), intent(in) :: lt
+    type(LT_loc_t)         :: loc
 
     print *, "----------------------------------------"
     print *, "Example 2: Get values using a loc (location) object, which"
@@ -71,8 +71,8 @@ contains
   end subroutine example_2
 
   subroutine example_3(lt)
-    type(lookup_table_t), intent(in) :: lt
-    real(dp)                         :: columns(lt%n_cols)
+    type(LT_t), intent(in) :: lt
+    real(dp)               :: columns(lt%n_cols)
 
     print *, "----------------------------------------"
     print *, "Example 3: Get all the columns at the same time."
@@ -88,7 +88,7 @@ contains
   end subroutine example_3
 
   subroutine example_4(lt)
-    type(lookup_table_t), intent(in) :: lt
+    type(LT_t), intent(in) :: lt
 
     print *, "----------------------------------------"
     print *, "Example 4: When x > x_max or x < x_min, a lookup"
@@ -109,8 +109,8 @@ contains
   end subroutine example_4
 
   subroutine example_5(lt)
-    type(lookup_table_t), intent(in) :: lt
-    type(lookup_table_t) :: new_lt
+    type(LT_t), intent(in)      :: lt
+    type(LT_t)                  :: new_lt
     character(len=*), parameter :: filename = "saved_table.dat"
 
     print *, "----------------------------------------"
