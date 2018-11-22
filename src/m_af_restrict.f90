@@ -11,6 +11,7 @@ module m_af_restrict
   public :: af_restrict_to_boxes
   public :: af_restrict_tree
   public :: af_restrict_box
+  public :: af_restrict_box_vars
   ! public :: af_restrict_box_face
 
 contains
@@ -135,6 +136,20 @@ contains
     end do
 #endif
   end subroutine af_restrict_box
+
+  !> Restriction of child box (box_c) to its parent (box_p)
+  subroutine af_restrict_box_vars(box_c, box_p, ivs, use_geometry)
+    type(box_t), intent(in)       :: box_c        !< Child box to restrict
+    type(box_t), intent(inout)    :: box_p        !< Parent box to restrict to
+    integer, intent(in)           :: ivs(:)       !< Variables to restrict
+    logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
+    integer                       :: i, iv
+
+    do i = 1, size(ivs)
+       iv = ivs(i)
+       call af_restrict_box(box_c, box_p, iv, use_geometry=use_geometry)
+    end do
+  end subroutine af_restrict_box_vars
 
 !   !> Restriction of face-centered variables from child to parent
 !   subroutine af_restrict_box_face(box_c, box_p, ivf, ivf_to)
