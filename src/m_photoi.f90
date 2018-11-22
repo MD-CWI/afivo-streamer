@@ -13,7 +13,7 @@ module m_photoi
   logical, protected, public :: photoi_enabled = .false.
 
   ! Which photoionization method to use (helmholtz, montecarlo)
-  character(len=ST_slen) :: photoi_method = 'helmholtz'
+  character(len=string_len) :: photoi_method = 'helmholtz'
 
   ! Photoionization efficiency factor, typically around 0.05-0.1, not for Helmholtz-Luque should be 1.0
   real(dp) :: photoi_eta = 0.05_dp
@@ -51,11 +51,11 @@ contains
 
     select case (photoi_method)
        case ("helmholtz")
-          call photoi_helmh_initialize(tree, cfg, .true.)
+          call photoi_helmh_initialize(tree, cfg, photoi_enabled)
           call phmc_initialize(cfg, .false.)
        case ("montecarlo")
           call photoi_helmh_initialize(tree, cfg, .false.)
-          call phmc_initialize(cfg, .true.)
+          call phmc_initialize(cfg, photoi_enabled)
        case default
           print *, "Unknown photoi_method: ", trim(photoi_method)
           error stop
@@ -80,6 +80,7 @@ contains
   !> Sets the photoionization
   subroutine photoi_set_src(tree, dt)
     use m_units_constants
+    use m_gas
 
     type(af_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
@@ -88,7 +89,7 @@ contains
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
-    quench_fac = p_quench / (ST_gas_pressure + p_quench)
+    quench_fac = p_quench / (gas_pressure + p_quench)
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
@@ -125,22 +126,23 @@ contains
   subroutine set_photoionization_rate(box, coeff)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: coeff(:)
-    integer                    :: IJK, nc
-    real(dp)                   :: fld, alpha, mobility, tmp
-    type(LT_loc_t)             :: loc
+    ! integer                    :: IJK, nc
+    ! real(dp)                   :: fld, alpha, mobility, tmp
+    ! type(LT_loc_t)             :: loc
 
-    nc = box%n_cell
+    ! nc = box%n_cell
 
-    do KJI_DO(1,nc)
-       fld      = box%cc(IJK, i_electric_fld)
-       loc      = LT_get_loc(ST_td_tbl, fld)
-       alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-       mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+    error stop "TODO set_photoionization_rate"
+    ! do KJI_DO(1,nc)
+    !    fld      = box%cc(IJK, i_electric_fld)
+    !    loc      = LT_get_loc(ST_td_tbl, fld)
+    !    alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+    !    mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
 
-       tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
-       if (tmp < 0) tmp = 0
-       box%cc(IJK, i_rhs) = tmp
-    end do; CLOSE_DO
+    !    tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
+    !    if (tmp < 0) tmp = 0
+    !    box%cc(IJK, i_rhs) = tmp
+    ! end do; CLOSE_DO
   end subroutine set_photoionization_rate
 
 end module m_photoi

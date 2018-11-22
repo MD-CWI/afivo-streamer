@@ -8,8 +8,8 @@ module m_photoi_mc
   private
 
   type phmc_tbl_t
-     type(lookup_table_t) :: tbl           !< The lookup table
-     real(dp)             :: frac_in_tbl   !< Fraction photons in table
+     type(LT_t) :: tbl         !< The lookup table
+     real(dp)   :: frac_in_tbl !< Fraction photons in table
   end type phmc_tbl_t
 
   ! Whether physical photons are used
@@ -46,8 +46,10 @@ contains
   subroutine phmc_initialize(cfg, is_used)
     use m_config
     use m_streamer
-    type(CFG_t), intent(inout) :: cfg          !< The configuration for the simulation
-    logical, intent(in) :: is_used
+    use m_gas
+    type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
+    logical, intent(in)        :: is_used
+    integer                    :: ix
 
     call CFG_add_get(cfg, "photoi_mc%physical_photons", &
          phmc_physical_photons, &
@@ -67,8 +69,10 @@ contains
 
     if (is_used) then
        ! Create table for photoionization
-       call phmc_get_table_air(phmc_tbl, ST_gas_frac_O2 * &
-            ST_gas_pressure, 2 * ST_domain_len)
+       ix = gas_index("O2")
+       if (ix == -1) error stop "Photoionization: no oxygen present"
+       call phmc_get_table_air(phmc_tbl, gas_fractions(ix) * gas_pressure, &
+            2 * ST_domain_len)
 
        call phmc_print_grid_spacing(ST_domain_len/ST_box_size)
     end if
@@ -263,18 +267,18 @@ contains
     use m_lookup_table
     use m_random
     use omp_lib
-    integer, intent(in)              :: n_photons !< Number of photons
+    integer, intent(in)        :: n_photons !< Number of photons
     !< Input (x,y,z) values
-    real(dp), intent(in)             :: xyz_in(3, n_photons)
+    real(dp), intent(in)       :: xyz_in(3, n_photons)
     !< Output (x,y,z) values
-    real(dp), intent(out)            :: xyz_out(3, n_photons)
-    integer, intent(in)              :: n_dim     !< 2 or 3 dimensional
+    real(dp), intent(out)      :: xyz_out(3, n_photons)
+    integer, intent(in)        :: n_dim     !< 2 or 3 dimensional
     !< Lookup table
-    type(lookup_table_t), intent(in) :: tbl
-    type(RNG_t), intent(inout)       :: rng       !< Random number geneator
-    integer                          :: n, n_procs, proc_id
-    real(dp)                         :: rr, dist
-    type(PRNG_t)                     :: prng
+    type(LT_t), intent(in)     :: tbl
+    type(RNG_t), intent(inout) :: rng       !< Random number geneator
+    integer                    :: n, n_procs, proc_id
+    real(dp)                   :: rr, dist
+    type(PRNG_t)               :: prng
 
     !$omp parallel private(n, rr, dist, proc_id)
     !$omp single

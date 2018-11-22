@@ -22,21 +22,19 @@ contains
 
    !> Routine to read in transport data from a file
    !! Searches 'file_name' for transport 'data_name' concerning 'gas_name'
-   subroutine TD_get_from_file(file_name, gas_name, data_name, x_data, y_data)
-      character(len=*), intent(in)       :: file_name, gas_name, data_name
+   subroutine TD_get_from_file(file_name, data_name, x_data, y_data)
+      character(len=*), intent(in)       :: file_name, data_name
       real(dp), allocatable, intent(out) :: x_data(:), y_data(:)
 
       ! Temporary variables
-      integer                :: gas_name_len
       integer                :: ioState, nL
       integer                :: n_rows
       integer, parameter     :: my_unit = 333
       character(LEN=40)      :: line_fmt
-      character(LEN=lineLen) :: line, prev_line
+      character(LEN=lineLen) :: line
       real(dp)               :: temp_table(2, max_num_rows)
 
       nL           = 0 ! Set the number of lines to 0
-      gas_name_len = len_trim(gas_name)
 
       ! Set the line format to read, only depends on lineLen currently
       write(line_fmt, FMT = "(I6)") lineLen
@@ -61,18 +59,11 @@ contains
 
       ! The outer DO loop, running until the end of the file is reached
       do
-         ! Search for 'gas_name' in the file
-         line = ' '
+         ! Search for 'data_name' in the file
          do
-            prev_line = line
             read(my_unit, FMT = line_fmt, ERR = 999, end = 888) line; nL = nL+1
-            line = adjustl(line)
-            if ( line(1:gas_name_len) == trim(gas_name) ) exit
+            if (line == data_name) exit
          end do
-
-         ! prev_line holds the type of transport data, see the formatting above
-         ! cycle if this is not the right entry
-         if (trim(data_name) /= trim(prev_line)) cycle
 
          ! Now we can check whether there is a comment, while scanning lines
          ! until dashes are found, which indicate the start of the transport
@@ -80,7 +71,6 @@ contains
          do
             read(my_unit, FMT = line_fmt, ERR = 999, end = 777) line; nL = nL+1
             line = adjustl(line)
-            if ( line(1:8) == "COMMENT:" ) cycle ! Do nothing for now
             if ( line(1:5) == "-----" ) exit
          end do
 
@@ -119,18 +109,18 @@ contains
 
 777   continue ! If the end of the file is reached after finding data
       print *, "TD_get_td_from_file unexpectedly reached end of " // trim(file_name)
-      print *, "searching '" // trim(gas_name) // "': '" // trim(data_name) // "'"
+      print *, "searching '" // trim(data_name) // "'"
       stop
 
 888   continue ! If the end of the file is reached without finding data
       print *, "TD_get_td_from_file: no data in " // trim(file_name)
-      print *, "searching '" // trim(gas_name) // "': '" // trim(data_name) // "'"
+      print *, "searching '" // trim(data_name) // "'"
       stop
 
 999   continue ! If there was an input error, the routine will end here
       print *, "TD_get_td_from_file error at line", nL
       print *, "ioState = ", ioState, " in ", file_name
-      print *, "searching '" // trim(gas_name) // "': '" // trim(data_name) // "'"
+      print *, "searching '" // trim(data_name) // "'"
       stop
 
     end subroutine TD_get_from_file

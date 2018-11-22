@@ -28,8 +28,6 @@ module m_streamer
   ! Optional variable (to show ionization source term)
   integer :: i_src = -1 ! Source term
 
-  integer, parameter :: name_len = 12
-
   ! If true, only include n_e, n_i and |E| in output files
   logical :: ST_small_output = .false.
 
@@ -40,17 +38,16 @@ module m_streamer
   integer, protected :: electric_fld = -1 ! Electric field vector
 
   ! ** Indices of transport data **
-  integer, parameter :: n_var_td    = 4 ! Number of transport coefficients
+  integer, parameter :: n_var_td    = 3 ! Number of transport coefficients
   integer, parameter :: i_mobility  = 1 ! Electron mobility
   integer, parameter :: i_diffusion = 2 ! Electron diffusion constant
-  integer, parameter :: i_alpha     = 3 ! Ionization coeff (1/m)
-  integer, parameter :: i_eta       = 4 ! Attachment coeff (1/m)
+  integer, parameter :: i_alpha_eff = 3 ! Net ionization coefficient
 
   ! Whether cylindrical coordinates are used
   logical :: ST_cylindrical = .false.
 
   ! Table with transport data vs electric field
-  type(lookup_table_t), protected :: ST_td_tbl
+  type(LT_t), protected :: ST_td_tbl
 
   !> Maximal electric field for the lookup table
   real(dp), protected :: ST_max_field = 3e7_dp
@@ -71,10 +68,10 @@ module m_streamer
   type(prng_t) :: ST_prng
 
   ! Name of the simulations
-  character(len=ST_slen), protected :: ST_simulation_name = "sim"
+  character(len=string_len), protected :: ST_simulation_name = "sim"
 
   ! Output directory
-  character(len=ST_slen), protected :: ST_output_dir = "output"
+  character(len=string_len), protected :: ST_output_dir = "output"
 
   ! Print status every this many seconds
   real(dp), protected :: ST_print_status_sec = 60.0_dp
@@ -134,13 +131,7 @@ module m_streamer
 
   real(dp), protected :: ST_drt_limit_flux_Emax = 1e10_dp
 
-  real(dp), protected :: ST_elec_density_threshold = -1.0e100_dp
-  real(dp), protected :: ST_src_min_density = -1.0e100_dp
   real(dp), protected :: ST_src_max_density = 1.0e100_dp
-  real(dp), protected :: ST_src_min_count = -1.0_dp
-  real(dp), protected :: ST_src_max_field = -1.0_dp
-  real(dp), protected :: ST_max_src = -1.0_dp
-  real(dp), protected :: ST_velocity_max_field = -1.0_dp
   real(dp), protected :: ST_max_velocity = -1.0_dp
   real(dp), protected :: ST_diffusion_field_limit = 1.0e100_dp
 
@@ -225,18 +216,8 @@ module m_streamer
   ! Whether the domain is periodic in the x (and y)
   logical, protected :: ST_periodic = .false.
 
-  ! Pressure of the gas in bar
-  real(dp), protected :: ST_gas_pressure = 1.0_dp
-
-  ! Fraction of O2
-  real(dp), protected :: ST_gas_frac_O2 = 0.2_dp
-
   ! Number of V-cycles to perform per time step
   integer, protected :: ST_multigrid_num_vcycles = 2
-
-  ! Used for the extrapolation of the ionization coefficient
-  real(dp), protected :: ST_extrap_src_dydx
-  real(dp), protected :: ST_extrap_src_y0
 
 contains
 
@@ -246,6 +227,7 @@ contains
     use m_config
     use omp_lib
     use m_chemistry
+    use m_units_constants
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
@@ -266,7 +248,7 @@ contains
     ! Set index of first positive ion species
     do n = 1, n_species
        if (species_charge(n) == 1) then
-          i_1pos_ion = n
+          i_1pos_ion = species_ix(n)
           exit
        end if
     end do
@@ -275,7 +257,7 @@ contains
 
     call af_add_cc_variable(tree, "phi", write_out=(.not. ST_small_output), ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
-    call af_add_cc_variable(tree, "rhs", write_out=.false., ix=i_rhs)
+    call af_add_cc_variable(tree, "rhs", write_out=(.not. ST_small_output), ix=i_rhs)
     call af_add_cc_variable(tree, "tmp", write_out=.false., ix=i_tmp)
 
     call af_add_fc_variable(tree, "flux_elec", ix=flux_elec)
@@ -311,10 +293,6 @@ contains
          "The length of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
          "Whether the domain is periodic")
-    call CFG_add_get(cfg, "gas_pressure", ST_gas_pressure, &
-         "The gas pressure (bar), used for photoionization")
-    call CFG_add_get(cfg, "gas_frac_O2", ST_gas_frac_O2, &
-         "Fraction of O2, used for photoionization")
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
@@ -323,18 +301,10 @@ contains
          "Avoid dielectric relaxation time step constraint by limiting flux")
     call CFG_add_get(cfg, "fixes%drt_limit_flux_Emax", ST_drt_limit_flux_Emax, &
          "Compute electron impact ionization source based on fluxes")
-    call CFG_add_get(cfg, "fixes%velocity_max_field", ST_velocity_max_field, &
-         "If positive, limit velocities to the value in this field (V/m)")
-    call CFG_add_get(cfg, "fixes%src_max_field", ST_src_max_field, &
-         "If positive, limit ionization to the value in this field (V/m)")
-    call CFG_add_get(cfg, "fixes%src_min_density", ST_src_min_density, &
-         "Disable impact ionization source below this density")
+    call CFG_add_get(cfg, "fixes%max_velocity", ST_max_velocity, &
+         "Limit velocities to this value (m/s)")
     call CFG_add_get(cfg, "fixes%src_max_density", ST_src_max_density, &
          "Disable impact ionization source above this density")
-    call CFG_add_get(cfg, "fixes%src_min_count", ST_src_min_count, &
-         "Disable impact ionization source below this electron count")
-    call CFG_add_get(cfg, "fixes%elec_density_threshold", ST_elec_density_threshold, &
-         "Set densities below this value to zero (1/m3)")
     call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
          "Disable diffusion parallel to fields above this threshold (V/m)")
 
@@ -374,7 +344,7 @@ contains
 
     call CFG_add_get(cfg, "plane%write", ST_plane_write, &
          "Write uniform output in a plane")
-    varname = "electron"
+    varname = "e"
     call CFG_add_get(cfg, "plane%varname", varname, &
          "Names of variable to write in a plane")
     ST_plane_ivar = af_find_cc_variable(tree, trim(varname))
@@ -467,94 +437,31 @@ contains
   subroutine ST_load_transport_data(cfg)
     use m_transport_data
     use m_config
+    use m_gas
+    use m_chemistry
 
     type(CFG_t), intent(inout) :: cfg
-    character(len=ST_slen)     :: td_file       = "td_input_file.txt"
-    character(len=ST_slen)     :: gas_name      = "AIR"
-    integer                    :: table_size    = 1000
-    real(dp)                   :: alpha_fac     = 1.0_dp
-    real(dp)                   :: eta_fac       = 1.0_dp
-    real(dp)                   :: mobility_fac  = 1.0_dp
-    real(dp)                   :: diffusion_fac = 1.0_dp
-    real(dp)                   :: x(2), y(2)
+    character(len=string_len)  :: td_file = "td_input_file.txt"
     real(dp), allocatable      :: x_data(:), y_data(:)
-    character(len=ST_slen)     :: data_name
+
+    ! Create a lookup table for the model coefficients
+    ST_td_tbl = LT_create(rate_min_townsend, rate_max_townsend, &
+         rate_table_size, n_var_td)
 
     call CFG_add_get(cfg, "transport_data_file", td_file, &
          "Input file with transport data")
-    call CFG_add_get(cfg, "gas_name", gas_name, &
-         "The name of the gas mixture used")
-
-    call CFG_add_get(cfg, "lookup_table_size", table_size, &
-         "The transport data table size in the fluid model")
-    call CFG_add_get(cfg, "lookup_table_max_electric_fld", ST_max_field, &
-         "The maximum electric field in the fluid model coefficients")
-
-    call CFG_add_get(cfg, "td_alpha_fac", alpha_fac, &
-         "Modify alpha by this factor")
-    call CFG_add_get(cfg, "td_eta_fac", eta_fac, &
-         "Modify eta by this factor")
-    call CFG_add_get(cfg, "td_mobility_fac", mobility_fac, &
-         "Modify mobility by this factor")
-    call CFG_add_get(cfg, "td_diffusion_fac", diffusion_fac, &
-         "Modify diffusion by this factor")
-
-    ! Create a lookup table for the model coefficients
-    ST_td_tbl = LT_create(0.0_dp, ST_max_field, table_size, n_var_td)
 
     ! Fill table with data
-    data_name = "efield[V/m]_vs_mu[m2/Vs]"
-    call CFG_add_get(cfg, "td_mobility_name", data_name, &
-         "The name of the mobility coefficient")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * mobility_fac
+    call TD_get_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
     call LT_set_col(ST_td_tbl, i_mobility, x_data, y_data)
 
-    data_name = "efield[V/m]_vs_dif[m2/s]"
-    call CFG_add_get(cfg, "td_diffusion_name", data_name, &
-         "The name of the diffusion coefficient")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * diffusion_fac
+    call TD_get_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
+         x_data, y_data)
     call LT_set_col(ST_td_tbl, i_diffusion, x_data, y_data)
 
-    data_name = "efield[V/m]_vs_alpha[1/m]"
-    call CFG_add_get(cfg, "td_alpha_name", data_name, &
-         "The name of the eff. ionization coeff.")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * alpha_fac
-    call LT_set_col(ST_td_tbl, i_alpha, x_data, y_data)
-
-    data_name = "efield[V/m]_vs_eta[1/m]"
-    call CFG_add_get(cfg, "td_eta_name", data_name, &
-         "The name of the eff. attachment coeff.")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * eta_fac
-    call LT_set_col(ST_td_tbl, i_eta, x_data, y_data)
-
-    ! Determine extrapolation coefficients for transport data
-    x = [ST_max_field, 0.8_dp * ST_max_field]
-
-    ! Linear extrapolation for ionization coefficient
-    y = LT_get_col(ST_td_tbl, i_alpha, x)
-
-    ST_extrap_src_dydx = (y(2) - y(1)) / (x(2) - x(1))
-    ST_extrap_src_y0   = y(2)
-
-    ! Set maximal velocity if velocity_max_field is given
-    if (ST_velocity_max_field > 0) then
-       ST_max_velocity = ST_velocity_max_field * &
-            LT_get_col(ST_td_tbl, i_mobility, ST_velocity_max_field)
-    end if
-
-    if (ST_src_max_field > 0) then
-       ST_max_src = ST_src_max_field * &
-            LT_get_col(ST_td_tbl, i_mobility, ST_src_max_field) * &
-            LT_get_col(ST_td_tbl, i_alpha, ST_src_max_field)
-    end if
+    call TD_get_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
+         x_data, y_data)
+    call LT_set_col(ST_td_tbl, i_alpha_eff, x_data, y_data)
 
   end subroutine ST_load_transport_data
 

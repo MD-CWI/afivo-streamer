@@ -18,7 +18,7 @@ module m_init_cond
      real(dp), allocatable           :: seed_density2(:)
      integer, allocatable            :: seed_charge_type(:)
      real(dp), allocatable           :: seed_width(:)
-     character(ST_slen), allocatable :: seed_falloff(:)
+     character(string_len), allocatable :: seed_falloff(:)
   end type initcnd_t
 
   ! This will contain the initial conditions
@@ -185,13 +185,13 @@ contains
   subroutine init_cond_set_box(box)
     use m_geometry
     type(box_t), intent(inout) :: box
-    integer                     :: IJK, n, nc
-    real(dp)                    :: rr(NDIM)
-    real(dp)                    :: density
+    integer                    :: IJK, n, nc
+    real(dp)                   :: rr(NDIM)
+    real(dp)                   :: density
 
     nc = box%n_cell
     box%cc(DTIMES(:), i_electron) = init_conds%background_density
-    box%cc(DTIMES(:), i_1pos_ion)  = init_conds%background_density
+    box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
     box%cc(DTIMES(:), i_phi)      = 0 ! Inital potential set to zero
 
     do KJI_DO(0,nc+1)

@@ -54,7 +54,7 @@ module m_field
   real(dp) :: field_point_r0(NDIM) = [0.0_dp, 0.0_dp, -1.0_dp]
 #endif
 
-  character(ST_slen) :: field_bc_type = "homogeneous"
+  character(string_len) :: field_bc_type = "homogeneous"
 
   public :: field_initialize
   public :: field_compute
@@ -194,7 +194,7 @@ contains
     call af_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call af_gc_tree(tree, i_electric_fld, af_gc_interp, af_bc_neumann_zero)
+    call af_gc_tree(tree, i_electric_fld)
   end subroutine field_compute
 
   !> Compute the electric field at a given time
@@ -445,6 +445,7 @@ contains
 #endif
     case default
        error stop "Not implemented"
+       i = 0; j = 0; rr = 0;
        call field_bc_homogeneous(box, nb, iv, bc_type)
     end select
   end subroutine field_bc_point_charge

@@ -51,10 +51,11 @@ contains
   subroutine photoi_helmh_initialize(tree, cfg, is_used)
     use m_config
     use m_units_constants
+    use m_gas
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     logical, intent(in)        :: is_used
-    integer                    :: n
+    integer                    :: n, ix
     character(len=12)          :: name
 
     call CFG_add(cfg, "photoi_helmh%author", author, &
@@ -83,21 +84,24 @@ contains
        call CFG_get(cfg, "photoi_helmh%max_rel_residual", max_rel_residual)
        call CFG_get(cfg, "photoi_helmh%author", author)
 
+       ix = gas_index("O2")
+       if (ix == -1) error stop "Photoionization: no oxygen present"
+
        select case (author)
           case ("Luque")
           !> Convert to correct units by multiplying with pressure in bar for Luque parameters
-          lambdas = lambdas * ST_gas_pressure  ! 1/m
-          coeffs  = coeffs * ST_gas_pressure**2 ! 1/m^2
+          lambdas = lambdas * gas_pressure  ! 1/m
+          coeffs  = coeffs * gas_pressure**2 ! 1/m^2
           !print *, author
           !print *, "lambdas * gas_pressure", lambdas
           !print *, "coeffs * gas_pressure", coeffs
           case ("Bourdon")
           !> Convert to correct units by multiplying with pressure in bar for Bourdon parameters
-          lambdas = lambdas * ST_gas_frac_O2 * ST_gas_pressure  ! 1/m
+          lambdas = lambdas * gas_fractions(ix) * gas_pressure  ! 1/m
           !> important note: in the case of Bourdon coeffs must be multiplied by photoi_eta, however we do not multiply it here
           !> but it is considered in set_photoionization_rate calculation as [photoi_eta * quench_fac] please check m_photoi_Xd.f90
           !> note that for Luque photoi_eta must be 1.0 (since we must Not multiply coeffs of Luque by photoi_eta)
-          coeffs  = coeffs * (ST_gas_frac_O2 * ST_gas_pressure)**2 ! 1/m^2
+          coeffs  = coeffs * (gas_fractions(ix) * gas_pressure)**2 ! 1/m^2
           !print *, author
           !print *, "lambdas * O2_pressure", lambdas
           !print *, "coeffs * O2_pressure", coeffs
