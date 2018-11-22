@@ -175,6 +175,7 @@ contains
        else if (tree%has_cc_method(iv)) then
           use_rb => tree%cc_methods(iv)%rb
        else
+          print *, "For variable ", trim(tree%cc_names(iv))
           error stop "af_gc_box: no refinement boundary method stored"
        end if
 
@@ -183,6 +184,7 @@ contains
        else if (tree%has_cc_method(iv)) then
           use_bc => tree%cc_methods(iv)%bc
        else
+          print *, "For variable ", trim(tree%cc_names(iv))
           error stop "af_gc_box: no boundary condition stored"
        end if
 
@@ -208,6 +210,7 @@ contains
     else if (tree%has_cc_method(iv)) then
        use_rb => tree%cc_methods(iv)%rb
     else
+       print *, "For variable ", trim(tree%cc_names(iv))
        error stop "af_gc_box: no refinement boundary method stored"
     end if
 
@@ -216,6 +219,7 @@ contains
     else if (tree%has_cc_method(iv)) then
        use_bc => tree%cc_methods(iv)%bc
     else
+       print *, "For variable ", trim(tree%cc_names(iv))
        error stop "af_gc_box: no boundary condition stored"
     end if
 
