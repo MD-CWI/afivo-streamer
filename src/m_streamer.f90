@@ -34,8 +34,8 @@ module m_streamer
   ! ** Indices of face-centered variables **
   integer, protected :: n_var_face   = 0 ! Number of variables
   integer, protected :: flux_elec    = -1 ! Electron flux
-  integer, protected :: flux_ion     = -1 ! Positive ion flux
   integer, protected :: electric_fld = -1 ! Electric field vector
+  integer, protected :: flux_species(1) = -1
 
   ! ** Indices of transport data **
   integer, parameter :: n_var_td    = 3 ! Number of transport coefficients
@@ -245,6 +245,8 @@ contains
     ! Set index of electrons
     i_electron = af_find_cc_variable(tree, "e")
 
+    flux_species(1) = i_electron
+
     ! Set index of first positive ion species
     do n = 1, n_species
        if (species_charge(n) == 1) then
@@ -263,15 +265,15 @@ contains
     call af_add_fc_variable(tree, "flux_elec", ix=flux_elec)
     call af_add_fc_variable(tree, "field", ix=electric_fld)
 
-    call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
-         "The mobility of positive ions (m2/Vs)")
-    call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
-         "The diffusion coefficient for positive ions (m2/s)")
+    ! call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
+    !      "The mobility of positive ions (m2/Vs)")
+    ! call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
+    !      "The diffusion coefficient for positive ions (m2/s)")
 
-    ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
-    if (ST_update_ions) then
-       call af_add_fc_variable(tree, "flux_ion", ix=flux_ion)
-    end if
+    ! ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
+    ! if (ST_update_ions) then
+    !    call af_add_fc_variable(tree, "flux_ion", ix=flux_ion)
+    ! end if
 
     n_threads = af_get_max_threads()
     ! Prevent cache invalidation issues by enlarging the array

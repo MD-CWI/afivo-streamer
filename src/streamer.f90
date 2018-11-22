@@ -166,14 +166,25 @@ program streamer
      select case (time_integrator)
      case ("forward_euler")
         call forward_euler(tree, ST_dt, 0, 0)
+        call restrict_flux_species(tree, 0)
         call field_compute(tree, mg, .true.)
         ST_time = ST_time + ST_dt
+     case ("rk2")
+        call forward_euler(tree, 0.5_dp * ST_dt, 0, 1)
+        call restrict_flux_species(tree, 1)
+        ST_time = ST_time + 0.5_dp * ST_dt
+        call field_compute(tree, mg, .true.)
+        call forward_euler(tree, ST_dt, 1, 0)
+        call restrict_flux_species(tree, 0)
+        call field_compute(tree, mg, .true.)
      case ("heuns_method")
         call forward_euler(tree, ST_dt, 0, 1)
+        call restrict_flux_species(tree, 1)
         ST_time = ST_time + ST_dt
         call field_compute(tree, mg, .true.)
         call forward_euler(tree, ST_dt, 1, 1)
         call combine_substeps(tree, species_ix(1:n_species), [0, 1], [0.5_dp, 0.5_dp], 0)
+        call restrict_flux_species(tree, 0)
         call field_compute(tree, mg, .true.)
      end select
 
@@ -361,12 +372,12 @@ contains
 
   end subroutine refine_routine
 
-  subroutine forward_euler(tree, dt, vi, vo)
+  subroutine forward_euler(tree, dt, s_in, s_out)
     use m_chemistry
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
-    integer, intent(in)       :: vi
-    integer, intent(in)       :: vo
+    integer, intent(in)       :: s_in
+    integer, intent(in)       :: s_out
     integer                   :: lvl, i, id, p_id
 
     ! First calculate fluxes
@@ -375,7 +386,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call fluxes_elec(tree%boxes, id, dt, vi)
+          call fluxes_elec(tree%boxes, id, dt, s_in)
        end do
        !$omp end do
     end do
@@ -389,13 +400,13 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call update_solution(tree%boxes(id), dt, vi, vo)
+          call update_solution(tree%boxes(id), dt, s_in, s_out)
 
           ! This can be important for setting ghost cells
           p_id = tree%boxes(id)%parent
           if (p_id > af_no_box) then
              call af_restrict_box_vars(tree%boxes(id), tree%boxes(p_id), &
-                  species_ix(1:n_species))
+                  flux_species)
           end if
        end do
        !$omp end do
@@ -403,14 +414,38 @@ contains
     !$omp end parallel
   end subroutine forward_euler
 
+  !> Restrict species for which we compute fluxes near refinement boundaries,
+  !> for the coarse grid ghost cells
+  subroutine restrict_flux_species(tree, s_out)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: s_out
+    integer                   :: lvl, i, id, p_id
+
+    !$omp parallel private(lvl, i, id, p_id)
+    do lvl = tree%lowest_lvl, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          p_id = tree%boxes(id)%parent
+          if (p_id > af_no_box .and. &
+               any(tree%boxes(id)%neighbors == af_no_box)) then
+             call af_restrict_box_vars(tree%boxes(id), tree%boxes(p_id), &
+                  flux_species + s_out)
+          end if
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine restrict_flux_species
+
   !> Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_elec(boxes, id, dt, vi)
+  subroutine fluxes_elec(boxes, id, dt, s_in)
     use m_flux_schemes
     use m_units_constants
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id
     real(dp), intent(in)       :: dt
-    integer, intent(in)        :: vi
+    integer, intent(in)        :: s_in
     real(dp)                   :: inv_dr, fld, Td
     ! Velocities at cell faces
     real(dp), allocatable      :: v(DTIMES(:), :)
@@ -442,11 +477,11 @@ contains
     end if
 
     ! Fill ghost cells on the sides of boxes (no corners)
-    call af_gc_box(boxes, id, i_electron+vi, af_gc_interp_lim, &
+    call af_gc_box(boxes, id, i_electron+s_in, af_gc_interp_lim, &
          af_bc_neumann_zero, .false.)
 
     ! Fill cc with interior data plus a second layer of ghost cells
-    call af_gc2_box(boxes, id, i_electron+vi, af_gc2_prolong_linear, &
+    call af_gc2_box(boxes, id, i_electron+s_in, af_gc2_prolong_linear, &
          af_bc2_neumann_zero, cc, nc)
 
     ! We use the average field to compute the mobility and diffusion coefficient
@@ -650,14 +685,14 @@ contains
   end subroutine fluxes_elec
 
   !> Advance solution over dt based on the fluxes / source term, using forward Euler
-  subroutine update_solution(box, dt, vi, vo)
+  subroutine update_solution(box, dt, s_in, s_out)
     use omp_lib
     use m_units_constants
     use m_gas
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
-    integer, intent(in)        :: vi
-    integer, intent(in)        :: vo
+    integer, intent(in)        :: s_in
+    integer, intent(in)        :: s_out
     real(dp)                   :: inv_dr
     real(dp), allocatable      :: rates(:, :)
     real(dp), allocatable      :: derivs(:, :)
@@ -682,13 +717,11 @@ contains
     fields = SI_to_Townsend * &
          reshape(box%cc(DTIMES(1:nc), i_electric_fld), [n_cells])
 
-    dens = reshape(box%cc(DTIMES(1:nc), species_ix(1:n_species)+vi), &
+    dens = reshape(box%cc(DTIMES(1:nc), species_ix(1:n_species)+s_in), &
          [n_cells, n_species])
 
     call get_rates(fields, rates, n_cells)
     call get_derivatives(dens, rates, derivs, n_cells)
-    ! print *, rates(1, :)
-    ! print *, derivs(1, :), derivs(1, 1) - sum(derivs(1, 2:))
 
     ix = 0
     do KJI_DO(1,nc)
@@ -702,13 +735,13 @@ contains
           rfac(:) = 1.0_dp
        end if
 
-       derivs(ix, i_electron) = inv_dr * ( &
+       derivs(ix, i_electron) = derivs(ix, i_electron) + inv_dr * ( &
             box%fc(i, j, 2, flux_elec) - &
             box%fc(i, j+1, 2, flux_elec) + &
             rfac(1) * box%fc(i, j, 1, flux_elec) - &
             rfac(2) * box%fc(i+1, j, 1, flux_elec))
 #elif NDIM == 3
-       derivs(ix, i_electron) = inv_dr * ( &
+       derivs(ix, i_electron) = derivs(ix, i_electron) + inv_dr * ( &
             sum(box%fc(i, j, k, 1:3, flux_elec)) - &
             box%fc(i+1, j, k, 1, flux_elec) - &
             box%fc(i, j+1, k, 2, flux_elec) - &
@@ -724,7 +757,7 @@ contains
 
        do n = 1, n_species
           iv = species_ix(n)
-          box%cc(IJK, iv+vo) = box%cc(IJK, iv+vi) + dt * derivs(ix, n)
+          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_in) + dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
 
