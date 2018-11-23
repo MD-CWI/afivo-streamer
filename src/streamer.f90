@@ -6,9 +6,11 @@ program streamer
   use m_streamer
   use m_field
   use m_init_cond
+  use m_refine
   use m_photoi
   use m_chemistry
   use m_gas
+  use m_fluid_lfa
 
   implicit none
 
@@ -39,6 +41,7 @@ program streamer
   call photoi_initialize(tree, cfg)
 
   call ST_load_transport_data(cfg)
+  call refine_initialize(cfg)
   call field_initialize(cfg, mg)
   call init_cond_initialize(cfg, NDIM)
 
@@ -116,7 +119,7 @@ program streamer
      call af_loop_box(tree, init_cond_set_box)
      call field_compute(tree, mg, .false.)
      call af_adjust_refinement(tree, refine_routine, ref_info, &
-          ST_refine_buffer_width, .true.)
+          refine_buffer_width, .true.)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -161,36 +164,37 @@ program streamer
         photoi_prev_time = ST_time
      end if
 
-     ST_dt_matrix(1:ST_dt_num_cond, :) = ST_dt_max      ! Maximum time step
+     dt_matrix(1:ST_dt_num_cond, :) = ST_dt_max      ! Maximum time step
 
      select case (time_integrator)
      case ("forward_euler")
-        call forward_euler(tree, ST_dt, 0, 0)
+        call forward_euler(tree, ST_dt, 0, 0, .true.)
         call restrict_flux_species(tree, 0)
         call field_compute(tree, mg, .true.)
         ST_time = ST_time + ST_dt
      case ("rk2")
-        call forward_euler(tree, 0.5_dp * ST_dt, 0, 1)
+        call forward_euler(tree, 0.5_dp * ST_dt, 0, 1, .false.)
         call restrict_flux_species(tree, 1)
         ST_time = ST_time + 0.5_dp * ST_dt
         call field_compute(tree, mg, .true.)
-        call forward_euler(tree, ST_dt, 1, 0)
+        call forward_euler(tree, ST_dt, 1, 0, .true.)
         call restrict_flux_species(tree, 0)
         call field_compute(tree, mg, .true.)
      case ("heuns_method")
-        call forward_euler(tree, ST_dt, 0, 1)
+        call forward_euler(tree, ST_dt, 0, 1, .false.)
         call restrict_flux_species(tree, 1)
         ST_time = ST_time + ST_dt
         call field_compute(tree, mg, .true.)
-        call forward_euler(tree, ST_dt, 1, 1)
-        call combine_substeps(tree, species_ix(1:n_species), [0, 1], [0.5_dp, 0.5_dp], 0)
+        call forward_euler(tree, ST_dt, 1, 1, .true.)
+        call combine_substeps(tree, species_ix(1:n_species), &
+             [0, 1], [0.5_dp, 0.5_dp], 0)
         call restrict_flux_species(tree, 0)
         call field_compute(tree, mg, .true.)
      end select
 
      ! Determine next time step
      ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * &
-          minval(ST_dt_matrix(1:ST_dt_num_cond, :)))
+          minval(dt_matrix(1:ST_dt_num_cond, :)))
      dt_prev = ST_dt
 
      if (ST_dt < ST_dt_min .and. .not. write_out) then
@@ -244,10 +248,10 @@ program streamer
 
      if (ST_dt < ST_dt_min) error stop "dt too small"
 
-     if (mod(it, ST_refine_per_steps) == 0) then
+     if (mod(it, refine_per_steps) == 0) then
         call af_gc_tree(tree, species_ix(1:n_species))
         call af_adjust_refinement(tree, refine_routine, ref_info, &
-             ST_refine_buffer_width, .true.)
+             refine_buffer_width, .true.)
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
@@ -286,7 +290,7 @@ contains
 
     if (ST_periodic) then
        if (ST_cylindrical) error stop "Cannot have periodic cylindrical domain"
-       nb_list(:, 1)                = -1
+       nb_list(:, 1)               = -1
        nb_list(af_neighb_lowx, 1)  = 1
        nb_list(af_neighb_highx, 1) = 1
 #if NDIM == 3
@@ -300,119 +304,6 @@ contains
     end if
 
   end subroutine init_tree
-
-  ! This routine sets the cell refinement flags for box
-  subroutine refine_routine(box, cell_flags)
-    use m_geometry
-    use m_init_cond
-    type(box_t), intent(in) :: box
-    ! Refinement flags for the cells of the box
-    integer, intent(out)     :: &
-         cell_flags(DTIMES(box%n_cell))
-    integer                  :: IJK, n, nc
-    real(dp)                 :: dx, dx2
-    real(dp)                 :: alpha, adx, fld, elec_dens
-    real(dp)                 :: dist, rmin(NDIM), rmax(NDIM)
-
-    nc      = box%n_cell
-    dx      = box%dr
-    dx2     = box%dr**2
-
-    do KJI_DO(1,nc)
-       fld   = box%cc(IJK, i_electric_fld) * SI_to_Townsend
-       alpha = LT_get_col(ST_td_tbl, i_alpha_eff, ST_refine_adx_fac * fld) * &
-            gas_number_density / ST_refine_adx_fac
-       adx   = box%dr * alpha
-       elec_dens = box%cc(IJK, i_electron)
-
-       if (adx  > ST_refine_adx .and. elec_dens > ST_refine_min_dens) then
-          cell_flags(IJK) = af_do_ref
-       else if (adx < 0.125_dp * ST_refine_adx .and. dx < ST_derefine_dx) then
-          cell_flags(IJK) = af_rm_ref
-       else
-          cell_flags(IJK) = af_keep_ref
-       end if
-
-       ! Refine around the initial conditions
-       if (ST_time < ST_refine_init_time) then
-          do n = 1, init_conds%n_cond
-             dist = GM_dist_line(af_r_cc(box, [IJK]), &
-                  init_conds%seed_r0(:, n), &
-                  init_conds%seed_r1(:, n), NDIM)
-             if (dist - init_conds%seed_width(n) < 2 * dx &
-                  .and. box%dr > ST_refine_init_fac * &
-                  init_conds%seed_width(n)) then
-                cell_flags(IJK) = af_do_ref
-             end if
-          end do
-       end if
-
-    end do; CLOSE_DO
-
-    ! Check fixed refinements
-    rmin = box%r_min
-    rmax = box%r_min + box%dr * box%n_cell
-
-    do n = 1, size(ST_refine_regions_dr)
-       if (ST_time <= ST_refine_regions_tstop(n) .and. &
-            dx > ST_refine_regions_dr(n) .and. all(&
-            rmax >= ST_refine_regions_rmin(:, n) .and. &
-            rmin <= ST_refine_regions_rmax(:, n))) then
-          ! Mark just the center cell to prevent refining neighbors
-          cell_flags(DTIMES(nc/2)) = af_do_ref
-       end if
-    end do
-
-    ! Make sure we don't have or get a too fine or too coarse grid
-    if (dx > ST_refine_max_dx) then
-       cell_flags = af_do_ref
-    else if (dx < 2 * ST_refine_min_dx) then
-       where(cell_flags == af_do_ref) cell_flags = af_keep_ref
-    end if
-
-  end subroutine refine_routine
-
-  subroutine forward_euler(tree, dt, s_in, s_out)
-    use m_chemistry
-    type(af_t), intent(inout) :: tree
-    real(dp), intent(in)      :: dt
-    integer, intent(in)       :: s_in
-    integer, intent(in)       :: s_out
-    integer                   :: lvl, i, id, p_id
-
-    ! First calculate fluxes
-    !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          call fluxes_elec(tree%boxes, id, dt, s_in)
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
-
-    call af_consistent_fluxes(tree, [flux_elec])
-
-    ! Update the solution
-    !$omp parallel private(lvl, i, id, p_id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          call update_solution(tree%boxes(id), dt, s_in, s_out)
-
-          ! This can be important for setting ghost cells
-          p_id = tree%boxes(id)%parent
-          if (p_id > af_no_box) then
-             call af_restrict_box_vars(tree%boxes(id), tree%boxes(p_id), &
-                  flux_species)
-          end if
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
-  end subroutine forward_euler
 
   !> Restrict species for which we compute fluxes near refinement boundaries,
   !> for the coarse grid ghost cells
@@ -438,331 +329,6 @@ contains
     !$omp end parallel
   end subroutine restrict_flux_species
 
-  !> Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_elec(boxes, id, dt, s_in)
-    use m_flux_schemes
-    use m_units_constants
-    type(box_t), intent(inout) :: boxes(:)
-    integer, intent(in)        :: id
-    real(dp), intent(in)       :: dt
-    integer, intent(in)        :: s_in
-    real(dp)                   :: inv_dr, fld, Td
-    ! Velocities at cell faces
-    real(dp), allocatable      :: v(DTIMES(:), :)
-    ! Diffusion coefficients at cell faces
-    real(dp), allocatable      :: dc(DTIMES(:), :)
-    ! Maximal fluxes at cell faces
-    real(dp), allocatable      :: fmax(DTIMES(:), :)
-    ! Cell-centered densities
-    real(dp), allocatable      :: cc(DTIMES(:))
-    real(dp)                   :: mu, fld_face, drt_fac, tmp
-    real(dp)                   :: nsmall, N_inv
-    integer                    :: nc, n, m
-#if NDIM == 3
-    integer                    :: l
-#endif
-
-    nc      = boxes(id)%n_cell
-    inv_dr  = 1/boxes(id)%dr
-    drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
-    nsmall  = 1.0_dp ! A small density
-    N_inv   = 1/gas_number_density
-
-    allocate(v(DTIMES(1:nc+1), NDIM))
-    allocate(dc(DTIMES(1:nc+1), NDIM))
-    allocate(cc(DTIMES(-1:nc+2)))
-    allocate(fmax(DTIMES(1:nc+1), NDIM))
-    if (ST_drt_limit_flux) then
-       fmax = 0.0_dp
-    end if
-
-    ! Fill ghost cells on the sides of boxes (no corners)
-    call af_gc_box(boxes, id, i_electron+s_in, af_gc_interp_lim, &
-         af_bc_neumann_zero, .false.)
-
-    ! Fill cc with interior data plus a second layer of ghost cells
-    call af_gc2_box(boxes, id, i_electron+s_in, af_gc2_prolong_linear, &
-         af_bc2_neumann_zero, cc, nc)
-
-    ! We use the average field to compute the mobility and diffusion coefficient
-    ! at the interface
-    do n = 1, nc+1
-       do m = 1, nc
-#if NDIM == 2
-          fld = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
-               boxes(id)%cc(n, m, i_electric_fld))
-          Td = fld * SI_to_Townsend
-          mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
-          fld_face = boxes(id)%fc(n, m, 1, electric_fld)
-          v(n, m, 1)  = mu * fld_face
-          dc(n, m, 1) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
-
-          if (ST_drt_limit_flux) then
-             tmp = abs(cc(n-1, m) - cc(n, m))/max(cc(n-1, m), cc(n, m), nsmall)
-             tmp = max(fld, tmp * inv_dr * dc(n, m, 1) / mu)
-             fmax(n, m, 1) = drt_fac * tmp
-          end if
-
-          if (abs(fld_face) > ST_diffusion_field_limit .and. &
-               (cc(n-1, m) - cc(n, m)) * fld_face > 0.0_dp) then
-             dc(n, m, 1) = 0.0_dp
-          end if
-
-          fld = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
-               boxes(id)%cc(m, n, i_electric_fld))
-          Td = fld * SI_to_Townsend
-          mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
-          fld_face = boxes(id)%fc(m, n, 2, electric_fld)
-          v(m, n, 2)  = -mu * fld_face
-          dc(m, n, 2) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
-
-          if (ST_drt_limit_flux) then
-             tmp = abs(cc(m, n-1) - cc(m, n))/max(cc(m, n-1), cc(m, n), nsmall)
-             tmp = max(fld, tmp * inv_dr * dc(m, n, 2) / mu)
-             fmax(m, n, 2) = drt_fac * tmp
-          end if
-
-          if (abs(fld_face) > ST_diffusion_field_limit .and. &
-               (cc(m, n-1) - cc(m, n)) * fld_face > 0.0_dp) then
-             dc(m, n, 2) = 0.0_dp
-          end if
-#elif NDIM == 3
-          do l = 1, nc
-             fld = 0.5_dp * (&
-                  boxes(id)%cc(n-1, m, l, i_electric_fld) + &
-                  boxes(id)%cc(n, m, l, i_electric_fld))
-             Td = fld * SI_to_Townsend
-             mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
-             fld_face = boxes(id)%fc(n, m, l, 1, electric_fld)
-             v(n, m, l, 1)  = -mu * fld_face
-             dc(n, m, l, 1) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
-
-             if (ST_drt_limit_flux) then
-                tmp = abs(cc(n-1, m, l) - cc(n, m, l)) / &
-                     max(cc(n-1, m, l), cc(n, m, l), nsmall)
-                tmp = max(fld, tmp * inv_dr * dc(n, m, l, 1) / mu)
-                fmax(n, m, l, 1) = drt_fac * tmp
-             end if
-
-             if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                  (cc(n-1, m, l) - cc(n, m, l)) * fld_face > 0.0_dp) then
-                dc(n, m, l, 1) = 0.0_dp
-             end if
-
-             fld = 0.5_dp * (&
-                  boxes(id)%cc(m, n-1, l, i_electric_fld) + &
-                  boxes(id)%cc(m, n, l, i_electric_fld))
-             Td = fld * SI_to_Townsend
-             mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
-             fld_face = boxes(id)%fc(m, n, l, 2, electric_fld)
-             v(m, n, l, 2)  = -mu * fld_face
-             dc(m, n, l, 2) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
-
-             if (ST_drt_limit_flux) then
-                tmp = abs(cc(m, n-1, l) - cc(m, n, l)) / &
-                     max(cc(m, n-1, l), cc(m, n, l), nsmall)
-                tmp = max(fld, tmp * inv_dr * dc(m, n, l, 2) / mu)
-                fmax(m, n, l, 2) = drt_fac * tmp
-             end if
-
-             if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                  (cc(m, n-1, l) - cc(m, n, l)) * fld_face > 0.0_dp) then
-                dc(m, n, l, 2) = 0.0_dp
-             end if
-
-             fld = 0.5_dp * (&
-                  boxes(id)%cc(m, l, n-1, i_electric_fld) + &
-                  boxes(id)%cc(m, l, n, i_electric_fld))
-             Td = fld * SI_to_Townsend
-             mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
-             fld_face = boxes(id)%fc(m, l, n, 3, electric_fld)
-             v(m, l, n, 3)  = -mu * fld_face
-             dc(m, l, n, 3) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
-
-             if (ST_drt_limit_flux) then
-                tmp = abs(cc(m, l, n-1) - cc(m, l, n)) / &
-                     max(cc(m, l, n-1), cc(m, l, n), nsmall)
-                tmp = max(fld, tmp * inv_dr * dc(m, l, n, 3) / mu)
-                fmax(m, l, n, 3) = drt_fac * tmp
-             end if
-
-             if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                  (cc(m, l, n-1) - cc(m, l, n)) * fld_face > 0.0_dp) then
-                dc(m, l, n, 3) = 0.0_dp
-             end if
-          end do
-#endif
-       end do
-    end do
-
-    if (ST_max_velocity > 0.0_dp) then
-       where (abs(v) > ST_max_velocity)
-          v = sign(ST_max_velocity, v)
-       end where
-    end if
-
-    ! if (set_dt) then
-    !    ! CFL condition
-    !    if (ST_max_velocity > 0) then
-    !       tmp_vec = abs(fld_vec * max(mu, abs(ST_ion_mobility)))
-    !       where (tmp_vec > ST_max_velocity) tmp_vec = ST_max_velocity
-    !       dt_cfl = 1.0_dp/sum(tmp_vec * inv_dr)
-    !    else
-    !       dt_cfl = 1.0_dp/sum(abs(fld_vec * &
-    !            max(mu, abs(ST_ion_mobility))) * inv_dr)
-    !    end if
-
-    !    ! Diffusion condition
-    !    dt_dif = box%dr**2 / max(2 * NDIM * max(diff, ST_ion_diffusion), &
-    !         epsilon(1.0_dp))
-
-    !    ! Dielectric relaxation time
-    !    if (ST_drt_limit_flux .and. fld < ST_drt_limit_flux_Emax) then
-    !       dt_drt = UC_eps0 / max(UC_elem_charge * abs(ST_ion_mobility) * &
-    !            box%cc(IJK, i_electron), epsilon(1.0_dp))
-    !    else
-    !       dt_drt = UC_eps0 / (UC_elem_charge * (mu + abs(ST_ion_mobility)) * &
-    !            max(box%cc(IJK, i_electron), epsilon(1.0_dp)))
-    !    end if
-
-    !    ST_dt_matrix(ST_ix_drt, tid) = min(ST_dt_matrix(ST_ix_drt, tid), &
-    !         dt_drt)
-
-    !    ! Take the combined CFL-diffusion condition with Courant number 0.5.
-    !    ! The 0.5 is emperical, to have good accuracy (and TVD/positivity) in
-    !    ! combination with the explicit trapezoidal rule
-    !    dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
-
-    !    ST_dt_matrix(ST_ix_cfl, tid) = min(ST_dt_matrix(ST_ix_cfl, tid), &
-    !         dt_cfl)
-    !    ST_dt_matrix(ST_ix_diff, tid) = min(ST_dt_matrix(ST_ix_diff, tid), &
-    !         dt_dif)
-    ! end if
-
-#if NDIM == 2
-    call flux_koren_2d(cc, v, nc, 2)
-    call flux_diff_2d(cc, dc, inv_dr, nc, 2)
-#elif NDIM == 3
-    call flux_koren_3d(cc, v, nc, 2)
-    call flux_diff_3d(cc, dc, inv_dr, nc, 2)
-#endif
-
-    boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
-
-    if (ST_drt_limit_flux) then
-       where (abs(boxes(id)%fc(DTIMES(:), :, flux_elec)) > fmax)
-          boxes(id)%fc(DTIMES(:), :, flux_elec) = &
-               sign(fmax, boxes(id)%fc(DTIMES(:), :, flux_elec))
-       end where
-    end if
-
-    !     if (ST_update_ions) then
-    !        ! Use a constant diffusion coefficient for ions
-    !        dc = ST_ion_diffusion
-
-    !        ! Use a constant mobility for ions
-    !        v(DTIMES(:), 1:NDIM) = ST_ion_mobility * &
-    !             boxes(id)%fc(DTIMES(:), 1:NDIM, electric_fld)
-
-    !        ! Fill ghost cells on the sides of boxes (no corners)
-    !        call af_gc_box(boxes, id, i_pos_ion, af_gc_interp_lim, &
-    !             af_bc_neumann_zero, .false.)
-
-    !        ! Fill cc with interior data plus a second layer of ghost cells
-    !        call af_gc2_box(boxes, id, i_pos_ion, af_gc2_prolong_linear, &
-    !             af_bc2_neumann_zero, cc, nc)
-
-    ! #if NDIM == 2
-    !        call flux_koren_2d(cc, v, nc, 2)
-    !        call flux_diff_2d(cc, dc, inv_dr, nc, 2)
-    ! #elif NDIM == 3
-    !        call flux_koren_3d(cc, v, nc, 2)
-    !        call flux_diff_3d(cc, dc, inv_dr, nc, 2)
-    ! #endif
-
-    !        boxes(id)%fc(DTIMES(:), :, flux_ion) = v + dc
-    !     end if
-  end subroutine fluxes_elec
-
-  !> Advance solution over dt based on the fluxes / source term, using forward Euler
-  subroutine update_solution(box, dt, s_in, s_out)
-    use omp_lib
-    use m_units_constants
-    use m_gas
-    type(box_t), intent(inout) :: box
-    real(dp), intent(in)       :: dt
-    integer, intent(in)        :: s_in
-    integer, intent(in)        :: s_out
-    real(dp)                   :: inv_dr
-    real(dp), allocatable      :: rates(:, :)
-    real(dp), allocatable      :: derivs(:, :)
-    real(dp), allocatable      :: dens(:, :)
-    real(dp), allocatable      :: fields(:)
-#if NDIM == 2
-    real(dp)                   :: rfac(2)
-    integer                    :: ioff
-#endif
-    integer                    :: IJK, ix, nc, n_cells, n, iv
-
-    nc     = box%n_cell
-    n_cells = box%n_cell**NDIM
-    inv_dr = 1/box%dr
-#if NDIM == 2
-    ioff   = (box%ix(1)-1) * nc
-#endif
-
-    allocate(rates(n_cells, n_reactions))
-    allocate(derivs(n_cells, n_species))
-
-    fields = SI_to_Townsend * &
-         reshape(box%cc(DTIMES(1:nc), i_electric_fld), [n_cells])
-
-    dens = reshape(box%cc(DTIMES(1:nc), species_ix(1:n_species)+s_in), &
-         [n_cells, n_species])
-
-    call get_rates(fields, rates, n_cells)
-    call get_derivatives(dens, rates, derivs, n_cells)
-
-    ix = 0
-    do KJI_DO(1,nc)
-       ix = ix + 1
-       ! Contribution of flux
-#if NDIM == 2
-       if (ST_cylindrical) then
-          ! Weighting of flux contribution for cylindrical coordinates
-          rfac(:) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-       else
-          rfac(:) = 1.0_dp
-       end if
-
-       derivs(ix, i_electron) = derivs(ix, i_electron) + inv_dr * ( &
-            box%fc(i, j, 2, flux_elec) - &
-            box%fc(i, j+1, 2, flux_elec) + &
-            rfac(1) * box%fc(i, j, 1, flux_elec) - &
-            rfac(2) * box%fc(i+1, j, 1, flux_elec))
-#elif NDIM == 3
-       derivs(ix, i_electron) = derivs(ix, i_electron) + inv_dr * ( &
-            sum(box%fc(i, j, k, 1:3, flux_elec)) - &
-            box%fc(i+1, j, k, 1, flux_elec) - &
-            box%fc(i, j+1, k, 2, flux_elec) - &
-            box%fc(i, j, k+1, 3, flux_elec))
-#endif
-
-       if (photoi_enabled) then
-          derivs(ix, i_electron) = derivs(ix, i_electron) + &
-               box%cc(IJK, i_photo)
-          derivs(ix, i_1pos_ion) = derivs(ix, i_1pos_ion) + &
-               box%cc(IJK, i_photo)
-       end if
-
-       do n = 1, n_species
-          iv = species_ix(n)
-          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_in) + dt * derivs(ix, n)
-       end do
-    end do; CLOSE_DO
-
-  end subroutine update_solution
-
   subroutine write_log_file(tree, filename, out_cnt, dir)
     type(af_t), intent(in)      :: tree
     character(len=*), intent(in) :: filename
@@ -785,7 +351,7 @@ contains
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
     call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
 
-    dt = ST_dt_safety_factor * minval(ST_dt_matrix(1:ST_dt_num_cond, :))
+    dt = ST_dt_safety_factor * minval(dt_matrix(1:ST_dt_num_cond, :))
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")

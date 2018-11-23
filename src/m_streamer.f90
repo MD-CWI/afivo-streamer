@@ -76,60 +76,10 @@ module m_streamer
   ! Print status every this many seconds
   real(dp), protected :: ST_print_status_sec = 60.0_dp
 
-  ! The refinement buffer width in cells (around flagged cells)
-  integer, protected :: ST_refine_buffer_width = 4
-
-  ! The number of steps after which the mesh is updated
-  integer, protected :: ST_refine_per_steps = 2
-
-  ! The grid spacing will always be larger than this value
-  real(dp), protected :: ST_refine_min_dx = 1.0e-7_dp
-
-  ! The grid spacing will always be smaller than this value
-  real(dp), protected :: ST_refine_max_dx = 1.0e-3_dp
-
-  ! Refine if alpha*dx is larger than this value
-  real(dp), protected :: ST_refine_adx = 1.0_dp
-
-  ! For refinement, use alpha(f * E)/f, where f is this factor
-  real(dp), protected :: ST_refine_adx_fac = 1.0_dp
-
-  ! Refine if the curvature in phi is larger than this value
-  real(dp), protected :: ST_refine_cphi = 1e99_dp
-
-  ! Allow derefinement if the curvature in phi is smaller than this value
-  real(dp), protected :: ST_derefine_cphi = 1e99_dp
-
-  ! Only derefine if grid spacing if smaller than this value
-  real(dp), protected :: ST_derefine_dx = 1e-4_dp
-
-  ! Refine around initial conditions up to this time
-  real(dp), protected :: ST_refine_init_time = 10e-9_dp
-
-  ! Refine until dx is smaller than this factor times the seed width
-  real(dp), protected :: ST_refine_init_fac = 0.25_dp
-
-  ! Minimum electron density for adding grid refinement
-  real(dp), protected :: ST_refine_min_dens = -1.0e99_dp
-
-  ! Refine a region up to this grid spacing
-  real(dp), protected, allocatable :: ST_refine_regions_dr(:)
-
-  ! Refine regions up to this simulation time
-  real(dp), protected, allocatable :: ST_refine_regions_tstop(:)
-
-  ! Minimum coordinate of the refinement regions
-  real(dp), protected, allocatable :: ST_refine_regions_rmin(:,:)
-
-  ! Maximum coordinate of the refinement regions
-  real(dp), protected, allocatable :: ST_refine_regions_rmax(:,:)
-
   ! Current time step
   real(dp) :: ST_dt
 
   logical, protected :: ST_drt_limit_flux = .false.
-
-  real(dp), protected :: ST_drt_limit_flux_Emax = 1e10_dp
 
   real(dp), protected :: ST_src_max_density = 1.0e100_dp
   real(dp), protected :: ST_max_velocity = -1.0_dp
@@ -139,7 +89,7 @@ module m_streamer
   integer, parameter :: ST_dt_num_cond = 3
 
   ! Array of time step restrictions per thread
-  real(dp), allocatable :: ST_dt_matrix(:, :)
+  real(dp), allocatable :: dt_matrix(:, :)
 
   ! Index of CFL condition
   integer, parameter :: ST_ix_cfl = 1
@@ -232,8 +182,7 @@ contains
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
-    real(dp)                   :: vec(ndim), tmp
-    real(dp), allocatable      :: dbuffer(:)
+    real(dp)                   :: tmp
     character(len=name_len)    :: varname
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
@@ -277,7 +226,7 @@ contains
 
     n_threads = af_get_max_threads()
     ! Prevent cache invalidation issues by enlarging the array
-    allocate(ST_dt_matrix(ST_dt_num_cond+32, n_threads))
+    allocate(dt_matrix(ST_dt_num_cond+32, n_threads))
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
@@ -301,8 +250,6 @@ contains
 
     call CFG_add_get(cfg, "fixes%drt_limit_flux", ST_drt_limit_flux, &
          "Avoid dielectric relaxation time step constraint by limiting flux")
-    call CFG_add_get(cfg, "fixes%drt_limit_flux_Emax", ST_drt_limit_flux_Emax, &
-         "Compute electron impact ionization source based on fluxes")
     call CFG_add_get(cfg, "fixes%max_velocity", ST_max_velocity, &
          "Limit velocities to this value (m/s)")
     call CFG_add_get(cfg, "fixes%src_max_density", ST_src_max_density, &
@@ -356,59 +303,6 @@ contains
          "Relative position of plane minimum coordinate")
     call CFG_add_get(cfg, "plane%rmax", ST_plane_rmax(1:ndim), &
          "Relative position of plane maximum coordinate")
-
-    call CFG_add_get(cfg, "refine_buffer_width", ST_refine_buffer_width, &
-         "The refinement buffer width in cells (around flagged cells)")
-    call CFG_add_get(cfg, "refine_per_steps", ST_refine_per_steps, &
-         "The number of steps after which the mesh is updated")
-    call CFG_add_get(cfg, "refine_min_dx", ST_refine_min_dx, &
-         "The grid spacing will always be larger than this value")
-    call CFG_add_get(cfg, "refine_max_dx", ST_refine_max_dx, &
-         "The grid spacing will always be smaller than this value")
-
-    if (ST_refine_min_dx > ST_refine_max_dx) &
-         error stop "Cannot have refine_min_dx < refine_max_dx"
-
-    call CFG_add_get(cfg, "refine_adx", ST_refine_adx, &
-         "Refine if alpha*dx is larger than this value")
-    call CFG_add_get(cfg, "refine_adx_fac", ST_refine_adx_fac, &
-         "For refinement, use alpha(f * E)/f, where f is this factor")
-    call CFG_add_get(cfg, "refine_cphi", ST_refine_cphi, &
-         "Refine if the curvature in phi is larger than this value")
-    call CFG_add_get(cfg, "derefine_cphi", ST_derefine_cphi, &
-         "Allow derefinement if the curvature in phi is smaller than this value")
-    call CFG_add_get(cfg, "derefine_dx", ST_derefine_dx, &
-         "Only derefine if grid spacing if smaller than this value")
-    call CFG_add_get(cfg, "refine_init_time", ST_refine_init_time, &
-         "Refine around initial conditions up to this time")
-    call CFG_add_get(cfg, "refine_init_fac", ST_refine_init_fac, &
-         "Refine until dx is smaller than this factor times the seed width")
-    call CFG_add_get(cfg, "refine_min_dens", ST_refine_min_dens, &
-         "Minimum electron density for adding grid refinement")
-
-    call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
-         "Refine regions up to this grid spacing", .true.)
-    call CFG_add(cfg, "refine_regions_tstop", [-1.0e99_dp], &
-         "Refine regions up to this simulation time", .true.)
-    vec = 0.0_dp
-    call CFG_add(cfg, "refine_regions_rmin", vec, &
-         "Minimum coordinate of the refinement regions", .true.)
-    call CFG_add(cfg, "refine_regions_rmax", vec, &
-         "Maximum coordinate of the refinement regions", .true.)
-
-    call CFG_get_size(cfg, "refine_regions_dr", n)
-    allocate(ST_refine_regions_dr(n))
-    allocate(ST_refine_regions_tstop(n))
-    allocate(ST_refine_regions_rmin(ndim, n))
-    allocate(ST_refine_regions_rmax(ndim, n))
-    allocate(dbuffer(ndim * n))
-
-    call CFG_get(cfg, "refine_regions_dr", ST_refine_regions_dr)
-    call CFG_get(cfg, "refine_regions_tstop", ST_refine_regions_tstop)
-    call CFG_get(cfg, "refine_regions_rmin", dbuffer)
-    ST_refine_regions_rmin = reshape(dbuffer, [ndim, n])
-    call CFG_get(cfg, "refine_regions_rmax", dbuffer)
-    ST_refine_regions_rmax = reshape(dbuffer, [ndim, n])
 
     call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
          "Seed for random numbers. If all zero, generate from clock.")
