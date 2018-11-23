@@ -2,7 +2,7 @@
 !> problems
 !>
 !> @todo Explain multidimensional index for flux, velocity
-module m_flux_schemes
+module m_af_flux_schemes
 
   implicit none
   private
@@ -198,4 +198,4 @@ contains
     end if
   end function koren_mlim
 
-end module m_flux_schemes
+end module m_af_flux_schemes

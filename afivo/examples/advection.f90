@@ -292,7 +292,7 @@ contains
   !> This routine computes the x-fluxes and y-fluxes interior (advective part)
   !> with the Koren limiter
   subroutine fluxes_koren(boxes, id)
-    use m_flux_schemes
+    use m_af_flux_schemes
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
     integer                      :: nc

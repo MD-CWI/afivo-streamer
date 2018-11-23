@@ -1,7 +1,7 @@
-SRC := m_morton.f90 m_vtk.f90 m_write_silo.f90		\
-	m_flux_schemes.f90 m_af_types.f90 m_af_core.f90 m_af_output.f90		\
-	m_af_ghostcell.f90 m_af_restrict.f90 m_af_prolong.f90 m_af_utils.f90	\
-	m_af_multigrid.f90 m_af_interp.f90 m_af_particles.f90 m_af_all.f90
+SRC := m_morton.f90 m_vtk.f90 m_write_silo.f90 m_af_flux_schemes.f90		\
+	m_af_types.f90 m_af_core.f90 m_af_output.f90 m_af_ghostcell.f90		\
+	m_af_restrict.f90 m_af_prolong.f90 m_af_utils.f90 m_af_multigrid.f90	\
+	m_af_interp.f90 m_af_particles.f90 m_af_all.f90
 
 OBJS := $(SRC:%.f90=%.o)
 

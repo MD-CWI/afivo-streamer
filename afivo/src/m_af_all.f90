@@ -11,6 +11,7 @@ module m_af_all
   use m_af_types
   use m_af_utils
   use m_af_particles
+  use m_af_flux_schemes
 
   implicit none
   public
