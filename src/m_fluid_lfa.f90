@@ -64,6 +64,8 @@ contains
     use omp_lib
     use m_streamer
     use m_gas
+    use m_dt
+    use m_lookup_table
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id
     real(dp), intent(in)       :: dt
@@ -120,7 +122,7 @@ contains
           Td = fld * SI_to_Townsend
           mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
           fld_face = boxes(id)%fc(n, m, 1, electric_fld)
-          v(n, m, 1)  = mu * fld_face
+          v(n, m, 1)  = -mu * fld_face
           dc(n, m, 1) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
 
           if (ST_drt_limit_flux) then
@@ -227,27 +229,10 @@ contains
        end where
     end if
 
-#if NDIM == 2
-    call flux_koren_2d(cc, v, nc, 2)
-    call flux_diff_2d(cc, dc, inv_dr, nc, 2)
-#elif NDIM == 3
-    call flux_koren_3d(cc, v, nc, 2)
-    call flux_diff_3d(cc, dc, inv_dr, nc, 2)
-#endif
-
-    boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
-
-    if (ST_drt_limit_flux) then
-       where (abs(boxes(id)%fc(DTIMES(:), :, flux_elec)) > fmax)
-          boxes(id)%fc(DTIMES(:), :, flux_elec) = &
-               sign(fmax, boxes(id)%fc(DTIMES(:), :, flux_elec))
-       end where
-    end if
-
     if (set_dt) then
-       tid = omp_get_thread_num()
-       dt_cfl = dt_matrix(ST_ix_cfl, tid)
-       dt_drt = dt_matrix(ST_ix_drt, tid)
+       tid    = omp_get_thread_num() + 1
+       dt_cfl = dt_max
+       dt_drt = dt_matrix(dt_ix_cfl, tid)
 
        do KJI_DO(1,nc)
 #if NDIM == 2
@@ -261,7 +246,7 @@ contains
           dt_cfl = 1.0_dp/sum(abs(vmean) * inv_dr)
 
           ! Diffusion condition
-          dt_dif = dr**2 / max(2 * NDIM * maxval(dc), epsilon(1.0_dp))
+          dt_dif = dr**2 / max(2 * NDIM * maxval(dc(IJK, :)), epsilon(1.0_dp))
 
           ! Take the combined CFL-diffusion condition with Courant number 0.5
           dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
@@ -277,10 +262,27 @@ contains
           ! Dielectric relaxation time
           dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK), epsilon(1.0_dp))
 
-          dt_matrix(ST_ix_drt, tid) = min(dt_matrix(ST_ix_drt, tid), dt_drt)
-          dt_matrix(ST_ix_cfl, tid) = min(dt_matrix(ST_ix_cfl, tid), dt_cfl)
-          dt_matrix(ST_ix_diff, tid) = min(dt_matrix(ST_ix_diff, tid), dt_dif)
+          dt_matrix(dt_ix_drt, tid) = min(dt_matrix(dt_ix_drt, tid), dt_drt)
+          dt_matrix(dt_ix_cfl, tid) = min(dt_matrix(dt_ix_cfl, tid), dt_cfl)
+          dt_matrix(dt_ix_diff, tid) = min(dt_matrix(dt_ix_diff, tid), dt_dif)
        end do; CLOSE_DO
+    end if
+
+#if NDIM == 2
+    call flux_koren_2d(cc, v, nc, 2)
+    call flux_diff_2d(cc, dc, inv_dr, nc, 2)
+#elif NDIM == 3
+    call flux_koren_3d(cc, v, nc, 2)
+    call flux_diff_3d(cc, dc, inv_dr, nc, 2)
+#endif
+
+    boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
+
+    if (ST_drt_limit_flux) then
+       where (abs(boxes(id)%fc(DTIMES(:), :, flux_elec)) > fmax)
+          boxes(id)%fc(DTIMES(:), :, flux_elec) = &
+               sign(fmax, boxes(id)%fc(DTIMES(:), :, flux_elec))
+       end where
     end if
 
     !     if (ST_update_ions) then
@@ -319,6 +321,7 @@ contains
     use m_chemistry
     use m_streamer
     use m_photoi
+    use m_dt
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: s_in
@@ -334,6 +337,7 @@ contains
     integer                    :: ioff
 #endif
     integer                    :: IJK, ix, nc, n_cells, n, iv
+    integer                    :: tid
 
     nc     = box%n_cell
     n_cells = box%n_cell**NDIM
@@ -353,6 +357,12 @@ contains
 
     call get_rates(fields, rates, n_cells)
     call get_derivatives(dens, rates, derivs, n_cells)
+
+    if (set_dt) then
+       tid = omp_get_thread_num() + 1
+       dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
+            1.0_dp / max(maxval(rates), epsilon(1.0_dp)))
+    end if
 
     ix = 0
     do KJI_DO(1,nc)

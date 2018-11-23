@@ -128,6 +128,7 @@ contains
     use m_geometry
     use m_init_cond
     use m_gas
+    use m_lookup_table
     type(box_t), intent(in) :: box
     ! Refinement flags for the cells of the box
     integer, intent(out)     :: &
@@ -157,7 +158,7 @@ contains
        end if
 
        ! Refine around the initial conditions
-       if (ST_time < refine_init_time) then
+       if (global_time < refine_init_time) then
           do n = 1, init_conds%n_cond
              dist = GM_dist_line(af_r_cc(box, [IJK]), &
                   init_conds%seed_r0(:, n), &
@@ -177,7 +178,7 @@ contains
     rmax = box%r_min + box%dr * box%n_cell
 
     do n = 1, size(refine_regions_dr)
-       if (ST_time <= refine_regions_tstop(n) .and. &
+       if (global_time <= refine_regions_tstop(n) .and. &
             dx > refine_regions_dr(n) .and. all(&
             rmax >= refine_regions_rmin(:, n) .and. &
             rmin <= refine_regions_rmax(:, n))) then

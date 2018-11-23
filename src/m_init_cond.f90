@@ -3,6 +3,7 @@ module m_init_cond
   use m_streamer
   use m_af_all
   use m_chemistry
+  use m_types
 
   implicit none
   private
@@ -32,6 +33,7 @@ contains
 
   ! Set the initial conditions from the configuration
   subroutine init_cond_initialize(cfg, n_dim)
+    use m_config
     type(CFG_t), intent(inout) :: cfg !< Settings
     integer, intent(in)        :: n_dim
 

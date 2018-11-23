@@ -1,7 +1,8 @@
 #include "../afivo/src/cpp_macros.h"
 module m_field
-  use m_streamer
   use m_af_all
+  use m_types
+  use m_streamer
 
   implicit none
   private
@@ -70,8 +71,9 @@ contains
 
   !> Set boundary conditions for the electric potential/field
   subroutine field_initialize(cfg, mg)
-    type(CFG_t), intent(inout)  :: cfg !< Settings
-    type(mg_t), intent(inout) :: mg  !< Multigrid option struct
+    use m_config
+    type(CFG_t), intent(inout) :: cfg !< Settings
+    type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
 
     call CFG_add_get(cfg, "field_mod_t0", field_mod_t0, &
          "Modify electric field after this time (s)")
@@ -141,11 +143,12 @@ contains
 
   !> Compute electric field on the tree. First perform multigrid to get electric
   !> potential, then take numerical gradient to geld field.
-  subroutine field_compute(tree, mg, have_guess)
+  subroutine field_compute(tree, mg, time, have_guess)
     use m_units_constants
     use m_chemistry
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg ! Multigrid option struct
+    real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
     real(dp)                  :: q
@@ -178,7 +181,7 @@ contains
     end do
     !$omp end parallel
 
-    call field_set_voltage(tree, ST_time)
+    call field_set_voltage(tree, time)
 
     if (.not. have_guess) then
        ! Perform a FMG cycle when we have no guess
@@ -453,8 +456,8 @@ contains
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
     type(box_t), intent(inout) :: box
-    integer                      :: nc
-    real(dp)                     :: inv_dr
+    integer                    :: nc
+    real(dp)                   :: inv_dr
 
     nc     = box%n_cell
     inv_dr = 1 / box%dr

@@ -2,6 +2,7 @@
 !> Program to perform NDIMd streamer simulations in Cartesian and cylindrical coordinates
 program streamer
 
+  use m_config
   use m_af_all
   use m_streamer
   use m_field
@@ -11,6 +12,9 @@ program streamer
   use m_chemistry
   use m_gas
   use m_fluid_lfa
+  use m_dt
+  use m_advance
+  use m_types
 
   implicit none
 
@@ -20,9 +24,9 @@ program streamer
   integer                   :: i, it
   character(len=string_len) :: fname
   character(len=name_len)   :: prolong_method
-  character(len=name_len)   :: time_integrator
   logical                   :: write_out
-  real(dp)                  :: dt_prev, photoi_prev_time
+  real(dp)                  :: end_time
+  real(dp)                  :: time, dt, photoi_prev_time
   type(CFG_t)               :: cfg  ! The configuration for the simulation
   type(af_t)                :: tree ! This contains the full grid information
   type(mg_t)                :: mg   ! Multigrid option struct
@@ -35,19 +39,20 @@ program streamer
 
   call CFG_update_from_arguments(cfg)
 
+  call CFG_add_get(cfg, "end_time", end_time, &
+       "The desired endtime (s) of the simulation")
+
   call gas_init(cfg)
   call chemistry_init(tree, cfg)
   call ST_initialize(tree, cfg, NDIM)
   call photoi_initialize(tree, cfg)
 
   call ST_load_transport_data(cfg)
+  call dt_initialize(cfg)
+  call advance_initialize(cfg)
   call refine_initialize(cfg)
   call field_initialize(cfg, mg)
   call init_cond_initialize(cfg, NDIM)
-
-  time_integrator = "heuns_method"
-  call CFG_add_get(cfg, "time_integrator", time_integrator, &
-       "Time integrator (forward_euler, heuns_method)")
 
   prolong_method = "limit"
   call CFG_add_get(cfg, "prolong_density", prolong_method, &
@@ -110,14 +115,16 @@ program streamer
      end if
   end do
 
-  output_cnt       = 0 ! Number of output files written
-  ST_time          = 0 ! Simulation time (all times are in s)
-  photoi_prev_time = 0 ! Time of last photoionization computation
+  output_cnt       = 0      ! Number of output files written
+  time             = 0.0_dp ! Simulation time (all times are in s)
+  global_time      = time
+  dt               = dt_min
+  photoi_prev_time = 0.0_dp ! Time of last photoionization computation
 
   ! Set up the initial conditions
   do
      call af_loop_box(tree, init_cond_set_box)
-     call field_compute(tree, mg, .false.)
+     call field_compute(tree, mg, time, .false.)
      call af_adjust_refinement(tree, refine_routine, ref_info, &
           refine_buffer_width, .true.)
      if (ref_info%n_add == 0) exit
@@ -128,17 +135,13 @@ program streamer
   print *, "Number of threads", af_get_max_threads()
   call af_print_info(tree)
 
-  ! Start from small time step
-  ST_dt   = ST_dt_min
-  dt_prev = ST_dt
-
   ! Initial wall clock time
   call system_clock(t_start, count_rate)
   inv_count_rate = 1.0_dp / count_rate
   time_last_print = -1e10_dp
 
   do it = 1, huge(1)-1
-     if (ST_time >= ST_end_time) exit
+     if (time >= end_time) exit
 
      ! Update wall clock time
      call system_clock(t_current)
@@ -150,55 +153,27 @@ program streamer
         time_last_print = wc_time
      end if
 
+     dt = advance_max_dt
+
      ! Every ST_dt_output, write output
-     if (output_cnt * ST_dt_output <= ST_time + ST_dt) then
+     if (output_cnt * ST_dt_output <= time + dt) then
         write_out  = .true.
-        ST_dt      = output_cnt * ST_dt_output - ST_time
+        dt         = output_cnt * ST_dt_output - time
         output_cnt = output_cnt + 1
      else
         write_out = .false.
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-        call photoi_set_src(tree, ST_time - photoi_prev_time)
-        photoi_prev_time = ST_time
+        call photoi_set_src(tree, time - photoi_prev_time)
+        photoi_prev_time = time
      end if
 
-     dt_matrix(1:ST_dt_num_cond, :) = ST_dt_max      ! Maximum time step
+     call advance(tree, mg, dt, time)
+     global_time = time
 
-     select case (time_integrator)
-     case ("forward_euler")
-        call forward_euler(tree, ST_dt, 0, 0, .true.)
-        call restrict_flux_species(tree, 0)
-        call field_compute(tree, mg, .true.)
-        ST_time = ST_time + ST_dt
-     case ("rk2")
-        call forward_euler(tree, 0.5_dp * ST_dt, 0, 1, .false.)
-        call restrict_flux_species(tree, 1)
-        ST_time = ST_time + 0.5_dp * ST_dt
-        call field_compute(tree, mg, .true.)
-        call forward_euler(tree, ST_dt, 1, 0, .true.)
-        call restrict_flux_species(tree, 0)
-        call field_compute(tree, mg, .true.)
-     case ("heuns_method")
-        call forward_euler(tree, ST_dt, 0, 1, .false.)
-        call restrict_flux_species(tree, 1)
-        ST_time = ST_time + ST_dt
-        call field_compute(tree, mg, .true.)
-        call forward_euler(tree, ST_dt, 1, 1, .true.)
-        call combine_substeps(tree, species_ix(1:n_species), &
-             [0, 1], [0.5_dp, 0.5_dp], 0)
-        call restrict_flux_species(tree, 0)
-        call field_compute(tree, mg, .true.)
-     end select
-
-     ! Determine next time step
-     ST_dt   = min(2 * dt_prev, ST_dt_safety_factor * &
-          minval(dt_matrix(1:ST_dt_num_cond, :)))
-     dt_prev = ST_dt
-
-     if (ST_dt < ST_dt_min .and. .not. write_out) then
-        print *, "ST_dt getting too small, instability?", ST_dt
+     if (advance_max_dt < dt_min .and. .not. write_out) then
+        print *, "ST_dt getting too small, instability?", advance_max_dt
         write_out = .true.
         output_cnt = output_cnt + 1
      end if
@@ -206,7 +181,7 @@ program streamer
      if (write_out) then
         if (ST_silo_write) then
            ! Because the mesh could have changed
-           if (photoi_enabled) call photoi_set_src(tree, ST_dt)
+           if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
 
            do i = 1, tree%n_var_cell
               if (tree%cc_write_output(i)) then
@@ -216,7 +191,7 @@ program streamer
            end do
 
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
-           call af_write_silo(tree, fname, output_cnt, ST_time, dir=ST_output_dir)
+           call af_write_silo(tree, fname, output_cnt, time, dir=ST_output_dir)
         end if
 
         if (ST_datfile_write) then
@@ -246,7 +221,7 @@ program streamer
         end if
      end if
 
-     if (ST_dt < ST_dt_min) error stop "dt too small"
+     if (advance_max_dt < dt_min) error stop "dt too small"
 
      if (mod(it, refine_per_steps) == 0) then
         call af_gc_tree(tree, species_ix(1:n_species))
@@ -255,7 +230,7 @@ program streamer
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
-           call field_compute(tree, mg, .true.)
+           call field_compute(tree, mg, time, .true.)
         end if
      end if
   end do
@@ -305,30 +280,6 @@ contains
 
   end subroutine init_tree
 
-  !> Restrict species for which we compute fluxes near refinement boundaries,
-  !> for the coarse grid ghost cells
-  subroutine restrict_flux_species(tree, s_out)
-    type(af_t), intent(inout) :: tree
-    integer, intent(in)       :: s_out
-    integer                   :: lvl, i, id, p_id
-
-    !$omp parallel private(lvl, i, id, p_id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          p_id = tree%boxes(id)%parent
-          if (p_id > af_no_box .and. &
-               any(tree%boxes(id)%neighbors == af_no_box)) then
-             call af_restrict_box_vars(tree%boxes(id), tree%boxes(p_id), &
-                  flux_species + s_out)
-          end if
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
-  end subroutine restrict_flux_species
-
   subroutine write_log_file(tree, filename, out_cnt, dir)
     type(af_t), intent(in)      :: tree
     character(len=*), intent(in) :: filename
@@ -351,7 +302,7 @@ contains
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
     call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
 
-    dt = ST_dt_safety_factor * minval(dt_matrix(1:ST_dt_num_cond, :))
+    dt = advance_max_dt
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(fname), action="write")
@@ -376,12 +327,12 @@ contains
     open(my_unit, file=trim(fname), action="write", &
          position="append")
 #if NDIM == 2
-    write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
+    write(my_unit, fmt) out_cnt, time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #elif NDIM == 3
-    write(my_unit, fmt) out_cnt, ST_time, dt, velocity, sum_elec, &
+    write(my_unit, fmt) out_cnt, time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #endif
@@ -391,8 +342,8 @@ contains
 
   subroutine print_status()
     write(*, "(F7.2,A,I0,A,E10.3,A,E10.3,A,E10.3,A,E10.3)") &
-         100 * ST_time / ST_end_time, "% it: ", it, &
-         " t:", ST_time, " dt:", ST_dt, " wc:", wc_time, &
+         100 * time / ST_end_time, "% it: ", it, &
+         " t:", time, " dt:", dt, " wc:", wc_time, &
          " ncell:", real(af_num_cells_used(tree), dp)
   end subroutine print_status
 
@@ -407,36 +358,5 @@ contains
        close(my_unit, status='delete')
     end if
   end subroutine check_path_writable
-
-  subroutine combine_substeps(tree, ivs, in_steps, coeffs, out_step)
-    type(af_t), intent(inout) :: tree
-    integer, intent(in)       :: ivs(:)
-    integer, intent(in)       :: in_steps(:)
-    real(dp), intent(in)      :: coeffs(:)
-    integer, intent(in)       :: out_step
-    integer                   :: lvl, i, id, n, nc
-    real(dp), allocatable     :: tmp(DTIMES(:), :)
-
-    nc = tree%n_cell
-
-    !$omp parallel private(lvl, i, id, tmp, n)
-    allocate(tmp(DTIMES(0:nc+1), size(ivs)))
-
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-
-          tmp = 0.0_dp
-          do n = 1, size(in_steps)
-             tmp = tmp + coeffs(n) * &
-                  tree%boxes(id)%cc(DTIMES(:), ivs+in_steps(n))
-          end do
-          tree%boxes(id)%cc(DTIMES(:), ivs+out_step) = tmp
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
-  end subroutine combine_substeps
 
 end program streamer

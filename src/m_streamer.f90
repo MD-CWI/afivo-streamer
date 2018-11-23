@@ -6,168 +6,140 @@
 module m_streamer
   use m_types
   use m_af_all
-  use m_config
   use m_random
   use m_lookup_table
 
   implicit none
-  public
+  private
 
   ! ** Indices of cell-centered variables **
-  integer, protected :: n_var_cell     = 0  ! Number of variables
-  integer, protected :: i_phi          = -1 ! Electrical potential
-  integer, protected :: i_electron     = -1 ! Electron density
-  integer, protected :: i_1pos_ion     = -1 ! First positive ion species
-  integer, protected :: i_electric_fld = -1 ! Electric field norm
-  integer, protected :: i_rhs          = -1 ! Source term Poisson
-  integer, protected :: i_tmp          = -1 ! Temporary variable
-
-  ! Optional variable (when using photoionization)
-  integer :: i_photo = -1 ! Photoionization rate
+  integer, public, protected :: n_var_cell     = 0  ! Number of variables
+  integer, public, protected :: i_phi          = -1 ! Electrical potential
+  integer, public, protected :: i_electron     = -1 ! Electron density
+  integer, public, protected :: i_1pos_ion     = -1 ! First positive ion species
+  integer, public, protected :: i_electric_fld = -1 ! Electric field norm
+  integer, public, protected :: i_rhs          = -1 ! Source term Poisson
+  integer, public, protected :: i_tmp          = -1 ! Temporary variable
 
   ! Optional variable (to show ionization source term)
-  integer :: i_src = -1 ! Source term
+  integer, public, protected :: i_src = -1 ! Source term
 
   ! If true, only include n_e, n_i and |E| in output files
-  logical :: ST_small_output = .false.
+  logical, public, protected :: ST_small_output = .false.
 
   ! ** Indices of face-centered variables **
-  integer, protected :: n_var_face   = 0 ! Number of variables
-  integer, protected :: flux_elec    = -1 ! Electron flux
-  integer, protected :: electric_fld = -1 ! Electric field vector
-  integer, protected :: flux_species(1) = -1
+  integer, public, protected :: n_var_face   = 0 ! Number of variables
+  integer, public, protected :: flux_elec    = -1 ! Electron flux
+  integer, public, protected :: electric_fld = -1 ! Electric field vector
+  integer, public, protected :: flux_species(1) = -1
 
   ! ** Indices of transport data **
-  integer, parameter :: n_var_td    = 3 ! Number of transport coefficients
-  integer, parameter :: i_mobility  = 1 ! Electron mobility
-  integer, parameter :: i_diffusion = 2 ! Electron diffusion constant
-  integer, parameter :: i_alpha_eff = 3 ! Net ionization coefficient
+  integer, parameter, public :: n_var_td    = 3 ! Number of transport coefficients
+  integer, parameter, public :: i_mobility  = 1 ! Electron mobility
+  integer, parameter, public :: i_diffusion = 2 ! Electron diffusion constant
+  integer, parameter, public :: i_alpha_eff = 3 ! Net ionization coefficient
 
   ! Whether cylindrical coordinates are used
-  logical :: ST_cylindrical = .false.
+  logical, public, protected :: ST_cylindrical = .false.
 
   ! Table with transport data vs electric field
-  type(LT_t), protected :: ST_td_tbl
+  type(LT_t), public, protected :: ST_td_tbl
 
   !> Maximal electric field for the lookup table
-  real(dp), protected :: ST_max_field = 3e7_dp
+  real(dp), public, protected :: ST_max_field = 3e7_dp
 
   !> The diffusion coefficient for positive ions (m2/s)
-  real(dp) :: ST_ion_diffusion = 0.0_dp
+  real(dp), public, protected :: ST_ion_diffusion = 0.0_dp
 
   !> The mobility of positive ions (m2/Vs)
-  real(dp) :: ST_ion_mobility = 0.0_dp
+  real(dp), public, protected :: ST_ion_mobility = 0.0_dp
 
   !> Whether to update ions (depends on ion diffusion/mobility)
-  logical :: ST_update_ions = .false.
+  logical, public, protected :: ST_update_ions = .false.
 
   ! Random number generator
-  type(rng_t) :: ST_rng
+  type(rng_t), public :: ST_rng
 
   ! Parallel random number generator
-  type(prng_t) :: ST_prng
+  type(prng_t), public :: ST_prng
 
   ! Name of the simulations
-  character(len=string_len), protected :: ST_simulation_name = "sim"
+  character(len=string_len), public, protected :: ST_simulation_name = "sim"
 
   ! Output directory
-  character(len=string_len), protected :: ST_output_dir = "output"
+  character(len=string_len), public, protected :: ST_output_dir = "output"
 
   ! Print status every this many seconds
-  real(dp), protected :: ST_print_status_sec = 60.0_dp
+  real(dp), public, protected :: ST_print_status_sec = 60.0_dp
 
-  ! Current time step
-  real(dp) :: ST_dt
+  logical, public, protected :: ST_drt_limit_flux = .false.
 
-  logical, protected :: ST_drt_limit_flux = .false.
-
-  real(dp), protected :: ST_src_max_density = 1.0e100_dp
-  real(dp), protected :: ST_max_velocity = -1.0_dp
-  real(dp), protected :: ST_diffusion_field_limit = 1.0e100_dp
-
-  ! Number of time step restrictions
-  integer, parameter :: ST_dt_num_cond = 3
-
-  ! Array of time step restrictions per thread
-  real(dp), allocatable :: dt_matrix(:, :)
-
-  ! Index of CFL condition
-  integer, parameter :: ST_ix_cfl = 1
-
-  ! Index of diffusion time step condition
-  integer, parameter :: ST_ix_diff = 2
-
-  ! Index of dielectric relaxation time condition
-  integer, parameter :: ST_ix_drt = 3
-
-  ! Safety factor for the time step
-  real(dp) :: ST_dt_safety_factor = 0.9_dp
-
-  ! Maximum allowed time step
-  real(dp), protected :: ST_dt_max = 1.0e-11_dp
-
-  ! Minimum allowed time step
-  real(dp), protected :: ST_dt_min = 1.0e-14_dp
+  real(dp), public, protected :: ST_src_max_density = 1.0e100_dp
+  real(dp), public, protected :: ST_max_velocity = -1.0_dp
+  real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
 
   ! Time between writing output
-  real(dp), protected :: ST_dt_output = 1.0e-10_dp
+  real(dp), public, protected :: ST_dt_output = 1.0e-10_dp
 
   ! Include ionization source term in output
-  logical, protected :: ST_output_src_term = .false.
+  logical, public, protected :: ST_output_src_term = .false.
 
   ! If positive: decay rate for source term (1/s) for time-averaged values
-  real(dp), protected :: ST_output_src_decay_rate = -1.0_dp
+  real(dp), public, protected :: ST_output_src_decay_rate = -1.0_dp
 
   ! Write output along a line
-  logical, protected :: ST_lineout_write = .false.
+  logical, public, protected :: ST_lineout_write = .false.
 
   ! Write Silo output
-  logical, protected :: ST_silo_write = .true.
+  logical, public, protected :: ST_silo_write = .true.
 
   ! Write binary output files (to resume later)
-  logical, protected :: ST_datfile_write = .false.
+  logical, public, protected :: ST_datfile_write = .false.
 
   ! Use this many points for lineout data
-  integer, protected :: ST_lineout_npoints = 500
+  integer, public, protected :: ST_lineout_npoints = 500
 
   ! Relative position of line minimum coordinate
-  real(dp), protected :: ST_lineout_rmin(3) = 0.0_dp
+  real(dp), public, protected :: ST_lineout_rmin(3) = 0.0_dp
 
   ! Relative position of line maximum coordinate
-  real(dp), protected :: ST_lineout_rmax(3) = 1.0_dp
+  real(dp), public, protected :: ST_lineout_rmax(3) = 1.0_dp
 
   ! Write uniform output in a plane
-  logical, protected :: ST_plane_write = .false.
+  logical, public, protected :: ST_plane_write = .false.
 
   ! Which variable to include in plane
-  integer, protected :: ST_plane_ivar
+  integer, public, protected :: ST_plane_ivar
 
   ! Use this many points for plane data
-  integer, protected :: ST_plane_npixels(2) = [64, 64]
+  integer, public, protected :: ST_plane_npixels(2) = [64, 64]
 
   ! Relative position of plane minimum coordinate
-  real(dp), protected :: ST_plane_rmin(3) = 0.0_dp
+  real(dp), public, protected :: ST_plane_rmin(3) = 0.0_dp
 
   ! Relative position of plane maximum coordinate
-  real(dp), protected :: ST_plane_rmax(3) = 1.0_dp
-
-  ! Current time
-  real(dp)  :: ST_time
+  real(dp), public, protected :: ST_plane_rmax(3) = 1.0_dp
 
   ! End time of the simulation
-  real(dp), protected :: ST_end_time = 10e-9_dp
+  real(dp), public, protected :: ST_end_time = 10e-9_dp
 
   ! The size of the boxes that we use to construct our mesh
-  integer, protected :: ST_box_size = 8
+  integer, public, protected :: ST_box_size = 8
 
   ! The length of the (square) domain
-  real(dp), protected :: ST_domain_len = 16e-3_dp
+  real(dp), public, protected :: ST_domain_len = 16e-3_dp
 
   ! Whether the domain is periodic in the x (and y)
-  logical, protected :: ST_periodic = .false.
+  logical, public, protected :: ST_periodic = .false.
 
   ! Number of V-cycles to perform per time step
-  integer, protected :: ST_multigrid_num_vcycles = 2
+  integer, public, protected :: ST_multigrid_num_vcycles = 2
+
+  ! Global time
+  real(dp), public :: global_time = 0.0_dp
+
+  public :: ST_initialize
+  public :: ST_load_transport_data
 
 contains
 
@@ -224,14 +196,8 @@ contains
     !    call af_add_fc_variable(tree, "flux_ion", ix=flux_ion)
     ! end if
 
-    n_threads = af_get_max_threads()
-    ! Prevent cache invalidation issues by enlarging the array
-    allocate(dt_matrix(ST_dt_num_cond+32, n_threads))
-
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
-    call CFG_add_get(cfg, "end_time", ST_end_time, &
-         "The desired endtime (s) of the simulation")
     call CFG_add_get(cfg, "simulation_name", ST_simulation_name, &
          "The name of the simulation")
     call CFG_add_get(cfg, "output_dir", ST_output_dir, &
@@ -259,13 +225,6 @@ contains
 
     call CFG_add_get(cfg, "dt_output", ST_dt_output, &
          "The timestep for writing output (s)")
-    call CFG_add_get(cfg, "dt_max", ST_dt_max, &
-         "The maximum timestep (s)")
-    call CFG_add_get(cfg, "dt_min", ST_dt_min, &
-         "The minimum timestep (s)")
-    call CFG_add_get(cfg, "dt_safety_factor", ST_dt_safety_factor, &
-         "Safety factor for the time step")
-
     call CFG_add_get(cfg, "output_src_term", ST_output_src_term, &
          "Include ionization source term in output")
 
@@ -314,6 +273,7 @@ contains
 
     rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
     call ST_rng%set_seed(rng_int8_seed)
+    n_threads = af_get_max_threads()
     call ST_prng%init_parallel(n_threads, ST_rng)
 
   end subroutine ST_initialize

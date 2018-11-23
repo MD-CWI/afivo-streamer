@@ -151,8 +151,9 @@ contains
     end do
   end subroutine photoi_helmh_set_methods
 
-  subroutine photoi_helmh_compute(tree)
+  subroutine photoi_helmh_compute(tree, i_photo)
     type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: i_photo
 
     integer :: n, lvl, i, id
     real(dp) :: residu, max_rhs

@@ -5,6 +5,7 @@ module m_photoi
   use m_photoi_helmh
   use m_af_all
   use m_streamer
+  use m_types
 
   implicit none
   private
@@ -20,6 +21,9 @@ module m_photoi
 
   ! Update photoionization every N time step
   integer, protected, public :: photoi_per_steps = 10
+
+  ! Optional variable (when using photoionization)
+  integer, public, protected :: i_photo = -1 ! Photoionization rate
 
   public :: photoi_initialize
   public :: photoi_set_methods
@@ -99,7 +103,7 @@ contains
     select case (photoi_method)
     case ("helmholtz")
        ! Use Helmholtz approximation
-       call photoi_helmh_compute(tree)
+       call photoi_helmh_compute(tree, i_photo)
     case ("montecarlo")
        if (phmc_physical_photons) then
 #if NDIM == 2
