@@ -434,7 +434,7 @@ contains
 
   ! Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_koren(boxes, id)
-    use m_flux_schemes
+    use m_af_flux_schemes
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
     real(dp)                    :: inv_dr
