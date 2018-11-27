@@ -79,13 +79,19 @@ def convert():
     with open(cfg.outfile, 'wb') as f:
         ix = transport_labels.index("E/N")
         for name in cfg.transport:
-            iy = transport_labels.index(name)
-            write_entry(name, transport_data[:, ix], transport_data[:, iy], f)
+            if name in transport_labels:
+                iy = transport_labels.index(name)
+                write_entry(name, transport_data[:, ix], transport_data[:, iy], f)
+            else:
+                print("Warning: {} not found".format(name))
 
         ix = rate_labels.index("E/N")
         for name in cfg.colls:
-            iy = rate_labels.index(name)
-            write_entry(rate_desc[iy], rate_data[:, ix], rate_data[:, iy], f)
+            if name in rate_labels:
+                iy = rate_labels.index(name)
+                write_entry(rate_desc[iy], rate_data[:, ix], rate_data[:, iy], f)
+            else:
+                print("Warning: {} not found".format(name))
 
 
 def write_entry(entry_name, x_data, y_data, f):
