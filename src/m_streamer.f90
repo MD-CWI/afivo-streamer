@@ -138,6 +138,10 @@ module m_streamer
   ! Global time
   real(dp), public :: global_time = 0.0_dp
 
+  ! Method used to prolong (interpolate) densities
+  procedure(af_subr_prolong), pointer, public, protected :: &
+       ST_prolongation_method => null()
+
   public :: ST_initialize
   public :: ST_load_transport_data
 
@@ -155,7 +159,7 @@ contains
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
     real(dp)                   :: tmp
-    character(len=name_len)    :: varname
+    character(len=name_len)    :: varname, prolong_method
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
@@ -200,6 +204,8 @@ contains
          "Whether cylindrical coordinates are used (only in 2D)")
     call CFG_add_get(cfg, "simulation_name", ST_simulation_name, &
          "The name of the simulation")
+    call CFG_add_get(cfg, "end_time", ST_end_time, &
+       "The desired endtime (s) of the simulation")
     call CFG_add_get(cfg, "output_dir", ST_output_dir, &
          "Directory where the output should be written")
     call CFG_add_get(cfg, "print_status_sec", ST_print_status_sec, &
@@ -213,6 +219,22 @@ contains
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
+
+    prolong_method = "limit"
+    call CFG_add_get(cfg, "prolong_density", prolong_method, &
+         "Density prolongation method (limit, linear, linear_cons, sparse)")
+    select case (prolong_method)
+    case ("limit")
+       ST_prolongation_method => af_prolong_limit
+    case ("linear")
+       ST_prolongation_method => af_prolong_linear
+    case ("linear_cons")
+       ST_prolongation_method => af_prolong_linear_cons
+    case ("sparse")
+       ST_prolongation_method => af_prolong_sparse
+    case default
+       error stop "Unknown prolong_density method"
+    end select
 
     call CFG_add_get(cfg, "fixes%drt_limit_flux", ST_drt_limit_flux, &
          "Avoid dielectric relaxation time step constraint by limiting flux")

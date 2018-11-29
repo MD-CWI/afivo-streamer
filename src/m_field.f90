@@ -139,6 +139,20 @@ contains
     case default
        error stop "field_bc_select error: invalid condition"
     end select
+
+    ! Set the multigrid options. First define the variables to use
+    mg%i_phi = i_phi
+    mg%i_tmp = i_electric_fld
+    mg%i_rhs = i_rhs
+
+    ! This automatically handles cylindrical symmetry
+    mg%box_op => mg_auto_op
+    mg%box_gsrb => mg_auto_gsrb
+    mg%box_corr => mg_auto_corr
+
+    ! This routine always needs to be called when using multigrid
+    call mg_init_mg(mg)
+
   end subroutine field_initialize
 
   !> Compute electric field on the tree. First perform multigrid to get electric

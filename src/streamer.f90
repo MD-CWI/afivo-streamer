@@ -18,58 +18,21 @@ program streamer
 
   implicit none
 
-  integer, parameter        :: int8 = selected_int_kind(18)
+  integer, parameter        :: int8       = selected_int_kind(18)
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate, time_last_print
   integer                   :: i, it
   character(len=string_len) :: fname
-  character(len=name_len)   :: prolong_method
   logical                   :: write_out
-  real(dp)                  :: end_time
   real(dp)                  :: time, dt, photoi_prev_time
-  type(CFG_t)               :: cfg  ! The configuration for the simulation
-  type(af_t)                :: tree ! This contains the full grid information
-  type(mg_t)                :: mg   ! Multigrid option struct
+  type(CFG_t)               :: cfg            ! The configuration for the simulation
+  type(af_t)                :: tree           ! This contains the full grid information
+  type(mg_t)                :: mg             ! Multigrid option struct
   type(ref_info_t)          :: ref_info
-
-  ! Method used to prolong (interpolate) densities
-  procedure(af_subr_prolong), pointer :: prolong_density => null()
-
-  integer :: output_cnt = 0 ! Number of output files written
+  integer                   :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
-
-  call CFG_add_get(cfg, "end_time", end_time, &
-       "The desired endtime (s) of the simulation")
-
-  call gas_init(cfg)
-  call chemistry_init(tree, cfg)
-  call ST_initialize(tree, cfg, NDIM)
-  call photoi_initialize(tree, cfg)
-
-  call ST_load_transport_data(cfg)
-  call dt_initialize(cfg)
-  call advance_initialize(cfg)
-  call refine_initialize(cfg)
-  call field_initialize(cfg, mg)
-  call init_cond_initialize(cfg, NDIM)
-
-  prolong_method = "limit"
-  call CFG_add_get(cfg, "prolong_density", prolong_method, &
-       "Density prolongation method (limit, linear, linear_cons, sparse)")
-  select case (prolong_method)
-  case ("limit")
-     prolong_density => af_prolong_limit
-  case ("linear")
-     prolong_density => af_prolong_linear
-  case ("linear_cons")
-     prolong_density => af_prolong_linear_cons
-  case ("sparse")
-     prolong_density => af_prolong_sparse
-  case default
-     error stop "Unknown prolong_density method"
-  end select
-
+  call initialize_modules(cfg, tree, mg)
   call check_path_writable(ST_output_dir)
 
   fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_out.cfg"
@@ -78,22 +41,9 @@ program streamer
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
 
-  ! Set the multigrid options. First define the variables to use
-  mg%i_phi = i_phi
-  mg%i_tmp = i_electric_fld
-  mg%i_rhs = i_rhs
-
-  ! This automatically handles cylindrical symmetry
-  mg%box_op => mg_auto_op
-  mg%box_gsrb => mg_auto_gsrb
-  mg%box_corr => mg_auto_corr
-
-  ! This routine always needs to be called when using multigrid
-  call mg_init_mg(mg)
-
   do i = 1, n_species
      call af_set_cc_methods(tree, species_ix(i), &
-          af_bc_neumann_zero, af_gc_interp_lim, prolong_density)
+          af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
   end do
 
   call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
@@ -122,15 +72,7 @@ program streamer
   photoi_prev_time = 0.0_dp ! Time of last photoionization computation
 
   ! Set up the initial conditions
-  do
-     call af_loop_box(tree, init_cond_set_box)
-     call field_compute(tree, mg, time, .false.)
-     call af_adjust_refinement(tree, refine_routine, ref_info, &
-          refine_buffer_width, .true.)
-     if (ref_info%n_add == 0) exit
-  end do
-
-  call init_cond_stochastic_density(tree)
+  call set_initial_conditions(tree, mg)
 
   print *, "Number of threads", af_get_max_threads()
   call af_print_info(tree)
@@ -141,7 +83,7 @@ program streamer
   time_last_print = -1e10_dp
 
   do it = 1, huge(1)-1
-     if (time >= end_time) exit
+     if (time >= ST_end_time) exit
 
      ! Update wall clock time
      call system_clock(t_current)
@@ -240,6 +182,24 @@ program streamer
 
 contains
 
+  subroutine initialize_modules(cfg, tree, mg)
+    type(CFG_t), intent(inout) :: cfg
+    type(af_t), intent(inout)  :: tree
+    type(mg_t), intent(inout)  :: mg
+
+    call gas_init(cfg)
+    call chemistry_init(tree, cfg)
+    call ST_initialize(tree, cfg, NDIM)
+    call photoi_initialize(tree, cfg)
+
+    call ST_load_transport_data(cfg)
+    call dt_initialize(cfg)
+    call advance_initialize(cfg)
+    call refine_initialize(cfg)
+    call field_initialize(cfg, mg)
+    call init_cond_initialize(cfg, NDIM)
+  end subroutine initialize_modules
+
   !> Initialize the AMR tree
   subroutine init_tree(tree)
     type(af_t), intent(inout) :: tree
@@ -279,6 +239,21 @@ contains
     end if
 
   end subroutine init_tree
+
+  subroutine set_initial_conditions(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(in)    :: mg
+
+    do
+       call af_loop_box(tree, init_cond_set_box)
+       call field_compute(tree, mg, time, .false.)
+       call af_adjust_refinement(tree, refine_routine, ref_info, &
+            refine_buffer_width, .true.)
+       if (ref_info%n_add == 0) exit
+    end do
+
+    call init_cond_stochastic_density(tree)
+  end subroutine set_initial_conditions
 
   subroutine write_log_file(tree, filename, out_cnt, dir)
     type(af_t), intent(in)      :: tree
