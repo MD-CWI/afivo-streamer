@@ -186,7 +186,9 @@ contains
     tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
 
     ! Initialize list of cell-centered variables with methods
-    allocate(tree%cc_method_vars(0))
+    if (.not. allocated(tree%cc_method_vars)) &
+         allocate(tree%cc_method_vars(0))
+
   end subroutine af_init
 
   !> Set the methods for a cell-centered variable
@@ -195,12 +197,13 @@ contains
     use m_af_prolong, only: af_prolong_linear
     use m_af_restrict, only: af_restrict_box
     type(af_t), intent(inout)             :: tree     !< Tree to operate on
-    integer, intent(in)                    :: iv       !< Index of variable
+    integer, intent(in)                   :: iv       !< Index of variable
     procedure(af_subr_bc)                 :: bc       !< Boundary condition method
     procedure(af_subr_rb), optional       :: rb       !< Refinement boundary method
     procedure(af_subr_prolong), optional  :: prolong  !< Prolongation method
     procedure(af_subr_restrict), optional :: restrict !< Restriction method
-    integer                                :: i, n
+    integer                               :: i, n
+
     tree%cc_methods(iv)%bc => bc
 
     if (present(rb)) then
@@ -222,8 +225,13 @@ contains
     end if
 
     tree%has_cc_method(iv) = .true.
+
+    if (.not. allocated(tree%cc_method_vars)) &
+         allocate(tree%cc_method_vars(0))
+
     n = size(tree%cc_method_vars)
     tree%cc_method_vars = [(tree%cc_method_vars(i), i=1,n), iv]
+
   end subroutine af_set_cc_methods
 
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
