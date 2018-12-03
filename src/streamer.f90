@@ -15,6 +15,7 @@ program streamer
   use m_dt
   use m_advance
   use m_types
+  use m_user_methods
 
   implicit none
 
@@ -167,8 +168,14 @@ program streamer
 
      if (mod(it, refine_per_steps) == 0) then
         call af_gc_tree(tree, species_ix(1:n_species))
-        call af_adjust_refinement(tree, refine_routine, ref_info, &
-             refine_buffer_width, .true.)
+
+        if (associated(user_refine)) then
+           call af_adjust_refinement(tree, user_refine, ref_info, &
+                refine_buffer_width, .true.)
+        else
+           call af_adjust_refinement(tree, refine_routine, ref_info, &
+                refine_buffer_width, .true.)
+        end if
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
@@ -250,13 +257,23 @@ contains
 
     do
        call af_loop_box(tree, init_cond_set_box)
+
+       if (associated(user_initial_conditions)) then
+          call af_loop_box(tree, user_initial_conditions)
+       end if
+
        call field_compute(tree, mg, time, .false.)
-       call af_adjust_refinement(tree, refine_routine, ref_info, &
-            refine_buffer_width, .true.)
+
+       if (associated(user_refine)) then
+          call af_adjust_refinement(tree, user_refine, ref_info, &
+               refine_buffer_width, .true.)
+       else
+          call af_adjust_refinement(tree, refine_routine, ref_info, &
+               refine_buffer_width, .true.)
+       end if
+
        if (ref_info%n_add == 0) exit
     end do
-
-    call init_cond_stochastic_density(tree)
   end subroutine set_initial_conditions
 
   subroutine write_log_file(tree, filename, out_cnt, dir)

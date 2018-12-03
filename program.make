@@ -13,7 +13,7 @@ LIBDIRS := $(MAIN_DIR)/lib_$(NDIM)d $(AFIVO_DIR)/lib_$(NDIM)d	\
 $(AFIVO_DIR)/external_libraries/silo/lib
 INCDIRS := $(TARGET_DIR) $(MAIN_DIR)/lib_$(NDIM)d $(AFIVO_DIR)/lib_$(NDIM)d
 LIBS := streamer afivo silo
-PROG := streamer_$(NDIM)d
+PROG := streamer
 
 .PHONY: all clean always_recompile
 
