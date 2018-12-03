@@ -1,16 +1,17 @@
-AFIVO_DIR := afivo
 2D_PROGS := bin_2d
 3D_PROGS := bin_3d
-SRC_DIRS := lib_2d lib_3d $(AFIVO_DIR)/lib_2d $(AFIVO_DIR)/lib_3d $(2D_PROGS)	\
-$(3D_PROGS)
+SRC_DIRS := $(2D_PROGS) $(3D_PROGS)
 
 # Directories with altered names (useful for cleaning)
-CLEANSRC := $(SRC_DIRS:%=clean-%)
+CLEANSRC := $(SRC_DIRS:%=clean-%) clean-lib_2d clean-lib_3d clean-afivo/lib_2d	\
+clean-afivo/lib_3d
 
 .PHONY:	all 2d 3d doc clean $(SRC_DIRS) $(CLEANSRC)
 
 all: 		2d 3d
+
 2d:		$(2D_PROGS)
+
 3d:		$(3D_PROGS)
 
 doc:    	$(SRC_DIRS)
@@ -27,11 +28,5 @@ $(CLEANSRC):
 # Ensure the output folder exists
 output:
 		mkdir -p output
-
-# Dependecy information
-lib_2d: $(AFIVO_DIR)/lib_2d
-lib_3d: $(AFIVO_DIR)/lib_3d
-$(2D_PROGS): lib_2d
-$(3D_PROGS): lib_3d
 
 

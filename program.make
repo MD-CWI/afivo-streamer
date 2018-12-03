@@ -15,7 +15,7 @@ INCDIRS := $(TARGET_DIR) $(MAIN_DIR)/lib_$(NDIM)d $(AFIVO_DIR)/lib_$(NDIM)d
 LIBS := streamer afivo silo
 PROG := streamer_$(NDIM)d
 
-.PHONY: all clean
+.PHONY: all clean always_recompile
 
 all: $(PROG)
 
@@ -38,5 +38,10 @@ $(PROG): streamer.f90
 
 # Dependencies
 $(PROG): $(MAIN_DIR)/lib_$(NDIM)d/libstreamer.a
-$(PROG): $(AFIVO_DIR)/lib_$(NDIM)d/libafivo.a
 $(PROG): m_user.o
+
+m_user.o: $(MAIN_DIR)/lib_$(NDIM)d/libstreamer.a
+
+$(MAIN_DIR)/lib_$(NDIM)d/libstreamer.a: always_recompile
+	$(MAKE) -C $(MAIN_DIR)/lib_$(NDIM)d
+
