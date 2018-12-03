@@ -1,11 +1,17 @@
-SRC_DIRS	:= build_2d build_3d afivo
+AFIVO_DIR := afivo
+2D_PROGS := bin_2d
+3D_PROGS := bin_3d
+SRC_DIRS := lib_2d lib_3d $(AFIVO_DIR)/lib_2d $(AFIVO_DIR)/lib_3d $(2D_PROGS)	\
+$(3D_PROGS)
 
 # Directories with altered names (useful for cleaning)
-CLEANSRC	:= $(SRC_DIRS:%=clean-%)
+CLEANSRC := $(SRC_DIRS:%=clean-%)
 
-.PHONY:	all doc clean $(SRC_DIRS) $(CLEANSRC)
+.PHONY:	all 2d 3d doc clean $(SRC_DIRS) $(CLEANSRC)
 
-all: 		$(SRC_DIRS)
+all: 		2d 3d
+2d:		$(2D_PROGS)
+3d:		$(3D_PROGS)
 
 doc:    	$(SRC_DIRS)
 		@doxygen
@@ -13,11 +19,6 @@ doc:    	$(SRC_DIRS)
 clean: 		$(CLEANSRC)
 
 $(SRC_DIRS):	| output
-		@echo "\n*********** Build information ***********"
-		@echo "  Debug is set to: [$(DEBUG)],"
-		@echo "  Set it to 1 to enable a debug build."
-		@echo "  For example: make clean; make DEBUG=1"
-		@echo "*****************************************\n"
 		$(MAKE) -C $@
 
 $(CLEANSRC):
@@ -28,4 +29,9 @@ output:
 		mkdir -p output
 
 # Dependecy information
-build_2d build_3d: afivo
+lib_2d: $(AFIVO_DIR)/lib_2d
+lib_3d: $(AFIVO_DIR)/lib_3d
+$(2D_PROGS): lib_2d
+$(3D_PROGS): lib_3d
+
+

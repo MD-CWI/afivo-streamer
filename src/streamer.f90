@@ -183,6 +183,8 @@ program streamer
 contains
 
   subroutine initialize_modules(cfg, tree, mg)
+    use m_user
+
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
@@ -198,6 +200,8 @@ contains
     call refine_initialize(cfg)
     call field_initialize(cfg, mg)
     call init_cond_initialize(cfg, NDIM)
+    call user_initialize(cfg, tree)
+
   end subroutine initialize_modules
 
   !> Initialize the AMR tree
