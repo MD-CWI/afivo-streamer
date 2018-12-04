@@ -191,17 +191,20 @@ contains
 
   subroutine initialize_modules(cfg, tree, mg)
     use m_user
+    use m_table_data
+    use m_transport_data
 
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
 
-    call gas_init(cfg)
-    call chemistry_init(tree, cfg)
+    call table_data_initialize(cfg)
+    call gas_initialize(cfg)
+    call transport_data_initialize(cfg)
+    call chemistry_initialize(tree, cfg)
     call ST_initialize(tree, cfg, NDIM)
     call photoi_initialize(tree, cfg)
 
-    call ST_load_transport_data(cfg)
     call dt_initialize(cfg)
     call advance_initialize(cfg)
     call refine_initialize(cfg)

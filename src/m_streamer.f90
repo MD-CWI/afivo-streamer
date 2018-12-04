@@ -33,17 +33,8 @@ module m_streamer
   integer, public, protected :: electric_fld = -1 ! Electric field vector
   integer, public, protected :: flux_species(1) = -1
 
-  ! ** Indices of transport data **
-  integer, parameter, public :: n_var_td    = 3 ! Number of transport coefficients
-  integer, parameter, public :: i_mobility  = 1 ! Electron mobility
-  integer, parameter, public :: i_diffusion = 2 ! Electron diffusion constant
-  integer, parameter, public :: i_alpha_eff = 3 ! Net ionization coefficient
-
   ! Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
-
-  ! Table with transport data vs electric field
-  type(LT_t), public, protected :: ST_td_tbl
 
   !> Maximal electric field for the lookup table
   real(dp), public, protected :: ST_max_field = 3e7_dp
@@ -143,7 +134,6 @@ module m_streamer
        ST_prolongation_method => null()
 
   public :: ST_initialize
-  public :: ST_load_transport_data
 
 contains
 
@@ -310,37 +300,5 @@ contains
        seed(i) = ishftc(time, i*8)
     end do
   end function get_random_seed
-
-  !> Initialize the transport coefficients
-  subroutine ST_load_transport_data(cfg)
-    use m_transport_data
-    use m_config
-    use m_gas
-    use m_chemistry
-
-    type(CFG_t), intent(inout) :: cfg
-    character(len=string_len)  :: td_file = "td_input_file.txt"
-    real(dp), allocatable      :: x_data(:), y_data(:)
-
-    ! Create a lookup table for the model coefficients
-    ST_td_tbl = LT_create(rate_min_townsend, rate_max_townsend, &
-         rate_table_size, n_var_td)
-
-    call CFG_add_get(cfg, "transport_data_file", td_file, &
-         "Input file with transport data")
-
-    ! Fill table with data
-    call TD_get_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
-    call LT_set_col(ST_td_tbl, i_mobility, x_data, y_data)
-
-    call TD_get_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
-         x_data, y_data)
-    call LT_set_col(ST_td_tbl, i_diffusion, x_data, y_data)
-
-    call TD_get_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
-         x_data, y_data)
-    call LT_set_col(ST_td_tbl, i_alpha_eff, x_data, y_data)
-
-  end subroutine ST_load_transport_data
 
 end module m_streamer

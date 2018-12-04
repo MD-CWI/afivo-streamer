@@ -3,6 +3,7 @@ module m_chemistry
   use m_types
   use m_af_all
   use m_lookup_table
+  use m_table_data
 
   implicit none
   private
@@ -35,13 +36,9 @@ module m_chemistry
   character(len=comp_len), public, protected :: species_list(max_num_species)
   integer, public, protected                 :: species_charge(max_num_species) = 0
   integer, public, protected                 :: species_ix(max_num_species)
-  type(reaction_t), public, protected        :: all_reactions(max_num_reactions)
+  type(reaction_t), public, protected        :: reactions(max_num_reactions)
   type(fast_react_t)                         :: fast_react(max_num_reactions)
   type(LT_t)                                 :: chemtbl
-
-  integer, public, protected  :: rate_table_size   = 1000
-  real(dp), public, protected :: rate_min_townsend = 0.0
-  real(dp), public, protected :: rate_max_townsend = 1e3_dp
 
   integer, allocatable, protected :: charged_species_ix(:)
   integer, allocatable, protected :: charged_species_charge(:)
@@ -49,7 +46,7 @@ module m_chemistry
   public :: charged_species_ix
   public :: charged_species_charge
 
-  public :: chemistry_init
+  public :: chemistry_initialize
   public :: get_rates
   public :: get_derivatives
 
@@ -57,27 +54,63 @@ module m_chemistry
 
 contains
 
-  subroutine chemistry_init(tree, cfg)
+  subroutine chemistry_initialize(tree, cfg)
     use m_config
     use m_units_constants
+    use m_table_data
+    use m_transport_data
+    use m_gas
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n, i
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
 
-    call CFG_add_get(cfg, "chemistry%rate_table_size", rate_table_size, &
-         "Size of the lookup table for reaction rates")
-    call CFG_add_get(cfg, "chemistry%rate_min_townsend", rate_min_townsend, &
-         "Minimal field (in Td) for the rate coeff. lookup table")
-    call CFG_add_get(cfg, "chemistry%rate_max_townsend", rate_max_townsend, &
-         "Maximal field (in Td) for the rate coeff. lookup table")
-
-    reaction_file = "reactions.txt"
+    reaction_file = "UNDEFINED"
     call CFG_add_get(cfg, "chemistry%reaction_file", reaction_file, &
          "File with a list of reactions")
 
-    call read_reactions(reaction_file)
+    if (reaction_file == "UNDEFINED") then
+       print *, "m_chemistry: no reactions defined, using standard model"
+
+       species_list(1) = "e"
+       species_list(2) = "M+"
+       species_list(3) = "M-"
+       n_species       = 3
+       n_reactions     = 2
+
+       ! Ionization reaction
+       if (gas_constant_density) then
+          reactions(1)%ix_in = [1]
+          reactions(1)%ix_out = [1, 2]
+          reactions(1)%multiplicity_out = [2, 1]
+          reactions(1)%rate_type = field_dependent_rate
+          reactions(1)%rate_factor = 1.0_dp
+          reactions(1)%x_data = &
+               LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
+          reactions(1)%y_data = td_tbl%rows_cols(:, td_alpha) * &
+               td_tbl%rows_cols(:, td_mobility) * reactions(1)%x_data * &
+               Townsend_to_SI
+          reactions(1)%description = "e + M > e + e + M+"
+
+          ! Attachment reaction
+          reactions(2)%ix_in = [1]
+          reactions(2)%ix_out = [3]
+          reactions(2)%multiplicity_out = [1]
+          reactions(2)%rate_type = field_dependent_rate
+          reactions(2)%rate_factor = 1.0_dp
+          reactions(2)%x_data = &
+               LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
+          reactions(2)%y_data = td_tbl%rows_cols(:, td_eta) * &
+               td_tbl%rows_cols(:, td_mobility) * reactions(2)%x_data * &
+               Townsend_to_SI
+          reactions(2)%description = "e + M > M-"
+       else
+          error stop "Varying gas density not yet supported"
+       end if
+    else
+       call read_reactions(reaction_file)
+    end if
 
     ! Convert names to simple ascii
     do n = 1, n_species
@@ -86,14 +119,14 @@ contains
             species_charge(n))
     end do
 
-    chemtbl = LT_create(rate_min_townsend, rate_max_townsend, &
-         rate_table_size, n_reactions)
+    chemtbl = LT_create(table_min_townsend, table_max_townsend, &
+         table_size, n_reactions)
 
     do n = 1, n_reactions
-       select case (all_reactions(n)%rate_type)
+       select case (reactions(n)%rate_type)
        case (constant_rate, field_dependent_rate)
-          call LT_set_col(chemtbl, n, all_reactions(n)%x_data, &
-               all_reactions(n)%rate_factor * all_reactions(n)%y_data)
+          call LT_set_col(chemtbl, n, reactions(n)%x_data, &
+               reactions(n)%rate_factor * reactions(n)%y_data)
        case default
           error stop "Unknown type of reaction rate"
        end select
@@ -101,13 +134,13 @@ contains
 
     ! Also store in more memory-efficient structure
     do n = 1, n_reactions
-       print *, all_reactions(n)%description
-       print *, all_reactions(n)%ix_in
-       print *, all_reactions(n)%ix_out
-       print *, all_reactions(n)%multiplicity_out
-       fast_react(n)%ix_in            = all_reactions(n)%ix_in
-       fast_react(n)%ix_out           = all_reactions(n)%ix_out
-       fast_react(n)%multiplicity_out = all_reactions(n)%multiplicity_out
+       print *, reactions(n)%description
+       print *, reactions(n)%ix_in
+       print *, reactions(n)%ix_out
+       print *, reactions(n)%multiplicity_out
+       fast_react(n)%ix_in            = reactions(n)%ix_in
+       fast_react(n)%ix_out           = reactions(n)%ix_out
+       fast_react(n)%multiplicity_out = reactions(n)%multiplicity_out
     end do
 
     do n = 1, n_species
@@ -129,7 +162,7 @@ contains
        end if
     end do
 
-  end subroutine chemistry_init
+  end subroutine chemistry_initialize
 
   !> Compute reaction rates
   subroutine get_rates(fields, rates, n_cells)
@@ -208,10 +241,6 @@ contains
 
        call get_reaction(trim(reaction), new_reaction)
        new_reaction%description = trim(reaction)
-       ! print *, trim(reaction)
-       ! print *, species_list(new_reaction%ix_in)
-       ! print *, species_list(new_reaction%ix_out)
-       ! print *, new_reaction%multiplicity_out
 
        select case (how_to_get)
        case ("table")
@@ -223,8 +252,8 @@ contains
           call read_reaction_constant(trim(data_value), new_reaction)
        end select
 
-       n_reactions                = n_reactions + 1
-       all_reactions(n_reactions) = new_reaction
+       n_reactions            = n_reactions + 1
+       reactions(n_reactions) = new_reaction
     end do
     close(my_unit)
 
@@ -239,7 +268,7 @@ contains
     rdata%rate_type = constant_rate
     read(text, *) tmp
 
-    rdata%x_data = [rate_min_townsend, rate_max_townsend]
+    rdata%x_data = [table_min_townsend, table_max_townsend]
     rdata%y_data = [tmp, tmp]
   end subroutine read_reaction_constant
 
@@ -250,7 +279,7 @@ contains
     type(reaction_t), intent(inout) :: rdata
 
     rdata%rate_type = field_dependent_rate
-    call TD_get_from_file(filename, dataname, rdata%x_data, rdata%y_data)
+    call table_from_file(filename, dataname, rdata%x_data, rdata%y_data)
   end subroutine read_reaction_table
 
   subroutine get_reaction(reaction_text, reaction)

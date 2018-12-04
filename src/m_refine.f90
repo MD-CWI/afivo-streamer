@@ -129,6 +129,7 @@ contains
     use m_init_cond
     use m_gas
     use m_lookup_table
+    use m_transport_data
     type(box_t), intent(in) :: box
     ! Refinement flags for the cells of the box
     integer, intent(out)     :: &
@@ -144,7 +145,7 @@ contains
 
     do KJI_DO(1,nc)
        fld   = box%cc(IJK, i_electric_fld) * SI_to_Townsend
-       alpha = LT_get_col(ST_td_tbl, i_alpha_eff, refine_adx_fac * fld) * &
+       alpha = LT_get_col(td_tbl, td_alpha, refine_adx_fac * fld) * &
             gas_number_density / refine_adx_fac
        adx   = box%dr * alpha
        elec_dens = box%cc(IJK, i_electron)

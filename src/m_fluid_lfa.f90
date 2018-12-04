@@ -66,6 +66,7 @@ contains
     use m_gas
     use m_dt
     use m_lookup_table
+    use m_transport_data
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id
     real(dp), intent(in)       :: dt
@@ -120,10 +121,10 @@ contains
           fld = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
                boxes(id)%cc(n, m, i_electric_fld))
           Td = fld * SI_to_Townsend
-          mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
+          mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
           fld_face = boxes(id)%fc(n, m, 1, electric_fld)
           v(n, m, 1)  = -mu * fld_face
-          dc(n, m, 1) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
+          dc(n, m, 1) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
 
           if (ST_drt_limit_flux) then
              tmp = abs(cc(n-1, m) - cc(n, m))/max(cc(n-1, m), cc(n, m), nsmall)
@@ -139,10 +140,10 @@ contains
           fld = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
                boxes(id)%cc(m, n, i_electric_fld))
           Td = fld * SI_to_Townsend
-          mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
+          mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
           fld_face = boxes(id)%fc(m, n, 2, electric_fld)
           v(m, n, 2)  = -mu * fld_face
-          dc(m, n, 2) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
+          dc(m, n, 2) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
 
           if (ST_drt_limit_flux) then
              tmp = abs(cc(m, n-1) - cc(m, n))/max(cc(m, n-1), cc(m, n), nsmall)
@@ -160,10 +161,10 @@ contains
                   boxes(id)%cc(n-1, m, l, i_electric_fld) + &
                   boxes(id)%cc(n, m, l, i_electric_fld))
              Td = fld * SI_to_Townsend
-             mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
+             mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              fld_face = boxes(id)%fc(n, m, l, 1, electric_fld)
              v(n, m, l, 1)  = -mu * fld_face
-             dc(n, m, l, 1) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
+             dc(n, m, l, 1) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
 
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(n-1, m, l) - cc(n, m, l)) / &
@@ -181,10 +182,10 @@ contains
                   boxes(id)%cc(m, n-1, l, i_electric_fld) + &
                   boxes(id)%cc(m, n, l, i_electric_fld))
              Td = fld * SI_to_Townsend
-             mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
+             mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              fld_face = boxes(id)%fc(m, n, l, 2, electric_fld)
              v(m, n, l, 2)  = -mu * fld_face
-             dc(m, n, l, 2) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
+             dc(m, n, l, 2) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
 
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(m, n-1, l) - cc(m, n, l)) / &
@@ -202,10 +203,10 @@ contains
                   boxes(id)%cc(m, l, n-1, i_electric_fld) + &
                   boxes(id)%cc(m, l, n, i_electric_fld))
              Td = fld * SI_to_Townsend
-             mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
+             mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              fld_face = boxes(id)%fc(m, l, n, 3, electric_fld)
              v(m, l, n, 3)  = -mu * fld_face
-             dc(m, l, n, 3) = LT_get_col(ST_td_tbl, i_diffusion, Td) * N_inv
+             dc(m, l, n, 3) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
 
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(m, l, n-1) - cc(m, l, n)) / &
@@ -255,7 +256,7 @@ contains
              mu = ST_ion_mobility
           else
              Td = boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend
-             mu = LT_get_col(ST_td_tbl, i_mobility, Td) * N_inv
+             mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              mu = max(mu, ST_ion_mobility)
           end if
 

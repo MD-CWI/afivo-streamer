@@ -28,12 +28,12 @@ module m_gas
   ! Convert Townsend to V/m
   real(dp), public, protected :: Townsend_to_SI
 
-  public :: gas_init
+  public :: gas_initialize
   public :: gas_index
 
 contains
 
-  subroutine gas_init(cfg)
+  subroutine gas_initialize(cfg)
     use m_config
     use m_units_constants
     type(CFG_t), intent(inout) :: cfg
@@ -70,7 +70,7 @@ contains
 
     gas_densities = gas_fractions * gas_number_density
 
-  end subroutine gas_init
+  end subroutine gas_initialize
 
   !> Find index of a gas component, return -1 if not found
   elemental integer function gas_index(name)
