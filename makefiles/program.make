@@ -25,7 +25,7 @@ clean:
 vpath %.f90 $(MAIN_DIR)/src
 
 # Include compilation rules
-include $(AFIVO_DIR)/src/makerules.make
+include  $(MAIN_DIR)/makefiles/makerules.make
 
 # Optionally include a local makefile
 -include local.make

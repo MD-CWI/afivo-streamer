@@ -37,28 +37,28 @@ contains
     type(CFG_t), intent(inout) :: cfg !< Settings
     integer, intent(in)        :: n_dim
 
-    integer                    :: n_cond, varsize
-    real(dp)                   :: dlen
+    integer                    :: n_cond, varsize, empty_int(0)
+    real(dp)                   :: dlen, empty_real(0)
     real(dp), allocatable      :: tmp_vec(:)
+    character(len=name_len)    :: empty_string(0)
     type(initcnd_t)            :: ic
 
     call CFG_add(cfg, "background_density", 0.0_dp, &
          "The background ion and electron density (1/m3)")
     call CFG_add(cfg, "stochastic_density", 0.0_dp, &
          "Stochastic background density (1/m3)")
-    call CFG_add(cfg, "seed_density", [1.0e15_dp], &
+    call CFG_add(cfg, "seed_density", empty_real, &
          "Initial density of the seed (1/m3)", .true.)
-    call CFG_add(cfg, "seed_rel_r0", [DTIMES(0.5_dp)], &
+    call CFG_add(cfg, "seed_rel_r0", empty_real, &
          "The relative start position of the initial seed", .true.)
-    call CFG_add(cfg, "seed_rel_r1", [DTIMES(0.5_dp)], &
+    call CFG_add(cfg, "seed_rel_r1", empty_real, &
          "The relative end position of the initial seed", .true.)
-    call CFG_add(cfg, "seed_charge_type", [0], &
+    call CFG_add(cfg, "seed_charge_type", empty_int, &
          "Type of seed: neutral (0), ions (1) or electrons (-1)", .true.)
-    call CFG_add(cfg, "seed_width", [0.25d-3], &
+    call CFG_add(cfg, "seed_width", empty_real, &
          "Seed width (m)", .true.)
-    call CFG_add(cfg, "seed_falloff", ['smoothstep'], &
-         "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser), "&
-         &"default=smoothstep", .true.)
+    call CFG_add(cfg, "seed_falloff", empty_string, &
+         "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)", .true.)
 
     call CFG_get_size(cfg, "seed_density", n_cond)
     ic%n_cond = n_cond

@@ -25,7 +25,7 @@ vpath %.f90 $(MAIN_DIR)/src $(MAIN_DIR)/src/config_fortran \
 include $(MAIN_DIR)/src/definitions.make
 
 # Compilation rules
-include $(AFIVO_DIR)/src/makerules.make
+include  $(MAIN_DIR)/makefiles/makerules.make
 
 FFLAGS += -DNDIM=$(NDIM)
 
