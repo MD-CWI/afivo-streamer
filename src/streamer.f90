@@ -142,7 +142,11 @@ program streamer
         end if
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_log.txt"
-        call write_log_file(tree, fname, output_cnt, ST_output_dir)
+        if (associated(user_write_log)) then
+           call user_write_log(tree, fname, output_cnt, ST_output_dir)
+        else
+           call write_log_file(tree, fname, output_cnt, ST_output_dir)
+        end if
 
         if (ST_plane_write) then
            write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
