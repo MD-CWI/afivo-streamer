@@ -13,14 +13,15 @@ module m_fluid_lfa
 
 contains
 
+  !> Advance fluid model using forward Euler step
   subroutine forward_euler(tree, dt, s_in, s_out, set_dt)
     use m_chemistry
     use m_streamer
     type(af_t), intent(inout) :: tree
-    real(dp), intent(in)      :: dt
-    integer, intent(in)       :: s_in
-    integer, intent(in)       :: s_out
-    logical, intent(in)       :: set_dt
+    real(dp), intent(in)      :: dt     !< Time step
+    integer, intent(in)       :: s_in   !< Input time state
+    integer, intent(in)       :: s_out  !< Output time state
+    logical, intent(in)       :: set_dt !< Whether to set new time step
     integer                   :: lvl, i, id, p_id
 
     ! First calculate fluxes
@@ -70,7 +71,7 @@ contains
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id
     real(dp), intent(in)       :: dt
-    integer, intent(in)        :: s_in
+    integer, intent(in)        :: s_in   !< Input time state
     logical, intent(in)        :: set_dt
     real(dp)                   :: inv_dr, fld, Td
     ! Velocities at cell faces
@@ -314,7 +315,8 @@ contains
     !     end if
   end subroutine fluxes_elec
 
-  !> Advance solution over dt based on the fluxes / source term, using forward Euler
+  !> Advance solution in a box over dt based on the fluxes and reactions, using
+  !> a forward Euler update
   subroutine update_solution(box, dt, s_in, s_out, set_dt)
     use omp_lib
     use m_units_constants
@@ -324,10 +326,10 @@ contains
     use m_photoi
     use m_dt
     type(box_t), intent(inout) :: box
-    real(dp), intent(in)       :: dt
-    integer, intent(in)        :: s_in
-    integer, intent(in)        :: s_out
-    logical, intent(in)        :: set_dt
+    real(dp), intent(in)       :: dt     !< Time step
+    integer, intent(in)        :: s_in   !< Input time state
+    integer, intent(in)        :: s_out  !< Output time state
+    logical, intent(in)        :: set_dt !< Whether to set new time step
     real(dp)                   :: inv_dr
     real(dp), allocatable      :: rates(:, :)
     real(dp), allocatable      :: derivs(:, :)
