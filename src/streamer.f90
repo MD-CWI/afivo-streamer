@@ -16,14 +16,14 @@ program streamer
   use m_advance
   use m_types
   use m_user_methods
+  use m_output
 
   implicit none
 
   integer, parameter        :: int8       = selected_int_kind(18)
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate, time_last_print
-  integer                   :: i, it
-  character(len=string_len) :: fname
+  integer                   :: i, s, it
   logical                   :: write_out
   real(dp)                  :: time, dt, photoi_prev_time
   type(CFG_t)               :: cfg            ! The configuration for the simulation
@@ -36,27 +36,18 @@ program streamer
 
   call initialize_modules(cfg, tree, mg)
 
-  call check_path_writable(ST_output_dir)
-
-  fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_out.cfg"
-  call CFG_write(cfg, trim(fname))
+  call CFG_write(cfg, trim(output_name) // "_out.cfg")
 
   ! Initialize the tree (which contains all the mesh information)
   call init_tree(tree)
 
+  ! Specify default methods for all the variables
   do i = 1, n_species
-     call af_set_cc_methods(tree, species_ix(i), &
-          af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
+     do s = 0, advance_num_states-1
+        call af_set_cc_methods(tree, species_ix(i)+s, &
+             af_bc_neumann_zero, af_gc_interp_lim)
+     end do
   end do
-
-  call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
-  call af_set_cc_methods(tree, i_electric_fld, &
-       af_bc_neumann_zero, af_gc_interp)
-
-  if (ST_output_src_term) then
-     call af_set_cc_methods(tree, i_src, &
-          af_bc_neumann_zero, af_gc_interp)
-  end if
 
   if (photoi_enabled) then
      call photoi_set_methods(tree)
@@ -71,7 +62,6 @@ program streamer
   output_cnt       = 0      ! Number of output files written
   time             = 0.0_dp ! Simulation time (all times are in s)
   global_time      = time
-  dt               = dt_min
   photoi_prev_time = 0.0_dp ! Time of last photoionization computation
 
   ! Set up the initial conditions
@@ -88,22 +78,22 @@ program streamer
   do it = 1, huge(1)-1
      if (time >= ST_end_time) exit
 
+     dt = advance_max_dt
+
      ! Update wall clock time
      call system_clock(t_current)
      wc_time = (t_current - t_start) * inv_count_rate
 
      ! Every ST_print_status_interval, print some info about progress
-     if (wc_time - time_last_print > ST_print_status_sec) then
-        call print_status()
+     if (wc_time - time_last_print > output_status_delay) then
+        call output_status(tree, time, wc_time, it, dt)
         time_last_print = wc_time
      end if
 
-     dt = advance_max_dt
-
-     ! Every ST_dt_output, write output
-     if (output_cnt * ST_dt_output <= time + dt) then
+     ! Every output_dt, write output
+     if (output_cnt * output_dt <= time + dt) then
         write_out  = .true.
-        dt         = output_cnt * ST_dt_output - time
+        dt         = output_cnt * output_dt - time
         output_cnt = output_cnt + 1
      else
         write_out = .false.
@@ -115,59 +105,19 @@ program streamer
      end if
 
      call advance(tree, mg, dt, time)
+     dt = advance_max_dt
      global_time = time
 
-     if (advance_max_dt < dt_min .and. .not. write_out) then
+     if (advance_max_dt < dt_min) then
         print *, "ST_dt getting too small, instability?", advance_max_dt
-        write_out = .true.
-        output_cnt = output_cnt + 1
+        if (.not. write_out) then
+           write_out = .true.
+           output_cnt = output_cnt + 1
+        end if
      end if
 
      if (write_out) then
-        if (ST_silo_write) then
-           ! Because the mesh could have changed
-           if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
-
-           do i = 1, tree%n_var_cell
-              if (tree%cc_write_output(i)) then
-                 call af_restrict_tree(tree, i)
-                 call af_gc_tree(tree, i)
-              end if
-           end do
-
-           write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
-           call af_write_silo(tree, fname, output_cnt, time, dir=ST_output_dir)
-        end if
-
-        if (ST_datfile_write) then
-           call af_write_tree(tree, fname, ST_output_dir)
-        end if
-
-        write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_log.txt"
-        if (associated(user_write_log)) then
-           call user_write_log(tree, fname, output_cnt, ST_output_dir)
-        else
-           call write_log_file(tree, fname, output_cnt, ST_output_dir)
-        end if
-
-        if (ST_plane_write) then
-           write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
-                "_plane_", output_cnt
-           call af_write_plane(tree, fname, [ST_plane_ivar], &
-                ST_plane_rmin * ST_domain_len, &
-                ST_plane_rmax * ST_domain_len, &
-                ST_plane_npixels, ST_output_dir)
-        end if
-
-        if (ST_lineout_write) then
-           write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
-                "_line_", output_cnt
-           call af_write_line(tree, trim(fname), &
-                [i_electron, i_1pos_ion, i_phi, i_electric_fld], &
-                r_min = ST_lineout_rmin(1:NDIM) * ST_domain_len, &
-                r_max = ST_lineout_rmax(1:NDIM) * ST_domain_len, &
-                n_points=ST_lineout_npoints, dir=ST_output_dir)
-        end if
+        call output_write(tree, output_cnt, wc_time)
      end if
 
      if (advance_max_dt < dt_min) error stop "dt too small"
@@ -190,8 +140,7 @@ program streamer
      end if
   end do
 
-  call print_status()
-  call af_destroy(tree)
+  call output_status(tree, time, wc_time, it, dt)
 
 contains
 
@@ -199,11 +148,13 @@ contains
     use m_user
     use m_table_data
     use m_transport_data
+    use m_advance_base
 
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
 
+    call advance_base_initialize(cfg)
     call table_data_initialize(cfg)
     call gas_initialize(cfg)
     call transport_data_initialize(cfg)
@@ -212,10 +163,11 @@ contains
     call photoi_initialize(tree, cfg)
 
     call dt_initialize(cfg)
-    call advance_initialize(cfg)
+    call advance_initialize()
     call refine_initialize(cfg)
-    call field_initialize(cfg, mg)
-    call init_cond_initialize(cfg, NDIM)
+    call field_initialize(tree, cfg, mg)
+    call init_cond_initialize(cfg)
+    call output_initialize(tree, cfg)
     call user_initialize(cfg, tree)
 
   end subroutine initialize_modules
@@ -284,84 +236,5 @@ contains
        if (ref_info%n_add == 0) exit
     end do
   end subroutine set_initial_conditions
-
-  subroutine write_log_file(tree, filename, out_cnt, dir)
-    type(af_t), intent(in)      :: tree
-    character(len=*), intent(in) :: filename
-    integer, intent(in)          :: out_cnt
-    character(len=*), intent(in) :: dir
-    character(len=string_len)       :: fname
-    character(len=30), save      :: fmt
-    integer, parameter           :: my_unit = 123
-    real(dp)                     :: velocity, dt
-    real(dp), save               :: prev_pos(NDIM) = 0
-    real(dp)                     :: sum_elec, sum_pos_ion
-    real(dp)                     :: max_elec, max_field, max_Er
-    type(af_loc_t)              :: loc_elec, loc_field, loc_Er
-
-    call af_prepend_directory(filename, dir, fname)
-
-    call af_tree_sum_cc(tree, i_electron, sum_elec)
-    call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
-    call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
-    call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
-
-    dt = advance_max_dt
-
-    if (out_cnt == 1) then
-       open(my_unit, file=trim(fname), action="write")
-#if NDIM == 2
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y wc_time n_cells min(dx) highest(lvl)"
-       fmt = "(I6,15E16.8,I12,1E16.8,I3)"
-#elif NDIM == 3
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
-       fmt = "(I6,14E16.8,I12,1E16.8,I3)"
-#endif
-       close(my_unit)
-
-       ! Start with velocity zero
-       prev_pos = af_r_loc(tree, loc_field)
-    end if
-
-    velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / ST_dt_output
-    prev_pos = af_r_loc(tree, loc_field)
-
-    open(my_unit, file=trim(fname), action="write", &
-         position="append")
-#if NDIM == 2
-    write(my_unit, fmt) out_cnt, time, dt, velocity, sum_elec, &
-         sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
-#elif NDIM == 3
-    write(my_unit, fmt) out_cnt, time, dt, velocity, sum_elec, &
-         sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
-#endif
-    close(my_unit)
-
-  end subroutine write_log_file
-
-  subroutine print_status()
-    write(*, "(F7.2,A,I0,A,E10.3,A,E10.3,A,E10.3,A,E10.3)") &
-         100 * time / ST_end_time, "% it: ", it, &
-         " t:", time, " dt:", dt, " wc:", wc_time, &
-         " ncell:", real(af_num_cells_used(tree), dp)
-  end subroutine print_status
-
-  subroutine check_path_writable(pathname)
-    character(len=*), intent(in) :: pathname
-    integer                      :: my_unit, iostate
-    open(newunit=my_unit, file=trim(pathname)//"/DUMMY", iostat=iostate)
-    if (iostate /= 0) then
-       print *, "Output directory: " // trim(pathname)
-       error stop "Directory not writable (does it exist?)"
-    else
-       close(my_unit, status='delete')
-    end if
-  end subroutine check_path_writable
 
 end program streamer

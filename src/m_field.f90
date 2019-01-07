@@ -71,8 +71,9 @@ module m_field
 contains
 
   !> Initialize this module
-  subroutine field_initialize(cfg, mg)
+  subroutine field_initialize(tree, cfg, mg)
     use m_config
+    type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg !< Settings
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
 
@@ -153,6 +154,10 @@ contains
 
     ! This routine always needs to be called when using multigrid
     call mg_init_mg(mg)
+
+    call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
+    call af_set_cc_methods(tree, i_electric_fld, &
+         af_bc_neumann_zero, af_gc_interp)
 
   end subroutine field_initialize
 

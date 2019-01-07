@@ -1,48 +1,24 @@
 #include "../afivo/src/cpp_macros.h"
-!> Module for time integration
+!> Module for advancing solution in time
 module m_advance
   use m_af_all
   use m_dt
+  use m_advance_base
 
   implicit none
   private
 
-  integer            :: time_integrator
-  integer, parameter :: forward_euler_t = 1
-  integer, parameter :: heuns_method_t  = 2
-  integer, parameter :: rk2_t           = 3
-
-  ! Current time step
+  !> Maximal allowed time step
   real(dp), public, protected :: advance_max_dt
 
   ! Public methods
   public :: advance_initialize
   public :: advance
+  public :: advance_num_states
 
 contains
 
-  subroutine advance_initialize(cfg)
-    use m_config
-    use m_types
-    type(CFG_t), intent(inout) :: cfg
-    character(len=name_len)    :: integrator
-
-    integrator = "heuns_method"
-    call CFG_add_get(cfg, "time_integrator", integrator, &
-         "Time integrator (forward_euler, heuns_method)")
-    select case (integrator)
-    case ("forward_euler")
-       time_integrator = forward_euler_t
-    case ("rk2")
-       time_integrator = rk2_t
-    case ("heuns_method")
-       time_integrator = heuns_method_t
-    case default
-       print *, "Time integrator: ", trim(integrator)
-       error stop "Invalid time integrator"
-    end select
-
-    ! Start from a small time step
+  subroutine advance_initialize()
     advance_max_dt = dt_min
   end subroutine advance_initialize
 

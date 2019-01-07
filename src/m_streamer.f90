@@ -21,12 +21,6 @@ module m_streamer
   integer, public, protected :: i_rhs          = -1 ! Source term Poisson
   integer, public, protected :: i_tmp          = -1 ! Temporary variable
 
-  ! Optional variable (to show ionization source term)
-  integer, public, protected :: i_src = -1 ! Source term
-
-  ! If true, only include n_e, n_i and |E| in output files
-  logical, public, protected :: ST_small_output = .false.
-
   ! ** Indices of face-centered variables **
   integer, public, protected :: n_var_face   = 0 ! Number of variables
   integer, public, protected :: flux_elec    = -1 ! Electron flux
@@ -54,62 +48,11 @@ module m_streamer
   ! Parallel random number generator
   type(prng_t), public :: ST_prng
 
-  ! Name of the simulations
-  character(len=string_len), public, protected :: ST_simulation_name = "sim"
-
-  ! Output directory
-  character(len=string_len), public, protected :: ST_output_dir = "output"
-
-  ! Print status every this many seconds
-  real(dp), public, protected :: ST_print_status_sec = 60.0_dp
-
   logical, public, protected :: ST_drt_limit_flux = .false.
 
   real(dp), public, protected :: ST_src_max_density = 1.0e100_dp
   real(dp), public, protected :: ST_max_velocity = -1.0_dp
   real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
-
-  ! Time between writing output
-  real(dp), public, protected :: ST_dt_output = 1.0e-10_dp
-
-  ! Include ionization source term in output
-  logical, public, protected :: ST_output_src_term = .false.
-
-  ! If positive: decay rate for source term (1/s) for time-averaged values
-  real(dp), public, protected :: ST_output_src_decay_rate = -1.0_dp
-
-  ! Write output along a line
-  logical, public, protected :: ST_lineout_write = .false.
-
-  ! Write Silo output
-  logical, public, protected :: ST_silo_write = .true.
-
-  ! Write binary output files (to resume later)
-  logical, public, protected :: ST_datfile_write = .false.
-
-  ! Use this many points for lineout data
-  integer, public, protected :: ST_lineout_npoints = 500
-
-  ! Relative position of line minimum coordinate
-  real(dp), public, protected :: ST_lineout_rmin(3) = 0.0_dp
-
-  ! Relative position of line maximum coordinate
-  real(dp), public, protected :: ST_lineout_rmax(3) = 1.0_dp
-
-  ! Write uniform output in a plane
-  logical, public, protected :: ST_plane_write = .false.
-
-  ! Which variable to include in plane
-  integer, public, protected :: ST_plane_ivar
-
-  ! Use this many points for plane data
-  integer, public, protected :: ST_plane_npixels(2) = [64, 64]
-
-  ! Relative position of plane minimum coordinate
-  real(dp), public, protected :: ST_plane_rmin(3) = 0.0_dp
-
-  ! Relative position of plane maximum coordinate
-  real(dp), public, protected :: ST_plane_rmax(3) = 1.0_dp
 
   ! End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
@@ -148,14 +91,10 @@ contains
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
-    real(dp)                   :: tmp
-    character(len=name_len)    :: varname, prolong_method
+    character(len=name_len)    :: prolong_method
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
-
-    call CFG_add_get(cfg, "small_output", ST_small_output, &
-         "If true, only include n_e, n_i and |E| in output files")
 
     ! Set index of electrons
     i_electron = af_find_cc_variable(tree, "e")
@@ -172,9 +111,9 @@ contains
 
     if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
 
-    call af_add_cc_variable(tree, "phi", write_out=(.not. ST_small_output), ix=i_phi)
+    call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
-    call af_add_cc_variable(tree, "rhs", write_out=(.not. ST_small_output), ix=i_rhs)
+    call af_add_cc_variable(tree, "rhs", ix=i_rhs)
     call af_add_cc_variable(tree, "tmp", write_out=.false., ix=i_tmp)
 
     call af_add_fc_variable(tree, "flux_elec", ix=flux_elec)
@@ -192,14 +131,8 @@ contains
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
-    call CFG_add_get(cfg, "simulation_name", ST_simulation_name, &
-         "The name of the simulation")
     call CFG_add_get(cfg, "end_time", ST_end_time, &
        "The desired endtime (s) of the simulation")
-    call CFG_add_get(cfg, "output_dir", ST_output_dir, &
-         "Directory where the output should be written")
-    call CFG_add_get(cfg, "print_status_sec", ST_print_status_sec, &
-         "Print status every this many seconds")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
          "The number of grid cells per coordinate in a box")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &
@@ -234,46 +167,6 @@ contains
          "Disable impact ionization source above this density")
     call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
          "Disable diffusion parallel to fields above this threshold (V/m)")
-
-    call CFG_add_get(cfg, "dt_output", ST_dt_output, &
-         "The timestep for writing output (s)")
-    call CFG_add_get(cfg, "output_src_term", ST_output_src_term, &
-         "Include ionization source term in output")
-
-    tmp = 1/ST_output_src_decay_rate
-    call CFG_add_get(cfg, "output_src_decay_time", tmp, &
-         "If positive: decay time for source term (s) for time-averaged values")
-    ST_output_src_decay_rate = 1/tmp
-
-    if (ST_output_src_term) then
-       call af_add_cc_variable(tree, "src", ix=i_src)
-    end if
-
-    call CFG_add_get(cfg, "lineout%write", ST_lineout_write, &
-         "Write output along a line")
-    call CFG_add_get(cfg, "silo_write", ST_silo_write, &
-         "Write silo output")
-    call CFG_add_get(cfg, "datfile_write", ST_datfile_write, &
-         "Write binary output files (to resume later)")
-    call CFG_add_get(cfg, "lineout%npoints", ST_lineout_npoints, &
-         "Use this many points for lineout data")
-    call CFG_add_get(cfg, "lineout%rmin", ST_lineout_rmin(1:ndim), &
-         "Relative position of line minimum coordinate")
-    call CFG_add_get(cfg, "lineout%rmax", ST_lineout_rmax(1:ndim), &
-         "Relative position of line maximum coordinate")
-
-    call CFG_add_get(cfg, "plane%write", ST_plane_write, &
-         "Write uniform output in a plane")
-    varname = "e"
-    call CFG_add_get(cfg, "plane%varname", varname, &
-         "Names of variable to write in a plane")
-    ST_plane_ivar = af_find_cc_variable(tree, trim(varname))
-    call CFG_add_get(cfg, "plane%npixels", ST_plane_npixels, &
-         "Use this many pixels for plane data")
-    call CFG_add_get(cfg, "plane%rmin", ST_plane_rmin(1:ndim), &
-         "Relative position of plane minimum coordinate")
-    call CFG_add_get(cfg, "plane%rmax", ST_plane_rmax(1:ndim), &
-         "Relative position of plane maximum coordinate")
 
     call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
          "Seed for random numbers. If all zero, generate from clock.")

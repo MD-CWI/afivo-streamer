@@ -14,12 +14,11 @@ module m_user_methods
   procedure(log_subr), pointer :: user_write_log => null()
 
   interface
-     subroutine log_subr(tree, filename, out_cnt, dir)
+     subroutine log_subr(tree, filename, out_cnt)
        import
        type(af_t), intent(in)      :: tree
        character(len=*), intent(in) :: filename
        integer, intent(in)          :: out_cnt
-       character(len=*), intent(in) :: dir
      end subroutine log_subr
   end interface
 

@@ -33,10 +33,9 @@ module m_init_cond
 contains
 
   ! Set the initial conditions from the configuration
-  subroutine init_cond_initialize(cfg, n_dim)
+  subroutine init_cond_initialize(cfg)
     use m_config
     type(CFG_t), intent(inout) :: cfg !< Settings
-    integer, intent(in)        :: n_dim
 
     integer                    :: n_cond, varsize, empty_int(0)
     real(dp)                   :: dlen, empty_real(0)
@@ -65,11 +64,11 @@ contains
     ic%n_cond = n_cond
 
     call CFG_get_size(cfg, "seed_rel_r0", varsize)
-    if (varsize /= n_dim * n_cond) &
+    if (varsize /= NDIM * n_cond) &
          stop "seed_rel_r0 variable has incompatible size"
 
     call CFG_get_size(cfg, "seed_rel_r1", varsize)
-    if (varsize /= n_dim * n_cond) &
+    if (varsize /= NDIM * n_cond) &
          stop "seed_rel_r1 variable has incompatible size"
 
     call CFG_get_size(cfg, "seed_charge_type", varsize)
@@ -83,17 +82,17 @@ contains
     allocate(ic%seed_density(n_cond))
     allocate(ic%seed_density2(n_cond))
     allocate(ic%seed_charge_type(n_cond))
-    allocate(ic%seed_r0(n_dim, n_cond))
-    allocate(ic%seed_r1(n_dim, n_cond))
+    allocate(ic%seed_r0(NDIM, n_cond))
+    allocate(ic%seed_r1(NDIM, n_cond))
     allocate(ic%seed_width(n_cond))
     allocate(ic%seed_falloff(n_cond))
 
-    allocate(tmp_vec(n_dim * n_cond))
+    allocate(tmp_vec(NDIM * n_cond))
     call CFG_get(cfg, "seed_rel_r0", tmp_vec)
     call CFG_get(cfg, "domain_len", dlen)
-    ic%seed_r0 = dlen * reshape(tmp_vec, [n_dim, n_cond])
+    ic%seed_r0 = dlen * reshape(tmp_vec, [NDIM, n_cond])
     call CFG_get(cfg, "seed_rel_r1", tmp_vec)
-    ic%seed_r1 = dlen * reshape(tmp_vec, [n_dim, n_cond])
+    ic%seed_r1 = dlen * reshape(tmp_vec, [NDIM, n_cond])
 
     call CFG_get(cfg, "background_density", ic%background_density)
     call CFG_get(cfg, "stochastic_density", ic%stochastic_density)

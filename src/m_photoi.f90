@@ -49,8 +49,7 @@ contains
     if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
 
     if (photoi_enabled) then
-       call af_add_cc_variable(tree, "photo", &
-            write_out=(.not. ST_small_output), ix=i_photo)
+       call af_add_cc_variable(tree, "photo", ix=i_photo)
     end if
 
     select case (photoi_method)
