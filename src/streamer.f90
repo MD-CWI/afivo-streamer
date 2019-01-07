@@ -185,7 +185,7 @@ program streamer
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
-           call field_compute(tree, mg, time, .true.)
+           call field_compute(tree, mg, 0, time, .true.)
         end if
      end if
   end do
@@ -271,7 +271,7 @@ contains
           call af_loop_box(tree, user_initial_conditions)
        end if
 
-       call field_compute(tree, mg, time, .false.)
+       call field_compute(tree, mg, 0, time, .false.)
 
        if (associated(user_refine)) then
           call af_adjust_refinement(tree, user_refine, ref_info, &

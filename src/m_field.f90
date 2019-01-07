@@ -157,11 +157,12 @@ contains
 
   !> Compute electric field on the tree. First perform multigrid to get electric
   !> potential, then take numerical gradient to geld field.
-  subroutine field_compute(tree, mg, time, have_guess)
+  subroutine field_compute(tree, mg, s_in, time, have_guess)
     use m_units_constants
     use m_chemistry
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg ! Multigrid option struct
+    integer, intent(in)       :: s_in
     real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
@@ -180,7 +181,7 @@ contains
           tree%boxes(id)%cc(DTIMES(:), i_rhs) = 0.0_dp
 
           do n = 1, size(charged_species_ix)
-             ix = charged_species_ix(n)
+             ix = charged_species_ix(n) + s_in
              q = charged_species_charge(n)
 
              tree%boxes(id)%cc(DTIMES(:), i_rhs) = &
