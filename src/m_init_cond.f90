@@ -1,4 +1,5 @@
 #include "../afivo/src/cpp_macros.h"
+!> Module to help setting up initial conditions
 module m_init_cond
   use m_streamer
   use m_af_all

@@ -1,3 +1,4 @@
+!> Module with basic types
 module m_types
 
   implicit none

@@ -28,6 +28,7 @@ module m_table_data
 
 contains
 
+  !> Initialize this module
   subroutine table_data_initialize(cfg)
     use m_config
     type(CFG_t), intent(inout) :: cfg

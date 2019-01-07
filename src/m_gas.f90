@@ -1,3 +1,4 @@
+!> Module that stores parameters related to the gas
 module m_gas
   use m_types
 
@@ -33,6 +34,7 @@ module m_gas
 
 contains
 
+  !> Initialize this module
   subroutine gas_initialize(cfg)
     use m_config
     use m_units_constants

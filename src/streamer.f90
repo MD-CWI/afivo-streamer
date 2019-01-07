@@ -1,5 +1,5 @@
 #include "../afivo/src/cpp_macros.h"
-!> Program to perform NDIMd streamer simulations in Cartesian and cylindrical coordinates
+!> Program to perform streamer simulations with AMR
 program streamer
 
   use m_config

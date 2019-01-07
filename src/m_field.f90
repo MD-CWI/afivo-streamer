@@ -1,4 +1,5 @@
 #include "../afivo/src/cpp_macros.h"
+!> Module to compute electric fields
 module m_field
   use m_af_all
   use m_types
@@ -69,7 +70,7 @@ module m_field
 
 contains
 
-  !> Set boundary conditions for the electric potential/field
+  !> Initialize this module
   subroutine field_initialize(cfg, mg)
     use m_config
     type(CFG_t), intent(inout) :: cfg !< Settings

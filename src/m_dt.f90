@@ -1,3 +1,4 @@
+!> Module to set the time step
 module m_dt
   use m_af_all
 
@@ -35,6 +36,7 @@ module m_dt
 
 contains
 
+  !> Initialize the time step module
   subroutine dt_initialize(cfg)
     use m_config
     use omp_lib
