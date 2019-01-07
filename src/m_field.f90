@@ -146,6 +146,7 @@ contains
     mg%i_phi = i_phi
     mg%i_tmp = i_electric_fld
     mg%i_rhs = i_rhs
+    if (ST_use_dielectric) mg%i_eps = i_eps
 
     ! This automatically handles cylindrical symmetry
     mg%box_op => mg_auto_op
@@ -491,6 +492,26 @@ contains
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi)) + &
          field_background(2)
 
+    if (ST_use_dielectric) then
+       ! Compute fields at the boundaries of the box, where eps can change
+       box%fc(1, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+            (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+            (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 2, electric_fld) = 2 * inv_dr * &
+            (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
+       box%fc(1:nc, nc+1, 2, electric_fld) = 2 * inv_dr * &
+            (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
+    end if
+
     box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
          (box%fc(1:nc, 1:nc, 1, electric_fld) + &
          box%fc(2:nc+1, 1:nc, 1, electric_fld))**2 + &
@@ -509,6 +530,34 @@ contains
          (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
          box%cc(1:nc, 1:nc, 1:nc+1, i_phi)) + &
          field_background(3)
+
+    if (ST_use_dielectric) then
+       ! Compute fields at the boundaries of the box, where eps can change
+       box%fc(1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+            (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+            (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 1:nc, 2, electric_fld) = 2 * inv_dr * &
+            (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
+            box%cc(1:nc, 0, 1:nc, i_eps) / &
+            (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
+       box%fc(1:nc, nc+1, 1:nc, 2, electric_fld) = 2 * inv_dr * &
+            (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
+            box%cc(1:nc, nc+1, 1:nc, i_eps) / &
+            (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
+       box%fc(1:nc, 1:nc, 1, 3, electric_fld) = 2 * inv_dr * &
+            (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
+       box%fc(1:nc, 1:nc, nc+1, 3, electric_fld) = 2 * inv_dr * &
+            (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, 1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
+    end if
 
     box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
          (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &

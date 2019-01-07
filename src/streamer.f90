@@ -221,6 +221,8 @@ contains
 
        if (associated(user_initial_conditions)) then
           call af_loop_box(tree, user_initial_conditions)
+       else if (ST_use_dielectric) then
+          error stop "use_dielectric requires user_initial_conditions to be set"
        end if
 
        call field_compute(tree, mg, 0, time, .false.)

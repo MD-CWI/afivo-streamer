@@ -342,11 +342,11 @@ contains
     integer                    :: IJK, ix, nc, n_cells, n, iv
     integer                    :: tid
 
-    nc     = box%n_cell
+    nc      = box%n_cell
     n_cells = box%n_cell**NDIM
-    inv_dr = 1/box%dr
+    inv_dr  = 1/box%dr
 #if NDIM == 2
-    ioff   = (box%ix(1)-1) * nc
+    ioff    = (box%ix(1)-1) * nc
 #endif
 
     allocate(rates(n_cells, n_reactions))
@@ -397,6 +397,15 @@ contains
                box%cc(IJK, i_photo)
           derivs(ix, i_1pos_ion) = derivs(ix, i_1pos_ion) + &
                box%cc(IJK, i_photo)
+       end if
+
+       if (ST_use_dielectric) then
+          if (box%cc(IJK, i_eps) > 1.0_dp) then
+             ! Convert electrons to 'minus' positive ions, so they remain stuck
+             derivs(ix, i_1pos_ion) = derivs(ix, i_1pos_ion) - &
+                  derivs(ix, i_electron)
+             derivs(ix, i_electron) = 0.0_dp
+          end if
        end if
 
        do n = 1, n_species

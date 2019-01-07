@@ -163,10 +163,10 @@ contains
 
     ! Also store in more memory-efficient structure
     do n = 1, n_reactions
-       print *, reactions(n)%description
-       print *, reactions(n)%ix_in
-       print *, reactions(n)%ix_out
-       print *, reactions(n)%multiplicity_out
+       print *, n, ": ", reactions(n)%description
+       ! print *, reactions(n)%ix_in
+       ! print *, reactions(n)%ix_out
+       ! print *, reactions(n)%multiplicity_out
        fast_react(n)%ix_in            = reactions(n)%ix_in
        fast_react(n)%ix_out           = reactions(n)%ix_out
        fast_react(n)%multiplicity_out = reactions(n)%multiplicity_out

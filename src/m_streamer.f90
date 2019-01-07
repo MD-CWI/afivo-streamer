@@ -20,6 +20,7 @@ module m_streamer
   integer, public, protected :: i_electric_fld = -1 ! Electric field norm
   integer, public, protected :: i_rhs          = -1 ! Source term Poisson
   integer, public, protected :: i_tmp          = -1 ! Temporary variable
+  integer, public, protected :: i_eps          = -1 ! Can be set to include a dielectric
 
   ! ** Indices of face-centered variables **
   integer, public, protected :: n_var_face   = 0 ! Number of variables
@@ -29,6 +30,9 @@ module m_streamer
 
   ! Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
+
+  !> Whether a dielectric is used
+  logical, public, protected :: ST_use_dielectric = .false.
 
   !> Maximal electric field for the lookup table
   real(dp), public, protected :: ST_max_field = 3e7_dp
@@ -131,6 +135,15 @@ contains
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
+
+    call CFG_add_get(cfg, "use_dielectric", ST_use_dielectric, &
+         "Whether a dielectric is used (experimental)")
+    if (ST_use_dielectric) then
+       call af_add_cc_variable(tree, "eps", ix=i_eps)
+       call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
+            af_gc_prolong_copy, af_prolong_zeroth)
+    end if
+
     call CFG_add_get(cfg, "end_time", ST_end_time, &
        "The desired endtime (s) of the simulation")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
