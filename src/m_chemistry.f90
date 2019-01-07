@@ -1,4 +1,5 @@
 #include "../afivo/src/cpp_macros.h"
+!> Module for handling chemical reactions
 module m_chemistry
   use m_types
   use m_af_all
@@ -8,39 +9,65 @@ module m_chemistry
   implicit none
   private
 
+  !> Basic chemical reaction type
   type reaction_t
-     integer, allocatable  :: ix_in(:)
-     integer, allocatable  :: ix_out(:)
-     integer, allocatable  :: multiplicity_out(:)
-     integer               :: rate_type
-     real(dp)              :: rate_factor
+     integer, allocatable  :: ix_in(:) !< Index of input species
+     integer, allocatable  :: ix_out(:) !< Index of output species
+     integer, allocatable  :: multiplicity_out(:) !< Multiplicity of output
+     integer               :: rate_type !< Type of reaction rate
+     real(dp)              :: rate_factor !< Multiply rate by this factor
      real(dp), allocatable :: x_data(:)
      real(dp), allocatable :: y_data(:)
      character(len=50)     :: description
   end type reaction_t
 
+  !> Compact reaction type, for efficiency
   type fast_react_t
      integer, allocatable  :: ix_in(:)
      integer, allocatable  :: ix_out(:)
      integer, allocatable  :: multiplicity_out(:)
   end type fast_react_t
 
+  !> Indicates a reaction with a constant reaction rate
   integer, parameter :: constant_rate        = 1
+
+  !> Indicates a reaction with a field-dependent reaction rate
   integer, parameter :: field_dependent_rate = 2
+
+  !> Maximum number of species
   integer, parameter :: max_num_species      = 100
+
+  !> Maximum number of reactions
   integer, parameter :: max_num_reactions    = 100
 
+  !> Number of species present
   integer, public, protected :: n_species = 0
+
+  !> Number of reactions present
   integer, public, protected :: n_reactions = 0
 
+  !> List of the species
   character(len=comp_len), public, protected :: species_list(max_num_species)
+
+  !> Charge of the species
   integer, public, protected                 :: species_charge(max_num_species) = 0
+
+  !> Index of the species (in the tree)
   integer, public, protected                 :: species_ix(max_num_species)
+
+  !> List of reactions
   type(reaction_t), public, protected        :: reactions(max_num_reactions)
+
+  !> List of reactions (copy for efficiency)
   type(fast_react_t)                         :: fast_react(max_num_reactions)
+
+  !> Lookup table with reaction rates
   type(LT_t)                                 :: chemtbl
 
+  !> List with indices of charged species
   integer, allocatable, protected :: charged_species_ix(:)
+
+  !> List with charges of charged species
   integer, allocatable, protected :: charged_species_charge(:)
 
   public :: charged_species_ix
@@ -54,6 +81,7 @@ module m_chemistry
 
 contains
 
+  !> Initialize module and load chemical reactions
   subroutine chemistry_initialize(tree, cfg)
     use m_config
     use m_units_constants
@@ -162,7 +190,23 @@ contains
        end if
     end do
 
+    call check_charge_conservation()
+
   end subroutine chemistry_initialize
+
+  subroutine check_charge_conservation()
+    integer :: n, q_in, q_out
+
+    do n = 1, n_reactions
+       q_in = sum(species_charge(reactions(n)%ix_in))
+       q_out = sum(species_charge(reactions(n)%ix_out) * &
+            reactions(n)%multiplicity_out)
+       if (q_in /= q_out) then
+          print *, trim(reactions(n)%description)
+          error stop "Charge is not conserved in this reaction"
+       end if
+    end do
+  end subroutine check_charge_conservation
 
   !> Compute reaction rates
   subroutine get_rates(fields, rates, n_cells)
@@ -210,6 +254,7 @@ contains
     end do
   end subroutine get_derivatives
 
+  !> Read reactions from a file
   subroutine read_reactions(filename)
     character(len=*), intent(in) :: filename
     character(len=string_len)    :: line, data_value
@@ -260,6 +305,7 @@ contains
 999 continue
   end subroutine read_reactions
 
+  !> Read a constant reaction rate
   subroutine read_reaction_constant(text, rdata)
     character(len=*), intent(in)    :: text
     type(reaction_t), intent(inout) :: rdata
@@ -272,6 +318,7 @@ contains
     rdata%y_data = [tmp, tmp]
   end subroutine read_reaction_constant
 
+  !> Read a reaction table
   subroutine read_reaction_table(filename, dataname, rdata)
     use m_transport_data
     character(len=*), intent(in)    :: filename
@@ -282,6 +329,7 @@ contains
     call table_from_file(filename, dataname, rdata%x_data, rdata%y_data)
   end subroutine read_reaction_table
 
+  !> Pare a reaction and store it
   subroutine get_reaction(reaction_text, reaction)
     use m_gas
     character(len=*), intent(in)  :: reaction_text
