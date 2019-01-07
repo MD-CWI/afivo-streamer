@@ -33,7 +33,9 @@ program streamer
   integer                   :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
+
   call initialize_modules(cfg, tree, mg)
+
   call check_path_writable(ST_output_dir)
 
   fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_out.cfg"

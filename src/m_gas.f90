@@ -46,6 +46,9 @@ contains
     call CFG_add_get(cfg, "gas%temperature", gas_temperature, &
          "The gas temperature (Kelvin)")
 
+    if (.not. gas_constant_density) &
+         error stop "Varying gas density not yet supported"
+
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
          (UC_boltzmann_const * gas_temperature)
