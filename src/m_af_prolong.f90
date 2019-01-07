@@ -8,6 +8,7 @@ module m_af_prolong
 
   public :: af_prolong_copy_from
   public :: af_prolong_copy
+  public :: af_prolong_zeroth
   public :: af_prolong_linear_from
   public :: af_prolong_sparse
   public :: af_prolong_linear
@@ -106,6 +107,68 @@ contains
 #endif
     end if
   end subroutine af_prolong_copy
+
+  !> Zeroth order prolongation
+  subroutine af_prolong_zeroth(box_p, box_c, iv, iv_to, add)
+    type(box_t), intent(in)       :: box_p !< Parent box
+    type(box_t), intent(inout)    :: box_c !< Child box
+    integer, intent(in)           :: iv    !< Variable to fill
+    integer, intent(in), optional :: iv_to !< Destination variable
+    logical, intent(in), optional :: add   !< Add to old values
+    integer                       :: hnc, nc, ix_offset(NDIM), ivc
+    integer                       :: i, j, i_c, i_f, j_c, j_f
+    real(dp)                      :: f0
+    logical                       :: add_to
+#if NDIM == 3
+    integer                       :: k, k_c, k_f
+#endif
+
+    nc        = box_c%n_cell
+    hnc       = ishft(box_c%n_cell, -1)
+    ix_offset = af_get_child_offset(box_c)
+    add_to    = .false.; if (present(add)) add_to = add
+    ivc       = iv; if (present(iv_to)) ivc = iv_to
+
+    if (.not. add_to) then
+#if NDIM == 2
+       box_c%cc(1:nc, 1:nc, ivc) = 0
+#elif NDIM == 3
+       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
+#endif
+    end if
+
+#if NDIM == 2
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
+
+          f0 = box_p%cc(i_c, j_c, iv)
+          box_c%cc(i_f:i_f+1, j_f:j_f+1, ivc) = &
+               box_c%cc(i_f:i_f+1, j_f:j_f+1, ivc) + f0
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f0  = box_p%cc(i_c,   j_c,   k_c,   iv)
+             box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, ivc) = &
+               box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, ivc) + f0
+          end do
+       end do
+    end do
+#endif
+  end subroutine af_prolong_zeroth
 
   !> Linear prolongation to children. We use 2-1-1 interpolation (2d) and
   !> 1-1-1-1 interpolation (3D), which do not require corner ghost cells.
