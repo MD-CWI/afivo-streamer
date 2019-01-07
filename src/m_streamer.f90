@@ -168,6 +168,8 @@ contains
        ST_prolongation_method => af_prolong_linear_cons
     case ("sparse")
        ST_prolongation_method => af_prolong_sparse
+    case ("zeroth")
+       ST_prolongation_method => af_prolong_zeroth
     case default
        error stop "Unknown prolong_density method"
     end select
