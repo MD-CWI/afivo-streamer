@@ -189,15 +189,12 @@ contains
 
           do n = 1, size(charged_species_itree)
              ix = charged_species_itree(n) + s_in
-             q = charged_species_charge(n)
+             q = charged_species_charge(n) * fac
 
              tree%boxes(id)%cc(DTIMES(:), i_rhs) = &
                   tree%boxes(id)%cc(DTIMES(:), i_rhs) + &
                   q * tree%boxes(id)%cc(DTIMES(:), ix)
           end do
-
-          tree%boxes(id)%cc(DTIMES(:), i_rhs) = fac * &
-               tree%boxes(id)%cc(DTIMES(:), i_rhs)
        end do
        !$omp end do nowait
     end do
