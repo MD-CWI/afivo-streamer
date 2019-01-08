@@ -44,7 +44,7 @@ program streamer
   ! Specify default methods for all the variables
   do i = 1, n_species
      do s = 0, advance_num_states-1
-        call af_set_cc_methods(tree, species_ix(i)+s, &
+        call af_set_cc_methods(tree, species_itree(i)+s, &
              af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
      end do
   end do
@@ -124,7 +124,7 @@ program streamer
      if (advance_max_dt < dt_min) error stop "dt too small"
 
      if (mod(it, refine_per_steps) == 0) then
-        call af_gc_tree(tree, species_ix(1:n_species))
+        call af_gc_tree(tree, species_itree(1:n_species))
 
         if (associated(user_refine)) then
            call af_adjust_refinement(tree, user_refine, ref_info, &

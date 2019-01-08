@@ -53,7 +53,7 @@ module m_chemistry
   integer, public, protected                 :: species_charge(max_num_species) = 0
 
   !> Index of the species (in the tree)
-  integer, public, protected                 :: species_ix(max_num_species)
+  integer, public, protected                 :: species_itree(max_num_species)
 
   !> List of reactions
   type(reaction_t), public, protected        :: reactions(max_num_reactions)
@@ -65,12 +65,12 @@ module m_chemistry
   type(LT_t)                                 :: chemtbl
 
   !> List with indices of charged species
-  integer, allocatable, protected :: charged_species_ix(:)
+  integer, allocatable, protected :: charged_species_itree(:)
 
   !> List with charges of charged species
   integer, allocatable, protected :: charged_species_charge(:)
 
-  public :: charged_species_ix
+  public :: charged_species_itree
   public :: charged_species_charge
 
   public :: chemistry_initialize
@@ -174,19 +174,19 @@ contains
 
     do n = 1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
-            n_copies=advance_num_states, ix=species_ix(n))
+            n_copies=advance_num_states, ix=species_itree(n))
     end do
 
     ! Store list with only charged species
     n = count(species_charge(1:n_species) /= 0)
-    allocate(charged_species_ix(n))
+    allocate(charged_species_itree(n))
     allocate(charged_species_charge(n))
 
     i = 0
     do n = 1, n_species
        if (species_charge(n) /= 0) then
           i = i + 1
-          charged_species_ix(i) = species_ix(n)
+          charged_species_itree(i) = species_itree(n)
           charged_species_charge(i) = species_charge(n)
        end if
     end do

@@ -16,7 +16,9 @@ module m_streamer
   integer, public, protected :: n_var_cell     = 0  ! Number of variables
   integer, public, protected :: i_phi          = -1 ! Electrical potential
   integer, public, protected :: i_electron     = -1 ! Electron density
+  integer, public, protected :: ix_electron    = -1 ! Electron density (in species list)
   integer, public, protected :: i_1pos_ion     = -1 ! First positive ion species
+  integer, public, protected :: ix_1pos_ion    = -1 ! First positive ion (in species list)
   integer, public, protected :: i_electric_fld = -1 ! Electric field norm
   integer, public, protected :: i_rhs          = -1 ! Source term Poisson
   integer, public, protected :: i_tmp          = -1 ! Temporary variable
@@ -102,13 +104,15 @@ contains
 
     ! Set index of electrons
     i_electron = af_find_cc_variable(tree, "e")
+    ix_electron = species_index("e")
 
     flux_species(1) = i_electron
 
     ! Set index of first positive ion species
     do n = 1, n_species
        if (species_charge(n) == 1) then
-          i_1pos_ion = species_ix(n)
+          i_1pos_ion = species_itree(n)
+          ix_1pos_ion = n
           exit
        end if
     end do
@@ -122,16 +126,6 @@ contains
 
     call af_add_fc_variable(tree, "flux_elec", ix=flux_elec)
     call af_add_fc_variable(tree, "field", ix=electric_fld)
-
-    ! call CFG_add_get(cfg, "ion_mobility", ST_ion_mobility, &
-    !      "The mobility of positive ions (m2/Vs)")
-    ! call CFG_add_get(cfg, "ion_diffusion", ST_ion_diffusion, &
-    !      "The diffusion coefficient for positive ions (m2/s)")
-
-    ! ST_update_ions = (abs(ST_ion_mobility) > 0 .or. abs(ST_ion_diffusion) > 0)
-    ! if (ST_update_ions) then
-    !    call af_add_fc_variable(tree, "flux_ion", ix=flux_ion)
-    ! end if
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")

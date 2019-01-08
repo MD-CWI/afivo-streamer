@@ -187,8 +187,8 @@ contains
 
           tree%boxes(id)%cc(DTIMES(:), i_rhs) = 0.0_dp
 
-          do n = 1, size(charged_species_ix)
-             ix = charged_species_ix(n) + s_in
+          do n = 1, size(charged_species_itree)
+             ix = charged_species_itree(n) + s_in
              q = charged_species_charge(n)
 
              tree%boxes(id)%cc(DTIMES(:), i_rhs) = &

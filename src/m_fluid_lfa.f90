@@ -355,7 +355,7 @@ contains
     fields = SI_to_Townsend * &
          reshape(box%cc(DTIMES(1:nc), i_electric_fld), [n_cells])
 
-    dens = reshape(box%cc(DTIMES(1:nc), species_ix(1:n_species)+s_in), &
+    dens = reshape(box%cc(DTIMES(1:nc), species_itree(1:n_species)+s_in), &
          [n_cells, n_species])
 
     call get_rates(fields, rates, n_cells)
@@ -379,13 +379,13 @@ contains
           rfac(:) = 1.0_dp
        end if
 
-       derivs(ix, i_electron) = derivs(ix, i_electron) + inv_dr * ( &
+       derivs(ix, ix_electron) = derivs(ix, ix_electron) + inv_dr * ( &
             box%fc(i, j, 2, flux_elec) - &
             box%fc(i, j+1, 2, flux_elec) + &
             rfac(1) * box%fc(i, j, 1, flux_elec) - &
             rfac(2) * box%fc(i+1, j, 1, flux_elec))
 #elif NDIM == 3
-       derivs(ix, i_electron) = derivs(ix, i_electron) + inv_dr * ( &
+       derivs(ix, ix_electron) = derivs(ix, ix_electron) + inv_dr * ( &
             sum(box%fc(i, j, k, 1:3, flux_elec)) - &
             box%fc(i+1, j, k, 1, flux_elec) - &
             box%fc(i, j+1, k, 2, flux_elec) - &
@@ -393,23 +393,23 @@ contains
 #endif
 
        if (photoi_enabled) then
-          derivs(ix, i_electron) = derivs(ix, i_electron) + &
+          derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
                box%cc(IJK, i_photo)
-          derivs(ix, i_1pos_ion) = derivs(ix, i_1pos_ion) + &
+          derivs(ix, ix_1pos_ion) = derivs(ix, ix_1pos_ion) + &
                box%cc(IJK, i_photo)
        end if
 
        if (ST_use_dielectric) then
           if (box%cc(IJK, i_eps) > 1.0_dp) then
              ! Convert electrons to 'minus' positive ions, so they remain stuck
-             derivs(ix, i_1pos_ion) = derivs(ix, i_1pos_ion) - &
-                  derivs(ix, i_electron)
-             derivs(ix, i_electron) = 0.0_dp
+             derivs(ix, ix_1pos_ion) = derivs(ix, ix_1pos_ion) - &
+                  derivs(ix, ix_electron)
+             derivs(ix, ix_electron) = 0.0_dp
           end if
        end if
 
        do n = 1, n_species
-          iv = species_ix(n)
+          iv = species_itree(n)
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_in) + dt * derivs(ix, n)
        end do
     end do; CLOSE_DO

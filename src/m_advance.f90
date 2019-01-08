@@ -53,7 +53,7 @@ contains
        time = time + dt
        call field_compute(tree, mg, 1, time, .true.)
        call forward_euler(tree, dt, 1, 1, .true.)
-       call combine_substeps(tree, species_ix(1:n_species), &
+       call combine_substeps(tree, species_itree(1:n_species), &
             [0, 1], [0.5_dp, 0.5_dp], 0)
        call restrict_flux_species(tree, 0)
        call field_compute(tree, mg, 0, time, .true.)
@@ -64,6 +64,9 @@ contains
     ! Determine next time step
     advance_max_dt = min(2 * advance_max_dt, dt_safety_factor * &
          minval(dt_matrix(1:dt_num_cond, :)))
+
+    ! This line prints the different time step restrictions
+    ! print *, minval(dt_matrix(1:dt_num_cond, :), dim=2)
   end subroutine advance
 
   !> Restrict species for which we compute fluxes near refinement boundaries,
