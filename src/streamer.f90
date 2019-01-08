@@ -187,9 +187,11 @@ contains
 
     ! Initialize tree
     if (ST_cylindrical) then
-       call af_init(tree, ST_box_size, dr, coarsen_to=2, coord=af_cyl)
+       call af_init(tree, ST_box_size, dr, &
+            coarsen_to=ST_coarsest_mesh, coord=af_cyl)
     else
-       call af_init(tree, ST_box_size, dr, coarsen_to=2)
+       call af_init(tree, ST_box_size, dr, &
+            coarsen_to=ST_coarsest_mesh)
     end if
 
     ! Set up geometry

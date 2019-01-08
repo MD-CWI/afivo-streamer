@@ -66,6 +66,9 @@ module m_streamer
   ! The size of the boxes that we use to construct our mesh
   integer, public, protected :: ST_box_size = 8
 
+  ! The size of the coarsest mesh
+  integer, public, protected :: ST_coarsest_mesh = 2
+
   ! The length of the (square) domain
   real(dp), public, protected :: ST_domain_len = 16e-3_dp
 
@@ -142,6 +145,8 @@ contains
        "The desired endtime (s) of the simulation")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
          "The number of grid cells per coordinate in a box")
+    call CFG_add_get(cfg, "coarsest_mesh", ST_coarsest_mesh, &
+         "The size of the coarsest mesh")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &
          "The length of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
