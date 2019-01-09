@@ -29,15 +29,18 @@ mechanism.
 
 ### Step 3: Run the examples
 
-    ./streamer_2d  configs/streamer_2d.cfg
-    ./streamer_cyl configs/streamer_cly.cfg
-    ./streamer_3d  configs/streamer_3d.cfg
+    cd programs/standard_2d
+    ./streamer streamer_2d.cfg
+    ./streamer streamer_cyl.cfg
+
+    cd programs/standard_3d
+    ./streamer_3d configs/streamer_3d.cfg
 
 where the configuration files include the parameters that you want to use, see
 the examples in the `configs` directory. You can also specify multiple
 configuration files, like
 
-    ./streamer_2d cfg_1.txt cfg_2.txt ...
+    ./streamer cfg_1.txt cfg_2.txt ...
 
 Options from later files will override those from earlier files.
 
@@ -82,3 +85,4 @@ folder.
   of: [3D Simulations and Analysis of Pulsed
   Discharges](https://research.tue.nl/en/publications/3d-simulations-and-analysis-of-pulsed-discharges),
   J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
+* [Comparison of six simulation codes for positive streamers in air](https://doi.org/10.1088/1361-6595/aad768)
