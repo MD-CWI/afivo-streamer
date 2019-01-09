@@ -9,13 +9,18 @@ module m_chemistry
   implicit none
   private
 
+  integer, parameter :: rate_max_num_coeff = 4
+
   !> Basic chemical reaction type
   type reaction_t
-     integer, allocatable  :: ix_in(:) !< Index of input species
-     integer, allocatable  :: ix_out(:) !< Index of output species
+     integer, allocatable  :: ix_in(:)            !< Index of input species
+     integer, allocatable  :: ix_out(:)           !< Index of output species
      integer, allocatable  :: multiplicity_out(:) !< Multiplicity of output
-     integer               :: rate_type !< Type of reaction rate
-     real(dp)              :: rate_factor !< Multiply rate by this factor
+     integer               :: rate_type           !< Type of reaction rate
+     real(dp)              :: rate_factor         !< Multiply rate by this factor
+     !> Data for the reaction rate
+     real(dp)              :: rate_data(rate_max_num_coeff) = -huge(1.0_dp)
+     integer               :: lookup_table_index  !< Index in lookup table
      real(dp), allocatable :: x_data(:)
      real(dp), allocatable :: y_data(:)
      character(len=50)     :: description
@@ -28,11 +33,17 @@ module m_chemistry
      integer, allocatable  :: multiplicity_out(:)
   end type fast_react_t
 
-  !> Indicates a reaction with a constant reaction rate
-  integer, parameter :: constant_rate        = 1
-
   !> Indicates a reaction with a field-dependent reaction rate
-  integer, parameter :: field_dependent_rate = 2
+  integer, parameter :: rate_tabulated_field = 1
+
+  !> Indicates a reaction with a constant reaction rate
+  integer, parameter :: rate_analytic_constant = 2
+
+  !> Indicates a reaction of the form c1 * (Td - c2)
+  integer, parameter :: rate_analytic_linear = 3
+
+  !> Indicates a reaction of the form c1 * exp(-(c2/(c3 + Td))**2)
+  integer, parameter :: rate_analytic_exp_v1 = 4
 
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
@@ -113,7 +124,7 @@ contains
           reactions(1)%ix_in = [1]
           reactions(1)%ix_out = [1, 2]
           reactions(1)%multiplicity_out = [2, 1]
-          reactions(1)%rate_type = field_dependent_rate
+          reactions(1)%rate_type = rate_tabulated_field
           reactions(1)%rate_factor = 1.0_dp
           reactions(1)%x_data = &
                LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
@@ -126,7 +137,7 @@ contains
           reactions(2)%ix_in = [1]
           reactions(2)%ix_out = [3]
           reactions(2)%multiplicity_out = [1]
-          reactions(2)%rate_type = field_dependent_rate
+          reactions(2)%rate_type = rate_tabulated_field
           reactions(2)%rate_factor = 1.0_dp
           reactions(2)%x_data = &
                LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
@@ -148,29 +159,28 @@ contains
             species_charge(n))
     end do
 
-    chemtbl = LT_create(table_min_townsend, table_max_townsend, &
-         table_size, n_reactions)
+    ! Store reactions of the tabulated field type
+    i = count(reactions(1:n_reactions)%rate_type == rate_tabulated_field)
+    chemtbl = LT_create(table_min_townsend, table_max_townsend, table_size, i)
 
+    i = 0
     do n = 1, n_reactions
-       select case (reactions(n)%rate_type)
-       case (constant_rate, field_dependent_rate)
-          call LT_set_col(chemtbl, n, reactions(n)%x_data, &
-               reactions(n)%rate_factor * reactions(n)%y_data)
-       case default
-          error stop "Unknown type of reaction rate"
-       end select
+       if (reactions(n)%rate_type == rate_tabulated_field) then
+          i = i + 1
+          reactions(n)%lookup_table_index = i
+          call LT_set_col(chemtbl, i, reactions(n)%x_data, reactions(n)%y_data)
+       end if
     end do
 
     ! Also store in more memory-efficient structure
+    print *, "--- List of reactions ---"
     do n = 1, n_reactions
-       print *, n, ": ", reactions(n)%description
-       ! print *, reactions(n)%ix_in
-       ! print *, reactions(n)%ix_out
-       ! print *, reactions(n)%multiplicity_out
+       write(*, "(I4,A)") n, ": " // reactions(n)%description
        fast_react(n)%ix_in            = reactions(n)%ix_in
        fast_react(n)%ix_out           = reactions(n)%ix_out
        fast_react(n)%multiplicity_out = reactions(n)%multiplicity_out
     end do
+    print *, "-------------------------"
 
     do n = 1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
@@ -204,22 +214,38 @@ contains
             reactions(n)%multiplicity_out)
        if (q_in /= q_out) then
           print *, trim(reactions(n)%description)
-          error stop "Charge is not conserved in this reaction"
+          error stop "Charge is not conserved in the above reaction"
        end if
     end do
   end subroutine check_charge_conservation
 
   !> Compute reaction rates
   subroutine get_rates(fields, rates, n_cells)
-    integer, intent(in)   :: n_cells
-    real(dp), intent(in)  :: fields(n_cells)
-    real(dp), intent(out) :: rates(n_cells, n_reactions)
+    integer, intent(in)   :: n_cells                     !< Number of cells
+    real(dp), intent(in)  :: fields(n_cells)             !< The field (in Td) in the cells
+    real(dp), intent(out) :: rates(n_cells, n_reactions) !< The reaction rates
     integer               :: n
+    real(dp)              :: c0, c(rate_max_num_coeff)
 
-    ! This order looks inefficient, but it is faster to look up multiple
-    ! reactions at the same field
-    do n = 1, n_cells
-       rates(n, :) = LT_get_mcol(chemtbl, fields(n))
+    do n = 1, n_reactions
+       ! A factor that the reaction rate is multiplied with, for example to
+       ! account for a constant gas number density
+       c0   = reactions(n)%rate_factor
+
+       ! Coefficients for the reaction rate
+       c(:) = reactions(n)%rate_data
+
+       select case (reactions(n)%rate_type)
+       case (rate_tabulated_field)
+          rates(:, n) = c0 * LT_get_col(chemtbl, &
+               reactions(n)%lookup_table_index, fields)
+       case (rate_analytic_constant)
+          rates(:, n) = c0 * c(1)
+       case (rate_analytic_linear)
+          rates(:, n) = c0 * c(1) * (fields - c(2))
+       case (rate_analytic_exp_v1)
+          rates(:, n) = c0 * c(1) * exp(-(c(2) / (c(3) + fields))**2)
+       end select
     end do
   end subroutine get_rates
 
@@ -289,13 +315,25 @@ contains
        new_reaction%description = trim(reaction)
 
        select case (how_to_get)
-       case ("table")
+       case ("field_table")
           ! Format is filename:reaction
           i = index(data_value, ":")
           call read_reaction_table(data_value(1:i-1), &
                trim(data_value(i+1:)), new_reaction)
        case ("constant")
-          call read_reaction_constant(trim(data_value), new_reaction)
+          new_reaction%rate_type = rate_analytic_constant
+          read(data_value, *) new_reaction%rate_data(1)
+       case ("linear")
+          new_reaction%rate_type = rate_analytic_linear
+          read(data_value, *) new_reaction%rate_data(1:2)
+       case ("exp_v1")
+          new_reaction%rate_type = rate_analytic_exp_v1
+          read(data_value, *) new_reaction%rate_data(1:3)
+       case default
+          print *, "Unknown rate type: ", trim(how_to_get)
+          print *, "For reaction:      ", trim(reaction)
+          print *, "In file:           ", trim(filename)
+          error stop
        end select
 
        n_reactions            = n_reactions + 1
@@ -306,19 +344,6 @@ contains
 999 continue
   end subroutine read_reactions
 
-  !> Read a constant reaction rate
-  subroutine read_reaction_constant(text, rdata)
-    character(len=*), intent(in)    :: text
-    type(reaction_t), intent(inout) :: rdata
-    real(dp)                        :: tmp
-
-    rdata%rate_type = constant_rate
-    read(text, *) tmp
-
-    rdata%x_data = [table_min_townsend, table_max_townsend]
-    rdata%y_data = [tmp, tmp]
-  end subroutine read_reaction_constant
-
   !> Read a reaction table
   subroutine read_reaction_table(filename, dataname, rdata)
     use m_transport_data
@@ -326,7 +351,7 @@ contains
     character(len=*), intent(in)    :: dataname
     type(reaction_t), intent(inout) :: rdata
 
-    rdata%rate_type = field_dependent_rate
+    rdata%rate_type = rate_tabulated_field
     call table_from_file(filename, dataname, rdata%x_data, rdata%y_data)
   end subroutine read_reaction_table
 
@@ -372,11 +397,21 @@ contains
           multiplicity = 1
        end if
 
-       ix = gas_index(component)
-       if (ix /= -1 .and. gas_constant_density) then
-          ! Multiply reaction by constant density
-          if (left_side) rfactor = rfactor * gas_densities(ix)
-          cycle
+       if (gas_constant_density) then
+          ix = gas_index(component)
+          if (ix /= -1) then
+             ! Multiply reaction by constant density
+             if (left_side) rfactor = rfactor * gas_densities(ix)
+             cycle
+          end if
+
+          if (component == "M") then
+             ! Assume this stands for 'any molecule'
+             if (left_side) rfactor = rfactor * gas_number_density
+             cycle
+          end if
+       else
+          error stop "Not implemented yet"
        end if
 
        ix = species_index(component)

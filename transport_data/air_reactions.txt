@@ -1,7 +1,0 @@
-# e + N2 -> e + e + N2+,constant,0.0d0
-e + N2 -> e + e + N2+,table,transport_data/air_data.txt:C25 N2 Ionization 15.60 eV
-e + N2 -> e + e + N2B+,table,transport_data/air_data.txt:C26 N2 Ionization 18.80 eV
-e + O2 -> e + e + O2+,table,transport_data/air_data.txt:C43 O2 Ionization 12.06 eV
-e + O2 -> O2-,table,transport_data/air_data.txt:C28 O2 Attachment
-# e + O2 + O2 -> O2 + O2-,table,transport_data/air_data.txt:C27 O2 Attachment
-# N2+ + e + e -> N2 + e,constant,1e-38
