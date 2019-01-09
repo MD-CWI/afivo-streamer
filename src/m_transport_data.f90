@@ -32,7 +32,7 @@ contains
     use m_gas
 
     type(CFG_t), intent(inout) :: cfg
-    character(len=string_len)  :: td_file = "td_input_file.txt"
+    character(len=string_len)  :: td_file = "UNDEFINED"
     real(dp), allocatable      :: x_data(:), y_data(:)
 
     ! Create a lookup table for the model coefficients

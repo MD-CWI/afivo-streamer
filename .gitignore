@@ -80,3 +80,5 @@ streamer_cyl
 /src/streamer_3d.f90
 /src/m_photoi_mc_2d.f90
 /src/m_photoi_mc_3d.f90
+/programs/*/streamer
+*gmon.out

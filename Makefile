@@ -1,5 +1,5 @@
-2D_PROGS := bin_2d
-3D_PROGS := bin_3d
+2D_PROGS := programs/standard_2d programs/dielectric_2d
+3D_PROGS := programs/standard_3d
 SRC_DIRS := $(2D_PROGS) $(3D_PROGS)
 
 # Directories with altered names (useful for cleaning)
