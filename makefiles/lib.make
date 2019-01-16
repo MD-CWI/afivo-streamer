@@ -41,4 +41,4 @@ clean:
 $(LIB): $(AFIVO_DIR)/lib_$(NDIM)d/libafivo.a
 
 $(AFIVO_DIR)/lib_$(NDIM)d/libafivo.a: always_recompile
-	$(MAKE) -C $(AFIVO_DIR)/lib_$(NDIM)d
+	$(MAKE) -C $(AFIVO_DIR) lib_$(NDIM)d
