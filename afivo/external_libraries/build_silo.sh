@@ -3,9 +3,9 @@
 # Set names/directories
 TARGET_DIR=`pwd`"/silo"
 SILO_BASEURL="https://wci.llnl.gov/content/assets/docs/simulation/"\
-"computer-codes/silo/silo-4.10/"
-SILO_TARNAME="silo-4.10-bsd-smalltest.tar.gz"
-SILO_DIRNAME="silo-4.10-bsd"
+"computer-codes/silo/silo-4.10.2/"
+SILO_TARNAME="silo-4.10.2-bsd-smalltest.tar.gz"
+SILO_DIRNAME="silo-4.10.2-bsd"
 BUILD_DIR="build"
 
 # Do compilation etc. in build directory
@@ -15,11 +15,9 @@ cd ${BUILD_DIR}
 # Get silo if not found
 if [ ! -f ${SILO_TARNAME} ]; then
     if hash curl 2> /dev/null; then
-        curl -O ${SILO_BASEURL}${SILO_TARNAME}
-    elif hash wget 2> /dev/null; then
-        wget ${SILO_BASEURL}${SILO_TARNAME}
+        curl -O -L ${SILO_BASEURL}${SILO_TARNAME}
     else
-        echo "build_silo.sh error: cannot find curl or wget"
+        echo "build_silo.sh error: cannot find curl"
     fi
 fi
 
