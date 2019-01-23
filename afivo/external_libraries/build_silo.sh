@@ -16,10 +16,8 @@ cd ${BUILD_DIR}
 if [ ! -f ${SILO_TARNAME} ]; then
     if hash curl 2> /dev/null; then
         curl -O ${SILO_BASEURL}${SILO_TARNAME}
-    elif hash wget 2> /dev/null; then
-        wget ${SILO_BASEURL}${SILO_TARNAME}
     else
-        echo "build_silo.sh error: cannot find curl or wget"
+        echo "build_silo.sh error: cannot find curl"
     fi
 fi
 
