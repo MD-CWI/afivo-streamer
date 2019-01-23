@@ -54,6 +54,7 @@ contains
     character(LEN=40)         :: line_fmt
     character(LEN=string_len) :: line
     real(dp)                  :: temp_table(2, table_max_rows)
+    real(dp)                  :: factor
 
     nL = 0 ! Set the number of lines to 0
 
@@ -68,6 +69,7 @@ contains
     ! Table format
 
     !     table_name
+    !     FACTOR: 1.0                   [optional: multiply with this factor]
     !     [other lines]
     !     ------------------            [at least 5 dashes]
     !     xxx       xxx                 [data in two column format]
@@ -83,12 +85,25 @@ contains
           if (line == data_name) exit
        end do
 
+       factor = 1.0_dp
+
        ! Now we can check whether there is a comment, while scanning lines until
        ! dashes are found, which indicate the start of the data
        do
           read(my_unit, FMT = line_fmt, ERR = 999, end = 777) line; nL = nL+1
           line = adjustl(line)
-          if ( line(1:5) == "-----" ) exit
+          if ( line(1:5) == "-----" ) then
+             exit
+          else if (line(1:7) == "FACTOR:") then
+             read(line(8:), *) factor
+             print *, factor
+          else if (line(1:8) == "COMMENT:") then
+             continue
+          else
+             print *, "In file ", trim(file_name), " at line", nL
+             print *, trim(line)
+             error stop "Unknown statement in input file"
+          end if
        end do
 
        ! Read the data into a temporary array
@@ -116,7 +131,7 @@ contains
        allocate(y_data(n_rows))
 
        x_data = temp_table(1, 1:n_rows)
-       y_data = temp_table(2, 1:n_rows)
+       y_data = factor * temp_table(2, 1:n_rows)
 
        exit                   ! Done
     end do
