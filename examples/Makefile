@@ -1,6 +1,6 @@
 AF_DIR  := ..
-LIBDIRS := $(AF_DIR)/external_libraries/silo/lib
-LIBS	:= afivo silo
+LIBDIRS := $(AF_DIR)/external_libraries/silo/lib $(AF_DIR)/external_libraries/hypre/lib
+LIBS	:= afivo silo HYPRE
 OUTDIR	:= output
 
 include $(AF_DIR)/src/makerules.make
@@ -10,7 +10,7 @@ include $(AF_DIR)/src/makerules.make
 PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
 implicit_diffusion computational_domain boundary_conditions poisson_neumann	\
 particles_to_grid poisson_dielectric ghostcell_benchmark poisson_helmholtz	\
-particles_gravity
+particles_gravity hypre_coupling
 
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric	\
 simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl
