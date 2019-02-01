@@ -1,16 +1,18 @@
 SRC := m_morton.f90 m_vtk.f90 m_write_silo.f90 m_af_flux_schemes.f90		\
 	m_af_types.f90 m_af_core.f90 m_af_output.f90 m_af_ghostcell.f90		\
 	m_af_restrict.f90 m_af_prolong.f90 m_af_utils.f90 m_af_multigrid.f90	\
-	m_af_interp.f90 m_af_particles.f90 m_af_all.f90
+	m_af_interp.f90 m_af_particles.f90 m_af_all.f90 m_hypre.f90
 
 OBJS := $(SRC:%.f90=%.o)
 
 # Requires Silo for compilation
 m_write_silo.o:		INCDIRS += ../external_libraries/silo/include
 m_write_silo.o:		FFLAGS += -Wno-implicit-interface
+m_hypre.o:		FFLAGS += -Wno-implicit-interface
 
 # Dependency information (generated with list_dependencies.sh)
 m_af_all.o: m_af_core.mod
+m_af_all.o: m_af_flux_schemes.mod
 m_af_all.o: m_af_ghostcell.mod
 m_af_all.o: m_af_interp.mod
 m_af_all.o: m_af_multigrid.mod
