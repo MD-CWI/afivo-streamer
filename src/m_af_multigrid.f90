@@ -2,91 +2,13 @@
 !> This module contains the geometric multigrid routines that come with Afivo
 module m_af_multigrid
   use m_af_types
+  use m_mg_types
+  use m_coarse_solver
 
   implicit none
   private
 
-  ! The mg module supports different multigrid operators, and uses these tags to
-  ! identify boxes / operators
-  integer, parameter, public :: mg_normal_box = 1 !< Normal box
-  integer, parameter, public :: mg_lsf_box    = 2 !< Box with an internal boundary
-  integer, parameter, public :: mg_ceps_box   = 3 !< Box with constant eps /= 1
-  integer, parameter, public :: mg_veps_box   = 4 !< Box with varying eps (on face)
-
-  ! Labels for the different steps of a multigrid cycle
-  integer, parameter :: mg_cycle_down = 1
-  integer, parameter :: mg_cycle_base = 2
-  integer, parameter :: mg_cycle_up   = 3
-
-  !> Type to store multigrid options in
-  type, public :: mg_t
-     integer :: i_phi        = -1 !< Variable holding solution
-     integer :: i_rhs        = -1 !< Variable holding right-hand side
-     integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
-
-     integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
-     integer :: i_lsf        = -1 !< Optional variable for level set function
-     integer :: i_bval       = -1 !< Optional variable for boundary value
-
-     integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
-     integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
-     integer :: n_cycle_base = -1 !< Number of relaxation cycles at bottom level
-
-     logical :: initialized = .false. !< Whether the structure has been initialized
-     logical :: use_corners = .false. !< Does the smoother use corner ghost cells
-     logical :: subtract_mean = .false. !< Whether to subtract mean from solution
-
-     !> Routine to call for filling ghost cells near physical boundaries
-     procedure(af_subr_bc), pointer, nopass   :: sides_bc => null()
-
-     !> Routine to call for filling ghost cells near refinement boundaries
-     procedure(af_subr_rb), pointer, nopass   :: sides_rb => null()
-
-     !> Subroutine that performs the (non)linear operator
-     procedure(mg_box_op), pointer, nopass   :: box_op => null()
-
-     !> Subroutine that performs Gauss-Seidel relaxation on a box
-     procedure(mg_box_gsrb), pointer, nopass :: box_gsrb => null()
-
-     !> Subroutine that corrects the children of a box
-     procedure(mg_box_corr), pointer, nopass :: box_corr => null()
-
-     !> Subroutine for restriction
-     procedure(mg_box_rstr), pointer, nopass :: box_rstr => null()
-  end type mg_t
-
-  abstract interface
-     !> Subroutine that performs A * cc(..., i_in) = cc(..., i_out)
-     subroutine mg_box_op(box, i_out, mg)
-       import
-       type(box_t), intent(inout) :: box !< The box to operate on
-       type(mg_t), intent(in)     :: mg !< Multigrid options
-       integer, intent(in)         :: i_out !< Index of output variable
-     end subroutine mg_box_op
-
-     !> Subroutine that performs Gauss-Seidel relaxation
-     subroutine mg_box_gsrb(box, redblack_cntr, mg)
-       import
-       type(box_t), intent(inout) :: box !< The box to operate on
-       type(mg_t), intent(in)     :: mg !< Multigrid options
-       integer, intent(in)         :: redblack_cntr !< Iteration counter
-     end subroutine mg_box_gsrb
-
-     subroutine mg_box_corr(box_p, box_c, mg)
-       import
-       type(box_t), intent(inout) :: box_c
-       type(box_t), intent(in)    :: box_p
-       type(mg_t), intent(in)     :: mg !< Multigrid options
-     end subroutine mg_box_corr
-
-     subroutine mg_box_rstr(box_c, box_p, iv, mg)
-       import
-       type(box_t), intent(in)    :: box_c !< Child box to restrict
-       type(box_t), intent(inout) :: box_p !< Parent box to restrict to
-       integer, intent(in)         :: iv    !< Variable to restrict
-       type(mg_t), intent(in)     :: mg !< Multigrid options
-     end subroutine mg_box_rstr
-  end interface
+  public :: mg_t
 
   public :: mg_init_mg
   public :: mg_fas_fmg
@@ -131,8 +53,9 @@ module m_af_multigrid
 contains
 
   !> Check multigrid options or set them to default
-  subroutine mg_init_mg(mg)
-    type(mg_t), intent(inout) :: mg           !< Multigrid options
+  subroutine mg_init_mg(tree, mg)
+    type(af_t), intent(in)    :: tree !< Tree to do multigrid on
+    type(mg_t), intent(inout) :: mg   !< Multigrid options
 
     if (mg%i_phi < 0)                  stop "mg_init_mg: i_phi not set"
     if (mg%i_tmp < 0)                  stop "mg_init_mg: i_tmp not set"
@@ -149,12 +72,20 @@ contains
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_sides_rb
-    if (.not. associated(mg%box_op))   mg%box_op => mg_box_lpl
+
+    if (.not. associated(mg%box_op)) then
+       mg%box_op => mg_box_lpl
+       mg%box_stencil => mg_box_lpl_stencil
+    end if
+
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg_box_corr_lpl
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_box_rstr_lpl
 
+    call coarse_solver_initialize(tree, mg)
+
     mg%initialized = .true.
+
   end subroutine mg_init_mg
 
   subroutine check_mg(mg)
@@ -169,7 +100,7 @@ contains
     use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_boxes_copy_cc
     type(af_t), intent(inout)       :: tree !< Tree to do multigrid on
-    type(mg_t), intent(in)         :: mg   !< Multigrid options
+    type(mg_t), intent(inout)         :: mg   !< Multigrid options
     logical, intent(in)             :: set_residual !< If true, store residual in i_tmp
     logical, intent(in)             :: have_guess   !< If false, start from phi = 0
     integer                         :: lvl
@@ -213,7 +144,7 @@ contains
     use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_tree_sum_cc
     type(af_t), intent(inout)    :: tree         !< Tree to do multigrid on
-    type(mg_t), intent(in)      :: mg           !< Multigrid options
+    type(mg_t), intent(inout)      :: mg           !< Multigrid options
     logical, intent(in)           :: set_residual !< If true, store residual in i_tmp
     integer, intent(in), optional :: highest_lvl  !< Maximum level for V-cycle
     integer                       :: lvl, min_lvl, i, id, max_lvl
@@ -224,7 +155,8 @@ contains
     max_lvl = tree%highest_lvl
     if (present(highest_lvl)) max_lvl = highest_lvl
 
-    do lvl = max_lvl, min_lvl+1, -1
+    do lvl = max_lvl, 2, -1
+       print *, "downwards", lvl
        ! Downwards relaxation
        call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_down)
 
@@ -233,11 +165,13 @@ contains
        call update_coarse(tree, lvl, mg)
     end do
 
-    lvl = min_lvl
-    call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_base)
+    ! lvl = min_lvl
+    ! call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_base)
+    call solve_coarse_grid(tree, mg)
 
     ! Do the upwards part of the v-cycle in the tree
-    do lvl = min_lvl+1, max_lvl
+    do lvl = 2, max_lvl
+       print *, "upwards", lvl
        ! Correct solution at this lvl using lvl-1 data
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
@@ -282,6 +216,133 @@ contains
     end if
 
   end subroutine mg_fas_vcycle
+
+  subroutine solve_coarse_grid(tree, mg)
+    type(af_t), intent(inout) :: tree  !< Tree to do multigrid on
+    type(mg_t), intent(inout) :: mg !< Multigrid options
+    integer                   :: n, nc, id, ix(NDIM)
+    integer                   :: ilo(NDIM), ihi(NDIM), ierr
+    integer                   :: nx(NDIM), i, j
+    real(dp)                  :: tmp(tree%n_cell**NDIM)
+    real(dp)                  :: coeffs(3, tree%n_cell**NDIM)
+
+    print *, "Set rhs"
+    nc = tree%n_cell
+    ! call coarse_solver_set_rhs(tree, mg)
+
+    do n = 1, size(tree%lvls(1)%ids)
+       id  = tree%lvls(1)%ids(n)
+       ilo = (tree%boxes(id)%ix - 1) * nc + 1
+       ihi = ilo + nc - 1
+
+       tmp = pack(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_rhs), .true.) * tree%dr_base**2
+       call HYPRE_StructVectorSetBoxValues(mg%csolver%rhs, ilo, ihi, tmp, ierr)
+
+       tmp = pack(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_phi), .true.)
+       call HYPRE_StructVectorSetBoxValues(mg%csolver%phi, ilo, ihi, tmp, ierr)
+    end do
+
+    print *, "Solve"
+    call hypre_solve_smg(mg%csolver%solver, mg%csolver%matrix, mg%csolver%rhs, mg%csolver%phi)
+    print *, "Solve done"
+
+    do n = 1, size(tree%lvls(1)%ids)
+       id  = tree%lvls(1)%ids(n)
+       ilo = (tree%boxes(id)%ix - 1) * nc + 1
+       ihi = ilo + nc - 1
+
+       call HYPRE_StructVectorGetBoxValues(mg%csolver%phi, ilo, ihi, tmp, ierr)
+       tree%boxes(id)%cc(DTIMES(1:nc), mg%i_phi) = reshape(tmp, [DTIMES(nc)])
+    end do
+    ! integer                   :: n, nc, id, ix(NDIM)
+    ! integer                   :: ilo(NDIM), ihi(NDIM), ierr
+    ! integer                   :: nx(NDIM), i, j
+    ! real(dp)                  :: tmp(tree%n_cell**NDIM)
+    ! real(dp)                  :: coeffs(3, tree%n_cell**NDIM)
+
+    ! nc = tree%n_cell
+    ! nx = [nc, nc]
+
+    ! print *, "Solving coarse grid"
+    ! call hypre_create_grid_2d(mg%sparse_grid, nx, [.false., .false.])
+    ! call hypre_create_vector(mg%sparse_grid, nx, mg%sparse_phi)
+    ! call hypre_create_vector(mg%sparse_grid, nx, mg%sparse_rhs)
+
+    ! n = 0
+    ! do j = 1, nc
+    !    do i = 1, nc
+    !       n = n + 1
+    !       coeffs(:, n) = 0.0_dp
+
+    !       if (i > 1) then
+    !          coeffs(1, n) = coeffs(1, n) - 1
+    !       else
+    !          coeffs(1, n) = coeffs(1, n) - 2
+    !       end if
+
+    !       if (i < nc) then
+    !          coeffs(1, n) = coeffs(1, n) - 1
+    !          coeffs(2, n) = 1.0_dp
+    !       else
+    !          coeffs(1, n) = coeffs(1, n) - 2
+    !       end if
+
+    !       if (j > 1) then
+    !          coeffs(1, n) = coeffs(1, n) - 1
+    !       else
+    !          coeffs(1, n) = coeffs(1, n) - 2
+    !       end if
+
+    !       if (j < nc) then
+    !          coeffs(1, n) = coeffs(1, n) - 1
+    !          coeffs(3, n) = 1.0_dp
+    !       else
+    !          coeffs(1, n) = coeffs(1, n) - 2
+    !       end if
+    !    end do
+    ! end do
+
+    ! ! coeffs = coeffs / tree%dr_base**2
+
+    ! print *, "Create matrix"
+    ! call hypre_create_matrix_2d(mg%sparse_matrix, mg%sparse_grid, nx, coeffs)
+
+    ! print *, "Set rhs"
+    ! do n = 1, size(tree%lvls(1)%ids)
+    !    id  = tree%lvls(1)%ids(n)
+    !    ix  = tree%boxes(id)%ix
+    !    ilo = (ix - 1) * nc
+    !    ihi = ilo + nc - 1
+
+    !    tmp = pack(tree%boxes(id)%cc(1:nc, 1:nc, mg%i_rhs), .true.) * tree%dr_base**2
+    !    call HYPRE_StructVectorSetBoxValues(mg%sparse_rhs, ilo, ihi, tmp, ierr)
+
+    !    tmp = pack(tree%boxes(id)%cc(1:nc, 1:nc, mg%i_phi), .true.)
+    !    call HYPRE_StructVectorSetBoxValues(mg%sparse_phi, ilo, ihi, tmp, ierr)
+    ! end do
+
+    ! print *, "Prepare solve"
+    ! call hypre_prepare_solve(mg%sparse_solver, mg%sparse_matrix, mg%sparse_rhs, mg%sparse_phi)
+
+    ! print *, "Solve"
+    ! call hypre_solve_smg(mg%sparse_solver, mg%sparse_matrix, mg%sparse_rhs, mg%sparse_phi)
+    ! print *, "Solve done"
+
+    ! do n = 1, size(tree%lvls(1)%ids)
+    !    id  = tree%lvls(1)%ids(n)
+    !    ix  = tree%boxes(id)%ix
+    !    ilo = (ix - 1) * nc
+    !    ihi = ilo + nc - 1
+
+    !    call HYPRE_StructVectorGetBoxValues(mg%sparse_phi, ilo, ihi, tmp, ierr)
+    !    tree%boxes(id)%cc(1:nc, 1:nc, mg%i_phi) = reshape(tmp, [DTIMES(nc)])
+    ! end do
+
+    ! call HYPRE_StructGridDestroy(mg%sparse_grid, ierr);
+    ! call HYPRE_StructMatrixDestroy(mg%sparse_matrix, ierr);
+    ! call HYPRE_StructVectorDestroy(mg%sparse_rhs, ierr);
+    ! call HYPRE_StructVectorDestroy(mg%sparse_phi, ierr);
+  end subroutine solve_coarse_grid
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
   subroutine mg_sides_rb(boxes, id, nb, iv)
@@ -1058,6 +1119,93 @@ contains
        call af_restrict_box(box_c, box_p, iv, use_geometry=.true.)
     end if
   end subroutine mg_box_rstr_lpl
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_lpl_stencil(box, mg, stencil)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    ! integer :: IJK
+
+    stencil(1, DTIMES(:)) = -2.0_dp * NDIM
+    stencil(2:, DTIMES(:)) = 1.0_dp
+
+    call stencil_handle_boundaries(box, mg, stencil)
+
+    ! do KJI_DO(1, box%n_cell)
+    !    print *, IJK, stencil(:, IJK)
+    ! end do; CLOSE_DO
+  end subroutine mg_box_lpl_stencil
+
+  !> Incorporate boundary conditions into stencil
+  subroutine stencil_handle_boundaries(box, mg, stencil)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    type(box_t)             :: dummy_box
+    integer                 :: nb, nc, lo(NDIM), hi(NDIM)
+    integer                 :: nb_dim, nb_id, bc_type
+
+    ! Determine boundary conditions by calling the boundary condition routine on
+    ! a dummy box
+    dummy_box = box
+    nc = box%n_cell
+
+    do nb = 1, af_num_neighbors
+       nb_id = box%neighbors(nb)
+
+       if (nb_id < af_no_box) then
+          call mg%sides_bc(dummy_box, nb, mg%i_phi, bc_type)
+
+          ! Determine index range next to boundary
+          nb_dim     = af_neighb_dim(nb)
+          lo(:)      = 1
+          hi(:)      = nc
+
+          if (af_neighb_low(nb)) then
+             lo(nb_dim) = 1
+             hi(nb_dim) = 1
+          else
+             lo(nb_dim) = nc
+             hi(nb_dim) = nc
+          end if
+
+          select case (bc_type)
+          case (af_bc_dirichlet)
+             ! Dirichlet value at cell face, so compute gradient over h/2
+             ! E.g. 1 -2 1 becomes 0 -3 1
+#if NDIM == 2
+             stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
+                  stencil(1, lo(1):hi(1), lo(2):hi(2)) - &
+                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
+             stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
+#elif NDIM == 3
+             stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
+                  stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) - &
+                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
+             stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
+#endif
+          case (af_bc_neumann)
+             ! Remove stencil components related to neighbor
+#if NDIM == 2
+             stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
+                  stencil(1, lo(1):hi(1), lo(2):hi(2)) + &
+                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
+             stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
+#elif NDIM == 3
+             stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
+                  stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) + &
+                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
+             stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
+#endif
+          case default
+             error stop "mg_box_lpl_stencil: unsupported boundary condition"
+          end select
+       end if
+    end do
+
+  end subroutine stencil_handle_boundaries
 
   !> Perform Gauss-Seidel relaxation on a box. Epsilon can have a jump at cell
   !> faces.

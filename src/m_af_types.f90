@@ -269,6 +269,8 @@ module m_af_types
      integer  :: n_var_cell  = 0       !< number of cell-centered variables
      integer  :: n_var_face  = 0       !< number of face-centered variables
      integer  :: coord_t               !< Type of coordinates
+     integer :: coarse_grid_size(3) = -1 !< Size of the coarse grid (if rectangular)
+     logical :: periodic(3) = .false.  !< Which dimensions are periodic
      real(dp) :: r_base(NDIM)          !< min. coords of box at index (1,1)
      real(dp) :: dr_base               !< cell spacing at lvl 1
 
