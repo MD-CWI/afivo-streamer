@@ -1122,16 +1122,17 @@ contains
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpl_stencil(box, mg, stencil)
+  subroutine mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(DTIMES(box%n_cell))
     ! integer :: IJK
 
     stencil(1, DTIMES(:)) = -2.0_dp * NDIM
     stencil(2:, DTIMES(:)) = 1.0_dp
 
-    call stencil_handle_boundaries(box, mg, stencil)
+    call stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
 
     ! do KJI_DO(1, box%n_cell)
     !    print *, IJK, stencil(:, IJK)
@@ -1139,18 +1140,23 @@ contains
   end subroutine mg_box_lpl_stencil
 
   !> Incorporate boundary conditions into stencil
-  subroutine stencil_handle_boundaries(box, mg, stencil)
+  subroutine stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(DTIMES(box%n_cell))
     type(box_t)             :: dummy_box
     integer                 :: nb, nc, lo(NDIM), hi(NDIM)
     integer                 :: nb_dim, nb_id, bc_type
+    real(dp)                :: inv_dr
+
+    bc_to_rhs = 0.0_dp
 
     ! Determine boundary conditions by calling the boundary condition routine on
     ! a dummy box
     dummy_box = box
-    nc = box%n_cell
+    nc        = box%n_cell
+    inv_dr    = 1 / box%dr
 
     do nb = 1, af_num_neighbors
        nb_id = box%neighbors(nb)
@@ -1174,29 +1180,38 @@ contains
           select case (bc_type)
           case (af_bc_dirichlet)
              ! Dirichlet value at cell face, so compute gradient over h/2
-             ! E.g. 1 -2 1 becomes 0 -3 1
+             ! E.g. 1 -2 1 becomes 0 -3 1 for a 1D Laplacian
+             ! The boundary condition is incorporated in the right-hand side
 #if NDIM == 2
              stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2)) - &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
+             bc_to_rhs(lo(1):hi(1), lo(2):hi(2)) = &
+                  -2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
 #elif NDIM == 3
              stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) - &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
+             bc_to_rhs(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
+                  -2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
 #endif
           case (af_bc_neumann)
-             ! Remove stencil components related to neighbor
+             ! E.g. 1 -2 1 becomes 0 -1 1 for a 1D Laplacian
 #if NDIM == 2
              stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
+             bc_to_rhs(lo(1):hi(1), lo(2):hi(2)) = &
+                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * inv_dr
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
 #elif NDIM == 3
              stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
+             bc_to_rhs(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
+                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * inv_dr
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
 #endif
           case default

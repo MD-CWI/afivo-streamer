@@ -51,13 +51,15 @@ contains
   subroutine coarse_solver_initialize(tree, mg)
     type(af_t), intent(in)    :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg
-    integer                   :: n, nc, nx(NDIM), id, ierr
-    integer                   :: ilo(NDIM), ihi(NDIM)
+    integer                   :: n, n_boxes, nc, id, ierr
+    integer                   :: nx(NDIM), ilo(NDIM), ihi(NDIM)
     real(dp)                  :: symm_coeffs(stencil_size, tree%n_cell**NDIM)
     real(dp)                  :: full_coeffs(2*NDIM+1, DTIMES(tree%n_cell))
 
-    nc = tree%n_cell
-    nx = tree%coarse_grid_size(1:NDIM)
+    nc                   = tree%n_cell
+    nx                   = tree%coarse_grid_size(1:NDIM)
+    mg%csolver%grid_size = tree%coarse_grid_size(1:NDIM)
+    n_boxes              = size(tree%lvls(1)%ids)
 
     if (any(nx == -1)) &
          error stop "coarse_solver_initialize: coarse_grid_size not set"
@@ -75,9 +77,12 @@ contains
     if (.not. associated(mg%box_stencil)) &
          error stop "coarse_solver_initialize: mg%box_stencil not set"
 
+    allocate(mg%csolver%bc_to_rhs(DTIMES(nc), n_boxes))
+
     do n = 1, size(tree%lvls(1)%ids)
        id  = tree%lvls(1)%ids(n)
-       call mg%box_stencil(tree%boxes(id), mg, full_coeffs)
+       call mg%box_stencil(tree%boxes(id), mg, full_coeffs, &
+            mg%csolver%bc_to_rhs(DTIMES(:), n))
        ! TODO: check symmetry
 
        symm_coeffs(1, :) = pack(full_coeffs(1, DTIMES(:)), .true.)

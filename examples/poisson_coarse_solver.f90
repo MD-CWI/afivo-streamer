@@ -1,5 +1,5 @@
 #include "../src/cpp_macros.h"
-program test_coarse_solver
+program poisson_coarse_solver
   use m_af_all
   use m_gaussians
 
@@ -297,4 +297,4 @@ contains
 #endif
   end subroutine sides_bc
 
-end program test_coarse_solver
+end program poisson_coarse_solver
