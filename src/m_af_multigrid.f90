@@ -108,7 +108,7 @@ contains
     call check_mg(mg)           ! Check whether mg options are set
 
     if (have_guess) then
-       do lvl = tree%highest_lvl,  tree%lowest_lvl+1, -1
+       do lvl = tree%highest_lvl,  2, -1
           ! Set rhs on coarse grid and restrict phi
           call set_coarse_phi_rhs(tree, lvl, mg)
        end do
@@ -116,12 +116,12 @@ contains
        call init_phi_rhs(tree, mg)
     end if
 
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        ! Store phi_old in tmp
        call af_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_tmp)
 
-       if (lvl > tree%lowest_lvl) then
+       if (lvl > 1) then
           ! Correct solution at this lvl using lvl-1 data
           ! phi = phi + prolong(phi_coarse - phi_old_coarse)
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
@@ -151,7 +151,7 @@ contains
     real(dp)                      :: sum_phi, mean_phi
 
     call check_mg(mg)           ! Check whether mg options are set
-    min_lvl = tree%lowest_lvl
+    min_lvl = 1
     max_lvl = tree%highest_lvl
     if (present(highest_lvl)) max_lvl = highest_lvl
 
@@ -218,6 +218,7 @@ contains
   end subroutine mg_fas_vcycle
 
   subroutine solve_coarse_grid(tree, mg)
+    use m_af_ghostcell, only: af_gc_ids
     type(af_t), intent(inout) :: tree  !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg !< Multigrid options
     integer                   :: n, nc, id, ix(NDIM)
@@ -226,25 +227,10 @@ contains
     real(dp)                  :: tmp(tree%n_cell**NDIM)
     real(dp)                  :: coeffs(3, tree%n_cell**NDIM)
 
-    print *, "Set rhs"
     nc = tree%n_cell
-    ! call coarse_solver_set_rhs(tree, mg)
 
-    do n = 1, size(tree%lvls(1)%ids)
-       id  = tree%lvls(1)%ids(n)
-       ilo = (tree%boxes(id)%ix - 1) * nc + 1
-       ihi = ilo + nc - 1
-
-       tmp = pack(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_rhs), .true.) * tree%dr_base**2
-       call HYPRE_StructVectorSetBoxValues(mg%csolver%rhs, ilo, ihi, tmp, ierr)
-
-       tmp = pack(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_phi), .true.)
-       call HYPRE_StructVectorSetBoxValues(mg%csolver%phi, ilo, ihi, tmp, ierr)
-    end do
-
-    print *, "Solve"
+    call coarse_solver_set_rhs_phi(tree, mg)
     call hypre_solve_smg(mg%csolver%solver, mg%csolver%matrix, mg%csolver%rhs, mg%csolver%phi)
-    print *, "Solve done"
 
     do n = 1, size(tree%lvls(1)%ids)
        id  = tree%lvls(1)%ids(n)
@@ -254,6 +240,8 @@ contains
        call HYPRE_StructVectorGetBoxValues(mg%csolver%phi, ilo, ihi, tmp, ierr)
        tree%boxes(id)%cc(DTIMES(1:nc), mg%i_phi) = reshape(tmp, [DTIMES(nc)])
     end do
+
+    call af_gc_ids(tree, tree%lvls(1)%ids, mg%i_phi, mg%sides_rb, mg%sides_bc)
     ! integer                   :: n, nc, id, ix(NDIM)
     ! integer                   :: ilo(NDIM), ihi(NDIM), ierr
     ! integer                   :: nx(NDIM), i, j
@@ -833,12 +821,12 @@ contains
     integer                   :: i, id, p_id, lvl
 
     !$omp parallel private(lvl, i, id, p_id)
-    do lvl = tree%highest_lvl,  tree%lowest_lvl+1, -1
+    do lvl = tree%highest_lvl,  1+1, -1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
           call af_box_clear_cc(tree%boxes(id), mg%i_phi)
-          if (lvl > tree%lowest_lvl) then
+          if (lvl > 1) then
              p_id = tree%boxes(id)%parent
              call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_rhs, mg)
           end if
@@ -1126,11 +1114,14 @@ contains
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp)                :: inv_dr2
     ! integer :: IJK
 
-    stencil(1, DTIMES(:)) = -2.0_dp * NDIM
-    stencil(2:, DTIMES(:)) = 1.0_dp
+    inv_dr2 = 1 / box%dr**2
+
+    stencil(1, DTIMES(:)) = -2.0_dp * NDIM * inv_dr2
+    stencil(2:, DTIMES(:)) = 1.0_dp * inv_dr2
 
     call stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
 
@@ -1144,7 +1135,7 @@ contains
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
     type(box_t)             :: dummy_box
     integer                 :: nb, nc, lo(NDIM), hi(NDIM)
     integer                 :: nb_dim, nb_id, bc_type
@@ -1165,17 +1156,7 @@ contains
           call mg%sides_bc(dummy_box, nb, mg%i_phi, bc_type)
 
           ! Determine index range next to boundary
-          nb_dim     = af_neighb_dim(nb)
-          lo(:)      = 1
-          hi(:)      = nc
-
-          if (af_neighb_low(nb)) then
-             lo(nb_dim) = 1
-             hi(nb_dim) = 1
-          else
-             lo(nb_dim) = nc
-             hi(nb_dim) = nc
-          end if
+          call af_get_index_bc_inside(nb, nc, lo, hi)
 
           select case (bc_type)
           case (af_bc_dirichlet)
@@ -1186,15 +1167,15 @@ contains
              stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2)) - &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
-             bc_to_rhs(lo(1):hi(1), lo(2):hi(2)) = &
-                  -2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
+             bc_to_rhs(:, nb) = &
+                  pack(-2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2)), .true.)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
 #elif NDIM == 3
              stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) - &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
-             bc_to_rhs(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
-                  -2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
+             bc_to_rhs(:, nb) = &
+                  pack(-2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), .true.)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
 #endif
           case (af_bc_neumann)
@@ -1203,15 +1184,15 @@ contains
              stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
-             bc_to_rhs(lo(1):hi(1), lo(2):hi(2)) = &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * inv_dr
+             bc_to_rhs(:, nb) = &
+                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * inv_dr, .true.)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
 #elif NDIM == 3
              stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
-             bc_to_rhs(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * inv_dr
+             bc_to_rhs(:, nb) = &
+                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * inv_dr, .true.)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
 #endif
           case default

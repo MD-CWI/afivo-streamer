@@ -53,12 +53,12 @@ contains
     if (present(leaves_only)) all_ids = .not. leaves_only
 
     if (all_ids) then
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, &
                subr_rb, subr_bc, corners)
        end do
     else
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, &
                subr_rb, subr_bc, corners)
        end do
@@ -82,12 +82,12 @@ contains
     if (present(leaves_only)) all_ids = .not. leaves_only
 
     if (all_ids) then
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%ids, iv, &
                subr_rb, subr_bc, corners)
        end do
     else
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%leaves, iv, &
                subr_rb, subr_bc, corners)
        end do
@@ -256,19 +256,15 @@ contains
     procedure(af_subr_rb)       :: subr_rb  !< Procedure called at refinement boundaries
     procedure(af_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
     integer                      :: nb, nb_id, bc_type
-    integer                      :: nb_dim, lo(NDIM), hi(NDIM), dnb(NDIM)
+    integer                      :: lo(NDIM), hi(NDIM), dnb(NDIM)
 
     do nb = 1, af_num_neighbors
        nb_id = boxes(id)%neighbors(nb)
 
        if (nb_id > af_no_box) then
           ! There is a neighbor
-          nb_dim     = af_neighb_dim(nb)
-          lo(:)      = 1
-          hi(:)      = boxes(id)%n_cell
-          lo(nb_dim) = af_neighb_high_01(nb) * (boxes(id)%n_cell + 1)
-          hi(nb_dim) = lo(nb_dim)
-          dnb        = af_neighb_offset([nb])
+          call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
+          dnb = af_neighb_offset([nb])
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
        else if (nb_id == af_no_box) then
           ! Refinement boundary
@@ -434,15 +430,10 @@ contains
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
     integer, intent(in)           :: nb       !< Neighbor to get data from
-    integer                       :: p_id, nb_dim, lo(NDIM), hi(NDIM)
+    integer                       :: p_id, lo(NDIM), hi(NDIM)
 
-    p_id       = boxes(id)%parent
-    nb_dim     = af_neighb_dim(nb)
-    lo(:)      = 1
-    hi(:)      = boxes(id)%n_cell
-    lo(nb_dim) = af_neighb_high_01(nb) * (boxes(id)%n_cell+1)
-    hi(nb_dim) = af_neighb_high_01(nb) * (boxes(id)%n_cell+1)
-
+    p_id = boxes(id)%parent
+    call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
     call af_prolong_copy(boxes(p_id), boxes(id), iv, low=lo, high=hi)
   end subroutine af_gc_prolong_copy
 

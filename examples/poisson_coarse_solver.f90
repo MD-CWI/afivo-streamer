@@ -5,8 +5,8 @@ program poisson_coarse_solver
 
   implicit none
 
-  integer, parameter :: box_size = 4
-  integer, parameter :: n_boxes_base = 1
+  integer, parameter :: box_size = 16
+  integer, parameter :: domain_size(NDIM) = 64
   integer, parameter :: n_iterations = 10
   integer :: i_phi
   integer :: i_rhs
@@ -18,14 +18,13 @@ program poisson_coarse_solver
   type(af_t)        :: tree
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
-  integer            :: ix_list(NDIM, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg_t)       :: mg
   type(gauss_t)      :: gs
   integer            :: count_rate,t_start,t_end
 
-  print *, "Running poisson_basic_" // DIMNAME
+  print *, "Running poisson_coarse_solver_" // DIMNAME
   print *, "Number of threads", af_get_max_threads()
 
   !> [Gauss_init]
@@ -34,12 +33,12 @@ program poisson_coarse_solver
   ! Sigmas    :  [0.04_dp, 0.04_dp]
   ! Locations :  x, y, z = 0.25 or x, y, z = 0.75
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.1_dp, 0.1_dp], &
-       reshape([DTIMES(0.5_dp), &
-       DTIMES(0.5_dp)], [NDIM,2]))
+       reshape([DTIMES(0.25_dp), &
+       DTIMES(0.6_dp)], [NDIM,2]))
   !> [Gauss_init]
 
   ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
+  dr = 1.0_dp / maxval(domain_size)
 
   !> [af_init]
   call af_add_cc_variable(tree, "phi", ix=i_phi)
@@ -52,20 +51,13 @@ program poisson_coarse_solver
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
-       coarsen_to=2)   ! Add coarsened levels for multigrid
+       dr)             ! Distance between cells on base level
   !> [af_init]
 
   !> [af_set_base]
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [DTIMES(1)]         ! Set index of box 1
-
   ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
+  call af_set_base(tree, domain_size)
   !> [af_set_base]
-
-  tree%coarse_grid_size(1:NDIM) = box_size
 
   call system_clock(t_start, count_rate)
   !> [set_refinement]
@@ -125,7 +117,7 @@ program poisson_coarse_solver
      !> [write_output]
      ! This writes a Silo output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
-     write(fname, "(A,I0)") "poisson_basic_" // DIMNAME // "_", mg_iter
+     write(fname, "(A,I0)") "poisson_coarse_solver_" // DIMNAME // "_", mg_iter
      call af_write_silo(tree, trim(fname), dir="output")
      !> [write_output]
   end do
@@ -160,11 +152,11 @@ contains
        ! which is related to the fourth derivative of the solution.
        drhs = dr2 * box%cc(IJK, i_rhs)
 
-       ! if (abs(drhs) > 1e-3_dp .and. box%lvl < 5) then
-       !    cell_flags(IJK) = af_do_ref
-       ! else
+       if (abs(drhs) > 1e-3_dp .and. box%lvl < 5) then
+          cell_flags(IJK) = af_do_ref
+       else
           cell_flags(IJK) = af_keep_ref
-       ! end if
+       end if
     end do; CLOSE_DO
   end subroutine refine_routine
   !> [refine_routine]

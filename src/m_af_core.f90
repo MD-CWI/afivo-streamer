@@ -119,27 +119,23 @@ contains
   end function af_find_fc_variable
 
   !> Initialize a NDIM-d tree type.
-  subroutine af_init(tree, n_cell, dr, r_min, n_boxes, coarsen_to, coord, mem_limit_gb)
+  subroutine af_init(tree, n_cell, dr, r_min, n_boxes, coord, mem_limit_gb)
     type(af_t), intent(inout)      :: tree       !< The tree to initialize
     integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
     real(dp), intent(in)           :: dr         !< spacing of a cell at lvl 1
     !> Lowest coordinate of box at 1,1. Default is (0, 0)
     real(dp), intent(in), optional :: r_min(NDIM)
-    !> Create additional coarse grids down to this size. Default is -1 (which
-    !> means don't do this)
-    integer, intent(in), optional  :: coarsen_to
     !> Allocate initial storage for n_boxes. Default is 1000
     integer, intent(in), optional  :: n_boxes
     integer, intent(in), optional  :: coord !< Select coordinate type
     real(dp), intent(in), optional :: mem_limit_gb !< Memory limit in GByte
 
-    integer                        :: n_boxes_a, coarsen_to_a
+    integer                        :: n_boxes_a
     real(dp)                       :: r_min_a(NDIM), gb_limit
     integer                        :: lvl, coord_a, box_bytes
 
     ! Set default arguments if not present
     n_boxes_a = 1000;  if (present(n_boxes)) n_boxes_a = n_boxes
-    coarsen_to_a = -1; if (present(coarsen_to)) coarsen_to_a = coarsen_to
     r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
     coord_a = af_xyz;  if (present(coord)) coord_a = coord
     gb_limit = 16;     if (present(mem_limit_gb)) gb_limit = mem_limit_gb
@@ -155,18 +151,6 @@ contains
     if (tree%n_var_cell <= 0) stop "af_init: no cell-centered variables present"
 
     allocate(tree%boxes(n_boxes_a))
-
-    if (coarsen_to_a > 0) then
-       ! Determine number of lvls for subtree
-       !> @todo remove subtree in future
-       tree%lowest_lvl = 1 - &
-            nint(log(real(n_cell, dp)/coarsen_to_a)/log(2.0_dp))
-
-       if (2**(1-tree%lowest_lvl) * coarsen_to_a /= n_cell) &
-            stop "af_init: cannot coarsen to given value"
-    else
-       tree%lowest_lvl = 1
-    end if
 
     do lvl = af_min_lvl, af_max_lvl
        allocate(tree%lvls(lvl)%ids(0))
@@ -251,277 +235,175 @@ contains
     end do
 
     tree%highest_lvl = 0
-    tree%lowest_lvl  = 1
     tree%highest_id  = 0
     tree%n_var_cell  = 0
     tree%n_var_face  = 0
     tree%ready       = .false.
   end subroutine af_destroy
 
-  !> Create the base level of the tree, ix_list(:, id) stores the spatial index
-  !> of box(id), nb_list(:, id) stores the neighbors of box(id). The connection
-  !> between neighbors is handled automatically, so only boundary conditions
-  !> have to be specified. Periodic boundaries only have to be specified from
-  !> one side. A default value of af_no_box in the nb_list is converted to a
-  !> physical boundary with index of -1.
-  subroutine af_set_base(tree, n_boxes, ix_list, nb_list)
+  !> Create the coarse grid
+  subroutine af_set_base(tree, coarse_grid_size, periodic_dims)
     !> Tree for which we set the base
-    type(af_t), intent(inout)  :: tree
+    type(af_t), intent(inout)     :: tree
     !> Number of boxes on coarse grid
-    integer, intent(in)        :: n_boxes
-    !> List of spatial indices for the initial boxes
-    integer, intent(in)        :: ix_list(NDIM, n_boxes)
-    !> Neighbors for the initial boxes
-    integer, intent(inout), optional :: nb_list(af_num_neighbors, n_boxes)
-    integer                    :: n, id, nb, nb_id
-    integer                    :: ix(NDIM), lvl, offset
-    integer                    :: ix_min(NDIM), ix_max(NDIM), nb_ix(NDIM)
-    integer                    :: nb_used(af_num_neighbors, size(ix_list, 2))
-#if NDIM == 2
-    integer, allocatable       :: id_array(:, :)
-#elif NDIM == 3
-    integer, allocatable       :: id_array(:, :, :)
-#endif
+    integer, intent(in)           :: coarse_grid_size(NDIM)
+    !> Whether dimensions are periodic (default: none)
+    logical, intent(in), optional :: periodic_dims(NDIM)
+    logical                       :: periodic(NDIM)
+    integer                       :: nx(NDIM), ix(NDIM), IJK, id, n_boxes, nb
+    integer, allocatable          :: id_array(DTIMES(:))
 
-    if (n_boxes < 1) stop "af_set_base: need at least one box"
-    if (any(ix_list < 1)) stop "af_set_base: need all ix_list > 0"
-    if (tree%highest_id > 0)  stop "af_set_base: this tree already has boxes"
-    if (.not. allocated(tree%boxes)) stop "af_set_base: tree not initialized"
+    if (tree%highest_id > 0) &
+         error stop "af_set_base: this tree already has boxes"
+    if (.not. allocated(tree%boxes)) &
+         error stop "af_set_base: tree not initialized"
+    if (any(coarse_grid_size < tree%n_cell)) &
+         error stop "af_set_base: coarse_grid_size < tree%n_cell"
+    if (any(modulo(coarse_grid_size, tree%n_cell) /= 0)) &
+         error stop "af_set_base: coarse_grid_size not divisible by tree%n_cell"
 
-    if (present(nb_list)) then
-       nb_used = nb_list
-    else
-       nb_used = af_no_box      ! Default value
-    end if
+    periodic(:) = .false.; if (present(periodic_dims)) periodic = periodic_dims
 
-    ! Create an array covering the coarse grid, in which boxes are indicated by
-    ! their id.
-    do n = 1, NDIM
-       ! -1 and +1 to also include 'neighbors' of the coarse grid
-       ix_min(n) = minval(ix_list(n, :)) - 1
-       ix_max(n) = maxval(ix_list(n, :)) + 1
-    end do
+    tree%coarse_grid_size(1:NDIM) = coarse_grid_size
+    tree%periodic                 = periodic
 
-#if NDIM == 2
-    allocate(id_array(ix_min(1):ix_max(1), ix_min(2):ix_max(2)))
-#elif NDIM == 3
-    allocate(id_array(ix_min(1):ix_max(1), &
-         ix_min(2):ix_max(2), ix_min(3):ix_max(3)))
-#endif
+    nx      = coarse_grid_size / tree%n_cell
+    n_boxes = product(nx)
 
-    ! Store box ids in the index array covering the coarse grid
-    id_array = af_no_box
+    ! For easy lookup of box neighbors
+    call create_index_array(nx, periodic, id_array)
 
-    do id = 1, n_boxes
-       ix = ix_list(:, id)
-#if NDIM == 2
-       id_array(ix(1), ix(2)) = id
-#elif NDIM == 3
-       id_array(ix(1), ix(2), ix(3)) = id
-#endif
-    end do
-
-    ! Loop over the boxes and set their neighbors
-    do id = 1, n_boxes
-       ix = ix_list(:, id)
-
-       do nb = 1, af_num_neighbors
-          ! Compute ix of neighbor
-          nb_ix = ix + af_neighb_dix(:, nb)
-#if NDIM == 2
-          nb_id = id_array(nb_ix(1), nb_ix(2))
-#elif NDIM == 3
-          nb_id = id_array(nb_ix(1), nb_ix(2), nb_ix(3))
-#endif
-
-          if (nb_id /= af_no_box) then
-             ! Neighbor present, so store id
-             nb_used(nb, id) = nb_id
-          else
-             ! A periodic or boundary condition
-             nb_id = nb_used(nb, id)
-
-             if (nb_id > af_no_box) then
-                ! If periodic, copy connectivity information to other box
-                nb_used(af_neighb_rev(nb), nb_id) = id
-             else if (nb_id == af_no_box) then
-                ! The value af_no_box is converted to af_phys_boundary,
-                ! indicating the default boundary condition
-                nb_used(nb, id) = af_phys_boundary
-             end if
-          end if
-
-       end do
-    end do
-
-    if (any(nb_used == af_no_box)) stop "af_set_base: unresolved neighbors"
-
-    ! Check if we have enough space, if not, increase space
+    ! Check if we have enough space
     if (n_boxes > size(tree%boxes(:))) then
        call af_resize_box_storage(tree, n_boxes)
     end if
 
-    ! Create coarser levels which are copies of lvl 1
-    do lvl = tree%lowest_lvl, 1
-       deallocate(tree%lvls(lvl)%ids)
-       allocate(tree%lvls(lvl)%ids(n_boxes))
+    ! Create level 1
+    deallocate(tree%lvls(1)%ids)
+    allocate(tree%lvls(1)%ids(n_boxes))
 
-       call get_free_ids(tree, tree%lvls(lvl)%ids)
-       offset = tree%lvls(lvl)%ids(1) - 1
+    ! The ids are simply 1, 2, 3, ..., N
+    call get_free_ids(tree, tree%lvls(1)%ids)
+    tree%lvls(1)%leaves = tree%lvls(1)%ids
 
-       do n = 1, n_boxes
-          id                         = tree%lvls(lvl)%ids(n)
-          ix                         = ix_list(:, n)
-          tree%boxes(id)%lvl         = lvl
-          tree%boxes(id)%ix          = ix
-          tree%boxes(id)%dr          = tree%dr_base * 0.5_dp**(lvl-1)
-          tree%boxes(id)%r_min       = tree%r_base + &
-               (ix - 1) * tree%dr_base * tree%n_cell
-          tree%boxes(id)%n_cell      = tree%n_cell / (2**(1-lvl))
-          tree%boxes(id)%coord_t     = tree%coord_t
+    ! Loop over the boxes and set their neighbors
+#if NDIM == 2
+    do j = 1, nx(2)
+       do i = 1, nx(1)
+          id                     = id_array(IJK)
+          tree%boxes(id)%lvl     = 1
+          tree%boxes(id)%ix      = [IJK]
+          tree%boxes(id)%dr      = tree%dr_base
+          tree%boxes(id)%r_min   = tree%r_base + &
+               (tree%boxes(id)%ix - 1) * tree%dr_base * tree%n_cell
+          tree%boxes(id)%n_cell  = tree%n_cell
+          tree%boxes(id)%coord_t = tree%coord_t
 
           tree%boxes(id)%parent      = af_no_box
-          tree%boxes(id)%children(:) = af_no_box ! Gets overwritten, see below
+          tree%boxes(id)%children(:) = af_no_box
 
-          ! Connectivity is the same for all lvls
-          where (nb_used(:, n) > af_no_box)
-             tree%boxes(id)%neighbors = nb_used(:, n) + offset
-          elsewhere
-             tree%boxes(id)%neighbors = nb_used(:, n)
-          end where
-
-          tree%boxes(id)%neighbor_mat = af_no_box
+          ! Connectivity
+          do nb = 1, af_num_neighbors
+             ix = [IJK] + af_neighb_dix(:, nb)
+             tree%boxes(id)%neighbors(nb) = id_array(ix(1), ix(2))
+          end do
+          tree%boxes(id)%neighbor_mat = id_array(i-1:i+1, j-1:j+1)
 
           call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
                tree%n_var_cell, tree%n_var_face)
        end do
-
-       if (lvl == 1) then
-          deallocate(tree%lvls(lvl)%leaves)
-          allocate(tree%lvls(lvl)%leaves(n_boxes))
-          tree%lvls(lvl)%leaves = tree%lvls(lvl)%ids
-       else
-          deallocate(tree%lvls(lvl)%parents)
-          allocate(tree%lvls(lvl)%parents(n_boxes))
-          tree%lvls(lvl)%parents = tree%lvls(lvl)%ids
-       end if
-
-       if (lvl > tree%lowest_lvl) then
-          tree%boxes(tree%lvls(lvl-1)%ids)%children(1) = &
-               tree%lvls(lvl)%ids
-          tree%boxes(tree%lvls(lvl)%ids)%parent = &
-               tree%lvls(lvl-1)%ids
-       end if
     end do
+#elif NDIM == 3
+    do k = 1, nx(3)
+       do j = 1, nx(2)
+          do i = 1, nx(1)
+             id                     = id_array(IJK)
+             tree%boxes(id)%lvl     = 1
+             tree%boxes(id)%ix      = [IJK]
+             tree%boxes(id)%dr      = tree%dr_base
+             tree%boxes(id)%r_min   = tree%r_base + &
+                  (tree%boxes(id)%ix - 1) * tree%dr_base * tree%n_cell
+             tree%boxes(id)%n_cell  = tree%n_cell
+             tree%boxes(id)%coord_t = tree%coord_t
 
-    ! Set the diagonal neighbors
-    do lvl = tree%lowest_lvl, 1
-       do n = 1, n_boxes
-          id = tree%lvls(lvl)%ids(n)
-          call set_neighbor_mat(tree%boxes, id)
+             tree%boxes(id)%parent      = af_no_box
+             tree%boxes(id)%children(:) = af_no_box
+
+             ! Connectivity
+             do nb = 1, af_num_neighbors
+                ix = [IJK] + af_neighb_dix(:, nb)
+             tree%boxes(id)%neighbors(nb) = id_array(ix(1), ix(2), ix(3))
+             end do
+             tree%boxes(id)%neighbor_mat = id_array(i-1:i+1, j-1:j+1, k-1:k+1)
+
+             call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+                  tree%n_var_cell, tree%n_var_face)
+          end do
        end do
     end do
+#endif
 
     tree%highest_lvl = 1
     tree%ready = .true.
-
   end subroutine af_set_base
 
-  subroutine set_neighbor_mat(boxes, id)
-    type(box_t), intent(inout) :: boxes(:) !< List of boxes
-    integer, intent(in)          :: id       !< Index of box
-    integer                      :: IJK, directions(NDIM), ndir, nb_id
+  !> Create array for easy lookup of indices
+  subroutine create_index_array(nx, periodic, id_array)
+    integer, intent(in)                 :: nx(NDIM)
+    logical, intent(in)                 :: periodic(NDIM)
+    integer, intent(inout), allocatable :: id_array(DTIMES(:))
+    integer                             :: IJK
 
-    do KJI_DO(-1,1)
-       if (boxes(id)%neighbor_mat(IJK) /= af_no_box) cycle
-
-       ndir = 0
-
-       if (i /= 0) then
-          ndir = ndir + 1
-          directions(ndir) = af_neighb_lowx + (i + 1)/2
-       end if
-
-       if (j /= 0) then
-          ndir = ndir + 1
-          directions(ndir) = af_neighb_lowy + (j + 1)/2
-       end if
-
-#if NDIM == 3
-       if (k /= 0) then
-          ndir = ndir + 1
-          directions(ndir) = af_neighb_lowz + (k + 1)/2
-       end if
-#endif
-
-       boxes(id)%neighbor_mat(IJK) = &
-            find_neighb_id(boxes, id, directions(1:ndir))
-
-       nb_id = boxes(id)%neighbor_mat(IJK)
-
-       if (nb_id > af_no_box) then
 #if NDIM == 2
-          boxes(nb_id)%neighbor_mat(-i, -j) = id
+    allocate(id_array(0:nx(1)+1, 0:nx(2)+1))
 #elif NDIM == 3
-          boxes(nb_id)%neighbor_mat(-i, -j, -k) = id
+    allocate(id_array(0:nx(1)+1, 0:nx(2)+1, 0:nx(3)+1))
 #endif
-       end if
-    end do; CLOSE_DO
 
-  end subroutine set_neighbor_mat
+    id_array = af_phys_boundary
 
-  !> Find direct, diagonal and edge neighbors. Returns the index of the neighbor
-  !> if found, otherwise the result is nb_id <= af_no_box.
-  pure function find_neighb_id(boxes, id, nbs) result(nb_id)
-    type(box_t), intent(in) :: boxes(:) !< List of all the boxes
-    integer, intent(in)       :: id       !< Start index
-    integer, intent(in)       :: nbs(:)   ! List of neighbor directions
-    integer                   :: i, j, k, nb, nb_id
-    integer                   :: nbs_perm(size(nbs))
-
-    nb_id = id
-
-    if (size(nbs) == 0) then
-       return
-    else
-       do i = 1, size(nbs)
-          nb_id = id
-
-          ! Check if path exists starting from nbs(i)
-          do j = 1, size(nbs)
-             ! k starts at i and runs over the neighbors
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
-          end do
-
-          if (nb_id > af_no_box) exit ! Found it
+#if NDIM == 2
+    do j = 1, nx(2)
+       do i = 1, nx(1)
+          id_array(i, j) = (j-1) * nx(1) + i
+          print *, i, j, id_array(i, j)
        end do
+    end do
+
+    if (periodic(1)) then
+       id_array(0, :) = id_array(nx(1), :)
+       id_array(nx(1)+1, :) = id_array(1, :)
     end if
 
-    ! For a corner neighbor in 3D, try again using the permuted neighbor list to
-    ! covers all paths
-    if (size(nbs) == 3 .and. nb_id <= af_no_box) then
-       nbs_perm = nbs([2,1,3])
-
-       do i = 1, size(nbs)
-          nb_id = id
-
-          do j = 1, size(nbs)
-             k = 1 + mod(i + j - 2, size(nbs))
-             nb = nbs(k)
-
-             nb_id = boxes(nb_id)%neighbors(nb)
-             if (nb_id <= af_no_box) exit
+    if (periodic(2)) then
+       id_array(:, 0) = id_array(:, nx(2))
+       id_array(:, nx(2)+1) = id_array(:, 1)
+    end if
+#elif NDIM == 3
+    do k = 1, nx(3)
+       do j = 1, nx(2)
+          do i = 1, nx(1)
+             id_array(i, j, k) = (k-1) * nx(2) * nx(1) + (j-1) * nx(1) + i
           end do
-
-          if (nb_id > af_no_box) exit ! Found it
        end do
+    end do
+
+    if (periodic(1)) then
+       id_array(0, :, :) = id_array(nx(1), :, :)
+       id_array(nx(1)+1, :, :) = id_array(1, :, :)
     end if
 
-  end function find_neighb_id
+    if (periodic(2)) then
+       id_array(:, 0, :) = id_array(:, nx(2), :)
+       id_array(:, nx(2)+1, :) = id_array(:, 1, :)
+    end if
+
+    if (periodic(3)) then
+       id_array(:, :, 0) = id_array(:, :, nx(3))
+       id_array(:, :, nx(3)+1) = id_array(:, :, 1)
+    end if
+#endif
+  end subroutine create_index_array
 
   !> Reorder and resize the list of boxes
   subroutine af_tidy_up(tree, max_hole_frac, n_clean_min)
@@ -553,7 +435,7 @@ contains
        ixs_map(0)       = 0
        n_stored         = 0
 
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           n_used_lvl = size(tree%lvls(lvl)%ids)
           allocate(mortons(n_used_lvl))
           allocate(ixs_sort(n_used_lvl))
@@ -1349,7 +1231,7 @@ contains
 
     if (.not. tree%ready) stop "Tree not ready"
     !$omp parallel private(lvl, i, id, nb, nb_id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl-1
+    do lvl = 1, tree%highest_lvl-1
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)

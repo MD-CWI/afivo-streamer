@@ -262,15 +262,14 @@ module m_af_types
   type af_t
      logical  :: ready       = .false. !< Is tree ready for use?
      integer  :: box_limit             !< maximum number of boxes
-     integer  :: lowest_lvl  = 1       !< lowest level present
      integer  :: highest_lvl = 0       !< highest level present
      integer  :: highest_id  = 0       !< highest box index present
      integer  :: n_cell                !< number of cells per dimension
      integer  :: n_var_cell  = 0       !< number of cell-centered variables
      integer  :: n_var_face  = 0       !< number of face-centered variables
      integer  :: coord_t               !< Type of coordinates
-     integer :: coarse_grid_size(3) = -1 !< Size of the coarse grid (if rectangular)
-     logical :: periodic(3) = .false.  !< Which dimensions are periodic
+     integer  :: coarse_grid_size(3) = -1 !< Size of the coarse grid (if rectangular)
+     logical  :: periodic(3) = .false.  !< Which dimensions are periodic
      real(dp) :: r_base(NDIM)          !< min. coords of box at index (1,1)
      real(dp) :: dr_base               !< cell spacing at lvl 1
 
@@ -468,7 +467,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%ids)
     end do
   end function af_num_boxes_used
@@ -478,7 +477,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%leaves)
     end do
   end function af_num_leaves_used
@@ -612,6 +611,38 @@ contains
        dix(dim) = dix(dim) + af_neighb_high_pm(nbs(n))
     end do
   end function af_neighb_offset
+
+  !> Get index range of boundary cells inside a box facing neighbor nb
+  subroutine af_get_index_bc_inside(nb, nc, lo, hi)
+    integer, intent(in)  :: nb !< Neighbor direction
+    integer, intent(in)  :: nc !< box size
+    integer, intent(out) :: lo(NDIM)
+    integer, intent(out) :: hi(NDIM)
+    integer              :: nb_dim
+
+    ! Determine index range next to boundary
+    nb_dim     = af_neighb_dim(nb)
+    lo(:)      = 1
+    hi(:)      = nc
+    lo(nb_dim) = 1 + (nc-1) * af_neighb_high_01(nb)
+    hi(nb_dim) = lo(nb_dim)
+  end subroutine af_get_index_bc_inside
+
+  !> Get index range of ghost cells facing neighbor nb
+  subroutine af_get_index_bc_outside(nb, nc, lo, hi)
+    integer, intent(in)  :: nb !< Neighbor direction
+    integer, intent(in)  :: nc !< box size
+    integer, intent(out) :: lo(NDIM)
+    integer, intent(out) :: hi(NDIM)
+    integer              :: nb_dim
+
+    ! Determine index range next to boundary
+    nb_dim     = af_neighb_dim(nb)
+    lo(:)      = 1
+    hi(:)      = nc
+    lo(nb_dim) = (nc+1) * af_neighb_high_01(nb)
+    hi(nb_dim) = lo(nb_dim)
+  end subroutine af_get_index_bc_outside
 
   !> Compute the 'child index' for a box with spatial index ix. With 'child
   !> index' we mean the index in the children(:) array of its parent.

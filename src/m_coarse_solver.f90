@@ -44,6 +44,7 @@ module m_coarse_solver
   ! public :: hypre_create_vector
   ! public :: hypre_set_vector
   ! public :: hypre_prepare_solve
+  public :: coarse_solver_set_rhs_phi
   public :: hypre_solve_smg
 
 contains
@@ -65,24 +66,22 @@ contains
          error stop "coarse_solver_initialize: coarse_grid_size not set"
 
     ! Construct grid and vectors
-    print *, "Create grid"
     call hypre_create_grid(mg%csolver%grid, nx, tree%periodic)
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%phi)
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%rhs)
 
     ! Construct the matrix
-    print *, "Create matrix"
     call hypre_create_matrix(mg%csolver%matrix, mg%csolver%grid)
 
     if (.not. associated(mg%box_stencil)) &
          error stop "coarse_solver_initialize: mg%box_stencil not set"
 
-    allocate(mg%csolver%bc_to_rhs(DTIMES(nc), n_boxes))
+    allocate(mg%csolver%bc_to_rhs(nc**(NDIM-1), af_num_neighbors, n_boxes))
 
     do n = 1, size(tree%lvls(1)%ids)
        id  = tree%lvls(1)%ids(n)
        call mg%box_stencil(tree%boxes(id), mg, full_coeffs, &
-            mg%csolver%bc_to_rhs(DTIMES(:), n))
+            mg%csolver%bc_to_rhs(:, :, n))
        ! TODO: check symmetry
 
        symm_coeffs(1, :) = pack(full_coeffs(1, DTIMES(:)), .true.)
@@ -98,10 +97,8 @@ contains
             stencil_size, stencil_indices, symm_coeffs, ierr)
     end do
 
-    print *, "Assemble matrix"
     call HYPRE_StructMatrixAssemble(mg%csolver%matrix, ierr)
 
-    print *, "Prepare solve"
     call hypre_prepare_solve(mg%csolver%solver, mg%csolver%matrix, &
          mg%csolver%rhs, mg%csolver%phi)
 
@@ -161,16 +158,58 @@ contains
     call HYPRE_StructVectorAssemble(vec, ierr)
   end subroutine hypre_create_vector
 
-  subroutine hypre_set_vector(vec, nx, val)
-    type(c_ptr), intent(in) :: vec
-    integer, intent(in)     :: nx(:)
-    real(dp), intent(in)    :: val(product(nx))
-    integer                 :: ilo(size(nx))
+  subroutine coarse_solver_set_rhs_phi(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(in)    :: mg
+    integer                   :: n, nb, nc, id, bc_type, ierr
+    integer                   :: ilo(NDIM), ihi(NDIM)
+    integer                   :: olo(NDIM), ohi(NDIM)
+    real(dp)                  :: tmp(DTIMES(tree%n_cell))
 
-    ilo = 0
+    nc = tree%n_cell
 
-    call HYPRE_StructVectorSetBoxValues(vec, ilo, nx-1, val);
-  end subroutine hypre_set_vector
+    do n = 1, size(tree%lvls(1)%ids)
+       id  = tree%lvls(1)%ids(n)
+
+       tmp = tree%boxes(id)%cc(DTIMES(1:nc), mg%i_rhs)
+
+       ! Add contribution of boundary conditions to rhs
+       do nb = 1, af_num_neighbors
+          if (tree%boxes(id)%neighbors(nb) < af_no_box) then
+             ! Put the boundary condition into the ghost cells of mg%i_phi
+             call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, bc_type)
+
+             ! Get index range near neighbor
+             call af_get_index_bc_inside(nb, nc, ilo, ihi)
+             call af_get_index_bc_outside(nb, nc, olo, ohi)
+
+             ! Use the stored arrays mg%csolver%bc_to_rhs to convert the value
+             ! at the boundary to the rhs
+#if NDIM == 2
+             tmp(ilo(1):ihi(1), ilo(2):ihi(2)) = &
+                  tmp(ilo(1):ihi(1), ilo(2):ihi(2)) + &
+                  reshape(mg%csolver%bc_to_rhs(:, nb, n), [ihi - ilo + 1]) * &
+                  tree%boxes(id)%cc(olo(1):ohi(1), olo(2):ohi(2), mg%i_phi)
+#elif NDIM == 3
+             tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) = &
+                  tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) + &
+                  reshape(mg%csolver%bc_to_rhs(:, nb, n), [ihi - ilo + 1]) * &
+                  tree%boxes(id)%cc(olo(1):ohi(1), olo(2):ohi(2), &
+                  olo(3):ohi(3), mg%i_phi)
+#endif
+          end if
+       end do
+
+       ilo = (tree%boxes(id)%ix - 1) * nc + 1
+       ihi = ilo + nc - 1
+       call HYPRE_StructVectorSetBoxValues(mg%csolver%rhs, ilo, ihi, &
+            pack(tmp, .true.), ierr)
+
+       tmp = tree%boxes(id)%cc(DTIMES(1:nc), mg%i_phi)
+       call HYPRE_StructVectorSetBoxValues(mg%csolver%phi, ilo, ihi, &
+            pack(tmp, .true.), ierr)
+    end do
+  end subroutine coarse_solver_set_rhs_phi
 
   subroutine hypre_create_matrix(A, grid)
     type(c_ptr), intent(out) :: A
@@ -208,7 +247,7 @@ contains
     call HYPRE_StructSMGCreate(MPI_COMM_WORLD, solver, ierr)
     call HYPRE_StructSMGSetMemoryUse(solver, 0, ierr)
     call HYPRE_StructSMGSetMaxIter(solver, 50, ierr)
-    call HYPRE_StructSMGSetTol(solver, 1.0e-09_dp, ierr)
+    call HYPRE_StructSMGSetTol(solver, 1.0e-5_dp, ierr)
     call HYPRE_StructSMGSetRelChange(solver, 0, ierr)
     call HYPRE_StructSMGSetNumPreRelax(solver, n_pre, ierr)
     call HYPRE_StructSMGSetNumPostRelax(solver, n_post, ierr)

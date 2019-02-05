@@ -110,7 +110,7 @@ module m_mg_types
        type(box_t), intent(in) :: box
        type(mg_t), intent(in)  :: mg
        real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-       real(dp), intent(inout) :: bc_to_rhs(DTIMES(box%n_cell))
+       real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
      end subroutine mg_box_stencil
   end interface
 

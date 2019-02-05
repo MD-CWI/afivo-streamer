@@ -82,9 +82,7 @@ contains
     write(my_unit) tree%cc_names(:)
     write(my_unit) tree%fc_names(:)
 
-    write(my_unit) tree%lowest_lvl ! Will become 1 in future
-
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
       write(my_unit) size(tree%lvls(lvl)%ids)
       write(my_unit) tree%lvls(lvl)%ids
 
@@ -143,7 +141,7 @@ contains
 
     read(my_unit) lvl
 
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
       read(my_unit) n
       allocate(tree%lvls(lvl)%ids(n))
       read(my_unit) tree%lvls(lvl)%ids
