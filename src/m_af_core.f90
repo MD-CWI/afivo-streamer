@@ -265,7 +265,7 @@ contains
     periodic(:) = .false.; if (present(periodic_dims)) periodic = periodic_dims
 
     tree%coarse_grid_size(1:NDIM) = coarse_grid_size
-    tree%periodic                 = periodic
+    tree%periodic(1:NDIM)         = periodic
 
     nx      = coarse_grid_size / tree%n_cell
     n_boxes = product(nx)
@@ -366,7 +366,6 @@ contains
     do j = 1, nx(2)
        do i = 1, nx(1)
           id_array(i, j) = (j-1) * nx(1) + i
-          print *, i, j, id_array(i, j)
        end do
     end do
 

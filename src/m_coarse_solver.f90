@@ -39,12 +39,8 @@ module m_coarse_solver
   integer, parameter :: myid = 0
 
   public :: coarse_solver_initialize
-  ! public :: hypre_create_grid_2d
-  ! public :: hypre_create_matrix_2d
-  ! public :: hypre_create_vector
-  ! public :: hypre_set_vector
-  ! public :: hypre_prepare_solve
   public :: coarse_solver_set_rhs_phi
+  public :: coarse_solver_get_phi
   public :: hypre_solve_smg
 
 contains
@@ -210,6 +206,25 @@ contains
             pack(tmp, .true.), ierr)
     end do
   end subroutine coarse_solver_set_rhs_phi
+
+  subroutine coarse_solver_get_phi(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(in)    :: mg
+    integer                   :: n, nc, id, ierr
+    integer                   :: ilo(NDIM), ihi(NDIM)
+    real(dp)                  :: tmp(tree%n_cell**NDIM)
+
+    nc = tree%n_cell
+
+    do n = 1, size(tree%lvls(1)%ids)
+       id  = tree%lvls(1)%ids(n)
+       ilo = (tree%boxes(id)%ix - 1) * nc + 1
+       ihi = ilo + nc - 1
+
+       call HYPRE_StructVectorGetBoxValues(mg%csolver%phi, ilo, ihi, tmp, ierr)
+       tree%boxes(id)%cc(DTIMES(1:nc), mg%i_phi) = reshape(tmp, [DTIMES(nc)])
+    end do
+  end subroutine coarse_solver_get_phi
 
   subroutine hypre_create_matrix(A, grid)
     type(c_ptr), intent(out) :: A

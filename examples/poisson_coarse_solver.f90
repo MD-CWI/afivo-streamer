@@ -5,8 +5,8 @@ program poisson_coarse_solver
 
   implicit none
 
-  integer, parameter :: box_size = 16
-  integer, parameter :: domain_size(NDIM) = 64
+  integer, parameter :: box_size = 8
+  integer, parameter :: domain_size(NDIM) = 16
   integer, parameter :: n_iterations = 10
   integer :: i_phi
   integer :: i_rhs

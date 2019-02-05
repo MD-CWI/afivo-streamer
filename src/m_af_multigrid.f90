@@ -156,7 +156,6 @@ contains
     if (present(highest_lvl)) max_lvl = highest_lvl
 
     do lvl = max_lvl, 2, -1
-       print *, "downwards", lvl
        ! Downwards relaxation
        call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_down)
 
@@ -171,7 +170,6 @@ contains
 
     ! Do the upwards part of the v-cycle in the tree
     do lvl = 2, max_lvl
-       print *, "upwards", lvl
        ! Correct solution at this lvl using lvl-1 data
        ! phi = phi + prolong(phi_coarse - phi_old_coarse)
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
@@ -221,115 +219,11 @@ contains
     use m_af_ghostcell, only: af_gc_ids
     type(af_t), intent(inout) :: tree  !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg !< Multigrid options
-    integer                   :: n, nc, id, ix(NDIM)
-    integer                   :: ilo(NDIM), ihi(NDIM), ierr
-    integer                   :: nx(NDIM), i, j
-    real(dp)                  :: tmp(tree%n_cell**NDIM)
-    real(dp)                  :: coeffs(3, tree%n_cell**NDIM)
-
-    nc = tree%n_cell
 
     call coarse_solver_set_rhs_phi(tree, mg)
     call hypre_solve_smg(mg%csolver%solver, mg%csolver%matrix, mg%csolver%rhs, mg%csolver%phi)
-
-    do n = 1, size(tree%lvls(1)%ids)
-       id  = tree%lvls(1)%ids(n)
-       ilo = (tree%boxes(id)%ix - 1) * nc + 1
-       ihi = ilo + nc - 1
-
-       call HYPRE_StructVectorGetBoxValues(mg%csolver%phi, ilo, ihi, tmp, ierr)
-       tree%boxes(id)%cc(DTIMES(1:nc), mg%i_phi) = reshape(tmp, [DTIMES(nc)])
-    end do
-
+    call coarse_solver_get_phi(tree, mg)
     call af_gc_ids(tree, tree%lvls(1)%ids, mg%i_phi, mg%sides_rb, mg%sides_bc)
-    ! integer                   :: n, nc, id, ix(NDIM)
-    ! integer                   :: ilo(NDIM), ihi(NDIM), ierr
-    ! integer                   :: nx(NDIM), i, j
-    ! real(dp)                  :: tmp(tree%n_cell**NDIM)
-    ! real(dp)                  :: coeffs(3, tree%n_cell**NDIM)
-
-    ! nc = tree%n_cell
-    ! nx = [nc, nc]
-
-    ! print *, "Solving coarse grid"
-    ! call hypre_create_grid_2d(mg%sparse_grid, nx, [.false., .false.])
-    ! call hypre_create_vector(mg%sparse_grid, nx, mg%sparse_phi)
-    ! call hypre_create_vector(mg%sparse_grid, nx, mg%sparse_rhs)
-
-    ! n = 0
-    ! do j = 1, nc
-    !    do i = 1, nc
-    !       n = n + 1
-    !       coeffs(:, n) = 0.0_dp
-
-    !       if (i > 1) then
-    !          coeffs(1, n) = coeffs(1, n) - 1
-    !       else
-    !          coeffs(1, n) = coeffs(1, n) - 2
-    !       end if
-
-    !       if (i < nc) then
-    !          coeffs(1, n) = coeffs(1, n) - 1
-    !          coeffs(2, n) = 1.0_dp
-    !       else
-    !          coeffs(1, n) = coeffs(1, n) - 2
-    !       end if
-
-    !       if (j > 1) then
-    !          coeffs(1, n) = coeffs(1, n) - 1
-    !       else
-    !          coeffs(1, n) = coeffs(1, n) - 2
-    !       end if
-
-    !       if (j < nc) then
-    !          coeffs(1, n) = coeffs(1, n) - 1
-    !          coeffs(3, n) = 1.0_dp
-    !       else
-    !          coeffs(1, n) = coeffs(1, n) - 2
-    !       end if
-    !    end do
-    ! end do
-
-    ! ! coeffs = coeffs / tree%dr_base**2
-
-    ! print *, "Create matrix"
-    ! call hypre_create_matrix_2d(mg%sparse_matrix, mg%sparse_grid, nx, coeffs)
-
-    ! print *, "Set rhs"
-    ! do n = 1, size(tree%lvls(1)%ids)
-    !    id  = tree%lvls(1)%ids(n)
-    !    ix  = tree%boxes(id)%ix
-    !    ilo = (ix - 1) * nc
-    !    ihi = ilo + nc - 1
-
-    !    tmp = pack(tree%boxes(id)%cc(1:nc, 1:nc, mg%i_rhs), .true.) * tree%dr_base**2
-    !    call HYPRE_StructVectorSetBoxValues(mg%sparse_rhs, ilo, ihi, tmp, ierr)
-
-    !    tmp = pack(tree%boxes(id)%cc(1:nc, 1:nc, mg%i_phi), .true.)
-    !    call HYPRE_StructVectorSetBoxValues(mg%sparse_phi, ilo, ihi, tmp, ierr)
-    ! end do
-
-    ! print *, "Prepare solve"
-    ! call hypre_prepare_solve(mg%sparse_solver, mg%sparse_matrix, mg%sparse_rhs, mg%sparse_phi)
-
-    ! print *, "Solve"
-    ! call hypre_solve_smg(mg%sparse_solver, mg%sparse_matrix, mg%sparse_rhs, mg%sparse_phi)
-    ! print *, "Solve done"
-
-    ! do n = 1, size(tree%lvls(1)%ids)
-    !    id  = tree%lvls(1)%ids(n)
-    !    ix  = tree%boxes(id)%ix
-    !    ilo = (ix - 1) * nc
-    !    ihi = ilo + nc - 1
-
-    !    call HYPRE_StructVectorGetBoxValues(mg%sparse_phi, ilo, ihi, tmp, ierr)
-    !    tree%boxes(id)%cc(1:nc, 1:nc, mg%i_phi) = reshape(tmp, [DTIMES(nc)])
-    ! end do
-
-    ! call HYPRE_StructGridDestroy(mg%sparse_grid, ierr);
-    ! call HYPRE_StructMatrixDestroy(mg%sparse_matrix, ierr);
-    ! call HYPRE_StructVectorDestroy(mg%sparse_rhs, ierr);
-    ! call HYPRE_StructVectorDestroy(mg%sparse_phi, ierr);
   end subroutine solve_coarse_grid
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
@@ -1138,7 +1032,7 @@ contains
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
     type(box_t)             :: dummy_box
     integer                 :: nb, nc, lo(NDIM), hi(NDIM)
-    integer                 :: nb_dim, nb_id, bc_type
+    integer                 :: nb_id, bc_type
     real(dp)                :: inv_dr
 
     bc_to_rhs = 0.0_dp
