@@ -759,7 +759,7 @@ contains
     dim_iv = (dim-1) * tree%n_var_face + iv - 1
 
     call af_reduction_loc(tree, dim_iv, box_min_fc, reduce_min, &
-         -huge(1.0_dp)/10, fc_min, tmp_loc)
+         huge(1.0_dp)/10, fc_min, tmp_loc)
     if (present(loc)) loc = tmp_loc
   end subroutine af_tree_min_fc
 
