@@ -417,6 +417,7 @@ contains
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "af_write_vtk: wrong indices given (ixs_cc)"
+       allocate(icc_val(size(ixs_cc)))
        icc_val = ixs_cc
     else
        call get_output_vars(tree, icc_val)
@@ -603,6 +604,7 @@ contains
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "af_write_silo: wrong indices given (ixs_cc)"
+       allocate(icc_val(size(ixs_cc)))
        icc_val = ixs_cc
     else
        call get_output_vars(tree, icc_val)

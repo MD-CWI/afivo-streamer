@@ -245,9 +245,9 @@ contains
   subroutine af_set_base(tree, coarse_grid_size, periodic_dims)
     !> Tree for which we set the base
     type(af_t), intent(inout)     :: tree
-    !> Number of boxes on coarse grid
+    !> Size of coarse grid (in cells)
     integer, intent(in)           :: coarse_grid_size(NDIM)
-    !> Whether dimensions are periodic (default: none)
+    !> Whether dimensions are periodic (default: false)
     logical, intent(in), optional :: periodic_dims(NDIM)
     logical                       :: periodic(NDIM)
     integer                       :: nx(NDIM), ix(NDIM), IJK, id, n_boxes, nb
@@ -332,7 +332,7 @@ contains
              ! Connectivity
              do nb = 1, af_num_neighbors
                 ix = [IJK] + af_neighb_dix(:, nb)
-             tree%boxes(id)%neighbors(nb) = id_array(ix(1), ix(2), ix(3))
+                tree%boxes(id)%neighbors(nb) = id_array(ix(1), ix(2), ix(3))
              end do
              tree%boxes(id)%neighbor_mat = id_array(i-1:i+1, j-1:j+1, k-1:k+1)
 
@@ -347,7 +347,7 @@ contains
     tree%ready = .true.
   end subroutine af_set_base
 
-  !> Create array for easy lookup of indices
+  !> Create an array for easy lookup of indices
   subroutine create_index_array(nx, periodic, id_array)
     integer, intent(in)                 :: nx(NDIM)
     logical, intent(in)                 :: periodic(NDIM)

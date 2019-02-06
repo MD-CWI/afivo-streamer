@@ -11,6 +11,9 @@ module m_coarse_solver
   ! Hypre CSR format
   integer, parameter :: HYPRE_PARCSR = 5555
 
+  ! Solver types
+  integer, parameter :: hypre_smg = 1
+
   ! Assume matrices are symmetric
   integer, parameter :: symmetric_matrix = 1
 
@@ -41,10 +44,11 @@ module m_coarse_solver
   public :: coarse_solver_initialize
   public :: coarse_solver_set_rhs_phi
   public :: coarse_solver_get_phi
-  public :: hypre_solve_smg
+  public :: coarse_solver
 
 contains
 
+  !> Initialize the coarse grid solver
   subroutine coarse_solver_initialize(tree, mg)
     type(af_t), intent(in)    :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg
@@ -55,7 +59,6 @@ contains
 
     nc                   = tree%n_cell
     nx                   = tree%coarse_grid_size(1:NDIM)
-    mg%csolver%grid_size = tree%coarse_grid_size(1:NDIM)
     n_boxes              = size(tree%lvls(1)%ids)
 
     if (any(nx == -1)) &
@@ -95,8 +98,9 @@ contains
 
     call HYPRE_StructMatrixAssemble(mg%csolver%matrix, ierr)
 
-    call hypre_prepare_solve(mg%csolver%solver, mg%csolver%matrix, &
-         mg%csolver%rhs, mg%csolver%phi)
+    mg%csolver%solver_type = hypre_smg
+
+    call hypre_prepare_solve(mg%csolver)
 
   end subroutine coarse_solver_initialize
 
@@ -129,15 +133,12 @@ contains
     call HYPRE_StructGridAssemble(grid, ierr)
   end subroutine hypre_create_grid
 
+  !> Create a Hypre vector
   subroutine hypre_create_vector(grid, nx, vec)
     type(c_ptr), intent(in)  :: grid
     integer, intent(in)      :: nx(:)
     type(c_ptr), intent(out) :: vec
-    real(dp), allocatable    :: zeros(:)
-    integer                  :: ilo(size(nx))
     integer                  :: ierr
-
-    ilo = 0
 
     ! Create an empty vector object */
     call HYPRE_StructVectorCreate(MPI_COMM_WORLD, grid, vec, ierr)
@@ -145,15 +146,12 @@ contains
     ! Indicate that the vector coefficients are ready to be set */
     call HYPRE_StructVectorInitialize(vec, ierr)
 
-    ! Set vector to zero
-    allocate(zeros(product(nx)))
-    zeros(:) = 0.0_dp
-    call HYPRE_StructVectorSetBoxValues(vec, ilo, nx-1, zeros, ierr)
-
     ! Finalize the construction of the vector before using
     call HYPRE_StructVectorAssemble(vec, ierr)
   end subroutine hypre_create_vector
 
+  !> Set the right-hand side and copy phi from the tree. Also move the boundary
+  !> conditions for phi to the rhs.
   subroutine coarse_solver_set_rhs_phi(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
@@ -207,6 +205,7 @@ contains
     end do
   end subroutine coarse_solver_set_rhs_phi
 
+  !> Copy solution from coarse solver to the tree
   subroutine coarse_solver_get_phi(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
@@ -226,6 +225,7 @@ contains
     end do
   end subroutine coarse_solver_get_phi
 
+  !> Create a symmetric matrix on a grid
   subroutine hypre_create_matrix(A, grid)
     type(c_ptr), intent(out) :: A
     type(c_ptr), intent(in)  :: grid
@@ -253,29 +253,34 @@ contains
 
   ! Prepare to solve the system. The coefficient data in b and x is ignored
   ! here, but information about the layout of the data may be used.
-  subroutine hypre_prepare_solve(solver, A, b, x)
-    type(c_ptr), intent(out) :: solver
-    type(c_ptr), intent(in)  :: A, b, x
-    integer, parameter       :: n_pre = 1, n_post = 1
-    integer                  :: ierr
+  subroutine hypre_prepare_solve(cs)
+    type(coarse_solve_t), intent(inout) :: cs
+    integer                             :: ierr
 
-    call HYPRE_StructSMGCreate(MPI_COMM_WORLD, solver, ierr)
-    call HYPRE_StructSMGSetMemoryUse(solver, 0, ierr)
-    call HYPRE_StructSMGSetMaxIter(solver, 50, ierr)
-    call HYPRE_StructSMGSetTol(solver, 1.0e-5_dp, ierr)
-    call HYPRE_StructSMGSetRelChange(solver, 0, ierr)
-    call HYPRE_StructSMGSetNumPreRelax(solver, n_pre, ierr)
-    call HYPRE_StructSMGSetNumPostRelax(solver, n_post, ierr)
-    call HYPRE_StructSMGSetPrintLevel(solver, 1, ierr)
-    call HYPRE_StructSMGSetLogging(solver, 1, ierr)
-    call HYPRE_StructSMGSetup(solver, A, b, x, ierr)
+    select case (cs%solver_type)
+    case (hypre_smg)
+       call HYPRE_StructSMGCreate(MPI_COMM_WORLD, cs%solver, ierr)
+       call HYPRE_StructSMGSetMaxIter(cs%solver, cs%max_iterations, ierr)
+       call HYPRE_StructSMGSetTol(cs%solver, cs%tolerance, ierr)
+       call HYPRE_StructSMGSetNumPreRelax(cs%solver, cs%n_cycle_down, ierr)
+       call HYPRE_StructSMGSetNumPostRelax(cs%solver, cs%n_cycle_up, ierr)
+       call HYPRE_StructSMGSetup(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+    case default
+       error stop "hypre_prepare_solve: unknown solver type"
+    end select
   end subroutine hypre_prepare_solve
 
   ! Solve the system A x = b
-  subroutine hypre_solve_smg(solver, A, b, x)
-    integer :: ierr
-    type(c_ptr), intent(in)  :: solver, A, b, x
-    call HYPRE_StructSMGSolve(solver, A, b, x, ierr)
-  end subroutine hypre_solve_smg
+  subroutine coarse_solver(cs)
+    type(coarse_solve_t), intent(inout) :: cs
+    integer                             :: ierr
+
+    select case (cs%solver_type)
+    case (hypre_smg)
+       call HYPRE_StructSMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+    case default
+       error stop "coarse_grid_solve: unknown solver type"
+    end select
+  end subroutine coarse_solver
 
 end module m_coarse_solver

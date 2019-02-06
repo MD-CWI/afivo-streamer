@@ -221,8 +221,10 @@ contains
     type(mg_t), intent(inout) :: mg !< Multigrid options
 
     call coarse_solver_set_rhs_phi(tree, mg)
-    call hypre_solve_smg(mg%csolver%solver, mg%csolver%matrix, mg%csolver%rhs, mg%csolver%phi)
+    call coarse_solver(mg%csolver)
     call coarse_solver_get_phi(tree, mg)
+
+    ! Set ghost cells for the new coarse grid solution
     call af_gc_ids(tree, tree%lvls(1)%ids, mg%i_phi, mg%sides_rb, mg%sides_bc)
   end subroutine solve_coarse_grid
 

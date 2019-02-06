@@ -27,8 +27,14 @@ module m_mg_types
      type(c_ptr) :: solver
      type(c_ptr) :: grid
 
-     integer :: grid_size(NDIM)
+     !> Stores coefficient to convert boundary conditions to the right-hand side
      real(dp), allocatable :: bc_to_rhs(DTIMES(:), :)
+
+     integer  :: solver_type    = -1
+     integer  :: max_iterations = 50
+     integer  :: n_cycle_down   = 1
+     integer  :: n_cycle_up     = 1
+     real(dp) :: tolerance      = 1e-6_dp
   end type coarse_solve_t
 
   !> Type to store multigrid options in
