@@ -10,7 +10,8 @@ module m_af_multigrid
 
   public :: mg_t
 
-  public :: mg_init_mg
+  public :: mg_init
+  public :: mg_destroy
   public :: mg_fas_fmg
   public :: mg_fas_vcycle
   public :: mg_box_op
@@ -36,6 +37,7 @@ module m_af_multigrid
   public :: mg_box_lpld
   public :: mg_box_gsrb_lpld
   public :: mg_box_corr_lpld
+  public :: mg_box_lpld_stencil
 
   ! Methods for normal Laplacian with internal boundary conditions (LSF)
   public :: mg_box_lpllsf
@@ -43,27 +45,40 @@ module m_af_multigrid
   public :: mg_box_corr_lpllsf
   public :: mg_box_rstr_lpllsf
 
+  ! Method for Helmholtz equations
+  public :: mg_box_helmh
+  public :: mg_box_helmh_stencil
+  public :: mg_box_gsrb_helmh
+
+  ! To adjust operator stencils near boundaries
+  public :: mg_stencil_handle_boundaries
+
 #if NDIM == 2
   public :: mg_box_clpl
+  public :: mg_box_clpl_stencil
   public :: mg_box_gsrb_clpl
   public :: mg_box_clpld
   public :: mg_box_gsrb_clpld
+  public :: mg_box_clpld_stencil
+  public :: mg_box_chelmh
+  public :: mg_box_chelmh_stencil
+  public :: mg_box_gsrb_chelmh
 #endif
 
 contains
 
   !> Check multigrid options or set them to default
-  subroutine mg_init_mg(tree, mg)
+  subroutine mg_init(tree, mg)
     type(af_t), intent(in)    :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg   !< Multigrid options
 
-    if (mg%i_phi < 0)                  stop "mg_init_mg: i_phi not set"
-    if (mg%i_tmp < 0)                  stop "mg_init_mg: i_tmp not set"
-    if (mg%i_rhs < 0)                  stop "mg_init_mg: i_rhs not set"
+    if (mg%i_phi < 0)                  stop "mg_init: i_phi not set"
+    if (mg%i_tmp < 0)                  stop "mg_init: i_tmp not set"
+    if (mg%i_rhs < 0)                  stop "mg_init: i_rhs not set"
     if (mg%i_lsf * mg%i_bval < 0) &
-         stop "mg_init_mg: you have to set both i_lsf and i_bval"
+         stop "mg_init: you have to set both i_lsf and i_bval"
 
-    if (.not. associated(mg%sides_bc)) stop "mg_init_mg: sides_bc not set"
+    if (.not. associated(mg%sides_bc)) stop "mg_init: sides_bc not set"
 
     ! Check whether these are set, otherwise use default
     if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
@@ -81,16 +96,25 @@ contains
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_box_gsrb_lpl
     if (.not. associated(mg%box_corr)) mg%box_corr => mg_box_corr_lpl
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_box_rstr_lpl
+    if (.not. associated(mg%box_stencil)) &
+         error stop "mg_init: no box_stencil method has been set"
 
     call coarse_solver_initialize(tree, mg)
 
     mg%initialized = .true.
 
-  end subroutine mg_init_mg
+  end subroutine mg_init
+
+  subroutine mg_destroy(mg)
+    type(mg_t), intent(inout) :: mg   !< Multigrid options
+
+    if (.not. mg%initialized) stop "check_mg: you haven't called mg_init"
+    call coarse_solver_destroy(mg%csolver)
+  end subroutine mg_destroy
 
   subroutine check_mg(mg)
     type(mg_t), intent(in) :: mg           !< Multigrid options
-    if (.not. mg%initialized) stop "check_mg: you haven't called mg_init_mg"
+    if (.not. mg%initialized) stop "check_mg: you haven't called mg_init"
   end subroutine check_mg
 
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
@@ -1012,22 +1036,15 @@ contains
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
     real(dp)                :: inv_dr2
-    ! integer :: IJK
 
-    inv_dr2 = 1 / box%dr**2
-
-    stencil(1, DTIMES(:)) = -2.0_dp * NDIM * inv_dr2
+    inv_dr2                = 1 / box%dr**2
+    stencil(1, DTIMES(:))  = -2.0_dp * NDIM * inv_dr2
     stencil(2:, DTIMES(:)) = 1.0_dp * inv_dr2
-
-    call stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-
-    ! do KJI_DO(1, box%n_cell)
-    !    print *, IJK, stencil(:, IJK)
-    ! end do; CLOSE_DO
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_lpl_stencil
 
   !> Incorporate boundary conditions into stencil
-  subroutine stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  subroutine mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
@@ -1097,7 +1114,7 @@ contains
        end if
     end do
 
-  end subroutine stencil_handle_boundaries
+  end subroutine mg_stencil_handle_boundaries
 
   !> Perform Gauss-Seidel relaxation on a box. Epsilon can have a jump at cell
   !> faces.
@@ -1161,12 +1178,8 @@ contains
     type(box_t), intent(inout) :: box   !< Box to operate on
     integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
     type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, j, nc, i_phi, i_eps
+    integer                     :: IJK, nc, i_phi, i_eps
     real(dp)                    :: inv_dr_sq, a0, u0, u(2*NDIM), a(2*NDIM)
-#if NDIM == 3
-    integer                     :: k
-#endif
-
 
     nc        = box%n_cell
     inv_dr_sq = 1 / box%dr**2
@@ -1208,6 +1221,50 @@ contains
 #endif
 
   end subroutine mg_box_lpld
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    integer                 :: IJK, nc, i_eps
+    real(dp)                :: inv_dr_sq, a0, a(2*NDIM)
+
+    nc        = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    i_eps     = mg%i_eps
+
+#if NDIM == 2
+    do j = 1, nc
+       do i = 1, nc
+          a0 = box%cc(i, j, i_eps)
+          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+
+          stencil(2:, IJK) = inv_dr_sq * 2 * a0*a(:)/(a0 + a(:))
+          stencil(1, IJK) = -sum(stencil(2:, IJK))
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             a0 = box%cc(i, j, k, i_eps)
+             a(1:2) = box%cc(i-1:i+1:2, j, k, i_eps)
+             a(3:4) = box%cc(i, j-1:j+1:2, k, i_eps)
+             a(5:6) = box%cc(i, j, k-1:k+1:2, i_eps)
+
+             stencil(2:, IJK) = inv_dr_sq * 2 * a0*a(:)/(a0 + a(:))
+             stencil(1, IJK) = -sum(stencil(2:, IJK))
+          end do
+       end do
+    end do
+#endif
+
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  end subroutine mg_box_lpld_stencil
 
   !> Correct fine grid values based on the change in the coarse grid, in the
   !> case of a jump in epsilon
@@ -1672,6 +1729,32 @@ contains
     end do
   end subroutine mg_box_clpl
 
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    integer                 :: i, j, nc, ioff
+    real(dp)                :: inv_dr_sq, rfac(2)
+
+    nc        = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    ioff      = (box%ix(1)-1) * nc
+
+    do j = 1, nc
+       do i = 1, nc
+          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          stencil(1, i, j)  = -4 * inv_dr_sq
+          stencil(2:3, i, j) = inv_dr_sq * rfac
+          stencil(4:5, i, j) = inv_dr_sq
+       end do
+    end do
+
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  end subroutine mg_box_clpl_stencil
+
   !> Perform cylindrical Laplacian operator on a box with varying eps
   subroutine mg_box_clpld(box, i_out, mg)
     type(box_t), intent(inout) :: box   !< Box to operate on
@@ -1702,6 +1785,37 @@ contains
        end do
     end do
   end subroutine mg_box_clpld
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    integer                 :: i, j, nc, i_eps, ioff
+    real(dp)                :: inv_dr_sq, a0, a(4), rfac(4)
+
+    nc        = box%n_cell
+    i_eps     = mg%i_eps
+    inv_dr_sq = 1 / box%dr**2
+    ioff      = (box%ix(1)-1) * nc
+
+    do j = 1, nc
+       do i = 1, nc
+          rfac(1:2) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          rfac(3:4) = 1
+          a0 = box%cc(i, j, i_eps)
+          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+
+          stencil(2:, i, j) = inv_dr_sq * 2 * rfac*a0*a(:)/(a0 + a(:))
+          stencil(1, i, j)  = -sum(stencil(2:, i, j))
+       end do
+    end do
+
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  end subroutine mg_box_clpld_stencil
 
   !> Perform Gauss-Seidel relaxation on box for a cylindrical Laplacian operator
   !> with a changing eps
@@ -1738,6 +1852,186 @@ contains
        end do
     end do
   end subroutine mg_box_gsrb_clpld
+
+  !> Perform cylindrical Laplacian operator on a box
+  subroutine mg_box_chelmh(box, i_out, mg)
+    type(box_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
+    type(mg_t), intent(in)     :: mg !< Multigrid options
+    integer                     :: i, j, nc, i_phi, ioff
+    real(dp)                    :: inv_dr_sq, rfac(2)
+
+    nc        = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    i_phi     = mg%i_phi
+    ioff      = (box%ix(1)-1) * nc
+
+    do j = 1, nc
+       do i = 1, nc
+          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          box%cc(i, j, i_out) = ( &
+               rfac(1) * box%cc(i-1, j, i_phi) + &
+               rfac(2) * box%cc(i+1, j, i_phi) + &
+               box%cc(i, j-1, i_phi) + box%cc(i, j+1, i_phi) - &
+               4 * box%cc(i, j, i_phi)) * inv_dr_sq - &
+               mg%helmh_lambda2 * box%cc(i, j, i_phi)
+       end do
+    end do
+  end subroutine mg_box_chelmh
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_chelmh_stencil(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    integer                 :: i, j, nc, ioff
+    real(dp)                :: inv_dr_sq, rfac(2)
+
+    nc        = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    ioff      = (box%ix(1)-1) * nc
+
+    do j = 1, nc
+       do i = 1, nc
+          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          stencil(1, i, j)  = -4 * inv_dr_sq - mg%helmh_lambda2
+          stencil(2:3, i, j) = inv_dr_sq * rfac
+          stencil(4:5, i, j) = inv_dr_sq
+       end do
+    end do
+
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  end subroutine mg_box_chelmh_stencil
+
+  !> Perform Gauss-Seidel relaxation on box for a cylindrical Helmholtz operator
+  subroutine mg_box_gsrb_chelmh(box, redblack_cntr, mg)
+    type(box_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: redblack_cntr !< Iteration counter
+    type(mg_t), intent(in)     :: mg !< Multigrid options
+    integer                     :: i, i0, j, nc, i_phi, i_rhs, ioff
+    real(dp)                    :: dx2, rfac(2)
+
+    dx2   = box%dr**2
+    nc    = box%n_cell
+    i_phi = mg%i_phi
+    i_rhs = mg%i_rhs
+    ioff  = (box%ix(1)-1) * nc
+
+    ! The parity of redblack_cntr determines which cells we use. If
+    ! redblack_cntr is even, we use the even cells and vice versa.
+    do j = 1, nc
+       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
+       do i = i0, nc, 2
+          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
+          box%cc(i, j, i_phi) = 1/(4 + mg%helmh_lambda2 * dx2) * ( &
+               rfac(1) * box%cc(i-1, j, i_phi) + &
+               rfac(2) * box%cc(i+1, j, i_phi) + &
+               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
+               dx2 * box%cc(i, j, i_rhs))
+       end do
+    end do
+  end subroutine mg_box_gsrb_chelmh
 #endif
+
+  !> Perform Helmholtz operator on a box
+  subroutine mg_box_helmh(box, i_out, mg)
+    type(box_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
+    type(mg_t), intent(in)     :: mg !< Multigrid options
+    integer                     :: i, j, nc, i_phi
+    real(dp)                    :: inv_dr_sq
+#if NDIM == 3
+    integer                     :: k
+#endif
+
+    nc = box%n_cell
+    inv_dr_sq = 1 / box%dr**2
+    i_phi = mg%i_phi
+
+#if NDIM == 2
+    do j = 1, nc
+       do i = 1, nc
+          box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
+               box%cc(i+1, j, i_phi) + box%cc(i, j-1, i_phi) + &
+               box%cc(i, j+1, i_phi) - 4 * box%cc(i, j, i_phi)) - &
+               mg%helmh_lambda2 * box%cc(i, j, i_phi)
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             box%cc(i, j, k, i_out) = inv_dr_sq * (box%cc(i-1, j, k, i_phi) + &
+                  box%cc(i+1, j, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
+                  box%cc(i, j+1, k, i_phi) + box%cc(i, j, k-1, i_phi) + &
+                  box%cc(i, j, k+1, i_phi) - 6 * box%cc(i, j, k, i_phi)) - &
+                  mg%helmh_lambda2 * box%cc(i, j, k, i_phi)
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg_box_helmh
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_helmh_stencil(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp)                :: inv_dr2
+
+    inv_dr2                = 1 / box%dr**2
+    stencil(1, DTIMES(:))  = -2.0_dp * NDIM * inv_dr2 - mg%helmh_lambda2
+    stencil(2:, DTIMES(:)) = 1.0_dp * inv_dr2
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  end subroutine mg_box_helmh_stencil
+
+
+  !> Perform Gauss-Seidel relaxation on box for a Helmholtz operator
+  subroutine mg_box_gsrb_helmh(box, redblack_cntr, mg)
+    type(box_t), intent(inout) :: box !< Box to operate on
+    integer, intent(in)         :: redblack_cntr !< Iteration counter
+    type(mg_t), intent(in)     :: mg !< Multigrid options
+    integer                     :: i, i0, j, nc, i_phi, i_rhs
+    real(dp)                    :: dx2
+#if NDIM == 3
+    integer                     :: k
+#endif
+
+    dx2   = box%dr**2
+    nc    = box%n_cell
+    i_phi = mg%i_phi
+    i_rhs = mg%i_rhs
+
+    ! The parity of redblack_cntr determines which cells we use. If
+    ! redblack_cntr is even, we use the even cells and vice versa.
+#if NDIM == 2
+    do j = 1, nc
+       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
+       do i = i0, nc, 2
+          box%cc(i, j, i_phi) = 1/(4 + mg%helmh_lambda2 * dx2) * ( &
+               box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
+               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
+               dx2 * box%cc(i, j, i_rhs))
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       do j = 1, nc
+          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
+          do i = i0, nc, 2
+             box%cc(i, j, k, i_phi) = 1/(6 + mg%helmh_lambda2 * dx2) * ( &
+                  box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
+                  box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
+                  box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &
+                  dx2 * box%cc(i, j, k, i_rhs))
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg_box_gsrb_helmh
 
 end module m_af_multigrid

@@ -87,7 +87,7 @@ program simple_streamer_2d
   mg%sides_bc => sides_bc_pot ! Filling ghost cell on physical boundaries
 
   ! This routine always needs to be called when using multigrid
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   call af_set_cc_methods(tree, i_elec, af_bc_dirichlet_zero, &
        af_gc_interp_lim, af_prolong_limit)

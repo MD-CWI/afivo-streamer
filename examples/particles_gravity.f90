@@ -66,7 +66,7 @@ program particles_gravity_Xd
 
   call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
 
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   ! Set default methods (boundary condition is not actually used due to
   ! periodicity)

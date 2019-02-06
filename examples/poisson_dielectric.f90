@@ -83,12 +83,13 @@ program dielectric_test
   mg%box_op       => mg_auto_op
   mg%box_gsrb     => mg_auto_gsrb
   mg%box_corr     => mg_auto_corr
+  mg%box_stencil  => mg_box_lpld_stencil
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
   ! and i_tmp. These variables will be initialized at the first call of mg_fas_fmg
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)

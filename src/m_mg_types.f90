@@ -30,6 +30,7 @@ module m_mg_types
      !> Stores coefficient to convert boundary conditions to the right-hand side
      real(dp), allocatable :: bc_to_rhs(:, :, :)
 
+     integer  :: symmetric      = 1
      integer  :: solver_type    = -1
      integer  :: max_iterations = 50
      integer  :: n_cycle_down   = 1
@@ -54,6 +55,9 @@ module m_mg_types
      logical :: initialized = .false. !< Whether the structure has been initialized
      logical :: use_corners = .false. !< Does the smoother use corner ghost cells
      logical :: subtract_mean = .false. !< Whether to subtract mean from solution
+
+     !> Store lambda^2 for Helmholtz equations
+     real(dp) :: helmh_lambda2 = -1.0e99_dp
 
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(af_subr_bc), pointer, nopass   :: sides_bc => null()

@@ -94,7 +94,7 @@ program poisson_basic
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
   ! first call of mg_fas_fmg
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)

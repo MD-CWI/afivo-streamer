@@ -60,10 +60,12 @@ program poisson_helmholtz_Xd
   mg%i_rhs    =  i_rhs     ! Right-hand side variable
   mg%i_tmp    =  i_tmp     ! Variable for temporary space
   mg%sides_bc => sides_bc ! Method for boundary conditions
-  mg%box_op   => helmholtz_operator
-  mg%box_gsrb => helmholtz_gsrb
+  mg%box_op   => mg_box_helmh
+  mg%box_gsrb => mg_box_gsrb_helmh
+  mg%box_stencil => mg_box_helmh_stencil
 
-  call mg_init_mg(tree, mg)
+  mg%helmh_lambda2 = lambda
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
@@ -226,89 +228,6 @@ contains
     end select
 #endif
   end subroutine sides_bc
-
-  !> Perform Helmholtz operator on a box
-  subroutine helmholtz_operator(box, i_out, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, j, nc, i_phi
-    real(dp)                    :: inv_dr_sq
-#if NDIM == 3
-    integer                     :: k
-#endif
-
-    nc = box%n_cell
-    inv_dr_sq = 1 / box%dr**2
-    i_phi = mg%i_phi
-
-#if NDIM == 2
-    do j = 1, nc
-       do i = 1, nc
-          box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
-               box%cc(i+1, j, i_phi) + box%cc(i, j-1, i_phi) + &
-               box%cc(i, j+1, i_phi) - 4 * box%cc(i, j, i_phi)) - &
-               lambda * box%cc(i, j, i_phi)
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             box%cc(i, j, k, i_out) = inv_dr_sq * (box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j, k-1, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) - 6 * box%cc(i, j, k, i_phi)) - &
-                  lambda * box%cc(i, j, k, i_phi)
-          end do
-       end do
-    end do
-#endif
-  end subroutine helmholtz_operator
-
-  !> Perform Gauss-Seidel relaxation on box for a Helmholtz operator
-  subroutine helmholtz_gsrb(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, i0, j, nc, i_phi, i_rhs
-    real(dp)                    :: dx2
-#if NDIM == 3
-    integer                     :: k
-#endif
-
-    dx2   = box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-#if NDIM == 2
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 1/(4 + lambda * dx2) * ( &
-               box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
-               dx2 * box%cc(i, j, i_rhs))
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-          do i = i0, nc, 2
-             box%cc(i, j, k, i_phi) = 1/(6 + lambda * dx2) * ( &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &
-                  dx2 * box%cc(i, j, k, i_rhs))
-          end do
-       end do
-    end do
-#endif
-  end subroutine helmholtz_gsrb
 
 end program poisson_helmholtz_Xd
 

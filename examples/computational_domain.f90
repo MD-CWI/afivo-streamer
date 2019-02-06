@@ -14,8 +14,8 @@ program computational_domain_Xd
   logical            :: periodic(NDIM)
 
   ! Create mesh 1: two boxes along x-direction
-  grid_size(:) = 1
-  grid_size(1) = 2
+  grid_size(:) = n_cell
+  grid_size(1) = 2 * n_cell
 
   call af_add_cc_variable(tree, "phi")
   call af_init(tree, n_cell, dr)
@@ -24,8 +24,8 @@ program computational_domain_Xd
   call af_destroy(tree)
 
   ! Create mesh 2: two boxes along y-direction
-  grid_size(:) = 1
-  grid_size(2) = 2
+  grid_size(:) = n_cell
+  grid_size(2) = 2 * n_cell
 
   call af_add_cc_variable(tree, "phi")
   call af_init(tree, n_cell, dr)
@@ -34,8 +34,8 @@ program computational_domain_Xd
   call af_destroy(tree)
 
   ! Create mesh 3: Two boxes along x-direction that are fully periodic
-  grid_size(:) = 1
-  grid_size(1) = 2
+  grid_size(:) = n_cell
+  grid_size(1) = 2 * n_cell
   periodic(:) = .true.
 
   call af_add_cc_variable(tree, "phi")

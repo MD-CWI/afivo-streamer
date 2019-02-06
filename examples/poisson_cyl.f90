@@ -29,8 +29,8 @@ program poisson_cyl
   print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
-  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([0.0_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
+  call gauss_init(gs, [1.0_dp], [0.2_dp], &
+       reshape([0.0_dp, 0.5_dp], [2,1]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
@@ -74,15 +74,16 @@ program poisson_cyl
   mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
 
   ! Automatically detect the right methods
-  mg%box_op       => mg_auto_op
-  mg%box_gsrb     => mg_auto_gsrb
-  mg%box_corr     => mg_auto_corr
+  mg%box_op      => mg_auto_op
+  mg%box_gsrb    => mg_auto_gsrb
+  mg%box_corr    => mg_auto_corr
+  mg%box_stencil => mg_box_clpl_stencil
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
   ! and i_tmp. These variables will be initialized at the first call of mg_fas_fmg
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
@@ -117,6 +118,7 @@ program poisson_cyl
   ! This call is not really necessary here, but cleaning up the data in a tree
   ! is important if your program continues with other tasks.
   call af_destroy(tree)
+  call mg_destroy(mg)
 
 contains
 

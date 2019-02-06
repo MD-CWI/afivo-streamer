@@ -27,7 +27,8 @@ program implicit_diffusion_Xd
   type(mg_t)         :: mg
   type(ref_info_t)   :: refine_info
   integer            :: time_steps, output_cnt
-  real(dp)           :: dt, time, end_time
+  real(dp)           :: time, end_time
+  real(dp), parameter :: dt = 0.1_dp
   character(len=100) :: fname
 
   print *, "Running implicit_diffusion_" // DIMNAME // ""
@@ -81,18 +82,18 @@ program implicit_diffusion_Xd
   ! equation, by changing the elliptic operator for the multigrid procedure.
   mg%box_op   => box_op_diff
   mg%box_gsrb => box_gsrb_diff
+  mg%box_stencil => box_op_stencil
 
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
   ! first call of mg_fas_fmg
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   output_cnt = 0
   time       = 0
   end_time   = 2.0_dp
   time_steps = 0
   time       = 0
-  dt         = 0.1_dp
 
   ! Starting simulation
   do
@@ -106,7 +107,7 @@ program implicit_diffusion_Xd
 
      ! Write the cell centered data of tree to a vtk unstructured file fname.
      ! Only the leaves of the tree are used
-     call af_write_vtk(tree, trim(fname), output_cnt, time, dir="output")
+     call af_write_silo(tree, trim(fname), output_cnt, time, dir="output")
 
      if (time > end_time) exit
 
@@ -215,6 +216,21 @@ contains
 #endif
     end do; CLOSE_DO
   end subroutine box_op_diff
+
+  subroutine box_op_stencil(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp)                :: tmp
+
+    tmp = diffusion_coeff * dt / box%dr**2
+
+    stencil(1, DTIMES(:)) = tmp * (2.0_dp * NDIM + 1/tmp)
+    stencil(2:, DTIMES(:)) = -tmp
+
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  end subroutine box_op_stencil
 
   ! Locally solve L * phi = rhs, where L corresponds to (D * dt * nabla^2 - 1)
   subroutine box_gsrb_diff(box, redblack_cntr, mg)

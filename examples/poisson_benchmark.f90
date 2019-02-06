@@ -99,7 +99,7 @@ program poisson_benchmark_Xd
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
   ! and i_tmp. These variables will be initialized at the first call of mg_fas_fmg
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   ! Warm-up call
   call mg_fas_fmg(tree, mg, .false., .false.)

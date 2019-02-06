@@ -14,26 +14,19 @@ module m_coarse_solver
   ! Solver types
   integer, parameter :: hypre_smg = 1
 
-  ! Assume matrices are symmetric
-  integer, parameter :: symmetric_matrix = 1
-
-  ! Size of the stencil (only direct neighbors)
-  integer, parameter :: stencil_size = NDIM + 1
-
-  ! Order in which the stencil is stored
-#if NDIM == 2
-  integer, parameter :: stencil_indices(stencil_size) = [0, 1, 2]
-#elif NDIM == 3
-  integer, parameter :: stencil_indices(stencil_size) = [0, 1, 2, 3]
-#endif
+    ! Size of the stencil (only direct neighbors)
+  integer, parameter :: max_stencil_size = 2*NDIM + 1
 
   ! Offsets for the stencil elements
 #if NDIM == 2
-  integer, parameter :: offsets(2, stencil_size) = &
-       reshape([0, 0, 1, 0, 0, 1], [2, stencil_size])
+  integer, parameter :: stencil_offsets(2, max_stencil_size) = reshape([0, 0, &
+       -1, 0, 1, 0, &
+       0, -1, 0, 1], [2, max_stencil_size])
 #elif NDIM == 3
-  integer, parameter :: offsets(3, stencil_size) = &
-       reshape([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1], [3, stencil_size])
+  integer, parameter :: stencil_offsets(3, max_stencil_size) = reshape([0, 0, 0, &
+       -1, 0, 0, 1, 0, 0, &
+       0, -1, 0, 0, 1, 0, &
+       0, 0, -1, 0, 0, 1], [3, max_stencil_size])
 #endif
 
   ! MPI stubs
@@ -41,7 +34,20 @@ module m_coarse_solver
   integer, parameter :: num_procs = 1
   integer, parameter :: myid = 0
 
+  interface
+     subroutine HYPRE_StructMatrixSetBoxValues(matrix, ilower, iupper, nentries, &
+          entries, values, ierr)
+       import
+       type(c_ptr), intent(in) :: matrix
+       integer, intent(in)     :: ilower(*), iupper(*)
+       integer, intent(in)     :: nentries, entries(*)
+       real(dp), intent(in)    :: values(*)
+       integer, intent(out)    :: ierr
+     end subroutine HYPRE_StructMatrixSetBoxValues
+  end interface
+
   public :: coarse_solver_initialize
+  public :: coarse_solver_destroy
   public :: coarse_solver_set_rhs_phi
   public :: coarse_solver_get_phi
   public :: coarse_solver
@@ -52,12 +58,17 @@ contains
   subroutine coarse_solver_initialize(tree, mg)
     type(af_t), intent(in)    :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg
-    integer                   :: n, n_boxes, nc, id, ierr
+    integer                   :: n, n_boxes, nc, id, IJK
+    integer                   :: cnt, stencil_size, ierr
     integer                   :: nx(NDIM), ilo(NDIM), ihi(NDIM)
-    real(dp)                  :: symm_coeffs(stencil_size, tree%n_cell**NDIM)
+    real(dp), allocatable     :: coeffs(:, :)
     real(dp)                  :: full_coeffs(2*NDIM+1, DTIMES(tree%n_cell))
+    integer, allocatable      :: stencil_ix(:)
+    integer, parameter        :: zero_to_n(max_stencil_size) = [(i, i=0, max_stencil_size-1)]
 
     if (.not. tree%ready) error stop "coarse_solver_initialize: tree not ready"
+    if (.not. associated(mg%box_stencil)) &
+         error stop "coarse_solver_initialize: mg%box_stencil not set"
 
     nc                   = tree%n_cell
     nx                   = tree%coarse_grid_size(1:NDIM)
@@ -71,31 +82,52 @@ contains
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%phi)
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%rhs)
 
-    ! Construct the matrix
-    call hypre_create_matrix(mg%csolver%matrix, mg%csolver%grid)
+    if (tree%coord_t == af_cyl) then
+       ! The symmetry option does not seem to work well with axisymmetric problems
+       mg%csolver%symmetric = 0
+    end if
 
-    if (.not. associated(mg%box_stencil)) &
-         error stop "coarse_solver_initialize: mg%box_stencil not set"
+    if (mg%csolver%symmetric == 1) then
+       stencil_size = NDIM + 1
+       allocate(stencil_ix(stencil_size))
+#if NDIM == 2
+       stencil_ix = [1, 3, 5]
+#elif NDIM == 3
+       stencil_ix = [1, 3, 5, 7]
+#endif
+    else
+       stencil_size = 2*NDIM + 1
+       allocate(stencil_ix(stencil_size))
+#if NDIM == 2
+       stencil_ix = [1, 2, 3, 4, 5]
+#elif NDIM == 3
+       stencil_ix = [1, 2, 3, 4, 5, 6, 7]
+#endif
+    end if
+
+    ! Construct the matrix
+    call hypre_create_matrix(mg%csolver%matrix, mg%csolver%grid, &
+         stencil_size, stencil_offsets(:, stencil_ix), mg%csolver%symmetric)
 
     allocate(mg%csolver%bc_to_rhs(nc**(NDIM-1), af_num_neighbors, n_boxes))
+    allocate(coeffs(stencil_size, tree%n_cell**NDIM))
 
     do n = 1, size(tree%lvls(1)%ids)
        id  = tree%lvls(1)%ids(n)
        call mg%box_stencil(tree%boxes(id), mg, full_coeffs, &
             mg%csolver%bc_to_rhs(:, :, n))
-       ! TODO: check symmetry
 
-       symm_coeffs(1, :) = pack(full_coeffs(1, DTIMES(:)), .true.)
-       symm_coeffs(2, :) = pack(full_coeffs(3, DTIMES(:)), .true.)
-       symm_coeffs(3, :) = pack(full_coeffs(5, DTIMES(:)), .true.)
-#if NDIM == 3
-       symm_coeffs(4, :) = pack(full_coeffs(7, DTIMES(:)), .true.)
-#endif
+       cnt = 0
+       do KJI_DO(1, nc)
+          cnt = cnt + 1
+          coeffs(:, cnt) = full_coeffs(stencil_ix, IJK)
+       end do; CLOSE_DO
 
        ilo = (tree%boxes(id)%ix - 1) * nc + 1
        ihi = ilo + nc - 1
        call HYPRE_StructMatrixSetBoxValues(mg%csolver%matrix, ilo, ihi, &
-            stencil_size, stencil_indices, symm_coeffs, ierr)
+            stencil_size, zero_to_n(1:stencil_size), coeffs, ierr)
+       if (ierr /= 0) error stop "HYPRE_StructMatrixSetBoxValues failed"
     end do
 
     call HYPRE_StructMatrixAssemble(mg%csolver%matrix, ierr)
@@ -105,6 +137,17 @@ contains
     call hypre_prepare_solve(mg%csolver)
 
   end subroutine coarse_solver_initialize
+
+  subroutine coarse_solver_destroy(cs)
+    type(coarse_solve_t), intent(inout) :: cs
+    integer                             :: ierr
+
+    call HYPRE_StructGridDestroy(cs%grid, ierr)
+    call HYPRE_StructMatrixDestroy(cs%matrix, ierr)
+    call HYPRE_StructVectorDestroy(cs%rhs, ierr)
+    call HYPRE_StructVectorDestroy(cs%phi, ierr)
+    call HYPRE_StructSMGDestroy(cs%solver, ierr)
+  end subroutine coarse_solver_destroy
 
   subroutine hypre_create_grid(grid, nx, periodic)
     type(c_ptr), intent(out) :: grid
@@ -228,9 +271,12 @@ contains
   end subroutine coarse_solver_get_phi
 
   !> Create a symmetric matrix on a grid
-  subroutine hypre_create_matrix(A, grid)
+  subroutine hypre_create_matrix(A, grid, stencil_size, offsets, symmetric)
     type(c_ptr), intent(out) :: A
     type(c_ptr), intent(in)  :: grid
+    integer, intent(in)      :: stencil_size
+    integer, intent(in)      :: offsets(NDIM, stencil_size)
+    integer, intent(in)      :: symmetric
     type(c_ptr)              :: stencil
     integer                  :: i, ierr
 
@@ -246,10 +292,12 @@ contains
     call HYPRE_StructMatrixCreate(MPI_COMM_WORLD, grid, stencil, A, ierr)
 
     ! Use symmetric storage? */
-    call HYPRE_StructMatrixSetSymmetric(A, symmetric_matrix, ierr)
+    call HYPRE_StructMatrixSetSymmetric(A, symmetric, ierr)
 
     ! Indicate that the matrix coefficients are ready to be set */
     call HYPRE_StructMatrixInitialize(A, ierr)
+
+    call HYPRE_StructStencilDestroy(stencil, ierr)
 
   end subroutine hypre_create_matrix
 

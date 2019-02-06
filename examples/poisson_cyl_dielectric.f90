@@ -29,8 +29,8 @@ program poisson_cyl_dielectric
   print *, "Number of threads", af_get_max_threads()
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
-  call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp], [2,2]))
+  call gauss_init(gs, [1.0_dp], [0.1_dp], &
+       reshape([0.0_dp, 0.25_dp], [2,1]))
 
   ! The cell spacing at the coarsest grid level
   dr = 1.0_dp / box_size
@@ -79,12 +79,13 @@ program poisson_cyl_dielectric
   mg%box_op       => mg_auto_op
   mg%box_gsrb     => mg_auto_gsrb
   mg%box_corr     => mg_auto_corr
+  mg%box_stencil  => mg_box_clpld_stencil
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
   ! and i_tmp. These variables will be initialized at the first call of mg_fas_fmg
-  call mg_init_mg(tree, mg)
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
@@ -107,7 +108,7 @@ program poisson_cyl_dielectric
           maxval(abs(anal_err))
 
      write(fname, "(A,I0)") "poisson_cyl_dielectric_", mg_iter
-     call af_write_vtk(tree, trim(fname), dir="output")
+     call af_write_silo(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
