@@ -96,7 +96,6 @@ contains
              exit
           else if (line(1:7) == "FACTOR:") then
              read(line(8:), *) factor
-             print *, factor
           else if (line(1:8) == "COMMENT:") then
              continue
           else
