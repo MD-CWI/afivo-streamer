@@ -25,7 +25,10 @@ clean:
 	$(RM) $(PROGS) *.o *.mod
 
 run:
-	$(foreach prog, $(PROGS), echo "**Running $(prog)**"; ./$(prog);)
+	for prog in $(PROGS); do\
+		./$$prog || { echo "$$prog failed" ; exit 1; };\
+	done
+
 
 $(OUTDIR):
 	mkdir -p $@
