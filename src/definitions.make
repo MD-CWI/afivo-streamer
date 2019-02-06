@@ -65,9 +65,11 @@ m_photoi_mc.o: m_streamer.mod
 m_photoi_mc.o: m_units_constants.mod
 m_photoi.o: m_config.mod
 m_photoi.o: m_gas.mod
+m_photoi.o: m_lookup_table.mod
 m_photoi.o: m_photoi_helmh.mod
 m_photoi.o: m_photoi_mc.mod
 m_photoi.o: m_streamer.mod
+m_photoi.o: m_transport_data.mod
 m_photoi.o: m_types.mod
 m_photoi.o: m_units_constants.mod
 m_refine.o: m_config.mod

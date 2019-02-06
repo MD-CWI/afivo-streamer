@@ -127,25 +127,29 @@ contains
 
   !> Sets the photoionization_rate
   subroutine set_photoionization_rate(box, coeff)
+    use m_streamer
+    use m_lookup_table
+    use m_transport_data
+    use m_gas
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: coeff(:)
-    ! integer                    :: IJK, nc
-    ! real(dp)                   :: fld, alpha, mobility, tmp
-    ! type(LT_loc_t)             :: loc
+    integer                    :: IJK, nc
+    real(dp)                   :: fld, Td, alpha, mobility, tmp
+    type(LT_loc_t)             :: loc
 
-    ! nc = box%n_cell
+    nc = box%n_cell
 
-    error stop "TODO set_photoionization_rate"
-    ! do KJI_DO(1,nc)
-    !    fld      = box%cc(IJK, i_electric_fld)
-    !    loc      = LT_get_loc(ST_td_tbl, fld)
-    !    alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-    !    mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+    do KJI_DO(1,nc)
+       fld      = box%cc(IJK, i_electric_fld)
+       Td       = fld * SI_to_Townsend
+       loc      = LT_get_loc(td_tbl, Td)
+       alpha    = LT_get_col_at_loc(td_tbl, td_alpha, loc)
+       mobility = LT_get_col_at_loc(td_tbl, td_mobility, loc)
 
-    !    tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
-    !    if (tmp < 0) tmp = 0
-    !    box%cc(IJK, i_rhs) = tmp
-    ! end do; CLOSE_DO
+       tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
+       if (tmp < 0) tmp = 0
+       box%cc(IJK, i_rhs) = tmp
+    end do; CLOSE_DO
   end subroutine set_photoionization_rate
 
 end module m_photoi
