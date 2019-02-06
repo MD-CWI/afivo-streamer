@@ -10,9 +10,6 @@ program test_reduction
 
   type(af_t)         :: tree
   integer            :: i
-  integer, parameter :: n_boxes_base = 1
-  integer            :: ix_list(NDIM, n_boxes_base)
-  integer            :: nb_list(2*NDIM, n_boxes_base)
   integer, parameter :: box_size     = 8
   integer            :: i_phi
   type(ref_info_t)   :: ref_info
@@ -28,14 +25,8 @@ program test_reduction
        box_size, &     ! Number of cells per coordinate in a box
        dr)             ! Distance between cells on base level
 
-  ! Set up geometry
-  ix_list(:, 1) = 1 ! One box at 1,1
-
-  ! Periodic boundary conditions
-  nb_list(:, 1) = 1
-
   ! Create the base mesh
-  call af_set_base(tree, 1, ix_list, nb_list)
+  call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
 
   ! Set variables on base
   call af_loop_box(tree, set_random_values)

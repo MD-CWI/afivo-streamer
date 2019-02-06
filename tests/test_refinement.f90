@@ -9,7 +9,6 @@ program test_init
   type(af_t)       :: tree
   type(ref_info_t) :: ref_info
   integer          :: i, n_lvl
-  integer          :: ixs(NDIM, 1), nbs(af_num_neighbors, 1)
 
   call af_add_cc_variable(tree, "phi")
   call af_add_fc_variable(tree, "flux")
@@ -19,9 +18,7 @@ program test_init
        dr = 1.0_dp, r_min=[DTIMES(0.0_dp)], &
        n_boxes=1000, coord=af_xyz, mem_limit_gb=1.0_dp)
 
-  ixs = 1                    ! Box at 1,1
-  nbs = 1                    ! Periodic
-  call af_set_base(tree, 1, ixs, nbs)
+  call af_set_coarse_grid(tree, [DTIMES(8)], [DTIMES(.true.)])
 
   n_lvl = 4
 

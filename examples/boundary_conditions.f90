@@ -8,13 +8,11 @@ program boundary_conditions_Xd
   implicit none
 
   integer, parameter :: box_size     = 8
-  integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 20
   integer            :: i_phi
 
   type(af_t)        :: tree
   integer            :: iter
-  integer            :: ix_list(NDIM, n_boxes_base)
   real(dp)           :: dr
   character(len=100) :: fname
 
@@ -31,12 +29,7 @@ program boundary_conditions_Xd
        box_size, &     ! A box contains box_size**DIM cells
        dr)             ! Distance between cells on base level
 
-  ! Set up geometry. This creates a single box, for which we need boundary
-  ! conditions on all sides
-  ix_list(:, 1) = [DTIMES(1)]         ! Set index of box 1
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
+  call af_set_coarse_grid(tree, [DTIMES(box_size)])
   call af_print_info(tree)
 
   do iter = 1, n_iterations

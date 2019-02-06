@@ -57,6 +57,8 @@ contains
     real(dp)                  :: symm_coeffs(stencil_size, tree%n_cell**NDIM)
     real(dp)                  :: full_coeffs(2*NDIM+1, DTIMES(tree%n_cell))
 
+    if (.not. tree%ready) error stop "coarse_solver_initialize: tree not ready"
+
     nc                   = tree%n_cell
     nx                   = tree%coarse_grid_size(1:NDIM)
     n_boxes              = size(tree%lvls(1)%ids)

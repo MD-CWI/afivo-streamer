@@ -21,10 +21,8 @@ program advection_Xd
 
   type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
-  integer            :: ix_list(NDIM, 1)
-  integer            :: nb_list(af_num_neighbors, 1)
   integer            :: refine_steps, time_steps, output_cnt
-  integer            :: i, id, n, n_steps
+  integer            :: i, n, n_steps
   real(dp)           :: dt, time, end_time, p_err, n_err
   real(dp)           :: sum_phi, sum_phi_t0
   real(dp)           :: dt_adapt, dt_output
@@ -49,16 +47,7 @@ program advection_Xd
   call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp_lim, &
        prolong=af_prolong_limit)
 
-  ! Set up geometry
-  id             = 1
-  ix_list(:, id) = 1            ! Set index of box
-  nb_list(:, id) = id           ! Box is periodic, so its own neighbor
-  if (coord_type == af_cyl) then
-     nb_list(af_neighb_lowx, id) = -1
-  end if
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list, nb_list)
+  call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
 
   output_cnt = 0
   time       = 0

@@ -10,7 +10,6 @@ program poisson_neumann_Xd
   implicit none
 
   integer, parameter :: box_size     = 8
-  integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 10
   integer            :: i_phi
   integer            :: i_rhs
@@ -20,7 +19,6 @@ program poisson_neumann_Xd
   type(af_t)        :: tree
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
-  integer            :: ix_list(NDIM, n_boxes_base)
   real(dp)           :: dr
   character(len=100) :: fname
   type(mg_t)       :: mg
@@ -40,15 +38,9 @@ program poisson_neumann_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
-       coarsen_to=2)   ! Add coarsened levels for multigrid
+       dr)             ! Distance between cells on base level
 
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [DTIMES(1)]         ! Set index of box 1
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
+  call af_set_coarse_grid(tree, [DTIMES(box_size)])
 
   call system_clock(t_start, count_rate)
   do
@@ -81,7 +73,7 @@ program poisson_neumann_Xd
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
   ! first call of mg_fas_fmg
-  call mg_init_mg(mg)
+  call mg_init_mg(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)

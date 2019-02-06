@@ -54,10 +54,9 @@ program poisson_coarse_solver
        dr)             ! Distance between cells on base level
   !> [af_init]
 
-  !> [af_set_base]
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, domain_size)
-  !> [af_set_base]
+  !> [af_set_coarse_grid]
+  call af_set_coarse_grid(tree, domain_size)
+  !> [af_set_coarse_grid]
 
   call system_clock(t_start, count_rate)
   !> [set_refinement]

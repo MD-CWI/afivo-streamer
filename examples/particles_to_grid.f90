@@ -17,7 +17,7 @@ program particles_to_grid_Xd
 
   type(af_t)      :: tree
   type(ref_info_t) :: refine_info
-  integer          :: n, id, ix_list(NDIM, 1)
+  integer          :: n
   integer          :: count_rate, t_start, t_end
   real(dp)         :: sum_density
 
@@ -32,12 +32,7 @@ program particles_to_grid_Xd
        dr=dr, &        ! Distance between cells on base level
        r_min=r_min)
 
-  ! Set up geometry
-  id             = 1
-  ix_list(:, id) = 1            ! Set index of box
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
+  call af_set_coarse_grid(tree, [DTIMES(box_size)])
 
   call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp)
 

@@ -37,8 +37,6 @@ program particles_gravity_Xd
   type(af_t)         :: tree
   type(mg_t)        :: mg
   type(ref_info_t)    :: refine_info
-  integer             :: id, ix_list(NDIM, 1)
-  integer             :: nb_list(2*NDIM, 1)
   integer             :: count_rate, wc_start, wc_end
   character(len=100)  :: fname
   real(dp)            :: max_vel, time
@@ -58,13 +56,7 @@ program particles_gravity_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr=dr, &        ! Distance between cells on base level
-       coarsen_to=2)
-
-  ! Set up geometry
-  id             = 1
-  ix_list(:, id) = 1 ! Set index of box
-  nb_list(:, id) = 1 ! Fully periodic
+       dr=dr)          ! Distance between cells on base level
 
   mg%i_phi         =  i_phi    ! Solution variable
   mg%i_rhs         =  i_rho    ! Right-hand side variable
@@ -72,10 +64,9 @@ program particles_gravity_Xd
   mg%sides_bc      => af_bc_neumann_zero ! Not used
   mg%subtract_mean =  .true.
 
-  call mg_init_mg(mg)
+  call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
 
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list, nb_list)
+  call mg_init_mg(tree, mg)
 
   ! Set default methods (boundary condition is not actually used due to
   ! periodicity)

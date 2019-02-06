@@ -87,7 +87,7 @@ program simple_streamer_2d
   mg%sides_bc => sides_bc_pot ! Filling ghost cell on physical boundaries
 
   ! This routine always needs to be called when using multigrid
-  call mg_init_mg(mg)
+  call mg_init_mg(tree, mg)
 
   call af_set_cc_methods(tree, i_elec, af_bc_dirichlet_zero, &
        af_gc_interp_lim, af_prolong_limit)
@@ -210,31 +210,15 @@ contains
 
     ! Variables used below to initialize tree
     real(dp)                  :: dr
-    integer                   :: id
-    integer                   :: ix_list(2, 1) ! Spatial indices of initial boxes
-    integer                   :: nb_list(4, 1) ! Neighbors of initial boxes
-    integer                   :: n_boxes_init = 1000
 
     dr = domain_length / box_size
 
     ! Initialize tree
-    call af_init(tree, &                   ! The tree to initialize
-         box_size, &               ! Boxes have box_size^dim cells
-         dr, &                     ! spacing of a cell at lvl 1
-         coarsen_to=2, &           ! Create additional coarse grids down to this size.
-         n_boxes = n_boxes_init)   ! Allocate initial storage for n_boxes.
+    call af_init(tree, & ! The tree to initialize
+         box_size, &     ! Boxes have box_size^dim cells
+         dr)             ! spacing of a cell at lvl 1
 
-    ! Set up geometry
-    id             = 1          ! One box ...
-    ix_list(:, id) = [1,1]      ! With index 1,1 ...
-
-    nb_list(af_neighb_lowy, id)  = -1 ! physical boundary
-    nb_list(af_neighb_highy, id) = -1 ! idem
-    nb_list(af_neighb_lowx, id)  = id ! periodic boundary
-    nb_list(af_neighb_highx, id) = id ! idem
-
-    ! Create the base mesh
-    call af_set_base(tree, 1, ix_list, nb_list)
+    call af_set_coarse_grid(tree, [box_size, box_size], [.true., .false.])
 
   end subroutine init_tree
 

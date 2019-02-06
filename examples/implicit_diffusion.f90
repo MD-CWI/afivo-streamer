@@ -24,11 +24,8 @@ program implicit_diffusion_Xd
 #endif
 
   type(af_t)         :: tree
-  type(mg_t)        :: mg
+  type(mg_t)         :: mg
   type(ref_info_t)   :: refine_info
-  integer            :: id
-  integer            :: ix_list(NDIM, 1)
-  integer            :: nb_list(af_num_neighbors, 1)
   integer            :: time_steps, output_cnt
   real(dp)           :: dt, time, end_time
   character(len=100) :: fname
@@ -44,13 +41,7 @@ program implicit_diffusion_Xd
   ! Initialize tree
   call af_init(tree, box_size, dr=dr)
 
-  ! Set up geometry
-  id             = 1
-  ix_list(:, id) = [DTIMES(1)] ! Set index of box
-  nb_list(:, id) = 1           ! Periodic domain
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list, nb_list)
+  call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
   call af_print_info(tree)
 
   ! Set up the initial conditions
@@ -94,7 +85,7 @@ program implicit_diffusion_Xd
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
   ! first call of mg_fas_fmg
-  call mg_init_mg(mg)
+  call mg_init_mg(tree, mg)
 
   output_cnt = 0
   time       = 0

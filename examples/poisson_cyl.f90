@@ -10,7 +10,6 @@ program poisson_cyl
   implicit none
 
   integer, parameter :: box_size     = 8
-  integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 10
   integer            :: i_phi
   integer            :: i_rhs
@@ -20,7 +19,6 @@ program poisson_cyl
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
-  integer            :: ix_list(2, n_boxes_base)
   real(dp)           :: dr, residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg_t)        :: mg
@@ -46,15 +44,9 @@ program poisson_cyl
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        dr, &           ! Distance between cells on base level
-       coarsen_to=2, & ! Add coarsened levels for multigrid
        coord=af_cyl)   ! Cylindrical coordinates
 
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [1,1]         ! Set index of box 1
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
+  call af_set_coarse_grid(tree, [box_size, box_size])
   call af_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -90,7 +82,7 @@ program poisson_cyl
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
   ! and i_tmp. These variables will be initialized at the first call of mg_fas_fmg
-  call mg_init_mg(mg)
+  call mg_init_mg(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)

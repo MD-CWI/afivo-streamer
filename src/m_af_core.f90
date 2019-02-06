@@ -15,7 +15,7 @@ module m_af_core
   public :: af_set_cc_methods
   public :: af_init_box
   public :: af_destroy
-  public :: af_set_base
+  public :: af_set_coarse_grid
   public :: af_tidy_up
   public :: af_resize_box_storage
   public :: af_adjust_refinement
@@ -242,7 +242,7 @@ contains
   end subroutine af_destroy
 
   !> Create the coarse grid
-  subroutine af_set_base(tree, coarse_grid_size, periodic_dims)
+  subroutine af_set_coarse_grid(tree, coarse_grid_size, periodic_dims)
     !> Tree for which we set the base
     type(af_t), intent(inout)     :: tree
     !> Size of coarse grid (in cells)
@@ -254,13 +254,13 @@ contains
     integer, allocatable          :: id_array(DTIMES(:))
 
     if (tree%highest_id > 0) &
-         error stop "af_set_base: this tree already has boxes"
+         error stop "af_set_coarse_grid: this tree already has boxes"
     if (.not. allocated(tree%boxes)) &
-         error stop "af_set_base: tree not initialized"
+         error stop "af_set_coarse_grid: tree not initialized"
     if (any(coarse_grid_size < tree%n_cell)) &
-         error stop "af_set_base: coarse_grid_size < tree%n_cell"
+         error stop "af_set_coarse_grid: coarse_grid_size < tree%n_cell"
     if (any(modulo(coarse_grid_size, tree%n_cell) /= 0)) &
-         error stop "af_set_base: coarse_grid_size not divisible by tree%n_cell"
+         error stop "af_set_coarse_grid: coarse_grid_size not divisible by tree%n_cell"
 
     periodic(:) = .false.; if (present(periodic_dims)) periodic = periodic_dims
 
@@ -345,7 +345,7 @@ contains
 
     tree%highest_lvl = 1
     tree%ready = .true.
-  end subroutine af_set_base
+  end subroutine af_set_coarse_grid
 
   !> Create an array for easy lookup of indices
   subroutine create_index_array(nx, periodic, id_array)

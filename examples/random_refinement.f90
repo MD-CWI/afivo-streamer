@@ -8,14 +8,14 @@ program random_refinement_Xd
 
   implicit none
 
-  type(af_t)        :: tree
-  integer            :: id, iter, boxes_used
-  integer, parameter :: n_boxes_base = 2
-  integer, parameter :: coord_type   = af_xyz ! af_xyz or af_cyl
-  integer            :: ix_list(NDIM, n_boxes_base)
-  integer            :: nb_list(af_num_neighbors, n_boxes_base)
-  integer, parameter :: box_size     = 8
-  integer, parameter :: i_phi        = 1
+  type(af_t)         :: tree
+  integer            :: grid_size(NDIM)
+  logical            :: periodic(NDIM) = .true.
+  integer            :: iter, boxes_used
+  integer, parameter :: coord_type     = af_xyz ! af_xyz or af_cyl
+
+  integer, parameter :: box_size   = 8
+  integer, parameter :: i_phi      = 1
   type(ref_info_t)   :: ref_info
   real(dp)           :: dr, sum_phi_t0, sum_phi
   character(len=40)  :: fname
@@ -39,27 +39,10 @@ program random_refinement_Xd
   call af_set_cc_methods(tree, 1, af_bc_dirichlet_zero, &
        prolong=af_prolong_linear)
 
-  ! Set up geometry.
-  ! Neighbors for the boxes are stored in nb_list
-  nb_list(:, :) = af_no_box     ! Default value
+  grid_size(1) = 2* box_size
+  grid_size(2:) = box_size
 
-  ! Spatial indices are used to define the coordinates of a box.
-  do id = 1, n_boxes_base
-#if NDIM == 2
-     ix_list(:, id)               = [id, 1] ! Boxes at (1,1), (2,1), etc.
-#elif NDIM == 3
-     ix_list(:, id)               = [id, 1, 1] ! Boxes at (1,1,1), (2,1,1), etc.
-     nb_list(af_neighb_highz, id) = id      ! Periodic in z-direction
-#endif
-     nb_list(af_neighb_highy, id) = id      ! Periodic in y-direction
-  end do
-
-  ! Periodic boundaries only have to be specified from one side. The lower-x
-  ! neighbor of box 1 is the last box
-  nb_list(af_neighb_lowx, 1)  = n_boxes_base
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, n_boxes_base, ix_list, nb_list)
+  call af_set_coarse_grid(tree, grid_size, periodic)
   call af_print_info(tree)
 
   ! Set variables on base by using the helper functions af_loop_box(tree, sub)

@@ -11,14 +11,11 @@ program test_init
   type(af_t)       :: tree
   type(ref_info_t) :: ref_info
   integer          :: i, n_lvl
-  integer          :: ixs(NDIM, 1), nbs(af_num_neighbors, 1)
 
   call af_add_cc_variable(tree, "phi")
   call af_init(tree, n_cell=8, dr = 1.0_dp)
 
-  ixs = 1                    ! Box at 1,1
-  nbs = -1                   ! Boundary condition indicated by -1
-  call af_set_base(tree, 1, ixs, nbs)
+  call af_set_coarse_grid(tree, [DTIMES(8)])
 
   n_lvl = 4
 

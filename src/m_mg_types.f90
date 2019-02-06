@@ -28,7 +28,7 @@ module m_mg_types
      type(c_ptr) :: grid
 
      !> Stores coefficient to convert boundary conditions to the right-hand side
-     real(dp), allocatable :: bc_to_rhs(DTIMES(:), :)
+     real(dp), allocatable :: bc_to_rhs(:, :, :)
 
      integer  :: solver_type    = -1
      integer  :: max_iterations = 50
