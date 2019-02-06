@@ -17,7 +17,13 @@ fi
 
 # Configure
 cd ${hypre_dirname}/src
-./configure --with-openmp --without-MPI --with-print-errors --enable-debug --prefix=${target_dir}
+
+./configure \
+    --with-openmp\
+    --without-MPI\
+    --with-print-errors\
+    --enable-global-partition\
+    --prefix=${target_dir}
 
 make -j
 make install
