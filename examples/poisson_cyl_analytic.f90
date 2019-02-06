@@ -77,9 +77,10 @@ program poisson_cyl_analytic
   mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
 
   ! Automatically detect the right methods
-  mg%box_op       => mg_auto_op
-  mg%box_gsrb     => mg_auto_gsrb
-  mg%box_corr     => mg_auto_corr
+  mg%box_op      => mg_auto_op
+  mg%box_gsrb    => mg_auto_gsrb
+  mg%box_corr    => mg_auto_corr
+  mg%box_stencil => mg_box_clpl_stencil
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.

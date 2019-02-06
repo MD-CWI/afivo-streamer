@@ -64,7 +64,7 @@ program poisson_helmholtz_Xd
   mg%box_gsrb => mg_box_gsrb_helmh
   mg%box_stencil => mg_box_helmh_stencil
 
-  mg%helmh_lambda2 = lambda
+  mg%helmholtz_lambda = lambda
   call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"

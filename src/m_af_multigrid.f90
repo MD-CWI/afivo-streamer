@@ -1872,7 +1872,7 @@ contains
                rfac(2) * box%cc(i+1, j, i_phi) + &
                box%cc(i, j-1, i_phi) + box%cc(i, j+1, i_phi) - &
                4 * box%cc(i, j, i_phi)) * inv_dr_sq - &
-               mg%helmh_lambda2 * box%cc(i, j, i_phi)
+               mg%helmholtz_lambda * box%cc(i, j, i_phi)
        end do
     end do
   end subroutine mg_box_chelmh
@@ -1894,7 +1894,7 @@ contains
     do j = 1, nc
        do i = 1, nc
           rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          stencil(1, i, j)  = -4 * inv_dr_sq - mg%helmh_lambda2
+          stencil(1, i, j)  = -4 * inv_dr_sq - mg%helmholtz_lambda
           stencil(2:3, i, j) = inv_dr_sq * rfac
           stencil(4:5, i, j) = inv_dr_sq
        end do
@@ -1923,7 +1923,7 @@ contains
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
           rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          box%cc(i, j, i_phi) = 1/(4 + mg%helmh_lambda2 * dx2) * ( &
+          box%cc(i, j, i_phi) = 1/(4 + mg%helmholtz_lambda * dx2) * ( &
                rfac(1) * box%cc(i-1, j, i_phi) + &
                rfac(2) * box%cc(i+1, j, i_phi) + &
                box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
@@ -1954,7 +1954,7 @@ contains
           box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
                box%cc(i+1, j, i_phi) + box%cc(i, j-1, i_phi) + &
                box%cc(i, j+1, i_phi) - 4 * box%cc(i, j, i_phi)) - &
-               mg%helmh_lambda2 * box%cc(i, j, i_phi)
+               mg%helmholtz_lambda * box%cc(i, j, i_phi)
        end do
     end do
 #elif NDIM == 3
@@ -1965,7 +1965,7 @@ contains
                   box%cc(i+1, j, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
                   box%cc(i, j+1, k, i_phi) + box%cc(i, j, k-1, i_phi) + &
                   box%cc(i, j, k+1, i_phi) - 6 * box%cc(i, j, k, i_phi)) - &
-                  mg%helmh_lambda2 * box%cc(i, j, k, i_phi)
+                  mg%helmholtz_lambda * box%cc(i, j, k, i_phi)
           end do
        end do
     end do
@@ -1982,7 +1982,7 @@ contains
     real(dp)                :: inv_dr2
 
     inv_dr2                = 1 / box%dr**2
-    stencil(1, DTIMES(:))  = -2.0_dp * NDIM * inv_dr2 - mg%helmh_lambda2
+    stencil(1, DTIMES(:))  = -2.0_dp * NDIM * inv_dr2 - mg%helmholtz_lambda
     stencil(2:, DTIMES(:)) = 1.0_dp * inv_dr2
     call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_helmh_stencil
@@ -2010,7 +2010,7 @@ contains
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 1/(4 + mg%helmh_lambda2 * dx2) * ( &
+          box%cc(i, j, i_phi) = 1/(4 + mg%helmholtz_lambda * dx2) * ( &
                box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
                box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
                dx2 * box%cc(i, j, i_rhs))
@@ -2021,7 +2021,7 @@ contains
        do j = 1, nc
           i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
           do i = i0, nc, 2
-             box%cc(i, j, k, i_phi) = 1/(6 + mg%helmh_lambda2 * dx2) * ( &
+             box%cc(i, j, k, i_phi) = 1/(6 + mg%helmholtz_lambda * dx2) * ( &
                   box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
                   box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
                   box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &

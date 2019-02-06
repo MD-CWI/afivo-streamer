@@ -57,7 +57,7 @@ module m_mg_types
      logical :: subtract_mean = .false. !< Whether to subtract mean from solution
 
      !> Store lambda^2 for Helmholtz equations
-     real(dp) :: helmh_lambda2 = -1.0e99_dp
+     real(dp) :: helmholtz_lambda = -1.0e99_dp
 
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(af_subr_bc), pointer, nopass   :: sides_bc => null()

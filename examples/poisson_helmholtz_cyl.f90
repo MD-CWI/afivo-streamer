@@ -15,7 +15,7 @@ program helmholtz_cyl
   integer            :: i_rhs
   integer            :: i_err
   integer            :: i_tmp
-  real(dp), parameter :: lambda2 = 1000.0_dp
+  real(dp), parameter :: lambda = 1000.0_dp
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -75,9 +75,12 @@ program helmholtz_cyl
   mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
 
   ! Automatically detect the right methods
-  mg%box_op       => helmholtz_cyl_operator
-  mg%box_gsrb     => helmholtz_cyl_gsrb
+  mg%box_op       => mg_box_chelmh
+  mg%box_gsrb     => mg_box_gsrb_chelmh
   mg%box_corr     => mg_auto_corr
+  mg%box_stencil  => mg_box_chelmh_stencil
+
+  mg%helmholtz_lambda = lambda
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
@@ -162,7 +165,7 @@ contains
        do i = 0, nc+1
           rz = af_r_cc(box, [i,j])
           box%cc(i, j, i_rhs) = gauss_laplacian_cyl(gs, rz) - &
-               lambda2 * gauss_value(gs, rz)
+               lambda * gauss_value(gs, rz)
        end do
     end do
   end subroutine set_init_cond
@@ -220,60 +223,5 @@ contains
        end do
     end select
   end subroutine sides_bc
-
-  !> Perform cylindrical Laplacian operator on a box
-  subroutine helmholtz_cyl_operator(box, i_out, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, j, nc, i_phi, ioff
-    real(dp)                    :: inv_dr_sq, rfac(2)
-
-    nc        = box%n_cell
-    inv_dr_sq = 1 / box%dr**2
-    i_phi     = mg%i_phi
-    ioff      = (box%ix(1)-1) * nc
-
-    do j = 1, nc
-       do i = 1, nc
-          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          box%cc(i, j, i_out) = ( &
-               rfac(1) * box%cc(i-1, j, i_phi) + &
-               rfac(2) * box%cc(i+1, j, i_phi) + &
-               box%cc(i, j-1, i_phi) + box%cc(i, j+1, i_phi) - &
-               4 * box%cc(i, j, i_phi)) * inv_dr_sq - &
-               lambda2 * box%cc(i, j, i_phi)
-       end do
-    end do
-  end subroutine helmholtz_cyl_operator
-
-  !> Perform Gauss-Seidel relaxation on box for a cylindrical Helmholtz operator
-  subroutine helmholtz_cyl_gsrb(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, i0, j, nc, i_phi, i_rhs, ioff
-    real(dp)                    :: dx2, rfac(2)
-
-    dx2   = box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-    ioff  = (box%ix(1)-1) * nc
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          box%cc(i, j, i_phi) = 1/(4 + lambda2 * dx2) * ( &
-               rfac(1) * box%cc(i-1, j, i_phi) + &
-               rfac(2) * box%cc(i+1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
-               dx2 * box%cc(i, j, i_rhs))
-       end do
-    end do
-  end subroutine helmholtz_cyl_gsrb
 
 end program helmholtz_cyl
