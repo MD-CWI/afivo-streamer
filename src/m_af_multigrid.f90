@@ -1052,7 +1052,6 @@ contains
     type(box_t)             :: dummy_box
     integer                 :: nb, nc, lo(NDIM), hi(NDIM)
     integer                 :: nb_id, bc_type
-    real(dp)                :: inv_dr
 
     bc_to_rhs = 0.0_dp
 
@@ -1060,7 +1059,6 @@ contains
     ! a dummy box
     dummy_box = box
     nc        = box%n_cell
-    inv_dr    = 1 / box%dr
 
     do nb = 1, af_num_neighbors
        nb_id = box%neighbors(nb)
@@ -1098,14 +1096,14 @@ contains
                   stencil(1, lo(1):hi(1), lo(2):hi(2)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
              bc_to_rhs(:, nb) = &
-                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * inv_dr, .true.)
+                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * box%dr, .true.)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
 #elif NDIM == 3
              stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
              bc_to_rhs(:, nb) = &
-                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * inv_dr, .true.)
+                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * box%dr, .true.)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
 #endif
           case default
