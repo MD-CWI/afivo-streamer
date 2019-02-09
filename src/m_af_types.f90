@@ -808,6 +808,21 @@ contains
     inner = 1 - tmp
     outer = 1 + tmp
   end subroutine af_cyl_child_weights
+
+  !> Get the factors for the left and right flux in each cell
+  subroutine af_cyl_flux_factors(box, flux_factors)
+    type(box_t), intent(in) :: box
+    real(dp), intent(out)   :: flux_factors(2, box%n_cell)
+    integer                 :: i
+    real(dp)                :: r, inv_r
+
+    do i = 1, box%n_cell
+       r                  = af_cyl_radius_cc(box, i)
+       inv_r              = 1/r
+       flux_factors(1, i) = (r - 0.5_dp * box%dr) * inv_r
+       flux_factors(2, i) = (r + 0.5_dp * box%dr) * inv_r
+    end do
+  end subroutine af_cyl_flux_factors
 #endif
 
 end module m_af_types
