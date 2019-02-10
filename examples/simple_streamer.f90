@@ -460,7 +460,7 @@ contains
 
           sflux = inv_dr(1) * (box%fc(i, j, 1, f_elec) - &
                box%fc(i+1, j, 1, f_elec)) + &
-               inv_dr(2) * (box%fc(i, j, 1, f_elec) - &
+               inv_dr(2) * (box%fc(i, j, 2, f_elec) - &
                box%fc(i, j+1, 2, f_elec))
 
           box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + (src + sflux) * dt(1)

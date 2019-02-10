@@ -2,39 +2,32 @@
 !> \example test_reduction.f90
 !> This example shows the basic reduction functionality of m_af_types.
 program test_reduction
-  use m_af_types
-  use m_af_core
-  use m_af_utils
+  use m_af_all
 
   implicit none
 
-  type(af_t)         :: tree
-  integer            :: i
-  integer, parameter :: box_size     = 8
-  integer            :: i_phi
-  type(ref_info_t)   :: ref_info
-  real(dp)           :: dr, max_val, min_val
-  type(af_loc_t)     :: max_loc, min_loc
-
-  dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
+  type(af_t)          :: tree
+  integer             :: i
+  integer, parameter  :: box_size = 8
+  real(dp), parameter :: dlen     = 2 * acos(-1.0_dp)
+  integer             :: i_phi
+  type(ref_info_t)    :: ref_info
+  real(dp)            :: max_val, min_val
+  type(af_loc_t)      :: max_loc, min_loc
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
 
   ! Initialize tree
-  call af_init(tree, & ! Tree to initialize
-       box_size, &     ! Number of cells per coordinate in a box
-       dr)             ! Distance between cells on base level
-
-  ! Create the base mesh
-  call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
+  call af_init(tree, box_size, [DTIMES(dlen)], [DTIMES(box_size)], &
+       periodic=[DTIMES(.true.)])
 
   ! Set variables on base
-  call af_loop_box(tree, set_random_values)
+  call af_loop_box(tree, set_values)
 
   do i = 1, 16
      print *, "i = ", i, "highest_id", tree%highest_id
      call af_adjust_refinement(tree, ref_func, ref_info, 0)
-     call af_loop_box(tree, set_random_values)
+     call af_loop_box(tree, set_values)
 
      call af_tree_max_cc(tree, i_phi, max_val)
      call af_tree_min_cc(tree, i_phi, min_val)
@@ -120,12 +113,12 @@ contains
     end if
   end subroutine ref_func
 
-  subroutine set_random_values(box)
+  subroutine set_values(box)
     type(box_t), intent(inout) :: box
     integer                    :: nc
 
     nc = box%n_cell
     box%cc(DTIMES(1:nc), i_phi) = sum(box%ix)
-  end subroutine set_random_values
+  end subroutine set_values
 
 end program test_reduction

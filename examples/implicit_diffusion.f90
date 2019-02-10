@@ -85,7 +85,7 @@ program implicit_diffusion_Xd
   mg%box_op   => mg_box_lpl
   mg%box_gsrb => mg_box_gsrb_lpl
   mg%box_stencil => mg_box_lpl_stencil
-  mg%helmholtz_lambda = diffusion_coeff * dt
+  mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
 
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
@@ -184,7 +184,8 @@ contains
     integer                     :: nc
 
     nc = box%n_cell
-    box%cc(DTIMES(1:nc), i_rhs) = box%cc(DTIMES(1:nc), i_phi)
+    box%cc(DTIMES(1:nc), i_rhs) = -1/(dt * diffusion_coeff) * &
+         box%cc(DTIMES(1:nc), i_phi)
   end subroutine set_rhs
 
 end program implicit_diffusion_Xd

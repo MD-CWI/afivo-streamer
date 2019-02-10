@@ -16,7 +16,6 @@ module m_mg_types
 
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1
-  integer, parameter :: mg_cycle_base = 2
   integer, parameter :: mg_cycle_up   = 3
 
   !> Generic type for the coarse grid solver
@@ -50,7 +49,6 @@ module m_mg_types
 
      integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
      integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
-     integer :: n_cycle_base = -1 !< Number of relaxation cycles at bottom level
 
      logical :: initialized = .false. !< Whether the structure has been initialized
      logical :: use_corners = .false. !< Does the smoother use corner ghost cells

@@ -70,7 +70,6 @@ contains
     ! Check whether these are set, otherwise use default
     if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
     if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
-    if (mg%n_cycle_base < 0)           mg%n_cycle_base = 4
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_sides_rb
@@ -175,8 +174,6 @@ contains
        call update_coarse(tree, lvl, mg)
     end do
 
-    ! lvl = min_lvl
-    ! call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_base)
     call solve_coarse_grid(tree, mg)
 
     ! Do the upwards part of the v-cycle in the tree
@@ -583,8 +580,6 @@ contains
        n_cycle = mg%n_cycle_down
     case (mg_cycle_up)
        n_cycle = mg%n_cycle_up
-    case (mg_cycle_base)
-       n_cycle = mg%n_cycle_base
     case default
        error stop "gsrb_boxes: invalid cycle type"
     end select
@@ -1322,7 +1317,7 @@ contains
 
     nc   = box%n_cell
     idr2 = 1/box%dr**2
-    fac  = 1.0_dp / sum(2 * idr2 + mg%helmholtz_lambda)
+    fac  = 1.0_dp / (2 * sum(idr2) + mg%helmholtz_lambda)
     call af_cyl_flux_factors(box, rfac)
 
     ! The parity of redblack_cntr determines which cells we use. If
@@ -1331,8 +1326,9 @@ contains
       do j = 1, nc
          i0 = 2 - iand(ieor(redblack_cntr, j), 1)
          do i = i0, nc, 2
-            cc(i, j, n) = fac * (idr2(1) * &
-                 (rfac(1, i) * cc(i-1, j, n) + rfac(2, i) * cc(i+1, j, n)) + &
+            cc(i, j, n) = fac * (&
+                 idr2(1) * (rfac(1, i) * cc(i-1, j, n) + &
+                 rfac(2, i) * cc(i+1, j, n)) + &
                  idr2(2) * (cc(i, j+1, n) + cc(i, j-1, n)) &
                  - cc(i, j, i_rhs))
          end do
@@ -1355,10 +1351,10 @@ contains
     associate (cc => box%cc, n => mg%i_phi)
       do j = 1, nc
          do i = 1, nc
-            cc(i, j, i_out) = idr2(1) * (rfac(1, i) * cc(i-1, j, n) + &
+            cc(i, j, i_out) = idr2(1) * ( rfac(1, i) * cc(i-1, j, n) + &
                  rfac(2, i) * cc(i+1, j, n) - 2 * cc(i, j, n)) + &
-                 idr2(2) * (cc(i, j-1, n) + cc(i, j+1, n) - &
-                 2 * cc(i, j, n)) - mg%helmholtz_lambda * cc(i, j, n)
+                 idr2(2) * (cc(i, j-1, n) + cc(i, j+1, n) - 2 * cc(i, j, n)) &
+                 - mg%helmholtz_lambda * cc(i, j, n)
          end do
       end do
     end associate

@@ -31,7 +31,7 @@ program helmholtz_cyl
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.01_dp, 0.04_dp], &
-       reshape([0.0_dp, 0.25_dp, 0.1_dp, 0.75_dp], [2,2]))
+       reshape([0.0_dp, 0.25_dp, 0.0_dp, 0.75_dp], [2,2]))
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)

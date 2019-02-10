@@ -442,10 +442,12 @@ contains
             af_coord_names(tree%coord_t)
 #if NDIM == 2
        write(*, "(A,2E12.4)") " min. coords:        ", tree%r_base
+       write(*, "(A,2E12.4)") " dr at level 1       ", tree%dr_base
 #elif NDIM == 3
        write(*, "(A,3E12.4)") " min. coords:        ", tree%r_base
+       write(*, "(A,3E12.4)") " dr at level 1       ", tree%dr_base
 #endif
-       write(*, "(A,2E12.4)")  " dx at min/max level ", tree%dr_base, af_min_dr(tree)
+       write(*, "(A,E12.4)") " minval(dr):        ", af_min_dr(tree)
        write(*, "(A)") ""
     end if
   end subroutine af_print_info
