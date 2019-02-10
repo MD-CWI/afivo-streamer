@@ -849,7 +849,7 @@ contains
 
     !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp, fac)
     do lvl = 1, tree%highest_lvl
-       fac = af_lvl_dr(tree, lvl)**NDIM
+       fac = product(af_lvl_dr(tree, lvl))
 
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)

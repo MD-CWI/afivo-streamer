@@ -56,8 +56,8 @@ module m_mg_types
      logical :: use_corners = .false. !< Does the smoother use corner ghost cells
      logical :: subtract_mean = .false. !< Whether to subtract mean from solution
 
-     !> Store lambda^2 for Helmholtz equations
-     real(dp) :: helmholtz_lambda = -1.0e99_dp
+     !> Store lambda^2 for Helmholtz equations (L phi - lamda phi = f)
+     real(dp) :: helmholtz_lambda = 0.0_dp
 
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(af_subr_bc), pointer, nopass   :: sides_bc => null()

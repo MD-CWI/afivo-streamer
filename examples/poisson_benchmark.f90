@@ -64,9 +64,8 @@ program poisson_benchmark_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        n_cell, &       ! A box contains box_size**DIM cells
-       dr)             ! Distance between cells on base level
-
-  call af_set_coarse_grid(tree, [DTIMES(n_cell)])
+       [DTIMES(1.0_dp)], &
+       [DTIMES(n_cell)])
 
   call system_clock(t_start, count_rate)
   do

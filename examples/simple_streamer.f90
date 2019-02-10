@@ -76,7 +76,12 @@ program simple_streamer_2d
   call af_add_fc_variable(tree, "f_fld", ix=f_fld)
 
   ! Initialize the tree (which contains all the mesh information)
-  call init_tree(tree)
+  call af_init(tree, & ! Tree to initialize
+       box_size, &     ! A box contains box_size**DIM cells
+       [domain_length, domain_length], &
+       [box_size, box_size], &
+       periodic=[.true., .false.])
+
 
   ! Set the multigrid options. First define the variables to use
   mg%i_phi        = i_phi
@@ -204,24 +209,6 @@ program simple_streamer_2d
 
 contains
 
-  !> Initialize the AMR tree
-  subroutine init_tree(tree)
-    type(af_t), intent(inout) :: tree
-
-    ! Variables used below to initialize tree
-    real(dp)                  :: dr
-
-    dr = domain_length / box_size
-
-    ! Initialize tree
-    call af_init(tree, & ! The tree to initialize
-         box_size, &     ! Boxes have box_size^dim cells
-         dr)             ! spacing of a cell at lvl 1
-
-    call af_set_coarse_grid(tree, [box_size, box_size], [.true., .false.])
-
-  end subroutine init_tree
-
   !> This routine sets the refinement flag for boxes(id)
   subroutine refinement_routine(box, cell_flags)
     type(box_t), intent(in) :: box
@@ -229,8 +216,8 @@ contains
     integer                  :: i, j, nc
     real(dp)                 :: dx, dens, fld, adx, xy(2)
 
-    nc      = box%n_cell
-    dx      = box%dr
+    nc = box%n_cell
+    dx = maxval(box%dr)
 
     do j = 1, nc
        do i = 1, nc
@@ -264,20 +251,21 @@ contains
   subroutine set_initial_condition(box)
     type(box_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: xy(2), normal_rands(2)
+    real(dp)                    :: xy(2), normal_rands(2), vol
 
     nc = box%n_cell
 
     do j = 0, nc+1
        do i = 0, nc+1
           xy   = af_r_cc(box, [i,j])
+          vol = (box%dr(1) * box%dr(2))**1.5_dp
 
           if (xy(2) > init_y_min .and. xy(2) < init_y_max) then
              ! Approximate Poisson distribution with normal distribution
-             normal_rands = two_normals(box%dr**3 * init_density, &
-                  sqrt(box%dr**3 * init_density))
+             normal_rands = two_normals(vol * init_density, &
+                  sqrt(vol * init_density))
              ! Prevent negative numbers
-             box%cc(i, j, i_elec) = abs(normal_rands(1)) / box%dr**3
+             box%cc(i, j, i_elec) = abs(normal_rands(1)) / vol
           else
              box%cc(i, j, i_elec) = 0
           end if
@@ -340,7 +328,7 @@ contains
          maxval(box%cc(1:nc, 1:nc, i_elec)) + epsilon(1.0_dp))
 
     ! Diffusion condition
-    dt_dif = 0.25_dp * box%dr**2 / max(diffusion_c, epsilon(1.0_dp))
+    dt_dif = 0.25_dp * minval(box%dr)**2 / max(diffusion_c, epsilon(1.0_dp))
 
     max_dt = min(dt_cfl, dt_drt, dt_dif)
   end function max_dt
@@ -399,14 +387,14 @@ contains
   subroutine fld_from_pot(box)
     type(box_t), intent(inout) :: box
     integer                     :: nc
-    real(dp)                    :: inv_dr
+    real(dp)                    :: inv_dr(2)
 
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-    box%fc(1:nc+1, 1:nc, 1, f_fld) = inv_dr * &
+    box%fc(1:nc+1, 1:nc, 1, f_fld) = inv_dr(1) * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 2, f_fld) = inv_dr * &
+    box%fc(1:nc, 1:nc+1, 2, f_fld) = inv_dr(2) * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
 
     box%cc(1:nc, 1:nc, i_fld) = sqrt(&
@@ -421,7 +409,7 @@ contains
     use m_af_flux_schemes
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)         :: id
-    real(dp)                    :: inv_dr
+    real(dp)                    :: inv_dr(2)
     real(dp)                    :: cc(-1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
     real(dp), allocatable       :: v(:, :, :), dc(:, :, :)
     integer                     :: nc
@@ -457,21 +445,23 @@ contains
   subroutine update_solution(box, dt)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)        :: dt(:)
-    real(dp)                    :: inv_dr, src, sflux, fld
+    real(dp)                    :: inv_dr(2), src, sflux, fld
     real(dp)                    :: alpha
     integer                     :: i, j, nc
 
     nc                    = box%n_cell
     inv_dr                = 1/box%dr
+
     do j = 1, nc
        do i = 1, nc
           fld   = box%cc(i,j, i_fld)
           alpha = get_alpha(fld)
           src   = box%cc(i, j, i_elec) * mobility * abs(fld) * alpha
 
-          sflux = (sum(box%fc(i, j, :, f_elec)) - &
-               box%fc(i+1, j, 1, f_elec) - &
-               box%fc(i, j+1, 2, f_elec)) * inv_dr
+          sflux = inv_dr(1) * (box%fc(i, j, 1, f_elec) - &
+               box%fc(i+1, j, 1, f_elec)) + &
+               inv_dr(2) * (box%fc(i, j, 1, f_elec) - &
+               box%fc(i, j+1, 2, f_elec))
 
           box%cc(i, j, i_elec) = box%cc(i, j, i_elec) + (src + sflux) * dt(1)
           box%cc(i, j, i_pion) = box%cc(i, j, i_pion) + src * dt(1)

@@ -15,7 +15,6 @@ module m_af_core
   public :: af_set_cc_methods
   public :: af_init_box
   public :: af_destroy
-  public :: af_set_coarse_grid
   public :: af_tidy_up
   public :: af_resize_box_storage
   public :: af_adjust_refinement
@@ -118,17 +117,17 @@ contains
     af_find_fc_variable = n
   end function af_find_fc_variable
 
-  !> Initialize a NDIM-d tree type.
-  subroutine af_init(tree, n_cell, dr, r_min, n_boxes, coord, mem_limit_gb)
-    type(af_t), intent(inout)      :: tree       !< The tree to initialize
-    integer, intent(in)            :: n_cell     !< Boxes have n_cell^dim cells
-    real(dp), intent(in)           :: dr         !< spacing of a cell at lvl 1
-    !> Lowest coordinate of box at 1,1. Default is (0, 0)
-    real(dp), intent(in), optional :: r_min(NDIM)
-    !> Allocate initial storage for n_boxes. Default is 1000
-    integer, intent(in), optional  :: n_boxes
-    integer, intent(in), optional  :: coord !< Select coordinate type
-    real(dp), intent(in), optional :: mem_limit_gb !< Memory limit in GByte
+  !> Initialize a NDIM-d octree/quadtree grid
+  subroutine af_init(tree, n_cell, r_max, grid_size, periodic, r_min, coord, mem_limit_gb, n_boxes)
+    type(af_t), intent(inout)      :: tree            !< The tree to initialize
+    integer, intent(in)            :: n_cell          !< Boxes have n_cell^dim cells
+    real(dp), intent(in)           :: r_max(NDIM)     !< Maximal coordinates of the domain
+    integer, intent(in)            :: grid_size(NDIM) !< Size of the coarse grid
+    logical, intent(in), optional  :: periodic(NDIM)  !< True for periodic dimensions
+    real(dp), intent(in), optional :: r_min(NDIM)     !< Lowest coordinate, default is (0., 0., 0.)
+    integer, intent(in), optional  :: coord           !< Select coordinate type
+    real(dp), intent(in), optional :: mem_limit_gb    !< Memory limit in GByte
+    integer, intent(in), optional  :: n_boxes         !< initial storage allocation
 
     integer                        :: n_boxes_a
     real(dp)                       :: r_min_a(NDIM), gb_limit
@@ -160,7 +159,7 @@ contains
 
     tree%n_cell      = n_cell
     tree%r_base      = r_min_a
-    tree%dr_base     = dr
+    tree%dr_base     = (r_max - r_min_a) / grid_size
     tree%highest_id  = 0
     tree%highest_lvl = 0
     tree%coord_t     = coord_a
@@ -173,73 +172,9 @@ contains
     if (.not. allocated(tree%cc_method_vars)) &
          allocate(tree%cc_method_vars(0))
 
+    call af_set_coarse_grid(tree, grid_size, periodic)
+
   end subroutine af_init
-
-  !> Set the methods for a cell-centered variable
-  subroutine af_set_cc_methods(tree, iv, bc, rb, prolong, restrict)
-    use m_af_ghostcell, only: af_gc_interp
-    use m_af_prolong, only: af_prolong_linear
-    use m_af_restrict, only: af_restrict_box
-    type(af_t), intent(inout)             :: tree     !< Tree to operate on
-    integer, intent(in)                   :: iv       !< Index of variable
-    procedure(af_subr_bc)                 :: bc       !< Boundary condition method
-    procedure(af_subr_rb), optional       :: rb       !< Refinement boundary method
-    procedure(af_subr_prolong), optional  :: prolong  !< Prolongation method
-    procedure(af_subr_restrict), optional :: restrict !< Restriction method
-    integer                               :: i, n
-
-    tree%cc_methods(iv)%bc => bc
-
-    if (present(rb)) then
-       tree%cc_methods(iv)%rb => rb
-    else
-       tree%cc_methods(iv)%rb => af_gc_interp
-    end if
-
-    if (present(prolong)) then
-       tree%cc_methods(iv)%prolong => prolong
-    else
-       tree%cc_methods(iv)%prolong => af_prolong_linear
-    end if
-
-    if (present(restrict)) then
-       tree%cc_methods(iv)%restrict => restrict
-    else
-       tree%cc_methods(iv)%restrict => af_restrict_box
-    end if
-
-    tree%has_cc_method(iv) = .true.
-
-    if (.not. allocated(tree%cc_method_vars)) &
-         allocate(tree%cc_method_vars(0))
-
-    n = size(tree%cc_method_vars)
-    tree%cc_method_vars = [(tree%cc_method_vars(i), i=1,n), iv]
-
-  end subroutine af_set_cc_methods
-
-  !> "Destroy" the data in a tree. Since we don't use pointers, you can also
-  !> just let a tree get out of scope
-  subroutine af_destroy(tree)
-    type(af_t), intent(inout) :: tree
-    integer                   :: lvl
-
-    if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
-    deallocate(tree%boxes)
-    deallocate(tree%cc_method_vars)
-
-    do lvl = af_min_lvl, af_max_lvl
-       deallocate(tree%lvls(lvl)%ids)
-       deallocate(tree%lvls(lvl)%leaves)
-       deallocate(tree%lvls(lvl)%parents)
-    end do
-
-    tree%highest_lvl = 0
-    tree%highest_id  = 0
-    tree%n_var_cell  = 0
-    tree%n_var_face  = 0
-    tree%ready       = .false.
-  end subroutine af_destroy
 
   !> Create the coarse grid
   subroutine af_set_coarse_grid(tree, coarse_grid_size, periodic_dims)
@@ -346,6 +281,72 @@ contains
     tree%highest_lvl = 1
     tree%ready = .true.
   end subroutine af_set_coarse_grid
+
+  !> Set the methods for a cell-centered variable
+  subroutine af_set_cc_methods(tree, iv, bc, rb, prolong, restrict)
+    use m_af_ghostcell, only: af_gc_interp
+    use m_af_prolong, only: af_prolong_linear
+    use m_af_restrict, only: af_restrict_box
+    type(af_t), intent(inout)             :: tree     !< Tree to operate on
+    integer, intent(in)                   :: iv       !< Index of variable
+    procedure(af_subr_bc)                 :: bc       !< Boundary condition method
+    procedure(af_subr_rb), optional       :: rb       !< Refinement boundary method
+    procedure(af_subr_prolong), optional  :: prolong  !< Prolongation method
+    procedure(af_subr_restrict), optional :: restrict !< Restriction method
+    integer                               :: i, n
+
+    tree%cc_methods(iv)%bc => bc
+
+    if (present(rb)) then
+       tree%cc_methods(iv)%rb => rb
+    else
+       tree%cc_methods(iv)%rb => af_gc_interp
+    end if
+
+    if (present(prolong)) then
+       tree%cc_methods(iv)%prolong => prolong
+    else
+       tree%cc_methods(iv)%prolong => af_prolong_linear
+    end if
+
+    if (present(restrict)) then
+       tree%cc_methods(iv)%restrict => restrict
+    else
+       tree%cc_methods(iv)%restrict => af_restrict_box
+    end if
+
+    tree%has_cc_method(iv) = .true.
+
+    if (.not. allocated(tree%cc_method_vars)) &
+         allocate(tree%cc_method_vars(0))
+
+    n = size(tree%cc_method_vars)
+    tree%cc_method_vars = [(tree%cc_method_vars(i), i=1,n), iv]
+
+  end subroutine af_set_cc_methods
+
+  !> "Destroy" the data in a tree. Since we don't use pointers, you can also
+  !> just let a tree get out of scope
+  subroutine af_destroy(tree)
+    type(af_t), intent(inout) :: tree
+    integer                   :: lvl
+
+    if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
+    deallocate(tree%boxes)
+    deallocate(tree%cc_method_vars)
+
+    do lvl = af_min_lvl, af_max_lvl
+       deallocate(tree%lvls(lvl)%ids)
+       deallocate(tree%lvls(lvl)%leaves)
+       deallocate(tree%lvls(lvl)%parents)
+    end do
+
+    tree%highest_lvl = 0
+    tree%highest_id  = 0
+    tree%n_var_cell  = 0
+    tree%n_var_face  = 0
+    tree%ready       = .false.
+  end subroutine af_destroy
 
   !> Create an array for easy lookup of indices
   subroutine create_index_array(nx, periodic, id_array)

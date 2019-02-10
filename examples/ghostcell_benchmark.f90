@@ -13,7 +13,7 @@ program ghostcell_benchmark_Xd
   type(ref_info_t)   :: ref_info
   integer            :: n_args
   integer            :: n_cell, it, n_iterations, max_ref_lvl
-  real(dp)           :: dr, time
+  real(dp)           :: time
   character(len=100) :: arg_string
   integer            :: count_rate, t_start, t_end
 
@@ -51,16 +51,13 @@ program ghostcell_benchmark_Xd
   print *, "Max refinement lvl: ", max_ref_lvl
   print *, "Num iterations:     ", n_iterations
 
-  dr = 1.0_dp / n_cell
-
   call af_add_cc_variable(tree, "phi", ix=i_phi)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
-       n_cell, &       ! A box contains box_size**DIM cells
-       dr)             ! Distance between cells on base level
-
-  call af_set_coarse_grid(tree, [DTIMES(n_cell)])
+       n_cell, &       ! A box contains n_cell**DIM cells
+       [DTIMES(1.0_dp)], &
+       [DTIMES(n_cell)])
 
   call system_clock(t_start, count_rate)
   do

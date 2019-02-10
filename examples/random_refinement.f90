@@ -10,6 +10,7 @@ program random_refinement_Xd
 
   type(af_t)         :: tree
   integer            :: grid_size(NDIM)
+  real(dp)           :: domain_size(NDIM)
   logical            :: periodic(NDIM) = .true.
   integer            :: iter, boxes_used
   integer, parameter :: coord_type     = af_xyz ! af_xyz or af_cyl
@@ -17,7 +18,7 @@ program random_refinement_Xd
   integer, parameter :: box_size   = 8
   integer, parameter :: i_phi      = 1
   type(ref_info_t)   :: ref_info
-  real(dp)           :: dr, sum_phi_t0, sum_phi
+  real(dp)           :: sum_phi_t0, sum_phi
   character(len=40)  :: fname
   integer            :: count_rate,t_start,t_end
 
@@ -27,22 +28,22 @@ program random_refinement_Xd
 
   call af_add_cc_variable(tree, "phi")
 
-  ! The cell spacing at the coarsest grid level
-  dr = 2 * acos(-1.0_dp) / box_size ! 2 * pi / box_size
-
-  ! Initialize tree
-  call af_init(tree, & ! Tree to initialize
-       box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
-       coord=coord_type)
-
   call af_set_cc_methods(tree, 1, af_bc_dirichlet_zero, &
        prolong=af_prolong_linear)
 
-  grid_size(1) = 2* box_size
+  ! Initialize tree
+  grid_size(1) = 2 * box_size
   grid_size(2:) = box_size
+  domain_size(1) = 2 * acos(-1.0_dp)
+  domain_size(2:) = acos(-1.0_dp)
 
-  call af_set_coarse_grid(tree, grid_size, periodic)
+  call af_init(tree, & ! Tree to initialize
+       box_size, &     ! A box contains box_size**DIM cells
+       domain_size, &
+       grid_size, &
+       periodic=periodic, &
+       coord=coord_type)
+
   call af_print_info(tree)
 
   ! Set variables on base by using the helper functions af_loop_box(tree, sub)

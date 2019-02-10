@@ -54,12 +54,9 @@ program poisson_basic
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr)             ! Distance between cells on base level
+       [DTIMES(1.0_dp)], &
+       [DTIMES(box_size)])
   !> [af_init]
-
-  !> [af_set_coarse_grid]
-  call af_set_coarse_grid(tree, [DTIMES(box_size)])
-  !> [af_set_coarse_grid]
 
   call system_clock(t_start, count_rate)
   !> [set_refinement]
@@ -145,7 +142,7 @@ contains
     real(dp)                 :: rr(NDIM), dr2, drhs
 
     nc = box%n_cell
-    dr2 = box%dr**2
+    dr2 = maxval(box%dr)**2
 
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])
@@ -189,20 +186,19 @@ contains
   subroutine set_error(box)
     type(box_t), intent(inout) :: box
     integer                     :: IJK, nc
-    real(dp)                    :: rr(NDIM), dx, gradx
+    real(dp)                    :: rr(NDIM), gradx
 
     nc = box%n_cell
-    dx = box%dr
 
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, i_err) = box%cc(IJK, i_phi) - gauss_value(gs, rr)
 #if NDIM == 2
        gradx = 0.5_dp * (box%cc(i+1, j, i_phi) - &
-            box%cc(i-1, j, i_phi)) / dx
+            box%cc(i-1, j, i_phi)) / box%dr(1)
 #elif NDIM == 3
        gradx = 0.5_dp * (box%cc(i+1, j, k, i_phi) - &
-            box%cc(i-1, j, k, i_phi)) / dx
+            box%cc(i-1, j, k, i_phi)) / box%dr(1)
 #endif
        box%cc(IJK, i_egradx) = gradx - box%cc(IJK, i_gradx)
 

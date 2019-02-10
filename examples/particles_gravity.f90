@@ -22,7 +22,6 @@ program particles_gravity_Xd
   real(dp), parameter :: domain_len      = 1.0_dp
   real(dp), parameter :: mean_density    = 1.0_dp
   real(dp), parameter :: particle_weight = domain_len**NDIM / n_particles
-  real(dp), parameter :: dr              = domain_len / box_size
   real(dp), parameter :: t_end           = 0.1_dp
   real(dp), parameter :: dt_output       = 5e-2_dp
   real(dp)            :: dt              = 1.0e-2_dp
@@ -33,13 +32,13 @@ program particles_gravity_Xd
   integer, allocatable  :: ids(:)
   real(dp), allocatable :: weights(:)
 
-  integer             :: n_output
+  integer            :: n_output
   type(af_t)         :: tree
-  type(mg_t)        :: mg
-  type(ref_info_t)    :: refine_info
-  integer             :: count_rate, wc_start, wc_end
-  character(len=100)  :: fname
-  real(dp)            :: max_vel, time
+  type(mg_t)         :: mg
+  type(ref_info_t)   :: refine_info
+  integer            :: count_rate, wc_start, wc_end
+  character(len=100) :: fname
+  real(dp)           :: max_vel, time
 
   print *, "Running particles_gravity_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
@@ -56,15 +55,15 @@ program particles_gravity_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr=dr)          ! Distance between cells on base level
+       [DTIMES(domain_len)], &
+       [DTIMES(box_size)], &
+       periodic=[DTIMES(.true.)])
 
   mg%i_phi         =  i_phi    ! Solution variable
   mg%i_rhs         =  i_rho    ! Right-hand side variable
   mg%i_tmp         =  i_tmp    ! Variable for temporary space
   mg%sides_bc      => af_bc_neumann_zero ! Not used
   mg%subtract_mean =  .true.
-
-  call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
 
   call mg_init(tree, mg)
 
@@ -212,7 +211,7 @@ contains
     integer                   :: nc
 
     nc           = box%n_cell
-    rho_refine   = particles_per_cell * particle_weight / box%dr**NDIM
+    rho_refine   = particles_per_cell * particle_weight / product(box%dr)
     rho_derefine = rho_refine / (2**NDIM * 4)
 
     where (box%cc(DTIMES(1:nc), i_rho) > rho_refine)
@@ -233,24 +232,24 @@ contains
 
   subroutine compute_forces(box)
     type(box_t), intent(inout) :: box
-    integer                      :: IJK, nc
-    real(dp)                     :: fac
+    integer                    :: IJK, nc
+    real(dp)                   :: fac(NDIM)
 
     nc  = box%n_cell
     fac = -0.5_dp / box%dr
 
     do KJI_DO(1, nc)
 #if NDIM == 2
-       box%cc(i, j, i_f(1)) = fac * &
+       box%cc(i, j, i_f(1)) = fac(1) * &
             (box%cc(i+1, j, i_phi) - box%cc(i-1, j, i_phi))
-       box%cc(i, j, i_f(2)) = fac * &
+       box%cc(i, j, i_f(2)) = fac(2) * &
             (box%cc(i, j+1, i_phi) - box%cc(i, j-1, i_phi))
 #elif NDIM == 3
-       box%cc(i, j, k, i_f(1)) = fac * &
+       box%cc(i, j, k, i_f(1)) = fac(1) * &
             (box%cc(i+1, j, k, i_phi) - box%cc(i-1, j, k, i_phi))
-       box%cc(i, j, k, i_f(2)) = fac * &
+       box%cc(i, j, k, i_f(2)) = fac(2) * &
             (box%cc(i, j+1, k, i_phi) - box%cc(i, j-1, k, i_phi))
-       box%cc(i, j, k, i_f(3)) = fac * &
+       box%cc(i, j, k, i_f(3)) = fac(3) * &
             (box%cc(i, j, k+1, i_phi) - box%cc(i, j, k-1, i_phi))
 #endif
     end do; CLOSE_DO

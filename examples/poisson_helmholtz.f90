@@ -20,7 +20,7 @@ program poisson_helmholtz_Xd
   type(af_t)        :: tree
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg_t)       :: mg
   type(gauss_t)      :: gs
@@ -33,9 +33,6 @@ program poisson_helmholtz_Xd
        reshape([DTIMES(0.25_dp), &
        DTIMES(0.75_dp)], [NDIM,2]))
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
-
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
@@ -44,9 +41,8 @@ program poisson_helmholtz_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr)             ! Distance between cells on base level
-
-  call af_set_coarse_grid(tree, [DTIMES(box_size)])
+       [DTIMES(1.0_dp)], &
+       [DTIMES(box_size)])
 
   do
      call af_loop_box(tree, set_initial_condition)
@@ -60,9 +56,9 @@ program poisson_helmholtz_Xd
   mg%i_rhs    =  i_rhs     ! Right-hand side variable
   mg%i_tmp    =  i_tmp     ! Variable for temporary space
   mg%sides_bc => sides_bc ! Method for boundary conditions
-  mg%box_op   => mg_box_helmh
-  mg%box_gsrb => mg_box_gsrb_helmh
-  mg%box_stencil => mg_box_helmh_stencil
+  mg%box_op   => mg_box_lpl
+  mg%box_gsrb => mg_box_gsrb_lpl
+  mg%box_stencil => mg_box_lpl_stencil
 
   mg%helmholtz_lambda = lambda
   call mg_init(tree, mg)
@@ -100,7 +96,7 @@ contains
     real(dp)                 :: rr(NDIM), dr2, drhs
 
     nc = box%n_cell
-    dr2 = box%dr**2
+    dr2 = maxval(box%dr)**2
 
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])

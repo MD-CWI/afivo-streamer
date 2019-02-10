@@ -11,25 +11,21 @@ program boundary_conditions_Xd
   integer, parameter :: n_iterations = 20
   integer            :: i_phi
 
-  type(af_t)        :: tree
+  type(af_t)         :: tree
   integer            :: iter
-  real(dp)           :: dr
   character(len=100) :: fname
 
   print *, "Running boundary_conditions_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
-
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr)             ! Distance between cells on base level
+       [DTIMES(1.0_dp)], &
+       [DTIMES(box_size)])
 
-  call af_set_coarse_grid(tree, [DTIMES(box_size)])
   call af_print_info(tree)
 
   do iter = 1, n_iterations
