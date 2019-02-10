@@ -441,13 +441,13 @@ contains
        write(*, "(A,A15)") " Type of coordinates:    ", &
             af_coord_names(tree%coord_t)
 #if NDIM == 2
-       write(*, "(A,2E12.4)") " min. coords:        ", tree%r_base
-       write(*, "(A,2E12.4)") " dr at level 1       ", tree%dr_base
+       write(*, "(A,2E10.2)") " min. coords:            ", tree%r_base
+       write(*, "(A,2E10.2)") " dr at level one:        ", tree%dr_base
 #elif NDIM == 3
-       write(*, "(A,3E12.4)") " min. coords:        ", tree%r_base
-       write(*, "(A,3E12.4)") " dr at level 1       ", tree%dr_base
+       write(*, "(A,3E10.2)") " min. coords:            ", tree%r_base
+       write(*, "(A,3E10.2)") " dr at level one:        ", tree%dr_base
 #endif
-       write(*, "(A,E12.4)") " minval(dr):        ", af_min_dr(tree)
+       write(*, "(A,E10.2)") " minval(dr):             ", af_min_dr(tree)
        write(*, "(A)") ""
     end if
   end subroutine af_print_info
