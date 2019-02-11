@@ -15,12 +15,12 @@ program poisson_coarse_solver
   integer :: i_gradx
   integer :: i_egradx
 
-  type(af_t)        :: tree
+  type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: residu(2), anal_err(2)
   character(len=100) :: fname
-  type(mg_t)       :: mg
+  type(mg_t)         :: mg
   type(gauss_t)      :: gs
   integer            :: count_rate,t_start,t_end
 
@@ -37,9 +37,6 @@ program poisson_coarse_solver
        DTIMES(0.6_dp)], [NDIM,2]))
   !> [Gauss_init]
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / maxval(domain_size)
-
   !> [af_init]
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -52,7 +49,7 @@ program poisson_coarse_solver
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(1.0_dp)], &
-       [DTIMES(box_size)])
+       domain_size)
   !> [af_init]
 
   call system_clock(t_start, count_rate)

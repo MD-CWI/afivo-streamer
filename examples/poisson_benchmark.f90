@@ -16,7 +16,7 @@ program poisson_benchmark_Xd
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter, n_args
   integer            :: n_cell, n_iterations, max_ref_lvl
-  real(dp)           :: dr, time, runtime
+  real(dp)           :: time, runtime
   character(len=100) :: arg_string !, fname
   type(mg_t)         :: mg
   integer            :: count_rate,t_start, t_end
@@ -54,8 +54,6 @@ program poisson_benchmark_Xd
   print *, "Box size:           ", n_cell
   print *, "Max refinement lvl: ", max_ref_lvl
   print *, "Run time (s):       ", runtime
-
-  dr = 1.0_dp / n_cell
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)

@@ -9,21 +9,22 @@ program poisson_basic
 
   implicit none
 
-  integer, parameter :: box_size = 8
-  integer, parameter :: n_iterations = 10
-  integer :: i_phi
-  integer :: i_rhs
-  integer :: i_err
-  integer :: i_tmp
-  integer :: i_gradx
-  integer :: i_egradx
-
-  type(af_t)        :: tree
+  integer, parameter :: box_size          = 8
+  integer, parameter :: n_iterations      = 10
+  integer            :: domain_size(NDIM)
+  real(dp)           :: domain_len(NDIM)
+  integer            :: i_phi
+  integer            :: i_rhs
+  integer            :: i_err
+  integer            :: i_tmp
+  integer            :: i_gradx
+  integer            :: i_egradx
+  type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: residu(2), anal_err(2)
   character(len=100) :: fname
-  type(mg_t)       :: mg
+  type(mg_t)         :: mg
   type(gauss_t)      :: gs
   integer            :: count_rate,t_start,t_end
 
@@ -40,9 +41,6 @@ program poisson_basic
        DTIMES(0.75_dp)], [NDIM,2]))
   !> [Gauss_init]
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
-
   !> [af_init]
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -51,11 +49,16 @@ program poisson_basic
   call af_add_cc_variable(tree, "Dx",  ix=i_gradx)
   call af_add_cc_variable(tree, "eDx", ix=i_egradx)
 
+  domain_len(1)   = 3.0_dp
+  domain_len(2:)  = 1.0_dp
+  domain_size(1)  = 3 * box_size
+  domain_size(2:) = box_size
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       [DTIMES(1.0_dp)], &
-       [DTIMES(box_size)])
+       domain_len, &
+       domain_size)
   !> [af_init]
 
   call system_clock(t_start, count_rate)

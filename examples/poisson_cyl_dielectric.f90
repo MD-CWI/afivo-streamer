@@ -19,7 +19,7 @@ program poisson_cyl_dielectric
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg_t)        :: mg
   type(gauss_t)      :: gs
@@ -31,9 +31,6 @@ program poisson_cyl_dielectric
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp], [0.1_dp], &
        reshape([0.0_dp, 0.25_dp], [2,1]))
-
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
