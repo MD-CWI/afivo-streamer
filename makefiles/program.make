@@ -15,12 +15,15 @@ INCDIRS := $(TARGET_DIR) $(MAIN_DIR)/lib_$(NDIM)d $(AFIVO_DIR)/lib_$(NDIM)d
 LIBS := streamer afivo silo HYPRE
 PROG := streamer
 
-.PHONY: all clean always_recompile
+.PHONY: all clean allclean always_recompile
 
 all: $(PROG)
 
 clean:
 	$(RM) *.o *.mod $(PROG)
+
+allclean: clean
+	$(MAKE) -C $(MAIN_DIR)/lib_$(NDIM)d clean
 
 vpath %.f90 $(MAIN_DIR)/src
 
