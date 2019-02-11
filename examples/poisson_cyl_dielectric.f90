@@ -44,10 +44,10 @@ program poisson_cyl_dielectric
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
+       [1.0_dp, 1.0_dp], &
+       [box_size, box_size], &
        coord=af_cyl)   ! Cylindrical coordinates
 
-  call af_set_coarse_grid(tree, [box_size, box_size])
   call af_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -128,14 +128,15 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
     integer                  :: i, j, nc
-    real(dp)                 :: crv
+    real(dp)                 :: crv, dr2
 
     nc = box%n_cell
+    dr2 = maxval(box%dr)**2
 
     ! Compute the "curvature" in phi
     do j = 1, nc
        do i = 1, nc
-          crv = box%dr**2 * abs(box%cc(i, j, i_rhs)) / box%cc(i, j, i_eps)
+          crv = dr2 * abs(box%cc(i, j, i_rhs)) / box%cc(i, j, i_eps)
 
           ! And refine if it exceeds a threshold
           if (crv > 1.0e-3_dp) then
@@ -151,11 +152,10 @@ contains
   subroutine set_init_cond(box)
     type(box_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: rz(2), grad(2), dr, qbnd, tmp
+    real(dp)                    :: rz(2), grad(2), qbnd, tmp
 
     nc                  = box%n_cell
     box%cc(:, :, i_phi) = 0
-    dr                  = box%dr
 
     do j = 0, nc+1
        do i = 0, nc+1
@@ -182,7 +182,7 @@ contains
           ! Determine amount of charge
           call gauss_gradient(gs, rz, grad)
           qbnd = (box%cc(i+1, j, i_eps) - box%cc(i, j, i_eps)) * &
-               grad(1) / dr
+               grad(1) / box%dr(1)
 
           ! Place surface charge weighted with eps
           tmp = box%cc(i+1, j, i_eps) / &
@@ -200,7 +200,7 @@ contains
           ! Determine amount of charge
           call gauss_gradient(gs, rz, grad)
           qbnd = (box%cc(i, j+1, i_eps) - box%cc(i, j, i_eps)) * &
-               grad(2) / dr
+               grad(2) / box%dr(2)
 
           ! Place surface charge weighted with eps
           tmp = box%cc(i, j+1, i_eps) / &

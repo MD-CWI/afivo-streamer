@@ -12,7 +12,6 @@ program particles_to_grid_Xd
   integer, parameter    :: n_particles = 100*1000
   real(dp), parameter   :: domain_len  = 1.0_dp
   real(dp), parameter   :: r_min(NDIM) = -0.5_dp * domain_len
-  real(dp), parameter   :: dr          = domain_len / box_size
   real(dp), allocatable :: coordinates(:, :), weights(:)
 
   type(af_t)      :: tree
@@ -29,10 +28,9 @@ program particles_to_grid_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr=dr, &        ! Distance between cells on base level
+       [DTIMES(domain_len)], &
+       [DTIMES(box_size)], &
        r_min=r_min)
-
-  call af_set_coarse_grid(tree, [DTIMES(box_size)])
 
   call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp)
 

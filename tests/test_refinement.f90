@@ -14,11 +14,8 @@ program test_init
   call af_add_fc_variable(tree, "flux")
 
   ! Call init with most options set
-  call af_init(tree, n_cell=8, &
-       dr = 1.0_dp, r_min=[DTIMES(0.0_dp)], &
-       n_boxes=1000, coord=af_xyz, mem_limit_gb=1.0_dp)
-
-  call af_set_coarse_grid(tree, [DTIMES(8)], [DTIMES(.true.)])
+  call af_init(tree, 8, [DTIMES(8.0_dp)], [DTIMES(8)], &
+       periodic=[DTIMES(.true.)])
 
   n_lvl = 4
 

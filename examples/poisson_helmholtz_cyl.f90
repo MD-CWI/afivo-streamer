@@ -20,7 +20,7 @@ program helmholtz_cyl
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg_t)        :: mg
   type(gauss_t)      :: gs
@@ -31,10 +31,7 @@ program helmholtz_cyl
 
   ! The manufactured solution exists of two Gaussians, which are stored in gs
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.01_dp, 0.04_dp], &
-       reshape([0.0_dp, 0.25_dp, 0.1_dp, 0.75_dp], [2,2]))
-
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
+       reshape([0.0_dp, 0.25_dp, 0.0_dp, 0.75_dp], [2,2]))
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -44,10 +41,10 @@ program helmholtz_cyl
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
+       [1.0_dp, 1.0_dp], &
+       [box_size, box_size], &
        coord=af_cyl)   ! Cylindrical coordinates
 
-  call af_set_coarse_grid(tree, [box_size, box_size])
   call af_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -75,10 +72,10 @@ program helmholtz_cyl
   mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
 
   ! Automatically detect the right methods
-  mg%box_op       => mg_box_chelmh
-  mg%box_gsrb     => mg_box_gsrb_chelmh
+  mg%box_op       => mg_box_clpl
+  mg%box_gsrb     => mg_box_gsrb_clpl
   mg%box_corr     => mg_auto_corr
-  mg%box_stencil  => mg_box_chelmh_stencil
+  mg%box_stencil  => mg_box_clpl_stencil
 
   mg%helmholtz_lambda = lambda
 
@@ -129,14 +126,15 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
     integer                  :: i, j, nc
-    real(dp)                 :: crv
+    real(dp)                 :: crv, dr2
 
     nc = box%n_cell
+    dr2 = maxval(box%dr)**2
 
     ! Compute the "curvature" in phi
     do j = 1, nc
        do i = 1, nc
-          crv = box%dr**2 * abs(box%cc(i, j, i_rhs))
+          crv = dr2 * abs(box%cc(i, j, i_rhs))
 
           ! And refine if it exceeds a threshold
           if (crv > 5.0e-4_dp) then

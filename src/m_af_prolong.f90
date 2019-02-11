@@ -331,13 +331,13 @@ contains
 
           if (box_p%coord_t == af_cyl) then
              ! Ensure densities stay positive
-             tmp = abs(0.5_dp * f0 / (1 + 0.25_dp * box_p%dr / &
+             tmp = abs(0.5_dp * f0 / (1 + 0.25_dp * box_p%dr(1) / &
                   af_cyl_radius_cc(box_p, i_c)))
              if (abs(fx) > tmp) fx = sign(tmp, fx)
              if (abs(fy) > tmp) fy = sign(tmp, fy)
 
              ! Correction for cylindrical coordinates
-             f0 = f0 - 0.25_dp * box_p%dr * fx / &
+             f0 = f0 - 0.25_dp * box_p%dr(1) * fx / &
                   af_cyl_radius_cc(box_p, i_c)
           else
              ! Ensure densities stay positive
@@ -466,7 +466,7 @@ contains
 
           if (box_p%coord_t == af_cyl) then
              ! Conservative prolongation for cylindrical coords
-             f0 = f0 - 0.25_dp * box_p%dr * fx / &
+             f0 = f0 - 0.25_dp * box_p%dr(1) * fx / &
                   af_cyl_radius_cc(box_p, i_c)
           end if
 

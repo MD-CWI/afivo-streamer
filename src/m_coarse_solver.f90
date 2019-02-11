@@ -13,6 +13,7 @@ module m_coarse_solver
 
   ! Solver types
   integer, parameter :: hypre_smg = 1
+  integer, parameter :: hypre_pfmg = 2
 
     ! Size of the stencil (only direct neighbors)
   integer, parameter :: max_stencil_size = 2*NDIM + 1
@@ -132,7 +133,7 @@ contains
 
     call HYPRE_StructMatrixAssemble(mg%csolver%matrix, ierr)
 
-    mg%csolver%solver_type = hypre_smg
+    mg%csolver%solver_type = hypre_pfmg
 
     call hypre_prepare_solve(mg%csolver)
 
@@ -146,7 +147,15 @@ contains
     call HYPRE_StructMatrixDestroy(cs%matrix, ierr)
     call HYPRE_StructVectorDestroy(cs%rhs, ierr)
     call HYPRE_StructVectorDestroy(cs%phi, ierr)
-    call HYPRE_StructSMGDestroy(cs%solver, ierr)
+
+    select case (cs%solver_type)
+    case (hypre_smg)
+       call HYPRE_StructSMGDestroy(cs%solver, ierr)
+    case (hypre_pfmg)
+       call HYPRE_StructSMGDestroy(cs%solver, ierr)
+    case default
+       error stop "hypre_solver_destroy: unknown solver type"
+    end select
   end subroutine coarse_solver_destroy
 
   subroutine hypre_create_grid(grid, nx, periodic)
@@ -315,6 +324,13 @@ contains
        call HYPRE_StructSMGSetNumPreRelax(cs%solver, cs%n_cycle_down, ierr)
        call HYPRE_StructSMGSetNumPostRelax(cs%solver, cs%n_cycle_up, ierr)
        call HYPRE_StructSMGSetup(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+    case (hypre_pfmg)
+       call HYPRE_StructPFMGCreate(MPI_COMM_WORLD, cs%solver, ierr)
+       call HYPRE_StructPFMGSetMaxIter(cs%solver, cs%max_iterations, ierr)
+       call HYPRE_StructPFMGSetTol(cs%solver, cs%tolerance, ierr)
+       call HYPRE_StructPFMGSetNumPreRelax(cs%solver, cs%n_cycle_down, ierr)
+       call HYPRE_StructPFMGSetNumPostRelax(cs%solver, cs%n_cycle_up, ierr)
+       call HYPRE_StructPFMGSetup(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
     case default
        error stop "hypre_prepare_solve: unknown solver type"
     end select
@@ -328,8 +344,10 @@ contains
     select case (cs%solver_type)
     case (hypre_smg)
        call HYPRE_StructSMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+    case (hypre_pfmg)
+       call HYPRE_StructPFMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
     case default
-       error stop "coarse_grid_solve: unknown solver type"
+       error stop "coarse_solver: unknown solver type"
     end select
   end subroutine coarse_solver
 

@@ -15,7 +15,6 @@ program implicit_diffusion_Xd
   integer            :: i_err
 
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
-  real(dp), parameter :: dr = domain_len / box_size
   real(dp), parameter :: diffusion_coeff = 1.0_dp
 #if NDIM == 2
   real(dp), parameter :: solution_modes(NDIM) = [1, 1]
@@ -40,9 +39,12 @@ program implicit_diffusion_Xd
   call af_add_cc_variable(tree, "err", ix=i_err)
 
   ! Initialize tree
-  call af_init(tree, box_size, dr=dr)
+  call af_init(tree, & ! Tree to initialize
+       box_size, &     ! A box contains box_size**DIM cells
+       [DTIMES(domain_len)], &
+       [DTIMES(box_size)], &
+       periodic=[DTIMES(.true.)])
 
-  call af_set_coarse_grid(tree, [DTIMES(box_size)], [DTIMES(.true.)])
   call af_print_info(tree)
 
   ! Set up the initial conditions
@@ -80,9 +82,10 @@ program implicit_diffusion_Xd
 
   ! The methods defined below implement a backward Euler method for the heat
   ! equation, by changing the elliptic operator for the multigrid procedure.
-  mg%box_op   => box_op_diff
-  mg%box_gsrb => box_gsrb_diff
-  mg%box_stencil => box_op_stencil
+  mg%box_op   => mg_box_lpl
+  mg%box_gsrb => mg_box_gsrb_lpl
+  mg%box_stencil => mg_box_lpl_stencil
+  mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
 
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
@@ -130,7 +133,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(DTIMES(box%n_cell))
 
-    if (box%dr > 2e-2_dp * domain_len) then
+    if (maxval(box%dr) > 2e-2_dp * domain_len) then
        cell_flags = af_do_ref
     else
        cell_flags = af_keep_ref
@@ -181,96 +184,8 @@ contains
     integer                     :: nc
 
     nc = box%n_cell
-    box%cc(DTIMES(1:nc), i_rhs) = box%cc(DTIMES(1:nc), i_phi)
+    box%cc(DTIMES(1:nc), i_rhs) = -1/(dt * diffusion_coeff) * &
+         box%cc(DTIMES(1:nc), i_phi)
   end subroutine set_rhs
-
-  ! Compute L * phi, where L corresponds to (D * dt * nabla^2 - 1)
-  subroutine box_op_diff(box, i_out, mg)
-    type(box_t), intent(inout) :: box    !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg
-    integer                     :: IJK, nc, i_phi
-    real(dp)                    :: tmp
-
-    nc    = box%n_cell
-    tmp   = diffusion_coeff * dt / box%dr**2
-    i_phi = mg%i_phi
-
-    do KJI_DO(1,nc)
-#if NDIM == 2
-       box%cc(i, j, i_out) = tmp * ((4 + 1/tmp) * &
-            box%cc(i, j, i_phi) &
-            - box%cc(i-1, j, i_phi) &
-            - box%cc(i+1, j, i_phi) &
-            - box%cc(i, j-1, i_phi) &
-            - box%cc(i, j+1, i_phi))
-#elif NDIM == 3
-       box%cc(i, j, k, i_out) = tmp * ((6 + 1/tmp) * &
-            box%cc(i, j, k, i_phi) &
-            - box%cc(i-1, j, k, i_phi) &
-            - box%cc(i+1, j, k, i_phi) &
-            - box%cc(i, j-1, k, i_phi) &
-            - box%cc(i, j+1, k, i_phi) &
-            - box%cc(i, j, k-1, i_phi) &
-            - box%cc(i, j, k+1, i_phi))
-#endif
-    end do; CLOSE_DO
-  end subroutine box_op_diff
-
-  subroutine box_op_stencil(box, mg, stencil, bc_to_rhs)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    real(dp)                :: tmp
-
-    tmp = diffusion_coeff * dt / box%dr**2
-
-    stencil(1, DTIMES(:)) = tmp * (2.0_dp * NDIM + 1/tmp)
-    stencil(2:, DTIMES(:)) = -tmp
-
-    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-  end subroutine box_op_stencil
-
-  ! Locally solve L * phi = rhs, where L corresponds to (D * dt * nabla^2 - 1)
-  subroutine box_gsrb_diff(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box            !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg
-    integer                     :: IJK, i0, nc, i_phi, i_rhs
-    real(dp)                    :: tmp
-
-    tmp   = diffusion_coeff * dt / box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-#if NDIM == 2
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 1 / (4 + 1/tmp) * ( &
-               box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) + &
-               1/tmp * box%cc(i, j, i_rhs))
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-          do i = i0, nc, 2
-             box%cc(i, j, k, i_phi) = 1 / (6 + 1/tmp) * ( &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) + &
-                  1/tmp * box%cc(i, j, k, i_rhs))
-          end do
-       end do
-    end do
-#endif
-  end subroutine box_gsrb_diff
 
 end program implicit_diffusion_Xd

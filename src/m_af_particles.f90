@@ -169,11 +169,11 @@ contains
 #if NDIM == 2
           tree%boxes(ids(n))%cc(ix(1), ix(2), iv) = &
                tree%boxes(ids(n))%cc(ix(1), ix(2), iv) + &
-               weights(n) / tree%boxes(ids(n))%dr**NDIM
+               weights(n) / product(tree%boxes(ids(n))%dr)
 #elif NDIM == 3
           tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) = &
                tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) + &
-               weights(n) / tree%boxes(ids(n))%dr**NDIM
+               weights(n) / product(tree%boxes(ids(n))%dr)
 #endif
        else
 #if NDIM == 2
@@ -203,7 +203,7 @@ contains
     integer, intent(in)        :: ids(n_particles)
     integer, intent(in)        :: threads(n_particles)
     logical, intent(in)        :: density
-    real(dp)                   :: tmp(NDIM), inv_dr
+    real(dp)                   :: tmp(NDIM), inv_dr(NDIM)
     real(dp)                   :: wu(NDIM), wl(NDIM), w(DTIMES(2))
     integer                    :: id, ix(NDIM), n, thread_id
 
@@ -235,11 +235,11 @@ contains
 #if NDIM == 2
           tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
                tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
-               w * weights(n) / tree%boxes(id)%dr**NDIM
+               w * weights(n) / product(tree%boxes(id)%dr)
 #elif NDIM == 3
           tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) = &
                tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) + &
-               w * weights(n) / tree%boxes(id)%dr**NDIM
+               w * weights(n) / product(tree%boxes(id)%dr)
 #endif
        else
 #if NDIM == 2

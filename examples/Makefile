@@ -5,7 +5,7 @@ OUTDIR	:= output
 
 include $(AF_DIR)/src/makerules.make
 
-.PHONY: all clean run
+.PHONY: all clean run run_2d run_3d
 
 PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
  computational_domain boundary_conditions poisson_neumann particles_to_grid	\
@@ -29,6 +29,15 @@ run:
 		./$$prog || { echo "$$prog failed" ; exit 1; };\
 	done
 
+run_2d:
+	for prog in $(PROGS_2D); do\
+		./$$prog || { echo "$$prog failed" ; exit 1; };\
+	done
+
+run_3d:
+	for prog in $(PROGS_3D); do\
+		./$$prog || { echo "$$prog failed" ; exit 1; };\
+	done
 
 $(OUTDIR):
 	mkdir -p $@

@@ -26,16 +26,13 @@ program poisson_cyl_analytic
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
-  real(dp)           :: dr, residu(2), anal_err(2), max_val
+  real(dp)           :: residu(2), anal_err(2), max_val
   character(len=100) :: fname
   type(mg_t)        :: mg
   integer            :: count_rate,t_start, t_end
 
   print *, "Running poisson_cyl_analytic"
   print *, "Number of threads", af_get_max_threads()
-
-  ! The cell spacing at the coarsest grid level
-  dr = 1.25e-2_dp / box_size
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -46,10 +43,10 @@ program poisson_cyl_analytic
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
+       [1.25e-2_dp, 1.25e-2_dp], &
+       [box_size, box_size], &
        coord=af_cyl)   ! Cylindrical coordinates
 
-  call af_set_coarse_grid(tree, [box_size, box_size])
   call af_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -132,14 +129,15 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(box%n_cell, box%n_cell)
     integer                  :: i, j, nc
-    real(dp)                 :: crv
+    real(dp)                 :: crv, dr2
 
     nc = box%n_cell
+    dr2 = maxval(box%dr)**2
 
     ! Compute the "curvature" in phi
     do j = 1, nc
        do i = 1, nc
-          crv = box%dr**2 * abs(box%cc(i, j, i_rhs))
+          crv = dr2 * abs(box%cc(i, j, i_rhs))
 
           ! And refine if it exceeds a threshold
           if (crv > 1e-1_dp .and. box%lvl < 10) then

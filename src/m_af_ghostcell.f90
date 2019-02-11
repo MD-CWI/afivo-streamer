@@ -355,7 +355,7 @@ contains
        c1 = -1
        c2 = 0
     case (af_bc_neumann)
-       c0 = box%dr * af_neighb_high_pm(nb) ! This gives a + or - sign
+       c0 = box%dr(af_neighb_dim(nb)) * af_neighb_high_pm(nb) ! This gives a + or - sign
        c1 = 1
        c2 = 0
     case (af_bc_continuous)

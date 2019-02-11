@@ -22,7 +22,7 @@ program dielectric_test
   type(af_t)        :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
-  real(dp)           :: dr, residu(2)
+  real(dp)           :: residu(2)
   character(len=100) :: fname
   type(mg_t)        :: mg
   integer            :: count_rate, t_start, t_end
@@ -33,9 +33,6 @@ program dielectric_test
   print *, "****************************************"
   print *, "Number of threads", af_get_max_threads()
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
-
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
@@ -44,9 +41,9 @@ program dielectric_test
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr)             ! Distance between cells on base level
+       [DTIMES(1.0_dp)], &
+       [DTIMES(box_size)])
 
-  call af_set_coarse_grid(tree, [DTIMES(box_size)])
   call af_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -145,7 +142,6 @@ contains
     real(dp)                     :: ellips_fac(NDIM)
 
     nc = box%n_cell
-    dr = box%dr
 
     ! Create ellipsoidal shape
     ellips_fac(2:) = 3.0_dp

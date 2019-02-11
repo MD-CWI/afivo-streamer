@@ -13,9 +13,7 @@ program test_init
   integer          :: i, n_lvl
 
   call af_add_cc_variable(tree, "phi")
-  call af_init(tree, n_cell=8, dr = 1.0_dp)
-
-  call af_set_coarse_grid(tree, [DTIMES(8)])
+  call af_init(tree, 8, [DTIMES(8.0_dp)], [DTIMES(8)])
 
   n_lvl = 4
 
