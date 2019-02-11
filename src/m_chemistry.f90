@@ -45,6 +45,9 @@ module m_chemistry
   !> Indicates a reaction of the form c1 * exp(-(c2/(c3 + Td))**2)
   integer, parameter :: rate_analytic_exp_v1 = 4
 
+  !> Indicates a reaction of the form c1 * exp(-(Td/c2)**2)
+  integer, parameter :: rate_analytic_exp_v2 = 5
+
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
 
@@ -245,6 +248,8 @@ contains
           rates(:, n) = c0 * c(1) * (fields - c(2))
        case (rate_analytic_exp_v1)
           rates(:, n) = c0 * c(1) * exp(-(c(2) / (c(3) + fields))**2)
+       case (rate_analytic_exp_v2)
+          rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
        end select
     end do
   end subroutine get_rates
@@ -329,6 +334,9 @@ contains
        case ("exp_v1")
           new_reaction%rate_type = rate_analytic_exp_v1
           read(data_value, *) new_reaction%rate_data(1:3)
+       case ("exp_v2")
+          new_reaction%rate_type = rate_analytic_exp_v2
+          read(data_value, *) new_reaction%rate_data(1:2)
        case default
           print *, "Unknown rate type: ", trim(how_to_get)
           print *, "For reaction:      ", trim(reaction)
