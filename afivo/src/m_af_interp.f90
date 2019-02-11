@@ -119,7 +119,7 @@ contains
 
     !> @todo Support cylindrical coordinates
     if (to_density) then
-       actual_amount = amount / tree%boxes(id)%dr**NDIM
+       actual_amount = amount / product(tree%boxes(id)%dr)
     else
        actual_amount = amount
     end if

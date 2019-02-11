@@ -61,7 +61,7 @@ contains
     if (.not. tree%ready) stop "af_loop_box: set_base has not been called"
 
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -94,7 +94,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -126,7 +126,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -159,7 +159,7 @@ contains
     leaves = .false.; if (present(leaves_only)) leaves = leaves_only
 
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        if (leaves) then
           !$omp do
           do i = 1, size(tree%lvls(lvl)%leaves)
@@ -305,7 +305,7 @@ contains
     integer                    :: lvl, i, id
 
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -333,7 +333,7 @@ contains
     integer                    :: lvl, i, id
 
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -403,7 +403,7 @@ contains
     if (present(eps)) use_eps = eps
 
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -439,7 +439,7 @@ contains
          error stop "af_times_cc: invalid array size"
 
     !$omp parallel private(lvl, i, id, n)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
@@ -518,7 +518,7 @@ contains
     integer, intent(in)       :: iv_from, iv_to
     integer                   :: lvl
 
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        call af_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine af_tree_copy_cc
@@ -550,7 +550,7 @@ contains
     my_val  = init_val
 
     !$omp parallel private(lvl, i, id, tmp) firstprivate(my_val)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -599,7 +599,7 @@ contains
     my_val  = init_val
 
     !$omp parallel private(lvl, i, id, tmp) firstprivate(my_val)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -653,7 +653,7 @@ contains
 
     !$omp parallel private(lvl, i, id, tmp, tmp_ix, new_val) &
     !$omp firstprivate(my_val, my_loc)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -899,8 +899,8 @@ contains
     my_sum = 0
 
     !$omp parallel reduction(+: my_sum) private(lvl, i, id, nc, tmp, fac)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
-       fac = af_lvl_dr(tree, lvl)**NDIM
+    do lvl = 1, tree%highest_lvl
+       fac = product(af_lvl_dr(tree, lvl))
 
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
@@ -982,7 +982,7 @@ contains
     integer                   :: lvl
 
     if (.not. tree%ready) stop "Tree not ready"
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        call af_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine af_tree_copy_fc

@@ -10,7 +10,6 @@ program poisson_helmholtz_Xd
   implicit none
 
   integer, parameter  :: box_size     = 8
-  integer, parameter  :: n_boxes_base = 1
   integer, parameter  :: n_iterations = 10
   integer             :: i_phi
   integer             :: i_rhs
@@ -21,8 +20,7 @@ program poisson_helmholtz_Xd
   type(af_t)        :: tree
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
-  integer            :: ix_list(NDIM, n_boxes_base)
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: residu(2), anal_err(2)
   character(len=100) :: fname
   type(mg_t)       :: mg
   type(gauss_t)      :: gs
@@ -35,9 +33,6 @@ program poisson_helmholtz_Xd
        reshape([DTIMES(0.25_dp), &
        DTIMES(0.75_dp)], [NDIM,2]))
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
-
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
@@ -46,11 +41,8 @@ program poisson_helmholtz_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
-       coarsen_to=2)   ! Add coarsened levels for multigrid
-
-  ix_list(:, 1) = [DTIMES(1)]         ! Set index of box 1
-  call af_set_base(tree, 1, ix_list)
+       [DTIMES(1.0_dp)], &
+       [DTIMES(box_size)])
 
   do
      call af_loop_box(tree, set_initial_condition)
@@ -64,10 +56,12 @@ program poisson_helmholtz_Xd
   mg%i_rhs    =  i_rhs     ! Right-hand side variable
   mg%i_tmp    =  i_tmp     ! Variable for temporary space
   mg%sides_bc => sides_bc ! Method for boundary conditions
-  mg%box_op   => helmholtz_operator
-  mg%box_gsrb => helmholtz_gsrb
+  mg%box_op   => mg_box_lpl
+  mg%box_gsrb => mg_box_gsrb_lpl
+  mg%box_stencil => mg_box_lpl_stencil
 
-  call mg_init_mg(mg)
+  mg%helmholtz_lambda = lambda
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
@@ -102,7 +96,7 @@ contains
     real(dp)                 :: rr(NDIM), dr2, drhs
 
     nc = box%n_cell
-    dr2 = box%dr**2
+    dr2 = maxval(box%dr)**2
 
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])
@@ -150,169 +144,24 @@ contains
     end do; CLOSE_DO
   end subroutine set_error
 
-  ! This routine sets boundary conditions for a box, by filling its ghost cells
-  ! with approriate values.
-  subroutine sides_bc(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)          :: nb      ! Direction for the boundary condition
-    integer, intent(in)          :: iv      ! Index of variable
-    integer, intent(out)         :: bc_type ! Type of boundary condition
-    real(dp)                     :: rr(NDIM)
-#if NDIM == 2
-    integer                      :: n, nc
-#elif NDIM == 3
-    integer                      :: IJK, ix, nc
-    real(dp)                     :: loc
-#endif
-
-    nc = box%n_cell
+  ! This routine sets boundary conditions for a box
+  subroutine sides_bc(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: n
 
     ! We use dirichlet boundary conditions
     bc_type = af_bc_dirichlet
 
     ! Below the solution is specified in the approriate ghost cells
-#if NDIM == 2
-    select case (nb)
-    case (af_neighb_lowx)             ! Lower-x direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [0.5_dp, real(n, dp)])
-          box%cc(0, n, iv) = gauss_value(gs, rr)
-       end do
-    case (af_neighb_highx)             ! Higher-x direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_value(gs, rr)
-       end do
-    case (af_neighb_lowy)             ! Lower-y direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_value(gs, rr)
-       end do
-    case (af_neighb_highy)             ! Higher-y direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_value(gs, rr)
-       end do
-    end select
-#elif NDIM == 3
-    ! Determine whether the direction nb is to "lower" or "higher" neighbors
-    if (af_neighb_low(nb)) then
-       ix = 0
-       loc = 0.5_dp
-    else
-       ix = nc+1
-       loc = nc + 0.5_dp
-    end if
-
-    ! Below the solution is specified in the approriate ghost cells
-    select case (af_neighb_dim(nb))
-    case (1)
-       do k = 1, nc
-          do j = 1, nc
-             rr = af_rr_cc(box, [loc, real(j, dp), real(k, dp)])
-             box%cc(ix, j, k, iv) = gauss_value(gs, rr)
-          end do
-       end do
-    case (2)
-       do k = 1, nc
-          do i = 1, nc
-             rr = af_rr_cc(box, [real(i, dp), loc, real(k, dp)])
-             box%cc(i, ix, k, iv) = gauss_value(gs, rr)
-          end do
-       end do
-    case (3)
-       do j = 1, nc
-          do i = 1, nc
-             rr = af_rr_cc(box, [real(i, dp), real(j, dp), loc])
-             box%cc(i, j, ix, iv) = gauss_value(gs, rr)
-          end do
-       end do
-    end select
-#endif
+    do n = 1, box%n_cell**(NDIM-1)
+       bc_val(n) = gauss_value(gs, coords(:, n))
+    end do
   end subroutine sides_bc
-
-  !> Perform Helmholtz operator on a box
-  subroutine helmholtz_operator(box, i_out, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, j, nc, i_phi
-    real(dp)                    :: inv_dr_sq
-#if NDIM == 3
-    integer                     :: k
-#endif
-
-    nc = box%n_cell
-    inv_dr_sq = 1 / box%dr**2
-    i_phi = mg%i_phi
-
-#if NDIM == 2
-    do j = 1, nc
-       do i = 1, nc
-          box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
-               box%cc(i+1, j, i_phi) + box%cc(i, j-1, i_phi) + &
-               box%cc(i, j+1, i_phi) - 4 * box%cc(i, j, i_phi)) - &
-               lambda * box%cc(i, j, i_phi)
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             box%cc(i, j, k, i_out) = inv_dr_sq * (box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j, k-1, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) - 6 * box%cc(i, j, k, i_phi)) - &
-                  lambda * box%cc(i, j, k, i_phi)
-          end do
-       end do
-    end do
-#endif
-  end subroutine helmholtz_operator
-
-  !> Perform Gauss-Seidel relaxation on box for a Helmholtz operator
-  subroutine helmholtz_gsrb(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, i0, j, nc, i_phi, i_rhs
-    real(dp)                    :: dx2
-#if NDIM == 3
-    integer                     :: k
-#endif
-
-    dx2   = box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-#if NDIM == 2
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 1/(4 + lambda * dx2) * ( &
-               box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
-               dx2 * box%cc(i, j, i_rhs))
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-          do i = i0, nc, 2
-             box%cc(i, j, k, i_phi) = 1/(6 + lambda * dx2) * ( &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &
-                  dx2 * box%cc(i, j, k, i_rhs))
-          end do
-       end do
-    end do
-#endif
-  end subroutine helmholtz_gsrb
 
 end program poisson_helmholtz_Xd
 

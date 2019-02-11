@@ -8,7 +8,6 @@ program poisson_benchmark_Xd
 
   implicit none
 
-  integer, parameter :: n_boxes_base = 1
   integer            :: i_phi
   integer            :: i_rhs
   integer            :: i_tmp
@@ -17,8 +16,7 @@ program poisson_benchmark_Xd
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter, n_args
   integer            :: n_cell, n_iterations, max_ref_lvl
-  integer            :: ix_list(NDIM, n_boxes_base)
-  real(dp)           :: dr, time, runtime
+  real(dp)           :: time, runtime
   character(len=100) :: arg_string !, fname
   type(mg_t)         :: mg
   integer            :: count_rate,t_start, t_end
@@ -57,8 +55,6 @@ program poisson_benchmark_Xd
   print *, "Max refinement lvl: ", max_ref_lvl
   print *, "Run time (s):       ", runtime
 
-  dr = 1.0_dp / n_cell
-
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
@@ -66,15 +62,8 @@ program poisson_benchmark_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        n_cell, &       ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
-       coarsen_to=2)   ! Add coarsened levels for multigrid
-
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [DTIMES(1)]       ! Set index of box 1
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
+       [DTIMES(1.0_dp)], &
+       [DTIMES(n_cell)])
 
   call system_clock(t_start, count_rate)
   do
@@ -107,7 +96,7 @@ program poisson_benchmark_Xd
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
   ! and i_tmp. These variables will be initialized at the first call of mg_fas_fmg
-  call mg_init_mg(mg)
+  call mg_init(tree, mg)
 
   ! Warm-up call
   call mg_fas_fmg(tree, mg, .false., .false.)

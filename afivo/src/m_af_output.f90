@@ -82,9 +82,7 @@ contains
     write(my_unit) tree%cc_names(:)
     write(my_unit) tree%fc_names(:)
 
-    write(my_unit) tree%lowest_lvl ! Will become 1 in future
-
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
       write(my_unit) size(tree%lvls(lvl)%ids)
       write(my_unit) tree%lvls(lvl)%ids
 
@@ -143,7 +141,7 @@ contains
 
     read(my_unit) lvl
 
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
       read(my_unit) n
       allocate(tree%lvls(lvl)%ids(n))
       read(my_unit) tree%lvls(lvl)%ids
@@ -419,6 +417,7 @@ contains
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "af_write_vtk: wrong indices given (ixs_cc)"
+       allocate(icc_val(size(ixs_cc)))
        icc_val = ixs_cc
     else
        call get_output_vars(tree, icc_val)
@@ -605,6 +604,7 @@ contains
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
             minval(ixs_cc) < 1) stop "af_write_silo: wrong indices given (ixs_cc)"
+       allocate(icc_val(size(ixs_cc)))
        icc_val = ixs_cc
     else
        call get_output_vars(tree, icc_val)

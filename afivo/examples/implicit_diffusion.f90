@@ -15,7 +15,6 @@ program implicit_diffusion_Xd
   integer            :: i_err
 
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
-  real(dp), parameter :: dr = domain_len / box_size
   real(dp), parameter :: diffusion_coeff = 1.0_dp
 #if NDIM == 2
   real(dp), parameter :: solution_modes(NDIM) = [1, 1]
@@ -24,13 +23,11 @@ program implicit_diffusion_Xd
 #endif
 
   type(af_t)         :: tree
-  type(mg_t)        :: mg
+  type(mg_t)         :: mg
   type(ref_info_t)   :: refine_info
-  integer            :: id
-  integer            :: ix_list(NDIM, 1)
-  integer            :: nb_list(af_num_neighbors, 1)
   integer            :: time_steps, output_cnt
-  real(dp)           :: dt, time, end_time
+  real(dp)           :: time, end_time
+  real(dp), parameter :: dt = 0.1_dp
   character(len=100) :: fname
 
   print *, "Running implicit_diffusion_" // DIMNAME // ""
@@ -42,15 +39,12 @@ program implicit_diffusion_Xd
   call af_add_cc_variable(tree, "err", ix=i_err)
 
   ! Initialize tree
-  call af_init(tree, box_size, dr=dr)
+  call af_init(tree, & ! Tree to initialize
+       box_size, &     ! A box contains box_size**DIM cells
+       [DTIMES(domain_len)], &
+       [DTIMES(box_size)], &
+       periodic=[DTIMES(.true.)])
 
-  ! Set up geometry
-  id             = 1
-  ix_list(:, id) = [DTIMES(1)] ! Set index of box
-  nb_list(:, id) = 1           ! Periodic domain
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list, nb_list)
   call af_print_info(tree)
 
   ! Set up the initial conditions
@@ -88,20 +82,21 @@ program implicit_diffusion_Xd
 
   ! The methods defined below implement a backward Euler method for the heat
   ! equation, by changing the elliptic operator for the multigrid procedure.
-  mg%box_op   => box_op_diff
-  mg%box_gsrb => box_gsrb_diff
+  mg%box_op   => mg_box_lpl
+  mg%box_gsrb => mg_box_gsrb_lpl
+  mg%box_stencil => mg_box_lpl_stencil
+  mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
 
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
   ! first call of mg_fas_fmg
-  call mg_init_mg(mg)
+  call mg_init(tree, mg)
 
   output_cnt = 0
   time       = 0
   end_time   = 2.0_dp
   time_steps = 0
   time       = 0
-  dt         = 0.1_dp
 
   ! Starting simulation
   do
@@ -115,7 +110,7 @@ program implicit_diffusion_Xd
 
      ! Write the cell centered data of tree to a vtk unstructured file fname.
      ! Only the leaves of the tree are used
-     call af_write_vtk(tree, trim(fname), output_cnt, time, dir="output")
+     call af_write_silo(tree, trim(fname), output_cnt, time, dir="output")
 
      if (time > end_time) exit
 
@@ -138,7 +133,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)     :: cell_flags(DTIMES(box%n_cell))
 
-    if (box%dr > 2e-2_dp * domain_len) then
+    if (maxval(box%dr) > 2e-2_dp * domain_len) then
        cell_flags = af_do_ref
     else
        cell_flags = af_keep_ref
@@ -189,81 +184,8 @@ contains
     integer                     :: nc
 
     nc = box%n_cell
-    box%cc(DTIMES(1:nc), i_rhs) = box%cc(DTIMES(1:nc), i_phi)
+    box%cc(DTIMES(1:nc), i_rhs) = -1/(dt * diffusion_coeff) * &
+         box%cc(DTIMES(1:nc), i_phi)
   end subroutine set_rhs
-
-  ! Compute L * phi, where L corresponds to (D * dt * nabla^2 - 1)
-  subroutine box_op_diff(box, i_out, mg)
-    type(box_t), intent(inout) :: box    !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg
-    integer                     :: IJK, nc, i_phi
-    real(dp)                    :: tmp
-
-    nc    = box%n_cell
-    tmp   = diffusion_coeff * dt / box%dr**2
-    i_phi = mg%i_phi
-
-    do KJI_DO(1,nc)
-#if NDIM == 2
-       box%cc(i, j, i_out) = tmp * ((4 + 1/tmp) * &
-            box%cc(i, j, i_phi) &
-            - box%cc(i-1, j, i_phi) &
-            - box%cc(i+1, j, i_phi) &
-            - box%cc(i, j-1, i_phi) &
-            - box%cc(i, j+1, i_phi))
-#elif NDIM == 3
-       box%cc(i, j, k, i_out) = tmp * ((6 + 1/tmp) * &
-            box%cc(i, j, k, i_phi) &
-            - box%cc(i-1, j, k, i_phi) &
-            - box%cc(i+1, j, k, i_phi) &
-            - box%cc(i, j-1, k, i_phi) &
-            - box%cc(i, j+1, k, i_phi) &
-            - box%cc(i, j, k-1, i_phi) &
-            - box%cc(i, j, k+1, i_phi))
-#endif
-    end do; CLOSE_DO
-  end subroutine box_op_diff
-
-  ! Locally solve L * phi = rhs, where L corresponds to (D * dt * nabla^2 - 1)
-  subroutine box_gsrb_diff(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box            !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg
-    integer                     :: IJK, i0, nc, i_phi, i_rhs
-    real(dp)                    :: tmp
-
-    tmp   = diffusion_coeff * dt / box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-#if NDIM == 2
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 1 / (4 + 1/tmp) * ( &
-               box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) + &
-               1/tmp * box%cc(i, j, i_rhs))
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-          do i = i0, nc, 2
-             box%cc(i, j, k, i_phi) = 1 / (6 + 1/tmp) * ( &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) + &
-                  1/tmp * box%cc(i, j, k, i_rhs))
-          end do
-       end do
-    end do
-#endif
-  end subroutine box_gsrb_diff
 
 end program implicit_diffusion_Xd

@@ -9,23 +9,22 @@ program poisson_basic
 
   implicit none
 
-  integer, parameter :: box_size = 8
-  integer, parameter :: n_boxes_base = 1
-  integer, parameter :: n_iterations = 10
-  integer :: i_phi
-  integer :: i_rhs
-  integer :: i_err
-  integer :: i_tmp
-  integer :: i_gradx
-  integer :: i_egradx
-
-  type(af_t)        :: tree
+  integer, parameter :: box_size          = 8
+  integer, parameter :: n_iterations      = 10
+  integer            :: domain_size(NDIM)
+  real(dp)           :: domain_len(NDIM)
+  integer            :: i_phi
+  integer            :: i_rhs
+  integer            :: i_err
+  integer            :: i_tmp
+  integer            :: i_gradx
+  integer            :: i_egradx
+  type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
   integer            :: mg_iter
-  integer            :: ix_list(NDIM, n_boxes_base)
-  real(dp)           :: dr, residu(2), anal_err(2)
+  real(dp)           :: residu(2), anal_err(2)
   character(len=100) :: fname
-  type(mg_t)       :: mg
+  type(mg_t)         :: mg
   type(gauss_t)      :: gs
   integer            :: count_rate,t_start,t_end
 
@@ -42,9 +41,6 @@ program poisson_basic
        DTIMES(0.75_dp)], [NDIM,2]))
   !> [Gauss_init]
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
-
   !> [af_init]
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -53,21 +49,17 @@ program poisson_basic
   call af_add_cc_variable(tree, "Dx",  ix=i_gradx)
   call af_add_cc_variable(tree, "eDx", ix=i_egradx)
 
+  domain_len(1)   = 3.0_dp
+  domain_len(2:)  = 1.0_dp
+  domain_size(1)  = 3 * box_size
+  domain_size(2:) = box_size
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
-       coarsen_to=2)   ! Add coarsened levels for multigrid
+       domain_len, &
+       domain_size)
   !> [af_init]
-
-  !> [af_set_base]
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [DTIMES(1)]         ! Set index of box 1
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
-  !> [af_set_base]
 
   call system_clock(t_start, count_rate)
   !> [set_refinement]
@@ -102,7 +94,7 @@ program poisson_basic
   ! This routine does not initialize the multigrid fields boxes%i_phi,
   ! boxes%i_rhs and boxes%i_tmp. These fileds will be initialized at the
   ! first call of mg_fas_fmg
-  call mg_init_mg(mg)
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
@@ -153,7 +145,7 @@ contains
     real(dp)                 :: rr(NDIM), dr2, drhs
 
     nc = box%n_cell
-    dr2 = box%dr**2
+    dr2 = maxval(box%dr)**2
 
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])
@@ -197,20 +189,19 @@ contains
   subroutine set_error(box)
     type(box_t), intent(inout) :: box
     integer                     :: IJK, nc
-    real(dp)                    :: rr(NDIM), dx, gradx
+    real(dp)                    :: rr(NDIM), gradx
 
     nc = box%n_cell
-    dx = box%dr
 
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, i_err) = box%cc(IJK, i_phi) - gauss_value(gs, rr)
 #if NDIM == 2
        gradx = 0.5_dp * (box%cc(i+1, j, i_phi) - &
-            box%cc(i-1, j, i_phi)) / dx
+            box%cc(i-1, j, i_phi)) / box%dr(1)
 #elif NDIM == 3
        gradx = 0.5_dp * (box%cc(i+1, j, k, i_phi) - &
-            box%cc(i-1, j, k, i_phi)) / dx
+            box%cc(i-1, j, k, i_phi)) / box%dr(1)
 #endif
        box%cc(IJK, i_egradx) = gradx - box%cc(IJK, i_gradx)
 
@@ -218,85 +209,23 @@ contains
   end subroutine set_error
   !> [set_error]
 
-  ! This routine sets boundary conditions for a box, by filling its ghost cells
-  ! with approriate values.
-  subroutine sides_bc(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)          :: nb      ! Direction for the boundary condition
-    integer, intent(in)          :: iv      ! Index of variable
-    integer, intent(out)         :: bc_type ! Type of boundary condition
-    real(dp)                     :: rr(NDIM)
-#if NDIM == 2
-    integer                      :: n, nc
-#elif NDIM == 3
-    integer                      :: IJK, ix, nc
-    real(dp)                     :: loc
-#endif
-
-    nc = box%n_cell
+  ! This routine sets boundary conditions for a box
+  subroutine sides_bc(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: n
 
     ! We use dirichlet boundary conditions
     bc_type = af_bc_dirichlet
 
     ! Below the solution is specified in the approriate ghost cells
-#if NDIM == 2
-    select case (nb)
-    case (af_neighb_lowx)             ! Lower-x direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [0.5_dp, real(n, dp)])
-          box%cc(0, n, iv) = gauss_value(gs, rr)
-       end do
-    case (af_neighb_highx)             ! Higher-x direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = gauss_value(gs, rr)
-       end do
-    case (af_neighb_lowy)             ! Lower-y direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = gauss_value(gs, rr)
-       end do
-    case (af_neighb_highy)             ! Higher-y direction
-       do n = 1, nc
-          rr = af_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = gauss_value(gs, rr)
-       end do
-    end select
-#elif NDIM == 3
-    ! Determine whether the direction nb is to "lower" or "higher" neighbors
-    if (af_neighb_low(nb)) then
-       ix = 0
-       loc = 0.5_dp
-    else
-       ix = nc+1
-       loc = nc + 0.5_dp
-    end if
-
-    ! Below the solution is specified in the approriate ghost cells
-    select case (af_neighb_dim(nb))
-    case (1)
-       do k = 1, nc
-          do j = 1, nc
-             rr = af_rr_cc(box, [loc, real(j, dp), real(k, dp)])
-             box%cc(ix, j, k, iv) = gauss_value(gs, rr)
-          end do
-       end do
-    case (2)
-       do k = 1, nc
-          do i = 1, nc
-             rr = af_rr_cc(box, [real(i, dp), loc, real(k, dp)])
-             box%cc(i, ix, k, iv) = gauss_value(gs, rr)
-          end do
-       end do
-    case (3)
-       do j = 1, nc
-          do i = 1, nc
-             rr = af_rr_cc(box, [real(i, dp), real(j, dp), loc])
-             box%cc(i, j, ix, iv) = gauss_value(gs, rr)
-          end do
-       end do
-    end select
-#endif
+    do n = 1, box%n_cell**(NDIM-1)
+       bc_val(n) = gauss_value(gs, coords(:, n))
+    end do
   end subroutine sides_bc
 
 end program poisson_basic

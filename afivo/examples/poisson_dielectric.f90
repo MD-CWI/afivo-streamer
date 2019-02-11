@@ -10,7 +10,6 @@ program dielectric_test
   implicit none
 
   integer, parameter :: box_size     = 8
-  integer, parameter :: n_boxes_base = 1
   integer, parameter :: n_iterations = 10
   integer            :: i_phi
   integer            :: i_rhs
@@ -23,8 +22,7 @@ program dielectric_test
   type(af_t)        :: tree
   type(ref_info_t)   :: ref_info
   integer            :: mg_iter
-  integer            :: ix_list(NDIM, n_boxes_base)
-  real(dp)           :: dr, residu(2)
+  real(dp)           :: residu(2)
   character(len=100) :: fname
   type(mg_t)        :: mg
   integer            :: count_rate, t_start, t_end
@@ -35,9 +33,6 @@ program dielectric_test
   print *, "****************************************"
   print *, "Number of threads", af_get_max_threads()
 
-  ! The cell spacing at the coarsest grid level
-  dr = 1.0_dp / box_size
-
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
@@ -46,15 +41,9 @@ program dielectric_test
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr, &           ! Distance between cells on base level
-       coarsen_to=2)   ! Add coarsened levels for multigrid
+       [DTIMES(1.0_dp)], &
+       [DTIMES(box_size)])
 
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = 1             ! Set index of box 1
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
   call af_print_info(tree)
 
   call system_clock(t_start, count_rate)
@@ -91,12 +80,13 @@ program dielectric_test
   mg%box_op       => mg_auto_op
   mg%box_gsrb     => mg_auto_gsrb
   mg%box_corr     => mg_auto_corr
+  mg%box_stencil  => mg_box_lpld_stencil
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
   ! and i_tmp. These variables will be initialized at the first call of mg_fas_fmg
-  call mg_init_mg(mg)
+  call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"
   call system_clock(t_start, count_rate)
@@ -152,7 +142,6 @@ contains
     real(dp)                     :: ellips_fac(NDIM)
 
     nc = box%n_cell
-    dr = box%dr
 
     ! Create ellipsoidal shape
     ellips_fac(2:) = 3.0_dp
@@ -174,28 +163,29 @@ contains
 
   end subroutine set_init_cond
 
-  subroutine sides_bc(box, nb, iv, bc_type)
-    use m_af_ghostcell
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction for the boundary condition
-    integer, intent(in)         :: iv ! Index of variable
-    integer, intent(out)        :: bc_type ! Type of boundary condition
-    integer                     :: nc
+  ! This routine sets boundary conditions for a box
+  subroutine sides_bc(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: nc
 
     nc = box%n_cell
 
+    ! Below the solution is specified in the approriate ghost cells
     select case (nb)
-    case (af_neighb_lowx)
-       call af_bc_dirichlet_zero(box, nb, iv, bc_type)
-    case (af_neighb_highx)
+    case (af_neighb_lowx)             ! Lower-x direction
        bc_type = af_bc_dirichlet
-#if NDIM == 2
-       box%cc(nc+1, 1:nc, iv) = 1.0_dp
-#elif NDIM == 3
-       box%cc(nc+1, 1:nc, 1:nc, iv) = 1.0_dp
-#endif
+       bc_val = 0.0_dp
+    case (af_neighb_highx)             ! Higher-x direction
+       bc_type = af_bc_dirichlet
+       bc_val = 1.0_dp
     case default
-       call af_bc_neumann_zero(box, nb, iv, bc_type)
+       bc_type = af_bc_neumann
+       bc_val = 0.0_dp
     end select
   end subroutine sides_bc
 

@@ -7,15 +7,13 @@ program ghostcell_benchmark_Xd
 
   implicit none
 
-  integer, parameter :: n_boxes_base = 1
   integer            :: i_phi
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: n_args
   integer            :: n_cell, it, n_iterations, max_ref_lvl
-  integer            :: ix_list(NDIM, n_boxes_base)
-  real(dp)           :: dr, time
+  real(dp)           :: time
   character(len=100) :: arg_string
   integer            :: count_rate, t_start, t_end
 
@@ -53,21 +51,13 @@ program ghostcell_benchmark_Xd
   print *, "Max refinement lvl: ", max_ref_lvl
   print *, "Num iterations:     ", n_iterations
 
-  dr = 1.0_dp / n_cell
-
   call af_add_cc_variable(tree, "phi", ix=i_phi)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
-       n_cell, &       ! A box contains box_size**DIM cells
-       dr)             ! Distance between cells on base level
-
-  ! Set up geometry. These indices are used to define the coordinates of a box,
-  ! by default the box at [1,1] touches the origin (x,y) = (0,0)
-  ix_list(:, 1) = [DTIMES(1)]       ! Set index of box 1
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
+       n_cell, &       ! A box contains n_cell**DIM cells
+       [DTIMES(1.0_dp)], &
+       [DTIMES(n_cell)])
 
   call system_clock(t_start, count_rate)
   do

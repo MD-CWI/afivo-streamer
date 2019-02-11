@@ -245,7 +245,7 @@ module m_af_types
      integer               :: neighbor_mat(-1:1, -1:1, -1:1)
 #endif
      integer               :: n_cell    !< number of cells per dimension
-     real(dp)              :: dr        !< width/height of a cell
+     real(dp)              :: dr(NDIM)  !< width/height of a cell
      real(dp)              :: r_min(NDIM) !< min coords. of box
      integer               :: coord_t   !< Coordinate type (e.g. Cartesian)
 #if NDIM == 2
@@ -262,15 +262,16 @@ module m_af_types
   type af_t
      logical  :: ready       = .false. !< Is tree ready for use?
      integer  :: box_limit             !< maximum number of boxes
-     integer  :: lowest_lvl  = 1       !< lowest level present
      integer  :: highest_lvl = 0       !< highest level present
      integer  :: highest_id  = 0       !< highest box index present
      integer  :: n_cell                !< number of cells per dimension
      integer  :: n_var_cell  = 0       !< number of cell-centered variables
      integer  :: n_var_face  = 0       !< number of face-centered variables
      integer  :: coord_t               !< Type of coordinates
+     integer  :: coarse_grid_size(3) = -1 !< Size of the coarse grid (if rectangular)
+     logical  :: periodic(3) = .false.  !< Which dimensions are periodic
      real(dp) :: r_base(NDIM)          !< min. coords of box at index (1,1)
-     real(dp) :: dr_base               !< cell spacing at lvl 1
+     real(dp) :: dr_base(NDIM)         !< cell spacing at lvl 1
 
      !> Names of cell-centered variables
      character(len=af_nlen) :: cc_names(af_max_num_vars)
@@ -362,12 +363,14 @@ module m_af_types
      end subroutine af_subr_rb
 
      !> To fill ghost cells near physical boundaries
-     subroutine af_subr_bc(box, nb, iv, bc_type)
+     subroutine af_subr_bc(box, nb, iv, coords, bc_val, bc_type)
        import
-       type(box_t), intent(inout)  :: box     !< Box that needs b.c.
-       integer, intent(in)          :: nb      !< Direction
-       integer, intent(in)          :: iv      !< Index of variable
-       integer, intent(out)         :: bc_type !< Type of b.c.
+       type(box_t), intent(in) :: box     !< Box that needs b.c.
+       integer, intent(in)     :: nb      !< Direction
+       integer, intent(in)     :: iv      !< Index of variable
+       real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1)) !< Coordinates of boundary
+       real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1)) !< Boundary values
+       integer, intent(out)    :: bc_type !< Type of b.c.
      end subroutine af_subr_bc
 
      !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries
@@ -440,11 +443,13 @@ contains
        write(*, "(A,A15)") " Type of coordinates:    ", &
             af_coord_names(tree%coord_t)
 #if NDIM == 2
-       write(*, "(A,2E12.4)") " min. coords:        ", tree%r_base
+       write(*, "(A,2E10.2)") " min. coords:            ", tree%r_base
+       write(*, "(A,2E10.2)") " dr at level one:        ", tree%dr_base
 #elif NDIM == 3
-       write(*, "(A,3E12.4)") " min. coords:        ", tree%r_base
+       write(*, "(A,3E10.2)") " min. coords:            ", tree%r_base
+       write(*, "(A,3E10.2)") " dr at level one:        ", tree%dr_base
 #endif
-       write(*, "(A,2E12.4)")  " dx at min/max level ", tree%dr_base, af_min_dr(tree)
+       write(*, "(A,E10.2)") " minval(dr):             ", af_min_dr(tree)
        write(*, "(A)") ""
     end if
   end subroutine af_print_info
@@ -466,7 +471,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%ids)
     end do
   end function af_num_boxes_used
@@ -476,7 +481,7 @@ contains
     integer                 :: n_boxes, lvl
 
     n_boxes = 0
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        n_boxes = n_boxes + size(tree%lvls(lvl)%leaves)
     end do
   end function af_num_leaves_used
@@ -492,7 +497,7 @@ contains
     type(af_t), intent(in) :: tree
     real(dp)                :: vol
     integer                 :: i, id
-    real(dp)                :: r0, r1, box_len
+    real(dp)                :: r0, r1, box_len(NDIM)
     real(dp), parameter     :: pi = acos(-1.0_dp)
 
     box_len = tree%n_cell * tree%dr_base
@@ -502,11 +507,11 @@ contains
        do i = 1, size(tree%lvls(1)%ids)
           id  = tree%lvls(1)%ids(i)
           r0  = tree%boxes(id)%r_min(1)
-          r1  = r0 + box_len
-          vol = vol + pi * (r1**2 - r0**2) * box_len
+          r1  = r0 + box_len(1)
+          vol = vol + pi * (r1**2 - r0**2) * box_len(2)
        end do
     else
-       vol = size(tree%lvls(1)%ids) * (box_len)**NDIM
+       vol = size(tree%lvls(1)%ids) * product(box_len)
     end if
   end function af_total_volume
 
@@ -611,6 +616,38 @@ contains
     end do
   end function af_neighb_offset
 
+  !> Get index range of boundary cells inside a box facing neighbor nb
+  subroutine af_get_index_bc_inside(nb, nc, lo, hi)
+    integer, intent(in)  :: nb !< Neighbor direction
+    integer, intent(in)  :: nc !< box size
+    integer, intent(out) :: lo(NDIM)
+    integer, intent(out) :: hi(NDIM)
+    integer              :: nb_dim
+
+    ! Determine index range next to boundary
+    nb_dim     = af_neighb_dim(nb)
+    lo(:)      = 1
+    hi(:)      = nc
+    lo(nb_dim) = 1 + (nc-1) * af_neighb_high_01(nb)
+    hi(nb_dim) = lo(nb_dim)
+  end subroutine af_get_index_bc_inside
+
+  !> Get index range of ghost cells facing neighbor nb
+  subroutine af_get_index_bc_outside(nb, nc, lo, hi)
+    integer, intent(in)  :: nb !< Neighbor direction
+    integer, intent(in)  :: nc !< box size
+    integer, intent(out) :: lo(NDIM)
+    integer, intent(out) :: hi(NDIM)
+    integer              :: nb_dim
+
+    ! Determine index range next to boundary
+    nb_dim     = af_neighb_dim(nb)
+    lo(:)      = 1
+    hi(:)      = nc
+    lo(nb_dim) = (nc+1) * af_neighb_high_01(nb)
+    hi(nb_dim) = lo(nb_dim)
+  end subroutine af_get_index_bc_outside
+
   !> Compute the 'child index' for a box with spatial index ix. With 'child
   !> index' we mean the index in the children(:) array of its parent.
   pure integer function af_ix_to_ichild(ix)
@@ -644,11 +681,11 @@ contains
   !> Get the location of the face parallel to dim with index fc_ix
   pure function af_r_fc(box, dim, fc_ix) result(r)
     type(box_t), intent(in) :: box
-    integer, intent(in)       :: dim
-    integer, intent(in)       :: fc_ix(NDIM)
-    real(dp)                  :: r(NDIM)
+    integer, intent(in)     :: dim
+    integer, intent(in)     :: fc_ix(NDIM)
+    real(dp)                :: r(NDIM)
     r      = box%r_min + (fc_ix-0.5_dp) * box%dr
-    r(dim) = r(dim) - 0.5_dp * box%dr
+    r(dim) = r(dim) - 0.5_dp * box%dr(dim)
   end function af_r_fc
 
   !> Get a general location with index cc_ix (like af_r_cc but using reals)
@@ -670,14 +707,14 @@ contains
   pure function af_min_dr(tree) result(dr)
     type(af_t), intent(in) :: tree
     real(dp)               :: dr !< Output: dr at the finest lvl of the tree
-    dr = af_lvl_dr(tree, tree%highest_lvl)
+    dr = minval(af_lvl_dr(tree, tree%highest_lvl))
   end function af_min_dr
 
   !> Return dr at lvl
   pure function af_lvl_dr(tree, lvl) result(dr)
     type(af_t), intent(in) :: tree
     integer, intent(in)    :: lvl
-    real(dp)               :: dr !< Output: dr at the finest lvl of the tree
+    real(dp)               :: dr(NDIM) !< Output: dr at the finest lvl of the tree
     dr = tree%dr_base * 0.5_dp**(lvl-1)
   end function af_lvl_dr
 
@@ -759,7 +796,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(in)      :: i
     real(dp)                 :: r
-    r = box%r_min(1) + (i-0.5_dp) * box%dr
+    r = box%r_min(1) + (i-0.5_dp) * box%dr(1)
   end function af_cyl_radius_cc
 
   !> Get the normalized weights of the 'inner' and 'outer' children of a cell
@@ -771,10 +808,25 @@ contains
     real(dp), intent(out)    :: inner, outer
     real(dp)                 :: tmp
 
-    tmp = 0.25_dp * box%dr / af_cyl_radius_cc(box, i)
+    tmp = 0.25_dp * box%dr(1) / af_cyl_radius_cc(box, i)
     inner = 1 - tmp
     outer = 1 + tmp
   end subroutine af_cyl_child_weights
+
+  !> Get the factors for the left and right flux in each cell
+  subroutine af_cyl_flux_factors(box, flux_factors)
+    type(box_t), intent(in) :: box
+    real(dp), intent(out)   :: flux_factors(2, box%n_cell)
+    integer                 :: i
+    real(dp)                :: r, inv_r
+
+    do i = 1, box%n_cell
+       r                  = af_cyl_radius_cc(box, i)
+       inv_r              = 1/r
+       flux_factors(1, i) = (r - 0.5_dp * box%dr(1)) * inv_r
+       flux_factors(2, i) = (r + 0.5_dp * box%dr(1)) * inv_r
+    end do
+  end subroutine af_cyl_flux_factors
 #endif
 
 end module m_af_types

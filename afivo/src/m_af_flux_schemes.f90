@@ -37,18 +37,18 @@ contains
     real(dp), intent(in)    :: cc(1-ngc:nc+ngc, 1-ngc:nc+ngc)
     !> Input: diffusion coeff. at interfaces, output: fluxes
     real(dp), intent(inout)    :: dc(1:nc+1, 1:nc+1, 2)
-    real(dp), intent(in)    :: inv_dr           !< Inverse grid spacing
+    real(dp), intent(in)    :: inv_dr(2)           !< Inverse grid spacing
     real(dp)                :: cc_1d(1-ngc:nc+ngc), dc_1d(1:nc+1)
     integer                 :: n
 
     do n = 1, nc
        ! x-fluxes
-       call flux_diff_1d(cc(:, n), dc(:, n, 1), inv_dr, nc, ngc)
+       call flux_diff_1d(cc(:, n), dc(:, n, 1), inv_dr(1), nc, ngc)
 
        ! y-fluxes (use temporary variables for efficiency)
        cc_1d = cc(n, :)
        dc_1d = dc(n, :, 2)
-       call flux_diff_1d(cc_1d, dc_1d, inv_dr, nc, ngc)
+       call flux_diff_1d(cc_1d, dc_1d, inv_dr(2), nc, ngc)
        dc(n, :, 2) = dc_1d     ! Copy result
     end do
   end subroutine flux_diff_2d
@@ -64,7 +64,7 @@ contains
     !> Input: diffusion coeff. at interfaces, output: fluxes
     real(dp), intent(inout)    :: dc(1:nc+1, 1:nc+1, 1:nc+1, 3)
     !> Inverse grid spacing
-    real(dp), intent(in)    :: inv_dr
+    real(dp), intent(in)    :: inv_dr(3)
     real(dp)                :: cc_1d(1-ngc:nc+ngc), dc_1d(1:nc+1)
     integer                 :: n, m
 
@@ -72,18 +72,18 @@ contains
        do n = 1, nc
           ! x-fluxes
           call flux_diff_1d(cc(:, n, m), dc(:, n, m, 1), &
-               inv_dr, nc, ngc)
+               inv_dr(1), nc, ngc)
 
           ! y-fluxes (use temporary variables for efficiency)
           cc_1d = cc(n, :, m)
           dc_1d = dc(n, :, m, 2)
-          call flux_diff_1d(cc_1d, dc_1d, inv_dr, nc, ngc)
+          call flux_diff_1d(cc_1d, dc_1d, inv_dr(2), nc, ngc)
           dc(n, :, m, 2) = dc_1d ! Copy result
 
           ! z-fluxes (use temporary variables for efficiency)
           cc_1d = cc(n, m, :)
           dc_1d = dc(n, m, :, 3)
-          call flux_diff_1d(cc_1d, dc_1d, inv_dr, nc, ngc)
+          call flux_diff_1d(cc_1d, dc_1d, inv_dr(3), nc, ngc)
           dc(n, m, :, 3) = dc_1d ! Copy result
        end do
     end do

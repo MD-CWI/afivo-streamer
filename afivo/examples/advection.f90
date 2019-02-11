@@ -17,14 +17,11 @@ program advection_Xd
   ! Set coord_type to af_cyl to test conservation in cyl. coordinates
   integer, parameter  :: coord_type = af_xyz
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
-  real(dp), parameter :: dr         = domain_len / box_size
 
   type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
-  integer            :: ix_list(NDIM, 1)
-  integer            :: nb_list(af_num_neighbors, 1)
   integer            :: refine_steps, time_steps, output_cnt
-  integer            :: i, id, n, n_steps
+  integer            :: i, n, n_steps
   real(dp)           :: dt, time, end_time, p_err, n_err
   real(dp)           :: sum_phi, sum_phi_t0
   real(dp)           :: dt_adapt, dt_output
@@ -40,25 +37,16 @@ program advection_Xd
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
-  ! Initialize tree
-  call af_init(tree, & ! Tree to initialize
-       box_size, &     ! A box contains box_size**DIM cells
-       dr=dr, &        ! Distance between cells on base level
-       coord=coord_type)
-
   call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp_lim, &
        prolong=af_prolong_limit)
 
-  ! Set up geometry
-  id             = 1
-  ix_list(:, id) = 1            ! Set index of box
-  nb_list(:, id) = id           ! Box is periodic, so its own neighbor
-  if (coord_type == af_cyl) then
-     nb_list(af_neighb_lowx, id) = -1
-  end if
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list, nb_list)
+  ! Initialize tree
+  call af_init(tree, & ! Tree to initialize
+       box_size, &     ! A box contains box_size**DIM cells
+       [DTIMES(domain_len)], &
+       [DTIMES(box_size)], &
+       periodic=[DTIMES(.true.)], &
+       coord=coord_type)
 
   output_cnt = 0
   time       = 0
@@ -215,19 +203,17 @@ contains
 
     do KJI_DO(1,nc)
 #if NDIM == 2
-       diff = abs(box%cc(i+1, j, i_phi) + &
-            box%cc(i-1, j, i_phi) + &
-            box%cc(i, j+1, i_phi) + &
-            box%cc(i, j-1, i_phi) - &
-            4 * box%cc(i, j, i_phi)) * box%dr
+       diff = abs(box%dr(1) * (box%cc(i+1, j, i_phi) + &
+            box%cc(i-1, j, i_phi) - 2 * box%cc(i, j, i_phi)) + &
+            box%dr(2) * (box%cc(i, j+1, i_phi) + &
+            box%cc(i, j-1, i_phi) - 2 * box%cc(i, j, i_phi)))
 #elif NDIM == 3
-       diff = abs(box%cc(i+1, j, k, i_phi) + &
-            box%cc(i-1, j, k, i_phi) + &
-            box%cc(i, j+1, k, i_phi) + &
-            box%cc(i, j-1, k, i_phi) + &
-            box%cc(i, j, k+1, i_phi) + &
-            box%cc(i, j, k-1, i_phi) - &
-            6 * box%cc(i, j, k, i_phi)) * box%dr
+       diff = abs(box%dr(1) * (box%cc(i+1, j, k, i_phi) + &
+            box%cc(i-1, j, k, i_phi) - 2 * box%cc(i, j, k, i_phi)) + &
+            box%dr(2) * (box%cc(i, j+1, k, i_phi) + &
+            box%cc(i, j-1, k, i_phi) - 2 * box%cc(i, j, k, i_phi)) + &
+            box%dr(3) * (box%cc(i, j, k+1, i_phi) + &
+            box%cc(i, j, k-1, i_phi) - 2 * box%cc(i, j, k, i_phi)))
 #endif
 
        if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 3) then
@@ -337,10 +323,10 @@ contains
   subroutine update_solution(box, dt)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)         :: dt(:)
-    real(dp)                     :: inv_dr
+    real(dp)                     :: inv_dr(NDIM)
     integer                      :: IJK, nc
 #if NDIM == 2
-    real(dp)                     :: tmp, w1, w2
+    real(dp)                     :: rfac(2, box%n_cell)
 #endif
 
     nc     = box%n_cell
@@ -348,35 +334,36 @@ contains
 
 #if NDIM == 2
     if (coord_type == af_cyl) then
+       call af_cyl_flux_factors(box, rfac)
        do j = 1, nc
           do i = 1, nc
-             tmp = 0.5_dp * box%dr / af_cyl_radius_cc(box, i)
-             w1 = 1 - tmp
-             w2 = 1 + tmp
-
-             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + &
-                  dt(1) * inv_dr * ( &
-                  w1 * box%fc(i, j, 1, i_phi) - &
-                  w2 * box%fc(i+1, j, 1, i_phi) + &
-                  box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi))
+             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + dt(1) * ( &
+                  inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, i_phi) - &
+                  rfac(2, i) * box%fc(i+1, j, 1, i_phi)) &
+                  + inv_dr(2) * &
+                  (box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi)))
           end do
        end do
     else
        do j = 1, nc
           do i = 1, nc
-             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + &
-                  dt(1) * inv_dr * ( &
-                  box%fc(i, j, 1, i_phi) - box%fc(i+1, j, 1, i_phi) + &
-                  box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi))
+             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + dt(1) * ( &
+                  inv_dr(1) * &
+                  (box%fc(i, j, 1, i_phi) - box%fc(i+1, j, 1, i_phi)) &
+                  + inv_dr(2) * &
+                  (box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi)))
           end do
        end do
     end if
 #elif NDIM == 3
     forall (i = 1:nc, j = 1:nc, k = 1:nc)
-       box%cc(i, j, k, i_phi) = box%cc(i, j, k, i_phi) + dt(1) * inv_dr * ( &
-            box%fc(i, j, k, 1, i_phi) - box%fc(i+1, j, k, 1, i_phi) + &
-            box%fc(i, j, k, 2, i_phi) - box%fc(i, j+1, k, 2, i_phi) + &
-            box%fc(i, j, k, 3, i_phi) - box%fc(i, j, k+1, 3, i_phi))
+       box%cc(i, j, k, i_phi) = box%cc(i, j, k, i_phi) + dt(1) * ( &
+            inv_dr(1) * &
+            (box%fc(i, j, k, 1, i_phi) - box%fc(i+1, j, k, 1, i_phi)) + &
+            inv_dr(2) * &
+            (box%fc(i, j, k, 2, i_phi) - box%fc(i, j+1, k, 2, i_phi)) + &
+            inv_dr(3) * &
+            (box%fc(i, j, k, 3, i_phi) - box%fc(i, j, k+1, 3, i_phi)))
     end forall
 #endif
   end subroutine update_solution

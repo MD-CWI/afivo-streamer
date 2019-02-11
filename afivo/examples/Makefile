@@ -1,16 +1,16 @@
 AF_DIR  := ..
-LIBDIRS := $(AF_DIR)/external_libraries/silo/lib
-LIBS	:= afivo silo
+LIBDIRS := $(AF_DIR)/external_libraries/silo/lib $(AF_DIR)/external_libraries/hypre/lib
+LIBS	:= afivo silo HYPRE
 OUTDIR	:= output
 
 include $(AF_DIR)/src/makerules.make
 
-.PHONY: all clean run
+.PHONY: all clean run run_2d run_3d
 
 PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
-implicit_diffusion computational_domain boundary_conditions poisson_neumann	\
-particles_to_grid poisson_dielectric ghostcell_benchmark poisson_helmholtz	\
-particles_gravity
+ computational_domain boundary_conditions poisson_neumann particles_to_grid	\
+ ghostcell_benchmark particles_gravity poisson_coarse_solver implicit_diffusion	\
+ poisson_dielectric poisson_helmholtz
 
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric	\
 simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl
@@ -25,7 +25,19 @@ clean:
 	$(RM) $(PROGS) *.o *.mod
 
 run:
-	$(foreach prog, $(PROGS), echo "**Running $(prog)**"; ./$(prog);)
+	for prog in $(PROGS); do\
+		./$$prog || { echo "$$prog failed" ; exit 1; };\
+	done
+
+run_2d:
+	for prog in $(PROGS_2D); do\
+		./$$prog || { echo "$$prog failed" ; exit 1; };\
+	done
+
+run_3d:
+	for prog in $(PROGS_3D); do\
+		./$$prog || { echo "$$prog failed" ; exit 1; };\
+	done
 
 $(OUTDIR):
 	mkdir -p $@

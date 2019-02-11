@@ -12,12 +12,11 @@ program particles_to_grid_Xd
   integer, parameter    :: n_particles = 100*1000
   real(dp), parameter   :: domain_len  = 1.0_dp
   real(dp), parameter   :: r_min(NDIM) = -0.5_dp * domain_len
-  real(dp), parameter   :: dr          = domain_len / box_size
   real(dp), allocatable :: coordinates(:, :), weights(:)
 
   type(af_t)      :: tree
   type(ref_info_t) :: refine_info
-  integer          :: n, id, ix_list(NDIM, 1)
+  integer          :: n
   integer          :: count_rate, t_start, t_end
   real(dp)         :: sum_density
 
@@ -29,15 +28,9 @@ program particles_to_grid_Xd
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
-       dr=dr, &        ! Distance between cells on base level
+       [DTIMES(domain_len)], &
+       [DTIMES(box_size)], &
        r_min=r_min)
-
-  ! Set up geometry
-  id             = 1
-  ix_list(:, id) = 1            ! Set index of box
-
-  ! Create the base mesh, using the box indices and their neighbor information
-  call af_set_base(tree, 1, ix_list)
 
   call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp)
 

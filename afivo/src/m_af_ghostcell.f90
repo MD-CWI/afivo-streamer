@@ -1,3 +1,4 @@
+#include "cpp_macros.h"
 !> This module contains routines related to the filling of ghost cells. Note that
 !> corner ghost cells are not used in Afivo.
 module m_af_ghostcell
@@ -9,6 +10,7 @@ module m_af_ghostcell
   public :: af_gc_tree
   public :: af_gc_ids
   public :: af_gc_box
+  public :: af_gc_get_boundary_coords
   public :: af_bc_dirichlet_zero
   public :: af_bc_neumann_zero
   public :: af_bc_set_continuous
@@ -53,12 +55,12 @@ contains
     if (present(leaves_only)) all_ids = .not. leaves_only
 
     if (all_ids) then
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, &
                subr_rb, subr_bc, corners)
        end do
     else
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, &
                subr_rb, subr_bc, corners)
        end do
@@ -82,12 +84,12 @@ contains
     if (present(leaves_only)) all_ids = .not. leaves_only
 
     if (all_ids) then
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%ids, iv, &
                subr_rb, subr_bc, corners)
        end do
     else
-       do lvl = tree%lowest_lvl, tree%highest_lvl
+       do lvl = 1, tree%highest_lvl
           call af_gc_ids(tree, tree%lvls(lvl)%leaves, iv, &
                subr_rb, subr_bc, corners)
        end do
@@ -251,36 +253,74 @@ contains
   !> refinement boundaries and subr_bc on physical boundaries.
   subroutine af_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
     type(box_t), intent(inout) :: boxes(:) !< List of all the boxes
-    integer, intent(in)          :: id       !< Id of box for which we set ghost cells
-    integer, intent(in)          :: iv       !< Variable for which ghost cells are set
-    procedure(af_subr_rb)       :: subr_rb  !< Procedure called at refinement boundaries
-    procedure(af_subr_bc)       :: subr_bc  !< Procedure called at physical boundaries
-    integer                      :: nb, nb_id, bc_type
-    integer                      :: nb_dim, lo(NDIM), hi(NDIM), dnb(NDIM)
+    integer, intent(in)        :: id       !< Id of box for which we set ghost cells
+    integer, intent(in)        :: iv       !< Variable for which ghost cells are set
+    procedure(af_subr_rb)      :: subr_rb  !< Procedure called at refinement boundaries
+    procedure(af_subr_bc)      :: subr_bc  !< Procedure called at physical boundaries
+    integer                    :: nb, nb_id, bc_type
+    integer                    :: lo(NDIM), hi(NDIM), dnb(NDIM)
+    real(dp)                   :: coords(NDIM, boxes(id)%n_cell**(NDIM-1))
+    real(dp)                   :: bc_val(boxes(id)%n_cell**(NDIM-1))
 
     do nb = 1, af_num_neighbors
        nb_id = boxes(id)%neighbors(nb)
 
        if (nb_id > af_no_box) then
           ! There is a neighbor
-          nb_dim     = af_neighb_dim(nb)
-          lo(:)      = 1
-          hi(:)      = boxes(id)%n_cell
-          lo(nb_dim) = af_neighb_high_01(nb) * (boxes(id)%n_cell + 1)
-          hi(nb_dim) = lo(nb_dim)
-          dnb        = af_neighb_offset([nb])
+          call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
+          dnb = af_neighb_offset([nb])
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
        else if (nb_id == af_no_box) then
           ! Refinement boundary
           call subr_rb(boxes, id, nb, iv)
        else
           ! Physical boundary
-          call subr_bc(boxes(id), nb, iv, bc_type)
-          call bc_to_gc(boxes(id), nb, iv, bc_type)
+          call af_gc_get_boundary_coords(boxes(id), nb, coords)
+          call subr_bc(boxes(id), nb, iv, coords, bc_val, bc_type)
+          call bc_to_gc(boxes(id), nb, iv, bc_val, bc_type)
        end if
     end do
 
   end subroutine af_gc_box_sides
+
+  !> Get coordinates at the faces of a box boundary
+  subroutine af_gc_get_boundary_coords(box, nb, coords)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    real(dp), intent(out)   :: coords(NDIM, box%n_cell**(NDIM-1))
+    integer                 :: i, nb_dim, bc_dim(NDIM-1)
+    integer, parameter      :: all_dims(NDIM) = [(i, i = 1, NDIM)]
+    real(dp)                :: rmin(NDIM)
+#if NDIM == 3
+    integer                 :: j, ix
+#endif
+
+    nb_dim       = af_neighb_dim(nb)
+    bc_dim       = pack(all_dims, all_dims /= nb_dim)
+    rmin(bc_dim) = box%r_min(bc_dim) + 0.5_dp * box%dr(bc_dim)
+
+    if (af_neighb_low(nb)) then
+       rmin(nb_dim) = box%r_min(nb_dim)
+    else
+       rmin(nb_dim) = box%r_min(nb_dim) + box%n_cell * box%dr(nb_dim)
+    end if
+
+#if NDIM == 2
+    do i = 1, box%n_cell
+       coords(bc_dim, i) = rmin(bc_dim) + (i-1) * box%dr(bc_dim)
+       coords(nb_dim, i) = rmin(nb_dim)
+    end do
+#elif NDIM == 3
+    ix = 0
+    do j = 1, box%n_cell
+       do i = 1, box%n_cell
+          ix = ix + 1
+          coords(bc_dim, ix) = rmin(bc_dim) + [i-1, j-1] * box%dr(bc_dim)
+          coords(nb_dim, ix) = rmin(nb_dim)
+       end do
+    end do
+#endif
+  end subroutine af_gc_get_boundary_coords
 
   !> Fill corner ghost cells for variable iv on corners/edges of a box. If there
   !> is no box to copy the data from, use linear extrapolation. This routine
@@ -335,13 +375,14 @@ contains
     end do
   end subroutine af_gc_box_corner
 
-  subroutine bc_to_gc(box, nb, iv, bc_type)
-    type(box_t), intent(inout)  :: box
-    integer, intent(in)          :: iv                    !< Variable to fill
-    integer, intent(in)          :: nb                    !< Neighbor direction
-    integer, intent(in)          :: bc_type               !< Type of b.c.
-    real(dp)                     :: c0, c1, c2
-    integer                      :: nc
+  subroutine bc_to_gc(box, nb, iv, bc_val, bc_type)
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: iv      !< Variable to fill
+    integer, intent(in)        :: nb      !< Neighbor direction
+    real(dp), intent(in)       :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(in)        :: bc_type !< Type of b.c.
+    real(dp)                   :: c0, c1, c2
+    integer                    :: nc
 
     nc = box%n_cell
 
@@ -359,7 +400,7 @@ contains
        c1 = -1
        c2 = 0
     case (af_bc_neumann)
-       c0 = box%dr * af_neighb_high_pm(nb) ! This gives a + or - sign
+       c0 = box%dr(af_neighb_dim(nb)) * af_neighb_high_pm(nb) ! This gives a + or - sign
        c1 = 1
        c2 = 0
     case (af_bc_continuous)
@@ -374,53 +415,53 @@ contains
 #if NDIM == 2
     case (af_neighb_lowx)
        box%cc(0, 1:nc, iv) = &
-            c0 * box%cc(0, 1:nc, iv) + &
+            c0 * bc_val + &
             c1 * box%cc(1, 1:nc, iv) + &
             c2 * box%cc(2, 1:nc, iv)
     case (af_neighb_highx)
        box%cc(nc+1, 1:nc, iv) = &
-            c0 * box%cc(nc+1, 1:nc, iv) + &
+            c0 * bc_val + &
             c1 * box%cc(nc, 1:nc, iv) + &
             c2 * box%cc(nc-1, 1:nc, iv)
     case (af_neighb_lowy)
        box%cc(1:nc, 0, iv) = &
-            c0 * box%cc(1:nc, 0, iv) + &
+            c0 * bc_val + &
             c1 * box%cc(1:nc, 1, iv) + &
             c2 * box%cc(1:nc, 2, iv)
     case (af_neighb_highy)
        box%cc(1:nc, nc+1, iv) = &
-            c0 * box%cc(1:nc, nc+1, iv) + &
+            c0 * bc_val + &
             c1 * box%cc(1:nc, nc, iv) + &
             c2 * box%cc(1:nc, nc-1, iv)
 #elif NDIM == 3
     case (af_neighb_lowx)
        box%cc(0, 1:nc, 1:nc, iv) = &
-            c0 * box%cc(0, 1:nc, 1:nc, iv) + &
+            c0 * reshape(bc_val, [nc, nc]) + &
             c1 * box%cc(1, 1:nc, 1:nc, iv) + &
             c2 * box%cc(2, 1:nc, 1:nc, iv)
     case (af_neighb_highx)
        box%cc(nc+1, 1:nc, 1:nc, iv) = &
-            c0 * box%cc(nc+1, 1:nc, 1:nc, iv) + &
+            c0 * reshape(bc_val, [nc, nc]) + &
             c1 * box%cc(nc, 1:nc, 1:nc, iv) + &
             c2 * box%cc(nc-1, 1:nc, 1:nc, iv)
     case (af_neighb_lowy)
        box%cc(1:nc, 0, 1:nc, iv) = &
-            c0 * box%cc(1:nc, 0, 1:nc, iv) + &
+            c0 * reshape(bc_val, [nc, nc]) + &
             c1 * box%cc(1:nc, 1, 1:nc, iv) + &
             c2 * box%cc(1:nc, 2, 1:nc, iv)
     case (af_neighb_highy)
        box%cc(1:nc, nc+1, 1:nc, iv) = &
-            c0 * box%cc(1:nc, nc+1, 1:nc, iv) + &
+            c0 * reshape(bc_val, [nc, nc]) + &
             c1 * box%cc(1:nc, nc, 1:nc, iv) + &
             c2 * box%cc(1:nc, nc-1, 1:nc, iv)
     case (af_neighb_lowz)
        box%cc(1:nc, 1:nc, 0, iv) = &
-            c0 * box%cc(1:nc, 1:nc, 0, iv) + &
+            c0 * reshape(bc_val, [nc, nc]) + &
             c1 * box%cc(1:nc, 1:nc, 1, iv) + &
             c2 * box%cc(1:nc, 1:nc, 2, iv)
     case (af_neighb_highz)
        box%cc(1:nc, 1:nc, nc+1, iv) = &
-            c0 * box%cc(1:nc, 1:nc, nc+1, iv) + &
+            c0 * reshape(bc_val, [nc, nc]) + &
             c1 * box%cc(1:nc, 1:nc, nc, iv) + &
             c2 * box%cc(1:nc, 1:nc, nc-1, iv)
 #endif
@@ -434,15 +475,10 @@ contains
     integer, intent(in)           :: id       !< Id of child
     integer, intent(in)           :: iv       !< Variable to fill
     integer, intent(in)           :: nb       !< Neighbor to get data from
-    integer                       :: p_id, nb_dim, lo(NDIM), hi(NDIM)
+    integer                       :: p_id, lo(NDIM), hi(NDIM)
 
-    p_id       = boxes(id)%parent
-    nb_dim     = af_neighb_dim(nb)
-    lo(:)      = 1
-    hi(:)      = boxes(id)%n_cell
-    lo(nb_dim) = af_neighb_high_01(nb) * (boxes(id)%n_cell+1)
-    hi(nb_dim) = af_neighb_high_01(nb) * (boxes(id)%n_cell+1)
-
+    p_id = boxes(id)%parent
+    call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
     call af_prolong_copy(boxes(p_id), boxes(id), iv, low=lo, high=hi)
   end subroutine af_gc_prolong_copy
 
@@ -654,34 +690,43 @@ contains
   end subroutine af_gc_interp_lim
 
   ! This fills ghost cells near physical boundaries using Neumann zero
-  subroutine af_bc_neumann_zero(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb, iv
-    integer, intent(out)        :: bc_type
+  subroutine af_bc_neumann_zero(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
 
     bc_type = af_bc_neumann
-    call af_set_box_gc(box, nb, iv, 0.0_dp)
+    bc_val  = 0.0_dp
   end subroutine af_bc_neumann_zero
 
   ! This fills ghost cells near physical boundaries using Neumann zero
-  subroutine af_bc_dirichlet_zero(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb, iv
-    integer, intent(out)        :: bc_type
+  subroutine af_bc_dirichlet_zero(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
 
     bc_type = af_bc_dirichlet
-    call af_set_box_gc(box, nb, iv, 0.0_dp)
+    bc_val  = 0.0_dp
   end subroutine af_bc_dirichlet_zero
 
   ! This fills ghost cells near physical boundaries using the same slope
-  subroutine af_bc_set_continuous(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb, iv
-    integer, intent(out)        :: bc_type
+  subroutine af_bc_set_continuous(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
 
-    bc_type = af_bc_continuous
+    bc_type = af_bc_dirichlet
     ! Set values to zero (to prevent problems with NaN)
-    call af_set_box_gc(box, nb, iv, 0.0_dp)
+    bc_val  = 0.0_dp
   end subroutine af_bc_set_continuous
 
   subroutine copy_from_nb(box, box_nb, dnb, lo, hi, iv)
