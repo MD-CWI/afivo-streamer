@@ -150,7 +150,7 @@ contains
 
 999 continue ! If there was an input error, the routine will end here
     print *, "table_from_file error at line", nL
-    print *, "ioState = ", ioState, " in ", file_name
+    print *, "ioState = ", ioState, " in ", trim(file_name)
     print *, "searching '" // trim(data_name) // "'"
     stop
 
