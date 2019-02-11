@@ -37,8 +37,8 @@ contains
     use m_config
     type(CFG_t), intent(inout) :: cfg !< Settings
 
-    integer                    :: n_cond, varsize, empty_int(0)
-    real(dp)                   :: dlen, empty_real(0)
+    integer                    :: n, n_cond, varsize, empty_int(0)
+    real(dp)                   :: empty_real(0)
     real(dp), allocatable      :: tmp_vec(:)
     character(len=name_len)    :: empty_string(0)
     type(initcnd_t)            :: ic
@@ -89,10 +89,14 @@ contains
 
     allocate(tmp_vec(NDIM * n_cond))
     call CFG_get(cfg, "seed_rel_r0", tmp_vec)
-    call CFG_get(cfg, "domain_len", dlen)
-    ic%seed_r0 = dlen * reshape(tmp_vec, [NDIM, n_cond])
+    ic%seed_r0 = reshape(tmp_vec, [NDIM, n_cond])
     call CFG_get(cfg, "seed_rel_r1", tmp_vec)
-    ic%seed_r1 = dlen * reshape(tmp_vec, [NDIM, n_cond])
+    ic%seed_r1 = reshape(tmp_vec, [NDIM, n_cond])
+
+    do n = 1, n_cond
+       ic%seed_r0(:, n) = ic%seed_r0(:, n) * ST_domain_len
+       ic%seed_r1(:, n) = ic%seed_r1(:, n) * ST_domain_len
+    end do
 
     call CFG_get(cfg, "background_density", ic%background_density)
     call CFG_get(cfg, "stochastic_density", ic%stochastic_density)

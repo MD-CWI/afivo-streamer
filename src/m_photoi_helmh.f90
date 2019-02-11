@@ -17,10 +17,7 @@ module m_photoi_helmh
   implicit none
   private
 
-  type(mg_t) :: mg_helm       ! Multigrid option struct
-
-  ! Lambda squared, used internally by the routines
-  real(dp) :: lambda2
+  type(mg_t), allocatable :: mg_helm(:) ! Multigrid option struct
 
   !> Maximum number of FMG cycles to perform to update each mode
   integer, parameter :: max_fmg_cycles = 10
@@ -88,14 +85,14 @@ contains
        if (ix == -1) error stop "Photoionization: no oxygen present"
 
        select case (author)
-          case ("Luque")
+       case ("Luque")
           !> Convert to correct units by multiplying with pressure in bar for Luque parameters
           lambdas = lambdas * gas_pressure  ! 1/m
           coeffs  = coeffs * gas_pressure**2 ! 1/m^2
           !print *, author
           !print *, "lambdas * gas_pressure", lambdas
           !print *, "coeffs * gas_pressure", coeffs
-          case ("Bourdon")
+       case ("Bourdon")
           !> Convert to correct units by multiplying with pressure in bar for Bourdon parameters
           lambdas = lambdas * gas_fractions(ix) * gas_pressure  ! 1/m
           !> important note: in the case of Bourdon coeffs must be multiplied by photoi_eta, however we do not multiply it here
@@ -105,9 +102,9 @@ contains
           !print *, author
           !print *, "lambdas * O2_pressure", lambdas
           !print *, "coeffs * O2_pressure", coeffs
-          case default
-             print *, "Unknown photoi_helmh_author: ", trim(author)
-             error stop
+       case default
+          print *, "Unknown photoi_helmh_author: ", trim(author)
+          error stop
        end select
 
        ! Add required variables
@@ -118,26 +115,25 @@ contains
        end do
 
        ! Now set the multigrid options
-       mg_helm%i_phi = i_modes(1) ! Will updated later on
-       mg_helm%i_rhs = i_rhs
-       mg_helm%i_tmp = i_tmp
+       allocate(mg_helm(n_modes))
 
-       mg_helm%sides_bc => photoi_helmh_bc
+       do n = 1, n_modes
+          mg_helm(n)%i_phi = i_modes(n)
+          mg_helm(n)%i_rhs = i_rhs
+          mg_helm(n)%i_tmp = i_tmp
+          mg_helm(n)%sides_bc => photoi_helmh_bc
+          mg_helm(n)%helmholtz_lambda = lambdas(n)**2
 
-#if NDIM == 2
-       if (ST_cylindrical) then
-          mg_helm%box_op => helmholtz_cyl_operator
-          mg_helm%box_gsrb => helmholtz_cyl_gsrb
-       else
-          mg_helm%box_op => helmholtz_operator
-          mg_helm%box_gsrb => helmholtz_gsrb
-       end if
-#elif NDIM == 3
-       mg_helm%box_op => helmholtz_operator
-       mg_helm%box_gsrb => helmholtz_gsrb
-#endif
-
-       call mg_init_mg(mg_helm)
+          if (ST_cylindrical) then
+             mg_helm(n)%box_op => mg_box_clpl
+             mg_helm(n)%box_gsrb => mg_box_gsrb_clpl
+             mg_helm(n)%box_stencil => mg_box_clpl_stencil
+          else
+             mg_helm(n)%box_op => mg_box_lpl
+             mg_helm(n)%box_gsrb => mg_box_gsrb_lpl
+             mg_helm(n)%box_stencil => mg_box_lpl_stencil
+          end if
+       end do
     end if
   end subroutine photoi_helmh_initialize
 
@@ -160,16 +156,17 @@ contains
 
     call af_tree_clear_cc(tree, i_photo)
 
-    call af_tree_maxabs_cc(tree, mg_helm%i_rhs, max_rhs)
+    call af_tree_maxabs_cc(tree, mg_helm(1)%i_rhs, max_rhs)
     max_rhs = max(max_rhs, sqrt(epsilon(1.0_dp)))
 
     do n = 1, n_modes
-       lambda2 = lambdas(n)**2
-       mg_helm%i_phi = i_modes(n)
+       if (.not. mg_helm(n)%initialized) then
+          call mg_init(tree, mg_helm(n))
+       end if
 
        do i = 1, max_fmg_cycles
-          call mg_fas_fmg(tree, mg_helm, .true., .true.)
-          call af_tree_maxabs_cc(tree, mg_helm%i_tmp, residu)
+          call mg_fas_fmg(tree, mg_helm(n), .true., .true.)
+          call af_tree_maxabs_cc(tree, mg_helm(n)%i_tmp, residu)
           ! print *, n, i, residu/max_rhs
           if (residu/max_rhs < max_rel_residual) exit
        end do
@@ -193,168 +190,24 @@ contains
   !> equations, see also Bourdon et al. PSST 2017. Setting a Dirichlet zero b.c.
   !> is inaccurate if the streamer gets close to that boundary, otherwise it
   !> should be quite reasonable.
-  subroutine photoi_helmh_bc(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction for the boundary condition
-    integer, intent(in)         :: iv ! Index of variable
-    integer, intent(out)        :: bc_type ! Type of boundary condition
-    integer                     :: nc
+  subroutine photoi_helmh_bc(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: nc
 
     nc = box%n_cell
 
-    select case (nb)
-    case (af_neighb_lowx, af_neighb_highx)
-       call af_bc_neumann_zero(box, nb, iv, bc_type)
-#if NDIM == 2
-    case (af_neighb_lowy, af_neighb_highy)
-       call af_bc_dirichlet_zero(box, nb, iv, bc_type)
-#elif NDIM == 3
-    case (af_neighb_lowy, af_neighb_highy)
-       call af_bc_neumann_zero(box, nb, iv, bc_type)
-    case (af_neighb_lowz, af_neighb_highz)
-       call af_bc_dirichlet_zero(box, nb, iv, bc_type)
-#endif
-    end select
+    if (af_neighb_dim(nb) == NDIM) then
+       bc_type = af_bc_dirichlet
+       bc_val  = 0.0_dp
+    else
+       bc_type = af_bc_neumann
+       bc_val  = 0.0_dp
+    end if
   end subroutine photoi_helmh_bc
-
-#if NDIM == 2
-  !> Perform cylindrical Laplacian operator on a box
-  subroutine helmholtz_cyl_operator(box, i_out, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, j, nc, i_phi, ioff
-    real(dp)                    :: inv_dr_sq, rfac(2)
-
-    nc        = box%n_cell
-    inv_dr_sq = 1 / box%dr**2
-    i_phi     = mg%i_phi
-    ioff      = (box%ix(1)-1) * nc
-
-    do j = 1, nc
-       do i = 1, nc
-          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          box%cc(i, j, i_out) = ( &
-               rfac(1) * box%cc(i-1, j, i_phi) + &
-               rfac(2) * box%cc(i+1, j, i_phi) + &
-               box%cc(i, j-1, i_phi) + box%cc(i, j+1, i_phi) - &
-               4 * box%cc(i, j, i_phi)) * inv_dr_sq - &
-               lambda2 * box%cc(i, j, i_phi)
-       end do
-    end do
-  end subroutine helmholtz_cyl_operator
-
-  !> Perform Gauss-Seidel relaxation on box for a cylindrical Helmholtz operator
-  subroutine helmholtz_cyl_gsrb(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, i0, j, nc, i_phi, i_rhs, ioff
-    real(dp)                    :: dx2, rfac(2)
-
-    dx2   = box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-    ioff  = (box%ix(1)-1) * nc
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          rfac = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-          box%cc(i, j, i_phi) = 1/(4 + lambda2 * dx2) * ( &
-               rfac(1) * box%cc(i-1, j, i_phi) + &
-               rfac(2) * box%cc(i+1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
-               dx2 * box%cc(i, j, i_rhs))
-       end do
-    end do
-  end subroutine helmholtz_cyl_gsrb
-#endif
-
-  !> Perform Helmholtz operator on a box
-  subroutine helmholtz_operator(box, i_out, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, j, nc, i_phi
-    real(dp)                    :: inv_dr_sq
-#if NDIM == 3
-    integer                     :: k
-#endif
-
-    nc = box%n_cell
-    inv_dr_sq = 1 / box%dr**2
-    i_phi = mg%i_phi
-
-#if NDIM == 2
-    do j = 1, nc
-       do i = 1, nc
-          box%cc(i, j, i_out) = inv_dr_sq * (box%cc(i-1, j, i_phi) + &
-               box%cc(i+1, j, i_phi) + box%cc(i, j-1, i_phi) + &
-               box%cc(i, j+1, i_phi) - 4 * box%cc(i, j, i_phi)) - &
-               lambda2 * box%cc(i, j, i_phi)
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             box%cc(i, j, k, i_out) = inv_dr_sq * (box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j, k-1, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) - 6 * box%cc(i, j, k, i_phi)) - &
-                  lambda2 * box%cc(i, j, k, i_phi)
-          end do
-       end do
-    end do
-#endif
-  end subroutine helmholtz_operator
-
-  !> Perform Gauss-Seidel relaxation on box for a Helmholtz operator
-  subroutine helmholtz_gsrb(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-    integer                     :: i, i0, j, nc, i_phi, i_rhs
-    real(dp)                    :: dx2
-#if NDIM == 3
-    integer                     :: k
-#endif
-
-    dx2   = box%dr**2
-    nc    = box%n_cell
-    i_phi = mg%i_phi
-    i_rhs = mg%i_rhs
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-#if NDIM == 2
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          box%cc(i, j, i_phi) = 1/(4 + lambda2 * dx2) * ( &
-               box%cc(i+1, j, i_phi) + box%cc(i-1, j, i_phi) + &
-               box%cc(i, j+1, i_phi) + box%cc(i, j-1, i_phi) - &
-               dx2 * box%cc(i, j, i_rhs))
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-          do i = i0, nc, 2
-             box%cc(i, j, k, i_phi) = 1/(6 + lambda2 * dx2) * ( &
-                  box%cc(i+1, j, k, i_phi) + box%cc(i-1, j, k, i_phi) + &
-                  box%cc(i, j+1, k, i_phi) + box%cc(i, j-1, k, i_phi) + &
-                  box%cc(i, j, k+1, i_phi) + box%cc(i, j, k-1, i_phi) - &
-                  dx2 * box%cc(i, j, k, i_rhs))
-          end do
-       end do
-    end do
-#endif
-  end subroutine helmholtz_gsrb
 
 end module m_photoi_helmh

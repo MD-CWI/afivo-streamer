@@ -74,9 +74,9 @@ contains
        ix = gas_index("O2")
        if (ix == -1) error stop "Photoionization: no oxygen present"
        call phmc_get_table_air(phmc_tbl, gas_fractions(ix) * gas_pressure, &
-            2 * ST_domain_len)
+            2 * maxval(ST_domain_len))
 
-       call phmc_print_grid_spacing(ST_domain_len/ST_box_size)
+       call phmc_print_grid_spacing(maxval(ST_domain_len/ST_box_size))
     end if
 
   end subroutine phmc_initialize
@@ -342,7 +342,7 @@ contains
     integer                     :: IJK, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs, my_num_photons
     integer                     :: pho_lvl
-    real(dp)                    :: tmp, dr, fac, dist, r(3)
+    real(dp)                    :: tmp, dr(NDIM), fac, dist, r(3)
     real(dp)                    :: sum_production, pi_lengthscale
     integer, allocatable        :: photons_per_thread(:), photon_thread(:)
     integer, allocatable        :: ix_offset(:)
@@ -397,12 +397,12 @@ contains
              if (tree%boxes(id)%coord_t == af_cyl) then
                 tmp = af_cyl_radius_cc(tree%boxes(id), i)
                 tmp = fac * 2 * pi * tmp * &
-                     tree%boxes(id)%cc(i, j, i_src) * dr**2
+                     tree%boxes(id)%cc(i, j, i_src) * product(dr)
              else
-                tmp = fac * tree%boxes(id)%cc(i, j, i_src) * dr**2
+                tmp = fac * tree%boxes(id)%cc(i, j, i_src) * product(dr)
              end if
 #elif NDIM == 3
-             tmp = fac * tree%boxes(id)%cc(i, j, k, i_src) * dr**3
+             tmp = fac * tree%boxes(id)%cc(i, j, k, i_src) * product(dr)
 #endif
 
              n_create = floor(tmp)
@@ -485,7 +485,7 @@ contains
 
        ! Determine at which level we estimate the photoionization source term. This
        ! depends on the typical length scale for absorption.
-       pho_lvl = get_lvl_length(tree%dr_base, pi_lengthscale)
+       pho_lvl = get_lvl_length(maxval(tree%dr_base), pi_lengthscale)
 
        !$omp parallel do
        do n = 1, n_used
@@ -499,7 +499,7 @@ contains
        do n = 1, n_used
           dist = phmc_absorp_fac * norm2(xyz_abs(1:NDIM, n) - xyz_src(1:NDIM, n))
           if (dist < phmc_min_dx) dist = phmc_min_dx
-          lvl = get_rlvl_length(tree%dr_base, dist, prng%rngs(proc_id))
+          lvl = get_rlvl_length(maxval(tree%dr_base), dist, prng%rngs(proc_id))
           ph_loc(n) = af_get_loc(tree, xyz_abs(1:NDIM, n), lvl)
        end do
        !$omp end do
@@ -532,11 +532,11 @@ contains
              r(1:2) = af_r_cc(tree%boxes(id), [i, j])
              tree%boxes(id)%cc(i, j, i_photo) = &
                   tree%boxes(id)%cc(i, j, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(tmp * dr**2 * r(1))
+                  phmc_tbl%frac_in_tbl/(tmp * product(dr) * r(1))
           else
              tree%boxes(id)%cc(IJK, i_photo) = &
                   tree%boxes(id)%cc(IJK, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(fac * dr**NDIM)
+                  phmc_tbl%frac_in_tbl/(fac * product(dr))
           end if
 #elif NDIM == 3
           i = ph_loc(n)%ix(1)
@@ -546,7 +546,7 @@ contains
 
           tree%boxes(id)%cc(IJK, i_photo) = &
                   tree%boxes(id)%cc(IJK, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(fac * dr**NDIM)
+                  phmc_tbl%frac_in_tbl/(fac * product(dr))
 #endif
        end if
     end do

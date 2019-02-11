@@ -26,7 +26,7 @@ contains
 
     ! First calculate fluxes
     !$omp parallel private(lvl, i, id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -40,7 +40,7 @@ contains
 
     ! Update the solution
     !$omp parallel private(lvl, i, id, p_id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
@@ -73,7 +73,7 @@ contains
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: s_in   !< Input time state
     logical, intent(in)        :: set_dt
-    real(dp)                   :: inv_dr, fld, Td
+    real(dp)                   :: inv_dr(NDIM), fld, Td
     ! Velocities at cell faces
     real(dp), allocatable      :: v(DTIMES(:), :)
     ! Diffusion coefficients at cell faces
@@ -83,7 +83,7 @@ contains
     ! Cell-centered densities
     real(dp), allocatable      :: cc(DTIMES(:))
     real(dp)                   :: mu, fld_face, drt_fac, tmp
-    real(dp)                   :: nsmall, N_inv, dr
+    real(dp)                   :: nsmall, N_inv
     real(dp)                   :: dt_cfl, dt_drt, dt_dif
     real(dp)                   :: vmean(NDIM)
     integer                    :: nc, n, m, IJK, tid
@@ -92,7 +92,6 @@ contains
 #endif
 
     nc      = boxes(id)%n_cell
-    dr      = boxes(id)%dr
     inv_dr  = 1/boxes(id)%dr
     drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
     nsmall  = 1.0_dp ! A small density
@@ -129,7 +128,7 @@ contains
 
           if (ST_drt_limit_flux) then
              tmp = abs(cc(n-1, m) - cc(n, m))/max(cc(n-1, m), cc(n, m), nsmall)
-             tmp = max(fld, tmp * inv_dr * dc(n, m, 1) / mu)
+             tmp = max(fld, tmp * inv_dr(1) * dc(n, m, 1) / mu)
              fmax(n, m, 1) = drt_fac * tmp
           end if
 
@@ -148,7 +147,7 @@ contains
 
           if (ST_drt_limit_flux) then
              tmp = abs(cc(m, n-1) - cc(m, n))/max(cc(m, n-1), cc(m, n), nsmall)
-             tmp = max(fld, tmp * inv_dr * dc(m, n, 2) / mu)
+             tmp = max(fld, tmp * inv_dr(2) * dc(m, n, 2) / mu)
              fmax(m, n, 2) = drt_fac * tmp
           end if
 
@@ -170,7 +169,7 @@ contains
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(n-1, m, l) - cc(n, m, l)) / &
                      max(cc(n-1, m, l), cc(n, m, l), nsmall)
-                tmp = max(fld, tmp * inv_dr * dc(n, m, l, 1) / mu)
+                tmp = max(fld, tmp * inv_dr(1) * dc(n, m, l, 1) / mu)
                 fmax(n, m, l, 1) = drt_fac * tmp
              end if
 
@@ -191,7 +190,7 @@ contains
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(m, n-1, l) - cc(m, n, l)) / &
                      max(cc(m, n-1, l), cc(m, n, l), nsmall)
-                tmp = max(fld, tmp * inv_dr * dc(m, n, l, 2) / mu)
+                tmp = max(fld, tmp * inv_dr(2) * dc(m, n, l, 2) / mu)
                 fmax(m, n, l, 2) = drt_fac * tmp
              end if
 
@@ -212,7 +211,7 @@ contains
              if (ST_drt_limit_flux) then
                 tmp = abs(cc(m, l, n-1) - cc(m, l, n)) / &
                      max(cc(m, l, n-1), cc(m, l, n), nsmall)
-                tmp = max(fld, tmp * inv_dr * dc(m, l, n, 3) / mu)
+                tmp = max(fld, tmp * inv_dr(3) * dc(m, l, n, 3) / mu)
                 fmax(m, l, n, 3) = drt_fac * tmp
              end if
 
@@ -248,7 +247,8 @@ contains
           dt_cfl = 1.0_dp/sum(abs(vmean) * inv_dr)
 
           ! Diffusion condition
-          dt_dif = dr**2 / max(2 * NDIM * maxval(dc(IJK, :)), epsilon(1.0_dp))
+          dt_dif = minval(boxes(id)%dr)**2 / &
+               max(2 * NDIM * maxval(dc(IJK, :)), epsilon(1.0_dp))
 
           ! Take the combined CFL-diffusion condition with Courant number 0.5
           dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
@@ -330,7 +330,7 @@ contains
     integer, intent(in)        :: s_in   !< Input time state
     integer, intent(in)        :: s_out  !< Output time state
     logical, intent(in)        :: set_dt !< Whether to set new time step
-    real(dp)                   :: inv_dr
+    real(dp)                   :: inv_dr(NDIM)
     real(dp), allocatable      :: rates(:, :)
     real(dp), allocatable      :: derivs(:, :)
     real(dp), allocatable      :: dens(:, :)
@@ -351,6 +351,8 @@ contains
 
     allocate(rates(n_cells, n_reactions))
     allocate(derivs(n_cells, n_species))
+    allocate(fields(n_cells))
+    allocate(dens(n_cells, n_species))
 
     fields = SI_to_Townsend * &
          reshape(box%cc(DTIMES(1:nc), i_electric_fld), [n_cells])
@@ -379,16 +381,18 @@ contains
           rfac(:) = 1.0_dp
        end if
 
-       derivs(ix, ix_electron) = derivs(ix, ix_electron) + inv_dr * ( &
-            box%fc(i, j, 2, flux_elec) - &
-            box%fc(i, j+1, 2, flux_elec) + &
-            rfac(1) * box%fc(i, j, 1, flux_elec) - &
-            rfac(2) * box%fc(i+1, j, 1, flux_elec))
+       derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
+            inv_dr(1) * (rfac(1) * box%fc(i, j, 1, flux_elec) - &
+            rfac(2) * box%fc(i+1, j, 1, flux_elec)) + &
+            inv_dr(2) * (box%fc(i, j, 2, flux_elec) - &
+            box%fc(i, j+1, 2, flux_elec))
 #elif NDIM == 3
-       derivs(ix, ix_electron) = derivs(ix, ix_electron) + inv_dr * ( &
-            sum(box%fc(i, j, k, 1:3, flux_elec)) - &
-            box%fc(i+1, j, k, 1, flux_elec) - &
-            box%fc(i, j+1, k, 2, flux_elec) - &
+       derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
+            inv_dr(1) * (box%fc(i, j, k, 1, flux_elec) - &
+            box%fc(i+1, j, k, 1, flux_elec)) + &
+            inv_dr(2) * (box%fc(i, j, k, 2, flux_elec) - &
+            box%fc(i, j+1, k, 2, flux_elec)) + &
+            inv_dr(3) * (box%fc(i, j, k, 3, flux_elec) - &
             box%fc(i, j, k+1, 3, flux_elec))
 #endif
 

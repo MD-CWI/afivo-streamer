@@ -23,7 +23,7 @@ program streamer
   integer, parameter        :: int8       = selected_int_kind(18)
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate, time_last_print
-  integer                   :: i, s, it
+  integer                   :: i, s, it, coord_type
   logical                   :: write_out
   real(dp)                  :: time, dt, photoi_prev_time
   type(CFG_t)               :: cfg            ! The configuration for the simulation
@@ -37,9 +37,6 @@ program streamer
   call initialize_modules(cfg, tree, mg)
 
   call CFG_write(cfg, trim(output_name) // "_out.cfg")
-
-  ! Initialize the tree (which contains all the mesh information)
-  call init_tree(tree)
 
   ! Specify default methods for all the variables
   do i = 1, n_species
@@ -59,6 +56,19 @@ program streamer
              af_gc_interp, ST_prolongation_method)
      end if
   end do
+
+  ! Initialize the tree (which contains all the mesh information)
+  if (ST_cylindrical) then
+     coord_type = af_cyl
+  else
+     coord_type = af_xyz
+  end if
+
+  call af_init(tree, ST_box_size, ST_domain_len, ST_coarse_grid_size, &
+       periodic=ST_periodic, coord=coord_type)
+
+  ! This routine always needs to be called when using multigrid
+  call mg_init(tree, mg)
 
   output_cnt       = 0      ! Number of output files written
   time             = 0.0_dp ! Simulation time (all times are in s)
@@ -173,51 +183,9 @@ contains
 
   end subroutine initialize_modules
 
-  !> Initialize the AMR tree
-  subroutine init_tree(tree)
-    type(af_t), intent(inout) :: tree
-
-    ! Variables used below to initialize tree
-    real(dp)                  :: dr
-    integer                   :: id
-    integer                   :: ix_list(NDIM, 1) ! Spatial indices of initial boxes
-    integer                   :: nb_list(2*NDIM, 1) ! Index of neighbors
-
-    dr = ST_domain_len / ST_box_size
-
-    ! Initialize tree
-    if (ST_cylindrical) then
-       call af_init(tree, ST_box_size, dr, &
-            coarsen_to=ST_coarsest_mesh, coord=af_cyl)
-    else
-       call af_init(tree, ST_box_size, dr, &
-            coarsen_to=ST_coarsest_mesh)
-    end if
-
-    ! Set up geometry
-    id             = 1          ! One box ...
-    ix_list(:, id) = 1          ! With index 1,1 ...
-
-    if (ST_periodic) then
-       if (ST_cylindrical) error stop "Cannot have periodic cylindrical domain"
-       nb_list(:, 1)               = -1
-       nb_list(af_neighb_lowx, 1)  = 1
-       nb_list(af_neighb_highx, 1) = 1
-#if NDIM == 3
-       nb_list(af_neighb_lowy, 1)  = 1
-       nb_list(af_neighb_highy, 1) = 1
-#endif
-       call af_set_base(tree, 1, ix_list, nb_list)
-    else
-       ! Create the base mesh
-       call af_set_base(tree, 1, ix_list)
-    end if
-
-  end subroutine init_tree
-
   subroutine set_initial_conditions(tree, mg)
     type(af_t), intent(inout) :: tree
-    type(mg_t), intent(in)    :: mg
+    type(mg_t), intent(inout) :: mg
 
     do
        call af_loop_box(tree, init_cond_set_box)

@@ -54,10 +54,10 @@ module m_output
   integer, public, protected :: plane_npixels(2) = [64, 64]
 
   ! Relative position of plane minimum coordinate
-  real(dp), public, protected :: plane_rmin(3) = 0.0_dp
+  real(dp), public, protected :: plane_rmin(NDIM) = 0.0_dp
 
   ! Relative position of plane maximum coordinate
-  real(dp), public, protected :: plane_rmax(3) = 1.0_dp
+  real(dp), public, protected :: plane_rmax(NDIM) = 1.0_dp
 
   ! Print status every this many seconds
   real(dp), public, protected :: output_status_delay = 60.0_dp

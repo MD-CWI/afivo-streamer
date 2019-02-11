@@ -66,14 +66,14 @@ module m_streamer
   ! The size of the boxes that we use to construct our mesh
   integer, public, protected :: ST_box_size = 8
 
-  ! The size of the coarsest mesh
-  integer, public, protected :: ST_coarsest_mesh = 2
+  ! Size of the coarse grid
+  integer, public, protected :: ST_coarse_grid_size(NDIM) = 8
 
-  ! The length of the (square) domain
-  real(dp), public, protected :: ST_domain_len = 16e-3_dp
+  ! Domain length per dimension
+  real(dp), public, protected :: ST_domain_len(NDIM) = 16e-3_dp
 
-  ! Whether the domain is periodic in the x (and y)
-  logical, public, protected :: ST_periodic = .false.
+  ! Whether the domain is periodic (per dimension)
+  logical, public, protected :: ST_periodic(NDIM) = .false.
 
   ! Number of V-cycles to perform per time step
   integer, public, protected :: ST_multigrid_num_vcycles = 2
@@ -145,12 +145,12 @@ contains
        "The desired endtime (s) of the simulation")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
          "The number of grid cells per coordinate in a box")
-    call CFG_add_get(cfg, "coarsest_mesh", ST_coarsest_mesh, &
-         "The size of the coarsest mesh")
+    call CFG_add_get(cfg, "coarse_grid_size", ST_coarse_grid_size, &
+         "The size of the coarse grid")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &
          "The length of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
-         "Whether the domain is periodic")
+         "Whether the domain is periodic (per dimension)")
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")

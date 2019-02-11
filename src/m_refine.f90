@@ -135,24 +135,24 @@ contains
     integer, intent(out)     :: &
          cell_flags(DTIMES(box%n_cell))
     integer                  :: IJK, n, nc
-    real(dp)                 :: dx, dx2
+    real(dp)                 :: min_dx, max_dx
     real(dp)                 :: alpha, adx, fld, elec_dens
     real(dp)                 :: dist, rmin(NDIM), rmax(NDIM)
 
-    nc      = box%n_cell
-    dx      = box%dr
-    dx2     = box%dr**2
+    nc = box%n_cell
+    min_dx = minval(box%dr)
+    max_dx = maxval(box%dr)
 
     do KJI_DO(1,nc)
        fld   = box%cc(IJK, i_electric_fld) * SI_to_Townsend
        alpha = LT_get_col(td_tbl, td_alpha, refine_adx_fac * fld) * &
             gas_number_density / refine_adx_fac
-       adx   = box%dr * alpha
+       adx   = max_dx * alpha
        elec_dens = box%cc(IJK, i_electron)
 
        if (adx  > refine_adx .and. elec_dens > refine_min_dens) then
           cell_flags(IJK) = af_do_ref
-       else if (adx < 0.125_dp * refine_adx .and. dx < derefine_dx) then
+       else if (adx < 0.125_dp * refine_adx .and. max_dx < derefine_dx) then
           cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -164,8 +164,8 @@ contains
              dist = GM_dist_line(af_r_cc(box, [IJK]), &
                   init_conds%seed_r0(:, n), &
                   init_conds%seed_r1(:, n), NDIM)
-             if (dist - init_conds%seed_width(n) < 2 * dx &
-                  .and. box%dr > refine_init_fac * &
+             if (dist - init_conds%seed_width(n) < 2 * max_dx &
+                  .and. max_dx > refine_init_fac * &
                   init_conds%seed_width(n)) then
                 cell_flags(IJK) = af_do_ref
              end if
@@ -180,7 +180,7 @@ contains
 
     do n = 1, size(refine_regions_dr)
        if (global_time <= refine_regions_tstop(n) .and. &
-            dx > refine_regions_dr(n) .and. all(&
+            max_dx > refine_regions_dr(n) .and. all(&
             rmax >= refine_regions_rmin(:, n) .and. &
             rmin <= refine_regions_rmax(:, n))) then
           ! Mark just the center cell to prevent refining neighbors
@@ -189,9 +189,9 @@ contains
     end do
 
     ! Make sure we don't have or get a too fine or too coarse grid
-    if (dx > refine_max_dx) then
+    if (max_dx > refine_max_dx) then
        cell_flags = af_do_ref
-    else if (dx < 2 * refine_min_dx) then
+    else if (min_dx < 2 * refine_min_dx) then
        where(cell_flags == af_do_ref) cell_flags = af_keep_ref
     end if
 

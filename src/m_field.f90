@@ -44,15 +44,6 @@ module m_field
   !> The applied voltage (vertical direction)
   real(dp) :: field_voltage
 
-  !> Drop-off radius
-  real(dp) :: field_dropoff_radius = 1e-3_dp
-
-  !> Relative width over which the potential drops
-  real(dp) :: field_dropoff_relwidth = 0.5_dp
-
-  !> Location from which the field drops off (set below)
-  real(dp) :: field_dropoff_pos(2) = 0.0_dp
-
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
   real(dp) :: field_stability_zmax      = 1.0_dp
@@ -74,8 +65,6 @@ module m_field
   public :: field_set_voltage
 
   public :: field_bc_homogeneous
-  public :: field_bc_dropoff_lin
-  public :: field_bc_dropoff_log
 
 contains
 
@@ -132,32 +121,11 @@ contains
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
 
-    call CFG_add_get(cfg, "field_dropoff_radius", field_dropoff_radius, &
-         "Potential stays constant up to this radius")
-    call CFG_add_get(cfg, "field_dropoff_relwidth", field_dropoff_relwidth, &
-         "Relative width over which the potential drops")
-
-    field_voltage = -ST_domain_len * field_amplitude
+    field_voltage = -ST_domain_len(NDIM) * field_amplitude
 
     select case (field_bc_type)
     case ("homogeneous")
        mg%sides_bc => field_bc_homogeneous
-    case ("dropoff_lin")
-       if (ST_cylindrical) then
-          field_dropoff_pos(:) = 0.0_dp
-       else
-          field_dropoff_pos(:) = 0.5_dp
-       end if
-
-       mg%sides_bc => field_bc_dropoff_lin
-    case ("dropoff_log")
-       if (ST_cylindrical) then
-          field_dropoff_pos(:) = 0.0_dp
-       else
-          field_dropoff_pos(:) = 0.5_dp
-       end if
-
-       mg%sides_bc => field_bc_dropoff_log
     case ("point_charge")
        mg%sides_bc => field_bc_point_charge
     case default
@@ -174,9 +142,7 @@ contains
     mg%box_op => mg_auto_op
     mg%box_gsrb => mg_auto_gsrb
     mg%box_corr => mg_auto_corr
-
-    ! This routine always needs to be called when using multigrid
-    call mg_init_mg(mg)
+    mg%box_stencil => mg_box_lpl_stencil
 
     call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
     call af_set_cc_methods(tree, i_electric_fld, &
@@ -190,7 +156,7 @@ contains
     use m_units_constants
     use m_chemistry
     type(af_t), intent(inout) :: tree
-    type(mg_t), intent(in)    :: mg ! Multigrid option struct
+    type(mg_t), intent(inout) :: mg ! Multigrid option struct
     integer, intent(in)       :: s_in
     real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
@@ -267,7 +233,7 @@ contains
        else if (field_stability_search) then
           call af_tree_max_cc(tree, i_electric_fld, max_fld, loc_field)
           r = af_r_loc(tree, loc_field)
-          zrel = r(NDIM) / ST_domain_len
+          zrel = r(NDIM) / ST_domain_len(NDIM)
           zrel = (zrel - field_stability_zmin) / &
                (field_stability_zmax - field_stability_zmin)
 
@@ -288,251 +254,98 @@ contains
     type(af_t), intent(in) :: tree
     real(dp), intent(in)    :: time
 
-    field_voltage = -ST_domain_len * field_get_amplitude(tree, time)
+    field_voltage = -ST_domain_len(NDIM) * field_get_amplitude(tree, time)
   end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential
-  subroutine field_bc_homogeneous(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction for the boundary condition
-    integer, intent(in)         :: iv ! Index of variable
-    integer, intent(out)        :: bc_type ! Type of boundary condition
-    integer                     :: nc
+  subroutine field_bc_homogeneous(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: nc
 
     nc = box%n_cell
 
-    select case (nb)
-#if NDIM == 2
-    case (af_neighb_lowx)
+    if (af_neighb_dim(nb) == NDIM) then
+       if (af_neighb_low(nb)) then
+          bc_type = af_bc_dirichlet
+          bc_val = 0.0_dp
+       else
+          bc_type = af_bc_dirichlet
+          bc_val  = field_voltage
+       end if
+    else
        bc_type = af_bc_neumann
-       box%cc(   0, 1:nc, iv) = 0
-    case (af_neighb_highx)
-       bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, iv) = 0
-    case (af_neighb_lowy)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc,    0, iv) = 0
-    case (af_neighb_highy)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc, nc+1, iv) = field_voltage
-#elif NDIM == 3
-    case (af_neighb_lowx)
-       bc_type = af_bc_neumann
-       box%cc(   0, 1:nc, 1:nc, iv) = 0
-    case (af_neighb_highx)
-       bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, 1:nc, iv) = 0
-    case (af_neighb_lowy)
-       bc_type = af_bc_neumann
-       box%cc(1:nc,    0, 1:nc, iv) = 0
-    case (af_neighb_highy)
-       bc_type = af_bc_neumann
-       box%cc(1:nc, nc+1, 1:nc, iv) = 0
-    case (af_neighb_lowz)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc, 1:nc,    0, iv) = 0
-    case (af_neighb_highz)
-       bc_type = af_bc_dirichlet
-       box%cc(1:nc, 1:nc, nc+1, iv) = field_voltage
-#endif
-    end select
-
+       bc_val = 0.0_dp
+    end if
   end subroutine field_bc_homogeneous
 
-  subroutine field_bc_dropoff_lin(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)          :: nb      ! Direction for the boundary condition
-    integer, intent(in)          :: iv      ! Index of variable
-    integer, intent(out)         :: bc_type ! Type of boundary condition
-    integer                      :: nc, i
-#if NDIM == 3
-    integer                      :: j
-#endif
-    real(dp)                     :: rr(NDIM), rdist
-
-    nc = box%n_cell
-
-    select case (nb)
-#if NDIM == 2
-    case (af_neighb_highy)
-       bc_type = af_bc_dirichlet
-
-       do i = 1, nc
-          rr = af_r_cc(box, [i, 0])
-          rdist = abs(rr(1) - field_dropoff_pos(1))
-          rdist = (rdist - field_dropoff_radius) / &
-               (field_dropoff_relwidth * ST_domain_len)
-
-          if (rdist < 0) then
-             box%cc(i, nc+1, iv) = field_voltage
-          else
-             box%cc(i, nc+1, iv) = field_voltage * &
-                  max(0.0_dp, (1 - rdist))
-          end if
-       end do
-#elif NDIM == 3
-    case (af_neighb_highz)
-       bc_type = af_bc_dirichlet
-
-       do j = 1, nc
-          do i = 1, nc
-             rr = af_r_cc(box, [i, j, 0])
-             rdist = norm2(rr(1:2) - field_dropoff_pos(1:2))
-             rdist = (rdist - field_dropoff_radius) / &
-                  (field_dropoff_relwidth * ST_domain_len)
-
-             if (rdist < 0) then
-                box%cc(i, j, nc+1, iv) = field_voltage
-             else
-                box%cc(i, j, nc+1, iv) = field_voltage * &
-                     max(0.0_dp, (1 - rdist))
-             end if
-          end do
-       end do
-#endif
-    case default
-       call field_bc_homogeneous(box, nb, iv, bc_type)
-    end select
-  end subroutine field_bc_dropoff_lin
-
-  subroutine field_bc_dropoff_log(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)          :: nb      ! Direction for the boundary condition
-    integer, intent(in)          :: iv      ! Index of variable
-    integer, intent(out)         :: bc_type ! Type of boundary condition
-    integer                      :: nc, i
-#if NDIM == 3
-    integer                      :: j
-#endif
-    real(dp)                     :: rr(NDIM), rdist, tmp
-
-    nc = box%n_cell
-    tmp = field_dropoff_relwidth * ST_domain_len
-
-    select case (nb)
-#if NDIM == 2
-    case (af_neighb_highy)
-       bc_type = af_bc_dirichlet
-
-       do i = 1, nc
-          rr = af_r_cc(box, [i, 0])
-          rdist = abs(rr(1) - field_dropoff_pos(1))
-
-          if (rdist < field_dropoff_radius) then
-             box%cc(i, nc+1, iv) = field_voltage
-          else
-             box%cc(i, nc+1, iv) = field_voltage * &
-                  log(1 + tmp/rdist) / log(1 + tmp/field_dropoff_radius)
-          end if
-       end do
-#elif NDIM == 3
-    case (af_neighb_highz)
-       bc_type = af_bc_dirichlet
-
-       do j = 1, nc
-          do i = 1, nc
-             rr = af_r_cc(box, [i, j, 0])
-             rdist = norm2(rr(1:2) - field_dropoff_pos(1:2))
-
-             if (rdist < field_dropoff_radius) then
-                box%cc(i, j, nc+1, iv) = field_voltage
-             else
-                box%cc(i, j, nc+1, iv) = field_voltage * &
-                     log(1 + tmp/rdist) / log(1 + tmp/field_dropoff_radius)
-             end if
-          end do
-       end do
-#endif
-    case default
-       call field_bc_homogeneous(box, nb, iv, bc_type)
-    end select
-  end subroutine field_bc_dropoff_log
-
   !> Create a field of the form E = E_0 - c / r^2
-  subroutine field_bc_point_charge(box, nb, iv, bc_type)
+  subroutine field_bc_point_charge(box, nb, iv, coords, bc_val, bc_type)
     use m_units_constants
-    type(box_t), intent(inout) :: box
-    integer, intent(in)          :: nb      ! Direction for the boundary condition
-    integer, intent(in)          :: iv      ! Index of variable
-    integer, intent(out)         :: bc_type ! Type of boundary condition
-    integer                      :: nc, i, j
-    real(dp)                     :: rr(NDIM), r0(NDIM), r1(NDIM), q
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: n, nc
+    real(dp)                :: r0(NDIM), r1(NDIM), q
 
-    nc = box%n_cell
-    bc_type = af_bc_dirichlet
-    q = field_point_charge / (4 * UC_pi * UC_eps0)
-    r0 = field_point_r0 * ST_domain_len
-    r1 = r0
+    nc       = box%n_cell
+    bc_type  = af_bc_dirichlet
+    q        = field_point_charge / (4 * UC_pi * UC_eps0)
+    r0       = field_point_r0 * ST_domain_len
+    r1       = r0
     r1(NDIM) = -r0(NDIM)
 
-    select case (nb)
-#if NDIM == 2
-    case (af_neighb_lowx)
-       if (ST_cylindrical) then
-          bc_type = af_bc_neumann
-          box%cc(0, 1:nc, iv) = 0
-       else
-          do j = 1, nc
-             rr = af_rr_cc(box, [0.5_dp, j+0.0_dp])
-             box%cc(0, j, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
-          end do
-       end if
-    case (af_neighb_highx)
-       do j = 1, nc
-          rr = af_rr_cc(box, [nc+0.5_dp, j+0.0_dp])
-          box%cc(nc+1, j, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
+    if (ST_cylindrical .and. nb == af_neighb_lowx) then
+       bc_type = af_bc_neumann
+       bc_val = 0.0_dp
+    else
+       bc_type = af_bc_dirichlet
+       do n = 1, box%n_cell**(NDIM-1)
+          bc_val(n) = q/norm2(coords(:, n) - r0) - &
+               q/norm2(coords(:, n) - r1)
        end do
-    case (af_neighb_lowy)
-       do i = 1, nc
-          rr = af_rr_cc(box, [i+0.0_dp, 0.5_dp])
-          box%cc(i, 0, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
-       end do
-    case (af_neighb_highy)
-       do i = 1, nc
-          rr = af_rr_cc(box, [i+0.0_dp, nc+0.5_dp])
-          box%cc(i, nc+1, iv) = q/norm2(rr-r0) - q/norm2(rr-r1)
-       end do
-#elif NDIM == 3
-#endif
-    case default
-       error stop "Not implemented"
-       i = 0; j = 0; rr = 0;
-       call field_bc_homogeneous(box, nb, iv, bc_type)
-    end select
+    end if
   end subroutine field_bc_point_charge
 
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
     type(box_t), intent(inout) :: box
     integer                    :: nc
-    real(dp)                   :: inv_dr
+    real(dp)                   :: inv_dr(NDIM)
 
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
 #if NDIM == 2
-    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr * &
+    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr(1) * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi)) + &
          field_background(1)
-    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr * &
+    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr(2) * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi)) + &
          field_background(2)
 
     if (ST_use_dielectric) then
        ! Compute fields at the boundaries of the box, where eps can change
-       box%fc(1, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+       box%fc(1, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
             (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
             box%cc(0, 1:nc, i_eps) / &
             (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+       box%fc(nc+1, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
             (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
             box%cc(nc+1, 1:nc, i_eps) / &
             (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 2, electric_fld) = 2 * inv_dr * &
+       box%fc(1:nc, 1, 2, electric_fld) = 2 * inv_dr(2) * &
             (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
             box%cc(1:nc, 0, i_eps) / &
             (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-       box%fc(1:nc, nc+1, 2, electric_fld) = 2 * inv_dr * &
+       box%fc(1:nc, nc+1, 2, electric_fld) = 2 * inv_dr(2) * &
             (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
             box%cc(1:nc, nc+1, i_eps) / &
             (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
@@ -544,42 +357,42 @@ contains
          (box%fc(1:nc, 1:nc, 2, electric_fld) + &
          box%fc(1:nc, 2:nc+1, 2, electric_fld))**2)
 #elif NDIM == 3
-    box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr * &
+    box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr(1) * &
          (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
          box%cc(1:nc+1, 1:nc, 1:nc, i_phi)) + &
          field_background(1)
-    box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr * &
+    box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr(2) * &
          (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
          box%cc(1:nc, 1:nc+1, 1:nc, i_phi)) + &
          field_background(2)
-    box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr * &
+    box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr(3) * &
          (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
          box%cc(1:nc, 1:nc, 1:nc+1, i_phi)) + &
          field_background(3)
 
     if (ST_use_dielectric) then
        ! Compute fields at the boundaries of the box, where eps can change
-       box%fc(1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+       box%fc(1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
             (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
             box%cc(0, 1:nc, 1:nc, i_eps) / &
             (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr * &
+       box%fc(nc+1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
             (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
             box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
             (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 1:nc, 2, electric_fld) = 2 * inv_dr * &
+       box%fc(1:nc, 1, 1:nc, 2, electric_fld) = 2 * inv_dr(2) * &
             (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
             box%cc(1:nc, 0, 1:nc, i_eps) / &
             (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
-       box%fc(1:nc, nc+1, 1:nc, 2, electric_fld) = 2 * inv_dr * &
+       box%fc(1:nc, nc+1, 1:nc, 2, electric_fld) = 2 * inv_dr(2) * &
             (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
             box%cc(1:nc, nc+1, 1:nc, i_eps) / &
             (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
-       box%fc(1:nc, 1:nc, 1, 3, electric_fld) = 2 * inv_dr * &
+       box%fc(1:nc, 1:nc, 1, 3, electric_fld) = 2 * inv_dr(3) * &
             (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
             box%cc(1:nc, 1:nc, 0, i_eps) / &
             (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
-       box%fc(1:nc, 1:nc, nc+1, 3, electric_fld) = 2 * inv_dr * &
+       box%fc(1:nc, 1:nc, nc+1, 3, electric_fld) = 2 * inv_dr(3) * &
             (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
             box%cc(1:nc, 1:nc, nc+1, i_eps) / &
             (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))

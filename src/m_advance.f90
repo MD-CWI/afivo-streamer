@@ -27,7 +27,7 @@ contains
     use m_fluid_lfa
     use m_field
     type(af_t), intent(inout) :: tree
-    type(mg_t), intent(in)    :: mg
+    type(mg_t), intent(inout) :: mg
     real(dp), intent(in)      :: dt
     real(dp), intent(inout)   :: time
 
@@ -78,7 +78,7 @@ contains
     integer                   :: lvl, i, id, p_id
 
     !$omp parallel private(lvl, i, id, p_id)
-    do lvl = tree%lowest_lvl, tree%highest_lvl
+    do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
