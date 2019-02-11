@@ -1026,19 +1026,17 @@ contains
 
   !> Incorporate boundary conditions into stencil
   subroutine mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+    use m_af_ghostcell, only: af_gc_get_boundary_coords
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    type(box_t)             :: dummy_box
     integer                 :: nb, nc, lo(NDIM), hi(NDIM)
     integer                 :: nb_id, nb_dim, bc_type
+    real(dp)                :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp)                :: bc_val(box%n_cell**(NDIM-1))
 
     bc_to_rhs = 0.0_dp
-
-    ! Determine boundary conditions by calling the boundary condition routine on
-    ! a dummy box
-    dummy_box = box
     nc        = box%n_cell
 
     do nb = 1, af_num_neighbors
@@ -1046,7 +1044,8 @@ contains
 
        if (nb_id < af_no_box) then
           nb_dim = af_neighb_dim(nb)
-          call mg%sides_bc(dummy_box, nb, mg%i_phi, bc_type)
+          call af_gc_get_boundary_coords(box, nb, coords)
+          call mg%sides_bc(box, nb, mg%i_phi, coords, bc_val, bc_type)
 
           ! Determine index range next to boundary
           call af_get_index_bc_inside(nb, nc, lo, hi)

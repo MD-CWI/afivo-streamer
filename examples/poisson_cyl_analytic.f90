@@ -201,43 +201,29 @@ contains
     end do
   end subroutine set_err
 
-  ! This routine sets boundary conditions for a box, by filling its ghost cells
-  ! with approriate values. Note that on the axis (a boundary in the lower-x
-  ! direction) we should use a Neumann zero condition in cylindrical
-  ! coordinates.
-  subroutine sides_bc(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction for the boundary condition
-    integer, intent(in)         :: iv ! Index of variable
-    integer, intent(out)        :: bc_type ! Type of boundary condition
-    real(dp)                    :: rz(2)
-    integer                     :: n, nc
+  ! This routine sets boundary conditions for a box
+  subroutine sides_bc(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: n
 
-    nc = box%n_cell
-
-    select case (nb)
-    case (af_neighb_lowx)             ! Neumann zero on axis
+    if (nb == af_neighb_lowx) then
+       ! On the axis, apply Neumann zero conditions
        bc_type = af_bc_neumann
-       box%cc(0, 1:nc, iv) = 0
-    case (af_neighb_highx)             ! Use solution on other boundaries
+       bc_val = 0.0_dp
+    else
+       ! We use dirichlet boundary conditions
        bc_type = af_bc_dirichlet
-       do n = 1, nc
-          rz = af_rr_cc(box, [nc+0.5_dp, real(n, dp)])
-          box%cc(nc+1, n, iv) = solution(rz)
+
+       ! Below the solution is specified in the approriate ghost cells
+       do n = 1, box%n_cell**(NDIM-1)
+          bc_val(n) = solution(coords(:, n))
        end do
-    case (af_neighb_lowy)
-       bc_type = af_bc_dirichlet
-       do n = 1, nc
-          rz = af_rr_cc(box, [real(n, dp), 0.5_dp])
-          box%cc(n, 0, iv) = solution(rz)
-       end do
-    case (af_neighb_highy)
-       bc_type = af_bc_dirichlet
-       do n = 1, nc
-          rz = af_rr_cc(box, [real(n, dp), nc+0.5_dp])
-          box%cc(n, nc+1, iv) = solution(rz)
-       end do
-    end select
+    end if
   end subroutine sides_bc
 
 end program poisson_cyl_analytic

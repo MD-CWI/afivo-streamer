@@ -52,6 +52,7 @@ m_af_particles.o: m_af_utils.mod
 m_af_prolong.o: m_af_types.mod
 m_af_restrict.o: m_af_types.mod
 m_af_utils.o: m_af_types.mod
+m_coarse_solver.o: m_af_ghostcell.mod
 m_coarse_solver.o: m_af_types.mod
 m_coarse_solver.o: m_mg_types.mod
 m_mg_types.o: m_af_types.mod

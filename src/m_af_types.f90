@@ -363,12 +363,14 @@ module m_af_types
      end subroutine af_subr_rb
 
      !> To fill ghost cells near physical boundaries
-     subroutine af_subr_bc(box, nb, iv, bc_type)
+     subroutine af_subr_bc(box, nb, iv, coords, bc_val, bc_type)
        import
-       type(box_t), intent(inout)  :: box     !< Box that needs b.c.
-       integer, intent(in)          :: nb      !< Direction
-       integer, intent(in)          :: iv      !< Index of variable
-       integer, intent(out)         :: bc_type !< Type of b.c.
+       type(box_t), intent(in) :: box     !< Box that needs b.c.
+       integer, intent(in)     :: nb      !< Direction
+       integer, intent(in)     :: iv      !< Index of variable
+       real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1)) !< Coordinates of boundary
+       real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1)) !< Boundary values
+       integer, intent(out)    :: bc_type !< Type of b.c.
      end subroutine af_subr_bc
 
      !> Subroutine for getting extra ghost cell data (> 1) near physical boundaries

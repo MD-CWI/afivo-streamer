@@ -81,12 +81,14 @@ contains
   end subroutine average_phi
 
   !> [boundary_method]
-  subroutine boundary_method(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box     ! Box to operate on
-    integer, intent(in)          :: nb      ! Direction for the boundary condition
-    integer, intent(in)          :: iv      ! Index of variable
-    integer, intent(out)         :: bc_type ! Type of boundary condition
-    integer                      :: nc
+  subroutine boundary_method(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+    integer                 :: nc
 
     nc = box%n_cell
 
@@ -95,35 +97,35 @@ contains
 #if NDIM == 2
     case (af_neighb_lowx)      ! Lower-x direction
        bc_type = af_bc_dirichlet
-       box%cc(0, 1:nc, iv) = 1.0_dp
+       bc_val = 1.0_dp
     case (af_neighb_highx)     ! Higher-x direction
        bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, iv) = 0.0_dp
+       bc_val = 0.0_dp
     case (af_neighb_lowy)      ! Lower-y direction
        bc_type = af_bc_dirichlet
-       box%cc(1:nc, 0, iv) = 1.0_dp
+       bc_val = 1.0_dp
     case (af_neighb_highy)     ! Higher-y direction
        bc_type = af_bc_neumann
-       box%cc(1:nc, nc+1, iv) = 0.0_dp
+       bc_val = 0.0_dp
 #elif NDIM == 3
     case (af_neighb_lowx)      ! Lower-x direction
        bc_type = af_bc_dirichlet
-       box%cc(0, 1:nc, 1:nc, iv) = 1.0_dp
+       bc_val = 1.0_dp
     case (af_neighb_highx)     ! Higher-x direction
        bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, 1:nc, iv) = 0.0_dp
+       bc_val = 0.0_dp
     case (af_neighb_lowy)      ! Lower-y direction
        bc_type = af_bc_dirichlet
-       box%cc(1:nc, 0, 1:nc, iv) = 1.0_dp
+       bc_val = 1.0_dp
     case (af_neighb_highy)     ! Higher-y direction
        bc_type = af_bc_neumann
-       box%cc(1:nc, nc+1, 1:nc, iv) = 0.0_dp
+       bc_val = 0.0_dp
     case (af_neighb_lowz)      ! Lower-z direction
        bc_type = af_bc_neumann
-       box%cc(1:nc, 1:nc, 0, iv) = 0.0_dp
+       bc_val = 0.0_dp
     case (af_neighb_highz)     ! Higher-z direction
        bc_type = af_bc_neumann
-       box%cc(1:nc, 1:nc, nc+1, iv) = 0.0_dp
+       bc_val = 0.0_dp
 #endif
     end select
 

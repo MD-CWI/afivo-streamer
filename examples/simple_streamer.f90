@@ -471,22 +471,21 @@ contains
   end subroutine update_solution
 
   !> This fills ghost cells near physical boundaries for the potential
-  subroutine sides_bc_pot(box, nb, iv, bc_type)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)         :: nb ! Direction for the boundary condition
-    integer, intent(in)         :: iv ! Index of variable
-    integer, intent(out)        :: bc_type ! Type of boundary condition
-    integer                     :: nc
-
-    nc = box%n_cell
+  subroutine sides_bc_pot(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
 
     select case (nb)
     case (af_neighb_lowy)
        bc_type = af_bc_neumann
-       box%cc(1:nc, 0, iv) = applied_field
+       bc_val  = applied_field
     case (af_neighb_highy)
        bc_type = af_bc_dirichlet
-       box%cc(1:nc, nc+1, iv) = 0
+       bc_val = 0.0_dp
     case default
        stop "sides_bc_pot: unspecified boundary"
     end select

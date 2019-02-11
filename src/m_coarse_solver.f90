@@ -11,8 +11,10 @@ module m_coarse_solver
   ! Hypre CSR format
   integer, parameter :: HYPRE_PARCSR = 5555
 
-  ! Solver types
+  ! Semi-coarsening multigrid (more robust and expensive)
   integer, parameter :: hypre_smg = 1
+
+  ! Multigrid with point-wise smoother (fast/cheap)
   integer, parameter :: hypre_pfmg = 2
 
     ! Size of the stencil (only direct neighbors)
@@ -133,7 +135,9 @@ contains
 
     call HYPRE_StructMatrixAssemble(mg%csolver%matrix, ierr)
 
-    mg%csolver%solver_type = hypre_pfmg
+    if (mg%csolver%solver_type <= 0) then
+       mg%csolver%solver_type = hypre_pfmg
+    end if
 
     call hypre_prepare_solve(mg%csolver)
 
@@ -152,7 +156,7 @@ contains
     case (hypre_smg)
        call HYPRE_StructSMGDestroy(cs%solver, ierr)
     case (hypre_pfmg)
-       call HYPRE_StructSMGDestroy(cs%solver, ierr)
+       call HYPRE_StructPFMGDestroy(cs%solver, ierr)
     case default
        error stop "hypre_solver_destroy: unknown solver type"
     end select
@@ -207,12 +211,14 @@ contains
   !> Set the right-hand side and copy phi from the tree. Also move the boundary
   !> conditions for phi to the rhs.
   subroutine coarse_solver_set_rhs_phi(tree, mg)
+    use m_af_ghostcell, only: af_gc_get_boundary_coords
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer                   :: n, nb, nc, id, bc_type, ierr
     integer                   :: ilo(NDIM), ihi(NDIM)
-    integer                   :: olo(NDIM), ohi(NDIM)
     real(dp)                  :: tmp(DTIMES(tree%n_cell))
+    real(dp)                  :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp)                  :: bc_val(tree%n_cell**(NDIM-1))
 
     nc = tree%n_cell
 
@@ -225,25 +231,23 @@ contains
        do nb = 1, af_num_neighbors
           if (tree%boxes(id)%neighbors(nb) < af_no_box) then
              ! Put the boundary condition into the ghost cells of mg%i_phi
-             call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, bc_type)
+             call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
+             call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, coords, bc_val, bc_type)
 
              ! Get index range near neighbor
              call af_get_index_bc_inside(nb, nc, ilo, ihi)
-             call af_get_index_bc_outside(nb, nc, olo, ohi)
 
              ! Use the stored arrays mg%csolver%bc_to_rhs to convert the value
              ! at the boundary to the rhs
 #if NDIM == 2
              tmp(ilo(1):ihi(1), ilo(2):ihi(2)) = &
                   tmp(ilo(1):ihi(1), ilo(2):ihi(2)) + &
-                  reshape(mg%csolver%bc_to_rhs(:, nb, n), [ihi - ilo + 1]) * &
-                  tree%boxes(id)%cc(olo(1):ohi(1), olo(2):ohi(2), mg%i_phi)
+                  reshape(mg%csolver%bc_to_rhs(:, nb, n) * bc_val, [ihi - ilo + 1])
 #elif NDIM == 3
              tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) = &
                   tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) + &
-                  reshape(mg%csolver%bc_to_rhs(:, nb, n), [ihi - ilo + 1]) * &
-                  tree%boxes(id)%cc(olo(1):ohi(1), olo(2):ohi(2), &
-                  olo(3):ohi(3), mg%i_phi)
+                  reshape(mg%csolver%bc_to_rhs(:, nb, n) * pack(bc_val, .true.), &
+                  [ihi - ilo + 1])
 #endif
           end if
        end do
