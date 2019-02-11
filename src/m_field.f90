@@ -8,6 +8,15 @@ module m_field
   implicit none
   private
 
+  !> Use a table with fields versus time
+  logical :: field_table_use
+
+  !> List of times
+  real(dp), allocatable :: field_table_times(:)
+
+  !> List of fields
+  real(dp), allocatable :: field_table_fields(:)
+
   !> Start modifying the vertical background field after this time
   real(dp) :: field_mod_t0 = 1e99_dp
 
@@ -73,9 +82,22 @@ contains
   !> Initialize this module
   subroutine field_initialize(tree, cfg, mg)
     use m_config
+    use m_table_data
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg !< Settings
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
+    character(len=string_len)  :: field_table
+
+    field_table = "UNDEFINED"
+    call CFG_add_get(cfg, "field_table", field_table, &
+         "File containing applied electric field (V/m) versus time")
+    if (field_table /= "UNDEFINED") then
+       field_table_use = .true.
+       call table_from_file(field_table, "field_vs_time", &
+            field_table_times, field_table_fields)
+    else
+       field_table_use = .false.
+    end if
 
     call CFG_add_get(cfg, "field_mod_t0", field_mod_t0, &
          "Modify electric field after this time (s)")
@@ -222,34 +244,41 @@ contains
   !> Compute the electric field at a given time
   function field_get_amplitude(tree, time) result(electric_fld)
     use m_units_constants
+    use m_lookup_table
     type(af_t), intent(in) :: tree
-    real(dp), intent(in)    :: time
-    real(dp)                :: electric_fld, t_rel
+    real(dp), intent(in)   :: time
+    real(dp)               :: electric_fld, t_rel
     type(af_loc_t)         :: loc_field
-    real(dp)                :: r(NDIM), zrel, max_fld
+    real(dp)               :: r(NDIM), zrel, max_fld
 
-    t_rel = time - field_mod_t0
-    t_rel = min(t_rel, field_mod_t1-field_mod_t0)
+    if (field_table_use) then
+       call LT_lin_interp_list(field_table_times, field_table_fields, &
+            time, electric_fld)
+    else
+       ! TODO: simplify stuff below
+       t_rel = time - field_mod_t0
+       t_rel = min(t_rel, field_mod_t1-field_mod_t0)
 
-    if (t_rel > 0) then
-       electric_fld = field_amplitude * exp(-t_rel/field_decay_time) + &
-            t_rel * field_lin_deriv + &
-            field_sin_amplitude * &
-            sin(t_rel * field_sin_freq * 2 * UC_pi)
-    else if (field_stability_search) then
-       call af_tree_max_cc(tree, i_electric_fld, max_fld, loc_field)
-       r = af_r_loc(tree, loc_field)
-       zrel = r(NDIM) / ST_domain_len
-       zrel = (zrel - field_stability_zmin) / &
-            (field_stability_zmax - field_stability_zmin)
+       if (t_rel > 0) then
+          electric_fld = field_amplitude * exp(-t_rel/field_decay_time) + &
+               t_rel * field_lin_deriv + &
+               field_sin_amplitude * &
+               sin(t_rel * field_sin_freq * 2 * UC_pi)
+       else if (field_stability_search) then
+          call af_tree_max_cc(tree, i_electric_fld, max_fld, loc_field)
+          r = af_r_loc(tree, loc_field)
+          zrel = r(NDIM) / ST_domain_len
+          zrel = (zrel - field_stability_zmin) / &
+               (field_stability_zmax - field_stability_zmin)
 
-       if (zrel > 0.0_dp .and. max_fld > field_stability_threshold) then
-          electric_fld = (1 - zrel) * field_amplitude
+          if (zrel > 0.0_dp .and. max_fld > field_stability_threshold) then
+             electric_fld = (1 - zrel) * field_amplitude
+          else
+             electric_fld = field_amplitude
+          end if
        else
           electric_fld = field_amplitude
        end if
-    else
-       electric_fld = field_amplitude
     end if
 
   end function field_get_amplitude
