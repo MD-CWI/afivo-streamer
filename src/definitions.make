@@ -28,7 +28,9 @@ m_chemistry.o: m_units_constants.mod
 m_dt.o: m_config.mod
 m_field.o: m_chemistry.mod
 m_field.o: m_config.mod
+m_field.o: m_lookup_table.mod
 m_field.o: m_streamer.mod
+m_field.o: m_table_data.mod
 m_field.o: m_types.mod
 m_field.o: m_units_constants.mod
 m_fluid_lfa.o: m_chemistry.mod
@@ -49,6 +51,7 @@ m_init_cond.o: m_streamer.mod
 m_init_cond.o: m_types.mod
 m_output.o: m_advance.mod
 m_output.o: m_config.mod
+m_output.o: m_field.mod
 m_output.o: m_photoi.mod
 m_output.o: m_streamer.mod
 m_output.o: m_types.mod

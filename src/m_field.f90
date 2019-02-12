@@ -60,6 +60,7 @@ module m_field
 
   public :: field_initialize
   public :: field_compute
+  public :: field_set_rhs
   public :: field_from_potential
   public :: field_get_amplitude
   public :: field_set_voltage
@@ -150,16 +151,11 @@ contains
 
   end subroutine field_initialize
 
-  !> Compute electric field on the tree. First perform multigrid to get electric
-  !> potential, then take numerical gradient to geld field.
-  subroutine field_compute(tree, mg, s_in, time, have_guess)
+  subroutine field_set_rhs(tree, s_in)
     use m_units_constants
     use m_chemistry
     type(af_t), intent(inout) :: tree
-    type(mg_t), intent(inout) :: mg ! Multigrid option struct
     integer, intent(in)       :: s_in
-    real(dp), intent(in)      :: time
-    logical, intent(in)       :: have_guess
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
     real(dp)                  :: q
     integer                   :: lvl, i, id, nc, n, ix
@@ -187,7 +183,21 @@ contains
        !$omp end do nowait
     end do
     !$omp end parallel
+  end subroutine field_set_rhs
 
+  !> Compute electric field on the tree. First perform multigrid to get electric
+  !> potential, then take numerical gradient to geld field.
+  subroutine field_compute(tree, mg, s_in, time, have_guess)
+    use m_units_constants
+    use m_chemistry
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(inout) :: mg ! Multigrid option struct
+    integer, intent(in)       :: s_in
+    real(dp), intent(in)      :: time
+    logical, intent(in)       :: have_guess
+    integer                   :: i
+
+    call field_set_rhs(tree, s_in)
     call field_set_voltage(tree, time)
 
     if (.not. have_guess) then

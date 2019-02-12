@@ -140,6 +140,7 @@ contains
 
   subroutine output_write(tree, output_cnt, wc_time)
     use m_photoi
+    use m_field
     use m_user_methods
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
@@ -150,6 +151,7 @@ contains
     if (silo_write) then
        ! Because the mesh could have changed
        if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
+       call field_set_rhs(tree, 0)
 
        do i = 1, tree%n_var_cell
           if (tree%cc_write_output(i)) then
