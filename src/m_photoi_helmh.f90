@@ -125,9 +125,11 @@ contains
           mg_helm(n)%helmholtz_lambda = lambdas(n)**2
 
           if (ST_cylindrical) then
+#if NDIM == 2
              mg_helm(n)%box_op => mg_box_clpl
              mg_helm(n)%box_gsrb => mg_box_gsrb_clpl
              mg_helm(n)%box_stencil => mg_box_clpl_stencil
+#endif
           else
              mg_helm(n)%box_op => mg_box_lpl
              mg_helm(n)%box_gsrb => mg_box_gsrb_lpl
