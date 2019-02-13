@@ -134,14 +134,21 @@ contains
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: coeff(:)
     integer                    :: IJK, nc
-    real(dp)                   :: fld, Td, alpha, mobility, tmp
+    real(dp)                   :: fld, Td, alpha, mobility, tmp, gas_dens
     type(LT_loc_t)             :: loc
 
     nc = box%n_cell
 
     do KJI_DO(1,nc)
        fld      = box%cc(IJK, i_electric_fld)
-       Td       = fld * SI_to_Townsend
+
+       if (gas_constant_density) then
+          gas_dens = gas_number_density
+       else
+          gas_dens = box%cc(IJK, i_gas_dens)
+       end if
+
+       Td       = fld * SI_to_Townsend / gas_dens
        loc      = LT_get_loc(td_tbl, Td)
        alpha    = LT_get_col_at_loc(td_tbl, td_alpha, loc)
        mobility = LT_get_col_at_loc(td_tbl, td_mobility, loc)

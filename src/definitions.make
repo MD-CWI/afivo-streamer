@@ -46,6 +46,7 @@ m_gas.o: m_types.mod
 m_gas.o: m_units_constants.mod
 m_init_cond.o: m_chemistry.mod
 m_init_cond.o: m_config.mod
+m_init_cond.o: m_gas.mod
 m_init_cond.o: m_geometry.mod
 m_init_cond.o: m_streamer.mod
 m_init_cond.o: m_types.mod
@@ -84,6 +85,7 @@ m_refine.o: m_streamer.mod
 m_refine.o: m_transport_data.mod
 m_streamer.o: m_chemistry.mod
 m_streamer.o: m_config.mod
+m_streamer.o: m_gas.mod
 m_streamer.o: m_lookup_table.mod
 m_streamer.o: m_random.mod
 m_streamer.o: m_types.mod

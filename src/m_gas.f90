@@ -24,10 +24,10 @@ module m_gas
   real(dp), public, protected :: gas_number_density
 
   ! Convert V/m to Townsend
-  real(dp), public, protected :: SI_to_Townsend
+  real(dp), parameter, public :: SI_to_Townsend = 1e21_dp
 
   ! Convert Townsend to V/m
-  real(dp), public, protected :: Townsend_to_SI
+  real(dp), parameter, public :: Townsend_to_SI = 1e-21_dp
 
   public :: gas_initialize
   public :: gas_index
@@ -48,14 +48,9 @@ contains
     call CFG_add_get(cfg, "gas%temperature", gas_temperature, &
          "The gas temperature (Kelvin)")
 
-    if (.not. gas_constant_density) &
-         error stop "Varying gas density not yet supported"
-
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
          (UC_boltzmann_const * gas_temperature)
-    SI_to_Townsend = 1e21_dp / gas_number_density
-    Townsend_to_SI = 1.0_dp / SI_to_Townsend
 
     call CFG_add(cfg, "gas%components", ["N2", "O2"], &
          "Gas component names", .true.)

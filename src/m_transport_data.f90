@@ -51,25 +51,25 @@ contains
        end if
 
        call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", x_data, y_data)
-       x_data = x_data * SI_to_Townsend
+       x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data * gas_number_density
        call LT_set_col(td_tbl, td_mobility, x_data, y_data)
 
        call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", &
             x_data, y_data)
-       x_data = x_data * SI_to_Townsend
+       x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data * gas_number_density
        call LT_set_col(td_tbl, td_diffusion, x_data, y_data)
 
        call table_from_file(td_file, "efield[V/m]_vs_alpha[1/m]", &
             x_data, y_data)
-       x_data = x_data * SI_to_Townsend
+       x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data / gas_number_density
        call LT_set_col(td_tbl, td_alpha, x_data, y_data)
 
        call table_from_file(td_file, "efield[V/m]_vs_eta[1/m]", &
             x_data, y_data)
-       x_data = x_data * SI_to_Townsend
+       x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data / gas_number_density
        call LT_set_col(td_tbl, td_eta, x_data, y_data)
     else

@@ -95,7 +95,7 @@ contains
     inv_dr  = 1/boxes(id)%dr
     drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
     nsmall  = 1.0_dp ! A small density
-    N_inv   = 1/gas_number_density
+    N_inv   = 1/gas_number_density ! For constant gas densities
 
     allocate(v(DTIMES(1:nc+1), NDIM))
     allocate(dc(DTIMES(1:nc+1), NDIM))
@@ -118,9 +118,14 @@ contains
     do n = 1, nc+1
        do m = 1, nc
 #if NDIM == 2
+          if (.not. gas_constant_density) then
+             N_inv = 2 / (boxes(id)%cc(n-1, m, i_gas_dens) + &
+                  boxes(id)%cc(n, m, i_gas_dens))
+          end if
+
           fld = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
                boxes(id)%cc(n, m, i_electric_fld))
-          Td = fld * SI_to_Townsend
+          Td = fld * SI_to_Townsend * N_inv
           mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
           fld_face = boxes(id)%fc(n, m, 1, electric_fld)
           v(n, m, 1)  = -mu * fld_face
@@ -137,9 +142,14 @@ contains
              dc(n, m, 1) = 0.0_dp
           end if
 
+          if (.not. gas_constant_density) then
+             N_inv = 2 / (boxes(id)%cc(m, n-1, i_gas_dens) + &
+                  boxes(id)%cc(m, n, i_gas_dens))
+          end if
+
           fld = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
                boxes(id)%cc(m, n, i_electric_fld))
-          Td = fld * SI_to_Townsend
+          Td = fld * SI_to_Townsend * N_inv
           mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
           fld_face = boxes(id)%fc(m, n, 2, electric_fld)
           v(m, n, 2)  = -mu * fld_face
@@ -157,10 +167,15 @@ contains
           end if
 #elif NDIM == 3
           do l = 1, nc
+             if (.not. gas_constant_density) then
+                N_inv = 2 / (boxes(id)%cc(n-1, m, l, i_gas_dens) + &
+                     boxes(id)%cc(n, m, l, i_gas_dens))
+             end if
+
              fld = 0.5_dp * (&
                   boxes(id)%cc(n-1, m, l, i_electric_fld) + &
                   boxes(id)%cc(n, m, l, i_electric_fld))
-             Td = fld * SI_to_Townsend
+             Td = fld * SI_to_Townsend * N_inv
              mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              fld_face = boxes(id)%fc(n, m, l, 1, electric_fld)
              v(n, m, l, 1)  = -mu * fld_face
@@ -178,10 +193,15 @@ contains
                 dc(n, m, l, 1) = 0.0_dp
              end if
 
+             if (.not. gas_constant_density) then
+                N_inv = 2 / (boxes(id)%cc(m, n-1, l, i_gas_dens) + &
+                     boxes(id)%cc(m, n, l, i_gas_dens))
+             end if
+
              fld = 0.5_dp * (&
                   boxes(id)%cc(m, n-1, l, i_electric_fld) + &
                   boxes(id)%cc(m, n, l, i_electric_fld))
-             Td = fld * SI_to_Townsend
+             Td = fld * SI_to_Townsend * N_inv
              mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              fld_face = boxes(id)%fc(m, n, l, 2, electric_fld)
              v(m, n, l, 2)  = -mu * fld_face
@@ -199,10 +219,15 @@ contains
                 dc(m, n, l, 2) = 0.0_dp
              end if
 
+             if (.not. gas_constant_density) then
+                N_inv = 2 / (boxes(id)%cc(m, l, n-1, i_gas_dens) + &
+                     boxes(id)%cc(m, l, n, i_gas_dens))
+             end if
+
              fld = 0.5_dp * (&
                   boxes(id)%cc(m, l, n-1, i_electric_fld) + &
                   boxes(id)%cc(m, l, n, i_electric_fld))
-             Td = fld * SI_to_Townsend
+             Td = fld * SI_to_Townsend * N_inv
              mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              fld_face = boxes(id)%fc(m, l, n, 3, electric_fld)
              v(m, l, n, 3)  = -mu * fld_face
@@ -256,7 +281,13 @@ contains
           if (ST_drt_limit_flux) then
              mu = ST_ion_mobility
           else
-             Td = boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend
+             if (gas_constant_density) then
+                N_inv = 1 / gas_number_density
+             else
+                N_inv = 1 / boxes(id)%cc(IJK, i_gas_dens)
+             end if
+
+             Td = boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
              mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              mu = max(mu, ST_ion_mobility)
           end if
@@ -331,6 +362,7 @@ contains
     integer, intent(in)        :: s_out  !< Output time state
     logical, intent(in)        :: set_dt !< Whether to set new time step
     real(dp)                   :: inv_dr(NDIM)
+    real(dp)                   :: tmp
     real(dp), allocatable      :: rates(:, :)
     real(dp), allocatable      :: derivs(:, :)
     real(dp), allocatable      :: dens(:, :)
@@ -354,8 +386,15 @@ contains
     allocate(fields(n_cells))
     allocate(dens(n_cells, n_species))
 
-    fields = SI_to_Townsend * &
-         reshape(box%cc(DTIMES(1:nc), i_electric_fld), [n_cells])
+    if (gas_constant_density) then
+       tmp = 1 / gas_number_density
+       fields = SI_to_Townsend * tmp * &
+            reshape(box%cc(DTIMES(1:nc), i_electric_fld), [n_cells])
+    else
+       fields = SI_to_Townsend * &
+            reshape(box%cc(DTIMES(1:nc), i_electric_fld) / &
+            box%cc(DTIMES(1:nc), i_gas_dens), [n_cells])
+    end if
 
     dens = reshape(box%cc(DTIMES(1:nc), species_itree(1:n_species)+s_in), &
          [n_cells, n_species])

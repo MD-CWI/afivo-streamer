@@ -105,7 +105,7 @@ contains
     use m_advance_base, only: advance_num_states
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    integer                    :: n, i
+    integer                    :: n, i, ix
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
 
@@ -133,7 +133,7 @@ contains
                LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
           reactions(1)%y_data = td_tbl%rows_cols(:, td_alpha) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(1)%x_data * &
-               Townsend_to_SI
+               Townsend_to_SI * gas_number_density
           reactions(1)%description = "e + M > e + e + M+"
 
           ! Attachment reaction
@@ -146,7 +146,7 @@ contains
                LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
           reactions(2)%y_data = td_tbl%rows_cols(:, td_eta) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(2)%x_data * &
-               Townsend_to_SI
+               Townsend_to_SI * gas_number_density
           reactions(2)%description = "e + M > M-"
        else
           error stop "Varying gas density not yet supported"
@@ -184,6 +184,23 @@ contains
        fast_react(n)%multiplicity_out = reactions(n)%multiplicity_out
     end do
     print *, "-------------------------"
+
+    ! Make sure the gas components exist as species
+    ix = species_index("M")
+    if (ix == -1) then
+       n_species        = n_species + 1
+       ix               = n_species
+       species_list(ix) = "M"
+    end if
+
+    do n = 1, size(gas_components)
+       ix = species_index(trim(gas_components(n)))
+       if (ix == -1) then
+          n_species        = n_species + 1
+          ix               = n_species
+          species_list(ix) = trim(gas_components(n))
+       end if
+    end do
 
     do n = 1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
@@ -418,8 +435,6 @@ contains
              if (left_side) rfactor = rfactor * gas_number_density
              cycle
           end if
-       else
-          error stop "Not implemented yet"
        end if
 
        ix = species_index(component)

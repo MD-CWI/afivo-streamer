@@ -144,6 +144,7 @@ contains
     mg%box_gsrb => mg_auto_gsrb
     mg%box_corr => mg_auto_corr
     mg%box_stencil => mg_box_lpl_stencil
+    mg%sides_rb => mg_sides_rb
 
     call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
     call af_set_cc_methods(tree, i_electric_fld, &

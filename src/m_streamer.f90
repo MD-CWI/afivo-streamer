@@ -23,6 +23,8 @@ module m_streamer
   integer, public, protected :: i_rhs          = -1 ! Source term Poisson
   integer, public, protected :: i_tmp          = -1 ! Temporary variable
   integer, public, protected :: i_eps          = -1 ! Can be set to include a dielectric
+  integer, public, protected :: i_gas_dens     = -1 ! Set for a variable gas density
+  integer, public, protected, allocatable :: i_gas_comp(:) ! Set for a variable gas density
 
   ! ** Indices of face-centered variables **
   integer, public, protected :: n_var_face   = 0 ! Number of variables
@@ -96,6 +98,7 @@ contains
     use omp_lib
     use m_chemistry
     use m_units_constants
+    use m_gas
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
@@ -121,6 +124,15 @@ contains
     end do
 
     if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
+
+    if (.not. gas_constant_density) then
+       i_gas_dens = af_find_cc_variable(tree, "M")
+
+       allocate(i_gas_comp(size(gas_components)))
+       do n = 1, size(gas_components)
+          i_gas_comp(n) = af_find_cc_variable(tree, trim(gas_components(n)))
+       end do
+    end if
 
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)

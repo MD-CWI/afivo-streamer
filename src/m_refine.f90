@@ -135,7 +135,7 @@ contains
     integer, intent(out)     :: &
          cell_flags(DTIMES(box%n_cell))
     integer                  :: IJK, n, nc
-    real(dp)                 :: min_dx, max_dx
+    real(dp)                 :: min_dx, max_dx, gas_dens
     real(dp)                 :: alpha, adx, fld, elec_dens
     real(dp)                 :: dist, rmin(NDIM), rmax(NDIM)
 
@@ -144,9 +144,14 @@ contains
     max_dx = maxval(box%dr)
 
     do KJI_DO(1,nc)
-       fld   = box%cc(IJK, i_electric_fld) * SI_to_Townsend
+       if (gas_constant_density) then
+          gas_dens = gas_number_density
+       else
+          gas_dens = box%cc(IJK, i_gas_dens)
+       end if
+       fld   = box%cc(IJK, i_electric_fld) * SI_to_Townsend / gas_dens
        alpha = LT_get_col(td_tbl, td_alpha, refine_adx_fac * fld) * &
-            gas_number_density / refine_adx_fac
+            gas_dens / refine_adx_fac
        adx   = max_dx * alpha
        elec_dens = box%cc(IJK, i_electron)
 
