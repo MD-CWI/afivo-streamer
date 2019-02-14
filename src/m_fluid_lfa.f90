@@ -409,7 +409,7 @@ contains
     if (set_dt) then
        tid = omp_get_thread_num() + 1
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
-            minval(max(dens, dt_chemistry_nmin) / max(abs(derivs), eps)))
+            minval((abs(dens) + dt_chemistry_nmin) / max(abs(derivs), eps)))
     end if
 
     ix = 0
