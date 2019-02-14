@@ -26,6 +26,9 @@ module m_dt
   ! Safety factor for the time step
   real(dp), public, protected :: dt_safety_factor = 0.9_dp
 
+  ! Small density for the chemistry time step
+  real(dp), public, protected :: dt_chemistry_nmin = 1e12
+
   ! Maximum allowed time step
   real(dp), public, protected :: dt_max = 1.0e-11_dp
 
@@ -49,6 +52,8 @@ contains
          "The minimum timestep (s)")
     call CFG_add_get(cfg, "dt_safety_factor", dt_safety_factor, &
          "Safety factor for the time step")
+    call CFG_add_get(cfg, "dt_chemistry_nmin", dt_chemistry_nmin, &
+         "Small density for the chemistry time step")
 
     n_threads = af_get_max_threads()
     ! Prevent cache invalidation issues by enlarging the array

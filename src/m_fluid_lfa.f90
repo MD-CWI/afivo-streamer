@@ -373,6 +373,7 @@ contains
 #endif
     integer                    :: IJK, ix, nc, n_cells, n, iv
     integer                    :: tid
+    real(dp), parameter        :: eps = 1e-100_dp
 
     nc      = box%n_cell
     n_cells = box%n_cell**NDIM
@@ -405,7 +406,7 @@ contains
     if (set_dt) then
        tid = omp_get_thread_num() + 1
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
-            1.0_dp / max(maxval(rates), epsilon(1.0_dp)))
+            minval(max(dens, dt_chemistry_nmin) / max(abs(derivs), eps)))
     end if
 
     ix = 0
