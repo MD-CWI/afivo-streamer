@@ -94,8 +94,8 @@ contains
     ic%seed_r1 = reshape(tmp_vec, [NDIM, n_cond])
 
     do n = 1, n_cond
-       ic%seed_r0(:, n) = ic%seed_r0(:, n) * ST_domain_len
-       ic%seed_r1(:, n) = ic%seed_r1(:, n) * ST_domain_len
+       ic%seed_r0(:, n) = ic%seed_r0(:, n) * ST_domain_len + ST_domain_origin
+       ic%seed_r1(:, n) = ic%seed_r1(:, n) * ST_domain_len + ST_domain_origin
     end do
 
     call CFG_get(cfg, "background_density", ic%background_density)

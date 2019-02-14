@@ -74,6 +74,9 @@ module m_streamer
   ! Domain length per dimension
   real(dp), public, protected :: ST_domain_len(NDIM) = 16e-3_dp
 
+  ! Origin of domain
+  real(dp), public, protected :: ST_domain_origin(NDIM) = 0.0_dp
+
   ! Whether the domain is periodic (per dimension)
   logical, public, protected :: ST_periodic(NDIM) = .false.
 
@@ -161,6 +164,8 @@ contains
          "The size of the coarse grid")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &
          "The length of the domain (m)")
+    call CFG_add_get(cfg, "domain_origin", ST_domain_origin, &
+         "The origin of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
          "Whether the domain is periodic (per dimension)")
 

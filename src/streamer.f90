@@ -64,8 +64,9 @@ program streamer
      coord_type = af_xyz
   end if
 
-  call af_init(tree, ST_box_size, ST_domain_len, ST_coarse_grid_size, &
-       periodic=ST_periodic, coord=coord_type)
+  call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
+       ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
+       r_min=ST_domain_origin)
 
   ! This routine always needs to be called when using multigrid
   call mg_init(tree, mg)
