@@ -395,6 +395,9 @@ contains
        fields = SI_to_Townsend * &
             reshape(box%cc(DTIMES(1:nc), i_electric_fld) / &
             box%cc(DTIMES(1:nc), i_gas_dens), [n_cells])
+       ! We need the gas density in ghost cells for the flux computations, this
+       ! line copies them in
+       box%cc(DTIMES(:), i_gas_dens+s_out) = box%cc(DTIMES(:), i_gas_dens+s_in)
     end if
 
     dens = reshape(box%cc(DTIMES(1:nc), species_itree(1:n_species)+s_in), &
