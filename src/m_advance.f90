@@ -65,8 +65,6 @@ contains
     advance_max_dt = min(2 * advance_max_dt, dt_safety_factor * &
          minval(dt_matrix(1:dt_num_cond, :)))
 
-    ! This line prints the different time step restrictions
-    ! print *, minval(dt_matrix(1:dt_num_cond, :), dim=2)
   end subroutine advance
 
   !> Restrict species for which we compute fluxes near refinement boundaries,

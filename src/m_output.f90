@@ -268,6 +268,7 @@ contains
 
   !> Print short status message
   subroutine output_status(tree, time, wc_time, it, dt)
+    use m_dt
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
     real(dp), intent(in)   :: wc_time
@@ -277,6 +278,11 @@ contains
          100 * time / ST_end_time, "% it: ", it, &
          " t:", time, " dt:", dt, " wc:", wc_time, &
          " ncell:", real(af_num_cells_used(tree), dp)
+
+    ! This line prints the different time step restrictions
+    write(*, "(A,4E10.3,A)") "         dt: ", &
+         minval(dt_matrix(1:dt_num_cond, :), dim=2), &
+         " (cfl diff drt chem)"
   end subroutine output_status
 
 end module m_output
