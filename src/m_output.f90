@@ -35,6 +35,9 @@ module m_output
   ! Write binary output files (to resume later)
   logical, public, protected :: datfile_write = .false.
 
+  ! Write binary output files every N outputs
+  integer, public, protected :: datfile_per_outputs = 1
+
   ! Use this many points for lineout data
   integer, public, protected :: lineout_npoints = 500
 
@@ -111,8 +114,10 @@ contains
     call CFG_add_get(cfg, "silo_write", silo_write, &
          "Write silo output")
 
-    call CFG_add_get(cfg, "datfile_write", datfile_write, &
+    call CFG_add_get(cfg, "datfile%write", datfile_write, &
          "Write binary output files (to resume later)")
+    call CFG_add_get(cfg, "datfile%per_outputs", datfile_per_outputs, &
+         "Write binary output files every N outputs")
 
     call CFG_add_get(cfg, "lineout%write", lineout_write, &
          "Write output along a line")
@@ -169,7 +174,8 @@ contains
        call af_write_silo(tree, fname, output_cnt, global_time)
     end if
 
-    if (datfile_write) then
+    if (datfile_write .and. &
+         modulo(output_cnt, datfile_per_outputs) == 0) then
        call af_write_tree(tree, fname, write_sim_data)
     end if
 
