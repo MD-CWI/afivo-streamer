@@ -13,7 +13,7 @@ module m_af_types
   integer, parameter :: af_max_lvl = 30
 
   !> Lowest allowed refinement level
-  integer, parameter :: af_min_lvl = -20
+  integer, parameter :: af_min_lvl = 1
 
   !> Maximum number of variables
   integer, parameter :: af_max_num_vars = 100
@@ -268,8 +268,8 @@ module m_af_types
      integer  :: n_var_cell  = 0       !< number of cell-centered variables
      integer  :: n_var_face  = 0       !< number of face-centered variables
      integer  :: coord_t               !< Type of coordinates
-     integer  :: coarse_grid_size(3) = -1 !< Size of the coarse grid (if rectangular)
-     logical  :: periodic(3) = .false.  !< Which dimensions are periodic
+     integer  :: coarse_grid_size(NDIM) = -1 !< Size of the coarse grid (if rectangular)
+     logical  :: periodic(NDIM) = .false.  !< Which dimensions are periodic
      real(dp) :: r_base(NDIM)          !< min. coords of box at index (1,1)
      real(dp) :: dr_base(NDIM)         !< cell spacing at lvl 1
 
