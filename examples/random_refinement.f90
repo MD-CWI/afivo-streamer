@@ -19,10 +19,10 @@ program random_refinement_Xd
   integer, parameter :: i_phi      = 1
   type(ref_info_t)   :: ref_info
   real(dp)           :: sum_phi_t0, sum_phi
-  character(len=40)  :: fname
+  character(len=100) :: fname
   integer            :: count_rate,t_start,t_end
 
-  write(*,'(A)') 'program random_refinement_" // DIMNAME // "'
+  write(*,'(A,I0,A)') 'program random_refinement_', NDIM, "d"
 
   print *, "Number of threads", af_get_max_threads()
 
@@ -37,24 +37,30 @@ program random_refinement_Xd
   domain_size(1) = 2 * acos(-1.0_dp)
   domain_size(2:) = acos(-1.0_dp)
 
-  call af_init(tree, & ! Tree to initialize
-       box_size, &     ! A box contains box_size**DIM cells
-       domain_size, &
-       grid_size, &
-       periodic=periodic, &
-       coord=coord_type)
+  if (command_argument_count() == 1) then
+     ! Load tree from file
+     call get_command_argument(1, fname)
+     call af_read_tree(tree, fname)
+  else
+     call af_init(tree, & ! Tree to initialize
+          box_size, &     ! A box contains box_size**DIM cells
+          domain_size, &
+          grid_size, &
+          periodic=periodic, &
+          coord=coord_type)
 
-  call af_print_info(tree)
+     call af_print_info(tree)
 
-  ! Set variables on base by using the helper functions af_loop_box(tree, sub)
-  ! and af_loop_boxes(tree, sub). These functions call the subroutine sub for
-  ! each box in the tree, with a slightly different syntax.
-  call af_loop_box(tree, set_init_cond)
+     ! Set variables on base by using the helper functions af_loop_box(tree, sub)
+     ! and af_loop_boxes(tree, sub). These functions call the subroutine sub for
+     ! each box in the tree, with a slightly different syntax.
+     call af_loop_box(tree, set_init_cond)
 
-  ! Fill ghost cells for phi. The third argument is a subroutine that fills
-  ! ghost cells near refinement boundaries, and the fourth argument fill ghost
-  ! cells near physical boundaries.
-  call af_gc_tree(tree, i_phi, af_gc_interp, af_bc_dirichlet_zero)
+     ! Fill ghost cells for phi. The third argument is a subroutine that fills
+     ! ghost cells near refinement boundaries, and the fourth argument fill ghost
+     ! cells near physical boundaries.
+     call af_gc_tree(tree, i_phi, af_gc_interp, af_bc_dirichlet_zero)
+  end if
 
   call af_tree_sum_cc(tree, i_phi, sum_phi_t0)
 
@@ -64,8 +70,9 @@ program random_refinement_Xd
      ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      ! Variables are the names given as the third argument.
-     write(fname, "(A,I0)") "random_refinement_" // DIMNAME // "_", iter
-     call af_write_silo(tree, trim(fname), dir="output", n_cycle=iter)
+     write(fname, "(A,I0)") "output/random_refinement_" // DIMNAME // "_", iter
+     call af_write_silo(tree, trim(fname), n_cycle=iter)
+     call af_write_tree(tree, fname)
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can
@@ -82,16 +89,16 @@ program random_refinement_Xd
      write(*, "(A,E10.2)") " conservation error: ", sum_phi - sum_phi_t0
      boxes_used = boxes_used + ref_info%n_add - ref_info%n_rm
      write(*,'(4(3x,A,1x,i6))') "# new     boxes", ref_info%n_add, &
-                                "# removed boxes", ref_info%n_rm,  &
-                                "# boxes used   ", boxes_used,     &
-                                " highest level ", tree%highest_lvl
+          "# removed boxes", ref_info%n_rm,  &
+          "# boxes used   ", boxes_used,     &
+          " highest level ", tree%highest_lvl
   end do
   call system_clock(t_end, count_rate)
 
   write(*, '(A,i3,1x,A,f8.2,1x,A,/)') &
-           ' Wall-clock time after ',iter, &
-           ' iterations: ', (t_end-t_start) / real(count_rate, dp), &
-           ' seconds'
+       ' Wall-clock time after ',iter, &
+       ' iterations: ', (t_end-t_start) / real(count_rate, dp), &
+       ' seconds'
 
   call af_print_info(tree)
 
@@ -114,7 +121,7 @@ contains
        cell_flags = af_do_ref   ! Add refinement
     else
        cell_flags = af_rm_ref   ! Ask to remove this box, which will not always
-                              ! happen (see documentation)
+       ! happen (see documentation)
     end if
   end subroutine ref_routine
 
