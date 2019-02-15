@@ -14,6 +14,8 @@ program poisson_cyl_analytic
   integer            :: i_err
   integer            :: i_sol
   integer            :: i_tmp
+  integer            :: i_gradx
+  integer            :: i_egradx
 
   real(dp), parameter :: domain_len = 1.25e-2_dp
   real(dp), parameter :: pi = acos(-1.0_dp)
@@ -39,6 +41,8 @@ program poisson_cyl_analytic
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_cc_variable(tree, "sol", ix=i_sol)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
+  call af_add_cc_variable(tree, "Dx",  ix=i_gradx)
+  call af_add_cc_variable(tree, "eDx", ix=i_egradx)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -109,7 +113,7 @@ program poisson_cyl_analytic
           maxval(abs(anal_err))
 
      write(fname, "(A,I0)") "poisson_cyl_analytic_", mg_iter
-     call af_write_vtk(tree, trim(fname), dir="output")
+     call af_write_silo(tree, trim(fname), dir="output")
   end do
   call system_clock(t_end, count_rate)
 
@@ -153,20 +157,31 @@ contains
   subroutine set_init_cond(box)
     type(box_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: rz(2)
+    real(dp)                    :: rz(2), gradx
 
     nc = box%n_cell
 
     do j = 0, nc+1
        do i = 0, nc+1
-          rz = af_r_cc(box, [i,j]) - rz_source
+          rz = af_r_cc(box, [i,j])
 
           ! Gaussian source term
           box%cc(i, j, i_rhs) = - Q_source * &
-               exp(-sum(rz**2) / (2 * sigma**2)) / &
+               exp(-sum((rz - rz_source)**2) / (2 * sigma**2)) / &
                (sigma**3 * sqrt(2 * pi)**3 * epsilon_source)
+
+          box%cc(i, j, i_sol) = solution(rz)
        end do
     end do
+
+    do j = 1, nc
+       do i = 1, nc
+          gradx = 0.5_dp * (box%cc(i+1, j, i_sol) - &
+               box%cc(i-1, j, i_sol)) / box%dr(1)
+          box%cc(i, j, i_gradx) = gradx
+       end do
+    end do
+
   end subroutine set_init_cond
 
   real(dp) function solution(rz_in)
@@ -189,14 +204,17 @@ contains
   subroutine set_err(box)
     type(box_t), intent(inout) :: box
     integer                     :: i, j, nc
-    real(dp)                    :: rz(2)
+    real(dp)                    :: rz(2), gradx
 
     nc = box%n_cell
     do j = 1, nc
        do i = 1, nc
           rz = af_r_cc(box, [i,j])
-          box%cc(i, j, i_sol) = solution(rz)
           box%cc(i, j, i_err) = box%cc(i, j, i_phi) - box%cc(i, j, i_sol)
+
+          gradx = 0.5_dp * (box%cc(i+1, j, i_phi) - &
+               box%cc(i-1, j, i_phi)) / box%dr(1)
+          box%cc(i, j, i_egradx) = gradx - box%cc(i, j, i_gradx)
        end do
     end do
   end subroutine set_err

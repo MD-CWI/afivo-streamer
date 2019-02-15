@@ -7,6 +7,8 @@ module m_af_output
   implicit none
   private
 
+  integer, parameter :: af_dat_file_version = 1
+
   abstract interface
      subroutine subr_add_vars(box, new_vars, n_var)
        import
@@ -19,6 +21,11 @@ module m_af_output
             0:box%n_cell+1, n_var)
 #endif
      end subroutine subr_add_vars
+
+     ! Subroutine that reads/writes unformatted data
+     subroutine subr_other_data(my_unit)
+       integer, intent(in) :: my_unit
+     end subroutine subr_other_data
   end interface
 
   public :: af_prepend_directory
@@ -54,136 +61,175 @@ contains
   end subroutine af_prepend_directory
 
   !> Write full tree in binary format
-  subroutine af_write_tree(tree, filename, dir)
-    type(af_t), intent(in)                :: tree     !< Tree to write out
+  subroutine af_write_tree(tree, filename, write_other_data)
+    type(af_t), intent(in)                 :: tree     !< Tree to write out
     character(len=*), intent(in)           :: filename !< Filename for the output
-    character(len=*), optional, intent(in) :: dir      !< Directory to place output in
+    procedure(subr_other_data), optional   :: write_other_data
     integer                                :: my_unit, lvl, id
     character(len=400)                     :: fname
 
-    error stop "af_write_tree: not complete"
-
-    call af_prepend_directory(trim(filename) // ".dat", dir, fname)
+    fname = trim(filename) // ".dat"
 
     open(newunit=my_unit, file=trim(fname), form='unformatted', &
          access='stream', status='replace')
 
-    write(my_unit) tree%ready       !< Is tree ready for use?
-    write(my_unit) tree%box_limit   !< maximum number of boxes
-    write(my_unit) tree%highest_lvl !< highest level present
-    write(my_unit) tree%highest_id  !< highest box index present
-    write(my_unit) tree%n_cell      !< number of cells per dimension
-    write(my_unit) tree%n_var_cell  !< number of cell-centered variables
-    write(my_unit) tree%n_var_face  !< number of face-centered variables
-    write(my_unit) tree%coord_t     !< Type of coordinates
-    write(my_unit) tree%r_base(:)   !< min. coords of box at index (1,1)
-    write(my_unit) tree%dr_base     !< cell spacing at lvl 1
+    write(my_unit) af_dat_file_version
+    write(my_unit) tree%ready
+    write(my_unit) tree%box_limit
+    write(my_unit) tree%highest_lvl
+    write(my_unit) tree%highest_id
+    write(my_unit) tree%n_cell
+    write(my_unit) tree%n_var_cell
+    write(my_unit) tree%n_var_face
+    write(my_unit) tree%coord_t
+    write(my_unit) tree%coarse_grid_size
+    write(my_unit) tree%periodic
+    write(my_unit) tree%r_base
+    write(my_unit) tree%dr_base
 
-    write(my_unit) tree%cc_names(:)
-    write(my_unit) tree%fc_names(:)
+    write(my_unit) tree%cc_names
+    write(my_unit) tree%fc_names
+    write(my_unit) tree%cc_max_level
+    write(my_unit) tree%cc_num_copies
+    write(my_unit) tree%cc_write_output
+
+    ! Skip methods (these have to be set again)
 
     do lvl = 1, tree%highest_lvl
-      write(my_unit) size(tree%lvls(lvl)%ids)
-      write(my_unit) tree%lvls(lvl)%ids
+       write(my_unit) size(tree%lvls(lvl)%ids)
+       write(my_unit) tree%lvls(lvl)%ids
 
-      write(my_unit) size(tree%lvls(lvl)%leaves)
-      write(my_unit) tree%lvls(lvl)%leaves
+       write(my_unit) size(tree%lvls(lvl)%leaves)
+       write(my_unit) tree%lvls(lvl)%leaves
 
-      write(my_unit) size(tree%lvls(lvl)%parents)
-      write(my_unit) tree%lvls(lvl)%parents
+       write(my_unit) size(tree%lvls(lvl)%parents)
+       write(my_unit) tree%lvls(lvl)%parents
     end do
 
     do id = 1, tree%highest_id
-      write(my_unit) tree%boxes(id)%in_use  !< is the box in use?
-      if (.not. tree%boxes(id)%in_use) cycle
+       write(my_unit) tree%boxes(id)%in_use  !< is the box in use?
+       if (.not. tree%boxes(id)%in_use) cycle
 
-      write(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
-      write(my_unit) tree%boxes(id)%lvl     !< level of the box
-      write(my_unit) tree%boxes(id)%tag     !< for the user
-      write(my_unit) tree%boxes(id)%ix      !< index in the domain
-      write(my_unit) tree%boxes(id)%parent  !< index of parent in box list
-      write(my_unit) tree%boxes(id)%children
-      write(my_unit) tree%boxes(id)%neighbors
-      write(my_unit) tree%boxes(id)%dr      !< width/height of a cell
-      write(my_unit) tree%boxes(id)%r_min   !< min coords. of box
-      write(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
-      write(my_unit) tree%boxes(id)%cc
-      write(my_unit) tree%boxes(id)%fc
+       write(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
+       write(my_unit) tree%boxes(id)%lvl     !< level of the box
+       write(my_unit) tree%boxes(id)%tag     !< for the user
+       write(my_unit) tree%boxes(id)%ix      !< index in the domain
+       write(my_unit) tree%boxes(id)%parent  !< index of parent in box list
+       write(my_unit) tree%boxes(id)%children
+       write(my_unit) tree%boxes(id)%neighbors
+       write(my_unit) tree%boxes(id)%neighbor_mat
+       write(my_unit) tree%boxes(id)%dr      !< width/height of a cell
+       write(my_unit) tree%boxes(id)%r_min   !< min coords. of box
+       write(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
+       write(my_unit) tree%boxes(id)%cc
+       write(my_unit) tree%boxes(id)%fc
     end do
+
+    write(my_unit) present(write_other_data)
+
+    if (present(write_other_data)) then
+       call write_other_data(my_unit)
+    end if
 
     close(my_unit)
     print *, "af_write_tree: written " // trim(fname)
   end subroutine af_write_tree
 
   !> Read full tree in binary format
-  subroutine af_read_tree(tree, filename)
+  subroutine af_read_tree(tree, filename, read_other_data)
     use m_af_core, only: af_init_box
-    type(af_t), intent(out)               :: tree    !< Tree to read in
-    character(len=*), intent(in)           :: filename !< Filename for the input
-    integer                                :: my_unit, lvl, n, id
+    type(af_t), intent(inout)    :: tree     !< Tree to read in
+    character(len=*), intent(in) :: filename !< Filename for the input
+    procedure(subr_other_data), optional :: read_other_data
+    integer                      :: my_unit, lvl, n, id, version
+    logical                      :: other_data_present
 
     open(newunit=my_unit, file=trim(filename), form='unformatted', &
          access='stream', status='old', action='read')
 
-    read(my_unit) tree%ready       !< Is tree ready for use?
-    read(my_unit) tree%box_limit   !< maximum number of boxes
-    read(my_unit) tree%highest_lvl !< highest level present
-    read(my_unit) tree%highest_id  !< highest box index present
-    read(my_unit) tree%n_cell      !< number of cells per dimension
-    read(my_unit) tree%n_var_cell  !< number of cell-centered variables
-    read(my_unit) tree%n_var_face  !< number of face-centered variables
-    read(my_unit) tree%coord_t     !< Type of coordinates
-    read(my_unit) tree%r_base(:)   !< min. coords of box at index (1,1)
-    read(my_unit) tree%dr_base     !< cell spacing at lvl 1
+    read(my_unit) version
+    if (version /= af_dat_file_version) then
+       print *, "File version read:", version
+       print *, "File version required:", af_dat_file_version
+       error stop "af_read_tree: incompatible file versions"
+    end if
 
-    read(my_unit) tree%cc_names(:)
-    read(my_unit) tree%fc_names(:)
+    read(my_unit) tree%ready
+    read(my_unit) tree%box_limit
+    read(my_unit) tree%highest_lvl
+    read(my_unit) tree%highest_id
+    read(my_unit) tree%n_cell
+    read(my_unit) tree%n_var_cell
+    read(my_unit) tree%n_var_face
+    read(my_unit) tree%coord_t
+    read(my_unit) tree%coarse_grid_size
+    read(my_unit) tree%periodic
+    read(my_unit) tree%r_base
+    read(my_unit) tree%dr_base
 
-    read(my_unit) lvl
+    ! Skip methods (these have to be set again)
+    if (.not. allocated(tree%cc_method_vars)) &
+         allocate(tree%cc_method_vars(0))
+
+    read(my_unit) tree%cc_names
+    read(my_unit) tree%fc_names
+    read(my_unit) tree%cc_max_level
+    read(my_unit) tree%cc_num_copies
+    read(my_unit) tree%cc_write_output
 
     do lvl = 1, tree%highest_lvl
-      read(my_unit) n
-      allocate(tree%lvls(lvl)%ids(n))
-      read(my_unit) tree%lvls(lvl)%ids
+       read(my_unit) n
+       allocate(tree%lvls(lvl)%ids(n))
+       read(my_unit) tree%lvls(lvl)%ids
 
-      read(my_unit) n
-      allocate(tree%lvls(lvl)%leaves(n))
-      read(my_unit) tree%lvls(lvl)%leaves
+       read(my_unit) n
+       allocate(tree%lvls(lvl)%leaves(n))
+       read(my_unit) tree%lvls(lvl)%leaves
 
-      read(my_unit) n
-      allocate(tree%lvls(lvl)%parents(n))
-      read(my_unit) tree%lvls(lvl)%parents
+       read(my_unit) n
+       allocate(tree%lvls(lvl)%parents(n))
+       read(my_unit) tree%lvls(lvl)%parents
     end do
 
     do lvl = tree%highest_lvl+1, af_max_lvl
-      allocate(tree%lvls(lvl)%ids(0))
-      allocate(tree%lvls(lvl)%leaves(0))
-      allocate(tree%lvls(lvl)%parents(0))
+       allocate(tree%lvls(lvl)%ids(0))
+       allocate(tree%lvls(lvl)%leaves(0))
+       allocate(tree%lvls(lvl)%parents(0))
     end do
 
     allocate(tree%boxes(tree%highest_id))
 
     do id = 1, tree%highest_id
-      read(my_unit) tree%boxes(id)%in_use  !< is the box in use?
-      if (.not. tree%boxes(id)%in_use) cycle
+       read(my_unit) tree%boxes(id)%in_use  !< is the box in use?
+       if (.not. tree%boxes(id)%in_use) cycle
 
-      ! Some boxes can have a different size
-      read(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
-      call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
-          tree%n_var_cell, tree%n_var_face)
+       read(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
+       call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+            tree%n_var_cell, tree%n_var_face)
 
-      read(my_unit) tree%boxes(id)%lvl     !< level of the box
-      read(my_unit) tree%boxes(id)%tag     !< for the user
-      read(my_unit) tree%boxes(id)%ix      !< index in the domain
-      read(my_unit) tree%boxes(id)%parent  !< index of parent in box list
-      read(my_unit) tree%boxes(id)%children
-      read(my_unit) tree%boxes(id)%neighbors
-      read(my_unit) tree%boxes(id)%dr      !< width/height of a cell
-      read(my_unit) tree%boxes(id)%r_min   !< min coords. of box
-      read(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
-      read(my_unit) tree%boxes(id)%cc
-      read(my_unit) tree%boxes(id)%fc
+       read(my_unit) tree%boxes(id)%lvl     !< level of the box
+       read(my_unit) tree%boxes(id)%tag     !< for the user
+       read(my_unit) tree%boxes(id)%ix      !< index in the domain
+       read(my_unit) tree%boxes(id)%parent  !< index of parent in box list
+       read(my_unit) tree%boxes(id)%children
+       read(my_unit) tree%boxes(id)%neighbors
+       read(my_unit) tree%boxes(id)%neighbor_mat
+       read(my_unit) tree%boxes(id)%dr      !< width/height of a cell
+       read(my_unit) tree%boxes(id)%r_min   !< min coords. of box
+       read(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
+       read(my_unit) tree%boxes(id)%cc
+       read(my_unit) tree%boxes(id)%fc
     end do
+
+    read(my_unit) other_data_present
+
+    if (present(read_other_data)) then
+       if (other_data_present) then
+          call read_other_data(my_unit)
+       else
+          error stop "af_read_tree: other data is not present"
+       end if
+    end if
 
     close(my_unit)
   end subroutine af_read_tree
