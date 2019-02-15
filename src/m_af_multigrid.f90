@@ -1376,8 +1376,8 @@ contains
     do j = 1, nc
        do i = 1, nc
           stencil(1, i, j)  = -2 * sum(idr2) - mg%helmholtz_lambda
-          stencil(2:3, i, j) = idr2 * rfac(:, i)
-          stencil(4:5, i, j) = idr2
+          stencil(2:3, i, j) = idr2(1) * rfac(:, i)
+          stencil(4:5, i, j) = idr2(2)
        end do
     end do
 
