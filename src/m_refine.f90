@@ -41,6 +41,9 @@ module m_refine
   ! Minimum electron density for adding grid refinement
   real(dp), protected :: refine_min_dens = -1.0e99_dp
 
+  ! See comment below
+  real(dp), protected :: refine_rhs_voltage = -1.0e99_dp
+
   ! Refine a region up to this grid spacing
   real(dp), protected, allocatable :: refine_regions_dr(:)
 
@@ -95,6 +98,8 @@ contains
          "Refine until dx is smaller than this factor times the seed width")
     call CFG_add_get(cfg, "refine_min_dens", refine_min_dens, &
          "Minimum electron density for adding grid refinement")
+    call CFG_add_get(cfg, "refine_rhs_voltage", refine_rhs_voltage, &
+         "Only refine if sqrt(rhs / (eps0 * V0)) * h > 1")
 
     call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
          "Refine regions up to this grid spacing", .true.)
@@ -132,12 +137,13 @@ contains
     use m_transport_data
     type(box_t), intent(in) :: box
     ! Refinement flags for the cells of the box
-    integer, intent(out)     :: &
+    integer, intent(out)    :: &
          cell_flags(DTIMES(box%n_cell))
-    integer                  :: IJK, n, nc
-    real(dp)                 :: min_dx, max_dx, gas_dens
-    real(dp)                 :: alpha, adx, fld, elec_dens
-    real(dp)                 :: dist, rmin(NDIM), rmax(NDIM)
+    integer                 :: IJK, n, nc
+    real(dp)                :: min_dx, max_dx, gas_dens
+    real(dp)                :: alpha, adx, fld, elec_dens
+    real(dp)                :: dist, rmin(NDIM), rmax(NDIM)
+    logical                 :: refine_rhs
 
     nc = box%n_cell
     min_dx = minval(box%dr)
@@ -154,6 +160,13 @@ contains
             gas_dens / refine_adx_fac
        adx   = max_dx * alpha
        elec_dens = box%cc(IJK, i_electron)
+
+       if (refine_rhs_voltage > 0.0_dp) then
+          refine_rhs = (sqrt(abs(box%cc(IJK, i_rhs)) / refine_rhs_voltage) * &
+               max_dx > 1.0_dp)
+       else
+          refine_rhs = .true.
+       end if
 
        if (adx  > refine_adx .and. elec_dens > refine_min_dens) then
           cell_flags(IJK) = af_do_ref
