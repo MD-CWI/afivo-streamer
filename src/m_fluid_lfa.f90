@@ -45,13 +45,6 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           call update_solution(tree%boxes(id), dt, s_in, s_out, set_dt)
-
-          ! This can be important for setting ghost cells
-          p_id = tree%boxes(id)%parent
-          if (p_id > af_no_box) then
-             call af_restrict_box_vars(tree%boxes(id), tree%boxes(p_id), &
-                  flux_species)
-          end if
        end do
        !$omp end do
     end do
@@ -119,8 +112,8 @@ contains
        do m = 1, nc
 #if NDIM == 2
           if (.not. gas_constant_density) then
-             N_inv = 2 / (boxes(id)%cc(n-1, m, i_gas_dens) + &
-                  boxes(id)%cc(n, m, i_gas_dens))
+             N_inv = 2 / (boxes(id)%cc(n-1, m, i_gas_dens+s_in) + &
+                  boxes(id)%cc(n, m, i_gas_dens+s_in))
           end if
 
           fld = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
@@ -143,8 +136,8 @@ contains
           end if
 
           if (.not. gas_constant_density) then
-             N_inv = 2 / (boxes(id)%cc(m, n-1, i_gas_dens) + &
-                  boxes(id)%cc(m, n, i_gas_dens))
+             N_inv = 2 / (boxes(id)%cc(m, n-1, i_gas_dens+s_in) + &
+                  boxes(id)%cc(m, n, i_gas_dens+s_in))
           end if
 
           fld = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
@@ -168,8 +161,8 @@ contains
 #elif NDIM == 3
           do l = 1, nc
              if (.not. gas_constant_density) then
-                N_inv = 2 / (boxes(id)%cc(n-1, m, l, i_gas_dens) + &
-                     boxes(id)%cc(n, m, l, i_gas_dens))
+                N_inv = 2 / (boxes(id)%cc(n-1, m, l, i_gas_dens+s_in) + &
+                     boxes(id)%cc(n, m, l, i_gas_dens+s_in))
              end if
 
              fld = 0.5_dp * (&
@@ -194,8 +187,8 @@ contains
              end if
 
              if (.not. gas_constant_density) then
-                N_inv = 2 / (boxes(id)%cc(m, n-1, l, i_gas_dens) + &
-                     boxes(id)%cc(m, n, l, i_gas_dens))
+                N_inv = 2 / (boxes(id)%cc(m, n-1, l, i_gas_dens+s_in) + &
+                     boxes(id)%cc(m, n, l, i_gas_dens+s_in))
              end if
 
              fld = 0.5_dp * (&
@@ -220,8 +213,8 @@ contains
              end if
 
              if (.not. gas_constant_density) then
-                N_inv = 2 / (boxes(id)%cc(m, l, n-1, i_gas_dens) + &
-                     boxes(id)%cc(m, l, n, i_gas_dens))
+                N_inv = 2 / (boxes(id)%cc(m, l, n-1, i_gas_dens+s_in) + &
+                     boxes(id)%cc(m, l, n, i_gas_dens+s_in))
              end if
 
              fld = 0.5_dp * (&
@@ -284,7 +277,7 @@ contains
              if (gas_constant_density) then
                 N_inv = 1 / gas_number_density
              else
-                N_inv = 1 / boxes(id)%cc(IJK, i_gas_dens)
+                N_inv = 1 / boxes(id)%cc(IJK, i_gas_dens+s_in)
              end if
 
              Td = boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
@@ -318,32 +311,6 @@ contains
        end where
     end if
 
-    !     if (ST_update_ions) then
-    !        ! Use a constant diffusion coefficient for ions
-    !        dc = ST_ion_diffusion
-
-    !        ! Use a constant mobility for ions
-    !        v(DTIMES(:), 1:NDIM) = ST_ion_mobility * &
-    !             boxes(id)%fc(DTIMES(:), 1:NDIM, electric_fld)
-
-    !        ! Fill ghost cells on the sides of boxes (no corners)
-    !        call af_gc_box(boxes, id, i_pos_ion, af_gc_interp_lim, &
-    !             af_bc_neumann_zero, .false.)
-
-    !        ! Fill cc with interior data plus a second layer of ghost cells
-    !        call af_gc2_box(boxes, id, i_pos_ion, af_gc2_prolong_linear, &
-    !             af_bc2_neumann_zero, cc, nc)
-
-    ! #if NDIM == 2
-    !        call flux_koren_2d(cc, v, nc, 2)
-    !        call flux_diff_2d(cc, dc, inv_dr, nc, 2)
-    ! #elif NDIM == 3
-    !        call flux_koren_3d(cc, v, nc, 2)
-    !        call flux_diff_3d(cc, dc, inv_dr, nc, 2)
-    ! #endif
-
-    !        boxes(id)%fc(DTIMES(:), :, flux_ion) = v + dc
-    !     end if
   end subroutine fluxes_elec
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
@@ -368,8 +335,7 @@ contains
     real(dp), allocatable      :: dens(:, :)
     real(dp), allocatable      :: fields(:)
 #if NDIM == 2
-    real(dp)                   :: rfac(2)
-    integer                    :: ioff
+    real(dp)                   :: rfac(2, box%n_cell)
 #endif
     integer                    :: IJK, ix, nc, n_cells, n, iv
     integer                    :: tid
@@ -378,9 +344,6 @@ contains
     nc      = box%n_cell
     n_cells = box%n_cell**NDIM
     inv_dr  = 1/box%dr
-#if NDIM == 2
-    ioff    = (box%ix(1)-1) * nc
-#endif
 
     allocate(rates(n_cells, n_reactions))
     allocate(derivs(n_cells, n_species))
@@ -394,7 +357,7 @@ contains
     else
        fields = SI_to_Townsend * &
             reshape(box%cc(DTIMES(1:nc), i_electric_fld) / &
-            box%cc(DTIMES(1:nc), i_gas_dens), [n_cells])
+            box%cc(DTIMES(1:nc), i_gas_dens+s_in), [n_cells])
        ! We need the gas density in ghost cells for the flux computations, this
        ! line copies them in
        box%cc(DTIMES(:), i_gas_dens+s_out) = box%cc(DTIMES(:), i_gas_dens+s_in)
@@ -412,21 +375,22 @@ contains
             minval((abs(dens) + dt_chemistry_nmin) / max(abs(derivs), eps)))
     end if
 
+#if NDIM == 2
+    if (ST_cylindrical) then
+       call af_cyl_flux_factors(box, rfac)
+    else
+       rfac = 1.0_dp
+    end if
+#endif
+
     ix = 0
     do KJI_DO(1,nc)
        ix = ix + 1
        ! Contribution of flux
 #if NDIM == 2
-       if (ST_cylindrical) then
-          ! Weighting of flux contribution for cylindrical coordinates
-          rfac(:) = [i+ioff-1, i+ioff] / (i+ioff-0.5_dp)
-       else
-          rfac(:) = 1.0_dp
-       end if
-
        derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
-            inv_dr(1) * (rfac(1) * box%fc(i, j, 1, flux_elec) - &
-            rfac(2) * box%fc(i+1, j, 1, flux_elec)) + &
+            inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, flux_elec) - &
+            rfac(2, i) * box%fc(i+1, j, 1, flux_elec)) + &
             inv_dr(2) * (box%fc(i, j, 2, flux_elec) - &
             box%fc(i, j+1, 2, flux_elec))
 #elif NDIM == 3
