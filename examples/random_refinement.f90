@@ -40,7 +40,7 @@ program random_refinement_Xd
   if (command_argument_count() == 1) then
      ! Load tree from file
      call get_command_argument(1, fname)
-     call af_read_tree(tree, fname)
+     call af_read_tree(tree, fname, read_other_data=read_string)
   else
      call af_init(tree, & ! Tree to initialize
           box_size, &     ! A box contains box_size**DIM cells
@@ -72,7 +72,7 @@ program random_refinement_Xd
      ! Variables are the names given as the third argument.
      write(fname, "(A,I0)") "output/random_refinement_" // DIMNAME // "_", iter
      call af_write_silo(tree, trim(fname), n_cycle=iter)
-     call af_write_tree(tree, fname)
+     call af_write_tree(tree, fname, write_other_data=write_string)
 
      ! This updates the refinement of the tree, by at most one level per call.
      ! The second argument is a subroutine that is called for each box that can
@@ -140,5 +140,21 @@ contains
        box%cc(IJK, i_phi) = sin(0.5_dp * rr(1))**2 * cos(rr(2))**2
     end do; CLOSE_DO
   end subroutine set_init_cond
+
+  subroutine write_string(my_unit)
+    integer, intent(in) :: my_unit
+    character(len=10)   :: str
+
+    str = "Hello"
+    write(my_unit) str
+  end subroutine write_string
+
+  subroutine read_string(my_unit)
+    integer, intent(in) :: my_unit
+    character(len=10)   :: str
+    read(my_unit) str
+
+    if (str /= "Hello") error stop "error reading other data"
+  end subroutine read_string
 
 end program random_refinement_Xd
