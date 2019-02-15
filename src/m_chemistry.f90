@@ -109,11 +109,11 @@ contains
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
 
-    reaction_file = "UNDEFINED"
+    reaction_file = undefined_str
     call CFG_add_get(cfg, "chemistry%reaction_file", reaction_file, &
          "File with a list of reactions")
 
-    if (reaction_file == "UNDEFINED") then
+    if (reaction_file == undefined_str) then
        print *, "m_chemistry: no reactions defined, using standard model"
 
        species_list(1) = "e"

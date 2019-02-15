@@ -4,6 +4,8 @@ module m_types
   implicit none
   public
 
+  character(len=*), parameter :: undefined_str = "UNDEFINED"
+
   !> Default length of strings
   integer, parameter :: string_len = 200
 

@@ -31,8 +31,12 @@ program streamer
   type(mg_t)                :: mg             ! Multigrid option struct
   type(ref_info_t)          :: ref_info
   integer                   :: output_cnt = 0 ! Number of output files written
+  character(len=string_len) :: restart_from_file = undefined_str
 
   call CFG_update_from_arguments(cfg)
+
+  call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
+       "If set, restart simulation from a previous .dat file")
 
   call initialize_modules(cfg, tree, mg)
 
@@ -58,26 +62,43 @@ program streamer
   end do
 
   ! Initialize the tree (which contains all the mesh information)
-  if (ST_cylindrical) then
-     coord_type = af_cyl
+  if (restart_from_file /= undefined_str) then
+     call af_read_tree(tree, restart_from_file)
+
+     output_cnt       = 0      ! Number of output files written
+     time             = 0.0_dp ! Simulation time (all times are in s)
+     global_time      = time
+     photoi_prev_time = time   ! Time of last photoionization computation
+
+     if (tree%n_cell /= ST_box_size) &
+          error stop "restart_from_file: incompatible box size"
+
+     ! TODO: more consistency checks
+
+     ! This routine always needs to be called when using multigrid
+     call mg_init(tree, mg)
   else
-     coord_type = af_xyz
+     output_cnt       = 0      ! Number of output files written
+     time             = 0.0_dp ! Simulation time (all times are in s)
+     global_time      = time
+     photoi_prev_time = time   ! Time of last photoionization computation
+
+     if (ST_cylindrical) then
+        coord_type = af_cyl
+     else
+        coord_type = af_xyz
+     end if
+
+     call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
+          ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
+          r_min=ST_domain_origin)
+
+     ! This routine always needs to be called when using multigrid
+     call mg_init(tree, mg)
+
+     ! Set up the initial conditions
+     call set_initial_conditions(tree, mg)
   end if
-
-  call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
-       ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
-       r_min=ST_domain_origin)
-
-  ! This routine always needs to be called when using multigrid
-  call mg_init(tree, mg)
-
-  output_cnt       = 0      ! Number of output files written
-  time             = 0.0_dp ! Simulation time (all times are in s)
-  global_time      = time
-  photoi_prev_time = 0.0_dp ! Time of last photoionization computation
-
-  ! Set up the initial conditions
-  call set_initial_conditions(tree, mg)
 
   print *, "Number of threads", af_get_max_threads()
   call af_print_info(tree)

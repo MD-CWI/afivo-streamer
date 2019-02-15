@@ -179,8 +179,8 @@ contains
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_plane_", output_cnt
        call af_write_plane(tree, fname, [plane_ivar], &
-            plane_rmin * ST_domain_len, &
-            plane_rmax * ST_domain_len, &
+            plane_rmin * ST_domain_len + ST_domain_origin, &
+            plane_rmax * ST_domain_len + ST_domain_origin, &
             plane_npixels)
     end if
 
@@ -189,8 +189,8 @@ contains
             "_line_", output_cnt
        call af_write_line(tree, trim(fname), &
             [i_electron, i_1pos_ion, i_phi, i_electric_fld], &
-            r_min = lineout_rmin(1:NDIM) * ST_domain_len, &
-            r_max = lineout_rmax(1:NDIM) * ST_domain_len, &
+            r_min = lineout_rmin(1:NDIM) * ST_domain_len + ST_domain_origin, &
+            r_max = lineout_rmax(1:NDIM) * ST_domain_len + ST_domain_origin, &
             n_points=lineout_npoints)
     end if
 

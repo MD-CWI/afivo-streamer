@@ -78,10 +78,10 @@ contains
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
     character(len=string_len)  :: field_table
 
-    field_table = "UNDEFINED"
+    field_table = undefined_str
     call CFG_add_get(cfg, "field_table", field_table, &
          "File containing applied electric field (V/m) versus time")
-    if (field_table /= "UNDEFINED") then
+    if (field_table /= undefined_str) then
        field_table_use = .true.
        call table_from_file(field_table, "field_vs_time", &
             field_table_times, field_table_fields)
