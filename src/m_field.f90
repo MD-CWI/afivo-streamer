@@ -135,7 +135,7 @@ contains
 
     ! Set the multigrid options. First define the variables to use
     mg%i_phi = i_phi
-    mg%i_tmp = i_electric_fld
+    mg%i_tmp = i_tmp
     mg%i_rhs = i_rhs
     if (ST_use_dielectric) mg%i_eps = i_eps
 
