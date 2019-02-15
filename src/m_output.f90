@@ -138,13 +138,18 @@ contains
 
   end subroutine output_initialize
 
-  subroutine output_write(tree, output_cnt, wc_time)
+  subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
     use m_photoi
     use m_field
     use m_user_methods
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
+    interface
+       subroutine write_sim_data(my_unit)
+         integer, intent(in) :: my_unit
+       end subroutine write_sim_data
+    end interface
     integer                   :: i
     character(len=string_len) :: fname
 
@@ -165,7 +170,7 @@ contains
     end if
 
     if (datfile_write) then
-       call af_write_tree(tree, fname)
+       call af_write_tree(tree, fname, write_sim_data)
     end if
 
     write(fname, "(A,I6.6)") trim(output_name) // "_log.txt"
@@ -223,17 +228,21 @@ contains
 #if NDIM == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
-       fmt = "(I6,16E16.8,I12,1E16.8,I3)"
 #elif NDIM == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
-       fmt = "(I6,14E16.8,I12,1E16.8,I3)"
 #endif
        close(my_unit)
 
        ! Start with velocity zero
        prev_pos = af_r_loc(tree, loc_field)
     end if
+
+#if NDIM == 2
+    fmt = "(I6,16E16.8,I12,1E16.8,I3)"
+#elif NDIM == 3
+    fmt = "(I6,14E16.8,I12,1E16.8,I3)"
+#endif
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
     prev_pos = af_r_loc(tree, loc_field)

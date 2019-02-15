@@ -63,12 +63,7 @@ program streamer
 
   ! Initialize the tree (which contains all the mesh information)
   if (restart_from_file /= undefined_str) then
-     call af_read_tree(tree, restart_from_file)
-
-     output_cnt       = 0      ! Number of output files written
-     time             = 0.0_dp ! Simulation time (all times are in s)
-     global_time      = time
-     photoi_prev_time = time   ! Time of last photoionization computation
+     call af_read_tree(tree, restart_from_file, read_sim_data)
 
      if (tree%n_cell /= ST_box_size) &
           error stop "restart_from_file: incompatible box size"
@@ -82,6 +77,7 @@ program streamer
      time             = 0.0_dp ! Simulation time (all times are in s)
      global_time      = time
      photoi_prev_time = time   ! Time of last photoionization computation
+     dt               = advance_max_dt
 
      if (ST_cylindrical) then
         coord_type = af_cyl
@@ -110,8 +106,6 @@ program streamer
 
   do it = 1, huge(1)-1
      if (time >= ST_end_time) exit
-
-     dt = advance_max_dt
 
      ! Update wall clock time
      call system_clock(t_current)
@@ -150,7 +144,7 @@ program streamer
      end if
 
      if (write_out) then
-        call output_write(tree, output_cnt, wc_time)
+        call output_write(tree, output_cnt, wc_time, write_sim_data)
      end if
 
      if (advance_max_dt < dt_min) error stop "dt too small"
@@ -231,5 +225,25 @@ contains
        if (ref_info%n_add == 0) exit
     end do
   end subroutine set_initial_conditions
+
+  subroutine write_sim_data(my_unit)
+    integer, intent(in) :: my_unit
+
+    write(my_unit) output_cnt
+    write(my_unit) time
+    write(my_unit) global_time
+    write(my_unit) photoi_prev_time
+    write(my_unit) dt
+  end subroutine write_sim_data
+
+  subroutine read_sim_data(my_unit)
+    integer, intent(in) :: my_unit
+
+    read(my_unit) output_cnt
+    read(my_unit) time
+    read(my_unit) global_time
+    read(my_unit) photoi_prev_time
+    read(my_unit) dt
+  end subroutine read_sim_data
 
 end program streamer
