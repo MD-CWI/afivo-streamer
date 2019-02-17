@@ -79,12 +79,6 @@ program implicit_diffusion_Xd
   mg%i_rhs    = i_rhs                 ! Right-hand side variable
   mg%i_tmp    = i_tmp                 ! Variable for temporary space
   mg%sides_bc => af_bc_dirichlet_zero ! Method for boundary conditions
-
-  ! The methods defined below implement a backward Euler method for the heat
-  ! equation, by changing the elliptic operator for the multigrid procedure.
-  mg%box_op   => mg_box_lpl
-  mg%box_gsrb => mg_box_gsrb_lpl
-  mg%box_stencil => mg_box_lpl_stencil
   mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
 
   ! This routine does not initialize the multigrid fields boxes%i_phi,

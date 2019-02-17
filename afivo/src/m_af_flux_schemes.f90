@@ -11,6 +11,7 @@ module m_af_flux_schemes
 
   public :: flux_diff_1d, flux_diff_2d, flux_diff_3d
   public :: flux_koren_1d, flux_koren_2d, flux_koren_3d
+  public :: flux_upwind_1d, flux_upwind_2d, flux_upwind_3d
 
 contains
 
@@ -197,5 +198,81 @@ contains
        bphi = b
     end if
   end function koren_mlim
+
+  !> Compute flux with first order upwind scheme
+  subroutine flux_upwind_1d(cc, v, nc, ngc)
+    integer, intent(in)   :: nc               !< Number of cells
+    integer, intent(in)   :: ngc              !< Number of ghost cells
+    real(dp), intent(in)  :: cc(1-ngc:nc+ngc) !< Cell-centered values
+    !> Input: velocities at interfaces, output: fluxes
+    real(dp), intent(inout)  :: v(1:nc+1)
+    integer               :: n
+
+    do n = 1, nc+1
+       if (v(n) < 0.0_dp) then
+          v(n) = v(n) * cc(n)
+       else                     ! v(n) > 0
+          v(n) = v(n) * cc(n-1)
+       end if
+    end do
+
+  end subroutine flux_upwind_1d
+
+  !> Compute flux with first order upwind scheme
+  subroutine flux_upwind_2d(cc, v, nc, ngc)
+    integer, intent(in)     :: nc                      !< Number of cells
+    integer, intent(in)     :: ngc                     !< Number of ghost cells
+    !> Cell-centered values
+    real(dp), intent(in)    :: cc(1-ngc:nc+ngc, 1-ngc:nc+ngc)
+    !> Input: velocities at interfaces, output: fluxes
+    real(dp), intent(inout)    :: v(1:nc+1, 1:nc+1, 2)
+    real(dp)                :: cc_1d(1-ngc:nc+ngc), v_1d(1:nc+1)
+    integer                 :: n
+
+    do n = 1, nc
+       ! x-fluxes
+       call flux_upwind_1d(cc(:, n), v(:, n, 1), nc, ngc)
+
+       ! y-fluxes (use temporary variables for efficiency)
+       cc_1d = cc(n, :)
+       v_1d  = v(n, :, 2)
+       call flux_upwind_1d(cc_1d, v_1d, nc, ngc)
+       v(n, :, 2) = v_1d     ! Copy result
+    end do
+  end subroutine flux_upwind_2d
+
+  !> Compute flux with first order upwind scheme
+  subroutine flux_upwind_3d(cc, v, nc, ngc)
+    !> Number of cells
+    integer, intent(in)     :: nc
+    !> Number of ghost cells
+    integer, intent(in)     :: ngc
+    !> Cell-centered values
+    real(dp), intent(in)    :: cc(1-ngc:nc+ngc, 1-ngc:nc+ngc, 1-ngc:nc+ngc)
+    !> Input: velocities at interfaces, output: fluxes
+    real(dp), intent(inout)    :: v(1:nc+1, 1:nc+1, 1:nc+1, 3)
+    real(dp)                :: cc_1d(1-ngc:nc+ngc), v_1d(1:nc+1)
+    integer                 :: n, m
+
+    do m = 1, nc
+       do n = 1, nc
+          ! x-fluxes
+          call flux_upwind_1d(cc(:, n, m), v(:, n, m, 1), &
+               nc, ngc)
+
+          ! y-fluxes (use temporary variables for efficiency)
+          cc_1d = cc(n, :, m)
+          v_1d  = v(n, :, m, 2)
+          call flux_upwind_1d(cc_1d, v_1d, nc, ngc)
+          v(n, :, m, 2) = v_1d ! Copy result
+
+          ! z-fluxes (use temporary variables for efficiency)
+          cc_1d = cc(n, m, :)
+          v_1d  = v(n, m, :, 3)
+          call flux_upwind_1d(cc_1d, v_1d, nc, ngc)
+          v(n, m, :, 3) = v_1d ! Copy result
+       end do
+    end do
+  end subroutine flux_upwind_3d
 
 end module m_af_flux_schemes

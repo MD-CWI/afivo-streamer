@@ -70,12 +70,6 @@ program poisson_cyl
   mg%i_tmp        = i_tmp       ! Variable for temporary space
   mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
 
-  ! Automatically detect the right methods
-  mg%box_op      => mg_auto_op
-  mg%box_gsrb    => mg_auto_gsrb
-  mg%box_corr    => mg_auto_corr
-  mg%box_stencil => mg_box_clpl_stencil
-
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs

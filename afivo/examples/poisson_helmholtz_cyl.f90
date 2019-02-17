@@ -70,13 +70,6 @@ program helmholtz_cyl
   mg%i_rhs        = i_rhs       ! Right-hand side variable
   mg%i_tmp        = i_tmp       ! Variable for temporary space
   mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
-
-  ! Automatically detect the right methods
-  mg%box_op       => mg_box_clpl
-  mg%box_gsrb     => mg_box_gsrb_clpl
-  mg%box_corr     => mg_auto_corr
-  mg%box_stencil  => mg_box_clpl_stencil
-
   mg%helmholtz_lambda = lambda
 
   ! Initialize the multigrid options. This performs some basics checks and sets

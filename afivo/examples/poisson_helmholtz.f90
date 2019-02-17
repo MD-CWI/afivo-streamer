@@ -56,11 +56,8 @@ program poisson_helmholtz_Xd
   mg%i_rhs    =  i_rhs     ! Right-hand side variable
   mg%i_tmp    =  i_tmp     ! Variable for temporary space
   mg%sides_bc => sides_bc ! Method for boundary conditions
-  mg%box_op   => mg_box_lpl
-  mg%box_gsrb => mg_box_gsrb_lpl
-  mg%box_stencil => mg_box_lpl_stencil
-
   mg%helmholtz_lambda = lambda
+
   call mg_init(tree, mg)
 
   print *, "Multigrid iteration | max residual | max error"

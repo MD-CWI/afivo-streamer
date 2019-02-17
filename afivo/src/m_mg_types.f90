@@ -85,17 +85,17 @@ module m_mg_types
      !> Subroutine that performs A * cc(..., i_in) = cc(..., i_out)
      subroutine mg_box_op(box, i_out, mg)
        import
-       type(box_t), intent(inout) :: box !< The box to operate on
-       type(mg_t), intent(in)     :: mg !< Multigrid options
-       integer, intent(in)         :: i_out !< Index of output variable
+       type(box_t), intent(inout) :: box   !< The box to operate on
+       type(mg_t), intent(in)     :: mg    !< Multigrid options
+       integer, intent(in)        :: i_out !< Index of output variable
      end subroutine mg_box_op
 
      !> Subroutine that performs Gauss-Seidel relaxation
      subroutine mg_box_gsrb(box, redblack_cntr, mg)
        import
-       type(box_t), intent(inout) :: box !< The box to operate on
-       type(mg_t), intent(in)     :: mg !< Multigrid options
-       integer, intent(in)         :: redblack_cntr !< Iteration counter
+       type(box_t), intent(inout) :: box           !< The box to operate on
+       type(mg_t), intent(in)     :: mg            !< Multigrid options
+       integer, intent(in)        :: redblack_cntr !< Iteration counter
      end subroutine mg_box_gsrb
 
      subroutine mg_box_corr(box_p, box_c, mg)
@@ -109,8 +109,8 @@ module m_mg_types
        import
        type(box_t), intent(in)    :: box_c !< Child box to restrict
        type(box_t), intent(inout) :: box_p !< Parent box to restrict to
-       integer, intent(in)         :: iv    !< Variable to restrict
-       type(mg_t), intent(in)     :: mg !< Multigrid options
+       integer, intent(in)        :: iv    !< Variable to restrict
+       type(mg_t), intent(in)     :: mg    !< Multigrid options
      end subroutine mg_box_rstr
 
      subroutine mg_box_stencil(box, mg, stencil, bc_to_rhs)
