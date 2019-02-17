@@ -41,9 +41,6 @@ module m_refine
   ! Minimum electron density for adding grid refinement
   real(dp), protected :: refine_min_dens = -1.0e99_dp
 
-  ! See comment below
-  real(dp), protected :: refine_rhs_voltage = -1.0e99_dp
-
   ! Refine a region up to this grid spacing
   real(dp), protected, allocatable :: refine_regions_dr(:)
 
@@ -55,6 +52,15 @@ module m_refine
 
   ! Maximum coordinate of the refinement regions
   real(dp), protected, allocatable :: refine_regions_rmax(:,:)
+
+  ! Limit refinement in a region to this grid spacing
+  real(dp), protected, allocatable :: refine_limits_dr(:)
+
+  ! Minimum coordinate of the refinement limits
+  real(dp), protected, allocatable :: refine_limits_rmin(:,:)
+
+  ! Maximum coordinate of the refinement limits
+  real(dp), protected, allocatable :: refine_limits_rmax(:,:)
 
   ! Public methods
   public :: refine_initialize
@@ -98,8 +104,6 @@ contains
          "Refine until dx is smaller than this factor times the seed width")
     call CFG_add_get(cfg, "refine_min_dens", refine_min_dens, &
          "Minimum electron density for adding grid refinement")
-    call CFG_add_get(cfg, "refine_rhs_voltage", refine_rhs_voltage, &
-         "Only refine if sqrt(rhs / (eps0 * V0)) * h > 1")
 
     call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
          "Refine regions up to this grid spacing", .true.)
@@ -125,6 +129,27 @@ contains
     call CFG_get(cfg, "refine_regions_rmax", dbuffer)
     refine_regions_rmax = reshape(dbuffer, [NDIM, n])
 
+    call CFG_add(cfg, "refine_limits_dr", [1.0e99_dp], &
+         "Refine regions at most up to this grid spacing", .true.)
+    vec = 0.0_dp
+    call CFG_add(cfg, "refine_limits_rmin", vec, &
+         "Minimum coordinate of the refinement limits", .true.)
+    call CFG_add(cfg, "refine_limits_rmax", vec, &
+         "Maximum coordinate of the refinement limits", .true.)
+
+    call CFG_get_size(cfg, "refine_limits_dr", n)
+    allocate(refine_limits_dr(n))
+    allocate(refine_limits_rmin(NDIM, n))
+    allocate(refine_limits_rmax(NDIM, n))
+    deallocate(dbuffer)
+    allocate(dbuffer(NDIM * n))
+
+    call CFG_get(cfg, "refine_limits_dr", refine_limits_dr)
+    call CFG_get(cfg, "refine_limits_rmin", dbuffer)
+    refine_limits_rmin = reshape(dbuffer, [NDIM, n])
+    call CFG_get(cfg, "refine_limits_rmax", dbuffer)
+    refine_limits_rmax = reshape(dbuffer, [NDIM, n])
+
   end subroutine refine_initialize
 
   ! This routine sets the cell refinement flags for box
@@ -143,7 +168,6 @@ contains
     real(dp)                :: min_dx, max_dx, gas_dens
     real(dp)                :: alpha, adx, fld, elec_dens
     real(dp)                :: dist, rmin(NDIM), rmax(NDIM)
-    logical                 :: refine_rhs
 
     nc = box%n_cell
     min_dx = minval(box%dr)
@@ -161,14 +185,7 @@ contains
        adx   = max_dx * alpha
        elec_dens = box%cc(IJK, i_electron)
 
-       if (refine_rhs_voltage > 0.0_dp) then
-          refine_rhs = (sqrt(abs(box%cc(IJK, i_rhs)) / refine_rhs_voltage) * &
-               max_dx > 1.0_dp)
-       else
-          refine_rhs = .true.
-       end if
-
-       if (adx  > refine_adx .and. elec_dens > refine_min_dens) then
+       if (adx > refine_adx .and. elec_dens > refine_min_dens) then
           cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp * refine_adx .and. max_dx < derefine_dx) then
           cell_flags(IJK) = af_rm_ref
@@ -203,6 +220,15 @@ contains
             rmin <= refine_regions_rmax(:, n))) then
           ! Mark just the center cell to prevent refining neighbors
           cell_flags(DTIMES(nc/2)) = af_do_ref
+       end if
+    end do
+
+    do n = 1, size(refine_limits_dr)
+       if (max_dx < 2 * refine_limits_dr(n) .and. all(&
+            rmin >= refine_limits_rmin(:, n) .and. &
+            rmax <= refine_limits_rmax(:, n))) then
+          ! Mark just the center cell to prevent refining neighbors
+          where (cell_flags == af_do_ref) cell_flags = af_keep_ref
        end if
     end do
 
