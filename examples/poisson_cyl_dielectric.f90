@@ -72,12 +72,6 @@ program poisson_cyl_dielectric
   mg%i_eps        = i_eps       ! Variable for epsilon coefficient
   mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
 
-  ! Automatically detect the right methods
-  mg%box_op       => mg_auto_op
-  mg%box_gsrb     => mg_auto_gsrb
-  mg%box_corr     => mg_auto_corr
-  mg%box_stencil  => mg_box_clpld_stencil
-
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.
   ! This routine does not initialize the multigrid variables i_phi, i_rhs
