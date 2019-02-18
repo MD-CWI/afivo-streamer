@@ -26,6 +26,7 @@ program streamer
   integer                   :: i, s, it, coord_type
   logical                   :: write_out
   real(dp)                  :: time, dt, photoi_prev_time
+  real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
   type(mg_t)                :: mg             ! Multigrid option struct
@@ -37,6 +38,8 @@ program streamer
 
   call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
        "If set, restart simulation from a previous .dat file")
+  call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
+       "Memory limit (GB)")
 
   call initialize_modules(cfg, tree, mg)
 
@@ -87,7 +90,7 @@ program streamer
 
      call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
           ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
-          r_min=ST_domain_origin)
+          r_min=ST_domain_origin, mem_limit_gb=memory_limit_GB)
 
      ! This routine always needs to be called when using multigrid
      call mg_init(tree, mg)
