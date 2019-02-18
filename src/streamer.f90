@@ -23,7 +23,7 @@ program streamer
   integer, parameter        :: int8       = selected_int_kind(18)
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate, time_last_print
-  integer                   :: i, s, it, coord_type
+  integer                   :: i, s, it, coord_type, box_bytes
   logical                   :: write_out
   real(dp)                  :: time, dt, photoi_prev_time
   real(dp)                  :: memory_limit_GB = 16.0_dp
@@ -67,6 +67,9 @@ program streamer
   ! Initialize the tree (which contains all the mesh information)
   if (restart_from_file /= undefined_str) then
      call af_read_tree(tree, restart_from_file, read_sim_data)
+
+     box_bytes = af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
+     tree%box_limit = nint(memory_limit_GB * 2.0_dp**30 / box_bytes)
 
      if (tree%n_cell /= ST_box_size) &
           error stop "restart_from_file: incompatible box size"
