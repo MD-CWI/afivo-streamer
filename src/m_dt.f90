@@ -27,7 +27,7 @@ module m_dt
   real(dp), public, protected :: dt_safety_factor = 0.9_dp
 
   ! Small density for the chemistry time step
-  real(dp), public, protected :: dt_chemistry_nmin = 1e12
+  real(dp), public, protected :: dt_chemistry_nmin = 1e15
 
   ! Maximum allowed time step
   real(dp), public, protected :: dt_max = 1.0e-11_dp
