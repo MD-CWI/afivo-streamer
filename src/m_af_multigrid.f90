@@ -22,6 +22,7 @@ module m_af_multigrid
   ! Automatic selection of operators
   public :: mg_set_box_tag
   public :: mg_auto_op
+  public :: mg_auto_stencil
   public :: mg_auto_gsrb
   public :: mg_auto_corr
   public :: mg_auto_rstr
@@ -56,7 +57,7 @@ contains
 
   !> Check multigrid options or set them to default
   subroutine mg_init(tree, mg)
-    type(af_t), intent(in)    :: tree !< Tree to do multigrid on
+    type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg   !< Multigrid options
 
     if (mg%i_phi < 0)                  stop "mg_init: i_phi not set"
@@ -74,17 +75,13 @@ contains
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_sides_rb
 
-    if (.not. associated(mg%box_op)) then
-       mg%box_op => mg_box_lpl
-       mg%box_stencil => mg_box_lpl_stencil
-    end if
+    if (.not. associated(mg%box_op)) mg%box_op => mg_auto_op
+    if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
+    if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_auto_gsrb
+    if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr
+    if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
 
-    if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_box_gsrb_lpl
-    if (.not. associated(mg%box_corr)) mg%box_corr => mg_box_corr_lpl
-    if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_box_rstr_lpl
-    if (.not. associated(mg%box_stencil)) &
-         error stop "mg_init: no box_stencil method has been set"
-
+    call mg_set_box_tag_lvl(tree, mg, 1)
     call coarse_solver_initialize(tree, mg)
 
     mg%initialized = .true.
@@ -116,6 +113,7 @@ contains
     integer                         :: lvl
 
     call check_mg(mg)           ! Check whether mg options are set
+    call mg_set_box_tag_tree(tree, mg) ! Make sure box tags are set
 
     if (have_guess) then
        do lvl = tree%highest_lvl,  2, -1
@@ -143,25 +141,30 @@ contains
 
        ! Perform V-cycle, only set residual on last iteration
        call mg_fas_vcycle(tree, mg, &
-            set_residual .and. lvl == tree%highest_lvl, lvl)
+            set_residual .and. lvl == tree%highest_lvl, lvl, standalone=.false.)
     end do
   end subroutine mg_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
-  subroutine mg_fas_vcycle(tree, mg, set_residual, highest_lvl)
+  subroutine mg_fas_vcycle(tree, mg, set_residual, highest_lvl, standalone)
     use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_tree_sum_cc
-    type(af_t), intent(inout)    :: tree         !< Tree to do multigrid on
-    type(mg_t), intent(inout)      :: mg           !< Multigrid options
+    type(af_t), intent(inout)     :: tree         !< Tree to do multigrid on
+    type(mg_t), intent(in)        :: mg           !< Multigrid options
     logical, intent(in)           :: set_residual !< If true, store residual in i_tmp
     integer, intent(in), optional :: highest_lvl  !< Maximum level for V-cycle
-    integer                       :: lvl, min_lvl, i, id, max_lvl
+    logical, intent(in), optional :: standalone   !< False if called by other cycle
+    integer                       :: lvl, i, id, max_lvl
+    logical                       :: by_itself
     real(dp)                      :: sum_phi, mean_phi
 
     call check_mg(mg)           ! Check whether mg options are set
-    min_lvl = 1
+
+    by_itself = .true.; if (present(standalone)) by_itself = standalone
+    if (by_itself) call mg_set_box_tag_tree(tree, mg)
+
     max_lvl = tree%highest_lvl
     if (present(highest_lvl)) max_lvl = highest_lvl
 
@@ -192,7 +195,7 @@ contains
 
     if (set_residual) then
        !$omp parallel private(lvl, i, id)
-       do lvl = min_lvl, max_lvl
+       do lvl = 1, max_lvl
           !$omp do
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
@@ -209,7 +212,7 @@ contains
        call af_tree_sum_cc(tree, mg%i_phi, sum_phi)
        mean_phi = sum_phi / af_total_volume(tree)
        !$omp parallel private(lvl, i, id)
-       do lvl = min_lvl, max_lvl
+       do lvl = 1, max_lvl
           !$omp do
           do i = 1, size(tree%lvls(lvl)%ids)
              id = tree%lvls(lvl)%ids(i)
@@ -225,8 +228,8 @@ contains
 
   subroutine solve_coarse_grid(tree, mg)
     use m_af_ghostcell, only: af_gc_ids
-    type(af_t), intent(inout) :: tree  !< Tree to do multigrid on
-    type(mg_t), intent(inout) :: mg !< Multigrid options
+    type(af_t), intent(inout) :: tree !< Tree to do multigrid on
+    type(mg_t), intent(in)    :: mg   !< Multigrid options
 
     call coarse_solver_set_rhs_phi(tree, mg)
     call coarse_solver(mg%csolver)
@@ -760,8 +763,6 @@ contains
     integer, intent(in)         :: redblack_cntr !< Iteration count
     type(mg_t), intent(in)     :: mg !< Multigrid options
 
-    if (box%tag == af_init_tag) call mg_set_box_tag(box, mg)
-
     select case(box%tag)
 #if NDIM == 2
     case (mg_normal_box)
@@ -786,16 +787,16 @@ contains
     case (mg_veps_box, mg_ceps_box)
        call mg_box_gsrb_lpld(box, redblack_cntr, mg)
 #endif
+    case default
+       error stop "mg_auto_gsrb: unknown box tag"
     end select
   end subroutine mg_auto_gsrb
 
-  !> Based on the box type, apply the approriate Laplace operator
+  !> Based on the box type, apply the approriate operator
   subroutine mg_auto_op(box, i_out, mg)
-    type(box_t), intent(inout) :: box !< Operate on this box
-    integer, intent(in)         :: i_out !< Index of output variable
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-
-    if (box%tag == af_init_tag) call mg_set_box_tag(box, mg)
+    type(box_t), intent(inout) :: box   !< Operate on this box
+    integer, intent(in)        :: i_out !< Index of output variable
+    type(mg_t), intent(in)     :: mg    !< Multigrid options
 
     select case(box%tag)
 #if NDIM == 2
@@ -821,24 +822,67 @@ contains
     case (mg_veps_box, mg_ceps_box)
        call mg_box_lpld(box, i_out, mg)
 #endif
+    case (af_init_tag)
+       error stop "mg_auto_op: box tag not set"
+    case default
+       error stop "mg_auto_op: unknown box tag"
     end select
   end subroutine mg_auto_op
+
+  !> Based on the box type, use the appropriate stencil method
+  subroutine mg_auto_stencil(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+
+    select case(box%tag)
+#if NDIM == 2
+    case (mg_normal_box)
+       if (box%coord_t == af_cyl) then
+          call mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs)
+       else
+          call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs)
+       end if
+    ! case (mg_lsf_box)
+    !    call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs)
+    case (mg_veps_box, mg_ceps_box)
+       if (box%coord_t == af_cyl) then
+          call mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs)
+       else
+          call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs)
+       end if
+#elif NDIM == 3
+    case (mg_normal_box)
+       call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs)
+    ! case (mg_lsf_box)
+    !    call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs)
+    case (mg_veps_box, mg_ceps_box)
+       call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs)
+#endif
+    case (af_init_tag)
+       error stop "mg_auto_stencil: box tag not set"
+    case default
+       error stop "mg_auto_stencil: unknown box tag"
+    end select
+  end subroutine mg_auto_stencil
 
   !> Based on the box type, apply the approriate Laplace operator
   subroutine mg_auto_rstr(box_c, box_p, iv, mg)
     type(box_t), intent(in)    :: box_c !< Child box
     type(box_t), intent(inout) :: box_p !< Parent box
-    integer, intent(in)         :: iv !< Index of variable
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-
-    ! We can only restrict after gsrb, so tag should always be set
-    if (box_c%tag == af_init_tag) stop "mg_auto_rstr: box_c tag not set"
+    integer, intent(in)        :: iv    !< Index of variable
+    type(mg_t), intent(in)     :: mg    !< Multigrid options
 
     select case(box_c%tag)
     case (mg_normal_box, mg_veps_box, mg_ceps_box)
        call mg_box_rstr_lpl(box_c, box_p, iv, mg)
     ! case (mg_lsf_box)
-    !    call mg_box_rstr_lpllsf(box_c, box_p, iv, mg)
+       !    call mg_box_rstr_lpllsf(box_c, box_p, iv, mg)
+    case (af_init_tag)
+       error stop "mg_auto_rstr: box_c tag not set"
+    case default
+       error stop "mg_auto_rstr: unknown box tag"
     end select
   end subroutine mg_auto_rstr
 
@@ -848,8 +892,6 @@ contains
     type(box_t), intent(in)    :: box_p !< Parent box
     type(mg_t), intent(in)     :: mg !< Multigrid options
 
-    if (box_c%tag == af_init_tag) call mg_set_box_tag(box_c, mg)
-
     select case(box_c%tag)
     case (mg_normal_box)
        call mg_box_corr_lpl(box_p, box_c, mg)
@@ -857,14 +899,18 @@ contains
     !    call mg_box_corr_lpllsf(box_p, box_c, mg)
     case (mg_veps_box, mg_ceps_box)
        call mg_box_corr_lpld(box_p, box_c, mg)
+    case (af_init_tag)
+       error stop "mg_auto_corr: box_c tag not set"
+    case default
+       error stop "mg_auto_corr: unknown box tag"
     end select
   end subroutine mg_auto_corr
 
   subroutine mg_set_box_tag(box, mg)
     type(box_t), intent(inout) :: box !< Box to operate on
     type(mg_t), intent(in)     :: mg  !< Multigrid options
-    real(dp)                     :: a, b
-    logical                      :: is_lsf, is_deps, is_eps
+    real(dp)                   :: a, b
+    logical                    :: is_lsf, is_deps, is_eps
 
     is_lsf = .false.
     is_eps = .false.
@@ -900,6 +946,41 @@ contains
     if (is_eps) box%tag = mg_ceps_box
     if (is_deps) box%tag = mg_veps_box
   end subroutine mg_set_box_tag
+
+  subroutine mg_set_box_tag_lvl(tree, mg, lvl)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(in)    :: mg
+    integer, intent(in)       :: lvl
+    integer                   :: i, id
+
+    !$omp parallel do private(i, id)
+    do i = 1, size(tree%lvls(lvl)%ids)
+       id = tree%lvls(lvl)%ids(i)
+       if (tree%boxes(id)%tag == af_init_tag) then
+          call mg_set_box_tag(tree%boxes(id), mg)
+       end if
+    end do
+    !$omp end parallel do
+  end subroutine mg_set_box_tag_lvl
+
+  subroutine mg_set_box_tag_tree(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(in)    :: mg
+    integer                   :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          if (tree%boxes(id)%tag == af_init_tag) then
+             call mg_set_box_tag(tree%boxes(id), mg)
+          end if
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine mg_set_box_tag_tree
 
   subroutine mg_box_corr_lpl(box_p, box_c, mg)
     use m_af_prolong

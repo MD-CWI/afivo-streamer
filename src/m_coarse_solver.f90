@@ -212,13 +212,13 @@ contains
   !> conditions for phi to the rhs.
   subroutine coarse_solver_set_rhs_phi(tree, mg)
     use m_af_ghostcell, only: af_gc_get_boundary_coords
-    type(af_t), intent(inout) :: tree
-    type(mg_t), intent(in)    :: mg
-    integer                   :: n, nb, nc, id, bc_type, ierr
-    integer                   :: ilo(NDIM), ihi(NDIM)
-    real(dp)                  :: tmp(DTIMES(tree%n_cell))
-    real(dp)                  :: coords(NDIM, tree%n_cell**(NDIM-1))
-    real(dp)                  :: bc_val(tree%n_cell**(NDIM-1))
+    type(af_t), intent(in) :: tree
+    type(mg_t), intent(in) :: mg
+    integer                :: n, nb, nc, id, bc_type, ierr
+    integer                :: ilo(NDIM), ihi(NDIM)
+    real(dp)               :: tmp(DTIMES(tree%n_cell))
+    real(dp)               :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp)               :: bc_val(tree%n_cell**(NDIM-1))
 
     nc = tree%n_cell
 
@@ -342,8 +342,8 @@ contains
 
   ! Solve the system A x = b
   subroutine coarse_solver(cs)
-    type(coarse_solve_t), intent(inout) :: cs
-    integer                             :: ierr
+    type(coarse_solve_t), intent(in) :: cs
+    integer                          :: ierr
 
     select case (cs%solver_type)
     case (coarse_solver_hypre_smg)
