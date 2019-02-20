@@ -42,7 +42,7 @@ module m_field
   real(dp) :: field_amplitude = 1.0e6_dp
 
   !> The applied voltage (vertical direction)
-  real(dp) :: field_voltage
+  real(dp), public, protected :: field_voltage
 
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
@@ -73,6 +73,7 @@ contains
   subroutine field_initialize(tree, cfg, mg)
     use m_config
     use m_table_data
+    use m_user_methods
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg !< Settings
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
@@ -124,14 +125,19 @@ contains
 
     field_voltage = -ST_domain_len(NDIM) * field_amplitude
 
-    select case (field_bc_type)
-    case ("homogeneous")
-       mg%sides_bc => field_bc_homogeneous
-    case ("point_charge")
-       mg%sides_bc => field_bc_point_charge
-    case default
-       error stop "field_bc_select error: invalid condition"
-    end select
+    if (associated(user_potential_bc)) then
+       mg%sides_bc => user_potential_bc
+    else
+       ! Use one of the predefined boundary conditions
+       select case (field_bc_type)
+       case ("homogeneous")
+          mg%sides_bc => field_bc_homogeneous
+       case ("point_charge")
+          mg%sides_bc => field_bc_point_charge
+       case default
+          error stop "field_bc_select error: invalid condition"
+       end select
+    end if
 
     ! Set the multigrid options. First define the variables to use
     mg%i_phi = i_phi
@@ -276,9 +282,6 @@ contains
     real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
     real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
     integer, intent(out)    :: bc_type
-    integer                 :: nc
-
-    nc = box%n_cell
 
     if (af_neighb_dim(nb) == NDIM) then
        if (af_neighb_low(nb)) then
@@ -303,10 +306,9 @@ contains
     real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
     real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
     integer, intent(out)    :: bc_type
-    integer                 :: n, nc
+    integer                 :: n
     real(dp)                :: r0(NDIM), r1(NDIM), q
 
-    nc       = box%n_cell
     bc_type  = af_bc_dirichlet
     q        = field_point_charge / (4 * UC_pi * UC_eps0)
     r0       = field_point_r0 * ST_domain_len

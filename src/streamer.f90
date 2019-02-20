@@ -46,12 +46,17 @@ program streamer
   call CFG_write(cfg, trim(output_name) // "_out.cfg")
 
   ! Specify default methods for all the variables
-  do i = 1, n_species
+  do i = n_gas_species+1, n_species
      do s = 0, advance_num_states-1
         call af_set_cc_methods(tree, species_itree(i)+s, &
              af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
      end do
   end do
+
+  if (.not. gas_constant_density) then
+     call af_set_cc_methods(tree, i_gas_dens, &
+          af_bc_neumann_zero, af_gc_interp, ST_prolongation_method)
+  end if
 
   if (photoi_enabled) then
      call photoi_set_methods(tree)
@@ -156,7 +161,7 @@ program streamer
      if (advance_max_dt < dt_min) error stop "dt too small"
 
      if (mod(it, refine_per_steps) == 0) then
-        call af_gc_tree(tree, species_itree(1:n_species))
+        call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
 
         if (associated(user_refine)) then
            call af_adjust_refinement(tree, user_refine, ref_info, &
@@ -187,9 +192,10 @@ contains
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
 
+    call user_initialize(cfg, tree)
     call advance_base_initialize(cfg)
     call table_data_initialize(cfg)
-    call gas_initialize(cfg)
+    call gas_initialize(tree, cfg)
     call transport_data_initialize(cfg)
     call chemistry_initialize(tree, cfg)
     call ST_initialize(tree, cfg, NDIM)
@@ -201,7 +207,6 @@ contains
     call field_initialize(tree, cfg, mg)
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
-    call user_initialize(cfg, tree)
 
   end subroutine initialize_modules
 

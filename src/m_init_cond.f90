@@ -191,6 +191,7 @@ contains
   subroutine init_cond_set_box(box)
     use m_geometry
     use m_gas
+    use m_user_methods
     type(box_t), intent(inout) :: box
     integer                    :: IJK, n, nc
     real(dp)                   :: rr(NDIM)
@@ -205,11 +206,7 @@ contains
        rr = af_r_cc(box, [IJK])
 
        if (.not. gas_constant_density) then
-          ! Set a constant density as default, users can then change it
-          do n = 1, size(gas_fractions)
-             box%cc(IJK, i_gas_comp(n)) = gas_number_density * gas_fractions(n)
-          end do
-          box%cc(IJK, i_gas_dens) = gas_number_density
+          box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
        end if
 
        do n = 1, init_conds%n_cond

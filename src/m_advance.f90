@@ -53,7 +53,8 @@ contains
        time = time + dt
        call field_compute(tree, mg, 1, time, .true.)
        call forward_euler(tree, dt, 1, 1, .true.)
-       call combine_substeps(tree, species_itree(1:n_species), &
+       call combine_substeps(tree, &
+            species_itree(n_gas_species+1:n_species), &
             [0, 1], [0.5_dp, 0.5_dp], 0)
        call restrict_flux_species(tree, 0)
        call field_compute(tree, mg, 0, time, .true.)

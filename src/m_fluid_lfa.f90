@@ -112,8 +112,8 @@ contains
        do m = 1, nc
 #if NDIM == 2
           if (.not. gas_constant_density) then
-             N_inv = 2 / (boxes(id)%cc(n-1, m, i_gas_dens+s_in) + &
-                  boxes(id)%cc(n, m, i_gas_dens+s_in))
+             N_inv = 2 / (boxes(id)%cc(n-1, m, i_gas_dens) + &
+                  boxes(id)%cc(n, m, i_gas_dens))
           end if
 
           fld = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
@@ -136,8 +136,8 @@ contains
           end if
 
           if (.not. gas_constant_density) then
-             N_inv = 2 / (boxes(id)%cc(m, n-1, i_gas_dens+s_in) + &
-                  boxes(id)%cc(m, n, i_gas_dens+s_in))
+             N_inv = 2 / (boxes(id)%cc(m, n-1, i_gas_dens) + &
+                  boxes(id)%cc(m, n, i_gas_dens))
           end if
 
           fld = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
@@ -161,8 +161,8 @@ contains
 #elif NDIM == 3
           do l = 1, nc
              if (.not. gas_constant_density) then
-                N_inv = 2 / (boxes(id)%cc(n-1, m, l, i_gas_dens+s_in) + &
-                     boxes(id)%cc(n, m, l, i_gas_dens+s_in))
+                N_inv = 2 / (boxes(id)%cc(n-1, m, l, i_gas_dens) + &
+                     boxes(id)%cc(n, m, l, i_gas_dens))
              end if
 
              fld = 0.5_dp * (&
@@ -187,8 +187,8 @@ contains
              end if
 
              if (.not. gas_constant_density) then
-                N_inv = 2 / (boxes(id)%cc(m, n-1, l, i_gas_dens+s_in) + &
-                     boxes(id)%cc(m, n, l, i_gas_dens+s_in))
+                N_inv = 2 / (boxes(id)%cc(m, n-1, l, i_gas_dens) + &
+                     boxes(id)%cc(m, n, l, i_gas_dens))
              end if
 
              fld = 0.5_dp * (&
@@ -213,8 +213,8 @@ contains
              end if
 
              if (.not. gas_constant_density) then
-                N_inv = 2 / (boxes(id)%cc(m, l, n-1, i_gas_dens+s_in) + &
-                     boxes(id)%cc(m, l, n, i_gas_dens+s_in))
+                N_inv = 2 / (boxes(id)%cc(m, l, n-1, i_gas_dens) + &
+                     boxes(id)%cc(m, l, n, i_gas_dens))
              end if
 
              fld = 0.5_dp * (&
@@ -277,7 +277,7 @@ contains
              if (gas_constant_density) then
                 N_inv = 1 / gas_number_density
              else
-                N_inv = 1 / boxes(id)%cc(IJK, i_gas_dens+s_in)
+                N_inv = 1 / boxes(id)%cc(IJK, i_gas_dens)
              end if
 
              Td = boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
@@ -351,20 +351,23 @@ contains
     allocate(dens(n_cells, n_species))
 
     if (gas_constant_density) then
+       ! Compute field in Townsends
        tmp = 1 / gas_number_density
        fields = SI_to_Townsend * tmp * &
-            reshape(box%cc(DTIMES(1:nc), i_electric_fld), [n_cells])
+            pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.)
     else
-       fields = SI_to_Townsend * &
-            reshape(box%cc(DTIMES(1:nc), i_electric_fld) / &
-            box%cc(DTIMES(1:nc), i_gas_dens+s_in), [n_cells])
-       ! We need the gas density in ghost cells for the flux computations, this
-       ! line copies them in
-       box%cc(DTIMES(:), i_gas_dens+s_out) = box%cc(DTIMES(:), i_gas_dens+s_in)
+       do n = 1, n_gas_species
+          dens(:, n) = gas_fractions(n) * &
+               pack(box%cc(DTIMES(1:nc), i_gas_dens), .true.)
+       end do
+
+       fields(:) = SI_to_Townsend * pack( &
+            box%cc(DTIMES(1:nc), i_electric_fld) / &
+            box%cc(DTIMES(1:nc), i_gas_dens), .true.)
     end if
 
-    dens = reshape(box%cc(DTIMES(1:nc), species_itree(1:n_species)+s_in), &
-         [n_cells, n_species])
+    dens(:, n_gas_species+1:n_species) = reshape(box%cc(DTIMES(1:nc), &
+            species_itree(n_gas_species+1:n_species)+s_in), [n_cells, n_plasma_species])
 
     call get_rates(fields, rates, n_cells)
     call get_derivatives(dens, rates, derivs, n_cells)
@@ -419,7 +422,7 @@ contains
           end if
        end if
 
-       do n = 1, n_species
+       do n = n_gas_species+1, n_species
           iv = species_itree(n)
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_in) + dt * derivs(ix, n)
        end do

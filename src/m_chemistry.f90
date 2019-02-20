@@ -57,6 +57,12 @@ module m_chemistry
   !> Number of species present
   integer, public, protected :: n_species = 0
 
+  !> Number of gas species present
+  integer, public, protected :: n_gas_species = 0
+
+  !> Number of plasma species present
+  integer, public, protected :: n_plasma_species = 0
+
   !> Number of reactions present
   integer, public, protected :: n_reactions = 0
 
@@ -105,13 +111,20 @@ contains
     use m_advance_base, only: advance_num_states
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    integer                    :: n, i, ix
+    integer                    :: n, i
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
 
     reaction_file = undefined_str
     call CFG_add_get(cfg, "chemistry%reaction_file", reaction_file, &
          "File with a list of reactions")
+
+    if (.not. gas_constant_density) then
+       ! Make sure the gas components are the first species
+       n_gas_species                 = size(gas_components)
+       n_species                     = n_gas_species
+       species_list(1:n_gas_species) = gas_components
+    end if
 
     if (reaction_file == undefined_str) then
        print *, "m_chemistry: no reactions defined, using standard model"
@@ -184,25 +197,24 @@ contains
        fast_react(n)%multiplicity_out = reactions(n)%multiplicity_out
     end do
     print *, "-------------------------"
-
-    ! Make sure the gas components exist as species
-    ix = species_index("M")
-    if (ix == -1) then
-       n_species        = n_species + 1
-       ix               = n_species
-       species_list(ix) = "M"
-    end if
-
-    do n = 1, size(gas_components)
-       ix = species_index(trim(gas_components(n)))
-       if (ix == -1) then
-          n_species        = n_species + 1
-          ix               = n_species
-          species_list(ix) = trim(gas_components(n))
-       end if
+    print *, ""
+    print *, "--- List of gas species ---"
+    do n = 1, n_gas_species
+       write(*, "(I4,A)") n, ": " // species_list(n)
     end do
+    print *, "-------------------------"
+    print *, ""
+    print *, "--- List of plasma species ---"
+    do n = n_gas_species+1, n_species
+       write(*, "(I4,A)") n, ": " // species_list(n)
+    end do
+    print *, "-------------------------"
 
-    do n = 1, n_species
+    ! Gas species are not stored in the tree for now
+    species_itree(1:n_gas_species) = -1
+    n_plasma_species = n_species - n_gas_species
+
+    do n = n_gas_species+1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
             n_copies=advance_num_states, ix=species_itree(n))
     end do

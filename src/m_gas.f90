@@ -1,11 +1,11 @@
+#include "../afivo/src/cpp_macros.h"
 !> Module that stores parameters related to the gas
 module m_gas
   use m_types
+  use m_af_types
 
   implicit none
   private
-
-  integer, parameter :: dp = kind(0.0d0)
 
   !> Whether the gas has a constant density
   logical, public, protected :: gas_constant_density = .true.
@@ -16,8 +16,13 @@ module m_gas
   ! Gas temperature in Kelvin
   real(dp), public, protected :: gas_temperature = 300.0_dp
 
+  ! List of gas fractions (the last one is 1.0 for the total density)
   real(dp), allocatable, public, protected :: gas_fractions(:)
+
+  ! List of gas densities (the last one is the total density)
   real(dp), allocatable, public, protected :: gas_densities(:)
+
+  ! List of gas components (the last one is M, the total density)
   character(len=comp_len), allocatable, public, protected :: gas_components(:)
 
   ! Gas number density (1/m3)
@@ -29,20 +34,29 @@ module m_gas
   ! Convert Townsend to V/m
   real(dp), parameter, public :: Townsend_to_SI = 1e-21_dp
 
+  ! Index of the gas number density
+  integer, public, protected :: i_gas_dens = -1
+
   public :: gas_initialize
   public :: gas_index
 
 contains
 
   !> Initialize this module
-  subroutine gas_initialize(cfg)
+  subroutine gas_initialize(tree, cfg)
     use m_config
     use m_units_constants
+    use m_user_methods
+    type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n
 
-    call CFG_add_get(cfg, "gas%constant_density", gas_constant_density, &
-         "Whether the density is constant")
+    gas_constant_density = .not. associated(user_gas_density)
+
+    if (.not. gas_constant_density) then
+       call af_add_cc_variable(tree, "M", ix=i_gas_dens)
+    end if
+
     call CFG_add_get(cfg, "gas%pressure", gas_pressure, &
          "The gas pressure (bar)")
     call CFG_add_get(cfg, "gas%temperature", gas_temperature, &
@@ -58,14 +72,17 @@ contains
          "Gas component fractions", .true.)
 
     call CFG_get_size(cfg, "gas%components", n)
-    allocate(gas_components(n))
-    allocate(gas_fractions(n))
-    call CFG_get(cfg, "gas%components", gas_components)
-    call CFG_get(cfg, "gas%fractions", gas_fractions)
+    allocate(gas_components(n+1))
+    allocate(gas_fractions(n+1))
+    call CFG_get(cfg, "gas%components", gas_components(1:n))
+    call CFG_get(cfg, "gas%fractions", gas_fractions(1:n))
+
+    gas_components(n+1) = "M"
+    gas_fractions(n+1)  = 1.0_dp
 
     if (any(gas_fractions < 0.0_dp)) &
          error stop "gas%fractions has negative value"
-    if (abs(sum(gas_fractions) - 1.0_dp) > 1e-4_dp) &
+    if (abs(sum(gas_fractions(1:n)) - 1.0_dp) > 1e-4_dp) &
          error stop "gas%fractions not normalized"
 
     gas_densities = gas_fractions * gas_number_density

@@ -1,3 +1,4 @@
+#include "../afivo/src/cpp_macros.h"
 !> This module contains several pre-defined variables like:
 !! * Indices of cell-centered variables
 !! * Names of the cell-centered variables
@@ -23,8 +24,6 @@ module m_streamer
   integer, public, protected :: i_rhs          = -1 ! Source term Poisson
   integer, public, protected :: i_tmp          = -1 ! Temporary variable
   integer, public, protected :: i_eps          = -1 ! Can be set to include a dielectric
-  integer, public, protected :: i_gas_dens     = -1 ! Set for a variable gas density
-  integer, public, protected, allocatable :: i_gas_comp(:) ! Set for a variable gas density
 
   ! ** Indices of face-centered variables **
   integer, public, protected :: n_var_face   = 0 ! Number of variables
@@ -118,7 +117,7 @@ contains
     flux_species(1) = i_electron
 
     ! Set index of first positive ion species
-    do n = 1, n_species
+    do n = n_gas_species+1, n_species
        if (species_charge(n) == 1) then
           i_1pos_ion = species_itree(n)
           ix_1pos_ion = n
@@ -127,15 +126,6 @@ contains
     end do
 
     if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
-
-    if (.not. gas_constant_density) then
-       i_gas_dens = af_find_cc_variable(tree, "M")
-
-       allocate(i_gas_comp(size(gas_components)))
-       do n = 1, size(gas_components)
-          i_gas_comp(n) = af_find_cc_variable(tree, trim(gas_components(n)))
-       end do
-    end if
 
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
