@@ -140,9 +140,11 @@ contains
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
-    call af_add_cc_variable(tree, "tmp", write_out=.false., ix=i_tmp)
+    call af_add_cc_variable(tree, "tmp", write_out=.false., &
+         write_binary=.false., ix=i_tmp)
 
-    call af_add_fc_variable(tree, "flux_elec", ix=flux_elec)
+    call af_add_fc_variable(tree, "flux_elec", ix=flux_elec, &
+         write_binary=.false.)
     call af_add_fc_variable(tree, "field", ix=electric_fld)
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
