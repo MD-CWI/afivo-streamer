@@ -1,3 +1,4 @@
+#include "cpp_macros.h"
 !> This module contains routines for writing output files with Afivo. The Silo
 !> format should probably be used for larger files, especially in 3D.
 module m_af_output
@@ -65,7 +66,7 @@ contains
     type(af_t), intent(in)                 :: tree     !< Tree to write out
     character(len=*), intent(in)           :: filename !< Filename for the output
     procedure(subr_other_data), optional   :: write_other_data
-    integer                                :: my_unit, lvl, id
+    integer                                :: my_unit, lvl, id, n
     character(len=400)                     :: fname
 
     fname = trim(filename) // ".dat"
@@ -92,6 +93,8 @@ contains
     write(my_unit) tree%cc_max_level
     write(my_unit) tree%cc_num_copies
     write(my_unit) tree%cc_write_output
+    write(my_unit) tree%cc_write_binary
+    write(my_unit) tree%fc_write_binary
 
     ! Skip methods (these have to be set again)
 
@@ -121,8 +124,18 @@ contains
        write(my_unit) tree%boxes(id)%dr      !< width/height of a cell
        write(my_unit) tree%boxes(id)%r_min   !< min coords. of box
        write(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
-       write(my_unit) tree%boxes(id)%cc
-       write(my_unit) tree%boxes(id)%fc
+
+       do n = 1, tree%n_var_cell
+          if (tree%cc_write_binary(n)) then
+             write(my_unit) tree%boxes(id)%cc(DTIMES(:), n)
+          end if
+       end do
+
+       do n = 1, tree%n_var_face
+          if (tree%fc_write_binary(n)) then
+             write(my_unit) tree%boxes(id)%fc(DTIMES(:), :, n)
+          end if
+       end do
     end do
 
     write(my_unit) present(write_other_data)
@@ -176,6 +189,8 @@ contains
     read(my_unit) tree%cc_max_level
     read(my_unit) tree%cc_num_copies
     read(my_unit) tree%cc_write_output
+    read(my_unit) tree%cc_write_binary
+    read(my_unit) tree%fc_write_binary
 
     do lvl = 1, tree%highest_lvl
        read(my_unit) n
@@ -217,8 +232,18 @@ contains
        read(my_unit) tree%boxes(id)%dr      !< width/height of a cell
        read(my_unit) tree%boxes(id)%r_min   !< min coords. of box
        read(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
-       read(my_unit) tree%boxes(id)%cc
-       read(my_unit) tree%boxes(id)%fc
+
+       do n = 1, tree%n_var_cell
+          if (tree%cc_write_binary(n)) then
+             read(my_unit) tree%boxes(id)%cc(DTIMES(:), n)
+          end if
+       end do
+
+       do n = 1, tree%n_var_face
+          if (tree%fc_write_binary(n)) then
+             read(my_unit) tree%boxes(id)%fc(DTIMES(:), :, n)
+          end if
+       end do
     end do
 
     read(my_unit) other_data_present
