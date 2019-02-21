@@ -22,7 +22,8 @@ program streamer
 
   integer, parameter        :: int8       = selected_int_kind(18)
   integer(int8)             :: t_start, t_current, count_rate
-  real(dp)                  :: wc_time, inv_count_rate, time_last_print
+  real(dp)                  :: wc_time, inv_count_rate
+  real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, s, it, coord_type, box_bytes
   logical                   :: write_out
   real(dp)                  :: time, dt, photoi_prev_time
@@ -109,8 +110,9 @@ program streamer
 
   ! Initial wall clock time
   call system_clock(t_start, count_rate)
-  inv_count_rate = 1.0_dp / count_rate
-  time_last_print = -1e10_dp
+  inv_count_rate   = 1.0_dp / count_rate
+  time_last_print  = -1e10_dp
+  time_last_output = time
 
   do it = 1, huge(1)-1
      if (time >= ST_end_time) exit
@@ -125,11 +127,12 @@ program streamer
         time_last_print = wc_time
      end if
 
-     ! Every output_dt, write output
-     if (output_cnt * output_dt <= time + dt) then
-        write_out  = .true.
-        dt         = output_cnt * output_dt - time
-        output_cnt = output_cnt + 1
+     ! Every output_dt, write output. Also write output at t = 0.
+     if (time <= 0.0_dp .or. time + dt >= time_last_output + output_dt) then
+        write_out        = .true.
+        dt               = time_last_output + output_dt - time
+        time_last_output = time_last_output + output_dt
+        output_cnt       = output_cnt + 1
      else
         write_out = .false.
      end if
@@ -200,7 +203,7 @@ contains
     call photoi_initialize(tree, cfg)
 
     call dt_initialize(cfg)
-    call advance_initialize()
+    call advance_set_max_dt(dt_min)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
     call init_cond_initialize(cfg)
@@ -247,17 +250,21 @@ contains
     write(my_unit) time
     write(my_unit) global_time
     write(my_unit) photoi_prev_time
-    write(my_unit) dt
+    write(my_unit) advance_max_dt
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
+    real(dp)            :: tmp
 
     read(my_unit) output_cnt
     read(my_unit) time
     read(my_unit) global_time
     read(my_unit) photoi_prev_time
-    read(my_unit) dt
+    read(my_unit) tmp
+
+    call advance_set_max_dt(tmp)
+    dt = tmp
   end subroutine read_sim_data
 
 end program streamer
