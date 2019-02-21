@@ -205,7 +205,7 @@ contains
     integer                   :: i
 
     call field_set_rhs(tree, s_in)
-    call field_set_voltage(tree, time)
+    call field_set_voltage(time)
 
     if (.not. have_guess) then
        ! Perform a FMG cycle when we have no guess
@@ -225,10 +225,9 @@ contains
   end subroutine field_compute
 
   !> Compute the electric field at a given time
-  function field_get_amplitude(tree, time) result(electric_fld)
+  function field_get_amplitude(time) result(electric_fld)
     use m_units_constants
     use m_lookup_table
-    type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
     real(dp)               :: electric_fld, t_rel
     type(af_loc_t)         :: loc_field
@@ -247,18 +246,6 @@ contains
                t_rel * field_lin_deriv + &
                field_sin_amplitude * &
                sin(t_rel * field_sin_freq * 2 * UC_pi)
-       else if (field_stability_search) then
-          call af_tree_max_cc(tree, i_electric_fld, max_fld, loc_field)
-          r = af_r_loc(tree, loc_field)
-          zrel = r(NDIM) / ST_domain_len(NDIM)
-          zrel = (zrel - field_stability_zmin) / &
-               (field_stability_zmax - field_stability_zmin)
-
-          if (zrel > 0.0_dp .and. max_fld > field_stability_threshold) then
-             electric_fld = (1 - zrel) * field_amplitude
-          else
-             electric_fld = field_amplitude
-          end if
        else
           electric_fld = field_amplitude
        end if
@@ -267,11 +254,10 @@ contains
   end function field_get_amplitude
 
   !> Compute the voltage at a given time
-  subroutine field_set_voltage(tree, time)
-    type(af_t), intent(in) :: tree
-    real(dp), intent(in)    :: time
+  subroutine field_set_voltage(time)
+    real(dp), intent(in) :: time
 
-    field_voltage = -ST_domain_len(NDIM) * field_get_amplitude(tree, time)
+    field_voltage = -ST_domain_len(NDIM) * field_get_amplitude(time)
   end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential
