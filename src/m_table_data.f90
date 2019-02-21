@@ -17,10 +17,7 @@ module m_table_data
   real(dp), public, protected :: table_max_townsend = 1e3_dp
 
   ! The maximum number of rows per entry
-  integer, parameter :: table_max_rows   = 500
-
-  ! The maximum number columns in a 2D transport data table
-  integer, parameter :: table_max_cols   = 50
+  integer, parameter :: table_max_rows   = 1500
 
   ! Public methods
   public :: table_data_initialize
