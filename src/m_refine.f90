@@ -107,7 +107,7 @@ contains
 
     call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
          "Refine regions up to this grid spacing", .true.)
-    call CFG_add(cfg, "refine_regions_tstop", [-1.0e99_dp], &
+    call CFG_add(cfg, "refine_regions_tstop", [1.0e99_dp], &
          "Refine regions up to this simulation time", .true.)
     vec = 0.0_dp
     call CFG_add(cfg, "refine_regions_rmin", vec, &
