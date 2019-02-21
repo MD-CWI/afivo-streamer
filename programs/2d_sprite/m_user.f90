@@ -26,31 +26,58 @@ contains
     type(af_t), intent(inout) :: tree
 
     user_initial_conditions => my_init_cond
+    user_gas_density => gas_density
+    user_potential_bc => potential_bc
 
   end subroutine user_initialize
+
+  pure real(dp) function gas_density(box, IJK)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: IJK
+    real(dp)                :: rr(NDIM)
+
+    rr = af_r_cc(box, [IJK])
+    gas_density = 2.5e25 * exp(-rr(NDIM) / scale_height)
+  end function gas_density
+
+  !> This fills ghost cells near physical boundaries for the potential
+  subroutine potential_bc(box, nb, iv, coords, bc_val, bc_type)
+    use m_field, only: field_voltage
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (af_neighb_dim(nb) == NDIM) then
+       if (af_neighb_low(nb)) then
+          bc_type = af_bc_dirichlet
+          bc_val = -field_voltage
+       else
+          bc_type = af_bc_dirichlet
+          bc_val  = 0.0_dp
+       end if
+    else
+       bc_type = af_bc_neumann
+       bc_val = 0.0_dp
+    end if
+  end subroutine potential_bc
 
   subroutine my_init_cond(box)
     use m_init_cond
     use m_geometry
     type(box_t), intent(inout) :: box
     integer                    :: i, j, n
-    real(dp)                   :: rr(2), gas_dens, n_e, density
+    real(dp)                   :: rr(2), n_e, density
 
     do j = 0, box%n_cell+1
        do i = 0, box%n_cell+1
           rr = af_r_cc(box, [i, j])
-          gas_dens = 2.5e25 * exp(-rr(2) / scale_height)
           n_e = n_e0 * exp((rr(2) - 60e3) / e_decay_height)
 
           box%cc(i, j, i_electron) = n_e
           box%cc(i, j, i_1pos_ion) = n_e
-
-          if (.not. gas_constant_density) then
-             do n = 1, size(gas_fractions)
-                box%cc(i, j, i_gas_comp(n)) = gas_dens * gas_fractions(n)
-             end do
-             box%cc(i, j, i_gas_dens) = gas_dens
-          end if
 
           do n = 1, init_conds%n_cond
              density = GM_density_line(rr, init_conds%seed_r0(:, n), &

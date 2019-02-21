@@ -100,9 +100,6 @@ program streamer
           ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
           r_min=ST_domain_origin, mem_limit_gb=memory_limit_GB)
 
-     ! This routine always needs to be called when using multigrid
-     call mg_init(tree, mg)
-
      ! Set up the initial conditions
      call set_initial_conditions(tree, mg)
   end if
@@ -213,8 +210,9 @@ contains
   subroutine set_initial_conditions(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg
+    integer                   :: n
 
-    do
+    do n = 1, 100
        call af_loop_box(tree, init_cond_set_box)
 
        if (associated(user_initial_conditions)) then
@@ -222,6 +220,10 @@ contains
        else if (ST_use_dielectric) then
           error stop "use_dielectric requires user_initial_conditions to be set"
        end if
+
+       ! This placement is so that users can set epsilon before the coarse grid
+       ! solver is constructed
+       if (n == 1) call mg_init(tree, mg)
 
        call field_compute(tree, mg, 0, time, .false.)
 

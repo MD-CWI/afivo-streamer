@@ -42,7 +42,7 @@ contains
        case ("top")
           do KJI_DO(0,nc+1)
              rr   = af_r_cc(box, [IJK])
-             if (rr(2) > 0.75_dp * ST_domain_len) then
+             if (rr(2) > 0.75_dp * ST_domain_len(2)) then
                 box%cc(IJK, i_eps) = dielectric_eps
                 box%cc(IJK, i_electron) = 0.0_dp
                 box%cc(IJK, i_1pos_ion) = 0.0_dp
@@ -53,8 +53,8 @@ contains
        case ("top_bottom")
           do KJI_DO(0,nc+1)
              rr   = af_r_cc(box, [IJK])
-             if (rr(2) > 0.75_dp * ST_domain_len .or. &
-                  rr(2) < 0.25_dp * ST_domain_len) then
+             if (rr(2) > 0.75_dp * ST_domain_len(2) .or. &
+                  rr(2) < 0.25_dp * ST_domain_len(2)) then
                 box%cc(IJK, i_eps) = dielectric_eps
                 box%cc(IJK, i_electron) = 0.0_dp
                 box%cc(IJK, i_1pos_ion) = 0.0_dp
@@ -65,7 +65,7 @@ contains
        case ("left")
           do KJI_DO(0,nc+1)
              rr   = af_r_cc(box, [IJK])
-             if (rr(1) < 0.25_dp * ST_domain_len) then
+             if (rr(1) < 0.25_dp * ST_domain_len(1)) then
                 box%cc(IJK, i_eps) = dielectric_eps
                 box%cc(IJK, i_electron) = 0.0_dp
                 box%cc(IJK, i_1pos_ion) = 0.0_dp
@@ -76,7 +76,7 @@ contains
        case ("rod")
           do KJI_DO(0,nc+1)
              rr   = af_r_cc(box, [IJK])
-             if (rr(1) < 0.125_dp * ST_domain_len) then
+             if (rr(1) < 0.125_dp * ST_domain_len(1)) then
                 box%cc(IJK, i_eps) = dielectric_eps
                 box%cc(IJK, i_electron) = 0.0_dp
                 box%cc(IJK, i_1pos_ion) = 0.0_dp
@@ -87,8 +87,8 @@ contains
        case ("hollow_rod")
           do KJI_DO(0,nc+1)
              rr   = af_r_cc(box, [IJK])
-             if (rr(1) > 0.0625_dp * ST_domain_len .and. &
-                  rr(1) < 0.125_dp * ST_domain_len) then
+             if (rr(1) > 0.0625_dp * ST_domain_len(1) .and. &
+                  rr(1) < 0.125_dp * ST_domain_len(1)) then
                 box%cc(IJK, i_eps) = dielectric_eps
                 box%cc(IJK, i_electron) = 0.0_dp
                 box%cc(IJK, i_1pos_ion) = 0.0_dp
