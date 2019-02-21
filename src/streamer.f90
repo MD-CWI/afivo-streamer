@@ -145,6 +145,7 @@ program streamer
 
      if (advance_max_dt < dt_min) then
         print *, "ST_dt getting too small, instability?", advance_max_dt
+        call output_status(tree, time, wc_time, it, dt)
         if (.not. write_out) then
            write_out = .true.
            output_cnt = output_cnt + 1
