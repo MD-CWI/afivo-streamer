@@ -12,15 +12,16 @@ module m_advance
   real(dp), public, protected :: advance_max_dt
 
   ! Public methods
-  public :: advance_initialize
+  public :: advance_set_max_dt
   public :: advance
   public :: advance_num_states
 
 contains
 
-  subroutine advance_initialize()
-    advance_max_dt = dt_min
-  end subroutine advance_initialize
+  subroutine advance_set_max_dt(dt_max)
+    real(dp), intent(in) :: dt_max
+    advance_max_dt = dt_max
+  end subroutine advance_set_max_dt
 
   subroutine advance(tree, mg, dt, time)
     use m_chemistry
