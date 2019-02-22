@@ -288,6 +288,12 @@ module m_af_types
      !> Whether to include the variable in the output
      logical :: cc_write_output(af_max_num_vars) = .true.
 
+     !> Whether to include a cell-centered variable in binary output
+     logical :: cc_write_binary(af_max_num_vars) = .true.
+
+     !> Whether to include a face-centered variable in binary output
+     logical :: fc_write_binary(af_max_num_vars) = .true.
+
      !> Methods for cell-centered variables
      type(af_cc_methods) :: cc_methods(af_max_num_vars)
 

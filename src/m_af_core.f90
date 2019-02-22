@@ -23,13 +23,16 @@ module m_af_core
 contains
 
   !> Add cell-centered variable
-  subroutine af_add_cc_variable(tree, name, write_out, n_copies, max_lvl, ix)
+  subroutine af_add_cc_variable(tree, name, write_out, n_copies, &
+       max_lvl, ix, write_binary)
     !> Tree to add variable to
     type(af_t), intent(inout)      :: tree
     !> Name of the variable
     character(len=*), intent(in)   :: name
     !> Include variable in output
     logical, intent(in), optional  :: write_out
+    !> Include variable in binary output (for restarting)
+    logical, intent(in), optional  :: write_binary
     !> How many copies of variable to store (default: 1)
     integer, intent(in), optional  :: n_copies
     !> Store variable up to this refinement level (default: af_max_lvl)
@@ -39,10 +42,11 @@ contains
 
     integer :: n
     integer :: ncpy, maxlvl
-    logical :: writeout
+    logical :: writeout, writebin
 
     ncpy = 1; if (present(n_copies)) ncpy = n_copies
     writeout = .true.; if (present(write_out)) writeout = write_out
+    writebin = .true.; if (present(write_binary)) writebin = write_binary
     maxlvl = 100; if (present(max_lvl)) maxlvl = max_lvl
 
     if (ncpy < 1) error stop "af_add_cc_variable: n_copies < 1"
@@ -54,12 +58,14 @@ contains
           if (present(ix)) ix = tree%n_var_cell
           tree%cc_names(tree%n_var_cell)        = name
           tree%cc_write_output(tree%n_var_cell) = writeout
+          tree%cc_write_binary(tree%n_var_cell) = writebin
           tree%cc_max_level(tree%n_var_cell)    = maxlvl
           tree%cc_num_copies(tree%n_var_cell)   = ncpy
        else
           write(tree%cc_names(tree%n_var_cell), "(A,I0)") &
                trim(name) // '_', n
           tree%cc_write_output(tree%n_var_cell) = .false.
+          tree%cc_write_binary(tree%n_var_cell) = .false.
           tree%cc_max_level(tree%n_var_cell)    = maxlvl
           tree%cc_num_copies(tree%n_var_cell)   = 1
        end if
@@ -68,16 +74,22 @@ contains
   end subroutine af_add_cc_variable
 
   !> Add face-centered variable
-  subroutine af_add_fc_variable(tree, name, ix)
+  subroutine af_add_fc_variable(tree, name, ix, write_binary)
     !> Tree to add variable to
     type(af_t), intent(inout)      :: tree
     !> Name of the variable
     character(len=*), intent(in)   :: name
     !> On output: index of variable
     integer, intent(out), optional :: ix
+    !> Include variable in binary output
+    logical, intent(in), optional  :: write_binary
+    logical                        :: writebin
+
+    writebin = .true.; if (present(write_binary)) writebin = write_binary
 
     tree%n_var_face                       = tree%n_var_face + 1
     tree%fc_names(tree%n_var_face)        = name
+    tree%fc_write_binary(tree%n_var_face) = writebin
     if (present(ix)) ix = tree%n_var_face
   end subroutine af_add_fc_variable
 
