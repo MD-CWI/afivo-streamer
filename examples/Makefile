@@ -15,7 +15,7 @@ PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric	\
 simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl
 
-PROGS_3D := $(PROGS_XD:%=%_3d)
+PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning
 
 PROGS := $(PROGS_2D) $(PROGS_3D)
 
