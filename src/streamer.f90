@@ -85,7 +85,6 @@ program streamer
      ! This routine always needs to be called when using multigrid
      call mg_init(tree, mg)
   else
-     output_cnt       = 0      ! Number of output files written
      time             = 0.0_dp ! Simulation time (all times are in s)
      global_time      = time
      photoi_prev_time = time   ! Time of last photoionization computation
@@ -103,6 +102,10 @@ program streamer
 
      ! Set up the initial conditions
      call set_initial_conditions(tree, mg)
+
+     ! Write initial output
+     output_cnt = 1 ! Number of output files written
+     call output_write(tree, output_cnt, 0.0_dp, write_sim_data)
   end if
 
   print *, "Number of threads", af_get_max_threads()
@@ -127,8 +130,8 @@ program streamer
         time_last_print = wc_time
      end if
 
-     ! Every output_dt, write output. Also write output at t = 0.
-     if (time <= 0.0_dp .or. time + dt >= time_last_output + output_dt) then
+     ! Every output_dt, write output
+     if (time + dt >= time_last_output + output_dt) then
         write_out        = .true.
         dt               = time_last_output + output_dt - time
         time_last_output = time_last_output + output_dt
