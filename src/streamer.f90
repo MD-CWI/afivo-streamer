@@ -34,6 +34,9 @@ program streamer
   type(ref_info_t)          :: ref_info
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
+  real(dp)                  :: max_field, initial_streamer_pos
+  type(af_loc_t)            :: loc_field, loc_field_initial
+  real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
 
   call CFG_update_from_arguments(cfg)
 
@@ -89,6 +92,7 @@ program streamer
      global_time      = time
      photoi_prev_time = time   ! Time of last photoionization computation
      dt               = advance_max_dt
+     initial_streamer_pos = 0.0_dp ! Initial streamer position
 
      if (ST_cylindrical) then
         coord_type = af_cyl
@@ -118,7 +122,20 @@ program streamer
   time_last_output = time
 
   do it = 1, huge(1)-1
-     if (time >= ST_end_time) exit
+      if (ST_use_end_time .and. time >= ST_end_time) exit
+
+      ! Initialize starting position of streamer
+     if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
+       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
+       loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+     end if
+
+     ! Check if streamer length exceeds the defined maximal streamer length
+     if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
+       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+       loc_field_coord = af_r_loc(tree, loc_field)
+       if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
+     end if
 
      ! Update wall clock time
      call system_clock(t_current)

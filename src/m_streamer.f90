@@ -64,6 +64,19 @@ module m_streamer
   ! End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
+  ! If we are using ST_end_time
+  logical, public, protected :: ST_use_end_time = .true.
+
+  ! Whether streamer length is used as a simulation stopping
+  logical, public, protected :: ST_use_end_streamer_length = .false.
+
+  ! Wait n steps before initializing streamer begin position
+  integer, public, protected :: ST_initial_streamer_pos_steps_wait = 5
+
+  ! Streamer length at which the simulation will stop
+  real(dp), public, protected :: ST_end_streamer_length = 15e-3
+
+
   ! The size of the boxes that we use to construct our mesh
   integer, public, protected :: ST_box_size = 8
 
@@ -147,6 +160,15 @@ contains
        call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
+
+    call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
+	       "Whether end_time is used to end the simulation")
+    call CFG_add_get(cfg, "use_end_streamer_length", ST_use_end_streamer_length, &
+         "Whether the length of the streamer is used to end the simulation")
+    call CFG_add_get(cfg, "end_streamer_length", ST_end_streamer_length, &
+         "Streamer length at which the simulation will end.")
+    call CFG_add_get(cfg, "initial_streamer_pos_steps_wait", ST_initial_streamer_pos_steps_wait, &
+          "Number of simulation steps to wait before initializing the starting position of the streamer")
 
     call CFG_add_get(cfg, "end_time", ST_end_time, &
        "The desired endtime (s) of the simulation")
