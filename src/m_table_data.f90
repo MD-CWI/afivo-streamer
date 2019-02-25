@@ -47,7 +47,7 @@ contains
     ! Temporary variables
     integer                   :: ioState, nL
     integer                   :: n_rows
-    integer, parameter        :: my_unit = 333
+    integer                   :: my_unit
     character(LEN=40)         :: line_fmt
     character(LEN=string_len) :: line
     real(dp)                  :: temp_table(2, table_max_rows)
@@ -60,7 +60,7 @@ contains
     line_fmt = "(A" // trim(adjustl(line_fmt)) // ")"
 
     ! Open 'file_name' (with error checking)
-    open(my_unit, file = trim(file_name), action = "read", &
+    open(newunit=my_unit, file = trim(file_name), action = "read", &
          err = 999, iostat = ioState, status="old")
 
     ! Table format

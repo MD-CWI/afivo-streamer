@@ -230,8 +230,6 @@ contains
     use m_lookup_table
     real(dp), intent(in)   :: time
     real(dp)               :: electric_fld, t_rel
-    type(af_loc_t)         :: loc_field
-    real(dp)               :: r(NDIM), zrel, max_fld
 
     if (field_table_use) then
        call LT_lin_interp_list(field_table_times, field_table_fields, &
