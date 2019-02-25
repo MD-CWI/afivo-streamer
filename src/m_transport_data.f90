@@ -32,16 +32,18 @@ contains
     use m_gas
 
     type(CFG_t), intent(inout) :: cfg
-    character(len=string_len)  :: td_file = "UNDEFINED"
+    character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: x_data(:), y_data(:)
 
     ! Create a lookup table for the model coefficients
     td_tbl = LT_create(table_min_townsend, table_max_townsend, &
          table_size, td_num_var)
 
-    call CFG_add_get(cfg, "transport_data%file", td_file, &
-         "Input file with transport data")
-    call CFG_add_get(cfg, "transport_data%old_style", td_old_style, &
+    call CFG_add_get(cfg, "input_data%file", td_file, &
+         "Input file with transport (and reaction) data")
+    if (td_file == undefined_str) error stop "input_data%file undefined"
+
+    call CFG_add_get(cfg, "input_data%old_style", td_old_style, &
          "Use old style transport data (alpha, eta, mu, D vs V/m)")
 
     ! Fill table with data

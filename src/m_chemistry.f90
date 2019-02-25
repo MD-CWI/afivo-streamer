@@ -114,10 +114,9 @@ contains
     integer                    :: n, i
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
+    logical                    :: read_success
 
-    reaction_file = undefined_str
-    call CFG_add_get(cfg, "chemistry%reaction_file", reaction_file, &
-         "File with a list of reactions")
+    call CFG_get(cfg, "input_data%file", reaction_file)
 
     if (.not. gas_constant_density) then
        ! Make sure the gas components are the first species
@@ -126,8 +125,10 @@ contains
        species_list(1:n_gas_species) = gas_components
     end if
 
-    if (reaction_file == undefined_str) then
-       print *, "m_chemistry: no reactions defined, using standard model"
+    call read_reactions(trim(reaction_file), read_success)
+
+    if (.not. read_success) then
+       print *, "m_chemistry: no reaction table found, using standard model"
 
        species_list(1) = "e"
        species_list(2) = "M+"
@@ -164,8 +165,6 @@ contains
        else
           error stop "Varying gas density not yet supported"
        end if
-    else
-       call read_reactions(reaction_file)
     end if
 
     ! Convert names to simple ascii
@@ -316,24 +315,49 @@ contains
   end subroutine get_derivatives
 
   !> Read reactions from a file
-  subroutine read_reactions(filename)
+  subroutine read_reactions(filename, read_success)
     character(len=*), intent(in) :: filename
-    character(len=string_len)    :: line, data_value
-    character(len=50)            :: reaction, how_to_get
+    logical, intent(out)         :: read_success
+    character(len=string_len)    :: line
+    character(len=50)            :: data_value(max_num_reactions)
+    character(len=50)            :: reaction(max_num_reactions)
+    character(len=50)            :: how_to_get(max_num_reactions)
     type(reaction_t)             :: new_reaction
     integer                      :: my_unit
     integer, parameter           :: n_fields = 3
     integer                      :: i0(n_fields), i1(n_fields)
-    integer                      :: n_found, i
+    integer                      :: n, n_found
 
     open(newunit=my_unit, file=filename, action="read")
 
-    n_reactions = 0
+    n_reactions  = 0
+    read_success = .false.
 
+    ! Find list of reactions
+    do
+       read(my_unit, "(A)", end=998) line
+       line = adjustl(line)
+
+       if (line == "reaction_list") then
+          ! Read next line starting with at least 5 dashes
+          read(my_unit, "(A)") line
+          if (line(1:5) /= "-----") &
+               error stop "read_reactions: reaction_list not followed by -----"
+          exit
+       end if
+    end do
+
+    ! Start reading reactions
     do
        read(my_unit, "(A)", end=999) line
        line = adjustl(line)
+
+       ! Ignore comments
        if (line(1:1) == "#") cycle
+
+       ! Exit when we read a line of dashes
+       if (line(1:5) == "-----") exit
+
        call get_fields_string(line, ",", n_fields, n_found, i0, i1)
 
        if (n_found /= n_fields) then
@@ -341,44 +365,51 @@ contains
           error stop "Invalid chemistry syntax"
        end if
 
-       reaction = line(i0(1):i1(1))
-       how_to_get = line(i0(2):i1(2))
-       data_value = line(i0(3):i1(3))
+       n_reactions             = n_reactions + 1
+       reaction(n_reactions)   = line(i0(1):i1(1))
+       how_to_get(n_reactions) = line(i0(2):i1(2))
+       data_value(n_reactions) = line(i0(3):i1(3))
+    end do
 
-       call get_reaction(trim(reaction), new_reaction)
-       new_reaction%description = trim(reaction)
+    ! Close the file (so that we can re-open it for reading data)
+    close(my_unit)
 
-       select case (how_to_get)
+    ! Now parse the reactions
+    do n = 1, n_reactions
+       call parse_reaction(trim(reaction(n)), new_reaction)
+       new_reaction%description = trim(reaction(n))
+
+       select case (how_to_get(n))
        case ("field_table")
-          ! Format is filename:reaction
-          i = index(data_value, ":")
-          call read_reaction_table(data_value(1:i-1), &
-               trim(data_value(i+1:)), new_reaction)
+          ! Reaction data should be present in the same file
+          call read_reaction_table(filename, &
+               trim(data_value(n)), new_reaction)
        case ("constant")
           new_reaction%rate_type = rate_analytic_constant
-          read(data_value, *) new_reaction%rate_data(1)
+          read(data_value(n), *) new_reaction%rate_data(1)
        case ("linear")
           new_reaction%rate_type = rate_analytic_linear
-          read(data_value, *) new_reaction%rate_data(1:2)
+          read(data_value(n), *) new_reaction%rate_data(1:2)
        case ("exp_v1")
           new_reaction%rate_type = rate_analytic_exp_v1
-          read(data_value, *) new_reaction%rate_data(1:3)
+          read(data_value(n), *) new_reaction%rate_data(1:3)
        case ("exp_v2")
           new_reaction%rate_type = rate_analytic_exp_v2
-          read(data_value, *) new_reaction%rate_data(1:2)
+          read(data_value(n), *) new_reaction%rate_data(1:2)
        case default
-          print *, "Unknown rate type: ", trim(how_to_get)
-          print *, "For reaction:      ", trim(reaction)
+          print *, "Unknown rate type: ", trim(how_to_get(n))
+          print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
           error stop
        end select
 
-       n_reactions            = n_reactions + 1
-       reactions(n_reactions) = new_reaction
+       reactions(n) = new_reaction
     end do
-    close(my_unit)
 
-999 continue
+    if (n_reactions > 0) read_success = .true.
+998 return
+
+999 error stop "read_reactions: no closing dashes for reaction list"
   end subroutine read_reactions
 
   !> Read a reaction table
@@ -392,8 +423,8 @@ contains
     call table_from_file(filename, dataname, rdata%x_data, rdata%y_data)
   end subroutine read_reaction_table
 
-  !> Pare a reaction and store it
-  subroutine get_reaction(reaction_text, reaction)
+  !> Parse a reaction and store it
+  subroutine parse_reaction(reaction_text, reaction)
     use m_gas
     character(len=*), intent(in)  :: reaction_text
     type(reaction_t), intent(out) :: reaction
@@ -482,7 +513,7 @@ contains
     reaction%ix_out           = ix_out(1:n_out)
     reaction%multiplicity_out = multiplicity_out(1:n_out)
     reaction%rate_factor      = rfactor
-  end subroutine get_reaction
+  end subroutine parse_reaction
 
   !> Find index of a species, return -1 if not found
   elemental integer function species_index(name)
