@@ -213,6 +213,7 @@ contains
 
     tree%coarse_grid_size(1:NDIM) = coarse_grid_size
     tree%periodic(1:NDIM)         = periodic
+    tree%ready                    = .true.
 
     nx      = coarse_grid_size / tree%n_cell
     n_boxes = product(nx)
@@ -291,7 +292,7 @@ contains
 #endif
 
     tree%highest_lvl = 1
-    tree%ready = .true.
+
   end subroutine af_set_coarse_grid
 
   !> Set the methods for a cell-centered variable
