@@ -21,11 +21,13 @@ contains
     real(dp), intent(in)          :: rr(NDIM) !< Where to interpolate
     integer, intent(in)           :: ivs(:)   !< Variables to interpolate
     logical, intent(out)          :: success  !< Whether the interpolation worked
-    integer, intent(in), optional :: id_guess !< Guess for box id
+    integer, intent(inout), optional :: id_guess !< Guess for box id (will be updated)
     real(dp)                      :: vals(size(ivs))
     type(af_loc_t)                :: loc
 
     loc = af_get_loc(tree, rr, guess=id_guess)
+    ! Update guess
+    if (present(id_guess)) id_guess = loc%id
 
     if (loc%id == -1) then
        success = .false.
@@ -47,12 +49,14 @@ contains
     real(dp), intent(in)          :: r(NDIM)  !< Where to interpolate
     integer, intent(in)           :: ivs(:)   !< Variables to interpolate
     logical, intent(out)          :: success  !< Whether the interpolation worked
-    integer, intent(in), optional :: id_guess !< Guess for box id
+    integer, intent(inout), optional :: id_guess !< Guess for box id (will be updated)
     real(dp)                      :: vals(size(ivs))
     integer                       :: i, iv, id, ix(NDIM)
     real(dp)                      :: r_loc(NDIM), dvec(NDIM), ovec(NDIM), w(DTIMES(2))
 
     id = af_get_id_at(tree, r, guess=id_guess)
+    ! Update guess
+    if (present(id_guess)) id_guess = id
 
     if (id <= af_no_box) then
        success = .false.

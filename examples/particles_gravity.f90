@@ -155,7 +155,7 @@ contains
     integer, intent(in)    :: n_particles
     real(dp), intent(in)   :: x(NDIM, n_particles)
     real(dp), intent(in)   :: v(NDIM, n_particles)
-    integer, intent(in)    :: ids(n_particles)
+    integer, intent(inout) :: ids(n_particles)
     real(dp)               :: sum_ken, sum_phi, phi(1)
     integer                :: n
     logical                :: success
