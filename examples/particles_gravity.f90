@@ -152,18 +152,20 @@ contains
 
   subroutine compute_total_energy(tree, x, v, ids, n_particles)
     type(af_t), intent(in) :: tree
-    integer, intent(in)     :: n_particles
-    real(dp), intent(in)    :: x(NDIM, n_particles)
-    real(dp), intent(in)    :: v(NDIM, n_particles)
-    integer, intent(in)     :: ids(n_particles)
-    real(dp)                :: sum_ken, sum_phi, phi(1)
-    integer                 :: n
+    integer, intent(in)    :: n_particles
+    real(dp), intent(in)   :: x(NDIM, n_particles)
+    real(dp), intent(in)   :: v(NDIM, n_particles)
+    integer, intent(in)    :: ids(n_particles)
+    real(dp)               :: sum_ken, sum_phi, phi(1)
+    integer                :: n
+    logical                :: success
 
     sum_ken = 0.0_dp
     sum_phi = 0.0_dp
 
     do n = 1, n_particles
-       phi = af_interp1(tree, x(:, n), [i_phi], 1, ids(n))
+       phi = af_interp1(tree, x(:, n), [i_phi], success, ids(n))
+       if (.not. success) error stop "compute_total_energy: interpolation error"
        sum_ken = sum_ken + 0.5_dp * sum(v(:, n)**2)
        sum_phi = sum_phi + 0.5_dp * phi(1)
     end do
@@ -186,7 +188,7 @@ contains
   end subroutine push_particles
 
   subroutine update_velocities(tree, x, v, ids, n_particles, dt)
-    type(af_t), intent(in) :: tree
+    type(af_t), intent(in)  :: tree
     integer, intent(in)     :: n_particles
     real(dp), intent(in)    :: x(NDIM, n_particles)
     real(dp), intent(inout) :: v(NDIM, n_particles)
@@ -194,11 +196,12 @@ contains
     real(dp), intent(in)    :: dt
     integer                 :: n
     real(dp)                :: a(NDIM)
+    logical                 :: success
 
     !$omp parallel do private(a)
     do n = 1, n_particles
-       a = af_interp1(tree, x(:, n), i_f, &
-            NDIM, ids(n))
+       a = af_interp1(tree, x(:, n), i_f, success, id_guess=ids(n))
+       if (.not. success) error stop "update velocities: interpolation error"
        v(:, n) = v(:, n) + dt * a * force_to_accel
     end do
     !$omp end parallel do

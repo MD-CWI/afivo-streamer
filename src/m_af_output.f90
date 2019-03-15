@@ -262,11 +262,12 @@ contains
   subroutine af_tree_copy_variable(tree_from, ivs_from, tree_to, ivs_to)
     use m_af_interp
     type(af_t), intent(in)    :: tree_from   !< Copy from this grid
-    integer, intent(in)        :: ivs_from(:) !< From these variable
+    integer, intent(in)       :: ivs_from(:) !< From these variable
     type(af_t), intent(inout) :: tree_to     !< Copy to this grid
-    integer, intent(in)        :: ivs_to(:)   !< To these variable
-    integer                    :: lvl, id, n, nc, i, j, k
-    real(dp)                   :: rr(NDIM)
+    integer, intent(in)       :: ivs_to(:)   !< To these variable
+    integer                   :: lvl, id, n, nc, i, j, k
+    real(dp)                  :: rr(NDIM)
+    logical                   :: success
 
     !$omp parallel private(lvl, id, n, nc, i, j, k, rr)
     do lvl = 1, tree_to%highest_lvl
@@ -279,7 +280,8 @@ contains
              do i = 1, nc
                 rr = af_r_cc(tree_to%boxes(id), [i, j])
                 tree_to%boxes(id)%cc(i, j, ivs_to) = &
-                     af_interp1(tree_from, rr, [ivs_from], size(ivs_from))
+                     af_interp1(tree_from, rr, [ivs_from], success)
+                if (.not. success) error stop "af_tree_copy_variable: interpolation error"
              end do
           end do
 #elif NDIM == 3
@@ -288,7 +290,8 @@ contains
                 do i = 1, nc
                    rr = af_r_cc(tree_to%boxes(id), [i, j, k])
                    tree_to%boxes(id)%cc(i, j, k, ivs_to) = &
-                        af_interp1(tree_from, rr, [ivs_from], size(ivs_from))
+                        af_interp1(tree_from, rr, [ivs_from], success)
+                   if (.not. success) error stop "af_tree_copy_variable: interpolation error"
                 end do
              end do
           end do
@@ -316,6 +319,7 @@ contains
     integer               :: i, n_cc
     real(dp)              :: r(NDIM), dr_vec(NDIM)
     real(dp), allocatable :: line_data(:, :)
+    logical               :: success
 
     n_cc = size(ivs)
     dr_vec = (r_max - r_min) / max(1, n_points-1)
@@ -326,7 +330,8 @@ contains
     do i = 1, n_points
        r = r_min + (i-1) * dr_vec
        line_data(1:NDIM, i) = r
-       line_data(NDIM+1:NDIM+n_cc, i) = af_interp1(tree, r, ivs, n_cc)
+       line_data(NDIM+1:NDIM+n_cc, i) = af_interp1(tree, r, ivs, success)
+       if (.not. success) error stop "af_write_line: interpolation error"
     end do
     !$omp end parallel do
 
@@ -372,6 +377,7 @@ contains
     real(dp)              :: r(NDIM), dvec(3)
     real(dp)              :: v1(NDIM), v2(NDIM)
     real(dp), allocatable :: pixel_data(:, :, :)
+    logical               :: success
 
     n_cc      = size(ivs)
 #if NDIM == 2
@@ -407,7 +413,8 @@ contains
     do j = 1, n_pixels(2)
        do i = 1, n_pixels(1)
           r = r_min + (i-1) * v1 + (j-1) * v2
-          pixel_data(:, i, j) = af_interp1(tree, r, ivs, n_cc)
+          pixel_data(:, i, j) = af_interp1(tree, r, ivs, success)
+          if (.not. success) error stop "af_write_plane: interpolation error"
        end do
     end do
     !$omp end parallel do

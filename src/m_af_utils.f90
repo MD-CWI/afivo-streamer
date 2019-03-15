@@ -207,36 +207,31 @@ contains
 
     integer                       :: i, i_ch, lvl_max
 
+    lvl_max = af_max_lvl
+    if (present(highest_lvl)) lvl_max = highest_lvl
+
+    id = -1
+
     if (present(guess)) then
-       id = guess
-       if (id > 0 .and. id < tree%highest_id) then
-          if (tree%boxes(id)%in_use .and. &
-               af_r_inside(tree%boxes(id), rr)) then
-
-             ! Jump into potential children for as long as possible
-             do while (af_has_children(tree%boxes(id)))
-                i_ch = child_that_contains(tree%boxes(id), rr)
-                id = tree%boxes(id)%children(i_ch)
-             end do
-
-             ! return             ! Exit routine
+       ! Check whether the guess is valid
+       if (guess > 0 .and. guess < tree%highest_id) then
+          if (tree%boxes(guess)%in_use .and. &
+               tree%boxes(guess)%lvl <= lvl_max .and. &
+               af_r_inside(tree%boxes(guess), rr)) then
+             id = guess
           end if
        end if
     end if
 
-    lvl_max = af_max_lvl
-    if (present(highest_lvl)) lvl_max = highest_lvl
+    if (id == -1) then
+       ! If there was no (valid) guess, find lvl 1 box that includes rr
+       do i = 1, size(tree%lvls(1)%ids)
+          id = tree%lvls(1)%ids(i)
+          if (af_r_inside(tree%boxes(id), rr)) exit
+       end do
+    end if
 
-    ! Find lvl 1 box that includes rr
-    do i = 1, size(tree%lvls(1)%ids)
-       id = tree%lvls(1)%ids(i)
-       if (af_r_inside(tree%boxes(id), rr)) exit
-    end do
-
-    if (i > size(tree%lvls(1)%ids)) then
-       ! Not inside any box
-       id = -1
-    else
+    if (id > 0) then
        ! Jump into children for as long as possible
        do
           if (tree%boxes(id)%lvl >= lvl_max .or. &
