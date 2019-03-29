@@ -14,10 +14,25 @@ module m_photoi
   logical, protected, public :: photoi_enabled = .false.
 
   ! Which photoionization method to use (helmholtz, montecarlo)
-  character(len=string_len) :: photoi_method = 'helmholtz'
+  character(len=20) :: photoi_method = 'helmholtz'
+
+  ! Which photoionization source to use (Zheleznyak, from_species)
+  character(len=20) :: photoi_source_type = 'Zheleznyak'
+
+  ! Name of the excited species in case photoi_source_type is 'from_species'
+  character(len=string_len) :: photoi_excited_species = 'UNDEFINED'
+
+  ! Index of the excited species
+  integer :: i_excited_species = -1
 
   ! Photoionization efficiency factor, typically around 0.05-0.1, not for Helmholtz-Luque should be 1.0
   real(dp) :: photoi_eta = 0.05_dp
+
+  ! Quenching pressure
+  real(dp) :: photoi_quenching_pressure = 40e-3 ! mbar
+
+  ! Decay time in case photoi_source_type is 'from_species'
+  real(dp) :: photoi_decay_time = 0.0_dp
 
   ! Update photoionization every N time step
   integer, protected, public :: photoi_per_steps = 10
@@ -45,11 +60,36 @@ contains
          "Which photoionization method to use (helmholtz, montecarlo)")
     call CFG_add_get(cfg, "photoi%eta", photoi_eta, &
          "Photoionization efficiency factor, typically around 0.05-0.1")
-    if (photoi_eta <= 0.0_dp) error stop "photoi%eta <= 0.0"
-    if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
+    call CFG_add_get(cfg, "photoi%quenching_pressure", photoi_quenching_pressure, &
+         "Photoionization quenching pressure (bar)")
+    call CFG_add_get(cfg, "photoi%source_type", photoi_source_type, &
+         "How to compute the photoi. source (Zheleznyak, from_species)")
+    call CFG_add_get(cfg, "photoi%excited_species", photoi_excited_species, &
+         "Which excited species to use when photoi%source_type = from_species")
+    call CFG_add_get(cfg, "photoi%decay_time", photoi_decay_time, &
+         "Decay time in case photoi_source_type is 'from_species'")
 
     if (photoi_enabled) then
+       if (photoi_eta <= 0.0_dp) error stop "photoi%eta <= 0.0"
+       if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
+       if (photoi_quenching_pressure <= 0.0_dp) &
+            error stop "photoi%quenching_pressure <= 0.0"
+
        call af_add_cc_variable(tree, "photo", ix=i_photo)
+
+       select case (photoi_source_type)
+       case ('Zheleznyak')
+          if (photoi_excited_species /= undefined_str) &
+             error stop "Cannot use photoi%excited_species with Zheleznyak"
+       case ('from_species')
+          if (photoi_excited_species == undefined_str) &
+             error stop "Please define photoi%excited_species"
+
+          i_excited_species = &
+               af_find_cc_variable(tree, trim(photoi_excited_species))
+       case default
+          error stop "Unknown value for photoi%source_type"
+       end select
     end if
 
     select case (photoi_method)
@@ -88,7 +128,7 @@ contains
     type(af_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
     real(dp), parameter            :: p_quench = 40.0e-3_dp
-    real(dp)                       :: quench_fac
+    real(dp)                       :: quench_fac, decay_fraction
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
@@ -96,8 +136,20 @@ contains
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
-    call af_loop_box_arg(tree, set_photoionization_rate, &
-         [photoi_eta * quench_fac], .true.)
+    select case (photoi_source_type)
+    case ('Zheleznyak')
+       call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
+            [photoi_eta * quench_fac], .true.)
+    case ('from_species')
+       if (photoi_decay_time > 0) then
+          decay_fraction = 1 - exp(-dt / photoi_decay_time)
+       else
+          decay_fraction = 1.0_dp
+       end if
+
+       call af_loop_box_arg(tree, photoionization_rate_from_species, &
+            [photoi_eta * quench_fac * decay_fraction, 1-decay_fraction], .true.)
+    end select
 
     select case (photoi_method)
     case ("helmholtz")
@@ -126,7 +178,7 @@ contains
   end subroutine photoi_set_src
 
   !> Sets the photoionization_rate
-  subroutine set_photoionization_rate(box, coeff)
+  subroutine photoionization_rate_from_alpha(box, coeff)
     use m_streamer
     use m_lookup_table
     use m_transport_data
@@ -157,6 +209,28 @@ contains
        if (tmp < 0) tmp = 0
        box%cc(IJK, i_rhs) = tmp
     end do; CLOSE_DO
-  end subroutine set_photoionization_rate
+  end subroutine photoionization_rate_from_alpha
+
+  !> Sets the photoionization_rate
+  subroutine photoionization_rate_from_species(box, coeff)
+    use m_streamer
+    use m_lookup_table
+    use m_transport_data
+    use m_gas
+    type(box_t), intent(inout) :: box
+    real(dp), intent(in)       :: coeff(:)
+    integer                    :: nc
+    real(dp)                   :: source_factor, decay_factor
+
+    nc            = box%n_cell
+    source_factor = coeff(1)
+    decay_factor  = coeff(2)
+
+    box%cc(DTIMES(1:nc), i_rhs) = source_factor * &
+         box%cc(DTIMES(1:nc), i_excited_species)
+    box%cc(DTIMES(1:nc), i_excited_species) = decay_factor * &
+         box%cc(DTIMES(1:nc), i_excited_species)
+
+  end subroutine photoionization_rate_from_species
 
 end module m_photoi
