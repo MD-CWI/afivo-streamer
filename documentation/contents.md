@@ -9,3 +9,4 @@
 * [Photoionization](documentation/photoionization.md) Description of photoionization methods
 * [Writing output](documentation/writing_output.md) How to write output
 * [Publications](documentation/publications.md) Relevant publications
+* [Contributors](documentation/contributors.md) List of people who contributed
