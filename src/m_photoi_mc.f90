@@ -270,9 +270,9 @@ contains
     use m_random
     use omp_lib
     integer, intent(in)        :: n_photons !< Number of photons
-    !< Input (x,y,z) values
+    !> Input (x,y,z) values
     real(dp), intent(in)       :: xyz_in(3, n_photons)
-    !< Output (x,y,z) values
+    !> Output (x,y,z) values
     real(dp), intent(out)      :: xyz_out(3, n_photons)
     integer, intent(in)        :: n_dim     !< 2 or 3 dimensional
     !< Lookup table
@@ -295,8 +295,9 @@ contains
        do n = 1, n_photons
           rr = prng%rngs(proc_id)%unif_01()
           dist = LT_get_col(tbl, 1, rr)
-          xyz_out(1:n_dim, n) =  xyz_in(1:n_dim, n) + &
-               prng%rngs(proc_id)%circle(dist)
+          ! Pick a random point on a sphere, and ignore the last dimension
+          xyz_out(1:3, n) =  xyz_in(1:3, n) + &
+               prng%rngs(proc_id)%sphere(dist)
        end do
        !$omp end do
     else if (n_dim == 3) then
