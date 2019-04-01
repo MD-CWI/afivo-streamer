@@ -17,7 +17,7 @@ name | example | meaning
 ---|---|---
 output%name | output/my_sim | filename base for output files
 output%dt | 0.25e-9 | time step for writing output
-input_data%file | [filename] | input file with transport data:
+input_data%file | [filename] | input file with transport data and reactions
 end_time | 10e-9 | end time of the simulation (s)
 domain_len | 32e-3 32e-3 | length of the domain (m)
 coarse_grid_size | 8 8 | size of the coarsest grid (cells)
