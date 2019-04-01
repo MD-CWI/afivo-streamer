@@ -1,5 +1,5 @@
 program performance_test
-  use m_find_index
+  use m_lookup_table
   implicit none
 
   integer, parameter :: dp         = kind(0.0d0)

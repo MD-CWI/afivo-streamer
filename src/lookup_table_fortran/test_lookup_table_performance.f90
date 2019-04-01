@@ -6,15 +6,15 @@ program test
   integer, parameter   :: test_size      = 1000*1000
   integer, parameter   :: min_table_size = 10
 
-  integer              :: i, cntr, table_size
-  type(lookup_table_t) :: lkp_tbl
-  real(dp)             :: x_values(test_size)
-  real(dp)             :: y_values(test_size)
-  real(dp)             :: y2_values(2, test_size)
-  real(dp)             :: lkp_results(test_size)
-  real(dp)             :: lkp2_results(2, test_size)
-  real(dp)             :: max_diff
-  real(dp)             :: total_time, time_t1, time_t2
+  integer    :: i, cntr, table_size
+  type(LT_t) :: lkp_tbl
+  real(dp)   :: x_values(test_size)
+  real(dp)   :: y_values(test_size)
+  real(dp)   :: y2_values(2, test_size)
+  real(dp)   :: lkp_results(test_size)
+  real(dp)   :: lkp2_results(2, test_size)
+  real(dp)   :: max_diff
+  real(dp)   :: total_time, time_t1, time_t2
 
   print *, 'start test_lookup_table'
 

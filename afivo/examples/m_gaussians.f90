@@ -70,7 +70,7 @@ contains
     real(dp)                  :: xrel(gs%n_dim)
 
     xrel = (r-gs%r0(:, ix)) / gs%sigma(ix)
-    gauss_single = exp(-sum(xrel**2))
+    gauss_single = gs%ampl(ix) * exp(-sum(xrel**2))
   end function gauss_single
 
   subroutine gauss_gradient(gs, r, grad)

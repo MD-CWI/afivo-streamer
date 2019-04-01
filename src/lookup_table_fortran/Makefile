@@ -1,6 +1,6 @@
 FC := gfortran
 FFLAGS := -O2 -g -std=f2008 -Wall -Wextra
-OBJS := m_find_index.o m_lookup_table.o m_lookup_table_2d.o
+OBJS := m_lookup_table.o
 TESTS := test_find_index_simple test_find_index_performance		\
 test_lookup_table_performance test_lookup_table_2d usage_example
 
@@ -9,13 +9,11 @@ test_lookup_table_performance test_lookup_table_2d usage_example
 all: 	$(TESTS)
 
 clean:
-	$(RM) $(TESTS) $(OBJS) $(OBJS:.o=.mod)
+	$(RM) $(TESTS) *.o *.mod
 
 # Dependency information
-$(TESTS): m_lookup_table.o m_lookup_table_2d.o m_find_index.o
-$(TESTS:%=%.o): m_lookup_table.o m_find_index.o
-m_lookup_table.o: m_find_index.o
-m_lookup_table_2d.o: m_lookup_table.o
+$(TESTS): m_lookup_table.o
+$(TESTS:%=%.o): m_lookup_table.o
 
 # How to get .o object files from .f90 source files
 %.o: %.f90

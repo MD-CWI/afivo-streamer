@@ -52,6 +52,8 @@ contains
     integer, intent(in)          :: n_proc
     integer                      :: n
 
+    if (n_proc < 1) error stop "init_parallel: n_proc < 1"
+
     allocate(self%rngs(n_proc))
     self%rngs(1) = rng
 

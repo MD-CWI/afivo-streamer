@@ -1,31 +1,14 @@
-SRC_DIRS	:= src afivo
+# List with all the program directories
+PROGRAM_DIRS := programs/standard_2d programs/standard_3d		\
+programs/dielectric_2d programs/stability_cyl programs/2d_sprite	\
+programs/3d_sprite
 
-# Directories with altered names (useful for cleaning)
-CLEANSRC	:= $(SRC_DIRS:%=clean-%)
+.PHONY: all $(PROGRAM_DIRS)
 
-.PHONY:	all doc clean $(SRC_DIRS) $(CLEANSRC)
+# We should not build multiple programs in parallel
+.NOTPARALLEL: $(PROGRAM_DIRS)
 
-all: 		$(SRC_DIRS)
+all: $(PROGRAM_DIRS)
 
-doc:    	$(SRC_DIRS)
-		@doxygen
-
-clean: 		$(CLEANSRC)
-
-$(SRC_DIRS):	| output
-		@echo "\n*********** Build information ***********"
-		@echo "  Debug is set to: [$(DEBUG)],"
-		@echo "  Set it to 1 to enable a debug build."
-		@echo "  For example: make clean; make DEBUG=1"
-		@echo "*****************************************\n"
-		$(MAKE) -C $@
-
-$(CLEANSRC):
-		$(MAKE) -C $(@:clean-%=%) clean
-
-# Ensure the output folder exists
-output:
-		mkdir -p output
-
-# Dependecy information
-src:		afivo
+$(PROGRAM_DIRS):
+	@$(MAKE) -C $@
