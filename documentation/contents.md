@@ -1,7 +1,7 @@
 # Code Contents {#doc-contents}
 
-* [Installation](documentation/installation.md) How to install the code
-* [Code overview](documentation/code_overview.md) A brief overview of the code
+* [Installation instructions](documentation/installation.md)
+* [Code overview](documentation/code_overview.md)
 * [Examples](documentation/examples.md) How to run some of the examples
 * [Simulation options](documentation/simulation_options.md) Description of the most important options
 * [Transport data](documentation/transport_data.md) How to obtain and set transport coefficients
