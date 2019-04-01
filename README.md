@@ -6,8 +6,7 @@ model are included.
 
 ## News/updates
 
-* In November/December 2018 I (Jannis) am planning to improve this code a bit so
-  that it becomes easier to write custom user applications.
+* There is now support for adding chemical reactions
 
 ## How to use
 

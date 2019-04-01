@@ -32,3 +32,4 @@ afivo/external_libraries/*
 /afivo/examples/*
 /programs/*/streamer
 *gmon.out
+documentation/html/*
