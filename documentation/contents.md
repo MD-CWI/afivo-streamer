@@ -8,3 +8,4 @@
 * [Chemistry](documentation/chemistry.md) How to set up chemical reactions
 * [Photoionization](documentation/photoionization.md) Description of photoionization methods
 * [Writing output](documentation/writing_output.md) How to write output
+* [Publications](documentation/publications.md) Relevant publications
