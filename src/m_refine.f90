@@ -1,4 +1,5 @@
 #include "../afivo/src/cpp_macros.h"
+!> Module with grid refinement settings and routines
 module m_refine
   use m_af_all
 
@@ -68,6 +69,7 @@ module m_refine
 
 contains
 
+  !> Initialize the grid refinement options
   subroutine refine_initialize(cfg)
     use m_config
     use m_gas
@@ -152,7 +154,7 @@ contains
 
   end subroutine refine_initialize
 
-  ! This routine sets the cell refinement flags for box
+  !> Set the cell refinement flags for box
   subroutine refine_routine(box, cell_flags)
     use m_streamer
     use m_geometry
@@ -161,7 +163,7 @@ contains
     use m_lookup_table
     use m_transport_data
     type(box_t), intent(in) :: box
-    ! Refinement flags for the cells of the box
+    !> Refinement flags for the cells of the box
     integer, intent(out)    :: &
          cell_flags(DTIMES(box%n_cell))
     integer                 :: IJK, n, nc
