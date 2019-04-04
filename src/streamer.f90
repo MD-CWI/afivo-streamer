@@ -17,6 +17,7 @@ program streamer
   use m_types
   use m_user_methods
   use m_output
+  use m_dielectric
 
   implicit none
 
@@ -122,19 +123,19 @@ program streamer
   time_last_output = time
 
   do it = 1, huge(1)-1
-      if (ST_use_end_time .and. time >= ST_end_time) exit
+     if (ST_use_end_time .and. time >= ST_end_time) exit
 
-      ! Initialize starting position of streamer
+     ! Initialize starting position of streamer
      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
-       loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
+        loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
      end if
 
      ! Check if streamer length exceeds the defined maximal streamer length
      if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-       loc_field_coord = af_r_loc(tree, loc_field)
-       if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+        loc_field_coord = af_r_loc(tree, loc_field)
+        if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
      end if
 
      ! Update wall clock time
@@ -184,13 +185,15 @@ program streamer
      if (mod(it, refine_per_steps) == 0) then
         call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
 
-        if (associated(user_refine)) then
-           call af_adjust_refinement(tree, user_refine, ref_info, &
-                refine_buffer_width)
+        if (ST_use_dielectric) then
+           call af_adjust_refinement(tree, refine_routine, ref_info, &
+                refine_buffer_width, dielectric_fix_refine)
         else
            call af_adjust_refinement(tree, refine_routine, ref_info, &
                 refine_buffer_width)
         end if
+
+        call dielectric_update_after_refinement(tree, ref_info)
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
@@ -236,6 +239,9 @@ contains
     type(mg_t), intent(inout) :: mg
     integer                   :: n
 
+    ! To initialize the dielectric, we need to have the tree
+    call dielectric_initialize(tree, cfg)
+
     do n = 1, 100
        call af_loop_box(tree, init_cond_set_box)
 
@@ -251,13 +257,15 @@ contains
 
        call field_compute(tree, mg, 0, time, .false.)
 
-       if (associated(user_refine)) then
-          call af_adjust_refinement(tree, user_refine, ref_info, &
-               refine_buffer_width)
+       if (ST_use_dielectric) then
+          call af_adjust_refinement(tree, refine_routine, ref_info, &
+               refine_buffer_width, dielectric_fix_refine)
        else
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width)
        end if
+
+       call dielectric_update_after_refinement(tree, ref_info)
 
        if (ref_info%n_add == 0) exit
     end do
