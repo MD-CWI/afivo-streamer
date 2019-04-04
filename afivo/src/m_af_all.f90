@@ -13,6 +13,7 @@ module m_af_all
   use m_af_particles
   use m_af_flux_schemes
   use m_coarse_solver
+  use m_mg_types
 
   implicit none
   public
