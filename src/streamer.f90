@@ -186,10 +186,10 @@ program streamer
 
         if (associated(user_refine)) then
            call af_adjust_refinement(tree, user_refine, ref_info, &
-                refine_buffer_width, .true.)
+                refine_buffer_width)
         else
            call af_adjust_refinement(tree, refine_routine, ref_info, &
-                refine_buffer_width, .true.)
+                refine_buffer_width)
         end if
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
@@ -253,10 +253,10 @@ contains
 
        if (associated(user_refine)) then
           call af_adjust_refinement(tree, user_refine, ref_info, &
-               refine_buffer_width, .true.)
+               refine_buffer_width)
        else
           call af_adjust_refinement(tree, refine_routine, ref_info, &
-               refine_buffer_width, .true.)
+               refine_buffer_width)
        end if
 
        if (ref_info%n_add == 0) exit
