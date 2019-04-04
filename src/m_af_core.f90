@@ -15,8 +15,6 @@ module m_af_core
   public :: af_set_cc_methods
   public :: af_init_box
   public :: af_destroy
-  public :: af_tidy_up
-  public :: af_resize_box_storage
   public :: af_adjust_refinement
   public :: af_consistent_fluxes
 
@@ -130,7 +128,7 @@ contains
   end function af_find_fc_variable
 
   !> Initialize a NDIM-d octree/quadtree grid
-  subroutine af_init(tree, n_cell, r_max, grid_size, periodic, r_min, coord, mem_limit_gb, n_boxes)
+  subroutine af_init(tree, n_cell, r_max, grid_size, periodic, r_min, coord, mem_limit_gb)
     type(af_t), intent(inout)      :: tree            !< The tree to initialize
     integer, intent(in)            :: n_cell          !< Boxes have n_cell^dim cells
     real(dp), intent(in)           :: r_max(NDIM)     !< Maximal coordinates of the domain
@@ -139,29 +137,23 @@ contains
     real(dp), intent(in), optional :: r_min(NDIM)     !< Lowest coordinate, default is (0., 0., 0.)
     integer, intent(in), optional  :: coord           !< Select coordinate type
     real(dp), intent(in), optional :: mem_limit_gb    !< Memory limit in GByte
-    integer, intent(in), optional  :: n_boxes         !< initial storage allocation
 
-    integer                        :: n_boxes_a
     real(dp)                       :: r_min_a(NDIM), gb_limit
     integer                        :: lvl, coord_a, box_bytes
 
     ! Set default arguments if not present
-    n_boxes_a = 1000;  if (present(n_boxes)) n_boxes_a = n_boxes
     r_min_a = 0.0_dp;  if (present(r_min)) r_min_a = r_min
     coord_a = af_xyz;  if (present(coord)) coord_a = coord
-    gb_limit = 16;     if (present(mem_limit_gb)) gb_limit = mem_limit_gb
+    gb_limit = 4;      if (present(mem_limit_gb)) gb_limit = mem_limit_gb
 
     if (tree%ready)       stop "af_init: tree was already initialized"
     if (n_cell < 2)       stop "af_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "af_init: n_cell should be even"
-    if (n_boxes_a <= 0)   stop "af_init: n_boxes should be > 0"
     if (gb_limit <= 0)    stop "af_init: mem_limit_gb should be > 0"
 #if NDIM == 3
     if (coord_a == af_cyl) stop "af_init: cannot have 3d cyl coords"
 #endif
     if (tree%n_var_cell <= 0) stop "af_init: no cell-centered variables present"
-
-    allocate(tree%boxes(n_boxes_a))
 
     do lvl = af_min_lvl, af_max_lvl
        allocate(tree%lvls(lvl)%ids(0))
@@ -179,6 +171,13 @@ contains
     ! Calculate size of a box
     box_bytes = af_box_bytes(n_cell, tree%n_var_cell, tree%n_var_face)
     tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
+
+    ! Allocate the full list of boxes
+    allocate(tree%boxes(tree%box_limit))
+
+    ! This list can probably be a bit smaller
+    tree%n_removed_ids = 0
+    allocate(tree%removed_ids(tree%box_limit))
 
     ! Initialize list of cell-centered variables with methods
     if (.not. allocated(tree%cc_method_vars)) &
@@ -222,9 +221,8 @@ contains
     call create_index_array(nx, periodic, id_array)
 
     ! Check if we have enough space
-    if (n_boxes > size(tree%boxes(:))) then
-       call af_resize_box_storage(tree, n_boxes)
-    end if
+    if (n_boxes > size(tree%boxes(:))) &
+         error stop "Not enough memory available for coarse grid"
 
     ! Create level 1
     deallocate(tree%lvls(1)%ids)
@@ -346,6 +344,7 @@ contains
 
     if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
     deallocate(tree%boxes)
+    deallocate(tree%removed_ids)
     deallocate(tree%cc_method_vars)
 
     do lvl = af_min_lvl, af_max_lvl
@@ -358,6 +357,7 @@ contains
     tree%highest_id  = 0
     tree%n_var_cell  = 0
     tree%n_var_face  = 0
+    tree%n_removed_ids = 0
     tree%ready       = .false.
   end subroutine af_destroy
 
@@ -418,96 +418,6 @@ contains
 #endif
   end subroutine create_index_array
 
-  !> Reorder and resize the list of boxes
-  subroutine af_tidy_up(tree, max_hole_frac, n_clean_min)
-    use m_morton
-    type(af_t), intent(inout)      :: tree !< The tree to tidy up
-    !> Maximum fraction of holes in boxes array
-    real(dp), intent(in)           :: max_hole_frac
-    !> Reorganize memory if at least this many boxes can be cleaned up
-    integer, intent(in)            :: n_clean_min
-    real(dp)                       :: hole_frac
-    integer                        :: n, lvl, id, n_clean, IJK
-    integer                        :: highest_id, n_used, n_stored, n_used_lvl
-    integer, allocatable           :: ixs_sort(:), ixs_map(:)
-    type(box_t), allocatable      :: boxes_cpy(:)
-    integer(morton_k), allocatable :: mortons(:)
-
-    if (.not. tree%ready) stop "Tree not ready"
-    if (max_hole_frac < 0) stop "af_tidy_up: need max_hole_frac >= 0"
-    if (n_clean_min < 0) stop "af_tidy_up: need n_clean_min >= 0"
-
-    highest_id  = tree%highest_id
-    n_used      = af_num_boxes_used(tree)
-    hole_frac   = 1 - n_used / real(highest_id, dp)
-    n_clean     = nint(hole_frac * highest_id)
-
-    if (hole_frac > max_hole_frac .and. n_clean >= n_clean_min) then
-       allocate(boxes_cpy(n_used))
-       allocate(ixs_map(0:highest_id))
-       ixs_map(0)       = 0
-       n_stored         = 0
-
-       do lvl = 1, tree%highest_lvl
-          n_used_lvl = size(tree%lvls(lvl)%ids)
-          allocate(mortons(n_used_lvl))
-          allocate(ixs_sort(n_used_lvl))
-
-          do n = 1, n_used_lvl
-             id = tree%lvls(lvl)%ids(n)
-             ! Note the -1, since our indices start at 1
-#if NDIM == 2
-             mortons(n) = morton_from_ix2(tree%boxes(id)%ix-1)
-#elif NDIM == 3
-             mortons(n) = morton_from_ix3(tree%boxes(id)%ix-1)
-#endif
-          end do
-
-          call morton_rank(mortons, ixs_sort)
-          tree%lvls(lvl)%ids = tree%lvls(lvl)%ids(ixs_sort)
-
-          do n = 1, n_used_lvl
-             id = tree%lvls(lvl)%ids(n)
-             boxes_cpy(n_stored + n) = tree%boxes(id)
-             ixs_map(tree%lvls(lvl)%ids(n)) = n_stored + n
-          end do
-
-          tree%lvls(lvl)%ids = [(n_stored+n, n=1,n_used_lvl)]
-          call set_leaves_parents(boxes_cpy, tree%lvls(lvl))
-          n_stored = n_stored + n_used_lvl
-          deallocate(mortons)
-          deallocate(ixs_sort)
-       end do
-
-       ! Update id's to new indices
-       do n = 1, n_used
-          boxes_cpy(n)%parent = ixs_map(boxes_cpy(n)%parent)
-          boxes_cpy(n)%children = ixs_map(boxes_cpy(n)%children)
-          where (boxes_cpy(n)%neighbors > af_no_box)
-             boxes_cpy(n)%neighbors = ixs_map(boxes_cpy(n)%neighbors)
-          end where
-
-          do KJI_DO(-1, 1)
-             if (boxes_cpy(n)%neighbor_mat(IJK) > af_no_box) then
-                boxes_cpy(n)%neighbor_mat(IJK) = &
-                     ixs_map(boxes_cpy(n)%neighbor_mat(IJK))
-             end if
-          end do; CLOSE_DO
-       end do
-
-       tree%boxes(1:n_used) = boxes_cpy ! Copy ordered data
-       do n = n_used+1, highest_id
-          if (tree%boxes(n)%in_use) then
-             ! Remove moved data
-             call clear_box(tree%boxes(n))
-          end if
-       end do
-
-       tree%highest_id = n_used
-    end if
-
-  end subroutine af_tidy_up
-
   !> Create a list of leaves and a list of parents for a level
   subroutine set_leaves_parents(boxes, level)
     type(box_t), intent(in)   :: boxes(:) !< List of boxes
@@ -552,28 +462,21 @@ contains
 
     box%in_use = .true.
 
+    ! Sometimes we re-use a removed box, then we don't have to re-allocate
+    if (.not. allocated(box%cc)) then
 #if NDIM == 2
-    allocate(box%cc(0:n_cell+1, 0:n_cell+1, n_cc))
-    allocate(box%fc(n_cell+1,   n_cell+1, NDIM, n_fc))
+       allocate(box%cc(0:n_cell+1, 0:n_cell+1, n_cc))
+       allocate(box%fc(n_cell+1,   n_cell+1, NDIM, n_fc))
 #elif NDIM == 3
-    allocate(box%cc(0:n_cell+1, 0:n_cell+1, 0:n_cell+1, n_cc))
-    allocate(box%fc(n_cell+1,   n_cell+1,   n_cell+1, NDIM, n_fc))
+       allocate(box%cc(0:n_cell+1, 0:n_cell+1, 0:n_cell+1, n_cc))
+       allocate(box%fc(n_cell+1,   n_cell+1,   n_cell+1, NDIM, n_fc))
 #endif
+    end if
 
     ! Initialize to zero
     box%cc = 0
     box%fc = 0
   end subroutine af_init_box
-
-  !> Deallocate data storage for a box and mark inactive
-  subroutine clear_box(box)
-    type(box_t), intent(inout) :: box
-
-    box%in_use = .false.
-
-    deallocate(box%cc)
-    deallocate(box%fc)
-  end subroutine clear_box
 
   ! Set the neighbors of id (using their parent)
   subroutine set_neighbs(boxes, id)
@@ -644,27 +547,6 @@ contains
     end if
   end function find_neighb
 
-  !> Resize box storage to new_size
-  subroutine af_resize_box_storage(tree, new_size)
-    type(af_t), intent(inout) :: tree    !< Tree to resize
-    integer, intent(in)       :: new_size !< New size for the array boxes(:)
-    type(box_t), allocatable :: boxes_cpy(:)
-
-    if (.not. tree%ready) stop "af_resize_box_storage: Tree not ready"
-    if (new_size < tree%highest_id) &
-         stop "af_resize_box_storage: Cannot shrink tree"
-
-    ! Store boxes in larger array boxes_cpy
-    allocate(boxes_cpy(new_size))
-    boxes_cpy(1:tree%highest_id) = tree%boxes(1:tree%highest_id)
-
-    ! Deallocate current storage
-    deallocate(tree%boxes)
-
-    ! Use new array
-    call move_alloc(boxes_cpy, tree%boxes)
-  end subroutine af_resize_box_storage
-
   !> Adjust the refinement of a tree using the user-supplied ref_subr. The
   !> optional argument ref_buffer controls over how many cells neighbors are
   !> affected by refinement flags.
@@ -677,11 +559,9 @@ contains
     type(ref_info_t), intent(inout) :: ref_info    !< Information about refinement
     integer, intent(in), optional   :: ref_buffer  !< Buffer width (in cells)
     logical, intent(in), optional   :: keep_buffer !< Use buffer for 'keep refinement' flags
-    integer                         :: lvl, id, i, c_ids(af_num_children)
-    integer                         :: highest_id_prev, highest_id_req
+    integer                         :: lvl, id, i, c_ids(af_num_children), i_ch
     integer, allocatable            :: ref_flags(:)
-    integer                         :: num_new_boxes, total_num_boxes
-    integer                         :: new_size, ref_buffer_val
+    integer                         :: ref_buffer_val
     logical                         :: keep_buffer_val
 
     if (.not. tree%ready) stop "Tree not ready"
@@ -696,47 +576,17 @@ contains
     if (ref_buffer_val > tree%n_cell) &
          error stop "af_adjust_refinement: ref_buffer > tree%n_cell"
 
-    ! Check whether the boxes array contains many holes, and if this is the
-    ! case, reorganize the array
-    call af_tidy_up(tree, 0.5_dp, 1000)
-
-    highest_id_prev = tree%highest_id
-    allocate(ref_flags(highest_id_prev))
+    allocate(ref_flags(tree%highest_id))
 
     ! Set refinement values for all boxes
     call consistent_ref_flags(tree, ref_flags, ref_subr, &
          ref_buffer_val, keep_buffer_val)
 
-    ! Compute number of new boxes
-    num_new_boxes = af_num_children * count(ref_flags == af_refine)
-
-    ! Determine number of boxes that could be in use after resizing
-    total_num_boxes = af_num_boxes_used(tree) + num_new_boxes
-
-    if (total_num_boxes > tree%box_limit) then
-       print *, "af_adjust_refinement: exceeding memory limit"
-       write(*, '(A,E12.2)') " memory_limit (GByte):     ", &
-            tree%box_limit * 0.5_dp**30 * &
-            af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
-       print *, "memory_limit (boxes):     ", tree%box_limit
-       print *, "required number of boxes: ", total_num_boxes
-       print *, "You can increase the memory limit in your call to af_init"
-       print *, "by setting mem_limit_gb to a higher value (in GBytes)"
-       error stop
-    end if
-
-    ! Resize box storage if required
-    highest_id_req = highest_id_prev + num_new_boxes
-    if (highest_id_req > size(tree%boxes)) then
-       new_size = 2 * highest_id_req ! Allocate some extra empty boxes
-       call af_resize_box_storage(tree, new_size)
-    end if
-
     do lvl = 1, af_max_lvl-1
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
 
-          if (id > highest_id_prev) then
+          if (id > size(ref_flags)) then
              cycle              ! This is a newly added box
           else if (ref_flags(id) == af_refine) then
              ! Add children. First need to get num_children free id's
@@ -746,7 +596,7 @@ contains
           else if (ref_flags(id) == af_derefine) then
              ! Remove children
              call auto_restrict(tree, id)
-             call remove_children(tree%boxes, id)
+             call remove_children(tree, id)
           end if
        end do
 
@@ -757,10 +607,14 @@ contains
        call set_child_ids(tree%lvls(lvl)%parents, &
             tree%lvls(lvl+1)%ids, tree%boxes)
 
-       ! Update connectivity of new children (id > highest_id_prev)
-       do i = 1, size(tree%lvls(lvl+1)%ids)
-          id = tree%lvls(lvl+1)%ids(i)
-          if (id > highest_id_prev) call set_neighbs(tree%boxes, id)
+       ! Update connectivity of new children
+       do i = 1, size(tree%lvls(lvl)%parents)
+          id = tree%lvls(lvl)%parents(i)
+          if (ref_flags(id) == af_refine) then
+             do i_ch = 1, af_num_children
+                call set_neighbs(tree%boxes, tree%boxes(id)%children(i_ch))
+             end do
+          end if
        end do
 
        if (size(tree%lvls(lvl+1)%ids) == 0) exit
@@ -909,12 +763,37 @@ contains
     integer                   :: i, highest_id_prev, n_ids
 
     n_ids = size(ids)
+
+    !> @todo when doing AMR in parallel, perhaps move some of the code outside
+    !> the critical construct
+
     !$omp critical (crit_free_ids)
-    highest_id_prev = tree%highest_id
-    tree%highest_id = tree%highest_id + n_ids
+    if (n_ids <= tree%n_removed_ids) then
+       ! Re-use removed boxes
+       do i = 1, n_ids
+          ids(i) = tree%removed_ids(tree%n_removed_ids-n_ids+i)
+       end do
+       tree%n_removed_ids = tree%n_removed_ids - n_ids
+    else
+       ! Add new boxes at the end of the list
+       highest_id_prev = tree%highest_id
+       tree%highest_id = tree%highest_id + n_ids
+
+       if (tree%highest_id > size(tree%boxes)) then
+          print *, "get_free_ids: exceeding memory limit"
+          write(*, '(A,E12.2)') " memory_limit (GByte):     ", &
+               tree%box_limit * 0.5_dp**30 * &
+               af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
+          print *, "memory_limit (boxes):     ", tree%box_limit
+          print *, "You can increase the memory limit in your call to af_init"
+          print *, "by setting mem_limit_gb to a higher value (in GBytes)"
+          error stop
+       end if
+
+       ids = [(highest_id_prev + i, i=1,n_ids)]
+    end if
     !$omp end critical (crit_free_ids)
 
-    ids = [(highest_id_prev + i, i=1,n_ids)]
   end subroutine get_free_ids
 
   !> Given the refinement function, return consistent refinement flags, that
@@ -1132,38 +1011,45 @@ contains
   end subroutine cell_to_ref_flags
 
   !> Remove the children of box id
-  subroutine remove_children(boxes, id)
-    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id       !< Id of box whose children will be removed
-    integer                     :: ic, c_id, nb_id, nb_rev, nb, IJK
+  subroutine remove_children(tree, id)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id !< Id of box whose children will be removed
+    integer                   :: ic, c_id, nb_id, nb_rev, nb, IJK, ix
+
+    !$omp critical (crit_remove_children)
+    ix = tree%n_removed_ids
+    tree%n_removed_ids = tree%n_removed_ids + af_num_children
+    !$omp end critical (crit_remove_children)
+
+    tree%removed_ids(ix+1:ix+af_num_children) = tree%boxes(id)%children
 
     do ic = 1, af_num_children
-       c_id = boxes(id)%children(ic)
+       c_id = tree%boxes(id)%children(ic)
 
        ! Remove from neighbors
        do nb = 1, af_num_neighbors
-          nb_id = boxes(c_id)%neighbors(nb)
+          nb_id = tree%boxes(c_id)%neighbors(nb)
           if (nb_id > af_no_box) then
              nb_rev = af_neighb_rev(nb)
-             boxes(nb_id)%neighbors(nb_rev) = af_no_box
+             tree%boxes(nb_id)%neighbors(nb_rev) = af_no_box
           end if
        end do
 
        do KJI_DO(-1,1)
-          nb_id = boxes(c_id)%neighbor_mat(IJK)
+          nb_id = tree%boxes(c_id)%neighbor_mat(IJK)
           if (nb_id > af_no_box) then
 #if NDIM == 2
-             boxes(nb_id)%neighbor_mat(-i, -j) = af_no_box
+             tree%boxes(nb_id)%neighbor_mat(-i, -j) = af_no_box
 #elif NDIM == 3
-             boxes(nb_id)%neighbor_mat(-i, -j, -k) = af_no_box
+             tree%boxes(nb_id)%neighbor_mat(-i, -j, -k) = af_no_box
 #endif
           end if
        end do; CLOSE_DO
 
-       call clear_box(boxes(c_id))
+       tree%boxes(c_id)%in_use = .false.
     end do
 
-    boxes(id)%children = af_no_box
+    tree%boxes(id)%children = af_no_box
   end subroutine remove_children
 
   !> Add children to box id, using the indices in c_ids

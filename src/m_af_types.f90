@@ -308,6 +308,12 @@ module m_af_types
 
      !> List of all boxes
      type(box_t), allocatable :: boxes(:)
+
+     !> List of all removed boxes (that can be reused)
+     integer, allocatable :: removed_ids(:)
+
+     !> Number of removed boxes
+     integer :: n_removed_ids = 0
   end type af_t
 
   !> Type specifying the location of a cell
