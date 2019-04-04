@@ -553,23 +553,22 @@ contains
   !>
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
-  subroutine af_adjust_refinement(tree, ref_subr, ref_info, ref_buffer, keep_buffer)
+  subroutine af_adjust_refinement(tree, ref_subr, ref_info, ref_buffer, &
+       modify_refinement)
     type(af_t), intent(inout)      :: tree        !< The tree to adjust
     procedure(af_subr_ref)         :: ref_subr    !< Refinement function
     type(ref_info_t), intent(inout) :: ref_info    !< Information about refinement
     integer, intent(in), optional   :: ref_buffer  !< Buffer width (in cells)
-    logical, intent(in), optional   :: keep_buffer !< Use buffer for 'keep refinement' flags
+    !> A routine to manually override refinement flags
+    procedure(subr_modify_ref), optional :: modify_refinement
     integer                         :: lvl, id, i, c_ids(af_num_children), i_ch
     integer, allocatable            :: ref_flags(:)
     integer                         :: ref_buffer_val
-    logical                         :: keep_buffer_val
 
     if (.not. tree%ready) stop "Tree not ready"
 
     ref_buffer_val = 0          ! Default buffer width (in cells) around refinement
     if (present(ref_buffer)) ref_buffer_val = ref_buffer
-    keep_buffer_val = .false.   ! Do not use a buffer for 'keep refinement' flags
-    if (present(keep_buffer)) keep_buffer_val = keep_buffer
 
     if (ref_buffer_val < 0) &
          error stop "af_adjust_refinement: ref_buffer < 0"
@@ -580,7 +579,7 @@ contains
 
     ! Set refinement values for all boxes
     call consistent_ref_flags(tree, ref_flags, ref_subr, &
-         ref_buffer_val, keep_buffer_val)
+         ref_buffer_val, modify_refinement)
 
     do lvl = 1, af_max_lvl-1
        do i = 1, size(tree%lvls(lvl)%ids)
@@ -802,16 +801,16 @@ contains
   !> ref_flags is changed: for boxes that will be refined it holds af_refine,
   !> for boxes that will be derefined it holds af_derefine
   subroutine consistent_ref_flags(tree, ref_flags, ref_subr, &
-       ref_buffer, keep_buffer)
+       ref_buffer, modify_refinement)
     use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     type(af_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)     :: ref_flags(:) !< List of refinement flags for all boxes(:)
     procedure(af_subr_ref)    :: ref_subr     !< User-supplied refinement function.
     integer, intent(in)        :: ref_buffer   !< Buffer width (in cells)
-    logical, intent(in)        :: keep_buffer  !< Also buffer 'keep refinement' flags
-
-    integer              :: lvl, i, i_ch, ch_id, id, c_ids(af_num_children)
-    integer              :: nb, p_id, nb_id, p_nb_id
+    !> A routine to manually override refinement flags
+    procedure(subr_modify_ref), optional :: modify_refinement
+    integer              :: lvl, i, i_ch, ch_id, id
+    integer              :: p_id
     integer              :: thread_id
     integer, allocatable :: tmp_flags(:, :)
 #if NDIM == 2
@@ -840,7 +839,7 @@ contains
 
           call ref_subr(tree%boxes(id), cell_flags)
           call cell_to_ref_flags(cell_flags, tree%n_cell, &
-               tmp_flags(:, thread_id), tree, id, ref_buffer, keep_buffer)
+               tmp_flags(:, thread_id), tree, id, ref_buffer)
 
           ! If the parent exists, and this is the first child which is itself
           ! not refined, set refinement flags for the parent
@@ -855,7 +854,7 @@ contains
                 ! This is the first child which is itself not refined
                 call ref_subr(tree%boxes(p_id), cell_flags)
                 call cell_to_ref_flags(cell_flags, tree%n_cell, &
-                     tmp_flags(:, thread_id), tree, p_id, ref_buffer, keep_buffer)
+                     tmp_flags(:, thread_id), tree, p_id, ref_buffer)
              end if
           end if
        end do
@@ -877,6 +876,24 @@ contains
        id = tree%lvls(af_max_lvl)%ids(i)
        if (ref_flags(id) == af_do_ref) ref_flags(id) = af_keep_ref
     end do
+
+    call ensure_two_one_balance(tree, ref_flags)
+    call handle_derefinement_flags(tree, ref_flags)
+
+    if (present(modify_refinement)) then
+       call modify_refinement(tree, ref_flags)
+       call ensure_two_one_balance(tree, ref_flags)
+       call handle_derefinement_flags(tree, ref_flags)
+    end if
+
+  end subroutine consistent_ref_flags
+
+  !> Adjust refinement flags to ensure 2-1 balance is maintained
+  subroutine ensure_two_one_balance(tree, ref_flags)
+    type(af_t), intent(inout) :: tree
+    integer, intent(inout)    :: ref_flags(:)
+    integer                   :: lvl, i, id, nb, nb_id
+    integer                   :: p_id, p_nb_id
 
     ! Ensure 2-1 balance
     do lvl = tree%highest_lvl, 1, -1
@@ -913,9 +930,14 @@ contains
 
        end do
     end do
+  end subroutine ensure_two_one_balance
 
-    ! Make the (de)refinement flags consistent for blocks with children. Also
-    ! ensure that at most one level can be removed at a time.
+  subroutine handle_derefinement_flags(tree, ref_flags)
+    type(af_t), intent(inout) :: tree
+    integer, intent(inout)    :: ref_flags(:)
+    integer                   :: lvl, i, id, c_ids(af_num_children)
+
+    ! Make the (de)refinement flags consistent for blocks with children
     do lvl = tree%highest_lvl-1, 1, -1
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
@@ -928,17 +950,20 @@ contains
              ref_flags(id) = af_derefine
           else
              ref_flags(id) = af_keep_ref
+             ! The children cannot be removed. This information is useful when
+             ! the modify_refinement() routine is used.
+             ref_flags(c_ids) = max(ref_flags(c_ids), af_keep_ref)
           end if
        end do
     end do
 
-  end subroutine consistent_ref_flags
+  end subroutine handle_derefinement_flags
 
   !> Given the cell refinement flags of a box, set the refinement flag for that
   !> box and potentially also its neighbors (in case of refinement near a
   !> boundary).
   subroutine cell_to_ref_flags(cell_flags, nc, ref_flags, tree, id, &
-       ref_buffer, keep_buffer)
+       ref_buffer)
     use m_af_utils, only: af_get_loc
     integer, intent(in)     :: nc                     !< n_cell for the box
 #if NDIM == 2
@@ -950,7 +975,6 @@ contains
     type(af_t), intent(in) :: tree                   !< Full tree
     integer, intent(in)     :: id                     !< Which box is considered
     integer, intent(in)     :: ref_buffer             !< Buffer cells around refinement
-    logical, intent(in)     :: keep_buffer            !< Buffer around 'keep refinement' flags
     integer                 :: ix0(NDIM), ix1(NDIM), IJK, nb_id
 
     if (minval(cell_flags) < af_rm_ref .or. &
@@ -993,17 +1017,11 @@ contains
 #if NDIM == 2
        if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
           ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. &
-            any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
        end if
 #elif NDIM == 3
        if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
             ix0(3):ix1(3)) == af_do_ref)) then
           ref_flags(nb_id) = af_do_ref
-       else if (keep_buffer .and. any(cell_flags(ix0(1):ix1(1), &
-            ix0(2):ix1(2), ix0(3):ix1(3)) == af_keep_ref)) then
-          ref_flags(nb_id) = max(ref_flags(nb_id), af_keep_ref)
        end if
 #endif
     end do; CLOSE_DO
