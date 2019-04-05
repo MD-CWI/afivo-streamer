@@ -17,6 +17,7 @@ contains
   subroutine forward_euler(tree, dt, s_in, s_out, set_dt)
     use m_chemistry
     use m_streamer
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
     integer, intent(in)       :: s_in   !< Input time state
@@ -37,6 +38,10 @@ contains
     !$omp end parallel
 
     call af_consistent_fluxes(tree, [flux_elec])
+
+    if (ST_use_dielectric) then
+       call dielectric_copy_fluxes(tree, flux_elec)
+    end if
 
     ! Update the solution
     !$omp parallel private(lvl, i, id, p_id)
@@ -83,6 +88,14 @@ contains
 #if NDIM == 3
     integer                    :: l
 #endif
+
+    ! Inside the dielectric, set the flux to zero. We later determine the
+    ! boundary flux onto dielectrics
+    if (ST_use_dielectric) then
+       if (boxes(id)%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          boxes(id)%fc(DTIMES(:), :, flux_elec) = 0.0_dp
+       end if
+    end if
 
     nc      = boxes(id)%n_cell
     inv_dr  = 1/boxes(id)%dr

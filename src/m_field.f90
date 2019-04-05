@@ -161,6 +161,7 @@ contains
   subroutine field_set_rhs(tree, s_in)
     use m_units_constants
     use m_chemistry
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: s_in
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
@@ -190,6 +191,11 @@ contains
        !$omp end do nowait
     end do
     !$omp end parallel
+
+    if (ST_use_dielectric) then
+       call dielectric_rearrange_charge(tree)
+    end if
+
   end subroutine field_set_rhs
 
   !> Compute electric field on the tree. First perform multigrid to get electric
@@ -320,97 +326,61 @@ contains
   end subroutine field_bc_point_charge
 
   !> Compute electric field from electrical potential
-  subroutine field_from_potential(box)
-    type(box_t), intent(inout) :: box
+  subroutine field_from_potential(boxes, id)
+    use m_dielectric
+    type(box_t), intent(inout) :: boxes(:)
+    integer, intent(in)        :: id
     integer                    :: nc
     real(dp)                   :: inv_dr(NDIM)
 
-    nc     = box%n_cell
-    inv_dr = 1 / box%dr
+    nc     = boxes(id)%n_cell
+    inv_dr = 1 / boxes(id)%dr
 
+    associate(cc => boxes(id)%cc, fc => boxes(id)%fc)
 #if NDIM == 2
-    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr(1) * &
-         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi)) + &
-         field_background(1)
-    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr(2) * &
-         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi)) + &
-         field_background(2)
+      fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr(1) * &
+           (cc(0:nc, 1:nc, i_phi) - cc(1:nc+1, 1:nc, i_phi)) + &
+           field_background(1)
+      fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr(2) * &
+           (cc(1:nc, 0:nc, i_phi) - cc(1:nc, 1:nc+1, i_phi)) + &
+           field_background(2)
 
-    if (ST_use_dielectric) then
-       ! Compute fields at the boundaries of the box, where eps can change
-       box%fc(1, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
-            box%cc(0, 1:nc, i_eps) / &
-            (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
-            box%cc(nc+1, 1:nc, i_eps) / &
-            (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
-            box%cc(1:nc, 0, i_eps) / &
-            (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-       box%fc(1:nc, nc+1, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
-            box%cc(1:nc, nc+1, i_eps) / &
-            (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
-    end if
+      if (ST_use_dielectric) then
+         call dielectric_adjust_field(boxes, id)
+      end if
 
-    box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 2, electric_fld))**2)
+      cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
+           (fc(1:nc, 1:nc, 1, electric_fld) + &
+           fc(2:nc+1, 1:nc, 1, electric_fld))**2 + &
+           (fc(1:nc, 1:nc, 2, electric_fld) + &
+           fc(1:nc, 2:nc+1, 2, electric_fld))**2)
 #elif NDIM == 3
-    box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr(1) * &
-         (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
-         box%cc(1:nc+1, 1:nc, 1:nc, i_phi)) + &
-         field_background(1)
-    box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr(2) * &
-         (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
-         box%cc(1:nc, 1:nc+1, 1:nc, i_phi)) + &
-         field_background(2)
-    box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr(3) * &
-         (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
-         box%cc(1:nc, 1:nc, 1:nc+1, i_phi)) + &
-         field_background(3)
+      fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr(1) * &
+           (cc(0:nc, 1:nc, 1:nc, i_phi) - &
+           cc(1:nc+1, 1:nc, 1:nc, i_phi)) + &
+           field_background(1)
+      fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr(2) * &
+           (cc(1:nc, 0:nc, 1:nc, i_phi) - &
+           cc(1:nc, 1:nc+1, 1:nc, i_phi)) + &
+           field_background(2)
+      fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr(3) * &
+           (cc(1:nc, 1:nc, 0:nc, i_phi) - &
+           cc(1:nc, 1:nc, 1:nc+1, i_phi)) + &
+           field_background(3)
 
-    if (ST_use_dielectric) then
-       ! Compute fields at the boundaries of the box, where eps can change
-       box%fc(1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
-            box%cc(0, 1:nc, 1:nc, i_eps) / &
-            (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
-            box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
-            (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 1:nc, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
-            box%cc(1:nc, 0, 1:nc, i_eps) / &
-            (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
-       box%fc(1:nc, nc+1, 1:nc, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
-            box%cc(1:nc, nc+1, 1:nc, i_eps) / &
-            (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
-       box%fc(1:nc, 1:nc, 1, 3, electric_fld) = 2 * inv_dr(3) * &
-            (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
-            box%cc(1:nc, 1:nc, 0, i_eps) / &
-            (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
-       box%fc(1:nc, 1:nc, nc+1, 3, electric_fld) = 2 * inv_dr(3) * &
-            (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
-            box%cc(1:nc, 1:nc, nc+1, i_eps) / &
-            (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
-    end if
+      if (ST_use_dielectric) then
+         call dielectric_adjust_field(boxes, id)
+      end if
 
-    box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
-         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))**2)
+      cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
+           (fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
+           fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))**2 + &
+           (fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
+           fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))**2 + &
+           (fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
+           fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))**2)
 #endif
+    end associate
 
   end subroutine field_from_potential
 

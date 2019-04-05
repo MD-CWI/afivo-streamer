@@ -25,10 +25,13 @@ m_chemistry.o: m_table_data.mod
 m_chemistry.o: m_transport_data.mod
 m_chemistry.o: m_types.mod
 m_chemistry.o: m_units_constants.mod
+m_dielectric.o: m_config.mod
 m_dielectric.o: m_streamer.mod
+m_dielectric.o: m_units_constants.mod
 m_dt.o: m_config.mod
 m_field.o: m_chemistry.mod
 m_field.o: m_config.mod
+m_field.o: m_dielectric.mod
 m_field.o: m_lookup_table.mod
 m_field.o: m_streamer.mod
 m_field.o: m_table_data.mod
@@ -36,6 +39,7 @@ m_field.o: m_types.mod
 m_field.o: m_units_constants.mod
 m_field.o: m_user_methods.mod
 m_fluid_lfa.o: m_chemistry.mod
+m_fluid_lfa.o: m_dielectric.mod
 m_fluid_lfa.o: m_dt.mod
 m_fluid_lfa.o: m_gas.mod
 m_fluid_lfa.o: m_lookup_table.mod
@@ -88,6 +92,7 @@ m_refine.o: m_init_cond.mod
 m_refine.o: m_lookup_table.mod
 m_refine.o: m_streamer.mod
 m_refine.o: m_transport_data.mod
+m_refine.o: m_user_methods.mod
 m_streamer.o: m_chemistry.mod
 m_streamer.o: m_config.mod
 m_streamer.o: m_gas.mod
