@@ -203,22 +203,30 @@ contains
     real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
     integer                   :: i
+    real(dp)                  :: max_rhs, max_residual
 
     call field_set_rhs(tree, s_in)
     call field_set_voltage(time)
 
+    call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
+
     if (.not. have_guess) then
        ! Perform a FMG cycle when we have no guess
        call mg_fas_fmg(tree, mg, .false., have_guess)
-    else
-       ! Perform cheaper V-cycles
-       do i = 1, ST_multigrid_num_vcycles
-          call mg_fas_vcycle(tree, mg, .false.)
-       end do
     end if
 
+    ! Perform cheaper V-cycles
+    do i = 1, ST_multigrid_num_vcycles
+       call mg_fas_vcycle(tree, mg, .true.)
+       call af_tree_maxabs_cc(tree, mg%i_tmp, max_residual)
+       if (max_residual < max_rhs * ST_multigrid_relative_residual) exit
+    end do
+
     ! Compute field from potential
-    call af_loop_box(tree, field_from_potential)
+    call af_loop_boxes(tree, field_from_potential, .true.)
+
+    ! Restrict the field norm to the coarse grid for filling ghost cells
+    call af_restrict_tree(tree, i_electric_fld)
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, i_electric_fld)

@@ -95,6 +95,9 @@ module m_streamer
   ! Number of V-cycles to perform per time step
   integer, public, protected :: ST_multigrid_num_vcycles = 2
 
+  ! Stop multigrid when residual is smaller than this factor times max(|rhs|)
+  real(dp), public, protected :: ST_multigrid_relative_residual = 1e-4_dp
+
   ! Global time
   real(dp), public :: global_time = 0.0_dp
 
@@ -185,6 +188,9 @@ contains
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
+    call CFG_add_get(cfg, "multigrid_relative_residual", &
+         ST_multigrid_relative_residual, &
+         "Stop multigrid when residual is smaller than this factor times max(|rhs|)")
 
     prolong_method = "limit"
     call CFG_add_get(cfg, "prolong_density", prolong_method, &
