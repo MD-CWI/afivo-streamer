@@ -188,12 +188,11 @@ program streamer
         if (ST_use_dielectric) then
            call af_adjust_refinement(tree, refine_routine, ref_info, &
                 refine_buffer_width, dielectric_fix_refine)
+           call dielectric_update_after_refinement(tree, ref_info)
         else
            call af_adjust_refinement(tree, refine_routine, ref_info, &
                 refine_buffer_width)
         end if
-
-        call dielectric_update_after_refinement(tree, ref_info)
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
@@ -260,12 +259,11 @@ contains
        if (ST_use_dielectric) then
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width, dielectric_fix_refine)
+          call dielectric_update_after_refinement(tree, ref_info)
        else
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width)
        end if
-
-       call dielectric_update_after_refinement(tree, ref_info)
 
        if (ref_info%n_add == 0) exit
     end do
