@@ -952,11 +952,14 @@ contains
           if (all(ref_flags(c_ids) == af_rm_ref) .and. &
                ref_flags(id) <= af_keep_ref) then
              ref_flags(id) = af_derefine
-          else if (ref_flags(id) /= af_derefine) then
+          else
              ref_flags(id) = af_keep_ref
              ! The children cannot be removed. This information is useful when
-             ! the modify_refinement() routine is used.
-             ref_flags(c_ids) = max(ref_flags(c_ids), af_keep_ref)
+             ! the modify_refinement() routine is used. Make sure not to
+             ! override previously set derefinement flags.
+             where (ref_flags(c_ids) /= af_derefine)
+                ref_flags(c_ids) = max(ref_flags(c_ids), af_keep_ref)
+             end where
           end if
        end do
     end do
