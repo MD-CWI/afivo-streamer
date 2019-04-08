@@ -7,6 +7,7 @@ adaptive mesh refinement and parallelization.
 
 ## Quick links
 
+* [Gitlab repository](https://gitlab.com/MD-CWI-NL/afivo-streamer)
 * [Installation instructions](documentation/installation.md)
 * [Contents of the documentation](@ref doc-contents)
 * [Recent changes](https://gitlab.com/MD-CWI-NL/afivo-streamer/activity)
