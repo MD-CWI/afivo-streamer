@@ -211,10 +211,38 @@ contains
   end subroutine dielectric_update_after_refinement
 
   subroutine prolong_surface_from_parent(tree, surface)
-    type(af_t), intent(in) :: tree
+    type(af_t), intent(in)              :: tree
     type(surface_data_t), intent(inout) :: surface
+    integer                             :: id, p_id, ix_p, ix_offset(NDIM)
+    integer                             :: nc, surface_offset
 
-    surface%charge = 0.0_dp
+    ! Find parent surface
+    id = surface%id_gas
+    p_id = tree%boxes(id)%parent
+    ix_p = box_id_to_surface_id(p_id)
+
+    if (ix_p > 0) then
+       nc        = tree%n_cell
+       ix_offset = af_get_child_offset(tree%boxes(id))
+
+       ! Determine dimension along surface
+#if NDIM == 2
+       if (af_neighb_dim(surface%direction) == 1) then
+          surface_offset = ix_offset(2)
+       else
+          surface_offset = ix_offset(1)
+       end if
+#elif NDIM == 3
+       error stop
+#endif
+
+       ! Simply copy the values from the parent
+       surface%charge(1:nc:2, 1) = &
+            surface_list(ix_p)%charge(surface_offset+1:surface_offset+nc/2, 1)
+       surface%charge(2:nc:2, 1) = surface%charge(1:nc:2, 1)
+    else
+       surface%charge = 0.0_dp
+    end if
     ! error stop "todo"
   end subroutine prolong_surface_from_parent
 
