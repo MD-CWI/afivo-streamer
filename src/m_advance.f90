@@ -18,42 +18,54 @@ module m_advance
 
 contains
 
+  !> Used to set the initial time step
   subroutine advance_set_max_dt(dt_max)
     real(dp), intent(in) :: dt_max
     advance_max_dt = dt_max
   end subroutine advance_set_max_dt
 
+  !> Advance the solution in time over dt
   subroutine advance(tree, mg, dt, time)
     use m_chemistry
     use m_fluid_lfa
     use m_field
     type(af_t), intent(inout) :: tree
-    type(mg_t), intent(inout) :: mg
-    real(dp), intent(in)      :: dt
-    real(dp), intent(inout)   :: time
+    type(mg_t), intent(inout) :: mg !< Multigrid options
+    real(dp), intent(in)      :: dt !< Time step
+    real(dp), intent(inout)   :: time !< Time (will be updated)
 
     dt_matrix(1:dt_num_cond, :) = dt_max ! Maximum time step
 
+    ! Different time integrators can be used. When calling the forward_euler
+    ! method, two numbers are given: the input state and the output state.
+    ! Variables can have N copies (labeled 0, ..., N-1), each corresponding to a
+    ! time state. The initial (and default) state is 0.
     select case (time_integrator)
     case (forward_euler_t)
+       ! Use the same output state as input state
        call forward_euler(tree, dt, 0, 0, .true.)
        call restrict_flux_species(tree, 0)
        call field_compute(tree, mg, 0, time, .true.)
        time = time + dt
     case (rk2_t)
+       ! Advance state 1 to t + 0.5 * dt
        call forward_euler(tree, 0.5_dp * dt, 0, 1, .false.)
        call restrict_flux_species(tree, 1)
        time = time + 0.5_dp * dt
        call field_compute(tree, mg, 1, time, .true.)
+       ! Advance state 0 to t + dt using the derivatives of state 1
        call forward_euler(tree, dt, 1, 0, .true.)
        call restrict_flux_species(tree, 0)
        call field_compute(tree, mg, 0, time, .true.)
     case (heuns_method_t)
+       ! Advance state 1 to t + dt
        call forward_euler(tree, dt, 0, 1, .false.)
        call restrict_flux_species(tree, 1)
        time = time + dt
        call field_compute(tree, mg, 1, time, .true.)
+       ! Advance state 1 again to t + 2 * dt
        call forward_euler(tree, dt, 1, 1, .true.)
+       ! Average the state at t and t + 2 * dt
        call combine_substeps(tree, &
             species_itree(n_gas_species+1:n_species), &
             [0, 1], [0.5_dp, 0.5_dp], 0)
