@@ -1,5 +1,8 @@
 #include "../afivo/src/cpp_macros.h"
 !> Module with settings and routines to handle dielectrics
+!>
+!> @todo Make sure species densities are initially zero inside the dielectric
+!> @todo Use special prolongation for multigrid when there are surface charges
 module m_dielectric
   use m_af_all
 
@@ -13,17 +16,17 @@ module m_dielectric
      integer :: direction
      real(dp) :: eps
 #if NDIM == 2
-     real(dp), allocatable :: charge(:)
-#elif NDIM == 3
      real(dp), allocatable :: charge(:, :)
+#elif NDIM == 3
+     real(dp), allocatable :: charge(:, :, :)
 #endif
   end type surface_data_t
 
   integer                           :: num_surfaces = 0
-  type(surface_data_t), allocatable :: surface_list(:)
+  type(surface_data_t), allocatable, public :: surface_list(:)
   integer                           :: n_removed_surfaces = 0
   integer, allocatable              :: removed_surfaces(:)
-  integer, allocatable              :: box_id_to_surface_id(:)
+  integer, allocatable, public, protected :: box_id_to_surface_id(:)
 
   public :: dielectric_initialize
   public :: dielectric_get_surfaces
@@ -31,7 +34,8 @@ module m_dielectric
   public :: dielectric_fix_refine
   public :: dielectric_rearrange_charge
   public :: dielectric_adjust_field
-  public :: dielectric_copy_fluxes
+  public :: dielectric_update_surface_charge
+  public :: dielectric_combine_substeps
 
 contains
 
@@ -60,6 +64,7 @@ contains
   end function get_new_surface
 
   subroutine dielectric_get_surfaces(tree)
+    use m_advance_base
     type(af_t), intent(in) :: tree
     integer                :: lvl, i, id, nb, nc, ix
     integer                :: id_diel
@@ -84,10 +89,11 @@ contains
 
              if (.not. allocated(surface_list(ix)%charge)) then
 #if NDIM == 2
-                allocate(surface_list(ix)%charge(nc))
+                allocate(surface_list(ix)%charge(nc, advance_num_states))
 #elif NDIM == 3
-                allocate(surface_list(ix)%charge(nc, nc))
+                allocate(surface_list(ix)%charge(nc, nc, advance_num_states))
 #endif
+                surface_list(ix)%charge = 0.0_dp
              end if
 
           end if
@@ -143,6 +149,7 @@ contains
   end function eps_changes_in_box
 
   subroutine dielectric_update_after_refinement(tree, ref_info)
+    use m_advance_base
     type(af_t), intent(in)       :: tree
     type(ref_info_t), intent(in) :: ref_info
     integer                      :: lvl, i, id, id_diel, nb, ix
@@ -189,10 +196,11 @@ contains
 
              if (.not. allocated(surface_list(ix)%charge)) then
 #if NDIM == 2
-                allocate(surface_list(ix)%charge(nc))
+                allocate(surface_list(ix)%charge(nc, advance_num_states))
 #elif NDIM == 3
-                allocate(surface_list(ix)%charge(nc, nc))
+                allocate(surface_list(ix)%charge(nc, nc, advance_num_states))
 #endif
+                surface_list(ix)%charge = 0.0_dp
              end if
 
              call prolong_surface_from_parent(tree, surface_list(ix))
@@ -206,6 +214,7 @@ contains
     type(af_t), intent(in) :: tree
     type(surface_data_t), intent(inout) :: surface
 
+    surface%charge = 0.0_dp
     ! error stop "todo"
   end subroutine prolong_surface_from_parent
 
@@ -237,8 +246,9 @@ contains
     end do
   end subroutine dielectric_fix_refine
 
-  subroutine dielectric_rearrange_charge(tree)
+  subroutine dielectric_rearrange_charge(tree, s_in)
     type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: s_in !< Time state to use
     integer                   :: n, id_gas
 
     do n = 1, num_surfaces
@@ -247,26 +257,31 @@ contains
 
        if (af_has_children(tree%boxes(id_gas))) cycle
 
-       call rearrange_charge_on_surface(tree%boxes, &
-            surface_list(n), tree%n_cell)
+       call surface_charge_to_rhs(tree%boxes, &
+            surface_list(n), tree%n_cell, s_in)
     end do
   end subroutine dielectric_rearrange_charge
 
-  subroutine rearrange_charge_on_surface(boxes, surface, nc)
+  subroutine surface_charge_to_rhs(boxes, surface, nc, s_in)
     use m_streamer
     use m_units_constants
     type(box_t), intent(inout)          :: boxes(:)
     type(surface_data_t), intent(inout) :: surface
     integer, intent(in)                 :: nc
+    integer, intent(in)                 :: s_in !< Time state to use
     integer                             :: nb, id_gas, id_diel
     integer                             :: glo(NDIM), ghi(NDIM)
     integer                             :: dlo(NDIM), dhi(NDIM)
-    real(dp)                            :: frac_gas, dr
+    real(dp)                            :: frac_gas, dr, fac
 
     nb      = surface%direction
     id_gas  = surface%id_gas
     id_diel = surface%id_diel
     dr      = boxes(id_gas)%dr(af_neighb_dim(nb))
+
+    ! Factor to convert surface charge density to rhs, which is defined as
+    ! -charge_density / eps0
+    fac     = -1 / (dr * UC_eps0)
 
     ! Get index range for dielectric box
     call af_get_index_bc_inside(af_neighb_rev(nb), nc, dlo, dhi)
@@ -277,30 +292,28 @@ contains
     ! How much of the rhs to put on the gas and dielectric side
     frac_gas  = 1.0_dp / (1.0_dp + surface%eps)
 
-    ! The rhs is defined as -rho/eps_0, hence the minus sign. Multiply with the
-    ! grid spacing to transform a charge density to a surface charge.
-    surface%charge = -reshape(boxes(id_diel)%cc(dlo(1):dhi(1), &
-         dlo(2):dhi(2), i_rhs), shape(surface%charge)) * dr
-
 #if NDIM == 2
     boxes(id_gas)%cc(glo(1):ghi(1), glo(2):ghi(2), i_rhs) = &
          boxes(id_gas)%cc(glo(1):ghi(1), glo(2):ghi(2), i_rhs) &
-         - frac_gas / dr * &
-         reshape(surface%charge, [ghi(1)-glo(1)+1, ghi(2)-glo(2)+1])
+         + frac_gas * fac * &
+         reshape(surface%charge(:, 1+s_in), [ghi(1)-glo(1)+1, ghi(2)-glo(2)+1])
 
     boxes(id_diel)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_rhs) = &
-         -(1-frac_gas) / dr * &
-         reshape(surface%charge, [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1])
+         boxes(id_diel)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_rhs) &
+         + (1-frac_gas) * fac * &
+         reshape(surface%charge(:, 1+s_in), [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1])
 #elif NDIM == 3
     error stop
 #endif
 
-  end subroutine rearrange_charge_on_surface
+  end subroutine surface_charge_to_rhs
 
-  subroutine dielectric_adjust_field(boxes, id)
+  subroutine dielectric_adjust_field(boxes, id, s_in)
+    use m_units_constants
     use m_streamer
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id
+    integer, intent(in)        :: s_in
     integer                    :: nc, nb, ix
     real(dp)                   :: eps, fac_fld, fac_charge
 
@@ -315,11 +328,12 @@ contains
     if (id == surface_list(ix)%id_gas) then
        nb = surface_list(ix)%direction
        fac_fld = 2 * eps / (1 + eps)
-       fac_charge = 1 / (1 + eps)
+       ! This factor is 1/eps0 * 1/(eps_gas + eps_diel)
+       fac_charge = 1 / (UC_eps0 * (1 + eps))
     else
        nb = af_neighb_rev(surface_list(ix)%direction)
        fac_fld = 2 / (1 + eps)
-       fac_charge = 1 / (1 + eps)
+       fac_charge = 1 / (UC_eps0 * (1 + eps))
     end if
 
 #if NDIM == 2
@@ -328,19 +342,19 @@ contains
     case (af_neighb_lowx)
        boxes(id)%fc(1, 1:nc, 1, electric_fld) = fac_fld * &
             boxes(id)%fc(1, 1:nc, 1, electric_fld) + &
-            fac_charge * surface_list(ix)%charge
+            fac_charge * surface_list(ix)%charge(:, 1+s_in)
     case (af_neighb_highx)
        boxes(id)%fc(nc+1, 1:nc, 1, electric_fld) = fac_fld * &
             boxes(id)%fc(nc+1, 1:nc, 1, electric_fld) - &
-            fac_charge * surface_list(ix)%charge
+            fac_charge * surface_list(ix)%charge(:, 1+s_in)
     case (af_neighb_lowy)
        boxes(id)%fc(1:nc, 1, 2, electric_fld) = fac_fld * &
             boxes(id)%fc(1:nc, 1, 2, electric_fld) + &
-            fac_charge * surface_list(ix)%charge
+            fac_charge * surface_list(ix)%charge(:, 1+s_in)
     case (af_neighb_highy)
        boxes(id)%fc(1:nc, nc+1, 2, electric_fld) = fac_fld * &
             boxes(id)%fc(1:nc, nc+1, 2, electric_fld) - &
-            fac_charge * surface_list(ix)%charge
+            fac_charge * surface_list(ix)%charge(:, 1+s_in)
     end select
 #elif NDIM == 3
     error stop
@@ -372,52 +386,66 @@ contains
 
   end subroutine dielectric_adjust_field
 
-  subroutine dielectric_copy_fluxes(tree, iflux)
-    type(af_t), intent(inout) :: tree
-    integer, intent(in)       :: iflux
-    integer                   :: n, id_diel, nb
+  subroutine dielectric_update_surface_charge(box, surface, dt, s_in, s_out)
+    use m_units_constants
+    use m_streamer
+    type(box_t), intent(inout)          :: box
+    type(surface_data_t), intent(inout) :: surface
+    real(dp), intent(in)                :: dt    !< Time step
+    integer, intent(in)                 :: s_in  !< Input state
+    integer, intent(in)                 :: s_out !< Output state
+    integer                             :: nc
+    real(dp)                            :: fac
+
+    nc  = box%n_cell
+    fac = dt * UC_elec_charge
+
+    select case (surface%direction)
+#if NDIM == 2
+    case (af_neighb_lowx)
+       surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) - &
+            fac * box%fc(1, 1:nc, 1, flux_elec)
+    case (af_neighb_highx)
+       surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) + &
+            fac * box%fc(nc+1, 1:nc, 1, flux_elec)
+    case (af_neighb_lowy)
+       surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) - &
+            fac * box%fc(1:nc, 1, 2, flux_elec)
+    case (af_neighb_highy)
+       surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) + &
+            fac * box%fc(1:nc, nc+1, 2, flux_elec)
+#elif NDIM == 3
+    case default
+       error stop
+#endif
+    end select
+  end subroutine dielectric_update_surface_charge
+
+  subroutine dielectric_combine_substeps(tree, in_steps, coeffs, out_step)
+    type(af_t), intent(in) :: tree
+    integer, intent(in)    :: in_steps(:)
+    real(dp), intent(in)   :: coeffs(:)
+    integer, intent(in)    :: out_step
+    integer                :: n, k
+#if NDIM == 2
+    real(dp)               :: tmp(tree%n_cell)
+#elif NDIM == 3
+    real(dp)               :: tmp(tree%n_cell, tree%n_cell)
+#endif
 
     do n = 1, num_surfaces
        if (.not. surface_list(n)%in_use) cycle
-       id_diel = surface_list(n)%id_diel
 
-       if (af_has_children(tree%boxes(id_diel))) cycle
-
-       nb = af_neighb_rev(surface_list(n)%direction)
-       call copy_flux_from_neighbor(tree%boxes, id_diel, nb, iflux)
-    end do
-  end subroutine dielectric_copy_fluxes
-
-  subroutine copy_flux_from_neighbor(boxes, id, nb, iflux)
-    type(box_t), intent(inout) :: boxes(:)
-    integer, intent(in)        :: id
-    integer, intent(in)        :: nb
-    integer, intent(in)        :: iflux
-    integer                    :: nc, nb_id
-
-    nc    = boxes(id)%n_cell
-    nb_id = boxes(id)%neighbors(nb)
-
-    select case (nb)
+       tmp = 0.0_dp
+       do k = 1, size(in_steps)
 #if NDIM == 2
-    case (af_neighb_lowx)
-       boxes(id)%fc(1, 1:nc, 1, iflux) = &
-            boxes(nb_id)%fc(nc+1, 1:nc, 1, iflux)
-    case (af_neighb_highx)
-       boxes(id)%fc(nc+1, 1:nc, 1, iflux) = &
-            boxes(nb_id)%fc(1, 1:nc, 1, iflux)
-    case (af_neighb_lowy)
-       boxes(id)%fc(1:nc, 1, 2, iflux) = &
-            boxes(nb_id)%fc(1:nc, nc+1, 2, iflux)
-    case (af_neighb_highy)
-       boxes(id)%fc(1:nc, nc+1, 2, iflux) = &
-            boxes(nb_id)%fc(1:nc, 1, 2, iflux)
+          tmp = tmp + coeffs(k) * surface_list(n)%charge(:, 1+in_steps(k))
 #elif NDIM == 3
-       error stop
+          error stop
 #endif
-
-    end select
-  end subroutine copy_flux_from_neighbor
-
+       end do
+       surface_list(n)%charge(:, 1+out_step) = tmp
+    end do
+  end subroutine dielectric_combine_substeps
 
 end module m_dielectric

@@ -107,6 +107,8 @@ contains
   end subroutine restrict_flux_species
 
   subroutine combine_substeps(tree, ivs, in_steps, coeffs, out_step)
+    use m_streamer
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: ivs(:)
     integer, intent(in)       :: in_steps(:)
@@ -135,6 +137,11 @@ contains
        !$omp end do
     end do
     !$omp end parallel
+
+    if (ST_use_dielectric) then
+       ! Also combine the different states of the surface charge
+       call dielectric_combine_substeps(tree, in_steps, coeffs, out_step)
+    end if
   end subroutine combine_substeps
 
 end module m_advance

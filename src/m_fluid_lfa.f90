@@ -39,17 +39,13 @@ contains
 
     call af_consistent_fluxes(tree, [flux_elec])
 
-    if (ST_use_dielectric) then
-       call dielectric_copy_fluxes(tree, flux_elec)
-    end if
-
     ! Update the solution
     !$omp parallel private(lvl, i, id, p_id)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call update_solution(tree%boxes(id), dt, s_in, s_out, set_dt)
+          call update_solution(tree%boxes(id), id, dt, s_in, s_out, set_dt)
        end do
        !$omp end do
     end do
@@ -94,6 +90,7 @@ contains
     if (ST_use_dielectric) then
        if (boxes(id)%cc(DTIMES(1), i_eps) > 1.0_dp) then
           boxes(id)%fc(DTIMES(:), :, flux_elec) = 0.0_dp
+          return
        end if
     end if
 
@@ -328,7 +325,7 @@ contains
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
-  subroutine update_solution(box, dt, s_in, s_out, set_dt)
+  subroutine update_solution(box, id, dt, s_in, s_out, set_dt)
     use omp_lib
     use m_units_constants
     use m_gas
@@ -336,7 +333,9 @@ contains
     use m_streamer
     use m_photoi
     use m_dt
+    use m_dielectric
     type(box_t), intent(inout) :: box
+    integer, intent(in)        :: id     !< id of the box
     real(dp), intent(in)       :: dt     !< Time step
     integer, intent(in)        :: s_in   !< Input time state
     integer, intent(in)        :: s_out  !< Output time state
@@ -357,6 +356,14 @@ contains
     nc      = box%n_cell
     n_cells = box%n_cell**NDIM
     inv_dr  = 1/box%dr
+
+    ! Inside the dielectric, do not update the species densities, which should
+    ! always be zero
+    if (ST_use_dielectric) then
+       if (box%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          return
+       end if
+    end if
 
     allocate(rates(n_cells, n_reactions))
     allocate(derivs(n_cells, n_species))
@@ -426,20 +433,22 @@ contains
                box%cc(IJK, i_photo)
        end if
 
-       if (ST_use_dielectric) then
-          if (box%cc(IJK, i_eps) > 1.0_dp) then
-             ! Convert electrons to 'minus' positive ions, so they remain stuck
-             derivs(ix, ix_1pos_ion) = derivs(ix, ix_1pos_ion) - &
-                  derivs(ix, ix_electron)
-             derivs(ix, ix_electron) = 0.0_dp
-          end if
-       end if
-
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_in) + dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
+
+    if (ST_use_dielectric) then
+       ! Convert electron fluxes onto dielectric to surface charge
+       ix = box_id_to_surface_id(id)
+       if (ix > 0) then
+          if (id == surface_list(ix)%id_gas) then
+             call dielectric_update_surface_charge(box, &
+                  surface_list(ix), dt, s_in, s_out)
+          end if
+       end if
+    end if
 
   end subroutine update_solution
 

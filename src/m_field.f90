@@ -193,7 +193,7 @@ contains
     !$omp end parallel
 
     if (ST_use_dielectric) then
-       call dielectric_rearrange_charge(tree)
+       call dielectric_rearrange_charge(tree, s_in)
     end if
 
   end subroutine field_set_rhs
@@ -208,7 +208,7 @@ contains
     integer, intent(in)       :: s_in
     real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
-    integer                   :: i
+    integer                   :: lvl, i, id
     real(dp)                  :: max_rhs, max_residual
 
     call field_set_rhs(tree, s_in)
@@ -229,7 +229,16 @@ contains
     end do
 
     ! Compute field from potential
-    call af_loop_boxes(tree, field_from_potential, .true.)
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          call field_from_potential(tree%boxes, id, s_in)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
 
     ! Restrict the field norm to the coarse grid for filling ghost cells
     call af_restrict_tree(tree, i_electric_fld)
@@ -326,10 +335,11 @@ contains
   end subroutine field_bc_point_charge
 
   !> Compute electric field from electrical potential
-  subroutine field_from_potential(boxes, id)
+  subroutine field_from_potential(boxes, id, s_in)
     use m_dielectric
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id
+    integer, intent(in)        :: s_in
     integer                    :: nc
     real(dp)                   :: inv_dr(NDIM)
 
@@ -346,7 +356,7 @@ contains
            field_background(2)
 
       if (ST_use_dielectric) then
-         call dielectric_adjust_field(boxes, id)
+         call dielectric_adjust_field(boxes, id, s_in)
       end if
 
       cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
@@ -369,7 +379,7 @@ contains
            field_background(3)
 
       if (ST_use_dielectric) then
-         call dielectric_adjust_field(boxes, id)
+         call dielectric_adjust_field(boxes, id, s_in)
       end if
 
       cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&

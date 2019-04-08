@@ -13,6 +13,7 @@ m_advance_base.o: m_config.mod
 m_advance_base.o: m_types.mod
 m_advance.o: m_advance_base.mod
 m_advance.o: m_chemistry.mod
+m_advance.o: m_dielectric.mod
 m_advance.o: m_dt.mod
 m_advance.o: m_field.mod
 m_advance.o: m_fluid_lfa.mod
@@ -25,6 +26,7 @@ m_chemistry.o: m_table_data.mod
 m_chemistry.o: m_transport_data.mod
 m_chemistry.o: m_types.mod
 m_chemistry.o: m_units_constants.mod
+m_dielectric.o: m_advance_base.mod
 m_dielectric.o: m_config.mod
 m_dielectric.o: m_streamer.mod
 m_dielectric.o: m_units_constants.mod
