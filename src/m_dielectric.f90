@@ -159,21 +159,18 @@ contains
     nc = tree%n_cell
 
     ! Handle removed surfaces
-    do lvl = 1, tree%highest_lvl
-       do i = 1, size(ref_info%lvls(lvl)%rm)
-          id = ref_info%lvls(lvl)%rm(i)
+    do i = 1, size(ref_info%rm)
+       id = ref_info%rm(i)
+       ix = box_id_to_surface_id(id)
+       if (ix > 0) then
+          call restrict_surface_to_parent(tree, surface_list(ix))
 
-          ix = box_id_to_surface_id(id)
-          if (ix > 0) then
-             n_removed_surfaces = n_removed_surfaces + 1
-             removed_surfaces(n_removed_surfaces) = ix
-             box_id_to_surface_id(surface_list%id_gas) = -1
-             box_id_to_surface_id(surface_list%id_diel) = -1
-             surface_list(ix)%in_use = .false.
-
-             call restrict_surface_to_parent(tree, surface_list(ix))
-          end if
-       end do
+          n_removed_surfaces = n_removed_surfaces + 1
+          removed_surfaces(n_removed_surfaces) = ix
+          box_id_to_surface_id(surface_list(ix)%id_gas) = -1
+          box_id_to_surface_id(surface_list(ix)%id_diel) = -1
+          surface_list(ix)%in_use = .false.
+       end if
     end do
 
     ! Add new surfaces
@@ -214,7 +211,7 @@ contains
     type(af_t), intent(in)              :: tree
     type(surface_data_t), intent(inout) :: surface
     integer                             :: id, p_id, ix_p, ix_offset(NDIM)
-    integer                             :: nc, surface_offset
+    integer                             :: nc, dix
 
     ! Find parent surface
     id = surface%id_gas
@@ -228,29 +225,55 @@ contains
        ! Determine dimension along surface
 #if NDIM == 2
        if (af_neighb_dim(surface%direction) == 1) then
-          surface_offset = ix_offset(2)
+          dix = ix_offset(2)
        else
-          surface_offset = ix_offset(1)
+          dix = ix_offset(1)
        end if
-#elif NDIM == 3
-       error stop
-#endif
 
        ! Simply copy the values from the parent
        surface%charge(1:nc:2, 1) = &
-            surface_list(ix_p)%charge(surface_offset+1:surface_offset+nc/2, 1)
+            surface_list(ix_p)%charge(dix+1:dix+nc/2, 1)
        surface%charge(2:nc:2, 1) = surface%charge(1:nc:2, 1)
+#elif NDIM == 3
+       error stop
+#endif
     else
        surface%charge = 0.0_dp
     end if
-    ! error stop "todo"
+
   end subroutine prolong_surface_from_parent
 
   subroutine restrict_surface_to_parent(tree, surface)
     type(af_t), intent(in)           :: tree
     type(surface_data_t), intent(in) :: surface
+    integer                          :: id, p_id, ix_p, ix_offset(NDIM)
+    integer                          :: nc, dix
 
-    ! error stop "todo"
+    ! Find parent surface
+    id   = surface%id_gas
+    p_id = tree%boxes(id)%parent
+    ix_p = box_id_to_surface_id(p_id)
+
+    if (ix_p > 0) then
+       nc        = tree%n_cell
+       ix_offset = af_get_child_offset(tree%boxes(id))
+
+       ! Determine dimension along surface
+#if NDIM == 2
+       if (af_neighb_dim(surface%direction) == 1) then
+          dix = ix_offset(2)
+       else
+          dix = ix_offset(1)
+       end if
+
+       ! Average the value on the children
+       surface_list(ix_p)%charge(dix+1:dix+nc/2, 1) = 0.5_dp * ( &
+            surface%charge(1:nc:2, 1) + surface%charge(2:nc:2, 1))
+#elif NDIM == 3
+       error stop
+#endif
+    end if
+
   end subroutine restrict_surface_to_parent
 
   subroutine dielectric_fix_refine(tree, ref_flags)
