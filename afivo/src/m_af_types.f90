@@ -76,14 +76,14 @@ module m_af_types
   !> Type that contains the refinement changes in a level
   type ref_lvl_t
      integer, allocatable :: add(:) !< Id's of newly added boxes
-     integer, allocatable :: rm(:) !< Id's of removed boxes
   end type ref_lvl_t
 
   !> Type that contains the refinement changes in a tree
   type ref_info_t
-     integer :: n_add = 0                    !< Total number of added boxes
-     integer :: n_rm = 0                     !< Total number removed boxes
-     type(ref_lvl_t), allocatable :: lvls(:) !< Information per level
+     integer                      :: n_add = 0 !< Total number of added boxes
+     integer                      :: n_rm  = 0 !< Total number removed boxes
+     integer, allocatable         :: rm(:)     !< Ids of removed boxes
+     type(ref_lvl_t), allocatable :: lvls(:)   !< Ids of added boxes per level
   end type ref_info_t
 
 #if NDIM == 2
