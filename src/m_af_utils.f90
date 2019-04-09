@@ -205,7 +205,7 @@ contains
     integer, intent(in), optional :: guess       !< Guess of box id, cannot be used with highest_lvl
     integer                       :: id          !< Id of finest box containing rr
 
-    integer                       :: i, i_ch, lvl_max
+    integer                       :: i, id_tmp, i_ch, lvl_max
 
     lvl_max = af_max_lvl
     if (present(highest_lvl)) lvl_max = highest_lvl
@@ -226,8 +226,11 @@ contains
     if (id == -1) then
        ! If there was no (valid) guess, find lvl 1 box that includes rr
        do i = 1, size(tree%lvls(1)%ids)
-          id = tree%lvls(1)%ids(i)
-          if (af_r_inside(tree%boxes(id), rr)) exit
+          id_tmp = tree%lvls(1)%ids(i)
+          if (af_r_inside(tree%boxes(id_tmp), rr)) then
+             id = id_tmp
+             exit
+          end if
        end do
     end if
 
