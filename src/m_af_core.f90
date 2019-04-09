@@ -562,6 +562,7 @@ contains
     !> A routine to manually override refinement flags
     procedure(subr_modify_ref), optional :: modify_refinement
     integer                         :: lvl, id, i, c_ids(af_num_children), i_ch
+    integer                         :: i_add, i_rm, n_ch, n_add
     integer, allocatable            :: ref_flags(:)
     integer                         :: ref_buffer_val
 
@@ -581,7 +582,31 @@ contains
     call consistent_ref_flags(tree, ref_flags, ref_subr, &
          ref_buffer_val, modify_refinement)
 
-    do lvl = 1, af_max_lvl-1
+    ! To store ids of removed boxes
+    n_ch = af_num_children
+    ref_info%n_rm = n_ch * count(ref_flags == af_derefine)
+    if (allocated(ref_info%rm)) deallocate(ref_info%rm)
+    allocate(ref_info%rm(ref_info%n_rm))
+
+    ! To store ids of new boxes per level
+    ref_info%n_add = n_ch * count(ref_flags == af_refine)
+    if (allocated(ref_info%lvls)) deallocate(ref_info%lvls)
+    allocate(ref_info%lvls(tree%highest_lvl+1))
+
+    ! There can be no new children at level 1
+    allocate(ref_info%lvls(1)%add(0))
+
+    do lvl = 1, tree%highest_lvl
+       ! Number of newly added boxes to the next level
+       n_add = n_ch * count(ref_flags(tree%lvls(lvl)%ids) == af_refine)
+       allocate(ref_info%lvls(lvl+1)%add(n_add))
+    end do
+
+    i_rm = 0
+
+    do lvl = 1, af_max_lvl-1 ! The loop exits when it encounters an empty level
+       i_add = 0
+
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
 
@@ -592,9 +617,14 @@ contains
              call get_free_ids(tree, c_ids)
              call add_children(tree%boxes, id, c_ids, &
                   tree%n_var_cell, tree%n_var_face)
+             ref_info%lvls(lvl+1)%add(i_add+1:i_add+n_ch) = &
+                  tree%boxes(id)%children
+             i_add = i_add + n_ch
           else if (ref_flags(id) == af_derefine) then
              ! Remove children
              call auto_restrict(tree, id)
+             ref_info%rm(i_rm+1:i_rm+n_ch) = tree%boxes(id)%children
+             i_rm = i_rm + n_ch
              call remove_children(tree, id)
           end if
        end do
@@ -626,9 +656,6 @@ contains
     ! not not empty before, and that af_max_lvl is skipped in the above loop.
     lvl = min(lvl+1, af_max_lvl)
     call set_leaves_parents(tree%boxes, tree%lvls(lvl))
-
-    ! Set information about the refinement
-    call set_ref_info(tree, ref_flags, ref_info)
 
     call auto_prolong(tree, ref_info)
 
@@ -689,70 +716,6 @@ contains
     end do
     !$omp end parallel
   end subroutine auto_prolong
-
-  !> Set information about the refinement for all "normal" levels (>= 1)
-  subroutine set_ref_info(tree, ref_flags, ref_info)
-    type(af_t), intent(in)         :: tree
-    integer, intent(in)             :: ref_flags(:)
-    type(ref_info_t), intent(inout) :: ref_info
-    integer                         :: id, lvl, n, n_ch
-    integer, allocatable            :: ref_count(:), drf_count(:)
-
-    n_ch           = af_num_children
-    ref_info%n_add = n_ch * count(ref_flags == af_refine)
-    ref_info%n_rm  = n_ch * count(ref_flags == af_derefine)
-
-    ! Use highest_lvl+1 here because this lvl might have been completely removed
-    if (allocated(ref_info%lvls)) deallocate(ref_info%lvls)
-    allocate(ref_info%lvls(tree%highest_lvl+1))
-    allocate(ref_count(tree%highest_lvl+1))
-    allocate(drf_count(tree%highest_lvl+1))
-
-    ! Find the number of (de)refined boxes per level
-    ref_count = 0
-    drf_count = 0
-
-    do id = 1, size(ref_flags)
-       lvl = tree%boxes(id)%lvl
-
-       if (ref_flags(id) == af_refine) then
-          ref_count(lvl) = ref_count(lvl) + 1
-       else if (ref_flags(id) == af_derefine) then
-          drf_count(lvl) = drf_count(lvl) + 1
-       end if
-    end do
-
-    ! Allocate storage per level
-    ! There can be no new children at level 1
-    allocate(ref_info%lvls(1)%add(0))
-    allocate(ref_info%lvls(1)%rm(0))
-
-    do lvl = 2, tree%highest_lvl+1
-       n = ref_count(lvl-1) * n_ch
-       allocate(ref_info%lvls(lvl)%add(n))
-       n = drf_count(lvl-1) * n_ch
-       allocate(ref_info%lvls(lvl)%rm(n))
-    end do
-
-    ! Set the added and removed id's per level, these are the children of the
-    ! (de)refined boxes
-    ref_count = 0
-    drf_count = 0
-
-    do id = 1, size(ref_flags)
-       lvl = tree%boxes(id)%lvl
-
-       if (ref_flags(id) == af_refine) then
-          ref_count(lvl) = ref_count(lvl) + 1
-          n = n_ch * (ref_count(lvl)-1) + 1
-          ref_info%lvls(lvl+1)%add(n:n+n_ch-1) = tree%boxes(id)%children
-       else if (ref_flags(id) == af_derefine) then
-          drf_count(lvl) = drf_count(lvl) + 1
-          n = n_ch * (drf_count(lvl)-1) + 1
-          ref_info%lvls(lvl+1)%rm(n:n+n_ch-1) = tree%boxes(id)%children
-       end if
-    end do
-  end subroutine set_ref_info
 
   !> Get free ids from the boxes(:) array to store new boxes in. These ids are
   !> always consecutive.
