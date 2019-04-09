@@ -73,6 +73,7 @@ m_photoi_helmh.o: m_gas.mod
 m_photoi_helmh.o: m_streamer.mod
 m_photoi_helmh.o: m_units_constants.mod
 m_photoi_mc.o: m_config.mod
+m_photoi_mc.o: m_dielectric.mod
 m_photoi_mc.o: m_gas.mod
 m_photoi_mc.o: m_lookup_table.mod
 m_photoi_mc.o: m_random.mod

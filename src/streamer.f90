@@ -231,6 +231,10 @@ contains
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
 
+    if (ST_use_dielectric) then
+       call dielectric_initialize(tree, cfg)
+    end if
+
   end subroutine initialize_modules
 
   subroutine set_initial_conditions(tree, mg)
@@ -238,8 +242,10 @@ contains
     type(mg_t), intent(inout) :: mg
     integer                   :: n
 
-    ! To initialize the dielectric, we need to have the tree
-    call dielectric_initialize(tree, cfg)
+    ! Allocate storage for the dielectric
+    if (ST_use_dielectric) then
+       call dielectric_allocate(tree)
+    end if
 
     do n = 1, 100
        call af_loop_box(tree, init_cond_set_box)

@@ -77,6 +77,13 @@ contains
             2 * maxval(ST_domain_len))
 
        call phmc_print_grid_spacing(maxval(ST_domain_len/ST_box_size))
+
+       if (ST_use_dielectric) then
+          if (.not. phmc_const_dx) &
+               error stop "phmc_initialize: with dielectric use const_dx"
+          if (phmc_absorp_fac > 1e-9_dp) &
+               error stop "Use phmc_absorp_fac <= 1e-9 with dielectric"
+       end if
     end if
 
   end subroutine phmc_initialize
@@ -165,9 +172,15 @@ contains
     if (n > tbl_size + 10) &
          stop "phmc_get_table_air: integration accuracy fail"
 
-    ! Scale table to lie between 0 and 1 (later on we have to correct for this)
-    phmc_tbl%frac_in_tbl = fsum(n-1)
-    fsum(1:n-1) = fsum(1:n-1) / fsum(n-1)
+    if (ST_use_dielectric) then
+       ! Photons that fly outside the domain can be absorbed by the dielectric,
+       ! so don't apply any tricks
+       phmc_tbl%frac_in_tbl = 1.0_dp
+    else
+       ! Scale table to lie between 0 and 1 (later on we have to correct for this)
+       phmc_tbl%frac_in_tbl = fsum(n-1)
+       fsum(1:n-1) = fsum(1:n-1) / fsum(n-1)
+    end if
 
     phmc_tbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
     call LT_set_col(phmc_tbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
@@ -326,6 +339,7 @@ contains
     use m_af_ghostcell
     use m_af_prolong
     use m_lookup_table
+    use m_dielectric
     use omp_lib
 
     type(af_t), intent(inout)  :: tree   !< Tree
@@ -475,9 +489,19 @@ contains
           xyz_src(2, n) = xyz_src(3, n)
        end do
        !$omp end do
+
+       if (ST_use_dielectric) then
+          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
+               2, n_used, fac * phmc_tbl%frac_in_tbl)
+       end if
     else
        ! Get location of absorbption
        call phmc_do_absorption(xyz_src, xyz_abs, NDIM, n_used, phmc_tbl%tbl, rng)
+
+       if (ST_use_dielectric) then
+          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
+               NDIM, n_used, fac * phmc_tbl%frac_in_tbl)
+       end if
     end if
 
     if (phmc_const_dx) then

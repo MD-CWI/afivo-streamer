@@ -440,11 +440,16 @@ contains
     end do; CLOSE_DO
 
     if (ST_use_dielectric) then
-       ! Convert electron fluxes onto dielectric to surface charge
+       ! Check if the box is part of a surface
        ix = box_id_to_surface_id(id)
        if (ix > 0) then
           if (id == surface_list(ix)%id_gas) then
+             ! Convert electron fluxes onto dielectric to surface charge
              call dielectric_update_surface_charge(box, &
+                  surface_list(ix), dt, s_in, s_out)
+
+             ! Add secondary emission from photons hitting the surface
+             call dielectric_photon_emission(box, &
                   surface_list(ix), dt, s_in, s_out)
           end if
        end if
