@@ -9,11 +9,12 @@ module m_transport_data
   integer, parameter :: dp = kind(0.0d0)
 
   ! ** Indices of transport data **
-  integer, parameter, public :: td_num_var   = 4 ! Number of transport coefficients
+  integer, parameter, public :: td_num_var   = 5 ! Number of transport coefficients
   integer, parameter, public :: td_mobility  = 1 ! Electron mobility
   integer, parameter, public :: td_diffusion = 2 ! Electron diffusion constant
   integer, parameter, public :: td_alpha     = 3 ! Ionization coefficient
   integer, parameter, public :: td_eta       = 4 ! Attachment coefficient
+  integer, parameter, public :: td_alpha_N2     = 5 ! Ionization coefficient
 
   ! Table with transport data vs electric field
   type(LT_t), public, protected :: td_tbl
@@ -85,6 +86,10 @@ contains
        call table_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
             x_data, y_data)
        call LT_set_col(td_tbl, td_alpha, x_data, y_data)
+       
+       call table_from_file(td_file, "Townsend ioniz. coef. alpha_N2/N (m2)", &
+            x_data, y_data)
+       call LT_set_col(td_tbl, td_alpha_N2, x_data, y_data)
 
        call table_from_file(td_file, "Townsend attach. coef. eta/N (m2)", &
             x_data, y_data)

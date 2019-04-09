@@ -128,7 +128,7 @@ contains
     type(af_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
     real(dp), parameter            :: p_quench = 40.0e-3_dp
-    real(dp)                       :: quench_fac, decay_fraction, decay_rate
+    real(dp)                       :: quench_fac, decay_fraction, eff_decay_time, decay_rate
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
@@ -141,16 +141,22 @@ contains
        call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
             [photoi_eta * quench_fac], .true.)
     case ('from_species')
-       decay_fraction = 1 - exp(-dt / photoi_decay_time)
+    !   if (photoi_decay_time > 0) then
+    
+        eff_decay_time = photoi_decay_time * quench_fac
+        decay_fraction = 1 - exp(-dt / eff_decay_time)
+        if (dt > 1e-6_dp * eff_decay_time) then
+                  decay_rate = decay_fraction / dt
+          else
+                  decay_rate = 1.0 / eff_decay_time
+        end if
 
-       if (dt > 1e-6_dp * photoi_decay_time) then
-          decay_rate = decay_fraction / dt
-       else
-          decay_rate = 1 / photoi_decay_time
-       end if
+    !   else
+    !      decay_fraction = 1.0_dp
+    !   end if
 
        call af_loop_box_arg(tree, photoionization_rate_from_species, &
-            [photoi_eta * quench_fac * decay_rate, 1-decay_fraction], .true.)
+            [ quench_fac * decay_rate, 1-decay_fraction], .true.)
     end select
 
     select case (photoi_method)
@@ -205,6 +211,7 @@ contains
        Td       = fld * SI_to_Townsend / gas_dens
        loc      = LT_get_loc(td_tbl, Td)
        alpha    = LT_get_col_at_loc(td_tbl, td_alpha, loc)
+      ! alpha    = LT_get_col_at_loc(td_tbl, td_alpha_N2, loc)
        mobility = LT_get_col_at_loc(td_tbl, td_mobility, loc)
 
        tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
@@ -232,7 +239,6 @@ contains
          box%cc(DTIMES(1:nc), i_excited_species)
     box%cc(DTIMES(1:nc), i_excited_species) = decay_factor * &
          box%cc(DTIMES(1:nc), i_excited_species)
-
   end subroutine photoionization_rate_from_species
 
 end module m_photoi
