@@ -128,7 +128,7 @@ contains
     type(af_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
     real(dp), parameter            :: p_quench = 40.0e-3_dp
-    real(dp)                       :: quench_fac, decay_fraction
+    real(dp)                       :: quench_fac, decay_fraction, decay_rate
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
@@ -141,14 +141,16 @@ contains
        call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
             [photoi_eta * quench_fac], .true.)
     case ('from_species')
-       if (photoi_decay_time > 0) then
-          decay_fraction = 1 - exp(-dt / photoi_decay_time)
+       decay_fraction = 1 - exp(-dt / photoi_decay_time)
+
+       if (dt > 1e-6_dp * photoi_decay_time) then
+          decay_rate = decay_fraction / dt
        else
-          decay_fraction = 1.0_dp
+          decay_rate = 1 / photoi_decay_time
        end if
 
        call af_loop_box_arg(tree, photoionization_rate_from_species, &
-            [photoi_eta * quench_fac * decay_fraction, 1-decay_fraction], .true.)
+            [photoi_eta * quench_fac * decay_rate, 1-decay_fraction], .true.)
     end select
 
     select case (photoi_method)

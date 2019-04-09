@@ -13,25 +13,37 @@ module m_streamer
   implicit none
   private
 
-  ! ** Indices of cell-centered variables **
-  integer, public, protected :: n_var_cell     = 0  ! Number of variables
-  integer, public, protected :: i_phi          = -1 ! Electrical potential
-  integer, public, protected :: i_electron     = -1 ! Electron density
-  integer, public, protected :: ix_electron    = -1 ! Electron density (in species list)
-  integer, public, protected :: i_1pos_ion     = -1 ! First positive ion species
-  integer, public, protected :: ix_1pos_ion    = -1 ! First positive ion (in species list)
-  integer, public, protected :: i_electric_fld = -1 ! Electric field norm
-  integer, public, protected :: i_rhs          = -1 ! Source term Poisson
-  integer, public, protected :: i_tmp          = -1 ! Temporary variable
-  integer, public, protected :: i_eps          = -1 ! Can be set to include a dielectric
+  !> Number of cell-centered variables
+  integer, public, protected :: n_var_cell     = 0
+  !> Index of electrical potential
+  integer, public, protected :: i_phi          = -1
+  !> Index of electron density
+  integer, public, protected :: i_electron     = -1
+  !> Index of electron density (in species list)
+  integer, public, protected :: ix_electron    = -1
+  !> Index of first positive ion species
+  integer, public, protected :: i_1pos_ion     = -1
+  !> Index of first positive ion (in species list)
+  integer, public, protected :: ix_1pos_ion    = -1
+  !> Index of electric field norm
+  integer, public, protected :: i_electric_fld = -1
+  !> Index of source term Poisson
+  integer, public, protected :: i_rhs          = -1
+  !> Index of temporary variable
+  integer, public, protected :: i_tmp          = -1
+  !> Index of can be set to include a dielectric
+  integer, public, protected :: i_eps          = -1
 
-  ! ** Indices of face-centered variables **
-  integer, public, protected :: n_var_face   = 0 ! Number of variables
-  integer, public, protected :: flux_elec    = -1 ! Electron flux
-  integer, public, protected :: electric_fld = -1 ! Electric field vector
+  !> Number of face-centered variables
+  integer, public, protected :: n_var_face   = 0
+  !> Index of electron flux
+  integer, public, protected :: flux_elec    = -1
+  !> Index of electric field vector
+  integer, public, protected :: electric_fld = -1
+  !> List of flux species
   integer, public, protected :: flux_species(1) = -1
 
-  ! Whether cylindrical coordinates are used
+  !> Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
 
   !> Whether a dielectric is used
@@ -49,50 +61,53 @@ module m_streamer
   !> Whether to update ions (depends on ion diffusion/mobility)
   logical, public, protected :: ST_update_ions = .false.
 
-  ! Random number generator
+  !> Random number generator
   type(rng_t), public :: ST_rng
 
-  ! Parallel random number generator
+  !> Parallel random number generator
   type(prng_t), public :: ST_prng
 
+  !> Avoid dielectric relaxation time step constraint by limiting flux
   logical, public, protected :: ST_drt_limit_flux = .false.
 
-  real(dp), public, protected :: ST_src_max_density = 1.0e100_dp
+  !> Limit velocities to this value (m/s)
   real(dp), public, protected :: ST_max_velocity = -1.0_dp
+
+  !> Disable diffusion parallel to fields above this threshold (V/m)
   real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
 
-  ! End time of the simulation
+  !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
-  ! If we are using ST_end_time
+  !> If we are using ST_end_time
   logical, public, protected :: ST_use_end_time = .true.
 
-  ! Whether streamer length is used as a simulation stopping
+  !> Whether streamer length is used as a simulation stopping
   logical, public, protected :: ST_use_end_streamer_length = .false.
 
-  ! Wait n steps before initializing streamer begin position
+  !> Wait n steps before initializing streamer begin position
   integer, public, protected :: ST_initial_streamer_pos_steps_wait = 5
 
-  ! Streamer length at which the simulation will stop
+  !> Streamer length at which the simulation will stop
   real(dp), public, protected :: ST_end_streamer_length = 15e-3
 
 
-  ! The size of the boxes that we use to construct our mesh
+  !> The size of the boxes that we use to construct our mesh
   integer, public, protected :: ST_box_size = 8
 
-  ! Size of the coarse grid
+  !> Size of the coarse grid
   integer, public, protected :: ST_coarse_grid_size(NDIM) = 8
 
-  ! Domain length per dimension
+  !> Domain length per dimension
   real(dp), public, protected :: ST_domain_len(NDIM) = 16e-3_dp
 
-  ! Origin of domain
+  !> Origin of domain
   real(dp), public, protected :: ST_domain_origin(NDIM) = 0.0_dp
 
-  ! Whether the domain is periodic (per dimension)
+  !> Whether the domain is periodic (per dimension)
   logical, public, protected :: ST_periodic(NDIM) = .false.
 
-  ! Number of V-cycles to perform per time step
+  !> Number of V-cycles to perform per time step
   integer, public, protected :: ST_multigrid_num_vcycles = 2
 
   ! Stop multigrid when residual is smaller than this factor times max(|rhs|)
@@ -101,7 +116,7 @@ module m_streamer
   ! Global time
   real(dp), public :: global_time = 0.0_dp
 
-  ! Method used to prolong (interpolate) densities
+  !> Method used to prolong (interpolate) densities
   procedure(af_subr_prolong), pointer, public, protected :: &
        ST_prolongation_method => null()
 
@@ -214,8 +229,6 @@ contains
          "Avoid dielectric relaxation time step constraint by limiting flux")
     call CFG_add_get(cfg, "fixes%max_velocity", ST_max_velocity, &
          "Limit velocities to this value (m/s)")
-    call CFG_add_get(cfg, "fixes%src_max_density", ST_src_max_density, &
-         "Disable impact ionization source above this density")
     call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
          "Disable diffusion parallel to fields above this threshold (V/m)")
 

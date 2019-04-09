@@ -8,7 +8,13 @@ specified in configuration files like this:
 
     group%name = value
 
-and can be of type integer, real, logical or string. Some options are arrays,
+Multiple settings from the same group can be given like this:
+
+    [group]
+        name = value
+        name_2 = value_2
+
+Options can be of type integer, real, logical or string. Some options are arrays,
 and they can also have a variable length.
 
 # Examples of a few important options
