@@ -207,10 +207,12 @@ contains
          ST_multigrid_relative_residual, &
          "Stop multigrid when residual is smaller than this factor times max(|rhs|)")
 
-    prolong_method = "limit"
+    prolong_method = "limit_pos"
     call CFG_add_get(cfg, "prolong_density", prolong_method, &
          "Density prolongation method (limit, linear, linear_cons, sparse)")
     select case (prolong_method)
+    case ("limit_pos")
+       ST_prolongation_method => af_prolong_limit_pos
     case ("limit")
        ST_prolongation_method => af_prolong_limit
     case ("linear")
