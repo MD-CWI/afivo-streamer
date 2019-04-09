@@ -4,7 +4,6 @@ module m_output
   use m_types
   use m_advance, only: advance_max_dt
   use m_streamer
-  use m_photoi
 
   implicit none
   private
@@ -217,12 +216,11 @@ contains
     integer, parameter           :: my_unit        = 123
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos(NDIM) = 0
-    real(dp)                     :: sum_elec, sum_pos_ion, sum_photo
+    real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er
 
     call af_tree_sum_cc(tree, i_electron, sum_elec)
-    call af_tree_sum_cc(tree, i_photo, sum_photo)
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
     call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
@@ -234,7 +232,7 @@ contains
     if (out_cnt == 1) then
        open(my_unit, file=trim(filename), action="write")
 #if NDIM == 2
-       write(my_unit, *) "# it time dt v sum(photo) sum(n_e) sum(n_i) ", &
+       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
@@ -247,7 +245,7 @@ contains
     end if
 
 #if NDIM == 2
-    fmt = "(I6,17E16.8,I12,1E16.8,I3)"
+    fmt = "(I6,16E16.8,I12,1E16.8,I3)"
 #elif NDIM == 3
     fmt = "(I6,14E16.8,I12,1E16.8,I3)"
 #endif
@@ -258,7 +256,7 @@ contains
     open(my_unit, file=trim(filename), action="write", &
          position="append")
 #if NDIM == 2
-    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_photo,sum_elec, &
+    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
