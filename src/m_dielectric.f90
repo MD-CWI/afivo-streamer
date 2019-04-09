@@ -48,6 +48,7 @@ module m_dielectric
   public :: dielectric_photon_emission
   public :: dielectric_combine_substeps
   public :: dielectric_photon_absorption
+  public :: dielectric_reset_photons
 
 contains
 
@@ -695,5 +696,15 @@ contains
     error stop
 #endif
   end subroutine add_to_surface_photons
+
+  subroutine dielectric_reset_photons()
+    integer :: n
+
+    do n = 1, num_surfaces
+       if (surface_list(n)%in_use) then
+          surface_list(n)%photons = 0.0_dp
+       end if
+    end do
+  end subroutine dielectric_reset_photons
 
 end module m_dielectric

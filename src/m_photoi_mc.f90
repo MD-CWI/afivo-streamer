@@ -371,6 +371,10 @@ contains
 
     if (NDIM == 3 .and. use_cyl) error stop "phmc_set_src: use_cyl is .true."
 
+    if (ST_use_dielectric) then
+       call dielectric_reset_photons()
+    end if
+
     nc = tree%n_cell
 
     ! Compute the sum of photon production
@@ -492,7 +496,7 @@ contains
 
        if (ST_use_dielectric) then
           call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
-               2, n_used, fac * phmc_tbl%frac_in_tbl)
+               2, n_used, phmc_tbl%frac_in_tbl/fac)
        end if
     else
        ! Get location of absorbption
@@ -500,7 +504,7 @@ contains
 
        if (ST_use_dielectric) then
           call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
-               NDIM, n_used, fac * phmc_tbl%frac_in_tbl)
+               NDIM, n_used, phmc_tbl%frac_in_tbl/fac)
        end if
     end if
 
@@ -570,8 +574,8 @@ contains
           dr = tree%boxes(id)%dr
 
           tree%boxes(id)%cc(IJK, i_photo) = &
-                  tree%boxes(id)%cc(IJK, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(fac * product(dr))
+               tree%boxes(id)%cc(IJK, i_photo) + &
+               phmc_tbl%frac_in_tbl/(fac * product(dr))
 #endif
        end if
     end do
