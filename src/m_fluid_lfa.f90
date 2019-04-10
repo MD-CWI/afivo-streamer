@@ -85,6 +85,7 @@ contains
 #if NDIM == 3
     integer                    :: l
 #endif
+    real(dp), parameter        :: small_value = 1e-100_dp
 
     ! Inside the dielectric, set the flux to zero. We later determine the
     ! boundary flux onto dielectrics
@@ -273,11 +274,11 @@ contains
                [v(i+1, j, k, 1), v(i, j+1, k, 2), v(i, j, k+1, 3)])
 #endif
           ! CFL condition
-          dt_cfl = 1.0_dp/sum(abs(vmean) * inv_dr)
+          dt_cfl = 1.0_dp/max(sum(abs(vmean) * inv_dr), small_value)
 
           ! Diffusion condition
           dt_dif = minval(boxes(id)%dr)**2 / &
-               max(2 * NDIM * maxval(dc(IJK, :)), epsilon(1.0_dp))
+               max(2 * NDIM * maxval(dc(IJK, :)), small_value)
 
           ! Take the combined CFL-diffusion condition with Courant number 0.5
           dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
@@ -297,7 +298,7 @@ contains
           end if
 
           ! Dielectric relaxation time
-          dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK), epsilon(1.0_dp))
+          dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK), small_value)
 
           dt_matrix(dt_ix_drt, tid) = min(dt_matrix(dt_ix_drt, tid), dt_drt)
           dt_matrix(dt_ix_cfl, tid) = min(dt_matrix(dt_ix_cfl, tid), dt_cfl)
