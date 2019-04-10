@@ -481,22 +481,26 @@ contains
     real(dp)                            :: fac
 
     nc  = box%n_cell
-    fac = dt * UC_elec_charge
+    fac = dt * UC_elem_charge
 
     select case (surface%direction)
 #if NDIM == 2
     case (af_neighb_lowx)
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) - &
-            fac * box%fc(1, 1:nc, 1, flux_elec)
+            fac * matmul(box%fc(1, 1:nc, 1, flux_variables), &
+            flux_species_charge)
     case (af_neighb_highx)
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) + &
-            fac * box%fc(nc+1, 1:nc, 1, flux_elec)
+            fac * matmul(box%fc(nc+1, 1:nc, 1, flux_variables), &
+            flux_species_charge)
     case (af_neighb_lowy)
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) - &
-            fac * box%fc(1:nc, 1, 2, flux_elec)
+            fac * matmul(box%fc(1:nc, 1, 2, flux_variables), &
+            flux_species_charge)
     case (af_neighb_highy)
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) + &
-            fac * box%fc(1:nc, nc+1, 2, flux_elec)
+            fac * matmul(box%fc(1:nc, nc+1, 2, flux_variables), &
+            flux_species_charge)
 #elif NDIM == 3
     case default
        error stop
