@@ -547,7 +547,8 @@ contains
        ix = box_id_to_surface_id(id)
        if (ix > 0) then
           if (id == surface_list(ix)%id_gas) then
-             ! Convert electron fluxes onto dielectric to surface charge
+             ! Convert fluxes onto dielectric to surface charge, and handle
+             ! secondary emission
              call dielectric_update_surface_charge(box, &
                   surface_list(ix), dt, s_in, s_out)
 

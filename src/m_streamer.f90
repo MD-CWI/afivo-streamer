@@ -36,12 +36,14 @@ module m_streamer
   integer, public, protected :: flux_elec    = -1
   !> Index of electric field vector
   integer, public, protected :: electric_fld = -1
-  !> List of flux variables
+  !> List of all flux variables (face-centered index)
   integer, public, protected, allocatable :: flux_variables(:)
-  !> List of flux species
+  !> List of all flux species (cell-centered index)
   integer, public, protected, allocatable :: flux_species(:)
   !> List of the charges of the flux species
   integer, public, protected, allocatable :: flux_species_charge(:)
+  !> List of positive ion fluxes (useful for secondary emission)
+  integer, public, protected, allocatable :: flux_pos_ion(:)
 
   !> Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
@@ -136,7 +138,7 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
-    integer                    :: n, n_threads, ix_chemistry
+    integer                    :: n, k, n_threads, ix_chemistry
     character(len=name_len)    :: prolong_method
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
@@ -179,6 +181,18 @@ contains
 
        call af_add_fc_variable(tree, trim(transport_data_ions%names(n)), &
             ix=flux_variables(1+n), write_binary=.false.)
+    end do
+
+    ! Create a list of positive ion fluxes for secondary emission
+    n = count(flux_species_charge > 0)
+    allocate(flux_pos_ion(n))
+
+    k = 0
+    do n = 1, size(flux_species_charge)
+       if (flux_species_charge(n) > 0) then
+          k = k + 1
+          flux_pos_ion(k) = flux_variables(n)
+       end if
     end do
 
     call af_add_cc_variable(tree, "phi", ix=i_phi)

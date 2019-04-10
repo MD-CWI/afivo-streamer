@@ -37,6 +37,12 @@ module m_dielectric
   ! Maximum travel distance for testing boundary intersection
   real(dp), protected :: photon_step_length = 1.0e-3_dp
 
+  !> Secondary electron emission coefficient for photons
+  real(dp), protected :: gamma_se_ion = 0.1_dp
+
+  !> Secondary electron emission coefficient for positive ion impact
+  real(dp), protected :: gamma_se_ph = 0.1_dp
+
   public :: dielectric_initialize
   public :: dielectric_allocate
   public :: dielectric_get_surfaces
@@ -60,6 +66,13 @@ contains
     call CFG_add_get(cfg, "dielectric%photon_step_length", &
          photon_step_length, &
          "Maximum travel distance for testing boundary intersection")
+    call CFG_add_get(cfg, "dielectric%gamma_se_ph", &
+         gamma_se_ph, &
+         "Secondary electron emission coefficient for photons")
+    call CFG_add_get(cfg, "dielectric%gamma_se_ion", &
+         gamma_se_ion, &
+         "Secondary electron emission coefficient for positive ion impact")
+
   end subroutine dielectric_initialize
 
   subroutine dielectric_allocate(tree)
@@ -477,11 +490,18 @@ contains
     real(dp), intent(in)                :: dt    !< Time step
     integer, intent(in)                 :: s_in  !< Input state
     integer, intent(in)                 :: s_out !< Output state
+#if NDIM == 2
+    real(dp)                            :: se_flux(box%n_cell)
+#elif NDIM == 3
+    real(dp)                            :: se_flux(box%n_cell, box%n_cell)
+#endif
     integer                             :: nc
-    real(dp)                            :: fac
+    real(dp)                            :: fac, dr
+    real(dp), parameter                 :: gamma_se_ion = 0.1_dp
 
     nc  = box%n_cell
     fac = dt * UC_elem_charge
+    dr  = box%dr(af_neighb_dim(surface%direction))
 
     select case (surface%direction)
 #if NDIM == 2
@@ -489,18 +509,54 @@ contains
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) - &
             fac * matmul(box%fc(1, 1:nc, 1, flux_variables), &
             flux_species_charge)
+
+       if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
+          ! Compute secondary emission flux
+          se_flux = gamma_se_ion * sum(box%fc(1, 1:nc, 1, flux_pos_ion), dim=2)
+          box%cc(1, 1:nc, i_electron+s_out) = &
+               box%cc(1, 1:nc, i_electron+s_out) + dt * se_flux / dr
+          surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
+               fac * se_flux
+       end if
     case (af_neighb_highx)
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) + &
             fac * matmul(box%fc(nc+1, 1:nc, 1, flux_variables), &
             flux_species_charge)
+
+       if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
+          ! Compute secondary emission flux
+          se_flux = gamma_se_ion * sum(box%fc(nc+1, 1:nc, 1, flux_pos_ion), dim=2)
+          box%cc(nc, 1:nc, i_electron+s_out) = &
+               box%cc(nc, 1:nc, i_electron+s_out) + dt * se_flux / dr
+          surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
+               fac * se_flux
+       end if
     case (af_neighb_lowy)
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) - &
             fac * matmul(box%fc(1:nc, 1, 2, flux_variables), &
             flux_species_charge)
+
+       if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
+          ! Compute secondary emission flux
+          se_flux = gamma_se_ion * sum(box%fc(1:nc, 1, 2, flux_pos_ion), dim=2)
+          box%cc(1:nc, 1, i_electron+s_out) = &
+               box%cc(1:nc, 1, i_electron+s_out) + dt * se_flux / dr
+          surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
+               fac * se_flux
+       end if
     case (af_neighb_highy)
        surface%charge(:, 1+s_out) = surface%charge(:, 1+s_in) + &
             fac * matmul(box%fc(1:nc, nc+1, 2, flux_variables), &
             flux_species_charge)
+
+       if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
+          ! Compute secondary emission flux
+          se_flux = gamma_se_ion * sum(box%fc(1:nc, nc+1, 2, flux_pos_ion), dim=2)
+          box%cc(1:nc, nc, i_electron+s_out) = &
+               box%cc(1:nc, nc, i_electron+s_out) + dt * se_flux / dr
+          surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
+               fac * se_flux
+       end if
 #elif NDIM == 3
     case default
        error stop
@@ -518,11 +574,11 @@ contains
     integer, intent(in)                 :: s_out !< Output state
     integer                             :: nc
     real(dp)                            :: fac, dr
-    real(dp), parameter                 :: gamma = 0.1_dp
+    real(dp), parameter                 :: gamma_se_ph = 0.1_dp
 
     nc  = box%n_cell
     dr  = box%dr(af_neighb_dim(surface%direction))
-    fac = gamma * dt
+    fac = gamma_se_ph * dt
 
     select case (surface%direction)
 #if NDIM == 2
