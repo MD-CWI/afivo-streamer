@@ -45,7 +45,6 @@ module m_dielectric
 
   public :: dielectric_initialize
   public :: dielectric_allocate
-  public :: dielectric_get_surfaces
   public :: dielectric_update_after_refinement
   public :: dielectric_fix_refine
   public :: dielectric_rearrange_charge
@@ -97,48 +96,6 @@ contains
        get_new_surface = num_surfaces
     end if
   end function get_new_surface
-
-  subroutine dielectric_get_surfaces(tree)
-    use m_advance_base
-    type(af_t), intent(in) :: tree
-    integer                :: lvl, i, id, nb, nc, ix
-    integer                :: id_diel
-    real(dp)               :: eps
-
-    nc = tree%n_cell
-
-    ! Locate all boxes at the boundary of the dielectric
-    do lvl = 1, tree%highest_lvl
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-
-          call find_dielectric_neighbor(tree, id, id_diel, nb, eps)
-
-          if (id_diel > 0) then
-             ix = get_new_surface()
-             surface_list(ix)%in_use = .true.
-             surface_list(ix)%id_gas = id
-             surface_list(ix)%id_diel = id_diel
-             surface_list(ix)%direction = nb
-             surface_list(ix)%eps = eps
-
-             if (.not. allocated(surface_list(ix)%charge)) then
-#if NDIM == 2
-                allocate(surface_list(ix)%charge(nc, advance_num_states))
-                allocate(surface_list(ix)%photons(nc))
-#elif NDIM == 3
-                allocate(surface_list(ix)%charge(nc, nc, advance_num_states))
-                allocate(surface_list(ix)%photons(nc, nc))
-#endif
-             end if
-             surface_list(ix)%charge = 0.0_dp
-             surface_list(ix)%photons = 0.0_dp
-
-          end if
-       end do
-    end do
-
-  end subroutine dielectric_get_surfaces
 
   subroutine find_dielectric_neighbor(tree, id, id_diel, nb, nb_eps)
     use m_streamer
