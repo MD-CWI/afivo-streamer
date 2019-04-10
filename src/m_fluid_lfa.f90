@@ -32,12 +32,13 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           call fluxes_elec(tree%boxes, id, dt, s_in, set_dt)
+          call fluxes_ions(tree, id, s_in)
        end do
        !$omp end do
     end do
     !$omp end parallel
 
-    call af_consistent_fluxes(tree, [flux_elec])
+    call af_consistent_fluxes(tree, flux_variables)
 
     ! Update the solution
     !$omp parallel private(lvl, i, id, p_id)
@@ -323,6 +324,83 @@ contains
 
   end subroutine fluxes_elec
 
+  !> Compute the ions fluxes
+  subroutine fluxes_ions(tree, id, s_in)
+    use m_af_flux_schemes
+    use m_units_constants
+    use m_streamer
+    use m_gas
+    use m_transport_data
+    type(af_t), intent(inout)  :: tree
+    integer, intent(in)        :: id
+    integer, intent(in)        :: s_in   !< Input time state
+
+    real(dp)                   :: inv_dr(NDIM)
+    ! Velocities at cell faces
+    real(dp), allocatable      :: v(DTIMES(:), :)
+    ! Cell-centered densities
+    real(dp), allocatable      :: cc(DTIMES(:))
+    real(dp)                   :: mu
+    integer                    :: nc, n, m, ix, i_flux, i_ion
+#if NDIM == 3
+    integer                    :: l
+#endif
+
+    nc      = tree%boxes(id)%n_cell
+    inv_dr  = 1/tree%boxes(id)%dr
+
+    ! Inside the dielectric, set the flux to zero
+    if (ST_use_dielectric) then
+       if (tree%boxes(id)%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          do ix = 2, size(flux_species)
+             i_flux = flux_variables(ix)
+             tree%boxes(id)%fc(DTIMES(:), :, i_flux) = 0.0_dp
+          end do
+          return
+       end if
+    end if
+
+    ! Fill ghost cells on the sides of boxes (no corners)
+    call af_gc_box(tree, id, flux_species(2:)+s_in, corners=.false.)
+
+    allocate(v(DTIMES(1:nc+1), NDIM))
+    allocate(cc(DTIMES(-1:nc+2)))
+
+    do ix = 2, size(flux_species)
+       i_ion  = flux_species(ix)
+       i_flux = flux_variables(ix)
+       mu     = transport_data_ions%mobilities(ix-1)
+
+       ! Fill cc with interior data plus a second layer of ghost cells
+       call af_gc2_box(tree%boxes, id, i_ion+s_in, af_gc2_prolong_linear, &
+            af_bc2_neumann_zero, cc, nc)
+
+       do n = 1, nc+1
+          do m = 1, nc
+#if NDIM == 2
+             v(n, m, 1) = mu * tree%boxes(id)%fc(n, m, 1, electric_fld)
+             v(m, n, 2) = mu * tree%boxes(id)%fc(m, n, 2, electric_fld)
+#elif NDIM == 3
+             do l = 1, nc
+                v(n, m, l, 1) = mu * tree%boxes(id)%fc(n, m, l, 1, electric_fld)
+                v(m, n, l, 2) = mu * tree%boxes(id)%fc(m, n, l, 2, electric_fld)
+                v(m, l, n, 3) = mu * tree%boxes(id)%fc(m, l, n, 3, electric_fld)
+             end do
+#endif
+          end do
+       end do
+
+#if NDIM == 2
+       call flux_koren_2d(cc, v, nc, 2)
+#elif NDIM == 3
+       call flux_koren_3d(cc, v, nc, 2)
+#endif
+
+       tree%boxes(id)%fc(DTIMES(:), :, i_flux) = v
+    end do
+
+  end subroutine fluxes_ions
+
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
   subroutine update_solution(box, id, dt, s_in, s_out, set_dt)
@@ -350,7 +428,7 @@ contains
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
     integer                    :: IJK, ix, nc, n_cells, n, iv
-    integer                    :: tid
+    integer                    :: tid, i_flux
     real(dp), parameter        :: eps = 1e-100_dp
 
     nc      = box%n_cell
@@ -387,7 +465,7 @@ contains
     end if
 
     dens(:, n_gas_species+1:n_species) = reshape(box%cc(DTIMES(1:nc), &
-            species_itree(n_gas_species+1:n_species)+s_in), [n_cells, n_plasma_species])
+         species_itree(n_gas_species+1:n_species)+s_in), [n_cells, n_plasma_species])
 
     call get_rates(fields, rates, n_cells)
     call get_derivatives(dens, rates, derivs, n_cells)
@@ -409,7 +487,7 @@ contains
     ix = 0
     do KJI_DO(1,nc)
        ix = ix + 1
-       ! Contribution of flux
+       ! Contribution of electron flux
 #if NDIM == 2
        derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
             inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, flux_elec) - &
@@ -438,6 +516,30 @@ contains
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_in) + dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
+
+    ! Ion fluxes
+    do n = 2, size(flux_species)
+       iv     = flux_species(n)
+       i_flux = flux_variables(n)
+
+       do KJI_DO(1,nc)
+          ! Contribution of ion flux
+#if NDIM == 2
+          tmp = inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, i_flux) - &
+               rfac(2, i) * box%fc(i+1, j, 1, i_flux)) + &
+               inv_dr(2) * (box%fc(i, j, 2, i_flux) - &
+               box%fc(i, j+1, 2, i_flux))
+#elif NDIM == 3
+          tmp = inv_dr(1) * (box%fc(i, j, k, 1, i_flux) - &
+               box%fc(i+1, j, k, 1, i_flux)) + &
+               inv_dr(2) * (box%fc(i, j, k, 2, i_flux) - &
+               box%fc(i, j+1, k, 2, i_flux)) + &
+               inv_dr(3) * (box%fc(i, j, k, 3, i_flux) - &
+               box%fc(i, j, k+1, 3, i_flux))
+#endif
+          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_out) + tmp * dt
+       end do; CLOSE_DO
+    end do
 
     if (ST_use_dielectric) then
        ! Check if the box is part of a surface

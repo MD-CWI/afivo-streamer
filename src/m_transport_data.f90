@@ -21,6 +21,14 @@ module m_transport_data
   !> Whether old style transport data is used (alpha, eta, mu, D vs V/m)
   logical, public, protected :: td_old_style = .false.
 
+  type ion_transport_t
+     integer                        :: n_mobile_ions ! Number of mobile ions
+     real(dp), allocatable          :: mobilities(:) ! Mobility of the ions
+     character(len=10), allocatable :: names(:)      ! Names of the ions
+  end type ion_transport_t
+
+  type(ion_transport_t), public :: transport_data_ions
+
   public :: transport_data_initialize
 
 contains
@@ -34,6 +42,9 @@ contains
     type(CFG_t), intent(inout) :: cfg
     character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: x_data(:), y_data(:)
+    real(dp)                   :: dummy_real(0)
+    character(len=10)          :: dummy_string(0)
+    integer                    :: n
 
     ! Create a lookup table for the model coefficients
     td_tbl = LT_create(table_min_townsend, table_max_townsend, &
@@ -90,6 +101,22 @@ contains
             x_data, y_data)
        call LT_set_col(td_tbl, td_eta, x_data, y_data)
     end if
+
+    call CFG_add(cfg, "input_data%mobile_ions", dummy_string, &
+         "List of ions that are considered mobile", .true.)
+    call CFG_add(cfg, "input_data%ion_mobilities", dummy_real, &
+         "List of ion mobilities (m^2/Vs)", .true.)
+
+    call CFG_get_size(cfg, "input_data%mobile_ions", n)
+
+    transport_data_ions%n_mobile_ions = n
+    allocate(transport_data_ions%names(n))
+    allocate(transport_data_ions%mobilities(n))
+
+    call CFG_get(cfg, "input_data%mobile_ions", transport_data_ions%names)
+    call CFG_get(cfg, "input_data%ion_mobilities", &
+         transport_data_ions%mobilities)
+
   end subroutine transport_data_initialize
 
 end module m_transport_data
