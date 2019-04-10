@@ -652,6 +652,25 @@ contains
 
     tree%highest_lvl = lvl
 
+    ! Update the list of removed boxes. We do this at the end so that they are
+    ! not re-used in the loop above.
+    i = tree%n_removed_ids
+    tree%removed_ids(i+1:i+ref_info%n_rm) = ref_info%rm(:)
+    tree%n_removed_ids = tree%n_removed_ids + ref_info%n_rm
+
+    ! Set the highest id in use
+    do id = tree%highest_id, 1, -1
+       if (tree%boxes(id)%in_use) exit
+    end do
+    tree%highest_id = id
+
+    ! Clean up list of removed boxes
+    i_rm = tree%n_removed_ids
+    i = count(tree%removed_ids(1:i_rm) <= tree%highest_id)
+    tree%removed_ids(1:i) = pack(tree%removed_ids(1:i_rm), &
+         mask=tree%removed_ids(1:i_rm) <= tree%highest_id)
+    tree%n_removed_ids = i
+
     ! We still have to update leaves and parents for the last level, which is
     ! either lvl+1 or af_max_lvl. Note that lvl+1 is empty now, but maybe it was
     ! not not empty before, and that af_max_lvl is skipped in the above loop.
@@ -1002,14 +1021,7 @@ contains
   subroutine remove_children(tree, id)
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: id !< Id of box whose children will be removed
-    integer                   :: ic, c_id, nb_id, nb_rev, nb, IJK, ix
-
-    !$omp critical (crit_remove_children)
-    ix = tree%n_removed_ids
-    tree%n_removed_ids = tree%n_removed_ids + af_num_children
-    !$omp end critical (crit_remove_children)
-
-    tree%removed_ids(ix+1:ix+af_num_children) = tree%boxes(id)%children
+    integer                   :: ic, c_id, nb_id, nb_rev, nb, IJK
 
     do ic = 1, af_num_children
        c_id = tree%boxes(id)%children(ic)
