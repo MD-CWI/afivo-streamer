@@ -43,6 +43,9 @@ module m_dielectric
   !> Secondary electron emission coefficient for positive ion impact
   real(dp), protected :: gamma_se_ph = 0.1_dp
 
+  !> Assume photons are not absorbed for photoemission computation
+  logical :: photons_no_absorption = .true.
+
   public :: dielectric_initialize
   public :: dielectric_allocate
   public :: dielectric_update_after_refinement
@@ -71,6 +74,9 @@ contains
     call CFG_add_get(cfg, "dielectric%gamma_se_ion", &
          gamma_se_ion, &
          "Secondary electron emission coefficient for positive ion impact")
+    call CFG_add_get(cfg, "dielectric%photons_no_absorption", &
+         photons_no_absorption, &
+         "Assume photons are not absorbed for photoemission computation")
 
   end subroutine dielectric_initialize
 
@@ -606,8 +612,10 @@ contains
     end do
   end subroutine dielectric_combine_substeps
 
-  !> Determine whether and where photons crossed a dielectric, and change their
-  !> absorption location to the first cell inside the surface
+  !> Determine whether and where photons hit a dielectric, and change their
+  !> absorption location to the first cell inside the surface. If
+  !> photons_no_absorption is true, assume that photons are not absorbed by the
+  !> gas (so extrapolate their path).
   subroutine dielectric_photon_absorption(tree, xyz_start, xyz_end, n_dim, &
        n_photons, photon_weight)
     use m_af_types
@@ -620,10 +628,11 @@ contains
     real(dp), intent(inout) :: xyz_end(3, n_photons)
     real(dp), intent(in)    :: photon_weight
     real(dp)                :: xyz(n_dim), dvec(n_dim)
+    real(dp)                :: dvec_small(n_dim), dvec_large(n_dim)
     real(dp)                :: xyz_gas(n_dim), xyz_nogas(n_dim)
     real(dp)                :: xyz_middle(n_dim), eps(1)
     real(dp)                :: travel_distance
-    integer                 :: n, n_steps, i, k, n_bisect
+    integer                 :: n, n_steps, n_steps_extra, i, k, n_bisect
     logical                 :: success
 
     ! Determine the number of bisection steps to find the first cell inside the
@@ -631,18 +640,33 @@ contains
     n_bisect = -ceiling(&
          log(af_min_dr(tree)/photon_step_length) / log(2.0_dp))
 
+    if (photons_no_absorption) then
+       n_steps_extra = ceiling(norm2(ST_domain_len) / photon_step_length)
+    else
+       n_steps_extra = 0
+    end if
+
     do n = 1, n_photons
        xyz             = xyz_start(1:n_dim, n)
        dvec            = xyz_end(1:n_dim, n) - xyz_start(1:n_dim, n)
        travel_distance = norm2(dvec)
-       n_steps         = ceiling(travel_distance/photon_step_length)
 
+       ! Large photon step length
+       dvec_large = (dvec/travel_distance) * photon_step_length
+
+       n_steps    = ceiling(travel_distance/photon_step_length)
        ! Normalize direction vector to right length. Possible TODO: near the
        ! boundary of the domain, a photon can fly out crossing on a small
        ! piece of a dielectric.
-       dvec = dvec / n_steps
+       dvec_small = dvec / n_steps
 
-       do i = 1, n_steps
+       do i = 1, n_steps + n_steps_extra
+          if (i <= n_steps) then
+             dvec = dvec_small
+          else
+             dvec = dvec_large
+          end if
+
           xyz = xyz + dvec
 
           ! If outside, stop
@@ -674,7 +698,11 @@ contains
              end do
 
              call add_to_surface_photons(tree, xyz_nogas, photon_weight)
-             xyz_end(1:n_dim, n) = -1e50_dp
+
+             if (i <= n_steps) then
+                ! The photon was absorbed within its normal travel path
+                xyz_end(1:n_dim, n) = -1e50_dp
+             end if
              exit
           end if
        end do
