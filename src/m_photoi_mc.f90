@@ -3,11 +3,10 @@
 module m_photoi_mc
   use m_streamer
   use m_lookup_table
+  use m_af_all
 
   implicit none
   private
-
-  integer, parameter :: dp = kind(0.0d0)
 
   !> Type to quickly look up absorption lengths from a table
   type, public :: phmc_tbl_t
@@ -278,7 +277,7 @@ contains
 
   !> Given a list of photon production positions (xyz_in), compute where they
   !> end up (xyz_out).
-  subroutine phmc_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, rng)
+  subroutine phmc_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, prng)
     use m_lookup_table
     use m_random
     use omp_lib
@@ -290,17 +289,11 @@ contains
     integer, intent(in)        :: n_dim     !< 2 or 3 dimensional
     !< Lookup table
     type(LT_t), intent(in)     :: tbl
-    type(RNG_t), intent(inout) :: rng       !< Random number geneator
-    integer                    :: n, n_procs, proc_id
+    type(PRNG_t), intent(inout) :: prng       !< Random number generator
+    integer                    :: n, proc_id
     real(dp)                   :: rr, dist
-    type(PRNG_t)               :: prng
 
     !$omp parallel private(n, rr, dist, proc_id)
-    !$omp single
-    n_procs = omp_get_num_threads()
-    call prng%init_parallel(n_procs, rng)
-    !$omp end single
-
     proc_id = 1+omp_get_thread_num()
 
     if (n_dim == 2) then
@@ -327,17 +320,12 @@ contains
     end if
     !$omp end parallel
 
-    call prng%update_seed(rng)
   end subroutine phmc_do_absorption
 
-  !> Set the source term due to photoionization for 2D models. At most
-  !> phmc_num_photons discrete photons are produced.
+  !> Set the source term due to photoionization. At most phmc_num_photons
+  !> discrete photons are produced.
   subroutine phmc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
     use m_random
-    use m_af_types
-    use m_af_utils
-    use m_af_ghostcell
-    use m_af_prolong
     use m_lookup_table
     use m_dielectric
     use omp_lib
@@ -353,14 +341,12 @@ contains
     !> Time step, if present use "physical" photons
     real(dp), intent(in), optional :: dt
 
-    integer                     :: lvl, ix, id, nc, min_lvl
-    integer                     :: IJK, n, n_create, n_used, i_ph
-    integer                     :: proc_id, n_procs, my_num_photons
-    integer                     :: pho_lvl
+    integer                     :: lvl, id, nc, min_lvl
+    integer                     :: IJK, n, n_used
+    integer                     :: proc_id, n_procs
+    integer                     :: pho_lvl, max_num_photons
     real(dp)                    :: tmp, dr(NDIM), dt_fac, dist, r(3)
     real(dp)                    :: sum_production_rate, pi_lengthscale
-    integer, allocatable        :: photons_per_thread(:), photon_thread(:)
-    integer, allocatable        :: ix_offset(:)
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
 #if NDIM == 2
@@ -378,7 +364,11 @@ contains
 
     nc = tree%n_cell
 
-    ! Compute the sum of photon production
+    ! Initialize parallel random numbers
+    n_procs = omp_get_max_threads()
+    call prng%init_parallel(n_procs, rng)
+
+    ! Compute the sum of the photon production rate
     call af_tree_sum_cc(tree, i_src, sum_production_rate)
 
     ! dt_fac is used to convert a discrete number of photons to a number of
@@ -394,102 +384,18 @@ contains
        dt_fac = phmc_num_photons / (sum_production_rate + small_value)
     end if
 
-    ! Allocate a bit more space because of stochastic production
-    n = nint(1.2_dp * dt_fac * sum_production_rate + 1000)
-    allocate(xyz_src(3, n))
-    allocate(photon_thread(n))
+    ! Over-estimate number of photons because of stochastic production
+    max_num_photons = nint(1.2_dp * dt_fac * sum_production_rate + 1000)
 
-    ! Now loop over all leaves and create photons using random numbers
-    n_used = 0
-
-    n_procs = omp_get_max_threads()
-    call prng%init_parallel(n_procs, rng)
-    allocate(photons_per_thread(n_procs))
-
-    !$omp parallel private(lvl, ix, id, i, j, n, r, dr, i_ph, proc_id, &
-    !$omp tmp, n_create, my_num_photons)
-    proc_id = 1+omp_get_thread_num()
-    my_num_photons = 0
-
-    do lvl = 1, tree%highest_lvl
-       dr = af_lvl_dr(tree, lvl)
-       !$omp do
-       do ix = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(ix)
-
-          do KJI_DO(1,nc)
-#if NDIM == 2
-             if (tree%boxes(id)%coord_t == af_cyl) then
-                tmp = af_cyl_radius_cc(tree%boxes(id), i)
-                tmp = dt_fac * 2 * pi * tmp * &
-                     tree%boxes(id)%cc(i, j, i_src) * product(dr)
-             else
-                tmp = dt_fac * tree%boxes(id)%cc(i, j, i_src) * product(dr)
-             end if
-#elif NDIM == 3
-             tmp = dt_fac * tree%boxes(id)%cc(i, j, k, i_src) * product(dr)
-#endif
-
-             n_create = floor(tmp)
-
-             if (prng%rngs(proc_id)%unif_01() < tmp - n_create) &
-                  n_create = n_create + 1
-
-             if (n_create > 0) then
-                !$omp critical
-                i_ph = n_used
-                n_used = n_used + n_create
-                !$omp end critical
-                my_num_photons = my_num_photons + n_create
-
-                do n = 1, n_create
-                   ! Location of production randomly chosen in cell
-                   r(1)   = prng%rngs(proc_id)%unif_01()
-                   r(2)   = prng%rngs(proc_id)%unif_01()
-#if NDIM == 2
-                   xyz_src(1:NDIM, i_ph+n) = af_rr_cc(tree%boxes(id), &
-                        [IJK] - 0.5_dp + r(1:NDIM))
-                   xyz_src(3, i_ph+n) = 0.0_dp
-#elif NDIM == 3
-                   r(3)   = prng%rngs(proc_id)%unif_01()
-                   xyz_src(:, i_ph+n) = af_rr_cc(tree%boxes(id), &
-                        [IJK] - 0.5_dp + r(1:NDIM))
-#endif
-                   photon_thread(i_ph+n) = proc_id
-                end do
-             end if
-          end do; CLOSE_DO
-       end do
-       !$omp end do nowait
-    end do
-
-    photons_per_thread(proc_id) = my_num_photons
-    !$omp end parallel
+    call phmc_generate_photons(tree, dt_fac, i_src, xyz_src, &
+         max_num_photons, n_used, prng)
 
     allocate(xyz_abs(3, n_used))
-    allocate(ph_loc(n_used))
-
-    ! Sort the xyz_src array so that runs are deterministic (the order in which
-    ! the threads write is not deterministic)
-    allocate(ix_offset(n_procs))
-    ix_offset(1) = 0
-    do n = 2, n_procs
-       ix_offset(n) = ix_offset(n-1) + photons_per_thread(n-1)
-    end do
-
-    photons_per_thread = 0
-    do n = 1, n_used
-       i = photon_thread(n)
-       photons_per_thread(i) = photons_per_thread(i) + 1
-       j = ix_offset(i) + photons_per_thread(i)
-       xyz_abs(:, j) = xyz_src(:, n)
-    end do
-    xyz_src(:, 1:n_used) = xyz_abs(:, 1:n_used)
 
     if (use_cyl) then           ! 2D only
        ! Get location of absorption. On input, xyz is set to (r, z, 0). On
        ! output, the coordinates thus correspond to (x, z, y)
-       call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, rng)
+       call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, prng)
 
        !$omp do
        do n = 1, n_used
@@ -507,7 +413,7 @@ contains
        end if
     else
        ! Get location of absorbption
-       call phmc_do_absorption(xyz_src, xyz_abs, NDIM, n_used, phmc_tbl%tbl, rng)
+       call phmc_do_absorption(xyz_src, xyz_abs, NDIM, n_used, phmc_tbl%tbl, prng)
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
@@ -515,6 +421,8 @@ contains
                NDIM, n_used, 1.0_dp/dt_fac)
        end if
     end if
+
+    allocate(ph_loc(n_used))
 
     if (phmc_const_dx) then
        ! Get a typical length scale for the absorption of photons
@@ -544,17 +452,7 @@ contains
     end if
 
     ! Clear variable i_photo, in which we will store the photoionization source term
-
-    !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          call af_box_clear_cc(tree%boxes(id), i_photo)
-       end do
-       !$omp end do nowait
-    end do
-    !$omp end parallel
+    call af_tree_clear_cc(tree, i_photo)
 
     do n = 1, n_used
        id = ph_loc(n)%id
@@ -617,5 +515,122 @@ contains
 
     call prng%update_seed(rng)
   end subroutine phmc_set_src
+
+  subroutine phmc_generate_photons(tree, dt_fac, i_src, xyz_src, n_max, n_used, prng)
+    use omp_lib
+    use m_random
+    use m_units_constants, only: UC_pi
+    type(af_t), intent(in)               :: tree
+    !> Time step to convert photon production rate to number of photons
+    real(dp), intent(in)                 :: dt_fac
+    !> Index of cell-centered variable containing photon production rate
+    integer, intent(in)                  :: i_src
+    !> Origin of the produced photons
+    real(dp), allocatable, intent(inout) :: xyz_src(:, :)
+    !> Maximum number of photons that will be produced
+    integer, intent(in)                  :: n_max
+    !> Number of photons that have been created
+    integer, intent(out)                 :: n_used
+    !> Parallel random number generator
+    type(PRNG_t), intent(inout)          :: prng
+
+    integer               :: proc_id, n_procs
+    integer               :: lvl, ix, id, IJK, n, nc, i_ph
+    integer               :: n_create, my_num_photons
+    real(dp)              :: tmp, dr(NDIM), r(3)
+    integer, allocatable  :: photons_per_thread(:), photon_thread(:)
+    integer, allocatable  :: ix_offset(:)
+    real(dp), allocatable :: xyz_tmp(:, :)
+
+    nc      = tree%n_cell
+    n_procs = omp_get_max_threads()
+
+    allocate(xyz_src(3, n_max))
+    allocate(photons_per_thread(n_procs))
+    allocate(photon_thread(n_max))
+
+    ! Loop over all leaves and create photons using random numbers
+    n_used = 0
+
+    !$omp parallel private(lvl, ix, id, IJK, n, r, dr, i_ph, proc_id, &
+    !$omp tmp, n_create, my_num_photons)
+    proc_id = 1+omp_get_thread_num()
+    my_num_photons = 0
+
+    do lvl = 1, tree%highest_lvl
+       dr = af_lvl_dr(tree, lvl)
+       !$omp do
+       do ix = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(ix)
+
+          do KJI_DO(1,nc)
+#if NDIM == 2
+             if (tree%boxes(id)%coord_t == af_cyl) then
+                tmp = af_cyl_radius_cc(tree%boxes(id), i)
+                tmp = dt_fac * 2 * UC_pi * tmp * &
+                     tree%boxes(id)%cc(i, j, i_src) * product(dr)
+             else
+                tmp = dt_fac * tree%boxes(id)%cc(i, j, i_src) * product(dr)
+             end if
+#elif NDIM == 3
+             tmp = dt_fac * tree%boxes(id)%cc(i, j, k, i_src) * product(dr)
+#endif
+
+             n_create = floor(tmp)
+
+             if (prng%rngs(proc_id)%unif_01() < tmp - n_create) &
+                  n_create = n_create + 1
+
+             if (n_create > 0) then
+                !$omp critical
+                i_ph = n_used
+                n_used = n_used + n_create
+                !$omp end critical
+                my_num_photons = my_num_photons + n_create
+
+                do n = 1, n_create
+                   ! Location of production randomly chosen in cell
+                   r(1)   = prng%rngs(proc_id)%unif_01()
+                   r(2)   = prng%rngs(proc_id)%unif_01()
+#if NDIM == 2
+                   xyz_src(1:NDIM, i_ph+n) = af_rr_cc(tree%boxes(id), &
+                        [IJK] - 0.5_dp + r(1:NDIM))
+                   xyz_src(3, i_ph+n) = 0.0_dp
+#elif NDIM == 3
+                   r(3)   = prng%rngs(proc_id)%unif_01()
+                   xyz_src(:, i_ph+n) = af_rr_cc(tree%boxes(id), &
+                        [IJK] - 0.5_dp + r(1:NDIM))
+#endif
+                   photon_thread(i_ph+n) = proc_id
+                end do
+             end if
+          end do; CLOSE_DO
+       end do
+       !$omp end do nowait
+    end do
+
+    photons_per_thread(proc_id) = my_num_photons
+    !$omp end parallel
+
+    ! Sort the xyz_src array so that runs are deterministic (the order in which
+    ! the threads write is not deterministic)
+    allocate(ix_offset(n_procs))
+    allocate(xyz_tmp(3, n_used))
+
+    ix_offset(1) = 0
+    do n = 2, n_procs
+       ix_offset(n) = ix_offset(n-1) + photons_per_thread(n-1)
+    end do
+
+    photons_per_thread = 0
+    do n = 1, n_used
+       i = photon_thread(n)
+       photons_per_thread(i) = photons_per_thread(i) + 1
+       j = ix_offset(i) + photons_per_thread(i)
+       xyz_tmp(:, j) = xyz_src(:, n)
+    end do
+    xyz_src(:, 1:n_used) = xyz_tmp(:, 1:n_used)
+
+  end subroutine phmc_generate_photons
 
 end module m_photoi_mc

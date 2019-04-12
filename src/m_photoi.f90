@@ -159,21 +159,11 @@ contains
        call photoi_helmh_compute(tree, i_photo)
     case ("montecarlo")
        if (phmc_physical_photons) then
-#if NDIM == 2
           call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, ST_cylindrical, dt)
-#elif NDIM == 3
-          call phmc_set_src(tree, ST_rng, i_rhs, &
-               i_photo, .false., dt)
-#endif
        else
-#if NDIM == 2
           call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, ST_cylindrical)
-#elif NDIM == 3
-          call phmc_set_src(tree, ST_rng, i_rhs, &
-               i_photo, .false.)
-#endif
        end if
     end select
 
