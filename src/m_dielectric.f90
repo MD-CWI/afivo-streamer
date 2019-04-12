@@ -19,12 +19,12 @@ module m_dielectric
      !> Charge density on the dielectric
      real(dp), allocatable :: charge(:, :)
      !> Photon flux on the dielectric
-     real(dp), allocatable :: photons(:)
+     real(dp), allocatable :: photon_flux(:)
 #elif NDIM == 3
      !> Charge density on the dielectric
      real(dp), allocatable :: charge(:, :, :)
      !> Photon flux on the dielectric
-     real(dp), allocatable :: photons(:, :)
+     real(dp), allocatable :: photon_flux(:, :)
 #endif
   end type surface_data_t
 
@@ -189,14 +189,14 @@ contains
              if (.not. allocated(surface_list(ix)%charge)) then
 #if NDIM == 2
                 allocate(surface_list(ix)%charge(nc, advance_num_states))
-                allocate(surface_list(ix)%photons(nc))
+                allocate(surface_list(ix)%photon_flux(nc))
 #elif NDIM == 3
                 allocate(surface_list(ix)%charge(nc, nc, advance_num_states))
-                allocate(surface_list(ix)%photons(nc, nc))
+                allocate(surface_list(ix)%photon_flux(nc, nc))
 #endif
              end if
              surface_list(ix)%charge = 0.0_dp
-             surface_list(ix)%photons = 0.0_dp
+             surface_list(ix)%photon_flux = 0.0_dp
 
              call prolong_surface_from_parent(tree, surface_list(ix))
           end if
@@ -233,9 +233,9 @@ contains
             surface_list(ix_p)%charge(dix+1:dix+nc/2, 1)
        surface%charge(2:nc:2, 1) = surface%charge(1:nc:2, 1)
 
-       surface%photons(1:nc:2) = &
-            surface_list(ix_p)%photons(dix+1:dix+nc/2)
-       surface%photons(2:nc:2) = surface%photons(1:nc:2)
+       surface%photon_flux(1:nc:2) = &
+            surface_list(ix_p)%photon_flux(dix+1:dix+nc/2)
+       surface%photon_flux(2:nc:2) = surface%photon_flux(1:nc:2)
 #elif NDIM == 3
        error stop
 #endif
@@ -269,8 +269,8 @@ contains
        ! Average the value on the children
        surface_list(ix_p)%charge(dix+1:dix+nc/2, 1) = 0.5_dp * ( &
             surface%charge(1:nc:2, 1) + surface%charge(2:nc:2, 1))
-       surface_list(ix_p)%photons(dix+1:dix+nc/2) = 0.5_dp * ( &
-            surface%photons(1:nc:2) + surface%photons(2:nc:2))
+       surface_list(ix_p)%photon_flux(dix+1:dix+nc/2) = 0.5_dp * ( &
+            surface%photon_flux(1:nc:2) + surface%photon_flux(2:nc:2))
 #elif NDIM == 3
        error stop
 #endif
@@ -543,33 +543,33 @@ contains
        where (box%fc(1, 1:nc, 1, electric_fld) < 0.0_dp)
           box%cc(1, 1:nc, i_electron+s_out) = &
                box%cc(1, 1:nc, i_electron+s_out) + &
-               surface%photons * fac / dr
+               surface%photon_flux * fac / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photons * fac * UC_elem_charge
+               surface%photon_flux * fac * UC_elem_charge
        end where
     case (af_neighb_highx)
        where (box%fc(nc, 1:nc, 1, electric_fld) > 0.0_dp)
           box%cc(nc, 1:nc, i_electron+s_out) = &
                box%cc(nc, 1:nc, i_electron+s_out) + &
-               surface%photons * fac / dr
+               surface%photon_flux * fac / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photons * fac * UC_elem_charge
+               surface%photon_flux * fac * UC_elem_charge
        end where
     case (af_neighb_lowy)
        where (box%fc(1:nc, 1, 2, electric_fld) < 0.0_dp)
           box%cc(1:nc, 1, i_electron+s_out) = &
                box%cc(1:nc, 1, i_electron+s_out) + &
-               surface%photons * fac / dr
+               surface%photon_flux * fac / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photons * fac * UC_elem_charge
+               surface%photon_flux * fac * UC_elem_charge
        end where
     case (af_neighb_highy)
        where (box%fc(1:nc, nc, 2, electric_fld) > 0.0_dp)
           box%cc(1:nc, nc, i_electron+s_out) = &
                box%cc(1:nc, nc, i_electron+s_out) + &
-               surface%photons * fac / dr
+               surface%photon_flux * fac / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photons * fac * UC_elem_charge
+               surface%photon_flux * fac * UC_elem_charge
        end where
 #elif NDIM == 3
     case default
@@ -708,7 +708,8 @@ contains
        area = tree%boxes(id_gas)%dr(1)
     end if
 
-    surface_list(ix)%photons(i) = surface_list(ix)%photons(i) + w/area
+    surface_list(ix)%photon_flux(i) = &
+         surface_list(ix)%photon_flux(i) + w/area
 #elif NDIM == 3
     error stop
 #endif
@@ -719,7 +720,7 @@ contains
 
     do n = 1, num_surfaces
        if (surface_list(n)%in_use) then
-          surface_list(n)%photons = 0.0_dp
+          surface_list(n)%photon_flux = 0.0_dp
        end if
     end do
   end subroutine dielectric_reset_photons
