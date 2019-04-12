@@ -66,7 +66,7 @@ program random_refinement_Xd
 
   call system_clock(t_start, count_rate)
   boxes_used = 1
-  do iter = 1, 15
+  do iter = 1, 50
      ! This writes a VTK output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
      ! Variables are the names given as the third argument.
@@ -92,6 +92,9 @@ program random_refinement_Xd
           "# removed boxes", ref_info%n_rm,  &
           "# boxes used   ", boxes_used,     &
           " highest level ", tree%highest_lvl
+     print *, "boxes / in use / not used: ", tree%highest_id, &
+          count(tree%boxes(1:tree%highest_id)%in_use), &
+          tree%n_removed_ids
   end do
   call system_clock(t_end, count_rate)
 

@@ -15,6 +15,7 @@ module m_af_prolong
   ! public :: af_prolong_quadratic_from
   ! public :: af_prolong_quadratic
 
+  public :: af_prolong_limit_pos
   public :: af_prolong_limit
   public :: af_prolong_linear_cons
 
@@ -284,9 +285,9 @@ contains
 #endif
   end subroutine af_prolong_sparse
 
-  ! Conservative prolongation using the gradient the coarse cells, and limited
-  ! to preserve positivity
-  subroutine af_prolong_limit(box_p, box_c, iv, iv_to, add)
+  !> Conservative prolongation using the gradient of the coarse cells, and
+  !> limited to preserve positivity
+  subroutine af_prolong_limit_pos(box_p, box_c, iv, iv_to, add)
     type(box_t), intent(in)     :: box_p !< Parent box
     type(box_t), intent(inout)  :: box_c !< Child box
     integer, intent(in)           :: iv    !< Variable to fill
@@ -401,21 +402,122 @@ contains
        end do
     end do
 #endif
-  ! contains
+  end subroutine af_prolong_limit_pos
+
+  !> Conservative prolongation using the gradient from the coarse cells, taking
+  !> the minimum of the slopes and zero if they differ
+  subroutine af_prolong_limit(box_p, box_c, iv, iv_to, add)
+    type(box_t), intent(in)     :: box_p !< Parent box
+    type(box_t), intent(inout)  :: box_c !< Child box
+    integer, intent(in)           :: iv    !< Variable to fill
+    integer, intent(in), optional :: iv_to !< Destination variable
+    logical, intent(in), optional :: add   !< Add to old values
+    integer                       :: hnc, nc, ix_offset(NDIM), ivc
+    integer                       :: i, j, i_c, i_f, j_c, j_f
+    real(dp)                      :: f0, fx, fy
+    logical                       :: add_to
+#if NDIM == 3
+    real(dp)                      :: fz
+    integer                       :: k, k_c, k_f
+#endif
+
+    nc        = box_c%n_cell
+    hnc       = ishft(box_c%n_cell, -1)
+    ix_offset = af_get_child_offset(box_c)
+    add_to    = .false.; if (present(add)) add_to = add
+    ivc       = iv; if (present(iv_to)) ivc = iv_to
+
+    if (.not. add_to) then
+#if NDIM == 2
+       box_c%cc(1:nc, 1:nc, ivc) = 0
+#elif NDIM == 3
+       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
+#endif
+    end if
+
+#if NDIM == 2
+    do j = 1, hnc
+       j_c = j + ix_offset(2)
+       j_f = 2 * j - 1
+       do i = 1, hnc
+          i_c = i + ix_offset(1)
+          i_f = 2 * i - 1
+
+          f0 = box_p%cc(i_c, j_c, iv)
+          fx = 0.25_dp * limit_slope( &
+               box_p%cc(i_c, j_c, iv) - box_p%cc(i_c-1, j_c, iv), &
+               box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c, iv))
+          fy = 0.25_dp * limit_slope( &
+               box_p%cc(i_c, j_c, iv) - box_p%cc(i_c, j_c-1, iv), &
+               box_p%cc(i_c, j_c+1, iv) - box_p%cc(i_c, j_c, iv))
+
+          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
+               + box_c%cc(i_f,   j_f,   ivc)
+          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy &
+               + box_c%cc(i_f+1, j_f,   ivc)
+          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy &
+               + box_c%cc(i_f,   j_f+1, ivc)
+          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy &
+               + box_c%cc(i_f+1, j_f+1, ivc)
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, hnc
+       k_c = k + ix_offset(3)
+       k_f = 2 * k - 1
+       do j = 1, hnc
+          j_c = j + ix_offset(2)
+          j_f = 2 * j - 1
+          do i = 1, hnc
+             i_c = i + ix_offset(1)
+             i_f = 2 * i - 1
+
+             f0 = box_p%cc(i_c, j_c, k_c, iv)
+             fx = 0.25_dp * limit_slope( &
+                  box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c-1, j_c, k_c, iv), &
+                  box_p%cc(i_c+1, j_c, k_c, iv) - box_p%cc(i_c, j_c, k_c, iv))
+             fy = 0.25_dp * limit_slope( &
+                  box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c, j_c-1, k_c, iv), &
+                  box_p%cc(i_c, j_c+1, k_c, iv) - box_p%cc(i_c, j_c, k_c, iv))
+             fz = 0.25_dp * limit_slope( &
+                  box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c, j_c, k_c-1, iv), &
+                  box_p%cc(i_c, j_c, k_c+1, iv) - box_p%cc(i_c, j_c, k_c, iv))
+
+             box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - &
+                  fy - fz + box_c%cc(i_f,   j_f,   k_f,   ivc)
+             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - &
+                  fy - fz + box_c%cc(i_f+1, j_f,   k_f,   ivc)
+             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + &
+                  fy - fz + box_c%cc(i_f,   j_f+1, k_f,   ivc)
+             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + &
+                  fy - fz + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
+             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - &
+                  fy + fz + box_c%cc(i_f,   j_f,   k_f+1, ivc)
+             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - &
+                  fy + fz + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
+             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + &
+                  fy + fz + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
+             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + &
+                  fy + fz + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
+          end do
+       end do
+    end do
+#endif
+  contains
 
     ! Take minimum of two slopes if they have the same sign, else take zero
-    ! elemental function limit_slope(ll, rr) result(slope)
-    !   real(dp), intent(in) :: ll, rr
-    !   real(dp)             :: slope
+    elemental function limit_slope(ll, rr) result(slope)
+      real(dp), intent(in) :: ll, rr
+      real(dp)             :: slope
 
-    !   if (ll * rr < 0) then
-    !      slope = 0.0_dp
-    !   else if (ll * ll < rr * rr) then
-    !      slope = ll
-    !   else
-    !      slope = rr
-    !   end if
-    ! end function limit_slope
+      if (ll * rr < 0) then
+         slope = 0.0_dp
+      else if (ll * ll < rr * rr) then
+         slope = ll
+      else
+         slope = rr
+      end if
+    end function limit_slope
 
   end subroutine af_prolong_limit
 
