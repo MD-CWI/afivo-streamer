@@ -1,5 +1,5 @@
 #include "../afivo/src/cpp_macros.h"
-!> Module that provides routines for operations on photons
+!> Module that provides routines for Monte Carlo photoionization
 module m_photoi_mc
   use m_streamer
   use m_lookup_table
@@ -9,30 +9,29 @@ module m_photoi_mc
 
   integer, parameter :: dp = kind(0.0d0)
 
-  type phmc_tbl_t
+  !> Type to quickly look up absorption lengths from a table
+  type, public :: phmc_tbl_t
      type(LT_t) :: tbl         !< The lookup table
      real(dp)   :: frac_in_tbl !< Fraction photons in table
   end type phmc_tbl_t
 
-  ! Whether physical photons are used
+  !> Whether physical photons are used
   logical, public, protected :: phmc_physical_photons = .true.
 
-  ! Whether a constant or adaptive grid spacing is usedn
+  !> Whether a constant or adaptive grid spacing is usedn
   logical, protected :: phmc_const_dx = .true.
 
-  ! Minimum grid spacing for photoionization
+  !> Minimum grid spacing for photoionization
   real(dp), protected :: phmc_min_dx = 1e-9_dp
 
-  ! At which grid spacing photons are absorbed compared to their mean distance
+  !> At which grid spacing photons are absorbed compared to their mean distance
   real(dp), protected :: phmc_absorp_fac = 0.25_dp
 
-  ! Number of photons to use
+  !> Number of photons to use
   integer, protected :: phmc_num_photons = 100*1000
 
-  ! Table for photoionization
+  !> Table for photoionization
   type(phmc_tbl_t), public, protected :: phmc_tbl
-
-  public :: phmc_tbl_t
 
   ! Public methods
   public :: phmc_initialize
@@ -189,7 +188,8 @@ contains
          1e3_dp * sum(dist(1:n-1))/(n-1), " mm"
   end subroutine phmc_get_table_air
 
-  !> Runge Kutta 4 method
+  !> Runge Kutta 4 method to compute dr/dF, where r is the absorption distance
+  !> and F is the cumulative absorption function (between 0 and 1)
   real(dp) function rk4_drdF(r, dF, p_O2)
     real(dp), intent(in) :: r    !> Initial point
     real(dp), intent(in) :: dF   !> grid size
@@ -357,8 +357,8 @@ contains
     integer                     :: IJK, n, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs, my_num_photons
     integer                     :: pho_lvl
-    real(dp)                    :: tmp, dr(NDIM), fac, dist, r(3)
-    real(dp)                    :: sum_production, pi_lengthscale
+    real(dp)                    :: tmp, dr(NDIM), dt_fac, dist, r(3)
+    real(dp)                    :: sum_production_rate, pi_lengthscale
     integer, allocatable        :: photons_per_thread(:), photon_thread(:)
     integer, allocatable        :: ix_offset(:)
     real(dp), allocatable       :: xyz_src(:, :)
@@ -368,6 +368,7 @@ contains
 #endif
     type(PRNG_t)                :: prng
     type(af_loc_t), allocatable :: ph_loc(:)
+    real(dp), parameter         :: small_value = 1e-100_dp
 
     if (NDIM == 3 .and. use_cyl) error stop "phmc_set_src: use_cyl is .true."
 
@@ -378,18 +379,23 @@ contains
     nc = tree%n_cell
 
     ! Compute the sum of photon production
-    call af_tree_sum_cc(tree, i_src, sum_production)
+    call af_tree_sum_cc(tree, i_src, sum_production_rate)
 
+    ! dt_fac is used to convert a discrete number of photons to a number of
+    ! photons per unit time. Depending on the arguments dt and phmc_num_photons,
+    ! 'physical' photons with a weight of 1.0, or super-photons with a weight
+    ! larger (or smaller) than one can be used.
     if (present(dt)) then
-       ! Create "physical" photons when less than phmc_num_photons are produced
-       fac = min(dt, phmc_num_photons / (sum_production + epsilon(1.0_dp)))
+       ! Create "physical" photons when less than phmc_num_photons are produced,
+       ! otherwise create approximately phmc_num_photons
+       dt_fac = min(dt, phmc_num_photons / (sum_production_rate + small_value))
     else
-       ! Create approximately phmc_num_photons
-       fac = phmc_num_photons / (sum_production + epsilon(1.0_dp))
+       ! Create approximately phmc_num_photons by setting dt_fac like this
+       dt_fac = phmc_num_photons / (sum_production_rate + small_value)
     end if
 
     ! Allocate a bit more space because of stochastic production
-    n = nint(1.2_dp * fac * sum_production + 1000)
+    n = nint(1.2_dp * dt_fac * sum_production_rate + 1000)
     allocate(xyz_src(3, n))
     allocate(photon_thread(n))
 
@@ -415,13 +421,13 @@ contains
 #if NDIM == 2
              if (tree%boxes(id)%coord_t == af_cyl) then
                 tmp = af_cyl_radius_cc(tree%boxes(id), i)
-                tmp = fac * 2 * pi * tmp * &
+                tmp = dt_fac * 2 * pi * tmp * &
                      tree%boxes(id)%cc(i, j, i_src) * product(dr)
              else
-                tmp = fac * tree%boxes(id)%cc(i, j, i_src) * product(dr)
+                tmp = dt_fac * tree%boxes(id)%cc(i, j, i_src) * product(dr)
              end if
 #elif NDIM == 3
-             tmp = fac * tree%boxes(id)%cc(i, j, k, i_src) * product(dr)
+             tmp = dt_fac * tree%boxes(id)%cc(i, j, k, i_src) * product(dr)
 #endif
 
              n_create = floor(tmp)
@@ -495,16 +501,18 @@ contains
        !$omp end do
 
        if (ST_use_dielectric) then
+          ! Handle photons that collide with dielectrics separately
           call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
-               2, n_used, phmc_tbl%frac_in_tbl/fac)
+               2, n_used, 1.0_dp/dt_fac)
        end if
     else
        ! Get location of absorbption
        call phmc_do_absorption(xyz_src, xyz_abs, NDIM, n_used, phmc_tbl%tbl, rng)
 
        if (ST_use_dielectric) then
+          ! Handle photons that collide with dielectrics separately
           call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
-               NDIM, n_used, phmc_tbl%frac_in_tbl/fac)
+               NDIM, n_used, 1.0_dp/dt_fac)
        end if
     end if
 
@@ -557,7 +565,7 @@ contains
           dr = tree%boxes(id)%dr
 
           if (use_cyl) then
-             tmp = fac * 2 * pi
+             tmp = dt_fac * 2 * pi
              r(1:2) = af_r_cc(tree%boxes(id), [i, j])
              tree%boxes(id)%cc(i, j, i_photo) = &
                   tree%boxes(id)%cc(i, j, i_photo) + &
@@ -565,7 +573,7 @@ contains
           else
              tree%boxes(id)%cc(IJK, i_photo) = &
                   tree%boxes(id)%cc(IJK, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(fac * product(dr))
+                  phmc_tbl%frac_in_tbl/(dt_fac * product(dr))
           end if
 #elif NDIM == 3
           i = ph_loc(n)%ix(1)
@@ -575,7 +583,7 @@ contains
 
           tree%boxes(id)%cc(IJK, i_photo) = &
                tree%boxes(id)%cc(IJK, i_photo) + &
-               phmc_tbl%frac_in_tbl/(fac * product(dr))
+               phmc_tbl%frac_in_tbl/(dt_fac * product(dr))
 #endif
        end if
     end do
