@@ -9,6 +9,17 @@ module m_dielectric
   implicit none
   private
 
+  type surface_charge_output_t
+#if NDIM == 2
+  real(dp), allocatable :: charge(:)
+  real(dp), allocatable :: photon_flux(:)
+#elif NDIM == 3
+  real(dp), allocatable :: charge(:,:)
+  real(dp), allocatable :: photon_flux(:, :)
+#endif
+  real(dp)              :: location(NDIM)
+  end type surface_charge_output_t
+  
   type surface_data_t
      logical :: in_use = .false.
      integer :: id_gas
@@ -45,6 +56,9 @@ module m_dielectric
 
   !> Assume photons are not absorbed for photoemission computation
   logical :: photons_no_absorption = .true.
+  
+  !> Use to write surface_charge_output
+  type(surface_charge_output_t), allocatable :: surface_charge_output(:)
 
   public :: dielectric_initialize
   public :: dielectric_allocate
@@ -57,6 +71,7 @@ module m_dielectric
   public :: dielectric_combine_substeps
   public :: dielectric_photon_absorption
   public :: dielectric_reset_photons
+  public :: dielectric_surcharge_output
 
 contains
 
@@ -752,5 +767,60 @@ contains
        end if
     end do
   end subroutine dielectric_reset_photons
+  
+ subroutine dielectric_surcharge_output(tree, filename)
+ type(af_t), intent(in)                 :: tree     !< Tree to write out
+ character(len=*), intent(in)           :: filename !< Filename for the output
+ type(surface_charge_output_t), allocatable :: surface_charge_output(:)
+ type(surface_charge_output_t), allocatable :: tmp(:)
+ integer                                    :: num_surface_output,i,n,nc
+ integer                                    :: num_file =102
+ character(len=400)                         :: fname
+ 
+ nc = tree%n_cell
+ allocate(tmp(size(surface_list)))
+ num_surface_output=0
+ 
+ do i = 1, size(surface_list)
+   if (surface_list(i)%in_use) then
+     if (tree%boxes(surface_list(i)%id_gas)%children(1) == af_no_box) then
+#if NDIM == 2    
+       if (surface_list(i)%direction==1 .or. surface_list(i)%direction==3 ) then
+         tmp(i)%location=tree%boxes(surface_list(i)%id_diel)%r_min
+       else
+         tmp(i)%location=tree%boxes(surface_list(i)%id_gas)%r_min
+       end if
+         tmp(i)%charge = surface_list(i)%charge(:,1)
+         tmp(i)%photon_flux = surface_list(i)%photon_flux
+         num_surface_output = num_surface_output + 1
+#elif NDIM == 3
+    error stop
+#endif
+     end if
+   end if
+ end do   
+ 
+ print *,"num_surface_output",num_surface_output
+ allocate(surface_charge_output(num_surface_output))
+ surface_charge_output = tmp(1:num_surface_output)
+ 
+ ! rerange surface_charge_output list with some function in external lib
+ 
+ fname = trim(filename) // "_surface_charge.txt"
+ open(num_file, file=trim(fname),action="write")
+ do n = 1, num_surface_output
+    if (.not. allocated(surface_charge_output(n)%charge)) then
+        allocate(surface_charge_output(n)%charge(nc))
+        allocate(surface_charge_output(n)%photon_flux(nc))
+    end if
+      write(num_file,*) surface_charge_output(n)%location
+      write(num_file,*) surface_charge_output(n)%charge
+      write(num_file,*) surface_charge_output(n)%photon_flux
+ end do 
+ close(num_file)
+ end subroutine dielectric_surcharge_output
 
 end module m_dielectric
+
+
+ 

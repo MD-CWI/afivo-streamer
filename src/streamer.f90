@@ -38,6 +38,7 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+  character(len=string_len) :: fname_sur
 
   call CFG_update_from_arguments(cfg)
 
@@ -178,6 +179,11 @@ program streamer
 
      if (write_out) then
         call output_write(tree, output_cnt, wc_time, write_sim_data)
+        ! this need to put into m_output
+        if (ST_use_dielectric) then
+        write(fname_sur, "(A,I6.6)") trim(output_name) // "_", output_cnt
+        call dielectric_surcharge_output(tree, fname_sur)
+        end if
      end if
 
      if (advance_max_dt < dt_min) error stop "dt too small"
