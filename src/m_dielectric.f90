@@ -780,19 +780,19 @@ contains
  nc = tree%n_cell
  allocate(tmp(size(surface_list)))
  num_surface_output=0
- 
  do i = 1, size(surface_list)
    if (surface_list(i)%in_use) then
      if (tree%boxes(surface_list(i)%id_gas)%children(1) == af_no_box) then
+       num_surface_output = num_surface_output + 1
 #if NDIM == 2    
-       if (surface_list(i)%direction==1 .or. surface_list(i)%direction==3 ) then
-         tmp(i)%location=tree%boxes(surface_list(i)%id_diel)%r_min
+       if (surface_list(i)%direction== af_neighb_highx &
+       .or. surface_list(i)%direction== af_neighb_highy ) then
+         tmp(num_surface_output)%location=tree%boxes(surface_list(i)%id_diel)%r_min
        else
-         tmp(i)%location=tree%boxes(surface_list(i)%id_gas)%r_min
+         tmp(num_surface_output)%location=tree%boxes(surface_list(i)%id_gas)%r_min
        end if
-         tmp(i)%charge = surface_list(i)%charge(:,1)
-         tmp(i)%photon_flux = surface_list(i)%photon_flux
-         num_surface_output = num_surface_output + 1
+         tmp(num_surface_output)%charge = surface_list(i)%charge(:,1)
+         tmp(num_surface_output)%photon_flux = surface_list(i)%photon_flux
 #elif NDIM == 3
     error stop
 #endif
@@ -800,7 +800,6 @@ contains
    end if
  end do   
  
- print *,"num_surface_output",num_surface_output
  allocate(surface_charge_output(num_surface_output))
  surface_charge_output = tmp(1:num_surface_output)
  
