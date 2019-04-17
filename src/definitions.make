@@ -2,7 +2,7 @@ OBJS := m_units_constants.o m_config.o m_lookup_table.o m_random.o		\
 	m_photoi_mc.o m_streamer.o m_geometry.o m_transport_data.o m_field.o	\
 	m_init_cond.o m_photoi_helmh.o m_photoi.o m_chemistry.o m_types.o	\
 	m_gas.o m_refine.o m_fluid_lfa.o m_dt.o m_advance.o m_advance_base.o	\
-	m_user_methods.o m_table_data.o m_output.o m_dielectric.o
+	m_user_methods.o m_table_data.o m_output.o m_dielectric.o m_mrgrnk.o
 
 # Hide some incorrect warnings
 m_photoi_helmh.o: FFLAGS += -Wno-unused-function
@@ -28,6 +28,7 @@ m_chemistry.o: m_types.mod
 m_chemistry.o: m_units_constants.mod
 m_dielectric.o: m_advance_base.mod
 m_dielectric.o: m_config.mod
+m_dielectric.o: m_mrgrnk.mod
 m_dielectric.o: m_streamer.mod
 m_dielectric.o: m_units_constants.mod
 m_dt.o: m_config.mod

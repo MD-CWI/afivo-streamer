@@ -208,7 +208,7 @@ contains
 
     ! this need to put into m_output
     if (ST_use_dielectric) then
-       write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
+       write(fname, "(A,I6.6)") trim(output_name) // "_surface_", output_cnt
        call dielectric_surcharge_output(tree, fname)
     end if
 
