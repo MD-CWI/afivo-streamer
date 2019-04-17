@@ -475,7 +475,6 @@ contains
 #endif
     integer                             :: nc
     real(dp)                            :: fac, dr
-    real(dp), parameter                 :: gamma_se_ion = 0.1_dp
 
     nc  = box%n_cell
     fac = dt * UC_elem_charge
@@ -552,7 +551,6 @@ contains
     integer, intent(in)                 :: s_out !< Output state
     integer                             :: nc
     real(dp)                            :: fac, dr
-    real(dp), parameter                 :: gamma_se_ph = 0.1_dp
 
     nc  = box%n_cell
     dr  = box%dr(af_neighb_dim(surface%direction))
