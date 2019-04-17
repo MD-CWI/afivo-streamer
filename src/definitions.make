@@ -62,6 +62,7 @@ m_init_cond.o: m_types.mod
 m_init_cond.o: m_user_methods.mod
 m_output.o: m_advance.mod
 m_output.o: m_config.mod
+m_output.o: m_dielectric.mod
 m_output.o: m_dt.mod
 m_output.o: m_field.mod
 m_output.o: m_photoi.mod

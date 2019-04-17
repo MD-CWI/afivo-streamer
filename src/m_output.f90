@@ -147,6 +147,7 @@ contains
     use m_photoi
     use m_field
     use m_user_methods
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
@@ -203,6 +204,12 @@ contains
             r_min = lineout_rmin(1:NDIM) * ST_domain_len + ST_domain_origin, &
             r_max = lineout_rmax(1:NDIM) * ST_domain_len + ST_domain_origin, &
             n_points=lineout_npoints)
+    end if
+
+    ! this need to put into m_output
+    if (ST_use_dielectric) then
+       write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
+       call dielectric_surcharge_output(tree, fname)
     end if
 
   end subroutine output_write
