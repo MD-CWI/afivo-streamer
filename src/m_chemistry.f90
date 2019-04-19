@@ -372,7 +372,7 @@ contains
     end do
 
     ! Close the file (so that we can re-open it for reading data)
-    close(my_unit)
+998 close(my_unit)
 
     ! Now parse the reactions
     do n = 1, n_reactions
@@ -407,7 +407,7 @@ contains
     end do
 
     if (n_reactions > 0) read_success = .true.
-998 return
+    return
 
 999 error stop "read_reactions: no closing dashes for reaction list"
   end subroutine read_reactions
