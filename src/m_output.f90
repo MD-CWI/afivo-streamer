@@ -1,9 +1,11 @@
+#include "../afivo/src/cpp_macros.h"
 !> Module with methods and parameters related to writing output
 module m_output
   use m_af_all
   use m_types
   use m_advance, only: advance_max_dt
   use m_streamer
+  use m_lookup_table
 
   implicit none
   private
@@ -65,6 +67,12 @@ module m_output
   ! Print status every this many seconds
   real(dp), public, protected :: output_status_delay = 60.0_dp
 
+  ! Show the electron energy in eV from the local field approximation
+  logical :: show_electron_energy = .false.
+
+  ! Table with energy in eV vs electric field
+  type(LT_t) :: eV_vs_fld
+
   ! Public methods
   public :: output_initialize
   public :: output_write
@@ -75,10 +83,13 @@ contains
 
   subroutine output_initialize(tree, cfg)
     use m_config
+    use m_table_data
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     character(len=name_len)    :: varname
+    character(len=string_len)  :: td_file
     real(dp)                   :: tmp
+    real(dp), allocatable      :: x_data(:), y_data(:)
 
     call CFG_add_get(cfg, "output%name", output_name, &
          "Name for the output files (e.g. output/my_sim)")
@@ -141,6 +152,19 @@ contains
     call CFG_add_get(cfg, "plane%rmax", plane_rmax(1:NDIM), &
          "Relative position of plane maximum coordinate")
 
+    call CFG_add_get(cfg, "output%electron_energy", show_electron_energy, &
+         "Show the electron energy in eV from the local field approximation")
+
+    if (show_electron_energy) then
+       ! Create a lookup table for the model coefficients
+       eV_vs_fld = LT_create(table_min_townsend, table_max_townsend, &
+            table_size, 1)
+       call CFG_get(cfg, "input_data%file", td_file)
+
+       ! Read table with E/N vs electron energy (eV)
+       call table_from_file(td_file, "Mean energy (eV)", x_data, y_data)
+       call LT_set_col(eV_vs_fld, 1, x_data, y_data)
+    end if
   end subroutine output_initialize
 
   subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
@@ -172,7 +196,12 @@ contains
        end do
 
        write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
-       call af_write_silo(tree, fname, output_cnt, global_time)
+       if (show_electron_energy) then
+          call af_write_silo(tree, fname, output_cnt, global_time, &
+               add_vars=add_variables, add_names=["eV"])
+       else
+          call af_write_silo(tree, fname, output_cnt, global_time)
+       end if
     end if
 
     if (datfile_write .and. &
@@ -213,6 +242,27 @@ contains
     end if
 
   end subroutine output_write
+
+  subroutine add_variables(box, new_vars, n_var)
+    use m_gas
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: n_var
+    real(dp)                :: new_vars(DTIMES(0:box%n_cell+1), n_var)
+    real(dp)                :: tmp(DTIMES(0:box%n_cell+1))
+
+    if (n_var > 0) then
+       ! Add electron energy in eV
+
+       if (.not. gas_constant_density) then
+          tmp = box%cc(DTIMES(:), i_gas_dens)
+       else
+          tmp = gas_number_density
+       end if
+
+       new_vars(DTIMES(:), 1) = LT_get_col(eV_vs_fld, 1, &
+            SI_to_Townsend * box%cc(DTIMES(:), i_electric_fld)/tmp)
+    end if
+  end subroutine add_variables
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
     type(af_t), intent(in)       :: tree
