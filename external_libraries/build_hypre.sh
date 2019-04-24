@@ -18,6 +18,13 @@ fi
 # Configure
 cd ${hypre_dirname}/src
 
+if [[ $(hostname) == *"lisa.surfsara.nl" ]]; then
+    export CC=/usr/bin/gcc
+    export CXX=/usr/bin/g++
+    export FC=/usr/bin/gfortran
+fi
+
+
 ./configure \
     --with-openmp\
     --without-MPI\
