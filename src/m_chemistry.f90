@@ -72,7 +72,7 @@ module m_chemistry
   !> Charge of the species
   integer, public, protected                 :: species_charge(max_num_species) = 0
 
-  !> Index of the species (in the tree)
+  !> species_itree(n) holds the index of species n in the tree (cell-centered variables)
   integer, public, protected                 :: species_itree(max_num_species)
 
   !> List of reactions
