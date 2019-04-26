@@ -485,6 +485,8 @@ contains
 
        ix = species_index(component)
        if (ix == -1) then
+          if (n_species >= max_num_species) &
+               error stop "Too many species, increase max_num_species"
           n_species        = n_species + 1
           ix               = n_species
           species_list(ix) = trim(component)
