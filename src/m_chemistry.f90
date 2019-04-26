@@ -52,7 +52,7 @@ module m_chemistry
   integer, parameter :: max_num_species      = 100
 
   !> Maximum number of reactions
-  integer, parameter :: max_num_reactions    = 100
+  integer, parameter :: max_num_reactions    = 500
 
   !> Number of species present
   integer, public, protected :: n_species = 0
@@ -364,6 +364,9 @@ contains
           print *, trim(line)
           error stop "Invalid chemistry syntax"
        end if
+
+       if (n_reactions >= max_num_reactions) &
+            error stop "Too many reactions, increase max_num_reactions"
 
        n_reactions             = n_reactions + 1
        reaction(n_reactions)   = line(i0(1):i1(1))
