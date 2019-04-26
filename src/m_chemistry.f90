@@ -27,11 +27,11 @@ module m_chemistry
   end type reaction_t
 
   !> Compact reaction type, for efficiency
-  type fast_react_t
+  type tiny_react_t
      integer, allocatable  :: ix_in(:)
      integer, allocatable  :: ix_out(:)
      integer, allocatable  :: multiplicity_out(:)
-  end type fast_react_t
+  end type tiny_react_t
 
   !> Indicates a reaction with a field-dependent reaction rate
   integer, parameter :: rate_tabulated_field = 1
@@ -78,8 +78,8 @@ module m_chemistry
   !> List of reactions
   type(reaction_t), public, protected        :: reactions(max_num_reactions)
 
-  !> List of reactions (copy for efficiency)
-  type(fast_react_t)                         :: fast_react(max_num_reactions)
+  !> A copy of the list of reactions for performance reasons
+  type(tiny_react_t)                         :: tiny_react(max_num_reactions)
 
   !> Lookup table with reaction rates
   type(LT_t)                                 :: chemtbl
@@ -191,9 +191,9 @@ contains
     print *, "--- List of reactions ---"
     do n = 1, n_reactions
        write(*, "(I4,A)") n, ": " // reactions(n)%description
-       fast_react(n)%ix_in            = reactions(n)%ix_in
-       fast_react(n)%ix_out           = reactions(n)%ix_out
-       fast_react(n)%multiplicity_out = reactions(n)%multiplicity_out
+       tiny_react(n)%ix_in            = reactions(n)%ix_in
+       tiny_react(n)%ix_out           = reactions(n)%ix_out
+       tiny_react(n)%multiplicity_out = reactions(n)%multiplicity_out
     end do
     print *, "-------------------------"
     print *, ""
@@ -297,19 +297,19 @@ contains
     do n = 1, n_reactions
        ! Determine production rate of 'full' reaction
        prate(:, n) = rates(:, n) * &
-            product(dens(:, fast_react(n)%ix_in), dim=2)
+            product(dens(:, tiny_react(n)%ix_in), dim=2)
 
        ! Input species are removed
-       do i = 1, size(fast_react(n)%ix_in)
-          ix = fast_react(n)%ix_in(i)
+       do i = 1, size(tiny_react(n)%ix_in)
+          ix = tiny_react(n)%ix_in(i)
           derivs(:, ix) = derivs(:, ix) - prate(:, n)
        end do
 
        ! Output species are created
-       do i = 1, size(fast_react(n)%ix_out)
-          ix = fast_react(n)%ix_out(i)
+       do i = 1, size(tiny_react(n)%ix_out)
+          ix = tiny_react(n)%ix_out(i)
           derivs(:, ix) = derivs(:, ix) + prate(:, n) * &
-               fast_react(n)%multiplicity_out(i)
+               tiny_react(n)%multiplicity_out(i)
        end do
     end do
   end subroutine get_derivatives
