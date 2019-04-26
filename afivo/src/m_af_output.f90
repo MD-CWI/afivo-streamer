@@ -8,7 +8,7 @@ module m_af_output
   implicit none
   private
 
-  integer, parameter :: af_dat_file_version = 1
+  integer, parameter :: af_dat_file_version = 2
 
   abstract interface
      subroutine subr_add_vars(box, new_vars, n_var)
@@ -95,6 +95,9 @@ contains
     write(my_unit) tree%cc_write_output
     write(my_unit) tree%cc_write_binary
     write(my_unit) tree%fc_write_binary
+
+    write(my_unit) tree%n_removed_ids
+    write(my_unit) tree%removed_ids(1:tree%n_removed_ids)
 
     ! Skip methods (these have to be set again)
 
@@ -192,6 +195,10 @@ contains
     read(my_unit) tree%cc_write_binary
     read(my_unit) tree%fc_write_binary
 
+    allocate(tree%removed_ids(tree%box_limit))
+    read(my_unit) tree%n_removed_ids
+    read(my_unit) tree%removed_ids(1:tree%n_removed_ids)
+
     do lvl = 1, tree%highest_lvl
        read(my_unit) n
        allocate(tree%lvls(lvl)%ids(n))
@@ -212,7 +219,7 @@ contains
        allocate(tree%lvls(lvl)%parents(0))
     end do
 
-    allocate(tree%boxes(tree%highest_id))
+    allocate(tree%boxes(tree%box_limit))
 
     do id = 1, tree%highest_id
        read(my_unit) tree%boxes(id)%in_use  !< is the box in use?
