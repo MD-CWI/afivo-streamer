@@ -47,7 +47,7 @@ program streamer
 
   call initialize_modules(cfg, tree, mg)
 
-  call CFG_write(cfg, trim(output_name) // "_out.cfg")
+  call CFG_write(cfg, trim(output_name) // "_out.cfg", custom_first=.true.)
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
