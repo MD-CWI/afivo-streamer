@@ -5,6 +5,7 @@
 !> @todo Use special prolongation for multigrid when there are surface charges
 module m_dielectric
   use m_af_all
+  use m_streamer
 
   implicit none
   private
@@ -757,18 +758,22 @@ contains
     type(af_t), intent(in)       :: tree     !< Tree to write out
     character(len=*), intent(in) :: filename !< Filename for the output
     integer                      :: n_surf, i, n, nc
-    integer                      :: num_file, dim, id_gas, ix
+    integer                      :: num_file, dim, id_gas, ix, dir
     real(dp)                     :: r_min, dr
 
     integer, allocatable :: sort_ixs(:)
     integer, allocatable :: output_ixs(:)
     real(dp), allocatable :: output_rmin(:)
     real(dp), allocatable :: output_dr(:)
-
+    real(dp), allocatable :: surface_E_x(:, :)
+    real(dp), allocatable :: surface_E_y(:, :)
+    
     nc = tree%n_cell
     allocate(output_ixs(num_surfaces))
     allocate(output_rmin(num_surfaces))
     allocate(output_dr(num_surfaces))
+    allocate(surface_E_x(num_surfaces, nc))
+    allocate(surface_E_y(num_surfaces, nc))
 
     n_surf=0
     do i = 1, size(surface_list)
@@ -776,7 +781,8 @@ contains
           id_gas = surface_list(i)%id_gas
           if (.not. af_has_children(tree%boxes(id_gas))) then
              n_surf = n_surf + 1
-             dim = af_neighb_dim(surface_list(i)%direction)
+             dir = surface_list(i)%direction
+             dim = af_neighb_dim(dir) 
              output_ixs(n_surf) = i
 #if NDIM == 2
              if (dim == 1) then
@@ -786,6 +792,21 @@ contains
                 output_dr(n_surf)   = tree%boxes(id_gas)%dr(1)
                 output_rmin(n_surf) = tree%boxes(id_gas)%r_min(1)
              end if
+             
+             select case (dir)
+             case (af_neighb_lowx)
+             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(1, 1:nc, 1, electric_fld)
+             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(1, 1:nc, 2, electric_fld)
+             case (af_neighb_highx)
+             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(nc+1, 1:nc, 1, electric_fld)
+             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(nc, 1:nc, 2, electric_fld)
+             case (af_neighb_lowy)
+             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, 1, 1, electric_fld)
+             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, 1, 2, electric_fld)
+             case (af_neighb_highy)
+             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, nc, 1, electric_fld)
+             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, nc+1, 2, electric_fld)
+             end select
 #elif NDIM == 3
              error stop
 #endif
@@ -798,7 +819,7 @@ contains
     call mrgrnk(output_rmin(1:n_surf), sort_ixs)
 
     open(newunit=num_file, file=trim(filename) // ".txt", action="write")
-    write(num_file, *) "# coord charge photon_flux"
+    write(num_file, *) "coord charge photon_flux E_x E_y"
 
     do n = 1, n_surf
        ix = output_ixs(sort_ixs(n))
@@ -807,7 +828,8 @@ contains
        do i = 1, nc
           write(num_file, *) r_min + (i-0.5_dp) * dr, &
                surface_list(ix)%charge(i, 1), &
-               surface_list(ix)%photon_flux(i)
+               surface_list(ix)%photon_flux(i), &
+               surface_E_x(sort_ixs(n), i), surface_E_y(sort_ixs(n), i)
        end do
     end do
     close(num_file)
