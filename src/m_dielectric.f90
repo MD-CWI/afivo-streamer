@@ -6,6 +6,7 @@
 module m_dielectric
   use m_af_all
   use m_streamer
+  use m_types
 
   implicit none
   private
@@ -753,13 +754,18 @@ contains
     end do
   end subroutine dielectric_reset_photons
 
-  subroutine dielectric_surcharge_output(tree, filename)
+  subroutine dielectric_surcharge_output(tree, output_name, output_cnt, wc_time)
     use m_mrgrnk
+    use m_init_cond
     type(af_t), intent(in)       :: tree     !< Tree to write out
-    character(len=*), intent(in) :: filename !< Filename for the output
-    integer                      :: n_surf, i, n, nc
+    character(len=*), intent(in) :: output_name !< Filename for the output
+    integer, intent(in)          :: output_cnt
+    real(dp), intent(in)         :: wc_time
+    integer                      :: n_surf, i, n, nc, j
     integer                      :: num_file, dim, id_gas, ix, dir
     real(dp)                     :: r_min, dr
+    integer                      :: loc_ix(1)
+    character(len=string_len)    :: fname
 
     integer, allocatable :: sort_ixs(:)
     integer, allocatable :: output_ixs(:)
@@ -767,6 +773,7 @@ contains
     real(dp), allocatable :: output_dr(:)
     real(dp), allocatable :: surface_E_x(:, :)
     real(dp), allocatable :: surface_E_y(:, :)
+    real(dp), allocatable :: sort_loc(:), sort_E_y(:), sort_E_x(:) 
     
     nc = tree%n_cell
     allocate(output_ixs(num_surfaces))
@@ -816,16 +823,28 @@ contains
 
     ! rerange surface_charge_output list with some function in external lib
     allocate(sort_ixs(n_surf))
+    ! store the sorted location
+    allocate(sort_loc(n_surf*nc))
+    ! store the E_y according to sorted location
+    allocate(sort_E_y(n_surf*nc))
+    ! store the E_x according to sorted location
+    allocate(sort_E_x(n_surf*nc))
     call mrgrnk(output_rmin(1:n_surf), sort_ixs)
 
-    open(newunit=num_file, file=trim(filename) // ".txt", action="write")
+    write(fname, "(A,I6.6)") trim(output_name) // "_surface_", output_cnt
+    open(newunit=num_file, file=trim(fname) // ".txt", action="write")
     write(num_file, *) "coord charge photon_flux E_x E_y"
 
+    j = 1
     do n = 1, n_surf
        ix = output_ixs(sort_ixs(n))
        r_min = output_rmin(sort_ixs(n))
        dr = output_dr(sort_ixs(n))
        do i = 1, nc
+       sort_loc(j) = r_min + (i-0.5_dp) * dr
+       sort_E_y(j) = surface_E_y(sort_ixs(n), i)
+       sort_E_x(j) = surface_E_x(sort_ixs(n), i)
+       j = j + 1
           write(num_file, *) r_min + (i-0.5_dp) * dr, &
                surface_list(ix)%charge(i, 1), &
                surface_list(ix)%photon_flux(i), &
@@ -833,6 +852,33 @@ contains
        end do
     end do
     close(num_file)
+    
+    !output the loc of max surface_E_y below the seed
+    !we could use the max Ey to present to head of positive streamer
+    loc_ix = maxloc(abs(sort_E_y), mask=sort_loc<init_conds%seed_r1(2, 1))
+    write(fname, "(A,I6.6)") trim(output_name) // "_surface_down_maxEy.txt"
+    if (output_cnt == 1) then
+    open(newunit=num_file, file=fname, action="write")
+    write(num_file, *) "output_cnt, global_time, loc, E_y"
+    close(num_file)
+    end if
+    open(newunit=num_file, file=fname, action="write", position="append")
+    write(num_file, *) output_cnt, global_time, sort_loc(loc_ix), sort_E_y(loc_ix)
+    close(num_file)
+    
+!     !output the loc of max surface_E_y above the seed
+!     !todo Ey couldn't find the head of negetive streamer, we may could use the max gradient of ne
+!     loc_ix = maxloc(abs(sort_E_y), mask=sort_loc>init_conds%seed_r0(2, 1))
+!     write(fname, "(A,I6.6)") trim(output_name) // "_surface_up_maxEy.txt"
+!     if (output_cnt == 1) then
+!     open(newunit=num_file, file=fname, action="write")
+!     write(num_file, *) "output_cnt, global_time, loc, E_y"
+!     close(num_file)
+!     end if
+!     open(newunit=num_file, file=fname, action="write", position="append")
+!     write(num_file, *) output_cnt, global_time, sort_loc(loc_ix), sort_E_y(loc_ix)
+!     close(num_file)
+    
   end subroutine dielectric_surcharge_output
 
 end module m_dielectric
