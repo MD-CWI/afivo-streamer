@@ -53,7 +53,7 @@ module m_output
   logical, public, protected :: plane_write = .false.
 
   ! Which variable to include in plane
-  integer, public, protected :: plane_ivar
+  integer, allocatable, public, protected :: plane_ivar(:)
 
   ! Use this many points for plane data
   integer, public, protected :: plane_npixels(2) = [64, 64]
@@ -86,7 +86,8 @@ contains
     use m_table_data
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    character(len=name_len)    :: varname
+    integer                    :: varname_size, i
+    character(len=name_len),allocatable    :: varname(:)
     character(len=string_len)  :: td_file
     real(dp)                   :: tmp
     real(dp), allocatable      :: x_data(:), y_data(:)
@@ -141,10 +142,16 @@ contains
 
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
-    varname = "e"
-    call CFG_add_get(cfg, "plane%varname", varname, &
-         "Names of variable to write in a plane")
-    plane_ivar = af_find_cc_variable(tree, trim(varname))
+    call CFG_add(cfg, "plane%varname", ["e"], &
+       "Names of variable to write in a plane", dynamic_size=.true.)
+    call CFG_get_size(cfg, "plane%varname", varname_size)
+    allocate(varname(varname_size))
+    call CFG_get(cfg, "plane%varname", varname)
+    print *,"cc_variables include in plane output:", varname
+    allocate(plane_ivar(varname_size))
+    do i = 1, varname_size
+       plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
+    end do
     call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
          "Use this many pixels for plane data")
     call CFG_add_get(cfg, "plane%rmin", plane_rmin(1:NDIM), &
@@ -219,7 +226,7 @@ contains
     if (plane_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_plane_", output_cnt
-       call af_write_plane(tree, fname, [plane_ivar], &
+       call af_write_plane(tree, fname, plane_ivar, &
             plane_rmin * ST_domain_len + ST_domain_origin, &
             plane_rmax * ST_domain_len + ST_domain_origin, &
             plane_npixels)
@@ -237,8 +244,7 @@ contains
 
     ! this need to put into m_output
     if (ST_use_dielectric) then
-       write(fname, "(A,I6.6)") trim(output_name) // "_surface_", output_cnt
-       call dielectric_surcharge_output(tree, fname)
+       call dielectric_surcharge_output(tree, output_name, output_cnt, wc_time)
     end if
 
   end subroutine output_write
