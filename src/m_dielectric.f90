@@ -301,7 +301,7 @@ contains
           if (ix > 0) then
              if (id == surface_list(ix)%id_gas) then
                 nb_id = surface_list(ix)%id_diel
-                ref_flags([id, nb_id]) = maxval(ref_flags([id, nb_id]))
+                ref_flags([id, nb_id]) = maxval([ref_flags([id, nb_id]),af_keep_ref])
              end if
           end if
        end do
