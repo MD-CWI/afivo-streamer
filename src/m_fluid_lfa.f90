@@ -505,7 +505,7 @@ contains
             box%fc(i, j, k+1, 3, flux_elec))
 #endif
 
-       if (photoi_enabled) then
+       if (photoi_enabled .and. photoi_enabled_ingas) then
           derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
                box%cc(IJK, i_photo)
           derivs(ix, ix_1pos_ion) = derivs(ix, ix_1pos_ion) + &

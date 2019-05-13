@@ -13,6 +13,9 @@ module m_photoi
   ! Whether photoionization is enabled
   logical, protected, public :: photoi_enabled = .false.
 
+  ! Whether photoionization is enabled in gas
+  logical, protected, public :: photoi_enabled_ingas = .true.
+
   ! Which photoionization method to use (helmholtz, montecarlo)
   character(len=20) :: photoi_method = 'helmholtz'
 
@@ -54,6 +57,8 @@ contains
 
     call CFG_add_get(cfg, "photoi%enabled", photoi_enabled, &
          "Whether photoionization is enabled")
+    call CFG_add_get(cfg, "photoi%enabled_ingas", photoi_enabled_ingas, &
+         "Whether photoionization is enabled in gas")
     call CFG_add_get(cfg, "photoi%per_steps", photoi_per_steps, &
          "Update photoionization every N time step")
     call CFG_add_get(cfg, "photoi%method", photoi_method, &
