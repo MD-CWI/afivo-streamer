@@ -39,12 +39,15 @@ module m_dielectric
   ! Maximum travel distance for testing boundary intersection
   real(dp), protected :: photon_step_length = 1.0e-3_dp
 
-  !> Secondary electron emission coefficient for photons
+  !> Secondary electron emission coefficient for positive ion impact
   real(dp), protected :: gamma_se_ion = 0.1_dp
 
-  !> Secondary electron emission coefficient for positive ion impact
-  real(dp), protected :: gamma_se_ph = 0.1_dp
-
+  !> Secondary electron emission coefficient for high energy photons
+  real(dp), protected :: gamma_se_ph_highenergy = 0.1_dp
+  
+  !> Secondary electron emission coefficient for low energy photons
+  real(dp), protected :: gamma_se_ph_lowenergy = 0.1_dp
+  
   !> Assume photons are not absorbed for photoemission computation
   logical :: photons_no_absorption = .true.
 
@@ -71,9 +74,12 @@ contains
     call CFG_add_get(cfg, "dielectric%photon_step_length", &
          photon_step_length, &
          "Maximum travel distance for testing boundary intersection")
-    call CFG_add_get(cfg, "dielectric%gamma_se_ph", &
-         gamma_se_ph, &
-         "Secondary electron emission coefficient for photons")
+    call CFG_add_get(cfg, "dielectric%gamma_se_ph_highenergy", &
+         gamma_se_ph_highenergy, &
+         "Secondary electron emission coefficient for high energy photons")
+    call CFG_add_get(cfg, "dielectric%gamma_se_ph_lowenergy", &
+         gamma_se_ph_lowenergy, &
+         "Secondary electron emission coefficient for low energy photons")
     call CFG_add_get(cfg, "dielectric%gamma_se_ion", &
          gamma_se_ion, &
          "Secondary electron emission coefficient for positive ion impact")
@@ -538,11 +544,10 @@ contains
     integer, intent(in)                 :: s_in  !< Input state
     integer, intent(in)                 :: s_out !< Output state
     integer                             :: nc
-    real(dp)                            :: fac, dr
+    real(dp)                            :: dr
 
     nc  = box%n_cell
     dr  = box%dr(af_neighb_dim(surface%direction))
-    fac = gamma_se_ph * dt
 
     select case (surface%direction)
 #if NDIM == 2
@@ -550,33 +555,33 @@ contains
        where (box%fc(1, 1:nc, 1, electric_fld) < 0.0_dp)
           box%cc(1, 1:nc, i_electron+s_out) = &
                box%cc(1, 1:nc, i_electron+s_out) + &
-               surface%photon_flux * fac / dr
+               surface%photon_flux * dt / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photon_flux * fac * UC_elem_charge
+               surface%photon_flux * dt * UC_elem_charge
        end where
     case (af_neighb_highx)
        where (box%fc(nc, 1:nc, 1, electric_fld) > 0.0_dp)
           box%cc(nc, 1:nc, i_electron+s_out) = &
                box%cc(nc, 1:nc, i_electron+s_out) + &
-               surface%photon_flux * fac / dr
+               surface%photon_flux * dt / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photon_flux * fac * UC_elem_charge
+               surface%photon_flux * dt * UC_elem_charge
        end where
     case (af_neighb_lowy)
        where (box%fc(1:nc, 1, 2, electric_fld) < 0.0_dp)
           box%cc(1:nc, 1, i_electron+s_out) = &
                box%cc(1:nc, 1, i_electron+s_out) + &
-               surface%photon_flux * fac / dr
+               surface%photon_flux * dt / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photon_flux * fac * UC_elem_charge
+               surface%photon_flux * dt * UC_elem_charge
        end where
     case (af_neighb_highy)
        where (box%fc(1:nc, nc, 2, electric_fld) > 0.0_dp)
           box%cc(1:nc, nc, i_electron+s_out) = &
                box%cc(1:nc, nc, i_electron+s_out) + &
-               surface%photon_flux * fac / dr
+               surface%photon_flux * dt / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
-               surface%photon_flux * fac * UC_elem_charge
+               surface%photon_flux * dt * UC_elem_charge
        end where
 #elif NDIM == 3
     case default
@@ -698,11 +703,12 @@ contains
                 end if
              end do
 
-             call add_to_surface_photons(tree, xyz_nogas, photon_weight)
-
              if (i <= n_steps) then
                 ! The photon was absorbed within its normal travel path
                 xyz_end(1:n_dim, n) = -1e50_dp
+                call add_to_surface_photons(tree, xyz_nogas, photon_weight, gamma_se_ph_highenergy)
+             else
+                call add_to_surface_photons(tree, xyz_nogas, photon_weight, gamma_se_ph_lowenergy)
              end if
              exit
           end if
@@ -710,10 +716,11 @@ contains
     end do
   end subroutine dielectric_photon_absorption
 
-  subroutine add_to_surface_photons(tree, xyz, w)
+  subroutine add_to_surface_photons(tree, xyz, w, frac)
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: xyz(NDIM)
     real(dp), intent(in)   :: w
+    real(dp), intent(in)   :: frac
     type(af_loc_t)         :: loc
     integer                :: ix, id_gas, normal_dim, i
     real(dp)               :: area
@@ -738,7 +745,7 @@ contains
     end if
 
     surface_list(ix)%photon_flux(i) = &
-         surface_list(ix)%photon_flux(i) + w/area
+         surface_list(ix)%photon_flux(i) + frac * w / area
 #elif NDIM == 3
     error stop
 #endif
