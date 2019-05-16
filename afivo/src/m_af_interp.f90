@@ -11,6 +11,7 @@ module m_af_interp
   public :: af_interp0
   public :: af_interp1
   public :: af_interp0_to_grid
+  public :: af_get_fc
 
 contains
 
@@ -101,6 +102,43 @@ contains
        end do
     end if
   end function af_interp1
+
+  !> get fc value at r
+  function af_get_fc(tree, r, ivs, success, id_guess) result(vals)
+    use m_af_utils, only: af_get_id_at
+    type(af_t), intent(in)        :: tree     !< Parent box
+    real(dp), intent(in)          :: r(NDIM)  !< Where to interpolate
+    integer, intent(in)           :: ivs(:)   !< Variables to interpolate
+    logical, intent(out)          :: success  !< Whether the interpolation worked
+    integer, intent(inout), optional :: id_guess !< Guess for box id (will be updated)
+    real(dp)                      :: vals(2*size(ivs))
+    integer                       :: i, iv, id, ix_near(NDIM), ix_high(NDIM)
+    real(dp)                      :: r_loc(NDIM), dvec(NDIM), ovec(NDIM), w(DTIMES(2))
+
+    id = af_get_id_at(tree, r, guess=id_guess)
+    ! Update guess
+    if (present(id_guess)) id_guess = id
+
+    if (id <= af_no_box) then
+       success = .false.
+       vals = 0.0_dp
+    else
+       success = .true.
+       ! Compute ix such that r lies between cell centers at ix and ix + 1
+       ix_near = nint((r - tree%boxes(id)%r_min) / tree%boxes(id)%dr)
+       ix_high = ceiling((r - tree%boxes(id)%r_min) / tree%boxes(id)%dr)
+
+       do i = 1, size(ivs)
+          iv = ivs(i)
+#if NDIM == 2
+          vals(i) = tree%boxes(id)%fc(ix_near(1)+1, min(ix_high(2),tree%n_cell), 1, iv)
+          vals(i+1) = tree%boxes(id)%fc(min(ix_high(1),tree%n_cell), ix_near(2)+1, 2, iv)          
+#elif NDIM == 3
+          stop
+#endif
+       end do
+    end if
+  end function af_get_fc
 
   !> Add 'amount' to the grid cell nearest to rr
   subroutine af_interp0_to_grid(tree, rr, iv, amount, to_density)
