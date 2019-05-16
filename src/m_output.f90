@@ -61,6 +61,9 @@ module m_output
   ! Write headline output
   logical, public, protected :: headline_output = .false.
 
+  ! Write surface output
+  logical, public, protected :: surface_output = .false.  
+
   ! Write uniform output in a plane
   logical, public, protected :: plane_write = .false.
 
@@ -161,6 +164,9 @@ contains
          "Use this many points for output head data")
     call CFG_add_get(cfg, "head%write", headline_output, &
          "Write headline output")
+         
+    call CFG_add_get(cfg, "dielectric%write", surface_output, &
+         "Write surface output")
          
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
@@ -265,7 +271,7 @@ contains
     end if
 
     ! this need to put into m_output
-    if (ST_use_dielectric) then
+    if (ST_use_dielectric .and. surface_output) then
        call dielectric_surcharge_output(tree, output_name, output_cnt, wc_time)
     end if
 
