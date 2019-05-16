@@ -49,6 +49,18 @@ module m_output
   ! Relative position of line maximum coordinate
   real(dp), public, protected :: lineout_rmax(3) = 1.0_dp
 
+  ! Relative position of output head maximum coordinate
+  real(dp), public, protected :: head_rmax = 0.0_dp
+
+  ! Relative position of output head minimum coordinate
+  real(dp), public, protected :: head_rmin = 1.0_dp
+  
+  ! Use this many points for output head data
+  integer, public, protected :: head_npoints = 500
+  
+  ! Write headline output
+  logical, public, protected :: headline_output = .false.
+
   ! Write uniform output in a plane
   logical, public, protected :: plane_write = .false.
 
@@ -77,6 +89,7 @@ module m_output
   public :: output_initialize
   public :: output_write
   public :: output_log
+  public :: output_headline
   public :: output_status
 
 contains
@@ -140,6 +153,15 @@ contains
     call CFG_add_get(cfg, "lineout%rmax", lineout_rmax(1:NDIM), &
          "Relative position of line maximum coordinate")
 
+    call CFG_add_get(cfg, "head%rmax", head_rmax, &
+         "Relative position of output head position maximum coordinate")
+    call CFG_add_get(cfg, "head%rmin", head_rmin, &
+         "Relative position of output head position minimum coordinate")
+    call CFG_add_get(cfg, "head%npoints", head_npoints, &
+         "Use this many points for output head data")
+    call CFG_add_get(cfg, "head%write", headline_output, &
+         "Write headline output")
+         
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
     call CFG_add(cfg, "plane%varname", ["e"], &
@@ -247,6 +269,10 @@ contains
        call dielectric_surcharge_output(tree, output_name, output_cnt, wc_time)
     end if
 
+    if (headline_output) then
+       call output_headline(tree, output_name, output_cnt)
+    end if
+
   end subroutine output_write
 
   subroutine add_variables(box, new_vars, n_var)
@@ -331,6 +357,58 @@ contains
     close(my_unit)
 
   end subroutine output_log
+
+  subroutine output_headline(tree, output_name, out_cnt)
+    use m_af_interp
+    use m_dielectric
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: output_name
+    integer, intent(in)          :: out_cnt
+    character(len=string_len)    :: fname
+    real(dp)                     :: loc_head(NDIM), r_min(NDIM), r_max(NDIM), r(NDIM)
+    real(dp), allocatable        :: head_data(:, :)
+    logical                      :: success
+    integer                      :: num_file, i
+    real(dp)                     :: max_field
+    type(af_loc_t)               :: loc_field
+    real(dp)                     :: dr_vec(NDIM)
+    
+    call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+
+    !Get the line of streamer head
+    loc_head = af_r_loc(tree, loc_field)
+    if (af_neighb_dim(surface_list(1)%direction) == 1) then
+        r_min = [head_rmin* ST_domain_len(1) + ST_domain_origin(1), loc_head(2)]
+        r_max = [head_rmax* ST_domain_len(1) + ST_domain_origin(1), loc_head(2)]
+    else 
+        stop
+    end if
+    
+    !write i_electron, i_1pos_ion, i_phi, i_electric_fld
+    write(fname, "(A,I6.6)") trim(output_name) // &
+            "_head_cc_", out_cnt
+    call af_write_line(tree, trim(fname), &
+        [i_electron, i_1pos_ion, i_phi, i_electric_fld], &
+        r_min, r_max, head_npoints)
+    
+    !write E_x, E_y
+    dr_vec = (r_max - r_min) / max(1, head_npoints-1)
+    allocate(head_data(NDIM+2, head_npoints))
+    do i = 1, head_npoints
+       r = r_min + (i-1) * dr_vec
+       head_data(1:NDIM, i) = r
+       head_data(NDIM+1:NDIM+2, i) = af_get_fc(tree, r, [electric_fld], success)
+       if (.not. success) error stop "af_get_fc: error"
+    end do
+    write(fname, "(A,I6.6)") trim(output_name) // &
+            "_head_fc_", out_cnt
+    open(newunit=num_file, file=trim(fname) // ".txt", action="write")
+    write(num_file, *) "x y E_x E_y"
+    do i = 1, head_npoints
+       write(num_file, *) head_data(:, i)
+    end do
+    close(num_file)
+  end subroutine output_headline
 
   subroutine check_path_writable(pathname)
     character(len=*), intent(in) :: pathname
