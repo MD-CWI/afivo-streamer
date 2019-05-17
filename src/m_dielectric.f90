@@ -768,58 +768,129 @@ contains
     character(len=*), intent(in) :: output_name !< Filename for the output
     integer, intent(in)          :: output_cnt
     real(dp), intent(in)         :: wc_time
-    integer                      :: n_surf, i, n, nc, j
-    integer                      :: num_file, dim, id_gas, ix, dir
-    real(dp)                     :: r_min, dr
+    integer                      :: n_surf_a, n_surf_b, i, n, nc, n_surf
+    integer                      :: num_file, dim, id_gas, ix, dir, id_diel
+    real(dp)                     :: r_min(NDIM), dr(NDIM), loc(NDIM), x_a, y_a
     integer                      :: loc_ix(1)
     character(len=string_len)    :: fname
 
-    integer, allocatable :: sort_ixs(:)
-    integer, allocatable :: output_ixs(:)
-    real(dp), allocatable :: output_rmin(:)
-    real(dp), allocatable :: output_dr(:)
-    real(dp), allocatable :: surface_E_x(:, :)
-    real(dp), allocatable :: surface_E_y(:, :)
-    real(dp), allocatable :: sort_loc(:), sort_E_y(:), sort_E_x(:) 
+    integer, allocatable :: sort_ixs_a(:)
+    integer, allocatable :: output_ixs_a(:)
+    real(dp), allocatable :: output_rmin_a(:,:)
+    real(dp), allocatable :: output_dr_a(:,:)
+    real(dp), allocatable :: surface_E_x_a(:, :)
+    real(dp), allocatable :: surface_E_y_a(:, :)
+    real(dp), allocatable :: sort_E_y_a(:), sort_E_x_a(:) 
+    
+    integer, allocatable :: sort_ixs_b(:)
+    integer, allocatable :: output_ixs_b(:)
+    real(dp), allocatable :: output_rmin_b(:,:)
+    real(dp), allocatable :: output_dr_b(:,:)
+    real(dp), allocatable :: surface_E_x_b(:, :)
+    real(dp), allocatable :: surface_E_y_b(:, :)
+    real(dp), allocatable :: sort_E_y_b(:), sort_E_x_b(:) 
     
     nc = tree%n_cell
-    allocate(output_ixs(num_surfaces))
-    allocate(output_rmin(num_surfaces))
-    allocate(output_dr(num_surfaces))
-    allocate(surface_E_x(num_surfaces, nc))
-    allocate(surface_E_y(num_surfaces, nc))
+    allocate(output_ixs_a(num_surfaces))
+    allocate(output_rmin_a(num_surfaces, NDIM))
+    allocate(output_dr_a(num_surfaces, NDIM))
+    allocate(surface_E_x_a(num_surfaces, nc))
+    allocate(surface_E_y_a(num_surfaces, nc))
+    allocate(output_ixs_b(num_surfaces))
+    allocate(output_rmin_b(num_surfaces, NDIM))
+    allocate(output_dr_b(num_surfaces, NDIM))
+    allocate(surface_E_x_b(num_surfaces, nc))
+    allocate(surface_E_y_b(num_surfaces, nc))
 
-    n_surf=0
+    n_surf_a=0
+    n_surf_b=0
+    n_surf = 0
     do i = 1, size(surface_list)
        if (surface_list(i)%in_use) then
           id_gas = surface_list(i)%id_gas
+          id_diel = surface_list(i)%id_diel
           if (.not. af_has_children(tree%boxes(id_gas))) then
-             n_surf = n_surf + 1
              dir = surface_list(i)%direction
-             dim = af_neighb_dim(dir) 
-             output_ixs(n_surf) = i
+             dim = af_neighb_dim(dir)
+             n_surf = n_surf + 1
 #if NDIM == 2
-             if (dim == 1) then
-                output_dr(n_surf)   = tree%boxes(id_gas)%dr(2)
-                output_rmin(n_surf) = tree%boxes(id_gas)%r_min(2)
-             else
-                output_dr(n_surf)   = tree%boxes(id_gas)%dr(1)
-                output_rmin(n_surf) = tree%boxes(id_gas)%r_min(1)
-             end if
-             
              select case (dir)
              case (af_neighb_lowx)
-             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(1, 1:nc, 1, electric_fld)
-             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(1, 1:nc, 2, electric_fld)
+             if (n_surf == 1) then
+             x_a = tree%boxes(id_gas)%r_min(1)
+             end if
+             if (tree%boxes(id_gas)%r_min(1) == x_a) then
+             n_surf_a = n_surf_a + 1
+             output_dr_a(n_surf_a, :)   = tree%boxes(id_gas)%dr
+             output_rmin_a(n_surf_a, :) = tree%boxes(id_gas)%r_min
+             surface_E_x_a(n_surf_a, :) = tree%boxes(id_gas)%fc(1, 1:nc, 1, electric_fld)
+             surface_E_y_a(n_surf_a, :) = tree%boxes(id_gas)%fc(1, 1:nc, 2, electric_fld)
+             output_ixs_a(n_surf_a) = i
+             else
+             n_surf_b = n_surf_b + 1
+             output_dr_b(n_surf_b, :)   = tree%boxes(id_gas)%dr
+             output_rmin_b(n_surf_b, :) = tree%boxes(id_gas)%r_min
+             surface_E_x_b(n_surf_b, :) = tree%boxes(id_gas)%fc(1, 1:nc, 1, electric_fld)
+             surface_E_y_b(n_surf_b, :) = tree%boxes(id_gas)%fc(1, 1:nc, 2, electric_fld)
+             output_ixs_b(n_surf_b) = i
+             end if
              case (af_neighb_highx)
-             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(nc+1, 1:nc, 1, electric_fld)
-             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(nc, 1:nc, 2, electric_fld)
+             if (n_surf == 1) then
+             x_a = tree%boxes(id_diel)%r_min(1)
+             end if
+             if (tree%boxes(id_diel)%r_min(1) == x_a) then
+             n_surf_a = n_surf_a + 1
+             output_dr_a(n_surf_a, :)   = tree%boxes(id_diel)%dr
+             output_rmin_a(n_surf_a, :) = tree%boxes(id_diel)%r_min
+             surface_E_x_a(n_surf_a, :) = tree%boxes(id_gas)%fc(nc+1, 1:nc, 1, electric_fld)
+             surface_E_y_a(n_surf_a, :) = tree%boxes(id_gas)%fc(nc, 1:nc, 2, electric_fld)
+             output_ixs_a(n_surf_a) = i
+             else
+             n_surf_b = n_surf_b + 1
+             output_dr_b(n_surf_b, :)   = tree%boxes(id_diel)%dr
+             output_rmin_b(n_surf_b, :) = tree%boxes(id_diel)%r_min
+             surface_E_x_b(n_surf_b, :) = tree%boxes(id_gas)%fc(nc+1, 1:nc, 1, electric_fld)
+             surface_E_y_b(n_surf_b, :) = tree%boxes(id_gas)%fc(nc, 1:nc, 2, electric_fld)
+             output_ixs_b(n_surf_b) = i
+             end if
              case (af_neighb_lowy)
-             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, 1, 1, electric_fld)
-             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, 1, 2, electric_fld)
+             if (n_surf == 1) then
+             y_a = tree%boxes(id_gas)%r_min(2)
+             end if
+             if (tree%boxes(id_gas)%r_min(2) == y_a) then
+             n_surf_a = n_surf_a + 1
+             output_dr_a(n_surf_a, :)   = tree%boxes(id_gas)%dr
+             output_rmin_a(n_surf_a, :) = tree%boxes(id_gas)%r_min
+             surface_E_x_a(n_surf_a, :) = tree%boxes(id_gas)%fc(1:nc, 1, 1, electric_fld)
+             surface_E_y_a(n_surf_a, :) = tree%boxes(id_gas)%fc(1:nc, 1, 2, electric_fld)
+             output_ixs_a(n_surf_a) = i
+             else
+             n_surf_b = n_surf_b + 1
+             output_dr_b(n_surf_b, :)   = tree%boxes(id_gas)%dr
+             output_rmin_b(n_surf_b, :) = tree%boxes(id_gas)%r_min
+             surface_E_x_b(n_surf_b, :) = tree%boxes(id_gas)%fc(1:nc, 1, 1, electric_fld)
+             surface_E_y_b(n_surf_b, :) = tree%boxes(id_gas)%fc(1:nc, 1, 2, electric_fld)
+             output_ixs_b(n_surf_b) = i
+             end if
              case (af_neighb_highy)
-             surface_E_x(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, nc, 1, electric_fld)
-             surface_E_y(n_surf, :) = tree%boxes(id_gas)%fc(1:nc, nc+1, 2, electric_fld)
+             if (n_surf == 1) then
+             y_a = tree%boxes(id_diel)%r_min(2)
+             end if
+             if (tree%boxes(id_diel)%r_min(2) == y_a) then
+             n_surf_a = n_surf_a + 1
+             output_dr_a(n_surf_a, :)   = tree%boxes(id_diel)%dr
+             output_rmin_a(n_surf_a, :) = tree%boxes(id_diel)%r_min
+             surface_E_x_a(n_surf_a, :) = tree%boxes(id_gas)%fc(1:nc, nc, 1, electric_fld)
+             surface_E_y_a(n_surf_a, :) = tree%boxes(id_gas)%fc(1:nc, nc+1, 2, electric_fld)
+             output_ixs_a(n_surf_a) = i
+             else
+             n_surf_b = n_surf_b + 1
+             output_dr_b(n_surf_b, :)   = tree%boxes(id_diel)%dr
+             output_rmin_b(n_surf_b, :) = tree%boxes(id_diel)%r_min
+             surface_E_x_b(n_surf_b, :) = tree%boxes(id_gas)%fc(1:nc, nc, 1, electric_fld)
+             surface_E_y_b(n_surf_b, :) = tree%boxes(id_gas)%fc(1:nc, nc+1, 2, electric_fld)
+             output_ixs_b(n_surf_b) = i
+             end if
              end select
 #elif NDIM == 3
              error stop
@@ -829,54 +900,67 @@ contains
     end do
 
     ! rerange surface_charge_output list with some function in external lib
-    allocate(sort_ixs(n_surf))
-    ! store the sorted location
-    allocate(sort_loc(n_surf*nc))
-    ! store the E_y according to sorted location
-    allocate(sort_E_y(n_surf*nc))
-    ! store the E_x according to sorted location
-    allocate(sort_E_x(n_surf*nc))
-    call mrgrnk(output_rmin(1:n_surf), sort_ixs)
+    allocate(sort_ixs_a(n_surf_a))
+    ! rerange surface_charge_output list with some function in external lib
+    allocate(sort_ixs_b(n_surf_b))
+
+    if( dim == 1 ) then
+        call mrgrnk(output_rmin_a(1:n_surf_a, 2), sort_ixs_a)
+        call mrgrnk(output_rmin_b(1:n_surf_b, 2), sort_ixs_b)
+    else
+        call mrgrnk(output_rmin_a(1:n_surf_a, 1), sort_ixs_a)
+        call mrgrnk(output_rmin_b(1:n_surf_b, 1), sort_ixs_b)
+    end if
+    
 
     write(fname, "(A,I6.6)") trim(output_name) // "_surface_", output_cnt
     open(newunit=num_file, file=trim(fname) // ".txt", action="write")
-    write(num_file, *) "coord charge photon_flux E_x E_y"
+    write(num_file, *) "x y charge photon_flux E_x E_y"
 
-    j = 1
-    do n = 1, n_surf
-       ix = output_ixs(sort_ixs(n))
-       r_min = output_rmin(sort_ixs(n))
-       dr = output_dr(sort_ixs(n))
+    do n = 1, n_surf_a
+       ix = output_ixs_a(sort_ixs_a(n))
+       r_min = output_rmin_a(sort_ixs_a(n), :)
+       dr = output_dr_a(sort_ixs_a(n), :)
        do i = 1, nc
-       sort_loc(j) = r_min + (i-0.5_dp) * dr
-       sort_E_y(j) = surface_E_y(sort_ixs(n), i)
-       sort_E_x(j) = surface_E_x(sort_ixs(n), i)
-       j = j + 1
-          write(num_file, *) r_min + (i-0.5_dp) * dr, &
+       if (dir == 1 .or. dir == 2) then
+            loc = [r_min(1), r_min(2) + (i-0.5_dp) * dr(2)]
+       else
+            loc = [r_min(1) + (i-0.5_dp) * dr(1), r_min(2)]
+       end if
+          write(num_file, *) loc, &
                surface_list(ix)%charge(i, 1), &
                surface_list(ix)%photon_flux(i), &
-               surface_E_x(sort_ixs(n), i), surface_E_y(sort_ixs(n), i)
+               surface_E_x_a(sort_ixs_a(n), i), surface_E_y_a(sort_ixs_a(n), i)
+       if(.not.(loc(1)==x_a)) then
+       print *, "surface location error in ", output_cnt
+       stop
+       end if
        end do
     end do
+
+    do n = 1, n_surf_b
+       ix = output_ixs_b(sort_ixs_b(n))
+       r_min = output_rmin_b(sort_ixs_b(n), :)
+       dr = output_dr_b(sort_ixs_b(n), :)
+       do i = 1, nc
+       if (dir == 1 .or. dir == 2) then
+            loc = [r_min(1), r_min(2) + (i-0.5_dp) * dr(2)]
+       else
+            loc = [r_min(1) + (i-0.5_dp) * dr(1), r_min(2)]
+       end if
+          write(num_file, *) loc, &
+               surface_list(ix)%charge(i, 1), &
+               surface_list(ix)%photon_flux(i), &
+               surface_E_x_b(sort_ixs_b(n), i), surface_E_y_b(sort_ixs_b(n), i)
+       end do
+    end do
+    
     close(num_file)
     
-    !output the loc of max surface_E_y below the seed
-    !we could use the max Ey to present to head of positive streamer
-    loc_ix = maxloc(abs(sort_E_y), mask=sort_loc<init_conds%seed_r1(2, 1))
-    write(fname, "(A,I6.6)") trim(output_name) // "_surface_down_maxEy.txt"
-    if (output_cnt == 1) then
-    open(newunit=num_file, file=fname, action="write")
-    write(num_file, *) "output_cnt, global_time, loc, E_y"
-    close(num_file)
-    end if
-    open(newunit=num_file, file=fname, action="write", position="append")
-    write(num_file, *) output_cnt, global_time, sort_loc(loc_ix), sort_E_y(loc_ix)
-    close(num_file)
-    
-!     !output the loc of max surface_E_y above the seed
-!     !todo Ey couldn't find the head of negetive streamer, we may could use the max gradient of ne
-!     loc_ix = maxloc(abs(sort_E_y), mask=sort_loc>init_conds%seed_r0(2, 1))
-!     write(fname, "(A,I6.6)") trim(output_name) // "_surface_up_maxEy.txt"
+!     !output the loc of max surface_E_y below the seed
+!     !we could use the max Ey to present to head of positive streamer
+!     loc_ix = maxloc(abs(sort_E_y), mask=sort_loc<init_conds%seed_r1(2, 1))
+!     write(fname, "(A,I6.6)") trim(output_name) // "_surface_down_maxEy.txt"
 !     if (output_cnt == 1) then
 !     open(newunit=num_file, file=fname, action="write")
 !     write(num_file, *) "output_cnt, global_time, loc, E_y"
