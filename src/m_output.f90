@@ -14,8 +14,8 @@ module m_output
   ! Optional variable (to show ionization source term)
   integer, public, protected :: i_src = -1 ! Source term
 
-  ! If true, only include n_e, n_i and |E| in output files
-  logical, public, protected :: output_compact = .false.
+  ! If defined, only output these variables
+  character(len=af_nlen), allocatable :: output_only(:)
 
   ! Time between writing output
   real(dp), public, protected :: output_dt = 1.0e-10_dp
@@ -78,6 +78,8 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     character(len=name_len)    :: varname
+    character(len=af_nlen)     :: empty_names(0)
+    integer                    :: n, i
     real(dp)                   :: tmp
 
     call CFG_add_get(cfg, "output%name", output_name, &
@@ -88,12 +90,19 @@ contains
     call CFG_add_get(cfg, "output%status_delay", output_status_delay, &
          "Print status every this many seconds")
 
-    call CFG_add_get(cfg, "output%compact", output_compact, &
-         "If true, only include n_e, n_i and |E| in output files")
+    call CFG_add(cfg, "output%only", empty_names, &
+         "If defined, only output these variables", .true.)
+    call CFG_get_size(cfg, "output%only", n)
+    allocate(output_only(n))
+    print *, n
+    call CFG_get(cfg, "output%only", output_only)
 
-    if (output_compact) then
+    if (size(output_only) > 0) then
        tree%cc_write_output(:) = .false.
-       tree%cc_write_output([i_electron, i_1pos_ion, i_electric_fld]) = .true.
+       do n = 1, size(output_only)
+          i = af_find_cc_variable(tree, trim(output_only(n)))
+          tree%cc_write_output(i) = .true.
+       end do
     end if
 
     call CFG_add_get(cfg, "output%dt", output_dt, &
