@@ -108,6 +108,10 @@ contains
                 box%cc(IJK, i_eps) = 1.0_dp
              end if
           end do; CLOSE_DO
+       case ("gas")
+          do KJI_DO(0,nc+1)
+                box%cc(IJK, i_eps) = 1.0_dp
+          end do; CLOSE_DO
        case default
           error stop "Unknown dielectric_type"
        end select
