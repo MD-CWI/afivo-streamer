@@ -312,23 +312,25 @@ contains
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos(NDIM) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
-    real(dp)                     :: max_elec, max_field, max_Er, min_Er
-    type(af_loc_t)               :: loc_elec, loc_field, loc_Er
+    real(dp)                     :: max_elec, max_field, max_Er, min_Er, max_Ey, min_Ey
+    type(af_loc_t)               :: loc_elec, loc_field, loc_maxEr, loc_minEr, loc_maxEy, loc_minEy
 
     call af_tree_sum_cc(tree, i_electron, sum_elec)
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
     call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
-    call af_tree_min_fc(tree, 1, electric_fld, min_Er)
+    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_maxEr)
+    call af_tree_min_fc(tree, 1, electric_fld, min_Er, loc_minEr)
+    call af_tree_max_fc(tree, 2, electric_fld, max_Ey, loc_maxEy)
+    call af_tree_min_fc(tree, 2, electric_fld, min_Ey, loc_minEy)
 
     dt = advance_max_dt
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(filename), action="write")
 #if NDIM == 2
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
+       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
+            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) x y max(Ey) x y min(Ey) x y wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
@@ -339,11 +341,11 @@ contains
        prev_pos = af_r_loc(tree, loc_field)
     end if
 
-#if NDIM == 2
-    fmt = "(I6,16E16.8,I12,1E16.8,I3)"
-#elif NDIM == 3
-    fmt = "(I6,14E16.8,I12,1E16.8,I3)"
-#endif
+! #if NDIM == 2
+!     fmt = "(I6,16E16.8,I12,1E16.8,I3)"
+! #elif NDIM == 3
+!     fmt = "(I6,14E16.8,I12,1E16.8,I3)"
+! #endif
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
     prev_pos = af_r_loc(tree, loc_field)
@@ -351,12 +353,13 @@ contains
     open(my_unit, file=trim(filename), action="write", &
          position="append")
 #if NDIM == 2
-    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
+    write(my_unit, *) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
+         af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_maxEr), min_Er, &
+         af_r_loc(tree, loc_minEr), max_Ey, af_r_loc(tree, loc_maxEy), min_Ey, &
+         af_r_loc(tree, loc_minEy), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #elif NDIM == 3
-    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
+    write(my_unit, *) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #endif
