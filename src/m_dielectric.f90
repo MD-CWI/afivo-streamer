@@ -707,9 +707,8 @@ contains
                 ! The photon was absorbed within its normal travel path
                 xyz_end(1:n_dim, n) = -1e50_dp
                 call add_to_surface_photons(tree, xyz_nogas, photon_weight, gamma_se_ph_highenergy)
-             else
+            end if
                 call add_to_surface_photons(tree, xyz_nogas, photon_weight, gamma_se_ph_lowenergy)
-             end if
              exit
           end if
        end do
