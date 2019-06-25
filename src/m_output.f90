@@ -62,6 +62,15 @@ module m_output
   ! Relative position of plane maximum coordinate
   real(dp), public, protected :: plane_rmax(NDIM) = 1.0_dp
 
+  ! Output electric field maxima and their locations
+  logical, public, protected :: field_maxima_write = .false.
+
+  ! Threshold value (V/m) for electric field maxima
+  real(dp), public, protected :: field_maxima_threshold = 0.0_dp
+
+  ! Minimal distance (m) between electric field maxima
+  real(dp), public, protected :: field_maxima_distance = 0.0_dp
+
   ! Print status every this many seconds
   real(dp), public, protected :: output_status_delay = 60.0_dp
 
@@ -141,6 +150,13 @@ contains
     call CFG_add_get(cfg, "plane%rmax", plane_rmax(1:NDIM), &
          "Relative position of plane maximum coordinate")
 
+    call CFG_add_get(cfg, "field_maxima%write", field_maxima_write, &
+         "Output electric field maxima and their locations")
+    call CFG_add_get(cfg, "field_maxima%threshold", field_maxima_threshold, &
+         "Threshold value (V/m) for electric field maxima")
+    call CFG_add_get(cfg, "field_maxima%distance", field_maxima_distance, &
+         "Minimal distance (m) between electric field maxima")
+
   end subroutine output_initialize
 
   subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
@@ -186,6 +202,12 @@ contains
        call output_log(tree, fname, output_cnt, wc_time)
     end if
 
+    if (field_maxima_write) then
+       write(fname, "(A,I6.6,A)") trim(output_name) // &
+            "_Emax_", output_cnt, ".txt"
+       call output_fld_maxima(tree, fname)
+    end if
+
     if (plane_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_plane_", output_cnt
@@ -210,10 +232,10 @@ contains
   subroutine output_log(tree, filename, out_cnt, wc_time)
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
-    integer, intent(in)          :: out_cnt
-    real(dp), intent(in)         :: wc_time
+    integer, intent(in)          :: out_cnt !< Output number
+    real(dp), intent(in)         :: wc_time !< Wallclock time
     character(len=30), save      :: fmt
-    integer, parameter           :: my_unit        = 123
+    integer                      :: my_unit
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos(NDIM) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
@@ -230,7 +252,7 @@ contains
     dt = advance_max_dt
 
     if (out_cnt == 1) then
-       open(my_unit, file=trim(filename), action="write")
+       open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
@@ -253,7 +275,7 @@ contains
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
     prev_pos = af_r_loc(tree, loc_field)
 
-    open(my_unit, file=trim(filename), action="write", &
+    open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
 #if NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
@@ -299,5 +321,45 @@ contains
          minval(dt_matrix(1:dt_num_cond, :), dim=2), &
          " (cfl diff drt chem)"
   end subroutine output_status
+
+  subroutine output_fld_maxima(tree, filename)
+    use m_analysis
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, i, n, n_found
+    integer, parameter           :: n_max         = 1000
+    real(dp)                     :: coord_val(NDIM+1, n_max), d
+    real(dp), parameter          :: very_negative = -1e100_dp
+
+    ! Get locations of the maxima
+    call analysis_get_maxima(tree, i_electric_fld, field_maxima_threshold, &
+         n_max, coord_val, n_found)
+
+    ! Merge maxima that are too close
+    do n = n_found, 1, -1
+       do i = 1, n-1
+          d = norm2(coord_val(1:NDIM, i) - coord_val(1:NDIM, n))
+          if (d < field_maxima_distance) then
+             ! Replace the smaller value by the one at the end of the list, and
+             ! shorten the list by one item
+             if (coord_val(NDIM+1, i) < coord_val(NDIM+1, n)) then
+                coord_val(:, i) = coord_val(:, n)
+             end if
+             coord_val(:, n) = coord_val(:, n_found)
+             n_found = n_found - 1
+             exit
+          end if
+       end do
+    end do
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do n = 1, n_found
+       if (coord_val(NDIM+1, n) > field_maxima_threshold) then
+          write(my_unit, *) coord_val(:, n)
+       end if
+    end do
+    close(my_unit)
+
+  end subroutine output_fld_maxima
 
 end module m_output
