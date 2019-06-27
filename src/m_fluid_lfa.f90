@@ -13,16 +13,24 @@ module m_fluid_lfa
 
 contains
 
-  !> Advance fluid model using forward Euler step
-  subroutine forward_euler(tree, dt, s_in, s_out, set_dt)
+  !> Advance fluid model using forward Euler step. If the equation is written as
+  !> y' = f(y), the result is: y(s_out) = y(s_prev) + f(y(s_dt)), where the
+  !> s_... refer to temporal states.
+  subroutine forward_euler(tree, dt, s_dt, s_prev, s_out, set_dt)
     use m_chemistry
     use m_streamer
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
-    integer, intent(in)       :: s_in   !< Input time state
-    integer, intent(in)       :: s_out  !< Output time state
+    !> Time state to compute derivatives from
+    integer, intent(in)       :: s_dt
+    !> Time state to add derivatives to
+    integer, intent(in)       :: s_prev
+    !< Time state to store result in
+    integer, intent(in)       :: s_out
     logical, intent(in)       :: set_dt !< Whether to set new time step
-    integer                   :: lvl, i, id, p_id
+    integer                   :: lvl, i, id, p_id, nc
+
+    nc = tree%n_cell
 
     ! First calculate fluxes
     !$omp parallel private(lvl, i, id)
@@ -30,7 +38,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call fluxes_elec(tree%boxes, id, dt, s_in, set_dt)
+          call fluxes_elec(tree%boxes, id, nc, dt, s_dt, set_dt)
        end do
        !$omp end do
     end do
@@ -44,7 +52,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call update_solution(tree%boxes(id), dt, s_in, s_out, set_dt)
+          call update_solution(tree%boxes(id), dt, s_dt, s_prev, s_out, set_dt)
        end do
        !$omp end do
     end do
@@ -52,7 +60,7 @@ contains
   end subroutine forward_euler
 
   !> Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_elec(boxes, id, dt, s_in, set_dt)
+  subroutine fluxes_elec(boxes, id, nc, dt, s_in, set_dt)
     use m_af_flux_schemes
     use m_units_constants
     use omp_lib
@@ -63,37 +71,36 @@ contains
     use m_transport_data
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id
+    integer, intent(in)        :: nc   !< Number of cells per dimension
     real(dp), intent(in)       :: dt
-    integer, intent(in)        :: s_in   !< Input time state
+    integer, intent(in)        :: s_in !< Input time state
     logical, intent(in)        :: set_dt
     real(dp)                   :: inv_dr(NDIM), fld, Td
     ! Velocities at cell faces
-    real(dp), allocatable      :: v(DTIMES(:), :)
+    real(dp)                   :: v(DTIMES(1:nc+1), NDIM)
     ! Diffusion coefficients at cell faces
-    real(dp), allocatable      :: dc(DTIMES(:), :)
+    real(dp)                   :: dc(DTIMES(1:nc+1), NDIM)
     ! Maximal fluxes at cell faces
-    real(dp), allocatable      :: fmax(DTIMES(:), :)
+    real(dp)                   :: fmax(DTIMES(1:nc+1), NDIM)
     ! Cell-centered densities
-    real(dp), allocatable      :: cc(DTIMES(:))
+    real(dp)                   :: cc(DTIMES(-1:nc+2))
     real(dp)                   :: mu, fld_face, drt_fac, tmp
     real(dp)                   :: nsmall, N_inv
     real(dp)                   :: dt_cfl, dt_drt, dt_dif
     real(dp)                   :: vmean(NDIM)
-    integer                    :: nc, n, m, IJK, tid
+    integer                    :: n, m, IJK, tid
 #if NDIM == 3
     integer                    :: l
 #endif
 
-    nc      = boxes(id)%n_cell
     inv_dr  = 1/boxes(id)%dr
     drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
     nsmall  = 1.0_dp ! A small density
     N_inv   = 1/gas_number_density ! For constant gas densities
 
-    allocate(v(DTIMES(1:nc+1), NDIM))
-    allocate(dc(DTIMES(1:nc+1), NDIM))
-    allocate(cc(DTIMES(-1:nc+2)))
-    allocate(fmax(DTIMES(1:nc+1), NDIM))
+    v  = 0.0_dp
+    dc = 0.0_dp
+
     if (ST_drt_limit_flux) then
        fmax = 0.0_dp
     end if
@@ -315,7 +322,7 @@ contains
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
-  subroutine update_solution(box, dt, s_in, s_out, set_dt)
+  subroutine update_solution(box, dt, s_dt, s_prev, s_out, set_dt)
     use omp_lib
     use m_units_constants
     use m_gas
@@ -325,7 +332,8 @@ contains
     use m_dt
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt     !< Time step
-    integer, intent(in)        :: s_in   !< Input time state
+    integer, intent(in)        :: s_dt   !< Time state to compute derivatives from
+    integer, intent(in)        :: s_prev !< Time state to add derivatives to
     integer, intent(in)        :: s_out  !< Output time state
     logical, intent(in)        :: set_dt !< Whether to set new time step
     real(dp)                   :: inv_dr(NDIM)
@@ -367,7 +375,7 @@ contains
     end if
 
     dens(:, n_gas_species+1:n_species) = reshape(box%cc(DTIMES(1:nc), &
-            species_itree(n_gas_species+1:n_species)+s_in), [n_cells, n_plasma_species])
+            species_itree(n_gas_species+1:n_species)+s_dt), [n_cells, n_plasma_species])
 
     call get_rates(fields, rates, n_cells)
     call get_derivatives(dens, rates, derivs, n_cells)
@@ -424,7 +432,7 @@ contains
 
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
-          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_in) + dt * derivs(ix, n)
+          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_prev) + dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
 

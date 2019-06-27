@@ -36,24 +36,24 @@ contains
 
     select case (time_integrator)
     case (forward_euler_t)
-       call forward_euler(tree, dt, 0, 0, .true.)
+       call forward_euler(tree, dt, 0, 0, 0, .true.)
        call restrict_flux_species(tree, 0)
        call field_compute(tree, mg, 0, time, .true.)
        time = time + dt
     case (rk2_t)
-       call forward_euler(tree, 0.5_dp * dt, 0, 1, .false.)
+       call forward_euler(tree, 0.5_dp * dt, 0, 0, 1, .false.)
        call restrict_flux_species(tree, 1)
-       time = time + 0.5_dp * dt
-       call field_compute(tree, mg, 1, time, .true.)
-       call forward_euler(tree, dt, 1, 0, .true.)
+       call field_compute(tree, mg, 1, time + 0.5_dp*dt, .true.)
+       call forward_euler(tree, dt, 1, 0, 0, .true.)
        call restrict_flux_species(tree, 0)
+       time = time + dt
        call field_compute(tree, mg, 0, time, .true.)
     case (heuns_method_t)
-       call forward_euler(tree, dt, 0, 1, .false.)
+       call forward_euler(tree, dt, 0, 0, 1, .false.)
        call restrict_flux_species(tree, 1)
        time = time + dt
        call field_compute(tree, mg, 1, time, .true.)
-       call forward_euler(tree, dt, 1, 1, .true.)
+       call forward_euler(tree, dt, 1, 1, 1, .true.)
        call combine_substeps(tree, &
             species_itree(n_gas_species+1:n_species), &
             [0, 1], [0.5_dp, 0.5_dp], 0)
