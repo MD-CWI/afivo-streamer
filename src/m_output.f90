@@ -338,7 +338,6 @@ contains
     integer                      :: my_unit, i, n, n_found
     integer, parameter           :: n_max         = 1000
     real(dp)                     :: coord_val(NDIM+1, n_max), d
-    real(dp), parameter          :: very_negative = -1e100_dp
 
     ! Get locations of the maxima
     call analysis_get_maxima(tree, i_electric_fld, field_maxima_threshold, &
