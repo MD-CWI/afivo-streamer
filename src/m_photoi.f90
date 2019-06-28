@@ -141,19 +141,14 @@ contains
        call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
             [photoi_eta * quench_fac], .true.)
     case ('from_species')
-    !   if (photoi_photoemission_time > 0) then
-    ! effective decay time when we have quenching  
-        eff_decay_time = photoi_photoemission_time * quench_fac
-        decay_fraction = 1 - exp(-dt / eff_decay_time)
-        if (dt > 1e-6_dp * eff_decay_time) then
-                  decay_rate = decay_fraction / dt
-          else
-                  decay_rate = 1.0 / eff_decay_time
-        end if
-
-    !   else
-    !      decay_fraction = 1.0_dp
-    !   end if
+       ! effective decay time when we have quenching  
+       eff_decay_time = photoi_photoemission_time * quench_fac
+       decay_fraction = 1 - exp(-dt / eff_decay_time)
+       if (dt > 1e-6_dp * eff_decay_time) then
+          decay_rate = decay_fraction / dt
+       else
+          decay_rate = 1.0 / eff_decay_time
+       end if
 
        call af_loop_box_arg(tree, photoionization_rate_from_species, &
             [ quench_fac * decay_rate, 1-decay_fraction], .true.)
@@ -210,8 +205,8 @@ contains
 
        Td       = fld * SI_to_Townsend / gas_dens
        loc      = LT_get_loc(td_tbl, Td)
+       ! No normalization required: (alpha/N) * (mu/N)
        alpha    = LT_get_col_at_loc(td_tbl, td_alpha, loc)
-      ! alpha    = LT_get_col_at_loc(td_tbl, td_alpha_N2, loc)
        mobility = LT_get_col_at_loc(td_tbl, td_mobility, loc)
 
        tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
