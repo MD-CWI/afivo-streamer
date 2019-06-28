@@ -30,6 +30,7 @@ program streamer
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
+  type(af_t)                :: tree_copy
   type(mg_t)                :: mg             ! Multigrid option struct
   type(ref_info_t)          :: ref_info
   integer                   :: output_cnt = 0 ! Number of output files written
@@ -75,7 +76,13 @@ program streamer
 
   ! Initialize the tree (which contains all the mesh information)
   if (restart_from_file /= undefined_str) then
+     tree_copy = tree           ! Store the settings
      call af_read_tree(tree, restart_from_file, read_sim_data)
+
+     ! Restore some of the settings
+     tree%cc_write_output = tree_copy%cc_write_output
+     tree%cc_write_binary = tree_copy%cc_write_binary
+     tree%fc_write_binary = tree_copy%fc_write_binary
 
      box_bytes = af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
      tree%box_limit = nint(memory_limit_GB * 2.0_dp**30 / box_bytes)
@@ -83,7 +90,13 @@ program streamer
      if (tree%n_cell /= ST_box_size) &
           error stop "restart_from_file: incompatible box size"
 
-     ! TODO: more consistency checks
+     if (tree%n_var_cell /= tree_copy%n_var_cell) then
+        print *, "n_var_cell here:", tree_copy%n_var_cell
+        print *, "n_var_cell file:", tree%n_var_cell
+        error stop "restart_from_file: incompatible variable list"
+     end if
+
+     ! @todo more consistency checks
 
      ! This routine always needs to be called when using multigrid
      call mg_init(tree, mg)
