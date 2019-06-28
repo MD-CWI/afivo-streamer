@@ -52,7 +52,8 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call update_solution(tree%boxes(id), dt, s_dt, s_prev, s_out, set_dt)
+          call update_solution(tree%boxes(id), nc, dt, s_dt, &
+               s_prev, s_out, set_dt)
        end do
        !$omp end do
     end do
@@ -322,7 +323,7 @@ contains
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
-  subroutine update_solution(box, dt, s_dt, s_prev, s_out, set_dt)
+  subroutine update_solution(box, nc, dt, s_dt, s_prev, s_out, set_dt)
     use omp_lib
     use m_units_constants
     use m_gas
@@ -331,6 +332,7 @@ contains
     use m_photoi
     use m_dt
     type(box_t), intent(inout) :: box
+    integer, intent(in)        :: nc     !< Box size
     real(dp), intent(in)       :: dt     !< Time step
     integer, intent(in)        :: s_dt   !< Time state to compute derivatives from
     integer, intent(in)        :: s_prev !< Time state to add derivatives to
@@ -338,25 +340,19 @@ contains
     logical, intent(in)        :: set_dt !< Whether to set new time step
     real(dp)                   :: inv_dr(NDIM)
     real(dp)                   :: tmp
-    real(dp), allocatable      :: rates(:, :)
-    real(dp), allocatable      :: derivs(:, :)
-    real(dp), allocatable      :: dens(:, :)
-    real(dp), allocatable      :: fields(:)
+    real(dp)                   :: rates(nc**NDIM, n_reactions)
+    real(dp)                   :: derivs(nc**NDIM, n_species)
+    real(dp)                   :: dens(nc**NDIM, n_species)
+    real(dp)                   :: fields(nc**NDIM), aeff(nc**NDIM)
 #if NDIM == 2
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
-    integer                    :: IJK, ix, nc, n_cells, n, iv
+    integer                    :: IJK, ix, n_cells, n, iv
     integer                    :: tid
     real(dp), parameter        :: eps = 1e-100_dp
 
-    nc      = box%n_cell
     n_cells = box%n_cell**NDIM
     inv_dr  = 1/box%dr
-
-    allocate(rates(n_cells, n_reactions))
-    allocate(derivs(n_cells, n_species))
-    allocate(fields(n_cells))
-    allocate(dens(n_cells, n_species))
 
     if (gas_constant_density) then
        ! Compute field in Townsends
