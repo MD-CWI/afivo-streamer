@@ -232,7 +232,7 @@ contains
          "Where alpha_eff * n^(-1/3) > threshold, disable electron reactions")
 
     call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
-         "Seed for random numbers. If all zero, generate from clock.")
+         "Seed for random numbers; if all zero, generate randomly")
 
     if (all(rng_int4_seed == 0)) then
        rng_int4_seed = get_random_seed()
@@ -246,14 +246,18 @@ contains
 
   end subroutine ST_initialize
 
-  !> Get a random seed based on the current time
+  !> Get a random seed based
   function get_random_seed() result(seed)
-    integer :: seed(4)
-    integer :: time, i
+    integer  :: seed(4)
+    integer  :: i
+    real(dp) :: rr
 
-    call system_clock(time)
+    ! Set a random seed
+    call random_seed()
+
     do i = 1, 4
-       seed(i) = ishftc(time, i*8)
+       call random_number(rr)
+       seed(i) = int(huge(1) * rr)
     end do
   end function get_random_seed
 
