@@ -336,12 +336,18 @@ contains
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer                      :: my_unit, i, n, n_found
-    integer, parameter           :: n_max         = 1000
+    integer, parameter           :: n_max = 1000
     real(dp)                     :: coord_val(NDIM+1, n_max), d
 
     ! Get locations of the maxima
     call analysis_get_maxima(tree, i_electric_fld, field_maxima_threshold, &
          n_max, coord_val, n_found)
+
+    if (n_found > n_max) then
+       print *, "output_fld_maxima warning: n_found > n_max"
+       print *, "n_found = ", n_found, "n_max = ", n_max
+       n_found = n_max
+    end if
 
     ! Merge maxima that are too close
     do n = n_found, 1, -1

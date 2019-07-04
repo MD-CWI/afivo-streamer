@@ -253,16 +253,21 @@ contains
 
   !> Get a random seed based
   function get_random_seed() result(seed)
+    use iso_fortran_env, only: int64
     integer  :: seed(4)
     integer  :: i
     real(dp) :: rr
+    integer(int64) :: time
 
-    ! Set a random seed
+    ! Set a random seed (this does not work on all systems)
     call random_seed()
+
+    ! Get some count of the time
+    call system_clock(time)
 
     do i = 1, 4
        call random_number(rr)
-       seed(i) = int(huge(1) * rr)
+       seed(i) = ieor(int(time), int(huge(1) * rr))
     end do
   end function get_random_seed
 
