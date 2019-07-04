@@ -32,6 +32,9 @@ module m_output
   ! Write Silo output
   logical, public, protected :: silo_write = .true.
 
+  ! Write Silo output every N outputs
+  integer, public, protected :: silo_per_outputs = 1
+
   ! Write binary output files (to resume later)
   logical, public, protected :: datfile_write = .false.
 
@@ -131,6 +134,8 @@ contains
 
     call CFG_add_get(cfg, "silo_write", silo_write, &
          "Write silo output")
+    call CFG_add_get(cfg, "silo%per_outputs", silo_per_outputs, &
+         "Write silo output files every N outputs")
 
     call CFG_add_get(cfg, "datfile%write", datfile_write, &
          "Write binary output files (to resume later)")
@@ -183,7 +188,8 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
-    if (silo_write) then
+    if (silo_write .and. &
+         modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
        if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
        call field_set_rhs(tree, 0)
