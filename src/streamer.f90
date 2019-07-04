@@ -31,14 +31,15 @@ program streamer
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
-  type(mg_t)                :: mg             ! Multigrid option struct
-  type(ref_info_t)          :: ref_info
+  type(mg_t)                :: mg             ! Multigrid option structure
+  type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
 
+  ! Parse command line configuration files and options
   call CFG_update_from_arguments(cfg)
 
   call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
