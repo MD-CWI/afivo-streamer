@@ -30,7 +30,7 @@ program streamer
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
-  type(af_t)                :: tree_copy
+  type(af_t)                :: tree_copy      ! Used when reading a tree from a file
   type(mg_t)                :: mg             ! Multigrid option struct
   type(ref_info_t)          :: ref_info
   integer                   :: output_cnt = 0 ! Number of output files written
