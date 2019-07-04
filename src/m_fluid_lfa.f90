@@ -386,6 +386,11 @@ contains
        end where
     end if
 
+    ! Limit the electron density for chemistry calculations
+    where (dens(:, ix_electron) > ST_max_reaction_density)
+       dens(:, ix_electron) = ST_max_reaction_density
+    end where
+
     call get_rates(fields, rates, n_cells)
     call get_derivatives(dens, rates, derivs, n_cells)
 
