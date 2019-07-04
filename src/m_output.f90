@@ -106,7 +106,6 @@ contains
          "If defined, only output these variables", .true.)
     call CFG_get_size(cfg, "output%only", n)
     allocate(output_only(n))
-    print *, n
     call CFG_get(cfg, "output%only", output_only)
 
     if (size(output_only) > 0) then
