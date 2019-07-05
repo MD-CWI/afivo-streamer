@@ -140,6 +140,7 @@ contains
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads
     character(len=name_len)    :: prolong_method
+    character(len=string_len)  :: tmp_str
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
@@ -242,6 +243,10 @@ contains
     if (all(rng_int4_seed == 0)) then
        rng_int4_seed = get_random_seed()
        print *, "RNG seed: ", rng_int4_seed
+
+       ! Store the updated seed in the configuration
+       write(tmp_str, *) "rng_seed = ", rng_int4_seed
+       call CFG_update_from_line(cfg, tmp_str)
     end if
 
     rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
