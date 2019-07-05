@@ -126,7 +126,8 @@ program streamer
      call output_write(tree, output_cnt, 0.0_dp, write_sim_data)
   end if
 
-  print *, "Number of threads", af_get_max_threads()
+  print *, "Simulation output: ", trim(output_name)
+  print *, "Number of threads: ", af_get_max_threads()
   call af_print_info(tree)
 
   ! Initial wall clock time
