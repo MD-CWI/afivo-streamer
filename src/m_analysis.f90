@@ -69,4 +69,39 @@ contains
 
   end subroutine analysis_get_maxima
 
+  !> Get the conductivity of an axisymmetric streamer at a z-coordinate
+  subroutine analysis_get_sigma_cyl(tree, rmax, z, sigma)
+    ! Include some modules
+    type(af_t), intent(in) :: tree
+    real(dp), intent(in)   :: rmax  !< Integrate up to this radius
+    real(dp), intent(in)   :: z     !< z-coordinate
+    real(dp), intent(out)  :: sigma !< The conductivity
+
+    real(dp) :: ne_fld(2)
+    logical  :: success
+    integer  :: id_guess
+
+    id_guess = -1
+    sigma    = 0.0_dp
+
+    ! Interpolate up to rmax
+    do ...
+       r = ...
+       ne_fld = af_interp1(tree, [r, z], [i_electron, i_electric_fld], &
+            success, id_guess)
+       if (.not. success) error stop "oh oh"
+
+       ! Get mobility (see e.g. m_fluid_lfa)
+       Td = ... ! Townsend
+       ! N_inv is inverse gas number density
+       mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv 
+
+       ! Multiply with something like 2 pi r dr
+
+       ! Update total
+       sigma = sigma + ...
+    end do
+
+  end subroutine analysis_get_sigma_cyl
+
 end module m_analysis
