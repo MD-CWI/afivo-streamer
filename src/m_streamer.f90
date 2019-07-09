@@ -184,7 +184,7 @@ contains
     end if
 
     call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
-	       "Whether end_time is used to end the simulation")
+         "Whether end_time is used to end the simulation")
     call CFG_add_get(cfg, "use_end_streamer_length", ST_use_end_streamer_length, &
          "Whether the length of the streamer is used to end the simulation")
     call CFG_add_get(cfg, "end_streamer_length", ST_end_streamer_length, &
