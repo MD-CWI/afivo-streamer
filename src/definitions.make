@@ -28,8 +28,10 @@ m_chemistry.o: m_types.mod
 m_chemistry.o: m_units_constants.mod
 m_dielectric.o: m_advance_base.mod
 m_dielectric.o: m_config.mod
+m_dielectric.o: m_init_cond.mod
 m_dielectric.o: m_mrgrnk.mod
 m_dielectric.o: m_streamer.mod
+m_dielectric.o: m_types.mod
 m_dielectric.o: m_units_constants.mod
 m_dt.o: m_config.mod
 m_field.o: m_chemistry.mod
@@ -66,8 +68,11 @@ m_output.o: m_config.mod
 m_output.o: m_dielectric.mod
 m_output.o: m_dt.mod
 m_output.o: m_field.mod
+m_output.o: m_gas.mod
+m_output.o: m_lookup_table.mod
 m_output.o: m_photoi.mod
 m_output.o: m_streamer.mod
+m_output.o: m_table_data.mod
 m_output.o: m_types.mod
 m_output.o: m_user_methods.mod
 m_photoi_helmh.o: m_config.mod

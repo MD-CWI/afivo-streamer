@@ -483,7 +483,7 @@ contains
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
           ! Compute secondary emission flux
-          se_flux = gamma_se_ion * sum(box%fc(1, 1:nc, 1, flux_pos_ion), dim=2)
+          se_flux = -gamma_se_ion * sum(box%fc(1, 1:nc, 1, flux_pos_ion), dim=2)
           box%cc(1, 1:nc, i_electron+s_out) = &
                box%cc(1, 1:nc, i_electron+s_out) + dt * se_flux / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
@@ -509,7 +509,7 @@ contains
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
           ! Compute secondary emission flux
-          se_flux = gamma_se_ion * sum(box%fc(1:nc, 1, 2, flux_pos_ion), dim=2)
+          se_flux = -gamma_se_ion * sum(box%fc(1:nc, 1, 2, flux_pos_ion), dim=2)
           box%cc(1:nc, 1, i_electron+s_out) = &
                box%cc(1:nc, 1, i_electron+s_out) + dt * se_flux / dr
           surface%charge(:, 1+s_out) = surface%charge(:, 1+s_out) + &
