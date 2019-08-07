@@ -94,6 +94,7 @@ module m_chemistry
   public :: charged_species_charge
 
   public :: chemistry_initialize
+  public :: chemistry_write_summary
   public :: get_rates
   public :: get_derivatives
 
@@ -235,6 +236,78 @@ contains
     call check_charge_conservation()
 
   end subroutine chemistry_initialize
+
+  !> Write a summary of the reactions (TODO) and the ionization and attachment
+  !> coefficients (if working at constant pressure)
+  subroutine chemistry_write_summary(fname)
+    use m_gas
+    use m_transport_data
+    character(len=*), intent(in) :: fname
+    real(dp), allocatable        :: fields(:)
+    real(dp), allocatable        :: rates(:, :)
+    real(dp), allocatable        :: eta(:), alpha(:)
+    real(dp), allocatable        :: v(:)
+    integer                      :: n, n_fields, i_elec
+    integer                      :: my_unit
+
+    if (gas_constant_density) then
+       i_elec = species_index("e")
+       n_fields = td_tbl%n_points
+
+       allocate(fields(n_fields))
+       fields = LT_get_xdata(td_tbl%x_min, td_tbl%dx, n_fields)
+
+       allocate(rates(n_fields, n_reactions))
+       allocate(eta(n_fields), alpha(n_fields))
+       call get_rates(fields, rates, n_fields)
+
+       eta(:)   = 0.0_dp
+       alpha(:) = 0.0_dp
+
+       ! Compute attachment coefficient
+       do n = 1, n_reactions
+          ! Find attachment reactions as follows:
+          ! l.h.s.: an electron and no positive ions
+          ! r.h.s.: no electron
+          if (any(reactions(n)%ix_in == i_elec) .and. &
+               .not. any(reactions(n)%ix_out == i_elec) .and. &
+               .not. any(species_charge(reactions(n)%ix_in) > 0)) then
+             eta(:) = eta(:) + rates(:, n)
+          else if (any(reactions(n)%ix_in == i_elec) .and. &
+               any(reactions(n)%ix_out == i_elec) .and. &
+               any(reactions(n)%multiplicity_out == 2)) then
+             !> @todo in the future, add reaction types to reactions
+             alpha(:) = alpha(:) + rates(:, n)
+          end if
+       end do
+
+       allocate(v(n_fields))
+       v = LT_get_col(td_tbl, td_mobility, fields) * fields * Townsend_to_SI
+
+       ! v(1) is zero, so extrapolate linearly
+       eta(2:) = eta(2:) / v(2:)
+       eta(1) = 2 * eta(2) - eta(3)
+       alpha(2:) = alpha(2:) / v(2:)
+       alpha(1) = 2 * alpha(2) - alpha(3)
+
+       ! Write to a file
+       open(newunit=my_unit, file=trim(fname), action="write")
+       write(my_unit, *) "Townsend attach. coef. eta (for fixed pressure)"
+       write(my_unit, *) "--------------------------"
+       do n = 1, n_fields
+          write(my_unit, *) fields(n), eta(n)
+       end do
+       write(my_unit, *) "--------------------------"
+       write(my_unit, *) ""
+       write(my_unit, *) "Townsend ioniz. coef. alpha (for fixed pressure)"
+       write(my_unit, *) "--------------------------"
+       do n = 1, n_fields
+          write(my_unit, *) fields(n), alpha(n)
+       end do
+       write(my_unit, *) "--------------------------"
+       close(my_unit)
+    end if
+  end subroutine chemistry_write_summary
 
   subroutine check_charge_conservation()
     integer :: n, q_in, q_out

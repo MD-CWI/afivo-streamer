@@ -79,6 +79,7 @@ module m_output
 
   ! Public methods
   public :: output_initialize
+  public :: output_initial_summary
   public :: output_write
   public :: output_log
   public :: output_status
@@ -171,6 +172,15 @@ contains
          "Minimal distance (m) between electric field maxima")
 
   end subroutine output_initialize
+
+  !> Write a summary of the model and parameters used
+  subroutine output_initial_summary()
+    use m_chemistry
+    character(len=string_len) :: fname
+
+    fname = trim(output_name) // "_summary.txt"
+    call chemistry_write_summary(trim(fname))
+  end subroutine output_initial_summary
 
   subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
     use m_photoi
