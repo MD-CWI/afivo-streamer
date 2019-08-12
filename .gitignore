@@ -74,3 +74,5 @@ documentation/html/*
 /examples/poisson_coarse_solver_2d
 /examples/poisson_coarse_solver_3d
 /examples/poisson_div_cleaning
+/examples/reaction_diffusion_2d
+/examples/reaction_diffusion_3d
