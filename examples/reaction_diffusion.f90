@@ -6,34 +6,52 @@ program reaction_diffusion_Xd
   implicit none
 
   integer, parameter :: box_size = 8
+  integer            :: nx_min = 100
   integer            :: i_u
   integer            :: i_v
   integer            :: i_phi1, i_phi2
   integer            :: i_rhs1, i_rhs2
   integer            :: i_tmp
 
-  real(dp), parameter :: domain_len = 1.0_dp
-
+  real(dp)           :: domain_len      = 1.0_dp
   type(af_t)         :: tree
   type(mg_t)         :: mg1, mg2
   type(ref_info_t)   :: refine_info
-  integer            :: time_steps, output_cnt
-  real(dp)           :: time, end_time
-  real(dp)           :: dt
-  real(dp)           :: dt_output
+  integer            :: it, output_cnt
+  integer            :: my_unit
+  real(dp)           :: time
+  real(dp)           :: end_time        = 2.0_dp
+  real(dp)           :: dt              = 1e-3_dp
+  real(dp)           :: dt_output       = 1e-2_dp
+  real(dp)           :: u_rng_ampl      = 0.0_dp
+  real(dp)           :: v_rng_ampl      = 0.0_dp
+  logical            :: periodic(3)     = .false.
   character(len=100) :: fname
+  character(len=20)  :: time_integrator = "imex"
+  character(len=20)  :: equation_type   = "schnakenberg"
 
-  real(dp), parameter :: alpha = 0.1305_dp
-  real(dp), parameter :: beta = 0.7695_dp
-  real(dp), parameter :: D1 = 0.05_dp
-  real(dp), parameter :: D2 = 1.0_dp
-  real(dp), parameter :: kappa = 100.0_dp
+  real(dp) :: alpha = 0.1305_dp
+  real(dp) :: beta  = 0.7695_dp
+  real(dp) :: D1    = 0.05_dp
+  real(dp) :: D2    = 1.0_dp
+  real(dp) :: kappa = 100.0_dp
+
+  real(dp) :: gs_F = 0.046d0
+  real(dp) :: gs_k = 0.063d0
+
+  namelist /settings/ alpha, beta, D1, D2, kappa, end_time, dt, &
+       dt_output, nx_min, time_integrator, periodic, u_rng_ampl, &
+       v_rng_ampl, equation_type, domain_len, gs_F, gs_k
 
   print *, "Running reaction_diffusion_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
-  call af_add_cc_variable(tree, "u", ix=i_u, n_copies=3)
-  call af_add_cc_variable(tree, "v", ix=i_v, n_copies=3)
+  open(newunit=my_unit, file="reaction_diffusion.txt", status="old")
+  read(my_unit, settings)
+  close(my_unit)
+
+  call af_add_cc_variable(tree, "u", ix=i_u, n_copies=2)
+  call af_add_cc_variable(tree, "v", ix=i_v, n_copies=2)
   call af_add_cc_variable(tree, "phi1", ix=i_phi1)
   call af_add_cc_variable(tree, "phi2", ix=i_phi2)
   call af_add_cc_variable(tree, "rhs1", ix=i_rhs1)
@@ -42,13 +60,15 @@ program reaction_diffusion_Xd
 
   call af_set_cc_methods(tree, i_u, af_bc_neumann_zero)
   call af_set_cc_methods(tree, i_v, af_bc_neumann_zero)
+  call af_set_cc_methods(tree, i_u+1, af_bc_neumann_zero)
+  call af_set_cc_methods(tree, i_v+1, af_bc_neumann_zero)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(domain_len)], &
        [DTIMES(box_size)], &
-       periodic=[DTIMES(.false.)])
+       periodic=periodic)
 
   call af_print_info(tree)
 
@@ -83,12 +103,17 @@ program reaction_diffusion_Xd
 
   output_cnt = 0
   time       = 0
-  end_time   = 2.0_dp
-  time_steps = 0
+  it         = 0
   time       = 0
-  dt         = 0.5 * af_min_dr(tree)**2/(2*NDIM*max(D1, D2))
-  dt         = 1e-3_dp
-  dt_output  = 1e-1_dp
+
+  select case (time_integrator)
+  case ("imex")
+     continue
+  case default
+     if (dt > af_min_dr(tree)**2/(2*NDIM*max(D1, D2))) then
+        error stop "dt is too large for explicit integration"
+     end if
+  end select
 
   mg1%helmholtz_lambda = 1/(0.5_dp * dt * D1)
   mg2%helmholtz_lambda = 1/(0.5_dp * dt * D2)
@@ -98,7 +123,7 @@ program reaction_diffusion_Xd
 
   ! Starting simulation
   do
-     time_steps = time_steps + 1
+     it = it + 1
 
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
@@ -106,8 +131,17 @@ program reaction_diffusion_Xd
         call af_write_silo(tree, trim(fname), output_cnt, time, dir="output")
      end if
 
-     ! call af_loop_box(tree, gs_explicit)
-     call gs_imex(tree)
+     select case (time_integrator)
+     case ("imex")
+        call rd_imex(tree)
+     case ("forward_euler")
+        call af_loop_box(tree, forward_euler)
+     case ("midpoint_method")
+        call af_loop_box(tree, midpoint_method_step1)
+        call af_gc_tree(tree, [i_u+1, i_v+1])
+        call af_loop_box(tree, midpoint_method_step2)
+     end select
+
      call af_gc_tree(tree, [i_u, i_v])
 
      if (time > end_time) exit
@@ -116,27 +150,28 @@ program reaction_diffusion_Xd
 
 contains
 
-  subroutine gs_explicit(box)
+  subroutine forward_euler(box)
     type(box_t), intent(inout) :: box
-    integer, parameter         :: explicit_order = 1
+    call step_F(box, dt, [i_u, i_v], [i_u, i_v], [i_u, i_v])
+  end subroutine forward_euler
 
-    select case (explicit_order)
-    case (1)
-       call step_F(box, dt, [i_u, i_v], [i_u, i_v], [i_u, i_v])
-    case (2)
-       ! RK2 method
-       call step_F(box, 0.5_dp * dt, [i_u, i_v], [i_u, i_v], [i_u+1, i_v+1])
-       call step_F(box, dt, [i_u+1, i_v+1], [i_u, i_v], [i_u, i_v])
-    end select
-  end subroutine gs_explicit
+  subroutine midpoint_method_step1(box)
+    type(box_t), intent(inout) :: box
+    call step_F(box, 0.5_dp * dt, [i_u, i_v], [i_u, i_v], [i_u+1, i_v+1])
+  end subroutine midpoint_method_step1
 
-  subroutine gs_imex(tree)
+  subroutine midpoint_method_step2(box)
+    type(box_t), intent(inout) :: box
+    call step_F(box, dt, [i_u+1, i_v+1], [i_u, i_v], [i_u, i_v])
+  end subroutine midpoint_method_step2
+
+  subroutine rd_imex(tree)
     type(af_t), intent(inout) :: tree
     integer                   :: n
     real(dp)                  :: max_res, max_rhs
     real(dp), parameter       :: max_rel_residual = 1e-6_dp
 
-    call af_loop_box(tree, gs_imex_step1)
+    call af_loop_box(tree, rd_imex_step1)
 
     do n = 1, 10
        call af_tree_maxabs_cc(tree, mg1%i_rhs, max_rhs)
@@ -154,10 +189,10 @@ contains
        if (max_res/max_rhs < max_rel_residual) exit
     end do
 
-    call af_loop_box(tree, gs_imex_step2)
-  end subroutine gs_imex
+    call af_loop_box(tree, rd_imex_step2)
+  end subroutine rd_imex
 
-  subroutine gs_imex_step1(box)
+  subroutine rd_imex_step1(box)
     type(box_t), intent(inout) :: box
     integer                    :: nc
 
@@ -173,15 +208,15 @@ contains
     box%cc(DTIMES(1:nc), mg2%i_rhs) = -box%cc(DTIMES(1:nc), mg2%i_rhs) * &
          mg2%helmholtz_lambda
 
-  end subroutine gs_imex_step1
+  end subroutine rd_imex_step1
 
-  subroutine gs_imex_step2(box)
+  subroutine rd_imex_step2(box)
     type(box_t), intent(inout) :: box
 
     call step_F(box, 0.5_dp * dt, [i_u, i_v], [i_u, i_v], [i_u, i_v])
     call step_F(box, 0.5_dp * dt, [mg1%i_phi, mg2%i_phi], &
          [i_u, i_v], [i_u, i_v])
-  end subroutine gs_imex_step2
+  end subroutine rd_imex_step2
 
   subroutine step_F0(box, dt, i_deriv, i_prev, i_out)
     type(box_t), intent(inout) :: box
@@ -195,10 +230,22 @@ contains
     nc = box%n_cell
 
     ! Store the derivatives in case i_out overlaps with i_deriv
-    tmp(DTIMES(:), 1) = kappa * (alpha - box%cc(DTIMES(1:nc), i_deriv(1)) + &
-         box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
-    tmp(DTIMES(:), 2) = kappa * (beta - &
-         box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
+    select case (equation_type)
+    case ("gs")
+       tmp(DTIMES(:), 1) = -box%cc(DTIMES(1:nc), i_deriv(1)) * &
+            box%cc(DTIMES(1:nc), i_deriv(2))**2 + &
+            gs_F * (1 - box%cc(DTIMES(1:nc), i_deriv(1)))
+       tmp(DTIMES(:), 2) = box%cc(DTIMES(1:nc), i_deriv(1)) * &
+            box%cc(DTIMES(1:nc), i_deriv(2))**2 - &
+            (gs_F + gs_k) * box%cc(DTIMES(1:nc), i_deriv(2))
+    case ("schnakenberg")
+       tmp(DTIMES(:), 1) = kappa * (alpha - box%cc(DTIMES(1:nc), i_deriv(1)) + &
+            box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
+       tmp(DTIMES(:), 2) = kappa * (beta - &
+            box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
+    case default
+       error stop "Invalid equation type"
+    end select
 
     box%cc(DTIMES(1:nc), i_out) = &
          box%cc(DTIMES(1:nc), i_prev) + dt * tmp
@@ -240,12 +287,26 @@ contains
     tmp(DTIMES(:), 2) = tmp(DTIMES(:), 2) * D2
 
     ! Add the other derivatives
-    tmp(DTIMES(:), 1) = tmp(DTIMES(:), 1) + &
-         kappa * (alpha - box%cc(DTIMES(1:nc), i_deriv(1)) + &
-         box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
-    tmp(DTIMES(:), 2) = tmp(DTIMES(:), 2) + &
-         kappa * (beta - &
-         box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
+    select case (equation_type)
+    case ("gs")
+       tmp(DTIMES(:), 1) = tmp(DTIMES(:), 1) - &
+            box%cc(DTIMES(1:nc), i_deriv(1)) * &
+            box%cc(DTIMES(1:nc), i_deriv(2))**2 + &
+            gs_F * (1 - box%cc(DTIMES(1:nc), i_deriv(1)))
+       tmp(DTIMES(:), 2) = tmp(DTIMES(:), 2) + &
+            box%cc(DTIMES(1:nc), i_deriv(1)) * &
+            box%cc(DTIMES(1:nc), i_deriv(2))**2 - &
+            (gs_F + gs_k) * box%cc(DTIMES(1:nc), i_deriv(2))
+    case ("schnakenberg")
+       tmp(DTIMES(:), 1) = tmp(DTIMES(:), 1) + &
+            kappa * (alpha - box%cc(DTIMES(1:nc), i_deriv(1)) + &
+            box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
+       tmp(DTIMES(:), 2) = tmp(DTIMES(:), 2) + &
+            kappa * (beta - &
+            box%cc(DTIMES(1:nc), i_deriv(1))**2 * box%cc(DTIMES(1:nc), i_deriv(2)))
+    case default
+       error stop "Invalid equation type"
+    end select
 
     box%cc(DTIMES(1:nc), i_out) = box%cc(DTIMES(1:nc), i_prev) + dt * tmp
   end subroutine step_F
@@ -255,7 +316,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
 
-    if (maxval(box%dr) > domain_len/50) then
+    if (maxval(box%dr) > domain_len/nx_min) then
        cell_flags = af_do_ref
     else
        cell_flags = af_keep_ref
@@ -266,29 +327,41 @@ contains
   subroutine set_initial_condition(box)
     type(box_t), intent(inout) :: box
     integer                    :: IJK, nc
-    real(dp)                   :: rr(NDIM), r0(NDIM)
+    real(dp)                   :: rr(NDIM), r0(NDIM), u, v
 
     nc = box%n_cell
-    r0(1) = 1.0_dp/3
-    r0(2:) = 0.5_dp
 
-    do KJI_DO(0,nc+1)
-       rr = af_r_cc(box, [IJK])
-       box%cc(IJK, i_u) = alpha + beta + 1e-3_dp * &
-            exp(-100_dp * sum((rr - r0)**2))
-       box%cc(IJK, i_v) = beta / (alpha + beta)**2
-    end do; CLOSE_DO
+    select case (equation_type)
+    case ("gs")
+       do KJI_DO(0,nc+1)
+          rr = af_r_cc(box, [IJK])
+
+          if (all(abs(rr - 0.5_dp * domain_len) < 10.0_dp/256)) then
+             call random_number(u)
+             call random_number(v)
+             box%cc(IJK, i_u) = 0.5_dp + u_rng_ampl * (u - 0.5_dp)
+             box%cc(IJK, i_v) = 0.25_dp + v_rng_ampl * (v - 0.5_dp)
+          else
+             box%cc(IJK, i_u) = 1.0_dp
+             box%cc(IJK, i_v) = 0.0_dp
+          end if
+       end do; CLOSE_DO
+    case ("schnakenberg")
+       r0(1) = 1.0_dp/3
+       r0(2:) = 0.5_dp
+
+       do KJI_DO(0,nc+1)
+          rr = af_r_cc(box, [IJK])
+          call random_number(u)
+          call random_number(v)
+          box%cc(IJK, i_u) = alpha + beta + 1e-3_dp * &
+               exp(-100_dp * sum((rr - r0)**2)) + u_rng_ampl * (u - 0.5_dp)
+          box%cc(IJK, i_v) = beta / (alpha + beta)**2 + v_rng_ampl * (v - 0.5_dp)
+       end do; CLOSE_DO
+    case default
+       error stop "Unknown equation type"
+    end select
   end subroutine set_initial_condition
-
-  ! !> This routine computes the right hand side per box
-  ! subroutine set_rhs(box)
-  !   type(box_t), intent(inout) :: box
-  !   integer                     :: nc
-
-  !   nc = box%n_cell
-  !   box%cc(DTIMES(1:nc), i_rhs) = -1/(dt * diffusion_coeff) * &
-  !        box%cc(DTIMES(1:nc), i_phi)
-  ! end subroutine set_rhs
 
   !> Perform Laplacian operator
   subroutine laplacian(box, i_in, lpl)
