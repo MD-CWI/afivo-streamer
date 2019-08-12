@@ -1,5 +1,8 @@
 #include "../src/cpp_macros.h"
 !> \example reaction_diffusion.f90
+!>
+!> This example shows how to solve reaction-diffusion equations with different
+!> time step methods.
 program reaction_diffusion_Xd
   use m_af_all
 
@@ -28,14 +31,21 @@ program reaction_diffusion_Xd
   logical            :: periodic(3)     = .false.
   character(len=100) :: fname
   character(len=20)  :: time_integrator = "imex"
+  ! Two types of equations can be solved, schnakenberg and gs (Gray-Scott). The
+  ! Gray-Scott models are not stiff, whereas the schnakenberg model has a stiff
+  ! diffusion term.
   character(len=20)  :: equation_type   = "schnakenberg"
 
+  ! These settings are for the example given in section 4.4 (p. 401) of
+  ! "Time-dependent advection diffusion reaction systems" by Hundsdorfer &
+  ! Verwer. The example is credited to Schnakenberg 1979.
   real(dp) :: alpha = 0.1305_dp
   real(dp) :: beta  = 0.7695_dp
   real(dp) :: D1    = 0.05_dp
   real(dp) :: D2    = 1.0_dp
   real(dp) :: kappa = 100.0_dp
 
+  ! These settings are for a Gray-Scott model.
   real(dp) :: gs_F = 0.046d0
   real(dp) :: gs_k = 0.063d0
 
@@ -82,6 +92,7 @@ program reaction_diffusion_Xd
      if (refine_info%n_add == 0) exit
   end do
 
+  ! Always initialize multigrid methods, even with explicit time integration
   mg1%i_phi            = i_phi1
   mg1%i_rhs            = i_rhs1
   mg1%i_tmp            = i_tmp
@@ -100,7 +111,6 @@ program reaction_diffusion_Xd
   mg2%box_gsrb    => mg_box_gsrb_lpl
   mg2%box_stencil => mg_box_lpl_stencil
 
-
   output_cnt = 0
   time       = 0
   it         = 0
@@ -115,6 +125,7 @@ program reaction_diffusion_Xd
      end if
   end select
 
+  ! Lambda in the Helmholtz equations depends on the time step
   mg1%helmholtz_lambda = 1/(0.5_dp * dt * D1)
   mg2%helmholtz_lambda = 1/(0.5_dp * dt * D2)
 
@@ -165,6 +176,9 @@ contains
     call step_F(box, dt, [i_u+1, i_v+1], [i_u, i_v], [i_u, i_v])
   end subroutine midpoint_method_step2
 
+  !> This implements the IMEX method described in Chapter IV eq. (4.12) of the
+  !> Hundsdorfer-Verwer book, which is a combination of the implicit and
+  !> explicit trapezoidal rule.
   subroutine rd_imex(tree)
     type(af_t), intent(inout) :: tree
     integer                   :: n
@@ -218,6 +232,7 @@ contains
          [i_u, i_v], [i_u, i_v])
   end subroutine rd_imex_step2
 
+  !> This is the non-stiff (reaction) part
   subroutine step_F0(box, dt, i_deriv, i_prev, i_out)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
@@ -251,6 +266,7 @@ contains
          box%cc(DTIMES(1:nc), i_prev) + dt * tmp
   end subroutine step_F0
 
+  !> This is the stiff (diffusion) part
   subroutine step_F1(box, dt, i_deriv, i_prev, i_out)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
