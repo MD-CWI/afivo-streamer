@@ -29,6 +29,15 @@ module m_output
   ! Write output along a line
   logical, public, protected :: lineout_write = .false.
 
+  ! Write integral over cross-section data output
+  logical, public, protected :: cross_write = .false.
+
+  ! Integrate up to this r value
+  real(dp), public, protected :: cross_rmax = 2.0e-3_dp
+
+  ! Use this many points for cross-section data
+  integer, public, protected :: cross_npoints = 500
+
   ! Write Silo output
   logical, public, protected :: silo_write = .true.
 
@@ -150,6 +159,13 @@ contains
     call CFG_add_get(cfg, "lineout%rmax", lineout_rmax(1:NDIM), &
          "Relative position of line maximum coordinate")
 
+    call CFG_add_get(cfg, "cross%write", cross_write, &
+         "Write integral over cross-section data output")
+    call CFG_add_get(cfg, "cross%rmax", cross_rmax, &
+         "Integrate up to this r value")
+    call CFG_add_get(cfg, "cross%npoints", cross_npoints, &
+         "Use this many points for cross-section data")
+
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
     varname = "e"
@@ -176,6 +192,7 @@ contains
     use m_photoi
     use m_field
     use m_user_methods
+    use m_analysis
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
@@ -186,6 +203,9 @@ contains
     end interface
     integer                   :: i
     character(len=string_len) :: fname
+
+    !compute conductivity of the entire domain
+    call analysis_get_sigma(tree)
 
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
@@ -235,11 +255,17 @@ contains
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_line_", output_cnt
        call af_write_line(tree, trim(fname), &
-            [i_electron, i_1pos_ion, i_phi, i_electric_fld], &
+            [i_electron, i_rhs, i_phi, i_electric_fld], &
             r_min = lineout_rmin(1:NDIM) * ST_domain_len + ST_domain_origin, &
             r_max = lineout_rmax(1:NDIM) * ST_domain_len + ST_domain_origin, &
             n_points=lineout_npoints)
     end if
+
+    if(cross_write) then
+      write(fname, "(A,I6.6)") trim(output_name) // &
+        "_cross_", output_cnt
+      call output_cross(tree, fname)
+    endif
 
   end subroutine output_write
 
@@ -380,5 +406,26 @@ contains
     close(my_unit)
 
   end subroutine output_fld_maxima
+
+  subroutine output_cross(tree, filename)
+    use m_af_all
+    use m_analysis
+    use m_streamer
+    type(af_t), intent(in) :: tree
+    character(len=*), intent(inout) :: filename
+
+    integer  :: my_unit
+    integer  :: i 
+    real(dp) :: z, sigma, elec_dens, charge_dens, current_dens
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    write(my_unit, '(A)') "z sigma elec_dens charge_dens current_dens"
+    do i = 1, cross_npoints
+      z = i * ST_domain_len(2) / (cross_npoints + 1)
+      call analysis_get_cross(tree, cross_rmax, z, sigma, elec_dens, charge_dens, current_dens)
+      write(my_unit, *) z, sigma, elec_dens, charge_dens, current_dens
+    end do
+    close(my_unit)
+  end subroutine output_cross
 
 end module m_output
