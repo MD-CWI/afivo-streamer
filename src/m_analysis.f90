@@ -83,7 +83,7 @@ contains
     real(dp) :: ne_fld(2), mu, Td, N_inv
     integer  :: n, m
 
-    N_inv = 1/gas_number_density
+    N_inv = 1.0_dp/gas_number_density
 
 #if NDIM == 2
     do n = 1, nc
@@ -142,7 +142,7 @@ contains
     elec_dens    = 0.0_dp
     charge_dens  = 0.0_dp
     current_dens = 0.0_dp
-    N_inv = 1/gas_number_density
+    N_inv = 1.0_dp/gas_number_density
     dr = af_min_dr(tree)
     m = int(rmax/dr) + 1
 
@@ -155,10 +155,10 @@ contains
 #endif
        Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-       d_sigma = mu * ne_fld_rhs(1) * 2 * UC_pi * r * dr
-       d_elec_dens = ne_fld_rhs(1) * 2 * UC_pi * r * dr
-       d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2 * UC_pi * r * dr / UC_elec_charge
-       d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2 * UC_pi * r * dr
+       d_sigma = mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
+       d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
+       d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
+       d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
 
        ! Update total
        sigma = sigma + d_sigma
