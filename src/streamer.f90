@@ -244,6 +244,8 @@ contains
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
 
+    call output_initial_summary()
+
   end subroutine initialize_modules
 
   subroutine set_initial_conditions(tree, mg)
