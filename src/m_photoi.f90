@@ -127,12 +127,12 @@ contains
 
     type(af_t), intent(inout)     :: tree
     real(dp), intent(in), optional :: dt
-    real(dp), parameter            :: p_quench = 40.0e-3_dp
     real(dp)                       :: quench_fac, decay_fraction, eff_decay_time, decay_rate
 
     ! Compute quench factor, because some excited species will be quenched by
     ! collisions, preventing the emission of a UV photon
-    quench_fac = p_quench / (gas_pressure + p_quench)
+    quench_fac = photoi_quenching_pressure / &
+         (gas_pressure + photoi_quenching_pressure)
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
