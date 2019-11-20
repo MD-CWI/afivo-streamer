@@ -1,4 +1,0 @@
-There are several points to note when using Bolsig.
-- Transport coefficients are affected by the electron density growth condition set which is by default assumed to be exponential in time on online Bolsig calculations. Using the offline version of Bolsig, one is free to choose between exponential temporal growth, exponential spatial growth, excitation and attachment not included, and density gradient expansion. The rates in air_chemistry_v0.txt used exponential temporal growth. 
-- In its calculation for the attachment coefficient, Bolsig does not include three-body attachment.
-- As of 19/11/19, including chemistry in afivo-streamer results in a simulation that employs two alpha coefficients. The photoionization module considers the alpha calculated by Bolsig while a separate alpha is alsco calculated by afivo-streamer from the reaction rate coefficients. The two alphas don't match.
