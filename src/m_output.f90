@@ -198,7 +198,7 @@ contains
     call chemistry_write_summary(trim(fname))
   end subroutine output_initial_summary
 
-  subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
+  subroutine output_write(tree, output_cnt, wc_time, lc_reading, write_sim_data)
     use m_photoi
     use m_field
     use m_user_methods
@@ -206,6 +206,7 @@ contains
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
+    logical, intent(in)       :: lc_reading
     interface
        subroutine write_sim_data(my_unit)
          integer, intent(in) :: my_unit
@@ -220,8 +221,10 @@ contains
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
-       if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
-       call field_set_rhs(tree, 0)
+       if ( .not. lc_reading) then 
+         if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
+         call field_set_rhs(tree, 0)
+       endif
 
        do i = 1, tree%n_var_cell
           if (tree%cc_write_output(i)) then
