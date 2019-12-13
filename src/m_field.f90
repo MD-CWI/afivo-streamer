@@ -60,6 +60,7 @@ module m_field
 
   public :: field_initialize
   public :: field_compute
+  public :: field_compute_rhs
   public :: field_set_rhs
   public :: field_from_potential
   public :: field_get_amplitude
@@ -223,6 +224,24 @@ contains
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, i_electric_fld)
   end subroutine field_compute
+
+  subroutine field_compute_rhs(tree, mg, time)
+    use m_units_constants
+    use m_chemistry
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(inout) :: mg ! Multigrid option struct
+    real(dp), intent(in)      :: time
+
+    call field_set_voltage(time)
+
+    call mg_fas_fmg(tree, mg, .false., .false.)
+
+    ! Compute field from potential
+    call af_loop_box(tree, field_from_potential)
+
+    ! Set the field norm also in ghost cells
+    call af_gc_tree(tree, i_electric_fld)
+  end subroutine field_compute_rhs
 
   !> Compute the electric field at a given time
   function field_get_amplitude(time) result(electric_fld)

@@ -17,6 +17,10 @@ program streamer
   use m_types
   use m_user_methods
   use m_output
+  use m_analysis
+  use m_lookup_table
+  use m_table_data
+  use m_units_constants
 
   implicit none
 
@@ -35,17 +39,27 @@ program streamer
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
-  real(dp)                  :: max_field, initial_streamer_pos
-  type(af_loc_t)            :: loc_field, loc_field_initial
+  logical                   :: lc_reading = .false.
+  real(dp)                  :: max_field, initial_streamer_pos, lc_r = 1.5e-06_dp
+  type(af_loc_t)            :: loc_field, loc_field_initial, loc_z
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+  real(dp), allocatable     :: x_data(:), y_data(:), z_data(:)
+  integer                   :: n
+  character(len=string_len) :: lc_file = undefined_str
+  real(dp), dimension (2)   :: rr_val
 
   ! Parse command line configuration files and options
   call CFG_update_from_arguments(cfg)
 
   call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
        "If set, restart simulation from a previous .dat file")
+  call CFG_add_get(cfg, "line_charge_reading", lc_reading, &
+       "If set, insert line charge in the axis of symmetry and calculate electric field")
+  call CFG_add_get(cfg, "line_charge_file", lc_file, "Input file with rhs data")  
   call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
        "Memory limit (GB)")
+  call CFG_add_get(cfg, "line_charge_r", lc_r, &
+       "Where to insert line charge (r coordinate)")
 
   call initialize_modules(cfg, tree, mg)
 
@@ -76,145 +90,184 @@ program streamer
   end do
 
   ! Initialize the tree (which contains all the mesh information)
-  if (restart_from_file /= undefined_str) then
-     tree_copy = tree           ! Store the settings
-     call af_read_tree(tree, restart_from_file, read_sim_data)
-
-     ! Restore some of the settings
-     tree%cc_write_output = tree_copy%cc_write_output
-     tree%cc_write_binary = tree_copy%cc_write_binary
-     tree%fc_write_binary = tree_copy%fc_write_binary
-
-     box_bytes = af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
-     tree%box_limit = nint(memory_limit_GB * 2.0_dp**30 / box_bytes)
-
-     if (tree%n_cell /= ST_box_size) &
-          error stop "restart_from_file: incompatible box size"
-
-     if (tree%n_var_cell /= tree_copy%n_var_cell) then
-        print *, "n_var_cell here:", tree_copy%n_var_cell
-        print *, "n_var_cell file:", tree%n_var_cell
-        error stop "restart_from_file: incompatible variable list"
-     end if
-
-     ! @todo more consistency checks
-
-     ! This routine always needs to be called when using multigrid
-     call mg_init(tree, mg)
-  else
-     time             = 0.0_dp ! Simulation time (all times are in s)
-     global_time      = time
-     photoi_prev_time = time   ! Time of last photoionization computation
-     dt               = advance_max_dt
-     initial_streamer_pos = 0.0_dp ! Initial streamer position
-
-     if (ST_cylindrical) then
-        coord_type = af_cyl
-     else
-        coord_type = af_xyz
-     end if
-
+  ! check if calculating for line approximation
+  if (lc_reading) then
+     time = 0.0_dp
+     coord_type = af_cyl
      call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
           ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
           r_min=ST_domain_origin, mem_limit_gb=memory_limit_GB)
-
-     ! Set up the initial conditions
      call set_initial_conditions(tree, mg)
 
-     ! Write initial output
-     output_cnt = 1 ! Number of output files written
-     call output_write(tree, output_cnt, 0.0_dp, write_sim_data)
-  end if
+     ! insert rhs values along axis
+     
+     call table_from_file(lc_file, "z_vs_Q/L", x_data, y_data)
+     ! read the Q/L data, need Q then rhs
+     call table_from_file(lc_file, "z_vs_e/L", x_data, z_data)
 
-  print *, "Simulation output: ", trim(output_name)
-  print *, "Number of threads: ", af_get_max_threads()
-  call af_print_info(tree)
+#if NDIM == 2
+     rr_val(1) = lc_r
+     do n = 1, cross_npoints
+      rr_val(2) = x_data(n)
+      loc_z = af_get_loc(tree, rr_val)
+      tree%boxes(loc_z%id)%cc(loc_z%ix(1), loc_z%ix(2), i_rhs) = y_data(n) &
+         * UC_elec_q_over_eps0 / (2.0_dp*UC_pi*rr_val(1)*af_min_dr(tree)) 
+      tree%boxes(loc_z%id)%cc(loc_z%ix(1), loc_z%ix(2), i_electron) = z_data(n) &
+         / (2.0_dp*UC_pi*rr_val(1)*af_min_dr(tree))
+     end do   
+#endif
+     ! compute E field and equipotential lines
+     call field_compute_rhs(tree, mg, time)
+     ! output and end 
+     call output_write(tree, 1, 0.0_dp, lc_reading, write_sim_data)
+
+  ! if not line approximation, run streamer simulation
+  else 
+  
+    !start from a previous run
+    if (restart_from_file /= undefined_str) then
+       tree_copy = tree           ! Store the settings
+       call af_read_tree(tree, restart_from_file, read_sim_data)
+
+       ! Restore some of the settings
+       tree%cc_write_output = tree_copy%cc_write_output
+       tree%cc_write_binary = tree_copy%cc_write_binary
+       tree%fc_write_binary = tree_copy%fc_write_binary
+
+       box_bytes = af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
+       tree%box_limit = nint(memory_limit_GB * 2.0_dp**30 / box_bytes)
+
+       if (tree%n_cell /= ST_box_size) &
+          error stop "restart_from_file: incompatible box size"
+
+       if (tree%n_var_cell /= tree_copy%n_var_cell) then
+          print *, "n_var_cell here:", tree_copy%n_var_cell
+          print *, "n_var_cell file:", tree%n_var_cell
+          error stop "restart_from_file: incompatible variable list"
+       end if
+
+       ! @todo more consistency checks
+
+       ! This routine always needs to be called when using multigrid
+       call mg_init(tree, mg)
+    
+    !start from scratch 
+    else
+       time             = 0.0_dp ! Simulation time (all times are in s)
+       global_time      = time
+       photoi_prev_time = time   ! Time of last photoionization computation
+       dt               = advance_max_dt
+       initial_streamer_pos = 0.0_dp ! Initial streamer position
+
+       if (ST_cylindrical) then
+          coord_type = af_cyl
+       else
+          coord_type = af_xyz
+       end if
+
+       call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
+            ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
+            r_min=ST_domain_origin, mem_limit_gb=memory_limit_GB)
+
+       ! Set up the initial conditions
+       call set_initial_conditions(tree, mg)
+
+       ! Write initial output
+       output_cnt = 1 ! Number of output files written
+       call output_write(tree, output_cnt, 0.0_dp, lc_reading, write_sim_data)
+    end if
+
+    print *, "Simulation output: ", trim(output_name)
+    print *, "Number of threads: ", af_get_max_threads()
+    call af_print_info(tree)
 
   ! Initial wall clock time
-  call system_clock(t_start, count_rate)
-  inv_count_rate   = 1.0_dp / count_rate
-  time_last_print  = -1e10_dp
-  time_last_output = time
+    call system_clock(t_start, count_rate)
+    inv_count_rate   = 1.0_dp / count_rate
+    time_last_print  = -1e10_dp
+    time_last_output = time
 
-  do it = 1, huge(1)-1
-      if (ST_use_end_time .and. time >= ST_end_time) exit
+    do it = 1, huge(1)-1
+        if (ST_use_end_time .and. time >= ST_end_time) exit
 
-      ! Initialize starting position of streamer
-     if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
-       loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
-     end if
+        ! Initialize starting position of streamer
+       if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
+         call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
+         loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+       end if
 
-     ! Check if streamer length exceeds the defined maximal streamer length
-     if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-       loc_field_coord = af_r_loc(tree, loc_field)
-       if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
-     end if
+       ! Check if streamer length exceeds the defined maximal streamer length
+       if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
+         call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+         loc_field_coord = af_r_loc(tree, loc_field)
+         if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
+       end if
 
-     ! Update wall clock time
-     call system_clock(t_current)
-     wc_time = (t_current - t_start) * inv_count_rate
+       ! Update wall clock time
+       call system_clock(t_current)
+       wc_time = (t_current - t_start) * inv_count_rate
 
-     ! Every ST_print_status_interval, print some info about progress
-     if (wc_time - time_last_print > output_status_delay) then
-        call output_status(tree, time, wc_time, it, dt)
-        time_last_print = wc_time
-     end if
+       ! Every ST_print_status_interval, print some info about progress
+       if (wc_time - time_last_print > output_status_delay) then
+          call output_status(tree, time, wc_time, it, dt)
+          time_last_print = wc_time
+       end if
 
-     ! Every output_dt, write output
-     if (time + dt >= time_last_output + output_dt) then
-        write_out        = .true.
-        dt               = time_last_output + output_dt - time
-        time_last_output = time_last_output + output_dt
-        output_cnt       = output_cnt + 1
-     else
-        write_out = .false.
-     end if
+       ! Every output_dt, write output
+       if (time + dt >= time_last_output + output_dt) then
+          write_out        = .true.
+          dt               = time_last_output + output_dt - time
+          time_last_output = time_last_output + output_dt
+         output_cnt       = output_cnt + 1
+       else
+          write_out = .false.
+       end if
 
-     if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-        call photoi_set_src(tree, time - photoi_prev_time)
-        photoi_prev_time = time
-     end if
+       if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+          call photoi_set_src(tree, time - photoi_prev_time)
+          photoi_prev_time = time
+       end if
 
-     call advance(tree, mg, dt, time)
-     dt = advance_max_dt
-     global_time = time
+       call advance(tree, mg, dt, time)
+       dt = advance_max_dt
+       global_time = time
 
-     if (advance_max_dt < dt_min) then
-        print *, "ST_dt getting too small, instability?", advance_max_dt
-        call output_status(tree, time, wc_time, it, dt)
-        if (.not. write_out) then
-           write_out = .true.
-           output_cnt = output_cnt + 1
-        end if
-     end if
+       if (advance_max_dt < dt_min) then
+          print *, "ST_dt getting too small, instability?", advance_max_dt
+          call output_status(tree, time, wc_time, it, dt)
+          if (.not. write_out) then
+             write_out = .true.
+             output_cnt = output_cnt + 1
+          end if
+       end if
 
-     if (write_out) then
-        call output_write(tree, output_cnt, wc_time, write_sim_data)
-     end if
+       if (write_out) then
+          call output_write(tree, output_cnt, wc_time, lc_reading, write_sim_data)
+       end if
 
-     if (advance_max_dt < dt_min) error stop "dt too small"
+       if (advance_max_dt < dt_min) error stop "dt too small"
 
-     if (mod(it, refine_per_steps) == 0) then
-        call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+       if (mod(it, refine_per_steps) == 0) then
+          call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
 
-        if (associated(user_refine)) then
-           call af_adjust_refinement(tree, user_refine, ref_info, &
-                refine_buffer_width)
-        else
-           call af_adjust_refinement(tree, refine_routine, ref_info, &
-                refine_buffer_width)
-        end if
+          if (associated(user_refine)) then
+             call af_adjust_refinement(tree, user_refine, ref_info, &
+                  refine_buffer_width)
+          else
+             call af_adjust_refinement(tree, refine_routine, ref_info, &
+                  refine_buffer_width)
+          end if
 
-        if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
-           ! Compute the field on the new mesh
-           call field_compute(tree, mg, 0, time, .true.)
-        end if
-     end if
-  end do
+          if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
+             ! Compute the field on the new mesh
+             call field_compute(tree, mg, 0, time, .true.)
+          end if
+       end if
+    end do
 
-  call output_status(tree, time, wc_time, it, dt)
+    call output_status(tree, time, wc_time, it, dt)
+
+  endif 
 
 contains
 
