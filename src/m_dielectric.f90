@@ -51,6 +51,9 @@ module m_dielectric
   !> Assume photons are not absorbed for photoemission computation
   logical :: photons_no_absorption = .true.
 
+  !> Preset surface charge
+  real(dp), protected :: preset_charge = 0.0_dp
+
   public :: dielectric_initialize
   public :: dielectric_allocate
   public :: dielectric_update_after_refinement
@@ -86,6 +89,9 @@ contains
     call CFG_add_get(cfg, "dielectric%photons_no_absorption", &
          photons_no_absorption, &
          "Assume photons are not absorbed for photoemission computation")
+    call CFG_add_get(cfg, "dielectric%preset_charge", &
+         preset_charge, &
+         "Preset surface charge")
 
   end subroutine dielectric_initialize
 
@@ -210,7 +216,7 @@ contains
                 allocate(surface_list(ix)%photon_flux(nc, nc))
 #endif
              end if
-             surface_list(ix)%charge = 0.0_dp
+             surface_list(ix)%charge = preset_charge
              surface_list(ix)%photon_flux = 0.0_dp
 
              call prolong_surface_from_parent(tree, surface_list(ix))

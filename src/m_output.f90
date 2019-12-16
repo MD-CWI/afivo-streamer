@@ -62,7 +62,16 @@ module m_output
   logical, public, protected :: headline_output = .false.
 
   ! Write surface output
-  logical, public, protected :: surface_output = .false.  
+  logical, public, protected :: surface_output = .false.
+  
+  real(dp), allocatable      :: user_point_x(:)
+  
+  real(dp), allocatable      :: user_point_y(:)
+  
+  integer, public, protected :: n_user_point = 0
+  
+  ! Write user output
+  logical, public, protected :: user_output = .false.
 
   ! Write uniform output in a plane
   logical, public, protected :: plane_write = .false.
@@ -94,6 +103,7 @@ module m_output
   public :: output_log
   public :: output_headline
   public :: output_status
+  public :: output_point
 
 contains
 
@@ -107,6 +117,7 @@ contains
     character(len=string_len)  :: td_file
     real(dp)                   :: tmp
     real(dp), allocatable      :: x_data(:), y_data(:)
+    real(dp)                   :: dummy_real(0)
 
     call CFG_add_get(cfg, "output%name", output_name, &
          "Name for the output files (e.g. output/my_sim)")
@@ -164,7 +175,22 @@ contains
          "Use this many points for output head data")
     call CFG_add_get(cfg, "head%write", headline_output, &
          "Write headline output")
+
+    call CFG_add_get(cfg, "user_point%write", user_output, &
+         "Write user output")
+    call CFG_add_get(cfg, "user_point%n", n_user_point, &
+         "number of user points")
+    call CFG_add(cfg, "user_point%x", dummy_real, &
+         "user_point", .true.)
+    call CFG_add(cfg, "user_point%y", dummy_real, &
+         "user_point", .true.)
          
+    allocate(user_point_x(n_user_point))
+    allocate(user_point_y(n_user_point))
+    
+    call CFG_get( cfg, "user_point%x", user_point_x)
+    call CFG_get( cfg, "user_point%y", user_point_y)    
+
     call CFG_add_get(cfg, "dielectric%write", surface_output, &
          "Write surface output")
          
@@ -279,6 +305,12 @@ contains
        call output_headline(tree, output_name, output_cnt)
     end if
 
+    write(fname, "(A,I6.6)") trim(output_name) // &
+            "user_point.txt"
+    if (user_output) then
+        call output_point(tree, fname, output_cnt, wc_time)
+    end if
+
   end subroutine output_write
 
   subroutine add_variables(box, new_vars, n_var)
@@ -312,23 +344,25 @@ contains
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos(NDIM) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
-    real(dp)                     :: max_elec, max_field, max_Er, min_Er
-    type(af_loc_t)               :: loc_elec, loc_field, loc_Er
+    real(dp)                     :: max_elec, max_field, max_Er, min_Er, max_Ey, min_Ey
+    type(af_loc_t)               :: loc_elec, loc_field, loc_maxEr, loc_minEr, loc_maxEy, loc_minEy
 
     call af_tree_sum_cc(tree, i_electron, sum_elec)
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
     call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
-    call af_tree_min_fc(tree, 1, electric_fld, min_Er)
+    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_maxEr)
+    call af_tree_min_fc(tree, 1, electric_fld, min_Er, loc_minEr)
+    call af_tree_max_fc(tree, 2, electric_fld, max_Ey, loc_maxEy)
+    call af_tree_min_fc(tree, 2, electric_fld, min_Ey, loc_minEy)
 
     dt = advance_max_dt
 
     if (out_cnt == 1) then
        open(my_unit, file=trim(filename), action="write")
 #if NDIM == 2
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
+       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
+            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) x y max(Ey) x y min(Ey) x y wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
@@ -339,11 +373,11 @@ contains
        prev_pos = af_r_loc(tree, loc_field)
     end if
 
-#if NDIM == 2
-    fmt = "(I6,16E16.8,I12,1E16.8,I3)"
-#elif NDIM == 3
-    fmt = "(I6,14E16.8,I12,1E16.8,I3)"
-#endif
+! #if NDIM == 2
+!     fmt = "(I6,16E16.8,I12,1E16.8,I3)"
+! #elif NDIM == 3
+!     fmt = "(I6,14E16.8,I12,1E16.8,I3)"
+! #endif
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
     prev_pos = af_r_loc(tree, loc_field)
@@ -351,12 +385,13 @@ contains
     open(my_unit, file=trim(filename), action="write", &
          position="append")
 #if NDIM == 2
-    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
+    write(my_unit, *) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
+         af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_maxEr), min_Er, &
+         af_r_loc(tree, loc_minEr), max_Ey, af_r_loc(tree, loc_maxEy), min_Ey, &
+         af_r_loc(tree, loc_minEy), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #elif NDIM == 3
-    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
+    write(my_unit, *) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #endif
@@ -415,6 +450,43 @@ contains
     end do
     close(num_file)
   end subroutine output_headline
+
+  
+  subroutine output_point(tree,fname,&
+  out_cnt,wc_time)
+    use m_af_interp
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: fname
+    integer, intent(in)          :: out_cnt
+    real(dp), intent(in)         :: wc_time
+    integer                      :: my_unit = 233
+    real(dp),allocatable         :: Ex_Ey(:)
+    real(dp)                     :: r(NDIM)
+    integer                      :: i
+    logical                      :: success
+    
+    if (out_cnt == 1) then
+        open(my_unit, file=trim(fname), action="write")
+        write(my_unit, *) "out_cnt t x y Ex Ey"
+        close(my_unit)
+    end if
+    
+    allocate(Ex_Ey(4*n_user_point))
+    
+    do i = 1, n_user_point
+        r(1) = user_point_x(i)
+        r(2) = user_point_y(i)
+        Ex_Ey(4*(i-1)+1) = r(1);
+        Ex_Ey(4*(i-1)+2) = r(2);
+        Ex_Ey(4*(i-1)+3:4*(i-1)+4) = af_get_fc(tree, r, [electric_fld], success)
+    end do
+    
+    open(my_unit, file=trim(fname), action="write", &
+         position="append")
+    write(my_unit,*) out_cnt, wc_time, Ex_Ey
+    close(my_unit)
+
+  end subroutine output_point
 
   subroutine check_path_writable(pathname)
     character(len=*), intent(in) :: pathname
