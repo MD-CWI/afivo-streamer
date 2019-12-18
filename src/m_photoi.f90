@@ -35,7 +35,7 @@ module m_photoi
   real(dp) :: photoi_photoemission_time = 0.0_dp
 
   ! Update photoionization every N time step
-  integer, protected, public :: photoi_per_steps = 10
+  integer, protected, public :: photoi_per_steps = 5
 
   ! Optional variable (when using photoionization)
   integer, public, protected :: i_photo = -1 ! Photoionization rate
