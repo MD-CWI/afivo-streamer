@@ -18,9 +18,16 @@ Then you can go into the folder and compile the code:
     cd afivo-streamer
     make
 
+Afterwards, you can run some of the example, see @ref md_documentation_examples.
+
+# Updating to the latest version
+
 If you want to update your previously downloaded code, go into your afivo-streamer folder and pull the new version:
 
-    cd afivo-streamer
-    git clone https://gitlab.com/MD-CWI-NL/afivo-streamer.git
+    git pull
 
-See @ref md_documentation_examples for a list of examples.
+Afterwards, you can recompile the code by typing
+
+    make
+
+either in the `afivo-streamer` folder, or in a specific program folder with a `Makefile`.
