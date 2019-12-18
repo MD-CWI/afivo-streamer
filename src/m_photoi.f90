@@ -94,10 +94,10 @@ contains
 
     select case (photoi_method)
        case ("helmholtz")
-          call photoi_helmh_initialize(tree, cfg, photoi_enabled)
+          call photoi_helmh_initialize(tree, cfg, photoi_enabled, photoi_eta)
           call phmc_initialize(cfg, .false.)
        case ("montecarlo")
-          call photoi_helmh_initialize(tree, cfg, .false.)
+          call photoi_helmh_initialize(tree, cfg, .false., photoi_eta)
           call phmc_initialize(cfg, photoi_enabled)
        case default
           print *, "Unknown photoi_method: ", trim(photoi_method)

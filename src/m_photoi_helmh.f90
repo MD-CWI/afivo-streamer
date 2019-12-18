@@ -25,9 +25,6 @@ module m_photoi_helmh
   !> Maximum residual relative to max(|rhs|)
   real(dp) :: max_rel_residual = 1.0d-2
 
-  !> Which parameters are chosen (Luque or Bourdon)
-  character(len=8):: author = 'Luque'
-
   !> Number of Helmholtz modes to include
   integer               :: n_modes = 2
   !> Lambdas to use for lpl(phi) - lambda*phi = f; unit 1/(m bar)
@@ -45,68 +42,93 @@ module m_photoi_helmh
 contains
 
   !> Initialize options for Helmholtz photoionization
-  subroutine photoi_helmh_initialize(tree, cfg, is_used)
+  subroutine photoi_helmh_initialize(tree, cfg, is_used, eta)
     use m_config
     use m_units_constants
     use m_gas
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    logical, intent(in)        :: is_used
+    logical, intent(in)        :: is_used !< Whether the module is used
+    real(dp), intent(in)       :: eta !< Efficiency
     integer                    :: n, ix
     character(len=12)          :: name
+    character(len=12)          :: author = "Bourdon-3"
+    real(dp)                   :: frac_O2, dummy(0)
 
-    call CFG_add(cfg, "photoi_helmh%author", author, &
-         "Luque or Bourdon coeffients are used?")
-    !> The default is Luque
-    !> Bourdon two terms lambdas in SI units are: [7305.62,44081.25]
-    !> Bourdon two terms coeffs in SI units are: [11814508.38,998607256]
-    !> Bourdon three terms lambdas in SI units are: [4147.85   10950.93  66755.67]
-    !> bourdon three terms coeffs in SI units are: [ 1117314.935  28692377.5  2748842283 ]
-    call CFG_add(cfg, "photoi_helmh%lambdas", [4425.38_dp, 750.06_dp], &
+    call CFG_add_get(cfg, "photoi_helmh%author", author, &
+         "Can be Luque (default), Bourdon-2, Bourdon-3 or custom")
+    call CFG_add(cfg, "photoi_helmh%lambdas", dummy, &
          "Lambdas to use for lpl(phi) - lambda*phi = f; unit 1/(m bar)", &
          .true.)
-    call CFG_add(cfg, "photoi_helmh%coeffs", [337557.38_dp, 19972.14_dp], &
+    call CFG_add(cfg, "photoi_helmh%coeffs", dummy, &
          "Weights corresponding to the lambdas; unit 1/(m bar)^2", &
          .true.)
 
-    call CFG_add(cfg, "photoi_helmh%max_rel_residual", max_rel_residual, &
-         "Maximum residual relative to max(|rhs|)")
+    ix = gas_index("O2")
+    if (ix == -1) error stop "Photoionization: no oxygen present"
+    frac_O2 = gas_fractions(ix)
 
-    if (is_used) then
+    select case (author)
+    case ("Luque")
+       n_modes = 2
+       lambdas = [4425.38_dp, 750.06_dp]
+       coeffs  = [337557.38_dp, 19972.14_dp]
+
+       ! Convert to correct units by multiplying with pressure in bar
+       lambdas = lambdas * (frac_O2/0.2_dp) * gas_pressure  ! 1/m
+       coeffs  = coeffs * ((frac_O2/0.2_dp) * gas_pressure)**2 ! 1/m^2
+
+       ! Note that for Luque photoi_eta must be 1.0 (since we must not multiply
+       ! coeffs of Luque by photoi_eta)
+       if (abs(eta - 1.0_dp) > 0) &
+            error stop "With Luque photoionization, photoi%eta should be 1.0"
+    case ("Bourdon-2")
+       !> Bourdon two terms lambdas in SI units are: [7305.62,44081.25]
+       !> Bourdon two terms coeffs in SI units are: [11814508.38,998607256]
+       n_modes = 2
+       lambdas = [7305.62_dp, 44081.25_dp]
+       coeffs  = [11814508.38_dp, 998607256.0_dp]
+
+       ! Convert to correct units by multiplying with pressure in bar
+       lambdas = lambdas * frac_O2 * gas_pressure  ! 1/m
+       ! Important note: in the case of Bourdon coeffs must be multiplied by
+       ! photoi_eta, however we do not multiply it here but it is considered in
+       ! set_photoionization_rate calculation as [photoi_eta * quench_fac]
+       ! please check m_photoi.f90
+       coeffs  = coeffs * (frac_O2 * gas_pressure)**2 ! 1/m^2
+    case ("Bourdon-3")
+       !> Bourdon three terms lambdas in SI units are: [4147.85   10950.93  66755.67]
+       !> bourdon three terms coeffs in SI units are: [ 1117314.935  28692377.5  2748842283 ]
+       n_modes = 3
+       lambdas = [4147.85_dp, 10950.93_dp, 66755.67_dp]
+       coeffs  = [1117314.935_dp, 28692377.5_dp, 2748842283.0_dp]
+
+       ! Convert to correct units by multiplying with pressure in bar
+       lambdas = lambdas * frac_O2 * gas_pressure  ! 1/m
+       ! Important note: in the case of Bourdon coeffs must be multiplied by
+       ! photoi_eta, however we do not multiply it here but it is considered in
+       ! set_photoionization_rate calculation as [photoi_eta * quench_fac]
+       ! please check m_photoi.f90
+       coeffs  = coeffs * (frac_O2 * gas_pressure)**2 ! 1/m^2
+    case ("custom")
        call CFG_get_size(cfg, "photoi_helmh%lambdas", n_modes)
        allocate(lambdas(n_modes))
        allocate(coeffs(n_modes))
        call CFG_get(cfg, "photoi_helmh%lambdas", lambdas)
        call CFG_get(cfg, "photoi_helmh%coeffs", coeffs)
-       call CFG_get(cfg, "photoi_helmh%max_rel_residual", max_rel_residual)
-       call CFG_get(cfg, "photoi_helmh%author", author)
+       ! Convert to correct units by multiplying with pressure in bar, but
+       ! perform no other normalization.
+       lambdas = lambdas * gas_pressure  ! 1/m
+       coeffs  = coeffs * gas_pressure**2 ! 1/m^2
+    case default
+       print *, "Unknown photoi_helmh_author: ", trim(author)
+       error stop
+    end select
 
-       ix = gas_index("O2")
-       if (ix == -1) error stop "Photoionization: no oxygen present"
+    call CFG_add_get(cfg, "photoi_helmh%max_rel_residual", max_rel_residual, &
+         "Maximum residual relative to max(|rhs|)")
 
-       select case (author)
-       case ("Luque")
-          !> Convert to correct units by multiplying with pressure in bar for Luque parameters
-          lambdas = lambdas * gas_pressure  ! 1/m
-          coeffs  = coeffs * gas_pressure**2 ! 1/m^2
-          !print *, author
-          !print *, "lambdas * gas_pressure", lambdas
-          !print *, "coeffs * gas_pressure", coeffs
-       case ("Bourdon")
-          !> Convert to correct units by multiplying with pressure in bar for Bourdon parameters
-          lambdas = lambdas * gas_fractions(ix) * gas_pressure  ! 1/m
-          !> important note: in the case of Bourdon coeffs must be multiplied by photoi_eta, however we do not multiply it here
-          !> but it is considered in set_photoionization_rate calculation as [photoi_eta * quench_fac] please check m_photoi_Xd.f90
-          !> note that for Luque photoi_eta must be 1.0 (since we must Not multiply coeffs of Luque by photoi_eta)
-          coeffs  = coeffs * (gas_fractions(ix) * gas_pressure)**2 ! 1/m^2
-          !print *, author
-          !print *, "lambdas * O2_pressure", lambdas
-          !print *, "coeffs * O2_pressure", coeffs
-       case default
-          print *, "Unknown photoi_helmh_author: ", trim(author)
-          error stop
-       end select
-
+    if (is_used) then
        ! Add required variables
        allocate(i_modes(n_modes))
        do n = 1, n_modes
