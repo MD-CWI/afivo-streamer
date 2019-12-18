@@ -18,4 +18,9 @@ Then you can go into the folder and compile the code:
     cd afivo-streamer
     make
 
+If you want to update your previously downloaded code, go into your afivo-streamer folder and pull the new version:
+
+    cd afivo-streamer
+    git clone https://gitlab.com/MD-CWI-NL/afivo-streamer.git
+
 See @ref md_documentation_examples for a list of examples.
