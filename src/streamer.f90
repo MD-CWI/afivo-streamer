@@ -197,6 +197,11 @@ program streamer
      if (advance_max_dt < dt_min) error stop "dt too small"
 
      if (mod(it, refine_per_steps) == 0) then
+        ! Restrict species, for the ghost cells near refinement boundaries
+        do i = n_gas_species+1, n_species
+           call af_restrict_tree(tree, species_itree(i))
+        end do
+
         call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
 
         if (associated(user_refine)) then
