@@ -58,7 +58,7 @@ contains
     call CFG_add_get(cfg, "photoi_helmh%author", author, &
          "Can be Luque (default), Bourdon-2, Bourdon-3 or custom")
     call CFG_add(cfg, "photoi_helmh%lambdas", dummy, &
-         "Lambdas to use for lpl(phi) - lambda*phi = f; unit 1/(m bar)", &
+         "Lambdas to use in Helmholtz eq; unit 1/(m bar)", &
          .true.)
     call CFG_add(cfg, "photoi_helmh%coeffs", dummy, &
          "Weights corresponding to the lambdas; unit 1/(m bar)^2", &
