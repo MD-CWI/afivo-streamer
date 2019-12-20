@@ -31,6 +31,11 @@ def get_args():
                    help='Initial guess for lambdas of Helmholtz modes')
     p.add_argument('-n_points', type=int, default=300,
                    help='Number of points to use for numerical approximation')
+    p.add_argument('-show_curve', metavar='A_i L_i', type=float, nargs='+',
+                   help='Show curve for (A1, L1, A2, L2, ...), where A are'
+                   ' amplitudes and L are lambdas')
+    p.add_argument('-show_curve_normalize', type=bool, default=True,
+                   help='Whether to normalize the coefficients (with p_O2)')
     return p.parse_args()
 
 
@@ -40,6 +45,14 @@ lambda_min = 98e-9              # nm
 lambda_max = 102.5e-9           # nm
 mu_max = 2.0e2 / one_torr       # convert to 1/(m * bar)
 mu_min = 0.035e2 / one_torr     # convert to 1/(m * bar)
+
+if args.show_curve:
+    # Normalize for pressure of O2 (p_O2)
+    if args.show_curve_normalize:
+        # Amplitudes
+        args.show_curve[0::2] = args.p_O2**2 * np.array(args.show_curve[0::2])
+        # Lambdas
+        args.show_curve[1::2] = args.p_O2 * np.array(args.show_curve[1::2])
 
 
 # Zheleznyak approximation for absorption coefficient
@@ -124,6 +137,8 @@ plt.title('Logarithmic scale')
 plt.semilogy(r, f, '.', label='numerical')
 plt.semilogy(r, g, label='Zheleznyak air')
 plt.semilogy(r, fit_func(r, *popt), label='fit ({}-term)'.format(args.n_modes))
+if args.show_curve:
+    plt.semilogy(r, fit_func(r, *args.show_curve), label='custom')
 plt.legend()
 plt.subplot(122)
 plt.xlabel('r (m)')
@@ -132,6 +147,8 @@ plt.title('Linear scale')
 plt.plot(r, f, '.', label='numerical')
 plt.plot(r, g, label='Zheleznyak air')
 plt.plot(r, fit_func(r, *popt), label='fit ({}-term)'.format(args.n_modes))
+if args.show_curve:
+    plt.plot(r, fit_func(r, *args.show_curve), label='custom')
 plt.legend()
 
 fig.tight_layout()
