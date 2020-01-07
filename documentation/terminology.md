@@ -23,10 +23,14 @@ tree | Data structure containing the full grid
 boxes | List of all the boxes, at all refinement levels
 id | Integer indicating the index of a boxes in the boxes array
 nc | The number of cells along each dimension of a box (a box contains \f$nc^D\f$ cells)
+iv | Index of a variable
+nb | Index giving the direction to a neighboring box (left, right, ...), from `1` to `2 * NDIM`
 lvl | Integer indicating the refinement level (1, 2, ...)
 neighbors | List of \f$2D\f$ integers to indicate the neighbors of a box. They can be positive (index of neighbor in boxes array), zero (refinement boundary) or negative (physical boundary)
 parent | An integer with the index of the parent, or zero if there is no parent
 children | List of \f$2^D\f$ integers with the indices of the children, and zero if there are no children
 `af_no_box` | The integer value zero
+fc | face-centered
+cc | cell-centered
 
 
