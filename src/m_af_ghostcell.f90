@@ -689,7 +689,7 @@ contains
 
   end subroutine af_gc_interp_lim
 
-  ! This fills ghost cells near physical boundaries using Neumann zero
+  !> This fills ghost cells near physical boundaries using Neumann zero
   subroutine af_bc_neumann_zero(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -702,7 +702,7 @@ contains
     bc_val  = 0.0_dp
   end subroutine af_bc_neumann_zero
 
-  ! This fills ghost cells near physical boundaries using Neumann zero
+  !> This fills ghost cells near physical boundaries using Dirichlet zero
   subroutine af_bc_dirichlet_zero(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -715,7 +715,7 @@ contains
     bc_val  = 0.0_dp
   end subroutine af_bc_dirichlet_zero
 
-  ! This fills ghost cells near physical boundaries using the same slope
+  !> This fills ghost cells near physical boundaries using the same slope
   subroutine af_bc_set_continuous(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
