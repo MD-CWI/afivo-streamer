@@ -345,7 +345,7 @@ contains
     real(dp)                   :: rates(nc**NDIM, n_reactions)
     real(dp)                   :: derivs(nc**NDIM, n_species)
     real(dp)                   :: dens(nc**NDIM, n_species)
-    real(dp)                   :: fields(nc**NDIM), aeff(nc**NDIM)
+    real(dp)                   :: fields(nc**NDIM)
 #if NDIM == 2
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
@@ -374,22 +374,6 @@ contains
 
     dens(:, n_gas_species+1:n_species) = reshape(box%cc(DTIMES(1:nc), &
          species_itree(n_gas_species+1:n_species)+s_dt), [n_cells, n_plasma_species])
-
-    ! Where alpha_eff * n^(-1/3) > threshold, disable electron reactions
-    ! Note: n^(-1/3) is an estimate of the distance between electrons
-    if (ST_alpha_dens_threshold > 0.0_dp) then
-       ! Get alpha_eff
-       aeff = gas_number_density * (LT_get_col(td_tbl, td_alpha, fields) - &
-            LT_get_col(td_tbl, td_eta, fields))
-       where (ST_alpha_dens_threshold**3 * dens(:, ix_electron) < aeff**3)
-          dens(:, ix_electron) = 0.0_dp
-       end where
-    end if
-
-    ! Limit the electron density for chemistry calculations
-    where (dens(:, ix_electron) > ST_max_reaction_density)
-       dens(:, ix_electron) = ST_max_reaction_density
-    end where
 
     call get_rates(fields, rates, n_cells)
     call get_derivatives(dens, rates, derivs, n_cells)

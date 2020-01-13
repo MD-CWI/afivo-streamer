@@ -76,12 +76,6 @@ module m_streamer
   !> Disable diffusion parallel to fields above this threshold (V/m)
   real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
 
-  !> Maximum electron density (1/m3) for computing reactions
-  real(dp), public, protected :: ST_max_reaction_density = 1.0e100_dp
-
-  !> Where alpha_eff * n^(-1/3) > threshold, disable electron reactions
-  real(dp), public, protected :: ST_alpha_dens_threshold = -1.0_dp
-
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
@@ -232,10 +226,6 @@ contains
          "Limit velocities to this value (m/s)")
     call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
          "Disable diffusion parallel to fields above this threshold (V/m)")
-    call CFG_add_get(cfg, "fixes%max_reaction_density", ST_max_reaction_density, &
-         "Maximum electron density (1/m3) for computing reactions")
-    call CFG_add_get(cfg, "fixes%alpha_dens_threshold", ST_alpha_dens_threshold, &
-         "Where alpha_eff * n^(-1/3) > threshold, disable electron reactions")
 
     call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
          "Seed for random numbers; if all zero, generate randomly")
