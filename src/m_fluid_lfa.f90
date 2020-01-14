@@ -346,6 +346,7 @@ contains
     real(dp)                   :: derivs(nc**NDIM, n_species)
     real(dp)                   :: dens(nc**NDIM, n_species)
     real(dp)                   :: fields(nc**NDIM)
+    real(dp)                   :: source_factor(nc**NDIM)
 #if NDIM == 2
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
@@ -376,6 +377,18 @@ contains
          species_itree(n_gas_species+1:n_species)+s_dt), [n_cells, n_plasma_species])
 
     call get_rates(fields, rates, n_cells)
+
+    if (ST_source_factor .or. ST_source_min_density > 0) then
+       call compute_source_factor(box, nc, dens(:, ix_electron), &
+            fields, source_factor)
+
+       do n = 1, n_reactions
+          if (reactions(n)%reaction_type == ionization_reaction) then
+             rates(:, n) = rates(:, n) * source_factor
+          end if
+       end do
+    end if
+
     call get_derivatives(dens, rates, derivs, n_cells)
 
     if (set_dt) then
@@ -395,6 +408,7 @@ contains
     ix = 0
     do KJI_DO(1,nc)
        ix = ix + 1
+
        ! Contribution of flux
 #if NDIM == 2
        derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
@@ -435,5 +449,63 @@ contains
     end do; CLOSE_DO
 
   end subroutine update_solution
+
+  !> Compute adjustment factor for electron source terms. Used to reduce them in
+  !> certain regimes.
+  subroutine compute_source_factor(box, nc, elec_dens, fields, source_factor)
+    use m_streamer
+    use m_gas
+    use m_transport_data
+    use m_lookup_table
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nc
+    real(dp), intent(in)    :: elec_dens(nc**NDIM)
+    real(dp), intent(in)    :: fields(nc**NDIM)
+    real(dp), intent(out)   :: source_factor(nc**NDIM)
+    real(dp)                :: tmp, mobilities(nc**NDIM)
+    integer                 :: ix, IJK
+
+    source_factor(:) = 1.0_dp
+
+    if (ST_source_factor) then
+       if (.not. gas_constant_density) &
+            error stop "source_factor: gas_constant_density is false"
+
+       tmp = 1 / gas_number_density
+       mobilities = LT_get_col(td_tbl, td_mobility, fields) * tmp
+
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
+
+          ! Compute norm of flux at cell center
+#if NDIM == 2
+          source_factor(ix) = 0.5_dp * norm2([ &
+               box%fc(i, j, 1, flux_elec) + box%fc(i+1, j, 1, flux_elec), &
+               box%fc(i, j, 2, flux_elec) + box%fc(i, j+1, 2, flux_elec)])
+#elif NDIM == 3
+          source_factor(ix) = 0.5_dp * norm2([ &
+               box%fc(i, j, k, 1, flux_elec) + box%fc(i+1, j, k, 1, flux_elec), &
+               box%fc(i, j, k, 2, flux_elec) + box%fc(i, j+1, k, 2, flux_elec), &
+               box%fc(i, j, k, 3, flux_elec) + box%fc(i, j, k+1, 3, flux_elec)])
+#endif
+       end do; CLOSE_DO
+
+       ! Compute source factor as |flux|/(n_e * mu * E)
+       source_factor = source_factor / max(1e-10_dp, &
+            elec_dens * mobilities * &
+            pack(box%cc(1:nc, 1:nc, i_electric_fld), .true.))
+       source_factor = min(1.0_dp, source_factor)
+       source_factor = max(0.0_dp, source_factor)
+    end if
+
+    if (ST_source_min_density > 0) then
+       ! Factor goes linearly to zero between n_min and 2 * n_min
+       source_factor = min(source_factor, &
+            max(0.0_dp, elec_dens-ST_source_min_density) / &
+            max(elec_dens, ST_source_min_density))
+    end if
+
+  end subroutine compute_source_factor
 
 end module m_fluid_lfa

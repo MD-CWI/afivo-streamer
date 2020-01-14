@@ -76,6 +76,12 @@ module m_streamer
   !> Disable diffusion parallel to fields above this threshold (V/m)
   real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
 
+  !> Use source factor to prevent unphysical effects due to diffusion
+  logical, public, protected :: ST_source_factor = .false.
+
+  !> Minimal density for including electron sources
+  real(dp), public, protected :: ST_source_min_density = -1e10_dp
+
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
@@ -226,6 +232,10 @@ contains
          "Limit velocities to this value (m/s)")
     call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
          "Disable diffusion parallel to fields above this threshold (V/m)")
+    call CFG_add_get(cfg, "fixes%source_factor", ST_source_factor, &
+         "Use source factor to prevent unphysical effects due to diffusion")
+    call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
+         "Minimal density for including electron sources")
 
     call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
          "Seed for random numbers; if all zero, generate randomly")
