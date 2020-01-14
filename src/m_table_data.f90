@@ -138,18 +138,18 @@ contains
 777 continue ! If the end of the file is reached after finding data
     print *, "table_from_file unexpectedly reached end of " // trim(file_name)
     print *, "searching '" // trim(data_name) // "'"
-    stop
+    error stop
 
 888 continue ! If the end of the file is reached without finding data
     print *, "table_from_file: no data in " // trim(file_name)
     print *, "searching '" // trim(data_name) // "'"
-    stop
+    error stop
 
 999 continue ! If there was an input error, the routine will end here
     print *, "table_from_file error at line", nL
     print *, "ioState = ", ioState, " in ", trim(file_name)
     print *, "searching '" // trim(data_name) // "'"
-    stop
+    error stop
 
   end subroutine table_from_file
 
