@@ -9,6 +9,22 @@ module m_chemistry
   implicit none
   private
 
+  !> Identifier for ionization reactions
+  integer, parameter, public :: ionization_reaction = 1
+  !> Identifier for attachment reactions
+  integer, parameter, public :: attachment_reaction = 2
+  !> Identifier for recombination reactions
+  integer, parameter, public :: recombination_reaction = 3
+  !> Identifier for detachment reactions
+  integer, parameter, public :: detachment_reaction = 4
+  !> Identifier for general reactions (not of any particular type)
+  integer, parameter, public :: general_reaction = 5
+
+  character(len=20), parameter, public :: reaction_names(*) = &
+       [character(len=20) :: "ionization", "attachment", "recombination", &
+       "detachment", "general"]
+
+  !> Maximum number of coefficients for a reaction rate function
   integer, parameter :: rate_max_num_coeff = 4
 
   !> Basic chemical reaction type
@@ -17,6 +33,8 @@ module m_chemistry
      integer, allocatable  :: ix_out(:)           !< Index of output species
      integer, allocatable  :: multiplicity_out(:) !< Multiplicity of output
      integer               :: rate_type           !< Type of reaction rate
+     !> Type of reaction (e.g. ionization)
+     integer               :: reaction_type = general_reaction
      real(dp)              :: rate_factor         !< Multiply rate by this factor
      !> Data for the reaction rate
      real(dp)              :: rate_data(rate_max_num_coeff) = -huge(1.0_dp)
@@ -112,7 +130,7 @@ contains
     use m_advance_base, only: advance_num_states
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    integer                    :: n, i
+    integer                    :: n, i, i_elec
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
     logical                    :: read_success
@@ -189,26 +207,11 @@ contains
     end do
 
     ! Also store in more memory-efficient structure
-    print *, "--- List of reactions ---"
     do n = 1, n_reactions
-       write(*, "(I4,A)") n, ": " // reactions(n)%description
        tiny_react(n)%ix_in            = reactions(n)%ix_in
        tiny_react(n)%ix_out           = reactions(n)%ix_out
        tiny_react(n)%multiplicity_out = reactions(n)%multiplicity_out
     end do
-    print *, "-------------------------"
-    print *, ""
-    print *, "--- List of gas species ---"
-    do n = 1, n_gas_species
-       write(*, "(I4,A)") n, ": " // species_list(n)
-    end do
-    print *, "-------------------------"
-    print *, ""
-    print *, "--- List of plasma species ---"
-    do n = n_gas_species+1, n_species
-       write(*, "(I4,A)") n, ": " // species_list(n)
-    end do
-    print *, "-------------------------"
 
     ! Gas species are not stored in the tree for now
     species_itree(1:n_gas_species) = -1
@@ -234,6 +237,50 @@ contains
     end do
 
     call check_charge_conservation()
+
+    ! Specify reaction types
+    i_elec = species_index("e")
+
+    do n = 1, n_reactions
+       if (any(reactions(n)%ix_in == i_elec) .and. &
+            .not. any(reactions(n)%ix_out == i_elec) .and. &
+            .not. any(species_charge(reactions(n)%ix_in) > 0)) then
+          ! In: an electron and no positive ions, out: no electrons
+          reactions(n)%reaction_type = attachment_reaction
+       else if (any(reactions(n)%ix_in == i_elec) .and. &
+            any(reactions(n)%ix_out == i_elec .and. &
+            reactions(n)%multiplicity_out == 2)) then
+          ! An electron in and out (with multiplicity 2)
+          reactions(n)%reaction_type = ionization_reaction
+       else if (any(species_charge(reactions(n)%ix_in) /= 0) .and. &
+            .not. any(species_charge(reactions(n)%ix_out) /= 0)) then
+          ! In: charged species, out: no charged species
+          reactions(n)%reaction_type = recombination_reaction
+       else if (all(reactions(n)%ix_in /= i_elec) .and. &
+            any(reactions(n)%ix_out == i_elec)) then
+          ! In: no electrons, out: an electron
+          reactions(n)%reaction_type = detachment_reaction
+       end if
+    end do
+
+    print *, "--- List of reactions ---"
+    do n = 1, n_reactions
+       write(*, "(I4,' ',A15,A)") n, reaction_names(reactions(n)%reaction_type), &
+            reactions(n)%description
+    end do
+    print *, "-------------------------"
+    print *, ""
+    print *, "--- List of gas species ---"
+    do n = 1, n_gas_species
+       write(*, "(I4,A)") n, ": " // species_list(n)
+    end do
+    print *, "-------------------------"
+    print *, ""
+    print *, "--- List of plasma species ---"
+    do n = n_gas_species+1, n_species
+       write(*, "(I4,A)") n, ": " // species_list(n)
+    end do
+    print *, "-------------------------"
 
   end subroutine chemistry_initialize
 
@@ -264,19 +311,10 @@ contains
        eta(:)   = 0.0_dp
        alpha(:) = 0.0_dp
 
-       ! Compute attachment coefficient
        do n = 1, n_reactions
-          ! Find attachment reactions as follows:
-          ! l.h.s.: an electron and no positive ions
-          ! r.h.s.: no electron
-          if (any(reactions(n)%ix_in == i_elec) .and. &
-               .not. any(reactions(n)%ix_out == i_elec) .and. &
-               .not. any(species_charge(reactions(n)%ix_in) > 0)) then
+          if (reactions(n)%reaction_type == attachment_reaction) then
              eta(:) = eta(:) + rates(:, n)
-          else if (any(reactions(n)%ix_in == i_elec) .and. &
-               any(reactions(n)%ix_out == i_elec) .and. &
-               any(reactions(n)%multiplicity_out == 2)) then
-             !> @todo in the future, add reaction types to reactions
+          else if (reactions(n)%reaction_type == ionization_reaction) then
              alpha(:) = alpha(:) + rates(:, n)
           end if
        end do
