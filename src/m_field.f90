@@ -38,8 +38,11 @@ module m_field
   !> Decay time of background field
   real(dp) :: field_decay_time = huge(1.0_dp)
 
-  !> The applied electric field (vertical direction)
+  !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = 1.0e6_dp
+
+  !> The current vertical applied electric field
+  real(dp), public, protected :: current_field_amplitude
 
   !> The applied voltage (vertical direction)
   real(dp), public, protected :: field_voltage
@@ -105,7 +108,7 @@ contains
     call CFG_add_get(cfg, "field_decay_time", field_decay_time, &
          "Decay time of field (s)")
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
-         "The applied electric field (V/m) (vertical)")
+         "The (initial) vertical applied electric field (V/m)")
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
          "Type of boundary condition to use (homogeneous, ...)")
 
@@ -123,7 +126,7 @@ contains
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
 
-    field_voltage = -ST_domain_len(NDIM) * field_amplitude
+    call field_set_voltage(0.0_dp)
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
@@ -255,7 +258,8 @@ contains
   subroutine field_set_voltage(time)
     real(dp), intent(in) :: time
 
-    field_voltage = -ST_domain_len(NDIM) * field_get_amplitude(time)
+    current_field_amplitude = field_get_amplitude(time)
+    field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
   end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential
