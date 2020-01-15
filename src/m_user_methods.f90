@@ -18,6 +18,9 @@ module m_user_methods
   !> To set a user-defined gas number density
   procedure(gas_dens_func), pointer :: user_gas_density => null()
 
+  !> To set the field amplitude manually
+  procedure(field_func), pointer :: user_field_amplitude => null()
+
   procedure(log_subr), pointer :: user_write_log => null()
 
   interface
@@ -34,6 +37,13 @@ module m_user_methods
        integer, intent(in)     :: IJK
        real(dp)                :: dens
      end function gas_dens_func
+
+     function field_func(tree, time) result(amplitude)
+       import
+       type(af_t), intent(in) :: tree
+       real(dp), intent(in)   :: time
+       real(dp)               :: amplitude
+     end function field_func
   end interface
 
 end module m_user_methods
