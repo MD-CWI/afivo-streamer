@@ -494,7 +494,7 @@ contains
        ! Compute source factor as |flux|/(n_e * mu * E)
        source_factor = source_factor / max(1e-10_dp, &
             elec_dens * mobilities * &
-            pack(box%cc(1:nc, 1:nc, i_electric_fld), .true.))
+            pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
        source_factor = min(1.0_dp, source_factor)
        source_factor = max(0.0_dp, source_factor)
     end if
