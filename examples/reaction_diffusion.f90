@@ -30,6 +30,8 @@ program reaction_diffusion_Xd
   real(dp)           :: v_rng_ampl      = 0.0_dp
   logical            :: periodic(3)     = .false.
   character(len=100) :: fname
+  logical            :: file_exists
+
   character(len=20)  :: time_integrator = "imex"
   ! Two types of equations can be solved, schnakenberg and gs (Gray-Scott). The
   ! Gray-Scott models are not stiff, whereas the schnakenberg model has a stiff
@@ -56,9 +58,14 @@ program reaction_diffusion_Xd
   print *, "Running reaction_diffusion_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
-  open(newunit=my_unit, file="reaction_diffusion.txt", status="old")
-  read(my_unit, settings)
-  close(my_unit)
+  inquire(file="reaction_diffusion.txt", exist=file_exists)
+  if (file_exists) then
+     open(newunit=my_unit, file="reaction_diffusion.txt", status="old")
+     read(my_unit, settings)
+     close(my_unit)
+  else
+     print *, "No input file reaction_diffusion.txt found; default settings"
+  end if
 
   call af_add_cc_variable(tree, "u", ix=i_u, n_copies=2)
   call af_add_cc_variable(tree, "v", ix=i_v, n_copies=2)
