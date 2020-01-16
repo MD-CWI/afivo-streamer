@@ -3,6 +3,7 @@ module m_user
   use m_af_all
   use m_config
   use m_user_methods
+  use m_streamer
 
   implicit none
   private
@@ -14,6 +15,8 @@ module m_user
   real(dp) :: min_field = -5e5_dp
   real(dp) :: decay_distance = 10e-3_dp
   real(dp) :: decay_start_time = 10.0e-9_dp
+  real(dp) :: detection_density = 1e18_dp
+  real(dp) :: decay_start_z = 28e-3_dp
 
 contains
 
@@ -29,34 +32,55 @@ contains
          "Decay distance (m)")
     call CFG_add_get(cfg, "my%decay_start_time", decay_start_time, &
          "Decay start time (s)")
+    call CFG_add_get(cfg, "my%decay_start_z", decay_start_z, &
+         "Decay starts from this z-coordinate")
 
     user_field_amplitude => my_field_amplitude
   end subroutine user_initialize
 
   function my_field_amplitude(tree, time) result(amplitude)
-    use m_streamer
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
-    real(dp)               :: amplitude, max_field, r(NDIM), dist
-    type(af_loc_t)         :: loc_field
-    logical, save          :: first_time = .true.
-    real(dp), save         :: initial_coord
+    real(dp)               :: amplitude, zmin, dist
 
-    ! Get location of Emax
-    call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-    r = af_r_loc(tree, loc_field)
+    ! Get lowest z-coordinate of a streamer
+    call af_reduction(tree, streamer_min_z, reduce_min, 1e100_dp, zmin)
 
-    if (first_time .or. time < decay_start_time) then
-       initial_coord = r(NDIM)
-       amplitude = initial_field
-       first_time = .false.
-    else
-       dist = abs(r(NDIM) - initial_coord)
-       amplitude = min_field + (initial_field - min_field) * &
-            exp(-dist / decay_distance)
-    end if
+    dist = max(decay_start_z - zmin, 0.0_dp)
+    amplitude = min_field + (initial_field - min_field) * &
+         exp(-dist / decay_distance)
 
-    ! print *, time, r(NDIM), amplitude
+    ! print *, time, zmin, amplitude
   end function my_field_amplitude
+
+  ! Find cell with smallest z coordinate that has a density exceeding
+  ! detection_density
+  real(dp) function streamer_min_z(box)
+    type(box_t), intent(in) :: box
+    integer                 :: i, n, nc
+    real(dp)                :: r(NDIM)
+
+    nc = box%n_cell
+    i = -1
+
+    do n = 1, nc
+       if (maxval(box%cc(1:nc, 1:nc, n, i_electron)) > detection_density) then
+          i = n
+          exit
+       end if
+    end do
+
+    if (i /= -1) then
+       r = af_r_cc(box, [1, 1, i])
+       streamer_min_z = r(NDIM)
+    else
+       streamer_min_z = 1e100_dp
+    end if
+  end function streamer_min_z
+
+  real(dp) function reduce_min(a, b)
+    real(dp), intent(in) :: a, b
+    reduce_min = min(a, b)
+  end function reduce_min
 
 end module m_user
