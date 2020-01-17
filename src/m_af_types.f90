@@ -365,6 +365,21 @@ module m_af_types
        real(dp), intent(in)        :: rarg(:)
      end subroutine af_subr_boxes_arg
 
+     !> Subroutine that gets a tree and a box id
+     subroutine af_subr_tree(tree, id)
+       import
+       type(af_t), intent(inout) :: tree
+       integer, intent(in)       :: id
+     end subroutine af_subr_tree
+
+     !> Subroutine that gets a tree, a box id and an array of reals
+     subroutine af_subr_tree_arg(tree, id, rarg)
+       import
+       type(af_t), intent(inout) :: tree
+       integer, intent(in)       :: id
+       real(dp), intent(in)      :: rarg(:)
+     end subroutine af_subr_tree_arg
+
      !> To fill ghost cells near refinement boundaries.
      subroutine af_subr_rb(boxes, id, nb, iv)
        import
