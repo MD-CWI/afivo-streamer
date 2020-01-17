@@ -59,7 +59,7 @@ program random_refinement_Xd
      ! Fill ghost cells for phi. The third argument is a subroutine that fills
      ! ghost cells near refinement boundaries, and the fourth argument fill ghost
      ! cells near physical boundaries.
-     call af_gc_tree(tree, i_phi, af_gc_interp, af_bc_dirichlet_zero)
+     call af_gc_tree(tree, [i_phi])
   end if
 
   call af_tree_sum_cc(tree, i_phi, sum_phi_t0)

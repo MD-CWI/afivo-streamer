@@ -19,6 +19,7 @@ program boundary_conditions_Xd
   print *, "Number of threads", af_get_max_threads()
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_set_cc_methods(tree, i_phi, boundary_method)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -37,7 +38,7 @@ program boundary_conditions_Xd
         call af_loop_box(tree, average_phi)
      end if
 
-     call af_gc_tree(tree, i_phi, af_gc_interp, boundary_method)
+     call af_gc_tree(tree, [i_phi])
 
      write(fname, "(A,I0)") "boundary_conditions_" // DIMNAME // "_", iter
      call af_write_vtk(tree, trim(fname), dir="output")

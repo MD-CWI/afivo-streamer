@@ -72,7 +72,7 @@ program advection_Xd
      ! boundaries. The ghost values are less than twice the coarse values. and
      ! af_bc_neumann_zero physical boundaries: fill ghost cells near physical
      ! boundaries using Neumann zero
-     call af_gc_tree(tree, i_phi, af_gc_interp_lim, af_bc_neumann_zero)
+     call af_gc_tree(tree, [i_phi])
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
@@ -104,7 +104,7 @@ program advection_Xd
   ! Fill ghost cells for variables i_phi on the sides of all boxes, using
   ! af_gc_interp_lim on refinement boundaries and af_bc_neumann_zero on
   ! physical boundaries
-  call af_gc_tree(tree, i_phi, af_gc_interp_lim, af_bc_neumann_zero)
+  call af_gc_tree(tree, [i_phi])
 
   call system_clock(t_start, count_rate)
   time_steps = 0
@@ -150,7 +150,7 @@ program advection_Xd
         ! Two forward Euler steps over dt
         do i = 1, 2
            ! Call procedure fluxes_koren for each id in tree, giving the list of boxes
-           call af_loop_boxes(tree, fluxes_koren)
+           call af_loop_tree(tree, fluxes_koren)
 
            ! Restrict fluxes from children to parents on refinement boundaries.
            call af_consistent_fluxes(tree, [i_phi])
@@ -168,7 +168,7 @@ program advection_Xd
      end do
 
      ! Fill ghost cells for variable i_phi
-     call af_gc_tree(tree, i_phi, af_gc_interp_lim, af_bc_neumann_zero)
+     call af_gc_tree(tree, [i_phi])
 
      !> [adjust_refinement]
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
@@ -277,24 +277,24 @@ contains
 
   !> This routine computes the x-fluxes and y-fluxes interior (advective part)
   !> with the Koren limiter
-  subroutine fluxes_koren(boxes, id)
+  subroutine fluxes_koren(tree, id)
     use m_af_flux_schemes
-    type(box_t), intent(inout) :: boxes(:)
-    integer, intent(in)          :: id
-    integer                      :: nc
-    real(dp), allocatable        :: cc(DTIMES(:))
-    real(dp), allocatable        :: v(DTIMES(:), :)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id
+    integer                   :: nc
+    real(dp), allocatable     :: cc(DTIMES(:))
+    real(dp), allocatable     :: v(DTIMES(:), :)
 
-    nc     = boxes(id)%n_cell
+    nc     = tree%boxes(id)%n_cell
     allocate(cc(DTIMES(-1:nc+2)))
     allocate(v(DTIMES(1:nc+1), NDIM))
 
-    call af_gc_box(boxes, id, i_phi, af_gc_interp_lim, af_bc_neumann_zero)
+    call af_gc_box(tree, id, [i_phi])
 
     ! Get a second layer of ghost cell data (the 'normal' routines give just one
     ! layer of ghost cells). Use af_gc2_prolong_linear on refinement boundaries and
     ! af_bc2_neumann_zero on physical boundaries.
-    call af_gc2_box(boxes, &      ! List of all the boxes
+    call af_gc2_box(tree%boxes, &      ! List of all the boxes
          id, &                     ! Id of box for which we set ghost cells
          i_phi, &                  ! Variable for which ghost cells are set
          af_gc2_prolong_linear, & ! Procedure called at refinement boundaries
@@ -307,14 +307,14 @@ contains
     v(:, :, 2) = velocity(2)
 
     call flux_koren_2d(cc, v, nc, 2)
-    boxes(id)%fc(:, :, :, i_phi) = v
+    tree%boxes(id)%fc(:, :, :, i_phi) = v
 #elif NDIM == 3
     v(:, :, :, 1) = velocity(1)
     v(:, :, :, 2) = velocity(2)
     v(:, :, :, 3) = velocity(3)
 
     call flux_koren_3d(cc, v, nc, 2)
-    boxes(id)%fc(:, :, :, :, i_phi) = v
+    tree%boxes(id)%fc(:, :, :, :, i_phi) = v
 #endif
 
   end subroutine fluxes_koren

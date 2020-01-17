@@ -134,7 +134,7 @@ contains
           print *, "do this with call af_set_cc_methods(tree, iv, ...)"
           error stop "af_particles_to_grid: no ghost cell method defined"
        else
-          call af_gc_tree(tree, iv)
+          call af_gc_tree(tree, [iv])
        end if
     end if
   end subroutine af_particles_to_grid

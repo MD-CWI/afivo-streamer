@@ -135,8 +135,7 @@ contains
           call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
           ! Update ghost cells
-          call af_gc_ids(tree, tree%lvls(lvl)%ids, mg%i_phi, &
-               mg%sides_rb, mg%sides_bc)
+          call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
        end if
 
        ! Perform V-cycle, only set residual on last iteration
@@ -186,8 +185,7 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells after correction
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, mg%i_phi, &
-            mg%sides_rb, mg%sides_bc)
+       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
 
        ! Upwards relaxation
        call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_up)
@@ -236,7 +234,7 @@ contains
     call coarse_solver_get_phi(tree, mg)
 
     ! Set ghost cells for the new coarse grid solution
-    call af_gc_ids(tree, tree%lvls(1)%ids, mg%i_phi, mg%sides_rb, mg%sides_bc)
+    call af_gc_ids(tree, tree%lvls(1)%ids, [mg%i_phi])
   end subroutine solve_coarse_grid
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
@@ -600,8 +598,7 @@ contains
 
        !$omp do
        do i = 1, size(ids)
-          call af_gc_box(tree, ids(i), mg%i_phi, mg%sides_rb, &
-               mg%sides_bc, use_corners)
+          call af_gc_box(tree, ids(i), [mg%i_phi])
        end do
        !$omp end do
     end do
@@ -655,8 +652,7 @@ contains
     end do
     !$omp end parallel do
 
-    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, mg%i_phi, &
-         mg%sides_rb, mg%sides_bc)
+    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, [mg%i_phi])
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
     ! store current coarse phi in tmp.
@@ -689,8 +685,7 @@ contains
 
     ! Fill ghost cells here to be sure
     if (lvl == tree%highest_lvl) then
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, mg%i_phi, &
-            mg%sides_rb, mg%sides_bc)
+       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
     end if
 
     !$omp parallel do private(id, p_id)
@@ -704,8 +699,7 @@ contains
     end do
     !$omp end parallel do
 
-    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, mg%i_phi, &
-         mg%sides_rb, mg%sides_bc)
+    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, [mg%i_phi])
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
 

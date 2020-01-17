@@ -168,7 +168,7 @@ program simple_streamer_2d
         ! Two forward Euler steps over dt
         do i = 1, 2
            ! First calculate fluxes
-           call af_loop_boxes(tree, fluxes_koren, leaves_only=.true.)
+           call af_loop_tree(tree, fluxes_koren, leaves_only=.true.)
            call af_consistent_fluxes(tree, [f_elec])
 
            ! Update the solution
@@ -187,8 +187,7 @@ program simple_streamer_2d
      end do
 
      ! Fill ghost cells for i_pion and i_elec
-     call af_gc_tree(tree, i_elec)
-     call af_gc_tree(tree, i_pion)
+     call af_gc_tree(tree, [i_elec, i_pion])
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
@@ -380,7 +379,7 @@ contains
     call af_loop_box(tree, fld_from_pot)
 
     ! Set the field norm also in ghost cells
-    call af_gc_tree(tree, i_fld, af_gc_interp, af_bc_neumann_zero)
+    call af_gc_tree(tree, [i_fld])
   end subroutine compute_fld
 
   ! Compute electric field from electrical potential
@@ -405,33 +404,32 @@ contains
   end subroutine fld_from_pot
 
   ! Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_koren(boxes, id)
+  subroutine fluxes_koren(tree, id)
     use m_af_flux_schemes
-    type(box_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id
-    real(dp)                    :: inv_dr(2)
-    real(dp)                    :: cc(-1:boxes(id)%n_cell+2, -1:boxes(id)%n_cell+2)
-    real(dp), allocatable       :: v(:, :, :), dc(:, :, :)
-    integer                     :: nc
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id
+    real(dp)                  :: inv_dr(2)
+    real(dp)                  :: cc(-1:tree%n_cell+2, -1:tree%n_cell+2)
+    real(dp), allocatable     :: v(:, :, :), dc(:, :, :)
+    integer                   :: nc
 
-    nc     = boxes(id)%n_cell
-    inv_dr = 1/boxes(id)%dr
+    nc     = tree%n_cell
+    inv_dr = 1/tree%boxes(id)%dr
 
     allocate(v(1:nc+1, 1:nc+1, 2))
     allocate(dc(1:nc+1, 1:nc+1, 2))
 
-    call af_gc_box(boxes, id, i_elec, af_gc_interp_lim, &
-         af_bc_dirichlet_zero)
-    call af_gc2_box(boxes, id, i_elec, af_gc2_prolong_linear, &
+    call af_gc_box(tree, id, [i_elec])
+    call af_gc2_box(tree%boxes, id, i_elec, af_gc2_prolong_linear, &
          af_bc2_dirichlet_zero, cc, nc)
 
-    v = -mobility * boxes(id)%fc(:, :, :, f_fld)
+    v = -mobility * tree%boxes(id)%fc(:, :, :, f_fld)
     dc = diffusion_c
 
     call flux_koren_2d(cc, v, nc, 2)
     call flux_diff_2d(cc, dc, inv_dr, nc, 2)
 
-    boxes(id)%fc(:, :, :, f_elec) = v + dc
+    tree%boxes(id)%fc(:, :, :, f_elec) = v + dc
   end subroutine fluxes_koren
 
   ! Take average of new and old electron/ion density for explicit trapezoidal rule

@@ -22,29 +22,13 @@ module m_af_ghostcell
   public :: af_bc2_neumann_zero
   public :: af_bc2_dirichlet_zero
 
-  ! Define interfaces so ghost cell routines can be called for a single variable
-  ! or for multiple variables
-  interface af_gc_tree
-     module procedure af_gc_tree_iv, af_gc_tree_ivs
-  end interface af_gc_tree
-
-  interface af_gc_ids
-     module procedure af_gc_ids_iv, af_gc_ids_ivs, af_gc_ids_v1
-  end interface af_gc_ids
-
-  interface af_gc_box
-     module procedure af_gc_box_iv, af_gc_box_ivs, af_gc_box_v1
-  end interface
-
 contains
 
   !> Fill ghost cells for variables ivs on the sides of all boxes, using
   !> subr_rb on refinement boundaries and subr_bc on physical boundaries
-  subroutine af_gc_tree_ivs(tree, ivs, subr_rb, subr_bc, corners, leaves_only)
+  subroutine af_gc_tree(tree, ivs, corners, leaves_only)
     type(af_t), intent(inout)       :: tree        !< Tree to fill ghost cells on
     integer, intent(in)              :: ivs(:)      !< Variables for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb     !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc     !< Procedure called at physical boundaries
     logical, intent(in), optional    :: corners     !< Fill corner ghost cells (default: yes)
     logical, intent(in), optional    :: leaves_only !< Fill only leaves' ghost cells (default: false)
     integer                          :: lvl
@@ -56,110 +40,37 @@ contains
 
     if (all_ids) then
        do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, &
-               subr_rb, subr_bc, corners)
+          call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, corners)
        end do
     else
        do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, &
-               subr_rb, subr_bc, corners)
+          call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, corners)
        end do
     end if
-  end subroutine af_gc_tree_ivs
-
-  !> Fill ghost cells for variables ivs on the sides of all boxes, using
-  !> subr_rb on refinement boundaries and subr_bc on physical boundaries
-  subroutine af_gc_tree_iv(tree, iv, subr_rb, subr_bc, corners, leaves_only)
-    type(af_t), intent(inout)       :: tree        !< Tree to fill ghost cells on
-    integer, intent(in)              :: iv          !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb     !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc     !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners     !< Fill corner ghost cells (default: yes)
-    logical, intent(in), optional    :: leaves_only !< Fill only leaves' ghost cells (default: false)
-    integer                          :: lvl
-    logical                          :: all_ids
-
-    if (.not. tree%ready) error stop "af_gc_tree: tree not ready"
-    all_ids = .true.
-    if (present(leaves_only)) all_ids = .not. leaves_only
-
-    if (all_ids) then
-       do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%ids, iv, &
-               subr_rb, subr_bc, corners)
-       end do
-    else
-       do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%leaves, iv, &
-               subr_rb, subr_bc, corners)
-       end do
-    end if
-  end subroutine af_gc_tree_iv
+  end subroutine af_gc_tree
 
   !> Fill ghost cells for variables ivs on the sides of all boxes, using subr_rb
   !> on refinement boundaries and subr_bc on physical boundaries. This routine
   !> assumes that ghost cells on other ids have been set already.
-  subroutine af_gc_ids_ivs(tree, ids, ivs, subr_rb, subr_bc, corners)
+  subroutine af_gc_ids(tree, ids, ivs, corners)
     type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
     integer, intent(in)              :: ids(:)  !< Ids of boxes for which we set ghost cells
     integer, intent(in)              :: ivs(:)  !< Variables for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
     logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
     integer                          :: i
 
     !$omp parallel do
     do i = 1, size(ids)
-       call af_gc_box(tree, ids(i), ivs, subr_rb, subr_bc, corners)
+       call af_gc_box(tree, ids(i), ivs, corners)
     end do
     !$omp end parallel do
-  end subroutine af_gc_ids_ivs
-
-  !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
-  !> on refinement boundaries and subr_bc on physical boundaries. This routine
-  !> assumes that ghost cells on other ids have been set already.
-  subroutine af_gc_ids_iv(tree, ids, iv, subr_rb, subr_bc, corners)
-    type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
-    integer, intent(in)              :: ids(:)  !< Ids of boxes for which we set ghost cells
-    integer, intent(in)              :: iv      !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
-    integer                          :: i
-
-    !$omp parallel do
-    do i = 1, size(ids)
-       call af_gc_box(tree, ids(i), iv, subr_rb, subr_bc, corners)
-    end do
-    !$omp end parallel do
-  end subroutine af_gc_ids_iv
-
-  !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
-  !> on refinement boundaries and subr_bc on physical boundaries. This routine
-  !> assumes that ghost cells on other ids have been set already.
-  subroutine af_gc_ids_v1(boxes, ids, iv, subr_rb, subr_bc, corners)
-    type(box_t), intent(inout)     :: boxes(:) !< List of all the boxes
-    integer, intent(in)              :: ids(:)   !< Ids of boxes for which we set ghost cells
-    integer, intent(in)              :: iv       !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb  !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc  !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners  !< Fill corner ghost cells (default: yes)
-    integer                          :: i
-
-    !$omp parallel do
-    do i = 1, size(ids)
-       call af_gc_box(boxes, ids(i), iv, subr_rb, subr_bc, corners)
-    end do
-    !$omp end parallel do
-  end subroutine af_gc_ids_v1
+  end subroutine af_gc_ids
 
   !> Fill ghost cells for variables ivs
-  subroutine af_gc_box_ivs(tree, id, ivs, subr_rb, subr_bc, corners)
+  subroutine af_gc_box(tree, id, ivs, corners)
     type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
     integer, intent(in)              :: id      !< Id of box for which we set ghost cells
     integer, intent(in)              :: ivs(:)  !< Variables for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
     logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
     logical                          :: do_corners
     integer                          :: i, iv
@@ -172,18 +83,14 @@ contains
     do i = 1, size(ivs)
        iv = ivs(i)
 
-       if (present(subr_rb)) then
-          use_rb => subr_rb
-       else if (tree%has_cc_method(iv)) then
+       if (tree%has_cc_method(iv)) then
           use_rb => tree%cc_methods(iv)%rb
        else
           print *, "For variable ", trim(tree%cc_names(iv))
           error stop "af_gc_box: no refinement boundary method stored"
        end if
 
-       if (present(subr_bc)) then
-          use_bc => subr_bc
-       else if (tree%has_cc_method(iv)) then
+       if (tree%has_cc_method(iv)) then
           use_bc => tree%cc_methods(iv)%bc
        else
           print *, "For variable ", trim(tree%cc_names(iv))
@@ -193,61 +100,7 @@ contains
        call af_gc_box_sides(tree%boxes, id, iv, use_rb, use_bc)
        if (do_corners) call af_gc_box_corner(tree%boxes, id, iv)
     end do
-  end subroutine af_gc_box_ivs
-
-  !> Fill ghost cells for variable iv
-  subroutine af_gc_box_iv(tree, id, iv, subr_rb, subr_bc, corners)
-    type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
-    integer, intent(in)              :: id      !< Id of box for which we set ghost cells
-    integer, intent(in)              :: iv      !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
-    logical                          :: do_corners
-    procedure(af_subr_rb), pointer  :: use_rb
-    procedure(af_subr_bc), pointer  :: use_bc
-
-    if (present(subr_rb)) then
-       use_rb => subr_rb
-    else if (tree%has_cc_method(iv)) then
-       use_rb => tree%cc_methods(iv)%rb
-    else
-       print *, "For variable ", trim(tree%cc_names(iv))
-       error stop "af_gc_box: no refinement boundary method stored"
-    end if
-
-    if (present(subr_bc)) then
-       use_bc => subr_bc
-    else if (tree%has_cc_method(iv)) then
-       use_bc => tree%cc_methods(iv)%bc
-    else
-       print *, "For variable ", trim(tree%cc_names(iv))
-       error stop "af_gc_box: no boundary condition stored"
-    end if
-
-    do_corners = .true.
-    if (present(corners)) do_corners = corners
-
-    call af_gc_box_sides(tree%boxes, id, iv, use_rb, use_bc)
-    if (do_corners) call af_gc_box_corner(tree%boxes, id, iv)
-  end subroutine af_gc_box_iv
-
-  !> Fill ghost cells for variable iv
-  subroutine af_gc_box_v1(boxes, id, iv, subr_rb, subr_bc, corners)
-    type(box_t), intent(inout)    :: boxes(:) !< List of all the boxes
-    integer, intent(in)             :: id       !< Id of box for which we set ghost cells
-    integer, intent(in)             :: iv       !< Variable for which ghost cells are set
-    procedure(af_subr_rb)          :: subr_rb  !< Procedure called at refinement boundaries
-    procedure(af_subr_bc)          :: subr_bc  !< Procedure called at physical boundaries
-    logical, intent(in), optional   :: corners  !< Fill corner ghost cells (default: yes)
-    logical                         :: do_corners
-
-    do_corners = .true.
-    if (present(corners)) do_corners = corners
-
-    call af_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
-    if (do_corners) call af_gc_box_corner(boxes, id, iv)
-  end subroutine af_gc_box_v1
+  end subroutine af_gc_box
 
   !> Fill ghost cells for variable iv on the sides of a box, using subr_rb on
   !> refinement boundaries and subr_bc on physical boundaries.

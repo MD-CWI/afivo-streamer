@@ -52,6 +52,7 @@ program ghostcell_benchmark_Xd
   print *, "Num iterations:     ", n_iterations
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_set_cc_methods(tree, i_phi, af_bc_dirichlet_zero)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -83,7 +84,7 @@ program ghostcell_benchmark_Xd
   ! Do the actual benchmarking
   call system_clock(t_start, count_rate)
   do it = 1, n_iterations
-     call af_gc_tree(tree, i_phi, af_gc_interp, af_bc_dirichlet_zero, .false.)
+     call af_gc_tree(tree, [i_phi], .false.)
   end do
   call system_clock(t_end, count_rate)
 

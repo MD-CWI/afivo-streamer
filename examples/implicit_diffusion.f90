@@ -38,6 +38,8 @@ program implicit_diffusion_Xd
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
   call af_add_cc_variable(tree, "err", ix=i_err)
 
+  call af_set_cc_methods(tree, i_phi, af_bc_dirichlet_zero)
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
@@ -59,7 +61,7 @@ program implicit_diffusion_Xd
      ! boundaries.
      ! Fill ghost cells near physical boundaries using Dirichlet zero
 
-     call af_gc_tree(tree, i_phi, af_gc_interp, af_bc_dirichlet_zero)
+     call af_gc_tree(tree, [i_phi])
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
