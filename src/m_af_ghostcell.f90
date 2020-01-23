@@ -577,7 +577,7 @@ contains
     real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
     integer, intent(out)    :: bc_type
 
-    bc_type = af_bc_dirichlet
+    bc_type = af_bc_continuous
     ! Set values to zero (to prevent problems with NaN)
     bc_val  = 0.0_dp
   end subroutine af_bc_set_continuous
