@@ -1,7 +1,7 @@
-!> \example simple_streamer_2d.f90
+!> \example simple_streamer.f90
 !>
 !> A simplified model for ionization waves and/or streamers in 2D
-program simple_streamer_2d
+program simple_streamer
 
   use m_af_types
   use m_af_core
@@ -144,7 +144,7 @@ program simple_streamer_2d
      ! Every dt_output, write output
      if (output_count * dt_output <= time) then
         output_count = output_count + 1
-        write(fname, "(A,I6.6)") "simple_streamer_2d_", output_count
+        write(fname, "(A,I6.6)") "simple_streamer_", output_count
 
         ! Write the cell centered data of a tree to a Silo file. Only the
         ! leaves of the tree are used
@@ -489,4 +489,4 @@ contains
     end select
   end subroutine sides_bc_pot
 
-end program simple_streamer_2d
+end program simple_streamer

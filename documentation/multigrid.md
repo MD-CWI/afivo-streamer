@@ -22,8 +22,10 @@ described in \cite afivo_paper. Here is a brief summary:
 
 # How to use multigrid in Afivo
 
-TODO
+See for example one of the following examples:
 
-# Solving different equations
+* @ref poisson_basic.f90
+* @ref poisson_cyl.f90
+* @ref poisson_dielectric.f90
+* @ref poisson_helmholtz.f90
 
-TODO

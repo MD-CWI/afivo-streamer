@@ -3,7 +3,7 @@
 !>
 !> This example shows how to solve reaction-diffusion equations with different
 !> time step methods.
-program reaction_diffusion_Xd
+program reaction_diffusion
   use m_af_all
 
   implicit none
@@ -416,4 +416,4 @@ contains
     end associate
   end subroutine laplacian
 
-end program reaction_diffusion_Xd
+end program reaction_diffusion

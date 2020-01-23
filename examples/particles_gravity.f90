@@ -1,8 +1,8 @@
 #include "../src/cpp_macros.h"
-!> \example particles_gravity_Xd.f90
+!> \example particles_gravity.f90
 !>
 !> Toy example showing how to simulate gravitating particles
-program particles_gravity_Xd
+program particles_gravity
   use m_af_all
 
   implicit none
@@ -265,4 +265,4 @@ contains
     box%cc(DTIMES(:), i_rho) = box%cc(DTIMES(:), i_rho) - mean_density
   end subroutine subtract_mean_density
 
-end program particles_gravity_Xd
+end program particles_gravity

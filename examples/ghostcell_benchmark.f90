@@ -1,8 +1,8 @@
 #include "../src/cpp_macros.h"
-!> \example ghostcell_benchmark_Xd.f90
+!> \example ghostcell_benchmark.f90
 !>
 !> This program can be used to benchmark the ghostcells routines
-program ghostcell_benchmark_Xd
+program ghostcell_benchmark
   use m_af_all
 
   implicit none
@@ -118,4 +118,4 @@ contains
     box%cc(DTIMES(1:nc), i_phi) = 1.0_dp
   end subroutine set_init_cond
 
-end program ghostcell_benchmark_Xd
+end program ghostcell_benchmark

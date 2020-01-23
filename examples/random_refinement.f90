@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example random_refinement_Xd.f90
+!> \example random_refinement.f90
 !>
 !> This example shows how to create an AMR tree, perform random refinement,
 !> write output files, and how to fill ghost cells.
-program random_refinement_Xd
+program random_refinement
   use m_af_all
 
   implicit none
@@ -160,4 +160,4 @@ contains
     if (str /= "Hello") error stop "error reading other data"
   end subroutine read_string
 
-end program random_refinement_Xd
+end program random_refinement

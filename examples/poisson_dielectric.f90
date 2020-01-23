@@ -1,5 +1,5 @@
 #include "../src/cpp_macros.h"
-!> \example dielectric_Xd.f90
+!> \example poisson_dielectric.f90
 !>
 !> Example showing how to include a dielectric object. Warning: the
 !> functionality is not fully ready

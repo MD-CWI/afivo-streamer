@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example advection_Xd.f90
+!> \example advection.f90
 !>
 !> An advection example using the Koren flux limiter. Time stepping is done with
 !> the explicit trapezoidal rule.
-program advection_Xd
+program advection
   use m_af_all
 
   implicit none
@@ -22,7 +22,7 @@ program advection_Xd
   type(ref_info_t)   :: refine_info
   integer            :: refine_steps, time_steps, output_cnt
   integer            :: i, n, n_steps
-  real(dp)           :: dt, time, end_time, p_err, n_err
+  real(dp)           :: dt, time, end_time, err, sum_err2
   real(dp)           :: sum_phi, sum_phi_t0
   real(dp)           :: dt_adapt, dt_output
   real(dp)           :: velocity(NDIM), dr_min(NDIM)
@@ -133,12 +133,13 @@ program advection_Xd
 
         ! Find maximum and minimum values of cc(..., i_err) and cc(..., i_phi).
         ! By default, only loop over leaves, and ghost cells are not used.
-        call af_tree_max_cc(tree, i_err, p_err)
-        call af_tree_min_cc(tree, i_err, n_err)
+        call af_tree_maxabs_cc(tree, i_err, err)
         call af_tree_sum_cc(tree, i_phi, sum_phi)
-        write(*,"(2(A,1x,Es12.4,2x))")  &
-             " max error:", max(p_err, abs(n_err)), &
-             "conservation error:  ", (sum_phi - sum_phi_t0) / sum_phi_t0
+        call af_tree_sum_cc(tree, i_err, sum_err2, power=2)
+        write(*,"(3(A,Es16.8))")  &
+             " max error:", err, &
+             " mean error:", sqrt(sum_err2/af_total_volume(tree)), &
+             " conservation error:  ", (sum_phi - sum_phi_t0) / sum_phi_t0
      end if
 
      if (time > end_time) exit
@@ -149,8 +150,9 @@ program advection_Xd
 
         ! Two forward Euler steps over dt
         do i = 1, 2
-           ! Call procedure fluxes_koren for each id in tree, giving the list of boxes
-           call af_loop_tree(tree, fluxes_koren)
+           ! Call procedure fluxes_koren for each id in tree, giving the list of
+           ! boxes
+           call af_loop_tree(tree, fluxes_koren, .true.)
 
            ! Restrict fluxes from children to parents on refinement boundaries.
            call af_consistent_fluxes(tree, [i_phi])
@@ -216,9 +218,9 @@ contains
             box%cc(i, j, k-1, i_phi) - 2 * box%cc(i, j, k, i_phi)))
 #endif
 
-       if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 3) then
+       if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 9 - 2*NDIM) then
           cell_flags(IJK) = af_do_ref
-       else if (diff < 0.1_dp * 0.1e-3_dp) then
+       else if (diff < 0.1_dp * 2.0e-3_dp) then
           cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -264,7 +266,7 @@ contains
 
     select case (sol_type)
     case (1)
-       sol = sin(rr_t(1))**4 * cos(rr_t(2))**4
+       sol = sin(0.5_dp * rr_t(1))**8 * cos(0.5_dp * rr_t(2))**8
     case (2)
        rr_t = modulo(rr_t, domain_len) / domain_len
        if (norm2(rr_t - 0.5_dp) < 0.1_dp) then
@@ -376,4 +378,4 @@ contains
          box%cc(DTIMES(:), i_phi_old))
   end subroutine average_phi
 
-end program advection_Xd
+end program advection

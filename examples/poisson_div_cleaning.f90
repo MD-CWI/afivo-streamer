@@ -1,5 +1,5 @@
 #include "../src/cpp_macros.h"
-!> \example divergence_cleaning.f90
+!> \example poisson_div_cleaning.f90
 !>
 !> Example showing how to use multigrid for ensuring a vector field is
 !> divergence free

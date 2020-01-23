@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example implicit_diffusion_Xd.f90
+!> \example implicit_diffusion.f90
 !>
 !> An implicit diffusion example, showing how the multigrid methods can be used
 !> to solve the diffusion equation with a backward Euler scheme.
-program implicit_diffusion_Xd
+program implicit_diffusion
   use m_af_all
 
   implicit none
@@ -184,4 +184,4 @@ contains
          box%cc(DTIMES(1:nc), i_phi)
   end subroutine set_rhs
 
-end program implicit_diffusion_Xd
+end program implicit_diffusion

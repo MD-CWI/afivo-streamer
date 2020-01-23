@@ -1,8 +1,8 @@
 #include "../src/cpp_macros.h"
-!> \example boundary_conditions_Xd.f90
+!> \example boundary_conditions.f90
 !>
 !> Example showing how to use different types of boundary conditions
-program boundary_conditions_Xd
+program boundary_conditions
   use m_af_all
 
   implicit none
@@ -133,4 +133,4 @@ contains
   end subroutine boundary_method
   !> [boundary_method]
 
-end program boundary_conditions_Xd
+end program boundary_conditions

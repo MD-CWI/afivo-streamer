@@ -87,127 +87,126 @@ module m_af_types
   end type ref_info_t
 
 #if NDIM == 2
-  ! Numbering of children (same location as **corners**)
+  !> Number of children
   integer, parameter :: af_num_children = 4
-  integer, parameter :: af_child_lowx_lowy = 1
-  integer, parameter :: af_child_highx_lowy = 2
-  integer, parameter :: af_child_lowx_highy = 3
-  integer, parameter :: af_child_highx_highy = 4
 
-  ! Index offset for each child
+  !> Index offset for each child
   integer, parameter :: af_child_dix(2, 4) = reshape([0,0,1,0,0,1,1,1], [2,4])
-  ! Children adjacent to a neighbor
+  !> Children adjacent to a neighbor
   integer, parameter :: af_child_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
-  ! Neighbors adjacent to a child
+  !> Neighbors adjacent to a child
   integer, parameter :: af_nb_adj_child(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
-  ! Which children have a low index per dimension
+  !> Which children have a low index per dimension
   logical, parameter :: af_child_low(2, 4) = reshape([.true., .true., &
        .false., .true., .true., .false., .false., .false.], [2, 4])
+  !> Whether a child located in the 'upper' direction (1 or 0)
   integer, parameter :: af_child_high_01(2, 4) = &
        reshape([0, 0, 1, 0, 0, 1, 1, 1], [2, 4])
 
-  ! Neighbor topology information
+  !> Number of neighbors
   integer, parameter :: af_num_neighbors = 4
+  !> Lower-x neighbor
   integer, parameter :: af_neighb_lowx = 1
+  !> Upper-x neighbor
   integer, parameter :: af_neighb_highx = 2
+  !> Lower-y neighbor
   integer, parameter :: af_neighb_lowy = 3
+  !> Upper-y neighbor
   integer, parameter :: af_neighb_highy = 4
 
-  ! Index offsets of neighbors
+  !> Index offsets of neighbors
   integer, parameter :: af_neighb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
-  ! Which neighbors have a lower index
+  !> Which neighbors have a lower index
   logical, parameter :: af_neighb_low(4) = [.true., .false., .true., .false.]
-  ! The low neighbors
+  !> The low neighbors
   integer, parameter :: af_low_neighbs(2) = [1, 3]
-  ! The high neighbors
+  !> The high neighbors
   integer, parameter :: af_high_neighbs(2) = [2, 4]
-  ! Opposite of nb_low, but now as 0,1 integers
+  !> Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: af_neighb_high_01(4) = [0, 1, 0, 1]
-  ! Opposite of nb_low, but now as -1,1 integers
+  !> Opposite of nb_low, but now as -1,1 integers
   integer, parameter :: af_neighb_high_pm(4) = [-1, 1, -1, 1]
 
-  ! Reverse neighbors
+  !> Reverse neighbors
   integer, parameter :: af_neighb_rev(4) = [2, 1, 4, 3]
-  ! Direction (dimension) for a neighbor
+  !> Direction (dimension) for a neighbor
   integer, parameter :: af_neighb_dim(4) = [1, 1, 2, 2]
 #elif NDIM == 3
-  ! Numbering of children (same location as **corners**)
+  !> Number of children
   integer, parameter :: af_num_children = 8
-  integer, parameter :: af_child_lowx_lowy_lowz = 1
-  integer, parameter :: af_child_highx_lowy_lowz = 2
-  integer, parameter :: af_child_lowx_highy_lowz = 3
-  integer, parameter :: af_child_highx_highy_lowz = 4
-  integer, parameter :: af_child_lowx_lowy_highz = 5
-  integer, parameter :: af_child_highx_lowy_highz = 6
-  integer, parameter :: af_child_lowx_highy_highz = 7
-  integer, parameter :: af_child_highx_highy_highz = 8
 
-  ! Index offset for each child
+  !> Index offset for each child
   integer, parameter :: af_child_dix(3, 8) = reshape( &
        [0,0,0, 1,0,0, 0,1,0, 1,1,0, &
        0,0,1, 1,0,1, 0,1,1, 1,1,1], [3,8])
-  ! Children adjacent to a neighbor
+  !> Children adjacent to a neighbor
   integer, parameter :: af_child_adj_nb(4, 6) = reshape( &
        [1,3,5,7, 2,4,6,8, 1,2,5,6, 3,4,7,8, 1,2,3,4, 5,6,7,8], [4,6])
-  ! Neighbors adjacent to a child
+  !> Neighbors adjacent to a child
   integer, parameter :: af_nb_adj_child(3, 8) = reshape( &
        [1,3,5, 2,3,5, 1,4,5, 2,4,5, 1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
-  ! Which children have a low index per dimension
+  !> Which children have a low index per dimension
   logical, parameter :: af_child_low(3, 8) = reshape([ &
        .true., .true., .true., .false., .true., .true., &
        .true., .false., .true., .false., .false., .true., &
        .true., .true., .false., .false., .true., .false., &
        .true., .false., .false., .false., .false., .false.], [3, 8])
-  ! Which children have a high index per dimension
+  !> Which children have a high index per dimension
   integer, parameter :: af_child_high_01(3, 8) = reshape([ &
        0, 0, 0, 1, 0, 0, &
        0, 1, 0, 1, 1, 0, &
        0, 0, 1, 1, 0, 1, &
        0, 1, 1, 1, 1, 1], [3, 8])
 
-  ! Neighbor topology information
+  !> Number of neighbors
   integer, parameter :: af_num_neighbors = 6
+  !> Lower-x neighbor
   integer, parameter :: af_neighb_lowx = 1
+  !> Upper-x neighbor
   integer, parameter :: af_neighb_highx = 2
+  !> Lower-y neighbor
   integer, parameter :: af_neighb_lowy = 3
+  !> Upper-y neighbor
   integer, parameter :: af_neighb_highy = 4
+  !> Lower-z neighbor
   integer, parameter :: af_neighb_lowz = 5
+  !> Upper-z neighbor
   integer, parameter :: af_neighb_highz = 6
-  ! Index offsets of neighbors
+  !> Index offsets of neighbors
   integer, parameter :: af_neighb_dix(3, 6) = reshape( &
        [-1,0,0, 1,0,0, 0,-1,0, 0,1,0, 0,0,-1, 0,0,1], [3,6])
-  ! Which neighbors have a lower index
+  !> Which neighbors have a lower index
   logical, parameter :: af_neighb_low(6) = &
        [.true., .false., .true., .false., .true., .false.]
-  ! The low neighbors
+  !> The low neighbors
   integer, parameter :: af_low_neighbs(3) = [1, 3, 5]
-  ! The high neighbors
+  !> The high neighbors
   integer, parameter :: af_high_neighbs(3) = [2, 4, 6]
-  ! Opposite of nb_low, but now as 0,1 integers
+  !> Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: af_neighb_high_01(6) = [0, 1, 0, 1, 0, 1]
-  ! Opposite of nb_low, but now as -1,1 integers
+  !> Opposite of nb_low, but now as -1,1 integers
   integer, parameter :: af_neighb_high_pm(6) = [-1, 1, -1, 1, -1, 1]
-  ! Reverse neighbors
+  !> Reverse neighbors
   integer, parameter :: af_neighb_rev(6) = [2, 1, 4, 3, 6, 5]
-  ! Direction (dimension) for a neighbor
+  !> Direction (dimension) for a neighbor
   integer, parameter :: af_neighb_dim(6) = [1, 1, 2, 2, 3, 3]
 
-  ! Number of edgse
+  !> Number of edgse
   integer, parameter :: af_num_edges = 12
-  ! Coordinate parallel to edge
+  !> Coordinate parallel to edge
   integer, parameter :: af_edge_dim(12) = &
        [1,1,1,1, 2,2,2,2, 3,3,3,3]
-  ! Direction of edge
+  !> Direction of edge
   integer, parameter :: af_edge_dir(3, 12) = reshape( &
        [0,-1,-1, 0,1,-1, 0,-1,1, 0,1,1, &
        -1,0,-1, 1,0,-1, -1,0,1, 1,0,1, &
        -1,-1,0, 1,-1,0, -1,1,0, 1,1,0], [3, 12])
-  ! Neighbors adjacent to edges
+  !> Neighbors adjacent to edges
   integer, parameter :: af_nb_adj_edge(2, 12) = reshape( &
        [3,5, 4,5, 3,6, 4,6, &
        1,5, 2,5, 1,6, 2,6, &
        1,3, 2,3, 1,4, 2,4], [2,12])
-  ! Minimum index of edge (1 indicates n_cell + 1)
+  !> Minimum index of edge (1 indicates n_cell + 1)
   integer, parameter :: af_edge_min_ix(3, 12) = reshape( &
        [0,0,0, 0,1,0, 0,0,1, 0,1,1, &
        0,0,0, 1,0,0, 0,0,1, 1,0,1, &
