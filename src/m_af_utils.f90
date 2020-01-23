@@ -949,12 +949,15 @@ contains
 
   !> Find weighted sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
-  subroutine af_tree_sum_cc(tree, iv, cc_sum)
+  subroutine af_tree_sum_cc(tree, iv, cc_sum, power)
     type(af_t), intent(in) :: tree !< Full grid
     integer, intent(in)    :: iv !< Index of variable
     real(dp), intent(out)  :: cc_sum !< Volume-integrated sum of variable
+    integer, intent(in), optional :: power !< Sum of values**power (default: 1)
     real(dp)               :: tmp, my_sum, fac
-    integer                :: i, id, lvl, nc
+    integer                :: i, id, lvl, nc, pow
+
+    pow = 1; if (present(power)) pow = power
 
     if (.not. tree%ready) stop "Tree not ready"
     my_sum = 0
@@ -971,10 +974,10 @@ contains
           if (tree%coord_t == af_cyl) then
              tmp = sum_2pr_box(tree%boxes(id), iv)
           else
-             tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+             tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv)**pow)
           end if
 #elif NDIM == 3
-          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv)**pow)
 #endif
           my_sum = my_sum + fac * tmp
        end do
@@ -1000,7 +1003,7 @@ contains
 
       do j = 1, nc
          do i = 1, nc
-            res = res + box%cc(i, j, iv) * af_cyl_radius_cc(box, i)
+            res = res + box%cc(i, j, iv)**pow * af_cyl_radius_cc(box, i)
          end do
       end do
       res = res * twopi
