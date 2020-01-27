@@ -13,6 +13,7 @@ program test_init
   integer          :: i, n_lvl
 
   call af_add_cc_variable(tree, "phi")
+  call af_set_cc_methods(tree, 1, af_bc_neumann_zero)
   call af_init(tree, 8, [DTIMES(8.0_dp)], [DTIMES(8)])
 
   n_lvl = 4
@@ -24,7 +25,7 @@ program test_init
   call af_loop_box(tree, init)
 
   ! Should set all ghost cells to zero
-  call af_gc_tree(tree, 1, af_gc_interp, af_bc_neumann_zero)
+  call af_gc_tree(tree, [1])
 
   call af_loop_box(tree, check_ghostcell)
 

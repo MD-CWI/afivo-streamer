@@ -606,14 +606,9 @@ contains
     type(box_t), intent(in)           :: box   !< A child box
     integer, intent(in), optional      :: nb     !< Optional: get index on parent neighbor
     integer                            :: ix_offset(NDIM)
-    if (box%lvl > 1) then
-       ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
-       if (present(nb)) ix_offset = ix_offset - af_neighb_dix(:, nb) * box%n_cell
-    else                        ! In the subtree, parents are half the size
-       ix_offset = 0
-       if (present(nb)) ix_offset = ix_offset - &
-            af_neighb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
-    endif
+
+    ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
+    if (present(nb)) ix_offset = ix_offset - af_neighb_dix(:, nb) * box%n_cell
   end function af_get_child_offset
 
   !> Given a cell index on box, get index of the closest cell at its parent
@@ -649,9 +644,10 @@ contains
   end function af_neighb_offset
 
   !> Get index range of boundary cells inside a box facing neighbor nb
-  subroutine af_get_index_bc_inside(nb, nc, lo, hi)
+  subroutine af_get_index_bc_inside(nb, nc, n_gc, lo, hi)
     integer, intent(in)  :: nb !< Neighbor direction
     integer, intent(in)  :: nc !< box size
+    integer, intent(in)  :: n_gc !< Number of ghost cells
     integer, intent(out) :: lo(NDIM)
     integer, intent(out) :: hi(NDIM)
     integer              :: nb_dim
@@ -660,14 +656,20 @@ contains
     nb_dim     = af_neighb_dim(nb)
     lo(:)      = 1
     hi(:)      = nc
-    lo(nb_dim) = 1 + (nc-1) * af_neighb_high_01(nb)
-    hi(nb_dim) = lo(nb_dim)
+    if (af_neighb_low(nb)) then
+       lo(nb_dim) = 1
+       hi(nb_dim) = n_gc
+    else
+       lo(nb_dim) = nc - n_gc + 1
+       hi(nb_dim) = nc
+    end if
   end subroutine af_get_index_bc_inside
 
   !> Get index range of ghost cells facing neighbor nb
-  subroutine af_get_index_bc_outside(nb, nc, lo, hi)
-    integer, intent(in)  :: nb !< Neighbor direction
-    integer, intent(in)  :: nc !< box size
+  subroutine af_get_index_bc_outside(nb, nc, n_gc, lo, hi)
+    integer, intent(in)  :: nb  !< Neighbor direction
+    integer, intent(in)  :: nc  !< box size
+    integer, intent(in)  :: n_gc !< Number of ghost cells
     integer, intent(out) :: lo(NDIM)
     integer, intent(out) :: hi(NDIM)
     integer              :: nb_dim
@@ -676,8 +678,13 @@ contains
     nb_dim     = af_neighb_dim(nb)
     lo(:)      = 1
     hi(:)      = nc
-    lo(nb_dim) = (nc+1) * af_neighb_high_01(nb)
-    hi(nb_dim) = lo(nb_dim)
+    if (af_neighb_low(nb)) then
+       lo(nb_dim) = 1 - n_gc
+       hi(nb_dim) = 0
+    else
+       lo(nb_dim) = nc + 1
+       hi(nb_dim) = nc + n_gc
+    end if
   end subroutine af_get_index_bc_outside
 
   !> Compute the 'child index' for a box with spatial index ix. With 'child

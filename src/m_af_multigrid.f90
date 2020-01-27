@@ -1123,7 +1123,7 @@ contains
           call mg%sides_bc(box, nb, mg%i_phi, coords, bc_val, bc_type)
 
           ! Determine index range next to boundary
-          call af_get_index_bc_inside(nb, nc, lo, hi)
+          call af_get_index_bc_inside(nb, nc, 1, lo, hi)
 
           select case (bc_type)
           case (af_bc_dirichlet)

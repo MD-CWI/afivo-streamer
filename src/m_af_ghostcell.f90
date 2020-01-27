@@ -74,8 +74,6 @@ contains
     logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
     logical                          :: do_corners
     integer                          :: i, iv
-    procedure(af_subr_rb), pointer  :: use_rb
-    procedure(af_subr_bc), pointer  :: use_bc
 
     do_corners = .true.
     if (present(corners)) do_corners = corners
@@ -83,21 +81,13 @@ contains
     do i = 1, size(ivs)
        iv = ivs(i)
 
-       if (tree%has_cc_method(iv)) then
-          use_rb => tree%cc_methods(iv)%rb
-       else
+       if (.not. tree%has_cc_method(iv)) then
           print *, "For variable ", trim(tree%cc_names(iv))
-          error stop "af_gc_box: no refinement boundary method stored"
+          error stop "af_gc_box: no methods stored"
        end if
 
-       if (tree%has_cc_method(iv)) then
-          use_bc => tree%cc_methods(iv)%bc
-       else
-          print *, "For variable ", trim(tree%cc_names(iv))
-          error stop "af_gc_box: no boundary condition stored"
-       end if
-
-       call af_gc_box_sides(tree%boxes, id, iv, use_rb, use_bc)
+       call af_gc_box_sides(tree%boxes, id, iv, tree%cc_methods(iv)%rb, &
+            tree%cc_methods(iv)%bc)
        if (do_corners) call af_gc_box_corner(tree%boxes, id, iv)
     end do
   end subroutine af_gc_box
@@ -120,7 +110,7 @@ contains
 
        if (nb_id > af_no_box) then
           ! There is a neighbor
-          call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
+          call af_get_index_bc_outside(nb, boxes(id)%n_cell, 1, lo, hi)
           dnb = af_neighb_offset([nb])
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
        else if (nb_id == af_no_box) then
@@ -331,7 +321,7 @@ contains
     integer                       :: p_id, lo(NDIM), hi(NDIM)
 
     p_id = boxes(id)%parent
-    call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
+    call af_get_index_bc_outside(nb, boxes(id)%n_cell, 1, lo, hi)
     call af_prolong_copy(boxes(p_id), boxes(id), iv, low=lo, high=hi)
   end subroutine af_gc_prolong_copy
 
