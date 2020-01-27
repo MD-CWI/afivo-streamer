@@ -18,6 +18,7 @@ module m_af_ghostcell
   public :: af_gc_prolong_copy
   public :: af_gc_interp_lim
   public :: af_gc2_box
+  public :: af_gc2_box_v2
   public :: af_gc2_prolong_linear
   public :: af_bc2_neumann_zero
   public :: af_bc2_dirichlet_zero
@@ -593,6 +594,174 @@ contains
          box_nb%cc(nlo(1):nhi(1), nlo(2):nhi(2), nlo(3):nhi(3), iv)
 #endif
   end subroutine copy_from_nb
+
+  !> Get array of cell-centered variables with multiple ghost cells, excluding corners
+  subroutine af_gc2_box_v2(tree, id, ivs, cc)
+    type(af_t), intent(inout) :: tree   !< Tree to fill ghost cells on
+    integer, intent(in)       :: id     !< Id of box for which we set ghost cells
+    integer, intent(in)       :: ivs(:) !< Variables for which ghost cells are set
+    real(dp)                  :: cc(DTIMES(-1:tree%n_cell+2), size(ivs))
+    integer                   :: i, iv, nb, nc, nb_id, bc_type
+    integer                   :: lo(NDIM), hi(NDIM), dnb(NDIM)
+    integer                   :: nlo(NDIM), nhi(NDIM)
+    real(dp)                  :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp)                  :: bc_val(tree%n_cell**(NDIM-1))
+
+    nc = tree%n_cell
+
+    do i = 1, size(ivs)
+       iv = ivs(i)
+       cc(DTIMES(1:nc), i) = tree%boxes(id)%cc(DTIMES(1:nc), iv)
+
+       if (.not. tree%has_cc_method(iv)) then
+          print *, "For variable ", trim(tree%cc_names(iv))
+          error stop "af_gc_box: no methods stored"
+       end if
+
+       do nb = 1, af_num_neighbors
+          nb_id = tree%boxes(id)%neighbors(nb)
+
+          if (nb_id > af_no_box) then
+             ! There is a neighbor
+             call af_get_index_bc_outside(nb, tree%n_cell, 2, lo, hi)
+
+             dnb = af_neighb_offset([nb])
+             nlo = lo - dnb * tree%n_cell
+             nhi = hi - dnb * tree%n_cell
+
+#if NDIM == 2
+             cc(lo(1):hi(1), lo(2):hi(2), i) = &
+                  tree%boxes(nb_id)%cc(nlo(1):nhi(1), nlo(2):nhi(2), iv)
+#elif NDIM == 3
+             cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3), i) = &
+                  tree%boxes(nb_id)%cc(nlo(1):nhi(1), nlo(2):nhi(2), &
+                  nlo(3):nhi(3), iv)
+#endif
+          else if (nb_id == af_no_box) then
+             ! Refinement boundary
+             call gc2_prolong_rb(tree%boxes, id, nb, iv, tree%n_cell, &
+                  cc(DTIMES(:), i))
+          else
+             ! TODO Physical boundary
+             ! call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
+             ! call subr_bc(tree%boxes(id), nb, iv, coords, bc_val, bc_type)
+             ! call bc_to_gc(tree%boxes(id), nb, iv, bc_val, bc_type)
+          end if
+       end do
+    end do
+  end subroutine af_gc2_box_v2
+
+  !> Conservative prolongation with a limited slope for ghost cells near
+  !> refinement boundaries
+  !>
+  !> @todo make compatible with arbitrary number of ghost cells
+  subroutine gc2_prolong_rb(boxes, id, nb, iv, nc, cc)
+    type(box_t), intent(in) :: boxes(:)            !< List of all boxes
+    integer, intent(in)     :: id                  !< Index of box to fill ghost cells for
+    integer, intent(in)     :: nb                  !< Neighbor direction
+    integer, intent(in)     :: iv                  !< Index of variable
+    integer, intent(in)     :: nc                  !< Number of cells
+    real(dp), intent(inout) :: cc(DTIMES(-1:nc+2)) !< Enlarged array
+    integer                 :: IJK, i_c, j_c, i_f, j_f, p_nb_id
+    integer                 :: lo_c(NDIM), hi_c(NDIM), ix_offset(NDIM)
+    integer                 :: lo(NDIM), hi(NDIM)
+    real(dp)                :: f0, fx, fy
+#if NDIM == 3
+    real(dp)                :: fz
+    integer                 :: k_c, k_f
+#endif
+
+    p_nb_id = boxes(boxes(id)%parent)%neighbors(nb)
+
+    ! Get index in current box
+    call af_get_index_bc_outside(nb, nc, 2, lo, hi)
+
+    ! Convert to index on parent box
+    ix_offset = af_get_child_offset(boxes(id))
+    lo_c = ix_offset + (lo+1)/2
+    hi_c = ix_offset + (hi+1)/2
+
+    ! Convert to index on neighbor of parent box
+    lo_c = lo_c - af_neighb_dix(:, nb) * nc
+    hi_c = hi_c - af_neighb_dix(:, nb) * nc
+
+    associate(cc_p => boxes(p_nb_id)%cc)
+#if NDIM == 2
+      do j = lo_c(2), hi_c(2)
+         j_f = lo(2) + 2 * (j - lo_c(2))
+         do i = lo_c(1), hi_c(1)
+            i_f = lo(1) + 2 * (i - lo_c(1))
+
+            ! Compute slopes on parent
+            f0 = cc_p(i, j, iv)
+            fx = 0.25_dp * limit_slope( &
+                 cc_p(i, j, iv) - cc_p(i-1, j, iv), &
+                 cc_p(i+1, j, iv) - cc_p(i, j, iv))
+            fy = 0.25_dp * limit_slope( &
+                 cc_p(i, j, iv) - cc_p(i, j-1, iv), &
+                 cc_p(i, j+1, iv) - cc_p(i, j, iv))
+
+            ! Prolong to fine cells
+            cc(i_f,   j_f) = f0 - fx - fy
+            cc(i_f,   j_f+1) = f0 - fx + fy
+            cc(i_f+1, j_f) = f0 + fx - fy
+            cc(i_f+1, j_f+1) = f0 + fx + fy
+         end do
+      end do
+#elif NDIM == 3
+      do k = lo_c(3), hi_c(3)
+         k_f = 2 * k - 1
+         do j = lo_c(2), hi_c(2)
+            j_f = 2 * j - 1
+            do i = lo_c(1), hi_c(1)
+               i_f = 2 * i - 1
+
+               ! Compute slopes on parent
+               f0 = cc_p(i, j, k, iv)
+               fx = 0.25_dp * limit_slope( &
+                    cc_p(i, j, k, iv) - cc_p(i-1, j, k, iv), &
+                    cc_p(i+1, j, k, iv) - cc_p(i, j, k, iv))
+               fy = 0.25_dp * limit_slope( &
+                    cc_p(i, j, k, iv) - cc_p(i, j-1, k, iv), &
+                    cc_p(i, j+1, k, iv) - cc_p(i, j, k, iv))
+               fz = 0.25_dp * limit_slope( &
+                    cc_p(i, j, k, iv) - cc_p(i, j, k-1, iv), &
+                    cc_p(i, j, k+1, iv) - cc_p(i, j, k, iv))
+
+               ! Prolong to fine cells
+               cc(i_f,   j_f,   k_f)   = f0 - fx - fy - fz
+               cc(i_f,   j_f,   k_f+1) = f0 - fx - fy + fz
+               cc(i_f,   j_f+1, k_f)   = f0 - fx + fy - fz
+               cc(i_f,   j_f+1, k_f+1) = f0 - fx + fy + fz
+               cc(i_f+1, j_f,   k_f)   = f0 + fx - fy - fz
+               cc(i_f+1, j_f,   k_f+1) = f0 + fx - fy + fz
+               cc(i_f+1, j_f+1, k_f)   = f0 + fx + fy - fz
+               cc(i_f+1, j_f+1, k_f+1) = f0 + fx + fy + fz
+            end do
+         end do
+      end do
+#endif
+    end associate
+
+  contains
+
+    ! Take minimum of two slopes if they have the same sign, else take zero
+    elemental function limit_slope(ll, rr) result(slope)
+      real(dp), intent(in) :: ll, rr
+      real(dp)             :: slope
+
+      if (ll * rr < 0) then
+         slope = 0.0_dp
+      else if (ll * ll < rr * rr) then
+         slope = ll
+      else
+         slope = rr
+      end if
+      ! slope = 0.5_dp * (ll + rr)
+      ! slope = 0.0_dp
+    end function limit_slope
+
+  end subroutine gc2_prolong_rb
 
   !> Get a second layer of ghost cell data (the 'normal' routines give just one
   !> layer of ghost cells). Use subr_rb on refinement boundaries and subr_bc
