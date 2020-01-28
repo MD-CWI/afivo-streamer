@@ -57,6 +57,7 @@ contains
 
   !> Check multigrid options or set them to default
   subroutine mg_init(tree, mg)
+    use m_af_core, only: af_set_cc_methods
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg   !< Multigrid options
 
@@ -67,6 +68,7 @@ contains
          stop "mg_init: you have to set both i_lsf and i_bval"
 
     if (.not. associated(mg%sides_bc)) stop "mg_init: sides_bc not set"
+    if (.not. tree%ready) error stop "mg_init: tree not initialized"
 
     ! Check whether these are set, otherwise use default
     if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
@@ -83,6 +85,9 @@ contains
 
     call mg_set_box_tag_lvl(tree, mg, 1)
     call coarse_solver_initialize(tree, mg)
+
+    ! Set the proper methods for the phi variable
+    call af_set_cc_methods(tree, mg%i_phi, mg%sides_bc, mg%sides_rb)
 
     mg%initialized = .true.
 

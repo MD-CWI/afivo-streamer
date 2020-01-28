@@ -38,14 +38,23 @@ program implicit_diffusion
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
   call af_add_cc_variable(tree, "err", ix=i_err)
 
-  call af_set_cc_methods(tree, i_phi, af_bc_dirichlet_zero)
-
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(domain_len)], &
        [DTIMES(box_size)], &
        periodic=[DTIMES(.true.)])
+
+  mg%i_phi    = i_phi                 ! Solution variable
+  mg%i_rhs    = i_rhs                 ! Right-hand side variable
+  mg%i_tmp    = i_tmp                 ! Variable for temporary space
+  mg%sides_bc => af_bc_dirichlet_zero ! Method for boundary conditions
+  mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
+
+  ! This routine does not initialize the multigrid fields boxes%i_phi,
+  ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
+  ! first call of mg_fas_fmg
+  call mg_init(tree, mg)
 
   call af_print_info(tree)
 
@@ -76,17 +85,6 @@ program implicit_diffusion
      ! If no new boxes have been added, exit the loop
      if (refine_info%n_add == 0) exit
   end do
-
-  mg%i_phi    = i_phi                 ! Solution variable
-  mg%i_rhs    = i_rhs                 ! Right-hand side variable
-  mg%i_tmp    = i_tmp                 ! Variable for temporary space
-  mg%sides_bc => af_bc_dirichlet_zero ! Method for boundary conditions
-  mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
-
-  ! This routine does not initialize the multigrid fields boxes%i_phi,
-  ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
-  ! first call of mg_fas_fmg
-  call mg_init(tree, mg)
 
   output_cnt = 0
   time       = 0

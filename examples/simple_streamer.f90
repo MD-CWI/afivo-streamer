@@ -99,7 +99,6 @@ program simple_streamer
   call af_set_cc_methods(tree, i_pion, af_bc_dirichlet_zero, &
        prolong=af_prolong_limit)
   call af_set_cc_methods(tree, i_fld, af_bc_neumann_zero)
-  call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
 
   output_count = 0 ! Number of output files written
   time    = 0 ! Simulation time (all times are in s)

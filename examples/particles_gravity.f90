@@ -69,7 +69,6 @@ program particles_gravity
 
   ! Set default methods (boundary condition is not actually used due to
   ! periodicity)
-  call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp)
   call af_set_cc_methods(tree, i_rho, af_bc_neumann_zero, af_gc_interp)
   do n = 1, NDIM
      call af_set_cc_methods(tree, i_f(n), af_bc_neumann_zero, af_gc_interp)

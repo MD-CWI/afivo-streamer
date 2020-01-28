@@ -306,6 +306,9 @@ contains
     procedure(af_subr_restrict), optional :: restrict !< Restriction method
     integer                               :: i, n
 
+    if (tree%has_cc_method(iv)) &
+         error stop "Cannot call af_set_cc_methods twice for same iv"
+
     tree%cc_methods(iv)%bc => bc
 
     if (present(rb)) then
