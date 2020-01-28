@@ -37,7 +37,7 @@ program advection
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
-  call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp_lim, &
+  call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, &
        prolong=af_prolong_limit)
 
   ! Initialize tree
@@ -218,7 +218,7 @@ contains
             box%cc(i, j, k-1, i_phi) - 2 * box%cc(i, j, k, i_phi)))
 #endif
 
-       if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 9 - 2*NDIM) then
+       if (box%lvl < 2 .or. diff > 2.0e-3_dp .and. box%lvl < 5) then
           cell_flags(IJK) = af_do_ref
        else if (diff < 0.1_dp * 2.0e-3_dp) then
           cell_flags(IJK) = af_rm_ref
@@ -284,38 +284,27 @@ contains
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: id
     integer                   :: nc
-    real(dp), allocatable     :: cc(DTIMES(:))
+    real(dp), allocatable     :: cc(DTIMES(:), :)
     real(dp), allocatable     :: v(DTIMES(:), :)
 
     nc     = tree%boxes(id)%n_cell
-    allocate(cc(DTIMES(-1:nc+2)))
+    allocate(cc(DTIMES(-1:nc+2), 1))
     allocate(v(DTIMES(1:nc+1), NDIM))
 
-    call af_gc_box(tree, id, [i_phi])
-
-    ! Get a second layer of ghost cell data (the 'normal' routines give just one
-    ! layer of ghost cells). Use af_gc2_prolong_linear on refinement boundaries and
-    ! af_bc2_neumann_zero on physical boundaries.
-    call af_gc2_box(tree%boxes, &      ! List of all the boxes
-         id, &                     ! Id of box for which we set ghost cells
-         i_phi, &                  ! Variable for which ghost cells are set
-         af_gc2_prolong_linear, & ! Procedure called at refinement boundaries
-         af_bc2_neumann_zero, &   ! Procedure called at physical boundaries
-         cc, &                  ! The enlarged box with ghost cells
-         nc)                       ! box%n_cell
+    call af_gc2_box(tree, id, [i_phi], cc)
 
 #if NDIM == 2
     v(:, :, 1) = velocity(1)
     v(:, :, 2) = velocity(2)
 
-    call flux_koren_2d(cc, v, nc, 2)
+    call flux_koren_2d(cc(DTIMES(:), 1), v, nc, 2)
     tree%boxes(id)%fc(:, :, :, i_phi) = v
 #elif NDIM == 3
     v(:, :, :, 1) = velocity(1)
     v(:, :, :, 2) = velocity(2)
     v(:, :, :, 3) = velocity(3)
 
-    call flux_koren_3d(cc, v, nc, 2)
+    call flux_koren_3d(cc(DTIMES(:), 1), v, nc, 2)
     tree%boxes(id)%fc(:, :, :, :, i_phi) = v
 #endif
 

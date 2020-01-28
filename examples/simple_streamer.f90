@@ -95,9 +95,10 @@ program simple_streamer
   call mg_init(tree, mg)
 
   call af_set_cc_methods(tree, i_elec, af_bc_dirichlet_zero, &
-       af_gc_interp_lim, af_prolong_limit)
+       prolong=af_prolong_limit)
   call af_set_cc_methods(tree, i_pion, af_bc_dirichlet_zero, &
-       af_gc_interp_lim, af_prolong_limit)
+       prolong=af_prolong_limit)
+  call af_set_cc_methods(tree, i_fld, af_bc_neumann_zero)
   call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
 
   output_count = 0 ! Number of output files written
@@ -409,7 +410,7 @@ contains
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: id
     real(dp)                  :: inv_dr(2)
-    real(dp)                  :: cc(-1:tree%n_cell+2, -1:tree%n_cell+2)
+    real(dp)                  :: cc(-1:tree%n_cell+2, -1:tree%n_cell+2, 1)
     real(dp), allocatable     :: v(:, :, :), dc(:, :, :)
     integer                   :: nc
 
@@ -419,15 +420,13 @@ contains
     allocate(v(1:nc+1, 1:nc+1, 2))
     allocate(dc(1:nc+1, 1:nc+1, 2))
 
-    call af_gc_box(tree, id, [i_elec])
-    call af_gc2_box(tree%boxes, id, i_elec, af_gc2_prolong_linear, &
-         af_bc2_dirichlet_zero, cc, nc)
+    call af_gc2_box(tree, id, [i_elec], cc)
 
     v = -mobility * tree%boxes(id)%fc(:, :, :, f_fld)
     dc = diffusion_c
 
-    call flux_koren_2d(cc, v, nc, 2)
-    call flux_diff_2d(cc, dc, inv_dr, nc, 2)
+    call flux_koren_2d(cc(:, :, 1), v, nc, 2)
+    call flux_diff_2d(cc(:, :, 1), dc, inv_dr, nc, 2)
 
     tree%boxes(id)%fc(:, :, :, f_elec) = v + dc
   end subroutine fluxes_koren
