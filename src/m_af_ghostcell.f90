@@ -219,6 +219,7 @@ contains
     end do
   end subroutine af_gc_box_corner
 
+  !> Convert a boundary condition to ghost cell data
   subroutine bc_to_gc(box, nb, iv, bc_val, bc_type)
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv      !< Variable to fill
@@ -311,6 +312,79 @@ contains
 #endif
     end select
   end subroutine bc_to_gc
+
+  !> Convert a boundary condition to two layers of ghost cell data
+  subroutine bc_to_gc2(nc, cc, nb, bc_val, bc_type, dr)
+    integer, intent(in)     :: nc                   !< Number of cells
+    real(dp), intent(inout) :: cc(DTIMES(-1:nc+2))  !< Cell-centered data
+    integer, intent(in)     :: nb                   !< Neighbor direction
+    real(dp), intent(in)    :: bc_val(nc**(NDIM-1)) !< Boundary condition
+    integer, intent(in)     :: bc_type              !< Type of b.c.
+    real(dp), intent(in)    :: dr(NDIM)             !< Grid spacing
+    real(dp)                :: c0, c1
+
+    ! If we call the interior point x1, x2 and the ghost point x0, then a
+    ! Dirichlet boundary value b can be imposed as:
+    ! x0 = -x1 + 2*b
+    ! x-1 = 2*x0 - x1
+    ! A Neumann b.c. can be imposed as:
+    ! x0 = x1 +/- dx * b
+    ! x-1 = 2*x0 - x1
+    ! (The second ghost cell here simply extends a linear slope)
+    ! Below, we set coefficients to handle these cases
+    select case (bc_type)
+    case (af_bc_dirichlet)
+       c0 = 2
+       c1 = -1
+    case (af_bc_neumann)
+       c0 = dr(af_neighb_dim(nb)) * af_neighb_high_pm(nb) ! This gives a + or - sign
+       c1 = 1
+    case default
+       stop "fill_bc: unknown boundary condition"
+    end select
+
+    select case (nb)
+#if NDIM == 2
+    case (af_neighb_lowx)
+       cc(0, 1:nc) = c0 * bc_val + c1 * cc(1, 1:nc)
+       cc(-1, 1:nc) = 2 * cc(0, 1:nc) - cc(1, 1:nc)
+    case (af_neighb_highx)
+       cc(nc+1, 1:nc) = c0 * bc_val + c1 * cc(nc, 1:nc)
+       cc(nc+2, 1:nc) = 2 * cc(nc+1, 1:nc) - cc(nc, 1:nc)
+    case (af_neighb_lowy)
+       cc(1:nc, 0) = c0 * bc_val + c1 * cc(1:nc, 1)
+       cc(1:nc, -1) = 2 * cc(1:nc, 0) - cc(1:nc, 1)
+    case (af_neighb_highy)
+       cc(1:nc, nc+1) = c0 * bc_val + c1 * cc(1:nc, nc)
+       cc(1:nc, nc+2) = 2 * cc(1:nc, nc+1) - cc(1:nc, nc)
+#elif NDIM == 3
+    case (af_neighb_lowx)
+       cc(0, 1:nc, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1, 1:nc, 1:nc)
+       cc(-1, 1:nc, 1:nc) = 2 * cc(0, 1:nc, 1:nc) - cc(1, 1:nc, 1:nc)
+    case (af_neighb_highx)
+       cc(nc+1, 1:nc, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(nc, 1:nc, 1:nc)
+       cc(nc+2, 1:nc, 1:nc) = 2 * cc(nc+1, 1:nc, 1:nc) - cc(nc, 1:nc, 1:nc)
+    case (af_neighb_lowy)
+       cc(1:nc, 0, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1, 1:nc)
+       cc(1:nc, -1, 1:nc) = 2 * cc(1:nc, 0, 1:nc) - cc(1:nc, 1, 1:nc)
+    case (af_neighb_highy)
+       cc(1:nc, nc+1, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, nc, 1:nc)
+       cc(1:nc, nc+2, 1:nc) = 2 * cc(1:nc, nc+1, 1:nc) - cc(1:nc, nc, 1:nc)
+    case (af_neighb_lowz)
+       cc(1:nc, 1:nc, 0) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1:nc, 1)
+       cc(1:nc, 1:nc, -1) = 2 * cc(1:nc, 1:nc, 0) - cc(1:nc, 1:nc, 1)
+    case (af_neighb_highz)
+       cc(1:nc, 1:nc, nc+1) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1:nc, nc)
+       cc(1:nc, 1:nc, nc+2) = 2 * cc(1:nc, 1:nc, nc+1) - cc(1:nc, 1:nc, nc)
+#endif
+    end select
+  end subroutine bc_to_gc2
 
   !> Partial prolongation to the ghost cells of box id from parent
   subroutine af_gc_prolong_copy(boxes, id, nb, iv)
@@ -642,10 +716,12 @@ contains
              call gc2_prolong_rb(tree%boxes, id, nb, iv, tree%n_cell, &
                   cc(DTIMES(:), i))
           else
-             ! TODO Physical boundary
-             ! call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
-             ! call subr_bc(tree%boxes(id), nb, iv, coords, bc_val, bc_type)
-             ! call bc_to_gc(tree%boxes(id), nb, iv, bc_val, bc_type)
+             ! Physical boundary
+             call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
+             call tree%cc_methods(iv)%bc(tree%boxes(id), &
+                  nb, iv, coords, bc_val, bc_type)
+             call bc_to_gc2(nc, cc(DTIMES(:), i), nb, bc_val, &
+                  bc_type, tree%boxes(id)%dr)
           end if
        end do
     end do
@@ -662,13 +738,13 @@ contains
     integer, intent(in)     :: iv                  !< Index of variable
     integer, intent(in)     :: nc                  !< Number of cells
     real(dp), intent(inout) :: cc(DTIMES(-1:nc+2)) !< Enlarged array
-    integer                 :: IJK, i_c, j_c, i_f, j_f, p_nb_id
+    integer                 :: IJK, i_f, j_f, p_nb_id
     integer                 :: lo_c(NDIM), hi_c(NDIM), ix_offset(NDIM)
     integer                 :: lo(NDIM), hi(NDIM)
     real(dp)                :: f0, fx, fy
 #if NDIM == 3
     real(dp)                :: fz
-    integer                 :: k_c, k_f
+    integer                 :: k_f
 #endif
 
     p_nb_id = boxes(boxes(id)%parent)%neighbors(nb)
@@ -752,13 +828,10 @@ contains
 
       if (ll * rr < 0) then
          slope = 0.0_dp
-      else if (ll * ll < rr * rr) then
-         slope = ll
       else
-         slope = rr
+         ! MC limiter
+         slope = sign(minval(abs([2 * ll, 2 * rr, 0.5_dp * (ll + rr)])), ll)
       end if
-      ! slope = 0.5_dp * (ll + rr)
-      ! slope = 0.0_dp
     end function limit_slope
 
   end subroutine gc2_prolong_rb
