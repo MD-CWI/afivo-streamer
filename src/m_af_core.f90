@@ -21,6 +21,7 @@ module m_af_core
 contains
 
   !> Add cell-centered variable
+  !> @todo ix as third argument?
   subroutine af_add_cc_variable(tree, name, write_out, n_copies, &
        max_lvl, ix, write_binary)
     !> Tree to add variable to

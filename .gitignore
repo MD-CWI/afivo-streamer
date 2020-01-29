@@ -76,3 +76,6 @@ documentation/html/*
 /examples/poisson_div_cleaning
 /examples/reaction_diffusion_2d
 /examples/reaction_diffusion_3d
+/examples/dielectric_surface_2d
+/examples/dielectric_surface_3d
+/documentation/auto/
