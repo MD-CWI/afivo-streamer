@@ -558,13 +558,13 @@ contains
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
   subroutine af_adjust_refinement(tree, ref_subr, ref_info, ref_buffer, &
-       modify_refinement)
+       ref_links)
     type(af_t), intent(inout)      :: tree        !< The tree to adjust
     procedure(af_subr_ref)         :: ref_subr    !< Refinement function
     type(ref_info_t), intent(inout) :: ref_info    !< Information about refinement
     integer, intent(in), optional   :: ref_buffer  !< Buffer width (in cells)
-    !> A routine to manually override refinement flags
-    procedure(subr_modify_ref), optional :: modify_refinement
+    !> Lists of linked boxes which should have the same refinement
+    integer, intent(in), optional   :: ref_links(:, :)
     integer                         :: lvl, id, i, c_ids(af_num_children), i_ch
     integer                         :: i_add, i_rm, n_ch, n_add
     integer, allocatable            :: ref_flags(:)
@@ -585,7 +585,7 @@ contains
     ! Set refinement values for all boxes. Only two flags are used below:
     ! af_refine and af_derefine. Other values are ignored.
     call consistent_ref_flags(tree, ref_flags, ref_subr, &
-         ref_buffer_val, modify_refinement)
+         ref_buffer_val, ref_links)
 
     ! To store ids of removed boxes
     n_ch = af_num_children
@@ -788,14 +788,14 @@ contains
   !> ref_flags is changed: for boxes that will be refined it holds af_refine,
   !> for boxes that will be derefined it holds af_derefine
   subroutine consistent_ref_flags(tree, ref_flags, ref_subr, &
-       ref_buffer, modify_refinement)
+       ref_buffer, ref_links)
     use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     type(af_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)     :: ref_flags(:) !< List of refinement flags for all boxes(:)
     procedure(af_subr_ref)    :: ref_subr     !< User-supplied refinement function.
     integer, intent(in)        :: ref_buffer   !< Buffer width (in cells)
-    !> A routine to manually override refinement flags
-    procedure(subr_modify_ref), optional :: modify_refinement
+    !> Lists of linked boxes which should have the same refinement
+    integer, intent(in), optional :: ref_links(:, :)
     integer              :: lvl, i, i_ch, ch_id, id
     integer              :: p_id
     integer              :: thread_id
@@ -867,8 +867,10 @@ contains
     call ensure_two_one_balance(tree, ref_flags)
     call handle_derefinement_flags(tree, ref_flags)
 
-    if (present(modify_refinement)) then
-       call modify_refinement(tree, ref_flags)
+    if (present(ref_links)) then
+       do i = 1, size(ref_links, 2)
+          ref_flags(ref_links(:, i)) = maxval(ref_flags(ref_links(:, i)))
+       end do
        call ensure_two_one_balance(tree, ref_flags)
        call handle_derefinement_flags(tree, ref_flags)
     end if

@@ -433,12 +433,6 @@ module m_af_types
        integer, intent(in), optional :: iv_to !< Destination (if /= iv)
        logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
      end subroutine af_subr_restrict
-
-     subroutine subr_modify_ref(tree, ref_flags)
-       import
-       type(af_t), intent(in) :: tree
-       integer, intent(inout) :: ref_flags(:)
-     end subroutine subr_modify_ref
   end interface
 
 contains
