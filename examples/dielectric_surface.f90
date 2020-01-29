@@ -20,10 +20,12 @@ program dielectric_surface
   integer            :: i_fld_fc
 
   ! The dielectric constant used in this example
-  double precision, parameter :: epsilon_high = 100.0_dp
+  double precision, parameter :: epsilon_high = 1000.0_dp
 
   ! Where the interface is located
-  real(dp), parameter :: interface_location = 0.25_dp
+  real(dp), parameter :: interface_location = 0.5_dp
+  ! Along which dimension the interface occurs
+  integer, parameter :: interface_dimension = 1
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -32,6 +34,7 @@ program dielectric_surface
   real(dp)           :: residu
   character(len=100) :: fname
   type(mg_t)         :: mg
+  integer, allocatable :: ref_links(:, :)
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -49,7 +52,7 @@ program dielectric_surface
   call af_add_fc_variable(tree, "fld_fc", i_fld_fc)
 
   call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
-       prolong=af_prolong_zeroth)
+       af_gc_prolong_copy, prolong=af_prolong_zeroth)
   call af_set_cc_methods(tree, i_fld_norm_fc, af_bc_neumann_zero)
   call af_set_cc_methods(tree, i_fld_norm_cc, af_bc_neumann_zero)
 
@@ -71,7 +74,8 @@ program dielectric_surface
 
   call dielectric_set_values(tree, dielectric, 1, sigma_function)
 
-  call af_adjust_refinement(tree, ref_routine, ref_info)
+  call dielectric_get_refinement_links(dielectric, ref_links)
+  call af_adjust_refinement(tree, ref_routine, ref_info, ref_links=ref_links)
   call dielectric_update_after_refinement(tree, dielectric, ref_info)
 
   call dielectric_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, 1.0_dp)
@@ -124,7 +128,7 @@ contains
        rr = af_r_cc(box, [IJK])
 
        ! Change epsilon in part of the domain
-       if (rr(2) < interface_location) then
+       if (rr(interface_dimension) < interface_location) then
           box%cc(IJK, i_eps) = epsilon_high
        else
           box%cc(IJK, i_eps) = 1.0_dp
@@ -147,10 +151,10 @@ contains
 
     ! Below the solution is specified in the approriate ghost cells
     select case (nb)
-    case (af_neighb_lowy)             ! Lower-x direction
+    case (2 * interface_dimension - 1)
        bc_type = af_bc_dirichlet
        bc_val = 0.0_dp
-    case (af_neighb_highy)             ! Higher-x direction
+    case (2 * interface_dimension)
        bc_type = af_bc_dirichlet
        bc_val = 1.0_dp
     case default
@@ -163,16 +167,16 @@ contains
     real(dp), intent(in) :: r(NDIM)
 
     ! Screen electric field outside dielectric
-    sigma_function = -epsilon_high/interface_location
+    ! sigma_function = -epsilon_high/interface_location
 
     ! Screen electric field inside dielectric
-    ! sigma_function = -1/(1 - interface_location)
+    ! sigma_function = 1/(1 - interface_location)
 
     ! Equal electric field on left and right
     ! sigma_function = 1 - epsilon_high
 
     ! No surface charge
-    ! sigma_function = 0.0_dp
+    sigma_function = 0.0_dp
   end function sigma_function
 
   subroutine compute_fields(box)

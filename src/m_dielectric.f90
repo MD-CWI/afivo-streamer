@@ -76,6 +76,7 @@ module m_dielectric
   public :: dielectric_update_after_refinement
   public :: dielectric_surface_charge_to_rhs
   public :: dielectric_correct_field_fc
+  public :: dielectric_get_refinement_links
 
 contains
 
@@ -182,6 +183,9 @@ contains
     integer, intent(in)               :: iv !< Surface variable
     procedure(value_func)             :: user_func !< User supplied function
     integer                           :: i, ix, id_out
+#if NDIM == 3
+    integer :: j, n
+#endif
     real(dp) :: coords(NDIM, tree%n_cell**(NDIM-1))
 
     ! Loop over the surfaces and call the user function to set values
@@ -195,7 +199,13 @@ contains
              dielectric%surfaces(ix)%sd(i, iv) = user_func(coords(:, i))
           end do
 #elif NDIM == 3
-          error stop
+          n = 0
+          do j = 1, tree%n_cell
+             do i = 1, tree%n_cell
+                n = n + 1
+                dielectric%surfaces(ix)%sd(i, j, iv) = user_func(coords(:, n))
+             end do
+          end do
 #endif
        end if
     end do
@@ -326,26 +336,25 @@ contains
 
   end subroutine restrict_surface_to_parent
 
-  ! subroutine dielectric_fix_refine(tree, dielectric, ref_flags)
-  !   type(af_t), intent(in) :: tree
-  !   integer, intent(inout) :: ref_flags(:)
-  !   integer                :: lvl, i, id, nb_id, ix
+  subroutine dielectric_get_refinement_links(dielectric, refinement_links)
+    type(dielectric_t), intent(in)      :: dielectric
+    integer, allocatable, intent(inout) :: refinement_links(:, :)
+    integer                             :: max_ix, n, ix
 
-  !   do lvl = 1, tree%highest_lvl
-  !      do i = 1, size(tree%lvls(lvl)%ids)
-  !         id = tree%lvls(lvl)%ids(i)
+    if (allocated(refinement_links)) deallocate(refinement_links)
+    max_ix = dielectric%max_ix
+    n      = count(dielectric%surfaces(1:max_ix)%in_use)
+    allocate(refinement_links(2, n))
 
-  !         ix = box_id_to_surface_ix(id)
-  !         if (ix > 0) then
-  !            if (id == surfaces(ix)%id_gas) then
-  !               nb_id = surfaces(ix)%id_diel
-  !               ref_flags([id, nb_id]) = &
-  !                    maxval([ref_flags([id, nb_id]), af_keep_ref])
-  !            end if
-  !         end if
-  !      end do
-  !   end do
-  ! end subroutine dielectric_fix_refine
+    n = 0
+    do ix = 1, max_ix
+       if (dielectric%surfaces(ix)%in_use) then
+          n = n + 1
+          refinement_links(:, n) = [dielectric%surfaces(ix)%id_out, &
+               dielectric%surfaces(ix)%id_in]
+       end if
+    end do
+  end subroutine dielectric_get_refinement_links
 
   subroutine dielectric_surface_charge_to_rhs(tree, dielectric, &
        i_sigma, i_rhs, fac)
