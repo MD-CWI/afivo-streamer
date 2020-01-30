@@ -53,6 +53,7 @@ program dielectric_surface
 
   call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
        af_gc_prolong_copy, prolong=af_prolong_zeroth)
+  call af_set_cc_methods(tree, i_rhs, af_bc_neumann_zero)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -60,14 +61,13 @@ program dielectric_surface
        [DTIMES(1.0_dp)], &
        [DTIMES(box_size)])
 
-  call af_loop_box(tree, set_init_cond)
-
   do n = 1, 2
      call af_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
-  dielectric%i_eps = i_eps
+  call af_loop_box(tree, set_init_cond)
+
   call dielectric_initialize(tree, i_eps, dielectric, 1)
 
   call dielectric_set_values(tree, dielectric, 1, sigma_function)
@@ -151,6 +151,9 @@ contains
        else
           box%cc(IJK, i_eps) = 1.0_dp
        end if
+
+       ! box%cc(IJK, i_rhs) = 10 * epsilon_high * &
+       !      exp(-100 * sum((rr - 0.75_dp)**2))
     end do; CLOSE_DO
 
   end subroutine set_init_cond

@@ -264,6 +264,7 @@ contains
        ix = get_new_surface_ix(diel)
        direction = diel%surfaces(p_ix)%direction
 
+       ! Select a child adjacent to a neighbor
        i_child  = af_child_adj_nb(n, direction)
        id_child = tree%boxes(p_id)%children(i_child)
        id_out   = tree%boxes(p_id)%children(i_child)
@@ -327,11 +328,11 @@ contains
     ! Remove child surface
     diel%n_removed = diel%n_removed + 1
     diel%removed_surfaces(diel%n_removed) = ix
+    diel%surfaces(p_ix)%in_use = .true.
     !$omp end critical
     id_out = diel%surfaces(ix)%id_out
     diel%box_id_out_to_surface_ix(id_out) = no_surface
     diel%surfaces(ix)%in_use = .false.
-    diel%surfaces(p_ix)%in_use = .true.
 
   end subroutine restrict_surface_to_parent
 
@@ -469,19 +470,19 @@ contains
                     (cc_in(0, 1:nc, i_phi) - cc_in(1, 1:nc, i_phi)) &
                     - fac_charge * sd(:, i_sigma)
             case (af_neighb_lowy)
-               fc_out(1:nc, nc+1, 2, i_fld) = fac_fld(1) * inv_dr(2) * &
-                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma)
-               fc_in(1:nc, 1, 2, i_fld)  = fac_fld(2) * inv_dr(2) * &
-                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+               fc_out(1:nc, 1, 2, i_fld)  = fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
                     - fac_charge * sd(:, i_sigma)
+               fc_in(1:nc, nc+1, 2, i_fld) = fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
+                    + fac_charge * sd(:, i_sigma)
             case (af_neighb_highy)
-               fc_out(1:nc, nc+1, 2, i_fld) = fac_fld(1) * inv_dr(2) * &
-                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma)
-               fc_in(1:nc, 1, 2, i_fld)  = fac_fld(2) * inv_dr(2) * &
-                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+               fc_out(1:nc, 1, 2, i_fld)  = fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
                     - fac_charge * sd(:, i_sigma)
+               fc_in(1:nc, nc+1, 2, i_fld) = fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
+                    + fac_charge * sd(:, i_sigma)
 #elif NDIM == 3
             case default
                error stop
@@ -543,23 +544,23 @@ contains
                     - fac_charge * sd(:, i_sigma) + inv_dr(1) * &
                     (cc_in(1, 1:nc, i_phi) - cc_in(2, 1:nc, i_phi)))
             case (af_neighb_lowy)
-               cc_out(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
-                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_out(1:nc, nc-1, i_phi) - cc_out(1:nc, nc, i_phi)))
-               cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
-                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+               cc_out(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
                     - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_in(1:nc, 1, i_phi) - cc_in(1:nc, 2, i_phi)))
+                    (cc_out(1:nc, 1, i_phi) - cc_out(1:nc, 2, i_phi)))
+               cc_in(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
+                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
+                    (cc_in(1:nc, nc-1, i_phi) - cc_in(1:nc, nc, i_phi)))
             case (af_neighb_highy)
-               cc_out(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
-                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_out(1:nc, nc-1, i_phi) - cc_out(1:nc, nc, i_phi)))
-               cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
-                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+               cc_out(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
                     - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_in(1:nc, 1, i_phi) - cc_in(1:nc, 2, i_phi)))
+                    (cc_out(1:nc, 1, i_phi) - cc_out(1:nc, 2, i_phi)))
+               cc_in(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
+                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
+                    (cc_in(1:nc, nc-1, i_phi) - cc_in(1:nc, nc, i_phi)))
 #elif NDIM == 3
             case default
                error stop
