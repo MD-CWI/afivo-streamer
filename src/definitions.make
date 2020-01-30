@@ -24,6 +24,7 @@ m_af_all.o: m_af_restrict.mod
 m_af_all.o: m_af_types.mod
 m_af_all.o: m_af_utils.mod
 m_af_all.o: m_coarse_solver.mod
+m_af_all.o: m_dielectric.mod
 m_af_all.o: m_mg_types.mod
 m_af_core.o: m_af_ghostcell.mod
 m_af_core.o: m_af_prolong.mod

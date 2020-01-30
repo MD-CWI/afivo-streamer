@@ -14,6 +14,7 @@ module m_af_all
   use m_af_flux_schemes
   use m_coarse_solver
   use m_mg_types
+  use m_dielectric
 
   implicit none
   public
