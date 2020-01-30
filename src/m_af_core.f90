@@ -16,6 +16,7 @@ module m_af_core
   public :: af_init_box
   public :: af_destroy
   public :: af_adjust_refinement
+  public :: af_refine_up_to_lvl
   public :: af_consistent_fluxes
 
 contains
@@ -550,6 +551,34 @@ contains
        nb_id = boxes(p_id)%children(c_ix)
     end if
   end function find_neighb
+
+  !> Refine a tree up to a given refinement lvl
+  subroutine af_refine_up_to_lvl(tree, lvl)
+    type(af_t), intent(inout) :: tree !< The tree to adjust
+    integer, intent(in)       :: lvl  !< Refine up to this lvl
+    type(ref_info_t)          :: ref_info
+
+    if (lvl < tree%highest_lvl) error stop "tree already above level"
+
+    do
+       call af_adjust_refinement(tree, ref_routine, ref_info)
+       if (ref_info%n_add == 0) exit
+    end do
+
+  contains
+
+    subroutine ref_routine(box, cell_flags)
+      type(box_t), intent(in) :: box
+      integer, intent(out) :: cell_flags(DTIMES(box%n_cell))
+
+      if (box%lvl < lvl) then
+         cell_flags = af_do_ref
+      else
+         cell_flags = af_keep_ref
+      end if
+    end subroutine ref_routine
+
+  end subroutine af_refine_up_to_lvl
 
   !> Adjust the refinement of a tree using the user-supplied ref_subr. The
   !> optional argument ref_buffer controls over how many cells neighbors are
