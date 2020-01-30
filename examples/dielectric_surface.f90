@@ -68,7 +68,7 @@ program dielectric_surface
   end do
 
   dielectric%i_eps = i_eps
-  call dielectric_initialize(tree, dielectric, 1)
+  call dielectric_initialize(tree, i_eps, dielectric, 1)
 
   call dielectric_set_values(tree, dielectric, 1, sigma_function)
 
@@ -91,7 +91,7 @@ program dielectric_surface
   do mg_iter = 1, n_iterations
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      call af_loop_box(tree, compute_fields)
-     call dielectric_correct_field_fc(tree, dielectric, 1, i_fld_fc, 1.0_dp)
+     call dielectric_correct_field_fc(tree, dielectric, 1, i_fld_fc, i_phi, 1.0_dp)
      call dielectric_correct_field_cc(tree, dielectric, 1, i_fld_cc, i_phi, 1.0_dp)
      call af_loop_box(tree, compute_field_norms)
 

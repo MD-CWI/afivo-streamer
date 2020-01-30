@@ -1,11 +1,12 @@
 #include "cpp_macros.h"
-!> This module contains routines for including dielectrics
+!> This module contains routines for including flat dielectric surfaces
 module m_dielectric
   use m_af_types
 
   implicit none
   private
 
+  !> Type for a single surface
   type surface_t
      logical               :: in_use    !< Whether the surface is active
      integer               :: id_in     !< Id of box inside dielectric
@@ -26,6 +27,7 @@ module m_dielectric
   !> Value indicating there is no surface
   integer, parameter :: no_surface = -1
 
+  !> Type for storing all the surfaces on a mesh
   type dielectric_t
      !> Number of variables to store on the surface
      integer :: n_variables = 0
@@ -35,12 +37,6 @@ module m_dielectric
      integer :: i_eps = -1
      !> Index of electric potential in tree
      integer :: i_phi = -1
-     !> Whether the electric field is stored at cell faces
-     logical :: field_at_faces = .true.
-     !> Index of face-centered electric field variable
-     integer :: ifc_E = -1
-     !> Indices of cell-centered electric field variables
-     integer :: icc_E(NDIM) = -1
      !> Highest surface id
      integer :: max_ix = 0
      !> Maximum number of surfaces
@@ -52,17 +48,11 @@ module m_dielectric
      integer                      :: n_removed = 0
      !> Indices of removed surfaces
      integer, allocatable         :: removed_surfaces(:)
-     !> Mapping of boxes to surfaces
-     integer, allocatable         :: box_id_to_surface_ix(:)
+     !> Mapping of boxes next to a dielectric to surfaces
+     integer, allocatable         :: box_id_out_to_surface_ix(:)
   end type dielectric_t
 
   interface
-     function eps_func(x) result(eps)
-       import
-       real(dp), intent(in) :: x(NDIM)
-       real(dp)             :: eps
-     end function eps_func
-
      function value_func(x) result(my_val)
        import
        real(dp), intent(in) :: x(NDIM)
@@ -81,12 +71,14 @@ module m_dielectric
 
 contains
 
-  subroutine dielectric_initialize(tree, dielectric, n_variables)
+  !> Initialize a set of surfaces based on the value of epsilon
+  subroutine dielectric_initialize(tree, i_eps, diel, n_variables)
     use m_af_ghostcell, only: af_gc_tree
-    type(af_t), intent(inout)         :: tree
-    type(dielectric_t), intent(inout) :: dielectric
-    integer, intent(in)               :: n_variables
-    integer                           :: nc, id, i, ix, i_eps
+    type(af_t), intent(inout)         :: tree        !< Initialized grid
+    integer, intent(in)               :: i_eps       !< Which variable stores epsilon
+    type(dielectric_t), intent(inout) :: diel        !< The dielectric surface
+    integer, intent(in)               :: n_variables !< Number of surface variables
+    integer                           :: nc, id, i, ix
     integer                           :: nb, nb_id
     real(dp)                          :: curr_eps, nb_eps
 
@@ -98,25 +90,28 @@ contains
             error stop "Tree not uniformly refined"
     end if
 
-    if (dielectric%i_eps < 0) error stop "dielectric%i_eps not set"
+    diel%i_eps         = i_eps
+    nc                 = tree%n_cell
+    diel%max_ix        = 0
+    diel%n_removed     = 0
+    diel%n_variables   = n_variables
+    diel%n_cell        = tree%n_cell
+    ! Assume that at most 1/10th of boxes has a surface
+    diel%surface_limit = tree%box_limit / 10
 
-    i_eps = dielectric%i_eps
-    nc    = tree%n_cell
-
-    dielectric%max_ix = 0
-    dielectric%n_removed       = 0
-    dielectric%n_variables     = n_variables
-    dielectric%n_cell          = tree%n_cell
-    dielectric%surface_limit   = tree%box_limit / 10 ! Conservative estimate
-
-    allocate(dielectric%surfaces(dielectric%surface_limit))
-    allocate(dielectric%removed_surfaces(dielectric%surface_limit))
-    allocate(dielectric%box_id_to_surface_ix(tree%box_limit))
-    dielectric%box_id_to_surface_ix = no_surface
+    allocate(diel%surfaces(diel%surface_limit))
+    allocate(diel%removed_surfaces(diel%surface_limit))
+    allocate(diel%box_id_out_to_surface_ix(tree%box_limit))
+    diel%box_id_out_to_surface_ix = no_surface
 
     ! Construct a list of surfaces
     do i = 1, size(tree%lvls(tree%highest_lvl)%ids)
        id = tree%lvls(tree%highest_lvl)%ids(i)
+
+       ! Check whether epsilon is set consistently on this box
+       if (maxval(tree%boxes(id)%cc(DTIMES(1:nc), i_eps)) > &
+            minval(tree%boxes(id)%cc(DTIMES(1:nc), i_eps))) &
+            error stop "epsilon not uniform on a box"
 
        ! Get eps on the interior of the current box
        curr_eps = tree%boxes(id)%cc(DTIMES(1), i_eps)
@@ -132,55 +127,58 @@ contains
 
           if (nb_eps > curr_eps) then
              ! There is a surface
-             ix = get_new_surface_id(dielectric)
+             ix = get_new_surface_ix(diel)
 
-             dielectric%surfaces(ix)%in_use    = .true.
-             dielectric%surfaces(ix)%ix_parent = no_surface
-             dielectric%surfaces(ix)%offset_parent(:) = 0
-             dielectric%surfaces(ix)%id_in     = nb_id
-             dielectric%surfaces(ix)%id_out    = id
-             dielectric%surfaces(ix)%direction = nb
-             dielectric%surfaces(ix)%eps       = nb_eps
+             diel%surfaces(ix)%in_use    = .true.
+             diel%surfaces(ix)%ix_parent = no_surface
+             diel%surfaces(ix)%offset_parent(:) = 0
+             diel%surfaces(ix)%id_in     = nb_id
+             diel%surfaces(ix)%id_out    = id
+             diel%surfaces(ix)%direction = nb
+             diel%surfaces(ix)%eps       = nb_eps
 
-             ! TODO: only a single surface per box for now
-             dielectric%box_id_to_surface_ix(id) = ix
+             if (diel%box_id_out_to_surface_ix(id) /= no_surface) &
+                  error stop "box with multiple adjacent surfaces"
+             diel%box_id_out_to_surface_ix(id) = ix
           end if
        end do
     end do
 
   end subroutine dielectric_initialize
 
-  function get_new_surface_id(dielectric) result(ix)
-    type(dielectric_t), intent(inout) :: dielectric
+  !> Get index for new surface
+  function get_new_surface_ix(diel) result(ix)
+    type(dielectric_t), intent(inout) :: diel
     logical                           :: use_removed
     integer                           :: ix, nc
 
     !$omp critical
-    use_removed = (dielectric%n_removed > 0)
+    use_removed = (diel%n_removed > 0)
     if (use_removed) then
-       ix = dielectric%removed_surfaces(dielectric%n_removed)
-       dielectric%n_removed = dielectric%n_removed - 1
+       ix = diel%removed_surfaces(diel%n_removed)
+       diel%n_removed = diel%n_removed - 1
     else
-       dielectric%max_ix = dielectric%max_ix + 1
-       ix = dielectric%max_ix
+       diel%max_ix = diel%max_ix + 1
+       ix = diel%max_ix
     end if
     !$omp end critical
 
     if (.not. use_removed) then
-       nc = dielectric%n_cell
+       nc = diel%n_cell
 #if NDIM == 2
-       allocate(dielectric%surfaces(ix)%sd(nc, dielectric%n_variables))
+       allocate(diel%surfaces(ix)%sd(nc, diel%n_variables))
 #elif NDIM == 3
-       allocate(dielectric%surfaces(ix)%sd(nc, nc, dielectric%n_variables))
+       allocate(diel%surfaces(ix)%sd(nc, nc, diel%n_variables))
 #endif
-       dielectric%surfaces(ix)%sd = 0.0_dp
+       diel%surfaces(ix)%sd = 0.0_dp
     end if
-  end function get_new_surface_id
+  end function get_new_surface_ix
 
-  subroutine dielectric_set_values(tree, dielectric, iv, user_func)
+  !> Set values on a dielectric with a user-defined function
+  subroutine dielectric_set_values(tree, diel, iv, user_func)
     use m_af_ghostcell, only: af_gc_get_boundary_coords
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: dielectric
+    type(dielectric_t), intent(inout) :: diel
     integer, intent(in)               :: iv !< Surface variable
     procedure(value_func)             :: user_func !< User supplied function
     integer                           :: i, ix, id_out
@@ -190,21 +188,21 @@ contains
     real(dp) :: coords(NDIM, tree%n_cell**(NDIM-1))
 
     ! Loop over the surfaces and call the user function to set values
-    do ix = 1, dielectric%max_ix
-       if (dielectric%surfaces(ix)%in_use) then
-          id_out = dielectric%surfaces(ix)%id_out
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+          id_out = diel%surfaces(ix)%id_out
           call af_gc_get_boundary_coords(tree%boxes(id_out), &
-               dielectric%surfaces(ix)%direction, coords)
+               diel%surfaces(ix)%direction, coords)
 #if NDIM == 2
           do i = 1, tree%n_cell
-             dielectric%surfaces(ix)%sd(i, iv) = user_func(coords(:, i))
+             diel%surfaces(ix)%sd(i, iv) = user_func(coords(:, i))
           end do
 #elif NDIM == 3
           n = 0
           do j = 1, tree%n_cell
              do i = 1, tree%n_cell
                 n = n + 1
-                dielectric%surfaces(ix)%sd(i, j, iv) = user_func(coords(:, n))
+                diel%surfaces(ix)%sd(i, j, iv) = user_func(coords(:, n))
              end do
           end do
 #endif
@@ -212,30 +210,21 @@ contains
     end do
   end subroutine dielectric_set_values
 
-  subroutine dielectric_update_after_refinement(tree, dielectric, ref_info)
+  !> Update the dielectric surface after the mesh has been refined
+  subroutine dielectric_update_after_refinement(tree, diel, ref_info)
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: dielectric
+    type(dielectric_t), intent(inout) :: diel
     type(ref_info_t), intent(in)      :: ref_info
-    integer                           :: lvl, i, id, p_id, ix, p_ix
-    integer                           :: nc, id_in, id_out
+    integer                           :: lvl, i, id, p_id, ix, p_ix, nc
 
     nc = tree%n_cell
 
     ! Handle removed surfaces
     do i = 1, size(ref_info%rm)
        id = ref_info%rm(i)
-       ix = dielectric%box_id_to_surface_ix(id)
+       ix = diel%box_id_out_to_surface_ix(id)
        if (ix > no_surface) then
-          call restrict_surface_to_parent(tree, dielectric, ix)
-
-          !$omp critical
-          dielectric%n_removed = dielectric%n_removed + 1
-          dielectric%removed_surfaces(dielectric%n_removed) = ix
-          !$omp end critical
-          id_in = dielectric%surfaces(ix)%id_in
-          id_out = dielectric%surfaces(ix)%id_out
-          dielectric%box_id_to_surface_ix([id_in, id_out]) = no_surface
-          dielectric%surfaces(ix)%in_use = .false.
+          call restrict_surface_to_parent(tree, diel, ix)
        end if
     end do
 
@@ -246,14 +235,12 @@ contains
 
           ! Check if parent has a surface
           p_id = tree%boxes(id)%parent
-          p_ix = dielectric%box_id_to_surface_ix(p_id)
+          p_ix = diel%box_id_out_to_surface_ix(p_id)
 
           if (p_ix > no_surface) then
-             ! We only need to prolong once per parent surface, so check if it
-             ! is the first child outside the dielectric
-             if (p_id == dielectric%surfaces(p_ix)%id_out .and. &
-                  af_ix_to_ichild(tree%boxes(id)%ix) == 1) then
-                call prolong_surface_from_parent(tree, dielectric, p_ix, p_id)
+             ! We only need to prolong once per parent surface
+             if (af_ix_to_ichild(tree%boxes(id)%ix) == 1) then
+                call prolong_surface_from_parent(tree, diel, p_ix, p_id)
              end if
           end if
        end do
@@ -261,9 +248,10 @@ contains
 
   end subroutine dielectric_update_after_refinement
 
-  subroutine prolong_surface_from_parent(tree, dielectric, p_ix, p_id)
+  !> Prolong a parent surface to newly created child surfaces
+  subroutine prolong_surface_from_parent(tree, diel, p_ix, p_id)
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: dielectric
+    type(dielectric_t), intent(inout) :: diel
     integer, intent(in)               :: p_ix !< Index of parent surface
     integer, intent(in)               :: p_id !< Index of parent box (on outside)
     integer                           :: i, n, ix, ix_offset(NDIM)
@@ -273,21 +261,21 @@ contains
     nc = tree%n_cell
 
     do n = 1, size(af_child_adj_nb, 1)
-       ix = get_new_surface_id(dielectric)
-       direction = dielectric%surfaces(p_ix)%direction
+       ix = get_new_surface_ix(diel)
+       direction = diel%surfaces(p_ix)%direction
 
        i_child  = af_child_adj_nb(n, direction)
        id_child = tree%boxes(p_id)%children(i_child)
        id_out   = tree%boxes(p_id)%children(i_child)
        id_in    = tree%boxes(id_child)%neighbors(direction)
 
-       dielectric%surfaces(ix)%in_use    = .true.
-       dielectric%surfaces(ix)%ix_parent = p_ix
-       dielectric%surfaces(ix)%id_in     = id_in
-       dielectric%surfaces(ix)%id_out    = id_out
-       dielectric%surfaces(ix)%direction = direction
-       dielectric%surfaces(ix)%eps       = dielectric%surfaces(p_ix)%eps
-       dielectric%box_id_to_surface_ix([id_out, id_in]) = ix
+       diel%surfaces(ix)%in_use    = .true.
+       diel%surfaces(ix)%ix_parent = p_ix
+       diel%surfaces(ix)%id_in     = id_in
+       diel%surfaces(ix)%id_out    = id_out
+       diel%surfaces(ix)%direction = direction
+       diel%surfaces(ix)%eps       = diel%surfaces(p_ix)%eps
+       diel%box_id_out_to_surface_ix(id_out) = ix
 
        ix_offset = af_get_child_offset(tree%boxes(id_child))
 
@@ -297,8 +285,8 @@ contains
        dix = nc/2 * pack(af_child_dix(:, i_child), &
             [(i, i=1,NDIM)] /= af_neighb_dim(direction))
 
-       associate (sd => dielectric%surfaces(ix)%sd, &
-            sd_p => dielectric%surfaces(p_ix)%sd)
+       associate (sd => diel%surfaces(ix)%sd, &
+            sd_p => diel%surfaces(p_ix)%sd)
 #if NDIM == 2
          ! Copy the values from the parent
          sd(1:nc:2, :) = sd_p(dix(1)+1:dix(1)+nc/2, :)
@@ -309,23 +297,24 @@ contains
        end associate
     end do
 
-    dielectric%surfaces(p_ix)%in_use = .false.
+    diel%surfaces(p_ix)%in_use = .false.
 
   end subroutine prolong_surface_from_parent
 
-  subroutine restrict_surface_to_parent(tree, dielectric, ix)
+  !> Restrict a child surface to its parent
+  subroutine restrict_surface_to_parent(tree, diel, ix)
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: dielectric
+    type(dielectric_t), intent(inout) :: diel
     integer, intent(in)               :: ix
-    integer                           :: p_ix, nc, dix(NDIM-1)
+    integer                           :: p_ix, nc, dix(NDIM-1), id_out
 
-    p_ix = dielectric%surfaces(ix)%ix_parent
+    p_ix = diel%surfaces(ix)%ix_parent
     if (p_ix == no_surface) error stop "Too much derefinement on surface"
-    dix  = dielectric%surfaces(ix)%offset_parent
+    dix  = diel%surfaces(ix)%offset_parent
     nc   = tree%n_cell
 
-    associate (sd => dielectric%surfaces(ix)%sd, &
-         sd_p => dielectric%surfaces(p_ix)%sd)
+    associate (sd => diel%surfaces(ix)%sd, &
+         sd_p => diel%surfaces(p_ix)%sd)
 #if NDIM == 2
       ! Average the value on the children
       sd_p(dix(1)+1:dix(1)+nc/2, 1) = 0.5_dp * (sd(1:nc:2, 1) + sd(2:nc:2, 1))
@@ -334,47 +323,61 @@ contains
 #endif
     end associate
 
-    dielectric%surfaces(p_ix)%in_use = .true.
+    !$omp critical
+    ! Remove child surface
+    diel%n_removed = diel%n_removed + 1
+    diel%removed_surfaces(diel%n_removed) = ix
+    !$omp end critical
+    id_out = diel%surfaces(ix)%id_out
+    diel%box_id_out_to_surface_ix(id_out) = no_surface
+    diel%surfaces(ix)%in_use = .false.
+    diel%surfaces(p_ix)%in_use = .true.
 
   end subroutine restrict_surface_to_parent
 
-  subroutine dielectric_get_refinement_links(dielectric, refinement_links)
-    type(dielectric_t), intent(in)      :: dielectric
+  !> Get an array of pairs of boxes (their indices) across a surface. This can
+  !> be used in af_adjust_refinement to prevent refinement jumps over the
+  !> surface.
+  subroutine dielectric_get_refinement_links(diel, refinement_links)
+    type(dielectric_t), intent(in)      :: diel
+    !> Array of linked boxes, on output of size (2, n_links)
     integer, allocatable, intent(inout) :: refinement_links(:, :)
     integer                             :: max_ix, n, ix
 
     if (allocated(refinement_links)) deallocate(refinement_links)
-    max_ix = dielectric%max_ix
-    n      = count(dielectric%surfaces(1:max_ix)%in_use)
+    max_ix = diel%max_ix
+    n      = count(diel%surfaces(1:max_ix)%in_use)
     allocate(refinement_links(2, n))
 
     n = 0
     do ix = 1, max_ix
-       if (dielectric%surfaces(ix)%in_use) then
+       if (diel%surfaces(ix)%in_use) then
           n = n + 1
-          refinement_links(:, n) = [dielectric%surfaces(ix)%id_out, &
-               dielectric%surfaces(ix)%id_in]
+          refinement_links(:, n) = [diel%surfaces(ix)%id_out, &
+               diel%surfaces(ix)%id_in]
        end if
     end do
   end subroutine dielectric_get_refinement_links
 
-  subroutine dielectric_surface_charge_to_rhs(tree, dielectric, &
-       i_sigma, i_rhs, fac)
+  !> Map surface charge to a cell-centered right-hand side
+  subroutine dielectric_surface_charge_to_rhs(tree, diel, i_sigma, i_rhs, fac)
     type(af_t), intent(inout)      :: tree
-    type(dielectric_t), intent(in) :: dielectric
+    type(dielectric_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma !< Surface charage variable
     integer, intent(in)            :: i_rhs   !< Rhs variable (in the tree)
     real(dp), intent(in)           :: fac     !< Multiplication factor
     integer                        :: n
 
-    do n = 1, dielectric%max_ix
-       if (.not. dielectric%surfaces(n)%in_use) cycle
+    do n = 1, diel%max_ix
+       if (.not. diel%surfaces(n)%in_use) cycle
 
-       call surface_charge_to_rhs(tree%boxes, dielectric%surfaces(n), &
+       call surface_charge_to_rhs(tree%boxes, diel%surfaces(n), &
             i_sigma, i_rhs, fac)
     end do
   end subroutine dielectric_surface_charge_to_rhs
 
+  !> Routine that implements the mapping of surface charge to a cell-centered
+  !> right-hand side
   subroutine surface_charge_to_rhs(boxes, surface, i_sigma, i_rhs, fac)
     type(box_t), intent(inout)  :: boxes(:)
     type(surface_t), intent(in) :: surface
@@ -420,54 +423,65 @@ contains
 
   end subroutine surface_charge_to_rhs
 
-  !> Correct the electric field at face centers, assuming it has already been
-  !> computed for a dielectric permittivity of one everywhere
-  subroutine dielectric_correct_field_fc(tree, dielectric, i_sigma, i_fld, eps0)
+  !> Compute the electric field at face centers near surfaces
+  subroutine dielectric_correct_field_fc(tree, diel, i_sigma, i_fld, i_phi, eps0)
     type(af_t), intent(inout)      :: tree
-    type(dielectric_t), intent(in) :: dielectric
+    type(dielectric_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma !< Surface charge variable
     integer, intent(in)            :: i_fld   !< Face-centered field variable
+    integer, intent(in)            :: i_phi   !< Cell-centered potential variable
     real(dp), intent(in)           :: eps0    !< Dielectric permittivity (vacuum)
     integer                        :: id_in, id_out, nc, nb, ix
-    real(dp)                       :: eps, fac_fld(2), fac_charge
+    real(dp)                       :: eps, fac_fld(2), fac_charge, inv_dr(NDIM)
 
     nc = tree%n_cell
 
-    do ix = 1, dielectric%max_ix
-       if (dielectric%surfaces(ix)%in_use) then
-          nb = dielectric%surfaces(ix)%direction
-          eps = dielectric%surfaces(ix)%eps
-          id_out = dielectric%surfaces(ix)%id_out
-          id_in = dielectric%surfaces(ix)%id_in
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+          nb = diel%surfaces(ix)%direction
+          eps = diel%surfaces(ix)%eps
+          id_out = diel%surfaces(ix)%id_out
+          id_in = diel%surfaces(ix)%id_in
+          inv_dr = 1/tree%boxes(id_out)%dr
 
           fac_fld = [2 * eps, 2.0_dp] / (1 + eps)
           fac_charge = 1 / (eps0 * (1 + eps))
 
           associate (fc_out => tree%boxes(id_out)%fc, &
                fc_in => tree%boxes(id_in)%fc, &
-               sd => dielectric%surfaces(ix)%sd)
+               cc_out => tree%boxes(id_out)%cc, &
+               cc_in => tree%boxes(id_in)%cc, &
+               sd => diel%surfaces(ix)%sd)
             select case (nb)
 #if NDIM == 2
             case (af_neighb_lowx)
-               fc_out(1, 1:nc, 1, i_fld) = fac_fld(1) * &
-                    fc_out(1, 1:nc, 1, i_fld) - fac_charge * sd(:, i_sigma)
-               fc_in(nc+1, 1:nc, 1, i_fld) = fac_fld(2) * &
-                    fc_in(nc+1, 1:nc, 1, i_fld) + fac_charge * sd(:, i_sigma)
+               fc_out(1, 1:nc, 1, i_fld) = fac_fld(1) * inv_dr(1) * &
+                    (cc_out(0, 1:nc, i_phi) - cc_out(1, 1:nc, i_phi)) &
+                    - fac_charge * sd(:, i_sigma)
+               fc_in(nc+1, 1:nc, 1, i_fld)  = fac_fld(2) * inv_dr(1) * &
+                    (cc_in(nc, 1:nc, i_phi) - cc_in(nc+1, 1:nc, i_phi)) &
+                    + fac_charge * sd(:, i_sigma)
             case (af_neighb_highx)
-               fc_out(nc+1, 1:nc, 1, i_fld) = fac_fld(1) * &
-                    fc_out(nc+1, 1:nc, 1, i_fld) + fac_charge * sd(:, i_sigma)
-               fc_in(1, 1:nc, 1, i_fld) = fac_fld(2) * &
-                    fc_in(1, 1:nc, 1, i_fld) - fac_charge * sd(:, i_sigma)
+               fc_out(nc+1, 1:nc, 1, i_fld)  = fac_fld(1) * inv_dr(1) * &
+                    (cc_out(nc, 1:nc, i_phi) - cc_out(nc+1, 1:nc, i_phi)) &
+                    + fac_charge * sd(:, i_sigma)
+               fc_in(1, 1:nc, 1, i_fld) = fac_fld(2) * inv_dr(1) * &
+                    (cc_in(0, 1:nc, i_phi) - cc_in(1, 1:nc, i_phi)) &
+                    - fac_charge * sd(:, i_sigma)
             case (af_neighb_lowy)
-               fc_out(1:nc, 1, 2, i_fld) = fac_fld(1) * &
-                    fc_out(1:nc, 1, 2, i_fld) - fac_charge * sd(:, i_sigma)
-               fc_in(1:nc, nc+1, 2, i_fld) = fac_fld(2) * &
-                    fc_in(1:nc, nc+1, 2, i_fld) + fac_charge * sd(:, i_sigma)
+               fc_out(1:nc, nc+1, 2, i_fld) = fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
+                    + fac_charge * sd(:, i_sigma)
+               fc_in(1:nc, 1, 2, i_fld)  = fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+                    - fac_charge * sd(:, i_sigma)
             case (af_neighb_highy)
-               fc_out(1:nc, nc+1, 2, i_fld) = fac_fld(1) * &
-                    fc_out(1:nc, nc+1, 2, i_fld) + fac_charge * sd(:, i_sigma)
-               fc_in(1:nc, 1, 2, i_fld) = fac_fld(2) * &
-                    fc_in(1:nc, 1, 2, i_fld) - fac_charge * sd(:, i_sigma)
+               fc_out(1:nc, nc+1, 2, i_fld) = fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
+                    + fac_charge * sd(:, i_sigma)
+               fc_in(1:nc, 1, 2, i_fld)  = fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+                    - fac_charge * sd(:, i_sigma)
 #elif NDIM == 3
             case default
                error stop
@@ -479,10 +493,10 @@ contains
 
   end subroutine dielectric_correct_field_fc
 
-  !> Correct the electric field at cell centers near surfaces
-  subroutine dielectric_correct_field_cc(tree, dielectric, i_sigma, i_fld, i_phi, eps0)
+  !> Compute the electric field at cell centers near surfaces
+  subroutine dielectric_correct_field_cc(tree, diel, i_sigma, i_fld, i_phi, eps0)
     type(af_t), intent(inout)      :: tree
-    type(dielectric_t), intent(in) :: dielectric
+    type(dielectric_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma     !< Surface charge variable
     integer, intent(in)            :: i_fld(NDIM) !< Cell-centered field variables
     integer, intent(in)            :: i_phi       !< Cell-centered potential variable
@@ -492,12 +506,12 @@ contains
 
     nc = tree%n_cell
 
-    do ix = 1, dielectric%max_ix
-       if (dielectric%surfaces(ix)%in_use) then
-          nb = dielectric%surfaces(ix)%direction
-          eps = dielectric%surfaces(ix)%eps
-          id_out = dielectric%surfaces(ix)%id_out
-          id_in = dielectric%surfaces(ix)%id_in
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+          nb = diel%surfaces(ix)%direction
+          eps = diel%surfaces(ix)%eps
+          id_out = diel%surfaces(ix)%id_out
+          id_in = diel%surfaces(ix)%id_in
           inv_dr = 1/tree%boxes(id_out)%dr
 
           fac_fld = [2 * eps, 2.0_dp] / (1 + eps)
@@ -505,7 +519,7 @@ contains
 
           associate (cc_out => tree%boxes(id_out)%cc, &
                cc_in => tree%boxes(id_in)%cc, &
-               sd => dielectric%surfaces(ix)%sd)
+               sd => diel%surfaces(ix)%sd)
 
             ! Compute field at two cell faces and average them
             select case (nb)
