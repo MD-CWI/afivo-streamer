@@ -16,6 +16,7 @@ module m_dielectric
      integer               :: ix_parent !< Index of parent surface
      real(dp)              :: eps       !< Permittivity of dielectric
      integer               :: offset_parent(NDIM-1) !< Index of parent surface
+     real(dp)              :: dr(NDIM-1) !< Grid spacing on surface
      !> Surface densities
 #if NDIM == 2
      real(dp), allocatable :: sd(:, :)
@@ -29,6 +30,8 @@ module m_dielectric
 
   !> Type for storing all the surfaces on a mesh
   type dielectric_t
+     !> Whether the dielectric is initialized
+     logical :: initialized = .false.
      !> Number of variables to store on the surface
      integer :: n_variables = 0
      !> Size of boxes (and thus also surfaces)
@@ -68,6 +71,7 @@ module m_dielectric
   public :: dielectric_correct_field_fc
   public :: dielectric_correct_field_cc
   public :: dielectric_get_refinement_links
+  public :: dielectric_get_surface_cell
 
 contains
 
@@ -78,7 +82,7 @@ contains
     integer, intent(in)               :: i_eps       !< Which variable stores epsilon
     type(dielectric_t), intent(inout) :: diel        !< The dielectric surface
     integer, intent(in)               :: n_variables !< Number of surface variables
-    integer                           :: nc, id, i, ix
+    integer                           :: nc, id, i, j, ix
     integer                           :: nb, nb_id
     real(dp)                          :: curr_eps, nb_eps
 
@@ -90,6 +94,7 @@ contains
             error stop "Tree not uniformly refined"
     end if
 
+    diel%initialized   = .true.
     diel%i_eps         = i_eps
     nc                 = tree%n_cell
     diel%max_ix        = 0
@@ -136,6 +141,10 @@ contains
              diel%surfaces(ix)%id_out    = id
              diel%surfaces(ix)%direction = nb
              diel%surfaces(ix)%eps       = nb_eps
+
+             ! Extract the grid spacing parallel to the surface
+             diel%surfaces(ix)%dr = &
+                  pack(tree%boxes(id)%dr, [(j, j=1,NDIM)] /= af_neighb_dim(nb))
 
              if (diel%box_id_out_to_surface_ix(id) /= no_surface) &
                   error stop "box with multiple adjacent surfaces"
@@ -187,6 +196,8 @@ contains
 #endif
     real(dp) :: coords(NDIM, tree%n_cell**(NDIM-1))
 
+    if (.not. diel%initialized) error stop "dielectric not initialized"
+
     ! Loop over the surfaces and call the user function to set values
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
@@ -217,6 +228,7 @@ contains
     type(ref_info_t), intent(in)      :: ref_info
     integer                           :: lvl, i, id, p_id, ix, p_ix, nc
 
+    if (.not. diel%initialized) error stop "dielectric not initialized"
     nc = tree%n_cell
 
     ! Handle removed surfaces
@@ -369,6 +381,8 @@ contains
     real(dp), intent(in)           :: fac     !< Multiplication factor
     integer                        :: n
 
+    if (.not. diel%initialized) error stop "dielectric not initialized"
+
     do n = 1, diel%max_ix
        if (.not. diel%surfaces(n)%in_use) cycle
 
@@ -434,6 +448,8 @@ contains
     real(dp), intent(in)           :: eps0    !< Dielectric permittivity (vacuum)
     integer                        :: id_in, id_out, nc, nb, ix
     real(dp)                       :: eps, fac_fld(2), fac_charge, inv_dr(NDIM)
+
+    if (.not. diel%initialized) error stop "dielectric not initialized"
 
     nc = tree%n_cell
 
@@ -505,6 +521,8 @@ contains
     integer                        :: id_in, id_out, nc, nb, ix
     real(dp)                       :: eps, fac_fld(2), fac_charge, inv_dr(NDIM)
 
+    if (.not. diel%initialized) error stop "dielectric not initialized"
+
     nc = tree%n_cell
 
     do ix = 1, diel%max_ix
@@ -571,5 +589,58 @@ contains
     end do
 
   end subroutine dielectric_correct_field_cc
+
+  subroutine dielectric_get_surface_cell(tree, diel, x, ix_surf, ix_cell)
+    use m_af_utils
+    type(af_t), intent(in)         :: tree
+    type(dielectric_t), intent(in) :: diel
+    real(dp), intent(in)           :: x(NDIM)         !< Coordinate inside dielectric
+    integer, intent(out)           :: ix_surf         !< Index of surface
+    integer, intent(out)           :: ix_cell(NDIM-1) !< Index of cell on surface
+    real(dp)                       :: box_min_max(af_num_neighbors)
+    type(af_loc_t)                 :: loc
+    integer                        :: i, id, n, dim, direction
+    real(dp)                       :: dist, min_dist
+
+    ! Find location in box
+    loc = af_get_loc(tree, x)
+
+    ! Check whether id is valid
+    id = loc%id
+    if (id == -1) error stop "Coordinate out of domain"
+
+    ! This will only work if x is outside the dielectric
+    ix_surf = diel%box_id_out_to_surface_ix(id)
+
+    if (ix_surf == no_surface) then
+       ! Find neighbor closest to x, which should contain the surface
+       ! Store minimum and maximum coordinates of a box
+       box_min_max(1::2) = tree%boxes(id)%r_min
+       box_min_max(2::2) = box_min_max(1::2) + tree%boxes(id)%dr * tree%n_cell
+
+       ! Find closest neighbor that has a surface connected to it (only boxes
+       ! outside the dielectric have a surface)
+       min_dist = 1e100_dp
+       ix_surf = -1
+       do n = 1, af_num_neighbors
+          id = tree%boxes(id)%neighbors(n)
+          if (diel%box_id_out_to_surface_ix(id) == no_surface) cycle
+
+          dim = af_neighb_dim(n)
+          dist = abs(x(dim) - box_min_max(n))
+          if (dist < min_dist) then
+             min_dist = dist
+             ix_surf = diel%box_id_out_to_surface_ix(id)
+          end if
+       end do
+
+       if (ix_surf == -1) error stop "No neighbor box with surface found"
+    end if
+
+    ! Extract the cell index but only parallel to the surface
+    direction = diel%surfaces(ix_surf)%direction
+    dim       = af_neighb_dim(direction)
+    ix_cell   = pack(loc%ix, [(i, i=1,NDIM)] /= dim)
+  end subroutine dielectric_get_surface_cell
 
 end module m_dielectric
