@@ -23,7 +23,7 @@ program dielectric_surface
   double precision, parameter :: epsilon_high = 1000.0_dp
 
   ! Where the interface is located
-  real(dp), parameter :: interface_location = 0.5_dp
+  real(dp), parameter :: interface_location = 0.25_dp
   ! Along which dimension the interface occurs
   integer, parameter :: interface_dimension = 1
 
@@ -53,8 +53,6 @@ program dielectric_surface
 
   call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
        af_gc_prolong_copy, prolong=af_prolong_zeroth)
-  call af_set_cc_methods(tree, i_fld_norm_fc, af_bc_neumann_zero)
-  call af_set_cc_methods(tree, i_fld_norm_cc, af_bc_neumann_zero)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -74,9 +72,11 @@ program dielectric_surface
 
   call dielectric_set_values(tree, dielectric, 1, sigma_function)
 
-  call dielectric_get_refinement_links(dielectric, ref_links)
-  call af_adjust_refinement(tree, ref_routine, ref_info, ref_links=ref_links)
-  call dielectric_update_after_refinement(tree, dielectric, ref_info)
+  do n = 1, 3
+     call dielectric_get_refinement_links(dielectric, ref_links)
+     call af_adjust_refinement(tree, ref_random, ref_info, ref_links=ref_links)
+     call dielectric_update_after_refinement(tree, dielectric, ref_info)
+  end do
 
   call dielectric_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, 1.0_dp)
 
@@ -92,6 +92,7 @@ program dielectric_surface
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      call af_loop_box(tree, compute_fields)
      call dielectric_correct_field_fc(tree, dielectric, 1, i_fld_fc, 1.0_dp)
+     call dielectric_correct_field_cc(tree, dielectric, 1, i_fld_cc, i_phi, 1.0_dp)
      call af_loop_box(tree, compute_field_norms)
 
      ! Determine the minimum and maximum residual and error
@@ -109,12 +110,29 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
 
-    if (box%lvl < 3 .or. (box%r_min(1) < 0.5_dp .and. box%lvl < 5)) then
+    if (box%lvl < 3) then
        cell_flags(DTIMES(:)) = af_do_ref
     else
        cell_flags(DTIMES(:)) = af_keep_ref
     end if
   end subroutine ref_routine
+
+  subroutine ref_random(box, cell_flags)
+    type(box_t), intent(in) :: box ! A list of all boxes in the tree
+    integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
+    real(dp)                :: rr
+
+    ! Draw a [0, 1) random number
+    call random_number(rr)
+
+    if (rr < 0.5_dp**NDIM .and. box%lvl < 6) then
+       cell_flags = af_do_ref
+    else if (box%lvl > 3) then
+       cell_flags = af_rm_ref
+    else
+       cell_flags = af_keep_ref
+    end if
+  end subroutine ref_random
 
   ! This routine sets the initial conditions for each box
   subroutine set_init_cond(box)
@@ -192,6 +210,10 @@ contains
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
     box%fc(1:nc, 1:nc+1, 2, i_fld_fc) = inv_dr(2) * &
          (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
+    box%cc(1:nc, 1:nc, i_fld_cc(1)) = 0.5_dp * inv_dr(1) * &
+         (box%cc(0:nc-1, 1:nc, i_phi) - box%cc(2:nc+1, 1:nc, i_phi))
+    box%cc(1:nc, 1:nc, i_fld_cc(2)) = 0.5_dp * inv_dr(2) * &
+         (box%cc(1:nc, 0:nc-1, i_phi) - box%cc(1:nc, 2:nc+1, i_phi))
 #elif NDIM == 3
     error stop
 #endif
@@ -201,7 +223,8 @@ contains
   subroutine compute_field_norms(box)
     type(box_t), intent(inout) :: box
     integer                    :: nc
-    nc     = box%n_cell
+
+    nc = box%n_cell
 
 #if NDIM == 2
     box%cc(1:nc, 1:nc, i_fld_norm_fc) = 0.5_dp * sqrt(&
@@ -209,6 +232,9 @@ contains
          box%fc(2:nc+1, 1:nc, 1, i_fld_fc))**2 + &
          (box%fc(1:nc, 1:nc, 2, i_fld_fc) + &
          box%fc(1:nc, 2:nc+1, 2, i_fld_fc))**2)
+    box%cc(1:nc, 1:nc, i_fld_norm_cc) = sqrt(&
+         box%cc(1:nc, 1:nc, i_fld_cc(1))**2 + &
+         box%cc(1:nc, 1:nc, i_fld_cc(2))**2)
 #elif NDIM == 3
     error stop
 #endif
