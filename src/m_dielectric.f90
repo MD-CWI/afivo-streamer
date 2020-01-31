@@ -510,12 +510,12 @@ contains
                     (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
                     + fac_charge * sd(:, i_sigma)
             case (af_neighb_highy)
-               fc_out(1:nc, 1, 2, i_fld)  = fac_fld(1) * inv_dr(2) * &
-                    (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma)
-               fc_in(1:nc, nc+1, 2, i_fld) = fac_fld(2) * inv_dr(2) * &
-                    (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
+               fc_out(1:nc, nc+1, 2, i_fld) = fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
                     + fac_charge * sd(:, i_sigma)
+               fc_in(1:nc, 1, 2, i_fld)  = fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+                    - fac_charge * sd(:, i_sigma)
 #elif NDIM == 3
             case default
                error stop
@@ -588,14 +588,14 @@ contains
                     + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
                     (cc_in(1:nc, nc-1, i_phi) - cc_in(1:nc, nc, i_phi)))
             case (af_neighb_highy)
-               cc_out(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
-                    (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_out(1:nc, 1, i_phi) - cc_out(1:nc, 2, i_phi)))
-               cc_in(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
-                    (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
+               cc_out(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
+                    (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
                     + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_in(1:nc, nc-1, i_phi) - cc_in(1:nc, nc, i_phi)))
+                    (cc_out(1:nc, nc-1, i_phi) - cc_out(1:nc, nc, i_phi)))
+               cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
+                    (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
+                    - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
+                    (cc_in(1:nc, 1, i_phi) - cc_in(1:nc, 2, i_phi)))
 #elif NDIM == 3
             case default
                error stop
