@@ -32,8 +32,10 @@ program advection
   print *, "Running advection_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
-  call af_add_cc_variable(tree, "phi", ix=i_phi)
-  call af_add_cc_variable(tree, "old", ix=i_phi_old)
+  ! Add variables to the mesh. This is a scalar advection example with second
+  ! order time stepping, which is why there are two copies of phi.
+  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
+  i_phi_old = i_phi + 1
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
@@ -63,27 +65,14 @@ program advection
 
   do
      refine_steps=refine_steps+1
-     ! We should only set the finest level, but this also works
+     ! Set initial conditions on all boxes
      call af_loop_box(tree, set_initial_condition)
 
-     ! Fill ghost cells for variables i_phi on the sides of all boxes, using
-     ! af_gc_interp_lim on refinement boundaries: Interpolation between fine
-     ! points and coarse neighbors to fill ghost cells near refinement
-     ! boundaries. The ghost values are less than twice the coarse values. and
-     ! af_bc_neumann_zero physical boundaries: fill ghost cells near physical
-     ! boundaries using Neumann zero
+     ! Fill ghost cells for variables i_phi
      call af_gc_tree(tree, [i_phi])
 
-     ! Adjust the refinement of a tree using refine_routine (see below) for grid
-     ! refinement.
-     ! Routine af_adjust_refinement sets the bit af_bit_new_children for each box
-     ! that is refined.  On input, the tree should be balanced. On output,
-     ! the tree is still balanced, and its refinement is updated (with at most
-     ! one level per call).
-     call af_adjust_refinement(tree, &           ! tree
-          refine_routine, & ! Refinement function
-          refine_info, &    ! Information about refinement
-          1)                ! Buffer width (in cells)
+     ! Adjust the refinement of a tree using refine_routine
+     call af_adjust_refinement(tree, refine_routine, refine_info, 1)
 
      ! If no new boxes have been added, exit the loop
      if (refine_info%n_add == 0) exit
@@ -96,14 +85,10 @@ program advection
 
   call af_print_info(tree)
 
-  ! Restrict the initial conditions Restrict the children of a box to the box
-  ! (e.g., in NDIMD, average the values at the four children to get the value for
-  ! the parent)
+  ! Restrict the initial conditions
   call af_restrict_tree(tree, i_phi)
 
-  ! Fill ghost cells for variables i_phi on the sides of all boxes, using
-  ! af_gc_interp_lim on refinement boundaries and af_bc_neumann_zero on
-  ! physical boundaries
+  ! Fill ghost cells for variables i_phi on the sides of all boxes
   call af_gc_tree(tree, [i_phi])
 
   call system_clock(t_start, count_rate)
