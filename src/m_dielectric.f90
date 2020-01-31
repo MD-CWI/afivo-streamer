@@ -53,6 +53,8 @@ module m_dielectric
      integer, allocatable         :: removed_surfaces(:)
      !> Mapping of boxes next to a dielectric to surfaces
      integer, allocatable         :: box_id_out_to_surface_ix(:)
+     !> Mapping of boxes inside a dielectric to surfaces
+     integer, allocatable         :: box_id_in_to_surface_ix(:)
   end type dielectric_t
 
   interface
@@ -107,7 +109,9 @@ contains
     allocate(diel%surfaces(diel%surface_limit))
     allocate(diel%removed_surfaces(diel%surface_limit))
     allocate(diel%box_id_out_to_surface_ix(tree%box_limit))
+    allocate(diel%box_id_in_to_surface_ix(tree%box_limit))
     diel%box_id_out_to_surface_ix = no_surface
+    diel%box_id_in_to_surface_ix = no_surface
 
     ! Construct a list of surfaces
     do i = 1, size(tree%lvls(tree%highest_lvl)%ids)
@@ -148,7 +152,10 @@ contains
 
              if (diel%box_id_out_to_surface_ix(id) /= no_surface) &
                   error stop "box with multiple adjacent surfaces"
+             if (diel%box_id_in_to_surface_ix(nb_id) /= no_surface) &
+                  error stop "box with multiple adjacent surfaces"
              diel%box_id_out_to_surface_ix(id) = ix
+             diel%box_id_in_to_surface_ix(nb_id) = ix
           end if
        end do
     end do
@@ -268,7 +275,7 @@ contains
     integer, intent(in)               :: p_id !< Index of parent box (on outside)
     integer                           :: i, n, ix, ix_offset(NDIM)
     integer                           :: nc, dix(NDIM-1), direction
-    integer                           :: i_child, id_child, id_in, id_out
+    integer                           :: i_child, id_in, id_out
 
     nc = tree%n_cell
 
@@ -276,11 +283,13 @@ contains
        ix = get_new_surface_ix(diel)
        direction = diel%surfaces(p_ix)%direction
 
-       ! Select a child adjacent to a neighbor
+       ! Select a child adjacent to the neighbor containing the dielectric
        i_child  = af_child_adj_nb(n, direction)
-       id_child = tree%boxes(p_id)%children(i_child)
        id_out   = tree%boxes(p_id)%children(i_child)
-       id_in    = tree%boxes(id_child)%neighbors(direction)
+       ! The neighbor inside the dielectric should exist
+       id_in    = tree%boxes(id_out)%neighbors(direction)
+       if (id_out <= af_no_box .or. id_in <= af_no_box) &
+            error stop "Error in prolongation: children do not exist"
 
        diel%surfaces(ix)%in_use    = .true.
        diel%surfaces(ix)%ix_parent = p_ix
@@ -289,13 +298,17 @@ contains
        diel%surfaces(ix)%direction = direction
        diel%surfaces(ix)%eps       = diel%surfaces(p_ix)%eps
        diel%box_id_out_to_surface_ix(id_out) = ix
+       diel%box_id_in_to_surface_ix(id_in) = ix
 
-       ix_offset = af_get_child_offset(tree%boxes(id_child))
+       ix_offset = af_get_child_offset(tree%boxes(id_out))
 
        ! Compute index offset of child surface relative to parent. This is nc/2
        ! times the child offset, but only in the dimensions parallel to the
        ! surface.
        dix = nc/2 * pack(af_child_dix(:, i_child), &
+            [(i, i=1,NDIM)] /= af_neighb_dim(direction))
+       ! Extract the grid spacing parallel to the surface
+       diel%surfaces(ix)%dr = pack(tree%boxes(id_out)%dr, &
             [(i, i=1,NDIM)] /= af_neighb_dim(direction))
 
        associate (sd => diel%surfaces(ix)%sd, &
@@ -319,7 +332,7 @@ contains
     type(af_t), intent(in)            :: tree
     type(dielectric_t), intent(inout) :: diel
     integer, intent(in)               :: ix
-    integer                           :: p_ix, nc, dix(NDIM-1), id_out
+    integer                           :: p_ix, nc, dix(NDIM-1), id_out, id_in
 
     p_ix = diel%surfaces(ix)%ix_parent
     if (p_ix == no_surface) error stop "Too much derefinement on surface"
@@ -343,7 +356,9 @@ contains
     diel%surfaces(p_ix)%in_use = .true.
     !$omp end critical
     id_out = diel%surfaces(ix)%id_out
+    id_in = diel%surfaces(ix)%id_in
     diel%box_id_out_to_surface_ix(id_out) = no_surface
+    diel%box_id_in_to_surface_ix(id_in) = no_surface
     diel%surfaces(ix)%in_use = .false.
 
   end subroutine restrict_surface_to_parent
@@ -597,10 +612,8 @@ contains
     real(dp), intent(in)           :: x(NDIM)         !< Coordinate inside dielectric
     integer, intent(out)           :: ix_surf         !< Index of surface
     integer, intent(out)           :: ix_cell(NDIM-1) !< Index of cell on surface
-    real(dp)                       :: box_min_max(af_num_neighbors)
     type(af_loc_t)                 :: loc
-    integer                        :: i, id, n, dim, direction
-    real(dp)                       :: dist, min_dist
+    integer                        :: i, id, dim, direction
 
     ! Find location in box
     loc = af_get_loc(tree, x)
@@ -609,33 +622,10 @@ contains
     id = loc%id
     if (id == -1) error stop "Coordinate out of domain"
 
-    ! This will only work if x is outside the dielectric
+    ! Check for a surface from both sides
     ix_surf = diel%box_id_out_to_surface_ix(id)
-
-    if (ix_surf == no_surface) then
-       ! Find neighbor closest to x, which should contain the surface
-       ! Store minimum and maximum coordinates of a box
-       box_min_max(1::2) = tree%boxes(id)%r_min
-       box_min_max(2::2) = box_min_max(1::2) + tree%boxes(id)%dr * tree%n_cell
-
-       ! Find closest neighbor that has a surface connected to it (only boxes
-       ! outside the dielectric have a surface)
-       min_dist = 1e100_dp
-       ix_surf = -1
-       do n = 1, af_num_neighbors
-          id = tree%boxes(id)%neighbors(n)
-          if (diel%box_id_out_to_surface_ix(id) == no_surface) cycle
-
-          dim = af_neighb_dim(n)
-          dist = abs(x(dim) - box_min_max(n))
-          if (dist < min_dist) then
-             min_dist = dist
-             ix_surf = diel%box_id_out_to_surface_ix(id)
-          end if
-       end do
-
-       if (ix_surf == -1) error stop "No neighbor box with surface found"
-    end if
+    if (ix_surf == no_surface) ix_surf = diel%box_id_in_to_surface_ix(id)
+    if (ix_surf == no_surface) error stop "No surface found"
 
     ! Extract the cell index but only parallel to the surface
     direction = diel%surfaces(ix_surf)%direction
