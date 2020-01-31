@@ -307,6 +307,8 @@ contains
        ! surface.
        dix = nc/2 * pack(af_child_dix(:, i_child), &
             [(i, i=1,NDIM)] /= af_neighb_dim(direction))
+       diel%surfaces(ix)%offset_parent(:) = dix
+
        ! Extract the grid spacing parallel to the surface
        diel%surfaces(ix)%dr = pack(tree%boxes(id_out)%dr, &
             [(i, i=1,NDIM)] /= af_neighb_dim(direction))
@@ -343,7 +345,7 @@ contains
          sd_p => diel%surfaces(p_ix)%sd)
 #if NDIM == 2
       ! Average the value on the children
-      sd_p(dix(1)+1:dix(1)+nc/2, 1) = 0.5_dp * (sd(1:nc:2, 1) + sd(2:nc:2, 1))
+      sd_p(dix(1)+1:dix(1)+nc/2, :) = 0.5_dp * (sd(1:nc:2, :) + sd(2:nc:2, :))
 #elif NDIM == 3
       error stop
 #endif
