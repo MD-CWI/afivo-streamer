@@ -342,13 +342,11 @@ contains
        write(my_unit, *) "# 4: Electron diffusion [m^2/s]"
        write(my_unit, *) "# 5: Townsend ioniz. coef. alpha [1/m]"
        write(my_unit, *) "# 6: Townsend attach. coef. eta [1/m]"
-       write(my_unit, *) "--------------------------"
        do n = 1, n_fields
           write(my_unit, *) fields(n), fields(n) * Townsend_to_SI, &
                mu(n) / gas_number_density, &
                diff(n) / gas_number_density, alpha(n), eta(n)
        end do
-       write(my_unit, *) "--------------------------"
        write(my_unit, *) ""
        close(my_unit)
     end if
