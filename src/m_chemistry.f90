@@ -292,7 +292,7 @@ contains
     character(len=*), intent(in) :: fname
     real(dp), allocatable        :: fields(:)
     real(dp), allocatable        :: rates(:, :)
-    real(dp), allocatable        :: eta(:), alpha(:)
+    real(dp), allocatable        :: eta(:), alpha(:), src(:), loss(:)
     real(dp), allocatable        :: v(:), mu(:), diff(:)
     integer                      :: n, n_fields, i_elec
     integer                      :: my_unit
@@ -305,17 +305,17 @@ contains
        fields = LT_get_xdata(td_tbl%x_min, td_tbl%dx, n_fields)
 
        allocate(rates(n_fields, n_reactions))
-       allocate(eta(n_fields), alpha(n_fields))
+       allocate(eta(n_fields), alpha(n_fields), src(n_fields), loss(n_fields))
        call get_rates(fields, rates, n_fields)
 
-       eta(:)   = 0.0_dp
-       alpha(:) = 0.0_dp
+       loss(:)   = 0.0_dp
+       src(:) = 0.0_dp
 
        do n = 1, n_reactions
           if (reactions(n)%reaction_type == attachment_reaction) then
-             eta(:) = eta(:) + rates(:, n)
+             loss(:) = loss(:) + rates(:, n)
           else if (reactions(n)%reaction_type == ionization_reaction) then
-             alpha(:) = alpha(:) + rates(:, n)
+             src(:) = src(:) + rates(:, n)
           end if
        end do
 
@@ -328,9 +328,9 @@ contains
        v = mu * fields * Townsend_to_SI
 
        ! v(1) is zero, so extrapolate linearly
-       eta(2:) = eta(2:) / v(2:)
+       eta(2:) = loss(2:) / v(2:)
        eta(1) = 2 * eta(2) - eta(3)
-       alpha(2:) = alpha(2:) / v(2:)
+       alpha(2:) = src(2:) / v(2:)
        alpha(1) = 2 * alpha(2) - alpha(3)
 
        ! Write to a file
@@ -342,10 +342,13 @@ contains
        write(my_unit, "(A)") "# 4: Electron diffusion [m^2/s]"
        write(my_unit, "(A)") "# 5: Townsend ioniz. coef. alpha [1/m]"
        write(my_unit, "(A)") "# 6: Townsend attach. coef. eta [1/m]"
+       write(my_unit, "(A)") "# 7: Ionization rate [1/s]"
+       write(my_unit, "(A)") "# 8: Attachment rate [1/s]"
        do n = 1, n_fields
           write(my_unit, *) fields(n), fields(n) * Townsend_to_SI, &
                mu(n) / gas_number_density, &
-               diff(n) / gas_number_density, alpha(n), eta(n)
+               diff(n) / gas_number_density, alpha(n), eta(n), &
+               src(n), loss(n)
        end do
        write(my_unit, *) ""
        close(my_unit)
