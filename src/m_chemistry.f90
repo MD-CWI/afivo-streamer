@@ -293,7 +293,7 @@ contains
     real(dp), allocatable        :: fields(:)
     real(dp), allocatable        :: rates(:, :)
     real(dp), allocatable        :: eta(:), alpha(:)
-    real(dp), allocatable        :: v(:)
+    real(dp), allocatable        :: v(:), mu(:)
     integer                      :: n, n_fields, i_elec
     integer                      :: my_unit
 
@@ -319,8 +319,10 @@ contains
           end if
        end do
 
+       allocate(mu(n_fields))
        allocate(v(n_fields))
-       v = LT_get_col(td_tbl, td_mobility, fields) * fields * Townsend_to_SI
+       mu = LT_get_col(td_tbl, td_mobility, fields)
+       v = mu * fields * Townsend_to_SI
 
        ! v(1) is zero, so extrapolate linearly
        eta(2:) = eta(2:) / v(2:)
@@ -330,17 +332,24 @@ contains
 
        ! Write to a file
        open(newunit=my_unit, file=trim(fname), action="write")
-       write(my_unit, *) "Townsend attach. coef. eta (for fixed pressure)"
+       write(my_unit, *) "Townsend attach. coef. eta [1/m]"
        write(my_unit, *) "--------------------------"
        do n = 1, n_fields
           write(my_unit, *) fields(n), eta(n)
        end do
        write(my_unit, *) "--------------------------"
        write(my_unit, *) ""
-       write(my_unit, *) "Townsend ioniz. coef. alpha (for fixed pressure)"
+       write(my_unit, *) "Townsend ioniz. coef. alpha [1/m]"
        write(my_unit, *) "--------------------------"
        do n = 1, n_fields
           write(my_unit, *) fields(n), alpha(n)
+       end do
+       write(my_unit, *) "--------------------------"
+       write(my_unit, *) ""
+       write(my_unit, *) "Electron mobility mu [m^2/(V s)]"
+       write(my_unit, *) "--------------------------"
+       do n = 1, n_fields
+          write(my_unit, *) fields(n), mu(n) / gas_number_density
        end do
        write(my_unit, *) "--------------------------"
        close(my_unit)
