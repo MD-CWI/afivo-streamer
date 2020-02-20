@@ -345,7 +345,8 @@ contains
        write(my_unit, "(A)") "# 7: Ionization rate [1/s]"
        write(my_unit, "(A)") "# 8: Attachment rate [1/s]"
        do n = 1, n_fields
-          write(my_unit, *) fields(n), fields(n) * Townsend_to_SI, &
+          write(my_unit, *) fields(n), &
+               fields(n) * Townsend_to_SI * gas_number_density, &
                mu(n) / gas_number_density, &
                diff(n) / gas_number_density, alpha(n), eta(n), &
                src(n), loss(n)
