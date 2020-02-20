@@ -293,7 +293,7 @@ contains
     real(dp), allocatable        :: fields(:)
     real(dp), allocatable        :: rates(:, :)
     real(dp), allocatable        :: eta(:), alpha(:)
-    real(dp), allocatable        :: v(:), mu(:)
+    real(dp), allocatable        :: v(:), mu(:), diff(:)
     integer                      :: n, n_fields, i_elec
     integer                      :: my_unit
 
@@ -319,6 +319,9 @@ contains
           end if
        end do
 
+       allocate(diff(n_fields))
+       diff = LT_get_col(td_tbl, td_diffusion, fields)
+
        allocate(mu(n_fields))
        allocate(v(n_fields))
        mu = LT_get_col(td_tbl, td_mobility, fields)
@@ -332,26 +335,21 @@ contains
 
        ! Write to a file
        open(newunit=my_unit, file=trim(fname), action="write")
-       write(my_unit, *) "Townsend attach. coef. eta [1/m]"
+       write(my_unit, *) "# Description of columns"
+       write(my_unit, *) "# 1: E/N [Td]"
+       write(my_unit, *) "# 2: E [V/m]"
+       write(my_unit, *) "# 3: Electron mobility [m^2/(V s)]"
+       write(my_unit, *) "# 4: Electron diffusion [m^2/s]"
+       write(my_unit, *) "# 5: Townsend ioniz. coef. alpha [1/m]"
+       write(my_unit, *) "# 6: Townsend attach. coef. eta [1/m]"
        write(my_unit, *) "--------------------------"
        do n = 1, n_fields
-          write(my_unit, *) fields(n), eta(n)
+          write(my_unit, *) fields(n), fields(n) * Townsend_to_SI, &
+               mu(n) / gas_number_density, &
+               diff(n) / gas_number_density, alpha(n), eta(n)
        end do
        write(my_unit, *) "--------------------------"
        write(my_unit, *) ""
-       write(my_unit, *) "Townsend ioniz. coef. alpha [1/m]"
-       write(my_unit, *) "--------------------------"
-       do n = 1, n_fields
-          write(my_unit, *) fields(n), alpha(n)
-       end do
-       write(my_unit, *) "--------------------------"
-       write(my_unit, *) ""
-       write(my_unit, *) "Electron mobility mu [m^2/(V s)]"
-       write(my_unit, *) "--------------------------"
-       do n = 1, n_fields
-          write(my_unit, *) fields(n), mu(n) / gas_number_density
-       end do
-       write(my_unit, *) "--------------------------"
        close(my_unit)
     end if
   end subroutine chemistry_write_summary
