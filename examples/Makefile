@@ -13,7 +13,8 @@ PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
  poisson_dielectric poisson_helmholtz reaction_diffusion dielectric_surface
 
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric	\
-simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl
+simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl h_domain_expts h_bc h_advection solid_body_rotation \
+amr_solid_body_rotation euler amr_euler KT_euler_v2 benchmark_euler
 
 PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning
 
