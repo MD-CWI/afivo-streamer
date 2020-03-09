@@ -79,3 +79,5 @@ documentation/html/*
 /examples/dielectric_surface_2d
 /examples/dielectric_surface_3d
 /documentation/auto/
+./examples/*.curve
+./examples/*.out
