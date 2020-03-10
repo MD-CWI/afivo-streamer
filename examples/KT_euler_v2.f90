@@ -9,7 +9,11 @@ program KT_euler
   integer, parameter :: coord_type = af_xyz
   real(dp), parameter :: euler_gamma = 1.4_dp
 
-  integer            :: i_rho, i_mom(NDIM), i_e
+  ! Indices defining the order of the flux variables
+  integer, parameter :: i_rho = 1
+  integer, parameter :: i_mom(NDIM) = [2, 3]
+  integer, parameter :: i_e = 4
+
   integer            :: variables(n_vars)
   integer            :: fluxes(n_vars)
   real(dp)           :: l_max(NDIM), l_min(NDIM)
@@ -20,7 +24,7 @@ program KT_euler
   real(dp)           :: dt, time, end_time
   integer            :: t_iter
   character(len=100) :: fname
-  integer            :: n
+  integer            :: n, substep
   real(dp)           :: rho_max
 
   ! AMR stuff
@@ -28,26 +32,20 @@ program KT_euler
   integer          :: refine_steps
   real(dp)         :: dr_min(NDIM)
 
+  character(len=10) :: var_names(n_vars)
+
+  var_names(i_rho) = "rho"
+  var_names(i_mom) = ["mom_x", "mom_y"]
+  var_names(i_e)   = "E"
+
   print *, "Running Euler 2D with KT scheme"
   print *, "Number of threads", af_get_max_threads()
 
-  call af_add_cc_variable(tree, "rho", ix=i_rho)
-  call af_add_cc_variable(tree, "mom_x", ix=i_mom(1))
-  call af_add_cc_variable(tree, "mom_y", ix=i_mom(2))
-#if NDIM == 3
-  call af_add_cc_variable(tree, "mom_z", ix=i_mom(3))
-#endif
-  call af_add_cc_variable(tree, "E", ix=i_e)
-  variables = [i_rho, i_mom, i_e]
-
   do n = 1, n_vars
+     call af_add_cc_variable(tree, var_names(n), ix=variables(n), n_copies=2)
      call af_add_fc_variable(tree, "flux", ix=fluxes(n))
+     call af_set_cc_methods(tree, variables(n), af_bc_neumann_zero)
   end do
-
-  call af_set_cc_methods(tree, i_rho, af_bc_neumann_zero)
-  call af_set_cc_methods(tree, i_mom(1), af_bc_neumann_zero)
-  call af_set_cc_methods(tree, i_mom(2), af_bc_neumann_zero)
-  call af_set_cc_methods(tree, i_e, af_bc_neumann_zero)
 
   ! Config 1
   ! u0(:, i_e)      = [1.0_dp, 0.4_dp, 0.0439_dp, 0.15_dp]
@@ -97,7 +95,7 @@ program KT_euler
 
   call af_loop_box(tree, set_init_conds)
 
-  call af_gc_tree(tree, [i_rho, i_mom(1), i_mom(2), i_e])
+  call af_gc_tree(tree, variables)
 
   !call af_write_silo(tree, 'eulerInit', dir='output')
 
@@ -113,22 +111,39 @@ program KT_euler
              add_vars = write_primitives, add_names=["xVel","yVel","pres"])
      end if
 
-     call af_loop_tree(tree, compute_flux)
-     call af_consistent_fluxes(tree, variables)
-     call af_loop_box_arg(tree, update_solution, [dt])
-     do n = 1, n_vars
-        call af_restrict_tree(tree, variables(n))
-     end do
-     call af_gc_tree(tree, variables)
-     !call af_adjust_refinement(tree, ref_rout, refine_info, 1)
+     if (forward_euler) then
+        call af_loop_tree(tree, compute_flux)
+        call af_consistent_fluxes(tree, variables)
+        call af_loop_box_arg(tree, update_solution, [dt])
+        do n = 1, n_vars
+           call af_restrict_tree(tree, variables(n))
+        end do
+     else ! Heun's method
+        ! Copy previous solution
+        do n = 1, n_vars
+           call af_tree_copy_cc(tree, variables(n), variables(n)+1)
+        end do
 
-     !call af_loop_box_arg(tree, update_solution, [dt])
-     !call af_gc_tree(tree, [i_rho, i_mom(1), i_mom(2), i_e])
+        do substep = 1, 2
+           call af_loop_tree(tree, compute_flux)
+           call af_consistent_fluxes(tree, variables)
+           call af_loop_box_arg(tree, update_solution, [dt])
+           do n = 1, n_vars
+              call af_restrict_tree(tree, variables(n))
+           end do
+        end do
+
+        call af_loop_box(tree, average_time_states)
+     end if
+
+     ! call af_gc_tree(tree, variables)
+     ! call af_adjust_refinement(tree, ref_rout, refine_info, 1)
+     ! call af_gc_tree(tree, [i_rho, i_mom(1), i_mom(2), i_e])
 
      t_iter = t_iter + 1
      time = time + dt
 
-     call af_tree_maxabs_cc(tree, i_rho, rho_max)
+     call af_tree_maxabs_cc(tree, variables(i_rho), rho_max)
      if (rho_max > 10.0_dp) &
           error stop "solution diverging!"
 
@@ -149,25 +164,13 @@ contains
     do KJI_DO(0, nc+1)
        rr = af_r_cc(box, [IJK])
        if (rr(1) > 0.5_dp .and. rr(2) > 0.5_dp) then
-          box%cc(IJK, i_rho)    = u0(1, 1)
-          box%cc(IJK, i_mom(1)) = u0(1, 2)
-          box%cc(IJK, i_mom(2)) = u0(1, 3)
-          box%cc(IJK, i_e)      = u0(1, 4)
+          box%cc(IJK, variables) = u0(1, :)
        elseif (rr(1) <= 0.5_dp .and. rr(2) >= 0.5_dp) then
-          box%cc(IJK, i_rho)    = u0(2, 1)
-          box%cc(IJK, i_mom(1)) = u0(2, 2)
-          box%cc(IJK, i_mom(2)) = u0(2, 3)
-          box%cc(IJK, i_e)      = u0(2, 4)
+          box%cc(IJK, variables) = u0(2, :)
        elseif (rr(1) <= 0.5_dp .and. rr(2) <= 0.5_dp) then
-          box%cc(IJK, i_rho)    = u0(3, 1)
-          box%cc(IJK, i_mom(1)) = u0(3, 2)
-          box%cc(IJK, i_mom(2)) = u0(3, 3)
-          box%cc(IJK, i_e)      = u0(3, 4)
+          box%cc(IJK, variables) = u0(3, :)
        else
-          box%cc(IJK, i_rho)    = u0(4, 1)
-          box%cc(IJK, i_mom(1)) = u0(4, 2)
-          box%cc(IJK, i_mom(2)) = u0(4, 3)
-          box%cc(IJK, i_e)      = u0(4, 4)
+          box%cc(IJK, variables) = u0(4, :)
        end if
     end do; CLOSE_DO
   end subroutine set_init_conds
@@ -290,28 +293,28 @@ contains
     end do
   end subroutine update_solution
 
-  subroutine ref_rout( box, cell_flags )
-    type(box_t), intent(in) :: box
-    integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
-    real(dp)                :: diff, tol
-    integer                 :: IJK, nc
+  ! subroutine ref_rout( box, cell_flags )
+  !   type(box_t), intent(in) :: box
+  !   integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
+  !   real(dp)                :: diff, tol
+  !   integer                 :: IJK, nc
 
-    nc  = box%n_cell
-    tol = 1.0e-6_dp
-    do KJI_DO(1,nc)
-       diff =  box%dr(1)**2*abs(box%cc(i+1,j,i_rho)+box%cc(i-1,j,i_rho) &
-            -2*box%cc(i,j,i_rho)) + &
-            box%dr(2)**2*abs(box%cc(i,j+1,i_rho)+box%cc(i,j-1,i_rho) &
-            -2*box%cc(i,j,i_rho))
-       if (diff > tol .and. box%lvl .le. 4) then
-          cell_flags(IJK) = af_do_ref
-       else if (diff < 0.1_dp*tol) then
-          cell_flags(IJK) = af_rm_ref
-       else
-          cell_flags(IJK) = af_keep_ref
-       end if
-    end do; CLOSE_DO
-  end subroutine ref_rout
+  !   nc  = box%n_cell
+  !   tol = 1.0e-6_dp
+  !   do KJI_DO(1,nc)
+  !      diff =  box%dr(1)**2*abs(box%cc(i+1,j,i_rho)+box%cc(i-1,j,i_rho) &
+  !           -2*box%cc(i,j,i_rho)) + &
+  !           box%dr(2)**2*abs(box%cc(i,j+1,i_rho)+box%cc(i,j-1,i_rho) &
+  !           -2*box%cc(i,j,i_rho))
+  !      if (diff > tol .and. box%lvl .le. 4) then
+  !         cell_flags(IJK) = af_do_ref
+  !      else if (diff < 0.1_dp*tol) then
+  !         cell_flags(IJK) = af_rm_ref
+  !      else
+  !         cell_flags(IJK) = af_keep_ref
+  !      end if
+  !   end do; CLOSE_DO
+  ! end subroutine ref_rout
 
   subroutine write_primitives(box, new_vars, n_var)
     type(box_t), intent(in) :: box
@@ -329,5 +332,11 @@ contains
 
   end subroutine write_primitives
 
+  subroutine average_time_states(box)
+    type(box_t), intent(inout) :: box
+    box%cc(DTIMES(:), variables) = 0.5_dp * (&
+         box%cc(DTIMES(:), variables) + &
+         box%cc(DTIMES(:), variables+1))
+  end subroutine average_time_states
 
 end program KT_euler
