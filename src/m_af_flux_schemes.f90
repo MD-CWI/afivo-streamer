@@ -275,11 +275,15 @@ contains
   elemental function vanLeer_mlim(a, b) result(phi)
     real(dp), intent(in) :: a
     real(dp), intent(in) :: b
-    real(dp) :: phi
-    phi = (2.0_dp*max(0.0_dp, a*b))/(a + b + epsilon(1.0_dp))
+    real(dp) :: ab, phi
 
+    ab = a * b
+    if (ab > 0) then
+       phi = 2 * ab / (a + b)
+    else
+       phi = 0
+    end if
   end function vanLeer_mlim
-
 
   elemental function minmod_mlim(a, b) result(phi)
     real(dp), intent(in) :: a
