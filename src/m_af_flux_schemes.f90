@@ -187,13 +187,13 @@ contains
     select case (use_limiter)
     case (limiter_vanleer)
        slopes = vanLeer_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
-            cc(0:nc+1, :) - cc(-1:nc+2, :))
+            cc(0:nc+1, :) - cc(-1:nc, :))
     case (limiter_koren)
        slopes = koren_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
-            cc(0:nc+1, :) - cc(-1:nc+2, :))
+            cc(0:nc+1, :) - cc(-1:nc, :))
     case (limiter_minmod)
        slopes = minmod_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
-            cc(0:nc+1, :) - cc(-1:nc+2, :))
+            cc(0:nc+1, :) - cc(-1:nc, :))
     case default
        error stop "unknown limiter"
     end select
