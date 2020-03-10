@@ -31,6 +31,8 @@ m_af_core.o: m_af_prolong.mod
 m_af_core.o: m_af_restrict.mod
 m_af_core.o: m_af_types.mod
 m_af_core.o: m_af_utils.mod
+m_af_flux_schemes.o: m_af_ghostcell.mod
+m_af_flux_schemes.o: m_af_types.mod
 m_af_ghostcell.o: m_af_prolong.mod
 m_af_ghostcell.o: m_af_types.mod
 m_af_interp.o: m_af_types.mod
@@ -60,4 +62,5 @@ m_coarse_solver.o: m_af_types.mod
 m_coarse_solver.o: m_mg_types.mod
 m_dielectric.o: m_af_ghostcell.mod
 m_dielectric.o: m_af_types.mod
+m_dielectric.o: m_af_utils.mod
 m_mg_types.o: m_af_types.mod

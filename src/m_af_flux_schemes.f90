@@ -1,18 +1,49 @@
+#include "cpp_macros.h"
 !> Module containing a couple simple flux schemes for scalar advection/diffusion
 !> problems
 !>
 !> @todo Explain multidimensional index for flux, velocity
 module m_af_flux_schemes
+  use m_af_types
 
   implicit none
   private
 
-  integer, parameter :: dp = kind(0.0d0)
+  integer, parameter :: limiter_vanleer = 1
+  integer, parameter :: limiter_koren = 2
+  integer, parameter :: limiter_minmod = 3
+
+  interface
+     subroutine subr_prim_cons(n_values, n_vars, u)
+       import
+       integer, intent(in)     :: n_values, n_vars
+       real(dp), intent(inout) :: u(n_values, n_vars)
+     end subroutine subr_prim_cons
+
+     subroutine subr_max_wavespeed(nf, n_var, flux_dim, u, w)
+       import
+       integer, intent(in)   :: nf    !< Number of cell faces
+       integer, intent(in)   :: n_var !< Number of variables
+       integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
+       real(dp), intent(in)  :: u(nf, n_var)
+       real(dp), intent(out) :: w(nf)
+     end subroutine subr_max_wavespeed
+
+     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux)
+       import
+       integer, intent(in)   :: nf       !< Number of cell faces
+       integer, intent(in)   :: n_var    !< Number of variables
+       integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
+       real(dp), intent(in)  :: u(nf, n_var)
+       real(dp), intent(out) :: flux(nf, n_var)
+     end subroutine subr_flux_from_prim
+  end interface
 
   public :: flux_diff_1d, flux_diff_2d, flux_diff_3d
   public :: flux_koren_1d, flux_koren_2d, flux_koren_3d
   public :: flux_upwind_1d, flux_upwind_2d, flux_upwind_3d
   public :: flux_kurganovTadmor_1d, reconstruct_lr_1d
+  public :: flux_generic
 
 contains
 
@@ -137,76 +168,154 @@ contains
     end do
   end subroutine flux_koren_2d
 
-  subroutine reconstruct_lr_1d(nc, ngc, n_vars, cc, u_lr)
-    integer, intent(in)     :: nc               !< Number of cells
-    integer, intent(in)     :: ngc              !< Number of ghost cells
-    integer, intent(in)     :: n_vars            !< Number of variables
-    real(dp), intent(in)    :: cc(1-ngc:nc+ngc, n_vars) !< Cell-centered values
+  subroutine reconstruct_lr_1d(nc, ngc, n_vars, cc, u_l, u_r, limiter)
+    integer, intent(in)           :: nc                       !< Number of cells
+    integer, intent(in)           :: ngc                      !< Number of ghost cells
+    integer, intent(in)           :: n_vars                   !< Number of variables
+    real(dp), intent(in)          :: cc(1-ngc:nc+ngc, n_vars) !< Cell-centered values
     !> Reconstructed (left, right) values at every interface
-    real(dp), intent(inout) :: u_lr(1:nc+1, 2, n_vars)
-    real(dp)                :: grad1(n_vars), grad2(n_vars), grad3(n_vars)
-    integer                 :: n
+    real(dp), intent(inout)       :: u_l(1:nc+1, n_vars)
+    real(dp), intent(inout)       :: u_r(1:nc+1, n_vars)
+    integer, intent(in), optional :: limiter                  !< Which limiter to use
+    real(dp)                      :: slopes(0:nc+1, n_vars)
+    integer                       :: use_limiter
 
-    do n=1, nc+1
-      grad1 = cc(n-1, :) - cc(n-2, :)
-      grad2 = cc(n, :) - cc(n-1, :)
-      grad3 = cc(n+1, :) - cc(n, :)
-      u_lr(n,1,:) = cc(n-1,:) + 0.5_dp*koren_mlim(grad1, grad2) !left
-      u_lr(n,2,:) = cc(n,:) - 0.5_dp*koren_mlim(grad2, grad3) !right
-      !vint(n) = vint(n)*(cc(n-1) + 0.5_dp*vanLeer_mlim(grad1, grad2)) !left
-      !vout(n) = vout(n)*(cc(n) - 0.5_dp*vanLeer_mlim(grad2, grad3)) !right
-      !u_lr(n, 1, :) = cc(n-1, :) + 0.5_dp*minmod_mlim(grad1, grad2) !left
-      !u_lr(n, 2, :) = cc(n, :) - 0.5_dp*minmod_mlim(grad2, grad3) !right
-    end do
+    use_limiter = limiter_vanleer
+    if (present(limiter)) use_limiter = limiter
+
+    ! Compute limited slopes at the cell centers
+    select case (use_limiter)
+    case (limiter_vanleer)
+       slopes = vanLeer_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
+            cc(0:nc+1, :) - cc(-1:nc+2, :))
+    case (limiter_koren)
+       slopes = koren_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
+            cc(0:nc+1, :) - cc(-1:nc+2, :))
+    case (limiter_minmod)
+       slopes = minmod_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
+            cc(0:nc+1, :) - cc(-1:nc+2, :))
+    case default
+       error stop "unknown limiter"
+    end select
+
+    ! Reconstruct values on the faces
+    u_l(1:nc+1, :) = cc(0:nc, :) + 0.5_dp * slopes(0:nc, :) ! left
+    u_r(1:nc+1, :) = cc(1:nc+1, :) - 0.5_dp * slopes(1:nc+1, :) ! right
   end subroutine reconstruct_lr_1d
 
   !> Compute flux for the KT scheme
-  subroutine flux_kurganovTadmor_1d( nf, n_vars, flux_lr, u_lr, w_lr, flux )
-    !integer, intent(in) :: nc
-    integer, intent(in) :: nf
+  subroutine flux_kurganovTadmor_1d(n_values, n_vars, flux_l, flux_r, &
+       u_l, u_r, wmax, flux)
+    integer, intent(in) :: n_values
     integer, intent(in) :: n_vars
-    real(dp), intent(in) :: flux_lr(nf, 2, n_vars), u_lr(nf,2,n_vars)
-    real(dp), intent(in) :: w_lr(nf)
-    real(dp), intent(inout) :: flux(nf, n_vars)
+    real(dp), intent(in) :: flux_l(n_values, n_vars)
+    real(dp), intent(in) :: flux_r(n_values, n_vars)
+    real(dp), intent(in) :: u_l(n_values, n_vars)
+    real(dp), intent(in) :: u_r(n_values, n_vars)
+    real(dp), intent(in) :: wmax(n_values)
+    real(dp), intent(inout) :: flux(n_values, n_vars)
 
-    flux = 0.5_dp*(flux_lr(:,1,:) + flux_lr(:,2,:)) - &
-                spread(w_lr, 2,n_vars)*(u_lr(:,2,:) - u_lr(:,1,:))
+    flux = 0.5_dp * (flux_l + flux_r) - spread(wmax, 2, n_vars) * (u_r - u_l)
   end subroutine flux_kurganovTadmor_1d
 
-  ! Jannis: Maybe this is not such a great idea, since the overhead of the
-  ! function calls can become significant in this line-by-line algorithm.
-  !
-  ! subroutine flux_generic(nc, n_gc, n_vars, cc_line, flux, flux_dim, &
-  !      to_primitive, to_conservative, &
-  !      max_wavespeed, flux_from_primitives)
-  !   integer, intent(in)     :: nc
-  !   integer, intent(in)     :: n_gc
-  !   integer, intent(in)     :: n_vars
-  !   real(dp), intent(in)    :: cc_line(1-n_gc:nc+n_gc, n_vars)
-  !   real(dp), intent(out)    :: flux(1:nc+1, n_vars)
-  !   integer, intent(in)     :: flux_dim
-  !   procedure(subr_prim_cons) :: to_primitive, to_conservative
-  !   procedure(subr_max_wavespeed) :: max_wavespeed
-  !   procedure(subr_flux_from_prim) :: flux_from_primitives
+  !> Compute generic finite volume flux
+  subroutine flux_generic(tree, id, nc, n_vars, i_cc, i_flux, &
+       to_primitive, to_conservative, &
+       max_wavespeed, flux_from_primitives)
+    use m_af_types
+    use m_af_ghostcell
+    type(af_t), intent(inout)      :: tree
+    integer, intent(in)            :: id             !< Id of box
+    integer, intent(in)            :: nc             !< Number of cells
+    integer, intent(in)            :: n_vars         !< Number of variables
+    integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)            :: i_flux(n_vars) !< Flux variables
+    !> Convert conservative variables to primitive ones
+    procedure(subr_prim_cons)      :: to_primitive
+    !> Convert primitive variables to conservative ones
+    procedure(subr_prim_cons)      :: to_conservative
+    !> Compute the maximum wave speed
+    procedure(subr_max_wavespeed)  :: max_wavespeed
+    !> Compute the flux from primitive variables
+    procedure(subr_flux_from_prim) :: flux_from_primitives
 
-  !   real(dp) :: prim_vars(1-n_gc:nc+n_gc, n_vars)
-  !   real(dp) :: u_lr(1:nc+1, 2, n_vars)
-  !   real(dp) :: w_lr(1:nc+1)
-  !   real(dp) :: flux_lr(1:nc+1, 2, n_vars)
-  !   integer  :: i, j
+    real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
+    real(dp) :: cc_line(-1:nc+2, n_vars)
+    real(dp) :: flux(nc+1, n_vars)
+    real(dp) :: u_l(nc+1, n_vars), u_r(nc+1, n_vars)
+    real(dp) :: w_l(nc+1), w_r(nc+1)
+    real(dp) :: flux_l(nc+1, n_vars), flux_r(nc+1, n_vars)
+    integer  :: i, flux_dim
+#if NDIM == 3
+    integer  :: j
+#endif
 
-  !   if (n_gc /= 2) error stop "n_gc /= 2"
+    ! Get two layers of ghost cell data
+    call af_gc2_box(tree, id, i_cc, cc)
 
-  !   !We need primitives at the ghost cells as they're used for reconstruction
-  !   call to_primitive(nc+2*n_gc, n_vars, cc_line, prim_vars)
-  !   call reconstruct_lr_1d(nc, n_gc, n_vars, prim_vars, u_lr)
-  !   call get_max_wavespeed_lr_1d(nc+1, n_vars, 1, u_lr, w_lr)
-  !   call get_fluxes_lr_1d(nc+1, n_vars, 1, u_lr, flux_lr)
-  !   call to_conservatives(nc+1, n_vars, u_lr, cons_vars)
-  !   call flux_kurganovTadmor_1d(nc+1, n_vars, flux_lr, u_lr, w_lr, flux)
-  !   tree%boxes(id)%fc(:, j, 1, :) = flux
+    ! Jannis: Below, there are function calls in the inner part of a loop. When
+    ! I did some benchmarks, it was not significantly slower than using a buffer
+    ! and fewer functions calls.
 
-  ! end subroutine flux_generic
+    do flux_dim = 1, NDIM
+#if NDIM == 3
+       do j = 1, nc
+#endif
+          do i = 1, nc
+             ! Extract cell-centered values along a line
+             select case (flux_dim)
+#if NDIM == 2
+             case (1)
+                cc_line = cc(:, i, :)
+             case (2)
+                cc_line = cc(i, :, :)
+#elif NDIM == 3
+             case (1)
+                cc_line = cc(:, i, j, :)
+             case (2)
+                cc_line = cc(i, :, j, :)
+             case (3)
+                cc_line = cc(:, i, j, :)
+#endif
+             end select
+
+             call to_primitive(nc+4, n_vars, cc_line)
+
+             ! Reconstruct to cell faces
+             call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r)
+
+             call max_wavespeed(nc+1, n_vars, flux_dim, u_l, w_l)
+             call max_wavespeed(nc+1, n_vars, flux_dim, u_r, w_r)
+             call flux_from_primitives(nc+1, n_vars, flux_dim, u_l, flux_l)
+             call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r)
+             call to_conservative(nc+1, n_vars, u_l)
+             call to_conservative(nc+1, n_vars, u_r)
+             call flux_kurganovTadmor_1d(nc+1, n_vars, flux_l, flux_r, &
+                  u_l, u_r, max(w_l, w_r), flux)
+
+             ! Store the computed fluxes
+             select case (flux_dim)
+#if NDIM == 2
+             case (1)
+                tree%boxes(id)%fc(:, i, flux_dim, i_flux) = flux
+             case (2)
+                tree%boxes(id)%fc(i, :, flux_dim, i_flux) = flux
+#elif NDIM == 3
+             case (1)
+                tree%boxes(id)%fc(:, i, j, flux_dim, i_flux) = flux
+             case (2)
+                tree%boxes(id)%fc(i, :, j, flux_dim, i_flux) = flux
+             case (3)
+                tree%boxes(id)%fc(:, i, j, flux_dim, i_flux) = flux
+#endif
+             end select
+          end do
+#if NDIM == 3
+       end do
+#endif
+    end do
+
+  end subroutine flux_generic
 
   !> Compute flux according to Koren limiter
   subroutine flux_koren_3d(cc, v, nc, ngc)
@@ -290,7 +399,7 @@ contains
     real(dp), intent(in) :: b
     real(dp)             :: phi
     phi = 0.5_dp*(sign(1.0_dp, a) + sign(1.0_dp, b)) * &
-          min(abs(a), abs(b))
+         min(abs(a), abs(b))
   end function minmod_mlim
 
   !> Compute flux with first order upwind scheme
