@@ -8,6 +8,7 @@ program KT_euler
   integer, parameter :: ncells = 8
   integer, parameter :: coord_type = af_xyz
   real(dp), parameter :: euler_gamma = 1.4_dp
+  logical, parameter :: forward_euler = .false.
 
   ! Indices defining the order of the flux variables
   integer, parameter :: i_rho = 1
