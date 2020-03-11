@@ -8,7 +8,7 @@ program KT_euler
   integer, parameter :: ncells = 8
   integer, parameter :: coord_type = af_xyz
   real(dp), parameter :: euler_gamma = 1.4_dp
-  logical, parameter :: forward_euler = .false.
+  integer, parameter :: time_integrator = af_heuns_method
 
   ! Indices defining the order of the flux variables
   integer, parameter :: i_rho = 1
@@ -16,6 +16,7 @@ program KT_euler
   integer, parameter :: i_e = 4
 
   integer            :: variables(n_vars)
+  integer            :: cc_rho, cc_mom(2), cc_e
   integer            :: fluxes(n_vars)
   real(dp)           :: l_max(NDIM), l_min(NDIM)
   integer            :: grid(NDIM)
@@ -25,7 +26,7 @@ program KT_euler
   real(dp)           :: dt, time, end_time
   integer            :: t_iter
   character(len=100) :: fname
-  integer            :: n, substep
+  integer            :: n
   real(dp)           :: rho_max
 
   ! AMR stuff
@@ -47,6 +48,10 @@ program KT_euler
      call af_add_fc_variable(tree, "flux", ix=fluxes(n))
      call af_set_cc_methods(tree, variables(n), af_bc_neumann_zero)
   end do
+
+  cc_rho = variables(i_rho)
+  cc_mom = variables(i_mom)
+  cc_e   = variables(i_e)
 
   ! Config 1
   ! u0(:, i_e)      = [1.0_dp, 0.4_dp, 0.0439_dp, 0.15_dp]
@@ -98,11 +103,9 @@ program KT_euler
 
   call af_gc_tree(tree, variables)
 
-  !call af_write_silo(tree, 'eulerInit', dir='output')
-
   !Setting the timestep data
   time = 0.0_dp
-  end_time = 0.2_dp
+  end_time = 0.02_dp
   t_iter = 0
   dt = 2.0e-04_dp
   do
@@ -112,37 +115,13 @@ program KT_euler
              add_vars = write_primitives, add_names=["xVel","yVel","pres"])
      end if
 
-     if (forward_euler) then
-        call af_loop_tree(tree, compute_flux)
-        call af_consistent_fluxes(tree, variables)
-        call af_loop_box_arg(tree, update_solution, [dt])
-        do n = 1, n_vars
-           call af_restrict_tree(tree, variables(n))
-        end do
-     else ! Heun's method
-        ! Copy previous solution
-        do n = 1, n_vars
-           call af_tree_copy_cc(tree, variables(n), variables(n)+1)
-        end do
-
-        do substep = 1, 2
-           call af_loop_tree(tree, compute_flux)
-           call af_consistent_fluxes(tree, variables)
-           call af_loop_box_arg(tree, update_solution, [dt])
-           do n = 1, n_vars
-              call af_restrict_tree(tree, variables(n))
-           end do
-        end do
-
-        call af_loop_box(tree, average_time_states)
-     end if
+     call af_advance(tree, dt, time, variables, time_integrator, forward_euler)
 
      ! call af_gc_tree(tree, variables)
      ! call af_adjust_refinement(tree, ref_rout, refine_info, 1)
      ! call af_gc_tree(tree, [i_rho, i_mom(1), i_mom(2), i_e])
 
      t_iter = t_iter + 1
-     time = time + dt
 
      call af_tree_maxabs_cc(tree, variables(i_rho), rho_max)
      if (rho_max > 10.0_dp) &
@@ -154,6 +133,20 @@ program KT_euler
   call af_destroy(tree)
 
 contains
+
+  subroutine forward_euler(tree, dt, time, s_deriv, s_prev, s_out)
+    type(af_t), intent(inout) :: tree
+    real(dp), intent(in)      :: dt
+    real(dp), intent(in)      :: time
+    integer, intent(in)       :: s_deriv
+    integer, intent(in)       :: s_prev
+    integer, intent(in)       :: s_out
+
+    call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, &
+         max_wavespeed, get_fluxes, to_primitive, to_conservative)
+    call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
+         s_prev, s_out)
+  end subroutine forward_euler
 
   subroutine set_init_conds(box)
     type(box_t), intent(inout) :: box
@@ -175,15 +168,6 @@ contains
        end if
     end do; CLOSE_DO
   end subroutine set_init_conds
-
-  subroutine compute_flux(tree, id)
-    use m_af_flux_schemes
-    type(af_t), intent(inout) :: tree
-    integer, intent(in)       :: id
-
-    call flux_generic(tree, id, tree%n_cell, n_vars, variables, fluxes, &
-         to_primitive, to_conservative, get_max_wavespeed_1d, get_fluxes_1d)
-  end subroutine compute_flux
 
   subroutine to_primitive(n_values, n_vars, u)
     integer, intent(in)     :: n_values, n_vars
@@ -215,7 +199,7 @@ contains
     end do
   end subroutine to_conservative
 
-  subroutine get_max_wavespeed_1d(n_values, n_var, flux_dim, u, w)
+  subroutine max_wavespeed(n_values, n_var, flux_dim, u, w)
     integer, intent(in)   :: n_values !< Number of cell faces
     integer, intent(in)   :: n_var    !< Number of variables
     integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
@@ -225,9 +209,9 @@ contains
 
     sound_speeds = sqrt(euler_gamma * u(:, i_e) / u(:, i_rho))
     w = sound_speeds + abs(u(:, i_mom(flux_dim)))
-  end subroutine get_max_wavespeed_1d
+  end subroutine max_wavespeed
 
-  subroutine get_fluxes_1d(n_values, n_var, flux_dim, u, flux)
+  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux)
     integer, intent(in)   :: n_values !< Number of cell faces
     integer, intent(in)   :: n_var    !< Number of variables
     integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
@@ -259,40 +243,7 @@ contains
     ! Energy flux
     flux(:, i_e) = u(:, i_mom(flux_dim)) * (E + u(:, i_e))
 
-  end subroutine get_fluxes_1d
-
-  subroutine update_solution(box, dt)
-    type(box_t), intent(inout) :: box
-    real(dp), intent(in)       :: dt(:)
-    real(dp)                   :: inv_dr(NDIM)
-    integer                    :: IJK, nc, n, iv, iflux
-
-    nc     = box%n_cell
-    inv_dr = 1.0_dp/box%dr
-
-    do n = 1, n_vars
-       iv    = variables(n)
-       iflux = fluxes(n)
-
-       do KJI_DO(1, nc)
-#if NDIM == 2
-          box%cc(IJK, iv) = box%cc(IJK, iv) - dt(1) * ( &
-               inv_dr(1) * &
-               (box%fc(i+1, j, 1, iflux) - box%fc(i, j, 1, iflux)) + &
-               inv_dr(2) * &
-               (box%fc(i, j+1, 2, iflux) - box%fc(i, j, 2, iflux)))
-#elif NDIM == 3
-          box%cc(IJK, iv) = box%cc(IJK, iv) - dt(1) * ( &
-               inv_dr(1) * &
-               (box%fc(i+1, j, k, 1, iflux) - box%fc(i, j, k, 1, iflux)) + &
-               inv_dr(2) * &
-               (box%fc(i, j+1, k, 2, iflux) - box%fc(i, j, k, 2, iflux)) + &
-               inv_dr(3) * &
-               (box%fc(i, j, k+1, 3, iflux) - box%fc(i, j, k, 3, iflux)))
-#endif
-       end do; CLOSE_DO
-    end do
-  end subroutine update_solution
+  end subroutine get_fluxes
 
   ! subroutine ref_rout( box, cell_flags )
   !   type(box_t), intent(in) :: box
@@ -323,21 +274,13 @@ contains
     real(dp)                :: new_vars(DTIMES(0:box%n_cell+1),n_var)
 
     ! X Velocity
-    new_vars(DTIMES(:), 1) = box%cc(DTIMES(:), i_mom(1))/box%cc(DTIMES(:), i_rho)
+    new_vars(DTIMES(:), 1) = box%cc(DTIMES(:), cc_mom(1))/box%cc(DTIMES(:), cc_rho)
     ! Y Velocity
-    new_vars(DTIMES(:), 2) = box%cc(DTIMES(:), i_mom(2))/box%cc(DTIMES(:), i_rho)
+    new_vars(DTIMES(:), 2) = box%cc(DTIMES(:), cc_mom(2))/box%cc(DTIMES(:), cc_rho)
     ! Pressure
-    new_vars(DTIMES(:), 3) = (euler_gamma-1.0_dp)*(box%cc(DTIMES(:), i_e) - &
-         sum(box%cc(DTIMES(:), i_mom(:))**2, dim=NDIM+1) &
-         /(2.0_dp*box%cc(DTIMES(:), i_rho)))
-
+    new_vars(DTIMES(:), 3) = (euler_gamma-1.0_dp)*(box%cc(DTIMES(:), cc_e) - &
+         sum(box%cc(DTIMES(:), cc_mom(:))**2, dim=NDIM+1) &
+         /(2.0_dp*box%cc(DTIMES(:), cc_rho)))
   end subroutine write_primitives
-
-  subroutine average_time_states(box)
-    type(box_t), intent(inout) :: box
-    box%cc(DTIMES(:), variables) = 0.5_dp * (&
-         box%cc(DTIMES(:), variables) + &
-         box%cc(DTIMES(:), variables+1))
-  end subroutine average_time_states
 
 end program KT_euler
