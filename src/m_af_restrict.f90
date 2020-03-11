@@ -12,6 +12,7 @@ module m_af_restrict
   public :: af_restrict_tree
   public :: af_restrict_box
   public :: af_restrict_box_vars
+  public :: af_restrict_ref_boundary
   ! public :: af_restrict_box_face
 
 contains
@@ -150,6 +151,32 @@ contains
        call af_restrict_box(box_c, box_p, iv, use_geometry=use_geometry)
     end do
   end subroutine af_restrict_box_vars
+
+  !> Restrict only next to refinement boundaries, which which can be required
+  !> for filling coarse-grid ghost cells
+  subroutine af_restrict_ref_boundary(tree, ivs)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: ivs(:)
+    integer                   :: lvl, i, id, p_id
+
+    !$omp parallel private(lvl, i, id, p_id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          p_id = tree%boxes(id)%parent
+
+          ! Only restrict near refinement boundaries
+          if (p_id > af_no_box .and. &
+               any(tree%boxes(id)%neighbors == af_no_box)) then
+             call af_restrict_box_vars(tree%boxes(id), tree%boxes(p_id), &
+                  ivs)
+          end if
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine af_restrict_ref_boundary
 
 !   !> Restriction of face-centered variables from child to parent
 !   subroutine af_restrict_box_face(box_c, box_p, ivf, ivf_to)
