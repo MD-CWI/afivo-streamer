@@ -1,8 +1,6 @@
 #include "cpp_macros.h"
-!> Module containing a couple simple flux schemes for scalar advection/diffusion
-!> problems
-!>
-!> @todo Explain multidimensional index for flux, velocity
+!> Module containing a couple flux schemes for solving hyperbolic problems
+!> explicitly, as well as handling diffusion explicitly.
 module m_af_flux_schemes
   use m_af_types
 
@@ -43,7 +41,8 @@ module m_af_flux_schemes
   public :: flux_koren_1d, flux_koren_2d, flux_koren_3d
   public :: flux_upwind_1d, flux_upwind_2d, flux_upwind_3d
   public :: flux_kurganovTadmor_1d, reconstruct_lr_1d
-  public :: flux_generic
+  public :: flux_generic_box, flux_generic_tree
+  public :: flux_update_densities
 
 contains
 
@@ -218,10 +217,111 @@ contains
     flux = 0.5_dp * (flux_l + flux_r) - spread(wmax, 2, n_vars) * (u_r - u_l)
   end subroutine flux_kurganovTadmor_1d
 
+  subroutine flux_update_densities(tree, dt, n_vars, i_cc, i_flux, &
+       s_prev, s_out)
+    type(af_t), intent(inout) :: tree
+    real(dp), intent(in)      :: dt             !< Time step
+    integer, intent(in)       :: n_vars         !< Number of variables
+    integer, intent(in)       :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)       :: i_flux(n_vars) !< Flux variables
+    integer, intent(in)       :: s_prev         !< Previous time state
+    integer, intent(in)       :: s_out          !< Output time state
+    integer                   :: lvl, n, id, IJK, nc
+    real(dp)                  :: dt_dr(NDIM)
+#if NDIM == 2
+    real(dp)                  :: rfac(2, tree%n_cell)
+#endif
+
+    nc = tree%n_cell
+
+    !$omp parallel private(lvl, n, id, IJK, dt_dr)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do n = 1, size(tree%lvls(lvl)%leaves)
+          id    = tree%lvls(lvl)%leaves(n)
+          dt_dr = dt/tree%boxes(id)%dr
+
+          associate(cc => tree%boxes(id)%cc, fc => tree%boxes(id)%fc)
+#if NDIM == 2
+            if (tree%coord_t == af_cyl) then
+               call af_cyl_flux_factors(tree%boxes(id), rfac)
+               do KJI_DO(1, nc)
+                  cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_prev) + &
+                       dt_dr(1) * (&
+                       rfac(1, i) * fc(i, j, 1, i_flux) - &
+                       rfac(2, i) * fc(i+1, j, 1, i_flux)) &
+                       + dt_dr(2) * &
+                       (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+               end do; CLOSE_DO
+            else
+               do KJI_DO(1, nc)
+                  cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_prev) + &
+                       dt_dr(1) * &
+                       (fc(i, j, 1, i_flux) - fc(i+1, j, 1, i_flux)) &
+                       + dt_dr(2) * &
+                       (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+               end do; CLOSE_DO
+            end if
+#elif NDIM == 3
+            do KJI_DO(1, nc)
+               cc(i, j, k, i_cc+s_out) = cc(i, j, k, i_cc+s_prev) + &
+                    dt_dr(1) * &
+                    (fc(i, j, k, 1, i_flux) - fc(i+1, j, k, 1, i_flux)) + &
+                    dt_dr(2) * &
+                    (fc(i, j, k, 2, i_flux) - fc(i, j+1, k, 2, i_flux)) + &
+                    dt_dr(3) * &
+                    (fc(i, j, k, 3, i_flux) - fc(i, j, k+1, 3, i_flux))
+            end do; CLOSE_DO
+#endif
+          end associate
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine flux_update_densities
+
+  subroutine flux_generic_tree(tree, n_vars, i_cc, i_flux, &
+       max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
+    use m_af_restrict
+    use m_af_core
+    type(af_t), intent(inout)      :: tree
+    integer, intent(in)            :: n_vars         !< Number of variables
+    integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)            :: i_flux(n_vars) !< Flux variables
+    !> Compute the maximum wave speed
+    procedure(subr_max_wavespeed)  :: max_wavespeed
+    !> Compute the flux from primitive variables
+    procedure(subr_flux_from_prim) :: flux_from_primitives
+    !> Convert conservative variables to primitive ones
+    procedure(subr_prim_cons), optional :: to_primitive
+    !> Convert primitive variables to conservative ones
+    procedure(subr_prim_cons), optional :: to_conservative
+
+    integer :: lvl, i
+
+    ! Ensure ghost cells near refinement boundaries can be properly filled
+    call af_restrict_ref_boundary(tree, i_cc)
+
+    !$omp parallel private(lvl, i)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
+               n_vars, i_cc, i_flux, max_wavespeed, flux_from_primitives, &
+               to_primitive, to_conservative)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    ! Compute coarse fluxes from the fine ones at refinement boundaries
+    call af_consistent_fluxes(tree, i_flux)
+
+  end subroutine flux_generic_tree
+
   !> Compute generic finite volume flux
-  subroutine flux_generic(tree, id, nc, n_vars, i_cc, i_flux, &
-       to_primitive, to_conservative, &
-       max_wavespeed, flux_from_primitives)
+  subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, i_flux, &
+       max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
     use m_af_types
     use m_af_ghostcell
     type(af_t), intent(inout)      :: tree
@@ -230,14 +330,15 @@ contains
     integer, intent(in)            :: n_vars         !< Number of variables
     integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)            :: i_flux(n_vars) !< Flux variables
-    !> Convert conservative variables to primitive ones
-    procedure(subr_prim_cons)      :: to_primitive
-    !> Convert primitive variables to conservative ones
-    procedure(subr_prim_cons)      :: to_conservative
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed)  :: max_wavespeed
     !> Compute the flux from primitive variables
     procedure(subr_flux_from_prim) :: flux_from_primitives
+    !> Convert conservative variables to primitive ones
+    procedure(subr_prim_cons), optional :: to_primitive
+    !> Convert primitive variables to conservative ones
+    procedure(subr_prim_cons), optional :: to_conservative
+
 
     real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
     real(dp) :: cc_line(-1:nc+2, n_vars)
@@ -279,7 +380,9 @@ contains
 #endif
              end select
 
-             call to_primitive(nc+4, n_vars, cc_line)
+             if (present(to_primitive)) then
+                call to_primitive(nc+4, n_vars, cc_line)
+             end if
 
              ! Reconstruct to cell faces
              call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r)
@@ -288,8 +391,12 @@ contains
              call max_wavespeed(nc+1, n_vars, flux_dim, u_r, w_r)
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_l, flux_l)
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r)
-             call to_conservative(nc+1, n_vars, u_l)
-             call to_conservative(nc+1, n_vars, u_r)
+
+             if (present(to_conservative)) then
+                call to_conservative(nc+1, n_vars, u_l)
+                call to_conservative(nc+1, n_vars, u_r)
+             end if
+
              call flux_kurganovTadmor_1d(nc+1, n_vars, flux_l, flux_r, &
                   u_l, u_r, max(w_l, w_r), flux)
 
@@ -315,7 +422,7 @@ contains
 #endif
     end do
 
-  end subroutine flux_generic
+  end subroutine flux_generic_box
 
   !> Compute flux according to Koren limiter
   subroutine flux_koren_3d(cc, v, nc, ngc)

@@ -33,7 +33,9 @@ m_af_core.o: m_af_prolong.mod
 m_af_core.o: m_af_restrict.mod
 m_af_core.o: m_af_types.mod
 m_af_core.o: m_af_utils.mod
+m_af_flux_schemes.o: m_af_core.mod
 m_af_flux_schemes.o: m_af_ghostcell.mod
+m_af_flux_schemes.o: m_af_restrict.mod
 m_af_flux_schemes.o: m_af_types.mod
 m_af_ghostcell.o: m_af_prolong.mod
 m_af_ghostcell.o: m_af_types.mod
