@@ -278,9 +278,6 @@ module m_af_types
      !> Names of face-centered variables
      character(len=af_nlen) :: fc_names(af_max_num_vars)
 
-     !> Maximal refinement level for the variables
-     integer :: cc_max_level(af_max_num_vars) = af_max_lvl
-
      !> Number of copies of the variable (for e.g. time-stepping)
      integer :: cc_num_copies(af_max_num_vars) = 1
 
@@ -300,7 +297,7 @@ module m_af_types
      logical :: has_cc_method(af_max_num_vars) = .false.
 
      !> Indices of cell-centered variables with methods
-     integer, allocatable :: cc_method_vars(:)
+     integer, allocatable :: cc_auto_vars(:)
 
      !> List storing the tree levels
      type(lvl_t) :: lvls(af_min_lvl:af_max_lvl)

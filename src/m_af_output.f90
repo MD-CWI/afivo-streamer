@@ -90,7 +90,6 @@ contains
 
     write(my_unit) tree%cc_names
     write(my_unit) tree%fc_names
-    write(my_unit) tree%cc_max_level
     write(my_unit) tree%cc_num_copies
     write(my_unit) tree%cc_write_output
     write(my_unit) tree%cc_write_binary
@@ -184,12 +183,11 @@ contains
     read(my_unit) tree%dr_base
 
     ! Skip methods (these have to be set again)
-    if (.not. allocated(tree%cc_method_vars)) &
-         allocate(tree%cc_method_vars(0))
+    if (.not. allocated(tree%cc_auto_vars)) &
+         allocate(tree%cc_auto_vars(0))
 
     read(my_unit) tree%cc_names
     read(my_unit) tree%fc_names
-    read(my_unit) tree%cc_max_level
     read(my_unit) tree%cc_num_copies
     read(my_unit) tree%cc_write_output
     read(my_unit) tree%cc_write_binary
