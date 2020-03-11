@@ -57,17 +57,18 @@ contains
        call forward_euler(tree, dt, time, 0, 0, 1)
        time = time + dt
        call forward_euler(tree, dt, time, 1, 1, 1)
-       call combine_substeps(tree, i_cc, [0, 1], [0.5_dp, 0.5_dp], 0)
+       call combine_substeps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
     end select
 
   end subroutine af_advance
 
-  subroutine combine_substeps(tree, ivs, in_steps, coeffs, out_step)
+  subroutine combine_substeps(tree, ivs, n_in, s_in, coeffs, s_out)
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: ivs(:)
-    integer, intent(in)       :: in_steps(:)
-    real(dp), intent(in)      :: coeffs(:)
-    integer, intent(in)       :: out_step
+    integer, intent(in)       :: n_in
+    integer, intent(in)       :: s_in(n_in)
+    real(dp), intent(in)      :: coeffs(n_in)
+    integer, intent(in)       :: s_out
     integer                   :: lvl, i, id, n, nc
     real(dp), allocatable     :: tmp(DTIMES(:), :)
 
@@ -82,13 +83,13 @@ contains
           id = tree%lvls(lvl)%leaves(i)
 
           tmp = 0.0_dp
-          do n = 1, size(in_steps)
+          do n = 1, n_in
              tmp = tmp + coeffs(n) * &
-                  tree%boxes(id)%cc(DTIMES(:), ivs+in_steps(n))
+                  tree%boxes(id)%cc(DTIMES(:), ivs+s_in(n))
           end do
-          tree%boxes(id)%cc(DTIMES(:), ivs+out_step) = tmp
+          tree%boxes(id)%cc(DTIMES(:), ivs+s_out) = tmp
        end do
-       !$omp end do
+       !$omp end do nowait
     end do
     !$omp end parallel
   end subroutine combine_substeps
