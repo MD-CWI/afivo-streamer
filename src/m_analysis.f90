@@ -155,10 +155,10 @@ contains
 #endif
        Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-       d_sigma = mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
+       d_sigma = UC_elem_charge * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
        d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
        d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
-       d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
+       d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
 
        ! Update total
        sigma = sigma + d_sigma

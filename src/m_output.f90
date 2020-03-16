@@ -268,7 +268,7 @@ contains
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_line_", output_cnt
        call af_write_line(tree, trim(fname), &
-            [i_electron, i_rhs, i_phi, i_electric_fld], &
+            [i_electron, i_rhs, i_phi, i_electric_fld, i_conductivity], &
             r_min = lineout_rmin(1:NDIM) * ST_domain_len + ST_domain_origin, &
             r_max = lineout_rmax(1:NDIM) * ST_domain_len + ST_domain_origin, &
             n_points=lineout_npoints)
