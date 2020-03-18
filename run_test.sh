@@ -18,7 +18,7 @@ run_test() {
     cfg=$(basename "$1")
 
     # Execute the test in the directory of the .cfg file
-    (cd "$dir" && ../streamer "$cfg" > run.log|| { echo "FAILED $1"; return; } )
+    (cd "$dir" && ../streamer "$cfg" > run.log|| { echo "FAILED $1"; return; })
 
     # Original output should have this name
     log_a="${1/.cfg/_rtest_orig.log}"
@@ -41,16 +41,12 @@ else
     declare -a test_dirs=("programs/standard_2d/tests")
 
     for dir in "${test_dirs[@]}"; do
-        cd "$dir"
+        # Compile in parent folder and make sure 'output' exists
+        (cd "$dir" && make -j -C .. --silent && mkdir -p output)
 
-        make -j -C .. --silent      # Compile in parent folder
-        mkdir -p output             # Make sure output/ exists
-
-        # Loop over the .cfg files in the tests/ subdirectory
-        for cfg in *.cfg; do
+        # Loop over the .cfg files
+        for cfg in "$dir"/*.cfg; do
             run_test "$cfg" "$top_dir"
         done
     done
 fi
-
-
