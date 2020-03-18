@@ -69,7 +69,8 @@ program streamer
   end if
 
   do i = 1, tree%n_var_cell
-     if (tree%cc_write_output(i) .and. .not. tree%has_cc_method(i)) then
+     if (tree%cc_write_output(i) .and. .not. &
+          (tree%has_cc_method(i) .or. i == i_phi)) then
         call af_set_cc_methods(tree, i, af_bc_neumann_zero, &
              af_gc_interp, ST_prolongation_method)
      end if

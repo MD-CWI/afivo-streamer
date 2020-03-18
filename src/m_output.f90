@@ -206,7 +206,7 @@ contains
        do i = 1, tree%n_var_cell
           if (tree%cc_write_output(i)) then
              call af_restrict_tree(tree, i)
-             call af_gc_tree(tree, i)
+             call af_gc_tree(tree, [i])
           end if
        end do
 

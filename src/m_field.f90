@@ -152,7 +152,6 @@ contains
     mg%box_stencil => mg_auto_stencil
     mg%sides_rb => mg_sides_rb
 
-    call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
     call af_set_cc_methods(tree, i_electric_fld, &
          af_bc_neumann_zero, af_gc_interp)
 
@@ -221,7 +220,7 @@ contains
     call af_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call af_gc_tree(tree, i_electric_fld)
+    call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute
 
   !> Compute the electric field at a given time

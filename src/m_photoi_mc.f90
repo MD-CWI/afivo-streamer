@@ -565,8 +565,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call af_gc_box(tree%boxes, id, i_photo, &
-               af_gc_interp, af_bc_neumann_zero)
+          call af_gc_box(tree, id, [i_photo])
        end do
        !$omp end do
 

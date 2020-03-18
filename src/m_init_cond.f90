@@ -143,8 +143,7 @@ contains
     do lvl = my_lvl, tree%highest_lvl-1
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call af_gc_box(tree%boxes, id, i_rhs, &
-               af_gc_interp, af_bc_neumann_zero)
+          call af_gc_box(tree, id, [i_rhs])
        end do
 
        do i = 1, size(tree%lvls(lvl)%parents)
@@ -166,8 +165,7 @@ contains
     ! Restrict and fill ghost cells
     call af_restrict_tree(tree, i_electron)
     call af_restrict_tree(tree, i_1pos_ion)
-    call af_gc_tree(tree, i_electron, af_gc_interp_lim, af_bc_neumann_zero)
-    call af_gc_tree(tree, i_1pos_ion, af_gc_interp_lim, af_bc_neumann_zero)
+    call af_gc_tree(tree, [i_electron, i_1pos_ion])
 
   end subroutine init_cond_stochastic_density
 
