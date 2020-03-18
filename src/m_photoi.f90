@@ -41,7 +41,6 @@ module m_photoi
   integer, public, protected :: i_photo = -1 ! Photoionization rate
 
   public :: photoi_initialize
-  public :: photoi_set_methods
   public :: photoi_set_src
 
 contains
@@ -76,6 +75,7 @@ contains
             error stop "photoi%quenching_pressure <= 0.0"
 
        call af_add_cc_variable(tree, "photo", ix=i_photo)
+       call af_set_cc_methods(tree, i_photo, photoi_helmh_bc, af_gc_interp)
 
        select case (photoi_source_type)
        case ('Zheleznyak')
@@ -104,21 +104,6 @@ contains
           error stop
     end select
   end subroutine photoi_initialize
-
-  subroutine photoi_set_methods(tree)
-    type(af_t), intent(inout) :: tree
-    call af_set_cc_methods(tree, i_photo, photoi_helmh_bc, af_gc_interp)
-
-    select case (photoi_method)
-    case ("helmholtz")
-       call photoi_helmh_set_methods(tree)
-    case ("montecarlo")
-       continue
-    case default
-       print *, "Unknown photoi_method: ", trim(photoi_method)
-       error stop
-    end select
-  end subroutine photoi_set_methods
 
   !> Sets the photoionization
   subroutine photoi_set_src(tree, dt)

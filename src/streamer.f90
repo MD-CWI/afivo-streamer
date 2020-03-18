@@ -64,10 +64,6 @@ program streamer
           af_bc_neumann_zero, af_gc_interp, ST_prolongation_method)
   end if
 
-  if (photoi_enabled) then
-     call photoi_set_methods(tree)
-  end if
-
   do i = 1, tree%n_var_cell
      if (tree%cc_write_output(i) .and. .not. &
           (tree%has_cc_method(i) .or. i == i_phi)) then

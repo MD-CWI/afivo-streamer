@@ -35,7 +35,6 @@ module m_photoi_helmh
   integer, allocatable :: i_modes(:)
 
   public :: photoi_helmh_initialize
-  public :: photoi_helmh_set_methods
   public :: photoi_helmh_compute
   public :: photoi_helmh_bc
 
@@ -168,16 +167,6 @@ contains
        end if
     end do
   end subroutine photoi_helmh_initialize
-
-  subroutine photoi_helmh_set_methods(tree)
-    type(af_t), intent(inout) :: tree
-    integer                    :: n
-
-    do n = 1, n_modes
-       call af_set_cc_methods(tree, i_modes(n), &
-            photoi_helmh_bc, mg_sides_rb)
-    end do
-  end subroutine photoi_helmh_set_methods
 
   subroutine photoi_helmh_compute(tree, i_photo)
     type(af_t), intent(inout) :: tree
