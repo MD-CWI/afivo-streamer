@@ -23,7 +23,7 @@ clean:
 	$(RM) *.o *.mod $(PROG)
 
 allclean: clean
-	$(MAKE) -C $(MAIN_DIR)/lib_$(NDIM)d clean
+	$(MAKE) -C $(MAIN_DIR)/lib_$(NDIM)d allclean
 
 vpath %.f90 $(MAIN_DIR)/src
 
