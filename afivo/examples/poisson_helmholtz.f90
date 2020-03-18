@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example poisson_helmholtz_Xd.f90
+!> \example poisson_helmholtz.f90
 !>
 !> Example showing how to use multigrid for Helmholtz equation and compare with
 !> an analytic solution. A standard 5 or 7 point stencil is used.
-program poisson_helmholtz_Xd
+program poisson_helmholtz
   use m_af_all
   use m_gaussians
 
@@ -160,6 +160,6 @@ contains
     end do
   end subroutine sides_bc
 
-end program poisson_helmholtz_Xd
+end program poisson_helmholtz
 
 

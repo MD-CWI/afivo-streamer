@@ -87,127 +87,126 @@ module m_af_types
   end type ref_info_t
 
 #if NDIM == 2
-  ! Numbering of children (same location as **corners**)
+  !> Number of children
   integer, parameter :: af_num_children = 4
-  integer, parameter :: af_child_lowx_lowy = 1
-  integer, parameter :: af_child_highx_lowy = 2
-  integer, parameter :: af_child_lowx_highy = 3
-  integer, parameter :: af_child_highx_highy = 4
 
-  ! Index offset for each child
+  !> Index offset for each child
   integer, parameter :: af_child_dix(2, 4) = reshape([0,0,1,0,0,1,1,1], [2,4])
-  ! Children adjacent to a neighbor
+  !> Children adjacent to a neighbor
   integer, parameter :: af_child_adj_nb(2, 4) = reshape([1,3,2,4,1,2,3,4], [2,4])
-  ! Neighbors adjacent to a child
+  !> Neighbors adjacent to a child
   integer, parameter :: af_nb_adj_child(2, 4) = reshape([1,3,2,3,1,4,2,4], [2,4])
-  ! Which children have a low index per dimension
+  !> Which children have a low index per dimension
   logical, parameter :: af_child_low(2, 4) = reshape([.true., .true., &
        .false., .true., .true., .false., .false., .false.], [2, 4])
+  !> Whether a child located in the 'upper' direction (1 or 0)
   integer, parameter :: af_child_high_01(2, 4) = &
        reshape([0, 0, 1, 0, 0, 1, 1, 1], [2, 4])
 
-  ! Neighbor topology information
+  !> Number of neighbors
   integer, parameter :: af_num_neighbors = 4
+  !> Lower-x neighbor
   integer, parameter :: af_neighb_lowx = 1
+  !> Upper-x neighbor
   integer, parameter :: af_neighb_highx = 2
+  !> Lower-y neighbor
   integer, parameter :: af_neighb_lowy = 3
+  !> Upper-y neighbor
   integer, parameter :: af_neighb_highy = 4
 
-  ! Index offsets of neighbors
+  !> Index offsets of neighbors
   integer, parameter :: af_neighb_dix(2, 4) = reshape([-1,0,1,0,0,-1,0,1], [2,4])
-  ! Which neighbors have a lower index
+  !> Which neighbors have a lower index
   logical, parameter :: af_neighb_low(4) = [.true., .false., .true., .false.]
-  ! The low neighbors
+  !> The low neighbors
   integer, parameter :: af_low_neighbs(2) = [1, 3]
-  ! The high neighbors
+  !> The high neighbors
   integer, parameter :: af_high_neighbs(2) = [2, 4]
-  ! Opposite of nb_low, but now as 0,1 integers
+  !> Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: af_neighb_high_01(4) = [0, 1, 0, 1]
-  ! Opposite of nb_low, but now as -1,1 integers
+  !> Opposite of nb_low, but now as -1,1 integers
   integer, parameter :: af_neighb_high_pm(4) = [-1, 1, -1, 1]
 
-  ! Reverse neighbors
+  !> Reverse neighbors
   integer, parameter :: af_neighb_rev(4) = [2, 1, 4, 3]
-  ! Direction (dimension) for a neighbor
+  !> Direction (dimension) for a neighbor
   integer, parameter :: af_neighb_dim(4) = [1, 1, 2, 2]
 #elif NDIM == 3
-  ! Numbering of children (same location as **corners**)
+  !> Number of children
   integer, parameter :: af_num_children = 8
-  integer, parameter :: af_child_lowx_lowy_lowz = 1
-  integer, parameter :: af_child_highx_lowy_lowz = 2
-  integer, parameter :: af_child_lowx_highy_lowz = 3
-  integer, parameter :: af_child_highx_highy_lowz = 4
-  integer, parameter :: af_child_lowx_lowy_highz = 5
-  integer, parameter :: af_child_highx_lowy_highz = 6
-  integer, parameter :: af_child_lowx_highy_highz = 7
-  integer, parameter :: af_child_highx_highy_highz = 8
 
-  ! Index offset for each child
+  !> Index offset for each child
   integer, parameter :: af_child_dix(3, 8) = reshape( &
        [0,0,0, 1,0,0, 0,1,0, 1,1,0, &
        0,0,1, 1,0,1, 0,1,1, 1,1,1], [3,8])
-  ! Children adjacent to a neighbor
+  !> Children adjacent to a neighbor
   integer, parameter :: af_child_adj_nb(4, 6) = reshape( &
        [1,3,5,7, 2,4,6,8, 1,2,5,6, 3,4,7,8, 1,2,3,4, 5,6,7,8], [4,6])
-  ! Neighbors adjacent to a child
+  !> Neighbors adjacent to a child
   integer, parameter :: af_nb_adj_child(3, 8) = reshape( &
        [1,3,5, 2,3,5, 1,4,5, 2,4,5, 1,3,6, 2,3,6, 1,4,6, 2,4,6], [3,8])
-  ! Which children have a low index per dimension
+  !> Which children have a low index per dimension
   logical, parameter :: af_child_low(3, 8) = reshape([ &
        .true., .true., .true., .false., .true., .true., &
        .true., .false., .true., .false., .false., .true., &
        .true., .true., .false., .false., .true., .false., &
        .true., .false., .false., .false., .false., .false.], [3, 8])
-  ! Which children have a high index per dimension
+  !> Which children have a high index per dimension
   integer, parameter :: af_child_high_01(3, 8) = reshape([ &
        0, 0, 0, 1, 0, 0, &
        0, 1, 0, 1, 1, 0, &
        0, 0, 1, 1, 0, 1, &
        0, 1, 1, 1, 1, 1], [3, 8])
 
-  ! Neighbor topology information
+  !> Number of neighbors
   integer, parameter :: af_num_neighbors = 6
+  !> Lower-x neighbor
   integer, parameter :: af_neighb_lowx = 1
+  !> Upper-x neighbor
   integer, parameter :: af_neighb_highx = 2
+  !> Lower-y neighbor
   integer, parameter :: af_neighb_lowy = 3
+  !> Upper-y neighbor
   integer, parameter :: af_neighb_highy = 4
+  !> Lower-z neighbor
   integer, parameter :: af_neighb_lowz = 5
+  !> Upper-z neighbor
   integer, parameter :: af_neighb_highz = 6
-  ! Index offsets of neighbors
+  !> Index offsets of neighbors
   integer, parameter :: af_neighb_dix(3, 6) = reshape( &
        [-1,0,0, 1,0,0, 0,-1,0, 0,1,0, 0,0,-1, 0,0,1], [3,6])
-  ! Which neighbors have a lower index
+  !> Which neighbors have a lower index
   logical, parameter :: af_neighb_low(6) = &
        [.true., .false., .true., .false., .true., .false.]
-  ! The low neighbors
+  !> The low neighbors
   integer, parameter :: af_low_neighbs(3) = [1, 3, 5]
-  ! The high neighbors
+  !> The high neighbors
   integer, parameter :: af_high_neighbs(3) = [2, 4, 6]
-  ! Opposite of nb_low, but now as 0,1 integers
+  !> Opposite of nb_low, but now as 0,1 integers
   integer, parameter :: af_neighb_high_01(6) = [0, 1, 0, 1, 0, 1]
-  ! Opposite of nb_low, but now as -1,1 integers
+  !> Opposite of nb_low, but now as -1,1 integers
   integer, parameter :: af_neighb_high_pm(6) = [-1, 1, -1, 1, -1, 1]
-  ! Reverse neighbors
+  !> Reverse neighbors
   integer, parameter :: af_neighb_rev(6) = [2, 1, 4, 3, 6, 5]
-  ! Direction (dimension) for a neighbor
+  !> Direction (dimension) for a neighbor
   integer, parameter :: af_neighb_dim(6) = [1, 1, 2, 2, 3, 3]
 
-  ! Number of edgse
+  !> Number of edgse
   integer, parameter :: af_num_edges = 12
-  ! Coordinate parallel to edge
+  !> Coordinate parallel to edge
   integer, parameter :: af_edge_dim(12) = &
        [1,1,1,1, 2,2,2,2, 3,3,3,3]
-  ! Direction of edge
+  !> Direction of edge
   integer, parameter :: af_edge_dir(3, 12) = reshape( &
        [0,-1,-1, 0,1,-1, 0,-1,1, 0,1,1, &
        -1,0,-1, 1,0,-1, -1,0,1, 1,0,1, &
        -1,-1,0, 1,-1,0, -1,1,0, 1,1,0], [3, 12])
-  ! Neighbors adjacent to edges
+  !> Neighbors adjacent to edges
   integer, parameter :: af_nb_adj_edge(2, 12) = reshape( &
        [3,5, 4,5, 3,6, 4,6, &
        1,5, 2,5, 1,6, 2,6, &
        1,3, 2,3, 1,4, 2,4], [2,12])
-  ! Minimum index of edge (1 indicates n_cell + 1)
+  !> Minimum index of edge (1 indicates n_cell + 1)
   integer, parameter :: af_edge_min_ix(3, 12) = reshape( &
        [0,0,0, 0,1,0, 0,0,1, 0,1,1, &
        0,0,0, 1,0,0, 0,0,1, 1,0,1, &
@@ -365,6 +364,21 @@ module m_af_types
        real(dp), intent(in)        :: rarg(:)
      end subroutine af_subr_boxes_arg
 
+     !> Subroutine that gets a tree and a box id
+     subroutine af_subr_tree(tree, id)
+       import
+       type(af_t), intent(inout) :: tree
+       integer, intent(in)       :: id
+     end subroutine af_subr_tree
+
+     !> Subroutine that gets a tree, a box id and an array of reals
+     subroutine af_subr_tree_arg(tree, id, rarg)
+       import
+       type(af_t), intent(inout) :: tree
+       integer, intent(in)       :: id
+       real(dp), intent(in)      :: rarg(:)
+     end subroutine af_subr_tree_arg
+
      !> To fill ghost cells near refinement boundaries.
      subroutine af_subr_rb(boxes, id, nb, iv)
        import
@@ -419,12 +433,6 @@ module m_af_types
        integer, intent(in), optional :: iv_to !< Destination (if /= iv)
        logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
      end subroutine af_subr_restrict
-
-     subroutine subr_modify_ref(tree, ref_flags)
-       import
-       type(af_t), intent(in) :: tree
-       integer, intent(inout) :: ref_flags(:)
-     end subroutine subr_modify_ref
   end interface
 
 contains
@@ -592,14 +600,9 @@ contains
     type(box_t), intent(in)           :: box   !< A child box
     integer, intent(in), optional      :: nb     !< Optional: get index on parent neighbor
     integer                            :: ix_offset(NDIM)
-    if (box%lvl > 1) then
-       ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
-       if (present(nb)) ix_offset = ix_offset - af_neighb_dix(:, nb) * box%n_cell
-    else                        ! In the subtree, parents are half the size
-       ix_offset = 0
-       if (present(nb)) ix_offset = ix_offset - &
-            af_neighb_dix(:, nb) * ishft(box%n_cell, -1) ! n_cell / 2
-    endif
+
+    ix_offset = iand(box%ix-1, 1) * ishft(box%n_cell, -1) ! * n_cell / 2
+    if (present(nb)) ix_offset = ix_offset - af_neighb_dix(:, nb) * box%n_cell
   end function af_get_child_offset
 
   !> Given a cell index on box, get index of the closest cell at its parent
@@ -635,9 +638,10 @@ contains
   end function af_neighb_offset
 
   !> Get index range of boundary cells inside a box facing neighbor nb
-  subroutine af_get_index_bc_inside(nb, nc, lo, hi)
+  subroutine af_get_index_bc_inside(nb, nc, n_gc, lo, hi)
     integer, intent(in)  :: nb !< Neighbor direction
     integer, intent(in)  :: nc !< box size
+    integer, intent(in)  :: n_gc !< Number of ghost cells
     integer, intent(out) :: lo(NDIM)
     integer, intent(out) :: hi(NDIM)
     integer              :: nb_dim
@@ -646,14 +650,20 @@ contains
     nb_dim     = af_neighb_dim(nb)
     lo(:)      = 1
     hi(:)      = nc
-    lo(nb_dim) = 1 + (nc-1) * af_neighb_high_01(nb)
-    hi(nb_dim) = lo(nb_dim)
+    if (af_neighb_low(nb)) then
+       lo(nb_dim) = 1
+       hi(nb_dim) = n_gc
+    else
+       lo(nb_dim) = nc - n_gc + 1
+       hi(nb_dim) = nc
+    end if
   end subroutine af_get_index_bc_inside
 
   !> Get index range of ghost cells facing neighbor nb
-  subroutine af_get_index_bc_outside(nb, nc, lo, hi)
-    integer, intent(in)  :: nb !< Neighbor direction
-    integer, intent(in)  :: nc !< box size
+  subroutine af_get_index_bc_outside(nb, nc, n_gc, lo, hi)
+    integer, intent(in)  :: nb  !< Neighbor direction
+    integer, intent(in)  :: nc  !< box size
+    integer, intent(in)  :: n_gc !< Number of ghost cells
     integer, intent(out) :: lo(NDIM)
     integer, intent(out) :: hi(NDIM)
     integer              :: nb_dim
@@ -662,8 +672,13 @@ contains
     nb_dim     = af_neighb_dim(nb)
     lo(:)      = 1
     hi(:)      = nc
-    lo(nb_dim) = (nc+1) * af_neighb_high_01(nb)
-    hi(nb_dim) = lo(nb_dim)
+    if (af_neighb_low(nb)) then
+       lo(nb_dim) = 1 - n_gc
+       hi(nb_dim) = 0
+    else
+       lo(nb_dim) = nc + 1
+       hi(nb_dim) = nc + n_gc
+    end if
   end subroutine af_get_index_bc_outside
 
   !> Compute the 'child index' for a box with spatial index ix. With 'child

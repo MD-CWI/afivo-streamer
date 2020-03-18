@@ -1,8 +1,8 @@
 #include "../src/cpp_macros.h"
-!> \example particles_to_grid_Xd.f90
+!> \example particles_to_grid.f90
 !>
 !> Example showing how to map particles to a grid
-program particles_to_grid_Xd
+program particles_to_grid
   use m_af_all
 
   implicit none
@@ -81,4 +81,4 @@ contains
     end if
   end subroutine refine_routine
 
-end program particles_to_grid_Xd
+end program particles_to_grid

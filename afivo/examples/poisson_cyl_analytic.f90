@@ -1,4 +1,4 @@
-!> \example poisson_cyl_analytic_analytic.f90
+!> \example poisson_cyl_analytic.f90
 !>
 !> Example showing how to use multigrid and compare with an analytic solution. A
 !> standard 5-point Laplacian is used in cylindrical coordinates.

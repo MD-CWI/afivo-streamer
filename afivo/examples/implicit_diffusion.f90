@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example implicit_diffusion_Xd.f90
+!> \example implicit_diffusion.f90
 !>
 !> An implicit diffusion example, showing how the multigrid methods can be used
 !> to solve the diffusion equation with a backward Euler scheme.
-program implicit_diffusion_Xd
+program implicit_diffusion
   use m_af_all
 
   implicit none
@@ -45,6 +45,17 @@ program implicit_diffusion_Xd
        [DTIMES(box_size)], &
        periodic=[DTIMES(.true.)])
 
+  mg%i_phi    = i_phi                 ! Solution variable
+  mg%i_rhs    = i_rhs                 ! Right-hand side variable
+  mg%i_tmp    = i_tmp                 ! Variable for temporary space
+  mg%sides_bc => af_bc_dirichlet_zero ! Method for boundary conditions
+  mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
+
+  ! This routine does not initialize the multigrid fields boxes%i_phi,
+  ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
+  ! first call of mg_fas_fmg
+  call mg_init(tree, mg)
+
   call af_print_info(tree)
 
   ! Set up the initial conditions
@@ -59,7 +70,7 @@ program implicit_diffusion_Xd
      ! boundaries.
      ! Fill ghost cells near physical boundaries using Dirichlet zero
 
-     call af_gc_tree(tree, i_phi, af_gc_interp, af_bc_dirichlet_zero)
+     call af_gc_tree(tree, [i_phi])
 
      ! Adjust the refinement of a tree using refine_routine (see below) for grid
      ! refinement.
@@ -74,17 +85,6 @@ program implicit_diffusion_Xd
      ! If no new boxes have been added, exit the loop
      if (refine_info%n_add == 0) exit
   end do
-
-  mg%i_phi    = i_phi                 ! Solution variable
-  mg%i_rhs    = i_rhs                 ! Right-hand side variable
-  mg%i_tmp    = i_tmp                 ! Variable for temporary space
-  mg%sides_bc => af_bc_dirichlet_zero ! Method for boundary conditions
-  mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
-
-  ! This routine does not initialize the multigrid fields boxes%i_phi,
-  ! boxes%i_rhs and boxes%i_tmp. These fields will be initialized at the
-  ! first call of mg_fas_fmg
-  call mg_init(tree, mg)
 
   output_cnt = 0
   time       = 0
@@ -182,4 +182,4 @@ contains
          box%cc(DTIMES(1:nc), i_phi)
   end subroutine set_rhs
 
-end program implicit_diffusion_Xd
+end program implicit_diffusion

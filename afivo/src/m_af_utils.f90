@@ -13,6 +13,8 @@ module m_af_utils
   public :: af_loop_box_arg
   public :: af_loop_boxes
   public :: af_loop_boxes_arg
+  public :: af_loop_tree
+  public :: af_loop_tree_arg
   public :: af_tree_clear_cc
   public :: af_box_clear_cc
   public :: af_tree_clear_ghostcells
@@ -178,6 +180,67 @@ contains
     end do
     !$omp end parallel
   end subroutine af_loop_boxes_arg
+
+  !> Call procedure for each id in tree, passing the tree as first argument
+  subroutine af_loop_tree(tree, my_procedure, leaves_only)
+    type(af_t), intent(inout)     :: tree
+    procedure(af_subr_tree)       :: my_procedure
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
+    integer                       :: lvl, i
+
+    if (.not. tree%ready) stop "Tree not ready"
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
+
+    !$omp parallel private(lvl, i)
+    do lvl = 1, tree%highest_lvl
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             call my_procedure(tree, tree%lvls(lvl)%leaves(i))
+          end do
+          !$omp end do
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             call my_procedure(tree, tree%lvls(lvl)%ids(i))
+          end do
+          !$omp end do
+       end if
+    end do
+    !$omp end parallel
+  end subroutine af_loop_tree
+
+  !> Call procedure for each id in tree, passing the tree as first argument
+  subroutine af_loop_tree_arg(tree, my_procedure, rarg, leaves_only)
+    type(af_t), intent(inout)     :: tree
+    procedure(af_subr_tree_arg)   :: my_procedure
+    real(dp), intent(in)          :: rarg(:)
+    logical, intent(in), optional :: leaves_only
+    logical                       :: leaves
+    integer                       :: lvl, i
+
+    if (.not. tree%ready) stop "Tree not ready"
+    leaves = .false.; if (present(leaves_only)) leaves = leaves_only
+
+    !$omp parallel private(lvl, i)
+    do lvl = 1, tree%highest_lvl
+       if (leaves) then
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             call my_procedure(tree, tree%lvls(lvl)%leaves(i), rarg)
+          end do
+          !$omp end do
+       else
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%ids)
+             call my_procedure(tree, tree%lvls(lvl)%leaves(i), rarg)
+          end do
+          !$omp end do
+       end if
+    end do
+    !$omp end parallel
+  end subroutine af_loop_tree_arg
 
   !> Returns whether r is inside or within a distance d from box
   pure function af_r_inside(box, r, d) result(inside)
@@ -886,12 +949,15 @@ contains
 
   !> Find weighted sum of cc(..., iv). Only loop over leaves, and ghost cells
   !> are not used.
-  subroutine af_tree_sum_cc(tree, iv, cc_sum)
+  subroutine af_tree_sum_cc(tree, iv, cc_sum, power)
     type(af_t), intent(in) :: tree !< Full grid
     integer, intent(in)    :: iv !< Index of variable
     real(dp), intent(out)  :: cc_sum !< Volume-integrated sum of variable
+    integer, intent(in), optional :: power !< Sum of values**power (default: 1)
     real(dp)               :: tmp, my_sum, fac
-    integer                :: i, id, lvl, nc
+    integer                :: i, id, lvl, nc, pow
+
+    pow = 1; if (present(power)) pow = power
 
     if (.not. tree%ready) stop "Tree not ready"
     my_sum = 0
@@ -908,10 +974,10 @@ contains
           if (tree%coord_t == af_cyl) then
              tmp = sum_2pr_box(tree%boxes(id), iv)
           else
-             tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv))
+             tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv)**pow)
           end if
 #elif NDIM == 3
-          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv))
+          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv)**pow)
 #endif
           my_sum = my_sum + fac * tmp
        end do
@@ -937,7 +1003,7 @@ contains
 
       do j = 1, nc
          do i = 1, nc
-            res = res + box%cc(i, j, iv) * af_cyl_radius_cc(box, i)
+            res = res + box%cc(i, j, iv)**pow * af_cyl_radius_cc(box, i)
          end do
       end do
       res = res * twopi

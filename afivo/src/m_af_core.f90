@@ -16,11 +16,13 @@ module m_af_core
   public :: af_init_box
   public :: af_destroy
   public :: af_adjust_refinement
+  public :: af_refine_up_to_lvl
   public :: af_consistent_fluxes
 
 contains
 
   !> Add cell-centered variable
+  !> @todo ix as third argument?
   subroutine af_add_cc_variable(tree, name, write_out, n_copies, &
        max_lvl, ix, write_binary)
     !> Tree to add variable to
@@ -306,6 +308,9 @@ contains
     procedure(af_subr_restrict), optional :: restrict !< Restriction method
     integer                               :: i, n
 
+    if (tree%has_cc_method(iv)) &
+         error stop "Cannot call af_set_cc_methods twice for same iv"
+
     tree%cc_methods(iv)%bc => bc
 
     if (present(rb)) then
@@ -547,6 +552,34 @@ contains
     end if
   end function find_neighb
 
+  !> Refine a tree up to a given refinement lvl
+  subroutine af_refine_up_to_lvl(tree, lvl)
+    type(af_t), intent(inout) :: tree !< The tree to adjust
+    integer, intent(in)       :: lvl  !< Refine up to this lvl
+    type(ref_info_t)          :: ref_info
+
+    if (lvl < tree%highest_lvl) error stop "tree already above level"
+
+    do
+       call af_adjust_refinement(tree, ref_routine, ref_info)
+       if (ref_info%n_add == 0) exit
+    end do
+
+  contains
+
+    subroutine ref_routine(box, cell_flags)
+      type(box_t), intent(in) :: box
+      integer, intent(out) :: cell_flags(DTIMES(box%n_cell))
+
+      if (box%lvl < lvl) then
+         cell_flags = af_do_ref
+      else
+         cell_flags = af_keep_ref
+      end if
+    end subroutine ref_routine
+
+  end subroutine af_refine_up_to_lvl
+
   !> Adjust the refinement of a tree using the user-supplied ref_subr. The
   !> optional argument ref_buffer controls over how many cells neighbors are
   !> affected by refinement flags.
@@ -554,13 +587,13 @@ contains
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
   subroutine af_adjust_refinement(tree, ref_subr, ref_info, ref_buffer, &
-       modify_refinement)
+       ref_links)
     type(af_t), intent(inout)      :: tree        !< The tree to adjust
     procedure(af_subr_ref)         :: ref_subr    !< Refinement function
     type(ref_info_t), intent(inout) :: ref_info    !< Information about refinement
     integer, intent(in), optional   :: ref_buffer  !< Buffer width (in cells)
-    !> A routine to manually override refinement flags
-    procedure(subr_modify_ref), optional :: modify_refinement
+    !> Lists of linked boxes which should have the same refinement
+    integer, intent(in), optional   :: ref_links(:, :)
     integer                         :: lvl, id, i, c_ids(af_num_children), i_ch
     integer                         :: i_add, i_rm, n_ch, n_add
     integer, allocatable            :: ref_flags(:)
@@ -581,7 +614,7 @@ contains
     ! Set refinement values for all boxes. Only two flags are used below:
     ! af_refine and af_derefine. Other values are ignored.
     call consistent_ref_flags(tree, ref_flags, ref_subr, &
-         ref_buffer_val, modify_refinement)
+         ref_buffer_val, ref_links)
 
     ! To store ids of removed boxes
     n_ch = af_num_children
@@ -784,14 +817,14 @@ contains
   !> ref_flags is changed: for boxes that will be refined it holds af_refine,
   !> for boxes that will be derefined it holds af_derefine
   subroutine consistent_ref_flags(tree, ref_flags, ref_subr, &
-       ref_buffer, modify_refinement)
+       ref_buffer, ref_links)
     use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     type(af_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)     :: ref_flags(:) !< List of refinement flags for all boxes(:)
     procedure(af_subr_ref)    :: ref_subr     !< User-supplied refinement function.
     integer, intent(in)        :: ref_buffer   !< Buffer width (in cells)
-    !> A routine to manually override refinement flags
-    procedure(subr_modify_ref), optional :: modify_refinement
+    !> Lists of linked boxes which should have the same refinement
+    integer, intent(in), optional :: ref_links(:, :)
     integer              :: lvl, i, i_ch, ch_id, id
     integer              :: p_id
     integer              :: thread_id
@@ -863,8 +896,10 @@ contains
     call ensure_two_one_balance(tree, ref_flags)
     call handle_derefinement_flags(tree, ref_flags)
 
-    if (present(modify_refinement)) then
-       call modify_refinement(tree, ref_flags)
+    if (present(ref_links)) then
+       do i = 1, size(ref_links, 2)
+          ref_flags(ref_links(:, i)) = maxval(ref_flags(ref_links(:, i)))
+       end do
        call ensure_two_one_balance(tree, ref_flags)
        call handle_derefinement_flags(tree, ref_flags)
     end if
