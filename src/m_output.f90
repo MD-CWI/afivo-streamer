@@ -26,6 +26,9 @@ module m_output
   ! If positive: decay rate for source term (1/s) for time-averaged values
   real(dp), public, protected :: output_src_decay_rate = -1.0_dp
 
+  ! Write to a log file for regression testing
+  logical, protected :: output_regression_test = .false.
+
   ! Write output along a line
   logical, public, protected :: lineout_write = .false.
 
@@ -121,6 +124,8 @@ contains
          "The timestep for writing output (s)")
     call CFG_add_get(cfg, "output%src_term", output_src_term, &
          "Include ionization source term in output")
+    call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
+         "Write to a log file for regression testing")
 
     if (output_src_term) then
        call af_add_cc_variable(tree, "src", ix=i_src)
@@ -226,6 +231,11 @@ contains
        call output_log(tree, fname, output_cnt, wc_time)
     end if
 
+    if (output_regression_test) then
+       write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
+       call output_regression_log(tree, fname, output_cnt, wc_time)
+    end if
+
     if (field_maxima_write) then
        write(fname, "(A,I6.6,A)") trim(output_name) // &
             "_Emax_", output_cnt, ".txt"
@@ -314,6 +324,43 @@ contains
     close(my_unit)
 
   end subroutine output_log
+
+  !> Write statistics to a file that can be used for regression testing
+  subroutine output_regression_log(tree, filename, out_cnt, wc_time)
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: filename
+    integer, intent(in)          :: out_cnt !< Output number
+    real(dp), intent(in)         :: wc_time !< Wallclock time
+    character(len=30)            :: fmt
+    integer                      :: my_unit
+    real(dp)                     :: vol, sum_ne, sum_ne2, max_ne
+    real(dp)                     :: sum_E, sum_E2, max_E
+
+    vol = af_total_volume(tree)
+    call af_tree_sum_cc(tree, i_electron, sum_ne)
+    call af_tree_sum_cc(tree, i_electron, sum_ne2, power=2)
+    call af_tree_max_cc(tree, i_electron, max_ne)
+    call af_tree_sum_cc(tree, i_electron, sum_E)
+    call af_tree_sum_cc(tree, i_electron, sum_E2, power=2)
+    call af_tree_max_cc(tree, i_electron, max_E)
+
+    if (out_cnt == 1) then
+       open(newunit=my_unit, file=trim(filename), action="write")
+       write(my_unit, "(A)") "it time dt mean(n_e) mean(n_e^2) " // &
+            "max(n_e) mean(E) mean(E^2) max(E)"
+       close(my_unit)
+    end if
+
+    fmt = "(I0,8E16.8)"
+
+    open(newunit=my_unit, file=trim(filename), action="write", &
+         position="append")
+    write(my_unit, fmt) out_cnt, global_time, advance_max_dt, &
+         sum_ne/vol, sum_ne2/vol, max_ne, &
+         sum_E/vol, sum_E2/vol, max_E
+    close(my_unit)
+
+  end subroutine output_regression_log
 
   subroutine check_path_writable(pathname)
     character(len=*), intent(in) :: pathname
