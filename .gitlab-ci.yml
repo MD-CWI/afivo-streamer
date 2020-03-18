@@ -1,0 +1,18 @@
+image: gcc
+
+before_script:
+  - gfortran --version
+
+cache:
+  paths:
+    - afivo
+
+build:
+  stage: build
+  script:
+    - make -j
+
+run_tests:
+  stage: test
+  script:
+    - ./run_test.sh
