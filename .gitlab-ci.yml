@@ -1,7 +1,7 @@
 image: gcc
 
 before_script:
-  - apt-get update -qq && apt-get install -y -qq python3-numpy
+  - apt-get update -qq && apt-get install -y -qq python2-numpy python3-numpy
   - gfortran --version
 
 cache:
@@ -9,9 +9,11 @@ cache:
     - afivo
 
 build:
+  stage: build
   script:
     - make -j
 
 run_tests:
+  stage: test
   script:
     - ./run_test.sh
