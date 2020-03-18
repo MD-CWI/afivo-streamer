@@ -69,6 +69,8 @@ contains
     ! Exit here if the module is not used
     if (.not. is_used) return
 
+    ! Whether oxygen is required is tested below, the idea being that we will in
+    ! the future add photoionization cases for other gases
     ix = gas_index("O2")
     if (ix /= -1) then
        frac_O2 = gas_fractions(ix)
@@ -78,6 +80,7 @@ contains
 
     select case (author)
     case ("Luque")
+       if (frac_O2 <= 0.0_dp) error stop "Photoionization: no oxygen present"
        n_modes = 2
        lambdas = [4425.38_dp, 750.06_dp]
        coeffs  = [337557.38_dp, 19972.14_dp]
@@ -91,6 +94,7 @@ contains
        if (abs(eta - 1.0_dp) > 0) &
             error stop "With Luque photoionization, photoi%eta should be 1.0"
     case ("Bourdon-2")
+       if (frac_O2 <= 0.0_dp) error stop "Photoionization: no oxygen present"
        !> Bourdon two terms lambdas in SI units are: [7305.62,44081.25]
        !> Bourdon two terms coeffs in SI units are: [11814508.38,998607256]
        n_modes = 2
@@ -105,6 +109,7 @@ contains
        ! please check m_photoi.f90
        coeffs  = coeffs * (frac_O2 * gas_pressure)**2 ! 1/m^2
     case ("Bourdon-3")
+       if (frac_O2 <= 0.0_dp) error stop "Photoionization: no oxygen present"
        !> Bourdon three terms lambdas in SI units are: [4147.85   10950.93  66755.67]
        !> bourdon three terms coeffs in SI units are: [ 1117314.935  28692377.5  2748842283 ]
        n_modes = 3
