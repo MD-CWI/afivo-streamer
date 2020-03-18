@@ -63,10 +63,18 @@ contains
     call CFG_add(cfg, "photoi_helmh%coeffs", dummy, &
          "Weights corresponding to the lambdas; unit 1/(m bar)^2", &
          .true.)
+    call CFG_add_get(cfg, "photoi_helmh%max_rel_residual", max_rel_residual, &
+         "Maximum residual relative to max(|rhs|)")
+
+    ! Exit here if the module is not used
+    if (.not. is_used) return
 
     ix = gas_index("O2")
-    if (ix == -1) error stop "Photoionization: no oxygen present"
-    frac_O2 = gas_fractions(ix)
+    if (ix /= -1) then
+       frac_O2 = gas_fractions(ix)
+    else
+       frac_O2 = 0.0_dp         ! No oxygen
+    end if
 
     select case (author)
     case ("Luque")
@@ -125,40 +133,35 @@ contains
        error stop
     end select
 
-    call CFG_add_get(cfg, "photoi_helmh%max_rel_residual", max_rel_residual, &
-         "Maximum residual relative to max(|rhs|)")
+    ! Add required variables
+    allocate(i_modes(n_modes))
+    do n = 1, n_modes
+       write(name, "(A,I0)") "helmh_", n
+       call af_add_cc_variable(tree, trim(name), write_out=.false., ix=i_modes(n))
+    end do
 
-    if (is_used) then
-       ! Add required variables
-       allocate(i_modes(n_modes))
-       do n = 1, n_modes
-          write(name, "(A,I0)") "helmh_", n
-          call af_add_cc_variable(tree, trim(name), write_out=.false., ix=i_modes(n))
-       end do
+    ! Now set the multigrid options
+    allocate(mg_helm(n_modes))
 
-       ! Now set the multigrid options
-       allocate(mg_helm(n_modes))
+    do n = 1, n_modes
+       mg_helm(n)%i_phi = i_modes(n)
+       mg_helm(n)%i_rhs = i_rhs
+       mg_helm(n)%i_tmp = i_tmp
+       mg_helm(n)%sides_bc => photoi_helmh_bc
+       mg_helm(n)%helmholtz_lambda = lambdas(n)**2
 
-       do n = 1, n_modes
-          mg_helm(n)%i_phi = i_modes(n)
-          mg_helm(n)%i_rhs = i_rhs
-          mg_helm(n)%i_tmp = i_tmp
-          mg_helm(n)%sides_bc => photoi_helmh_bc
-          mg_helm(n)%helmholtz_lambda = lambdas(n)**2
-
-          if (ST_cylindrical) then
+       if (ST_cylindrical) then
 #if NDIM == 2
-             mg_helm(n)%box_op => mg_box_clpl
-             mg_helm(n)%box_gsrb => mg_box_gsrb_clpl
-             mg_helm(n)%box_stencil => mg_box_clpl_stencil
+          mg_helm(n)%box_op => mg_box_clpl
+          mg_helm(n)%box_gsrb => mg_box_gsrb_clpl
+          mg_helm(n)%box_stencil => mg_box_clpl_stencil
 #endif
-          else
-             mg_helm(n)%box_op => mg_box_lpl
-             mg_helm(n)%box_gsrb => mg_box_gsrb_lpl
-             mg_helm(n)%box_stencil => mg_box_lpl_stencil
-          end if
-       end do
-    end if
+       else
+          mg_helm(n)%box_op => mg_box_lpl
+          mg_helm(n)%box_gsrb => mg_box_gsrb_lpl
+          mg_helm(n)%box_stencil => mg_box_lpl_stencil
+       end if
+    end do
   end subroutine photoi_helmh_initialize
 
   subroutine photoi_helmh_set_methods(tree)
