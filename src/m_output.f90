@@ -347,7 +347,7 @@ contains
     call af_tree_sum_cc(tree, i_electron, sum_E2, power=2)
     call af_tree_max_cc(tree, i_electron, max_E)
 
-    if (out_cnt == 1) then
+    if (out_cnt == 0) then
        open(newunit=my_unit, file=trim(filename), action="write")
        write(my_unit, "(A)") "it time dt mean(n_e) mean(n_e^2) " // &
             "max(n_e) mean(E) mean(E^2) max(E)"
