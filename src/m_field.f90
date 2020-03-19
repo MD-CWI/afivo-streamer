@@ -38,8 +38,11 @@ module m_field
   !> Decay time of background field
   real(dp) :: field_decay_time = huge(1.0_dp)
 
-  !> The applied electric field (vertical direction)
+  !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = 1.0e6_dp
+
+  !> The current vertical applied electric field
+  real(dp), public, protected :: current_field_amplitude
 
   !> The applied voltage (vertical direction)
   real(dp), public, protected :: field_voltage
@@ -105,7 +108,7 @@ contains
     call CFG_add_get(cfg, "field_decay_time", field_decay_time, &
          "Decay time of field (s)")
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
-         "The applied electric field (V/m) (vertical)")
+         "The (initial) vertical applied electric field (V/m)")
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
          "Type of boundary condition to use (homogeneous, ...)")
 
@@ -122,8 +125,6 @@ contains
          "Charge (in C) of point charge")
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
-
-    field_voltage = -ST_domain_len(NDIM) * field_amplitude
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
@@ -204,7 +205,7 @@ contains
     integer                   :: i
 
     call field_set_rhs(tree, s_in)
-    call field_set_voltage(time)
+    call field_set_voltage(tree, time)
 
     if (.not. have_guess) then
        ! Perform a FMG cycle when we have no guess
@@ -224,13 +225,17 @@ contains
   end subroutine field_compute
 
   !> Compute the electric field at a given time
-  function field_get_amplitude(time) result(electric_fld)
+  function field_get_amplitude(tree, time) result(electric_fld)
     use m_units_constants
     use m_lookup_table
+    use m_user_methods
+    type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
     real(dp)               :: electric_fld, t_rel
 
-    if (field_table_use) then
+    if (associated(user_field_amplitude)) then
+       electric_fld = user_field_amplitude(tree, time)
+    else if (field_table_use) then
        call LT_lin_interp_list(field_table_times, field_table_fields, &
             time, electric_fld)
     else
@@ -251,10 +256,12 @@ contains
   end function field_get_amplitude
 
   !> Compute the voltage at a given time
-  subroutine field_set_voltage(time)
-    real(dp), intent(in) :: time
+  subroutine field_set_voltage(tree, time)
+    type(af_t), intent(in) :: tree
+    real(dp), intent(in)   :: time
 
-    field_voltage = -ST_domain_len(NDIM) * field_get_amplitude(time)
+    current_field_amplitude = field_get_amplitude(tree, time)
+    field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
   end subroutine field_set_voltage
 
   !> This fills ghost cells near physical boundaries for the potential

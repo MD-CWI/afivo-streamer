@@ -119,7 +119,7 @@ program streamer
      call set_initial_conditions(tree, mg)
 
      ! Write initial output
-     output_cnt = 1 ! Number of output files written
+     output_cnt = 0 ! Number of output files written
      call output_write(tree, output_cnt, 0.0_dp, write_sim_data)
   end if
 

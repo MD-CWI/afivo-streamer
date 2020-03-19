@@ -275,6 +275,7 @@ contains
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er
+    logical, save                :: first_time = .true.
 
     call af_tree_sum_cc(tree, i_electron, sum_elec)
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
@@ -285,13 +286,15 @@ contains
 
     dt = advance_max_dt
 
-    if (out_cnt == 1) then
+    if (first_time) then
+       first_time = .false.
+
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 2
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
+       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
+       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
 #endif
        close(my_unit)
