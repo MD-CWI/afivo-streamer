@@ -34,3 +34,4 @@ afivo/external_libraries/*
 *gmon.out
 documentation/html/*
 **/tests/output/*
+**/run.log

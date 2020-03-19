@@ -330,37 +330,50 @@ contains
 
   !> Write statistics to a file that can be used for regression testing
   subroutine output_regression_log(tree, filename, out_cnt, wc_time)
+    use m_chemistry
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
     real(dp), intent(in)         :: wc_time !< Wallclock time
     character(len=30)            :: fmt
-    integer                      :: my_unit
-    real(dp)                     :: vol, sum_ne, sum_ne2, max_ne
-    real(dp)                     :: sum_E, sum_E2, max_E
+    integer                      :: my_unit, n
+    real(dp)                     :: vol
+    real(dp)                     :: sum_dens(n_species)
+    real(dp)                     :: sum_dens_sq(n_species)
+    real(dp)                     :: max_dens(n_species)
 
     vol = af_total_volume(tree)
-    call af_tree_sum_cc(tree, i_electron, sum_ne)
-    call af_tree_sum_cc(tree, i_electron, sum_ne2, power=2)
-    call af_tree_max_cc(tree, i_electron, max_ne)
-    call af_tree_sum_cc(tree, i_electron, sum_E)
-    call af_tree_sum_cc(tree, i_electron, sum_E2, power=2)
-    call af_tree_max_cc(tree, i_electron, max_E)
+    do n = 1, n_species
+       call af_tree_sum_cc(tree, i_electron, sum_dens(n))
+       call af_tree_sum_cc(tree, i_electron, sum_dens_sq(n), power=2)
+       call af_tree_max_cc(tree, i_electron, max_dens(n))
+    end do
 
     if (out_cnt == 0) then
        open(newunit=my_unit, file=trim(filename), action="write")
-       write(my_unit, "(A)") "it time dt mean(n_e) mean(n_e^2) " // &
-            "max(n_e) mean(E) mean(E^2) max(E)"
+       write(my_unit, "(A)", advance="no") "it time dt"
+       do n = 1, n_species
+          write(my_unit, "(A)", advance="no") &
+               " sum(" // trim(species_list(n)) // ")"
+       end do
+       do n = 1, n_species
+          write(my_unit, "(A)", advance="no") &
+               " sum(" // trim(species_list(n)) // "^2)"
+       end do
+       do n = 1, n_species
+          write(my_unit, "(A)", advance="no") &
+               " max(" // trim(species_list(n)) // ")"
+       end do
+       write(my_unit, "(A)") ""
        close(my_unit)
     end if
 
-    fmt = "(I0,8E16.8)"
+    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E16.8)"
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
     write(my_unit, fmt) out_cnt, global_time, advance_max_dt, &
-         sum_ne/vol, sum_ne2/vol, max_ne, &
-         sum_E/vol, sum_E2/vol, max_E
+         sum_dens/vol, sum_dens_sq/vol, max_dens
     close(my_unit)
 
   end subroutine output_regression_log

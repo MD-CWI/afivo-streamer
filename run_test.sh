@@ -17,10 +17,9 @@ run_test() {
     # Execute the test in the directory of the .cfg file
     (cd "$dir" && ../streamer "$cfg" > run.log || return 1)
 
-    # Original output should have this name
-    log_a="${1/.cfg/_rtest_orig.log}"
-    # A file test_X.cfg should produce a log file output/test_X_rtest.log
-    log_b="$dir/output/${cfg/.cfg/_rtest.log}"
+    log_name="${cfg/.cfg/_rtest.log}"
+    log_a="$dir/$log_name"
+    log_b="$dir/output/$log_name"
 
     # Compare log files
     if "$2"/tools/compare_logs.py "$log_a" "$log_b"; then
