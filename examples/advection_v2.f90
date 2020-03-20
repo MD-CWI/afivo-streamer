@@ -16,12 +16,12 @@ program advection
 
   type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
-  integer            :: refine_steps, time_steps, output_cnt
-  integer            :: n, n_steps
-  real(dp)           :: dt, time, end_time, err, sum_err2
+  integer            :: refine_steps, output_cnt
+  real(dp)           :: dt, dt_lim, time, time_prev_refine
+  real(dp)           :: end_time, err, sum_err2
   real(dp)           :: sum_phi, sum_phi_t0
-  real(dp)           :: dt_adapt, dt_output
-  real(dp)           :: velocity(NDIM), dr_min(NDIM)
+  real(dp)           :: dt_amr, dt_output
+  real(dp)           :: velocity(NDIM)
   character(len=100) :: fname
 
   print *, "Running advection_" // DIMNAME // ""
@@ -43,11 +43,11 @@ program advection
        [DTIMES(box_size)], &
        periodic=[DTIMES(.true.)])
 
-  output_cnt = 0
-  time       = 0
-  dt_adapt   = 0.01_dp
-  dt_output  = 0.5_dp
-  end_time   = 5.0_dp
+  output_cnt  = 0
+  time        = 0
+  dt_amr      = 0.01_dp
+  dt_output   = 0.5_dp
+  end_time    = 5.0_dp
   velocity(:) = 0.0_dp
   velocity(1) = 1.0_dp
   velocity(2) = -1.0_dp
@@ -78,19 +78,14 @@ program advection
   ! Fill ghost cells for variables i_phi on the sides of all boxes
   call af_gc_tree(tree, [i_phi])
 
-  time_steps = 0
-
   call af_tree_sum_cc(tree, i_phi, sum_phi_t0)
+
+  dt = 0.5_dp / (sum(abs(velocity/af_lvl_dr(tree, tree%highest_lvl))) + &
+       epsilon(1.0_dp))
+  time_prev_refine = time
 
   ! Starting simulation
   do
-     time_steps = time_steps + 1
-     dr_min  = af_min_dr(tree)
-     dt      = 0.5_dp / (sum(abs(velocity/dr_min)) + epsilon(1.0_dp))
-
-     n_steps = ceiling(dt_adapt/dt)
-     dt      = dt_adapt / n_steps
-
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
         write(fname, "(A,I0)") "advection_v2_" // DIMNAME // "_", output_cnt
@@ -115,13 +110,15 @@ program advection
 
      if (time > end_time) exit
 
-     do n = 1, n_steps
-        call af_advance(tree, dt, time, [i_phi], &
-             af_midpoint_method, forward_euler)
-     end do
+     call af_advance(tree, dt, dt_lim, time, [i_phi], &
+          af_midpoint_method, forward_euler)
+     dt = 0.8_dp * dt_lim
 
-     call af_gc_tree(tree, [i_phi])
-     call af_adjust_refinement(tree, refine_routine, refine_info, 1)
+     if (time > time_prev_refine + dt_amr) then
+        call af_gc_tree(tree, [i_phi])
+        call af_adjust_refinement(tree, refine_routine, refine_info, 1)
+        time_prev_refine = time
+     end if
   end do
 
 contains
@@ -210,17 +207,22 @@ contains
     end select
   end function solution
 
-  subroutine forward_euler(tree, dt, time, s_deriv, s_prev, s_out)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
     real(dp), intent(in)      :: time
+    real(dp), intent(out)     :: dt_lim
     integer, intent(in)       :: s_deriv
     integer, intent(in)       :: s_prev
     integer, intent(in)       :: s_out
+    real(dp)                  :: wmax(NDIM)
 
-    call flux_generic_tree(tree, 1, [i_phi+s_deriv], [i_flux], &
+    call flux_generic_tree(tree, 1, [i_phi+s_deriv], [i_flux], wmax, &
          max_wavespeed, get_flux)
     call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], s_prev, s_out)
+
+    ! Compute maximal time step
+    dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine forward_euler
 
   subroutine max_wavespeed(n_values, n_var, flux_dim, u, w)

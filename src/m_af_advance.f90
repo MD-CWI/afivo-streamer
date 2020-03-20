@@ -15,10 +15,11 @@ module m_af_advance
   integer, parameter :: req_copies(n_integrators) = [1, 2, 2]
 
   interface
-     subroutine subr_feuler(tree, dt, time, s_deriv, s_prev, s_out)
+     subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out)
        import
        type(af_t), intent(inout) :: tree
        real(dp), intent(in)      :: dt      !< Time step
+       real(dp), intent(out)     :: dt_lim  !< Computed time step limit
        real(dp), intent(in)      :: time    !< Current time
        integer, intent(in)       :: s_deriv !< State to compute derivatives from
        integer, intent(in)       :: s_prev  !< Previous state
@@ -31,11 +32,12 @@ module m_af_advance
 contains
 
   !> Compute generic finite volume flux
-  subroutine af_advance(tree, dt, time, i_cc, time_integrator, forward_euler)
+  subroutine af_advance(tree, dt, dt_lim, time, i_cc, time_integrator, forward_euler)
     type(af_t), intent(inout) :: tree
-    real(dp), intent(in)      :: dt
-    real(dp), intent(inout)   :: time
-    integer, intent(in)       :: i_cc(:)
+    real(dp), intent(in)      :: dt      !< Current time step
+    real(dp), intent(out)     :: dt_lim  !< Time step limit
+    real(dp), intent(inout)   :: time    !< Current time
+    integer, intent(in)       :: i_cc(:) !< Index of cell-centered variables
     integer, intent(in)       :: time_integrator
     procedure(subr_feuler)    :: forward_euler
 
@@ -47,16 +49,16 @@ contains
 
     select case (time_integrator)
     case (af_forward_euler)
-       call forward_euler(tree, dt, time, 0, 0, 0)
+       call forward_euler(tree, dt, dt_lim, time, 0, 0, 0)
        time = time + dt
     case (af_midpoint_method)
-       call forward_euler(tree, 0.5_dp * dt, time, 0, 0, 1)
-       call forward_euler(tree, dt, time, 1, 0, 0)
+       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 0, 0, 1)
+       call forward_euler(tree, dt, dt_lim, time, 1, 0, 0)
        time = time + dt
     case (af_heuns_method)
-       call forward_euler(tree, dt, time, 0, 0, 1)
+       call forward_euler(tree, dt, dt_lim, time, 0, 0, 1)
        time = time + dt
-       call forward_euler(tree, dt, time, 1, 1, 1)
+       call forward_euler(tree, dt, dt_lim, time, 1, 1, 1)
        call combine_substeps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
     end select
 

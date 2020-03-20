@@ -280,7 +280,7 @@ contains
     !$omp end parallel
   end subroutine flux_update_densities
 
-  subroutine flux_generic_tree(tree, n_vars, i_cc, i_flux, &
+  subroutine flux_generic_tree(tree, n_vars, i_cc, i_flux, wmax, &
        max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
     use m_af_restrict
     use m_af_core
@@ -288,6 +288,7 @@ contains
     integer, intent(in)            :: n_vars         !< Number of variables
     integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)            :: i_flux(n_vars) !< Flux variables
+    real(dp), intent(out)          :: wmax(NDIM)     !< Maximum wave speed found
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed)  :: max_wavespeed
     !> Compute the flux from primitive variables
@@ -302,13 +303,15 @@ contains
     ! Ensure ghost cells near refinement boundaries can be properly filled
     call af_restrict_ref_boundary(tree, i_cc)
 
-    !$omp parallel private(lvl, i)
+    wmax(:) = 0
+
+    !$omp parallel private(lvl, i) reduction(max:wmax)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, i_flux, max_wavespeed, flux_from_primitives, &
-               to_primitive, to_conservative)
+               n_vars, i_cc, i_flux, wmax, max_wavespeed, &
+               flux_from_primitives, to_primitive, to_conservative)
        end do
        !$omp end do
     end do
@@ -320,7 +323,7 @@ contains
   end subroutine flux_generic_tree
 
   !> Compute generic finite volume flux
-  subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, i_flux, &
+  subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, i_flux, wmax, &
        max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
     use m_af_types
     use m_af_ghostcell
@@ -330,6 +333,7 @@ contains
     integer, intent(in)            :: n_vars         !< Number of variables
     integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)            :: i_flux(n_vars) !< Flux variables
+    real(dp), intent(inout)        :: wmax(NDIM)     !< Maximum wave speed found
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed)  :: max_wavespeed
     !> Compute the flux from primitive variables
@@ -397,8 +401,12 @@ contains
                 call to_conservative(nc+1, n_vars, u_r)
              end if
 
+             w_l = max(w_l, w_r) ! Get maximum of left/right wave speed
              call flux_kurganovTadmor_1d(nc+1, n_vars, flux_l, flux_r, &
-                  u_l, u_r, max(w_l, w_r), flux)
+                  u_l, u_r, w_l, flux)
+
+             ! Store maximum wave speed
+             wmax(flux_dim) = max(wmax(flux_dim), maxval(w_l))
 
              ! Store the computed fluxes
              select case (flux_dim)
