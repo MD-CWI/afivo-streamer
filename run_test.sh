@@ -15,7 +15,13 @@ run_test() {
     cfg=$(basename "$1")
 
     # Execute the test in the directory of the .cfg file
-    (cd "$dir" && ../streamer "$cfg" > run.log || return 1)
+    (cd "$dir" && ../streamer "$cfg" > run.log ||
+             { cat run.log; return 1; })
+
+    if (($? != 0)); then
+        echo "FAILED $1"
+        return
+    fi
 
     log_name="${cfg/.cfg/_rtest.log}"
     log_a="$dir/$log_name"
