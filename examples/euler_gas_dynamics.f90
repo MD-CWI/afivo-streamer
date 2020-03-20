@@ -23,16 +23,18 @@ program KT_euler
   logical            :: periodicBC(NDIM)
   real(dp)           :: u0(4, n_vars)
   type(af_t)         :: tree
-  real(dp)           :: dt, time, end_time
-  integer            :: t_iter
+  real(dp)           :: dt, dt_lim, time, end_time, dt_output
+  real(dp)           :: dt_amr, time_prev_refine
   character(len=100) :: fname
-  integer            :: n
+  character(len=20)  :: carg
+  integer            :: n, output_cnt
   real(dp)           :: rho_max
+  logical            :: benchmark
+  logical            :: use_amr
 
   ! AMR stuff
   type(ref_info_t) :: refine_info
   integer          :: refine_steps
-  real(dp)         :: dr_min(NDIM)
 
   character(len=10) :: var_names(n_vars)
 
@@ -53,25 +55,48 @@ program KT_euler
   cc_mom = variables(i_mom)
   cc_e   = variables(i_e)
 
-  ! Config 1
-  ! u0(:, i_e)      = [1.0_dp, 0.4_dp, 0.0439_dp, 0.15_dp]
-  ! u0(:, i_rho)    = [1.0_dp, 0.5197_dp, 0.1072_dp, 0.2579_dp]
-  ! u0(:, i_mom(1)) = [0.0_dp, -0.7259_dp, -0.7259_dp, 0.0_dp]
-  ! u0(:, i_mom(2)) = [0.0_dp, 0.0_dp, -1.4045_dp, -1.4045_dp]
+  carg = "sod"
+  if (command_argument_count() > 0) then
+     call get_command_argument(1, carg)
+  end if
+  print *, "Initial condition type: ", trim(carg)
 
-  ! Config 6
-  ! u0(:, i_e)      = [1.0_dp, 1.0_dp, 1.0_dp, 1.0_dp]
-  ! u0(:, i_rho)    = [1.0_dp, 2.0_dp, 1.0_dp, 3.0_dp]
-  ! u0(:, i_mom(1)) = [0.75_dp, 0.75_dp, -0.75_dp, -0.75_dp]
-  ! u0(:, i_mom(2)) = [-0.5_dp, 0.5_dp, 0.5_dp, -0.5_dp]
-
-  ! 1D Sod shock test case
-  u0(:, i_rho)    = [0.125_dp, 1.0_dp, 1.0_dp, 0.125_dp]
-  u0(:, i_e)      = [0.1_dp, 1.0_dp, 1.0_dp, 0.1_dp]
-  u0(:, i_mom(1)) = [0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp]
-  u0(:, i_mom(2)) = [0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+  select case (carg)
+  case ("first")
+     u0(:, i_e)      = [1.0_dp, 0.4_dp, 0.0439_dp, 0.15_dp]
+     u0(:, i_rho)    = [1.0_dp, 0.5197_dp, 0.1072_dp, 0.2579_dp]
+     u0(:, i_mom(1)) = [0.0_dp, -0.7259_dp, -0.7259_dp, 0.0_dp]
+     u0(:, i_mom(2)) = [0.0_dp, 0.0_dp, -1.4045_dp, -1.4045_dp]
+  case ("sixth")
+     u0(:, i_e)      = [1.0_dp, 1.0_dp, 1.0_dp, 1.0_dp]
+     u0(:, i_rho)    = [1.0_dp, 2.0_dp, 1.0_dp, 3.0_dp]
+     u0(:, i_mom(1)) = [0.75_dp, 0.75_dp, -0.75_dp, -0.75_dp]
+     u0(:, i_mom(2)) = [-0.5_dp, 0.5_dp, 0.5_dp, -0.5_dp]
+  case ("sod")
+     ! 1D Sod shock test case
+     u0(:, i_rho)    = [0.125_dp, 1.0_dp, 1.0_dp, 0.125_dp]
+     u0(:, i_e)      = [0.1_dp, 1.0_dp, 1.0_dp, 0.1_dp]
+     u0(:, i_mom(1)) = [0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+     u0(:, i_mom(2)) = [0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+  case default
+     error stop "Unknown initial condition"
+  end select
 
   call to_conservative(4, n_vars, u0)
+
+  use_amr = .false.
+  if (command_argument_count() > 1) then
+     call get_command_argument(2, carg)
+     read(carg, *) use_amr
+  end if
+  print *, "Use AMR: ", use_amr
+
+  benchmark = .false.
+  if (command_argument_count() > 2) then
+     call get_command_argument(3, carg)
+     read(carg, *) benchmark
+  end if
+  print *, "Benchmark: ", benchmark
 
   grid(:)       = 50*ncells
   l_max(:)      = 1.0_dp
@@ -82,46 +107,52 @@ program KT_euler
        periodic=periodicBC, r_min=l_min, &
        coord=coord_type)
 
-  !Init mesh refinement
-  !  do
-  !      refine_steps = refine_steps + 1
-  !      !Settng init conds for each refinement is needed as we use that data as
-  !      !refinement criterion
-  !      call af_loop_box(tree, set_init_conds)
-  !      call af_gc_tree(tree, [i_rho, i_mom(1), i_mom(2), i_e])
-  !      call af_adjust_refinement(tree, ref_rout, refine_info, 1)
-  !  if (refine_info%n_add == 0) exit
-  !  end do
-  !  call af_restrict_tree(tree, i_rho)
-  !  call af_restrict_tree(tree, i_mom(1))
-  !  call af_restrict_tree(tree, i_mom(2))
-  !  call af_restrict_tree(tree, i_e)
-  !  call af_gc_tree(tree, [i_rho, i_mom(1), i_mom(2), i_e])
+  if (use_amr) then
+     do
+        refine_steps = refine_steps + 1
+        !Settng init conds for each refinement is needed as we use that data as
+        !refinement criterion
+        call af_loop_box(tree, set_init_conds)
+        call af_gc_tree(tree, variables)
+        call af_adjust_refinement(tree, ref_rout, refine_info, 1)
+        if (refine_info%n_add == 0) exit
+     end do
+     call af_restrict_tree(tree, i_rho)
+     call af_restrict_tree(tree, i_mom(1))
+     call af_restrict_tree(tree, i_mom(2))
+     call af_restrict_tree(tree, i_e)
+     call af_gc_tree(tree, variables)
+  else
+     call af_loop_box(tree, set_init_conds)
+     call af_gc_tree(tree, variables)
+  end if
 
+  time             = 0.0_dp
+  time_prev_refine = time
+  end_time         = 0.2_dp
+  dt               = 0.0_dp ! Start from zero time step
+  output_cnt       = 0
+  dt_output        = end_time / 20
+  dt_amr           = end_time / 100
 
-  call af_loop_box(tree, set_init_conds)
-
-  call af_gc_tree(tree, variables)
-
-  !Setting the timestep data
-  time = 0.0_dp
-  end_time = 0.02_dp
-  t_iter = 0
-  dt = 2.0e-04_dp
   do
-     if (mod(t_iter, 10) == 0) then
-        write(fname, "(A,I0)") "KT_euler_" // DIMNAME // "_", t_iter
-        call af_write_silo(tree, trim(fname), t_iter, time, dir="output", &
+     if (.not. benchmark .and. output_cnt * dt_output <= time) then
+        write(fname, "(A,I0)") "euler_" // DIMNAME // "_", output_cnt
+        call af_write_silo(tree, trim(fname), output_cnt, time, dir="output", &
              add_vars = write_primitives, add_names=["xVel","yVel","pres"])
+        output_cnt = output_cnt + 1
      end if
 
-     call af_advance(tree, dt, time, variables, time_integrator, forward_euler)
+     call af_advance(tree, dt, dt_lim, time, variables, &
+          time_integrator, forward_euler)
 
-     ! call af_gc_tree(tree, variables)
-     ! call af_adjust_refinement(tree, ref_rout, refine_info, 1)
-     ! call af_gc_tree(tree, [i_rho, i_mom(1), i_mom(2), i_e])
+     dt = 0.8_dp * dt_lim
 
-     t_iter = t_iter + 1
+     if (use_amr .and. time > time_prev_refine + dt_amr) then
+        call af_gc_tree(tree, variables)
+        call af_adjust_refinement(tree, ref_rout, refine_info, 1)
+        time_prev_refine = time
+     end if
 
      call af_tree_maxabs_cc(tree, variables(i_rho), rho_max)
      if (rho_max > 10.0_dp) &
@@ -134,18 +165,23 @@ program KT_euler
 
 contains
 
-  subroutine forward_euler(tree, dt, time, s_deriv, s_prev, s_out)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
+    real(dp), intent(out)     :: dt_lim
     real(dp), intent(in)      :: time
     integer, intent(in)       :: s_deriv
     integer, intent(in)       :: s_prev
     integer, intent(in)       :: s_out
+    real(dp)                  :: wmax(NDIM)
 
-    call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, &
+    call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, wmax, &
          max_wavespeed, get_fluxes, to_primitive, to_conservative)
     call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
          s_prev, s_out)
+
+    ! Compute new time step
+    dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine forward_euler
 
   subroutine set_init_conds(box)
@@ -245,28 +281,28 @@ contains
 
   end subroutine get_fluxes
 
-  ! subroutine ref_rout( box, cell_flags )
-  !   type(box_t), intent(in) :: box
-  !   integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
-  !   real(dp)                :: diff, tol
-  !   integer                 :: IJK, nc
+  subroutine ref_rout( box, cell_flags )
+    type(box_t), intent(in) :: box
+    integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
+    real(dp)                :: diff, tol
+    integer                 :: IJK, nc
 
-  !   nc  = box%n_cell
-  !   tol = 1.0e-6_dp
-  !   do KJI_DO(1,nc)
-  !      diff =  box%dr(1)**2*abs(box%cc(i+1,j,i_rho)+box%cc(i-1,j,i_rho) &
-  !           -2*box%cc(i,j,i_rho)) + &
-  !           box%dr(2)**2*abs(box%cc(i,j+1,i_rho)+box%cc(i,j-1,i_rho) &
-  !           -2*box%cc(i,j,i_rho))
-  !      if (diff > tol .and. box%lvl .le. 4) then
-  !         cell_flags(IJK) = af_do_ref
-  !      else if (diff < 0.1_dp*tol) then
-  !         cell_flags(IJK) = af_rm_ref
-  !      else
-  !         cell_flags(IJK) = af_keep_ref
-  !      end if
-  !   end do; CLOSE_DO
-  ! end subroutine ref_rout
+    nc  = box%n_cell
+    tol = 1.0e-6_dp
+    do KJI_DO(1,nc)
+       diff =  box%dr(1)**2*abs(box%cc(i+1,j,i_rho)+box%cc(i-1,j,i_rho) &
+            -2*box%cc(i,j,i_rho)) + &
+            box%dr(2)**2*abs(box%cc(i,j+1,i_rho)+box%cc(i,j-1,i_rho) &
+            -2*box%cc(i,j,i_rho))
+       if (diff > tol .and. box%lvl < 3) then
+          cell_flags(IJK) = af_do_ref
+       else if (diff < 0.1_dp*tol) then
+          cell_flags(IJK) = af_rm_ref
+       else
+          cell_flags(IJK) = af_keep_ref
+       end if
+    end do; CLOSE_DO
+  end subroutine ref_rout
 
   subroutine write_primitives(box, new_vars, n_var)
     type(box_t), intent(in) :: box
