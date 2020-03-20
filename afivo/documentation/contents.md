@@ -19,6 +19,7 @@
 * [Running in parallel](documentation/parallelization.md)
 * [Multigrid overview](documentation/multigrid.md)
 * [Writing and viewing output](documentation/writing_viewing_output.md)
+* [Profiling an application](documentation/profiling.md)
 
 # Other
 

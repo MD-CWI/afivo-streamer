@@ -1085,10 +1085,10 @@ contains
     if (iv == mg%i_phi) then
        ! Don't use geometry for restriction, since this is inconsistent with the
        ! filling of ghost cells near refinement boundaries
-       call af_restrict_box(box_c, box_p, iv, use_geometry=.false.)
+       call af_restrict_box(box_c, box_p, [iv], use_geometry=.false.)
     else
        ! For the right-hand side, use the geometry
-       call af_restrict_box(box_c, box_p, iv, use_geometry=.true.)
+       call af_restrict_box(box_c, box_p, [iv], use_geometry=.true.)
     end if
   end subroutine mg_box_rstr_lpl
 

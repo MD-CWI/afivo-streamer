@@ -278,9 +278,6 @@ module m_af_types
      !> Names of face-centered variables
      character(len=af_nlen) :: fc_names(af_max_num_vars)
 
-     !> Maximal refinement level for the variables
-     integer :: cc_max_level(af_max_num_vars) = af_max_lvl
-
      !> Number of copies of the variable (for e.g. time-stepping)
      integer :: cc_num_copies(af_max_num_vars) = 1
 
@@ -300,7 +297,7 @@ module m_af_types
      logical :: has_cc_method(af_max_num_vars) = .false.
 
      !> Indices of cell-centered variables with methods
-     integer, allocatable :: cc_method_vars(:)
+     integer, allocatable :: cc_auto_vars(:)
 
      !> List storing the tree levels
      type(lvl_t) :: lvls(af_min_lvl:af_max_lvl)
@@ -425,12 +422,11 @@ module m_af_types
      end subroutine af_subr_prolong
 
      !> Subroutine for restriction
-     subroutine af_subr_restrict(box_c, box_p, iv, iv_to, use_geometry)
+     subroutine af_subr_restrict(box_c, box_p, ivs, use_geometry)
        import
-       type(box_t), intent(in)     :: box_c !< Child box to restrict
-       type(box_t), intent(inout)  :: box_p !< Parent box to restrict to
-       integer, intent(in)           :: iv    !< Variable to restrict
-       integer, intent(in), optional :: iv_to !< Destination (if /= iv)
+       type(box_t), intent(in)       :: box_c        !< Child box to restrict
+       type(box_t), intent(inout)    :: box_p        !< Parent box to restrict to
+       integer, intent(in)           :: ivs(:)       !< Variables to restrict
        logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
      end subroutine af_subr_restrict
   end interface

@@ -24,7 +24,7 @@ contains
   !> Add cell-centered variable
   !> @todo ix as third argument?
   subroutine af_add_cc_variable(tree, name, write_out, n_copies, &
-       max_lvl, ix, write_binary)
+       ix, write_binary)
     !> Tree to add variable to
     type(af_t), intent(inout)      :: tree
     !> Name of the variable
@@ -35,22 +35,17 @@ contains
     logical, intent(in), optional  :: write_binary
     !> How many copies of variable to store (default: 1)
     integer, intent(in), optional  :: n_copies
-    !> Store variable up to this refinement level (default: af_max_lvl)
-    integer, intent(in), optional  :: max_lvl
     !> On output: index of variable
     integer, intent(out), optional :: ix
 
-    integer :: n
-    integer :: ncpy, maxlvl
+    integer :: n, ncpy
     logical :: writeout, writebin
 
     ncpy = 1; if (present(n_copies)) ncpy = n_copies
     writeout = .true.; if (present(write_out)) writeout = write_out
     writebin = .true.; if (present(write_binary)) writebin = write_binary
-    maxlvl = 100; if (present(max_lvl)) maxlvl = max_lvl
 
     if (ncpy < 1) error stop "af_add_cc_variable: n_copies < 1"
-    if (maxlvl < 1) error stop "af_add_cc_variable: max_lvl < 1"
 
     do n = 1, ncpy
        tree%n_var_cell = tree%n_var_cell + 1
@@ -59,15 +54,13 @@ contains
           tree%cc_names(tree%n_var_cell)        = name
           tree%cc_write_output(tree%n_var_cell) = writeout
           tree%cc_write_binary(tree%n_var_cell) = writebin
-          tree%cc_max_level(tree%n_var_cell)    = maxlvl
           tree%cc_num_copies(tree%n_var_cell)   = ncpy
        else
           write(tree%cc_names(tree%n_var_cell), "(A,I0)") &
                trim(name) // '_', n
           tree%cc_write_output(tree%n_var_cell) = .false.
           tree%cc_write_binary(tree%n_var_cell) = .false.
-          tree%cc_max_level(tree%n_var_cell)    = maxlvl
-          tree%cc_num_copies(tree%n_var_cell)   = 1
+          tree%cc_num_copies(tree%n_var_cell)   = 0
        end if
     end do
 
@@ -182,8 +175,8 @@ contains
     allocate(tree%removed_ids(tree%box_limit))
 
     ! Initialize list of cell-centered variables with methods
-    if (.not. allocated(tree%cc_method_vars)) &
-         allocate(tree%cc_method_vars(0))
+    if (.not. allocated(tree%cc_auto_vars)) &
+         allocate(tree%cc_auto_vars(0))
 
     call af_set_coarse_grid(tree, grid_size, periodic)
 
@@ -306,38 +299,45 @@ contains
     procedure(af_subr_rb), optional       :: rb       !< Refinement boundary method
     procedure(af_subr_prolong), optional  :: prolong  !< Prolongation method
     procedure(af_subr_restrict), optional :: restrict !< Restriction method
-    integer                               :: i, n
+    integer                               :: i
 
-    if (tree%has_cc_method(iv)) &
-         error stop "Cannot call af_set_cc_methods twice for same iv"
-
-    tree%cc_methods(iv)%bc => bc
-
-    if (present(rb)) then
-       tree%cc_methods(iv)%rb => rb
-    else
-       tree%cc_methods(iv)%rb => af_gc_interp
+    if (tree%has_cc_method(iv)) then
+       print *, "Cannot call af_set_cc_methods twice for ", &
+            trim(tree%cc_names(iv))
+       error stop
     end if
 
-    if (present(prolong)) then
-       tree%cc_methods(iv)%prolong => prolong
-    else
-       tree%cc_methods(iv)%prolong => af_prolong_linear
-    end if
+    ! Set methods for the variable and its copies
+    do i = iv, iv + tree%cc_num_copies(iv) - 1
+       tree%cc_methods(i)%bc => bc
 
-    if (present(restrict)) then
-       tree%cc_methods(iv)%restrict => restrict
-    else
-       tree%cc_methods(iv)%restrict => af_restrict_box
-    end if
+       if (present(rb)) then
+          tree%cc_methods(i)%rb => rb
+       else
+          tree%cc_methods(i)%rb => af_gc_interp
+       end if
 
-    tree%has_cc_method(iv) = .true.
+       if (present(prolong)) then
+          tree%cc_methods(i)%prolong => prolong
+       else
+          tree%cc_methods(i)%prolong => af_prolong_linear
+       end if
 
-    if (.not. allocated(tree%cc_method_vars)) &
-         allocate(tree%cc_method_vars(0))
+       if (present(restrict)) then
+          tree%cc_methods(i)%restrict => restrict
+       else
+          tree%cc_methods(i)%restrict => af_restrict_box
+       end if
 
-    n = size(tree%cc_method_vars)
-    tree%cc_method_vars = [(tree%cc_method_vars(i), i=1,n), iv]
+       tree%has_cc_method(i) = .true.
+    end do
+
+    if (.not. allocated(tree%cc_auto_vars)) &
+         allocate(tree%cc_auto_vars(0))
+
+    ! Append only original variable to cc_auto_vars, so that the copies are not
+    ! automatically prolongated etc.
+    tree%cc_auto_vars = [tree%cc_auto_vars, iv]
 
   end subroutine af_set_cc_methods
 
@@ -350,7 +350,7 @@ contains
     if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
     deallocate(tree%boxes)
     deallocate(tree%removed_ids)
-    deallocate(tree%cc_method_vars)
+    deallocate(tree%cc_auto_vars)
 
     do lvl = af_min_lvl, af_max_lvl
        deallocate(tree%lvls(lvl)%ids)
@@ -727,7 +727,7 @@ contains
           do i_ch = 1, af_num_children
              ch_id = tree%boxes(id)%children(i_ch)
              call tree%cc_methods(iv)%restrict(tree%boxes(ch_id), &
-                  tree%boxes(id), iv)
+                  tree%boxes(id), [iv])
           end do
        end if
     end do
@@ -752,8 +752,8 @@ contains
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
 
-          do n = 1, size(tree%cc_method_vars)
-             iv = tree%cc_method_vars(n)
+          do n = 1, size(tree%cc_auto_vars)
+             iv = tree%cc_auto_vars(n)
              call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
                   tree%boxes(id), iv)
           end do
@@ -763,7 +763,7 @@ contains
        !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call af_gc_box(tree, id, [tree%cc_method_vars])
+          call af_gc_box(tree, id, [tree%cc_auto_vars])
        end do
        !$omp end do
     end do

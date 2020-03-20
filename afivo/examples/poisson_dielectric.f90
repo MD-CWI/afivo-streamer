@@ -62,7 +62,7 @@ program dielectric_test
   ! Average epsilon on coarse grids. In the future, it could be better to define
   ! epsilon on cell faces, and to perform this restriction in a matrix fashion:
   ! A_coarse = M_restrict * A_fine * M_prolong (A = matrix operator, M = matrix)
-  call af_restrict_tree(tree, i_eps)
+  call af_restrict_tree(tree, [i_eps])
 
   write(*,"(A,Es10.3,A)") " Wall-clock time generating AMR grid: ", &
        (t_end-t_start) / real(count_rate,dp), " seconds"
