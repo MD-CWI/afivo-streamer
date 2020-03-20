@@ -422,12 +422,11 @@ module m_af_types
      end subroutine af_subr_prolong
 
      !> Subroutine for restriction
-     subroutine af_subr_restrict(box_c, box_p, iv, iv_to, use_geometry)
+     subroutine af_subr_restrict(box_c, box_p, ivs, use_geometry)
        import
-       type(box_t), intent(in)     :: box_c !< Child box to restrict
-       type(box_t), intent(inout)  :: box_p !< Parent box to restrict to
-       integer, intent(in)           :: iv    !< Variable to restrict
-       integer, intent(in), optional :: iv_to !< Destination (if /= iv)
+       type(box_t), intent(in)       :: box_c        !< Child box to restrict
+       type(box_t), intent(inout)    :: box_p        !< Parent box to restrict to
+       integer, intent(in)           :: ivs(:)       !< Variables to restrict
        logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
      end subroutine af_subr_restrict
   end interface

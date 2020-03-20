@@ -44,7 +44,7 @@ program solid_body_rotation
   call af_gc_tree(tree, [iq])
   !One level of refinement
   call af_adjust_refinement(tree, refine_routine, refine_info, 1)
-  call af_restrict_tree(tree, iq)
+  call af_restrict_tree(tree, [iq])
   call af_gc_tree(tree, [iq])
 
   !call af_write_silo(tree, "testsbr_amr", dir="output")
@@ -70,7 +70,7 @@ program solid_body_rotation
 
      call af_loop_box_arg(tree, updateSoln, [dt])
      !print *, 'finished time stepping'
-     call af_restrict_tree(tree, iq)
+     call af_restrict_tree(tree, [iq])
 
      call af_gc_tree(tree, [iq])
      !print *, 'Updating ghost cells'

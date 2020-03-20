@@ -117,10 +117,7 @@ program KT_euler
         call af_adjust_refinement(tree, ref_rout, refine_info, 1)
         if (refine_info%n_add == 0) exit
      end do
-     call af_restrict_tree(tree, i_rho)
-     call af_restrict_tree(tree, i_mom(1))
-     call af_restrict_tree(tree, i_mom(2))
-     call af_restrict_tree(tree, i_e)
+     call af_restrict_tree(tree, variables)
      call af_gc_tree(tree, variables)
   else
      call af_loop_box(tree, set_init_conds)

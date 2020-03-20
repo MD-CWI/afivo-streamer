@@ -77,8 +77,6 @@ program reaction_diffusion
 
   call af_set_cc_methods(tree, i_u, af_bc_neumann_zero)
   call af_set_cc_methods(tree, i_v, af_bc_neumann_zero)
-  call af_set_cc_methods(tree, i_u+1, af_bc_neumann_zero)
-  call af_set_cc_methods(tree, i_v+1, af_bc_neumann_zero)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize

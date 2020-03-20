@@ -73,7 +73,7 @@ program advection
   call af_print_info(tree)
 
   ! Restrict the initial conditions
-  call af_restrict_tree(tree, i_phi)
+  call af_restrict_tree(tree, [i_phi])
 
   ! Fill ghost cells for variables i_phi on the sides of all boxes
   call af_gc_tree(tree, [i_phi])

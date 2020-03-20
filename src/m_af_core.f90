@@ -727,7 +727,7 @@ contains
           do i_ch = 1, af_num_children
              ch_id = tree%boxes(id)%children(i_ch)
              call tree%cc_methods(iv)%restrict(tree%boxes(ch_id), &
-                  tree%boxes(id), iv)
+                  tree%boxes(id), [iv])
           end do
        end if
     end do
