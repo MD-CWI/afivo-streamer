@@ -81,3 +81,8 @@ documentation/html/*
 /documentation/auto/
 ./examples/*.curve
 ./examples/*.out
+/examples/euler_gas_dynamics
+/examples/solid_body_rotation
+/examples/amr_solid_body_rotation
+/examples/advection_v2_2d
+/examples/advection_v2_3d
