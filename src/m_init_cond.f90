@@ -163,8 +163,7 @@ contains
     end do
 
     ! Restrict and fill ghost cells
-    call af_restrict_tree(tree, i_electron)
-    call af_restrict_tree(tree, i_1pos_ion)
+    call af_restrict_tree(tree, [i_electron, i_1pos_ion])
     call af_gc_tree(tree, [i_electron, i_1pos_ion])
 
   end subroutine init_cond_stochastic_density

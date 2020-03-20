@@ -53,10 +53,8 @@ program streamer
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
-     do s = 0, advance_num_states-1
-        call af_set_cc_methods(tree, species_itree(i)+s, &
-             af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
-     end do
+     call af_set_cc_methods(tree, species_itree(i), &
+          af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
   end do
 
   if (.not. gas_constant_density) then
@@ -195,10 +193,7 @@ program streamer
 
      if (mod(it, refine_per_steps) == 0) then
         ! Restrict species, for the ghost cells near refinement boundaries
-        do i = n_gas_species+1, n_species
-           call af_restrict_tree(tree, species_itree(i))
-        end do
-
+        call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
         call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
 
         if (associated(user_refine)) then

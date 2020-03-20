@@ -85,8 +85,8 @@ contains
           p_id = tree%boxes(id)%parent
           if (p_id > af_no_box .and. &
                any(tree%boxes(id)%neighbors == af_no_box)) then
-             call af_restrict_box_vars(tree%boxes(id), tree%boxes(p_id), &
-                  flux_species + s_out)
+             call af_restrict_box(tree%boxes(id), tree%boxes(p_id), &
+                  [flux_species + s_out])
           end if
        end do
        !$omp end do
