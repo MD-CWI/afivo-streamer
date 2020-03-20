@@ -214,7 +214,7 @@ contains
     real(dp), intent(in) :: wmax(n_values)
     real(dp), intent(inout) :: flux(n_values, n_vars)
 
-    flux = 0.5_dp * (flux_l + flux_r) - spread(wmax, 2, n_vars) * (u_r - u_l)
+    flux = 0.5_dp * (flux_l + flux_r - spread(wmax, 2, n_vars) * (u_r - u_l))
   end subroutine flux_kurganovTadmor_1d
 
   subroutine flux_update_densities(tree, dt, n_vars, i_cc, i_flux, &
