@@ -301,8 +301,11 @@ contains
     procedure(af_subr_restrict), optional :: restrict !< Restriction method
     integer                               :: i
 
-    if (tree%has_cc_method(iv)) &
-         error stop "Cannot call af_set_cc_methods twice for same iv"
+    if (tree%has_cc_method(iv)) then
+       print *, "Cannot call af_set_cc_methods twice for ", &
+            trim(tree%cc_names(iv))
+       error stop
+    end if
 
     ! Set methods for the variable and its copies
     do i = iv, iv + tree%cc_num_copies(iv) - 1
