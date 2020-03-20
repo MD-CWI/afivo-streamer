@@ -24,7 +24,7 @@ program streamer
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
-  integer                   :: i, s, it, coord_type, box_bytes
+  integer                   :: i, it, coord_type, box_bytes
   logical                   :: write_out
   real(dp)                  :: time, dt, photoi_prev_time
   real(dp)                  :: memory_limit_GB = 16.0_dp
