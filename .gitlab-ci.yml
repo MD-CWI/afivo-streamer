@@ -6,7 +6,7 @@ before_script:
 
 cache:
   paths:
-    - afivo
+    - afivo/external_libraries
 
 build:
   stage: build
