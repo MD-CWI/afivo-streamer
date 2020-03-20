@@ -3,6 +3,7 @@
 * [Installation instructions](documentation/installation.md)
 * [Code overview](documentation/code_overview.md)
 * [Examples](documentation/examples.md) How to run some of the examples
+* [Testing](documentation/testing.md) How to run and add tests
 * [Simulation options](documentation/simulation_options.md) Description of the most important options
 * [Initial conditions](documentation/initial_conditions.md) How to set initial conditions
 * [Transport data](documentation/transport_data.md) How to obtain and set transport coefficients
