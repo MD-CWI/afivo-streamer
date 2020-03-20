@@ -27,13 +27,15 @@ module m_af_flux_schemes
        real(dp), intent(out) :: w(nf)
      end subroutine subr_max_wavespeed
 
-     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux)
+     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux, box, line_ix)
        import
-       integer, intent(in)   :: nf       !< Number of cell faces
-       integer, intent(in)   :: n_var    !< Number of variables
-       integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
-       real(dp), intent(in)  :: u(nf, n_var)
-       real(dp), intent(out) :: flux(nf, n_var)
+       integer, intent(in)     :: nf              !< Number of cell faces
+       integer, intent(in)     :: n_var           !< Number of variables
+       integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+       real(dp), intent(in)    :: u(nf, n_var)    !< Primitive variables
+       real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
+       type(box_t), intent(in) :: box             !< Current box
+       integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
      end subroutine subr_flux_from_prim
   end interface
 
@@ -350,7 +352,7 @@ contains
     real(dp) :: u_l(nc+1, n_vars), u_r(nc+1, n_vars)
     real(dp) :: w_l(nc+1), w_r(nc+1)
     real(dp) :: flux_l(nc+1, n_vars), flux_r(nc+1, n_vars)
-    integer  :: i, flux_dim
+    integer  :: i, flux_dim, line_ix(NDIM-1)
 #if NDIM == 3
     integer  :: j
 #endif
@@ -384,6 +386,12 @@ contains
 #endif
              end select
 
+#if NDIM == 2
+             line_ix = [i]
+#elif NDIM == 3
+             line_ix = [i, j]
+#endif
+
              if (present(to_primitive)) then
                 call to_primitive(nc+4, n_vars, cc_line)
              end if
@@ -393,8 +401,10 @@ contains
 
              call max_wavespeed(nc+1, n_vars, flux_dim, u_l, w_l)
              call max_wavespeed(nc+1, n_vars, flux_dim, u_r, w_r)
-             call flux_from_primitives(nc+1, n_vars, flux_dim, u_l, flux_l)
-             call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r)
+             call flux_from_primitives(nc+1, n_vars, flux_dim, u_l, flux_l, &
+                  tree%boxes(id), line_ix)
+             call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r, &
+                  tree%boxes(id), line_ix)
 
              if (present(to_conservative)) then
                 call to_conservative(nc+1, n_vars, u_l)

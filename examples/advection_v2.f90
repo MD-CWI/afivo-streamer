@@ -235,12 +235,14 @@ contains
     w = abs(velocity(flux_dim))
   end subroutine max_wavespeed
 
-  subroutine get_flux(n_values, n_var, flux_dim, u, flux)
-    integer, intent(in)   :: n_values !< Number of cell faces
-    integer, intent(in)   :: n_var    !< Number of variables
-    integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
-    real(dp), intent(in)  :: u(n_values, n_var)
-    real(dp), intent(out) :: flux(n_values, n_var)
+  subroutine get_flux(n_values, n_var, flux_dim, u, flux, box, line_ix)
+    integer, intent(in)     :: n_values !< Number of cell faces
+    integer, intent(in)     :: n_var    !< Number of variables
+    integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
+    real(dp), intent(in)    :: u(n_values, n_var)
+    real(dp), intent(out)   :: flux(n_values, n_var)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: line_ix(NDIM-1)
 
     flux = u * velocity(flux_dim)
   end subroutine get_flux
