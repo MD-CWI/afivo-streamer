@@ -541,6 +541,7 @@ contains
     real(dp), intent(in)           :: eps0        !< Dielectric permittivity (vacuum)
     integer                        :: id_in, id_out, nc, nb, ix
     real(dp)                       :: eps, fac_fld(2), fac_charge, inv_dr(NDIM)
+    real(dp)                       :: f_out(tree%n_cell), f_in(tree%n_cell)
 
     if (.not. diel%initialized) error stop "dielectric not initialized"
 
@@ -565,42 +566,58 @@ contains
             select case (nb)
 #if NDIM == 2
             case (af_neighb_lowx)
-               cc_out(1, 1:nc, i_fld(1)) = 0.5_dp * (fac_fld(1) * inv_dr(1) * &
+               f_out = fac_fld(1) * inv_dr(1) * &
                     (cc_out(0, 1:nc, i_phi) - cc_out(1, 1:nc, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(1) * &
-                    (cc_out(1, 1:nc, i_phi) - cc_out(2, 1:nc, i_phi)))
-               cc_in(nc, 1:nc, i_fld(1))  = 0.5_dp * (fac_fld(2) * inv_dr(1) * &
+                    - fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(1) * &
                     (cc_in(nc, 1:nc, i_phi) - cc_in(nc+1, 1:nc, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(1) * &
+                    + fac_charge * sd(:, i_sigma)
+               cc_out(1, 1:nc, i_fld(1)) = 0.5_dp * (f_out + inv_dr(1) * &
+                    (cc_out(1, 1:nc, i_phi) - cc_out(2, 1:nc, i_phi)))
+               cc_out(0, 1:nc, i_fld(1)) = f_out
+               cc_in(nc, 1:nc, i_fld(1))  = 0.5_dp * (f_in + inv_dr(1) * &
                     (cc_in(nc-1, 1:nc, i_phi) - cc_in(nc, 1:nc, i_phi)))
+               cc_in(nc+1, 1:nc, i_fld(1)) = f_in
             case (af_neighb_highx)
-               cc_out(nc, 1:nc, i_fld(1))  = 0.5_dp * (fac_fld(1) * inv_dr(1) * &
+               f_out = fac_fld(1) * inv_dr(1) * &
                     (cc_out(nc, 1:nc, i_phi) - cc_out(nc+1, 1:nc, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(1) * &
-                    (cc_out(nc-1, 1:nc, i_phi) - cc_out(nc, 1:nc, i_phi)))
-               cc_in(1, 1:nc, i_fld(1)) = 0.5_dp * (fac_fld(2) * inv_dr(1) * &
+                    + fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(1) * &
                     (cc_in(0, 1:nc, i_phi) - cc_in(1, 1:nc, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(1) * &
+                    - fac_charge * sd(:, i_sigma)
+               cc_out(nc, 1:nc, i_fld(1))  = 0.5_dp * (f_out + inv_dr(1) * &
+                    (cc_out(nc-1, 1:nc, i_phi) - cc_out(nc, 1:nc, i_phi)))
+               cc_out(nc+1, 1:nc, i_fld(1)) = f_out
+               cc_in(1, 1:nc, i_fld(1)) = 0.5_dp * (f_in + inv_dr(1) * &
                     (cc_in(1, 1:nc, i_phi) - cc_in(2, 1:nc, i_phi)))
+               cc_in(0, 1:nc, i_fld(1)) = f_in
             case (af_neighb_lowy)
-               cc_out(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
+               f_out = fac_fld(1) * inv_dr(2) * &
                     (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_out(1:nc, 1, i_phi) - cc_out(1:nc, 2, i_phi)))
-               cc_in(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
+                    - fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(2) * &
                     (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
+                    + fac_charge * sd(:, i_sigma)
+               cc_out(1:nc, 1, i_fld(2))  = 0.5_dp * (f_out + inv_dr(2) * &
+                    (cc_out(1:nc, 1, i_phi) - cc_out(1:nc, 2, i_phi)))
+               cc_out(1:nc, 0, i_fld(2)) = f_out
+               cc_in(1:nc, nc, i_fld(2)) = 0.5_dp * (f_in + inv_dr(2) * &
                     (cc_in(1:nc, nc-1, i_phi) - cc_in(1:nc, nc, i_phi)))
+               cc_in(1:nc, nc+1, i_fld(2)) = f_in
             case (af_neighb_highy)
-               cc_out(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
+               f_out = fac_fld(1) * inv_dr(2) * &
                     (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_out(1:nc, nc-1, i_phi) - cc_out(1:nc, nc, i_phi)))
-               cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
+                    + fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(2) * &
                     (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
+                    - fac_charge * sd(:, i_sigma)
+               cc_out(1:nc, nc, i_fld(2)) = 0.5_dp * (f_out + inv_dr(2) * &
+                    (cc_out(1:nc, nc-1, i_phi) - cc_out(1:nc, nc, i_phi)))
+               cc_out(1:nc, nc+1, i_fld(2)) = f_out
+               cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (f_in + inv_dr(2) * &
                     (cc_in(1:nc, 1, i_phi) - cc_in(1:nc, 2, i_phi)))
-#else
+               cc_in(1:nc, 0, i_fld(2)) = f_in
+#elif NDIM == 3
             case default
                error stop
 #endif
