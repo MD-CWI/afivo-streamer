@@ -65,7 +65,10 @@ module m_dielectric
   public :: dielectric_t
   public :: dielectric_initialize
   public :: dielectric_set_values
+  public :: dielectric_set_weighted_sum
+  public :: dielectric_get_integral
   public :: dielectric_update_after_refinement
+  public :: dielectric_inside_layer_to_surface
   public :: dielectric_surface_charge_to_rhs
   public :: dielectric_correct_field_fc
   public :: dielectric_correct_field_cc
@@ -231,6 +234,38 @@ contains
        end if
     end do
   end subroutine dielectric_set_values
+
+  !> Set surface variable to a weighted sum of other variables
+  subroutine dielectric_set_weighted_sum(diel, i_out, i_in, w_in)
+    type(dielectric_t), intent(inout) :: diel
+    integer, intent(in)               :: i_out   !< Output surface density
+    integer, intent(in)               :: i_in(:) !< List of input surface densities
+    real(dp), intent(in)              :: w_in(:) !< Weights of input densities
+    integer                           :: ix
+
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+          diel%surfaces(ix)%sd(:, i_out) = &
+               matmul(diel%surfaces(ix)%sd(:, i_in), w_in)
+       end if
+    end do
+  end subroutine dielectric_set_weighted_sum
+
+  !> Compute integral of surface variable
+  subroutine dielectric_get_integral(diel, i_surf, surf_int)
+    type(dielectric_t), intent(inout) :: diel
+    integer, intent(in)               :: i_surf   !< Surface variables
+    real(dp), intent(out)             :: surf_int !< Surface integral
+    integer                           :: ix
+
+    surf_int = 0
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
+               sum(diel%surfaces(ix)%sd(:, i_surf))
+       end if
+    end do
+  end subroutine dielectric_get_integral
 
   !> Update the dielectric surface after the mesh has been refined
   subroutine dielectric_update_after_refinement(tree, diel, ref_info)
@@ -458,6 +493,62 @@ contains
 #endif
 
   end subroutine surface_charge_to_rhs
+
+  !> Map first layer inside the dielectric to surface density
+  subroutine dielectric_inside_layer_to_surface(tree, diel, i_cc, i_sigma, &
+       fac, clear_cc, clear_surf)
+    type(af_t), intent(inout)         :: tree
+    type(dielectric_t), intent(inout) :: diel
+    integer, intent(in)               :: i_cc       !< Cell-centered variable (in the tree)
+    integer, intent(in)               :: i_sigma    !< Surface charage variable
+    real(dp), intent(in)              :: fac        !< Multiplication factor
+    logical, intent(in)               :: clear_cc   !< Set density to zero afterwards
+    logical, intent(in)               :: clear_surf !< Set surface density to zero initially
+    integer                           :: n
+
+    if (.not. diel%initialized) error stop "dielectric not initialized"
+
+    do n = 1, diel%max_ix
+       if (.not. diel%surfaces(n)%in_use) cycle
+
+       call inside_layer_to_surface(tree%boxes, diel%surfaces(n), &
+            i_cc, i_sigma, fac, clear_cc, clear_surf)
+    end do
+  end subroutine dielectric_inside_layer_to_surface
+
+  !> Map first layer inside the dielectric to surface density
+  subroutine inside_layer_to_surface(boxes, surface, i_cc, i_sigma, fac, &
+       clear_cc, clear_surf)
+    type(box_t), intent(inout)     :: boxes(:)
+    type(surface_t), intent(inout) :: surface
+    integer, intent(in)            :: i_cc       !< Cell-centered variable (in the tree)
+    integer, intent(in)            :: i_sigma    !< Surface charage variable
+    real(dp), intent(in)           :: fac        !< Multiplication factor
+    logical, intent(in)            :: clear_cc   !< Set density to zero afterwards
+    logical, intent(in)            :: clear_surf !< Set surface density to zero initially
+    integer                        :: nb, nc, id_in
+    integer                        :: dlo(NDIM), dhi(NDIM)
+    real(dp)                       :: dr
+
+    nb     = surface%direction
+    id_in  = surface%id_in
+    nc     = boxes(id_in)%n_cell
+    dr     = boxes(id_in)%dr(af_neighb_dim(nb))
+
+    ! Get index range for cells adjacent to the boundary of the dielectric box
+    call af_get_index_bc_inside(af_neighb_rev(nb), nc, 1, dlo, dhi)
+
+    if (clear_surf) surface%sd(:, i_sigma) = 0.0_dp
+
+#if NDIM == 2
+    surface%sd(:, i_sigma) = surface%sd(:, i_sigma) + fac * dr * &
+         pack(boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_cc), .true.)
+    if (clear_cc) boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_cc) = 0.0_dp
+#elif NDIM == 3
+    error stop
+#endif
+
+  end subroutine inside_layer_to_surface
 
   !> Compute the electric field at face centers near surfaces
   subroutine dielectric_correct_field_fc(tree, diel, i_sigma, i_fld, i_phi, eps0)
