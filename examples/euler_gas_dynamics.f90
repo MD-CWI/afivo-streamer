@@ -162,7 +162,7 @@ program KT_euler
 
 contains
 
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, istep)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
     real(dp), intent(out)     :: dt_lim
@@ -170,6 +170,7 @@ contains
     integer, intent(in)       :: s_deriv
     integer, intent(in)       :: s_prev
     integer, intent(in)       :: s_out
+    integer, intent(in)       :: istep
     real(dp)                  :: wmax(NDIM)
 
     call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, wmax, &
