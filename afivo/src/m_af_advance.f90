@@ -11,11 +11,15 @@ module m_af_advance
   integer, parameter, public :: af_heuns_method    = 2
   integer, parameter, public :: af_midpoint_method = 3
 
+  !> How many steps the time integrators take
+  integer, parameter, public :: &
+       af_advance_num_steps(n_integrators) = [1, 2, 2]
+
   !> How many variable copies are required for the time integrators
-  integer, parameter :: req_copies(n_integrators) = [1, 2, 2]
+  integer, parameter :: req_copies(n_integrators) = af_advance_num_steps
 
   interface
-     subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out)
+     subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, istep)
        import
        type(af_t), intent(inout) :: tree
        real(dp), intent(in)      :: dt      !< Time step
@@ -24,6 +28,7 @@ module m_af_advance
        integer, intent(in)       :: s_deriv !< State to compute derivatives from
        integer, intent(in)       :: s_prev  !< Previous state
        integer, intent(in)       :: s_out   !< Output state
+       integer, intent(in)       :: istep   !< Step of the integrator
      end subroutine subr_feuler
   end interface
 
@@ -49,16 +54,16 @@ contains
 
     select case (time_integrator)
     case (af_forward_euler)
-       call forward_euler(tree, dt, dt_lim, time, 0, 0, 0)
+       call forward_euler(tree, dt, dt_lim, time, 0, 0, 0, 1)
        time = time + dt
     case (af_midpoint_method)
-       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 0, 0, 1)
-       call forward_euler(tree, dt, dt_lim, time, 1, 0, 0)
+       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 0, 0, 1, 1)
+       call forward_euler(tree, dt, dt_lim, time, 1, 0, 0, 2)
        time = time + dt
     case (af_heuns_method)
-       call forward_euler(tree, dt, dt_lim, time, 0, 0, 1)
+       call forward_euler(tree, dt, dt_lim, time, 0, 0, 1, 1)
        time = time + dt
-       call forward_euler(tree, dt, dt_lim, time, 1, 1, 1)
+       call forward_euler(tree, dt, dt_lim, time, 1, 1, 1, 2)
        call combine_substeps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
     end select
 
