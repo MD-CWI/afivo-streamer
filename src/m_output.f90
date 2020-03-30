@@ -344,9 +344,9 @@ contains
 
     vol = af_total_volume(tree)
     do n = 1, n_species
-       call af_tree_sum_cc(tree, i_electron, sum_dens(n))
-       call af_tree_sum_cc(tree, i_electron, sum_dens_sq(n), power=2)
-       call af_tree_max_cc(tree, i_electron, max_dens(n))
+       call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+       call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
+       call af_tree_max_cc(tree, species_itree(n), max_dens(n))
     end do
 
     if (out_cnt == 0) then
