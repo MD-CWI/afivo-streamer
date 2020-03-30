@@ -31,7 +31,6 @@ program streamer
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
-  type(mg_t)                :: mg             ! Multigrid option structure
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
@@ -172,7 +171,7 @@ program streamer
         photoi_prev_time = time
      end if
 
-     call advance(tree, mg, dt, time)
+     call advance(tree, dt, time)
      dt = advance_max_dt
      global_time = time
 

@@ -16,11 +16,13 @@ contains
   !> Advance fluid model using forward Euler step. If the equation is written as
   !> y' = f(y), the result is: y(s_out) = y(s_prev) + f(y(s_dt)), where the
   !> s_... refer to temporal states.
-  subroutine forward_euler(tree, dt, s_dt, s_prev, s_out, set_dt)
+  subroutine forward_euler(tree, dt, time, s_dt, s_prev, s_out, set_dt, istep)
     use m_chemistry
     use m_streamer
+    use m_field
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
+    real(dp), intent(in)      :: time
     !> Time state to compute derivatives from
     integer, intent(in)       :: s_dt
     !> Time state to add derivatives to
@@ -28,9 +30,12 @@ contains
     !< Time state to store result in
     integer, intent(in)       :: s_out
     logical, intent(in)       :: set_dt !< Whether to set new time step
+    integer, intent(in)       :: istep
     integer                   :: lvl, i, id, p_id, nc
 
     nc = tree%n_cell
+
+    if (istep > 1) call field_compute(tree, mg, s_dt, time, .true.)
 
     ! First calculate fluxes
     !$omp parallel private(lvl, i, id)

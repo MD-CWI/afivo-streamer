@@ -61,6 +61,9 @@ module m_streamer
   !> Whether to update ions (depends on ion diffusion/mobility)
   logical, public, protected :: ST_update_ions = .false.
 
+  !> Multigrid option structure
+  type(mg_t), public :: mg
+
   !> Random number generator
   type(rng_t), public :: ST_rng
 
