@@ -127,7 +127,7 @@ contains
     use m_table_data
     use m_transport_data
     use m_gas
-    use m_advance_base, only: advance_num_states
+    use m_dt
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n, i, i_elec
@@ -219,7 +219,8 @@ contains
 
     do n = n_gas_species+1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
-            n_copies=advance_num_states, ix=species_itree(n))
+            n_copies=af_advance_num_steps(time_integrator), &
+            ix=species_itree(n))
     end do
 
     ! Store list with only charged species

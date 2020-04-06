@@ -2,7 +2,6 @@
 module m_output
   use m_af_all
   use m_types
-  use m_advance, only: advance_max_dt
   use m_streamer
 
   implicit none
@@ -205,7 +204,7 @@ contains
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
-       if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
+       if (photoi_enabled) call photoi_set_src(tree, global_dt)
        call field_set_rhs(tree, 0)
 
        do i = 1, tree%n_var_cell
@@ -284,7 +283,7 @@ contains
     call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
     call af_tree_min_fc(tree, 1, electric_fld, min_Er)
 
-    dt = advance_max_dt
+    dt = global_dt
 
     if (first_time) then
        first_time = .false.
@@ -372,7 +371,7 @@ contains
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
-    write(my_unit, fmt) out_cnt, global_time, advance_max_dt, &
+    write(my_unit, fmt) out_cnt, global_time, global_dt, &
          sum_dens/vol, sum_dens_sq/vol, max_dens
     close(my_unit)
 

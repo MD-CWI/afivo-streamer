@@ -13,7 +13,6 @@ program streamer
   use m_gas
   use m_fluid_lfa
   use m_dt
-  use m_advance
   use m_types
   use m_user_methods
   use m_output
@@ -26,7 +25,7 @@ program streamer
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
   logical                   :: write_out
-  real(dp)                  :: time, dt, photoi_prev_time
+  real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
@@ -99,7 +98,7 @@ program streamer
      time             = 0.0_dp ! Simulation time (all times are in s)
      global_time      = time
      photoi_prev_time = time   ! Time of last photoionization computation
-     dt               = advance_max_dt
+     dt               = global_dt
      initial_streamer_pos = 0.0_dp ! Initial streamer position
 
      if (ST_cylindrical) then
@@ -171,12 +170,20 @@ program streamer
         photoi_prev_time = time
      end if
 
-     call advance(tree, dt, time)
-     dt = advance_max_dt
+     dt_matrix(1:dt_num_cond, :) = dt_max ! Maximum time step
+     call af_advance(tree, dt, dt_lim, time, &
+          species_itree(n_gas_species+1:n_species), &
+          af_heuns_method, forward_euler)
+     ! Determine next time step
+     global_dt = min(2 * global_dt, dt_safety_factor * &
+          minval(dt_matrix(1:dt_num_cond, :)))
+     call field_compute(tree, mg, 0, time, .true.)
+
+     dt = global_dt
      global_time = time
 
-     if (advance_max_dt < dt_min) then
-        print *, "ST_dt getting too small, instability?", advance_max_dt
+     if (global_dt < dt_min) then
+        print *, "ST_dt getting too small, instability?", global_dt
         call output_status(tree, time, wc_time, it, dt)
         if (.not. write_out) then
            write_out = .true.
@@ -188,7 +195,7 @@ program streamer
         call output_write(tree, output_cnt, wc_time, write_sim_data)
      end if
 
-     if (advance_max_dt < dt_min) error stop "dt too small"
+     if (global_dt < dt_min) error stop "dt too small"
 
      if (mod(it, refine_per_steps) == 0) then
         ! Restrict species, for the ghost cells near refinement boundaries
@@ -218,23 +225,21 @@ contains
     use m_user
     use m_table_data
     use m_transport_data
-    use m_advance_base
 
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
 
     call user_initialize(cfg, tree)
-    call advance_base_initialize(cfg)
+    call dt_initialize(cfg)
+    global_dt = dt_min
+
     call table_data_initialize(cfg)
     call gas_initialize(tree, cfg)
     call transport_data_initialize(cfg)
     call chemistry_initialize(tree, cfg)
     call ST_initialize(tree, cfg, NDIM)
     call photoi_initialize(tree, cfg)
-
-    call dt_initialize(cfg)
-    call advance_set_max_dt(dt_min)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
     call init_cond_initialize(cfg)
@@ -283,21 +288,19 @@ contains
     write(my_unit) time
     write(my_unit) global_time
     write(my_unit) photoi_prev_time
-    write(my_unit) advance_max_dt
+    write(my_unit) global_dt
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
-    real(dp)            :: tmp
 
     read(my_unit) output_cnt
     read(my_unit) time
     read(my_unit) global_time
     read(my_unit) photoi_prev_time
-    read(my_unit) tmp
+    read(my_unit) global_dt
 
-    call advance_set_max_dt(tmp)
-    dt = tmp
+    dt = global_dt
   end subroutine read_sim_data
 
 end program streamer

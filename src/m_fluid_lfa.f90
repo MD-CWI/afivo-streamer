@@ -16,26 +16,31 @@ contains
   !> Advance fluid model using forward Euler step. If the equation is written as
   !> y' = f(y), the result is: y(s_out) = y(s_prev) + f(y(s_dt)), where the
   !> s_... refer to temporal states.
-  subroutine forward_euler(tree, dt, time, s_dt, s_prev, s_out, set_dt, istep)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, istep)
     use m_chemistry
     use m_streamer
     use m_field
+    use m_dt
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
+    real(dp), intent(out)     :: dt_lim !< Time step limitation
     real(dp), intent(in)      :: time
     !> Time state to compute derivatives from
-    integer, intent(in)       :: s_dt
+    integer, intent(in)       :: s_deriv
     !> Time state to add derivatives to
     integer, intent(in)       :: s_prev
     !< Time state to store result in
     integer, intent(in)       :: s_out
-    logical, intent(in)       :: set_dt !< Whether to set new time step
     integer, intent(in)       :: istep
     integer                   :: lvl, i, id, p_id, nc
+    logical                   :: set_dt
+
+    set_dt = (istep == af_advance_num_steps(time_integrator))
 
     nc = tree%n_cell
 
-    if (istep > 1) call field_compute(tree, mg, s_dt, time, .true.)
+    call af_restrict_ref_boundary(tree, flux_species+s_deriv)
+    if (istep > 1) call field_compute(tree, mg, s_deriv, time, .true.)
 
     ! First calculate fluxes
     !$omp parallel private(lvl, i, id)
@@ -43,7 +48,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call fluxes_elec(tree, id, nc, dt, s_dt, set_dt)
+          call fluxes_elec(tree, id, nc, dt, s_deriv, set_dt)
        end do
        !$omp end do
     end do
@@ -57,7 +62,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call update_solution(tree%boxes(id), nc, dt, s_dt, &
+          call update_solution(tree%boxes(id), nc, dt, s_deriv, &
                s_prev, s_out, set_dt)
        end do
        !$omp end do

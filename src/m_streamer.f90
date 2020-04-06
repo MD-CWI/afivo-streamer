@@ -122,6 +122,9 @@ module m_streamer
   !> Global time
   real(dp), public :: global_time = 0.0_dp
 
+  !> Global time step
+  real(dp), public :: global_dt = 0.0_dp
+
   !> Method used to prolong (interpolate) densities
   procedure(af_subr_prolong), pointer, public, protected :: &
        ST_prolongation_method => null()
