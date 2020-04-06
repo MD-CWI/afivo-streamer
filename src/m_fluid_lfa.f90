@@ -35,9 +35,10 @@ contains
     integer                   :: lvl, i, id, p_id, nc
     logical                   :: set_dt
 
-    set_dt = (istep == af_advance_num_steps(time_integrator))
-
     nc = tree%n_cell
+
+    set_dt = (istep == af_advance_num_steps(time_integrator))
+    if (set_dt) dt_matrix(1:dt_num_cond, :) = dt_max ! Maximum time step
 
     call af_restrict_ref_boundary(tree, flux_species+s_deriv)
     if (istep > 1) call field_compute(tree, mg, s_deriv, time, .true.)
@@ -68,6 +69,11 @@ contains
        !$omp end do
     end do
     !$omp end parallel
+
+    if (set_dt) then
+       dt_lim = min(2 * global_dt, dt_safety_factor * &
+            minval(dt_matrix(1:dt_num_cond, :)))
+    end if
   end subroutine forward_euler
 
   !> Compute the electron fluxes due to drift and diffusion

@@ -170,16 +170,16 @@ program streamer
         photoi_prev_time = time
      end if
 
-     dt_matrix(1:dt_num_cond, :) = dt_max ! Maximum time step
      call af_advance(tree, dt, dt_lim, time, &
           species_itree(n_gas_species+1:n_species), &
           af_heuns_method, forward_euler)
-     ! Determine next time step
-     global_dt = min(2 * global_dt, dt_safety_factor * &
-          minval(dt_matrix(1:dt_num_cond, :)))
+
+     ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
 
-     dt = global_dt
+     ! dt is modified when writing output, global_dt not
+     global_dt   = dt_lim
+     dt          = dt_lim
      global_time = time
 
      if (global_dt < dt_min) then
