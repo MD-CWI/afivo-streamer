@@ -3,12 +3,16 @@
 module m_gas
   use m_types
   use m_af_types
+  use m_units_constants
 
   implicit none
   private
 
   !> Whether the gas has a constant density
   logical, public, protected :: gas_constant_density = .true.
+
+  !> Whether the gas dynamics are simulated
+  logical, public, protected :: gas_dynamics = .false.
 
   ! Pressure of the gas in bar
   real(dp), public, protected :: gas_pressure = 1.0_dp
@@ -37,8 +41,36 @@ module m_gas
   ! Index of the gas number density
   integer, public, protected :: i_gas_dens = -1
 
+  ! Gas mean molecular weight (kg)
+  real(dp), public, protected :: gas_molecular_weight = 28.8_dp * UC_atomic_mass
+
+  ! Ratio of heat capacities (polytropic index)
+  real(dp), public, protected :: gas_euler_gamma = 1.4_dp
+
+  ! Number of variables for the Euler equations
+  integer, parameter, public :: n_vars_euler = 2+NDIM
+
+  ! Indices of the Euler variables
+  integer, public, protected :: gas_vars(n_vars_euler)
+
+  ! Indices of the Euler fluxes
+  integer, public, protected :: gas_fluxes(n_vars_euler)
+
+  ! Names of the Euler variables
+  character(len=name_len), public, protected :: gas_var_names(n_vars_euler)
+
+  ! Indices defining the order of the gas dynamics variables
+  integer, parameter, public :: i_rho = 1
+#if NDIM == 2
+  integer, parameter, public :: i_mom(NDIM) = [2, 3]
+#elif NDIM == 3
+  integer, parameter, public :: i_mom(NDIM) = [2, 3, 4]
+#endif
+  integer, parameter, public :: i_e = i_mom(NDIM) + 1
+
   public :: gas_initialize
   public :: gas_index
+  public :: gas_forward_euler
 
 contains
 
@@ -47,20 +79,45 @@ contains
     use m_config
     use m_units_constants
     use m_user_methods
+    use m_dt
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n
 
-    gas_constant_density = .not. associated(user_gas_density)
+    call CFG_add_get(cfg, "gas%dynamics", gas_dynamics, &
+         "Whether the gas dynamics are simulated")
 
-    if (.not. gas_constant_density) then
+    if (gas_dynamics) then
+       gas_var_names(i_rho) = "gas_rho"
+       gas_var_names(i_mom(1:2)) = ["gas_mom_x", "gas_mom_y"]
+#if NDIM == 3
+       gas_var_names(i_mom(3)) = "gas_mom_z"
+#endif
+       gas_var_names(i_e)   = "gas_e"
+
+       gas_constant_density = .false.
        call af_add_cc_variable(tree, "M", ix=i_gas_dens)
+
+       do n = 1, n_vars_euler
+          call af_add_cc_variable(tree, gas_var_names(n), ix=gas_vars(n), &
+               n_copies=af_advance_num_steps(time_integrator))
+          call af_add_fc_variable(tree, "flux", ix=gas_fluxes(n))
+          ! @todo improve boundary conditions?
+          call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
+       end do
+    else if (associated(user_gas_density)) then
+       gas_constant_density = .false.
+       call af_add_cc_variable(tree, "M", ix=i_gas_dens)
+    else
+       gas_constant_density = .true.
     end if
 
     call CFG_add_get(cfg, "gas%pressure", gas_pressure, &
          "The gas pressure (bar)")
     call CFG_add_get(cfg, "gas%temperature", gas_temperature, &
          "The gas temperature (Kelvin)")
+    call CFG_add_get(cfg, "gas%molecular_weight", gas_molecular_weight, &
+         "Gas mean molecular weight (kg), for gas dynamics")
 
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
@@ -89,6 +146,28 @@ contains
 
   end subroutine gas_initialize
 
+  subroutine gas_forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, istep)
+    use m_af_flux_schemes
+    type(af_t), intent(inout) :: tree
+    real(dp), intent(in)      :: dt
+    real(dp), intent(out)     :: dt_lim
+    real(dp), intent(in)      :: time
+    integer, intent(in)       :: s_deriv
+    integer, intent(in)       :: s_prev
+    integer, intent(in)       :: s_out
+    integer, intent(in)       :: istep
+    real(dp)                  :: wmax(NDIM)
+
+    call flux_generic_tree(tree, n_vars_euler, gas_vars+s_deriv, &
+         gas_fluxes, wmax, max_wavespeed, get_fluxes, &
+         to_primitive, to_conservative)
+    call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
+         s_prev, s_out)
+
+    ! Compute new time step
+    dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
+  end subroutine gas_forward_euler
+
   !> Find index of a gas component, return -1 if not found
   elemental integer function gas_index(name)
     character(len=*), intent(in) :: name
@@ -97,5 +176,83 @@ contains
     end do
     if (gas_index == size(gas_components)+1) gas_index = -1
   end function gas_index
+
+  subroutine to_primitive(n_values, n_vars, u)
+    integer, intent(in)     :: n_values, n_vars
+    real(dp), intent(inout) :: u(n_values, n_vars)
+
+    u(:, i_mom(1)) = u(:, i_mom(1))/u(:, i_rho)
+    u(:, i_mom(2)) = u(:, i_mom(2))/u(:, i_rho)
+    u(:, i_e) = (gas_euler_gamma-1.0_dp) * (u(:, i_e) - &
+         0.5_dp*u(:, i_rho)* sum(u(:, i_mom(:))**2, dim=2))
+  end subroutine to_primitive
+
+  subroutine to_conservative(n_values, n_vars, u)
+    integer, intent(in)     :: n_values, n_vars
+    real(dp), intent(inout) :: u(n_values, n_vars)
+    real(dp)                :: kin_en(n_values)
+    real(dp)                :: inv_fac
+    integer                 :: i
+
+    ! Compute kinetic energy (0.5 * rho * velocity^2)
+    kin_en = 0.5_dp * u(:, i_rho) * sum(u(:, i_mom(:))**2, dim=2)
+
+    ! Compute energy from pressure and kinetic energy
+    inv_fac = 1/(gas_euler_gamma - 1.0_dp)
+    u(:, i_e) = u(:, i_e) * inv_fac + kin_en
+
+    ! Compute momentum from density and velocity components
+    do i = 1, NDIM
+       u(:, i_mom(i)) = u(:, i_rho) * u(:, i_mom(i))
+    end do
+  end subroutine to_conservative
+
+  subroutine max_wavespeed(n_values, n_var, flux_dim, u, w)
+    integer, intent(in)   :: n_values !< Number of cell faces
+    integer, intent(in)   :: n_var    !< Number of variables
+    integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
+    real(dp), intent(in)  :: u(n_values, n_var) !< Primitive variables
+    real(dp), intent(out) :: w(n_values) !< Maximum speed
+    real(dp)              :: sound_speeds(n_values)
+
+    sound_speeds = sqrt(gas_euler_gamma * u(:, i_e) / u(:, i_rho))
+    w = sound_speeds + abs(u(:, i_mom(flux_dim)))
+  end subroutine max_wavespeed
+
+  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux, box, line_ix)
+    integer, intent(in)     :: n_values !< Number of cell faces
+    integer, intent(in)     :: n_var    !< Number of variables
+    integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
+    real(dp), intent(in)    :: u(n_values, n_var)
+    real(dp), intent(out)   :: flux(n_values, n_var)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: line_ix(NDIM-1)
+    real(dp)                :: E(n_values), inv_fac
+    integer                 :: i
+
+    ! Compute left and right flux for conservative variables from the primitive
+    ! reconstructed values.
+
+    ! Density flux
+    flux(:, i_rho) = u(:, i_rho) * u(:, i_mom(flux_dim))
+
+    ! Momentum flux
+    do i = 1, NDIM
+       flux(:,  i_mom(i)) = u(:, i_rho) * &
+            u(:, i_mom(i)) * u(:, i_mom(flux_dim))
+    end do
+
+    ! Add pressure term
+    flux(:, i_mom(flux_dim)) = flux(:, i_mom(flux_dim)) + u(:, i_e)
+
+    ! Compute energy
+    inv_fac = 1/(gas_euler_gamma-1.0_dp)
+    E = u(:, i_e) * inv_fac + 0.5_dp * u(:, i_rho) * &
+         sum(u(:, i_mom(:))**2, dim=2)
+
+    ! Energy flux
+    flux(:, i_e) = u(:, i_mom(flux_dim)) * (E + u(:, i_e))
+
+  end subroutine get_fluxes
 
 end module m_gas

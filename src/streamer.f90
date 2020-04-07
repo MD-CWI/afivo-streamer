@@ -26,6 +26,7 @@ program streamer
   integer                   :: i, it, coord_type, box_bytes
   logical                   :: write_out
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
+  real(dp)                  :: gas_prev_time, dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
@@ -98,7 +99,9 @@ program streamer
      time             = 0.0_dp ! Simulation time (all times are in s)
      global_time      = time
      photoi_prev_time = time   ! Time of last photoionization computation
+     gas_prev_time    = time
      dt               = global_dt
+     dt_gas           = global_dt
      initial_streamer_pos = 0.0_dp ! Initial streamer position
 
      if (ST_cylindrical) then
@@ -173,6 +176,12 @@ program streamer
      call af_advance(tree, dt, dt_lim, time, &
           species_itree(n_gas_species+1:n_species), &
           af_heuns_method, forward_euler)
+
+     if (gas_dynamics .and. time > gas_prev_time + dt_gas) then
+        call af_advance(tree, dt_gas, dt_gas_lim, gas_prev_time, &
+             gas_vars, time_integrator, gas_forward_euler)
+        dt_gas = min(0.5_dp * dt_gas_lim, 100 * global_dt)
+     end if
 
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)

@@ -202,7 +202,23 @@ contains
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
 
-       if (.not. gas_constant_density) then
+       if (gas_dynamics) then
+          if (associated(user_gas_density)) then
+             box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
+          else
+             ! Start with a constant gas number density
+             box%cc(IJK, i_gas_dens) = gas_number_density
+          end if
+
+          ! Initialize Euler variables: density, momentum, energy
+          box%cc(IJK, gas_vars(i_rho)) = box%cc(IJK, i_gas_dens) * &
+               gas_molecular_weight
+          box%cc(IJK, gas_vars(i_mom)) = 0.0_dp
+          box%cc(IJK, gas_vars(i_e)) = &
+               gas_pressure / (gas_euler_gamma - 1) + &
+               0.5_dp * box%cc(IJK, i_gas_dens) * &
+               sum(box%cc(IJK, gas_vars(i_mom))**2)
+       else if (associated(user_gas_density)) then
           box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
        end if
 

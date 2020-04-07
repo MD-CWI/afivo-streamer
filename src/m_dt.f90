@@ -36,6 +36,9 @@ module m_dt
   ! Minimum allowed time step
   real(dp), public, protected :: dt_min = 1.0e-14_dp
 
+  ! Time step for gas dynamics
+  real(dp), public :: dt_gas = 1.0e-14_dp
+
   !> Which time integrator is used
   integer, public, protected :: time_integrator
 
