@@ -207,7 +207,8 @@ contains
     end select
   end function solution
 
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, istep)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
+       i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
     real(dp), intent(in)      :: time
@@ -215,7 +216,7 @@ contains
     integer, intent(in)       :: s_deriv
     integer, intent(in)       :: s_prev
     integer, intent(in)       :: s_out
-    integer, intent(in)       :: istep
+    integer, intent(in)       :: i_step, n_steps
     real(dp)                  :: wmax(NDIM)
 
     call flux_generic_tree(tree, 1, [i_phi+s_deriv], [i_flux], wmax, &

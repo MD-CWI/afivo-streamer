@@ -19,7 +19,8 @@ module m_af_advance
   integer, parameter :: req_copies(n_integrators) = af_advance_num_steps
 
   interface
-     subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, istep)
+     subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
+          i_step, n_steps)
        import
        type(af_t), intent(inout) :: tree
        real(dp), intent(in)      :: dt      !< Time step
@@ -28,7 +29,8 @@ module m_af_advance
        integer, intent(in)       :: s_deriv !< State to compute derivatives from
        integer, intent(in)       :: s_prev  !< Previous state
        integer, intent(in)       :: s_out   !< Output state
-       integer, intent(in)       :: istep   !< Step of the integrator
+       integer, intent(in)       :: i_step   !< Step of the integrator
+       integer, intent(in)       :: n_steps   !< Total number of steps
      end subroutine subr_feuler
   end interface
 
@@ -45,6 +47,7 @@ contains
     integer, intent(in)       :: i_cc(:) !< Index of cell-centered variables
     integer, intent(in)       :: time_integrator
     procedure(subr_feuler)    :: forward_euler
+    integer                   :: n_steps
 
     if (time_integrator < 1 .or. time_integrator > n_integrators) &
          error stop "Invalid time integrator"
@@ -52,18 +55,20 @@ contains
     if (any(tree%cc_num_copies(i_cc) < req_copies(time_integrator))) &
          error stop "Not enough copies available"
 
+    n_steps = af_advance_num_steps(time_integrator)
+
     select case (time_integrator)
     case (af_forward_euler)
-       call forward_euler(tree, dt, dt_lim, time, 0, 0, 0, 1)
+       call forward_euler(tree, dt, dt_lim, time, 0, 0, 0, 1, n_steps)
        time = time + dt
     case (af_midpoint_method)
-       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 0, 0, 1, 1)
-       call forward_euler(tree, dt, dt_lim, time, 1, 0, 0, 2)
+       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 0, 0, 1, 1, n_steps)
+       call forward_euler(tree, dt, dt_lim, time, 1, 0, 0, 2, n_steps)
        time = time + dt
     case (af_heuns_method)
-       call forward_euler(tree, dt, dt_lim, time, 0, 0, 1, 1)
+       call forward_euler(tree, dt, dt_lim, time, 0, 0, 1, 1, n_steps)
        time = time + dt
-       call forward_euler(tree, dt, dt_lim, time, 1, 1, 1, 2)
+       call forward_euler(tree, dt, dt_lim, time, 1, 1, 1, 2, n_steps)
        call combine_substeps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
     end select
 
