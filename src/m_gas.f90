@@ -146,6 +146,7 @@ contains
 
   end subroutine gas_initialize
 
+  !> A forward-Euler method for the Euler equations
   subroutine gas_forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
        i_step, n_steps)
     use m_af_flux_schemes

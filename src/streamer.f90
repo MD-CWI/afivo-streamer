@@ -11,6 +11,7 @@ program streamer
   use m_photoi
   use m_chemistry
   use m_gas
+  use m_coupling
   use m_fluid_lfa
   use m_dt
   use m_types
@@ -177,10 +178,15 @@ program streamer
           species_itree(n_gas_species+1:n_species), &
           af_heuns_method, forward_euler)
 
-     if (gas_dynamics .and. time > gas_prev_time + dt_gas) then
-        call af_advance(tree, dt_gas, dt_gas_lim, gas_prev_time, &
-             gas_vars, time_integrator, gas_forward_euler)
-        dt_gas = min(0.5_dp * dt_gas_lim, 100 * global_dt)
+     if (gas_dynamics) then
+        call coupling_add_fluid_source(tree, dt)
+
+        if (time > gas_prev_time + dt_gas) then
+           call af_advance(tree, dt_gas, dt_gas_lim, gas_prev_time, &
+                gas_vars, time_integrator, gas_forward_euler)
+           dt_gas = min(0.5_dp * dt_gas_lim, 10 * global_dt)
+           call coupling_update_gas_density(tree)
+        end if
      end if
 
      ! Make sure field is available for latest time state
@@ -210,6 +216,11 @@ program streamer
         ! Restrict species, for the ghost cells near refinement boundaries
         call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
         call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+
+        if (gas_dynamics) then
+           call af_restrict_tree(tree, gas_vars)
+           call af_gc_tree(tree, gas_vars)
+        end if
 
         if (associated(user_refine)) then
            call af_adjust_refinement(tree, user_refine, ref_info, &
