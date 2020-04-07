@@ -38,9 +38,15 @@ contains
     nc = tree%n_cell
 
     set_dt = (istep == af_advance_num_steps(time_integrator))
-    if (set_dt) dt_matrix(1:dt_num_cond, :) = dt_max ! Maximum time step
 
+    ! Use a shared array to determine maximum time step
+    dt_matrix(1:dt_num_cond, :) = dt_max
+
+    ! So that ghost cells can be computed properly near refinement boundaries
     call af_restrict_ref_boundary(tree, flux_species+s_deriv)
+
+    ! Since field_compute is called after performing time integration, we don't
+    ! have to call it again for the first sub-step of the next iteration
     if (istep > 1) call field_compute(tree, mg, s_deriv, time, .true.)
 
     ! First calculate fluxes
@@ -70,10 +76,8 @@ contains
     end do
     !$omp end parallel
 
-    if (set_dt) then
-       dt_lim = min(2 * global_dt, dt_safety_factor * &
-            minval(dt_matrix(1:dt_num_cond, :)))
-    end if
+    dt_lim = min(2 * global_dt, dt_safety_factor * &
+         minval(dt_matrix(1:dt_num_cond, :)))
   end subroutine forward_euler
 
   !> Compute the electron fluxes due to drift and diffusion
