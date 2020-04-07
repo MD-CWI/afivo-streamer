@@ -16,14 +16,15 @@ contains
   !> Advance fluid model using forward Euler step. If the equation is written as
   !> y' = f(y), the result is: y(s_out) = y(s_prev) + f(y(s_dt)), where the
   !> s_... refer to temporal states.
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, istep)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
+       i_step, n_steps)
     use m_chemistry
     use m_streamer
     use m_field
     use m_dt
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
-    real(dp), intent(out)     :: dt_lim !< Time step limitation
+    real(dp), intent(inout)   :: dt_lim !< Time step limitation
     real(dp), intent(in)      :: time
     !> Time state to compute derivatives from
     integer, intent(in)       :: s_deriv
@@ -31,13 +32,13 @@ contains
     integer, intent(in)       :: s_prev
     !< Time state to store result in
     integer, intent(in)       :: s_out
-    integer, intent(in)       :: istep
+    integer, intent(in)       :: i_step, n_steps
     integer                   :: lvl, i, id, p_id, nc
     logical                   :: set_dt
 
     nc = tree%n_cell
 
-    set_dt = (istep == af_advance_num_steps(time_integrator))
+    set_dt = (i_step == n_steps)
 
     ! Use a shared array to determine maximum time step
     dt_matrix(1:dt_num_cond, :) = dt_max
@@ -47,7 +48,7 @@ contains
 
     ! Since field_compute is called after performing time integration, we don't
     ! have to call it again for the first sub-step of the next iteration
-    if (istep > 1) call field_compute(tree, mg, s_deriv, time, .true.)
+    if (i_step > 1) call field_compute(tree, mg, s_deriv, time, .true.)
 
     ! First calculate fluxes
     !$omp parallel private(lvl, i, id)
@@ -76,8 +77,10 @@ contains
     end do
     !$omp end parallel
 
-    dt_lim = min(2 * global_dt, dt_safety_factor * &
-         minval(dt_matrix(1:dt_num_cond, :)))
+    if (set_dt) then
+       dt_lim = min(2 * global_dt, dt_safety_factor * &
+            minval(dt_matrix(1:dt_num_cond, :)))
+    end if
   end subroutine forward_euler
 
   !> Compute the electron fluxes due to drift and diffusion
