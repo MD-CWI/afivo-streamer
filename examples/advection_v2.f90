@@ -212,7 +212,7 @@ contains
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
     real(dp), intent(in)      :: time
-    real(dp), intent(out)     :: dt_lim
+    real(dp), intent(inout)   :: dt_lim
     integer, intent(in)       :: s_deriv
     integer, intent(in)       :: s_prev
     integer, intent(in)       :: s_out

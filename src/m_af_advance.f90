@@ -24,7 +24,7 @@ module m_af_advance
        import
        type(af_t), intent(inout) :: tree
        real(dp), intent(in)      :: dt      !< Time step
-       real(dp), intent(out)     :: dt_lim  !< Computed time step limit
+       real(dp), intent(inout)   :: dt_lim  !< Computed time step limit
        real(dp), intent(in)      :: time    !< Current time
        integer, intent(in)       :: s_deriv !< State to compute derivatives from
        integer, intent(in)       :: s_prev  !< Previous state
