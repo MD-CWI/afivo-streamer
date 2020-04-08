@@ -177,7 +177,7 @@ contains
     call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, wmax, &
          max_wavespeed, get_fluxes, to_primitive, to_conservative)
     call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
-         s_prev, s_out)
+         s_deriv, s_prev, s_out)
 
     ! Compute new time step
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
