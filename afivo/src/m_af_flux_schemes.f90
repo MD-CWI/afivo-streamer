@@ -230,13 +230,12 @@ contains
     integer, intent(in)       :: s_out          !< Output time state
     integer                   :: lvl, n, id, IJK, nc
     real(dp)                  :: dt_dr(NDIM)
-#if NDIM == 2
     real(dp)                  :: rfac(2, tree%n_cell)
-#endif
 
     nc = tree%n_cell
+    rfac = 0.0_dp ! Prevent warnings in 3D
 
-    !$omp parallel private(lvl, n, id, IJK, dt_dr)
+    !$omp parallel private(lvl, n, id, IJK, dt_dr, rfac)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do n = 1, size(tree%lvls(lvl)%leaves)
