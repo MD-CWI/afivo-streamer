@@ -163,12 +163,56 @@ contains
     call flux_generic_tree(tree, n_vars_euler, gas_vars+s_deriv, &
          gas_fluxes, wmax, max_wavespeed, get_fluxes, &
          to_primitive, to_conservative)
-    call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-         s_prev, s_out)
+    if (tree%coord_t == af_cyl) then
+       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
+            s_deriv, s_prev, s_out, add_geometric_source)
+    else
+       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
+            s_deriv, s_prev, s_out)
+    end if
 
     ! Compute new time step
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine gas_forward_euler
+
+#if NDIM == 2
+  !> Add geometric source term for axisymmetric simulations
+  subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out)
+    type(box_t), intent(inout) :: box
+    real(dp), intent(in)       :: dt
+    integer, intent(in)        :: n_vars
+    integer, intent(in)        :: i_cc(n_vars)
+    integer, intent(in)        :: s_deriv
+    integer, intent(in)        :: s_out
+    real(dp)                   :: pressure(DTIMES(box%n_cell))
+    real(dp)                   :: inv_radius
+    integer                    :: nc, i
+
+    nc = box%n_cell
+    pressure = get_pressure(box, s_deriv)
+
+    do i = 1, nc
+       inv_radius = 1/af_cyl_radius_cc(box, i)
+       box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) = &
+            box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) + dt * &
+            pressure(i, :) * inv_radius
+    end do
+
+  end subroutine add_geometric_source
+#endif
+
+  pure function get_pressure(box, s_in) result(pressure)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: s_in
+    real(dp)                :: pressure(DTIMES(box%n_cell))
+    integer                 :: nc
+
+    nc = box%n_cell
+    pressure = (gas_euler_gamma-1.0_dp) * (&
+         box%cc(DTIMES(1:nc), gas_vars(i_e)+s_in) - 0.5_dp * &
+         sum(box%cc(DTIMES(1:nc), gas_vars(i_mom)+s_in)**2, dim=NDIM+1) / &
+         box%cc(DTIMES(1:nc), gas_vars(i_rho)+s_in))
+  end function get_pressure
 
   !> Find index of a gas component, return -1 if not found
   elemental integer function gas_index(name)
