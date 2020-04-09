@@ -175,7 +175,7 @@ contains
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine gas_forward_euler
 
-#if NDIM == 2
+
   !> Add geometric source term for axisymmetric simulations
   subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out)
     type(box_t), intent(inout) :: box
@@ -184,6 +184,8 @@ contains
     integer, intent(in)        :: i_cc(n_vars)
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
+
+#if NDIM == 2
     real(dp)                   :: pressure(DTIMES(box%n_cell))
     real(dp)                   :: inv_radius
     integer                    :: nc, i
@@ -197,9 +199,8 @@ contains
             box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) + dt * &
             pressure(i, :) * inv_radius
     end do
-
-  end subroutine add_geometric_source
 #endif
+  end subroutine add_geometric_source
 
   pure function get_pressure(box, s_in) result(pressure)
     type(box_t), intent(in) :: box
