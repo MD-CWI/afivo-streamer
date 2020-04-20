@@ -23,6 +23,9 @@ module m_user_methods
 
   procedure(log_subr), pointer :: user_write_log => null()
 
+  !> Whether to simulate the plasma fluid equations for the electrons
+  procedure(bool_subr), pointer :: user_evolve_electrons => null()
+
   interface
      subroutine log_subr(tree, filename, out_cnt)
        import
@@ -44,6 +47,12 @@ module m_user_methods
        real(dp), intent(in)   :: time
        real(dp)               :: amplitude
      end function field_func
+
+     logical function bool_subr(tree, time)
+       import
+       type(af_t), intent(in) :: tree
+       real(dp), intent(in)   :: time
+     end function bool_subr
   end interface
 
 end module m_user_methods
