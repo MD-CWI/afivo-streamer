@@ -278,7 +278,7 @@ contains
     end if
 
     if (present(time)) then
-       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+       ierr = dbadddopt(dboptix, DBOPT_DTIME, time)
     end if
 
     ierr = dbputmmesh(dbix, trim(mmname), len_trim(mmname), n_grids, &
