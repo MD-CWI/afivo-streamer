@@ -31,3 +31,11 @@ Afterwards, you can recompile the code by typing
     make
 
 either in the `afivo-streamer` folder, or in a specific program folder with a `Makefile`.
+
+# List of issues and solutions
+
+## Problems compiling Silo
+
+* The script `build_silo.sh` can be executed manually from the `afivo/external_libraries' folder for easier debugging. 
+* Make sure the default C, C++ and Fortran compiler are configured correctly. For example, use `export FC=/usr/bin/gfortran' in your shell to specify the Fortran compiler.
+* `/usr/bin/ld: cannot find -lsz`. **Solution** (on Fedora) `sudo dnf install libaec-devel`
