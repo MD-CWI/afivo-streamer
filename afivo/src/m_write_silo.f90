@@ -342,7 +342,7 @@ contains
     end if
 
     if (present(time)) then
-       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+       ierr = dbadddopt(dboptix, DBOPT_DTIME, time)
     end if
 
     ! Jannis: valgrind complains about a memory leak due to this call, but if
