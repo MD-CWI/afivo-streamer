@@ -39,3 +39,10 @@ either in the `afivo-streamer` folder, or in a specific program folder with a `M
 * The script `build_silo.sh` can be executed manually from the `afivo/external_libraries' folder for easier debugging. 
 * Make sure the default C, C++ and Fortran compiler are configured correctly. For example, use `export FC=/usr/bin/gfortran' in your shell to specify the Fortran compiler.
 * `/usr/bin/ld: cannot find -lsz`. **Solution** (on Fedora) `sudo dnf install libaec-devel`
+
+### The above solution gives a new error (encountered by some users using Fedora 30)
+
+* Add the following lines to `build_silo.sh` just before the `#Configure` comment:
+    `export CC=/usr/bin/gcc`
+    `export CXX=/usr/bin/g++`
+    `export FC=/usr/bin/gfortran`
