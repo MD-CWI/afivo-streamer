@@ -37,6 +37,8 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
 
+  call print_program_name()
+
   ! Parse command line configuration files and options
   call CFG_update_from_arguments(cfg)
 
@@ -302,5 +304,15 @@ contains
 
     dt = global_dt
   end subroutine read_sim_data
+
+  subroutine print_program_name()
+    print *, "            __ _                  _____ _                                      "
+    print *, "     /\    / _(_)                / ____| |                                     "
+    print *, "    /  \  | |_ ___   _____ _____| (___ | |_ _ __ ___  __ _ _ __ ___   ___ _ __ "
+    print *, "   / /\ \ |  _| \ \ / / _ \______\___ \| __| '__/ _ \/ _` | '_ ` _ \ / _ \ '__|"
+    print *, "  / ____ \| | | |\ V / (_) |     ____) | |_| | |  __/ (_| | | | | | |  __/ |   "
+    print *, " /_/    \_\_| |_| \_/ \___/     |_____/ \__|_|  \___|\__,_|_| |_| |_|\___|_|   "
+    print *, "                                                                               "
+  end subroutine print_program_name
 
 end program streamer
