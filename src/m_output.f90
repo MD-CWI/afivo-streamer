@@ -382,7 +382,7 @@ contains
     integer                      :: my_unit, iostate
     open(newunit=my_unit, file=trim(pathname)//"_DUMMY", iostat=iostate)
     if (iostate /= 0) then
-       print *, "Output directory: " // trim(pathname)
+       print *, "Output name: " // trim(pathname) // '_...'
        error stop "Directory not writable (does it exist?)"
     else
        close(my_unit, status='delete')
