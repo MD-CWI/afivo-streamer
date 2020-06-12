@@ -31,7 +31,7 @@ module m_user_methods
        integer, intent(in)          :: out_cnt
      end subroutine log_subr
 
-     pure function gas_dens_func(box, IJK) result(dens)
+     function gas_dens_func(box, IJK) result(dens)
        import
        type(box_t), intent(in) :: box
        integer, intent(in)     :: IJK
