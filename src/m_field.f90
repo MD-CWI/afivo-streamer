@@ -324,28 +324,6 @@ contains
     call af_loop_box(tree, v2_from_charge)
     call af_loop_box(tree, v_gnd_from_charge)
 
-    ! do lvl = 1, tree%highest_lvl
-    !   do i = 1, size(tree%lvls(lvl)%leaves)
-    !     id = tree%lvls(lvl)%leaves(i)
-    !     nc = tree%boxes(id)%n_cell
-    !     do n = 1, nc
-    !       do m = 1, nc
-    !         dis_pow = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
-    !            (ST_domain_len(2) - tree%boxes(id)%r_min(2) + &
-    !            (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
-    !         dis_gnd = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
-    !            (tree%boxes(id)%r_min(2) + (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
-    !         vol = tree%boxes(id)%r_min(2)*tree%boxes(id)%r_min(1)*2*UC_pi*&
-    !            (tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-1.0_dp)))
-    !         v2_change = v2_change + &
-    !            tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_pow)
-    !         v_gnd_change = v_gnd_change + &
-    !            tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_gnd)
-    !       end do
-    !     end do
-    !   end do 
-    ! end do
-
     voltage_2 = voltage_2 + v2_change - v2_change_old
     voltage_gnd = voltage_gnd + v_gnd_change - v_gnd_change_old
     cup = voltage_2 + &
