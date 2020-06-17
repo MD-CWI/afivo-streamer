@@ -44,14 +44,13 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial, loc_z
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp), allocatable     :: x_data(:), y_data(:), z_data(:)
-  integer                   :: n, lvl, m, nc, id
+  integer                   :: n
   character(len=string_len) :: lc_file = undefined_str
   real(dp), dimension (2)   :: rr_val
 
   logical  :: voltage_change = .false.        !> To changing voltage at the electrodes
   real(dp) :: v2_change_old = 0_dp       ! potential due to charges in the powered electrode in the previous time step 
   real(dp) :: v_gnd_change_old = 0_dp    ! potential due to charges in the ground electrode in the previous time step
-  real(dp) :: dis_gnd, dis_pow
 
   ! Parse command line configuration files and options
   call CFG_update_from_arguments(cfg)
@@ -189,25 +188,8 @@ program streamer
     call af_print_info(tree)
 
     !compute voltage due to charges before starting
-    do lvl = 1, tree%highest_lvl
-      do i = 1, size(tree%lvls(lvl)%leaves)
-        id = tree%lvls(lvl)%leaves(i)
-        nc = tree%boxes(id)%n_cell
-        do n = 1, nc
-          do m = 1, nc
-            dis_pow = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
-               (ST_domain_len(2) - tree%boxes(id)%r_min(2) + &
-               (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
-            dis_gnd = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
-               (tree%boxes(id)%r_min(2) + (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
-            v2_change_old = v2_change_old + &
-               tree%boxes(id)%cc(n, m, i_rhs) / (-4.0*UC_pi*dis_pow)
-            v_gnd_change_old = v_gnd_change_old + &
-               tree%boxes(id)%cc(n, m, i_rhs) / (-4.0*UC_pi*dis_gnd)
-          end do
-        end do
-      end do 
-    end do
+    call af_loop_box(tree, v2_old_from_charge)
+    call af_loop_box(tree, v_gnd_old_from_charge)
 
   ! Initial wall clock time
     call system_clock(t_start, count_rate)
@@ -292,9 +274,8 @@ program streamer
           end if
        end if
 
-       if(voltage_change .and. time > 20e-9) then
+       if(voltage_change) then
         call voltage_compute(tree, v2_change_old, v_gnd_change_old, dt)
-        ! call voltage_compute(tree, dt)
        endif
     end do
 
@@ -389,5 +370,48 @@ contains
     call advance_set_max_dt(tmp)
     dt = tmp
   end subroutine read_sim_data
+
+  subroutine v2_old_from_charge(box)
+    type(box_t), intent(inout) :: box
+    integer                 :: nc, n, m
+    real(dp)                :: dis, vol
+
+    nc = box%n_cell
+
+#if NDIM == 2
+    do n = 1, nc
+      do m = 1, nc
+        dis = sqrt((box%r_min(1) + (box%dr(1)*(n-0.5_dp)))**2 + &
+               (ST_domain_len(2) - box%r_min(2) - (box%dr(2)*(m-0.5_dp)))**2)
+        vol = 2.0_dp*UC_pi*(box%r_min(1) + (box%dr(1)*(n-1)))* &
+               box%dr(1)*box%dr(2)
+        v2_change_old = v2_change_old + &
+               box%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis)
+      end do
+    end do
+#endif
+  end subroutine
+
+  subroutine v_gnd_old_from_charge(box)
+    type(box_t), intent(inout) :: box
+    integer                 :: nc, n, m
+    real(dp)                :: dis, vol
+
+    nc = box%n_cell
+
+#if NDIM == 2
+    do n = 1, nc
+      do m = 1, nc
+        dis = sqrt((box%r_min(1) + (box%dr(1)*(n-0.5_dp)))**2 + &
+               (box%r_min(2) + (box%dr(2)*(m-0.5_dp)))**2)
+        vol = 2.0_dp*UC_pi*(box%r_min(1) + (box%dr(1)*(n-1)))* &
+               box%dr(1)*box%dr(2) 
+        v_gnd_change_old = v_gnd_change_old + &
+               box%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis)
+      end do
+    end do
+#endif
+
+  end subroutine
 
 end program streamer

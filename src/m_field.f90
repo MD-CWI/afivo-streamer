@@ -60,8 +60,8 @@ module m_field
   real(dp), parameter :: r_gnd = 10_dp ! resistance of grounded electrode
   real(dp), public, protected :: voltage_2                  ! voltage at powered electrode
   real(dp), public, protected :: voltage_gnd                ! voltage at ground electrode
-  real(dp), public :: v2_change                  ! potential at powered electrode due to charges 
-  real(dp), public :: v_gnd_change               ! potential at ground electrode due to charges
+  real(dp), public, protected :: v2_change                  ! potential at powered electrode due to charges 
+  real(dp), public, protected :: v_gnd_change               ! potential at ground electrode due to charges
 
   real(dp) :: field_point_charge = 0.0_dp
 #if NDIM == 2
@@ -261,48 +261,52 @@ contains
   end subroutine field_compute_rhs
 
   !Compute voltage contribution to powered electrode of space charges
-!   subroutine v2_from_charge(box)
-!     use m_units_constants
-!     type(box_t), intent(inout) :: box
-!     integer                 :: nc, n, m
-!     real(dp)                :: dis
+  subroutine v2_from_charge(box)
+    use m_units_constants
+    type(box_t), intent(inout) :: box
+    integer                 :: nc, n, m
+    real(dp)                :: dis, vol
 
-!     nc = box%n_cell
-!     dis = sqrt((box%r_min(1) + (box%dr(1)*nc/2))**2 + &
-!                (ST_domain_len(2) - box%r_min(2) + (box%dr(2)*nc/2))**2)
+    nc = box%n_cell
 
-! #if NDIM == 2
-!     do n = 1, nc
-!       do m = 1, nc  
-!         v2_change = v2_change + &
-!                box%cc(n, m, i_rhs) / (4.0*UC_elec_charge*UC_pi*dis)
-!       end do
-!     end do
-! #endif
+#if NDIM == 2
+    do n = 1, nc
+      do m = 1, nc
+        dis = sqrt((box%r_min(1) + (box%dr(1)*(n-0.5_dp)))**2 + &
+               (ST_domain_len(2) - box%r_min(2) - (box%dr(2)*(m-0.5_dp)))**2)
+        vol = 2.0_dp*UC_pi*(box%r_min(1) + (box%dr(1)*(n-1)))* &
+               box%dr(1)*box%dr(2)
+        v2_change = v2_change + &
+               box%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis)
+      end do
+    end do
+#endif
 
-!   end subroutine
+  end subroutine
 
   !Compute voltage contribution to grounded electrode of space charges
-!   subroutine v_gnd_from_charge(box)
-!     use m_units_constants
-!     type(box_t), intent(inout) :: box
-!     integer                 :: nc, n, m
-!     real(dp)                :: dis
+  subroutine v_gnd_from_charge(box)
+    use m_units_constants
+    type(box_t), intent(inout) :: box
+    integer                 :: nc, n, m
+    real(dp)                :: dis, vol
 
-!     nc = box%n_cell
-!     dis = sqrt((box%r_min(1) + (box%dr(1)*nc/2))**2 + &
-!                (box%r_min(2) + (box%dr(2)*nc/2))**2)
+    nc = box%n_cell
 
-! #if NDIM == 2
-!     do n = 1, nc
-!       do m = 1, nc  
-!         v_gnd_change = v_gnd_change + &
-!                box%cc(n, m, i_rhs) / (4.0*UC_elec_charge*UC_pi*dis)
-!       end do
-!     end do
-! #endif
+#if NDIM == 2
+    do n = 1, nc
+      do m = 1, nc
+        dis = sqrt((box%r_min(1) + (box%dr(1)*(n-0.5_dp)))**2 + &
+               (box%r_min(2) + (box%dr(2)*(m-0.5_dp)))**2)
+        vol = 2.0_dp*UC_pi*(box%r_min(1) + (box%dr(1)*(n-1)))* &
+               box%dr(1)*box%dr(2) 
+        v_gnd_change = v_gnd_change + &
+               box%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis)
+      end do
+    end do
+#endif
 
-!   end subroutine
+  end subroutine
 
   !Compute voltage change due to circuit elements
   subroutine voltage_compute(tree, v2_change_old, v_gnd_change_old, dt)
@@ -312,40 +316,35 @@ contains
     real(dp), intent(inout) :: v_gnd_change_old
     real(dp), intent(in)   :: dt
 
-    !added to try without af_loop_box
-    integer :: lvl, id, i, nc, n, m
-    real(dp) :: dis_pow, dis_gnd, vol
-
     real(dp) :: cup                        ! placeholder
 
     v2_change = 0_dp
     v_gnd_change = 0_dp
 
-    !call af_loop_box(tree, v2_from_charge)
+    call af_loop_box(tree, v2_from_charge)
+    call af_loop_box(tree, v_gnd_from_charge)
 
-    do lvl = 1, tree%highest_lvl
-      do i = 1, size(tree%lvls(lvl)%leaves)
-        id = tree%lvls(lvl)%leaves(i)
-        nc = tree%boxes(id)%n_cell
-        do n = 1, nc
-          do m = 1, nc
-            dis_pow = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
-               (ST_domain_len(2) - tree%boxes(id)%r_min(2) + &
-               (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
-            dis_gnd = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
-               (tree%boxes(id)%r_min(2) + (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
-            vol = tree%boxes(id)%r_min(2)*tree%boxes(id)%r_min(1)*2*UC_pi*&
-               (tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-1.0_dp)))
-            v2_change = v2_change + &
-               tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_pow)
-            v_gnd_change = v_gnd_change + &
-               tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_gnd)
-          end do
-        end do
-      end do 
-    end do
-
-    ! call af_loop_box(tree, v_gnd_from_charge)
+    ! do lvl = 1, tree%highest_lvl
+    !   do i = 1, size(tree%lvls(lvl)%leaves)
+    !     id = tree%lvls(lvl)%leaves(i)
+    !     nc = tree%boxes(id)%n_cell
+    !     do n = 1, nc
+    !       do m = 1, nc
+    !         dis_pow = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
+    !            (ST_domain_len(2) - tree%boxes(id)%r_min(2) + &
+    !            (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
+    !         dis_gnd = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
+    !            (tree%boxes(id)%r_min(2) + (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
+    !         vol = tree%boxes(id)%r_min(2)*tree%boxes(id)%r_min(1)*2*UC_pi*&
+    !            (tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-1.0_dp)))
+    !         v2_change = v2_change + &
+    !            tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_pow)
+    !         v_gnd_change = v_gnd_change + &
+    !            tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_gnd)
+    !       end do
+    !     end do
+    !   end do 
+    ! end do
 
     voltage_2 = voltage_2 + v2_change - v2_change_old
     voltage_gnd = voltage_gnd + v_gnd_change - v_gnd_change_old
