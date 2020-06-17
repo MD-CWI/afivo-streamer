@@ -39,7 +39,7 @@ module m_field
   real(dp) :: field_decay_time = huge(1.0_dp)
 
   !> The applied electric field (vertical direction)
-  real(dp) :: field_amplitude = 1.0e6_dp
+  real(dp), public, protected :: field_amplitude = 1.0e6_dp
 
   !> The applied voltage (vertical direction)
   real(dp), public, protected :: field_voltage
@@ -48,6 +48,20 @@ module m_field
   real(dp) :: field_stability_zmin      = 0.2_dp
   real(dp) :: field_stability_zmax      = 1.0_dp
   real(dp) :: field_stability_threshold = 3e6_dp
+
+  !> Circuit elements
+  real(dp), public :: voltage_1 = 1.7e4_dp       ! The voltage at the capacitor
+  real(dp), parameter :: vs = 1.7e4_dp   ! high voltage source
+  real(dp), parameter :: c1 = 200e-12_dp ! capacitance of capacitor
+  real(dp), parameter :: c2 = 10e-12_dp  ! capacitance of powered electrode
+  real(dp), parameter :: r1 = 10e3_dp    ! resistance of capacitor
+  real(dp), parameter :: r2 = 300_dp     ! resistance of powered electrode
+  real(dp), parameter :: c_gnd = 10e-12_dp ! self capacitance of grounded electrode
+  real(dp), parameter :: r_gnd = 10_dp ! resistance of grounded electrode
+  real(dp), public, protected :: voltage_2                  ! voltage at powered electrode
+  real(dp), public, protected :: voltage_gnd                ! voltage at ground electrode
+  real(dp), public :: v2_change                  ! potential at powered electrode due to charges 
+  real(dp), public :: v_gnd_change               ! potential at ground electrode due to charges
 
   real(dp) :: field_point_charge = 0.0_dp
 #if NDIM == 2
@@ -65,6 +79,7 @@ module m_field
   public :: field_from_potential
   public :: field_get_amplitude
   public :: field_set_voltage
+  public :: voltage_compute
 
   public :: field_bc_homogeneous
 
@@ -125,6 +140,8 @@ contains
          "Relative position of point charge (outside domain)")
 
     field_voltage = -ST_domain_len(NDIM) * field_amplitude
+    voltage_2 = -ST_domain_len(NDIM) * field_amplitude
+    voltage_gnd = 0_dp
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
@@ -242,6 +259,108 @@ contains
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, i_electric_fld)
   end subroutine field_compute_rhs
+
+  !Compute voltage contribution to powered electrode of space charges
+!   subroutine v2_from_charge(box)
+!     use m_units_constants
+!     type(box_t), intent(inout) :: box
+!     integer                 :: nc, n, m
+!     real(dp)                :: dis
+
+!     nc = box%n_cell
+!     dis = sqrt((box%r_min(1) + (box%dr(1)*nc/2))**2 + &
+!                (ST_domain_len(2) - box%r_min(2) + (box%dr(2)*nc/2))**2)
+
+! #if NDIM == 2
+!     do n = 1, nc
+!       do m = 1, nc  
+!         v2_change = v2_change + &
+!                box%cc(n, m, i_rhs) / (4.0*UC_elec_charge*UC_pi*dis)
+!       end do
+!     end do
+! #endif
+
+!   end subroutine
+
+  !Compute voltage contribution to grounded electrode of space charges
+!   subroutine v_gnd_from_charge(box)
+!     use m_units_constants
+!     type(box_t), intent(inout) :: box
+!     integer                 :: nc, n, m
+!     real(dp)                :: dis
+
+!     nc = box%n_cell
+!     dis = sqrt((box%r_min(1) + (box%dr(1)*nc/2))**2 + &
+!                (box%r_min(2) + (box%dr(2)*nc/2))**2)
+
+! #if NDIM == 2
+!     do n = 1, nc
+!       do m = 1, nc  
+!         v_gnd_change = v_gnd_change + &
+!                box%cc(n, m, i_rhs) / (4.0*UC_elec_charge*UC_pi*dis)
+!       end do
+!     end do
+! #endif
+
+!   end subroutine
+
+  !Compute voltage change due to circuit elements
+  subroutine voltage_compute(tree, v2_change_old, v_gnd_change_old, dt)
+    use m_units_constants
+    type(af_t), intent(inout)  :: tree
+    real(dp), intent(inout) :: v2_change_old
+    real(dp), intent(inout) :: v_gnd_change_old
+    real(dp), intent(in)   :: dt
+
+    !added to try without af_loop_box
+    integer :: lvl, id, i, nc, n, m
+    real(dp) :: dis_pow, dis_gnd, vol
+
+    real(dp) :: cup                        ! placeholder
+
+    v2_change = 0_dp
+    v_gnd_change = 0_dp
+
+    !call af_loop_box(tree, v2_from_charge)
+
+    do lvl = 1, tree%highest_lvl
+      do i = 1, size(tree%lvls(lvl)%leaves)
+        id = tree%lvls(lvl)%leaves(i)
+        nc = tree%boxes(id)%n_cell
+        do n = 1, nc
+          do m = 1, nc
+            dis_pow = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
+               (ST_domain_len(2) - tree%boxes(id)%r_min(2) + &
+               (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
+            dis_gnd = sqrt((tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-0.5_dp)))**2 + &
+               (tree%boxes(id)%r_min(2) + (tree%boxes(id)%dr(2)*(m-0.5_dp)))**2)
+            vol = tree%boxes(id)%r_min(2)*tree%boxes(id)%r_min(1)*2*UC_pi*&
+               (tree%boxes(id)%r_min(1) + (tree%boxes(id)%dr(1)*(n-1.0_dp)))
+            v2_change = v2_change + &
+               tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_pow)
+            v_gnd_change = v_gnd_change + &
+               tree%boxes(id)%cc(n, m, i_rhs)*vol / (-4.0*UC_pi*dis_gnd)
+          end do
+        end do
+      end do 
+    end do
+
+    ! call af_loop_box(tree, v_gnd_from_charge)
+
+    voltage_2 = voltage_2 + v2_change - v2_change_old
+    voltage_gnd = voltage_gnd + v_gnd_change - v_gnd_change_old
+    cup = voltage_2 + &
+         ( (voltage_1 - voltage_2) * dt / ( c2 * r2 ) )
+    voltage_1 = voltage_1 + &
+         (( (vs / (c1 * r1)) - ((r1 + r2) * voltage_1 / (c1 * r1 * r2)) + &
+          (voltage_2 / (c1 * r2)) )* dt)
+    voltage_gnd = voltage_gnd * exp(-dt / (c_gnd * r_gnd))
+    voltage_2 = cup
+
+    field_amplitude = (voltage_gnd - voltage_2) / ST_domain_len(NDIM)   
+    v2_change_old = v2_change
+    v_gnd_change_old = v_gnd_change
+  end subroutine
 
   !> Compute the electric field at a given time
   function field_get_amplitude(time) result(electric_fld)
