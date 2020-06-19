@@ -32,8 +32,7 @@ contains
     integer, intent(in)       :: s_prev
     !< Time state to store result in
     integer, intent(in)       :: s_out
-    integer, intent(in)       :: i_step
-    integer, intent(in)       :: n_steps
+    integer, intent(in)       :: i_step, n_steps
     integer                   :: lvl, i, id, p_id, nc
     logical                   :: set_dt
 
@@ -78,8 +77,10 @@ contains
     end do
     !$omp end parallel
 
-    dt_lim = min(2 * global_dt, dt_safety_factor * &
-         minval(dt_matrix(1:dt_num_cond, :)))
+    if (set_dt) then
+       dt_lim = min(2 * global_dt, dt_safety_factor * &
+            minval(dt_matrix(1:dt_num_cond, :)))
+    end if
   end subroutine forward_euler
 
   !> Compute the electron fluxes due to drift and diffusion

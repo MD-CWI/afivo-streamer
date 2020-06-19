@@ -11,6 +11,7 @@ program streamer
   use m_photoi
   use m_chemistry
   use m_gas
+  use m_coupling
   use m_fluid_lfa
   use m_dt
   use m_types
@@ -25,8 +26,9 @@ program streamer
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
-  logical                   :: write_out
+  logical                   :: write_out, evolve_electrons
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
+  real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
@@ -168,21 +170,46 @@ program streamer
         write_out = .false.
      end if
 
-     if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-        call photoi_set_src(tree, time - photoi_prev_time)
-        photoi_prev_time = time
+     evolve_electrons = .true.
+     if (associated(user_evolve_electrons)) &
+          evolve_electrons = user_evolve_electrons(tree, time)
+
+     if (evolve_electrons) then
+        if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+           call photoi_set_src(tree, time - photoi_prev_time)
+           photoi_prev_time = time
+        end if
+
+        call af_advance(tree, dt, dt_lim, time, &
+             species_itree(n_gas_species+1:n_species), &
+             af_heuns_method, forward_euler)
+
+        ! Make sure field is available for latest time state
+        call field_compute(tree, mg, 0, time, .true.)
+     else
+        dt_lim = dt_max
      end if
 
-     call af_advance(tree, dt, dt_lim, time, &
-          species_itree(n_gas_species+1:n_species), &
-          af_heuns_method, forward_euler)
+     if (evolve_electrons .and. gas_dynamics) then
+        ! Jannis: we could also keep the 'old' source from the discharge active
+        ! for a while when we are only simulating gas dynamics
+        call coupling_add_fluid_source(tree, dt)
+     end if
 
-     ! Make sure field is available for latest time state
-     call field_compute(tree, mg, 0, time, .true.)
+     if (gas_dynamics) then
+        ! Go back to time at beginning of step
+        time = global_time
+
+        call af_advance(tree, dt, dt_gas_lim, time, &
+             gas_vars, time_integrator, gas_forward_euler)
+        call coupling_update_gas_density(tree)
+     else
+        dt_gas_lim = dt_max
+     end if
 
      ! dt is modified when writing output, global_dt not
+     dt          = min(dt_lim, dt_gas_lim)
      global_dt   = dt_lim
-     dt          = dt_lim
      global_time = time
 
      if (global_dt < dt_min) then
@@ -204,6 +231,11 @@ program streamer
         ! Restrict species, for the ghost cells near refinement boundaries
         call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
         call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+
+        if (gas_dynamics) then
+           call af_restrict_tree(tree, gas_vars)
+           call af_gc_tree(tree, gas_vars)
+        end if
 
         if (associated(user_refine)) then
            call af_adjust_refinement(tree, user_refine, ref_info, &

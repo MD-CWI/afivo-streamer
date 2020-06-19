@@ -33,6 +33,8 @@ module m_streamer
   integer, public, protected :: i_tmp          = -1
   !> Index of can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
+  !> Index of Joule heating term
+  integer, public, protected :: i_heat_src     = -1
 
   !> Number of face-centered variables
   integer, public, protected :: n_var_face   = 0
@@ -187,6 +189,10 @@ contains
        call af_add_cc_variable(tree, "eps", ix=i_eps)
        call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
             af_gc_prolong_copy, af_prolong_zeroth)
+    end if
+
+    if (gas_dynamics) then
+       call af_add_cc_variable(tree, "heat_src", ix=i_heat_src)
     end if
 
     call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
