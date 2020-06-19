@@ -47,6 +47,9 @@ module m_field
   !> The applied voltage (vertical direction)
   real(dp), public, protected :: field_voltage
 
+  !> Whether the voltage has been set externally
+  logical :: voltage_set_externally = .false.
+
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
   real(dp) :: field_stability_zmax      = 1.0_dp
@@ -261,13 +264,16 @@ contains
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
 
-    current_field_amplitude = field_get_amplitude(tree, time)
-    field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
+    if (.not. voltage_set_externally) then
+       current_field_amplitude = field_get_amplitude(tree, time)
+       field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
+    end if
   end subroutine field_set_voltage
 
   !> Set the voltage
   subroutine field_set_voltage_externally(voltage)
     real(dp), intent(in) :: voltage
+    voltage_set_externally = .true.
     field_voltage = voltage
   end subroutine field_set_voltage_externally
 

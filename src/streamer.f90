@@ -135,19 +135,19 @@ program streamer
   time_last_output = time
 
   do it = 1, huge(1)-1
-      if (ST_use_end_time .and. time >= ST_end_time) exit
+     if (ST_use_end_time .and. time >= ST_end_time) exit
 
-      ! Initialize starting position of streamer
+     ! Initialize starting position of streamer
      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
-       loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
+        loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
      end if
 
      ! Check if streamer length exceeds the defined maximal streamer length
      if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-       loc_field_coord = af_r_loc(tree, loc_field)
-       if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+        loc_field_coord = af_r_loc(tree, loc_field)
+        if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
      end if
 
      ! Update wall clock time
@@ -186,14 +186,11 @@ program streamer
 
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
+
+        if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
+        if (circuit_used) call circuit_update(tree, dt)
      else
         dt_lim = dt_max
-     end if
-
-     if (evolve_electrons .and. gas_dynamics) then
-        ! Jannis: we could also keep the 'old' source from the discharge active
-        ! for a while when we are only simulating gas dynamics
-        call coupling_add_fluid_source(tree, dt)
      end if
 
      if (gas_dynamics) then
@@ -277,6 +274,7 @@ contains
     call photoi_initialize(tree, cfg)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
+    call circuit_initialize(tree, cfg)
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
 
