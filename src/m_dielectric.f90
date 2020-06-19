@@ -72,6 +72,7 @@ module m_dielectric
   public :: dielectric_photon_absorption
   public :: dielectric_reset_photons
   public :: dielectric_surcharge_output
+  public :: dielectric_set_preset_charge
 
 contains
 
@@ -231,43 +232,58 @@ contains
                 allocate(surface_list(ix)%photon_flux(nc, nc))
 #endif
              end if
-             !TODO:add proper surface charge to new cells
-             !surface_list(ix)%charge = preset_charge
-             call set_preset_charge_to_box(tree, surface_list(ix))
-             !surface_list(ix)%charge = preset_charge_to_box(tree, id)
+             
+             surface_list(ix)%charge = 0.0_dp
              surface_list(ix)%photon_flux = 0.0_dp
 
+             !print *, "before prolong", surface_list(ix)%charge
              call prolong_surface_from_parent(tree, surface_list(ix))
+             !print *, "after prolong", surface_list(ix)%charge
           end if
        end do
     end do
 
   end subroutine dielectric_update_after_refinement
   
+  subroutine dielectric_set_preset_charge(tree)
+    use m_advance_base
+    type(af_t), intent(in)       :: tree
+    integer                      :: ix
+    
+    do ix = 1, size(surface_list)
+        if (surface_list(ix)%in_use) then
+            call set_preset_charge_to_box(tree, surface_list(ix))
+        end if
+    end do
+
+  end subroutine dielectric_set_preset_charge
+  
    subroutine set_preset_charge_to_box(tree, surface)
     type(af_t), intent(in)              :: tree
     type(surface_data_t), intent(inout) :: surface
     real                 :: loc, dx
     integer              :: i, nc, id
-!    real                 :: tmp_down, tmp_up, loc_down, loc_up, loc_mid
+    real                 :: tmp_down, tmp_up, loc_down, loc_up, loc_mid
     
     nc = tree%n_cell
     id = surface%id_gas
     loc = tree%boxes(id)%r_min(2)         !y direction surface
     dx = tree%boxes(id)%dr(2)
     do i = 1, nc
-        surface%charge(i, :) = preset_charge_to_cell(loc+dx*(i-1)+dx/2)
-!         loc_down = loc+dx*(i-1)
-!         loc_up = loc+dx*(i)
-!         loc_mid = (loc_down + loc_up)/2
-!         tmp_down = preset_charge_to_cell(loc_down)
-!         tmp_up = preset_charge_to_cell(loc_up)
-!         if (tmp_down == tmp_up) then
-!         surface%charge(i, :) = preset_charge_to_cell(loc_mid)
-!         else
-!         !TODO_lixiaoran: if tmp_down != tmp_up, we need to do refine. now we just ignore.
-!         surface%charge(i, :) = preset_charge_to_cell(loc_mid)
-!         end if
+        !surface%charge(i, :) = preset_charge_to_cell(loc+dx*(i-1)+dx/2)
+        loc_down = loc+dx*(i-1)
+        loc_up = loc+dx*(i)
+        loc_mid = (loc_down + loc_up)/2
+        tmp_down = preset_charge_to_cell(loc_down)
+        tmp_up = preset_charge_to_cell(loc_up)
+        if (tmp_down == tmp_up) then
+        surface%charge(i, :) = preset_charge_to_cell(loc_mid)
+        print *,loc_down, loc_up, loc_mid, tmp_down, tmp_up, "same",preset_charge_to_cell(loc_mid)
+        else
+        !TODO_lixiaoran: if tmp_down != tmp_up, we need to do refine. now we just ignore.
+        print *,loc_down, loc_up, loc_mid, tmp_down, tmp_up, "tmp_down!=tmp_up",preset_charge_to_cell(loc_mid)
+        surface%charge(i, :) = preset_charge_to_cell(loc_mid)
+        end if
     end do
     
   end subroutine set_preset_charge_to_box

@@ -273,6 +273,9 @@ contains
 
        if (ref_info%n_add == 0) exit
     end do
+    
+    !set preset surface charge after initial refinement of the meshes
+    call dielectric_set_preset_charge(tree)
   end subroutine set_initial_conditions
 
   subroutine write_sim_data(my_unit)
