@@ -16,6 +16,7 @@ program streamer
   use m_types
   use m_user_methods
   use m_output
+  use m_circuit
 
   implicit none
 

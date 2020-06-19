@@ -67,6 +67,7 @@ module m_field
   public :: field_from_potential
   public :: field_get_amplitude
   public :: field_set_voltage
+  public :: field_set_voltage_externally
 
   public :: field_bc_homogeneous
 
@@ -263,6 +264,12 @@ contains
     current_field_amplitude = field_get_amplitude(tree, time)
     field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
   end subroutine field_set_voltage
+
+  !> Set the voltage
+  subroutine field_set_voltage_externally(voltage)
+    real(dp), intent(in) :: voltage
+    field_voltage = voltage
+  end subroutine field_set_voltage_externally
 
   !> This fills ghost cells near physical boundaries for the potential
   subroutine field_bc_homogeneous(box, nb, iv, coords, bc_val, bc_type)
