@@ -28,15 +28,18 @@ module m_circuit
 contains
 
   !> Initialize this module
-  subroutine circuit_initialize(tree, cfg)
+  subroutine circuit_initialize(tree, cfg, restart)
     use m_config
     use m_units_constants
     use m_field
     use m_streamer
     type(af_t), intent(in)     :: tree
     type(CFG_t), intent(inout) :: cfg
+    logical, intent(in)        :: restart
     real(dp)                   :: voltage
     logical                    :: V0_from_field = .true.
+
+    if (restart) error stop "TODO: Circuit does not support restarting"
 
     call CFG_add_get(cfg, "circuit%type", circuit_type, &
          "Type of external circuit")

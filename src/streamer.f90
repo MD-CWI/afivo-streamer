@@ -50,7 +50,7 @@ program streamer
   call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
        "Memory limit (GB)")
 
-  call initialize_modules(cfg, tree, mg)
+  call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
   call CFG_write(cfg, trim(output_name) // "_out.cfg", custom_first=.true.)
 
@@ -253,7 +253,7 @@ program streamer
 
 contains
 
-  subroutine initialize_modules(cfg, tree, mg)
+  subroutine initialize_modules(cfg, tree, mg, restart)
     use m_user
     use m_table_data
     use m_transport_data
@@ -261,6 +261,7 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
+    logical, intent(in)        :: restart
 
     call user_initialize(cfg, tree)
     call dt_initialize(cfg)
@@ -274,7 +275,7 @@ contains
     call photoi_initialize(tree, cfg)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
-    call circuit_initialize(tree, cfg)
+    call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
 
