@@ -11,11 +11,13 @@ program streamer
   use m_photoi
   use m_chemistry
   use m_gas
+  use m_coupling
   use m_fluid_lfa
   use m_dt
   use m_types
   use m_user_methods
   use m_output
+  use m_circuit
 
   implicit none
 
@@ -24,8 +26,9 @@ program streamer
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
-  logical                   :: write_out
+  logical                   :: write_out, evolve_electrons
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
+  real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
@@ -58,7 +61,7 @@ program streamer
   call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
        "Memory limit (GB)")
 
-  call initialize_modules(cfg, tree, mg)
+  call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
   call CFG_write(cfg, trim(output_name) // "_out.cfg", custom_first=.true.)
 
@@ -143,19 +146,19 @@ program streamer
   time_last_output = time
 
   do it = 1, huge(1)-1
-      if (ST_use_end_time .and. time >= ST_end_time) exit
+     if (ST_use_end_time .and. time >= ST_end_time) exit
 
-      ! Initialize starting position of streamer
+     ! Initialize starting position of streamer
      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
-       loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
+        loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
      end if
 
      ! Check if streamer length exceeds the defined maximal streamer length
      if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
-       call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-       loc_field_coord = af_r_loc(tree, loc_field)
-       if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+        loc_field_coord = af_r_loc(tree, loc_field)
+        if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
      end if
 
      ! Update wall clock time
@@ -178,14 +181,32 @@ program streamer
         write_out = .false.
      end if
 
-     if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-        call photoi_set_src(tree, time - photoi_prev_time)
-        photoi_prev_time = time
+     evolve_electrons = .true.
+     if (associated(user_evolve_electrons)) &
+          evolve_electrons = user_evolve_electrons(tree, time)
+
+     if (evolve_electrons) then
+        if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+           call photoi_set_src(tree, time - photoi_prev_time)
+           photoi_prev_time = time
+        end if
+
+        call af_advance(tree, dt, dt_lim, time, &
+             species_itree(n_gas_species+1:n_species), &
+             af_heuns_method, forward_euler)
+
+        ! Make sure field is available for latest time state
+        call field_compute(tree, mg, 0, time, .true.)
+
+        if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
+        if (circuit_used) call circuit_update(tree, dt)
+     else
+        dt_lim = dt_max
      end if
 
-     call af_advance(tree, dt, dt_lim, time, &
-          species_itree(n_gas_species+1:n_species), &
-          af_heuns_method, forward_euler)
+     if (gas_dynamics) then
+        ! Go back to time at beginning of step
+        time = global_time
 
      ! Change potentials at boundaries due to circuit
 # if NDIM == 2
@@ -193,10 +214,16 @@ program streamer
 # endif
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
+        call af_advance(tree, dt, dt_gas_lim, time, &
+             gas_vars, time_integrator, gas_forward_euler)
+        call coupling_update_gas_density(tree)
+     else
+        dt_gas_lim = dt_max
+     end if
 
      ! dt is modified when writing output, global_dt not
+     dt          = min(dt_lim, dt_gas_lim)
      global_dt   = dt_lim
-     dt          = dt_lim
      global_time = time
 
      if (global_dt < dt_min) then
@@ -219,6 +246,11 @@ program streamer
         call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
         call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
 
+        if (gas_dynamics) then
+           call af_restrict_tree(tree, gas_vars)
+           call af_gc_tree(tree, gas_vars)
+        end if
+
         if (associated(user_refine)) then
            call af_adjust_refinement(tree, user_refine, ref_info, &
                 refine_buffer_width)
@@ -238,7 +270,7 @@ program streamer
 
 contains
 
-  subroutine initialize_modules(cfg, tree, mg)
+  subroutine initialize_modules(cfg, tree, mg, restart)
     use m_user
     use m_table_data
     use m_transport_data
@@ -246,6 +278,7 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
+    logical, intent(in)        :: restart
 
     call user_initialize(cfg, tree)
     call dt_initialize(cfg)
@@ -259,6 +292,7 @@ contains
     call photoi_initialize(tree, cfg)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
+    call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
 
