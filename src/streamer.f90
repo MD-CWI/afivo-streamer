@@ -36,6 +36,17 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+  ! Circuit stuff. fine lets do it with global variables
+  real(dp), dimension(2) :: r_top_electrode
+  real(dp) :: old_calculated_voltage_at_top_electrode = 0.0
+  real(dp) :: new_calculated_voltage_at_top_electrode = 0.0
+  real(dp) :: capacitor_voltage = 0.0
+  real(dp) :: capacitor_capacitance = 200e-12
+  real(dp) :: top_electrode_voltage = 0.0
+  real(dp) :: top_electrode_self_capacitance = 0.0
+  real(dp) :: resistor = 300
+
+  top_electrode_self_capacitance = 0.1 * capacitor_capacitance
 
   call print_program_name()
 
@@ -176,6 +187,10 @@ program streamer
           species_itree(n_gas_species+1:n_species), &
           af_heuns_method, forward_euler)
 
+     ! Change potentials at boundaries due to circuit
+# if NDIM == 2
+      call add_circuit_effect(tree)
+# endif
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
 
@@ -281,6 +296,14 @@ contains
 
        if (ref_info%n_add == 0) exit
     end do
+
+    ! Initialize capacitor voltage to be the same as applied voltage
+    capacitor_voltage = -field_get_amplitude(tree, time) * ST_domain_len(2)
+    print *, "Initial capacitor voltage: ", capacitor_voltage
+    r_top_electrode(1) = 0
+    r_top_electrode(2) = ST_domain_len(2)
+    top_electrode_voltage = capacitor_voltage
+
   end subroutine set_initial_conditions
 
   subroutine write_sim_data(my_unit)
@@ -314,5 +337,95 @@ contains
     print *, " /_/    \_\_| |_| \_/ \___/     |_____/ \__|_|  \___|\__,_|_| |_| |_|\___|_|   "
     print *, "                                                                               "
   end subroutine print_program_name
+
+
+   subroutine add_circuit_effect(tree)
+      type(af_t), intent(inout)     :: tree
+      real(dp) :: delta_V_electrode_dt
+      real(dp) :: delta_V_electrode_capacitor
+      real(dp) :: current
+
+      call af_loop_box(tree, calculate_potential_from_box, .true.)
+
+      ! The change in potential at the top electrode
+      delta_V_electrode_dt = new_calculated_voltage_at_top_electrode &
+                            - old_calculated_voltage_at_top_electrode
+
+      ! Change the potential of the top electrode
+      top_electrode_voltage = top_electrode_voltage + delta_V_electrode_dt
+
+      print *, "Old calculated potential at top electrode: ", &
+                      old_calculated_voltage_at_top_electrode
+      print *, "New calculated potential at top electrode: ", &
+                      new_calculated_voltage_at_top_electrode
+      print *, "Delta potential at top electrode (N - O): ", &
+                      delta_V_electrode_dt
+
+      ! There is now a new potential difference between capacitor and the top electrode
+      delta_V_electrode_capacitor = capacitor_voltage - top_electrode_voltage
+
+      ! This potential difference creates a current between the top electrode and capacitor
+      current = delta_V_electrode_capacitor / resistor
+
+      ! This current will change the potential of the capacitor
+      capacitor_voltage = capacitor_voltage - (current * dt) / capacitor_capacitance
+
+      ! This current will also charge the top electrode again
+      top_electrode_voltage = top_electrode_voltage + (current * dt) / top_electrode_self_capacitance
+      
+      ! Change the applied voltage at the top electrode for the simulation
+      field_amplitude = -top_electrode_voltage / ST_domain_len(NDIM)
+
+      old_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode
+      new_calculated_voltage_at_top_electrode = 0.0
+
+
+   end subroutine add_circuit_effect
+
+   subroutine calculate_potential_from_box(box)
+      use m_units_constants
+      type(box_t), intent(inout)     :: box
+      real(dp) :: box_dr(NDIM)
+      real(dp) :: box_rmin(NDIM)
+      real(dp) :: cell_r_center(NDIM)
+      real(dp) :: cell_volume
+      integer :: n_cells
+      integer :: i_cell, j_cell
+      integer :: i_rhs_cell
+      real(dp) :: rhs_cell
+      real(dp) :: total_charge_cell
+      real(dp) :: distance_cell_to_electrode
+      real(dp) :: potential_from_cell
+      
+      n_cells = box%n_cell
+      box_rmin = box%r_min
+      box_dr = box%dr
+
+      ! Loop through each cell in the box
+      do i_cell = 1, n_cells
+         do j_cell = 1, n_cells
+            cell_r_center(1) = box_rmin(1) + i_cell * box_dr(1)
+            cell_r_center(2) = box_rmin(2) + j_cell * box_dr(2)
+            ! Calculate the cell volume (Cylindrical cell volume = 2 * pi * r * dr * dz)
+            cell_volume = 2 * UC_pi * (cell_r_center(1) - 0.5 * box_dr(1)) * box_dr(1) * box_dr(2)
+            ! Retrieve the charge density in this cell
+            ! rhs = -rho / epsilon0
+            i_rhs_cell = af_find_cc_variable(tree, "rhs")
+# if NDIM == 2
+            rhs_cell = box%cc(i_cell, j_cell, i_rhs_cell)
+# endif
+            ! Calculate the total charge = charge density * cell volume
+            total_charge_cell = -rhs_cell * UC_eps0 * cell_volume
+            ! Calculate the potential of this cell to the electrode position
+            distance_cell_to_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
+                                              (cell_r_center(2) - r_top_electrode(2))**2)
+            potential_from_cell = total_charge_cell / (4 * UC_pi * distance_cell_to_electrode)
+            ! Increment potential at top electrode with the calculated potential of this cell
+            new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell
+            !print *, "Potential from cell: ", potential_from_cell
+         end do
+      end do
+
+   end subroutine calculate_potential_from_box
 
 end program streamer
