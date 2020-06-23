@@ -45,7 +45,6 @@ contains
     logical, intent(in)        :: restart
     real(dp)                   :: voltage
     logical                    :: V0_from_field = .true.
-    integer :: write_error = 0
 
     if (restart) error stop "TODO: Circuit does not support restarting"
 
