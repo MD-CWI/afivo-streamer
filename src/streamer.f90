@@ -531,7 +531,7 @@ contains
             ! Calculate the potential of this cell to the top electrode position
             distance_cell_to_top_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
                                               (cell_r_center(2) - r_top_electrode(2))**2)
-            potential_from_cell_top = total_charge_cell / (4 * UC_pi * distance_cell_to_top_electrode)
+            potential_from_cell_top = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_top_electrode)
             ! Increment potential at top electrode with the calculated potential of this cell
             new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
             !print *, "Potential from cell: ", potential_from_cell
@@ -539,7 +539,7 @@ contains
             ! Calculate the potential of this cell to the bottom electrode position
             distance_cell_to_bottom_electrode = sqrt((cell_r_center(1) - r_bottom_electrode(1))**2 + &
                                               (cell_r_center(2) - r_bottom_electrode(2))**2)
-            potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * distance_cell_to_bottom_electrode)
+            potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_bottom_electrode)
             ! Increment potential at top electrode with the calculated potential of this cell
             new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
 
@@ -567,7 +567,7 @@ do i_cell = 1, n_cells
          distance_cell_to_top_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
                                           (cell_r_center(2) - r_top_electrode(2))**2 + &
                                           (cell_r_center(3) - r_top_electrode(3))**2)
-         potential_from_cell_top = total_charge_cell / (4 * UC_pi * distance_cell_to_top_electrode)
+         potential_from_cell_top = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_top_electrode)
          ! Increment potential at top electrode with the calculated potential of this cell
          new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
          !print *, "Potential from cell: ", potential_from_cell
@@ -576,7 +576,7 @@ do i_cell = 1, n_cells
          distance_cell_to_bottom_electrode = sqrt((cell_r_center(1) - r_bottom_electrode(1))**2 + &
                                           (cell_r_center(2) - r_bottom_electrode(2))**2 + &
                                           (cell_r_center(3) - r_bottom_electrode(3))**2)
-         potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * distance_cell_to_bottom_electrode)
+         potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_bottom_electrode)
          ! Increment potential at top electrode with the calculated potential of this cell
          new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
          !print *, "Potential from cell: ", potential_from_cell
