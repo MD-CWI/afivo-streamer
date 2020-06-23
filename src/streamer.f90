@@ -18,6 +18,7 @@ program streamer
   use m_user_methods
   use m_output
   use m_circuit
+  use m_units_constants
 
   implicit none
 
@@ -40,21 +41,38 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   ! Circuit stuff. fine lets do it with global variables
-  real(dp), dimension(2) :: r_top_electrode
+  logical :: use_circuit_andy = .false.
+  integer :: circuit_andy_output_unit = 50
+  real(dp), dimension(NDIM) :: r_top_electrode
   real(dp) :: old_calculated_voltage_at_top_electrode = 0.0
   real(dp) :: new_calculated_voltage_at_top_electrode = 0.0
-  real(dp) :: capacitor_voltage = 0.0
-  real(dp) :: capacitor_capacitance = 200e-12
   real(dp) :: top_electrode_voltage = 0.0
   real(dp) :: top_electrode_self_capacitance = 0.0
   real(dp) :: resistor = 300
-
-  top_electrode_self_capacitance = 0.1 * capacitor_capacitance
+  real(dp) :: capacitor_initial_voltage_fraction = 1
+  real(dp) :: capacitor_capacitance = 200e-12
+  real(dp) :: capacitor_voltage = 0.0
+  real(dp), dimension(NDIM) :: r_bottom_electrode
+  real(dp) :: bottom_electrode_voltage = 0.0
+  real(dp) :: gnd_resistor = 10
+  real(dp) :: old_calculated_voltage_at_bottom_electrode = 0.0
+  real(dp) :: new_calculated_voltage_at_bottom_electrode = 0.0
 
   call print_program_name()
 
   ! Parse command line configuration files and options
   call CFG_update_from_arguments(cfg)
+
+  call CFG_add_get(cfg, "use_circuit_andy", use_circuit_andy, &
+         "If set use the circuit implementation of Andy.")
+  call CFG_add_get(cfg, "capacitor_capacitance", capacitor_capacitance, &
+         "Capacitance of the capacitor used in the RC circuit implementation of Andy.")
+  call CFG_add_get(cfg, "resistor", resistor, &
+         "Resistor value for the resistor in the RC circuit implementation of Andy.")
+  call CFG_add_get(cfg, "gnd_resistor", gnd_resistor, &
+         "Resistor value for the connection of the bottom plate to ground.")
+  call CFG_add_get(cfg, "capacitor_initial_voltage_fraction", capacitor_initial_voltage_fraction, &
+         "Initial capacitor voltage as a fraction of the applied discharge voltage for RC Andy.")
 
   call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
        "If set, restart simulation from a previous .dat file")
@@ -195,8 +213,16 @@ program streamer
              species_itree(n_gas_species+1:n_species), &
              af_heuns_method, forward_euler)
 
+# if NDIM >= 2
+      if (use_circuit_andy) then
+         call add_circuit_effect(tree)
+      end if
+# endif
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
+
+        !print *, "Top electrode voltage: ", top_electrode_voltage
+        !print *, "Field amplitude: ", field_get_amplitude(tree, time)
 
         if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
         if (circuit_used) call circuit_update(tree, dt)
@@ -208,12 +234,7 @@ program streamer
         ! Go back to time at beginning of step
         time = global_time
 
-     ! Change potentials at boundaries due to circuit
-# if NDIM == 2
-      call add_circuit_effect(tree)
-# endif
      ! Make sure field is available for latest time state
-     call field_compute(tree, mg, 0, time, .true.)
         call af_advance(tree, dt, dt_gas_lim, time, &
              gas_vars, time_integrator, gas_forward_euler)
         call coupling_update_gas_density(tree)
@@ -268,6 +289,14 @@ program streamer
 
   call output_status(tree, time, wc_time, it, dt)
 
+   if (use_circuit_andy) then
+      close(circuit_andy_output_unit)
+   end if
+
+   if (circuit_used) then
+      close(circuit_jannis_output_unit)
+   endif
+
 contains
 
   subroutine initialize_modules(cfg, tree, mg, restart)
@@ -292,9 +321,10 @@ contains
     call photoi_initialize(tree, cfg)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
-    call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
+    call circuit_initialize(tree, cfg, restart)
+
 
     call output_initial_summary()
 
@@ -331,13 +361,9 @@ contains
        if (ref_info%n_add == 0) exit
     end do
 
-    ! Initialize capacitor voltage to be the same as applied voltage
-    capacitor_voltage = -field_get_amplitude(tree, time) * ST_domain_len(2)
-    print *, "Initial capacitor voltage: ", capacitor_voltage
-    r_top_electrode(1) = 0
-    r_top_electrode(2) = ST_domain_len(2)
-    top_electrode_voltage = capacitor_voltage
-
+    if (use_circuit_andy) then
+      call initialize_circuit_andy(tree, cfg)
+    end if
   end subroutine set_initial_conditions
 
   subroutine write_sim_data(my_unit)
@@ -373,46 +399,96 @@ contains
   end subroutine print_program_name
 
 
+   subroutine initialize_circuit_andy(tree, cfg)
+      type(CFG_t), intent(inout) :: cfg
+      type(af_t), intent(inout)  :: tree
+
+      ! Initialize capacitor voltage to be the same as applied voltage
+      capacitor_voltage = capacitor_initial_voltage_fraction * (-field_get_amplitude(tree, time) * ST_domain_len(NDIM))
+      print *, "Initial capacitor voltage: ", capacitor_voltage
+      r_top_electrode(1) = 0
+      r_top_electrode(2) = 0
+      r_top_electrode(NDIM) = ST_domain_len(NDIM)
+      top_electrode_voltage = capacitor_voltage
+      ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
+      top_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
+
+      r_bottom_electrode(1) = 0
+      r_bottom_electrode(2) = 0
+      r_bottom_electrode(NDIM) = 0
+
+      ! Create an output file
+      open(newunit=circuit_andy_output_unit, file=trim(output_name) // "_" // "output", action='write')
+      write(circuit_andy_output_unit, *) "dt(s)           I(A)           Ve(V)           Vc(V)           Vgnd(V)           Ignd(A)"
+
+
+   end subroutine initialize_circuit_andy
+
    subroutine add_circuit_effect(tree)
       type(af_t), intent(inout)     :: tree
-      real(dp) :: delta_V_electrode_dt
+      real(dp) :: delta_V_top_electrode_dt
       real(dp) :: delta_V_electrode_capacitor
-      real(dp) :: current
+      real(dp) :: current_top
+      real(dp) :: delta_V_bottom_electrode_dt
+      real(dp) :: current_bottom
 
       call af_loop_box(tree, calculate_potential_from_box, .true.)
 
+      !!!! TOP ELECTRODE !!!!
       ! The change in potential at the top electrode
-      delta_V_electrode_dt = new_calculated_voltage_at_top_electrode &
+      delta_V_top_electrode_dt = new_calculated_voltage_at_top_electrode &
                             - old_calculated_voltage_at_top_electrode
 
       ! Change the potential of the top electrode
-      top_electrode_voltage = top_electrode_voltage + delta_V_electrode_dt
+      top_electrode_voltage = top_electrode_voltage + delta_V_top_electrode_dt
 
-      print *, "Old calculated potential at top electrode: ", &
-                      old_calculated_voltage_at_top_electrode
-      print *, "New calculated potential at top electrode: ", &
-                      new_calculated_voltage_at_top_electrode
-      print *, "Delta potential at top electrode (N - O): ", &
-                      delta_V_electrode_dt
+      !print *, "Old calculated potential at top electrode: ", &
+      !                old_calculated_voltage_at_top_electrode
+      !print *, "New calculated potential at top electrode: ", &
+      !                new_calculated_voltage_at_top_electrode
+      !print *, "Delta potential at top electrode (N - O): ", &
+      !                delta_V_electrode_dt
 
       ! There is now a new potential difference between capacitor and the top electrode
       delta_V_electrode_capacitor = capacitor_voltage - top_electrode_voltage
 
-      ! This potential difference creates a current between the top electrode and capacitor
-      current = delta_V_electrode_capacitor / resistor
+      ! This potential difference creates a current from capacitor to top electrode (conventional)
+      current_top = delta_V_electrode_capacitor / resistor
 
       ! This current will change the potential of the capacitor
-      capacitor_voltage = capacitor_voltage - (current * dt) / capacitor_capacitance
+      capacitor_voltage = capacitor_voltage - (current_top * dt) / capacitor_capacitance
+      !print *, "current * dt: ", current * dt
+      !print *, "capacitor capacitance: ", capacitor_capacitance
+      !print *, "Capacitor Voltage: ", capacitor_voltage
 
       ! This current will also charge the top electrode again
-      top_electrode_voltage = top_electrode_voltage + (current * dt) / top_electrode_self_capacitance
+      top_electrode_voltage = top_electrode_voltage + (current_top * dt) / top_electrode_self_capacitance
       
+      !!!! BOTTOM ELECTRODE !!!!
+      delta_V_bottom_electrode_dt = new_calculated_voltage_at_bottom_electrode - old_calculated_voltage_at_bottom_electrode
+
+      bottom_electrode_voltage = bottom_electrode_voltage + delta_V_bottom_electrode_dt
+
+      ! Current from bottom electrode to ground (conventional)
+      current_bottom = (bottom_electrode_voltage - 0) / gnd_resistor
+
+      bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / top_electrode_self_capacitance
+
+      !print *, "Bottom electrode voltage: ", bottom_electrode_voltage
+      !print *, "Ground current: ", current_bottom
+
       ! Change the applied voltage at the top electrode for the simulation
-      field_amplitude = -top_electrode_voltage / ST_domain_len(NDIM)
+      ! For simulations we still have bottom electrode  = 0 V and top electrode has the applied potential
+      call field_set_voltage_externally(top_electrode_voltage - bottom_electrode_voltage)
 
       old_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode
       new_calculated_voltage_at_top_electrode = 0.0
 
+      old_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode
+      new_calculated_voltage_at_bottom_electrode = 0.0
+
+      write(circuit_andy_output_unit, *) dt, current_top, top_electrode_voltage, capacitor_voltage, &
+                                         bottom_electrode_voltage, current_bottom
 
    end subroutine add_circuit_effect
 
@@ -424,18 +500,22 @@ contains
       real(dp) :: cell_r_center(NDIM)
       real(dp) :: cell_volume
       integer :: n_cells
-      integer :: i_cell, j_cell
+      integer :: i_cell, j_cell, k_cell
       integer :: i_rhs_cell
       real(dp) :: rhs_cell
       real(dp) :: total_charge_cell
-      real(dp) :: distance_cell_to_electrode
-      real(dp) :: potential_from_cell
+      real(dp) :: distance_cell_to_top_electrode
+      real(dp) :: distance_cell_to_bottom_electrode
+      real(dp) :: potential_from_cell_top
+      real(dp) :: potential_from_cell_bottom
       
       n_cells = box%n_cell
       box_rmin = box%r_min
       box_dr = box%dr
 
+
       ! Loop through each cell in the box
+# if NDIM == 2
       do i_cell = 1, n_cells
          do j_cell = 1, n_cells
             cell_r_center(1) = box_rmin(1) + i_cell * box_dr(1)
@@ -445,20 +525,66 @@ contains
             ! Retrieve the charge density in this cell
             ! rhs = -rho / epsilon0
             i_rhs_cell = af_find_cc_variable(tree, "rhs")
-# if NDIM == 2
             rhs_cell = box%cc(i_cell, j_cell, i_rhs_cell)
-# endif
             ! Calculate the total charge = charge density * cell volume
             total_charge_cell = -rhs_cell * UC_eps0 * cell_volume
-            ! Calculate the potential of this cell to the electrode position
-            distance_cell_to_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
+            ! Calculate the potential of this cell to the top electrode position
+            distance_cell_to_top_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
                                               (cell_r_center(2) - r_top_electrode(2))**2)
-            potential_from_cell = total_charge_cell / (4 * UC_pi * distance_cell_to_electrode)
+            potential_from_cell_top = total_charge_cell / (4 * UC_pi * distance_cell_to_top_electrode)
             ! Increment potential at top electrode with the calculated potential of this cell
-            new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell
+            new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
             !print *, "Potential from cell: ", potential_from_cell
+
+            ! Calculate the potential of this cell to the bottom electrode position
+            distance_cell_to_bottom_electrode = sqrt((cell_r_center(1) - r_bottom_electrode(1))**2 + &
+                                              (cell_r_center(2) - r_bottom_electrode(2))**2)
+            potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * distance_cell_to_bottom_electrode)
+            ! Increment potential at top electrode with the calculated potential of this cell
+            new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
+
+
          end do
       end do
+# endif
+
+# if NDIM == 3
+do i_cell = 1, n_cells
+   do j_cell = 1, n_cells
+      do k_cell = 1, n_cells
+         cell_r_center(1) = box_rmin(1) + i_cell * box_dr(1)
+         cell_r_center(2) = box_rmin(2) + j_cell * box_dr(2)
+         cell_r_center(3) = box_rmin(3) + k_cell * box_dr(3)
+         ! Calculate the cell volume
+         cell_volume = box_dr(1) * box_dr(2) * box_dr(3)
+         ! Retrieve the charge density in this cell
+         ! rhs = -rho / epsilon0
+         i_rhs_cell = af_find_cc_variable(tree, "rhs")
+         rhs_cell = box%cc(i_cell, j_cell, k_cell, i_rhs_cell)
+         ! Calculate the total charge = charge density * cell volume
+         total_charge_cell = -rhs_cell * UC_eps0 * cell_volume
+         ! Calculate the potential of this cell to the electrode position
+         distance_cell_to_top_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
+                                          (cell_r_center(2) - r_top_electrode(2))**2 + &
+                                          (cell_r_center(3) - r_top_electrode(3))**2)
+         potential_from_cell_top = total_charge_cell / (4 * UC_pi * distance_cell_to_top_electrode)
+         ! Increment potential at top electrode with the calculated potential of this cell
+         new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
+         !print *, "Potential from cell: ", potential_from_cell
+
+          ! Calculate the potential of this cell to the electrode position
+         distance_cell_to_bottom_electrode = sqrt((cell_r_center(1) - r_bottom_electrode(1))**2 + &
+                                          (cell_r_center(2) - r_bottom_electrode(2))**2 + &
+                                          (cell_r_center(3) - r_bottom_electrode(3))**2)
+         potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * distance_cell_to_bottom_electrode)
+         ! Increment potential at top electrode with the calculated potential of this cell
+         new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
+         !print *, "Potential from cell: ", potential_from_cell
+      end do
+   end do
+end do
+# endif
+
 
    end subroutine calculate_potential_from_box
 

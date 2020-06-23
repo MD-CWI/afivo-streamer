@@ -9,7 +9,7 @@ module m_circuit
 
   !> Whether an external circuit is used
   logical, public, protected :: circuit_used = .false.
-
+  
   !> Type of external circuit
   character(len=name_len) :: circuit_type = undefined_str
 
@@ -25,6 +25,12 @@ module m_circuit
   public :: circuit_initialize
   public :: circuit_update
 
+
+
+   !> Hardcoded output unit for Jannis RC circuit
+  integer, public, protected :: circuit_jannis_output_unit = 23
+
+
 contains
 
   !> Initialize this module
@@ -33,11 +39,13 @@ contains
     use m_units_constants
     use m_field
     use m_streamer
+    use m_output
     type(af_t), intent(in)     :: tree
     type(CFG_t), intent(inout) :: cfg
     logical, intent(in)        :: restart
     real(dp)                   :: voltage
     logical                    :: V0_from_field = .true.
+    integer :: write_error = 0
 
     if (restart) error stop "TODO: Circuit does not support restarting"
 
@@ -77,6 +85,15 @@ contains
        error stop "Unknown circuit type"
     end select
 
+    if (circuit_used) then
+      print *, "Circuit is used ! Creating output file with unit: ", circuit_jannis_output_unit
+      ! Create an output file
+      open(unit=circuit_jannis_output_unit, file=trim(output_name) // "_" // "output", action='write')
+      print *, "Writing header to file. Unit: ", circuit_jannis_output_unit 
+      write(circuit_jannis_output_unit, *) "dt(s)           I(A)           Ve(V)           Vc(V)"
+     
+    end if
+
   end subroutine circuit_initialize
 
     !> Add source terms form the fluid model to the Euler equations
@@ -105,6 +122,8 @@ contains
        ! step. Iterating to get the response from the discharge to the new
        ! voltage is unnecessary, since we use small time steps anyway.
        new_voltage = capacitors_q(1) / capacitors(1) - current * resistors(1)
+
+       write(circuit_jannis_output_unit, *) dt, current, new_voltage, capacitors_q(1) / capacitors(1)
     case default
        error stop "Unknown circuit type"
     end select
