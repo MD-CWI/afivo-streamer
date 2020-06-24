@@ -57,6 +57,7 @@ program streamer
   real(dp) :: gnd_resistor = 10
   real(dp) :: old_calculated_voltage_at_bottom_electrode = 0.0
   real(dp) :: new_calculated_voltage_at_bottom_electrode = 0.0
+  real(dp) :: delta_electrode_position = 1e-6  ! We will put the calculated potential position a bit out of the grid to avoid 1 / r influence
 
   call print_program_name()
 
@@ -213,11 +214,11 @@ program streamer
              species_itree(n_gas_species+1:n_species), &
              af_heuns_method, forward_euler)
 
-# if NDIM >= 2
+#if NDIM >= 2
       if (use_circuit_andy) then
          call add_circuit_effect(tree)
       end if
-# endif
+#endif
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
 
@@ -408,14 +409,14 @@ contains
       print *, "Initial capacitor voltage: ", capacitor_voltage
       r_top_electrode(1) = 0
       r_top_electrode(2) = 0
-      r_top_electrode(NDIM) = ST_domain_len(NDIM)
+      r_top_electrode(NDIM) = ST_domain_len(NDIM) + delta_electrode_position
       top_electrode_voltage = capacitor_voltage
       ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
       top_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
 
       r_bottom_electrode(1) = 0
       r_bottom_electrode(2) = 0
-      r_bottom_electrode(NDIM) = 0
+      r_bottom_electrode(NDIM) = 0 - delta_electrode_position
 
       ! Create an output file
       open(newunit=circuit_andy_output_unit, file=trim(output_name) // "_" // "output", action='write')
@@ -494,96 +495,125 @@ contains
 
    subroutine calculate_potential_from_box(box)
       use m_units_constants
+      use m_chemistry
       type(box_t), intent(inout)     :: box
       real(dp) :: box_dr(NDIM)
       real(dp) :: box_rmin(NDIM)
       real(dp) :: cell_r_center(NDIM)
       real(dp) :: cell_volume
       integer :: n_cells
-      integer :: i_cell, j_cell, k_cell
-      integer :: i_rhs_cell
-      real(dp) :: rhs_cell
+      integer :: i_cell, j_cell
+      integer :: cell_idx(NDIM)
+      real(dp) :: charge_density_cell
+      integer :: i_plasma_species
       real(dp) :: total_charge_cell
       real(dp) :: distance_cell_to_top_electrode
       real(dp) :: distance_cell_to_bottom_electrode
       real(dp) :: potential_from_cell_top
       real(dp) :: potential_from_cell_bottom
-      
+#if NDIM == 3
+      integer :: k_cell
+#endif
       n_cells = box%n_cell
       box_rmin = box%r_min
       box_dr = box%dr
 
-
-      ! Loop through each cell in the box
-# if NDIM == 2
+#if NDIM == 2
       do i_cell = 1, n_cells
          do j_cell = 1, n_cells
-            cell_r_center(1) = box_rmin(1) + i_cell * box_dr(1)
-            cell_r_center(2) = box_rmin(2) + j_cell * box_dr(2)
+            charge_density_cell = 0.0
+
+            ! Calculate the center of each cell in the box
+            cell_idx(1) = i_cell
+            cell_idx(2) = j_cell
+            cell_r_center = af_r_cc(box, cell_idx)
+
             ! Calculate the cell volume (Cylindrical cell volume = 2 * pi * r * dr * dz)
             cell_volume = 2 * UC_pi * (cell_r_center(1) - 0.5 * box_dr(1)) * box_dr(1) * box_dr(2)
             ! Retrieve the charge density in this cell
-            ! rhs = -rho / epsilon0
-            i_rhs_cell = af_find_cc_variable(tree, "rhs")
-            rhs_cell = box%cc(i_cell, j_cell, i_rhs_cell)
-            ! Calculate the total charge = charge density * cell volume
-            total_charge_cell = -rhs_cell * UC_eps0 * cell_volume
+            do i_plasma_species = 1, n_plasma_species
+               charge_density_cell = charge_density_cell + &
+                                 charged_species_charge(i_plasma_species) * &
+                                 box%cc(i_cell, j_cell, charged_species_itree(i_plasma_species))
+            end do
+            charge_density_cell = charge_density_cell * UC_elem_charge
+
+            total_charge_cell = charge_density_cell * cell_volume
+
             ! Calculate the potential of this cell to the top electrode position
             distance_cell_to_top_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
-                                              (cell_r_center(2) - r_top_electrode(2))**2)
+                                                  (cell_r_center(2) - r_top_electrode(2))**2)
             potential_from_cell_top = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_top_electrode)
             ! Increment potential at top electrode with the calculated potential of this cell
+
+            !$omp critical
             new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
-            !print *, "Potential from cell: ", potential_from_cell
+            !$omp end critical
 
             ! Calculate the potential of this cell to the bottom electrode position
             distance_cell_to_bottom_electrode = sqrt((cell_r_center(1) - r_bottom_electrode(1))**2 + &
-                                              (cell_r_center(2) - r_bottom_electrode(2))**2)
+                                                     (cell_r_center(2) - r_bottom_electrode(2))**2)
             potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_bottom_electrode)
             ! Increment potential at top electrode with the calculated potential of this cell
+            
+            !$omp critical
             new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
-
+            !$omp end critical
 
          end do
       end do
-# endif
+#endif
 
-# if NDIM == 3
+#if NDIM == 3
 do i_cell = 1, n_cells
    do j_cell = 1, n_cells
       do k_cell = 1, n_cells
-         cell_r_center(1) = box_rmin(1) + i_cell * box_dr(1)
-         cell_r_center(2) = box_rmin(2) + j_cell * box_dr(2)
-         cell_r_center(3) = box_rmin(3) + k_cell * box_dr(3)
+         charge_density_cell = 0
+
+         ! Calculate the center of each cell in the box
+         cell_idx(1) = i_cell
+         cell_idx(2) = j_cell
+         cell_idx(3) = k_cell
+         cell_r_center = af_r_cc(box, cell_idx)
+         
          ! Calculate the cell volume
          cell_volume = box_dr(1) * box_dr(2) * box_dr(3)
          ! Retrieve the charge density in this cell
-         ! rhs = -rho / epsilon0
-         i_rhs_cell = af_find_cc_variable(tree, "rhs")
-         rhs_cell = box%cc(i_cell, j_cell, k_cell, i_rhs_cell)
-         ! Calculate the total charge = charge density * cell volume
-         total_charge_cell = -rhs_cell * UC_eps0 * cell_volume
+         do i_plasma_species = 1, n_plasma_species
+            charge_density_cell = charge_density_cell + &
+                              charged_species_charge(i_plasma_species) * &
+                              box%cc(i_cell, j_cell, k_cell, charged_species_itree(i_plasma_species))
+         end do
+         charge_density_cell = charge_density_cell * UC_elem_charge
+
+         total_charge_cell = charge_density_cell * cell_volume
+
          ! Calculate the potential of this cell to the electrode position
          distance_cell_to_top_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
-                                          (cell_r_center(2) - r_top_electrode(2))**2 + &
-                                          (cell_r_center(3) - r_top_electrode(3))**2)
+                                               (cell_r_center(2) - r_top_electrode(2))**2 + &
+                                               (cell_r_center(3) - r_top_electrode(3))**2)
          potential_from_cell_top = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_top_electrode)
          ! Increment potential at top electrode with the calculated potential of this cell
+         
+         !$omp critical
          new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
-         !print *, "Potential from cell: ", potential_from_cell
+         !$omp end critical
 
           ! Calculate the potential of this cell to the electrode position
          distance_cell_to_bottom_electrode = sqrt((cell_r_center(1) - r_bottom_electrode(1))**2 + &
-                                          (cell_r_center(2) - r_bottom_electrode(2))**2 + &
-                                          (cell_r_center(3) - r_bottom_electrode(3))**2)
+                                                  (cell_r_center(2) - r_bottom_electrode(2))**2 + &
+                                                  (cell_r_center(3) - r_bottom_electrode(3))**2)
          potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_bottom_electrode)
          ! Increment potential at top electrode with the calculated potential of this cell
+
+         !$omp critical
          new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
-         !print *, "Potential from cell: ", potential_from_cell
+         !$omp end critical
+
       end do
    end do
 end do
-# endif
+#endif
 
 
    end subroutine calculate_potential_from_box
