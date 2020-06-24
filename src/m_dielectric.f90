@@ -241,12 +241,19 @@ contains
     integer, intent(in)               :: i_out   !< Output surface density
     integer, intent(in)               :: i_in(:) !< List of input surface densities
     real(dp), intent(in)              :: w_in(:) !< Weights of input densities
-    integer                           :: ix
+    integer                           :: ix, i
 
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
+#if NDIM == 2
           diel%surfaces(ix)%sd(:, i_out) = &
                matmul(diel%surfaces(ix)%sd(:, i_in), w_in)
+#elif NDIM == 3
+!TODO3D
+          error stop "STILL NEEDS TO BE DONE"
+          !diel%surfaces(ix)%sd(:, :, i_out) = &
+              ! sum([(w_in(i) * diel%surfaces(ix)%sd(:, :, i_in(i)), i=1,size(i_in))], DIM=3)
+#endif
        end if
     end do
   end subroutine dielectric_set_weighted_sum
@@ -261,8 +268,14 @@ contains
     surf_int = 0
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
+#if NDIM == 2
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, i_surf))
+#elif NDIM == 3
+!FLAG
+          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
+               sum(diel%surfaces(ix)%sd(:, :, i_surf))
+#endif
        end if
     end do
   end subroutine dielectric_get_integral
@@ -358,8 +371,12 @@ contains
          ! Copy the values from the parent
          sd(1:nc:2, :) = sd_p(dix(1)+1:dix(1)+nc/2, :)
          sd(2:nc:2, :) = sd(1:nc:2, :)
-#else
-         error stop
+#elif NDIM == 3
+        ! Copy the values from the parent
+!FLAG
+         sd(1:nc:2, 1:nc:2, :) = sd_p(dix(1)+1:dix(1)+nc/2, dix(2)+1:dix(2)+nc/2, :)
+         sd(2:nc:2, 1:nc:2, :) = sd(1:nc:2, 1:nc:2, :)
+         sd(:, 2:nc:2, :)      = sd(:, 1:nc:2, :)
 #endif
        end associate
     end do
@@ -385,8 +402,10 @@ contains
 #if NDIM == 2
       ! Average the value on the children
       sd_p(dix(1)+1:dix(1)+nc/2, :) = 0.5_dp * (sd(1:nc:2, :) + sd(2:nc:2, :))
-#else
-      error stop
+#elif NDIM == 3
+!FLAG
+      sd_p(dix(1)+1:dix(1)+nc/2, dix(2)+1:dix(2)+nc/2, :) = 0.25_dp * &
+      (sd(1:nc:2, 1:nc:2, :) + sd(2:nc:2, 1:nc:2, :) + sd(1:nc:2, 2:nc:2, :) + sd(2:nc:2, 1:nc:2, :) + sd(2:nc:2, 2:nc:2, :))
 #endif
     end associate
 
@@ -488,8 +507,17 @@ contains
          boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_rhs) &
          + (1-frac_gas) * fac * fac_to_volume * &
          reshape(surface%sd(:, i_sigma), [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1])
-#else
-    error stop
+#elif NDIM == 3
+!FLAG
+    boxes(id_out)%cc(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), i_rhs) = &
+      boxes(id_out)%cc(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), i_rhs) &
+      + frac_gas * fac * fac_to_volume * &
+      reshape(surface%sd(:, :, i_sigma), [ghi(1)-glo(1)+1, ghi(2)-glo(2)+1, ghi(3)-glo(3)+1])
+
+    boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_rhs) = &
+      boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_rhs) &
+      + (1-frac_gas) * fac * fac_to_volume * &
+      reshape(surface%sd(:, :, i_sigma), [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1, dhi(3)-dlo(3)+1])
 #endif
 
   end subroutine surface_charge_to_rhs
@@ -538,14 +566,18 @@ contains
     ! Get index range for cells adjacent to the boundary of the dielectric box
     call af_get_index_bc_inside(af_neighb_rev(nb), nc, 1, dlo, dhi)
 
+#if NDIM == 2
     if (clear_surf) surface%sd(:, i_sigma) = 0.0_dp
 
-#if NDIM == 2
     surface%sd(:, i_sigma) = surface%sd(:, i_sigma) + fac * dr * &
          pack(boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_cc), .true.)
     if (clear_cc) boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_cc) = 0.0_dp
 #elif NDIM == 3
-    error stop
+    if (clear_surf) surface%sd(:, :, i_sigma) = 0.0_dp
+!FLAG
+    surface%sd(:,:, i_sigma) = surface%sd(:, :, i_sigma) + fac * dr * &
+         reshape(boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_cc), [nc, nc])
+    if (clear_cc) boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_cc) = 0.0_dp
 #endif
 
   end subroutine inside_layer_to_surface
@@ -560,6 +592,11 @@ contains
     real(dp), intent(in)           :: fac     !< Elementary charge over eps0
     integer                        :: id_in, id_out, nc, nb, ix
     real(dp)                       :: eps, fac_fld(2), fac_charge, inv_dr(NDIM)
+    integer                        :: dlo(NDIM), dhi(NDIM)
+    integer                        :: glo(NDIM), ghi(NDIM)
+    integer                        :: dlo_shft(NDIM), dhi_shft(NDIM)
+    integer                        :: glo_shft(NDIM), ghi_shft(NDIM)
+    integer                        :: shft(NDIM, 2*NDIM)
 
     if (.not. diel%initialized) error stop "dielectric not initialized"
 
@@ -575,6 +612,20 @@ contains
 
           fac_fld = [2 * eps, 2.0_dp] / (1 + eps)
           fac_charge = fac / (1 + eps)
+
+          ! Get index range for cells adjacent to the boundary of the dielectric box
+          call af_get_index_bface_inside(af_neighb_rev(nb), nc, 1, dlo, dhi)
+
+          ! Get similar index range for gas-phase box
+          call af_get_index_bface_inside(nb, nc, 1, glo, ghi)
+
+          ! Compute the offset for finite difference
+          shft = - abs(af_neighb_dix(:, :))
+
+          dlo_shft(:) = dlo(:) + shft(:, nb)
+          dhi_shft(:) = dhi(:) + shft(:, nb)
+          glo_shft(:) = glo(:) + shft(:, nb)
+          ghi_shft(:) = ghi(:) + shft(:, nb)
 
           associate (fc_out => tree%boxes(id_out)%fc, &
                fc_in => tree%boxes(id_in)%fc, &
@@ -613,7 +664,17 @@ contains
                     + fac_charge * sd(:, i_sigma)
 #elif NDIM == 3
             case default
-               error stop
+                fc_out(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), af_neighb_dim(nb), i_fld) = &
+                  fac_fld(1) * inv_dr(af_neighb_dim(nb)) * &
+                  (cc_out(glo_shft(1):ghi_shft(1), glo_shft(2):ghi_shft(2), glo_shft(3):ghi_shft(3), i_phi) - &
+                   cc_out(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), i_phi)) &
+                   + fac_charge * reshape(sd(:, :, i_sigma), [ghi(1)-glo(1)+1, ghi(2)-glo(2)+1, ghi(3)-glo(3)+1])
+
+                fc_in(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), af_neighb_dim(nb), i_fld) = &
+                  fac_fld(2) * inv_dr(af_neighb_dim(nb)) * &
+                  (cc_in(dlo_shft(1):dhi_shft(1), dlo_shft(2):dhi_shft(2), dlo_shft(3):dhi_shft(3), i_phi) - &
+                  cc_in(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_phi)) &
+                   - fac_charge * reshape(sd(:, :, i_sigma), [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1, dhi(3)-dlo(3)+1])
 #endif
             end select
           end associate
@@ -710,7 +771,7 @@ contains
                cc_in(1:nc, 0, i_fld(2)) = f_in
 #elif NDIM == 3
             case default
-               error stop
+               error stop "STILL NEEDS TO BE DONE"!TODO3D
 #endif
             end select
           end associate

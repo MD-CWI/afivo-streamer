@@ -4,7 +4,7 @@
 !> Example showing how to include a dielectric surface
 program dielectric_surface
   use m_af_all
-  use m_dielectric
+  ! use m_dielectric
 
   implicit none
 
@@ -18,14 +18,15 @@ program dielectric_surface
   integer            :: i_fld_norm_cc
   integer            :: i_fld_cc(NDIM)
   integer            :: i_fld_fc
+  real(dp)           :: fac = 1.0_dp
 
   ! The dielectric constant used in this example
-  double precision, parameter :: epsilon_high = 1000.0_dp
+  double precision, parameter :: epsilon_high = 2.0_dp
 
   ! Where the interface is located
   real(dp), parameter :: interface_location = 0.25_dp
   ! Along which dimension the interface occurs
-  integer, parameter :: interface_dimension = 1
+  integer, parameter :: interface_dimension = 2
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -80,7 +81,7 @@ program dielectric_surface
      call dielectric_update_after_refinement(tree, dielectric, ref_info)
   end do
 
-  call dielectric_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, 1.0_dp)
+  call dielectric_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, fac)
 
   mg%i_phi        = i_phi
   mg%i_rhs        = i_rhs
@@ -93,8 +94,8 @@ program dielectric_surface
   do mg_iter = 1, n_iterations
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      call af_loop_box(tree, compute_fields)
-     call dielectric_correct_field_fc(tree, dielectric, 1, i_fld_fc, i_phi, 1.0_dp)
-     call dielectric_correct_field_cc(tree, dielectric, 1, i_fld_cc, i_phi, 1.0_dp)
+     call dielectric_correct_field_fc(tree, dielectric, 1, i_fld_fc, i_phi, -fac)
+     ! call dielectric_correct_field_cc(tree, dielectric, 1, i_fld_cc, i_phi, -fac)
      call af_loop_box(tree, compute_field_norms)
 
      ! Determine the minimum and maximum residual and error
@@ -221,7 +222,15 @@ contains
     box%cc(1:nc, 1:nc, i_fld_cc(2)) = 0.5_dp * inv_dr(2) * &
          (box%cc(1:nc, 0:nc-1, i_phi) - box%cc(1:nc, 2:nc+1, i_phi))
 #elif NDIM == 3
-    error stop
+    box%fc(1:nc+1, 1:nc, 1:nc, 1, i_fld_fc) = inv_dr(1) * &
+         (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
+         box%cc(1:nc+1, 1:nc, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc+1, 1:nc, 2, i_fld_fc) = inv_dr(2) * &
+         (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
+         box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc, 1:nc+1, 3, i_fld_fc) = inv_dr(3) * &
+         (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
+         box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
 #endif
 
   end subroutine compute_fields
@@ -242,7 +251,17 @@ contains
          box%cc(1:nc, 1:nc, i_fld_cc(1))**2 + &
          box%cc(1:nc, 1:nc, i_fld_cc(2))**2)
 #elif NDIM == 3
-    error stop
+    box%cc(1:nc, 1:nc, 1:nc, i_fld_norm_cc) = sqrt(&
+         box%cc(1:nc, 1:nc, 1:nc, i_fld_cc(1))**2 + &
+         box%cc(1:nc, 1:nc, 1:nc, i_fld_cc(2))**2 + &
+         box%cc(1:nc, 1:nc, 1:nc, i_fld_cc(3))**2)
+    box%cc(1:nc, 1:nc, 1:nc, i_fld_norm_fc) = 0.5_dp * sqrt(&
+             (box%fc(1:nc, 1:nc, 1:nc, 1, i_fld_fc) + &
+              box%fc(2:nc+1, 1:nc, 1:nc, 1, i_fld_fc))**2 + &
+             (box%fc(1:nc, 1:nc, 1:nc, 2, i_fld_fc) + &
+              box%fc(1:nc, 2:nc+1, 1:nc, 2, i_fld_fc))**2 + &
+             (box%fc(1:nc, 1:nc, 1:nc, 3, i_fld_fc) + &
+              box%fc(1:nc, 1:nc, 2:nc+1, 3, i_fld_fc))**2)
 #endif
   end subroutine compute_field_norms
 
