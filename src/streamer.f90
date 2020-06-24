@@ -443,13 +443,6 @@ contains
       ! Change the potential of the top electrode
       top_electrode_voltage = top_electrode_voltage + delta_V_top_electrode_dt
 
-      !print *, "Old calculated potential at top electrode: ", &
-      !                old_calculated_voltage_at_top_electrode
-      !print *, "New calculated potential at top electrode: ", &
-      !                new_calculated_voltage_at_top_electrode
-      !print *, "Delta potential at top electrode (N - O): ", &
-      !                delta_V_electrode_dt
-
       ! There is now a new potential difference between capacitor and the top electrode
       delta_V_electrode_capacitor = capacitor_voltage - top_electrode_voltage
 
@@ -458,9 +451,6 @@ contains
 
       ! This current will change the potential of the capacitor
       capacitor_voltage = capacitor_voltage - (current_top * dt) / capacitor_capacitance
-      !print *, "current * dt: ", current * dt
-      !print *, "capacitor capacitance: ", capacitor_capacitance
-      !print *, "Capacitor Voltage: ", capacitor_voltage
 
       ! This current will also charge the top electrode again
       top_electrode_voltage = top_electrode_voltage + (current_top * dt) / top_electrode_self_capacitance
@@ -474,9 +464,6 @@ contains
       current_bottom = (bottom_electrode_voltage - 0) / gnd_resistor
 
       bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / top_electrode_self_capacitance
-
-      !print *, "Bottom electrode voltage: ", bottom_electrode_voltage
-      !print *, "Ground current: ", current_bottom
 
       ! Change the applied voltage at the top electrode for the simulation
       ! For simulations we still have bottom electrode  = 0 V and top electrode has the applied potential
@@ -531,7 +518,7 @@ contains
             ! Calculate the cell volume (Cylindrical cell volume = 2 * pi * r * dr * dz)
             cell_volume = 2 * UC_pi * (cell_r_center(1) - 0.5 * box_dr(1)) * box_dr(1) * box_dr(2)
             ! Retrieve the charge density in this cell
-            do i_plasma_species = 1, n_plasma_species
+            do i_plasma_species = 1, size(charged_species_charge)
                charge_density_cell = charge_density_cell + &
                                  charged_species_charge(i_plasma_species) * &
                                  box%cc(i_cell, j_cell, charged_species_itree(i_plasma_species))
@@ -544,8 +531,8 @@ contains
             distance_cell_to_top_electrode = sqrt((cell_r_center(1) - r_top_electrode(1))**2 + &
                                                   (cell_r_center(2) - r_top_electrode(2))**2)
             potential_from_cell_top = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_top_electrode)
+           
             ! Increment potential at top electrode with the calculated potential of this cell
-
             !$omp critical
             new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
             !$omp end critical
@@ -554,8 +541,8 @@ contains
             distance_cell_to_bottom_electrode = sqrt((cell_r_center(1) - r_bottom_electrode(1))**2 + &
                                                      (cell_r_center(2) - r_bottom_electrode(2))**2)
             potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_bottom_electrode)
-            ! Increment potential at top electrode with the calculated potential of this cell
             
+            ! Increment potential at top electrode with the calculated potential of this cell
             !$omp critical
             new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
             !$omp end critical
@@ -579,7 +566,7 @@ do i_cell = 1, n_cells
          ! Calculate the cell volume
          cell_volume = box_dr(1) * box_dr(2) * box_dr(3)
          ! Retrieve the charge density in this cell
-         do i_plasma_species = 1, n_plasma_species
+         do i_plasma_species = 1, size(charged_species_charge)
             charge_density_cell = charge_density_cell + &
                               charged_species_charge(i_plasma_species) * &
                               box%cc(i_cell, j_cell, k_cell, charged_species_itree(i_plasma_species))
@@ -593,8 +580,8 @@ do i_cell = 1, n_cells
                                                (cell_r_center(2) - r_top_electrode(2))**2 + &
                                                (cell_r_center(3) - r_top_electrode(3))**2)
          potential_from_cell_top = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_top_electrode)
-         ! Increment potential at top electrode with the calculated potential of this cell
          
+         ! Increment potential at top electrode with the calculated potential of this cell
          !$omp critical
          new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
          !$omp end critical
@@ -604,8 +591,8 @@ do i_cell = 1, n_cells
                                                   (cell_r_center(2) - r_bottom_electrode(2))**2 + &
                                                   (cell_r_center(3) - r_bottom_electrode(3))**2)
          potential_from_cell_bottom = total_charge_cell / (4 * UC_pi * UC_eps0 * distance_cell_to_bottom_electrode)
+        
          ! Increment potential at top electrode with the calculated potential of this cell
-
          !$omp critical
          new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
          !$omp end critical
