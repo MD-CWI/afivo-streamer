@@ -45,6 +45,8 @@ contains
     logical, intent(in)        :: restart
     real(dp)                   :: voltage
     logical                    :: V0_from_field = .true.
+    real(dp)                   :: electrode_V0_from_field_fraction = 1
+    real(dp)                   :: capacitor_V0_from_field_fraction = 1
 
     if (restart) error stop "TODO: Circuit does not support restarting"
 
@@ -58,6 +60,11 @@ contains
          "Initial charge on capacitors (Coulomb)", .true.)
     call CFG_add_get(cfg, "circuit%V0_from_field", V0_from_field, &
          "Get initial voltage (and capacitor charge) from applied field")
+    call CFG_add_get(cfg, "circuit%electrode_V0_from_field_fraction", electrode_V0_from_field_fraction, &
+         "Get initial electrode voltage from fraction of applied field")
+    call CFG_add_get(cfg, "circuit%capacitor_V0_from_field_fraction", capacitor_V0_from_field_fraction, &
+         "Get initial capacitor voltage from fraction of applied field")
+
 
     select case (circuit_type)
     case (undefined_str)
@@ -70,10 +77,11 @@ contains
        call CFG_get(cfg, "circuit%capacitors_q", capacitors_q)
 
        if (V0_from_field) then
-          voltage = -ST_domain_len(NDIM) * &
-               field_get_amplitude(tree, 0.0_dp)
+          voltage = electrode_V0_from_field_fraction * (-ST_domain_len(NDIM) * &
+                    field_get_amplitude(tree, 0.0_dp))
           ! Set initial charge from voltage
-          capacitors_q(1) = capacitors(1) * voltage
+          capacitors_q(1) = capacitors(1) * capacitor_V0_from_field_fraction * (-ST_domain_len(NDIM) * &
+                            field_get_amplitude(tree, 0.0_dp))
        else
           ! Set initial voltage from capacitor charge
           voltage = capacitors_q(1) / capacitors(1)
