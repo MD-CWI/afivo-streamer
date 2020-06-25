@@ -249,10 +249,9 @@ contains
           diel%surfaces(ix)%sd(:, i_out) = &
                matmul(diel%surfaces(ix)%sd(:, i_in), w_in)
 #elif NDIM == 3
-!TODO3D
-          error stop "STILL NEEDS TO BE DONE"
-          !diel%surfaces(ix)%sd(:, :, i_out) = &
-              ! sum([(w_in(i) * diel%surfaces(ix)%sd(:, :, i_in(i)), i=1,size(i_in))], DIM=3)
+!TODO3D This is not tested...
+          diel%surfaces(ix)%sd(:, :, i_out) = &
+              sum([(w_in(i) * diel%surfaces(ix)%sd(:, :, i_in(i)), i=1,size(i_in))], dim=1)
 #endif
        end if
     end do
@@ -771,7 +770,8 @@ contains
                cc_in(1:nc, 0, i_fld(2)) = f_in
 #elif NDIM == 3
             case default
-               error stop "STILL NEEDS TO BE DONE"!TODO3D
+               error stop "Cell-centered field correction not implemented. &
+                            Consider switching to face-centered form."!TODO3D
 #endif
             end select
           end associate
