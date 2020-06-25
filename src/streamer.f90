@@ -47,6 +47,7 @@ program streamer
   real(dp) :: old_calculated_voltage_at_top_electrode = 0.0
   real(dp) :: new_calculated_voltage_at_top_electrode = 0.0
   real(dp) :: top_electrode_voltage = 0.0
+  real(dp) :: top_electrode_initial_voltage_fraction = 1
   real(dp) :: top_electrode_self_capacitance = 0.0
   real(dp) :: resistor = 300
   real(dp) :: capacitor_initial_voltage_fraction = 1
@@ -73,7 +74,9 @@ program streamer
   call CFG_add_get(cfg, "gnd_resistor", gnd_resistor, &
          "Resistor value for the connection of the bottom plate to ground.")
   call CFG_add_get(cfg, "capacitor_initial_voltage_fraction", capacitor_initial_voltage_fraction, &
-         "Initial capacitor voltage as a fraction of the applied discharge voltage for RC Andy.")
+         "Initial capacitor voltage as a fraction of the applied electric field for RC Andy.")
+   call CFG_add_get(cfg, "top_electrode_initial_voltage_fraction", top_electrode_initial_voltage_fraction, &
+        "Initial top electrode voltage as a fraction of the applied electric field for RC Andy.")
 
   call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
        "If set, restart simulation from a previous .dat file")
@@ -336,6 +339,10 @@ contains
     type(mg_t), intent(inout) :: mg
     integer                   :: n
 
+    if (use_circuit_andy) then
+      call initialize_circuit_andy(tree, cfg)
+    end if
+
     do n = 1, 100
        call af_loop_box(tree, init_cond_set_box)
 
@@ -362,9 +369,7 @@ contains
        if (ref_info%n_add == 0) exit
     end do
 
-    if (use_circuit_andy) then
-      call initialize_circuit_andy(tree, cfg)
-    end if
+    
   end subroutine set_initial_conditions
 
   subroutine write_sim_data(my_unit)
@@ -401,16 +406,18 @@ contains
 
 
    subroutine initialize_circuit_andy(tree, cfg)
+      use m_field
       type(CFG_t), intent(inout) :: cfg
       type(af_t), intent(inout)  :: tree
 
       ! Initialize capacitor voltage to be the same as applied voltage
-      capacitor_voltage = capacitor_initial_voltage_fraction * (-field_get_amplitude(tree, time) * ST_domain_len(NDIM))
+      capacitor_voltage = capacitor_initial_voltage_fraction * (-field_get_amplitude(tree, 0.0_dp) * ST_domain_len(NDIM))
       print *, "Initial capacitor voltage: ", capacitor_voltage
       r_top_electrode(1) = 0
       r_top_electrode(2) = 0
       r_top_electrode(NDIM) = ST_domain_len(NDIM) + delta_electrode_position
-      top_electrode_voltage = capacitor_voltage
+      top_electrode_voltage = top_electrode_initial_voltage_fraction * (-field_get_amplitude(tree, 0.0_dp) * ST_domain_len(NDIM))
+      call field_set_voltage_externally(top_electrode_voltage)
       ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
       top_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
 
