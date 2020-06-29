@@ -175,7 +175,12 @@ contains
        vals(2) = (1 - ix_frac(2)) * tree%boxes(id)%fc(ix(1), ix(2), 2, ifc) + &
             ix_frac(2) * tree%boxes(id)%fc(ix(1), ix(2)+1, 2, ifc)
 #elif NDIM == 3
-       error stop "not implemented"
+       vals(1) = (1 - ix_frac(1)) * tree%boxes(id)%fc(ix(1), ix(2), ix(3), 1, ifc) + &
+            ix_frac(1) * tree%boxes(id)%fc(ix(1)+1, ix(2), ix(3), 1, ifc)
+       vals(2) = (1 - ix_frac(2)) * tree%boxes(id)%fc(ix(1), ix(2), ix(3), 2, ifc) + &
+            ix_frac(2) * tree%boxes(id)%fc(ix(1), ix(2)+1, ix(3), 2, ifc)
+       vals(3) = (1 - ix_frac(3)) * tree%boxes(id)%fc(ix(1), ix(2), ix(3), 3, ifc) + &
+            ix_frac(3) * tree%boxes(id)%fc(ix(1), ix(2), ix(3)+1, 3, ifc)
 #endif
     end if
   end function af_interp1_fc
