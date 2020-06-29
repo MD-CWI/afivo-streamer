@@ -203,6 +203,7 @@ contains
     use m_field
     use m_user_methods
     use m_analysis
+    use m_streamer
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
@@ -274,11 +275,13 @@ contains
             n_points=lineout_npoints)
     end if
 
-    if(cross_write) then
-      write(fname, "(A,I6.6)") trim(output_name) // &
+    if(ST_cylindrical) then
+      if(cross_write) then
+        write(fname, "(A,I6.6)") trim(output_name) // &
         "_cross_", output_cnt
-      call output_cross(tree, fname)
-    endif
+        call output_cross(tree, fname)
+      endif
+    end if
 
   end subroutine output_write
 

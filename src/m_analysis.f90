@@ -81,7 +81,7 @@ contains
     integer, intent(in)        :: id, nc
 
     real(dp) :: ne_fld(2), mu, Td, N_inv
-    integer  :: n, m
+    integer  :: n, m, o
 
     N_inv = 1.0_dp/gas_number_density
 
@@ -93,6 +93,19 @@ contains
         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
         boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
       end do
+    end do
+#endif
+
+#if NDIM == 3
+    do n = 1, nc
+    	do m = 1, nc
+    		do o = 1, nc
+                ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
+                Td = ne_fld(2) * SI_to_Townsend * N_inv
+                mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+                boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+    		end do
+    	end do
     end do
 #endif
 
