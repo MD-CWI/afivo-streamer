@@ -14,6 +14,10 @@ New integrators can be added relatively easily by modifying the `af_advance` rou
 
 ## How to use
 
+Time integration can be performed with a call to `m_af_advance::af_advance`.
+
+## User-supplied forward Euler method
+
 To use the built-in time integration, a `forward_euler` routine has to be
 provided, see `m_af_advance::subr_feuler` for details. This routine will then
 be used to construct the various time integration schemes.

@@ -51,14 +51,21 @@ module m_af_advance
 
 contains
 
-  !> Compute generic finite volume flux
+  !> Advance solution over dt using time_integrator
+  !>
+  !> The user should supply a forward Euler method as documented in subr_feuler.
+  !> The indices of the cell-centered variables that will be operated on should
+  !> also be provided, so that higher-order schemes can be constructed
+  !> automatically from the forward Euler method.
   subroutine af_advance(tree, dt, dt_lim, time, i_cc, time_integrator, forward_euler)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt      !< Current time step
     real(dp), intent(out)     :: dt_lim  !< Time step limit
     real(dp), intent(inout)   :: time    !< Current time
     integer, intent(in)       :: i_cc(:) !< Index of cell-centered variables
+    !> One of the pre-defined time integrators (e.g. af_heuns_method)
     integer, intent(in)       :: time_integrator
+    !> Forward Euler method provided by the user
     procedure(subr_feuler)    :: forward_euler
     integer                   :: n_steps
 
@@ -69,6 +76,7 @@ contains
          error stop "Not enough copies available"
 
     n_steps = af_advance_num_steps(time_integrator)
+    dt_lim = 1e100_dp
 
     select case (time_integrator)
     case (af_forward_euler)
