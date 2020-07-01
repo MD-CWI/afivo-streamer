@@ -48,9 +48,4 @@ refinement:
   with tools such
   as [Visit](https://wci.llnl.gov/simulation/computer-codes/visit/)
 
-# What is not included? {#excluded-functionality}
-
-Besides the multigrid methods, there are no built-in solvers. To use Afivo for
-e.g. hyperbolic problems, a user will have to implement both a spatial and
-temporal discretization. Some of the included @ref examples-page show how this
-can be done.
+See the **Modules** page for all included modules.

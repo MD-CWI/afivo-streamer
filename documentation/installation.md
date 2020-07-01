@@ -18,4 +18,31 @@ Then you can go into the folder and compile the code:
     cd afivo-streamer
     make
 
-See @ref md_documentation_examples for a list of examples.
+Afterwards, you can run some of the example, see @ref md_documentation_examples.
+
+# Updating to the latest version
+
+If you want to update your previously downloaded code, go into your afivo-streamer folder and pull the new version:
+
+    git pull
+
+Afterwards, you can recompile the code by typing
+
+    make
+
+either in the `afivo-streamer` folder, or in a specific program folder with a `Makefile`.
+
+# List of issues and solutions
+
+## Problems compiling Silo
+
+* The script `build_silo.sh` can be executed manually from the `afivo/external_libraries' folder for easier debugging. 
+* Make sure the default C, C++ and Fortran compiler are configured correctly. For example, use `export FC=/usr/bin/gfortran' in your shell to specify the Fortran compiler.
+* `/usr/bin/ld: cannot find -lsz`. **Solution** (on Fedora) `sudo dnf install libaec-devel`
+
+### The above solution gives a new error (encountered by some users using Fedora 30)
+
+* Add the following lines to `build_silo.sh` just before the `#Configure` comment:
+    `export CC=/usr/bin/gcc`
+    `export CXX=/usr/bin/g++`
+    `export FC=/usr/bin/gfortran`

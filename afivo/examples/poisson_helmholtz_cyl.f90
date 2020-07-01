@@ -1,4 +1,4 @@
-!> \example helmholtz_cyl.f90
+!> \example poisson_helmholtz_cyl.f90
 !>
 !> Example showing how to use multigrid and compare with an analytic solution,
 !> using the method of manufactured solutions. A standard 5-point Laplacian is

@@ -1,8 +1,8 @@
 #include "../src/cpp_macros.h"
-!> \example particles_gravity_Xd.f90
+!> \example particles_gravity.f90
 !>
 !> Toy example showing how to simulate gravitating particles
-program particles_gravity_Xd
+program particles_gravity
   use m_af_all
 
   implicit none
@@ -69,7 +69,6 @@ program particles_gravity_Xd
 
   ! Set default methods (boundary condition is not actually used due to
   ! periodicity)
-  call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero, af_gc_interp)
   call af_set_cc_methods(tree, i_rho, af_bc_neumann_zero, af_gc_interp)
   do n = 1, NDIM
      call af_set_cc_methods(tree, i_f(n), af_bc_neumann_zero, af_gc_interp)
@@ -265,4 +264,4 @@ contains
     box%cc(DTIMES(:), i_rho) = box%cc(DTIMES(:), i_rho) - mean_density
   end subroutine subtract_mean_density
 
-end program particles_gravity_Xd
+end program particles_gravity

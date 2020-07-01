@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example poisson_neumann_Xd.f90
+!> \example poisson_neumann.f90
 !>
 !> Example showing how to use multigrid in combination with Neumann boundary
 !> conditions.
-program poisson_neumann_Xd
+program poisson_neumann
   use m_af_all
   use m_gaussians
 

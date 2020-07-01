@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example poisson_benchmark_Xd.f90
+!> \example poisson_benchmark.f90
 !>
 !> This program can be used to benchmark the multigrid routines. For simplicity,
 !> it does not compare results with a known solution.
-program poisson_benchmark_Xd
+program poisson_benchmark
   use m_af_all
 
   implicit none
@@ -170,4 +170,4 @@ contains
     box%cc(DTIMES(1:nc), i_rhs) = 1.0_dp
   end subroutine set_init_cond
 
-end program poisson_benchmark_Xd
+end program poisson_benchmark

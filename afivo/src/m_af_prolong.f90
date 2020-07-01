@@ -512,10 +512,9 @@ contains
 
       if (ll * rr < 0) then
          slope = 0.0_dp
-      else if (ll * ll < rr * rr) then
-         slope = ll
       else
-         slope = rr
+         ! MC limiter
+         slope = sign(minval(abs([2 * ll, 2 * rr, 0.5_dp * (ll + rr)])), ll)
       end if
     end function limit_slope
 

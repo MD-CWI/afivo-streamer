@@ -1,9 +1,9 @@
 #include "../src/cpp_macros.h"
-!> \example random_refinement_Xd.f90
+!> \example random_refinement.f90
 !>
 !> This example shows how to create an AMR tree, perform random refinement,
 !> write output files, and how to fill ghost cells.
-program random_refinement_Xd
+program random_refinement
   use m_af_all
 
   implicit none
@@ -59,7 +59,7 @@ program random_refinement_Xd
      ! Fill ghost cells for phi. The third argument is a subroutine that fills
      ! ghost cells near refinement boundaries, and the fourth argument fill ghost
      ! cells near physical boundaries.
-     call af_gc_tree(tree, i_phi, af_gc_interp, af_bc_dirichlet_zero)
+     call af_gc_tree(tree, [i_phi])
   end if
 
   call af_tree_sum_cc(tree, i_phi, sum_phi_t0)
@@ -160,4 +160,4 @@ contains
     if (str /= "Hello") error stop "error reading other data"
   end subroutine read_string
 
-end program random_refinement_Xd
+end program random_refinement

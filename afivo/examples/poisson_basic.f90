@@ -1,5 +1,5 @@
 #include "../src/cpp_macros.h"
-!> \example poisson_basic_Xd.f90
+!> \example poisson_basic.f90
 !>
 !> Example showing how to use multigrid and compare with an analytic solution. A
 !> standard 5-point Laplacian is used.

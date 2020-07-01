@@ -18,7 +18,13 @@ module m_user_methods
   !> To set a user-defined gas number density
   procedure(gas_dens_func), pointer :: user_gas_density => null()
 
+  !> To set the field amplitude manually
+  procedure(field_func), pointer :: user_field_amplitude => null()
+
   procedure(log_subr), pointer :: user_write_log => null()
+
+  !> Whether to simulate the plasma fluid equations for the electrons
+  procedure(bool_subr), pointer :: user_evolve_electrons => null()
 
   interface
      subroutine log_subr(tree, filename, out_cnt)
@@ -28,12 +34,25 @@ module m_user_methods
        integer, intent(in)          :: out_cnt
      end subroutine log_subr
 
-     pure function gas_dens_func(box, IJK) result(dens)
+     function gas_dens_func(box, IJK) result(dens)
        import
        type(box_t), intent(in) :: box
        integer, intent(in)     :: IJK
        real(dp)                :: dens
      end function gas_dens_func
+
+     function field_func(tree, time) result(amplitude)
+       import
+       type(af_t), intent(in) :: tree
+       real(dp), intent(in)   :: time
+       real(dp)               :: amplitude
+     end function field_func
+
+     logical function bool_subr(tree, time)
+       import
+       type(af_t), intent(in) :: tree
+       real(dp), intent(in)   :: time
+     end function bool_subr
   end interface
 
 end module m_user_methods

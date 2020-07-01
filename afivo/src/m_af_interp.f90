@@ -15,17 +15,17 @@ module m_af_interp
 contains
 
   !> Using zeroth order interpolation to get a value at r in cell
-  function af_interp0(tree, rr, ivs, success, id_guess) result(vals)
+  function af_interp0(tree, r, ivs, success, id_guess) result(vals)
     use m_af_utils, only: af_get_loc
     type(af_t), intent(in)        :: tree     !< Parent box
-    real(dp), intent(in)          :: rr(NDIM) !< Where to interpolate
+    real(dp), intent(in)          :: r(NDIM) !< Where to interpolate
     integer, intent(in)           :: ivs(:)   !< Variables to interpolate
     logical, intent(out)          :: success  !< Whether the interpolation worked
     integer, intent(inout), optional :: id_guess !< Guess for box id (will be updated)
     real(dp)                      :: vals(size(ivs))
     type(af_loc_t)                :: loc
 
-    loc = af_get_loc(tree, rr, guess=id_guess)
+    loc = af_get_loc(tree, r, guess=id_guess)
     ! Update guess
     if (present(id_guess)) id_guess = loc%id
 
@@ -102,22 +102,22 @@ contains
     end if
   end function af_interp1
 
-  !> Add 'amount' to the grid cell nearest to rr
-  subroutine af_interp0_to_grid(tree, rr, iv, amount, to_density)
+  !> Add 'amount' to the grid cell nearest to r
+  subroutine af_interp0_to_grid(tree, r, iv, amount, to_density)
     use m_af_utils, only: af_get_loc
     type(af_t), intent(inout) :: tree
     integer, intent(in)        :: iv         !< Index of variable
-    real(dp), intent(in)       :: rr(NDIM)     !< Location
+    real(dp), intent(in)       :: r(NDIM)     !< Location
     real(dp), intent(in)       :: amount     !< How much to add
     logical, intent(in)        :: to_density !< If true, divide by cell volume
     real(dp)                   :: actual_amount
     type(af_loc_t)            :: loc
     integer                    :: id, ix(NDIM)
 
-    loc = af_get_loc(tree, rr)
+    loc = af_get_loc(tree, r)
 
     if (loc%id == -1) then
-       print *, "af_interp0_to_grid error, no box at ", rr
+       print *, "af_interp0_to_grid error, no box at ", r
        stop
     end if
 

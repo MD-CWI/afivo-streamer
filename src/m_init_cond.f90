@@ -143,8 +143,7 @@ contains
     do lvl = my_lvl, tree%highest_lvl-1
        do i = 1, size(tree%lvls(lvl)%parents)
           id = tree%lvls(lvl)%parents(i)
-          call af_gc_box(tree%boxes, id, i_rhs, &
-               af_gc_interp, af_bc_neumann_zero)
+          call af_gc_box(tree, id, [i_rhs])
        end do
 
        do i = 1, size(tree%lvls(lvl)%parents)
@@ -164,10 +163,8 @@ contains
     end do
 
     ! Restrict and fill ghost cells
-    call af_restrict_tree(tree, i_electron)
-    call af_restrict_tree(tree, i_1pos_ion)
-    call af_gc_tree(tree, i_electron, af_gc_interp_lim, af_bc_neumann_zero)
-    call af_gc_tree(tree, i_1pos_ion, af_gc_interp_lim, af_bc_neumann_zero)
+    call af_restrict_tree(tree, [i_electron, i_1pos_ion])
+    call af_gc_tree(tree, [i_electron, i_1pos_ion])
 
   end subroutine init_cond_stochastic_density
 
@@ -205,7 +202,23 @@ contains
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
 
-       if (.not. gas_constant_density) then
+       if (gas_dynamics) then
+          if (associated(user_gas_density)) then
+             box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
+          else
+             ! Start with a constant gas number density
+             box%cc(IJK, i_gas_dens) = gas_number_density
+          end if
+
+          ! Initialize Euler variables: density, momentum, energy
+          box%cc(IJK, gas_vars(i_rho)) = box%cc(IJK, i_gas_dens) * &
+               gas_molecular_weight
+          box%cc(IJK, gas_vars(i_mom)) = 0.0_dp
+          box%cc(IJK, gas_vars(i_e)) = &
+               gas_pressure * 1e5_dp / (gas_euler_gamma - 1) + &
+               0.5_dp * sum(box%cc(IJK, gas_vars(i_mom))**2) / &
+               box%cc(IJK, gas_vars(i_rho))
+       else if (associated(user_gas_density)) then
           box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
        end if
 

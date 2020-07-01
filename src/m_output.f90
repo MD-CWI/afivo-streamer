@@ -2,7 +2,6 @@
 module m_output
   use m_af_all
   use m_types
-  use m_advance, only: advance_max_dt
   use m_streamer
 
   implicit none
@@ -25,6 +24,9 @@ module m_output
 
   ! If positive: decay rate for source term (1/s) for time-averaged values
   real(dp), public, protected :: output_src_decay_rate = -1.0_dp
+
+  ! Write to a log file for regression testing
+  logical, protected :: output_regression_test = .false.
 
   ! Write output along a line
   logical, public, protected :: lineout_write = .false.
@@ -130,6 +132,8 @@ contains
          "The timestep for writing output (s)")
     call CFG_add_get(cfg, "output%src_term", output_src_term, &
          "Include ionization source term in output")
+    call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
+         "Write to a log file for regression testing")
 
     if (output_src_term) then
        call af_add_cc_variable(tree, "src", ix=i_src)
@@ -223,14 +227,14 @@ contains
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
        if ( .not. lc_reading) then 
-         if (photoi_enabled) call photoi_set_src(tree, advance_max_dt)
+         if (photoi_enabled) call photoi_set_src(tree, global_dt)
          call field_set_rhs(tree, 0)
        endif
 
        do i = 1, tree%n_var_cell
           if (tree%cc_write_output(i)) then
-             call af_restrict_tree(tree, i)
-             call af_gc_tree(tree, i)
+             call af_restrict_tree(tree, [i])
+             call af_gc_tree(tree, [i])
           end if
        end do
 
@@ -248,6 +252,11 @@ contains
        call user_write_log(tree, fname, output_cnt)
     else
        call output_log(tree, fname, output_cnt, wc_time)
+    end if
+
+    if (output_regression_test) then
+       write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
+       call output_regression_log(tree, fname, output_cnt, wc_time)
     end if
 
     if (field_maxima_write) then
@@ -286,6 +295,7 @@ contains
   end subroutine output_write
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
+    use m_field, only: field_voltage
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
@@ -297,6 +307,7 @@ contains
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er
+    logical, save                :: first_time = .true.
 
     call af_tree_sum_cc(tree, i_electron, sum_elec)
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
@@ -305,16 +316,20 @@ contains
     call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
     call af_tree_min_fc(tree, 1, electric_fld, min_Er)
 
-    dt = advance_max_dt
+    dt = global_dt
 
-    if (out_cnt == 1) then
+    if (first_time) then
+       first_time = .false.
+
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 2
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
+       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
+            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage ", &
+            " wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
-       write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
+       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
+            "max(E) x y z max(n_e) x y z voltage ", &
+            "wc_time n_cells min(dx) highest(lvl)"
 #endif
        close(my_unit)
 
@@ -323,9 +338,9 @@ contains
     end if
 
 #if NDIM == 2
-    fmt = "(I6,16E16.8,I12,1E16.8,I3)"
+    fmt = "(I6,17E16.8,I12,1E16.8,I3)"
 #elif NDIM == 3
-    fmt = "(I6,14E16.8,I12,1E16.8,I3)"
+    fmt = "(I6,15E16.8,I12,1E16.8,I3)"
 #endif
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -337,22 +352,75 @@ contains
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
+         field_voltage, &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
+         af_r_loc(tree, loc_elec), field_voltage, &
+         wc_time, af_num_cells_used(tree), &
+         af_min_dr(tree),tree%highest_lvl
 #endif
     close(my_unit)
 
   end subroutine output_log
+
+  !> Write statistics to a file that can be used for regression testing
+  subroutine output_regression_log(tree, filename, out_cnt, wc_time)
+    use m_chemistry
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: filename
+    integer, intent(in)          :: out_cnt !< Output number
+    real(dp), intent(in)         :: wc_time !< Wallclock time
+    character(len=30)            :: fmt
+    integer                      :: my_unit, n
+    real(dp)                     :: vol
+    real(dp)                     :: sum_dens(n_species)
+    real(dp)                     :: sum_dens_sq(n_species)
+    real(dp)                     :: max_dens(n_species)
+
+    vol = af_total_volume(tree)
+    do n = 1, n_species
+       call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+       call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
+       call af_tree_max_cc(tree, species_itree(n), max_dens(n))
+    end do
+
+    if (out_cnt == 0) then
+       open(newunit=my_unit, file=trim(filename), action="write")
+       write(my_unit, "(A)", advance="no") "it time dt"
+       do n = 1, n_species
+          write(my_unit, "(A)", advance="no") &
+               " sum(" // trim(species_list(n)) // ")"
+       end do
+       do n = 1, n_species
+          write(my_unit, "(A)", advance="no") &
+               " sum(" // trim(species_list(n)) // "^2)"
+       end do
+       do n = 1, n_species
+          write(my_unit, "(A)", advance="no") &
+               " max(" // trim(species_list(n)) // ")"
+       end do
+       write(my_unit, "(A)") ""
+       close(my_unit)
+    end if
+
+    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E16.8)"
+
+    open(newunit=my_unit, file=trim(filename), action="write", &
+         position="append")
+    write(my_unit, fmt) out_cnt, global_time, global_dt, &
+         sum_dens/vol, sum_dens_sq/vol, max_dens
+    close(my_unit)
+
+  end subroutine output_regression_log
 
   subroutine check_path_writable(pathname)
     character(len=*), intent(in) :: pathname
     integer                      :: my_unit, iostate
     open(newunit=my_unit, file=trim(pathname)//"_DUMMY", iostat=iostate)
     if (iostate /= 0) then
-       print *, "Output directory: " // trim(pathname)
+       print *, "Output name: " // trim(pathname) // '_...'
        error stop "Directory not writable (does it exist?)"
     else
        close(my_unit, status='delete')

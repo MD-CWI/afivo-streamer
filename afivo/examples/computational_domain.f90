@@ -1,7 +1,7 @@
 #include "../src/cpp_macros.h"
-!> \example computational_domain_Xd.f90
+!> \example computational_domain.f90
 !> Example showing how create different types of computational domains
-program computational_domain_Xd
+program computational_domain
   use m_af_all
 
   implicit none
@@ -43,4 +43,4 @@ program computational_domain_Xd
   call af_write_vtk(tree, "computational_domain_" // DIMNAME // "_3", dir="output")
   call af_destroy(tree)
 
-end program computational_domain_Xd
+end program computational_domain

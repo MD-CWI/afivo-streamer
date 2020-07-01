@@ -1,0 +1,19 @@
+image: gcc
+
+before_script:
+  - apt-get update -qq && apt-get install -y -qq python-numpy python3-numpy
+  - gfortran --version
+
+cache:
+  paths:
+    - afivo/external_libraries
+
+build:
+  stage: build
+  script:
+    - make -j
+
+run_tests:
+  stage: test
+  script:
+    - ./run_test.sh

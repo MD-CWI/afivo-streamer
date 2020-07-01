@@ -235,7 +235,7 @@ contains
              call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, coords, bc_val, bc_type)
 
              ! Get index range near neighbor
-             call af_get_index_bc_inside(nb, nc, ilo, ihi)
+             call af_get_index_bc_inside(nb, nc, 1, ilo, ihi)
 
              ! Use the stored arrays mg%csolver%bc_to_rhs to convert the value
              ! at the boundary to the rhs

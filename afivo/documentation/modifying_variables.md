@@ -2,15 +2,13 @@
 
 # Introduction
 
-Afivo supports cell-centered and face-centered variables. When calling
-`m_a2_core::a2_init()` a user selects how many of these variables to include.
-Users can modify these variables in different ways, as explained below.
+Afivo supports cell-centered and face-centered variables, which can be added with `m_af_core::af_add_cc_variable()` and `m_af_core::af_add_fc_variable()`.
 
 # Changing variables on a single box
 
 A single box contains an array `cc` with cell-centered variables and an array
-`fc` with face centered variables, see the definition in `m_a2_types::box2_t`.
-These variables can be modified as shown below:
+`fc` with face centered variables, see the definition in `m_af_types::box_t`.
+These variables can for example be modified as shown below:
 
 ```{f90}
     subroutine change_values(box)
@@ -39,12 +37,12 @@ These variables can be modified as shown below:
 # Calling a routine on all boxes of the tree
 
 If a user has written a routine as shown above, then this routine can be passed
-to `m_a2_utils::a2_loop_box`:
+to `m_af_utils::af_loop_box`:
 
-    call a2_loop_box(tree, change_values)
+    call af_loop_box(tree, change_values)
 
-The routine will then be called on all the boxes of the tree. See `m_a2_utils`
-for alternatives to `a2_loop_box`.
+The routine will then be called on all the boxes of the tree. See `m_af_utils`
+for alternatives to `af_loop_box`.
 
 # Manually looping over all the boxes in a tree
 

@@ -38,11 +38,17 @@ module m_field
   !> Decay time of background field
   real(dp) :: field_decay_time = huge(1.0_dp)
 
-  !> The applied electric field (vertical direction)
+  !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = 1.0e6_dp
+
+  !> The current vertical applied electric field
+  real(dp), public, protected :: current_field_amplitude
 
   !> The applied voltage (vertical direction)
   real(dp), public, protected :: field_voltage
+
+  !> Whether the voltage has been set externally
+  logical :: voltage_set_externally = .false.
 
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
@@ -65,6 +71,7 @@ module m_field
   public :: field_from_potential
   public :: field_get_amplitude
   public :: field_set_voltage
+  public :: field_set_voltage_externally
 
   public :: field_bc_homogeneous
 
@@ -106,7 +113,7 @@ contains
     call CFG_add_get(cfg, "field_decay_time", field_decay_time, &
          "Decay time of field (s)")
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
-         "The applied electric field (V/m) (vertical)")
+         "The (initial) vertical applied electric field (V/m)")
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
          "Type of boundary condition to use (homogeneous, ...)")
 
@@ -123,8 +130,6 @@ contains
          "Charge (in C) of point charge")
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
-
-    field_voltage = -ST_domain_len(NDIM) * field_amplitude
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
@@ -153,7 +158,6 @@ contains
     mg%box_stencil => mg_auto_stencil
     mg%sides_rb => mg_sides_rb
 
-    call af_set_cc_methods(tree, i_phi, mg%sides_bc, mg%sides_rb)
     call af_set_cc_methods(tree, i_electric_fld, &
          af_bc_neumann_zero, af_gc_interp)
 
@@ -206,7 +210,7 @@ contains
     integer                   :: i
 
     call field_set_rhs(tree, s_in)
-    call field_set_voltage(time)
+    call field_set_voltage(tree, time)
 
     if (.not. have_guess) then
        ! Perform a FMG cycle when we have no guess
@@ -222,7 +226,7 @@ contains
     call af_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call af_gc_tree(tree, i_electric_fld)
+    call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute
 
   subroutine field_compute_rhs(tree, mg, time)
@@ -244,13 +248,17 @@ contains
   end subroutine field_compute_rhs
 
   !> Compute the electric field at a given time
-  function field_get_amplitude(time) result(electric_fld)
+  function field_get_amplitude(tree, time) result(electric_fld)
     use m_units_constants
     use m_lookup_table
+    use m_user_methods
+    type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
     real(dp)               :: electric_fld, t_rel
 
-    if (field_table_use) then
+    if (associated(user_field_amplitude)) then
+       electric_fld = user_field_amplitude(tree, time)
+    else if (field_table_use) then
        call LT_lin_interp_list(field_table_times, field_table_fields, &
             time, electric_fld)
     else
@@ -271,11 +279,22 @@ contains
   end function field_get_amplitude
 
   !> Compute the voltage at a given time
-  subroutine field_set_voltage(time)
-    real(dp), intent(in) :: time
+  subroutine field_set_voltage(tree, time)
+    type(af_t), intent(in) :: tree
+    real(dp), intent(in)   :: time
 
-    field_voltage = -ST_domain_len(NDIM) * field_get_amplitude(time)
+    if (.not. voltage_set_externally) then
+       current_field_amplitude = field_get_amplitude(tree, time)
+       field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
+    end if
   end subroutine field_set_voltage
+
+  !> Set the voltage
+  subroutine field_set_voltage_externally(voltage)
+    real(dp), intent(in) :: voltage
+    voltage_set_externally = .true.
+    field_voltage = voltage
+  end subroutine field_set_voltage_externally
 
   !> This fills ghost cells near physical boundaries for the potential
   subroutine field_bc_homogeneous(box, nb, iv, coords, bc_val, bc_type)

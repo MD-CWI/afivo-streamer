@@ -16,13 +16,15 @@ module m_af_core
   public :: af_init_box
   public :: af_destroy
   public :: af_adjust_refinement
+  public :: af_refine_up_to_lvl
   public :: af_consistent_fluxes
 
 contains
 
   !> Add cell-centered variable
+  !> @todo ix as third argument?
   subroutine af_add_cc_variable(tree, name, write_out, n_copies, &
-       max_lvl, ix, write_binary)
+       ix, write_binary)
     !> Tree to add variable to
     type(af_t), intent(inout)      :: tree
     !> Name of the variable
@@ -33,22 +35,17 @@ contains
     logical, intent(in), optional  :: write_binary
     !> How many copies of variable to store (default: 1)
     integer, intent(in), optional  :: n_copies
-    !> Store variable up to this refinement level (default: af_max_lvl)
-    integer, intent(in), optional  :: max_lvl
     !> On output: index of variable
     integer, intent(out), optional :: ix
 
-    integer :: n
-    integer :: ncpy, maxlvl
+    integer :: n, ncpy
     logical :: writeout, writebin
 
     ncpy = 1; if (present(n_copies)) ncpy = n_copies
     writeout = .true.; if (present(write_out)) writeout = write_out
     writebin = .true.; if (present(write_binary)) writebin = write_binary
-    maxlvl = 100; if (present(max_lvl)) maxlvl = max_lvl
 
     if (ncpy < 1) error stop "af_add_cc_variable: n_copies < 1"
-    if (maxlvl < 1) error stop "af_add_cc_variable: max_lvl < 1"
 
     do n = 1, ncpy
        tree%n_var_cell = tree%n_var_cell + 1
@@ -57,15 +54,13 @@ contains
           tree%cc_names(tree%n_var_cell)        = name
           tree%cc_write_output(tree%n_var_cell) = writeout
           tree%cc_write_binary(tree%n_var_cell) = writebin
-          tree%cc_max_level(tree%n_var_cell)    = maxlvl
           tree%cc_num_copies(tree%n_var_cell)   = ncpy
        else
           write(tree%cc_names(tree%n_var_cell), "(A,I0)") &
                trim(name) // '_', n
           tree%cc_write_output(tree%n_var_cell) = .false.
           tree%cc_write_binary(tree%n_var_cell) = .false.
-          tree%cc_max_level(tree%n_var_cell)    = maxlvl
-          tree%cc_num_copies(tree%n_var_cell)   = 1
+          tree%cc_num_copies(tree%n_var_cell)   = 0
        end if
     end do
 
@@ -180,8 +175,8 @@ contains
     allocate(tree%removed_ids(tree%box_limit))
 
     ! Initialize list of cell-centered variables with methods
-    if (.not. allocated(tree%cc_method_vars)) &
-         allocate(tree%cc_method_vars(0))
+    if (.not. allocated(tree%cc_auto_vars)) &
+         allocate(tree%cc_auto_vars(0))
 
     call af_set_coarse_grid(tree, grid_size, periodic)
 
@@ -304,35 +299,45 @@ contains
     procedure(af_subr_rb), optional       :: rb       !< Refinement boundary method
     procedure(af_subr_prolong), optional  :: prolong  !< Prolongation method
     procedure(af_subr_restrict), optional :: restrict !< Restriction method
-    integer                               :: i, n
+    integer                               :: i
 
-    tree%cc_methods(iv)%bc => bc
-
-    if (present(rb)) then
-       tree%cc_methods(iv)%rb => rb
-    else
-       tree%cc_methods(iv)%rb => af_gc_interp
+    if (tree%has_cc_method(iv)) then
+       print *, "Cannot call af_set_cc_methods twice for ", &
+            trim(tree%cc_names(iv))
+       error stop
     end if
 
-    if (present(prolong)) then
-       tree%cc_methods(iv)%prolong => prolong
-    else
-       tree%cc_methods(iv)%prolong => af_prolong_linear
-    end if
+    ! Set methods for the variable and its copies
+    do i = iv, iv + tree%cc_num_copies(iv) - 1
+       tree%cc_methods(i)%bc => bc
 
-    if (present(restrict)) then
-       tree%cc_methods(iv)%restrict => restrict
-    else
-       tree%cc_methods(iv)%restrict => af_restrict_box
-    end if
+       if (present(rb)) then
+          tree%cc_methods(i)%rb => rb
+       else
+          tree%cc_methods(i)%rb => af_gc_interp
+       end if
 
-    tree%has_cc_method(iv) = .true.
+       if (present(prolong)) then
+          tree%cc_methods(i)%prolong => prolong
+       else
+          tree%cc_methods(i)%prolong => af_prolong_linear
+       end if
 
-    if (.not. allocated(tree%cc_method_vars)) &
-         allocate(tree%cc_method_vars(0))
+       if (present(restrict)) then
+          tree%cc_methods(i)%restrict => restrict
+       else
+          tree%cc_methods(i)%restrict => af_restrict_box
+       end if
 
-    n = size(tree%cc_method_vars)
-    tree%cc_method_vars = [(tree%cc_method_vars(i), i=1,n), iv]
+       tree%has_cc_method(i) = .true.
+    end do
+
+    if (.not. allocated(tree%cc_auto_vars)) &
+         allocate(tree%cc_auto_vars(0))
+
+    ! Append only original variable to cc_auto_vars, so that the copies are not
+    ! automatically prolongated etc.
+    tree%cc_auto_vars = [tree%cc_auto_vars, iv]
 
   end subroutine af_set_cc_methods
 
@@ -345,7 +350,7 @@ contains
     if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
     deallocate(tree%boxes)
     deallocate(tree%removed_ids)
-    deallocate(tree%cc_method_vars)
+    deallocate(tree%cc_auto_vars)
 
     do lvl = af_min_lvl, af_max_lvl
        deallocate(tree%lvls(lvl)%ids)
@@ -547,6 +552,34 @@ contains
     end if
   end function find_neighb
 
+  !> Refine a tree up to a given refinement lvl
+  subroutine af_refine_up_to_lvl(tree, lvl)
+    type(af_t), intent(inout) :: tree !< The tree to adjust
+    integer, intent(in)       :: lvl  !< Refine up to this lvl
+    type(ref_info_t)          :: ref_info
+
+    if (lvl < tree%highest_lvl) error stop "tree already above level"
+
+    do
+       call af_adjust_refinement(tree, ref_routine, ref_info)
+       if (ref_info%n_add == 0) exit
+    end do
+
+  contains
+
+    subroutine ref_routine(box, cell_flags)
+      type(box_t), intent(in) :: box
+      integer, intent(out) :: cell_flags(DTIMES(box%n_cell))
+
+      if (box%lvl < lvl) then
+         cell_flags = af_do_ref
+      else
+         cell_flags = af_keep_ref
+      end if
+    end subroutine ref_routine
+
+  end subroutine af_refine_up_to_lvl
+
   !> Adjust the refinement of a tree using the user-supplied ref_subr. The
   !> optional argument ref_buffer controls over how many cells neighbors are
   !> affected by refinement flags.
@@ -554,13 +587,13 @@ contains
   !> On input, the tree should be balanced. On output, the tree is still
   !> balanced, and its refinement is updated (with at most one level per call).
   subroutine af_adjust_refinement(tree, ref_subr, ref_info, ref_buffer, &
-       modify_refinement)
+       ref_links)
     type(af_t), intent(inout)      :: tree        !< The tree to adjust
     procedure(af_subr_ref)         :: ref_subr    !< Refinement function
     type(ref_info_t), intent(inout) :: ref_info    !< Information about refinement
     integer, intent(in), optional   :: ref_buffer  !< Buffer width (in cells)
-    !> A routine to manually override refinement flags
-    procedure(subr_modify_ref), optional :: modify_refinement
+    !> Lists of linked boxes which should have the same refinement
+    integer, intent(in), optional   :: ref_links(:, :)
     integer                         :: lvl, id, i, c_ids(af_num_children), i_ch
     integer                         :: i_add, i_rm, n_ch, n_add
     integer, allocatable            :: ref_flags(:)
@@ -581,7 +614,7 @@ contains
     ! Set refinement values for all boxes. Only two flags are used below:
     ! af_refine and af_derefine. Other values are ignored.
     call consistent_ref_flags(tree, ref_flags, ref_subr, &
-         ref_buffer_val, modify_refinement)
+         ref_buffer_val, ref_links)
 
     ! To store ids of removed boxes
     n_ch = af_num_children
@@ -694,7 +727,7 @@ contains
           do i_ch = 1, af_num_children
              ch_id = tree%boxes(id)%children(i_ch)
              call tree%cc_methods(iv)%restrict(tree%boxes(ch_id), &
-                  tree%boxes(id), iv)
+                  tree%boxes(id), [iv])
           end do
        end if
     end do
@@ -719,8 +752,8 @@ contains
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
 
-          do n = 1, size(tree%cc_method_vars)
-             iv = tree%cc_method_vars(n)
+          do n = 1, size(tree%cc_auto_vars)
+             iv = tree%cc_auto_vars(n)
              call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
                   tree%boxes(id), iv)
           end do
@@ -730,7 +763,7 @@ contains
        !$omp do
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
-          call af_gc_box(tree, id, [tree%cc_method_vars])
+          call af_gc_box(tree, id, [tree%cc_auto_vars])
        end do
        !$omp end do
     end do
@@ -784,14 +817,14 @@ contains
   !> ref_flags is changed: for boxes that will be refined it holds af_refine,
   !> for boxes that will be derefined it holds af_derefine
   subroutine consistent_ref_flags(tree, ref_flags, ref_subr, &
-       ref_buffer, modify_refinement)
+       ref_buffer, ref_links)
     use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     type(af_t), intent(inout) :: tree         !< Tree for which we set refinement flags
     integer, intent(inout)     :: ref_flags(:) !< List of refinement flags for all boxes(:)
     procedure(af_subr_ref)    :: ref_subr     !< User-supplied refinement function.
     integer, intent(in)        :: ref_buffer   !< Buffer width (in cells)
-    !> A routine to manually override refinement flags
-    procedure(subr_modify_ref), optional :: modify_refinement
+    !> Lists of linked boxes which should have the same refinement
+    integer, intent(in), optional :: ref_links(:, :)
     integer              :: lvl, i, i_ch, ch_id, id
     integer              :: p_id
     integer              :: thread_id
@@ -863,8 +896,10 @@ contains
     call ensure_two_one_balance(tree, ref_flags)
     call handle_derefinement_flags(tree, ref_flags)
 
-    if (present(modify_refinement)) then
-       call modify_refinement(tree, ref_flags)
+    if (present(ref_links)) then
+       do i = 1, size(ref_links, 2)
+          ref_flags(ref_links(:, i)) = maxval(ref_flags(ref_links(:, i)))
+       end do
        call ensure_two_one_balance(tree, ref_flags)
        call handle_derefinement_flags(tree, ref_flags)
     end if

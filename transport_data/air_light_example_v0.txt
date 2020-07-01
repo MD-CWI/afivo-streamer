@@ -11,9 +11,9 @@ e + O2 -> e + e + O2+,field_table,C43 O2 Ionization 12.06 eV
 # Attachment
 e + O2 + O2 -> O2-,field_table,C27 O2 Attachment
 e + O2 -> O-,field_table,C28 O2 Attachment
-# Generation of N2(C3), rates from Panchesnyi PR-E 2005
+# Generation of N2(C3)
 e + N2 -> e + N2_C3,field_table,C10 N2 Excitation 11.03 eV
-# Quenching by N2 and O2 collisions
+# Quenching by N2 and O2 collisions (rates from Panchesnyi PR-E 2005)
 N2_C3 + N2 -> N2 + N2,constant,0.13e-16
 N2_C3 + O2 -> N2 + O2,constant,3.0e-16
 # Radiative lifetime is 42 ns

@@ -278,7 +278,7 @@ contains
     end if
 
     if (present(time)) then
-       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+       ierr = dbadddopt(dboptix, DBOPT_DTIME, time)
     end if
 
     ierr = dbputmmesh(dbix, trim(mmname), len_trim(mmname), n_grids, &
@@ -342,13 +342,15 @@ contains
     end if
 
     if (present(time)) then
-       ierr = dbaddiopt(dboptix, DBOPT_DTIME, time)
+       ierr = dbadddopt(dboptix, DBOPT_DTIME, time)
     end if
 
+    ! Jannis: valgrind complains about a memory leak due to this call, but if
+    ! that leak is there, it seems to be Silo's fault.
     ierr = dbaddcopt(dboptix, DBOPT_MMESH_NAME, &
          trim(mmname), len_trim(mmname))
     if (ierr /= 0) print *, &
-            "Error dbaddiopt is SILO_set_mmesh_var: DBOPT_MMESH_NAME", ierr
+            "Error dbaddiopt in SILO_set_mmesh_var: DBOPT_MMESH_NAME", ierr
 
     ierr = dbputmvar(dbix, trim(mvname), len_trim(mvname), n_grids, &
          dnames(1:total_len), name_lengths, m_types, dboptix, iostat)

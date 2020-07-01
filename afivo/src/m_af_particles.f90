@@ -126,7 +126,7 @@ contains
        error stop "af_particles_to_grid: Invalid interpolation order"
     end select
 
-    call af_restrict_tree(tree, iv)
+    call af_restrict_tree(tree, [iv])
 
     if (fill_gc_at_end) then
        if (.not. tree%has_cc_method(iv)) then
@@ -134,7 +134,7 @@ contains
           print *, "do this with call af_set_cc_methods(tree, iv, ...)"
           error stop "af_particles_to_grid: no ghost cell method defined"
        else
-          call af_gc_tree(tree, iv)
+          call af_gc_tree(tree, [iv])
        end if
     end if
   end subroutine af_particles_to_grid

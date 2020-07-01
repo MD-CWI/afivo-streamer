@@ -35,6 +35,8 @@ module m_streamer
   integer, public, protected :: i_tmp          = -1
   !> Index of can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
+  !> Index of Joule heating term
+  integer, public, protected :: i_heat_src     = -1
 
   !> Number of face-centered variables
   integer, public, protected :: n_var_face   = 0
@@ -63,6 +65,9 @@ module m_streamer
   !> Whether to update ions (depends on ion diffusion/mobility)
   logical, public, protected :: ST_update_ions = .false.
 
+  !> Multigrid option structure
+  type(mg_t), public :: mg
+
   !> Random number generator
   type(rng_t), public :: ST_rng
 
@@ -78,11 +83,11 @@ module m_streamer
   !> Disable diffusion parallel to fields above this threshold (V/m)
   real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
 
-  !> Maximum electron density (1/m3) for computing reactions
-  real(dp), public, protected :: ST_max_reaction_density = 1.0e100_dp
+  !> Use source factor to prevent unphysical effects due to diffusion
+  logical, public, protected :: ST_source_factor = .false.
 
-  !> Where alpha_eff * n^(-1/3) > threshold, disable electron reactions
-  real(dp), public, protected :: ST_alpha_dens_threshold = -1.0_dp
+  !> Minimal density for including electron sources
+  real(dp), public, protected :: ST_source_min_density = -1e10_dp
 
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
@@ -120,6 +125,9 @@ module m_streamer
 
   !> Global time
   real(dp), public :: global_time = 0.0_dp
+
+  !> Global time step
+  real(dp), public :: global_dt = 0.0_dp
 
   !> Method used to prolong (interpolate) densities
   procedure(af_subr_prolong), pointer, public, protected :: &
@@ -186,6 +194,10 @@ contains
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
 
+    if (gas_dynamics) then
+       call af_add_cc_variable(tree, "heat_src", ix=i_heat_src)
+    end if
+
     call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
          "Whether end_time is used to end the simulation")
     call CFG_add_get(cfg, "use_end_streamer_length", ST_use_end_streamer_length, &
@@ -235,10 +247,10 @@ contains
          "Limit velocities to this value (m/s)")
     call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
          "Disable diffusion parallel to fields above this threshold (V/m)")
-    call CFG_add_get(cfg, "fixes%max_reaction_density", ST_max_reaction_density, &
-         "Maximum electron density (1/m3) for computing reactions")
-    call CFG_add_get(cfg, "fixes%alpha_dens_threshold", ST_alpha_dens_threshold, &
-         "Where alpha_eff * n^(-1/3) > threshold, disable electron reactions")
+    call CFG_add_get(cfg, "fixes%source_factor", ST_source_factor, &
+         "Use source factor to prevent unphysical effects due to diffusion")
+    call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
+         "Minimal density for including electron sources")
 
     call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
          "Seed for random numbers; if all zero, generate randomly")

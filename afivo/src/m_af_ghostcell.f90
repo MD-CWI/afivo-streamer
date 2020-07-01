@@ -18,33 +18,14 @@ module m_af_ghostcell
   public :: af_gc_prolong_copy
   public :: af_gc_interp_lim
   public :: af_gc2_box
-  public :: af_gc2_prolong_linear
-  public :: af_bc2_neumann_zero
-  public :: af_bc2_dirichlet_zero
-
-  ! Define interfaces so ghost cell routines can be called for a single variable
-  ! or for multiple variables
-  interface af_gc_tree
-     module procedure af_gc_tree_iv, af_gc_tree_ivs
-  end interface af_gc_tree
-
-  interface af_gc_ids
-     module procedure af_gc_ids_iv, af_gc_ids_ivs, af_gc_ids_v1
-  end interface af_gc_ids
-
-  interface af_gc_box
-     module procedure af_gc_box_iv, af_gc_box_ivs, af_gc_box_v1
-  end interface
 
 contains
 
   !> Fill ghost cells for variables ivs on the sides of all boxes, using
   !> subr_rb on refinement boundaries and subr_bc on physical boundaries
-  subroutine af_gc_tree_ivs(tree, ivs, subr_rb, subr_bc, corners, leaves_only)
+  subroutine af_gc_tree(tree, ivs, corners, leaves_only)
     type(af_t), intent(inout)       :: tree        !< Tree to fill ghost cells on
     integer, intent(in)              :: ivs(:)      !< Variables for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb     !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc     !< Procedure called at physical boundaries
     logical, intent(in), optional    :: corners     !< Fill corner ghost cells (default: yes)
     logical, intent(in), optional    :: leaves_only !< Fill only leaves' ghost cells (default: false)
     integer                          :: lvl
@@ -56,115 +37,40 @@ contains
 
     if (all_ids) then
        do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, &
-               subr_rb, subr_bc, corners)
+          call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, corners)
        end do
     else
        do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, &
-               subr_rb, subr_bc, corners)
+          call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, corners)
        end do
     end if
-  end subroutine af_gc_tree_ivs
-
-  !> Fill ghost cells for variables ivs on the sides of all boxes, using
-  !> subr_rb on refinement boundaries and subr_bc on physical boundaries
-  subroutine af_gc_tree_iv(tree, iv, subr_rb, subr_bc, corners, leaves_only)
-    type(af_t), intent(inout)       :: tree        !< Tree to fill ghost cells on
-    integer, intent(in)              :: iv          !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb     !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc     !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners     !< Fill corner ghost cells (default: yes)
-    logical, intent(in), optional    :: leaves_only !< Fill only leaves' ghost cells (default: false)
-    integer                          :: lvl
-    logical                          :: all_ids
-
-    if (.not. tree%ready) error stop "af_gc_tree: tree not ready"
-    all_ids = .true.
-    if (present(leaves_only)) all_ids = .not. leaves_only
-
-    if (all_ids) then
-       do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%ids, iv, &
-               subr_rb, subr_bc, corners)
-       end do
-    else
-       do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%leaves, iv, &
-               subr_rb, subr_bc, corners)
-       end do
-    end if
-  end subroutine af_gc_tree_iv
+  end subroutine af_gc_tree
 
   !> Fill ghost cells for variables ivs on the sides of all boxes, using subr_rb
   !> on refinement boundaries and subr_bc on physical boundaries. This routine
   !> assumes that ghost cells on other ids have been set already.
-  subroutine af_gc_ids_ivs(tree, ids, ivs, subr_rb, subr_bc, corners)
+  subroutine af_gc_ids(tree, ids, ivs, corners)
     type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
     integer, intent(in)              :: ids(:)  !< Ids of boxes for which we set ghost cells
     integer, intent(in)              :: ivs(:)  !< Variables for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
     logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
     integer                          :: i
 
     !$omp parallel do
     do i = 1, size(ids)
-       call af_gc_box(tree, ids(i), ivs, subr_rb, subr_bc, corners)
+       call af_gc_box(tree, ids(i), ivs, corners)
     end do
     !$omp end parallel do
-  end subroutine af_gc_ids_ivs
-
-  !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
-  !> on refinement boundaries and subr_bc on physical boundaries. This routine
-  !> assumes that ghost cells on other ids have been set already.
-  subroutine af_gc_ids_iv(tree, ids, iv, subr_rb, subr_bc, corners)
-    type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
-    integer, intent(in)              :: ids(:)  !< Ids of boxes for which we set ghost cells
-    integer, intent(in)              :: iv      !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
-    integer                          :: i
-
-    !$omp parallel do
-    do i = 1, size(ids)
-       call af_gc_box(tree, ids(i), iv, subr_rb, subr_bc, corners)
-    end do
-    !$omp end parallel do
-  end subroutine af_gc_ids_iv
-
-  !> Fill ghost cells for variables iv on the sides of all boxes, using subr_rb
-  !> on refinement boundaries and subr_bc on physical boundaries. This routine
-  !> assumes that ghost cells on other ids have been set already.
-  subroutine af_gc_ids_v1(boxes, ids, iv, subr_rb, subr_bc, corners)
-    type(box_t), intent(inout)     :: boxes(:) !< List of all the boxes
-    integer, intent(in)              :: ids(:)   !< Ids of boxes for which we set ghost cells
-    integer, intent(in)              :: iv       !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb  !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc  !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners  !< Fill corner ghost cells (default: yes)
-    integer                          :: i
-
-    !$omp parallel do
-    do i = 1, size(ids)
-       call af_gc_box(boxes, ids(i), iv, subr_rb, subr_bc, corners)
-    end do
-    !$omp end parallel do
-  end subroutine af_gc_ids_v1
+  end subroutine af_gc_ids
 
   !> Fill ghost cells for variables ivs
-  subroutine af_gc_box_ivs(tree, id, ivs, subr_rb, subr_bc, corners)
+  subroutine af_gc_box(tree, id, ivs, corners)
     type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
     integer, intent(in)              :: id      !< Id of box for which we set ghost cells
     integer, intent(in)              :: ivs(:)  !< Variables for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
     logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
     logical                          :: do_corners
     integer                          :: i, iv
-    procedure(af_subr_rb), pointer  :: use_rb
-    procedure(af_subr_bc), pointer  :: use_bc
 
     do_corners = .true.
     if (present(corners)) do_corners = corners
@@ -172,82 +78,16 @@ contains
     do i = 1, size(ivs)
        iv = ivs(i)
 
-       if (present(subr_rb)) then
-          use_rb => subr_rb
-       else if (tree%has_cc_method(iv)) then
-          use_rb => tree%cc_methods(iv)%rb
-       else
+       if (.not. tree%has_cc_method(iv)) then
           print *, "For variable ", trim(tree%cc_names(iv))
-          error stop "af_gc_box: no refinement boundary method stored"
+          error stop "af_gc_box: no methods stored"
        end if
 
-       if (present(subr_bc)) then
-          use_bc => subr_bc
-       else if (tree%has_cc_method(iv)) then
-          use_bc => tree%cc_methods(iv)%bc
-       else
-          print *, "For variable ", trim(tree%cc_names(iv))
-          error stop "af_gc_box: no boundary condition stored"
-       end if
-
-       call af_gc_box_sides(tree%boxes, id, iv, use_rb, use_bc)
+       call af_gc_box_sides(tree%boxes, id, iv, tree%cc_methods(iv)%rb, &
+            tree%cc_methods(iv)%bc)
        if (do_corners) call af_gc_box_corner(tree%boxes, id, iv)
     end do
-  end subroutine af_gc_box_ivs
-
-  !> Fill ghost cells for variable iv
-  subroutine af_gc_box_iv(tree, id, iv, subr_rb, subr_bc, corners)
-    type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
-    integer, intent(in)              :: id      !< Id of box for which we set ghost cells
-    integer, intent(in)              :: iv      !< Variable for which ghost cells are set
-    procedure(af_subr_rb), optional :: subr_rb !< Procedure called at refinement boundaries
-    procedure(af_subr_bc), optional :: subr_bc !< Procedure called at physical boundaries
-    logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
-    logical                          :: do_corners
-    procedure(af_subr_rb), pointer  :: use_rb
-    procedure(af_subr_bc), pointer  :: use_bc
-
-    if (present(subr_rb)) then
-       use_rb => subr_rb
-    else if (tree%has_cc_method(iv)) then
-       use_rb => tree%cc_methods(iv)%rb
-    else
-       print *, "For variable ", trim(tree%cc_names(iv))
-       error stop "af_gc_box: no refinement boundary method stored"
-    end if
-
-    if (present(subr_bc)) then
-       use_bc => subr_bc
-    else if (tree%has_cc_method(iv)) then
-       use_bc => tree%cc_methods(iv)%bc
-    else
-       print *, "For variable ", trim(tree%cc_names(iv))
-       error stop "af_gc_box: no boundary condition stored"
-    end if
-
-    do_corners = .true.
-    if (present(corners)) do_corners = corners
-
-    call af_gc_box_sides(tree%boxes, id, iv, use_rb, use_bc)
-    if (do_corners) call af_gc_box_corner(tree%boxes, id, iv)
-  end subroutine af_gc_box_iv
-
-  !> Fill ghost cells for variable iv
-  subroutine af_gc_box_v1(boxes, id, iv, subr_rb, subr_bc, corners)
-    type(box_t), intent(inout)    :: boxes(:) !< List of all the boxes
-    integer, intent(in)             :: id       !< Id of box for which we set ghost cells
-    integer, intent(in)             :: iv       !< Variable for which ghost cells are set
-    procedure(af_subr_rb)          :: subr_rb  !< Procedure called at refinement boundaries
-    procedure(af_subr_bc)          :: subr_bc  !< Procedure called at physical boundaries
-    logical, intent(in), optional   :: corners  !< Fill corner ghost cells (default: yes)
-    logical                         :: do_corners
-
-    do_corners = .true.
-    if (present(corners)) do_corners = corners
-
-    call af_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
-    if (do_corners) call af_gc_box_corner(boxes, id, iv)
-  end subroutine af_gc_box_v1
+  end subroutine af_gc_box
 
   !> Fill ghost cells for variable iv on the sides of a box, using subr_rb on
   !> refinement boundaries and subr_bc on physical boundaries.
@@ -267,7 +107,7 @@ contains
 
        if (nb_id > af_no_box) then
           ! There is a neighbor
-          call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
+          call af_get_index_bc_outside(nb, boxes(id)%n_cell, 1, lo, hi)
           dnb = af_neighb_offset([nb])
           call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
        else if (nb_id == af_no_box) then
@@ -375,6 +215,7 @@ contains
     end do
   end subroutine af_gc_box_corner
 
+  !> Convert a boundary condition to ghost cell data
   subroutine bc_to_gc(box, nb, iv, bc_val, bc_type)
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv      !< Variable to fill
@@ -468,6 +309,79 @@ contains
     end select
   end subroutine bc_to_gc
 
+  !> Convert a boundary condition to two layers of ghost cell data
+  subroutine bc_to_gc2(nc, cc, nb, bc_val, bc_type, dr)
+    integer, intent(in)     :: nc                   !< Number of cells
+    real(dp), intent(inout) :: cc(DTIMES(-1:nc+2))  !< Cell-centered data
+    integer, intent(in)     :: nb                   !< Neighbor direction
+    real(dp), intent(in)    :: bc_val(nc**(NDIM-1)) !< Boundary condition
+    integer, intent(in)     :: bc_type              !< Type of b.c.
+    real(dp), intent(in)    :: dr(NDIM)             !< Grid spacing
+    real(dp)                :: c0, c1
+
+    ! If we call the interior point x1, x2 and the ghost point x0, then a
+    ! Dirichlet boundary value b can be imposed as:
+    ! x0 = -x1 + 2*b
+    ! x-1 = 2*x0 - x1
+    ! A Neumann b.c. can be imposed as:
+    ! x0 = x1 +/- dx * b
+    ! x-1 = 2*x0 - x1
+    ! (The second ghost cell here simply extends a linear slope)
+    ! Below, we set coefficients to handle these cases
+    select case (bc_type)
+    case (af_bc_dirichlet)
+       c0 = 2
+       c1 = -1
+    case (af_bc_neumann)
+       c0 = dr(af_neighb_dim(nb)) * af_neighb_high_pm(nb) ! This gives a + or - sign
+       c1 = 1
+    case default
+       stop "fill_bc: unknown boundary condition"
+    end select
+
+    select case (nb)
+#if NDIM == 2
+    case (af_neighb_lowx)
+       cc(0, 1:nc) = c0 * bc_val + c1 * cc(1, 1:nc)
+       cc(-1, 1:nc) = 2 * cc(0, 1:nc) - cc(1, 1:nc)
+    case (af_neighb_highx)
+       cc(nc+1, 1:nc) = c0 * bc_val + c1 * cc(nc, 1:nc)
+       cc(nc+2, 1:nc) = 2 * cc(nc+1, 1:nc) - cc(nc, 1:nc)
+    case (af_neighb_lowy)
+       cc(1:nc, 0) = c0 * bc_val + c1 * cc(1:nc, 1)
+       cc(1:nc, -1) = 2 * cc(1:nc, 0) - cc(1:nc, 1)
+    case (af_neighb_highy)
+       cc(1:nc, nc+1) = c0 * bc_val + c1 * cc(1:nc, nc)
+       cc(1:nc, nc+2) = 2 * cc(1:nc, nc+1) - cc(1:nc, nc)
+#elif NDIM == 3
+    case (af_neighb_lowx)
+       cc(0, 1:nc, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1, 1:nc, 1:nc)
+       cc(-1, 1:nc, 1:nc) = 2 * cc(0, 1:nc, 1:nc) - cc(1, 1:nc, 1:nc)
+    case (af_neighb_highx)
+       cc(nc+1, 1:nc, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(nc, 1:nc, 1:nc)
+       cc(nc+2, 1:nc, 1:nc) = 2 * cc(nc+1, 1:nc, 1:nc) - cc(nc, 1:nc, 1:nc)
+    case (af_neighb_lowy)
+       cc(1:nc, 0, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1, 1:nc)
+       cc(1:nc, -1, 1:nc) = 2 * cc(1:nc, 0, 1:nc) - cc(1:nc, 1, 1:nc)
+    case (af_neighb_highy)
+       cc(1:nc, nc+1, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, nc, 1:nc)
+       cc(1:nc, nc+2, 1:nc) = 2 * cc(1:nc, nc+1, 1:nc) - cc(1:nc, nc, 1:nc)
+    case (af_neighb_lowz)
+       cc(1:nc, 1:nc, 0) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1:nc, 1)
+       cc(1:nc, 1:nc, -1) = 2 * cc(1:nc, 1:nc, 0) - cc(1:nc, 1:nc, 1)
+    case (af_neighb_highz)
+       cc(1:nc, 1:nc, nc+1) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1:nc, nc)
+       cc(1:nc, 1:nc, nc+2) = 2 * cc(1:nc, 1:nc, nc+1) - cc(1:nc, 1:nc, nc)
+#endif
+    end select
+  end subroutine bc_to_gc2
+
   !> Partial prolongation to the ghost cells of box id from parent
   subroutine af_gc_prolong_copy(boxes, id, nb, iv)
     use m_af_prolong, only: af_prolong_copy
@@ -478,7 +392,7 @@ contains
     integer                       :: p_id, lo(NDIM), hi(NDIM)
 
     p_id = boxes(id)%parent
-    call af_get_index_bc_outside(nb, boxes(id)%n_cell, lo, hi)
+    call af_get_index_bc_outside(nb, boxes(id)%n_cell, 1, lo, hi)
     call af_prolong_copy(boxes(p_id), boxes(id), iv, low=lo, high=hi)
   end subroutine af_gc_prolong_copy
 
@@ -689,7 +603,7 @@ contains
 
   end subroutine af_gc_interp_lim
 
-  ! This fills ghost cells near physical boundaries using Neumann zero
+  !> This fills ghost cells near physical boundaries using Neumann zero
   subroutine af_bc_neumann_zero(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -702,7 +616,7 @@ contains
     bc_val  = 0.0_dp
   end subroutine af_bc_neumann_zero
 
-  ! This fills ghost cells near physical boundaries using Neumann zero
+  !> This fills ghost cells near physical boundaries using Dirichlet zero
   subroutine af_bc_dirichlet_zero(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -715,7 +629,7 @@ contains
     bc_val  = 0.0_dp
   end subroutine af_bc_dirichlet_zero
 
-  ! This fills ghost cells near physical boundaries using the same slope
+  !> This fills ghost cells near physical boundaries using the same slope
   subroutine af_bc_set_continuous(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -724,7 +638,7 @@ contains
     real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
     integer, intent(out)    :: bc_type
 
-    bc_type = af_bc_dirichlet
+    bc_type = af_bc_continuous
     ! Set values to zero (to prevent problems with NaN)
     bc_val  = 0.0_dp
   end subroutine af_bc_set_continuous
@@ -751,275 +665,188 @@ contains
 #endif
   end subroutine copy_from_nb
 
-  !> Get a second layer of ghost cell data (the 'normal' routines give just one
-  !> layer of ghost cells). Use subr_rb on refinement boundaries and subr_bc
-  !> on physical boundaries.
-  subroutine af_gc2_box(boxes, id, iv, subr_rb, subr_bc, cc, nc)
-    type(box_t), intent(inout) :: boxes(:) !< List of all the boxes
-    integer, intent(in)          :: id       !< Id of box for which we set ghost cells
-    integer, intent(in)          :: iv       !< Variable for which ghost cells are set
-    procedure(af_subr_egc)      :: subr_rb  !< Procedure called at refinement boundaries
-    procedure(af_subr_egc)      :: subr_bc  !< Procedure called at physical boundaries
-    integer, intent(in)          :: nc       !< box%n_cell
-    !> The data with extra ghost cells
-#if NDIM   == 2
-    real(dp), intent(out)        :: cc(-1:nc+2, -1:nc+2)
-    real(dp)                     :: gc(1:nc)
-#elif NDIM == 3
-    real(dp), intent(out)        :: cc(-1:nc+2, -1:nc+2, -1:nc+2)
-    real(dp)                     :: gc(1:nc, 1:nc)
-#endif
-    integer                      :: nb, nb_id, nb_dim, lo(NDIM), hi(NDIM)
+  !> Get array of cell-centered variables with multiple ghost cells, excluding corners
+  subroutine af_gc2_box(tree, id, ivs, cc)
+    type(af_t), intent(inout) :: tree   !< Tree to fill ghost cells on
+    integer, intent(in)       :: id     !< Id of box for which we set ghost cells
+    integer, intent(in)       :: ivs(:) !< Variables for which ghost cells are set
+    real(dp)                  :: cc(DTIMES(-1:tree%n_cell+2), size(ivs))
+    integer                   :: i, iv, nb, nc, nb_id, bc_type
+    integer                   :: lo(NDIM), hi(NDIM), dnb(NDIM)
+    integer                   :: nlo(NDIM), nhi(NDIM)
+    real(dp)                  :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp)                  :: bc_val(tree%n_cell**(NDIM-1))
 
-#if NDIM == 2
-    cc(0:nc+1, 0:nc+1) = boxes(id)%cc(0:nc+1, 0:nc+1, iv)
-#elif NDIM == 3
-    cc(0:nc+1, 0:nc+1, 0:nc+1) = boxes(id)%cc(0:nc+1, 0:nc+1, 0:nc+1, iv)
-#endif
+    nc = tree%n_cell
+
+    do i = 1, size(ivs)
+       iv = ivs(i)
+
+       ! Copy interior region
+       cc(DTIMES(0:nc+1), i) = tree%boxes(id)%cc(DTIMES(:), iv)
+
+       if (.not. tree%has_cc_method(iv)) then
+          print *, "For variable ", trim(tree%cc_names(iv))
+          error stop "No methods stored"
+       end if
+    end do
 
     do nb = 1, af_num_neighbors
-       nb_id = boxes(id)%neighbors(nb)
+       nb_id = tree%boxes(id)%neighbors(nb)
 
        if (nb_id > af_no_box) then
-          call sides2_from_nb(boxes(nb_id), nb, iv, gc, nc)
-       else if (nb_id == af_no_box) then
-          call subr_rb(boxes, id, nb, iv, gc, nc)
-       else
-          call subr_bc(boxes, id, nb, iv, gc, nc)
-       end if
+          ! There is a neighbor
+          call af_get_index_bc_outside(nb, tree%n_cell, 2, lo, hi)
 
-       ! Determine ghost cell indices
-       nb_dim = af_neighb_dim(nb)
-       lo(:) = 1
-       hi(:) = boxes(id)%n_cell
-       lo(nb_dim) = -1 + af_neighb_high_01(nb) * (boxes(id)%n_cell + 3)
-       hi(nb_dim) = lo(nb_dim)
+          dnb = af_neighb_offset([nb])
+          nlo = lo - dnb * tree%n_cell
+          nhi = hi - dnb * tree%n_cell
 
 #if NDIM == 2
-       cc(lo(1):hi(1), lo(2):hi(2)) = reshape(gc, 1 + hi - lo)
+          cc(lo(1):hi(1), lo(2):hi(2), :) = &
+               tree%boxes(nb_id)%cc(nlo(1):nhi(1), nlo(2):nhi(2), ivs)
 #elif NDIM == 3
-       cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = reshape(gc, 1 + hi - lo)
+          cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3), :) = &
+               tree%boxes(nb_id)%cc(nlo(1):nhi(1), nlo(2):nhi(2), &
+               nlo(3):nhi(3), ivs)
 #endif
+       else if (nb_id == af_no_box) then
+          ! Refinement boundary
+          do i = 1, size(ivs)
+             iv = ivs(i)
+             call gc2_prolong_rb(tree%boxes, id, nb, iv, tree%n_cell, &
+                  cc(DTIMES(:), i))
+          end do
+       else
+          ! Physical boundary
+          call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
+          do i = 1, size(ivs)
+             iv = ivs(i)
+             call tree%cc_methods(iv)%bc(tree%boxes(id), &
+                  nb, iv, coords, bc_val, bc_type)
+             call bc_to_gc2(nc, cc(DTIMES(:), i), nb, bc_val, &
+                  bc_type, tree%boxes(id)%dr)
+          end do
+       end if
     end do
+
+    do i = 1, size(ivs)
+       iv = ivs(i)
+
+       ! Copy back updated ghost cells
+       tree%boxes(id)%cc(DTIMES(:), iv) = cc(DTIMES(0:nc+1), i)
+    end do
+
   end subroutine af_gc2_box
 
-  !> Fill values on the side of a box from a neighbor nb
-  subroutine sides2_from_nb(box_nb, nb, iv, gc_side, nc)
-    type(box_t), intent(in) :: box_nb !< Neighbouring box
-    integer, intent(in)       :: nb     !< Ghost cell / neighbor direction
-    integer, intent(in)       :: iv     !< Ghost cell variable
-    integer, intent(in)       :: nc
-#if NDIM == 2
-    real(dp), intent(out)     :: gc_side(nc)
-#elif NDIM == 3
-    real(dp), intent(out)     :: gc_side(nc, nc)
-#endif
-
-    select case (nb)
-#if NDIM == 2
-    case (af_neighb_lowx)
-       gc_side = box_nb%cc(nc-1, 1:nc, iv)
-    case (af_neighb_highx)
-       gc_side = box_nb%cc(2, 1:nc, iv)
-    case (af_neighb_lowy)
-       gc_side = box_nb%cc(1:nc, nc-1, iv)
-    case (af_neighb_highy)
-       gc_side = box_nb%cc(1:nc, 2, iv)
-#elif NDIM == 3
-    case (af_neighb_lowx)
-       gc_side = box_nb%cc(nc-1, 1:nc, 1:nc, iv)
-    case (af_neighb_highx)
-       gc_side = box_nb%cc(2, 1:nc, 1:nc, iv)
-    case (af_neighb_lowy)
-       gc_side = box_nb%cc(1:nc, nc-1, 1:nc, iv)
-    case (af_neighb_highy)
-       gc_side = box_nb%cc(1:nc, 2, 1:nc, iv)
-    case (af_neighb_lowz)
-       gc_side = box_nb%cc(1:nc, 1:nc, nc-1, iv)
-    case (af_neighb_highz)
-       gc_side = box_nb%cc(1:nc, 1:nc, 2, iv)
-#endif
-    end select
-  end subroutine sides2_from_nb
-
-  !> Linear interpolation (using data from neighbor) to fill ghost cells
-  subroutine af_gc2_prolong_linear(boxes, id, nb, iv, gc_side, nc)
-    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer, intent(in)         :: nc        !< Box n_cell
-#if NDIM == 2
-    real(dp), intent(out)       :: gc_side(nc) !< Ghost cells on side
-#elif NDIM == 3
-    real(dp), intent(out)       :: gc_side(nc, nc) !< Ghost cells on side
-#endif
-    integer                     :: ix, i, j
-    integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
-    integer                     :: p_id, ix_offset(NDIM)
+  !> Conservative prolongation with a limited slope for ghost cells near
+  !> refinement boundaries
+  !>
+  !> @todo make compatible with arbitrary number of ghost cells
+  subroutine gc2_prolong_rb(boxes, id, nb, iv, nc, cc)
+    type(box_t), intent(in) :: boxes(:)            !< List of all boxes
+    integer, intent(in)     :: id                  !< Index of box to fill ghost cells for
+    integer, intent(in)     :: nb                  !< Neighbor direction
+    integer, intent(in)     :: iv                  !< Index of variable
+    integer, intent(in)     :: nc                  !< Number of cells
+    real(dp), intent(inout) :: cc(DTIMES(-1:nc+2)) !< Enlarged array
+    integer                 :: IJK, i_f, j_f, p_nb_id
+    integer                 :: lo_c(NDIM), hi_c(NDIM), ix_offset(NDIM)
+    integer                 :: lo(NDIM), hi(NDIM)
+    real(dp)                :: f0, fx, fy
 #if NDIM == 3
-    integer                     :: k, k_c1, k_c2
+    real(dp)                :: fz
+    integer                 :: k_f
 #endif
 
-    p_id      = boxes(id)%parent
-    p_nb_id   = boxes(p_id)%neighbors(nb)
-    ix_offset = af_get_child_offset(boxes(id), nb)
-    ix        = af_neighb_high_01(nb) * (nc+3) - 1 ! -1 or nc+2
+    p_nb_id = boxes(boxes(id)%parent)%neighbors(nb)
 
-    select case (af_neighb_dim(nb))
+    ! Get index in current box
+    call af_get_index_bc_outside(nb, nc, 2, lo, hi)
+
+    ! Convert to index on parent box
+    ix_offset = af_get_child_offset(boxes(id))
+    lo_c = ix_offset + (lo+1)/2
+    hi_c = ix_offset + (hi+1)/2
+
+    ! Convert to index on neighbor of parent box
+    lo_c = lo_c - af_neighb_dix(:, nb) * nc
+    hi_c = hi_c - af_neighb_dix(:, nb) * nc
+
+    associate(cc_p => boxes(p_nb_id)%cc)
 #if NDIM == 2
-    case (1)
-       i_c1 = ix_offset(1) + ishft(ix+1, -1) ! (ix+1)/2
-       i_c2 = i_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          gc_side(j) = &
-               0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, iv)
-       end do
-    case (2)
-       j_c1 = ix_offset(2) + ishft(ix+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-          gc_side(i) = &
-               0.5_dp * boxes(p_nb_id)%cc(i_c1, j_c1, iv) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, iv) + &
-               0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, iv)
-       end do
-#elif NDIM==3
-    case (1)
-       i_c1 = ix_offset(1) + ishft(ix+1, -1) ! (ix+1)/2
-       i_c2 = i_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
-       do k = 1, nc
-          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-          do j = 1, nc
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-             gc_side(j, k) = &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv)
-          end do
-       end do
-    case (2)
-       j_c1 = ix_offset(2) + ishft(ix+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
-       do k = 1, nc
-          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-             gc_side(i, k) = &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv)
-          end do
-       end do
-    case (3)
-       k_c1 = ix_offset(3) + ishft(ix+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(ix, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-             gc_side(i, j) = &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c2, j_c1, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c2, k_c1, iv) + &
-                  0.25_dp * boxes(p_nb_id)%cc(i_c1, j_c1, k_c2, iv)
-          end do
-       end do
-#endif
-    end select
+      do j = lo_c(2), hi_c(2)
+         j_f = lo(2) + 2 * (j - lo_c(2))
+         do i = lo_c(1), hi_c(1)
+            i_f = lo(1) + 2 * (i - lo_c(1))
 
-  end subroutine af_gc2_prolong_linear
+            ! Compute slopes on parent
+            f0 = cc_p(i, j, iv)
+            fx = 0.25_dp * limit_slope( &
+                 cc_p(i, j, iv) - cc_p(i-1, j, iv), &
+                 cc_p(i+1, j, iv) - cc_p(i, j, iv))
+            fy = 0.25_dp * limit_slope( &
+                 cc_p(i, j, iv) - cc_p(i, j-1, iv), &
+                 cc_p(i, j+1, iv) - cc_p(i, j, iv))
 
-  ! This fills second ghost cells near physical boundaries using Neumann zero
-  subroutine af_bc2_neumann_zero(boxes, id, nb, iv, gc_side, nc)
-    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer, intent(in)         :: nc        !< Box n_cell
-#if NDIM == 2
-    real(dp), intent(out)       :: gc_side(nc) !< Ghost cells on side
+            ! Prolong to fine cells
+            cc(i_f,   j_f) = f0 - fx - fy
+            cc(i_f,   j_f+1) = f0 - fx + fy
+            cc(i_f+1, j_f) = f0 + fx - fy
+            cc(i_f+1, j_f+1) = f0 + fx + fy
+         end do
+      end do
 #elif NDIM == 3
-    real(dp), intent(out)       :: gc_side(nc, nc) !< Ghost cells on side
-#endif
+      do k = lo_c(3), hi_c(3)
+         k_f = lo(3) + 2 * (k - lo_c(3))
+         do j = lo_c(2), hi_c(2)
+            j_f = lo(2) + 2 * (j - lo_c(2))
+            do i = lo_c(1), hi_c(1)
+               i_f = lo(1) + 2 * (i - lo_c(1))
 
-    select case (nb)
-#if NDIM == 2
-    case (af_neighb_lowx)
-       gc_side = boxes(id)%cc(2, 1:nc, iv)
-    case (af_neighb_highx)
-       gc_side = boxes(id)%cc(nc-1, 1:nc, iv)
-    case (af_neighb_lowy)
-       gc_side = boxes(id)%cc(1:nc, 2, iv)
-    case (af_neighb_highy)
-       gc_side = boxes(id)%cc(1:nc, nc-1, iv)
-#elif NDIM == 3
-    case (af_neighb_lowx)
-       gc_side = boxes(id)%cc(2, 1:nc, 1:nc, iv)
-    case (af_neighb_highx)
-       gc_side = boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
-    case (af_neighb_lowy)
-       gc_side = boxes(id)%cc(1:nc, 2, 1:nc, iv)
-    case (af_neighb_highy)
-       gc_side = boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
-    case (af_neighb_lowz)
-       gc_side = boxes(id)%cc(1:nc, 1:nc, 2, iv)
-    case (af_neighb_highz)
-       gc_side = boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
-#endif
-    end select
-  end subroutine af_bc2_neumann_zero
+               ! Compute slopes on parent
+               f0 = cc_p(i, j, k, iv)
+               fx = 0.25_dp * limit_slope( &
+                    cc_p(i, j, k, iv) - cc_p(i-1, j, k, iv), &
+                    cc_p(i+1, j, k, iv) - cc_p(i, j, k, iv))
+               fy = 0.25_dp * limit_slope( &
+                    cc_p(i, j, k, iv) - cc_p(i, j-1, k, iv), &
+                    cc_p(i, j+1, k, iv) - cc_p(i, j, k, iv))
+               fz = 0.25_dp * limit_slope( &
+                    cc_p(i, j, k, iv) - cc_p(i, j, k-1, iv), &
+                    cc_p(i, j, k+1, iv) - cc_p(i, j, k, iv))
 
-  ! This fills second ghost cells near physical boundaries using Neumann zero
-  subroutine af_bc2_dirichlet_zero(boxes, id, nb, iv, gc_side, nc)
-    type(box_t), intent(inout) :: boxes(:)
-    integer, intent(in)         :: id, nb, iv, nc
-#if NDIM == 2
-    real(dp), intent(out)       :: gc_side(nc)
-#elif NDIM == 3
-    real(dp), intent(out)       :: gc_side(nc, nc)
+               ! Prolong to fine cells
+               cc(i_f,   j_f,   k_f)   = f0 - fx - fy - fz
+               cc(i_f,   j_f,   k_f+1) = f0 - fx - fy + fz
+               cc(i_f,   j_f+1, k_f)   = f0 - fx + fy - fz
+               cc(i_f,   j_f+1, k_f+1) = f0 - fx + fy + fz
+               cc(i_f+1, j_f,   k_f)   = f0 + fx - fy - fz
+               cc(i_f+1, j_f,   k_f+1) = f0 + fx - fy + fz
+               cc(i_f+1, j_f+1, k_f)   = f0 + fx + fy - fz
+               cc(i_f+1, j_f+1, k_f+1) = f0 + fx + fy + fz
+            end do
+         end do
+      end do
 #endif
+    end associate
 
-    select case (nb)
-#if NDIM == 2
-    case (af_neighb_lowx)
-       gc_side = -boxes(id)%cc(2, 1:nc, iv)
-    case (af_neighb_highx)
-       gc_side = -boxes(id)%cc(nc-1, 1:nc, iv)
-    case (af_neighb_lowy)
-       gc_side = -boxes(id)%cc(1:nc, 2, iv)
-    case (af_neighb_highy)
-       gc_side = -boxes(id)%cc(1:nc, nc-1, iv)
-#elif NDIM == 3
-    case (af_neighb_lowx)
-       gc_side = -boxes(id)%cc(2, 1:nc, 1:nc, iv)
-    case (af_neighb_highx)
-       gc_side = -boxes(id)%cc(nc-1, 1:nc, 1:nc, iv)
-    case (af_neighb_lowy)
-       gc_side = -boxes(id)%cc(1:nc, 2, 1:nc, iv)
-    case (af_neighb_highy)
-       gc_side = -boxes(id)%cc(1:nc, nc-1, 1:nc, iv)
-    case (af_neighb_lowz)
-       gc_side = -boxes(id)%cc(1:nc, 1:nc, 2, iv)
-    case (af_neighb_highz)
-       gc_side = -boxes(id)%cc(1:nc, 1:nc, nc-1, iv)
-#endif
-    end select
-  end subroutine af_bc2_dirichlet_zero
+  contains
+
+    ! Take minimum of two slopes if they have the same sign, else take zero
+    elemental function limit_slope(ll, rr) result(slope)
+      real(dp), intent(in) :: ll, rr
+      real(dp)             :: slope
+
+      if (ll * rr < 0) then
+         slope = 0.0_dp
+      else
+         ! MC limiter
+         slope = sign(minval(abs([2 * ll, 2 * rr, 0.5_dp * (ll + rr)])), ll)
+      end if
+    end function limit_slope
+
+  end subroutine gc2_prolong_rb
 
   !> This fills corner ghost cells using linear extrapolation. The ghost cells
   !> on the sides already need to be filled.

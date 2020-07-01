@@ -11,9 +11,9 @@ program streamer
   use m_photoi
   use m_chemistry
   use m_gas
+  use m_coupling
   use m_fluid_lfa
   use m_dt
-  use m_advance
   use m_types
   use m_user_methods
   use m_output
@@ -21,6 +21,7 @@ program streamer
   use m_lookup_table
   use m_table_data
   use m_units_constants
+  use m_circuit
 
   implicit none
 
@@ -28,14 +29,14 @@ program streamer
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
-  integer                   :: i, s, it, coord_type, box_bytes
-  logical                   :: write_out
-  real(dp)                  :: time, dt, photoi_prev_time
+  integer                   :: i, it, coord_type, box_bytes
+  logical                   :: write_out, evolve_electrons
+  real(dp)                  :: time, dt, dt_lim, photoi_prev_time
+  real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
-  type(mg_t)                :: mg             ! Multigrid option structure
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
@@ -47,6 +48,8 @@ program streamer
   integer                   :: n
   character(len=string_len) :: lc_file = undefined_str
   real(dp), dimension (2)   :: rr_val
+
+  call print_program_name()
 
   ! Parse command line configuration files and options
   call CFG_update_from_arguments(cfg)
@@ -61,16 +64,14 @@ program streamer
   call CFG_add_get(cfg, "line_charge_r", lc_r, &
        "Where to insert line charge (r coordinate)")
 
-  call initialize_modules(cfg, tree, mg)
+  call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
   call CFG_write(cfg, trim(output_name) // "_out.cfg", custom_first=.true.)
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
-     do s = 0, advance_num_states-1
-        call af_set_cc_methods(tree, species_itree(i)+s, &
-             af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
-     end do
+     call af_set_cc_methods(tree, species_itree(i), &
+          af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
   end do
 
   if (.not. gas_constant_density) then
@@ -78,12 +79,9 @@ program streamer
           af_bc_neumann_zero, af_gc_interp, ST_prolongation_method)
   end if
 
-  if (photoi_enabled) then
-     call photoi_set_methods(tree)
-  end if
-
   do i = 1, tree%n_var_cell
-     if (tree%cc_write_output(i) .and. .not. tree%has_cc_method(i)) then
+     if (tree%cc_write_output(i) .and. .not. &
+          (tree%has_cc_method(i) .or. i == i_phi)) then
         call af_set_cc_methods(tree, i, af_bc_neumann_zero, &
              af_gc_interp, ST_prolongation_method)
      end if
@@ -156,7 +154,7 @@ program streamer
        time             = 0.0_dp ! Simulation time (all times are in s)
        global_time      = time
        photoi_prev_time = time   ! Time of last photoionization computation
-       dt               = advance_max_dt
+       dt               = global_dt
        initial_streamer_pos = 0.0_dp ! Initial streamer position
 
        if (ST_cylindrical) then
@@ -173,7 +171,7 @@ program streamer
        call set_initial_conditions(tree, mg)
 
        ! Write initial output
-       output_cnt = 1 ! Number of output files written
+       output_cnt = 0 ! Number of output files written
        call output_write(tree, output_cnt, 0.0_dp, lc_reading, write_sim_data)
     end if
 
@@ -223,17 +221,49 @@ program streamer
           write_out = .false.
        end if
 
-       if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-          call photoi_set_src(tree, time - photoi_prev_time)
-          photoi_prev_time = time
+       evolve_electrons = .true.
+       if (associated(user_evolve_electrons)) &
+            evolve_electrons = user_evolve_electrons(tree, time)
+
+       if (evolve_electrons) then
+          if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+             call photoi_set_src(tree, time - photoi_prev_time)
+             photoi_prev_time = time
+          end if
+
+          call af_advance(tree, dt, dt_lim, time, &
+             species_itree(n_gas_species+1:n_species), &
+             af_heuns_method, forward_euler)
+
+          ! Make sure field is available for latest time state
+          call field_compute(tree, mg, 0, time, .true.)
+
+          if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
+          if (circuit_used) call circuit_update(tree, dt)
+       else
+          dt_lim = dt_max
        end if
 
-       call advance(tree, mg, dt, time)
-       dt = advance_max_dt
+       if (gas_dynamics) then
+          ! Go back to time at beginning of step
+          time = global_time
+
+          call af_advance(tree, dt, dt_gas_lim, time, &
+               gas_vars, time_integrator, gas_forward_euler)
+          call coupling_update_gas_density(tree)
+       else
+          dt_gas_lim = dt_max
+       end if
+
+       ! dt is modified when writing output, global_dt not
+       dt          = min(dt_lim, dt_gas_lim)
+       global_dt   = dt_lim
        global_time = time
 
-       if (advance_max_dt < dt_min) then
-          print *, "ST_dt getting too small, instability?", advance_max_dt
+       if (global_dt < dt_min) then
+          write(*, "(A,E12.4,A)") " Time step (dt =", global_dt, &
+             ") getting too small"
+          print *, "See the documentation on time integration"
           call output_status(tree, time, wc_time, it, dt)
           if (.not. write_out) then
              write_out = .true.
@@ -245,17 +275,24 @@ program streamer
           call output_write(tree, output_cnt, wc_time, lc_reading, write_sim_data)
        end if
 
-       if (advance_max_dt < dt_min) error stop "dt too small"
+       if (global_dt < dt_min) error stop "dt too small"
 
        if (mod(it, refine_per_steps) == 0) then
+          ! Restrict species, for the ghost cells near refinement boundaries
+          call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
           call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+
+          if (gas_dynamics) then
+             call af_restrict_tree(tree, gas_vars)
+             call af_gc_tree(tree, gas_vars)
+          end if
 
           if (associated(user_refine)) then
              call af_adjust_refinement(tree, user_refine, ref_info, &
-                  refine_buffer_width)
+                refine_buffer_width)
           else
              call af_adjust_refinement(tree, refine_routine, ref_info, &
-                  refine_buffer_width)
+                refine_buffer_width)
           end if
 
           if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
@@ -271,29 +308,29 @@ program streamer
 
 contains
 
-  subroutine initialize_modules(cfg, tree, mg)
+  subroutine initialize_modules(cfg, tree, mg, restart)
     use m_user
     use m_table_data
     use m_transport_data
-    use m_advance_base
 
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     type(mg_t), intent(inout)  :: mg
+    logical, intent(in)        :: restart
 
     call user_initialize(cfg, tree)
-    call advance_base_initialize(cfg)
+    call dt_initialize(cfg)
+    global_dt = dt_min
+
     call table_data_initialize(cfg)
     call gas_initialize(tree, cfg)
     call transport_data_initialize(cfg)
     call chemistry_initialize(tree, cfg)
     call ST_initialize(tree, cfg, NDIM)
     call photoi_initialize(tree, cfg)
-
-    call dt_initialize(cfg)
-    call advance_set_max_dt(dt_min)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
+    call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(cfg)
     call output_initialize(tree, cfg)
 
@@ -340,21 +377,29 @@ contains
     write(my_unit) time
     write(my_unit) global_time
     write(my_unit) photoi_prev_time
-    write(my_unit) advance_max_dt
+    write(my_unit) global_dt
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
-    real(dp)            :: tmp
 
     read(my_unit) output_cnt
     read(my_unit) time
     read(my_unit) global_time
     read(my_unit) photoi_prev_time
-    read(my_unit) tmp
+    read(my_unit) global_dt
 
-    call advance_set_max_dt(tmp)
-    dt = tmp
+    dt = global_dt
   end subroutine read_sim_data
+
+  subroutine print_program_name()
+    print *, "            __ _                  _____ _                                      "
+    print *, "     /\    / _(_)                / ____| |                                     "
+    print *, "    /  \  | |_ ___   _____ _____| (___ | |_ _ __ ___  __ _ _ __ ___   ___ _ __ "
+    print *, "   / /\ \ |  _| \ \ / / _ \______\___ \| __| '__/ _ \/ _` | '_ ` _ \ / _ \ '__|"
+    print *, "  / ____ \| | | |\ V / (_) |     ____) | |_| | |  __/ (_| | | | | | |  __/ |   "
+    print *, " /_/    \_\_| |_| \_/ \___/     |_____/ \__|_|  \___|\__,_|_| |_| |_|\___|_|   "
+    print *, "                                                                               "
+  end subroutine print_program_name
 
 end program streamer
