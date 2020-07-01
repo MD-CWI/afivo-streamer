@@ -19,6 +19,19 @@ module m_af_advance
   integer, parameter :: req_copies(n_integrators) = af_advance_num_steps
 
   interface
+     !> Interface for a generic forward Euler scheme for time integration
+     !>
+     !> This method should advance the solution over a time dt. The method
+     !> assumes that several copies are stored for the variables to be
+     !> integrated. It should then operate on these different copies, which
+     !> correspond to temporal states. In this way, higher-order time
+     !> integration schemes can be constructed.
+     !>
+     !> The meaning of the temporal states is as follows. For an equation y' =
+     !> f(y), the method should perform: y_out = y_prev + dt * f(y_deriv).
+     !>
+     !> If the index of the variable `y` is `i`, then the index of `y_out` is
+     !> `i+s_out`, the index of `y_prev` is `i+s_prev` etc.
      subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
           i_step, n_steps)
        import
