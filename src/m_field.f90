@@ -236,7 +236,7 @@ contains
     type(mg_t), intent(inout) :: mg ! Multigrid option struct
     real(dp), intent(in)      :: time
 
-    call field_set_voltage(time)
+    call field_set_voltage(tree, time)
 
     call mg_fas_fmg(tree, mg, .false., .false.)
 
@@ -244,7 +244,7 @@ contains
     call af_loop_box(tree, field_from_potential)
 
     ! Set the field norm also in ghost cells
-    call af_gc_tree(tree, i_electric_fld)
+    call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute_rhs
 
   !> Compute the electric field at a given time
