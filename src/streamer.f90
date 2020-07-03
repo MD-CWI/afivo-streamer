@@ -276,7 +276,7 @@ contains
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
     call circuit_initialize(tree, cfg, restart)
-    call init_cond_initialize(cfg)
+    call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
 
     call output_initial_summary()
