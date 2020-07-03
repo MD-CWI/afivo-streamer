@@ -59,6 +59,22 @@ program streamer
   real(dp) :: old_calculated_voltage_at_bottom_electrode = 0.0
   real(dp) :: new_calculated_voltage_at_bottom_electrode = 0.0
   real(dp) :: delta_electrode_position = 1e-6  ! We will put the calculated potential position a bit out of the grid to avoid 1 / r influence
+  logical :: use_circuit_R = .false.
+  integer :: circuit_R_output_unit = 55
+  real(dp) :: Q0_R = UC_elem_charge
+  integer :: ix_weighting_potential_top
+  integer :: ix_weighting_potential_bottom
+
+ ! Add a variable to store the weighting potential from the top electrode in
+  call af_add_cc_variable(tree, "weighting_pot_top")
+  ix_weighting_potential_top = af_find_cc_variable(tree, "weighting_pot_top")
+  call af_set_cc_methods(tree, ix_weighting_potential_top, af_bc_neumann_zero)
+
+! Add a variable to store the weighting potential from the bottom electrode in
+  call af_add_cc_variable(tree, "weighting_pot_bottom")
+  ix_weighting_potential_bottom = af_find_cc_variable(tree, "weighting_pot_bottom")
+  call af_set_cc_methods(tree, ix_weighting_potential_bottom, af_bc_neumann_zero)
+
 
   call print_program_name()
 
@@ -67,6 +83,8 @@ program streamer
 
   call CFG_add_get(cfg, "use_circuit_andy", use_circuit_andy, &
          "If set use the circuit implementation of Andy.")
+   call CFG_add_get(cfg, "use_circuit_R", use_circuit_R, &
+         "If set use the circuit implementation of W. Riegler.")
   call CFG_add_get(cfg, "capacitor_capacitance", capacitor_capacitance, &
          "Capacitance of the capacitor used in the RC circuit implementation of Andy.")
   call CFG_add_get(cfg, "resistor", resistor, &
@@ -221,6 +239,10 @@ program streamer
       if (use_circuit_andy) then
          call add_circuit_effect(tree)
       end if
+
+      if (use_circuit_R) then
+         call add_circuit_effect_R(tree)
+      end if
 #endif
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
@@ -297,6 +319,10 @@ program streamer
       close(circuit_andy_output_unit)
    end if
 
+   if (use_circuit_R) then
+      close(circuit_R_output_unit)
+   end if
+
    if (circuit_used) then
       close(circuit_jannis_output_unit)
    endif
@@ -339,10 +365,6 @@ contains
     type(mg_t), intent(inout) :: mg
     integer                   :: n
 
-    if (use_circuit_andy) then
-      call initialize_circuit_andy(tree, cfg)
-    end if
-
     do n = 1, 100
        call af_loop_box(tree, init_cond_set_box)
 
@@ -369,6 +391,14 @@ contains
        if (ref_info%n_add == 0) exit
     end do
 
+
+    if (use_circuit_andy) then
+      call initialize_circuit_andy(tree, cfg)
+    end if
+
+    if (use_circuit_R) then
+      call initialize_circuit_R(tree, cfg)
+    end if
     
   end subroutine set_initial_conditions
 
@@ -446,6 +476,8 @@ contains
       ! The change in potential at the top electrode
       delta_V_top_electrode_dt = new_calculated_voltage_at_top_electrode &
                             - old_calculated_voltage_at_top_electrode
+      print *, "Change in potential top electrode: ", delta_V_top_electrode_dt
+
 
       ! Change the potential of the top electrode
       top_electrode_voltage = top_electrode_voltage + delta_V_top_electrode_dt
@@ -608,8 +640,271 @@ do i_cell = 1, n_cells
    end do
 end do
 #endif
+end subroutine calculate_potential_from_box
 
 
-   end subroutine calculate_potential_from_box
+subroutine initialize_circuit_R(tree, cfg)
+   use m_field
+   type(CFG_t), intent(inout) :: cfg
+   type(af_t), intent(inout)  :: tree
+   real(dp) :: field_voltage_temp
+   real(dp) :: max_potential = 0.0
+   real(dp) :: min_potential = 0.0
+   integer :: i_fas_fmg
+
+   ! Initialize capacitor voltage to be the a fraction of the applied voltage
+   capacitor_voltage = capacitor_initial_voltage_fraction * (-field_get_amplitude(tree, 0.0_dp) * ST_domain_len(NDIM))
+   print *, "Initial capacitor voltage: ", capacitor_voltage
+   top_electrode_voltage = top_electrode_initial_voltage_fraction * (-field_get_amplitude(tree, 0.0_dp) * ST_domain_len(NDIM))
+   call field_set_voltage_externally(top_electrode_voltage)
+   ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
+   top_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
+
+   !!!!! Calculate weighting potential at t = 0 !!!!!
+   ! TOP ELECTRODE
+   ! Set RHS to 0
+   call af_tree_clear_cc(tree, i_rhs)
+   ! Store field voltage in temp
+   field_voltage_temp = field_voltage
+   ! Set field voltage to desired value
+   call field_set_voltage_externally(Q0_R / top_electrode_self_capacitance)
+   ! Calculate the weighting potential field using FAS FMG
+   do i_fas_fmg = 1, 100
+      call mg_fas_fmg(tree, mg, .false., .false.)
+   end do
+   ! copy cc var i_phi to i_phiR_top
+   call af_tree_copy_cc(tree, i_phi, ix_weighting_potential_top)
+
+   ! BOTTOM ELECTRODE
+   ! Set RHS to 0
+   call af_tree_clear_cc(tree, i_rhs)
+   ! Set phi to 0
+   call af_tree_clear_cc(tree, i_phi)
+   ! Use specially defined boundary conditions for bottom electrode
+   mg%sides_bc => weighting_field_bottom_bc
+   ! Calculate the weighting potential field using FAS FMG
+   do i_fas_fmg = 1, 100
+      call mg_fas_fmg(tree, mg, .false., .false.)
+   end do
+   ! copy cc var i_phi to the weighting_potential_bottom
+   call af_tree_copy_cc(tree, i_phi, ix_weighting_potential_bottom)
+   ! Set normal boundary conditions back
+   mg%sides_bc => field_bc_homogeneous
+   ! set field voltage back from temp
+   call field_set_voltage_externally(field_voltage_temp)
+   ! field compute with rhs to obtain original field again
+   call field_compute(tree, mg, 0, 0.0_dp, .false.)
+   ! Calculate the initial contribution of the charges in the gap to the induced potential on the top electrode
+   ! integral psi_V * charge_density  dV / Q0
+   call af_loop_box(tree, calculate_Rterm_both_electrodes_from_box, .true.)
+   ! We dont use the induced potential at the initial timestep. We need a difference in times (moving charges)
+   old_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode
+   new_calculated_voltage_at_top_electrode = 0.0
+
+   old_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode
+   new_calculated_voltage_at_bottom_electrode = 0.0
+ 
+   call af_tree_max_cc(tree, ix_weighting_potential_bottom, max_potential)
+   print *, "Max potential: ", max_potential
+   print *, "Real max potential: ", Q0_R / top_electrode_self_capacitance
+   call af_tree_min_cc(tree, ix_weighting_potential_bottom, min_potential)
+   print *, "Min potential: ", min_potential
+   print *, "Real min potential: ", 0
+
+   ! Create an output file
+   open(newunit=circuit_R_output_unit, file=trim(output_name) // "_" // "output", action='write')
+   write(circuit_R_output_unit, *) "dt(s)           I(A)           Ve(V)           Vc(V)           Vgnd(V)           Ignd(A)"
+
+end subroutine initialize_circuit_R
+
+
+subroutine add_circuit_effect_R(tree)
+   type(af_t), intent(inout)     :: tree
+   real(dp) :: delta_V_top_electrode_dt
+   real(dp) :: delta_V_electrode_capacitor
+   real(dp) :: current_top
+   real(dp) :: delta_V_bottom_electrode_dt
+   real(dp) :: current_bottom
+
+   ! Calculate the contribution of the charges in the gap to the induced potential on the top electrode
+   ! integral psi_V * charge_density  dV / Q0
+   call af_loop_box(tree, calculate_Rterm_both_electrodes_from_box, .true.)
+
+   !!!! TOP ELECTRODE !!!!
+   ! The change in potential at the top electrode
+   delta_V_top_electrode_dt = new_calculated_voltage_at_top_electrode &
+                         - old_calculated_voltage_at_top_electrode
+   !print *, "Change in potential top electrode: ", delta_V_top_electrode_dt
+
+   ! Change the potential of the top electrode
+   top_electrode_voltage = top_electrode_voltage + delta_V_top_electrode_dt
+
+   ! There is now a new potential difference between capacitor and the top electrode
+   delta_V_electrode_capacitor = capacitor_voltage - top_electrode_voltage
+
+   ! This potential difference creates a current from capacitor to top electrode (conventional)
+   current_top = delta_V_electrode_capacitor / resistor
+
+   ! This current will change the potential of the capacitor
+   capacitor_voltage = capacitor_voltage - (current_top * dt) / capacitor_capacitance
+
+   ! This current will also charge the top electrode again
+   top_electrode_voltage = top_electrode_voltage + (current_top * dt) / top_electrode_self_capacitance
+   
+   !!!! BOTTOM ELECTRODE !!!!
+   delta_V_bottom_electrode_dt = new_calculated_voltage_at_bottom_electrode - old_calculated_voltage_at_bottom_electrode
+   !print *, "Change in potential bottom electrode: ", delta_V_bottom_electrode_dt
+
+   bottom_electrode_voltage = bottom_electrode_voltage + delta_V_bottom_electrode_dt
+
+   ! Current from bottom electrode to ground (conventional)
+   current_bottom = (bottom_electrode_voltage - 0) / gnd_resistor
+
+   bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / top_electrode_self_capacitance
+
+   ! Change the applied voltage at the top electrode for the simulation
+   ! For simulations we still have bottom electrode  = 0 V and top electrode has the applied potential
+   call field_set_voltage_externally(top_electrode_voltage - bottom_electrode_voltage)
+
+   old_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode
+   new_calculated_voltage_at_top_electrode = 0.0
+
+   old_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode
+   new_calculated_voltage_at_bottom_electrode = 0.0
+
+   write(circuit_R_output_unit, *) dt, current_top, top_electrode_voltage, capacitor_voltage, &
+                                      bottom_electrode_voltage, current_bottom
+
+end subroutine add_circuit_effect_R
+
+subroutine calculate_Rterm_both_electrodes_from_box(box)
+   use m_units_constants
+   use m_chemistry
+   type(box_t), intent(inout)     :: box
+   real(dp) :: box_dr(NDIM)
+   real(dp) :: box_rmin(NDIM)
+   real(dp) :: cell_r_center(NDIM)
+   real(dp) :: cell_volume
+   integer :: n_cells
+   integer :: i_cell, j_cell
+   integer :: cell_idx(NDIM)
+   real(dp) :: charge_density_cell
+   integer :: i_plasma_species
+   real(dp) :: total_charge_cell
+   real(dp) :: potential_from_cell_top
+   real(dp) :: potential_from_cell_bottom
+#if NDIM == 3
+   integer :: k_cell
+#endif
+   n_cells = box%n_cell
+   box_rmin = box%r_min
+   box_dr = box%dr
+
+#if NDIM == 2
+   do i_cell = 1, n_cells
+      do j_cell = 1, n_cells
+         charge_density_cell = 0.0
+
+         ! Calculate the center of each cell in the box
+         cell_idx(1) = i_cell
+         cell_idx(2) = j_cell
+         cell_r_center = af_r_cc(box, cell_idx)
+
+         ! Calculate the cell volume (Cylindrical cell volume = 2 * pi * r * dr * dz)
+         cell_volume = 2 * UC_pi * (cell_r_center(1) - 0.5 * box_dr(1)) * box_dr(1) * box_dr(2)
+         ! Retrieve the charge density in this cell
+         do i_plasma_species = 1, size(charged_species_charge)
+            charge_density_cell = charge_density_cell + &
+                              charged_species_charge(i_plasma_species) * &
+                              box%cc(i_cell, j_cell, charged_species_itree(i_plasma_species))
+         end do
+         charge_density_cell = charge_density_cell * UC_elem_charge
+
+         total_charge_cell = charge_density_cell * cell_volume
+
+         ! Multiply the total charge of this cell with the weighting potential to get the induced potential
+         potential_from_cell_top = total_charge_cell * box%cc(i_cell, j_cell, ix_weighting_potential_top) / Q0_R
+         ! Increment potential at top electrode with the calculated potential of this cell
+         !$omp critical
+         new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
+         !$omp end critical
+
+         ! Multiply the total charge of this cell with the weighting potential to get the induced potential
+         potential_from_cell_bottom = total_charge_cell * box%cc(i_cell, j_cell, ix_weighting_potential_bottom) / Q0_R
+         ! Increment potential at bottom electrode with the calculated potential of this cell
+         !$omp critical
+         new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
+         !$omp end critical
+      end do
+   end do
+#endif
+
+#if NDIM == 3
+do i_cell = 1, n_cells
+do j_cell = 1, n_cells
+   do k_cell = 1, n_cells
+      charge_density_cell = 0
+
+      ! Calculate the center of each cell in the box
+      cell_idx(1) = i_cell
+      cell_idx(2) = j_cell
+      cell_idx(3) = k_cell
+      cell_r_center = af_r_cc(box, cell_idx)
+      
+      ! Calculate the cell volume
+      cell_volume = box_dr(1) * box_dr(2) * box_dr(3)
+      ! Retrieve the charge density in this cell
+      do i_plasma_species = 1, size(charged_species_charge)
+         charge_density_cell = charge_density_cell + &
+                           charged_species_charge(i_plasma_species) * &
+                           box%cc(i_cell, j_cell, k_cell, charged_species_itree(i_plasma_species))
+      end do
+      charge_density_cell = charge_density_cell * UC_elem_charge
+
+      total_charge_cell = charge_density_cell * cell_volume
+
+      ! Multiply the total charge of this cell with the weighting potential to get the induced potential
+      potential_from_cell_top = total_charge_cell * box%cc(i_cell, j_cell, k_cell, ix_weighting_potential_top) / Q0_R
+      
+      ! Increment potential at top electrode with the calculated potential of this cell
+      !$omp critical
+      new_calculated_voltage_at_top_electrode = new_calculated_voltage_at_top_electrode + potential_from_cell_top
+      !$omp end critical
+
+      ! Multiply the total charge of this cell with the weighting potential to get the induced potential
+      potential_from_cell_bottom = total_charge_cell * box%cc(i_cell, j_cell, k_cell, ix_weighting_potential_bottom) / Q0_R
+      ! Increment potential at bottom electrode with the calculated potential of this cell
+      !$omp critical
+      new_calculated_voltage_at_bottom_electrode = new_calculated_voltage_at_bottom_electrode + potential_from_cell_bottom
+      !$omp end critical
+   end do
+end do
+end do
+#endif
+end subroutine calculate_Rterm_both_electrodes_from_box
+
+
+!> This fills ghost cells near physical boundaries for the potential
+subroutine weighting_field_bottom_bc(box, nb, iv, coords, bc_val, bc_type)
+   type(box_t), intent(in) :: box
+   integer, intent(in)     :: nb
+   integer, intent(in)     :: iv
+   real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+   real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+   integer, intent(out)    :: bc_type
+
+   if (af_neighb_dim(nb) == NDIM) then
+      if (af_neighb_low(nb)) then
+         bc_type = af_bc_dirichlet
+         bc_val = Q0_R / top_electrode_self_capacitance
+      else
+         bc_type = af_bc_dirichlet
+         bc_val  = 0.0
+      end if
+   else
+      bc_type = af_bc_neumann
+      bc_val = 0.0_dp
+   end if
+ end subroutine weighting_field_bottom_bc
 
 end program streamer
