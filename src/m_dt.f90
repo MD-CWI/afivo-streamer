@@ -51,7 +51,7 @@ contains
     integer                    :: n_threads
     character(len=name_len)    :: integrator
 
-
+    !> [relevant_parameters]
     call CFG_add_get(cfg, "dt_max", dt_max, &
          "The maximum timestep (s)")
     call CFG_add_get(cfg, "dt_min", dt_min, &
@@ -60,10 +60,12 @@ contains
          "Safety factor for the time step")
     call CFG_add_get(cfg, "dt_chemistry_nmin", dt_chemistry_nmin, &
          "Small density for the chemistry time step")
+    !> [relevant_parameters]
 
     integrator = "heuns_method"
     call CFG_add_get(cfg, "time_integrator", integrator, &
          "Time integrator (forward_euler, heuns_method)")
+    !> [integrators]
     select case (integrator)
     case ("forward_euler")
        time_integrator = af_forward_euler
@@ -75,6 +77,7 @@ contains
        print *, "Time integrator: ", trim(integrator)
        error stop "Invalid time integrator"
     end select
+    !> [integrators]
 
     n_threads = af_get_max_threads()
     ! Prevent cache invalidation issues by enlarging the array

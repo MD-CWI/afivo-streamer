@@ -263,6 +263,7 @@ contains
   end subroutine output_write
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
+    use m_field, only: field_voltage
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
@@ -291,10 +292,12 @@ contains
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 2
        write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) wc_time n_cells min(dx) highest(lvl)"
+            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage ", &
+            " wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z wc_time n_cells min(dx) highest(lvl)"
+            "max(E) x y z max(n_e) x y z voltage ", &
+            "wc_time n_cells min(dx) highest(lvl)"
 #endif
        close(my_unit)
 
@@ -303,9 +306,9 @@ contains
     end if
 
 #if NDIM == 2
-    fmt = "(I6,16E16.8,I12,1E16.8,I3)"
+    fmt = "(I6,17E16.8,I12,1E16.8,I3)"
 #elif NDIM == 3
-    fmt = "(I6,14E16.8,I12,1E16.8,I3)"
+    fmt = "(I6,15E16.8,I12,1E16.8,I3)"
 #endif
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -317,11 +320,14 @@ contains
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
+         field_voltage, &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
+         af_r_loc(tree, loc_elec), field_voltage, &
+         wc_time, af_num_cells_used(tree), &
+         af_min_dr(tree),tree%highest_lvl
 #endif
     close(my_unit)
 
