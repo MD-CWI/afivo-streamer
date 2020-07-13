@@ -17,8 +17,8 @@ def get_argparser():
         The output file contains two columns: the path length and the
         variable along the path.''',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        epilog='''Usage: visit -nowin -cli -s lineout.py database variable
-        -r0 x y z -r1 x y z''',
+        epilog='''Usage: visit -nowin -cli -s visit_lineout.py
+        database variable -r0 x y z -r1 x y z''',
         prog='visit -nowin -cli -s visit_lineout.py')
     pr.add_argument('database', type=str,
                     help='Database name (e.g. sim.silo or "sim_*.silo")')
