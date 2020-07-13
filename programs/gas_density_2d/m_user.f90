@@ -67,6 +67,11 @@ contains
        continue
     case ("gaussian")
        gas_density = gas_density * (1 - r_reduction * exp(-(r_rel/r_width)**2))
+    case ("step")
+       if (r_rel < r_width) then
+          ! Reduce gas density inside channel
+          gas_density = r_reduction * gas_density
+       end if
     case default
        error stop "Unknown density_profile_r specified"
     end select
