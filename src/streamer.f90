@@ -210,7 +210,9 @@ program streamer
      global_time = time
 
      if (global_dt < dt_min) then
-        print *, "ST_dt getting too small, instability?", global_dt
+        write(*, "(A,E12.4,A)") " Time step (dt =", global_dt, &
+             ") getting too small"
+        print *, "See the documentation on time integration"
         call output_status(tree, time, wc_time, it, dt)
         if (.not. write_out) then
            write_out = .true.
@@ -276,7 +278,7 @@ contains
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
     call circuit_initialize(tree, cfg, restart)
-    call init_cond_initialize(cfg)
+    call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
 
     call output_initial_summary()
