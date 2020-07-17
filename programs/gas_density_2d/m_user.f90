@@ -13,8 +13,11 @@ module m_user
   ! Public methods
   public :: user_initialize
 
-  character(len=32) :: density_profile = "homogeneous"
-  real(dp)          :: density_factor  = 2.0_dp
+  character(len=32) :: density_profile_z = "homogeneous"
+  character(len=32) :: density_profile_r = "homogeneous"
+  real(dp)          :: z_density_ratio  = 0.0_dp
+  real(dp)          :: r_reduction  = 0.5_dp
+  real(dp)          :: r_width  = 0.1_dp
 
 contains
 
@@ -24,10 +27,16 @@ contains
 
     user_gas_density => gas_density
 
-    call CFG_add_get(cfg, "density_profile", density_profile, &
-         "Name of the gas number density profile")
-    call CFG_add_get(cfg, "density_factor", density_factor, &
-         "Factor for increasing the gas number density")
+    call CFG_add_get(cfg, "density_profile_z", density_profile_z, &
+         "Name of the gas number density profile in the z direction")
+    call CFG_add_get(cfg, "density_profile_r", density_profile_r, &
+         "Name of the gas number density profile in the r direction")
+    call CFG_add_get(cfg, "z_density_ratio", z_density_ratio, &
+         "Density ratio in the z direction")
+    call CFG_add_get(cfg, "r_reduction", r_reduction, &
+         "Reduction of the gas number density on the axis")
+    call CFG_add_get(cfg, "r_width", r_width, &
+         "Width of the profile in the r direction")
 
   end subroutine user_initialize
 
@@ -42,17 +51,29 @@ contains
     r_rel = rz_rel(1)
     z_rel = rz_rel(2)
 
-    select case (density_profile)
+    select case (density_profile_z)
     case ("homogeneous")
        gas_density = gas_number_density
-    case ("linear_increase_z")
-       ! Linearly increase density with z
-       gas_density = gas_number_density * (1 + (density_factor-1) * z_rel)
-    case ("linear_decrease_z")
-       ! Start from high density and linearly decrease with z
-       gas_density = gas_number_density * (1 + (density_factor-1) * (1 - z_rel))
+    case ("linear_z")
+       ! Linearly trend in z
+       gas_density = gas_number_density * (1 + (z_density_ratio-1) * z_rel) / &
+            max(1.0_dp, abs(z_density_ratio))
     case default
-       error stop "Unknown density_profile specified"
+       error stop "Unknown density_profile_z specified"
+    end select
+
+    select case (density_profile_r)
+    case ("homogeneous")
+       continue
+    case ("gaussian")
+       gas_density = gas_density * (1 - r_reduction * exp(-(r_rel/r_width)**2))
+    case ("step")
+       if (r_rel < r_width) then
+          ! Reduce gas density inside channel
+          gas_density = r_reduction * gas_density
+       end if
+    case default
+       error stop "Unknown density_profile_r specified"
     end select
   end function gas_density
 

@@ -21,6 +21,7 @@ module m_init_cond
      integer, allocatable            :: seed_charge_type(:)
      real(dp), allocatable           :: seed_width(:)
      character(string_len), allocatable :: seed_falloff(:)
+     integer, allocatable            :: seed1_species(:) !< Custom seed 1 species
   end type initcnd_t
 
   ! This will contain the initial conditions
@@ -33,14 +34,16 @@ module m_init_cond
 contains
 
   ! Set the initial conditions from the configuration
-  subroutine init_cond_initialize(cfg)
+  subroutine init_cond_initialize(tree, cfg)
     use m_config
+    type(af_t), intent(in)     :: tree
     type(CFG_t), intent(inout) :: cfg !< Settings
 
     integer                    :: n, n_cond, varsize, empty_int(0)
     real(dp)                   :: empty_real(0)
     real(dp), allocatable      :: tmp_vec(:)
     character(len=name_len)    :: empty_string(0)
+    character(len=name_len), allocatable :: seed_species(:)
     type(initcnd_t)            :: ic
 
     call CFG_add(cfg, "background_density", 0.0_dp, &
@@ -59,6 +62,8 @@ contains
          "Seed width (m)", .true.)
     call CFG_add(cfg, "seed_falloff", empty_string, &
          "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)", .true.)
+    call CFG_add(cfg, "seed1_species", empty_string, &
+         "Names of custom species for the first seed", .true.)
 
     call CFG_get_size(cfg, "seed_density", n_cond)
     ic%n_cond = n_cond
@@ -107,8 +112,19 @@ contains
 
     ! Keep density at endpoint the same by default
     call CFG_add(cfg, "seed_density2", ic%seed_density, &
-         "Initial density of the seed at other endpoint (1/m3)", .true.)
+         "Initial density of the seed at other endpoint (1/m3)")
     call CFG_get(cfg, "seed_density2", ic%seed_density2)
+
+    call CFG_get_size(cfg, "seed1_species", varsize)
+
+    if (varsize > 0) then
+       allocate(seed_species(varsize))
+       allocate(ic%seed1_species(varsize))
+       call CFG_get(cfg, "seed1_species", seed_species)
+       do n = 1, varsize
+          ic%seed1_species(n) = af_find_cc_variable(tree, seed_species(n))
+       end do
+    end if
 
     init_conds = ic
 
@@ -195,9 +211,9 @@ contains
     real(dp)                   :: density
 
     nc = box%n_cell
+    box%cc(DTIMES(:), :) = 0.0_dp ! Set initial densities/voltage to zero
     box%cc(DTIMES(:), i_electron) = init_conds%background_density
     box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
-    box%cc(DTIMES(:), i_phi)      = 0 ! Inital potential set to zero
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
@@ -229,14 +245,22 @@ contains
                init_conds%seed_width(n), &
                init_conds%seed_falloff(n))
 
-          ! Add electrons and/or ions depending on the seed charge type
-          ! (positive, negative or neutral)
-          if (init_conds%seed_charge_type(n) <= 0) then
-             box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + density
-          end if
-
-          if (init_conds%seed_charge_type(n) >= 0) then
-             box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_1pos_ion) + density
+          if (n == 1 .and. allocated(init_conds%seed1_species)) then
+             box%cc(IJK, init_conds%seed1_species) = &
+                  box%cc(IJK, init_conds%seed1_species) + density
+          else
+             ! Add electrons and/or ions depending on the seed charge type
+             select case (init_conds%seed_charge_type(n))
+             case (-1)
+                box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + density
+             case (0)
+                box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_1pos_ion) + density
+                box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + density
+             case (1)
+                box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_1pos_ion) + density
+             case default
+                error stop "Invalid seed_charge_type"
+             end select
           end if
        end do
     end do; CLOSE_DO
