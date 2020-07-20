@@ -33,6 +33,8 @@ module m_streamer
   integer, public, protected :: i_tmp          = -1
   !> Index of can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
+  !> Index of power deposited variable
+  integer, public, protected :: i_pow_dens     = -1
 
   !> Number of face-centered variables
   integer, public, protected :: n_var_face   = 0
@@ -188,6 +190,9 @@ contains
        call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
+    
+    call af_add_cc_variable(tree, "power_density", ix = i_pow_dens)
+
 
     call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
          "Whether end_time is used to end the simulation")
