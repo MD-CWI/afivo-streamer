@@ -51,10 +51,10 @@ module m_gas
   integer, parameter, public :: n_vars_euler = 2+NDIM
 
   ! Indices of the Euler variables
-  integer, public, protected :: gas_vars(n_vars_euler)
+  integer, public, protected :: gas_vars(n_vars_euler) = -1
 
   ! Indices of the Euler fluxes
-  integer, public, protected :: gas_fluxes(n_vars_euler)
+  integer, public, protected :: gas_fluxes(n_vars_euler) = -1
 
   ! Names of the Euler variables
   character(len=name_len), public, protected :: gas_var_names(n_vars_euler)
