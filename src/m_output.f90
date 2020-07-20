@@ -275,6 +275,8 @@ contains
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er
+    real(dp)                     :: max_power, min_power, sum_power
+    type(af_loc_t)               :: loc_power
     logical, save                :: first_time = .true.
 
     call af_tree_sum_cc(tree, i_electron, sum_elec)
@@ -283,6 +285,10 @@ contains
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
     call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
     call af_tree_min_fc(tree, 1, electric_fld, min_Er)
+    
+    call af_tree_max_cc(tree, i_pow_dens, max_power, loc_power)
+    call af_tree_min_cc(tree, i_pow_dens, min_power)
+    call af_tree_sum_cc(tree, i_pow_dens, sum_power)
 
     dt = global_dt
 
@@ -293,10 +299,12 @@ contains
 #if NDIM == 2
        write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage ", &
+            "pow_dep max(power) x y min(power)", &
             " wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
             "max(E) x y z max(n_e) x y z voltage ", &
+            "pow_dep max(power) x y z min(power)", &
             "wc_time n_cells min(dx) highest(lvl)"
 #endif
        close(my_unit)
@@ -321,11 +329,13 @@ contains
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          field_voltage, &
+         sum_power, max_power, af_r_loc(tree, loc_power), min_power, &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), field_voltage, &
+         sum_power, max_power, af_r_loc(tree, loc_power), min_power, &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl
 #endif
