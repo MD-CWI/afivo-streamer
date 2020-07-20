@@ -1,3 +1,4 @@
+#include "../afivo/src/cpp_macros.h"
 !> Module with methods and parameters related to writing output
 module m_output
   use m_af_all
@@ -200,6 +201,10 @@ contains
     end interface
     integer                   :: i
     character(len=string_len) :: fname
+
+    if (compute_power_density) then
+       call af_loop_box(tree, set_power_density_box)
+    end if
 
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
@@ -458,5 +463,30 @@ contains
     close(my_unit)
 
   end subroutine output_fld_maxima
+
+  subroutine set_power_density_box(box)
+    use m_units_constants
+    type(box_t), intent(inout) :: box
+    integer                    :: IJK, nc
+    real(dp)                   :: J_dot_E
+
+    nc = box%n_cell
+    do KJI_DO(1, nc)
+       ! Compute inner product flux * field over the cell faces
+       J_dot_E = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
+#if NDIM == 2
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
+            box%fc(i, j+1, 2, flux_elec) * box%fc(i, j+1, 2, electric_fld))
+#elif NDIM == 3
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, j, k, 1, flux_elec) * box%fc(i+1, j, k, 1, electric_fld) + &
+            box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
+            box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
+#endif
+
+       box%cc(IJK, i_power_density) = J_dot_E * UC_elec_charge
+    end do; CLOSE_DO
+  end subroutine set_power_density_box
 
 end module m_output

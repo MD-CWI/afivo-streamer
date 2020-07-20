@@ -33,7 +33,6 @@ contains
     do KJI_DO(1, nc)
        ! Compute inner product flux * field over the cell faces
        J_dot_E = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
-       box%cc(IJK, i_pow_dens) = 2.0_dp * J_dot_E * UC_elec_charge
 #if NDIM == 2
        J_dot_E = J_dot_E + 0.5_dp * (&
             box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
