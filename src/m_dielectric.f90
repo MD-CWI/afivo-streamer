@@ -241,7 +241,7 @@ contains
     integer, intent(in)               :: i_out   !< Output surface density
     integer, intent(in)               :: i_in(:) !< List of input surface densities
     real(dp), intent(in)              :: w_in(:) !< Weights of input densities
-    integer                           :: ix, i
+    integer                           :: ix, ii
 
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
@@ -249,9 +249,12 @@ contains
           diel%surfaces(ix)%sd(:, i_out) = &
                matmul(diel%surfaces(ix)%sd(:, i_in), w_in)
 #elif NDIM == 3
-!TODO3D This is not tested...
-          diel%surfaces(ix)%sd(:, :, i_out) = &
-              sum([(w_in(i) * diel%surfaces(ix)%sd(:, :, i_in(i)), i=1,size(i_in))], dim=1)
+          ! TODO improve by removing do-loop??
+          diel%surfaces(ix)%sd(:, :, i_out) = 0.0_dp
+          do ii=1, size(i_in)
+            diel%surfaces(ix)%sd(:, :, i_out) =  diel%surfaces(ix)%sd(:, :, i_out) &
+              + w_in(ii) * diel%surfaces(ix)%sd(:, :, i_in(ii))
+          end do
 #endif
        end if
     end do
