@@ -16,7 +16,6 @@ module m_af_ghostcell
   public :: af_bc_set_continuous
   public :: af_gc_interp
   public :: af_gc_prolong_copy
-  public :: af_gc_interp_lim
   public :: af_gc2_box
 
 contains
@@ -145,7 +144,9 @@ contains
        rmin(nb_dim) = box%r_min(nb_dim) + box%n_cell * box%dr(nb_dim)
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    coords(nb_dim, 1) = rmin(nb_dim)
+#elif NDIM == 2
     do i = 1, box%n_cell
        coords(bc_dim, i) = rmin(bc_dim) + (i-1) * box%dr(bc_dim)
        coords(nb_dim, i) = rmin(nb_dim)
@@ -200,11 +201,8 @@ contains
     do n = 1, af_num_children
        ! Check whether there is a neighbor, and find its index
        dnb   = 2 * af_child_dix(:, n) - 1
-#if NDIM == 2
-       nb_id = boxes(id)%neighbor_mat(dnb(1), dnb(2))
-#elif NDIM == 3
-       nb_id = boxes(id)%neighbor_mat(dnb(1), dnb(2), dnb(3))
-#endif
+
+       nb_id = boxes(id)%neighbor_mat(DINDEX(dnb))
        lo    = af_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then
@@ -253,7 +251,18 @@ contains
     end select
 
     select case (nb)
-#if NDIM == 2
+#if NDIM == 1
+    case (af_neighb_lowx)
+       box%cc(0, iv) = &
+            c0 * bc_val(1) + &
+            c1 * box%cc(1, iv) + &
+            c2 * box%cc(2, iv)
+    case (af_neighb_highx)
+       box%cc(nc+1, iv) = &
+            c0 * bc_val(1) + &
+            c1 * box%cc(nc, iv) + &
+            c2 * box%cc(nc-1, iv)
+#elif NDIM == 2
     case (af_neighb_lowx)
        box%cc(0, 1:nc, iv) = &
             c0 * bc_val + &
@@ -340,7 +349,14 @@ contains
     end select
 
     select case (nb)
-#if NDIM == 2
+#if NDIM == 1
+    case (af_neighb_lowx)
+       cc(0) = c0 * bc_val(1) + c1 * cc(1)
+       cc(-1) = 2 * cc(0) - cc(1)
+    case (af_neighb_highx)
+       cc(nc+1) = c0 * bc_val(1) + c1 * cc(nc)
+       cc(nc+2) = 2 * cc(nc+1) - cc(nc)
+#elif NDIM == 2
     case (af_neighb_lowx)
        cc(0, 1:nc) = c0 * bc_val + c1 * cc(1, 1:nc)
        cc(-1, 1:nc) = 2 * cc(0, 1:nc) - cc(1, 1:nc)
@@ -403,11 +419,15 @@ contains
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, ix_c, ix_f, i, j
-    integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
+    integer                     :: nc, ix, ix_c, ix_f
+    integer                     :: p_nb_id
     integer                     :: p_id, ix_offset(NDIM)
-    real(dp), parameter         :: sixth=1/6.0_dp, third=1/3.0_dp
-#if NDIM == 3
+    real(dp), parameter         :: third=1/3.0_dp
+#if NDIM > 1
+    real(dp), parameter         :: sixth=1/6.0_dp
+    integer                     :: i_c1, i_c2, j_c1, j_c2, i, j
+#endif
+#if NDIM > 2
     integer                     :: k_c1, k_c2, k
 #endif
 
@@ -427,7 +447,12 @@ contains
     end if
 
     select case (af_neighb_dim(nb))
-#if NDIM == 2
+#if NDIM == 1
+    case (1)
+          boxes(id)%cc(ix, iv) = &
+               2 * third * boxes(p_nb_id)%cc(ix_c, iv) + &
+               third * boxes(id)%cc(ix_f, iv)
+#elif NDIM == 2
     case (1)
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
@@ -494,115 +519,6 @@ contains
 
   end subroutine af_gc_interp
 
-  !> Interpolate between fine points and coarse neighbors to fill ghost cells
-  !> near refinement boundaries. The ghost values are less than twice the coarse
-  !> values.
-  subroutine af_gc_interp_lim(boxes, id, nb, iv)
-    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, ix_c, ix_f, i, j
-    integer                     :: i_c1, i_c2, j_c1, j_c2, p_nb_id
-    integer                     :: p_id, ix_offset(NDIM)
-    real(dp)                    :: c1, c2
-    real(dp), parameter         :: sixth=1/6.0_dp, third=1/3.0_dp
-#if NDIM == 3
-    integer                     :: k_c1, k_c2, k
-    real(dp)                    :: c3
-#endif
-
-    nc        = boxes(id)%n_cell
-    p_id      = boxes(id)%parent
-    p_nb_id   = boxes(p_id)%neighbors(nb)
-    ix_offset = af_get_child_offset(boxes(id), nb)
-
-    if (af_neighb_low(nb)) then
-       ix = 0
-       ix_f = 1
-       ix_c = nc
-    else
-       ix = nc+1
-       ix_f = nc
-       ix_c = 1
-    end if
-
-    select case (af_neighb_dim(nb))
-#if NDIM == 2
-    case (1)
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          c1 = boxes(p_nb_id)%cc(ix_c, j_c1, iv)
-          c2 = boxes(p_nb_id)%cc(ix_c, j_c2, iv)
-          boxes(id)%cc(ix, j, iv) = 0.5_dp * c1 + sixth * c2 + &
-               third * boxes(id)%cc(ix_f, j, iv)
-          if (boxes(id)%cc(ix, j, iv) > 2 * c1) boxes(id)%cc(ix, j, iv) = 2 * c1
-       end do
-    case (2)
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-          c1 = boxes(p_nb_id)%cc(i_c1, ix_c, iv)
-          c2 = boxes(p_nb_id)%cc(i_c2, ix_c, iv)
-          boxes(id)%cc(i, ix, iv) = 0.5_dp * c1 + sixth * c2 + &
-               third * boxes(id)%cc(i, ix_f, iv)
-          if (boxes(id)%cc(i, ix, iv) > 2 * c1) boxes(id)%cc(i, ix, iv) = 2 * c1
-       end do
-#elif NDIM==3
-    case (1)
-       do k = 1, nc
-          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
-          do j = 1, nc
-             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-             c1 = boxes(p_nb_id)%cc(ix_c, j_c1, k_c1, iv)
-             c2 = boxes(p_nb_id)%cc(ix_c, j_c2, k_c1, iv)
-             c3 = boxes(p_nb_id)%cc(ix_c, j_c1, k_c2, iv)
-             boxes(id)%cc(ix, j, k, iv) = third * c1 + sixth * c2 + &
-                  sixth * c3 + third * boxes(id)%cc(ix_f, j, k, iv)
-             if (boxes(id)%cc(ix, j, k, iv) > 2 * c1) &
-                  boxes(id)%cc(ix, j, k, iv) = 2 * c1
-          end do
-       end do
-    case (2)
-       do k = 1, nc
-          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             c1 = boxes(p_nb_id)%cc(i_c1, ix_c, k_c1, iv)
-             c2 = boxes(p_nb_id)%cc(i_c2, ix_c, k_c1, iv)
-             c3 = boxes(p_nb_id)%cc(i_c1, ix_c, k_c2, iv)
-             boxes(id)%cc(i, ix, k, iv) = third * c1 + sixth * c2 + &
-                  sixth * c3 + third * boxes(id)%cc(i, ix_f, k, iv)
-             if (boxes(id)%cc(i, ix, k, iv) > 2 * c1) &
-                  boxes(id)%cc(i, ix, k, iv) = 2 * c1
-          end do
-       end do
-    case (3)
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
-             c1 = boxes(p_nb_id)%cc(i_c1, j_c1, ix_c, iv)
-             c2 = boxes(p_nb_id)%cc(i_c1, j_c2, ix_c, iv)
-             c3 = boxes(p_nb_id)%cc(i_c2, j_c1, ix_c, iv)
-             boxes(id)%cc(i, j, ix, iv) = third * c1 + sixth * c2 + &
-                  sixth * c3 + third * boxes(id)%cc(i, j, ix_f, iv)
-             if (boxes(id)%cc(i, j, ix, iv) > 2 * c1) &
-                  boxes(id)%cc(i, j, ix, iv) = 2 * c1
-          end do
-       end do
-#endif
-    end select
-
-  end subroutine af_gc_interp_lim
-
   !> This fills ghost cells near physical boundaries using Neumann zero
   subroutine af_bc_neumann_zero(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
@@ -656,7 +572,10 @@ contains
     nlo = lo - dnb * box%n_cell
     nhi = hi - dnb * box%n_cell
 
-#if NDIM == 2
+#if NDIM == 1
+    box%cc(lo(1):hi(1), iv) = &
+         box_nb%cc(nlo(1):nhi(1), iv)
+#elif NDIM == 2
     box%cc(lo(1):hi(1), lo(2):hi(2), iv) = &
          box_nb%cc(nlo(1):nhi(1), nlo(2):nhi(2), iv)
 #elif NDIM == 3
@@ -702,7 +621,10 @@ contains
           nlo = lo - dnb * tree%n_cell
           nhi = hi - dnb * tree%n_cell
 
-#if NDIM == 2
+#if NDIM == 1
+          cc(lo(1):hi(1), :) = &
+               tree%boxes(nb_id)%cc(nlo(1):nhi(1), ivs)
+#elif NDIM == 2
           cc(lo(1):hi(1), lo(2):hi(2), :) = &
                tree%boxes(nb_id)%cc(nlo(1):nhi(1), nlo(2):nhi(2), ivs)
 #elif NDIM == 3
@@ -750,14 +672,10 @@ contains
     integer, intent(in)     :: iv                  !< Index of variable
     integer, intent(in)     :: nc                  !< Number of cells
     real(dp), intent(inout) :: cc(DTIMES(-1:nc+2)) !< Enlarged array
-    integer                 :: IJK, i_f, j_f, p_nb_id
+    integer                 :: IJK, IJK_(f), p_nb_id
     integer                 :: lo_c(NDIM), hi_c(NDIM), ix_offset(NDIM)
     integer                 :: lo(NDIM), hi(NDIM)
-    real(dp)                :: f0, fx, fy
-#if NDIM == 3
-    real(dp)                :: fz
-    integer                 :: k_f
-#endif
+    real(dp)                :: f(0:NDIM)
 
     p_nb_id = boxes(boxes(id)%parent)%neighbors(nb)
 
@@ -774,26 +692,40 @@ contains
     hi_c = hi_c - af_neighb_dix(:, nb) * nc
 
     associate(cc_p => boxes(p_nb_id)%cc)
-#if NDIM == 2
+#if NDIM == 1
+      do i = lo_c(1), hi_c(1)
+         i_f = lo(1) + 2 * (i - lo_c(1))
+
+         ! Compute slopes on parent
+         f(0) = cc_p(i, iv)
+         f(1) = 0.25_dp * limit_slope( &
+              cc_p(i, iv) - cc_p(i-1, iv), &
+              cc_p(i+1, iv) - cc_p(i, iv))
+
+         ! Prolong to fine cells
+         cc(i_f) = f(0) - f(1)
+         cc(i_f+1) = f(0) + f(1)
+      end do
+#elif NDIM == 2
       do j = lo_c(2), hi_c(2)
          j_f = lo(2) + 2 * (j - lo_c(2))
          do i = lo_c(1), hi_c(1)
             i_f = lo(1) + 2 * (i - lo_c(1))
 
             ! Compute slopes on parent
-            f0 = cc_p(i, j, iv)
-            fx = 0.25_dp * limit_slope( &
+            f(0) = cc_p(i, j, iv)
+            f(1) = 0.25_dp * limit_slope( &
                  cc_p(i, j, iv) - cc_p(i-1, j, iv), &
                  cc_p(i+1, j, iv) - cc_p(i, j, iv))
-            fy = 0.25_dp * limit_slope( &
+            f(2) = 0.25_dp * limit_slope( &
                  cc_p(i, j, iv) - cc_p(i, j-1, iv), &
                  cc_p(i, j+1, iv) - cc_p(i, j, iv))
 
             ! Prolong to fine cells
-            cc(i_f,   j_f) = f0 - fx - fy
-            cc(i_f,   j_f+1) = f0 - fx + fy
-            cc(i_f+1, j_f) = f0 + fx - fy
-            cc(i_f+1, j_f+1) = f0 + fx + fy
+            cc(i_f,   j_f) = f(0) - f(1) - f(2)
+            cc(i_f,   j_f+1) = f(0) - f(1) + f(2)
+            cc(i_f+1, j_f) = f(0) + f(1) - f(2)
+            cc(i_f+1, j_f+1) = f(0) + f(1) + f(2)
          end do
       end do
 #elif NDIM == 3
@@ -805,26 +737,26 @@ contains
                i_f = lo(1) + 2 * (i - lo_c(1))
 
                ! Compute slopes on parent
-               f0 = cc_p(i, j, k, iv)
-               fx = 0.25_dp * limit_slope( &
+               f(0) = cc_p(i, j, k, iv)
+               f(1) = 0.25_dp * limit_slope( &
                     cc_p(i, j, k, iv) - cc_p(i-1, j, k, iv), &
                     cc_p(i+1, j, k, iv) - cc_p(i, j, k, iv))
-               fy = 0.25_dp * limit_slope( &
+               f(2) = 0.25_dp * limit_slope( &
                     cc_p(i, j, k, iv) - cc_p(i, j-1, k, iv), &
                     cc_p(i, j+1, k, iv) - cc_p(i, j, k, iv))
-               fz = 0.25_dp * limit_slope( &
+               f(3) = 0.25_dp * limit_slope( &
                     cc_p(i, j, k, iv) - cc_p(i, j, k-1, iv), &
                     cc_p(i, j, k+1, iv) - cc_p(i, j, k, iv))
 
                ! Prolong to fine cells
-               cc(i_f,   j_f,   k_f)   = f0 - fx - fy - fz
-               cc(i_f,   j_f,   k_f+1) = f0 - fx - fy + fz
-               cc(i_f,   j_f+1, k_f)   = f0 - fx + fy - fz
-               cc(i_f,   j_f+1, k_f+1) = f0 - fx + fy + fz
-               cc(i_f+1, j_f,   k_f)   = f0 + fx - fy - fz
-               cc(i_f+1, j_f,   k_f+1) = f0 + fx - fy + fz
-               cc(i_f+1, j_f+1, k_f)   = f0 + fx + fy - fz
-               cc(i_f+1, j_f+1, k_f+1) = f0 + fx + fy + fz
+               cc(i_f,   j_f,   k_f)   = f(0) - f(1) - f(2) - f(3)
+               cc(i_f,   j_f,   k_f+1) = f(0) - f(1) - f(2) + f(3)
+               cc(i_f,   j_f+1, k_f)   = f(0) - f(1) + f(2) - f(3)
+               cc(i_f,   j_f+1, k_f+1) = f(0) - f(1) + f(2) + f(3)
+               cc(i_f+1, j_f,   k_f)   = f(0) + f(1) - f(2) - f(3)
+               cc(i_f+1, j_f,   k_f+1) = f(0) + f(1) - f(2) + f(3)
+               cc(i_f+1, j_f+1, k_f)   = f(0) + f(1) + f(2) - f(3)
+               cc(i_f+1, j_f+1, k_f+1) = f(0) + f(1) + f(2) + f(3)
             end do
          end do
       end do

@@ -41,7 +41,7 @@ program boundary_conditions
      call af_gc_tree(tree, [i_phi])
 
      write(fname, "(A,I0)") "boundary_conditions_" // DIMNAME // "_", iter
-     call af_write_vtk(tree, trim(fname), dir="output")
+     call af_write_silo(tree, trim(fname), dir="output")
   end do
 
 contains
@@ -61,7 +61,11 @@ contains
     nc = box%n_cell
 
     do KJI_DO(1,nc)
-#if NDIM == 2
+#if NDIM == 1
+       tmp(i) = 0.5_dp * ( &
+            box%cc(i+1, i_phi) + &
+            box%cc(i-1, i_phi))
+#elif NDIM == 2
        tmp(i, j) = 0.25_dp * ( &
             box%cc(i+1, j, i_phi) + &
             box%cc(i-1, j, i_phi) + &
@@ -78,7 +82,9 @@ contains
 #endif
     end do; CLOSE_DO
 
-    box%cc(DTIMES(1:nc), i_phi) = tmp(DTIMES(:))
+    ! Average new and old value
+    box%cc(DTIMES(1:nc), i_phi) = 0.5_dp * (&
+         tmp(DTIMES(:)) + box%cc(DTIMES(1:nc), i_phi))
   end subroutine average_phi
 
   !> [boundary_method]
@@ -95,39 +101,12 @@ contains
 
     ! Below the solution is specified in the approriate ghost cells
     select case (nb)
-#if NDIM == 2
     case (af_neighb_lowx)      ! Lower-x direction
        bc_type = af_bc_dirichlet
        bc_val = 1.0_dp
-    case (af_neighb_highx)     ! Higher-x direction
+    case default
        bc_type = af_bc_neumann
        bc_val = 0.0_dp
-    case (af_neighb_lowy)      ! Lower-y direction
-       bc_type = af_bc_dirichlet
-       bc_val = 1.0_dp
-    case (af_neighb_highy)     ! Higher-y direction
-       bc_type = af_bc_neumann
-       bc_val = 0.0_dp
-#elif NDIM == 3
-    case (af_neighb_lowx)      ! Lower-x direction
-       bc_type = af_bc_dirichlet
-       bc_val = 1.0_dp
-    case (af_neighb_highx)     ! Higher-x direction
-       bc_type = af_bc_neumann
-       bc_val = 0.0_dp
-    case (af_neighb_lowy)      ! Lower-y direction
-       bc_type = af_bc_dirichlet
-       bc_val = 1.0_dp
-    case (af_neighb_highy)     ! Higher-y direction
-       bc_type = af_bc_neumann
-       bc_val = 0.0_dp
-    case (af_neighb_lowz)      ! Lower-z direction
-       bc_type = af_bc_neumann
-       bc_val = 0.0_dp
-    case (af_neighb_highz)     ! Higher-z direction
-       bc_type = af_bc_neumann
-       bc_val = 0.0_dp
-#endif
     end select
 
   end subroutine boundary_method

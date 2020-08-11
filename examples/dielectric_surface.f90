@@ -43,7 +43,9 @@ program dielectric_surface
 
   ! Include both cell-centered and face-centered electric field for testing
   call af_add_cc_variable(tree, "fld_cc_x", ix=i_fld_cc(1))
+#if NDIM > 1
   call af_add_cc_variable(tree, "fld_cc_y", ix=i_fld_cc(2))
+#endif
 #if NDIM == 3
   call af_add_cc_variable(tree, "fld_cc_z", ix=i_fld_cc(3))
 #endif

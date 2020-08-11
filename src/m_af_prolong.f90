@@ -1,3 +1,4 @@
+#include "cpp_macros.h"
 !> This module contains the routines related to prolongation: going from
 !> coarse to fine variables.
 module m_af_prolong
@@ -15,7 +16,6 @@ module m_af_prolong
   ! public :: af_prolong_quadratic_from
   ! public :: af_prolong_quadratic
 
-  public :: af_prolong_limit_pos
   public :: af_prolong_limit
   public :: af_prolong_linear_cons
 
@@ -48,10 +48,7 @@ contains
     logical, intent(in), optional :: add      !< Add to old values
     logical                       :: add_to
     integer                       :: nc, ix_offset(NDIM), ivc
-    integer                       :: i, j, i_c1, j_c1, lo(NDIM), hi(NDIM)
-#if NDIM == 3
-    integer                       :: k, k_c1
-#endif
+    integer                       :: IJK, IJK_(c1), lo(NDIM), hi(NDIM)
 
     nc   = box_c%n_cell
     add_to = .false.; if (present(add)) add_to = add
@@ -63,7 +60,13 @@ contains
     ix_offset = af_get_child_offset(box_c)
 
     if (add_to) then
-#if NDIM == 2
+#if NDIM == 1
+       do i = lo(1), hi(1)
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          box_c%cc(i, ivc) = box_c%cc(i, ivc) + &
+               box_p%cc(i_c1, iv)
+       end do
+#elif NDIM == 2
        do j = lo(2), hi(2)
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           do i = lo(1), hi(1)
@@ -86,7 +89,12 @@ contains
        end do
 #endif
     else
-#if NDIM == 2
+#if NDIM == 1
+       do i = lo(1), hi(1)
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          box_c%cc(i, ivc) = box_p%cc(i_c1, iv)
+       end do
+#elif NDIM == 2
        do j = lo(2), hi(2)
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
           do i = lo(1), hi(1)
@@ -117,12 +125,9 @@ contains
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
-    integer                       :: i, j, i_c, i_f, j_c, j_f
+    integer                       :: IJK, IJK_(c), IJK_(f)
     real(dp)                      :: f0
     logical                       :: add_to
-#if NDIM == 3
-    integer                       :: k, k_c, k_f
-#endif
 
     nc        = box_c%n_cell
     hnc       = ishft(box_c%n_cell, -1)
@@ -131,14 +136,19 @@ contains
     ivc       = iv; if (present(iv_to)) ivc = iv_to
 
     if (.not. add_to) then
-#if NDIM == 2
-       box_c%cc(1:nc, 1:nc, ivc) = 0
-#elif NDIM == 3
-       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
-#endif
+       box_c%cc(DTIMES(1:nc), ivc) = 0
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    do i = 1, hnc
+       i_c = i + ix_offset(1)
+       i_f = 2 * i - 1
+
+       f0 = box_p%cc(i_c, iv)
+       box_c%cc(i_f:i_f+1, ivc) = &
+            box_c%cc(i_f:i_f+1, ivc) + f0
+    end do
+#elif NDIM == 2
     do j = 1, hnc
        j_c = j + ix_offset(2)
        j_f = 2 * j - 1
@@ -164,7 +174,7 @@ contains
 
              f0  = box_p%cc(i_c,   j_c,   k_c,   iv)
              box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, ivc) = &
-               box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, ivc) + f0
+                  box_c%cc(i_f:i_f+1, j_f:j_f+1, k_f:k_f+1, ivc) + f0
           end do
        end do
     end do
@@ -198,12 +208,14 @@ contains
     integer, intent(in), optional :: iv_to    !< Destination variable
     logical, intent(in), optional :: add      !< Add to old values
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
-    integer                       :: i, j, i_c, i_f, j_c, j_f
-    real(dp)                      :: f0, flx, fhx, fly, fhy
+    integer                       :: IJK, IJK_(c), IJK_(f)
+    real(dp)                      :: f0, flx, fhx
     logical                       :: add_to
-#if NDIM == 3
+#if NDIM > 1
+    real(dp)                      :: fly, fhy
+#endif
+#if NDIM > 2
     real(dp)                      :: flz, fhz
-    integer                       :: k, k_c, k_f
 #endif
 
     nc        = box_c%n_cell
@@ -213,14 +225,22 @@ contains
     ivc       = iv; if (present(iv_to)) ivc = iv_to
 
     if (.not. add_to) then
-#if NDIM == 2
-       box_c%cc(1:nc, 1:nc, ivc) = 0
-#elif NDIM == 3
-       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
-#endif
+       box_c%cc(DTIMES(1:nc), ivc) = 0
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    do i = 1, hnc
+       i_c = i + ix_offset(1)
+       i_f = 2 * i - 1
+
+       f0 = 0.5_dp * box_p%cc(i_c, iv)
+       flx = 0.25_dp * box_p%cc(i_c-1, iv)
+       fhx = 0.25_dp * box_p%cc(i_c+1, iv)
+
+       box_c%cc(i_f,   ivc) = f0 + flx + box_c%cc(i_f,   ivc)
+       box_c%cc(i_f+1, ivc) = f0 + fhx + box_c%cc(i_f+1, ivc)
+    end do
+#elif NDIM == 2
     do j = 1, hnc
        j_c = j + ix_offset(2)
        j_f = 2 * j - 1
@@ -285,125 +305,6 @@ contains
 #endif
   end subroutine af_prolong_sparse
 
-  !> Conservative prolongation using the gradient of the coarse cells, and
-  !> limited to preserve positivity
-  subroutine af_prolong_limit_pos(box_p, box_c, iv, iv_to, add)
-    type(box_t), intent(in)     :: box_p !< Parent box
-    type(box_t), intent(inout)  :: box_c !< Child box
-    integer, intent(in)           :: iv    !< Variable to fill
-    integer, intent(in), optional :: iv_to !< Destination variable
-    logical, intent(in), optional :: add   !< Add to old values
-    integer                       :: hnc, nc, ix_offset(NDIM), ivc
-    integer                       :: i, j, i_c, i_f, j_c, j_f
-    real(dp)                      :: f0, fx, fy, tmp
-    logical                       :: add_to
-#if NDIM == 3
-    real(dp)                      :: fz
-    integer                       :: k, k_c, k_f
-#endif
-
-    nc        = box_c%n_cell
-    hnc       = ishft(box_c%n_cell, -1)
-    ix_offset = af_get_child_offset(box_c)
-    add_to    = .false.; if (present(add)) add_to = add
-    ivc       = iv; if (present(iv_to)) ivc = iv_to
-
-    if (.not. add_to) then
-#if NDIM == 2
-       box_c%cc(1:nc, 1:nc, ivc) = 0
-#elif NDIM == 3
-       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
-#endif
-    end if
-
-#if NDIM == 2
-    do j = 1, hnc
-       j_c = j + ix_offset(2)
-       j_f = 2 * j - 1
-       do i = 1, hnc
-          i_c = i + ix_offset(1)
-          i_f = 2 * i - 1
-
-          f0 = box_p%cc(i_c, j_c, iv)
-          fx = 0.125_dp * (box_p%cc(i_c+1, j_c, iv) - &
-               box_p%cc(i_c-1, j_c, iv))
-          fy = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
-               box_p%cc(i_c, j_c-1, iv))
-
-          if (box_p%coord_t == af_cyl) then
-             ! Ensure densities stay positive
-             tmp = abs(0.5_dp * f0 / (1 + 0.25_dp * box_p%dr(1) / &
-                  af_cyl_radius_cc(box_p, i_c)))
-             if (abs(fx) > tmp) fx = sign(tmp, fx)
-             if (abs(fy) > tmp) fy = sign(tmp, fy)
-
-             ! Correction for cylindrical coordinates
-             f0 = f0 - 0.25_dp * box_p%dr(1) * fx / &
-                  af_cyl_radius_cc(box_p, i_c)
-          else
-             ! Ensure densities stay positive
-             tmp = abs(0.5_dp * f0)
-             if (abs(fx) > tmp) fx = sign(tmp, fx)
-             if (abs(fy) > tmp) fy = sign(tmp, fy)
-          end if
-
-          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
-               + box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy &
-               + box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy &
-               + box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy &
-               + box_c%cc(i_f+1, j_f+1, ivc)
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, hnc
-       k_c = k + ix_offset(3)
-       k_f = 2 * k - 1
-       do j = 1, hnc
-          j_c = j + ix_offset(2)
-          j_f = 2 * j - 1
-          do i = 1, hnc
-             i_c = i + ix_offset(1)
-             i_f = 2 * i - 1
-
-             f0 = box_p%cc(i_c, j_c, k_c, iv)
-             fx = 0.125_dp * (box_p%cc(i_c+1, j_c,   k_c,   iv) - &
-                  box_p%cc(i_c-1, j_c,   k_c,   iv))
-             fy = 0.125_dp * (box_p%cc(i_c,   j_c+1, k_c,   iv) - &
-                  box_p%cc(i_c,   j_c-1, k_c,   iv))
-             fz = 0.125_dp * (box_p%cc(i_c,   j_c,   k_c+1, iv) - &
-                  box_p%cc(i_c,   j_c,   k_c-1, iv))
-
-             ! Ensure densities stay positive
-             tmp = abs(f0/3.0_dp)
-             if (abs(fx) > tmp) fx = sign(tmp, fx)
-             if (abs(fy) > tmp) fy = sign(tmp, fy)
-             if (abs(fz) > tmp) fz = sign(tmp, fz)
-
-             box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - &
-                  fy - fz + box_c%cc(i_f,   j_f,   k_f,   ivc)
-             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - &
-                  fy - fz + box_c%cc(i_f+1, j_f,   k_f,   ivc)
-             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + &
-                  fy - fz + box_c%cc(i_f,   j_f+1, k_f,   ivc)
-             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + &
-                  fy - fz + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
-             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - &
-                  fy + fz + box_c%cc(i_f,   j_f,   k_f+1, ivc)
-             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - &
-                  fy + fz + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
-             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + &
-                  fy + fz + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
-             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + &
-                  fy + fz + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
-          end do
-       end do
-    end do
-#endif
-  end subroutine af_prolong_limit_pos
-
   !> Conservative prolongation using the gradient from the coarse cells, taking
   !> the minimum of the slopes and zero if they differ
   subroutine af_prolong_limit(box_p, box_c, iv, iv_to, add)
@@ -413,13 +314,9 @@ contains
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
-    integer                       :: i, j, i_c, i_f, j_c, j_f
-    real(dp)                      :: f0, fx, fy
+    integer                       :: IJK, IJK_(c), IJK_(f)
+    real(dp)                      :: f(0:NDIM)
     logical                       :: add_to
-#if NDIM == 3
-    real(dp)                      :: fz
-    integer                       :: k, k_c, k_f
-#endif
 
     nc        = box_c%n_cell
     hnc       = ishft(box_c%n_cell, -1)
@@ -428,14 +325,23 @@ contains
     ivc       = iv; if (present(iv_to)) ivc = iv_to
 
     if (.not. add_to) then
-#if NDIM == 2
-       box_c%cc(1:nc, 1:nc, ivc) = 0
-#elif NDIM == 3
-       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
-#endif
+       box_c%cc(DTIMES(1:nc), ivc) = 0
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    do i = 1, hnc
+       i_c = i + ix_offset(1)
+       i_f = 2 * i - 1
+
+       f(0) = box_p%cc(i_c, iv)
+       f(1) = 0.25_dp * limit_slope( &
+            box_p%cc(i_c, iv) - box_p%cc(i_c-1, iv), &
+            box_p%cc(i_c+1, iv) - box_p%cc(i_c, iv))
+
+       box_c%cc(i_f, ivc) = f(0) - f(1) + box_c%cc(i_f, ivc)
+       box_c%cc(i_f+1, ivc) = f(0) + f(1) + box_c%cc(i_f+1, ivc)
+    end do
+#elif NDIM == 2
     do j = 1, hnc
        j_c = j + ix_offset(2)
        j_f = 2 * j - 1
@@ -443,21 +349,21 @@ contains
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
 
-          f0 = box_p%cc(i_c, j_c, iv)
-          fx = 0.25_dp * limit_slope( &
+          f(0) = box_p%cc(i_c, j_c, iv)
+          f(1) = 0.25_dp * limit_slope( &
                box_p%cc(i_c, j_c, iv) - box_p%cc(i_c-1, j_c, iv), &
                box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c, iv))
-          fy = 0.25_dp * limit_slope( &
+          f(2) = 0.25_dp * limit_slope( &
                box_p%cc(i_c, j_c, iv) - box_p%cc(i_c, j_c-1, iv), &
                box_p%cc(i_c, j_c+1, iv) - box_p%cc(i_c, j_c, iv))
 
-          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
+          box_c%cc(i_f,   j_f,   ivc) = f(0) - f(1) - f(2) &
                + box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy &
+          box_c%cc(i_f+1, j_f,   ivc) = f(0) + f(1) - f(2) &
                + box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy &
+          box_c%cc(i_f,   j_f+1, ivc) = f(0) - f(1) + f(2) &
                + box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy &
+          box_c%cc(i_f+1, j_f+1, ivc) = f(0) + f(1) + f(2) &
                + box_c%cc(i_f+1, j_f+1, ivc)
        end do
     end do
@@ -472,33 +378,33 @@ contains
              i_c = i + ix_offset(1)
              i_f = 2 * i - 1
 
-             f0 = box_p%cc(i_c, j_c, k_c, iv)
-             fx = 0.25_dp * limit_slope( &
+             f(0) = box_p%cc(i_c, j_c, k_c, iv)
+             f(1) = 0.25_dp * limit_slope( &
                   box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c-1, j_c, k_c, iv), &
                   box_p%cc(i_c+1, j_c, k_c, iv) - box_p%cc(i_c, j_c, k_c, iv))
-             fy = 0.25_dp * limit_slope( &
+             f(2) = 0.25_dp * limit_slope( &
                   box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c, j_c-1, k_c, iv), &
                   box_p%cc(i_c, j_c+1, k_c, iv) - box_p%cc(i_c, j_c, k_c, iv))
-             fz = 0.25_dp * limit_slope( &
+             f(3) = 0.25_dp * limit_slope( &
                   box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c, j_c, k_c-1, iv), &
                   box_p%cc(i_c, j_c, k_c+1, iv) - box_p%cc(i_c, j_c, k_c, iv))
 
-             box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - &
-                  fy - fz + box_c%cc(i_f,   j_f,   k_f,   ivc)
-             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - &
-                  fy - fz + box_c%cc(i_f+1, j_f,   k_f,   ivc)
-             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + &
-                  fy - fz + box_c%cc(i_f,   j_f+1, k_f,   ivc)
-             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + &
-                  fy - fz + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
-             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - &
-                  fy + fz + box_c%cc(i_f,   j_f,   k_f+1, ivc)
-             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - &
-                  fy + fz + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
-             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + &
-                  fy + fz + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
-             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + &
-                  fy + fz + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
+             box_c%cc(i_f,   j_f,   k_f,   ivc) = f(0) - f(1) - &
+                  f(2) - f(3) + box_c%cc(i_f,   j_f,   k_f,   ivc)
+             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f(0) + f(1) - &
+                  f(2) - f(3) + box_c%cc(i_f+1, j_f,   k_f,   ivc)
+             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f(0) - f(1) + &
+                  f(2) - f(3) + box_c%cc(i_f,   j_f+1, k_f,   ivc)
+             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f(0) + f(1) + &
+                  f(2) - f(3) + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
+             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f(0) - f(1) - &
+                  f(2) + f(3) + box_c%cc(i_f,   j_f,   k_f+1, ivc)
+             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f(0) + f(1) - &
+                  f(2) + f(3) + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
+             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f(0) - f(1) + &
+                  f(2) + f(3) + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
+             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f(0) + f(1) + &
+                  f(2) + f(3) + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
           end do
        end do
     end do
@@ -529,13 +435,9 @@ contains
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
-    integer                       :: i, j, i_c, i_f, j_c, j_f
-    real(dp)                      :: f0, fx, fy
+    integer                       :: IJK, IJK_(c), IJK_(f)
+    real(dp)                      :: f(0:NDIM)
     logical                       :: add_to
-#if NDIM == 3
-    real(dp)                      :: fz
-    integer                       :: k, k_c, k_f
-#endif
 
     nc        = box_c%n_cell
     hnc       = ishft(box_c%n_cell, -1)
@@ -544,14 +446,22 @@ contains
     ivc       = iv; if (present(iv_to)) ivc = iv_to
 
     if (.not. add_to) then
-#if NDIM == 2
-       box_c%cc(1:nc, 1:nc, ivc) = 0
-#elif NDIM == 3
-       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
-#endif
+       box_c%cc(DTIMES(1:nc), ivc) = 0
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    do i = 1, hnc
+       i_c = i + ix_offset(1)
+       i_f = 2 * i - 1
+
+       f(0) = box_p%cc(i_c, iv)
+       f(1) = 0.125_dp * (box_p%cc(i_c+1, iv) - &
+            box_p%cc(i_c-1, iv))
+
+       box_c%cc(i_f, ivc) = f(0) - f(1) + box_c%cc(i_f, ivc)
+       box_c%cc(i_f+1, ivc) = f(0) + f(1) + box_c%cc(i_f+1, ivc)
+    end do
+#elif NDIM == 2
     do j = 1, hnc
        j_c = j + ix_offset(2)
        j_f = 2 * j - 1
@@ -559,25 +469,25 @@ contains
           i_c = i + ix_offset(1)
           i_f = 2 * i - 1
 
-          f0 = box_p%cc(i_c, j_c, iv)
-          fx = 0.125_dp * (box_p%cc(i_c+1, j_c, iv) - &
+          f(0) = box_p%cc(i_c, j_c, iv)
+          f(1) = 0.125_dp * (box_p%cc(i_c+1, j_c, iv) - &
                box_p%cc(i_c-1, j_c, iv))
-          fy = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
+          f(2) = 0.125_dp * (box_p%cc(i_c, j_c+1, iv) - &
                box_p%cc(i_c, j_c-1, iv))
 
           if (box_p%coord_t == af_cyl) then
              ! Conservative prolongation for cylindrical coords
-             f0 = f0 - 0.25_dp * box_p%dr(1) * fx / &
+             f(0) = f(0) - 0.25_dp * box_p%dr(1) * f(1) / &
                   af_cyl_radius_cc(box_p, i_c)
           end if
 
-          box_c%cc(i_f,   j_f,   ivc) = f0 - fx - fy &
+          box_c%cc(i_f,   j_f,   ivc) = f(0) - f(1) - f(2) &
                + box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f0 + fx - fy &
+          box_c%cc(i_f+1, j_f,   ivc) = f(0) + f(1) - f(2) &
                + box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f0 - fx + fy &
+          box_c%cc(i_f,   j_f+1, ivc) = f(0) - f(1) + f(2) &
                + box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f0 + fx + fy &
+          box_c%cc(i_f+1, j_f+1, ivc) = f(0) + f(1) + f(2) &
                + box_c%cc(i_f+1, j_f+1, ivc)
        end do
     end do
@@ -592,30 +502,30 @@ contains
              i_c = i + ix_offset(1)
              i_f = 2 * i - 1
 
-             f0 = box_p%cc(i_c, j_c, k_c, iv)
-             fx = 0.125_dp * (box_p%cc(i_c+1, j_c,   k_c,   iv) - &
+             f(0) = box_p%cc(i_c, j_c, k_c, iv)
+             f(1) = 0.125_dp * (box_p%cc(i_c+1, j_c,   k_c,   iv) - &
                   box_p%cc(i_c-1, j_c,   k_c,   iv))
-             fy = 0.125_dp * (box_p%cc(i_c,   j_c+1, k_c,   iv) - &
+             f(2) = 0.125_dp * (box_p%cc(i_c,   j_c+1, k_c,   iv) - &
                   box_p%cc(i_c,   j_c-1, k_c,   iv))
-             fz = 0.125_dp * (box_p%cc(i_c,   j_c,   k_c+1, iv) - &
+             f(3) = 0.125_dp * (box_p%cc(i_c,   j_c,   k_c+1, iv) - &
                   box_p%cc(i_c,   j_c,   k_c-1, iv))
 
-             box_c%cc(i_f,   j_f,   k_f,   ivc) = f0 - fx - &
-                  fy - fz + box_c%cc(i_f,   j_f,   k_f,   ivc)
-             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f0 + fx - &
-                  fy - fz + box_c%cc(i_f+1, j_f,   k_f,   ivc)
-             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f0 - fx + &
-                  fy - fz + box_c%cc(i_f,   j_f+1, k_f,   ivc)
-             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f0 + fx + &
-                  fy - fz + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
-             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f0 - fx - &
-                  fy + fz + box_c%cc(i_f,   j_f,   k_f+1, ivc)
-             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f0 + fx - &
-                  fy + fz + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
-             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f0 - fx + &
-                  fy + fz + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
-             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f0 + fx + &
-                  fy + fz + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
+             box_c%cc(i_f,   j_f,   k_f,   ivc) = f(0) - f(1) - &
+                  f(2) - f(3) + box_c%cc(i_f,   j_f,   k_f,   ivc)
+             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f(0) + f(1) - &
+                  f(2) - f(3) + box_c%cc(i_f+1, j_f,   k_f,   ivc)
+             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f(0) - f(1) + &
+                  f(2) - f(3) + box_c%cc(i_f,   j_f+1, k_f,   ivc)
+             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f(0) + f(1) + &
+                  f(2) - f(3) + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
+             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f(0) - f(1) - &
+                  f(2) + f(3) + box_c%cc(i_f,   j_f,   k_f+1, ivc)
+             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f(0) + f(1) - &
+                  f(2) + f(3) + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
+             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f(0) - f(1) + &
+                  f(2) + f(3) + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
+             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f(0) + f(1) + &
+                  f(2) + f(3) + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
           end do
        end do
     end do
@@ -631,9 +541,12 @@ contains
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
-    integer                       :: i, j, i_c, i_f, j_c, j_f
+    integer                       :: IJK, IJK_(c), IJK_(f)
     logical                       :: add_to
-#if NDIM == 2
+#if NDIM == 1
+    real(dp)                      :: f0, flx, fhx
+    real(dp), parameter           :: f1=1/4.0_dp, f3=3/4.0_dp
+#elif NDIM == 2
     real(dp)                      :: f0, flx, fhx, fly, fhy
     real(dp)                      :: fll, fhl, flh, fhh
     real(dp), parameter           :: f1  = 1/16.0_dp, f3=3/16.0_dp, f9=9/16.0_dp
@@ -644,7 +557,6 @@ contains
     real(dp)                      :: fllh, flhl, fhll, fhhl, fhlh, flhh
     real(dp), parameter           :: f1  = 1/64.0_dp, f3=3/64.0_dp, f9=9/64.0_dp
     real(dp), parameter           :: f27 = 27/64.0_dp
-    integer                       :: k, k_c, k_f
 #endif
 
     nc        = box_c%n_cell
@@ -654,14 +566,22 @@ contains
     ivc       = iv; if (present(iv_to)) ivc = iv_to
 
     if (.not. add_to) then
-#if NDIM == 2
-       box_c%cc(1:nc, 1:nc, ivc) = 0
-#elif NDIM == 3
-       box_c%cc(1:nc, 1:nc, 1:nc, ivc) = 0
-#endif
+       box_c%cc(DTIMES(1:nc), ivc) = 0
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    do i = 1, hnc
+       i_c = i + ix_offset(1)
+       i_f = 2 * i - 1
+
+       f0 = f3 * box_p%cc(i_c, iv)
+       flx = f1 * box_p%cc(i_c-1, iv)
+       fhx = f1 * box_p%cc(i_c+1, iv)
+
+       box_c%cc(i_f, ivc) = f0 + flx + box_c%cc(i_f, ivc)
+       box_c%cc(i_f+1, ivc) = f0 + fhx + box_c%cc(i_f+1, ivc)
+    end do
+#elif NDIM == 2
     do j = 1, hnc
        j_c = j + ix_offset(2)
        j_f = 2 * j - 1

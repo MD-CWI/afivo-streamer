@@ -34,11 +34,7 @@ contains
        vals = 0.0_dp
     else
        success = .true.
-#if NDIM == 2
-       vals = tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), ivs)
-#elif NDIM == 3
-       vals = tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), loc%ix(3), ivs)
-#endif
+       vals = tree%boxes(loc%id)%cc(DINDEX(loc%ix), ivs)
     end if
   end function af_interp0
 
@@ -73,7 +69,10 @@ contains
        ovec = 1 - dvec
 
        ! Compute weights of linear interpolation
-#if NDIM == 2
+#if NDIM == 1
+       w(1) = ovec(1)
+       w(2) = dvec(1)
+#elif NDIM == 2
        w(1, 1) = ovec(1) * ovec(2)
        w(2, 1) = dvec(1) * ovec(2)
        w(1, 2) = ovec(1) * dvec(2)
@@ -91,7 +90,9 @@ contains
 
        do i = 1, size(ivs)
           iv = ivs(i)
-#if NDIM == 2
+#if NDIM == 1
+          vals(i) = sum(w * tree%boxes(id)%cc(ix(1):ix(1)+1, iv))
+#elif NDIM == 2
           vals(i) = sum(w * tree%boxes(id)%cc(ix(1):ix(1)+1, &
                ix(2):ix(2)+1, iv))
 #elif NDIM == 3
@@ -131,15 +132,9 @@ contains
        actual_amount = amount
     end if
 
-#if NDIM == 2
-    tree%boxes(id)%cc(ix(1), ix(2), iv) = &
-         tree%boxes(id)%cc(ix(1), ix(2), iv) + &
+    tree%boxes(id)%cc(DINDEX(ix), iv) = &
+         tree%boxes(id)%cc(DINDEX(ix), iv) + &
          actual_amount
-#elif NDIM == 3
-    tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) = &
-         tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) + &
-         actual_amount
-#endif
   end subroutine af_interp0_to_grid
 
 end module m_af_interp

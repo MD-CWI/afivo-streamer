@@ -47,7 +47,9 @@ program particles_gravity
   call af_add_cc_variable(tree, "rho", ix=i_rho)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
   call af_add_cc_variable(tree, "fx", ix=i_f(1))
+#if NDIM > 1
   call af_add_cc_variable(tree, "fy", ix=i_f(2))
+#endif
 #if NDIM == 3
   call af_add_cc_variable(tree, "fz", ix=i_f(3))
 #endif
@@ -241,7 +243,10 @@ contains
     fac = -0.5_dp / box%dr
 
     do KJI_DO(1, nc)
-#if NDIM == 2
+#if NDIM == 1
+       box%cc(i, i_f(1)) = fac(1) * &
+            (box%cc(i+1, i_phi) - box%cc(i-1, i_phi))
+#elif NDIM == 2
        box%cc(i, j, i_f(1)) = fac(1) * &
             (box%cc(i+1, j, i_phi) - box%cc(i-1, j, i_phi))
        box%cc(i, j, i_f(2)) = fac(2) * &
