@@ -204,6 +204,11 @@ program streamer
         dt_gas_lim = dt_max
      end if
 
+     ! If neither electrons or the gas is evolved, make sure time is increased
+     if (.not. (evolve_electrons .or. gas_dynamics)) then
+        time = time + dt
+     end if
+
      ! dt is modified when writing output, global_dt not
      dt          = min(dt_lim, dt_gas_lim)
      global_dt   = dt_lim
