@@ -16,6 +16,7 @@ module m_af_ghostcell
   public :: af_bc_set_continuous
   public :: af_gc_interp
   public :: af_gc_prolong_copy
+  public :: af_gc_interp_lim
   public :: af_gc2_box
 
 contains
@@ -518,6 +519,119 @@ contains
     end select
 
   end subroutine af_gc_interp
+
+  !> Interpolate between fine points and coarse neighbors to fill ghost cells
+  !> near refinement boundaries. The ghost values are less than twice the coarse
+  !> values.
+  subroutine af_gc_interp_lim(boxes, id, nb, iv)
+    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)        :: id       !< Id of box
+    integer, intent(in)        :: nb       !< Ghost cell direction
+    integer, intent(in)        :: iv       !< Ghost cell variable
+    integer                    :: nc, ix, ix_c, ix_f
+    integer                    :: p_id, ix_offset(NDIM), p_nb_id
+    real(dp)                   :: c(NDIM)
+    real(dp), parameter        :: third = 1/3.0_dp
+#if NDIM > 1
+    integer                    :: IJK, IJK_(c1), IJK_(c2)
+    real(dp), parameter        :: sixth = 1/6.0_dp
+#endif
+
+    nc        = boxes(id)%n_cell
+    p_id      = boxes(id)%parent
+    p_nb_id   = boxes(p_id)%neighbors(nb)
+    ix_offset = af_get_child_offset(boxes(id), nb)
+
+    if (af_neighb_low(nb)) then
+       ix = 0
+       ix_f = 1
+       ix_c = nc
+    else
+       ix = nc+1
+       ix_f = nc
+       ix_c = 1
+    end if
+
+    select case (af_neighb_dim(nb))
+#if NDIM == 1
+    case (1)
+       c(1) = boxes(p_nb_id)%cc(ix_c, iv)
+       boxes(id)%cc(ix, iv) = (2 * c(1) + boxes(id)%cc(ix_f, iv)) * third
+       if (boxes(id)%cc(ix, iv) > 2 * c(1)) boxes(id)%cc(ix, iv) = 2 * c(1)
+#elif NDIM == 2
+    case (1)
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          c(1) = boxes(p_nb_id)%cc(ix_c, j_c1, iv)
+          c(2) = boxes(p_nb_id)%cc(ix_c, j_c2, iv)
+          boxes(id)%cc(ix, j, iv) = 0.5_dp * c(1) + sixth * c(2) + &
+               third * boxes(id)%cc(ix_f, j, iv)
+          if (boxes(id)%cc(ix, j, iv) > 2 * c(1)) boxes(id)%cc(ix, j, iv) = 2 * c(1)
+       end do
+    case (2)
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+          c(1) = boxes(p_nb_id)%cc(i_c1, ix_c, iv)
+          c(2) = boxes(p_nb_id)%cc(i_c2, ix_c, iv)
+          boxes(id)%cc(i, ix, iv) = 0.5_dp * c(1) + sixth * c(2) + &
+               third * boxes(id)%cc(i, ix_f, iv)
+          if (boxes(id)%cc(i, ix, iv) > 2 * c(1)) boxes(id)%cc(i, ix, iv) = 2 * c(1)
+       end do
+#elif NDIM==3
+    case (1)
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+             c(1) = boxes(p_nb_id)%cc(ix_c, j_c1, k_c1, iv)
+             c(2) = boxes(p_nb_id)%cc(ix_c, j_c2, k_c1, iv)
+             c(3) = boxes(p_nb_id)%cc(ix_c, j_c1, k_c2, iv)
+             boxes(id)%cc(ix, j, k, iv) = third * c(1) + sixth * c(2) + &
+                  sixth * c(3) + third * boxes(id)%cc(ix_f, j, k, iv)
+             if (boxes(id)%cc(ix, j, k, iv) > 2 * c(1)) &
+                  boxes(id)%cc(ix, j, k, iv) = 2 * c(1)
+          end do
+       end do
+    case (2)
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)          ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+             c(1) = boxes(p_nb_id)%cc(i_c1, ix_c, k_c1, iv)
+             c(2) = boxes(p_nb_id)%cc(i_c2, ix_c, k_c1, iv)
+             c(3) = boxes(p_nb_id)%cc(i_c1, ix_c, k_c2, iv)
+             boxes(id)%cc(i, ix, k, iv) = third * c(1) + sixth * c(2) + &
+                  sixth * c(3) + third * boxes(id)%cc(i, ix_f, k, iv)
+             if (boxes(id)%cc(i, ix, k, iv) > 2 * c(1)) &
+                  boxes(id)%cc(i, ix, k, iv) = 2 * c(1)
+          end do
+       end do
+    case (3)
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)          ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)          ! even: +1, odd: -1
+             c(1) = boxes(p_nb_id)%cc(i_c1, j_c1, ix_c, iv)
+             c(2) = boxes(p_nb_id)%cc(i_c1, j_c2, ix_c, iv)
+             c(3) = boxes(p_nb_id)%cc(i_c2, j_c1, ix_c, iv)
+             boxes(id)%cc(i, j, ix, iv) = third * c(1) + sixth * c(2) + &
+                  sixth * c(3) + third * boxes(id)%cc(i, j, ix_f, iv)
+             if (boxes(id)%cc(i, j, ix, iv) > 2 * c(1)) &
+                  boxes(id)%cc(i, j, ix, iv) = 2 * c(1)
+          end do
+       end do
+#endif
+    end select
+
+  end subroutine af_gc_interp_lim
 
   !> This fills ghost cells near physical boundaries using Neumann zero
   subroutine af_bc_neumann_zero(box, nb, iv, coords, bc_val, bc_type)
