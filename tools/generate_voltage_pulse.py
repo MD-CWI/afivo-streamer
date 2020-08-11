@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 
 
 #Electric field amplitude (Volts)
-field_amplitude = -10.0e+5 
+field_amplitude = 0.25E+07 
 
 #Pulse start time
 tStart = 0.0e-9
 
 #Pulse duration (seconds)
-tPulse = 30.0e-9
+tPulse = 10.0e-9
 
 
 #Rise time (seconds)
@@ -43,8 +43,8 @@ for i in range(nPoints):
   else:
     eField[i] = 0.0
     
-    
-np.savetxt('electric_field.txt', np.array([eField, time]).T)
+head = '{0:^12s}\n{1:^14s}'.format('field_vs_time', '---------------')    
+np.savetxt('electric_field.txt', np.array([time, eField]).T, header=head, footer='-----------------------', comments='')
     
 plt.plot(time, eField)
 plt.show()
