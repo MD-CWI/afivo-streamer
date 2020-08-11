@@ -16,7 +16,9 @@ program implicit_diffusion
 
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   real(dp), parameter :: diffusion_coeff = 1.0_dp
-#if NDIM == 2
+#if NDIM == 1
+  real(dp), parameter :: solution_modes(NDIM) = [1]
+#elif NDIM == 2
   real(dp), parameter :: solution_modes(NDIM) = [1, 1]
 #elif NDIM == 3
   real(dp), parameter :: solution_modes(NDIM) = [1, 1, 0]

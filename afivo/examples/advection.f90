@@ -13,7 +13,7 @@ program advection
   integer             :: i_phi_old
   integer             :: i_err
   integer             :: i_flux
-  integer, parameter  :: sol_type   = 1
+  integer, parameter  :: sol_type   = 2
   ! Set coord_type to af_cyl to test conservation in cyl. coordinates
   integer, parameter  :: coord_type = af_xyz
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
@@ -55,9 +55,8 @@ program advection
   dt_adapt   = 0.01_dp
   dt_output  = 0.5_dp
   end_time   = 5.0_dp
-  velocity(:) = 0.0_dp
+  velocity(:) = -0.5_dp
   velocity(1) = 1.0_dp
-  velocity(2) = -1.0_dp
 
   ! Set up the initial conditions
   call system_clock(t_start,count_rate)
@@ -189,7 +188,10 @@ contains
     nc   = box%n_cell
 
     do KJI_DO(1,nc)
-#if NDIM == 2
+#if NDIM == 1
+       diff = abs(box%dr(1) * (box%cc(i+1, i_phi) + &
+            box%cc(i-1, i_phi) - 2 * box%cc(i, i_phi)))
+#elif NDIM == 2
        diff = abs(box%dr(1) * (box%cc(i+1, j, i_phi) + &
             box%cc(i-1, j, i_phi) - 2 * box%cc(i, j, i_phi)) + &
             box%dr(2) * (box%cc(i, j+1, i_phi) + &
@@ -251,7 +253,11 @@ contains
 
     select case (sol_type)
     case (1)
+#if NDIM > 1
        sol = sin(0.5_dp * rr_t(1))**8 * cos(0.5_dp * rr_t(2))**8
+#else
+       sol = sin(0.5_dp * rr_t(1))**8
+#endif
     case (2)
        rr_t = modulo(rr_t, domain_len) / domain_len
        if (norm2(rr_t - 0.5_dp) < 0.1_dp) then
@@ -278,7 +284,11 @@ contains
 
     call af_gc2_box(tree, id, [i_phi], cc)
 
-#if NDIM == 2
+#if NDIM == 1
+    v(:, 1) = velocity(1)
+    call flux_koren_1d(cc(DTIMES(:), 1), v, nc, 2)
+    tree%boxes(id)%fc(:, :, i_phi) = v
+#elif NDIM == 2
     v(:, :, 1) = velocity(1)
     v(:, :, 2) = velocity(2)
 
@@ -308,7 +318,13 @@ contains
     nc     = box%n_cell
     inv_dr = 1/box%dr
 
-#if NDIM == 2
+#if NDIM == 1
+    forall (i = 1:nc)
+       box%cc(i, i_phi) = box%cc(i, i_phi) + dt(1) * ( &
+            inv_dr(1) * &
+            (box%fc(i, 1, i_phi) - box%fc(i+1, 1, i_phi)))
+    end forall
+#elif NDIM == 2
     if (coord_type == af_cyl) then
        call af_cyl_flux_factors(box, rfac)
        do j = 1, nc

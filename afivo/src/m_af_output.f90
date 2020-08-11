@@ -15,12 +15,8 @@ module m_af_output
        import
        type(box_t), intent(in) :: box
        integer, intent(in)       :: n_var
-#if NDIM == 2
-       real(dp)                  :: new_vars(0:box%n_cell+1, 0:box%n_cell+1, n_var)
-#elif NDIM == 3
-       real(dp)                  :: new_vars(0:box%n_cell+1, 0:box%n_cell+1, &
-            0:box%n_cell+1, n_var)
-#endif
+       real(dp)                  :: &
+            new_vars(DTIMES(0:box%n_cell+1), n_var)
      end subroutine subr_add_vars
 
      ! Subroutine that reads/writes unformatted data
@@ -34,9 +30,11 @@ module m_af_output
   public :: af_read_tree
   public :: af_tree_copy_variable
   public :: af_write_vtk
+#if NDIM > 1
+  public :: af_write_plane
+#endif
   public :: af_write_silo
   public :: af_write_line
-  public :: af_write_plane
 
 contains
 
@@ -280,27 +278,13 @@ contains
        do n = 1, size(tree_to%lvls(lvl)%leaves)
           id = tree_to%lvls(lvl)%leaves(n)
           nc = tree_to%boxes(id)%n_cell
-#if NDIM == 2
-          do j = 1, nc
-             do i = 1, nc
-                rr = af_r_cc(tree_to%boxes(id), [i, j])
-                tree_to%boxes(id)%cc(i, j, ivs_to) = &
-                     af_interp1(tree_from, rr, [ivs_from], success)
-                if (.not. success) error stop "af_tree_copy_variable: interpolation error"
-             end do
-          end do
-#elif NDIM == 3
-          do k = 1, nc
-             do j = 1, nc
-                do i = 1, nc
-                   rr = af_r_cc(tree_to%boxes(id), [i, j, k])
-                   tree_to%boxes(id)%cc(i, j, k, ivs_to) = &
-                        af_interp1(tree_from, rr, [ivs_from], success)
-                   if (.not. success) error stop "af_tree_copy_variable: interpolation error"
-                end do
-             end do
-          end do
-#endif
+
+          do KJI_DO(1, nc)
+             rr = af_r_cc(tree_to%boxes(id), [IJK])
+             tree_to%boxes(id)%cc(IJK, ivs_to) = &
+                  af_interp1(tree_from, rr, [ivs_from], success)
+             if (.not. success) error stop "af_tree_copy_variable: interpolation error"
+          end do; CLOSE_DO
        end do
        !$omp end do
     end do
@@ -344,7 +328,9 @@ contains
 
     ! Write header
     open(my_unit, file=trim(fname), action="write")
-#if NDIM == 2
+#if NDIM == 1
+    write(my_unit, '(A)', advance="no") "# x"
+#elif NDIM == 2
     write(my_unit, '(A)', advance="no") "# x y"
 #elif NDIM == 3
     write(my_unit, '(A)', advance="no") "# x y z"
@@ -362,6 +348,7 @@ contains
     close(my_unit)
   end subroutine af_write_line
 
+#if NDIM > 1
   !> Write data in a plane (2D) to a VTK ASCII file. In 3D, r_min and r_max
   !> should have one identical coordinate (i.e., they differ in two
   !> coordinates).
@@ -453,6 +440,7 @@ contains
     end do
     close(my_unit)
   end subroutine af_write_plane
+#endif
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
   !> leaves of the tree are used
@@ -470,7 +458,7 @@ contains
     character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
 
     integer                       :: lvl, bc, bn, n, n_cells, n_nodes
-    integer                       :: ig, i, j, id, n_ix, c_ix, n_grids
+    integer                       :: ig, IJK, id, n_ix, c_ix, n_grids
     integer                       :: cell_ix, node_ix, n_cycle_val
     integer                       :: n_cc, n_add
     integer, parameter            :: n_ch = af_num_children
@@ -482,14 +470,12 @@ contains
     type(vtk_t)                   :: vtkf
     character(len=400)            :: fname
     character(len=100), allocatable :: var_names(:)
-#if NDIM == 2
-    real(dp), allocatable :: cc(:, :, :)
-#elif NDIM == 3
-    real(dp), allocatable :: cc(:, :, :, :)
-    integer                       :: k, bn2
+    real(dp), allocatable         :: cc(DTIMES(:), :)
+#if NDIM == 3
+    integer                       :: bn2
 #endif
 
-    if (.not. tree%ready) stop "Tree not ready"
+    if (.not. tree%ready) error stop "Tree not ready"
     time_val = 0.0_dp; if (present(time)) time_val = time
     n_cycle_val = 0; if (present(n_cycle)) n_cycle_val = n_cycle
     n_add = 0; if (present(add_names)) n_add = size(add_names)
@@ -520,11 +506,7 @@ contains
     nodes_per_box = bn**NDIM
     cells_per_box = bc**NDIM
 
-#if NDIM == 2
-    allocate(cc(0:bc+1, 0:bc+1, n_cc + n_add))
-#elif NDIM == 3
-    allocate(cc(0:bc+1, 0:bc+1, 0:bc+1, n_cc + n_add))
-#endif
+    allocate(cc(DTIMES(0:bc+1), n_cc + n_add))
 
     n_grids = 0
     do lvl = 1, tree%highest_lvl
@@ -539,7 +521,9 @@ contains
     allocate(cell_types(cells_per_box * n_grids))
     allocate(connects(n_ch * cells_per_box * n_grids))
 
-#if NDIM == 2
+#if NDIM == 1
+    cell_types = 3  ! VTK line type
+#elif NDIM == 2
     cell_types = 8  ! VTK pixel type
 #elif NDIM       == 3
     bn2        = bn**2
@@ -554,7 +538,29 @@ contains
           cell_ix = (ig-1) * cells_per_box
           node_ix = (ig-1) * nodes_per_box
 
-#if NDIM == 2
+#if NDIM == 1
+          cc(:, 1:n_cc) = tree%boxes(id)%cc(:, icc_val)
+
+          if (present(add_vars)) then
+             call add_vars(tree%boxes(id), &
+                  cc(:, n_cc+1:n_cc+n_add), n_add)
+          end if
+
+          do i = 1, bn
+             n_ix = node_ix + i
+             coords(n_ix) = tree%boxes(id)%r_min(1) + &
+                  (i-1) * tree%boxes(id)%dr(1)
+          end do
+
+          do i = 1, bc
+             ! In vtk, indexing starts at 0, so subtract 1
+             n_ix                      = node_ix + i - 1
+             c_ix                      = cell_ix + i
+             cc_vars(c_ix, :)          = cc(i, :)
+             offsets(c_ix)             = af_num_children * c_ix
+             connects(n_ch*(c_ix-1)+1:n_ch*c_ix) = [n_ix, n_ix+1]
+          end do
+#elif NDIM == 2
           cc(:, :, 1:n_cc) = tree%boxes(id)%cc(:, :, icc_val)
 
           if (present(add_vars)) then
@@ -637,8 +643,92 @@ contains
     print *, "af_write_vtk: written " // trim(fname)
   end subroutine af_write_vtk
 
+#if NDIM == 1
+  subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, dir, &
+       add_vars, add_names)
+    use m_write_silo
+    use m_mrgrnk
+
+    type(af_t), intent(in)                 :: tree         !< Tree to write out
+    character(len=*)                       :: filename     !< Filename for the vtk file
+    integer, intent(in), optional          :: n_cycle      !< Cycle-number for vtk file (counter)
+    real(dp), intent(in), optional         :: time         !< Time for output file
+    integer, intent(in), optional          :: ixs_cc(:)    !< Oncly include these cell variables
+    character(len=*), optional, intent(in) :: dir          !< Directory to place files in
+    procedure(subr_add_vars), optional     :: add_vars     !< Optional routine to add extra variables
+    character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
+    integer                                :: n, i, id, ix, lvl, n_boxes
+    integer                                :: dbix, n_cc, n_leaves, nc
+    integer, allocatable                   :: icc_val(:), id_leaves(:)
+    integer, allocatable                   :: id_sorted_ix(:)
+    real(dp), allocatable                  :: xmin_leaves(:)
+    real(dp), allocatable                  :: xdata(:), ydata(:, :)
+    character(len=af_nlen)                 :: yname
+    character(len=400)                     :: fname
+
+    if (present(ixs_cc)) then
+       if (maxval(ixs_cc) > tree%n_var_cell .or. &
+            minval(ixs_cc) < 1) stop "af_write_silo: wrong indices given (ixs_cc)"
+       allocate(icc_val(size(ixs_cc)))
+       icc_val = ixs_cc
+    else
+       call get_output_vars(tree, icc_val)
+    end if
+
+    if (present(add_vars) .or. present(add_names)) &
+         error stop "add_vars / add_names not implemented in 1D"
+
+    n_cc     = size(icc_val)
+    n_leaves = af_num_leaves_used(tree)
+    nc       = tree%n_cell
+
+    allocate(ydata(n_leaves * nc, n_cc))
+    allocate(xdata(n_leaves * nc))
+    allocate(id_leaves(n_leaves))
+    allocate(xmin_leaves(n_leaves))
+    allocate(id_sorted_ix(n_leaves))
+
+    ! Store ids of all leaves
+    n = 0
+    do lvl = 1, tree%highest_lvl
+       n_boxes = size(tree%lvls(lvl)%leaves)
+       id_leaves(n+1:n+n_boxes) = tree%lvls(lvl)%leaves
+       n = n + n_boxes
+    end do
+
+    ! Get minimum coordinate of each leave
+    xmin_leaves = tree%boxes(id_leaves)%r_min(1)
+
+    ! Sort by xmin
+    call mrgrnk(xmin_leaves, id_sorted_ix)
+
+    do n = 1, n_leaves
+       ix = (n-1) * nc
+       id = id_leaves(id_sorted_ix(n))
+       ydata(ix+1:ix+nc, :) = tree%boxes(id)%cc(1:nc, icc_val)
+       do i = 1, nc
+          xdata(ix+i:ix+i) = af_r_cc(tree%boxes(id), [i])
+       end do
+    end do
+
+    call af_prepend_directory(trim(filename) // ".silo", dir, fname)
+    call SILO_create_file(trim(fname), dbix)
+    call SILO_set_time_varying(dbix)
+
+    do n = 1, n_cc
+       yname = tree%cc_names(icc_val(n))
+       call SILO_add_curve(dbix, yname, xdata, ydata(:, n), "x", yname)
+    end do
+
+    call SILO_close_file(dbix)
+    print *, "af_write_silo: written " // trim(fname)
+  end subroutine af_write_silo
+#else
   !> Write the cell centered data of a tree to a Silo file. Only the
   !> leaves of the tree are used
+  !>
+  !> Note: a 1D version is present below, and seems to work, but its output
+  !> cannot be visualized by Visit. That's why we use curve output for 1D cases.
   subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, dir, &
        add_vars, add_names)
     use m_write_silo
@@ -659,7 +749,7 @@ contains
     character(len=400)              :: fname
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
     integer                         :: n_cc, n_add, dbix
-    integer                         :: nx, ny, nx_prev, ny_prev, ix, iy
+    integer                         :: nx, nx_prev, ix
     integer                         :: n_cycle_val
     integer                         :: lo(NDIM), hi(NDIM), vlo(NDIM), vhi(NDIM)
     integer                         :: blo(NDIM), bhi(NDIM)
@@ -667,12 +757,12 @@ contains
     integer, allocatable            :: ids(:), nb_ids(:), icc_val(:)
     logical, allocatable            :: box_done(:)
     real(dp)                        :: dr(NDIM), r_min(NDIM), time_val
-#if NDIM == 2
-    integer, allocatable            :: box_list(:,:), new_box_list(:, :)
-    real(dp), allocatable           :: var_data(:,:,:), cc(:, :, :)
-#elif NDIM == 3
-    integer, allocatable            :: box_list(:,:,:), new_box_list(:,:,:)
-    real(dp), allocatable           :: var_data(:,:,:,:), cc(:, :, :, :)
+    integer, allocatable            :: box_list(DTIMES(:)), new_box_list(DTIMES(:))
+    real(dp), allocatable           :: var_data(DTIMES(:),:), cc(DTIMES(:), :)
+#if NDIM > 1
+    integer                         :: ny, ny_prev, iy
+#endif
+#if NDIM > 2
     integer                         :: nz, nz_prev, iz
 #endif
 
@@ -714,11 +804,7 @@ contains
     allocate(box_done(tree%highest_id))
     box_done = .false.
 
-#if NDIM == 2
-    allocate(cc(0:nc+1, 0:nc+1, n_cc + n_add))
-#elif NDIM == 3
-    allocate(cc(0:nc+1, 0:nc+1, 0:nc+1, n_cc + n_add))
-#endif
+    allocate(cc(DTIMES(0:nc+1), n_cc + n_add))
 
     call af_prepend_directory(trim(filename) // ".silo", dir, fname)
     call SILO_create_file(trim(fname), dbix)
@@ -735,7 +821,113 @@ contains
 
           ! Find largest rectangular box including id and other leaves that
           ! haven't been written yet
-#if NDIM == 2
+#if NDIM == 1
+          allocate(box_list(1))
+          box_list(1) = id
+          box_done(id) = .true.
+          nx = 1
+
+          do
+             nx_prev = nx
+
+             ! Check whether we can extend to the -x direction
+             ids = box_list(1:1)
+             nb_ids = tree%boxes(ids)%neighbors(af_neighb_lowx)
+             if (all(nb_ids > af_no_box)) then
+                if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) < tree%boxes(ids(1))%ix(1) .and. &
+                     .not. any(af_has_children(tree%boxes(nb_ids)))) then
+                   nx = nx + 1
+                   allocate(new_box_list(nx))
+                   new_box_list(1:1) = nb_ids
+                   new_box_list(2:) = box_list
+                   box_list = new_box_list
+                   box_done(nb_ids) = .true.
+                   deallocate(new_box_list)
+                end if
+             end if
+
+             ! Check whether we can extend to the +x direction
+             ids = box_list(nx:nx)
+             nb_ids = tree%boxes(ids)%neighbors(af_neighb_highx)
+             if (all(nb_ids > af_no_box)) then
+                if (.not. any(box_done(nb_ids)) .and. &
+                     tree%boxes(nb_ids(1))%ix(1) > tree%boxes(ids(1))%ix(1) .and. &
+                     .not. any(af_has_children(tree%boxes(nb_ids)))) then
+                   nx = nx + 1
+                   allocate(new_box_list(nx))
+                   new_box_list(nx:nx) = nb_ids
+                   new_box_list(1:nx-1) = box_list
+                   box_list = new_box_list
+                   box_done(nb_ids) = .true.
+                   deallocate(new_box_list)
+                end if
+             end if
+
+             if (nx == nx_prev) exit
+          end do
+
+          ! Check for (periodic) boundaries (this could give problems for
+          ! complex geometries, e.g. a triangle block)
+          id     = box_list(1)
+          lo_bnd = af_is_phys_boundary(tree%boxes, id, af_low_neighbs)
+
+          id = box_list(nx)
+          hi_bnd = af_is_phys_boundary(tree%boxes, id, af_high_neighbs)
+
+          lo(:) = 1
+          where (.not. lo_bnd) lo = lo - 1
+
+          hi = [nx] * nc
+          where (.not. hi_bnd) hi = hi + 1
+
+          ! Include ghost cells around internal boundaries
+          allocate(var_data(lo(1):hi(1), n_cc+n_add))
+
+          do ix = 1, nx
+             id = box_list(ix)
+
+             cc(:, 1:n_cc) = tree%boxes(id)%cc(:, icc_val)
+             if (present(add_vars)) then
+                call add_vars(tree%boxes(id), &
+                     cc(:, n_cc+1:n_cc+n_add), n_add)
+             end if
+
+             ! Include ghost cells on internal block boundaries
+             blo = 1
+             where ([ix] == 1 .and. .not. lo_bnd) blo = 0
+
+             bhi = nc
+             where ([ix] == [nx] .and. .not. hi_bnd) bhi = nc+1
+
+             vlo = blo + ([ix]-1) * nc
+             vhi = bhi + ([ix]-1) * nc
+
+             var_data(vlo(1):vhi(1), :) = cc(blo(1):bhi(1), :)
+          end do
+
+          id = box_list(1)
+          dr = tree%boxes(id)%dr
+          r_min = tree%boxes(id)%r_min - (1 - lo) * dr
+
+          write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
+          call SILO_add_grid(dbix, grid_list(i_grid), 1, &
+               hi - lo + 2, r_min, dr, 1-lo, hi - [nx] * nc)
+          write(grid_list_block(i_grid), "(A,I0)") meshdir // '/' // block_prefix &
+               // grid_name, i_grid
+          call SILO_add_grid(dbix, grid_list_block(i_grid), 1, [nx+1], &
+               tree%boxes(id)%r_min, nc*dr, [0], [0])
+
+          do iv = 1, n_cc+n_add
+             write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
+                  trim(var_names(iv)) // "_", i_grid
+             call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
+                  pack(var_data(:, iv), .true.), hi-lo+1)
+          end do
+
+          deallocate(var_data)
+          deallocate(box_list)
+#elif NDIM == 2
           allocate(box_list(1,1))
           box_list(1,1) = id
           box_done(id) = .true.
@@ -1079,6 +1271,7 @@ contains
     call SILO_close_file(dbix)
     print *, "af_write_silo: written " // trim(fname)
   end subroutine af_write_silo
+#endif
 
   subroutine get_output_vars(tree, ix_out)
     type(af_t), intent(in)              :: tree
