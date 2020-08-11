@@ -48,7 +48,7 @@ either in the `afivo-streamer` folder, or in a specific program folder with a `M
     `export FC=/usr/bin/gfortran`
     
 ### Making videos using VisIt
-* The following link gives an overview on creating movies in VisIt:[Making movies in VisIt](https://www.visitusers.org/index.php?title=Making_Movies).
+* The following link gives an overview on creating movies in VisIt: [Making movies in VisIt](https://www.visitusers.org/index.php?title=Making_Movies).
 
 #### Issues encountered and the solutions:
 
