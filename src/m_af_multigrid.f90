@@ -1173,23 +1173,24 @@ contains
              stencil(1, lo(1):hi(1)) = &
                   stencil(1, lo(1):hi(1)) + &
                   stencil(nb+1, lo(1):hi(1))
-             bc_to_rhs(:, nb) = stencil(nb+1, lo(1):hi(1)) * box%dr(nb_dim)
+             bc_to_rhs(:, nb) = -stencil(nb+1, lo(1):hi(1)) * &
+                  box%dr(nb_dim) * af_neighb_high_pm(nb)
              stencil(nb+1, lo(1):hi(1)) = 0.0_dp
 #elif NDIM == 2
              stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
              bc_to_rhs(:, nb) = &
-                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * &
-                  box%dr(nb_dim), .true.)
+                  -pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * &
+                  box%dr(nb_dim), .true.) * af_neighb_high_pm(nb)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
 #elif NDIM == 3
              stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
                   stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) + &
                   stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
              bc_to_rhs(:, nb) = &
-                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * &
-                  box%dr(nb_dim), .true.)
+                  -pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * &
+                  box%dr(nb_dim), .true.) * af_neighb_high_pm(nb)
              stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
 #endif
           case default

@@ -142,7 +142,7 @@ contains
        bc_type = af_bc_dirichlet
        bc_val = 0.0_dp
     case (af_neighb_highx)             ! Higher-x direction
-       bc_type = af_bc_dirichlet
+       bc_type = af_bc_neumann
        bc_val = 1.0_dp
     case default
        bc_type = af_bc_neumann
