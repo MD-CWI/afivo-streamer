@@ -1066,20 +1066,9 @@ contains
           ix1 = ref_buffer
        end where
 
-#if NDIM == 1
-       if (any(cell_flags(ix0(1):ix1(1)) == af_do_ref)) then
+       if (any(cell_flags(DSLICE(ix0, ix1)) == af_do_ref)) then
           ref_flags(nb_id) = af_do_ref
        end if
-#elif NDIM == 2
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       end if
-#elif NDIM == 3
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
-            ix0(3):ix1(3)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       end if
-#endif
     end do; CLOSE_DO
 
   end subroutine cell_to_ref_flags

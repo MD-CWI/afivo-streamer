@@ -1145,53 +1145,20 @@ contains
              ! Dirichlet value at cell face, so compute gradient over h/2
              ! E.g. 1 -2 1 becomes 0 -3 1 for a 1D Laplacian
              ! The boundary condition is incorporated in the right-hand side
-#if NDIM == 1
-             stencil(1, lo(1):hi(1)) = &
-                  stencil(1, lo(1):hi(1)) - &
-                  stencil(nb+1, lo(1):hi(1))
-             bc_to_rhs(:, nb) = -2 * stencil(nb+1, lo(1):hi(1))
-             stencil(nb+1, lo(1):hi(1)) = 0.0_dp
-#elif NDIM == 2
-             stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2)) - &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
-             bc_to_rhs(:, nb) = &
-                  pack(-2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2)), .true.)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
-#elif NDIM == 3
-             stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) - &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
-             bc_to_rhs(:, nb) = &
-                  pack(-2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), .true.)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
-#endif
+             stencil(1, DSLICE(lo, hi)) = &
+                  stencil(1, DSLICE(lo, hi)) - &
+                  stencil(nb+1, DSLICE(lo, hi))
+             bc_to_rhs(:, nb) = pack(-2 * stencil(nb+1, DSLICE(lo, hi)), .true.)
+             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
           case (af_bc_neumann)
              ! E.g. 1 -2 1 becomes 0 -1 1 for a 1D Laplacian
-#if NDIM == 1
-             stencil(1, lo(1):hi(1)) = &
-                  stencil(1, lo(1):hi(1)) + &
-                  stencil(nb+1, lo(1):hi(1))
-             bc_to_rhs(:, nb) = -stencil(nb+1, lo(1):hi(1)) * &
-                  box%dr(nb_dim) * af_neighb_high_pm(nb)
-             stencil(nb+1, lo(1):hi(1)) = 0.0_dp
-#elif NDIM == 2
-             stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2)) + &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
+             stencil(1, DSLICE(lo, hi)) = &
+                  stencil(1, DSLICE(lo, hi)) + &
+                  stencil(nb+1, DSLICE(lo, hi))
              bc_to_rhs(:, nb) = &
-                  -pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * &
+                  -pack(stencil(nb+1, DSLICE(lo, hi)) * &
                   box%dr(nb_dim), .true.) * af_neighb_high_pm(nb)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
-#elif NDIM == 3
-             stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) + &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
-             bc_to_rhs(:, nb) = &
-                  -pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * &
-                  box%dr(nb_dim), .true.) * af_neighb_high_pm(nb)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
-#endif
+             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
           case default
              error stop "mg_box_lpl_stencil: unsupported boundary condition"
           end select

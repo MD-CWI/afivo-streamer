@@ -312,19 +312,9 @@ contains
              n1 = 0
           end where
 
-#if NDIM == 1
-          boxes(id)%cc(i0(1):i1(1), iv) = &
-               boxes(id)%cc(i0(1):i1(1), iv) + &
-               boxes(id)%cc(n0(1):n1(1), iv)
-#elif NDIM == 2
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) + &
-               boxes(id)%cc(n0(1):n1(1), n0(2):n1(2), iv)
-#elif NDIM == 3
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) + &
-               boxes(id)%cc(n0(1):n1(1), n0(2):n1(2), n0(3):n1(3), iv)
-#endif
+          boxes(id)%cc(DSLICE(i0, i1), iv) = &
+               boxes(id)%cc(DSLICE(i0, i1), iv) + &
+               boxes(id)%cc(DSLICE(n0, n1), iv)
        else
           i0 = 1
           i1 = nc
@@ -340,19 +330,9 @@ contains
              n1 = nc+1
           end where
 
-#if NDIM == 1
-          boxes(id)%cc(i0(1):i1(1), iv) = &
-               boxes(id)%cc(i0(1):i1(1), iv) + &
-               boxes(nb_id)%cc(n0(1):n1(1), iv)
-#elif NDIM == 2
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) + &
-               boxes(nb_id)%cc(n0(1):n1(1), n0(2):n1(2), iv)
-#elif NDIM == 3
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) + &
-               boxes(nb_id)%cc(n0(1):n1(1), n0(2):n1(2), n0(3):n1(3), iv)
-#endif
+          boxes(id)%cc(DSLICE(i0, i1), iv) = &
+               boxes(id)%cc(DSLICE(i0, i1), iv) + &
+               boxes(nb_id)%cc(DSLICE(n0, n1), iv)
        end if
     end do; CLOSE_DO
   end subroutine add_from_ghostcells
