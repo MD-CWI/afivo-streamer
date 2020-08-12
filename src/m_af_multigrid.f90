@@ -261,7 +261,6 @@ contains
 #if NDIM == 1
     real(dp)                     :: tmp
     real(dp)                     :: gc
-    real(dp), parameter          :: third = 1/3.0_dp
 #elif NDIM == 2
     integer                      :: dj
     real(dp)                     :: tmp(0:boxes(id)%n_cell/2+1)
@@ -354,7 +353,9 @@ contains
     case (1)
        i = ix
        di = dix
-       boxes(id)%cc(i-di, iv) = (2 * gc + boxes(id)%cc(i, iv)) * third
+       boxes(id)%cc(i-di, iv) = 0.5_dp * gc &
+            + 0.75_dp * boxes(id)%cc(i, iv) &
+            - 0.25_dp * boxes(id)%cc(i+di, iv)
 #elif NDIM == 2
     case (1)
        i = ix
@@ -431,9 +432,6 @@ contains
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
     integer                     :: nc, ix, dix, IJK, di
-#if NDIM == 1
-    real(dp), parameter         :: third = 1/3.0_dp
-#endif
 #if NDIM > 1
     integer                     :: dj
 #endif
@@ -458,8 +456,9 @@ contains
     case (1)
        i = ix
        di = dix
-       boxes(id)%cc(i-di, iv) = (2 * boxes(id)%cc(i-di, iv) + &
-             boxes(id)%cc(i, iv)) * third
+       boxes(id)%cc(i-di, iv) = 0.5_dp * boxes(id)%cc(i-di, iv) &
+            + 0.75_dp * boxes(id)%cc(i, iv) &
+            - 0.25_dp * boxes(id)%cc(i+di, iv)
 #elif NDIM == 2
     case (1)
        i = ix
