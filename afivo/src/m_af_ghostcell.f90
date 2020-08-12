@@ -686,16 +686,8 @@ contains
     nlo = lo - dnb * box%n_cell
     nhi = hi - dnb * box%n_cell
 
-#if NDIM == 1
-    box%cc(lo(1):hi(1), iv) = &
-         box_nb%cc(nlo(1):nhi(1), iv)
-#elif NDIM == 2
-    box%cc(lo(1):hi(1), lo(2):hi(2), iv) = &
-         box_nb%cc(nlo(1):nhi(1), nlo(2):nhi(2), iv)
-#elif NDIM == 3
-    box%cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3), iv) = &
-         box_nb%cc(nlo(1):nhi(1), nlo(2):nhi(2), nlo(3):nhi(3), iv)
-#endif
+    box%cc(DSLICE(lo, hi), iv) = &
+         box_nb%cc(DSLICE(nlo, nhi), iv)
   end subroutine copy_from_nb
 
   !> Get array of cell-centered variables with multiple ghost cells, excluding corners
@@ -735,17 +727,9 @@ contains
           nlo = lo - dnb * tree%n_cell
           nhi = hi - dnb * tree%n_cell
 
-#if NDIM == 1
-          cc(lo(1):hi(1), :) = &
-               tree%boxes(nb_id)%cc(nlo(1):nhi(1), ivs)
-#elif NDIM == 2
-          cc(lo(1):hi(1), lo(2):hi(2), :) = &
-               tree%boxes(nb_id)%cc(nlo(1):nhi(1), nlo(2):nhi(2), ivs)
-#elif NDIM == 3
-          cc(lo(1):hi(1), lo(2):hi(2), lo(3):hi(3), :) = &
-               tree%boxes(nb_id)%cc(nlo(1):nhi(1), nlo(2):nhi(2), &
-               nlo(3):nhi(3), ivs)
-#endif
+          cc(DSLICE(lo, hi), :) = &
+               tree%boxes(nb_id)%cc(DSLICE(nlo, nhi), ivs)
+
        else if (nb_id == af_no_box) then
           ! Refinement boundary
           do i = 1, size(ivs)

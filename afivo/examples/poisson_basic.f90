@@ -9,7 +9,7 @@ program poisson_basic
 
   implicit none
 
-  integer, parameter :: box_size          = 64
+  integer, parameter :: box_size          = 16
   integer, parameter :: n_iterations      = 10
   integer            :: domain_size(NDIM)
   real(dp)           :: domain_len(NDIM)
@@ -156,7 +156,7 @@ contains
        ! which is related to the fourth derivative of the solution.
        drhs = dr2 * box%cc(IJK, i_rhs)
 
-       if (abs(drhs) > 1e-3_dp .and. box%lvl < 5) then
+       if (abs(drhs) > 1e-3_dp .and. box%lvl < 7 - NDIM) then
           cell_flags(IJK) = af_do_ref
        else
           cell_flags(IJK) = af_keep_ref

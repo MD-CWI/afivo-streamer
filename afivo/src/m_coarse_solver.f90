@@ -256,19 +256,10 @@ contains
 
              ! Use the stored arrays mg%csolver%bc_to_rhs to convert the value
              ! at the boundary to the rhs
-#if NDIM == 1
-             tmp(ilo(1):ihi(1)) = tmp(ilo(1):ihi(1)) + &
-                  reshape(mg%csolver%bc_to_rhs(:, nb, n) * bc_val, [ihi - ilo + 1])
-#elif NDIM == 2
-             tmp(ilo(1):ihi(1), ilo(2):ihi(2)) = &
-                  tmp(ilo(1):ihi(1), ilo(2):ihi(2)) + &
-                  reshape(mg%csolver%bc_to_rhs(:, nb, n) * bc_val, [ihi - ilo + 1])
-#elif NDIM == 3
-             tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) = &
-                  tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) + &
+             tmp(DSLICE(ilo, ihi)) = &
+                  tmp(DSLICE(ilo, ihi)) + &
                   reshape(mg%csolver%bc_to_rhs(:, nb, n) * pack(bc_val, .true.), &
                   [ihi - ilo + 1])
-#endif
           end if
        end do
 
