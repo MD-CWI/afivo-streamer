@@ -1,4 +1,4 @@
-# This is a template to build afivo-streamer libraries in 2D/3D
+# This is a template to build afivo-streamer libraries in 1D/2D/3D
 
 ifndef NDIM
 $(error NDIM is not set)

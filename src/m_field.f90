@@ -56,11 +56,7 @@ module m_field
   real(dp) :: field_stability_threshold = 3e6_dp
 
   real(dp) :: field_point_charge = 0.0_dp
-#if NDIM == 2
-  real(dp) :: field_point_r0(NDIM) = [0.0_dp, -1.0_dp]
-#elif NDIM == 3
-  real(dp) :: field_point_r0(NDIM) = [0.0_dp, 0.0_dp, -1.0_dp]
-#endif
+  real(dp) :: field_point_r0(NDIM) = 0.0_dp
 
   character(string_len) :: field_bc_type = "homogeneous"
 
@@ -127,6 +123,8 @@ contains
 
     call CFG_add_get(cfg, "field_point_charge", field_point_charge, &
          "Charge (in C) of point charge")
+    field_point_r0(:) = 0.0_dp
+    field_point_r0(NDIM) = -1.0_dp
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
 
@@ -339,7 +337,27 @@ contains
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-#if NDIM == 2
+#if NDIM == 1
+    box%fc(1:nc+1, 1, electric_fld) = inv_dr(1) * &
+         (box%cc(0:nc, i_phi) - box%cc(1:nc+1, i_phi)) + &
+         field_background(1)
+
+    if (ST_use_dielectric) then
+       ! Compute fields at the boundaries of the box, where eps can change
+       box%fc(1, 1, electric_fld) = 2 * inv_dr(1) * &
+            (box%cc(0, i_phi) - box%cc(1, i_phi)) * &
+            box%cc(0, i_eps) / &
+            (box%cc(1, i_eps) + box%cc(0, i_eps))
+       box%fc(nc+1, 1, electric_fld) = 2 * inv_dr(1) * &
+            (box%cc(nc, i_phi) - box%cc(nc+1, i_phi)) * &
+            box%cc(nc+1, i_eps) / &
+            (box%cc(nc+1, i_eps) + box%cc(nc, i_eps))
+    end if
+
+    box%cc(1:nc, i_electric_fld) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1, electric_fld))**2)
+#elif NDIM == 2
     box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr(1) * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi)) + &
          field_background(1)

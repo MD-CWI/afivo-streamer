@@ -131,7 +131,13 @@ contains
     nc          = box%n_cell
 
     ! Sum inner product flux * field over the cell faces
-#if NDIM == 2
+#if NDIM == 1
+    do KJI_DO(1, nc)
+       J_dot_E = J_dot_E + fac * 0.5_dp * (&
+            sum(box%fc(IJK, :, flux_elec) * field) + &
+            box%fc(i+1, 1, flux_elec) * field(1))
+    end do; CLOSE_DO
+#elif NDIM == 2
     if (ST_cylindrical) then
        ! Multiply values with 2 * pi * r
        fac = fac * 2 * acos(-1.0_dp)

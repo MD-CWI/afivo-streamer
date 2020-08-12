@@ -246,6 +246,7 @@ contains
        call output_fld_maxima(tree, fname)
     end if
 
+#if NDIM > 1
     if (plane_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_plane_", output_cnt
@@ -254,6 +255,7 @@ contains
             plane_rmax * ST_domain_len + ST_domain_origin, &
             plane_npixels)
     end if
+#endif
 
     if (lineout_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
@@ -309,7 +311,10 @@ contains
        first_time = .false.
 
        open(newunit=my_unit, file=trim(filename), action="write")
-#if NDIM == 2
+#if NDIM == 1
+       write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
+            &max(E) x max(n_e) x voltage wc_time n_cells min(dx) highest(lvl)"
+#elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
             &wc_time n_cells min(dx) highest(lvl)"
@@ -330,7 +335,9 @@ contains
        prev_pos = af_r_loc(tree, loc_field)
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    n_reals = 11
+#elif NDIM == 2
     n_reals = 17
 #elif NDIM == 3
     n_reals = 15
@@ -348,7 +355,13 @@ contains
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
-#if NDIM == 2
+#if NDIM == 1
+    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
+         sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
+         af_r_loc(tree, loc_elec), field_voltage, &
+         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
+         var_values(1:n_user_vars)
+#elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
@@ -503,7 +516,10 @@ contains
     do KJI_DO(1, nc)
        ! Compute inner product flux * field over the cell faces
        J_dot_E = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
-#if NDIM == 2
+#if NDIM == 1
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, 1, flux_elec) * box%fc(i+1, 1, electric_fld))
+#elif NDIM == 2
        J_dot_E = J_dot_E + 0.5_dp * (&
             box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
             box%fc(i, j+1, 2, flux_elec) * box%fc(i, j+1, 2, electric_fld))

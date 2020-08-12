@@ -61,7 +61,9 @@ module m_gas
 
   ! Indices defining the order of the gas dynamics variables
   integer, parameter, public :: i_rho = 1
-#if NDIM == 2
+#if NDIM == 1
+  integer, parameter, public :: i_mom(NDIM) = [2]
+#elif NDIM == 2
   integer, parameter, public :: i_mom(NDIM) = [2, 3]
 #elif NDIM == 3
   integer, parameter, public :: i_mom(NDIM) = [2, 3, 4]
@@ -89,7 +91,10 @@ contains
 
     if (gas_dynamics) then
        gas_var_names(i_rho) = "gas_rho"
-       gas_var_names(i_mom(1:2)) = ["gas_mom_x", "gas_mom_y"]
+       gas_var_names(i_mom(1)) = "gas_mom_x"
+#if NDIM > 1
+       gas_var_names(i_mom(2)) = "gas_mom_y"
+#endif
 #if NDIM == 3
        gas_var_names(i_mom(3)) = "gas_mom_z"
 #endif
@@ -227,9 +232,12 @@ contains
   subroutine to_primitive(n_values, n_vars, u)
     integer, intent(in)     :: n_values, n_vars
     real(dp), intent(inout) :: u(n_values, n_vars)
+    integer :: idim
 
-    u(:, i_mom(1)) = u(:, i_mom(1))/u(:, i_rho)
-    u(:, i_mom(2)) = u(:, i_mom(2))/u(:, i_rho)
+    do idim = 1, NDIM
+       u(:, i_mom(idim)) = u(:, i_mom(idim))/u(:, i_rho)
+    end do
+
     u(:, i_e) = (gas_euler_gamma-1.0_dp) * (u(:, i_e) - &
          0.5_dp*u(:, i_rho)* sum(u(:, i_mom(:))**2, dim=2))
   end subroutine to_primitive
