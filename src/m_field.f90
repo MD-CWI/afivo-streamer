@@ -135,6 +135,8 @@ contains
        select case (field_bc_type)
        case ("homogeneous")
           mg%sides_bc => field_bc_homogeneous
+       case ("neumann")
+          mg%sides_bc => field_bc_neumann
        case ("point_charge")
           mg%sides_bc => field_bc_point_charge
        case default
@@ -273,9 +275,11 @@ contains
     real(dp), intent(in) :: voltage
     voltage_set_externally = .true.
     field_voltage = voltage
+    current_field_amplitude = -voltage/ST_domain_len(NDIM)
   end subroutine field_set_voltage_externally
 
-  !> This fills ghost cells near physical boundaries for the potential
+  !> Dirichlet boundary conditions for the potential in the last dimension,
+  !> Neumann zero boundary conditions in the other directions
   subroutine field_bc_homogeneous(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -297,6 +301,31 @@ contains
        bc_val = 0.0_dp
     end if
   end subroutine field_bc_homogeneous
+
+  !> A Dirichlet zero and non-zero Neumann boundary condition for the potential
+  !> in the last dimension, Neumann zero boundary conditions in the other
+  !> directions
+  subroutine field_bc_neumann(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (af_neighb_dim(nb) == NDIM) then
+       if (af_neighb_low(nb)) then
+          bc_type = af_bc_dirichlet
+          bc_val = 0.0_dp
+       else
+          bc_type = af_bc_neumann
+          bc_val  = -current_field_amplitude
+       end if
+    else
+       bc_type = af_bc_neumann
+       bc_val = 0.0_dp
+    end if
+  end subroutine field_bc_neumann
 
   !> Create a field of the form E = E_0 - c / r^2
   subroutine field_bc_point_charge(box, nb, iv, coords, bc_val, bc_type)
