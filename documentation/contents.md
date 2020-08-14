@@ -10,6 +10,7 @@
 * [Chemistry](documentation/chemistry.md) How to set up chemical reactions
 * [Photoionization](documentation/photoionization.md) Description of photoionization methods
 * [Writing output](documentation/writing_output.md) How to write output
+* [Visualization/Postprocessing](documentation/visualization.md) How to make videos/get data along a line/plane and some postprocessing examples 
 * [Time integration](documentation/time_integration.md) Time integration and time steps
 * [Publications](documentation/publications.md) Relevant publications
 * [Contributors](documentation/contributors.md) List of people who contributed
