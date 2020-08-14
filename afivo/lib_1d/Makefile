@@ -1,4 +1,4 @@
-NDIM := 2
+NDIM := 1
 LIB := libafivo.a
 
 .PHONY: all clean

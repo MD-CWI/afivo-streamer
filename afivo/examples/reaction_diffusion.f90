@@ -397,7 +397,9 @@ contains
 
     associate (cc => box%cc, n => i_in)
       do KJI_DO(1, nc)
-#if NDIM == 2
+#if NDIM == 1
+         lpl(i) = idr2(1) * (cc(i-1, n) + cc(i+1, n) - 2 * cc(i, n))
+#elif NDIM == 2
          lpl(i, j) = &
               idr2(1) * (cc(i-1, j, n) + cc(i+1, j, n) - 2 * cc(i, j, n)) + &
               idr2(2) * (cc(i, j-1, n) + cc(i, j+1, n) - 2 * cc(i, j, n))

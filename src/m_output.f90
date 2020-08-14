@@ -1,3 +1,4 @@
+#include "../afivo/src/cpp_macros.h"
 !> Module with methods and parameters related to writing output
 module m_output
   use m_af_all
@@ -223,6 +224,10 @@ contains
     !compute conductivity of the entire domain
     call analysis_get_sigma(tree)
 
+    if (compute_power_density) then
+       call af_loop_box(tree, set_power_density_box)
+    end if
+
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
@@ -265,6 +270,7 @@ contains
        call output_fld_maxima(tree, fname)
     end if
 
+#if NDIM > 1
     if (plane_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_plane_", output_cnt
@@ -273,6 +279,7 @@ contains
             plane_rmax * ST_domain_len + ST_domain_origin, &
             plane_npixels)
     end if
+#endif
 
     if (lineout_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
@@ -296,18 +303,34 @@ contains
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
     use m_field, only: field_voltage
+    use m_user_methods
+    use m_chemistry
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
     real(dp), intent(in)         :: wc_time !< Wallclock time
-    character(len=30), save      :: fmt
-    integer                      :: my_unit
+    character(len=50), save      :: fmt
+    integer                      :: my_unit, n
     real(dp)                     :: velocity, dt
     real(dp), save               :: prev_pos(NDIM) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
+    real(dp)                     :: sum_elem_charge, tmp
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er
-    logical, save                :: first_time = .true.
+    integer                      :: i, n_reals, n_user_vars
+    character(len=name_len)      :: var_names(user_max_log_vars)
+    real(dp)                     :: var_values(user_max_log_vars)
+    logical, save                :: first_time     = .true.
+
+    if (associated(user_log_variables)) then
+       ! Set default names for the user variables
+       do i = 1, user_max_log_vars
+          write(var_names, "(A,I0)") "uservar_", i
+       end do
+       call user_log_variables(tree, n_user_vars, var_names, var_values)
+    else
+       n_user_vars = 0
+    end if
 
     call af_tree_sum_cc(tree, i_electron, sum_elec)
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
@@ -316,50 +339,88 @@ contains
     call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
     call af_tree_min_fc(tree, 1, electric_fld, min_Er)
 
+    sum_elem_charge = 0
+    do n = n_gas_species+1, n_species
+       if (species_charge(n) /= 0) then
+          call af_tree_sum_cc(tree, species_itree(n), tmp)
+          sum_elem_charge = sum_elem_charge + tmp * species_charge(n)
+       end if
+    end do
+
     dt = global_dt
 
     if (first_time) then
        first_time = .false.
 
        open(newunit=my_unit, file=trim(filename), action="write")
-#if NDIM == 2
-       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage ", &
-            " wc_time n_cells min(dx) highest(lvl)"
+#if NDIM == 1
+       write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
+            &sum(charge) max(E) x max(n_e) x voltage wc_time n_cells min(dx) &
+            &highest(lvl)"
+#elif NDIM == 2
+       write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
+            &sum(charge) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
+            &wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
-       write(my_unit, *) "it time dt v sum(n_e) sum(n_i) ", &
-            "max(E) x y z max(n_e) x y z voltage ", &
-            "wc_time n_cells min(dx) highest(lvl)"
+       write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
+            &sum(charge) max(E) x y z max(n_e) x y z voltage &
+            &wc_time n_cells min(dx) highest(lvl)"
 #endif
+       if (associated(user_log_variables)) then
+          do i = 1, n_user_vars
+             write(my_unit, "(A)", advance="no") " "//trim(var_names(i))
+          end do
+       end if
+       write(my_unit, *) ""
        close(my_unit)
 
        ! Start with velocity zero
        prev_pos = af_r_loc(tree, loc_field)
     end if
 
-#if NDIM == 2
-    fmt = "(I6,17E16.8,I12,1E16.8,I3)"
+#if NDIM == 1
+    n_reals = 12
+#elif NDIM == 2
+    n_reals = 18
 #elif NDIM == 3
-    fmt = "(I6,15E16.8,I12,1E16.8,I3)"
+    n_reals = 16
 #endif
+
+    if (associated(user_log_variables)) then
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E16.8,I12,1E16.8,I3,", &
+            n_user_vars, "E16.8)"
+    else
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E16.8,I12,1E16.8,I3)"
+    end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
     prev_pos = af_r_loc(tree, loc_field)
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
-#if NDIM == 2
+#if NDIM == 1
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
+         sum_pos_ion, sum_elem_charge, &
+         max_field, af_r_loc(tree, loc_field), max_elec, &
+         af_r_loc(tree, loc_elec), field_voltage, &
+         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
+         var_values(1:n_user_vars)
+#elif NDIM == 2
+    write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
+         sum_pos_ion, sum_elem_charge, &
+         max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          field_voltage, &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl
+         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
+         var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, max_field, af_r_loc(tree, loc_field), max_elec, &
+         sum_pos_ion, sum_elem_charge, &
+         max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), field_voltage, &
          wc_time, af_num_cells_used(tree), &
-         af_min_dr(tree),tree%highest_lvl
+         af_min_dr(tree),tree%highest_lvl, &
+         var_values(1:n_user_vars)
 #endif
     close(my_unit)
 
@@ -511,5 +572,33 @@ contains
     end do
     close(my_unit)
   end subroutine output_cross
+
+  subroutine set_power_density_box(box)
+    use m_units_constants
+    type(box_t), intent(inout) :: box
+    integer                    :: IJK, nc
+    real(dp)                   :: J_dot_E
+
+    nc = box%n_cell
+    do KJI_DO(1, nc)
+       ! Compute inner product flux * field over the cell faces
+       J_dot_E = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
+#if NDIM == 1
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, 1, flux_elec) * box%fc(i+1, 1, electric_fld))
+#elif NDIM == 2
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
+            box%fc(i, j+1, 2, flux_elec) * box%fc(i, j+1, 2, electric_fld))
+#elif NDIM == 3
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, j, k, 1, flux_elec) * box%fc(i+1, j, k, 1, electric_fld) + &
+            box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
+            box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
+#endif
+
+       box%cc(IJK, i_power_density) = J_dot_E * UC_elec_charge
+    end do; CLOSE_DO
+  end subroutine set_power_density_box
 
 end module m_output

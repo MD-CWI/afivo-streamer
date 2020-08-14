@@ -340,7 +340,7 @@ contains
     real(dp), intent(in), optional :: dt
 
     integer                     :: lvl, ix, id, nc, min_lvl
-    integer                     :: IJK, n, n_create, n_used, i_ph
+    integer                     :: IJK, n, nn, n_create, n_used, i_ph
     integer                     :: proc_id, n_procs, my_num_photons
     integer                     :: pho_lvl
     real(dp)                    :: tmp, dr(NDIM), fac, dist, r(3)
@@ -382,7 +382,7 @@ contains
     call prng%init_parallel(n_procs, rng)
     allocate(photons_per_thread(n_procs))
 
-    !$omp parallel private(lvl, ix, id, i, j, n, r, dr, i_ph, proc_id, &
+    !$omp parallel private(lvl, ix, id, IJK, n, nn, r, dr, i_ph, proc_id, &
     !$omp tmp, n_create, my_num_photons)
     proc_id = 1+omp_get_thread_num()
     my_num_photons = 0
@@ -402,8 +402,8 @@ contains
              else
                 tmp = fac * tree%boxes(id)%cc(i, j, i_src) * product(dr)
              end if
-#elif NDIM == 3
-             tmp = fac * tree%boxes(id)%cc(i, j, k, i_src) * product(dr)
+#else
+             tmp = fac * tree%boxes(id)%cc(IJK, i_src) * product(dr)
 #endif
 
              n_create = floor(tmp)
@@ -421,12 +421,17 @@ contains
                 do n = 1, n_create
                    ! Location of production randomly chosen in cell
                    r(1)   = prng%rngs(proc_id)%unif_01()
+#if NDIM == 1
+                   xyz_src(1:NDIM, i_ph+n) = af_rr_cc(tree%boxes(id), &
+                        [IJK] - 0.5_dp + r(1:NDIM))
+                   xyz_src(2:3, i_ph+n) = 0.0_dp
+#elif NDIM == 2
                    r(2)   = prng%rngs(proc_id)%unif_01()
-#if NDIM == 2
                    xyz_src(1:NDIM, i_ph+n) = af_rr_cc(tree%boxes(id), &
                         [IJK] - 0.5_dp + r(1:NDIM))
                    xyz_src(3, i_ph+n) = 0.0_dp
 #elif NDIM == 3
+                   r(2)   = prng%rngs(proc_id)%unif_01()
                    r(3)   = prng%rngs(proc_id)%unif_01()
                    xyz_src(:, i_ph+n) = af_rr_cc(tree%boxes(id), &
                         [IJK] - 0.5_dp + r(1:NDIM))
@@ -457,8 +462,8 @@ contains
     do n = 1, n_used
        i = photon_thread(n)
        photons_per_thread(i) = photons_per_thread(i) + 1
-       j = ix_offset(i) + photons_per_thread(i)
-       xyz_abs(:, j) = xyz_src(:, n)
+       nn = ix_offset(i) + photons_per_thread(i)
+       xyz_abs(:, nn) = xyz_src(:, n)
     end do
     xyz_src(:, 1:n_used) = xyz_abs(:, 1:n_used)
 
@@ -523,7 +528,14 @@ contains
     do n = 1, n_used
        id = ph_loc(n)%id
        if (id > af_no_box) then
-#if NDIM == 2
+#if NDIM == 1
+          i = ph_loc(n)%ix(1)
+          dr = tree%boxes(id)%dr
+
+          tree%boxes(id)%cc(IJK, i_photo) = &
+                  tree%boxes(id)%cc(IJK, i_photo) + &
+                  phmc_tbl%frac_in_tbl/(fac * product(dr))
+#elif NDIM == 2
           i = ph_loc(n)%ix(1)
           j = ph_loc(n)%ix(2)
           dr = tree%boxes(id)%dr

@@ -145,9 +145,7 @@ contains
     if (n_cell < 2)       stop "af_init: n_cell should be >= 2"
     if (btest(n_cell, 0)) stop "af_init: n_cell should be even"
     if (gb_limit <= 0)    stop "af_init: mem_limit_gb should be > 0"
-#if NDIM == 3
-    if (coord_a == af_cyl) stop "af_init: cannot have 3d cyl coords"
-#endif
+    if (coord_a == af_cyl .and. NDIM /= 2) stop "af_init: cyl. coords only in 2d"
     if (tree%n_var_cell <= 0) stop "af_init: no cell-centered variables present"
 
     do lvl = af_min_lvl, af_max_lvl
@@ -228,7 +226,31 @@ contains
     tree%lvls(1)%leaves = tree%lvls(1)%ids
 
     ! Loop over the boxes and set their neighbors
-#if NDIM == 2
+#if NDIM == 1
+       do i = 1, nx(1)
+          id                     = id_array(IJK)
+          tree%boxes(id)%lvl     = 1
+          tree%boxes(id)%ix      = [IJK]
+          tree%boxes(id)%dr      = tree%dr_base
+          tree%boxes(id)%r_min   = tree%r_base + &
+               (tree%boxes(id)%ix - 1) * tree%dr_base * tree%n_cell
+          tree%boxes(id)%n_cell  = tree%n_cell
+          tree%boxes(id)%coord_t = tree%coord_t
+
+          tree%boxes(id)%parent      = af_no_box
+          tree%boxes(id)%children(:) = af_no_box
+
+          ! Connectivity
+          do nb = 1, af_num_neighbors
+             ix = [IJK] + af_neighb_dix(:, nb)
+             tree%boxes(id)%neighbors(nb) = id_array(ix(1))
+          end do
+          tree%boxes(id)%neighbor_mat = id_array(i-1:i+1)
+
+          call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+               tree%n_var_cell, tree%n_var_face)
+       end do
+#elif NDIM == 2
     do j = 1, nx(2)
        do i = 1, nx(1)
           id                     = id_array(IJK)
@@ -373,7 +395,9 @@ contains
     integer, intent(inout), allocatable :: id_array(DTIMES(:))
     integer                             :: IJK
 
-#if NDIM == 2
+#if NDIM == 1
+    allocate(id_array(0:nx(1)+1))
+#elif NDIM == 2
     allocate(id_array(0:nx(1)+1, 0:nx(2)+1))
 #elif NDIM == 3
     allocate(id_array(0:nx(1)+1, 0:nx(2)+1, 0:nx(3)+1))
@@ -381,7 +405,16 @@ contains
 
     id_array = af_phys_boundary
 
-#if NDIM == 2
+#if NDIM == 1
+    do i = 1, nx(1)
+       id_array(i) = i
+    end do
+
+    if (periodic(1)) then
+       id_array(0) = id_array(nx(1))
+       id_array(nx(1)+1) = id_array(1)
+    end if
+#elif NDIM == 2
     do j = 1, nx(2)
        do i = 1, nx(1)
           id_array(i, j) = (j-1) * nx(1) + i
@@ -469,7 +502,10 @@ contains
 
     ! Sometimes we re-use a removed box, then we don't have to re-allocate
     if (.not. allocated(box%cc)) then
-#if NDIM == 2
+#if NDIM == 1
+       allocate(box%cc(0:n_cell+1, n_cc))
+       allocate(box%fc(n_cell+1,   NDIM, n_fc))
+#elif NDIM == 2
        allocate(box%cc(0:n_cell+1, 0:n_cell+1, n_cc))
        allocate(box%fc(n_cell+1,   n_cell+1, NDIM, n_fc))
 #elif NDIM == 3
@@ -494,7 +530,9 @@ contains
           nb_id = find_neighb(boxes, id, [IJK])
           if (nb_id > af_no_box) then
              boxes(id)%neighbor_mat(IJK) = nb_id
-#if NDIM == 2
+#if NDIM == 1
+             boxes(nb_id)%neighbor_mat(-i) = id
+#elif NDIM == 2
              boxes(nb_id)%neighbor_mat(-i, -j) = id
 #elif NDIM == 3
              boxes(nb_id)%neighbor_mat(-i, -j, -k) = id
@@ -505,7 +543,9 @@ contains
 
     do nb = 1, af_num_neighbors
        if (boxes(id)%neighbors(nb) == af_no_box) then
-#if NDIM == 2
+#if NDIM == 1
+          nb_id = boxes(id)%neighbor_mat(af_neighb_dix(1, nb))
+#elif NDIM == 2
           nb_id = boxes(id)%neighbor_mat(af_neighb_dix(1, nb), &
                af_neighb_dix(2, nb))
 #elif NDIM == 3
@@ -538,11 +578,7 @@ contains
        dix_c = 0
     end where
 
-#if NDIM == 2
-    p_id = boxes(p_id)%neighbor_mat(dix_c(1), dix_c(2))
-#elif NDIM == 3
-    p_id = boxes(p_id)%neighbor_mat(dix_c(1), dix_c(2), dix_c(3))
-#endif
+    p_id = boxes(p_id)%neighbor_mat(DINDEX(dix_c))
 
     if (p_id <= af_no_box) then
        nb_id = p_id
@@ -829,11 +865,7 @@ contains
     integer              :: p_id
     integer              :: thread_id
     integer, allocatable :: tmp_flags(:, :)
-#if NDIM == 2
-    integer              :: cell_flags(tree%n_cell, tree%n_cell)
-#elif NDIM == 3
-    integer              :: cell_flags(tree%n_cell, tree%n_cell, tree%n_cell)
-#endif
+    integer              :: cell_flags(DTIMES(tree%n_cell))
     integer, parameter   :: unset_flag = -huge(1)
 
     ! Set refinement flags for each thread individually, because we sometimes
@@ -990,11 +1022,7 @@ contains
        ref_buffer)
     use m_af_utils, only: af_get_loc
     integer, intent(in)     :: nc                     !< n_cell for the box
-#if NDIM == 2
-    integer, intent(in)     :: cell_flags(nc, nc)     !< Cell refinement flags
-#elif NDIM == 3
-    integer, intent(in)     :: cell_flags(nc, nc, nc) !< Cell refinement flags
-#endif
+    integer, intent(in)     :: cell_flags(DTIMES(nc))     !< Cell refinement flags
     integer, intent(inout)  :: ref_flags(:)           !< Box refinement flags for this thread
     type(af_t), intent(in) :: tree                   !< Full tree
     integer, intent(in)     :: id                     !< Which box is considered
@@ -1038,16 +1066,9 @@ contains
           ix1 = ref_buffer
        end where
 
-#if NDIM == 2
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2)) == af_do_ref)) then
+       if (any(cell_flags(DSLICE(ix0, ix1)) == af_do_ref)) then
           ref_flags(nb_id) = af_do_ref
        end if
-#elif NDIM == 3
-       if (any(cell_flags(ix0(1):ix1(1), ix0(2):ix1(2), &
-            ix0(3):ix1(3)) == af_do_ref)) then
-          ref_flags(nb_id) = af_do_ref
-       end if
-#endif
     end do; CLOSE_DO
 
   end subroutine cell_to_ref_flags
@@ -1073,7 +1094,9 @@ contains
        do KJI_DO(-1,1)
           nb_id = tree%boxes(c_id)%neighbor_mat(IJK)
           if (nb_id > af_no_box) then
-#if NDIM == 2
+#if NDIM == 1
+             tree%boxes(nb_id)%neighbor_mat(-i) = af_no_box
+#elif NDIM == 2
              tree%boxes(nb_id)%neighbor_mat(-i, -j) = af_no_box
 #elif NDIM == 3
              tree%boxes(nb_id)%neighbor_mat(-i, -j, -k) = af_no_box
@@ -1125,13 +1148,8 @@ contains
           child_nb = c_ids(af_child_adj_nb(:, nb)) ! Neighboring children
           boxes(child_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
           dix = af_neighb_dix(:, nb)
-#if NDIM == 2
-          boxes(child_nb)%neighbor_mat(dix(1), dix(2)) = &
+          boxes(child_nb)%neighbor_mat(DINDEX(dix)) = &
                boxes(id)%neighbors(nb)
-#elif NDIM == 3
-          boxes(child_nb)%neighbor_mat(dix(1), dix(2), dix(3)) = &
-               boxes(id)%neighbors(nb)
-#endif
        end if
     end do
   end subroutine add_children
@@ -1193,7 +1211,10 @@ contains
     integer, intent(in)         :: nb        !< Direction in which fluxes are set
     integer, intent(in)         :: f_ixs(:)  !< Indices of the fluxes
     integer                     :: nc, nch, c_id, i_ch, i, ic, d
-    integer                     :: n_chnb, nb_id, i_nb, ioff(NDIM)
+    integer                     :: n_chnb, nb_id, i_nb
+#if NDIM > 1
+    integer                     :: ioff(NDIM)
+#endif
 #if NDIM == 2
     integer                     :: n
     real(dp)                    :: w1, w2
@@ -1215,7 +1236,15 @@ contains
     end if
 
     select case (d)
-#if NDIM == 2
+#if NDIM == 1
+    case (1)
+       do ic = 1, n_chnb
+          ! Get index of child adjacent to neighbor
+          i_ch = af_child_adj_nb(ic, nb)
+          c_id = boxes(id)%children(i_ch)
+          boxes(nb_id)%fc(i_nb, 1, f_ixs) = boxes(c_id)%fc(i, 1, f_ixs)
+       end do
+#elif NDIM == 2
     case (1)
        do ic = 1, n_chnb
           ! Get index of child adjacent to neighbor

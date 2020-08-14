@@ -112,7 +112,10 @@ contains
     real(dp)                   :: nsmall, N_inv
     real(dp)                   :: dt_cfl, dt_drt, dt_dif
     real(dp)                   :: vmean(NDIM)
-    integer                    :: n, m, IJK, tid
+    integer                    :: n, IJK, tid
+#if NDIM > 1
+    integer                    :: m
+#endif
 #if NDIM == 3
     integer                    :: l
 #endif
@@ -136,6 +139,32 @@ contains
       ! We use the average field to compute the mobility and diffusion coefficient
       ! at the interface
       do n = 1, nc+1
+#if NDIM == 1
+         if (.not. gas_constant_density) then
+            N_inv = 2 / (box%cc(n-1, i_gas_dens) + &
+                 box%cc(n, i_gas_dens))
+         end if
+
+         fld = 0.5_dp * (box%cc(n-1, i_electric_fld) + &
+              box%cc(n, i_electric_fld))
+         Td = fld * SI_to_Townsend * N_inv
+         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+         fld_face = box%fc(n, 1, electric_fld)
+         v(n, 1)  = -mu * fld_face
+         dc(n, 1) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
+
+         if (ST_drt_limit_flux) then
+            tmp = abs(cc(n-1, 1) - cc(n, 1)) / &
+                 max(cc(n-1, 1), cc(n, 1), nsmall)
+            tmp = max(fld, tmp * inv_dr(1) * dc(n, 1) / mu)
+            fmax(n, 1) = drt_fac * tmp
+         end if
+
+         if (abs(fld_face) > ST_diffusion_field_limit .and. &
+              (cc(n-1, 1) - cc(n, 1)) * fld_face > 0.0_dp) then
+            dc(n, 1) = 0.0_dp
+         end if
+#else
          do m = 1, nc
 #if NDIM == 2
             if (.not. gas_constant_density) then
@@ -269,6 +298,7 @@ contains
             end do
 #endif
          end do
+#endif
       end do
     end associate
 
@@ -284,7 +314,9 @@ contains
        dt_drt = dt_matrix(dt_ix_cfl, tid)
 
        do KJI_DO(1,nc)
-#if NDIM == 2
+#if NDIM == 1
+          vmean = 0.5_dp * (v(IJK, :) + [v(i+1, 1)])
+#elif NDIM == 2
           vmean = 0.5_dp * (v(IJK, :) + &
                [v(i+1, j, 1), v(i, j+1, 2)])
 #elif NDIM == 3
@@ -324,7 +356,10 @@ contains
        end do; CLOSE_DO
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    call flux_koren_1d(cc, v, nc, 2)
+    call flux_diff_1d(cc, dc, inv_dr(1), nc, 2)
+#elif NDIM == 2
     call flux_koren_2d(cc, v, nc, 2)
     call flux_diff_2d(cc, dc, inv_dr, nc, 2)
 #elif NDIM == 3
@@ -432,7 +467,11 @@ contains
        ix = ix + 1
 
        ! Contribution of flux
-#if NDIM == 2
+#if NDIM == 1
+       derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
+            inv_dr(1) * (box%fc(i, 1, flux_elec) - &
+            box%fc(i+1, 1, flux_elec))
+#elif NDIM == 2
        derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
             inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, flux_elec) - &
             rfac(2, i) * box%fc(i+1, j, 1, flux_elec)) + &
@@ -501,7 +540,10 @@ contains
           ix = ix + 1
 
           ! Compute norm of flux at cell center
-#if NDIM == 2
+#if NDIM == 1
+          source_factor(ix) = 0.5_dp * norm2([ &
+               box%fc(i, 1, flux_elec) + box%fc(i+1, 1, flux_elec)])
+#elif NDIM == 2
           source_factor(ix) = 0.5_dp * norm2([ &
                box%fc(i, j, 1, flux_elec) + box%fc(i+1, j, 1, flux_elec), &
                box%fc(i, j, 2, flux_elec) + box%fc(i, j+1, 2, flux_elec)])

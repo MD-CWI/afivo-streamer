@@ -17,6 +17,7 @@
 * [Setting boundary conditions](documentation/boundary_conditions.md)
 * [Performing grid refinement](documentation/grid_refinement.md)
 * [Running in parallel](documentation/parallelization.md)
+* [Time integration](documentation/time_integration.md)
 * [Multigrid overview](documentation/multigrid.md)
 * [Writing and viewing output](documentation/writing_viewing_output.md)
 * [Profiling an application](documentation/profiling.md)

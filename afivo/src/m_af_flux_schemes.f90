@@ -264,7 +264,13 @@ contains
           end if
 
           associate(cc => tree%boxes(id)%cc, fc => tree%boxes(id)%fc)
-#if NDIM == 2
+#if NDIM == 1
+            do KJI_DO(1, nc)
+               cc(i, i_cc+s_out) = cc(i, i_cc+s_out) + &
+                    dt_dr(1) * &
+                    (fc(i, 1, i_flux) - fc(i+1, 1, i_flux))
+            end do; CLOSE_DO
+#elif NDIM == 2
             if (tree%coord_t == af_cyl) then
                call af_cyl_flux_factors(tree%boxes(id), rfac)
                do KJI_DO(1, nc)
@@ -372,8 +378,11 @@ contains
     real(dp) :: u_l(nc+1, n_vars), u_r(nc+1, n_vars)
     real(dp) :: w_l(nc+1), w_r(nc+1)
     real(dp) :: flux_l(nc+1, n_vars), flux_r(nc+1, n_vars)
-    integer  :: i, flux_dim, line_ix(NDIM-1)
-#if NDIM == 3
+    integer  :: flux_dim, line_ix(NDIM-1)
+#if NDIM > 1
+    integer  :: i
+#endif
+#if NDIM > 2
     integer  :: j
 #endif
 
@@ -385,13 +394,18 @@ contains
     ! and fewer functions calls.
 
     do flux_dim = 1, NDIM
-#if NDIM == 3
+#if NDIM > 2
        do j = 1, nc
 #endif
+#if NDIM > 1
           do i = 1, nc
+#endif
              ! Extract cell-centered values along a line
              select case (flux_dim)
-#if NDIM == 2
+#if NDIM == 1
+             case (1)
+                cc_line = cc(:, :)
+#elif NDIM == 2
              case (1)
                 cc_line = cc(:, i, :)
              case (2)
@@ -440,7 +454,10 @@ contains
 
              ! Store the computed fluxes
              select case (flux_dim)
-#if NDIM == 2
+#if NDIM == 1
+             case (1)
+                tree%boxes(id)%fc(:, flux_dim, i_flux) = flux
+#elif NDIM == 2
              case (1)
                 tree%boxes(id)%fc(:, i, flux_dim, i_flux) = flux
              case (2)
@@ -454,8 +471,10 @@ contains
                 tree%boxes(id)%fc(:, i, j, flux_dim, i_flux) = flux
 #endif
              end select
+#if NDIM > 1
           end do
-#if NDIM == 3
+#endif
+#if NDIM > 2
        end do
 #endif
     end do
