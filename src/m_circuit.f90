@@ -39,8 +39,6 @@ contains
     real(dp)                   :: voltage
     logical                    :: V0_from_field = .true.
 
-    if (restart) error stop "TODO: Circuit does not support restarting"
-
     call CFG_add_get(cfg, "circuit%type", circuit_type, &
          "Type of external circuit")
     call CFG_add(cfg, "circuit%resistors", [3.0e2_dp], &
@@ -51,6 +49,10 @@ contains
          "Initial charge on capacitors (Coulomb)", .true.)
     call CFG_add_get(cfg, "circuit%V0_from_field", V0_from_field, &
          "Get initial voltage (and capacitor charge) from applied field")
+
+    if (restart .and. circuit_type /= undefined_str) then
+       error stop "TODO: Circuit does not support restarting"
+    end if
 
     select case (circuit_type)
     case (undefined_str)
