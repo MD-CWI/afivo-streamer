@@ -206,7 +206,9 @@ contains
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
     end if
-    call af_loop_box(tree, set_gas_primitives_box)
+    if (gas_dynamics) then 
+       call af_loop_box(tree, set_gas_primitives_box)
+    end if
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
@@ -523,7 +525,6 @@ contains
     use m_units_constants
     type(box_t), intent(inout) :: box
     integer                    :: IJK, nc
-    real(dp)                   :: J_dot_E
 
     nc = box%n_cell
     do KJI_DO(1, nc)
