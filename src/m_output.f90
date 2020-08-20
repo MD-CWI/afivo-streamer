@@ -527,27 +527,21 @@ contains
 
     nc = box%n_cell
     do KJI_DO(1, nc)
-        box%cc(IJK, gas_prim_vars(i_rho)) = box%cc(IJK,gas_vars(i_rho))
+        ! Compute the x velocity
         box%cc(IJK, gas_prim_vars(i_mom(1))) = box%cc(IJK, gas_vars(i_mom(1)))/box%cc(IJK,gas_vars(i_rho))
-
+        ! Compute the y velocity
         box%cc(IJK, gas_prim_vars(i_mom(2))) = box%cc(IJK, gas_vars(i_mom(2)))/box%cc(IJK, gas_vars(i_rho))
-       ! Compute inner product flux * field over the cell faces
-       J_dot_E = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
-#if NDIM == 2
-       J_dot_E = J_dot_E + 0.5_dp * (&
-            box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
-            box%fc(i, j+1, 2, flux_elec) * box%fc(i, j+1, 2, electric_fld))
-#elif NDIM == 3
+#if NDIM == 3
+        ! Compute the z velocity
         box%cc(IJK, gas_prim_vars(i_mom(3))) = box%cc(IJK, gas_vars(i_mom(3)))/box%cc(IJK, gas_vars(i_rho))
-       J_dot_E = J_dot_E + 0.5_dp * (&
-            box%fc(i+1, j, k, 1, flux_elec) * box%fc(i+1, j, k, 1, electric_fld) + &
-            box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
-            box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
 #endif
+       ! Compute the pressure
        box%cc(IJK, gas_prim_vars(i_e)) = (gas_euler_gamma-1.0_dp) * (box%cc(IJK,gas_vars( i_e)) - &
          0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
+       ! Compute the temperature (T = P/(n*kB), n=gas number density)
+       box%cc(IJK, gas_prim_vars(i_e+1)) = box%cc(IJK, gas_prim_vars(i_e))/ &
+                                          (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
 
-       box%cc(IJK, i_power_density) = J_dot_E * UC_elec_charge
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
 

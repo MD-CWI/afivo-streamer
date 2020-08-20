@@ -107,14 +107,13 @@ contains
           ! @todo improve boundary conditions?
           call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
        end do
-       call af_add_cc_variable(tree, "rho", ix=gas_prim_vars(i_rho))
        call af_add_cc_variable(tree, "u", ix=gas_prim_vars(i_mom(1)))
        call af_add_cc_variable(tree, "v", ix=gas_prim_vars(i_mom(2)))
 #if NDIM == 3
        call af_add_cc_variable(tree, "w", ix=gas_prim_vars(i_mom(3)))
 #endif
-       call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e))
-       call af_add_cc_variable(tree, "pressure", ix=gas_prim_vars(i_e+1))
+       call af_add_cc_variable(tree, "pressure", ix=gas_prim_vars(i_e))
+       call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
     else if (associated(user_gas_density)) then
        gas_constant_density = .false.
        call af_add_cc_variable(tree, "M", ix=i_gas_dens)
