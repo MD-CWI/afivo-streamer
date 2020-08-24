@@ -1,3 +1,4 @@
+#include "cpp_macros.h"
 !> This module contains routines for restriction: going from fine to coarse
 !> variables.
 module m_af_restrict
@@ -64,13 +65,11 @@ contains
     type(box_t), intent(inout)    :: box_p        !< Parent box to restrict to
     integer, intent(in)           :: ivs(:)       !< Variable to restrict
     logical, intent(in), optional :: use_geometry !< If set to false, don't use geometry
-    integer                       :: i, j, i_f, j_f, i_c, j_c, n, iv
+    integer                       :: IJK, IJK_(c), IJK_(f), n, iv
     integer                       :: hnc, ix_offset(NDIM)
     logical                       :: use_geom
 #if NDIM == 2
     real(dp)                      :: w1, w2
-#elif NDIM == 3
-    integer                       :: k, k_f, k_c
 #endif
 
     hnc       = ishft(box_c%n_cell, -1) ! n_cell / 2
@@ -84,7 +83,14 @@ contains
 
     do n = 1, size(ivs)
        iv = ivs(n)
-#if NDIM == 2
+#if NDIM == 1
+       do i = 1, hnc
+          i_c = ix_offset(1) + i
+          i_f = 2 * i - 1
+          box_p%cc(i_c, iv) = 0.5_dp * &
+               sum(box_c%cc(i_f:i_f+1, iv))
+       end do
+#elif NDIM == 2
        if (box_p%coord_t == af_cyl .and. use_geom) then
           do j = 1, hnc
              j_c = ix_offset(2) + j

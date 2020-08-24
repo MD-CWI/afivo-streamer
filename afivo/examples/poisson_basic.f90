@@ -9,11 +9,12 @@ program poisson_basic
 
   implicit none
 
-  integer, parameter :: box_size          = 8
+  integer, parameter :: box_size          = 16
   integer, parameter :: n_iterations      = 10
   integer            :: domain_size(NDIM)
   real(dp)           :: domain_len(NDIM)
   integer            :: i_phi
+  integer            :: i_sol
   integer            :: i_rhs
   integer            :: i_err
   integer            :: i_tmp
@@ -43,6 +44,7 @@ program poisson_basic
 
   !> [af_init]
   call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "sol", ix=i_sol)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
@@ -154,7 +156,7 @@ contains
        ! which is related to the fourth derivative of the solution.
        drhs = dr2 * box%cc(IJK, i_rhs)
 
-       if (abs(drhs) > 1e-3_dp .and. box%lvl < 5) then
+       if (abs(drhs) > 1e-3_dp .and. box%lvl < 7 - NDIM) then
           cell_flags(IJK) = af_do_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -180,6 +182,7 @@ contains
        box%cc(IJK, i_rhs) = gauss_laplacian(gs, rr)
        call gauss_gradient(gs, rr, grad)
        box%cc(IJK, i_gradx) = grad(1)
+       box%cc(IJK, i_sol) = gauss_value(gs, rr)
     end do; CLOSE_DO
   end subroutine set_initial_condition
   !> [set_initial_condition]
@@ -196,7 +199,10 @@ contains
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, i_err) = box%cc(IJK, i_phi) - gauss_value(gs, rr)
-#if NDIM == 2
+#if NDIM == 1
+       gradx = 0.5_dp * (box%cc(i+1, i_phi) - &
+            box%cc(i-1, i_phi)) / box%dr(1)
+#elif NDIM == 2
        gradx = 0.5_dp * (box%cc(i+1, j, i_phi) - &
             box%cc(i-1, j, i_phi)) / box%dr(1)
 #elif NDIM == 3

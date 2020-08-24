@@ -17,11 +17,17 @@ module m_coarse_solver
   ! Multigrid with point-wise smoother (fast/cheap)
   integer, parameter, public :: coarse_solver_hypre_pfmg = 2
 
+  ! PCG solver (slow)
+  integer, parameter, public :: coarse_solver_hypre_pcg = 3
+
     ! Size of the stencil (only direct neighbors)
   integer, parameter :: max_stencil_size = 2*NDIM + 1
 
   ! Offsets for the stencil elements
-#if NDIM == 2
+#if NDIM == 1
+  integer, parameter :: stencil_offsets(1, max_stencil_size) = reshape([0, &
+       -1, 1], [1, max_stencil_size])
+#elif NDIM == 2
   integer, parameter :: stencil_offsets(2, max_stencil_size) = reshape([0, 0, &
        -1, 0, 1, 0, &
        0, -1, 0, 1], [2, max_stencil_size])
@@ -93,7 +99,9 @@ contains
     if (mg%csolver%symmetric == 1) then
        stencil_size = NDIM + 1
        allocate(stencil_ix(stencil_size))
-#if NDIM == 2
+#if NDIM == 1
+       stencil_ix = [1, 3]
+#elif NDIM == 2
        stencil_ix = [1, 3, 5]
 #elif NDIM == 3
        stencil_ix = [1, 3, 5, 7]
@@ -101,7 +109,9 @@ contains
     else
        stencil_size = 2*NDIM + 1
        allocate(stencil_ix(stencil_size))
-#if NDIM == 2
+#if NDIM == 1
+       stencil_ix = [1, 2, 3]
+#elif NDIM == 2
        stencil_ix = [1, 2, 3, 4, 5]
 #elif NDIM == 3
        stencil_ix = [1, 2, 3, 4, 5, 6, 7]
@@ -136,7 +146,12 @@ contains
     call HYPRE_StructMatrixAssemble(mg%csolver%matrix, ierr)
 
     if (mg%csolver%solver_type <= 0) then
-       mg%csolver%solver_type = coarse_solver_hypre_pfmg
+       if (NDIM == 1) then
+          ! PFMG cannot be used in 1D
+          mg%csolver%solver_type = coarse_solver_hypre_pcg
+       else
+          mg%csolver%solver_type = coarse_solver_hypre_pfmg
+       end if
     end if
 
     call hypre_prepare_solve(mg%csolver)
@@ -153,6 +168,8 @@ contains
     call HYPRE_StructVectorDestroy(cs%phi, ierr)
 
     select case (cs%solver_type)
+    case (coarse_solver_hypre_pcg)
+       call HYPRE_StructPCGDestroy(cs%solver, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGDestroy(cs%solver, ierr)
     case (coarse_solver_hypre_pfmg)
@@ -171,7 +188,7 @@ contains
 
     ilo(:) = 1
 
-    ! Create an empty 2D grid object
+    ! Create an empty grid object
     call HYPRE_StructGridCreate(MPI_COMM_WORLD, NDIM, grid, ierr)
 
     ! Add a new box to the grid
@@ -239,16 +256,10 @@ contains
 
              ! Use the stored arrays mg%csolver%bc_to_rhs to convert the value
              ! at the boundary to the rhs
-#if NDIM == 2
-             tmp(ilo(1):ihi(1), ilo(2):ihi(2)) = &
-                  tmp(ilo(1):ihi(1), ilo(2):ihi(2)) + &
-                  reshape(mg%csolver%bc_to_rhs(:, nb, n) * bc_val, [ihi - ilo + 1])
-#elif NDIM == 3
-             tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) = &
-                  tmp(ilo(1):ihi(1), ilo(2):ihi(2), ilo(3):ihi(3)) + &
+             tmp(DSLICE(ilo, ihi)) = &
+                  tmp(DSLICE(ilo, ihi)) + &
                   reshape(mg%csolver%bc_to_rhs(:, nb, n) * pack(bc_val, .true.), &
                   [ihi - ilo + 1])
-#endif
           end if
        end do
 
@@ -321,6 +332,9 @@ contains
     integer                             :: ierr
 
     select case (cs%solver_type)
+    case (coarse_solver_hypre_pcg)
+       call HYPRE_StructPCGCreate(MPI_COMM_WORLD, cs%solver, ierr)
+       call HYPRE_StructPCGSetup(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGCreate(MPI_COMM_WORLD, cs%solver, ierr)
        call HYPRE_StructSMGSetMaxIter(cs%solver, cs%max_iterations, ierr)
@@ -346,6 +360,8 @@ contains
     integer                          :: ierr
 
     select case (cs%solver_type)
+    case (coarse_solver_hypre_pcg)
+       call HYPRE_StructPCGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
     case (coarse_solver_hypre_pfmg)
