@@ -21,6 +21,7 @@ module m_transport_data
   !> Whether old style transport data is used (alpha, eta, mu, D vs V/m)
   logical, public, protected :: td_old_style = .false.
 
+  ! TODO: move this to separate ion module
   type ion_transport_t
      integer                        :: n_mobile_ions ! Number of mobile ions
      real(dp), allocatable          :: mobilities(:) ! Mobility of the ions
@@ -28,6 +29,9 @@ module m_transport_data
   end type ion_transport_t
 
   type(ion_transport_t), public :: transport_data_ions
+
+  !> Secondary electron emission yield for positive ions
+  real(dp), public, protected   :: ion_se_yield = 0.0_dp
 
   public :: transport_data_initialize
 
@@ -116,6 +120,9 @@ contains
     call CFG_get(cfg, "input_data%mobile_ions", transport_data_ions%names)
     call CFG_get(cfg, "input_data%ion_mobilities", &
          transport_data_ions%mobilities)
+
+    call CFG_add_get(cfg, "input_data%ion_se_yield", ion_se_yield, &
+         "Secondary electron emission yield for positive ions")
 
   end subroutine transport_data_initialize
 

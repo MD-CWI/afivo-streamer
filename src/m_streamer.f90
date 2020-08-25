@@ -49,6 +49,8 @@ module m_streamer
   integer, public, protected, allocatable :: flux_variables(:)
   !> List of all flux species (cell-centered index)
   integer, public, protected, allocatable :: flux_species(:)
+    !> List of the charges of the flux species
+  integer, public, protected, allocatable :: flux_species_charge(:)
 
   !> Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
@@ -152,7 +154,7 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
-    integer                    :: n, n_threads
+    integer                    :: n, n_threads, ix_chemistry
     character(len=name_len)    :: prolong_method
     character(len=string_len)  :: tmp_str
     integer                    :: rng_int4_seed(4) = &
@@ -180,13 +182,19 @@ contains
     call af_add_fc_variable(tree, "field", ix=electric_fld)
 
     allocate(flux_species(1+transport_data_ions%n_mobile_ions))
+    allocate(flux_species_charge(1+transport_data_ions%n_mobile_ions))
     allocate(flux_variables(1+transport_data_ions%n_mobile_ions))
     flux_species(1)        = i_electron
+    flux_species_charge(1) = -1
     flux_variables(1)      = flux_elec
 
     do n = 1, transport_data_ions%n_mobile_ions
        flux_species(1+n) = af_find_cc_variable(tree, &
             trim(transport_data_ions%names(n)))
+
+       ! Get index in chemistry list and determine charge
+       ix_chemistry = species_index(trim(transport_data_ions%names(n)))
+       flux_species_charge(1+n) = species_charge(ix_chemistry)
 
        call af_add_fc_variable(tree, trim(transport_data_ions%names(n)), &
             ix=flux_variables(1+n), write_binary=.false.)

@@ -69,6 +69,12 @@ contains
 
     call af_consistent_fluxes(tree, flux_variables)
 
+    if (transport_data_ions%n_mobile_ions > 0 .and. &
+         ion_se_yield > 0.0_dp) then
+       ! Handle secondary electron emission from ions
+       call af_loop_box(tree, handle_ion_se_flux, .true.)
+    end if
+
     ! Update the solution
     !$omp parallel private(lvl, i, id, p_id)
     do lvl = 1, tree%highest_lvl
@@ -677,5 +683,84 @@ contains
     end if
 
   end subroutine compute_source_factor
+
+  !> Handle secondary emission from positive ions
+  subroutine handle_ion_se_flux(box)
+    use m_transport_data
+    use m_streamer
+    type(box_t), intent(inout) :: box
+    integer                    :: nc, nb, n, ion_flux
+
+    nc = box%n_cell
+
+    ! Return if there is no physical boundary
+    if (all(box%neighbors >= af_no_box)) return
+
+    do nb = 1, af_num_neighbors
+       ! Check for physical boundary
+       if (box%neighbors(nb) < af_no_box) then
+          ! Loop over positive ion species
+          do n = 1, transport_data_ions%n_mobile_ions
+             if (flux_species_charge(n+1) > 0.0_dp) then
+                ion_flux = flux_variables(n+1)
+                select case (nb)
+#if NDIM == 1
+                case (af_neighb_lowx)
+                   box%fc(1, 1, flux_elec) = box%fc(1, 1, flux_elec) - &
+                        ion_se_yield * min(0.0_dp, box%fc(1, 1, ion_flux))
+                case (af_neighb_highx)
+                   box%fc(nc+1, 1, flux_elec) = box%fc(nc+1, 1, flux_elec) - &
+                        ion_se_yield * max(0.0_dp, box%fc(1, 1, ion_flux))
+#elif NDIM == 2
+                case (af_neighb_lowx)
+                   box%fc(1, 1:nc, 1, flux_elec) = &
+                        box%fc(1, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1, 1:nc, 1, ion_flux))
+                case (af_neighb_highx)
+                   box%fc(nc+1, 1:nc, 1, flux_elec) = &
+                        box%fc(nc+1, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(nc+1, 1:nc, 1, ion_flux))
+                case (af_neighb_lowy)
+                   box%fc(1:nc, 1, 2, flux_elec) = &
+                        box%fc(1:nc, 1, 2, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1:nc, 1, 2, ion_flux))
+                case (af_neighb_highy)
+                   box%fc(1:nc, nc+1, 2, flux_elec) = &
+                        box%fc(1:nc, nc+1, 2, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(1:nc, nc+1, 2, ion_flux))
+#elif NDIM == 3
+                case (af_neighb_lowx)
+                   box%fc(1, 1:nc, 1:nc, 1, flux_elec) = &
+                        box%fc(1, 1:nc, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1, 1:nc, 1:nc, 1, ion_flux))
+                case (af_neighb_highx)
+                   box%fc(nc+1, 1:nc, 1:nc, 1, flux_elec) = &
+                        box%fc(nc+1, 1:nc, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(nc+1, 1:nc, 1:nc, 1, ion_flux))
+                case (af_neighb_lowy)
+                   box%fc(1:nc, 1:nc, 1, 2, flux_elec) = &
+                        box%fc(1:nc, 1:nc, 1, 2, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1:nc, 1:nc, 1, 2, ion_flux))
+                case (af_neighb_highy)
+                   box%fc(1:nc, nc+1, 1:nc, 2, flux_elec) = &
+                        box%fc(1:nc, nc+1, 1:nc, 2, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(1:nc, nc+1, 1:nc, 2, ion_flux))
+                case (af_neighb_lowz)
+                   box%fc(1:nc, 1:nc, 1, 3, flux_elec) = &
+                        box%fc(1:nc, 1:nc, 1, 3, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1:nc, 1:nc, 1, 3, ion_flux))
+                case (af_neighb_highz)
+                   box%fc(1:nc, 1:nc, nc+1, 3, flux_elec) = &
+                        box%fc(1:nc, 1:nc, nc+1, 3, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(1:nc, 1:nc, nc+1, 3, ion_flux))
+#endif
+
+                end select
+             end if
+          end do
+       end if
+    end do
+
+  end subroutine handle_ion_se_flux
 
 end module m_fluid_lfa
