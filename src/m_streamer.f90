@@ -45,8 +45,10 @@ module m_streamer
   integer, public, protected :: flux_elec    = -1
   !> Index of electric field vector
   integer, public, protected :: electric_fld = -1
-  !> List of flux species
-  integer, public, protected :: flux_species(1) = -1
+  !> List of all flux variables (face-centered index)
+  integer, public, protected, allocatable :: flux_variables(:)
+  !> List of all flux species (cell-centered index)
+  integer, public, protected, allocatable :: flux_species(:)
 
   !> Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
@@ -146,6 +148,7 @@ contains
     use m_chemistry
     use m_units_constants
     use m_gas
+    use m_transport_data
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
@@ -160,8 +163,6 @@ contains
     i_electron = af_find_cc_variable(tree, "e")
     ix_electron = species_index("e")
 
-    flux_species(1) = i_electron
-
     ! Set index of first positive ion species
     do n = n_gas_species+1, n_species
        if (species_charge(n) == 1) then
@@ -173,15 +174,31 @@ contains
 
     if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
 
+    ! Set flux species
+    call af_add_fc_variable(tree, "flux_elec", ix=flux_elec, &
+         write_binary=.false.)
+    call af_add_fc_variable(tree, "field", ix=electric_fld)
+
+    allocate(flux_species(1+transport_data_ions%n_mobile_ions))
+    allocate(flux_variables(1+transport_data_ions%n_mobile_ions))
+    flux_species(1)        = i_electron
+    flux_variables(1)      = flux_elec
+
+    do n = 1, transport_data_ions%n_mobile_ions
+       flux_species(1+n) = af_find_cc_variable(tree, &
+            trim(transport_data_ions%names(n)))
+
+       call af_add_fc_variable(tree, trim(transport_data_ions%names(n)), &
+            ix=flux_variables(1+n), write_binary=.false.)
+    end do
+
+    if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
+
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
     call af_add_cc_variable(tree, "tmp", write_out=.false., &
          write_binary=.false., ix=i_tmp)
-
-    call af_add_fc_variable(tree, "flux_elec", ix=flux_elec, &
-         write_binary=.false.)
-    call af_add_fc_variable(tree, "field", ix=electric_fld)
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")

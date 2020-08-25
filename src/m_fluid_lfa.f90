@@ -22,6 +22,7 @@ contains
     use m_streamer
     use m_field
     use m_dt
+    use m_transport_data
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
     real(dp), intent(inout)   :: dt_lim !< Time step limitation
@@ -57,12 +58,16 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           call fluxes_elec(tree, id, nc, dt, s_deriv, set_dt)
+
+          if (transport_data_ions%n_mobile_ions > 0) then
+             call fluxes_ions(tree, id, nc, dt, s_deriv, set_dt)
+          end if
        end do
        !$omp end do
     end do
     !$omp end parallel
 
-    call af_consistent_fluxes(tree, [flux_elec])
+    call af_consistent_fluxes(tree, flux_variables)
 
     ! Update the solution
     !$omp parallel private(lvl, i, id, p_id)
@@ -378,6 +383,80 @@ contains
 
   end subroutine fluxes_elec
 
+  subroutine fluxes_ions(tree, id, nc, dt, s_in, set_dt)
+    use m_af_flux_schemes
+    use m_streamer
+    use m_gas
+    use m_transport_data
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)        :: id
+    integer, intent(in)        :: nc   !< Number of cells per dimension
+    real(dp), intent(in)       :: dt
+    integer, intent(in)        :: s_in !< Input time state
+    logical, intent(in)        :: set_dt
+    real(dp)                   :: inv_dr(NDIM)
+    ! Velocities at cell faces
+    real(dp)                   :: v(DTIMES(1:nc+1), NDIM)
+    ! Cell-centered densities
+    real(dp)                   :: cc(DTIMES(-1:nc+2), &
+         transport_data_ions%n_mobile_ions)
+    real(dp)                   :: mu
+    integer                    :: n, i_ion, i_flux, ix
+#if NDIM > 1
+    integer                    :: m
+#endif
+#if NDIM == 3
+    integer                    :: l
+#endif
+
+    if (.not. gas_constant_density) &
+         error stop "TODO: support variable gas density for ions"
+
+    inv_dr  = 1/tree%boxes(id)%dr
+
+    call af_gc2_box(tree, id, [flux_species(2:)+s_in], cc)
+
+    do ix = 1, transport_data_ions%n_mobile_ions
+       i_ion  = flux_species(ix+1)
+       i_flux = flux_variables(ix+1)
+       mu     = transport_data_ions%mobilities(ix)
+
+#if NDIM == 1
+       do n = 1, nc+1
+          v(n, 1) = mu * tree%boxes(id)%fc(n, 1, electric_fld)
+       end do
+#elif NDIM == 2
+       do n = 1, nc+1
+          do m = 1, nc
+             v(n, m, 1) = mu * tree%boxes(id)%fc(n, m, 1, electric_fld)
+             v(m, n, 2) = mu * tree%boxes(id)%fc(m, n, 2, electric_fld)
+          end do
+       end do
+#elif NDIM == 3
+       do n = 1, nc+1
+          do m = 1, nc
+             do l = 1, nc
+                v(n, m, l, 1) = mu * tree%boxes(id)%fc(n, m, l, 1, electric_fld)
+                v(m, n, l, 2) = mu * tree%boxes(id)%fc(m, n, l, 2, electric_fld)
+                v(m, l, n, 3) = mu * tree%boxes(id)%fc(m, l, n, 3, electric_fld)
+             end do
+          end do
+       end do
+#endif
+
+#if NDIM == 1
+       call flux_koren_1d(cc(DTIMES(:), ix), v, nc, 2)
+#elif NDIM == 2
+       call flux_koren_2d(cc(DTIMES(:), ix), v, nc, 2)
+#elif NDIM == 3
+       call flux_koren_3d(cc(DTIMES(:), ix), v, nc, 2)
+#endif
+
+       tree%boxes(id)%fc(DTIMES(:), :, i_flux) = v
+    end do
+
+  end subroutine fluxes_ions
+
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
   subroutine update_solution(box, nc, dt, s_dt, s_prev, s_out, set_dt)
@@ -407,7 +486,7 @@ contains
 #if NDIM == 2
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
-    integer                    :: IJK, ix, n_cells, n, iv
+    integer                    :: IJK, ix, n_cells, n, iv, i_flux
     integer                    :: tid
     real(dp), parameter        :: eps = 1e-100_dp
 
@@ -508,6 +587,33 @@ contains
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_prev) + dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
+
+    ! Ion fluxes
+    do n = 2, size(flux_species)
+       iv     = flux_species(n)
+       i_flux = flux_variables(n)
+
+       do KJI_DO(1,nc)
+          ! Contribution of ion flux
+#if NDIM == 1
+          tmp = inv_dr(1) * (box%fc(i, 1, i_flux) - &
+               box%fc(i+1, 1, i_flux))
+#elif NDIM == 2
+          tmp = inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, i_flux) - &
+               rfac(2, i) * box%fc(i+1, j, 1, i_flux)) + &
+               inv_dr(2) * (box%fc(i, j, 2, i_flux) - &
+               box%fc(i, j+1, 2, i_flux))
+#elif NDIM == 3
+          tmp = inv_dr(1) * (box%fc(i, j, k, 1, i_flux) - &
+               box%fc(i+1, j, k, 1, i_flux)) + &
+               inv_dr(2) * (box%fc(i, j, k, 2, i_flux) - &
+               box%fc(i, j+1, k, 2, i_flux)) + &
+               inv_dr(3) * (box%fc(i, j, k, 3, i_flux) - &
+               box%fc(i, j, k+1, 3, i_flux))
+#endif
+          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_out) + tmp * dt
+       end do; CLOSE_DO
+    end do
 
   end subroutine update_solution
 
