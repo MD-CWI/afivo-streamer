@@ -56,8 +56,19 @@ program streamer
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
-     call af_set_cc_methods(tree, species_itree(i), &
-          af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
+       select case (ST_species_boundary_condition)
+       case ("neumann_zero")
+          call af_set_cc_methods(tree, species_itree(i), &
+               af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
+       case ("dirichlet_zero")
+          call af_set_cc_methods(tree, species_itree(i), &
+               af_bc_dirichlet_zero, af_gc_interp_lim, ST_prolongation_method)
+       case default
+          print *, "Unknown boundary condition: ", &
+               ST_species_boundary_condition
+          print *, "Try neumann_zero or dirichlet_zero"
+          error stop
+       end select
   end do
 
   if (.not. gas_constant_density) then

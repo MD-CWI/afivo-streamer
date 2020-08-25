@@ -49,7 +49,7 @@ module m_streamer
   integer, public, protected, allocatable :: flux_variables(:)
   !> List of all flux species (cell-centered index)
   integer, public, protected, allocatable :: flux_species(:)
-    !> List of the charges of the flux species
+  !> List of the charges of the flux species
   integer, public, protected, allocatable :: flux_species_charge(:)
 
   !> Whether cylindrical coordinates are used
@@ -58,17 +58,9 @@ module m_streamer
   !> Whether a dielectric is used
   logical, public, protected :: ST_use_dielectric = .false.
 
-  !> Maximal electric field for the lookup table
-  real(dp), public, protected :: ST_max_field = 3e7_dp
-
-  !> The diffusion coefficient for positive ions (m2/s)
-  real(dp), public, protected :: ST_ion_diffusion = 0.0_dp
-
-  !> The mobility of positive ions (m2/Vs)
-  real(dp), public, protected :: ST_ion_mobility = 0.0_dp
-
-  !> Whether to update ions (depends on ion diffusion/mobility)
-  logical, public, protected :: ST_update_ions = .false.
+  !> Boundary condition for the plasma species
+  character(len=af_nlen), public, protected :: &
+       ST_species_boundary_condition = "neumann_zero"
 
   !> Multigrid option structure
   type(mg_t), public :: mg
@@ -218,6 +210,10 @@ contains
        call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
+
+    call CFG_add_get(cfg, "species_boundary_condition", &
+         ST_species_boundary_condition, &
+         "Boundary condition for the plasma species")
 
     call CFG_add_get(cfg, "compute_power_density", compute_power_density, &
          "Whether to compute the deposited power density")
