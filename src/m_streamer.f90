@@ -59,8 +59,8 @@ module m_streamer
   logical, public, protected :: ST_use_dielectric = .false.
 
   !> Boundary condition for the plasma species
-  character(len=af_nlen), public, protected :: &
-       ST_species_boundary_condition = "neumann_zero"
+  procedure(af_subr_bc), public, protected, pointer :: &
+       bc_species => null()
 
   !> Multigrid option structure
   type(mg_t), public :: mg
@@ -147,7 +147,7 @@ contains
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, n_threads, ix_chemistry
-    character(len=name_len)    :: prolong_method
+    character(len=name_len)    :: prolong_method, bc_method
     character(len=string_len)  :: tmp_str
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
@@ -211,9 +211,20 @@ contains
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
 
+    bc_method = "neumann_zero"
     call CFG_add_get(cfg, "species_boundary_condition", &
-         ST_species_boundary_condition, &
+         bc_method, &
          "Boundary condition for the plasma species")
+    select case (bc_method)
+    case ("neumann_zero")
+       bc_species => af_bc_neumann_zero
+    case ("dirichlet_zero")
+       bc_species => bc_species_dirichlet_zero
+    case default
+       print *, "Unknown boundary condition: ", trim(bc_method)
+       print *, "Try neumann_zero or dirichlet_zero"
+       error stop
+    end select
 
     call CFG_add_get(cfg, "compute_power_density", compute_power_density, &
          "Whether to compute the deposited power density")
@@ -316,5 +327,27 @@ contains
        seed(i) = ieor(int(time), int(huge(1) * rr))
     end do
   end function get_random_seed
+
+  !> Impose a Dirichlet zero boundary condition for plasma species in the last
+  !> dimension, which is supposed to have the electrodes. We use Neumann
+  !> conditions in the other dimensions. Note that this version avoids
+  !> extrapolation (in contrast to the regular Dirichlet b.c.), which is more
+  !> suitable for conserved species densities.
+  subroutine bc_species_dirichlet_zero(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (af_neighb_dim(nb) == NDIM) then
+       bc_type = af_bc_dirichlet_copy
+       bc_val  = 0.0_dp
+    else
+       bc_type = af_bc_neumann
+       bc_val  = 0.0_dp
+    end if
+  end subroutine bc_species_dirichlet_zero
 
 end module m_streamer
