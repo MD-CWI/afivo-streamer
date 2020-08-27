@@ -247,6 +247,10 @@ contains
        c0 = 0
        c1 = 2
        c2 = -1
+    case (af_bc_dirichlet_copy)
+       c0 = 1
+       c1 = 0
+       c2 = 0
     case default
        stop "fill_bc: unknown boundary condition"
     end select
@@ -345,6 +349,9 @@ contains
     case (af_bc_neumann)
        c0 = dr(af_neighb_dim(nb)) * af_neighb_high_pm(nb) ! This gives a + or - sign
        c1 = 1
+    case (af_bc_dirichlet_copy)
+       c0 = 1
+       c1 = 0
     case default
        stop "fill_bc: unknown boundary condition"
     end select
