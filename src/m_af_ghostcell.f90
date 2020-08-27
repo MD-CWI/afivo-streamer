@@ -331,27 +331,34 @@ contains
     real(dp), intent(in)    :: bc_val(nc**(NDIM-1)) !< Boundary condition
     integer, intent(in)     :: bc_type              !< Type of b.c.
     real(dp), intent(in)    :: dr(NDIM)             !< Grid spacing
-    real(dp)                :: c0, c1
+    real(dp)                :: c0, c1, c2
 
     ! If we call the interior point x1, x2 and the ghost point x0, then a
     ! Dirichlet boundary value b can be imposed as:
-    ! x0 = -x1 + 2*b
-    ! x-1 = 2*x0 - x1
+    ! x0 = -x1 + 2*b = c0 * b + c1 * x1
+    ! x-1 = -x2 + 2*b = c2 * b + c1 * x2
     ! A Neumann b.c. can be imposed as:
-    ! x0 = x1 +/- dx * b
-    ! x-1 = 2*x0 - x1
-    ! (The second ghost cell here simply extends a linear slope)
+    ! x0 = x1 +/- dx * b = c0 * b + c1 * x1
+    ! x-1 = x2 +/- 3 * dx * b = c2 * b + c1 * x2
+    !
+    ! The second ghost cell here is a copy of the first one, this might not
+    ! always be ideal, but it ensures the af_bc_dirichlet_copy variant does not
+    ! introduce negative values
+    !
     ! Below, we set coefficients to handle these cases
     select case (bc_type)
     case (af_bc_dirichlet)
        c0 = 2
        c1 = -1
+       c2 = c0
     case (af_bc_neumann)
        c0 = dr(af_neighb_dim(nb)) * af_neighb_high_pm(nb) ! This gives a + or - sign
        c1 = 1
+       c2 = 3 * c0
     case (af_bc_dirichlet_copy)
        c0 = 1
        c1 = 0
+       c2 = c0
     case default
        stop "fill_bc: unknown boundary condition"
     end select
@@ -360,48 +367,54 @@ contains
 #if NDIM == 1
     case (af_neighb_lowx)
        cc(0) = c0 * bc_val(1) + c1 * cc(1)
-       cc(-1) = 2 * cc(0) - cc(1)
+       cc(-1) = c2 * bc_val(1) + c1 * cc(2)
     case (af_neighb_highx)
        cc(nc+1) = c0 * bc_val(1) + c1 * cc(nc)
-       cc(nc+2) = 2 * cc(nc+1) - cc(nc)
+       cc(nc+2) = c2 * bc_val(1) + c1 * cc(nc-1)
 #elif NDIM == 2
     case (af_neighb_lowx)
        cc(0, 1:nc) = c0 * bc_val + c1 * cc(1, 1:nc)
-       cc(-1, 1:nc) = 2 * cc(0, 1:nc) - cc(1, 1:nc)
+       cc(-1, 1:nc) = c2 * bc_val + c1 * cc(2, 1:nc)
     case (af_neighb_highx)
        cc(nc+1, 1:nc) = c0 * bc_val + c1 * cc(nc, 1:nc)
-       cc(nc+2, 1:nc) = 2 * cc(nc+1, 1:nc) - cc(nc, 1:nc)
+       cc(nc+2, 1:nc) = c2 * bc_val + c1 * cc(nc-1, 1:nc)
     case (af_neighb_lowy)
        cc(1:nc, 0) = c0 * bc_val + c1 * cc(1:nc, 1)
-       cc(1:nc, -1) = 2 * cc(1:nc, 0) - cc(1:nc, 1)
+       cc(1:nc, -1) = c2 * bc_val + c1 * cc(1:nc, 2)
     case (af_neighb_highy)
        cc(1:nc, nc+1) = c0 * bc_val + c1 * cc(1:nc, nc)
-       cc(1:nc, nc+2) = 2 * cc(1:nc, nc+1) - cc(1:nc, nc)
+       cc(1:nc, nc+2) = c2 * bc_val + c1 * cc(1:nc, nc-1)
 #elif NDIM == 3
     case (af_neighb_lowx)
        cc(0, 1:nc, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
             c1 * cc(1, 1:nc, 1:nc)
-       cc(-1, 1:nc, 1:nc) = 2 * cc(0, 1:nc, 1:nc) - cc(1, 1:nc, 1:nc)
+       cc(-1, 1:nc, 1:nc) = c2 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(2, 1:nc, 1:nc)
     case (af_neighb_highx)
        cc(nc+1, 1:nc, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
             c1 * cc(nc, 1:nc, 1:nc)
-       cc(nc+2, 1:nc, 1:nc) = 2 * cc(nc+1, 1:nc, 1:nc) - cc(nc, 1:nc, 1:nc)
+       cc(nc+2, 1:nc, 1:nc) = c2 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(nc-1, 1:nc, 1:nc)
     case (af_neighb_lowy)
        cc(1:nc, 0, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
             c1 * cc(1:nc, 1, 1:nc)
-       cc(1:nc, -1, 1:nc) = 2 * cc(1:nc, 0, 1:nc) - cc(1:nc, 1, 1:nc)
+       cc(1:nc, -1, 1:nc) = c2 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 2, 1:nc)
     case (af_neighb_highy)
        cc(1:nc, nc+1, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
             c1 * cc(1:nc, nc, 1:nc)
-       cc(1:nc, nc+2, 1:nc) = 2 * cc(1:nc, nc+1, 1:nc) - cc(1:nc, nc, 1:nc)
+       cc(1:nc, nc+2, 1:nc) = c0 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, nc-1, 1:nc)
     case (af_neighb_lowz)
        cc(1:nc, 1:nc, 0) = c0 * reshape(bc_val, [nc, nc]) + &
             c1 * cc(1:nc, 1:nc, 1)
-       cc(1:nc, 1:nc, -1) = 2 * cc(1:nc, 1:nc, 0) - cc(1:nc, 1:nc, 1)
+       cc(1:nc, 1:nc, -1) = c2 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1:nc, 2)
     case (af_neighb_highz)
        cc(1:nc, 1:nc, nc+1) = c0 * reshape(bc_val, [nc, nc]) + &
             c1 * cc(1:nc, 1:nc, nc)
-       cc(1:nc, 1:nc, nc+2) = 2 * cc(1:nc, 1:nc, nc+1) - cc(1:nc, 1:nc, nc)
+       cc(1:nc, 1:nc, nc+2) = c2 * reshape(bc_val, [nc, nc]) + &
+            c1 * cc(1:nc, 1:nc, nc-1)
 #endif
     end select
   end subroutine bc_to_gc2
