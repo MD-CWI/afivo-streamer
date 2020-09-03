@@ -4,6 +4,7 @@ module m_output
   use m_af_all
   use m_types
   use m_streamer
+  use m_gas
 
   implicit none
   private
@@ -205,7 +206,9 @@ contains
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
     end if
-
+    if (gas_dynamics) then 
+       call af_loop_box(tree, set_gas_primitives_box)
+    end if
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
@@ -547,5 +550,30 @@ contains
        box%cc(IJK, i_power_density) = J_dot_E * UC_elec_charge
     end do; CLOSE_DO
   end subroutine set_power_density_box
+
+  subroutine set_gas_primitives_box(box)
+    use m_units_constants
+    type(box_t), intent(inout) :: box
+    integer                    :: IJK, nc
+
+    nc = box%n_cell
+    do KJI_DO(1, nc)
+        ! Compute the x velocity
+        box%cc(IJK, gas_prim_vars(i_mom(1))) = box%cc(IJK, gas_vars(i_mom(1)))/box%cc(IJK,gas_vars(i_rho))
+        ! Compute the y velocity
+        box%cc(IJK, gas_prim_vars(i_mom(2))) = box%cc(IJK, gas_vars(i_mom(2)))/box%cc(IJK, gas_vars(i_rho))
+#if NDIM == 3
+        ! Compute the z velocity
+        box%cc(IJK, gas_prim_vars(i_mom(3))) = box%cc(IJK, gas_vars(i_mom(3)))/box%cc(IJK, gas_vars(i_rho))
+#endif
+       ! Compute the pressure
+       box%cc(IJK, gas_prim_vars(i_e)) = (gas_euler_gamma-1.0_dp) * (box%cc(IJK,gas_vars( i_e)) - &
+         0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
+       ! Compute the temperature (T = P/(n*kB), n=gas number density)
+       box%cc(IJK, gas_prim_vars(i_e+1)) = box%cc(IJK, gas_prim_vars(i_e))/ &
+                                          (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
+
+    end do; CLOSE_DO
+  end subroutine set_gas_primitives_box
 
 end module m_output
