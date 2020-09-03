@@ -106,7 +106,7 @@ module m_streamer
   integer, public, protected :: ST_box_size = 8
 
   !> Size of the coarse grid
-  integer, public, protected :: ST_coarse_grid_size(NDIM) = 8
+  integer, public, protected :: ST_coarse_grid_size(NDIM) = -1
 
   !> Domain length per dimension
   real(dp), public, protected :: ST_domain_len(NDIM) = 16e-3_dp
@@ -245,6 +245,11 @@ contains
          "The origin of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
          "Whether the domain is periodic (per dimension)")
+
+    if (all(ST_coarse_grid_size == -1)) then
+       ! Not set, automatically determine size
+       ST_coarse_grid_size = 8 * nint(ST_domain_len / minval(ST_domain_len))
+    end if
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
