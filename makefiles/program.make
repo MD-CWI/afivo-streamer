@@ -13,7 +13,9 @@ LIBDIRS := $(MAIN_DIR)/lib_$(NDIM)d $(AFIVO_DIR)/lib_$(NDIM)d	\
 $(AFIVO_DIR)/external_libraries/silo/lib $(AFIVO_DIR)/external_libraries/hypre/lib
 INCDIRS := $(TARGET_DIR) $(MAIN_DIR)/lib_$(NDIM)d $(AFIVO_DIR)/lib_$(NDIM)d
 LIBS := streamer afivo silo HYPRE
+ifndef PROG
 PROG := streamer
+endif
 
 .PHONY: all clean allclean always_recompile
 
@@ -35,7 +37,7 @@ include  $(MAIN_DIR)/makefiles/makerules.make
 
 FFLAGS += -DNDIM=$(NDIM)
 
-$(PROG): streamer.f90
+$(PROG): $(PROG).f90
 	$(FC) -o $@ $(filter %.f90 %.o, $^) $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
 	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 
