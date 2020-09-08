@@ -554,18 +554,16 @@ contains
   subroutine set_gas_primitives_box(box)
     use m_units_constants
     type(box_t), intent(inout) :: box
-    integer                    :: IJK, nc
+    integer                    :: IJK, nc, idim
 
     nc = box%n_cell
     do KJI_DO(1, nc)
-        ! Compute the x velocity
-        box%cc(IJK, gas_prim_vars(i_mom(1))) = box%cc(IJK, gas_vars(i_mom(1)))/box%cc(IJK,gas_vars(i_rho))
-        ! Compute the y velocity
-        box%cc(IJK, gas_prim_vars(i_mom(2))) = box%cc(IJK, gas_vars(i_mom(2)))/box%cc(IJK, gas_vars(i_rho))
-#if NDIM == 3
-        ! Compute the z velocity
-        box%cc(IJK, gas_prim_vars(i_mom(3))) = box%cc(IJK, gas_vars(i_mom(3)))/box%cc(IJK, gas_vars(i_rho))
-#endif
+       do idim = 1, NDIM
+          ! Compute velocity components
+          box%cc(IJK, gas_prim_vars(i_mom(idim))) = &
+               box%cc(IJK, gas_vars(i_mom(idim))) / box%cc(IJK, gas_vars(i_rho))
+       end do
+
        ! Compute the pressure
        box%cc(IJK, gas_prim_vars(i_e)) = (gas_euler_gamma-1.0_dp) * (box%cc(IJK,gas_vars( i_e)) - &
          0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))

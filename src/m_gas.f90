@@ -116,7 +116,9 @@ contains
           call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
        end do
        call af_add_cc_variable(tree, "u", ix=gas_prim_vars(i_mom(1)))
+#if NDIM > 1
        call af_add_cc_variable(tree, "v", ix=gas_prim_vars(i_mom(2)))
+#endif
 #if NDIM == 3
        call af_add_cc_variable(tree, "w", ix=gas_prim_vars(i_mom(3)))
 #endif
