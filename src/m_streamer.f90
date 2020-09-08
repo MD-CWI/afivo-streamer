@@ -260,7 +260,8 @@ contains
 
     if (all(ST_coarse_grid_size == -1)) then
        ! Not set, automatically determine size
-       ST_coarse_grid_size = 8 * nint(ST_domain_len / minval(ST_domain_len))
+       ST_coarse_grid_size = ST_box_size * &
+            nint(ST_domain_len / minval(ST_domain_len))
     end if
 
     tmp = maxval(ST_domain_len/ST_coarse_grid_size) / &
