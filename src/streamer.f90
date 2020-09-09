@@ -49,6 +49,11 @@ program streamer
   real(dp) :: top_electrode_voltage = 0.0
   real(dp) :: top_electrode_initial_voltage_fraction = 1
   real(dp) :: top_electrode_self_capacitance = 0.0
+  real(dp) :: top_electrode_sphere_radius = 0
+  logical  :: use_top_electrode_sphere = .false.
+  real(dp) :: bottom_electrode_self_capacitance = 0.0
+  real(dp) :: bottom_electrode_sphere_radius = 0
+  logical  :: use_bottom_electrode_sphere = .false.
   real(dp) :: resistor = 300
   real(dp) :: capacitor_initial_voltage_fraction = 1
   real(dp) :: capacitor_capacitance = 200e-12
@@ -56,6 +61,7 @@ program streamer
   real(dp), dimension(NDIM) :: r_bottom_electrode
   real(dp) :: bottom_electrode_voltage = 0.0
   real(dp) :: gnd_resistor = 10
+  integer  :: n_streamers_circuit = 1
   real(dp) :: old_calculated_voltage_at_bottom_electrode = 0.0
   real(dp) :: new_calculated_voltage_at_bottom_electrode = 0.0
   real(dp) :: delta_electrode_position = 1e-6  ! We will put the calculated potential position a bit out of the grid to avoid 1 / r influence
@@ -79,22 +85,33 @@ program streamer
   call print_program_name()
 
   ! Parse command line configuration files and options
-  call CFG_update_from_arguments(cfg)
+   call CFG_update_from_arguments(cfg)
 
-  call CFG_add_get(cfg, "use_circuit_andy", use_circuit_andy, &
+   call CFG_add_get(cfg, "use_circuit_andy", use_circuit_andy, &
          "If set use the circuit implementation of Andy.")
    call CFG_add_get(cfg, "use_circuit_R", use_circuit_R, &
          "If set use the circuit implementation of W. Riegler.")
-  call CFG_add_get(cfg, "capacitor_capacitance", capacitor_capacitance, &
+   call CFG_add_get(cfg, "use_top_electrode_sphere", use_top_electrode_sphere, &
+         "If set we approximate the top electrode as a sphere for self capacitance calculations (for needle electrodes).")
+   call CFG_add_get(cfg, "use_bottom_electrode_sphere", use_bottom_electrode_sphere, &
+         "If set we approximate the bottom electrode as a sphere for self capacitance calculations (for needle electrodes).")
+   call CFG_add_get(cfg, "top_electrode_sphere_radius", top_electrode_sphere_radius, &
+         "Determines the radius of the top electrode when approximated as a sphere.")
+   call CFG_add_get(cfg, "bottom_electrode_sphere_radius", bottom_electrode_sphere_radius, &
+         "Determines the radius of the bottom electrode when approximated as a sphere.")
+   call CFG_add_get(cfg, "capacitor_capacitance", capacitor_capacitance, &
          "Capacitance of the capacitor used in the RC circuit implementation of Andy.")
-  call CFG_add_get(cfg, "resistor", resistor, &
+   call CFG_add_get(cfg, "resistor", resistor, &
          "Resistor value for the resistor in the RC circuit implementation of Andy.")
-  call CFG_add_get(cfg, "gnd_resistor", gnd_resistor, &
+   call CFG_add_get(cfg, "gnd_resistor", gnd_resistor, &
          "Resistor value for the connection of the bottom plate to ground.")
-  call CFG_add_get(cfg, "capacitor_initial_voltage_fraction", capacitor_initial_voltage_fraction, &
+   call CFG_add_get(cfg, "capacitor_initial_voltage_fraction", capacitor_initial_voltage_fraction, &
          "Initial capacitor voltage as a fraction of the applied electric field for RC Andy.")
    call CFG_add_get(cfg, "top_electrode_initial_voltage_fraction", top_electrode_initial_voltage_fraction, &
         "Initial top electrode voltage as a fraction of the applied electric field for RC Andy.")
+   call CFG_add_get(cfg, "n_streamers_circuit", n_streamers_circuit, &
+        "Number of streamers we pretend to simulate for power consumption of the circuit.")
+
 
   call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
        "If set, restart simulation from a previous .dat file")
@@ -658,8 +675,22 @@ subroutine initialize_circuit_R(tree, cfg)
    print *, "Initial capacitor voltage: ", capacitor_voltage
    top_electrode_voltage = top_electrode_initial_voltage_fraction * (-field_get_amplitude(tree, 0.0_dp) * ST_domain_len(NDIM))
    call field_set_voltage_externally(top_electrode_voltage)
-   ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
-   top_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
+   if (use_top_electrode_sphere) then
+      ! Formula for self capacitance of a sphere with radius R; C = 4 * pi * eps0 * R
+      top_electrode_self_capacitance = 4 * UC_pi * UC_eps0 * top_electrode_sphere_radius
+   else
+      ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
+      top_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
+   end if
+
+   if (use_bottom_electrode_sphere) then
+      ! Formula for self capacitance of a sphere with radius R; C = 4 * pi * eps0 * R
+      bottom_electrode_self_capacitance = 4 * UC_pi * UC_eps0 * bottom_electrode_sphere_radius
+   else
+      ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
+      bottom_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
+   end if
+
 
    !!!!! Calculate weighting potential at t = 0 !!!!!
    ! TOP ELECTRODE
@@ -761,7 +792,7 @@ subroutine add_circuit_effect_R(tree)
    ! Current from bottom electrode to ground (conventional)
    current_bottom = (bottom_electrode_voltage - 0) / gnd_resistor
 
-   bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / top_electrode_self_capacitance
+   bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / bottom_electrode_self_capacitance
 
    ! Change the applied voltage at the top electrode for the simulation
    ! For simulations we still have bottom electrode  = 0 V and top electrode has the applied potential
@@ -821,7 +852,7 @@ subroutine calculate_Rterm_both_electrodes_from_box(box)
          end do
          charge_density_cell = charge_density_cell * UC_elem_charge
 
-         total_charge_cell = charge_density_cell * cell_volume
+         total_charge_cell = charge_density_cell * cell_volume * n_streamers_circuit
 
          ! Multiply the total charge of this cell with the weighting potential to get the induced potential
          potential_from_cell_top = total_charge_cell * box%cc(i_cell, j_cell, ix_weighting_potential_top) / Q0_R
@@ -862,7 +893,7 @@ do j_cell = 1, n_cells
       end do
       charge_density_cell = charge_density_cell * UC_elem_charge
 
-      total_charge_cell = charge_density_cell * cell_volume
+      total_charge_cell = charge_density_cell * cell_volume * n_streamers_circuit
 
       ! Multiply the total charge of this cell with the weighting potential to get the induced potential
       potential_from_cell_top = total_charge_cell * box%cc(i_cell, j_cell, k_cell, ix_weighting_potential_top) / Q0_R
