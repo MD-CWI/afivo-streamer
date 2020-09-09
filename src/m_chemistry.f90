@@ -66,6 +66,42 @@ module m_chemistry
   !> Indicates a reaction of the form c1 * exp(-(Td/c2)**2)
   integer, parameter :: rate_analytic_exp_v2 = 5
 
+  !> Indicates a reaction of the form c1 * (300 / Te)**c2
+  integer, parameter :: rate_analytic_k1 = 6
+
+  !> Indicates a reaction of the form c1
+  integer, parameter :: rate_analytic_k2 = 7
+
+  !> Indicates a reaction of the form (c1 * (kB * Te + c2)**2 - c3) * c4
+  integer, parameter :: rate_analytic_k3 = 8
+
+  !> Indicates a reaction of the form c1 * (T / 300)**c2 * exp(-c3 / T)
+  integer, parameter :: rate_analytic_k4 = 9
+
+  !> Indicates a reaction of the form c1 * exp(-c2 / T)
+  integer, parameter :: rate_analytic_k5 = 10
+
+  !> Indicates a reaction of the form c1 * T**c2
+  integer, parameter :: rate_analytic_k6 = 11
+
+  !> Indicates a reaction of the form c1 * (T / c2)**c3
+  integer, parameter :: rate_analytic_k7 = 12
+
+  !> Indicates a reaction of the form c1 * (300 / T)**c2
+  integer, parameter :: rate_analytic_k8 = 13
+
+  !> Indicates a reaction of the form c1 * exp(-c2 * T)
+  integer, parameter :: rate_analytic_k9 = 14
+
+  !> Indicates a reaction of the form exp(c1 + c2 * (T - 300))
+  integer, parameter :: rate_analytic_k10 = 15
+
+  !> Indicates a reaction of the form c1 * (300 / T)**c2 * exp(-c3 / T)
+  integer, parameter :: rate_analytic_k11 = 16
+ 
+  !> Indicates a reaction of the form c1 * T**c2 * exp(-c3 / T)
+  integer, parameter :: rate_analytic_k12 = 17
+
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
 
@@ -371,13 +407,39 @@ contains
     end do
   end subroutine check_charge_conservation
 
+  function approximate_electron_temperature(n_cells, fields) result(Te)
+   use m_units_constants
+   integer, intent(in)   :: n_cells                     !< Number of cells
+   real(dp), intent(in)  :: fields(n_cells)             !< The field (in Td) in the cells
+   real(dp)              :: Te(n_cells)                 !< Electron temperature in the cells
+   integer               :: idx_cell                    !< Cell loop variable
+
+   do idx_cell = 1, n_cells
+      ! Electron temperature in eV !
+      ! Approximation based on Benilov et al. 2003: https://doi.org/10.1088/0022-3727/36/15/314
+      if (fields(idx_cell) <= 50) then
+         Te(idx_cell) = 0.447 * fields(idx_cell)**0.16
+      else
+         Te(idx_cell) = 0.0167 * fields(idx_cell)
+      end if
+   end do
+
+   ! Convert eV to Kelvin
+   Te(:) = Te(:) / UC_boltzmann_const
+  end function
+
   !> Compute reaction rates
   subroutine get_rates(fields, rates, n_cells)
+    use m_units_constants
+    use m_gas
     integer, intent(in)   :: n_cells                     !< Number of cells
     real(dp), intent(in)  :: fields(n_cells)             !< The field (in Td) in the cells
     real(dp), intent(out) :: rates(n_cells, n_reactions) !< The reaction rates
     integer               :: n
     real(dp)              :: c0, c(rate_max_num_coeff)
+    real(dp)              :: Te(n_cells)                 !> Electron Temperature in Kelvin
+
+
 
     do n = 1, n_reactions
        ! A factor that the reaction rate is multiplied with, for example to
@@ -399,7 +461,33 @@ contains
           rates(:, n) = c0 * c(1) * exp(-(c(2) / (c(3) + fields))**2)
        case (rate_analytic_exp_v2)
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
-       end select
+       case (rate_analytic_k1)
+          Te = approximate_electron_temperature(n_cells, fields)
+          rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
+       case (rate_analytic_k2)
+          rates(:, n) = c0 * c(1)
+       case (rate_analytic_k3)
+          Te = approximate_electron_temperature(n_cells, fields)
+          rates(:, n) = c0 * (c(1) * (UC_boltzmann_const * Te + c(2))**2 - c(3)) * c(4)
+       case (rate_analytic_k4)
+          rates(:, n) = c0 * c(1) * (gas_temperature / 300)**c(2) * exp(-c(3) / gas_temperature)
+       case (rate_analytic_k5)
+          rates(:, n) = c0 * c(1) * exp(-c(2) / gas_temperature)
+       case (rate_analytic_k6)
+          rates(:, n) = c0 * c(1) * gas_temperature**c(2)
+       case (rate_analytic_k7)
+          rates(:, n) = c0 * c(1) * (gas_temperature / c(2))**c(3)
+       case (rate_analytic_k8)
+          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2)
+       case (rate_analytic_k9)
+          rates(:, n) = c0 * c(1) * exp(-c(2) * gas_temperature)
+       case (rate_analytic_k10)
+          rates(:, n) = c0 * exp(c(1) + c(2) * (gas_temperature - 300))
+       case (rate_analytic_k11)
+          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2) * exp(-c(3) / gas_temperature)
+       case (rate_analytic_k12)
+          rates(:, n) = c0 * c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature)
+      end select
     end do
   end subroutine get_rates
 
@@ -520,7 +608,43 @@ contains
        case ("exp_v2")
           new_reaction%rate_type = rate_analytic_exp_v2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case default
+       case ("k1_func")
+          new_reaction%rate_type = rate_analytic_k1
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k2_func")
+          new_reaction%rate_type = rate_analytic_k2
+          read(data_value(n), *) new_reaction%rate_data(1)
+       case ("k3_func")
+          new_reaction%rate_type = rate_analytic_k3
+          read(data_value(n), *) new_reaction%rate_data(1:4)
+       case ("k4_func")
+          new_reaction%rate_type = rate_analytic_k4
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k5_func")
+          new_reaction%rate_type = rate_analytic_k5
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k6_func")
+          new_reaction%rate_type = rate_analytic_k6
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k7_func")
+          new_reaction%rate_type = rate_analytic_k7
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k8_func")
+          new_reaction%rate_type = rate_analytic_k8
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k9_func")
+          new_reaction%rate_type = rate_analytic_k9
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k10_func")
+          new_reaction%rate_type = rate_analytic_k10
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k11_func")
+          new_reaction%rate_type = rate_analytic_k11
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k12_func")
+          new_reaction%rate_type = rate_analytic_k12
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+      case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
