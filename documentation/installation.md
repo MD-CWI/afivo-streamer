@@ -46,3 +46,4 @@ either in the `afivo-streamer` folder, or in a specific program folder with a `M
     `export CC=/usr/bin/gcc`
     `export CXX=/usr/bin/g++`
     `export FC=/usr/bin/gfortran`
+    

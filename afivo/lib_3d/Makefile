@@ -1,3 +1,4 @@
+NDIM := 3
 LIB := libafivo.a
 
 .PHONY: all clean
@@ -8,7 +9,7 @@ vpath %.f90 ../src
 include ../src/definitions.make
 include ../src/makerules.make
 
-$(OBJS): FFLAGS += -DNDIM=3
+$(OBJS): FFLAGS += -DNDIM=$(NDIM)
 
 $(LIB): $(OBJS)
 	$(RM) $@

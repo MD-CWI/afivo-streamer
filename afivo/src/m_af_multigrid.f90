@@ -256,16 +256,22 @@ contains
     integer, intent(in)          :: id       !< Id of box
     integer, intent(in)          :: nb       !< Ghost cell direction
     integer, intent(in)          :: iv       !< Ghost cell variable
-    integer                      :: nc, ix, dix, i, di, j, dj, co(NDIM)
+    integer                      :: nc, ix, dix, IJK, di, co(NDIM)
     integer                      :: hnc, p_id, p_nb_id
-    real(dp)                     :: grad(NDIM-1)
-#if NDIM == 2
+#if NDIM == 1
+    real(dp)                     :: tmp
+    real(dp)                     :: gc
+#elif NDIM == 2
+    integer                      :: dj
     real(dp)                     :: tmp(0:boxes(id)%n_cell/2+1)
     real(dp)                     :: gc(boxes(id)%n_cell)
 #elif NDIM == 3
-    integer                      :: k, dk
+    integer                      :: dj, dk
     real(dp)                     :: tmp(0:boxes(id)%n_cell/2+1, 0:boxes(id)%n_cell/2+1)
     real(dp)                     :: gc(boxes(id)%n_cell, boxes(id)%n_cell)
+#endif
+#if NDIM > 1
+    real(dp)                     :: grad(NDIM-1)
 #endif
 
     nc = boxes(id)%n_cell
@@ -278,7 +284,12 @@ contains
     associate(box => boxes(p_nb_id))
       ! First fill a temporary array with data next to the fine grid
       select case (nb)
-#if NDIM == 2
+#if NDIM == 1
+      case (af_neighb_lowx)
+         tmp = box%cc(nc, iv)
+      case (af_neighb_highx)
+         tmp = box%cc(1, iv)
+#elif NDIM == 2
       case (af_neighb_lowx)
          tmp = box%cc(nc, co(2):co(2)+hnc+1, iv)
       case (af_neighb_highx)
@@ -301,12 +312,16 @@ contains
       case (af_neighb_highz)
          tmp = box%cc(co(1):co(1)+hnc+1, co(2):co(2)+hnc+1, 1, iv)
 #endif
+      case default
+         error stop "mg_sides_rb: wrong argument for nb"
       end select
     end associate
 
     ! Now interpolate the coarse grid data to obtain values 'straight' next to
     ! the fine grid points
-#if NDIM == 2
+#if NDIM == 1
+    gc = tmp
+#elif NDIM == 2
     do i = 1, hnc
        grad(1) = 0.125_dp * (tmp(i+1) - tmp(i-1))
        gc(2*i-1) = tmp(i) - grad(1)
@@ -334,7 +349,14 @@ contains
     end if
 
     select case (af_neighb_dim(nb))
-#if NDIM == 2
+#if NDIM == 1
+    case (1)
+       i = ix
+       di = dix
+       boxes(id)%cc(i-di, iv) = 0.5_dp * gc &
+            + 0.75_dp * boxes(id)%cc(i, iv) &
+            - 0.25_dp * boxes(id)%cc(i+di, iv)
+#elif NDIM == 2
     case (1)
        i = ix
        di = dix
@@ -409,9 +431,12 @@ contains
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
     integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, dix, i, di, j, dj
-#if NDIM == 3
-    integer                     :: k, dk
+    integer                     :: nc, ix, dix, IJK, di
+#if NDIM > 1
+    integer                     :: dj
+#endif
+#if NDIM > 2
+    integer                     :: dk
 #endif
 
     nc = boxes(id)%n_cell
@@ -427,7 +452,14 @@ contains
     call af_gc_prolong_copy(boxes, id, nb, iv)
 
     select case (af_neighb_dim(nb))
-#if NDIM == 2
+#if NDIM == 1
+    case (1)
+       i = ix
+       di = dix
+       boxes(id)%cc(i-di, iv) = 0.5_dp * boxes(id)%cc(i-di, iv) &
+            + 0.75_dp * boxes(id)%cc(i, iv) &
+            - 0.25_dp * boxes(id)%cc(i+di, iv)
+#elif NDIM == 2
     case (1)
        i = ix
        di = dix
@@ -562,13 +594,8 @@ contains
        nc = boxes(id)%n_cell
 
        ! Store the correction in i_tmp
-#if NDIM == 2
-       boxes(id)%cc(:, :, mg%i_tmp) = boxes(id)%cc(:, :, mg%i_phi) - &
-            boxes(id)%cc(:, :, mg%i_tmp)
-#elif NDIM == 3
-       boxes(id)%cc(:, :, :, mg%i_tmp) = boxes(id)%cc(:, :, :, mg%i_phi) - &
-            boxes(id)%cc(:, :, :, mg%i_tmp)
-#endif
+       boxes(id)%cc(DTIMES(:), mg%i_tmp) = boxes(id)%cc(DTIMES(:), mg%i_phi) - &
+            boxes(id)%cc(DTIMES(:), mg%i_tmp)
 
        do i_c = 1, af_num_children
           c_id = boxes(id)%children(i_c)
@@ -626,19 +653,11 @@ contains
     integer, intent(in)        :: lvl !< Update coarse values at lvl-1
     type(mg_t), intent(in)   :: mg !< Multigrid options
     integer                    :: i, id, p_id, nc
-#if NDIM == 2
-    real(dp), allocatable :: tmp(:,:)
-#elif NDIM == 3
-    real(dp), allocatable :: tmp(:,:,:)
-#endif
+    real(dp), allocatable :: tmp(DTIMES(:))
 
     id = tree%lvls(lvl)%ids(1)
     nc = af_n_cell(tree, lvl)
-#if NDIM == 2
-    allocate(tmp(1:nc, 1:nc))
-#elif NDIM == 3
-    allocate(tmp(1:nc, 1:nc, 1:nc))
-#endif
+    allocate(tmp(DTIMES(1:nc)))
 
     ! Restrict phi and the residual
     !$omp parallel do private(id, p_id, tmp)
@@ -648,19 +667,11 @@ contains
 
        ! Copy the data currently in i_tmp, and restore it later (i_tmp holds the
        ! previous state of i_phi)
-#if NDIM == 2
-       tmp = tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp)
-#elif NDIM == 3
-       tmp = tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
-#endif
+       tmp = tree%boxes(id)%cc(DTIMES(1:nc), mg%i_tmp)
        call residual_box(tree%boxes(id), mg)
        call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_tmp, mg)
        call mg%box_rstr(tree%boxes(id), tree%boxes(p_id), mg%i_phi, mg)
-#if NDIM == 2
-       tree%boxes(id)%cc(1:nc, 1:nc, mg%i_tmp) = tmp
-#elif NDIM == 3
-       tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = tmp
-#endif
+       tree%boxes(id)%cc(DTIMES(1:nc), mg%i_tmp) = tmp
     end do
     !$omp end parallel do
 
@@ -754,13 +765,8 @@ contains
 
     call mg%box_op(box, mg%i_tmp, mg)
     nc = box%n_cell
-#if NDIM == 2
-    box%cc(1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, mg%i_tmp)
-#elif NDIM == 3
-    box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp) = box%cc(1:nc, 1:nc, 1:nc, mg%i_rhs) &
-         - box%cc(1:nc, 1:nc, 1:nc, mg%i_tmp)
-#endif
+    box%cc(DTIMES(1:nc), mg%i_tmp) = box%cc(DTIMES(1:nc), mg%i_rhs) &
+         - box%cc(DTIMES(1:nc), mg%i_tmp)
   end subroutine residual_box
 
   !> Based on the box type, apply a Gauss-Seidel relaxation scheme
@@ -785,7 +791,7 @@ contains
        else
           call mg_box_gsrb_lpld(box, redblack_cntr, mg)
        end if
-#elif NDIM == 3
+#else
     case (mg_normal_box)
        call mg_box_gsrb_lpl(box, redblack_cntr, mg)
     ! case (mg_lsf_box)
@@ -820,7 +826,7 @@ contains
        else
           call mg_box_lpld(box, i_out, mg)
        end if
-#elif NDIM == 3
+#else
     case (mg_normal_box)
        call mg_box_lpl(box, i_out, mg)
     ! case (mg_lsf_box)
@@ -858,7 +864,7 @@ contains
        else
           call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs)
        end if
-#elif NDIM == 3
+#else
     case (mg_normal_box)
        call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs)
     ! case (mg_lsf_box)
@@ -923,23 +929,13 @@ contains
     is_deps = .false.
 
     if (mg%i_lsf /= -1) then
-#if NDIM == 2
-       is_lsf = minval(box%cc(:, :, mg%i_lsf)) * &
-            maxval(box%cc(:, :, mg%i_lsf)) < 0
-#elif NDIM == 3
-       is_lsf = minval(box%cc(:, :, :, mg%i_lsf)) * &
-            maxval(box%cc(:, :, :, mg%i_lsf)) < 0
-#endif
+       is_lsf = minval(box%cc(DTIMES(:), mg%i_lsf)) * &
+            maxval(box%cc(DTIMES(:), mg%i_lsf)) < 0
     end if
 
     if (mg%i_eps /= -1) then
-#if NDIM == 2
-       a = minval(box%cc(:, :, mg%i_eps))
-       b = maxval(box%cc(:, :, mg%i_eps))
-#elif NDIM == 3
-       a = minval(box%cc(:, :, :, mg%i_eps))
-       b = maxval(box%cc(:, :, :, mg%i_eps))
-#endif
+       a = minval(box%cc(DTIMES(:), mg%i_eps))
+       b = maxval(box%cc(DTIMES(:), mg%i_eps))
        is_deps = (b > a)
        if (.not. is_deps) is_eps = (a < 1 .or. a > 1)
     end if
@@ -1012,7 +1008,14 @@ contains
     ! The parity of redblack_cntr determines which cells we use. If
     ! redblack_cntr is even, we use the even cells and vice versa.
     associate (cc => box%cc, n => mg%i_phi, i_rhs => mg%i_rhs)
-#if NDIM == 2
+#if NDIM == 1
+      i0 = 2 - iand(redblack_cntr, 1)
+      do i = i0, nc, 2
+         cc(i, n) = fac * ( &
+              idr2(1) * (cc(i+1, n) + cc(i-1, n)) - &
+              cc(i, mg%i_rhs))
+      end do
+#elif NDIM == 2
       do j = 1, nc
          i0 = 2 - iand(ieor(redblack_cntr, j), 1)
          do i = i0, nc, 2
@@ -1044,18 +1047,19 @@ contains
     type(box_t), intent(inout) :: box   !< Box to operate on
     integer, intent(in)        :: i_out !< Index of variable to store Laplacian in
     type(mg_t), intent(in)     :: mg    !< Multigrid options
-    integer                    :: i, j, nc
+    integer                    :: IJK, nc
     real(dp)                   :: idr2(NDIM)
-#if NDIM == 3
-    integer                    :: k
-#endif
 
     nc   = box%n_cell
     idr2 = 1 / box%dr**2
 
     associate (cc => box%cc, n => mg%i_phi)
       do KJI_DO(1, nc)
-#if NDIM == 2
+#if NDIM == 1
+         cc(i, i_out) = &
+              idr2(1) * (cc(i-1, n) + cc(i+1, n) - 2 * cc(i, n)) - &
+              mg%helmholtz_lambda * cc(i, n)
+#elif NDIM == 2
          cc(i, j, i_out) = &
               idr2(1) * (cc(i-1, j, n) + cc(i+1, j, n) - 2 * cc(i, j, n)) + &
               idr2(2) * (cc(i, j-1, n) + cc(i, j+1, n) - 2 * cc(i, j, n)) - &
@@ -1100,14 +1104,13 @@ contains
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
     real(dp)                :: inv_dr2(NDIM)
+    integer                 :: idim
 
     inv_dr2                 = 1 / box%dr**2
     stencil(1, DTIMES(:))   = -2.0_dp * sum(inv_dr2) - mg%helmholtz_lambda
-    stencil(2:3, DTIMES(:)) = inv_dr2(1)
-    stencil(4:5, DTIMES(:)) = inv_dr2(2)
-#if NDIM == 3
-    stencil(6:7, DTIMES(:)) = inv_dr2(3)
-#endif
+    do idim = 1, NDIM
+       stencil(2*idim:2*idim+1, DTIMES(:)) = inv_dr2(idim)
+    end do
     call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_lpl_stencil
 
@@ -1142,40 +1145,20 @@ contains
              ! Dirichlet value at cell face, so compute gradient over h/2
              ! E.g. 1 -2 1 becomes 0 -3 1 for a 1D Laplacian
              ! The boundary condition is incorporated in the right-hand side
-#if NDIM == 2
-             stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2)) - &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
-             bc_to_rhs(:, nb) = &
-                  pack(-2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2)), .true.)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
-#elif NDIM == 3
-             stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) - &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
-             bc_to_rhs(:, nb) = &
-                  pack(-2 * stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)), .true.)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
-#endif
+             stencil(1, DSLICE(lo, hi)) = &
+                  stencil(1, DSLICE(lo, hi)) - &
+                  stencil(nb+1, DSLICE(lo, hi))
+             bc_to_rhs(:, nb) = pack(-2 * stencil(nb+1, DSLICE(lo, hi)), .true.)
+             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
           case (af_bc_neumann)
              ! E.g. 1 -2 1 becomes 0 -1 1 for a 1D Laplacian
-#if NDIM == 2
-             stencil(1, lo(1):hi(1), lo(2):hi(2)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2)) + &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2))
+             stencil(1, DSLICE(lo, hi)) = &
+                  stencil(1, DSLICE(lo, hi)) + &
+                  stencil(nb+1, DSLICE(lo, hi))
              bc_to_rhs(:, nb) = &
-                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) * &
-                  box%dr(nb_dim), .true.)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2)) = 0.0_dp
-#elif NDIM == 3
-             stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = &
-                  stencil(1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) + &
-                  stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3))
-             bc_to_rhs(:, nb) = &
-                  pack(stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) * &
-                  box%dr(nb_dim), .true.)
-             stencil(nb+1, lo(1):hi(1), lo(2):hi(2), lo(3):hi(3)) = 0.0_dp
-#endif
+                  -pack(stencil(nb+1, DSLICE(lo, hi)) * &
+                  box%dr(nb_dim), .true.) * af_neighb_high_pm(nb)
+             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
           case default
              error stop "mg_box_lpl_stencil: unsupported boundary condition"
           end select
@@ -1201,7 +1184,17 @@ contains
     ! The parity of redblack_cntr determines which cells we use. If
     ! redblack_cntr is even, we use the even cells and vice versa.
     associate (cc => box%cc, n => mg%i_phi, i_rhs => mg%i_rhs, i_eps => mg%i_eps)
-#if NDIM == 2
+#if NDIM == 1
+      i0 = 2 - iand(redblack_cntr, 1)
+      do i = i0, nc, 2
+         a0     = cc(i, i_eps)
+         u(1:2) = cc(i-1:i+1:2, n)
+         a(1:2) = cc(i-1:i+1:2, i_eps)
+         c(:)   = 2 * a0 * a(:) / (a0 + a(:)) * idr2
+
+         cc(i, n) = (sum(c(:) * u(:)) - cc(i, i_rhs)) / sum(c(:))
+      end do
+#elif NDIM == 2
       do j = 1, nc
          i0 = 2 - iand(ieor(redblack_cntr, j), 1)
          do i = i0, nc, 2
@@ -1254,7 +1247,16 @@ contains
 
     associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
       do KJI_DO(1, nc)
-#if NDIM == 2
+#if NDIM == 1
+         a0     = cc(i, i_eps)
+         a(1:2) = cc(i-1:i+1:2, i_eps)
+         u0     = cc(i, n)
+         u(1:2) = cc(i-1:i+1:2, n)
+
+         cc(i, i_out) = sum(2 * idr2 * &
+              a0*a(:)/(a0 + a(:)) * (u(:) - u0))
+
+#elif NDIM == 2
          a0     = cc(i, j, i_eps)
          a(1:2) = cc(i-1:i+1:2, j, i_eps)
          a(3:4) = cc(i, j-1:j+1:2, i_eps)
@@ -1298,7 +1300,13 @@ contains
 
     associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
       do KJI_DO(1, nc)
-#if NDIM == 2
+#if NDIM == 1
+         a0 = box%cc(i, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, i_eps)
+
+         stencil(2:, IJK) = idr2 * 2 * a0*a(:)/(a0 + a(:))
+         stencil(1, IJK) = -sum(stencil(2:, IJK))
+#elif NDIM == 2
          a0 = box%cc(i, j, i_eps)
          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
@@ -1327,10 +1335,9 @@ contains
     type(box_t), intent(in)     :: box_p !< Parent box
     type(mg_t), intent(in)      :: mg !< Multigrid options
     integer                      :: ix_offset(NDIM), i_phi, i_corr, i_eps
-    integer                      :: nc, i, j, i_c1, i_c2, j_c1, j_c2
+    integer                      :: nc, IJK, IJK_(c1), IJK_(c2)
     real(dp)                     :: u0, u(NDIM), a0, a(NDIM)
 #if NDIM == 3
-    integer                      :: k, k_c1, k_c2
     real(dp), parameter          :: third = 1/3.0_dp
 #endif
 
@@ -1342,7 +1349,21 @@ contains
 
     ! In these loops, we calculate the closest coarse index (_c1), and the
     ! one-but-closest (_c2). The fine cell lies in between.
-#if NDIM == 2
+#if NDIM == 1
+    do i = 1, nc
+       i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+       i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+       u0 = box_p%cc(i_c1, i_corr)
+       a0 = box_p%cc(i_c1, i_eps)
+       u(1) = box_p%cc(i_c2, i_corr)
+       a(1) = box_p%cc(i_c2, i_eps)
+
+       ! Get value of phi at coarse cell faces, and average
+       box_c%cc(i, i_phi) = box_c%cc(i, i_phi) + &
+            sum( (a0*u0 + a(:)*u(:)) / (a0 + a(:)) )
+    end do
+#elif NDIM == 2
     do j = 1, nc
        j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
        j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1

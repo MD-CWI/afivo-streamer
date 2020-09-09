@@ -166,25 +166,13 @@ contains
        where (ix > tree%n_cell) ix = tree%n_cell
 
        if (density) then
-#if NDIM == 2
-          tree%boxes(ids(n))%cc(ix(1), ix(2), iv) = &
-               tree%boxes(ids(n))%cc(ix(1), ix(2), iv) + &
+          tree%boxes(ids(n))%cc(DINDEX(ix), iv) = &
+               tree%boxes(ids(n))%cc(DINDEX(ix), iv) + &
                weights(n) / product(tree%boxes(ids(n))%dr)
-#elif NDIM == 3
-          tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) = &
-               tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) + &
-               weights(n) / product(tree%boxes(ids(n))%dr)
-#endif
        else
-#if NDIM == 2
-          tree%boxes(ids(n))%cc(ix(1), ix(2), iv) = &
-               tree%boxes(ids(n))%cc(ix(1), ix(2), iv) + &
+          tree%boxes(ids(n))%cc(DINDEX(ix), iv) = &
+               tree%boxes(ids(n))%cc(DINDEX(ix), iv) + &
                weights(n)
-#elif NDIM == 3
-          tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) = &
-               tree%boxes(ids(n))%cc(ix(1), ix(2), ix(3), iv) + &
-               weights(n)
-#endif
        end if
     end do
     !$omp end parallel
@@ -220,7 +208,10 @@ contains
        wu     = tmp - ix
        wl     = 1 - wu
 
-#if NDIM == 2
+#if NDIM == 1
+       w(1) = wl(1)
+       w(2) = wu(1)
+#elif NDIM == 2
        w(:, 1) = [wl(1), wu(1)] * wl(2)
        w(:, 2) = [wl(1), wu(1)] * wu(2)
 #elif NDIM == 3
@@ -232,7 +223,11 @@ contains
 
        ! Linear interpolation
        if (density) then
-#if NDIM == 2
+#if NDIM == 1
+          tree%boxes(id)%cc(ix(1):ix(1)+1, iv) = &
+               tree%boxes(id)%cc(ix(1):ix(1)+1, iv) + &
+               w * weights(n) / product(tree%boxes(id)%dr)
+#elif NDIM == 2
           tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
                tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
                w * weights(n) / product(tree%boxes(id)%dr)
@@ -242,7 +237,10 @@ contains
                w * weights(n) / product(tree%boxes(id)%dr)
 #endif
        else
-#if NDIM == 2
+#if NDIM == 1
+          tree%boxes(id)%cc(ix(1):ix(1)+1, iv) = &
+               tree%boxes(id)%cc(ix(1):ix(1)+1, iv) + w * weights(n)
+#elif NDIM == 2
           tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
                tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
                w * weights(n)
@@ -314,15 +312,9 @@ contains
              n1 = 0
           end where
 
-#if NDIM == 2
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) + &
-               boxes(id)%cc(n0(1):n1(1), n0(2):n1(2), iv)
-#elif NDIM == 3
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) + &
-               boxes(id)%cc(n0(1):n1(1), n0(2):n1(2), n0(3):n1(3), iv)
-#endif
+          boxes(id)%cc(DSLICE(i0, i1), iv) = &
+               boxes(id)%cc(DSLICE(i0, i1), iv) + &
+               boxes(id)%cc(DSLICE(n0, n1), iv)
        else
           i0 = 1
           i1 = nc
@@ -338,15 +330,9 @@ contains
              n1 = nc+1
           end where
 
-#if NDIM == 2
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), iv) + &
-               boxes(nb_id)%cc(n0(1):n1(1), n0(2):n1(2), iv)
-#elif NDIM == 3
-          boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) = &
-               boxes(id)%cc(i0(1):i1(1), i0(2):i1(2), i0(3):i1(3), iv) + &
-               boxes(nb_id)%cc(n0(1):n1(1), n0(2):n1(2), n0(3):n1(3), iv)
-#endif
+          boxes(id)%cc(DSLICE(i0, i1), iv) = &
+               boxes(id)%cc(DSLICE(i0, i1), iv) + &
+               boxes(nb_id)%cc(DSLICE(n0, n1), iv)
        end if
     end do; CLOSE_DO
   end subroutine add_from_ghostcells

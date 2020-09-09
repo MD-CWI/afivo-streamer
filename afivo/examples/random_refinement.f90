@@ -140,7 +140,11 @@ contains
        rr = af_r_cc(box, [IJK])
 
        ! Set the values at each cell according to some function
-       box%cc(IJK, i_phi) = sin(0.5_dp * rr(1))**2 * cos(rr(2))**2
+#if NDIM > 1
+          box%cc(IJK, i_phi) = sin(0.5_dp * rr(1))**2 * cos(rr(2))**2
+#else
+          box%cc(IJK, i_phi) = sin(0.5_dp * rr(1))**2
+#endif
     end do; CLOSE_DO
   end subroutine set_init_cond
 

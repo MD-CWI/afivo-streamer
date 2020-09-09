@@ -26,7 +26,6 @@ name | example | meaning
 `input_data%%file` | [filename] | input file with transport data and reactions
 `end_time` | 10e-9 | end time of the simulation (s)
 `domain_len` | 32e-3 32e-3 | length of the domain (m)
-`coarse_grid_size` | 8 8 | size of the coarsest grid (cells)
 `gas%%components` | N2 O2 | names of the gas components
 `gas%%fractions` | 0.8 0.2 | gas fractions
 `gas%%pressure` | 1.0 | pressure (bar)

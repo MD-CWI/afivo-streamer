@@ -22,6 +22,7 @@ contains
     use m_streamer
     use m_field
     use m_dt
+    use m_transport_data
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
     real(dp), intent(inout)   :: dt_lim !< Time step limitation
@@ -57,12 +58,22 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           call fluxes_elec(tree, id, nc, dt, s_deriv, set_dt)
+
+          if (transport_data_ions%n_mobile_ions > 0) then
+             call fluxes_ions(tree, id, nc, dt, s_deriv, set_dt)
+          end if
        end do
        !$omp end do
     end do
     !$omp end parallel
 
-    call af_consistent_fluxes(tree, [flux_elec])
+    call af_consistent_fluxes(tree, flux_variables)
+
+    if (transport_data_ions%n_mobile_ions > 0 .and. &
+         ion_se_yield > 0.0_dp) then
+       ! Handle secondary electron emission from ions
+       call af_loop_box(tree, handle_ion_se_flux, .true.)
+    end if
 
     ! Update the solution
     !$omp parallel private(lvl, i, id, p_id)
@@ -112,7 +123,10 @@ contains
     real(dp)                   :: nsmall, N_inv
     real(dp)                   :: dt_cfl, dt_drt, dt_dif
     real(dp)                   :: vmean(NDIM)
-    integer                    :: n, m, IJK, tid
+    integer                    :: n, IJK, tid
+#if NDIM > 1
+    integer                    :: m
+#endif
 #if NDIM == 3
     integer                    :: l
 #endif
@@ -136,6 +150,32 @@ contains
       ! We use the average field to compute the mobility and diffusion coefficient
       ! at the interface
       do n = 1, nc+1
+#if NDIM == 1
+         if (.not. gas_constant_density) then
+            N_inv = 2 / (box%cc(n-1, i_gas_dens) + &
+                 box%cc(n, i_gas_dens))
+         end if
+
+         fld = 0.5_dp * (box%cc(n-1, i_electric_fld) + &
+              box%cc(n, i_electric_fld))
+         Td = fld * SI_to_Townsend * N_inv
+         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+         fld_face = box%fc(n, 1, electric_fld)
+         v(n, 1)  = -mu * fld_face
+         dc(n, 1) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
+
+         if (ST_drt_limit_flux) then
+            tmp = abs(cc(n-1, 1) - cc(n, 1)) / &
+                 max(cc(n-1, 1), cc(n, 1), nsmall)
+            tmp = max(fld, tmp * inv_dr(1) * dc(n, 1) / mu)
+            fmax(n, 1) = drt_fac * tmp
+         end if
+
+         if (abs(fld_face) > ST_diffusion_field_limit .and. &
+              (cc(n-1, 1) - cc(n, 1)) * fld_face > 0.0_dp) then
+            dc(n, 1) = 0.0_dp
+         end if
+#else
          do m = 1, nc
 #if NDIM == 2
             if (.not. gas_constant_density) then
@@ -269,6 +309,7 @@ contains
             end do
 #endif
          end do
+#endif
       end do
     end associate
 
@@ -284,7 +325,9 @@ contains
        dt_drt = dt_matrix(dt_ix_cfl, tid)
 
        do KJI_DO(1,nc)
-#if NDIM == 2
+#if NDIM == 1
+          vmean = 0.5_dp * (v(IJK, :) + [v(i+1, 1)])
+#elif NDIM == 2
           vmean = 0.5_dp * (v(IJK, :) + &
                [v(i+1, j, 1), v(i, j+1, 2)])
 #elif NDIM == 3
@@ -302,7 +345,7 @@ contains
           dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
 
           if (ST_drt_limit_flux) then
-             mu = ST_ion_mobility
+             mu = maxval(abs(transport_data_ions%mobilities))
           else
              if (gas_constant_density) then
                 N_inv = 1 / gas_number_density
@@ -312,7 +355,8 @@ contains
 
              Td = tree%boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
              mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-             mu = max(mu, ST_ion_mobility)
+             mu = max(mu, &
+                  maxval(abs(transport_data_ions%mobilities)))
           end if
 
           ! Dielectric relaxation time
@@ -324,7 +368,10 @@ contains
        end do; CLOSE_DO
     end if
 
-#if NDIM == 2
+#if NDIM == 1
+    call flux_koren_1d(cc, v, nc, 2)
+    call flux_diff_1d(cc, dc, inv_dr(1), nc, 2)
+#elif NDIM == 2
     call flux_koren_2d(cc, v, nc, 2)
     call flux_diff_2d(cc, dc, inv_dr, nc, 2)
 #elif NDIM == 3
@@ -342,6 +389,80 @@ contains
     end if
 
   end subroutine fluxes_elec
+
+  subroutine fluxes_ions(tree, id, nc, dt, s_in, set_dt)
+    use m_af_flux_schemes
+    use m_streamer
+    use m_gas
+    use m_transport_data
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)        :: id
+    integer, intent(in)        :: nc   !< Number of cells per dimension
+    real(dp), intent(in)       :: dt
+    integer, intent(in)        :: s_in !< Input time state
+    logical, intent(in)        :: set_dt
+    real(dp)                   :: inv_dr(NDIM)
+    ! Velocities at cell faces
+    real(dp)                   :: v(DTIMES(1:nc+1), NDIM)
+    ! Cell-centered densities
+    real(dp)                   :: cc(DTIMES(-1:nc+2), &
+         transport_data_ions%n_mobile_ions)
+    real(dp)                   :: mu
+    integer                    :: n, i_ion, i_flux, ix
+#if NDIM > 1
+    integer                    :: m
+#endif
+#if NDIM == 3
+    integer                    :: l
+#endif
+
+    if (.not. gas_constant_density) &
+         error stop "TODO: support variable gas density for ions"
+
+    inv_dr  = 1/tree%boxes(id)%dr
+
+    call af_gc2_box(tree, id, [flux_species(2:)+s_in], cc)
+
+    do ix = 1, transport_data_ions%n_mobile_ions
+       i_ion  = flux_species(ix+1)
+       i_flux = flux_variables(ix+1)
+       mu     = transport_data_ions%mobilities(ix)
+
+#if NDIM == 1
+       do n = 1, nc+1
+          v(n, 1) = mu * tree%boxes(id)%fc(n, 1, electric_fld)
+       end do
+#elif NDIM == 2
+       do n = 1, nc+1
+          do m = 1, nc
+             v(n, m, 1) = mu * tree%boxes(id)%fc(n, m, 1, electric_fld)
+             v(m, n, 2) = mu * tree%boxes(id)%fc(m, n, 2, electric_fld)
+          end do
+       end do
+#elif NDIM == 3
+       do n = 1, nc+1
+          do m = 1, nc
+             do l = 1, nc
+                v(n, m, l, 1) = mu * tree%boxes(id)%fc(n, m, l, 1, electric_fld)
+                v(m, n, l, 2) = mu * tree%boxes(id)%fc(m, n, l, 2, electric_fld)
+                v(m, l, n, 3) = mu * tree%boxes(id)%fc(m, l, n, 3, electric_fld)
+             end do
+          end do
+       end do
+#endif
+
+#if NDIM == 1
+       call flux_koren_1d(cc(DTIMES(:), ix), v, nc, 2)
+#elif NDIM == 2
+       call flux_koren_2d(cc(DTIMES(:), ix), v, nc, 2)
+#elif NDIM == 3
+       call flux_koren_3d(cc(DTIMES(:), ix), v, nc, 2)
+#endif
+
+       tree%boxes(id)%fc(DTIMES(:), :, i_flux) = v
+    end do
+
+  end subroutine fluxes_ions
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
@@ -372,7 +493,7 @@ contains
 #if NDIM == 2
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
-    integer                    :: IJK, ix, n_cells, n, iv
+    integer                    :: IJK, ix, n_cells, n, iv, i_flux
     integer                    :: tid
     real(dp), parameter        :: eps = 1e-100_dp
 
@@ -432,7 +553,11 @@ contains
        ix = ix + 1
 
        ! Contribution of flux
-#if NDIM == 2
+#if NDIM == 1
+       derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
+            inv_dr(1) * (box%fc(i, 1, flux_elec) - &
+            box%fc(i+1, 1, flux_elec))
+#elif NDIM == 2
        derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
             inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, flux_elec) - &
             rfac(2, i) * box%fc(i+1, j, 1, flux_elec)) + &
@@ -470,6 +595,33 @@ contains
        end do
     end do; CLOSE_DO
 
+    ! Ion fluxes
+    do n = 2, size(flux_species)
+       iv     = flux_species(n)
+       i_flux = flux_variables(n)
+
+       do KJI_DO(1,nc)
+          ! Contribution of ion flux
+#if NDIM == 1
+          tmp = inv_dr(1) * (box%fc(i, 1, i_flux) - &
+               box%fc(i+1, 1, i_flux))
+#elif NDIM == 2
+          tmp = inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, i_flux) - &
+               rfac(2, i) * box%fc(i+1, j, 1, i_flux)) + &
+               inv_dr(2) * (box%fc(i, j, 2, i_flux) - &
+               box%fc(i, j+1, 2, i_flux))
+#elif NDIM == 3
+          tmp = inv_dr(1) * (box%fc(i, j, k, 1, i_flux) - &
+               box%fc(i+1, j, k, 1, i_flux)) + &
+               inv_dr(2) * (box%fc(i, j, k, 2, i_flux) - &
+               box%fc(i, j+1, k, 2, i_flux)) + &
+               inv_dr(3) * (box%fc(i, j, k, 3, i_flux) - &
+               box%fc(i, j, k+1, 3, i_flux))
+#endif
+          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_out) + tmp * dt
+       end do; CLOSE_DO
+    end do
+
   end subroutine update_solution
 
   !> Compute adjustment factor for electron source terms. Used to reduce them in
@@ -501,7 +653,10 @@ contains
           ix = ix + 1
 
           ! Compute norm of flux at cell center
-#if NDIM == 2
+#if NDIM == 1
+          source_factor(ix) = 0.5_dp * norm2([ &
+               box%fc(i, 1, flux_elec) + box%fc(i+1, 1, flux_elec)])
+#elif NDIM == 2
           source_factor(ix) = 0.5_dp * norm2([ &
                box%fc(i, j, 1, flux_elec) + box%fc(i+1, j, 1, flux_elec), &
                box%fc(i, j, 2, flux_elec) + box%fc(i, j+1, 2, flux_elec)])
@@ -529,5 +684,84 @@ contains
     end if
 
   end subroutine compute_source_factor
+
+  !> Handle secondary emission from positive ions
+  subroutine handle_ion_se_flux(box)
+    use m_transport_data
+    use m_streamer
+    type(box_t), intent(inout) :: box
+    integer                    :: nc, nb, n, ion_flux
+
+    nc = box%n_cell
+
+    ! Return if there is no physical boundary
+    if (all(box%neighbors >= af_no_box)) return
+
+    do nb = 1, af_num_neighbors
+       ! Check for physical boundary
+       if (box%neighbors(nb) < af_no_box) then
+          ! Loop over positive ion species
+          do n = 1, transport_data_ions%n_mobile_ions
+             if (flux_species_charge(n+1) > 0.0_dp) then
+                ion_flux = flux_variables(n+1)
+                select case (nb)
+#if NDIM == 1
+                case (af_neighb_lowx)
+                   box%fc(1, 1, flux_elec) = box%fc(1, 1, flux_elec) - &
+                        ion_se_yield * min(0.0_dp, box%fc(1, 1, ion_flux))
+                case (af_neighb_highx)
+                   box%fc(nc+1, 1, flux_elec) = box%fc(nc+1, 1, flux_elec) - &
+                        ion_se_yield * max(0.0_dp, box%fc(1, 1, ion_flux))
+#elif NDIM == 2
+                case (af_neighb_lowx)
+                   box%fc(1, 1:nc, 1, flux_elec) = &
+                        box%fc(1, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1, 1:nc, 1, ion_flux))
+                case (af_neighb_highx)
+                   box%fc(nc+1, 1:nc, 1, flux_elec) = &
+                        box%fc(nc+1, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(nc+1, 1:nc, 1, ion_flux))
+                case (af_neighb_lowy)
+                   box%fc(1:nc, 1, 2, flux_elec) = &
+                        box%fc(1:nc, 1, 2, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1:nc, 1, 2, ion_flux))
+                case (af_neighb_highy)
+                   box%fc(1:nc, nc+1, 2, flux_elec) = &
+                        box%fc(1:nc, nc+1, 2, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(1:nc, nc+1, 2, ion_flux))
+#elif NDIM == 3
+                case (af_neighb_lowx)
+                   box%fc(1, 1:nc, 1:nc, 1, flux_elec) = &
+                        box%fc(1, 1:nc, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1, 1:nc, 1:nc, 1, ion_flux))
+                case (af_neighb_highx)
+                   box%fc(nc+1, 1:nc, 1:nc, 1, flux_elec) = &
+                        box%fc(nc+1, 1:nc, 1:nc, 1, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(nc+1, 1:nc, 1:nc, 1, ion_flux))
+                case (af_neighb_lowy)
+                   box%fc(1:nc, 1:nc, 1, 2, flux_elec) = &
+                        box%fc(1:nc, 1:nc, 1, 2, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1:nc, 1:nc, 1, 2, ion_flux))
+                case (af_neighb_highy)
+                   box%fc(1:nc, nc+1, 1:nc, 2, flux_elec) = &
+                        box%fc(1:nc, nc+1, 1:nc, 2, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(1:nc, nc+1, 1:nc, 2, ion_flux))
+                case (af_neighb_lowz)
+                   box%fc(1:nc, 1:nc, 1, 3, flux_elec) = &
+                        box%fc(1:nc, 1:nc, 1, 3, flux_elec) - ion_se_yield * &
+                        min(0.0_dp, box%fc(1:nc, 1:nc, 1, 3, ion_flux))
+                case (af_neighb_highz)
+                   box%fc(1:nc, 1:nc, nc+1, 3, flux_elec) = &
+                        box%fc(1:nc, 1:nc, nc+1, 3, flux_elec) - ion_se_yield * &
+                        max(0.0_dp, box%fc(1:nc, 1:nc, nc+1, 3, ion_flux))
+#endif
+
+                end select
+             end if
+          end do
+       end if
+    end do
+
+  end subroutine handle_ion_se_flux
 
 end module m_fluid_lfa

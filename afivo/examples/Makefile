@@ -12,12 +12,14 @@ PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
  ghostcell_benchmark particles_gravity poisson_coarse_solver implicit_diffusion	\
  poisson_dielectric poisson_helmholtz reaction_diffusion dielectric_surface advection_v2
 
+PROGS_1D := $(PROGS_XD:%=%_1d)
+
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric		\
 simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl solid_body_rotation amr_solid_body_rotation euler_gas_dynamics
 
 PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning
 
-PROGS := $(PROGS_2D) $(PROGS_3D)
+PROGS := $(PROGS_1D) $(PROGS_2D) $(PROGS_3D)
 
 all:	$(PROGS)
 
@@ -42,7 +44,12 @@ run_3d:
 $(OUTDIR):
 	mkdir -p $@
 
-# Set flags for 2d and 3d version of programs
+# Set flags
+$(PROGS_1D): $(AF_DIR)/lib_1d/libafivo.a | $(OUTDIR)
+$(PROGS_1D): INCDIRS+=$(AF_DIR)/lib_1d
+$(PROGS_1D): LIBDIRS+=$(AF_DIR)/lib_1d
+$(PROGS_1D): FFLAGS += -DNDIM=1
+
 $(PROGS_2D): $(AF_DIR)/lib_2d/libafivo.a | $(OUTDIR)
 $(PROGS_2D): INCDIRS+=$(AF_DIR)/lib_2d
 $(PROGS_2D): LIBDIRS+=$(AF_DIR)/lib_2d
@@ -54,6 +61,9 @@ $(PROGS_3D): LIBDIRS+=$(AF_DIR)/lib_3d
 $(PROGS_3D): FFLAGS += -DNDIM=3
 
 # How to create executables
+%_1d: %.f90
+	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
+	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 %_2d: %.f90
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
 	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))

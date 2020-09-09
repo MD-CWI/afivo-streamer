@@ -345,8 +345,10 @@ contains
     center = box%r_min + box%dr * ishft(box%n_cell, -1)
 
     if (rr(1) > center(1)) i_ch = i_ch + 1
+#if NDIM > 1
     if (rr(2) > center(2)) i_ch = i_ch + 2
-#if NDIM==3
+#endif
+#if NDIM > 2
     if (rr(3) > center(3)) i_ch = i_ch + 4
 #endif
   end function child_that_contains
@@ -381,11 +383,7 @@ contains
   subroutine af_box_clear_cc(box, iv)
     type(box_t), intent(inout) :: box
     integer, intent(in)         :: iv !< Variable to clear
-#if NDIM == 2
-    box%cc(:,:, iv) = 0
-#elif NDIM == 3
-    box%cc(:,:,:, iv) = 0
-#endif
+    box%cc(DTIMES(:), iv) = 0
   end subroutine af_box_clear_cc
 
   subroutine af_tree_clear_ghostcells(tree, iv)
@@ -413,7 +411,10 @@ contains
 
     nc = box%n_cell
 
-#if NDIM == 2
+#if NDIM == 1
+    box%cc(0, iv)          = 0
+    box%cc(nc+1, iv)       = 0
+#elif NDIM == 2
     box%cc(0, :, iv)       = 0
     box%cc(nc+1, :, iv)    = 0
     box%cc(:, 0, iv)       = 0
@@ -432,22 +433,16 @@ contains
   subroutine af_box_add_cc(box, iv_from, iv_to)
     type(box_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
-#if NDIM == 2
-    box%cc(:,:, iv_to) = box%cc(:,:, iv_to) + box%cc(:,:, iv_from)
-#elif NDIM == 3
-    box%cc(:,:,:, iv_to) = box%cc(:,:,:, iv_to) + box%cc(:,:,:, iv_from)
-#endif
+    box%cc(DTIMES(:), iv_to) = box%cc(DTIMES(:), iv_to) + &
+         box%cc(DTIMES(:), iv_from)
   end subroutine af_box_add_cc
 
   !> Subtract cc(..., iv_from) from box%cc(..., iv_to)
   subroutine af_box_sub_cc(box, iv_from, iv_to)
     type(box_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
-#if NDIM == 2
-    box%cc(:,:, iv_to) = box%cc(:,:, iv_to) - box%cc(:,:, iv_from)
-#elif NDIM == 3
-    box%cc(:,:,:, iv_to) = box%cc(:,:,:, iv_to) - box%cc(:,:,:, iv_from)
-#endif
+    box%cc(DTIMES(:), iv_to) = box%cc(DTIMES(:), iv_to) - &
+         box%cc(DTIMES(:), iv_from)
   end subroutine af_box_sub_cc
 
   !> Perform cc(..., iv_a) = cc(..., iv_a) 'op' cc(..., iv_b), where 'op' can be
@@ -518,11 +513,7 @@ contains
     type(box_t), intent(inout) :: box
     real(dp), intent(in)        :: a
     integer, intent(in)         :: iv
-#if NDIM == 2
-    box%cc(:,:, iv) = a * box%cc(:,:, iv)
-#elif NDIM == 3
-    box%cc(:,:,:, iv) = a * box%cc(:,:,:, iv)
-#endif
+    box%cc(DTIMES(:), iv) = a * box%cc(DTIMES(:), iv)
   end subroutine af_box_times_cc
 
   !> Set cc(..., iv_b) = a * cc(..., iv_a) + b * cc(..., iv_b)
@@ -530,11 +521,8 @@ contains
     type(box_t), intent(inout) :: box
     real(dp), intent(in)        :: a, b
     integer, intent(in)         :: iv_a, iv_b
-#if NDIM == 2
-    box%cc(:,:, iv_b) = a * box%cc(:,:, iv_a) + b * box%cc(:,:, iv_b)
-#elif NDIM == 3
-    box%cc(:,:,:, iv_b) = a * box%cc(:,:,:, iv_a) + b * box%cc(:,:,:, iv_b)
-#endif
+    box%cc(DTIMES(:), iv_b) = a * box%cc(DTIMES(:), iv_a) + &
+         b * box%cc(DTIMES(:), iv_b)
   end subroutine af_box_lincomb_cc
 
   !> Copy cc(..., iv_from) from box_in to cc(..., iv_to) on box_out
@@ -542,22 +530,14 @@ contains
     type(box_t), intent(in)    :: box_from
     type(box_t), intent(inout) :: box_to
     integer, intent(in)         :: iv_from, iv_to
-#if NDIM == 2
-    box_to%cc(:,:, iv_to) = box_from%cc(:,:, iv_from)
-#elif NDIM == 3
-    box_to%cc(:,:,:, iv_to) = box_from%cc(:,:,:, iv_from)
-#endif
+    box_to%cc(DTIMES(:), iv_to) = box_from%cc(DTIMES(:), iv_from)
   end subroutine af_box_copy_cc_to
 
   !> Copy cc(..., iv_from) to box%cc(..., iv_to)
   subroutine af_box_copy_cc(box, iv_from, iv_to)
     type(box_t), intent(inout) :: box
     integer, intent(in)         :: iv_from, iv_to
-#if NDIM == 2
-    box%cc(:,:, iv_to) = box%cc(:,:, iv_from)
-#elif NDIM == 3
-    box%cc(:,:,:, iv_to) = box%cc(:,:,:, iv_from)
-#endif
+    box%cc(DTIMES(:), iv_to) = box%cc(DTIMES(:), iv_from)
   end subroutine af_box_copy_cc
 
   !> Copy cc(..., iv_from) to box%cc(..., iv_to) for all ids
@@ -832,13 +812,8 @@ contains
     integer                   :: nc
 
     nc = box%n_cell
-#if NDIM == 2
-    ix = maxloc(box%cc(1:nc, 1:nc, iv))
-    val = box%cc(ix(1), ix(2), iv)
-#elif NDIM == 3
-    ix = maxloc(box%cc(1:nc, 1:nc, 1:nc, iv))
-    val = box%cc(ix(1), ix(2), ix(3), iv)
-#endif
+    ix = maxloc(box%cc(DTIMES(1:nc), iv))
+    val = box%cc(DINDEX(ix), iv)
   end subroutine box_max_cc
 
   subroutine box_maxabs_cc(box, iv, val, ix)
@@ -849,13 +824,8 @@ contains
     integer                   :: nc
 
     nc = box%n_cell
-#if NDIM == 2
-    ix = maxloc(abs(box%cc(1:nc, 1:nc, iv)))
-    val = abs(box%cc(ix(1), ix(2), iv))
-#elif NDIM == 3
-    ix = maxloc(abs(box%cc(1:nc, 1:nc, 1:nc, iv)))
-    val = abs(box%cc(ix(1), ix(2), ix(3), iv))
-#endif
+    ix = maxloc(abs(box%cc(DTIMES(1:nc), iv)))
+    val = abs(box%cc(DINDEX(ix), iv))
   end subroutine box_maxabs_cc
 
   subroutine box_min_cc(box, iv, val, ix)
@@ -866,13 +836,8 @@ contains
     integer                   :: nc
 
     nc = box%n_cell
-#if NDIM == 2
-    ix = minloc(box%cc(1:nc, 1:nc, iv))
-    val = box%cc(ix(1), ix(2), iv)
-#elif NDIM == 3
-    ix = minloc(box%cc(1:nc, 1:nc, 1:nc, iv))
-    val = box%cc(ix(1), ix(2), ix(3), iv)
-#endif
+    ix = minloc(box%cc(DTIMES(1:nc), iv))
+    val = box%cc(DINDEX(ix), iv)
   end subroutine box_min_cc
 
   subroutine box_max_fc(box, dim_iv, val, ix)
@@ -885,7 +850,15 @@ contains
     nc     = box%n_cell
     dix(:) = 0
 
-#if NDIM == 2
+#if NDIM == 1
+    n_fc = size(box%fc, 3)
+
+    ! Decode dim and iv
+    dim      = 1 ! Trivial
+    iv       = dim_iv + 1
+    ix       = maxloc(box%fc(1:nc+1, dim, iv))
+    val      = box%fc(ix(1), dim, iv)
+#elif NDIM == 2
     n_fc = size(box%fc, 4)
 
     ! Decode dim and iv
@@ -916,7 +889,15 @@ contains
     nc     = box%n_cell
     dix(:) = 0
 
-#if NDIM == 2
+#if NDIM == 1
+    n_fc = size(box%fc, 3)
+
+    ! Decode dim and iv
+    dim      = 1 ! Trivial
+    iv       = dim_iv + 1
+    ix       = minloc(box%fc(1:nc+1, dim, iv))
+    val      = box%fc(ix(1), dim, iv)
+#elif NDIM == 2
     n_fc = size(box%fc, 4)
 
     ! Decode dim and iv
@@ -976,8 +957,8 @@ contains
           else
              tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, iv)**pow)
           end if
-#elif NDIM == 3
-          tmp = sum(tree%boxes(id)%cc(1:nc, 1:nc, 1:nc, iv)**pow)
+#else
+          tmp = sum(tree%boxes(id)%cc(DTIMES(1:nc), iv)**pow)
 #endif
           my_sum = my_sum + fac * tmp
        end do
@@ -1016,11 +997,7 @@ contains
     type(box_t), intent(inout) :: box !< Operate on this box
     integer, intent(in)         :: iv_from !< From this variable
     integer, intent(in)         :: iv_to !< To this variable
-#if NDIM == 2
-    box%fc(:,:,:, iv_to) = box%fc(:,:,:, iv_from)
-#elif NDIM == 3
-    box%fc(:,:,:,:, iv_to) = box%fc(:,:,:,:, iv_from)
-#endif
+    box%fc(DTIMES(:),:, iv_to) = box%fc(DTIMES(:),:, iv_from)
   end subroutine af_box_copy_fc
 
   !> Copy fx/fy/fz(..., iv_from) to fx/fy/fz(..., iv_to) for all ids

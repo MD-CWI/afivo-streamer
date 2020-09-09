@@ -11,7 +11,7 @@ program advection
   integer             :: i_phi
   integer             :: i_err
   integer             :: i_flux
-  integer, parameter  :: sol_type   = 1
+  integer, parameter  :: sol_type   = 2
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
 
   type(af_t)         :: tree
@@ -48,9 +48,8 @@ program advection
   dt_amr      = 0.01_dp
   dt_output   = 0.5_dp
   end_time    = 5.0_dp
-  velocity(:) = 0.0_dp
+  velocity(:) = -0.5_dp
   velocity(1) = 1.0_dp
-  velocity(2) = -1.0_dp
 
   ! Set up the initial conditions
   refine_steps=0
@@ -134,7 +133,10 @@ contains
     nc   = box%n_cell
 
     do KJI_DO(1,nc)
-#if NDIM == 2
+#if NDIM == 1
+       diff = abs(box%dr(1) * (box%cc(i+1, i_phi) + &
+            box%cc(i-1, i_phi) - 2 * box%cc(i, i_phi)))
+#elif NDIM == 2
        diff = abs(box%dr(1) * (box%cc(i+1, j, i_phi) + &
             box%cc(i-1, j, i_phi) - 2 * box%cc(i, j, i_phi)) + &
             box%dr(2) * (box%cc(i, j+1, i_phi) + &
@@ -196,7 +198,11 @@ contains
 
     select case (sol_type)
     case (1)
+#if NDIM > 1
        sol = sin(0.5_dp * rr_t(1))**8 * cos(0.5_dp * rr_t(2))**8
+#else
+       sol = sin(0.5_dp * rr_t(1))**8
+#endif
     case (2)
        rr_t = modulo(rr_t, domain_len) / domain_len
        if (norm2(rr_t - 0.5_dp) < 0.1_dp) then

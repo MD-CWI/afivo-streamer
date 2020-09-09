@@ -56,11 +56,7 @@ module m_field
   real(dp) :: field_stability_threshold = 3e6_dp
 
   real(dp) :: field_point_charge = 0.0_dp
-#if NDIM == 2
-  real(dp) :: field_point_r0(NDIM) = [0.0_dp, -1.0_dp]
-#elif NDIM == 3
-  real(dp) :: field_point_r0(NDIM) = [0.0_dp, 0.0_dp, -1.0_dp]
-#endif
+  real(dp) :: field_point_r0(NDIM) = 0.0_dp
 
   character(string_len) :: field_bc_type = "homogeneous"
 
@@ -127,6 +123,8 @@ contains
 
     call CFG_add_get(cfg, "field_point_charge", field_point_charge, &
          "Charge (in C) of point charge")
+    field_point_r0(:) = 0.0_dp
+    field_point_r0(NDIM) = -1.0_dp
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
 
@@ -137,6 +135,8 @@ contains
        select case (field_bc_type)
        case ("homogeneous")
           mg%sides_bc => field_bc_homogeneous
+       case ("neumann")
+          mg%sides_bc => field_bc_neumann
        case ("point_charge")
           mg%sides_bc => field_bc_point_charge
        case default
@@ -275,9 +275,11 @@ contains
     real(dp), intent(in) :: voltage
     voltage_set_externally = .true.
     field_voltage = voltage
+    current_field_amplitude = -voltage/ST_domain_len(NDIM)
   end subroutine field_set_voltage_externally
 
-  !> This fills ghost cells near physical boundaries for the potential
+  !> Dirichlet boundary conditions for the potential in the last dimension,
+  !> Neumann zero boundary conditions in the other directions
   subroutine field_bc_homogeneous(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -299,6 +301,31 @@ contains
        bc_val = 0.0_dp
     end if
   end subroutine field_bc_homogeneous
+
+  !> A Dirichlet zero and non-zero Neumann boundary condition for the potential
+  !> in the last dimension, Neumann zero boundary conditions in the other
+  !> directions
+  subroutine field_bc_neumann(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (af_neighb_dim(nb) == NDIM) then
+       if (af_neighb_low(nb)) then
+          bc_type = af_bc_dirichlet
+          bc_val = 0.0_dp
+       else
+          bc_type = af_bc_neumann
+          bc_val  = -current_field_amplitude
+       end if
+    else
+       bc_type = af_bc_neumann
+       bc_val = 0.0_dp
+    end if
+  end subroutine field_bc_neumann
 
   !> Create a field of the form E = E_0 - c / r^2
   subroutine field_bc_point_charge(box, nb, iv, coords, bc_val, bc_type)
@@ -339,7 +366,27 @@ contains
     nc     = box%n_cell
     inv_dr = 1 / box%dr
 
-#if NDIM == 2
+#if NDIM == 1
+    box%fc(1:nc+1, 1, electric_fld) = inv_dr(1) * &
+         (box%cc(0:nc, i_phi) - box%cc(1:nc+1, i_phi)) + &
+         field_background(1)
+
+    if (ST_use_dielectric) then
+       ! Compute fields at the boundaries of the box, where eps can change
+       box%fc(1, 1, electric_fld) = 2 * inv_dr(1) * &
+            (box%cc(0, i_phi) - box%cc(1, i_phi)) * &
+            box%cc(0, i_eps) / &
+            (box%cc(1, i_eps) + box%cc(0, i_eps))
+       box%fc(nc+1, 1, electric_fld) = 2 * inv_dr(1) * &
+            (box%cc(nc, i_phi) - box%cc(nc+1, i_phi)) * &
+            box%cc(nc+1, i_eps) / &
+            (box%cc(nc+1, i_eps) + box%cc(nc, i_eps))
+    end if
+
+    box%cc(1:nc, i_electric_fld) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1, electric_fld))**2)
+#elif NDIM == 2
     box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr(1) * &
          (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi)) + &
          field_background(1)
