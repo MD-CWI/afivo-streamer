@@ -2,8 +2,9 @@
 
 # Introduction
 
-In Afivo so-called [quadtree](https://en.wikipedia.org/wiki/Quadtree) (2D)
-or [octree](https://en.wikipedia.org/wiki/Octree) (3D) grids are used.
+In Afivo so-called [quadtree](https://en.wikipedia.org/wiki/Quadtree) (2D) or
+[octree](https://en.wikipedia.org/wiki/Octree) (3D) grids are used, as well as
+their 1D equivalent.
 
 # Quadtree grids
 
@@ -20,17 +21,15 @@ illustrated above. In Afivo so-called *proper nesting* or *2:1 balance* is
 ensured, which means that neighboring boxes differ by at most one refinement
 level.
 
-# Octree grids
+# Octree and 1D grids
 
 Octrees are the 3D equivalent of quadtrees. When a box is refined, it is covered
-by eight children instead of four in 2D. Some of the other differences are
-summarized in the table below.
+by eight children instead of four in 2D. The 1D equivalent of such trees is also
+supported in Afivo. Properties of such trees are summarized in the table below.
 
-Property | Quadtree | Octree
+Property | 1D tree | Quadtree | Octree
 ---|---|---
-Children of a box | 4 | 8
-Number of corners | 4 | 8
-Number of faces | 0 | 6
-Number of edges | 4 | 12
-
-
+Children of a box | 2 | 4 | 8
+Number of corners | 0 | 4 | 8
+Number of faces | 2 | 4 | 6
+Number of edges | 0 | 0 | 12

@@ -148,7 +148,7 @@ contains
 #if NDIM == 2
           call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, ST_cylindrical, dt)
-#elif NDIM == 3
+#else
           call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, .false., dt)
 #endif
@@ -156,7 +156,7 @@ contains
 #if NDIM == 2
           call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, ST_cylindrical)
-#elif NDIM == 3
+#else
           call phmc_set_src(tree, ST_rng, i_rhs, &
                i_photo, .false.)
 #endif

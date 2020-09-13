@@ -48,8 +48,6 @@ contains
     real(dp)                   :: electrode_V0_from_field_fraction = 1
     real(dp)                   :: capacitor_V0_from_field_fraction = 1
 
-    if (restart) error stop "TODO: Circuit does not support restarting"
-
     call CFG_add_get(cfg, "circuit%type", circuit_type, &
          "Type of external circuit")
     call CFG_add(cfg, "circuit%resistors", [3.0e2_dp], &
@@ -65,6 +63,10 @@ contains
     call CFG_add_get(cfg, "circuit%capacitor_V0_from_field_fraction", capacitor_V0_from_field_fraction, &
          "Get initial capacitor voltage from fraction of applied field")
 
+
+    if (restart .and. circuit_type /= undefined_str) then
+       error stop "TODO: Circuit does not support restarting"
+    end if
 
     select case (circuit_type)
     case (undefined_str)
@@ -157,7 +159,13 @@ contains
     nc          = box%n_cell
 
     ! Sum inner product flux * field over the cell faces
-#if NDIM == 2
+#if NDIM == 1
+    do KJI_DO(1, nc)
+       J_dot_E = J_dot_E + fac * 0.5_dp * (&
+            sum(box%fc(IJK, :, flux_elec) * field) + &
+            box%fc(i+1, 1, flux_elec) * field(1))
+    end do; CLOSE_DO
+#elif NDIM == 2
     if (ST_cylindrical) then
        ! Multiply values with 2 * pi * r
        fac = fac * 2 * acos(-1.0_dp)

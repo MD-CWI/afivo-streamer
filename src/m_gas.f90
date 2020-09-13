@@ -44,6 +44,9 @@ module m_gas
   ! Gas mean molecular weight (kg)
   real(dp), public, protected :: gas_molecular_weight = 28.8_dp * UC_atomic_mass
 
+  ! Joule heating efficiency
+  real(dp), public, protected :: gas_heating_efficiency  = 1.0_dp
+
   ! Ratio of heat capacities (polytropic index)
   real(dp), public, protected :: gas_euler_gamma = 1.4_dp
 
@@ -51,17 +54,21 @@ module m_gas
   integer, parameter, public :: n_vars_euler = 2+NDIM
 
   ! Indices of the Euler variables
-  integer, public, protected :: gas_vars(n_vars_euler)
+  integer, public, protected :: gas_vars(n_vars_euler) = -1
+  ! Indices of the primiteve Euler variables
+  integer, public, protected :: gas_prim_vars(n_vars_euler+1) = -1
 
   ! Indices of the Euler fluxes
-  integer, public, protected :: gas_fluxes(n_vars_euler)
+  integer, public, protected :: gas_fluxes(n_vars_euler) = -1
 
   ! Names of the Euler variables
   character(len=name_len), public, protected :: gas_var_names(n_vars_euler)
 
   ! Indices defining the order of the gas dynamics variables
   integer, parameter, public :: i_rho = 1
-#if NDIM == 2
+#if NDIM == 1
+  integer, parameter, public :: i_mom(NDIM) = [2]
+#elif NDIM == 2
   integer, parameter, public :: i_mom(NDIM) = [2, 3]
 #elif NDIM == 3
   integer, parameter, public :: i_mom(NDIM) = [2, 3, 4]
@@ -89,7 +96,10 @@ contains
 
     if (gas_dynamics) then
        gas_var_names(i_rho) = "gas_rho"
-       gas_var_names(i_mom(1:2)) = ["gas_mom_x", "gas_mom_y"]
+       gas_var_names(i_mom(1)) = "gas_mom_x"
+#if NDIM > 1
+       gas_var_names(i_mom(2)) = "gas_mom_y"
+#endif
 #if NDIM == 3
        gas_var_names(i_mom(3)) = "gas_mom_z"
 #endif
@@ -105,6 +115,15 @@ contains
           ! @todo improve boundary conditions?
           call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
        end do
+       call af_add_cc_variable(tree, "u", ix=gas_prim_vars(i_mom(1)))
+#if NDIM > 1
+       call af_add_cc_variable(tree, "v", ix=gas_prim_vars(i_mom(2)))
+#endif
+#if NDIM == 3
+       call af_add_cc_variable(tree, "w", ix=gas_prim_vars(i_mom(3)))
+#endif
+       call af_add_cc_variable(tree, "pressure", ix=gas_prim_vars(i_e))
+       call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
     else if (associated(user_gas_density)) then
        gas_constant_density = .false.
        call af_add_cc_variable(tree, "M", ix=i_gas_dens)
@@ -118,6 +137,8 @@ contains
          "The gas temperature (Kelvin)")
     call CFG_add_get(cfg, "gas%molecular_weight", gas_molecular_weight, &
          "Gas mean molecular weight (kg), for gas dynamics")
+    call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
+         "Joule heating efficiency (between 0.0 and 1.0)")
 
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
@@ -227,9 +248,12 @@ contains
   subroutine to_primitive(n_values, n_vars, u)
     integer, intent(in)     :: n_values, n_vars
     real(dp), intent(inout) :: u(n_values, n_vars)
+    integer :: idim
 
-    u(:, i_mom(1)) = u(:, i_mom(1))/u(:, i_rho)
-    u(:, i_mom(2)) = u(:, i_mom(2))/u(:, i_rho)
+    do idim = 1, NDIM
+       u(:, i_mom(idim)) = u(:, i_mom(idim))/u(:, i_rho)
+    end do
+
     u(:, i_e) = (gas_euler_gamma-1.0_dp) * (u(:, i_e) - &
          0.5_dp*u(:, i_rho)* sum(u(:, i_mom(:))**2, dim=2))
   end subroutine to_primitive

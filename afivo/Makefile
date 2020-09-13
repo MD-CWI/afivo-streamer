@@ -1,4 +1,4 @@
-SRC_DIRS	:= lib_2d lib_3d examples tests
+SRC_DIRS	:= lib_1d lib_2d lib_3d examples tests
 
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
@@ -30,4 +30,4 @@ external_libraries/hypre:
 
 # Dependency information
 $(SRC_DIRS): external_libraries/silo external_libraries/hypre
-examples tests: lib_2d lib_3d
+examples tests: lib_1d lib_2d lib_3d

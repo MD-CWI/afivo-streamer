@@ -33,8 +33,11 @@ module m_streamer
   integer, public, protected :: i_tmp          = -1
   !> Index of can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
-  !> Index of Joule heating term
-  integer, public, protected :: i_heat_src     = -1
+
+  !> Include deposited power density in output
+  logical, public, protected :: compute_power_density = .false.
+  !> Index of deposited power density
+  integer, public, protected :: i_power_density = -1
 
   !> Number of face-centered variables
   integer, public, protected :: n_var_face   = 0
@@ -42,8 +45,12 @@ module m_streamer
   integer, public, protected :: flux_elec    = -1
   !> Index of electric field vector
   integer, public, protected :: electric_fld = -1
-  !> List of flux species
-  integer, public, protected :: flux_species(1) = -1
+  !> List of all flux variables (face-centered index)
+  integer, public, protected, allocatable :: flux_variables(:)
+  !> List of all flux species (cell-centered index)
+  integer, public, protected, allocatable :: flux_species(:)
+  !> List of the charges of the flux species
+  integer, public, protected, allocatable :: flux_species_charge(:)
 
   !> Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
@@ -51,17 +58,9 @@ module m_streamer
   !> Whether a dielectric is used
   logical, public, protected :: ST_use_dielectric = .false.
 
-  !> Maximal electric field for the lookup table
-  real(dp), public, protected :: ST_max_field = 3e7_dp
-
-  !> The diffusion coefficient for positive ions (m2/s)
-  real(dp), public, protected :: ST_ion_diffusion = 0.0_dp
-
-  !> The mobility of positive ions (m2/Vs)
-  real(dp), public, protected :: ST_ion_mobility = 0.0_dp
-
-  !> Whether to update ions (depends on ion diffusion/mobility)
-  logical, public, protected :: ST_update_ions = .false.
+  !> Boundary condition for the plasma species
+  procedure(af_subr_bc), public, protected, pointer :: &
+       bc_species => null()
 
   !> Multigrid option structure
   type(mg_t), public :: mg
@@ -107,7 +106,7 @@ module m_streamer
   integer, public, protected :: ST_box_size = 8
 
   !> Size of the coarse grid
-  integer, public, protected :: ST_coarse_grid_size(NDIM) = 8
+  integer, public, protected :: ST_coarse_grid_size(NDIM) = -1
 
   !> Domain length per dimension
   real(dp), public, protected :: ST_domain_len(NDIM) = 16e-3_dp
@@ -143,21 +142,21 @@ contains
     use m_chemistry
     use m_units_constants
     use m_gas
+    use m_transport_data
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
-    integer                    :: n, n_threads
-    character(len=name_len)    :: prolong_method
+    integer                    :: n, n_threads, ix_chemistry
+    character(len=name_len)    :: prolong_method, bc_method
     character(len=string_len)  :: tmp_str
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
+    real(dp)                   :: tmp
 
     ! Set index of electrons
     i_electron = af_find_cc_variable(tree, "e")
     ix_electron = species_index("e")
-
-    flux_species(1) = i_electron
 
     ! Set index of first positive ion species
     do n = n_gas_species+1, n_species
@@ -170,15 +169,37 @@ contains
 
     if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
 
+    ! Set flux species
+    call af_add_fc_variable(tree, "flux_elec", ix=flux_elec, &
+         write_binary=.false.)
+    call af_add_fc_variable(tree, "field", ix=electric_fld)
+
+    allocate(flux_species(1+transport_data_ions%n_mobile_ions))
+    allocate(flux_species_charge(1+transport_data_ions%n_mobile_ions))
+    allocate(flux_variables(1+transport_data_ions%n_mobile_ions))
+    flux_species(1)        = i_electron
+    flux_species_charge(1) = -1
+    flux_variables(1)      = flux_elec
+
+    do n = 1, transport_data_ions%n_mobile_ions
+       flux_species(1+n) = af_find_cc_variable(tree, &
+            trim(transport_data_ions%names(n)))
+
+       ! Get index in chemistry list and determine charge
+       ix_chemistry = species_index(trim(transport_data_ions%names(n)))
+       flux_species_charge(1+n) = species_charge(ix_chemistry)
+
+       call af_add_fc_variable(tree, trim(transport_data_ions%names(n)), &
+            ix=flux_variables(1+n), write_binary=.false.)
+    end do
+
+    if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
+
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
     call af_add_cc_variable(tree, "tmp", write_out=.false., &
          write_binary=.false., ix=i_tmp)
-
-    call af_add_fc_variable(tree, "flux_elec", ix=flux_elec, &
-         write_binary=.false.)
-    call af_add_fc_variable(tree, "field", ix=electric_fld)
 
     call CFG_add_get(cfg, "cylindrical", ST_cylindrical, &
          "Whether cylindrical coordinates are used (only in 2D)")
@@ -191,8 +212,26 @@ contains
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
 
-    if (gas_dynamics) then
-       call af_add_cc_variable(tree, "heat_src", ix=i_heat_src)
+    bc_method = "neumann_zero"
+    call CFG_add_get(cfg, "species_boundary_condition", &
+         bc_method, &
+         "Boundary condition for the plasma species")
+    select case (bc_method)
+    case ("neumann_zero")
+       bc_species => af_bc_neumann_zero
+    case ("dirichlet_zero")
+       bc_species => bc_species_dirichlet_zero
+    case default
+       print *, "Unknown boundary condition: ", trim(bc_method)
+       print *, "Try neumann_zero or dirichlet_zero"
+       error stop
+    end select
+
+    call CFG_add_get(cfg, "compute_power_density", compute_power_density, &
+         "Whether to compute the deposited power density")
+
+    if (compute_power_density) then
+       call af_add_cc_variable(tree, "power_density", ix = i_power_density)
     end if
 
     call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
@@ -201,11 +240,13 @@ contains
          "Whether the length of the streamer is used to end the simulation")
     call CFG_add_get(cfg, "end_streamer_length", ST_end_streamer_length, &
          "Streamer length at which the simulation will end.")
-    call CFG_add_get(cfg, "initial_streamer_pos_steps_wait", ST_initial_streamer_pos_steps_wait, &
-          "Number of simulation steps to wait before initializing the starting position of the streamer")
+    call CFG_add_get(cfg, "initial_streamer_pos_steps_wait", &
+         ST_initial_streamer_pos_steps_wait, &
+         "Number of simulation steps to wait before initializing "&
+         "the starting position of the streamer")
 
     call CFG_add_get(cfg, "end_time", ST_end_time, &
-       "The desired endtime (s) of the simulation")
+         "The desired endtime (s) of the simulation")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
          "The number of grid cells per coordinate in a box")
     call CFG_add_get(cfg, "coarse_grid_size", ST_coarse_grid_size, &
@@ -216,6 +257,19 @@ contains
          "The origin of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
          "Whether the domain is periodic (per dimension)")
+
+    if (all(ST_coarse_grid_size == -1)) then
+       ! Not set, automatically determine size
+       ST_coarse_grid_size = ST_box_size * &
+            nint(ST_domain_len / minval(ST_domain_len))
+    end if
+
+    tmp = maxval(ST_domain_len/ST_coarse_grid_size) / &
+         minval(ST_domain_len/ST_coarse_grid_size)
+    if (tmp > 1.001_dp) then
+       print *, "!!! Warning: using non-square grid cells"
+       write(*, "(A,F12.4)") " !!! Maximal aspect ratio:", tmp
+    end if
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
@@ -287,5 +341,27 @@ contains
        seed(i) = ieor(int(time), int(huge(1) * rr))
     end do
   end function get_random_seed
+
+  !> Impose a Dirichlet zero boundary condition for plasma species in the last
+  !> dimension, which is supposed to have the electrodes. We use Neumann
+  !> conditions in the other dimensions. Note that this version avoids
+  !> extrapolation (in contrast to the regular Dirichlet b.c.), which is more
+  !> suitable for conserved species densities.
+  subroutine bc_species_dirichlet_zero(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (af_neighb_dim(nb) == NDIM) then
+       bc_type = af_bc_dirichlet_copy
+       bc_val  = 0.0_dp
+    else
+       bc_type = af_bc_neumann
+       bc_val  = 0.0_dp
+    end if
+  end subroutine bc_species_dirichlet_zero
 
 end module m_streamer

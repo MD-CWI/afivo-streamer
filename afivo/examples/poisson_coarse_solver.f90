@@ -187,7 +187,10 @@ contains
     do KJI_DO(1,nc)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, i_err) = box%cc(IJK, i_phi) - gauss_value(gs, rr)
-#if NDIM == 2
+#if NDIM == 1
+       gradx = 0.5_dp * (box%cc(i+1, i_phi) - &
+            box%cc(i-1, i_phi)) / box%dr(1)
+#elif NDIM == 2
        gradx = 0.5_dp * (box%cc(i+1, j, i_phi) - &
             box%cc(i-1, j, i_phi)) / box%dr(1)
 #elif NDIM == 3

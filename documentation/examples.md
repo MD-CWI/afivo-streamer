@@ -21,11 +21,12 @@ The 2D program can also be used for axisymmetric simulations:
 
 For more information about the configuration files, see @ref md_documentation_simulation_options.
 
-## Standard 3D example
+## Examples in 1D and 3D
 
-A 3D example can be found in
+Examples in 1D and 3D can be found in
 
-    cd programs/standard_3d
+    programs/standard_1d
+    programs/standard_3d
 
 ## Visualization
 

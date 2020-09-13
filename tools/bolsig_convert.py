@@ -1,16 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Author: Jannis Teunissen
-
-# Description: Convert Bolsig+ output (one big table) to a list of energy,
-# mobility, diffusion constant, ionization coefficient and attachment
-# coefficient
-
-# TODO: Could write this more compactly, but for now works okay.
 
 import argparse
 import re
 import numpy as np
+import sys
 
 
 def getArgs():
@@ -18,11 +13,18 @@ def getArgs():
     parser = argparse.ArgumentParser(description="Converter for Bolsig+ data")
     parser.add_argument("infile", type=str, help="input file")
     parser.add_argument("outfile", type=str, help="output file")
-    parser.add_argument("-T", type=float, default=300.,
-                        help="Gas temperature (K)")
-    parser.add_argument("-p", type=float,
-                        default=1.0, help="Gas pressure (bar)")
-
+    parser.add_argument("-transport", type=str, nargs='+',
+                        default=["Mean energy (eV)",
+                                 "Mobility *N (1/m/V/s)",
+                                 "Diffusion coefficient *N (1/m/s)",
+                                 "Townsend ioniz. coef. alpha/N (m2)",
+                                 "Townsend attach. coef. eta/N (m2)"],
+                        help="Which transport coefficients to include")
+    parser.add_argument("-colltypes", type=str, nargs='+',
+                        default=["Ionization", "Attachment"],
+                        help="Which collision types to include")
+    parser.add_argument("-colls", type=str, nargs='+', default=[],
+                        help="Other collisions to include (e.g. C2 C5)")
     return parser.parse_args()
 
 
@@ -31,84 +33,66 @@ def convert():
 
     with open(cfg.infile, 'r') as f:
         fr = f.read()
-        fr = re.sub(r'(\r\n|\r|\n)', '\n', fr)  # Fix newlines
+    fr = re.sub(r'\r\n', '\n', fr)  # Fix newlines
+    lines = fr.splitlines()
 
-    # Look up columns of things we are interested in
-    Efield_label = 'E/N(Td)'
-    match = re.search(r'(A\S*).*Mean energy \(eV\)', fr)
-    eV_label = match.group(1)
-    match = re.search(r'(A\S*).*Mobility \*N \(1\/m\/V\/s\)', fr)
-    mu_label = match.group(1)
-    match = re.search(r'(A\S*).*Diffusion coefficient'
-                      + r' \*N \(1\/m\/s\)', fr)
-    dc_label = match.group(1)
-    match = re.search(r'(A\S*).*Townsend ioniz. coef. alpha/N \(m2\)', fr)
-    alpha_label = match.group(1)
-    eta_label = 'I_DO_NOT_EXIST?'
+    transport_labels = ['R#', 'E/N']
+    ix = lines.index(r' Transport coefficients') + 1
+    while lines[ix].startswith(r'A'):
+        tmp = lines[ix].split()
+        transport_labels.append(' '.join(tmp[1:]))
+        ix += 1
 
-    # Listing of columns at the start (e.g. R# E/N (Td) A1 A2 A6 ...)
-    match = re.search(r'.*(\s+(A\d+)){5,}.*', fr)
-    # Remove the space from 'E/N (Td)'
-    header = re.sub(r'E/N \(', r'E/N(', match.group(0))
-    # The table starts after the header
-    tbl_start = match.end() + 1
-
-    # Find indexes of columns
-    column_order = header.split()
-    Efield_col = column_order.index(Efield_label)
-    eV_col = column_order.index(eV_label)
-    mu_col = column_order.index(mu_label)
-    dc_col = column_order.index(dc_label)
-    alpha_col = column_order.index(alpha_label)
-    if eta_label in column_order:
-        eta_col = column_order.index(eta_label)
-    else:
-        eta_col = -1
+    # Skip one line with column labels
+    i0 = ix + 1
 
     # Find end of table
-    # Double Newline at the end
-    match = re.search(r'^\s*$', fr[tbl_start:], re.M)
-    tbl_end = tbl_start + match.start() - 1
+    i1 = i0
+    while lines[i1].strip() != "":
+        i1 += 1
 
-    tbl_string = fr[tbl_start:tbl_end].splitlines()
-    tbl_data = np.genfromtxt(tbl_string)
+    tbl_string = ";".join(lines[i0:i1])
+    
+    transport_data = np.matrix(tbl_string)
 
-    # Check if all data was read correctly
-    if np.any(np.isnan(tbl_data)):
-        print("! Warning: some data could not be read properly!")
-        print("! Number of missing values: {}".format(
-            np.sum(np.isnan(tbl_data))))
+    rate_labels = ['R#', 'E/N', 'eV']
+    rate_desc = [None, None, None]
+    ix = lines.index("Rate coefficients (m3/s)") + 1
+    while lines[ix].startswith(r' C'):
+        tmp = lines[ix].split()
+        rate_labels.append(tmp[0])
+        rate_desc.append(' '.join(tmp))
+        if tmp[2] in cfg.colltypes:
+            cfg.colls.append(tmp[0])
+        ix += 1
 
-    boltzmann_const = 1.3806488e-23
-    gas_num_dens = cfg.p * 1e5 / (boltzmann_const * cfg.T)
+    # Skip one line with column labels
+    i0 = ix + 1
 
-    print("Gas temperature %.3e Kelvin" % (cfg.T))
-    print("Gas pressure     %.3e bar" % (cfg.p))
-    print("Gas #density     %.3e /m3" % (gas_num_dens))
+    # Find end of table
+    i1 = i0
+    while lines[i1].strip() != "": i1 += 1
 
-    # Clear file
-    with open(cfg.outfile, 'w') as f:
-        f.close()
+    tbl_string = ";".join(lines[i0:i1])
+    rate_data = np.matrix(tbl_string)
 
-    with open(cfg.outfile, 'ab') as f:
-        tbl_data[:, Efield_col] = (tbl_data[:, Efield_col] *
-                                   1e-21 * gas_num_dens)
-        tbl_data[:, mu_col] = tbl_data[:, mu_col] / gas_num_dens
-        tbl_data[:, dc_col] = tbl_data[:, dc_col] / gas_num_dens
-        tbl_data[:, alpha_col] = tbl_data[:, alpha_col] * gas_num_dens
+    # Now write output
+    with open(cfg.outfile, 'wb') as f:
+        ix = transport_labels.index("E/N")
+        for name in cfg.transport:
+            if name in transport_labels:
+                iy = transport_labels.index(name)
+                write_entry(name, transport_data[:, ix], transport_data[:, iy], f)
+            else:
+                print("Warning: {} not found".format(name))
 
-        write_entry(r'efield[V/m]_vs_mu[m2/Vs]', tbl_data[:, Efield_col],
-                    tbl_data[:, mu_col], f)
-        write_entry(r'efield[V/m]_vs_dif[m2/s]', tbl_data[:, Efield_col],
-                    tbl_data[:, dc_col], f)
-        write_entry(r'efield[V/m]_vs_alpha[1/m]', tbl_data[:, Efield_col],
-                    tbl_data[:, alpha_col], f)
-        if (eta_col != -1):
-            tbl_data[:, eta_col] = tbl_data[:, eta_col] * gas_num_dens
-            write_entry(r'efield[V/m]_vs_eta[1/m]',
-                        tbl_data[:, Efield_col], tbl_data[:, eta_col], f)
-            write_entry(r'efield[V/m]_vs_energy[eV]',
-                        tbl_data[:, Efield_col], tbl_data[:, eV_col], f)
+        ix = rate_labels.index("E/N")
+        for name in cfg.colls:
+            if name in rate_labels:
+                iy = rate_labels.index(name)
+                write_entry(rate_desc[iy], rate_data[:, ix], rate_data[:, iy], f)
+            else:
+                print("Warning: {} not found".format(name))
 
 
 def write_entry(entry_name, x_data, y_data, f):
@@ -120,7 +104,6 @@ def write_entry(entry_name, x_data, y_data, f):
     f.write(hdr.encode('ascii'))
     np.savetxt(f, out_data)
     f.write(ftr.encode('ascii'))
-
 
 if __name__ == '__main__':
     convert()

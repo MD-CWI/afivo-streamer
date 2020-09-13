@@ -162,6 +162,7 @@ program KT_euler
 
 contains
 
+  !> [forward_euler_gasd]
   subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
        i_step, n_steps)
     type(af_t), intent(inout) :: tree
@@ -182,6 +183,7 @@ contains
     ! Compute new time step
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine forward_euler
+  !> [forward_euler_gasd]
 
   subroutine set_init_conds(box)
     type(box_t), intent(inout) :: box

@@ -38,7 +38,9 @@ contains
           associate (cc => tree%boxes(id)%cc)
             do KJI_DO(1,nc)
                val = cc(IJK, iv)
-#if NDIM == 2
+#if NDIM == 1
+               neighbs = [cc(i-1, iv), cc(i+1, iv)]
+#elif NDIM == 2
                neighbs = [cc(i-1, j, iv), cc(i+1, j, iv), &
                     cc(i, j-1, iv), cc(i, j+1, iv)]
 #elif NDIM == 3

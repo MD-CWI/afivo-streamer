@@ -125,7 +125,7 @@ program streamer
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
      call af_set_cc_methods(tree, species_itree(i), &
-          af_bc_neumann_zero, af_gc_interp_lim, ST_prolongation_method)
+          bc_species, af_gc_interp_lim, ST_prolongation_method)
   end do
 
   if (.not. gas_constant_density) then
@@ -283,6 +283,11 @@ program streamer
         call coupling_update_gas_density(tree)
      else
         dt_gas_lim = dt_max
+     end if
+
+     ! If neither electrons or the gas is evolved, make sure time is increased
+     if (.not. (evolve_electrons .or. gas_dynamics)) then
+        time = time + dt
      end if
 
      ! dt is modified when writing output, global_dt not

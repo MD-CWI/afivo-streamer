@@ -8,7 +8,7 @@ vpath %.f90 ../src
 include ../src/definitions.make
 include ../src/makerules.make
 
-$(OBJS): FFLAGS += -DNDIM=2
+$(OBJS): FFLAGS += -DNDIM=$(NDIM)
 
 $(LIB): $(OBJS)
 	$(RM) $@
