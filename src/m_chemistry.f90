@@ -442,6 +442,7 @@ contains
     integer               :: n
     real(dp)              :: c0, c(rate_max_num_coeff)
     real(dp)              :: Te(n_cells)                 !> Electron Temperature in Kelvin
+    real(dp)              :: cm_to_m_conversion_factor   !> cm^x / s conversion to m^x / s factor
 
 
 
@@ -452,6 +453,10 @@ contains
 
        ! Coefficients for the reaction rate
        c(:) = reactions(n)%rate_data
+
+       ! Kossyi analytical functions unit conversion: 
+       ! The analytical functions from Kossyi are in cm3/s for 2-body and cm6/s for 3-body reactions
+       cm_to_m_conversion_factor = 1e-6**(reactions(n)%n_species_in - 1)
 
        select case (reactions(n)%rate_type)
        case (rate_tabulated_field)
@@ -467,30 +472,30 @@ contains
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
        case (rate_analytic_k1)
           Te = approximate_electron_temperature(n_cells, fields)
-          rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
+          rates(:, n) = c0 * c(1) * (300 / Te)**c(2) * cm_to_m_conversion_factor
        case (rate_analytic_k2)
-          rates(:, n) = c0 * c(1)
+          rates(:, n) = c0 * c(1) * cm_to_m_conversion_factor
        case (rate_analytic_k3)
           Te = approximate_electron_temperature(n_cells, fields)
-          rates(:, n) = c0 * (c(1) * (UC_boltzmann_const * Te + c(2))**2 - c(3)) * c(4)
+          rates(:, n) = c0 * (c(1) * (UC_boltzmann_const * Te + c(2))**2 - c(3)) * c(4) * cm_to_m_conversion_factor
        case (rate_analytic_k4)
-          rates(:, n) = c0 * c(1) * (gas_temperature / 300)**c(2) * exp(-c(3) / gas_temperature)
+          rates(:, n) = c0 * c(1) * (gas_temperature / 300)**c(2) * exp(-c(3) / gas_temperature) * cm_to_m_conversion_factor
        case (rate_analytic_k5)
-          rates(:, n) = c0 * c(1) * exp(-c(2) / gas_temperature)
+          rates(:, n) = c0 * c(1) * exp(-c(2) / gas_temperature) * cm_to_m_conversion_factor
        case (rate_analytic_k6)
-          rates(:, n) = c0 * c(1) * gas_temperature**c(2)
+          rates(:, n) = c0 * c(1) * gas_temperature**c(2) * cm_to_m_conversion_factor
        case (rate_analytic_k7)
-          rates(:, n) = c0 * c(1) * (gas_temperature / c(2))**c(3)
+          rates(:, n) = c0 * c(1) * (gas_temperature / c(2))**c(3) * cm_to_m_conversion_factor
        case (rate_analytic_k8)
-          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2)
+          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2) * cm_to_m_conversion_factor
        case (rate_analytic_k9)
-          rates(:, n) = c0 * c(1) * exp(-c(2) * gas_temperature)
+          rates(:, n) = c0 * c(1) * exp(-c(2) * gas_temperature) * cm_to_m_conversion_factor
        case (rate_analytic_k10)
-          rates(:, n) = c0 * exp(c(1) + c(2) * (gas_temperature - 300))
+          rates(:, n) = c0 * exp(c(1) + c(2) * (gas_temperature - 300)) * cm_to_m_conversion_factor
        case (rate_analytic_k11)
-          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2) * exp(-c(3) / gas_temperature)
+          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2) * exp(-c(3) / gas_temperature) * cm_to_m_conversion_factor
        case (rate_analytic_k12)
-          rates(:, n) = c0 * c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature)
+          rates(:, n) = c0 * c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature) * cm_to_m_conversion_factor
       end select
     end do
   end subroutine get_rates
