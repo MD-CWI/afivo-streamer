@@ -94,7 +94,7 @@ module m_chemistry
   !> Indicates a reaction of the form c1 * exp(-c2 * T)
   integer, parameter :: rate_analytic_k9 = 14
 
-  !> Indicates a reaction of the form exp(c1 + c2 * (T - 300))
+  !> Indicates a reaction of the form 10**(c1 + c2 * (T - 300))
   integer, parameter :: rate_analytic_k10 = 15
 
   !> Indicates a reaction of the form c1 * (300 / T)**c2 * exp(-c3 / T)
@@ -491,7 +491,7 @@ contains
        case (rate_analytic_k9)
           rates(:, n) = c0 * c(1) * exp(-c(2) * gas_temperature) * cm_to_m_conversion_factor
        case (rate_analytic_k10)
-          rates(:, n) = c0 * exp(c(1) + c(2) * (gas_temperature - 300)) * cm_to_m_conversion_factor
+          rates(:, n) = c0 * 10**(c(1) + c(2) * (gas_temperature - 300)) * cm_to_m_conversion_factor
        case (rate_analytic_k11)
           rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2) * exp(-c(3) / gas_temperature) * cm_to_m_conversion_factor
        case (rate_analytic_k12)
