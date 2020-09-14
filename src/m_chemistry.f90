@@ -32,6 +32,7 @@ module m_chemistry
      integer, allocatable  :: ix_in(:)            !< Index of input species
      integer, allocatable  :: ix_out(:)           !< Index of output species
      integer, allocatable  :: multiplicity_out(:) !< Multiplicity of output
+     integer               :: n_species_in        !< Number of input species
      integer               :: rate_type           !< Type of reaction rate
      !> Type of reaction (e.g. ionization)
      integer               :: reaction_type = general_reaction
@@ -196,6 +197,7 @@ contains
           reactions(1)%ix_in = [1]
           reactions(1)%ix_out = [1, 2]
           reactions(1)%multiplicity_out = [2, 1]
+          reactions(1)%n_species_in = 2
           reactions(1)%rate_type = rate_tabulated_field
           reactions(1)%rate_factor = 1.0_dp
           reactions(1)%x_data = &
@@ -209,6 +211,7 @@ contains
           reactions(2)%ix_in = [1]
           reactions(2)%ix_out = [3]
           reactions(2)%multiplicity_out = [1]
+          reactions(2)%n_species_in = 2
           reactions(2)%rate_type = rate_tabulated_field
           reactions(2)%rate_factor = 1.0_dp
           reactions(2)%x_data = &
@@ -302,7 +305,8 @@ contains
 
     print *, "--- List of reactions ---"
     do n = 1, n_reactions
-       write(*, "(I4,' ',A15,A)") n, reaction_names(reactions(n)%reaction_type), &
+       write(*, "(I4,' (',I0,') ',A15,A)") n, reactions(n)%n_species_in, &
+            reaction_names(reactions(n)%reaction_type), &
             reactions(n)%description
     end do
     print *, "-------------------------"
@@ -694,6 +698,7 @@ contains
     n_in      = 0
     n_out     = 0
     rfactor   = 1.0_dp
+    reaction%n_species_in = 0
 
     do n = 1, n_found
        component = reaction_text(i0(n):i1(n))
@@ -711,6 +716,10 @@ contains
           component = component(2:)
        else
           multiplicity = 1
+       end if
+
+       if (left_side) then
+          reaction%n_species_in = reaction%n_species_in + multiplicity
        end if
 
        if (gas_constant_density) then
