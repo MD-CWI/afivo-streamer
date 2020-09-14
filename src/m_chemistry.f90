@@ -637,7 +637,7 @@ contains
           read(data_value(n), *) new_reaction%rate_data(1:2)
        case ("k7_func")
           new_reaction%rate_type = rate_analytic_k7
-          read(data_value(n), *) new_reaction%rate_data(1:2)
+          read(data_value(n), *) new_reaction%rate_data(1:3)
        case ("k8_func")
           new_reaction%rate_type = rate_analytic_k8
           read(data_value(n), *) new_reaction%rate_data(1:2)
