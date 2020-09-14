@@ -447,10 +447,11 @@ contains
     character(len=50)            :: data_value(max_num_reactions)
     character(len=50)            :: reaction(max_num_reactions)
     character(len=50)            :: how_to_get(max_num_reactions)
+    character(len=10)            :: length_unit(max_num_reactions)
     type(reaction_t)             :: new_reaction
     integer                      :: my_unit
-    integer, parameter           :: n_fields = 3
-    integer                      :: i0(n_fields), i1(n_fields)
+    integer, parameter           :: n_fields_max = 4
+    integer                      :: i0(n_fields_max), i1(n_fields_max)
     integer                      :: n, n_found
 
     open(newunit=my_unit, file=filename, action="read")
@@ -483,9 +484,9 @@ contains
        ! Exit when we read a line of dashes
        if (line(1:5) == "-----") exit
 
-       call get_fields_string(line, ",", n_fields, n_found, i0, i1)
+       call get_fields_string(line, ",", n_fields_max, n_found, i0, i1)
 
-       if (n_found /= n_fields) then
+       if (n_found < 3 .or. n_found > n_fields_max) then
           print *, trim(line)
           error stop "Invalid chemistry syntax"
        end if
@@ -497,6 +498,13 @@ contains
        reaction(n_reactions)   = line(i0(1):i1(1))
        how_to_get(n_reactions) = line(i0(2):i1(2))
        data_value(n_reactions) = line(i0(3):i1(3))
+
+       ! Fourth entry can hold a custom length unit, default is meter
+       if (n_found > 3) then
+          length_unit(n_reactions) = line(i0(4):i1(4))
+       else
+          length_unit(n_reactions) = "m"
+       end if
     end do
 
     ! Close the file (so that we can re-open it for reading data)
@@ -528,6 +536,20 @@ contains
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
+          error stop
+       end select
+
+       ! Correct for length unit in the rate function (e.g. [k] = cm3/s)
+       select case (length_unit(n))
+       case ("m")
+          continue
+       case ("cm")
+          ! 1 cm^3 = 1e-6 m^3
+          new_reaction%rate_factor = new_reaction%rate_factor * &
+               1e-6_dp**(new_reaction%n_species_in-1)
+       case default
+          print *, "For reaction: ", trim(reaction(n))
+          print *, "Invalid length unit: ", trim(length_unit(n))
           error stop
        end select
 

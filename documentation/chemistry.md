@@ -28,25 +28,34 @@ Chemical reactions can be defined in the `input_data%file`, as in the following 
 
 The format of these reactions is
 
-    reaction, rate_type, value
+    reaction, rate_type, value(s) [, length unit]
 
-Some of the `rate_type` options are described below. For a list of all supported
-rate types, see @ref m_chemistry::get_rates()
+where:
+
+* `reaction` is the reaction text, as in the example above
+* `rate_type` denotes the method used to obtain the reaction rate. Several
+  options are described below. For a list of all supported rate types, see @ref
+  m_chemistry::get_rates()
+* `value(s)` are one or more values needed to obtain the reaction rate, for
+  example the name of a table or the coefficients of a function
+* `length unit` optionally denotes the length unit used in the reaction rate. It
+  can be `m` (the default) or `cm`. This setting can be used to convert reaction
+  rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s` respectively.
 
 ## field_table
 
 For a table of the reaction rate versus the reduced electric field (E/N) in
-Townsend. Options: the name of the table in `input_data%file`
+Townsend. Value: the name of the table in `input_data%file`
 
 ## constant
 
-For a constant reaction rate. Options: the reaction rate.
+For a constant reaction rate. Value: the reaction rate.
 
 ## `linear`
 
-For a reaction rate linear in E/N. Options: c1, c2. The rate is given by
+For a reaction rate linear in E/N. Values: c1, c2. The rate is given by
 `c1 * (Td - c2)` where `Td` is the field in Townsend
 
 ## exp_v1
 
-For an exponential dependence on E/N. Options: c1, c2, c3. The rate is given by `c(1) * exp(-(c(2) / (c(3) + fields))**2)`
+For an exponential dependence on E/N. Values: c1, c2, c3. The rate is given by `c(1) * exp(-(c(2) / (c(3) + fields))**2)`
