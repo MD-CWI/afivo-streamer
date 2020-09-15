@@ -28,7 +28,7 @@ Chemical reactions can be defined in the `input_data%file`, as in the following 
 
 The format of these reactions is
 
-    reaction, rate_type, value(s) [, length unit]
+    reaction,rate_type,value(s) [, length unit]
 
 where:
 
