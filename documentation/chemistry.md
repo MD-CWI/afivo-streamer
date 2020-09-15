@@ -28,7 +28,7 @@ Chemical reactions can be defined in the `input_data%file`, as in the following 
 
 The format of these reactions is
 
-    reaction, rate_type, value(s) [, length unit]
+    reaction,rate_type,value(s) [, length unit]
 
 where:
 
@@ -59,3 +59,51 @@ For a reaction rate linear in E/N. Values: c1, c2. The rate is given by
 ## exp_v1
 
 For an exponential dependence on E/N. Values: c1, c2, c3. The rate is given by `c(1) * exp(-(c(2) / (c(3) + fields))**2)`
+
+## k1_func
+
+Values: c1. The rate is given by `c(1) * (300 / Te)**2`, with `Te` the electron temperature.
+
+## k2_func
+
+For a constant reaction rate. Is the same as `constant`, but was implemented seperately by the chemistry data repo. Values: c1. The rate is given by `c(1)`
+
+## k3_func
+
+Values: c1, c2, c3, c4. The rate is given by `(c(1) * (kB * Te + c(2))**2 - c(3)) * c(4)`, with `kB` the Boltzmann constant and `Te` the electron temperature.
+
+## k4_func
+
+Values: c1, c2, c3. The rate is given by `c(1) * (T / 300)**c(2) * exp(-c(3) / T)`, with `T` the gas temperature.
+
+## k5_func
+
+Values: c1, c2. The rate is given by `c(1) * exp(-c(2) / T)`, with `T` the gas temperature.
+
+## k6_func
+
+Values: c1, c2. The rate is given by `c(1) * T**c(2)`, with `T` the gas temperature.
+
+## k7_func
+
+Values: c1, c2, c3. The rate is given by `c(1) * (T / c(2))**c(3)`, with `T` the gas temperature.
+
+## k8_func
+
+Values: c1, c2. The rate is given by `c(1) * (300 / T)**c(2)`, with `T` the gas temperature.
+
+## k9_func
+
+Values: c1, c2. The rate is given by `c(1) * exp(-c(2) * T)`, with `T` the gas temperature.
+
+## k10_func
+
+Values: c1, c2. The rate is given by `10**(c(1) + c(2) * (T - 300))`, with `T` the gas temperature.
+
+## k11_func
+
+Values: c1, c2, c3. The rate is given by `c(1) * (300 / T)**c(2) * exp(-c(3) / T)`, with `T` the gas temperature.
+
+## k12_func
+
+Values: c1, c2, c3. The rate is given by `c(1) * T**c(2) * exp(-c(3) / T)`, with `T` the gas temperature.
