@@ -106,7 +106,7 @@ module m_streamer
   integer, public, protected :: ST_box_size = 8
 
   !> Size of the coarse grid
-  integer, public, protected :: ST_coarse_grid_size(NDIM) = 8
+  integer, public, protected :: ST_coarse_grid_size(NDIM) = -1
 
   !> Domain length per dimension
   real(dp), public, protected :: ST_domain_len(NDIM) = 16e-3_dp
@@ -152,6 +152,7 @@ contains
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
+    real(dp)                   :: tmp
 
     ! Set index of electrons
     i_electron = af_find_cc_variable(tree, "e")
@@ -256,6 +257,19 @@ contains
          "The origin of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
          "Whether the domain is periodic (per dimension)")
+
+    if (all(ST_coarse_grid_size == -1)) then
+       ! Not set, automatically determine size
+       ST_coarse_grid_size = ST_box_size * &
+            nint(ST_domain_len / minval(ST_domain_len))
+    end if
+
+    tmp = maxval(ST_domain_len/ST_coarse_grid_size) / &
+         minval(ST_domain_len/ST_coarse_grid_size)
+    if (tmp > 1.001_dp) then
+       print *, "!!! Warning: using non-square grid cells"
+       write(*, "(A,F12.4)") " !!! Maximal aspect ratio:", tmp
+    end if
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")

@@ -24,6 +24,7 @@ contains
   end subroutine coupling_add_fluid_source
 
   subroutine add_heating_box(box, dt_vec)
+    use m_gas ! needed for the heating efficiency
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc
@@ -48,7 +49,7 @@ contains
 #endif
 
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-            J_dot_E * UC_elec_charge * dt_vec(1)
+           gas_heating_efficiency *  J_dot_E * UC_elec_charge * dt_vec(1)
     end do; CLOSE_DO
   end subroutine add_heating_box
 
