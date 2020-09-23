@@ -9,11 +9,12 @@ module m_transport_data
   integer, parameter :: dp = kind(0.0d0)
 
   ! ** Indices of transport data **
-  integer, parameter, public :: td_num_var   = 4 ! Number of transport coefficients
-  integer, parameter, public :: td_mobility  = 1 ! Electron mobility
-  integer, parameter, public :: td_diffusion = 2 ! Electron diffusion constant
-  integer, parameter, public :: td_alpha     = 3 ! Ionization coefficient
-  integer, parameter, public :: td_eta       = 4 ! Attachment coefficient
+  integer, parameter, public :: td_mobility  = 1 !< Electron mobility
+  integer, parameter, public :: td_diffusion = 2 !< Electron diffusion constant
+  integer, parameter, public :: td_alpha     = 3 !< Ionization coefficient
+  integer, parameter, public :: td_eta       = 4 !< Attachment coefficient
+  !> Electron energy in eV (used with chemistry)
+  integer, protected, public :: td_energy_eV = -1
 
   ! Table with transport data vs electric field
   type(LT_t), public, protected :: td_tbl
@@ -50,10 +51,6 @@ contains
     character(len=10)          :: dummy_string(0)
     integer                    :: n
 
-    ! Create a lookup table for the model coefficients
-    td_tbl = LT_create(table_min_townsend, table_max_townsend, &
-         table_size, td_num_var)
-
     call CFG_add_get(cfg, "input_data%file", td_file, &
          "Input file with transport (and reaction) data")
     if (td_file == undefined_str) error stop "input_data%file undefined"
@@ -66,6 +63,9 @@ contains
        if (.not. gas_constant_density) then
           error stop "Old style transport used with varying gas density"
        end if
+
+       ! Create a lookup table for the model coefficients
+       td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 4)
 
        call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", x_data, y_data)
        x_data = x_data * SI_to_Townsend / gas_number_density
@@ -90,6 +90,9 @@ contains
        y_data = y_data / gas_number_density
        call LT_set_col(td_tbl, td_eta, x_data, y_data)
     else
+       ! Create a lookup table for the model coefficients
+       td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 5)
+
        call table_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
        call LT_set_col(td_tbl, td_mobility, x_data, y_data)
 
@@ -104,6 +107,11 @@ contains
        call table_from_file(td_file, "Townsend attach. coef. eta/N (m2)", &
             x_data, y_data)
        call LT_set_col(td_tbl, td_eta, x_data, y_data)
+
+       td_energy_eV = 5
+       call table_from_file(td_file, "Mean energy (eV)", &
+            x_data, y_data)
+       call LT_set_col(td_tbl, td_energy_eV, x_data, y_data)
     end if
 
     call CFG_add(cfg, "input_data%mobile_ions", dummy_string, &

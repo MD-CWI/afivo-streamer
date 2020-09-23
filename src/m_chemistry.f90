@@ -32,6 +32,7 @@ module m_chemistry
      integer, allocatable  :: ix_in(:)            !< Index of input species
      integer, allocatable  :: ix_out(:)           !< Index of output species
      integer, allocatable  :: multiplicity_out(:) !< Multiplicity of output
+     integer               :: n_species_in        !< Number of input species
      integer               :: rate_type           !< Type of reaction rate
      !> Type of reaction (e.g. ionization)
      integer               :: reaction_type = general_reaction
@@ -65,6 +66,42 @@ module m_chemistry
 
   !> Indicates a reaction of the form c1 * exp(-(Td/c2)**2)
   integer, parameter :: rate_analytic_exp_v2 = 5
+
+  !> Indicates a reaction of the form c1 * (300 / Te)**c2
+  integer, parameter :: rate_analytic_k1 = 6
+
+  !> Indicates a reaction of the form c1
+  integer, parameter :: rate_analytic_k2 = 7
+
+  !> Indicates a reaction of the form (c1 * (kB * Te + c2)**2 - c3) * c4
+  integer, parameter :: rate_analytic_k3 = 8
+
+  !> Indicates a reaction of the form c1 * (T / 300)**c2 * exp(-c3 / T)
+  integer, parameter :: rate_analytic_k4 = 9
+
+  !> Indicates a reaction of the form c1 * exp(-c2 / T)
+  integer, parameter :: rate_analytic_k5 = 10
+
+  !> Indicates a reaction of the form c1 * T**c2
+  integer, parameter :: rate_analytic_k6 = 11
+
+  !> Indicates a reaction of the form c1 * (T / c2)**c3
+  integer, parameter :: rate_analytic_k7 = 12
+
+  !> Indicates a reaction of the form c1 * (300 / T)**c2
+  integer, parameter :: rate_analytic_k8 = 13
+
+  !> Indicates a reaction of the form c1 * exp(-c2 * T)
+  integer, parameter :: rate_analytic_k9 = 14
+
+  !> Indicates a reaction of the form 10**(c1 + c2 * (T - 300))
+  integer, parameter :: rate_analytic_k10 = 15
+
+  !> Indicates a reaction of the form c1 * (300 / T)**c2 * exp(-c3 / T)
+  integer, parameter :: rate_analytic_k11 = 16
+ 
+  !> Indicates a reaction of the form c1 * T**c2 * exp(-c3 / T)
+  integer, parameter :: rate_analytic_k12 = 17
 
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
@@ -160,6 +197,7 @@ contains
           reactions(1)%ix_in = [1]
           reactions(1)%ix_out = [1, 2]
           reactions(1)%multiplicity_out = [2, 1]
+          reactions(1)%n_species_in = 2
           reactions(1)%rate_type = rate_tabulated_field
           reactions(1)%rate_factor = 1.0_dp
           reactions(1)%x_data = &
@@ -173,6 +211,7 @@ contains
           reactions(2)%ix_in = [1]
           reactions(2)%ix_out = [3]
           reactions(2)%multiplicity_out = [1]
+          reactions(2)%n_species_in = 2
           reactions(2)%rate_type = rate_tabulated_field
           reactions(2)%rate_factor = 1.0_dp
           reactions(2)%x_data = &
@@ -266,7 +305,8 @@ contains
 
     print *, "--- List of reactions ---"
     do n = 1, n_reactions
-       write(*, "(I4,' ',A15,A)") n, reaction_names(reactions(n)%reaction_type), &
+       write(*, "(I4,' (',I0,') ',A15,A)") n, reactions(n)%n_species_in, &
+            reaction_names(reactions(n)%reaction_type), &
             reactions(n)%description
     end do
     print *, "-------------------------"
@@ -373,16 +413,21 @@ contains
 
   !> Compute reaction rates
   subroutine get_rates(fields, rates, n_cells)
+    use m_units_constants
+    use m_gas
+    use m_transport_data
     integer, intent(in)   :: n_cells                     !< Number of cells
     real(dp), intent(in)  :: fields(n_cells)             !< The field (in Td) in the cells
     real(dp), intent(out) :: rates(n_cells, n_reactions) !< The reaction rates
     integer               :: n
     real(dp)              :: c0, c(rate_max_num_coeff)
+    real(dp)              :: Te(n_cells)                 !> Electron Temperature in Kelvin
+
 
     do n = 1, n_reactions
        ! A factor that the reaction rate is multiplied with, for example to
-       ! account for a constant gas number density
-       c0   = reactions(n)%rate_factor
+       ! account for a constant gas number density and if the length unit is cm instead of m
+       c0 = reactions(n)%rate_factor
 
        ! Coefficients for the reaction rate
        c(:) = reactions(n)%rate_data
@@ -399,7 +444,33 @@ contains
           rates(:, n) = c0 * c(1) * exp(-(c(2) / (c(3) + fields))**2)
        case (rate_analytic_exp_v2)
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
-       end select
+       case (rate_analytic_k1)
+          Te = LT_get_col(td_tbl, td_energy_eV, fields) / UC_boltzmann_const
+          rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
+       case (rate_analytic_k2)
+          rates(:, n) = c0 * c(1)
+       case (rate_analytic_k3)
+          Te = LT_get_col(td_tbl, td_energy_eV, fields) / UC_boltzmann_const
+          rates(:, n) = c0 * (c(1) * (UC_boltzmann_const * Te + c(2))**2 - c(3)) * c(4)
+       case (rate_analytic_k4)
+          rates(:, n) = c0 * c(1) * (gas_temperature / 300)**c(2) * exp(-c(3) / gas_temperature)
+       case (rate_analytic_k5)
+          rates(:, n) = c0 * c(1) * exp(-c(2) / gas_temperature)
+       case (rate_analytic_k6)
+          rates(:, n) = c0 * c(1) * gas_temperature**c(2)
+       case (rate_analytic_k7)
+          rates(:, n) = c0 * c(1) * (gas_temperature / c(2))**c(3)
+       case (rate_analytic_k8)
+          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2)
+       case (rate_analytic_k9)
+          rates(:, n) = c0 * c(1) * exp(-c(2) * gas_temperature)
+       case (rate_analytic_k10)
+          rates(:, n) = c0 * 10**(c(1) + c(2) * (gas_temperature - 300))
+       case (rate_analytic_k11)
+          rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2) * exp(-c(3) / gas_temperature)
+       case (rate_analytic_k12)
+          rates(:, n) = c0 * c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature)
+      end select
     end do
   end subroutine get_rates
 
@@ -443,10 +514,11 @@ contains
     character(len=50)            :: data_value(max_num_reactions)
     character(len=50)            :: reaction(max_num_reactions)
     character(len=50)            :: how_to_get(max_num_reactions)
+    character(len=10)            :: length_unit(max_num_reactions)
     type(reaction_t)             :: new_reaction
     integer                      :: my_unit
-    integer, parameter           :: n_fields = 3
-    integer                      :: i0(n_fields), i1(n_fields)
+    integer, parameter           :: n_fields_max = 4
+    integer                      :: i0(n_fields_max), i1(n_fields_max)
     integer                      :: n, n_found
 
     open(newunit=my_unit, file=filename, action="read")
@@ -479,9 +551,9 @@ contains
        ! Exit when we read a line of dashes
        if (line(1:5) == "-----") exit
 
-       call get_fields_string(line, ",", n_fields, n_found, i0, i1)
+       call get_fields_string(line, ",", n_fields_max, n_found, i0, i1)
 
-       if (n_found /= n_fields) then
+       if (n_found < 3 .or. n_found > n_fields_max) then
           print *, trim(line)
           error stop "Invalid chemistry syntax"
        end if
@@ -493,6 +565,13 @@ contains
        reaction(n_reactions)   = line(i0(1):i1(1))
        how_to_get(n_reactions) = line(i0(2):i1(2))
        data_value(n_reactions) = line(i0(3):i1(3))
+
+       ! Fourth entry can hold a custom length unit, default is meter
+       if (n_found > 3) then
+          length_unit(n_reactions) = line(i0(4):i1(4))
+       else
+          length_unit(n_reactions) = "m"
+       end if
     end do
 
     ! Close the file (so that we can re-open it for reading data)
@@ -520,10 +599,60 @@ contains
        case ("exp_v2")
           new_reaction%rate_type = rate_analytic_exp_v2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case default
+       case ("k1_func")
+          new_reaction%rate_type = rate_analytic_k1
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k2_func")
+          new_reaction%rate_type = rate_analytic_k2
+          read(data_value(n), *) new_reaction%rate_data(1)
+       case ("k3_func")
+          new_reaction%rate_type = rate_analytic_k3
+          read(data_value(n), *) new_reaction%rate_data(1:4)
+       case ("k4_func")
+          new_reaction%rate_type = rate_analytic_k4
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k5_func")
+          new_reaction%rate_type = rate_analytic_k5
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k6_func")
+          new_reaction%rate_type = rate_analytic_k6
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k7_func")
+          new_reaction%rate_type = rate_analytic_k7
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k8_func")
+          new_reaction%rate_type = rate_analytic_k8
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k9_func")
+          new_reaction%rate_type = rate_analytic_k9
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k10_func")
+          new_reaction%rate_type = rate_analytic_k10
+          read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("k11_func")
+          new_reaction%rate_type = rate_analytic_k11
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k12_func")
+          new_reaction%rate_type = rate_analytic_k12
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+      case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
+          error stop
+       end select
+
+       ! Correct for length unit in the rate function (e.g. [k] = cm3/s)
+       select case (length_unit(n))
+       case ("m")
+          continue
+       case ("cm")
+          ! 1 cm^3 = 1e-6 m^3
+          new_reaction%rate_factor = new_reaction%rate_factor * &
+               1e-6_dp**(new_reaction%n_species_in-1)
+       case default
+          print *, "For reaction: ", trim(reaction(n))
+          print *, "Invalid length unit: ", trim(length_unit(n))
           error stop
        end select
 
@@ -570,6 +699,7 @@ contains
     n_in      = 0
     n_out     = 0
     rfactor   = 1.0_dp
+    reaction%n_species_in = 0
 
     do n = 1, n_found
        component = reaction_text(i0(n):i1(n))
@@ -587,6 +717,10 @@ contains
           component = component(2:)
        else
           multiplicity = 1
+       end if
+
+       if (left_side) then
+          reaction%n_species_in = reaction%n_species_in + multiplicity
        end if
 
        if (gas_constant_density) then
