@@ -416,9 +416,6 @@ contains
     integer                    :: l
 #endif
 
-    if (.not. gas_constant_density) &
-         error stop "TODO: support variable gas density for ions"
-
     inv_dr  = 1/tree%boxes(id)%dr
 
     call af_gc2_box(tree, id, [flux_species(2:)+s_in], cc)
@@ -430,22 +427,28 @@ contains
 
 #if NDIM == 1
        do n = 1, nc+1
-          v(n, 1) = mu * tree%boxes(id)%fc(n, 1, electric_fld)
+          v(n, 1) = mu * get_N_inv_face(tree%boxes(id), n, 1) * &
+               tree%boxes(id)%fc(n, 1, electric_fld)
        end do
 #elif NDIM == 2
        do n = 1, nc+1
           do m = 1, nc
-             v(n, m, 1) = mu * tree%boxes(id)%fc(n, m, 1, electric_fld)
-             v(m, n, 2) = mu * tree%boxes(id)%fc(m, n, 2, electric_fld)
+             v(n, m, 1) = mu * get_N_inv_face(tree%boxes(id), n, m, 1) * &
+                  tree%boxes(id)%fc(n, m, 1, electric_fld)
+             v(m, n, 2) = mu * get_N_inv_face(tree%boxes(id), m, n, 2) * &
+                  tree%boxes(id)%fc(m, n, 2, electric_fld)
           end do
        end do
 #elif NDIM == 3
        do n = 1, nc+1
           do m = 1, nc
              do l = 1, nc
-                v(n, m, l, 1) = mu * tree%boxes(id)%fc(n, m, l, 1, electric_fld)
-                v(m, n, l, 2) = mu * tree%boxes(id)%fc(m, n, l, 2, electric_fld)
-                v(m, l, n, 3) = mu * tree%boxes(id)%fc(m, l, n, 3, electric_fld)
+                v(n, m, l, 1) = mu * get_N_inv_face(tree%boxes(id), n, m, l, 1) * &
+                     tree%boxes(id)%fc(n, m, l, 1, electric_fld)
+                v(m, n, l, 2) = mu * get_N_inv_face(tree%boxes(id), m, n, l, 2) * &
+                     tree%boxes(id)%fc(m, n, l, 2, electric_fld)
+                v(m, l, n, 3) = mu * get_N_inv_face(tree%boxes(id), m, l, n, 3) * &
+                     tree%boxes(id)%fc(m, l, n, 3, electric_fld)
              end do
           end do
        end do
@@ -463,6 +466,45 @@ contains
     end do
 
   end subroutine fluxes_ions
+
+  !> Get inverse gas density at a cell face, between cell-centered index i-1 and
+  !> i along dimension idim
+  pure real(dp) function get_N_inv_face(box, IJK, idim)
+    use m_gas
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: IJK
+    integer, intent(in)     :: idim !< Direction of flux through cell face
+
+    if (gas_constant_density) then
+       get_N_inv_face = gas_inverse_number_density
+    else
+#if NDIM == 1
+       get_N_inv_face = 2 / (box%cc(i-1, i_gas_dens) + &
+            box%cc(i, i_gas_dens))
+#elif NDIM == 2
+       select case (idim)
+       case (1)
+          get_N_inv_face = 2 / (box%cc(i-1, j, i_gas_dens) + &
+            box%cc(i, j, i_gas_dens))
+       case default
+          get_N_inv_face = 2 / (box%cc(i, j-1, i_gas_dens) + &
+            box%cc(i, j, i_gas_dens))
+       end select
+#elif NDIM == 3
+       select case (idim)
+       case (1)
+          get_N_inv_face = 2 / (box%cc(i-1, j, k, i_gas_dens) + &
+            box%cc(i, j, k, i_gas_dens))
+       case (2)
+          get_N_inv_face = 2 / (box%cc(i, j-1, k, i_gas_dens) + &
+               box%cc(i, j, k, i_gas_dens))
+       case default
+          get_N_inv_face = 2 / (box%cc(i, j, k-1, i_gas_dens) + &
+               box%cc(i, j, k, i_gas_dens))
+       end select
+#endif
+    end if
+  end function get_N_inv_face
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update

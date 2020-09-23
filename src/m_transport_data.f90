@@ -43,7 +43,7 @@ contains
     use m_config
     use m_table_data
     use m_gas
-
+    use m_units_constants
     type(CFG_t), intent(inout) :: cfg
     character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: x_data(:), y_data(:)
@@ -117,7 +117,7 @@ contains
     call CFG_add(cfg, "input_data%mobile_ions", dummy_string, &
          "List of ions that are considered mobile", .true.)
     call CFG_add(cfg, "input_data%ion_mobilities", dummy_real, &
-         "List of ion mobilities (m^2/Vs)", .true.)
+         "List of ion mobilities (m^2/Vs) at 1 bar, 300 K", .true.)
 
     call CFG_get_size(cfg, "input_data%mobile_ions", n)
 
@@ -128,6 +128,10 @@ contains
     call CFG_get(cfg, "input_data%mobile_ions", transport_data_ions%names)
     call CFG_get(cfg, "input_data%ion_mobilities", &
          transport_data_ions%mobilities)
+
+    ! Scale ion mobilities with gas number density at 300 K and 1 bar
+    transport_data_ions%mobilities = transport_data_ions%mobilities * &
+         (1e5_dp / (UC_boltzmann_const * 300))
 
     call CFG_add_get(cfg, "input_data%ion_se_yield", ion_se_yield, &
          "Secondary electron emission yield for positive ions")

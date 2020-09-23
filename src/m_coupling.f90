@@ -24,7 +24,6 @@ contains
   end subroutine coupling_add_fluid_source
 
   subroutine add_heating_box(box, dt_vec)
-    use m_gas ! needed for the heating efficiency
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc

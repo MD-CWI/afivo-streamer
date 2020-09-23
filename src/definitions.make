@@ -63,6 +63,7 @@ m_output.o: m_chemistry.mod
 m_output.o: m_config.mod
 m_output.o: m_dt.mod
 m_output.o: m_field.mod
+m_output.o: m_gas.mod
 m_output.o: m_photoi.mod
 m_output.o: m_streamer.mod
 m_output.o: m_types.mod
@@ -109,6 +110,7 @@ m_transport_data.o: m_gas.mod
 m_transport_data.o: m_lookup_table.mod
 m_transport_data.o: m_table_data.mod
 m_transport_data.o: m_types.mod
+m_transport_data.o: m_units_constants.mod
 m_user_methods.o: m_types.mod
 streamer.o: m_chemistry.mod
 streamer.o: m_circuit.mod

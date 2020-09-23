@@ -32,6 +32,9 @@ module m_gas
   ! Gas number density (1/m3)
   real(dp), public, protected :: gas_number_density
 
+  ! Inverse gas number density (1/m3)
+  real(dp), public, protected :: gas_inverse_number_density
+
   ! Convert V/m to Townsend
   real(dp), parameter, public :: SI_to_Townsend = 1e21_dp
 
@@ -143,6 +146,7 @@ contains
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
          (UC_boltzmann_const * gas_temperature)
+    gas_inverse_number_density = 1/gas_number_density
 
     call CFG_add(cfg, "gas%components", ["N2", "O2"], &
          "Gas component names", .true.)
