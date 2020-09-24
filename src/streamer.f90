@@ -70,6 +70,7 @@ program streamer
   real(dp) :: Q0_R = UC_elem_charge
   integer :: ix_weighting_potential_top
   integer :: ix_weighting_potential_bottom
+  integer :: it_circuit_effect = 100
 
  ! Add a variable to store the weighting potential from the top electrode in
   call af_add_cc_variable(tree, "weighting_pot_top")
@@ -675,6 +676,8 @@ subroutine initialize_circuit_R(tree, cfg)
    real(dp) :: min_potential = 0.0
    integer :: i_fas_fmg
 
+   print *, "Initializing Riegler circuit"
+
    ! Initialize capacitor voltage to be the a fraction of the applied voltage
    capacitor_voltage = capacitor_initial_voltage_fraction * (-field_get_amplitude(tree, 0.0_dp) * ST_domain_len(NDIM))
    print *, "Initial capacitor voltage: ", capacitor_voltage
@@ -742,16 +745,13 @@ subroutine initialize_circuit_R(tree, cfg)
    new_calculated_voltage_at_bottom_electrode = 0.0
  
    call af_tree_max_cc(tree, ix_weighting_potential_bottom, max_potential)
-   print *, "Max potential: ", max_potential
-   print *, "Real max potential: ", Q0_R / top_electrode_self_capacitance
    call af_tree_min_cc(tree, ix_weighting_potential_bottom, min_potential)
-   print *, "Min potential: ", min_potential
-   print *, "Real min potential: ", 0
 
    ! Create an output file
    open(newunit=circuit_R_output_unit, file=trim(output_name) // "_" // "output", action='write')
    write(circuit_R_output_unit, *) "dt(s)           I(A)           Ve(V)           Vc(V)           Vgnd(V)           Ignd(A)"
 
+   print *, "Riegler circuit initialization done"
 end subroutine initialize_circuit_R
 
 
@@ -770,7 +770,7 @@ subroutine add_circuit_effect_R(tree)
    !!!! TOP ELECTRODE !!!!
    ! The change in potential at the top electrode
    delta_V_top_electrode_dt = new_calculated_voltage_at_top_electrode &
-                         - old_calculated_voltage_at_top_electrode
+                        - old_calculated_voltage_at_top_electrode
    !print *, "Change in potential top electrode: ", delta_V_top_electrode_dt
 
    ! Change the potential of the top electrode
@@ -810,7 +810,7 @@ subroutine add_circuit_effect_R(tree)
    new_calculated_voltage_at_bottom_electrode = 0.0
 
    write(circuit_R_output_unit, *) dt, current_top, top_electrode_voltage, capacitor_voltage, &
-                                      bottom_electrode_voltage, current_bottom
+                                    bottom_electrode_voltage, current_bottom
 
 end subroutine add_circuit_effect_R
 
