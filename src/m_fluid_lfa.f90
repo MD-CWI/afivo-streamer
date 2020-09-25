@@ -344,19 +344,19 @@ contains
           ! Take the combined CFL-diffusion condition with Courant number 0.5
           dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
 
-          if (ST_drt_limit_flux) then
-             mu = maxval(abs(transport_data_ions%mobilities))
+          if (gas_constant_density) then
+             N_inv = 1 / gas_number_density
           else
-             if (gas_constant_density) then
-                N_inv = 1 / gas_number_density
-             else
-                N_inv = 1 / tree%boxes(id)%cc(IJK, i_gas_dens)
-             end if
+             N_inv = 1 / tree%boxes(id)%cc(IJK, i_gas_dens)
+          end if
 
+          if (ST_drt_limit_flux) then
+             mu = maxval(abs(transport_data_ions%mobilities)) * N_inv
+          else
              Td = tree%boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
              mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
              mu = max(mu, &
-                  maxval(abs(transport_data_ions%mobilities)))
+                  maxval(abs(transport_data_ions%mobilities)) * N_inv)
           end if
 
           ! Dielectric relaxation time
