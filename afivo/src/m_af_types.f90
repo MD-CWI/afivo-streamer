@@ -63,6 +63,11 @@ module m_af_types
   !> Value to indicate a continuous boundary condition
   integer, parameter :: af_bc_continuous = -12
 
+  !> Value to indicate a Dirichlet boundary condition in which a value is copied
+  !> to the ghost cells, without any type of extrapolation. This can be useful
+  !> for hyperbolic PDEs
+  integer, parameter :: af_bc_dirichlet_copy = -13
+
   !> Maximum length of the names of variables
   integer, parameter :: af_nlen = 20
 

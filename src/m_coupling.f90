@@ -48,7 +48,7 @@ contains
 #endif
 
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-            J_dot_E * UC_elec_charge * dt_vec(1)
+           gas_heating_efficiency *  J_dot_E * UC_elec_charge * dt_vec(1)
     end do; CLOSE_DO
   end subroutine add_heating_box
 
