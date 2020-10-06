@@ -311,16 +311,18 @@ contains
   end subroutine af_set_coarse_grid
 
   !> Set the methods for a cell-centered variable
-  subroutine af_set_cc_methods(tree, iv, bc, rb, prolong, restrict)
+  subroutine af_set_cc_methods(tree, iv, bc, rb, prolong, restrict, &
+       bc_custom)
     use m_af_ghostcell, only: af_gc_interp
     use m_af_prolong, only: af_prolong_linear
     use m_af_restrict, only: af_restrict_box
     type(af_t), intent(inout)             :: tree     !< Tree to operate on
     integer, intent(in)                   :: iv       !< Index of variable
-    procedure(af_subr_bc)                 :: bc       !< Boundary condition method
+    procedure(af_subr_bc), optional       :: bc       !< Boundary condition method
     procedure(af_subr_rb), optional       :: rb       !< Refinement boundary method
     procedure(af_subr_prolong), optional  :: prolong  !< Prolongation method
     procedure(af_subr_restrict), optional :: restrict !< Restriction method
+    procedure(af_subr_bc_custom), optional :: bc_custom !< Custom b.c. method
     integer                               :: i
 
     if (tree%has_cc_method(iv)) then
@@ -331,7 +333,13 @@ contains
 
     ! Set methods for the variable and its copies
     do i = iv, iv + tree%cc_num_copies(iv) - 1
-       tree%cc_methods(i)%bc => bc
+       if (present(bc)) then
+          tree%cc_methods(i)%bc => bc
+       else if (present(bc_custom)) then
+          tree%cc_methods(i)%bc_custom => bc_custom
+       else
+          error stop "af_set_cc_methods: either bc or bc_custom required"
+       end if
 
        if (present(rb)) then
           tree%cc_methods(i)%rb => rb
