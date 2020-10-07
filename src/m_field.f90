@@ -38,6 +38,9 @@ module m_field
   !> Decay time of background field
   real(dp) :: field_decay_time = huge(1.0_dp)
 
+  !> Linear rise time of field (s)
+  real(dp) :: field_rise_time = 0.0_dp
+
   !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = 1.0e6_dp
 
@@ -107,6 +110,8 @@ contains
          "Linear derivative of field [V/(ms)]")
     call CFG_add_get(cfg, "field_decay_time", field_decay_time, &
          "Decay time of field (s)")
+    call CFG_add_get(cfg, "field_rise_time", field_rise_time, &
+         "Linear rise time of field (s)")
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
          "The (initial) vertical applied electric field (V/m)")
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
@@ -243,17 +248,21 @@ contains
        call LT_lin_interp_list(field_table_times, field_table_fields, &
             time, electric_fld)
     else
+       electric_fld = field_amplitude
+
+       if (time < field_rise_time) then
+          electric_fld = electric_fld * (time/field_rise_time)
+       end if
+
        ! TODO: simplify stuff below
        t_rel = time - field_mod_t0
        t_rel = min(t_rel, field_mod_t1-field_mod_t0)
 
        if (t_rel > 0) then
-          electric_fld = field_amplitude * exp(-t_rel/field_decay_time) + &
+          electric_fld = electric_fld * exp(-t_rel/field_decay_time) + &
                t_rel * field_lin_deriv + &
                field_sin_amplitude * &
                sin(t_rel * field_sin_freq * 2 * UC_pi)
-       else
-          electric_fld = field_amplitude
        end if
     end if
 
