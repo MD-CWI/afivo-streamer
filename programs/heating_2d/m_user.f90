@@ -16,7 +16,7 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout) :: tree
 
-    user_evolve_electrons => gas_active
+!    user_evolve_electrons => gas_active
     
     user_log_variables => total_power_deposited
   end subroutine user_initialize

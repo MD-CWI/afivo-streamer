@@ -38,6 +38,8 @@ module m_streamer
   logical, public, protected :: compute_power_density = .false.
   !> Index of deposited power density
   integer, public, protected :: i_power_density = -1
+  !> Index of deposited energy density
+  integer, public, protected :: i_energy_density = -1
 
   !> Number of face-centered variables
   integer, public, protected :: n_var_face   = 0
@@ -232,6 +234,7 @@ contains
 
     if (compute_power_density) then
        call af_add_cc_variable(tree, "power_density", ix = i_power_density)
+       call af_add_cc_variable(tree, "energy_density", ix = i_energy_density)
     end if
 
     call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
