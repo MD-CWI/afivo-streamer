@@ -34,6 +34,15 @@ module m_output
 
   ! Write output along a line
   logical, public, protected :: lineout_write = .false.
+  
+  ! Write integral over cross-section data output
+  logical, public, protected :: cross_write = .false.
+
+  ! Integrate upto this r value
+  real(dp), public, protected :: cross_rmax = 2.0e-3_dp
+
+  ! Use this many points for cross-section data
+  integer, public, protected :: cross_npoints = 500
 
   ! Write Silo output
   logical, public, protected :: silo_write = .true.
@@ -167,7 +176,14 @@ contains
          "Relative position of line minimum coordinate")
     call CFG_add_get(cfg, "lineout%rmax", lineout_rmax(1:NDIM), &
          "Relative position of line maximum coordinate")
-
+    
+    call CFG_add_get(cfg, "cross%write", cross_write, &
+         "Write integral over cross-section data output")
+    call CFG_add_get(cfg, "cross%rmax", cross_rmax, &
+         "Integrate up to this r value")
+    call CFG_add_get(cfg, "cross%npoints", cross_npoints, &
+         "Use this many points for cross-section data")
+    
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
     varname = "e"

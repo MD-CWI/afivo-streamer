@@ -33,6 +33,8 @@ module m_streamer
   integer, public, protected :: i_tmp          = -1
   !> Index of can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
+  !> Index of conductivity
+  integer, public, protected :: i_conductivity = -1
 
   !> Include deposited power density in output
   logical, public, protected :: compute_power_density = .false.
@@ -200,6 +202,7 @@ contains
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
+    call af_add_cc_variable(tree, "conductivity", ix=i_conductivity)
     call af_add_cc_variable(tree, "tmp", write_out=.false., &
          write_binary=.false., ix=i_tmp)
 

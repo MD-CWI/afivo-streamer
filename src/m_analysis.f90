@@ -9,6 +9,8 @@ module m_analysis
 
   ! Public methods
   public :: analysis_get_maxima
+  public :: analysis_get_sigma
+  public :: analysis_get_cross
 
 contains
 
@@ -176,8 +178,8 @@ contains
        d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
        d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
        !sum up ion densities
-       ion_dens = af_interp1(tree, [r, z], charged_species_itree, &
-            success, id_guess)
+       ion_dens = 0.0_dp !af_interp1(tree, [r, z], charged_species_itree, &
+            !success, id_guess)
        if (.not. success) error stop "unsuccessful interp1"
        tot_ion_dens = 0.0
        do n = 1, 7
