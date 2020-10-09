@@ -71,4 +71,127 @@ contains
 
   end subroutine analysis_get_maxima
 
+  subroutine sigma_calculator(boxes, id, nc)
+    use m_lookup_table
+    use m_units_constants
+    use m_gas
+    use m_transport_data
+    use m_streamer
+    type(box_t), intent(inout) :: boxes(:)
+    integer, intent(in)        :: id, nc
+
+    real(dp) :: ne_fld(2), mu, Td, N_inv
+    integer  :: n, m, o
+
+    N_inv = 1.0_dp/gas_number_density
+
+#if NDIM == 2
+    do n = 1, nc
+      do m = 1, nc
+        ne_fld = boxes(id)%cc(n, m, [i_electron, i_electric_fld])
+        Td = ne_fld(2) * SI_to_Townsend * N_inv
+        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+      end do
+    end do
+#endif
+
+#if NDIM == 3
+    do n = 1, nc
+    	do m = 1, nc
+    		do o = 1, nc
+                ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
+                Td = ne_fld(2) * SI_to_Townsend * N_inv
+                mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+                boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+    		end do
+    	end do
+    end do
+#endif
+
+  end subroutine sigma_calculator
+
+  subroutine analysis_get_sigma(tree)
+    type(af_t), intent(inout) :: tree
+
+    integer     :: lvl, id, i, nc
+
+    nc = tree%n_cell
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+      !$omp do
+      do i = 1, size(tree%lvls(lvl)%leaves)
+        id = tree%lvls(lvl)%leaves(i)
+        call sigma_calculator(tree%boxes, id, nc)
+      end do
+      !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine analysis_get_sigma
+
+  !> Get the conductivity and densities of an axisymmetric streamer at a z-coordinate
+  subroutine analysis_get_cross(tree, rmax, z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens)
+    use m_lookup_table
+    use m_transport_data
+    use m_gas
+    use m_streamer
+    use m_units_constants
+    use m_chemistry
+    type(af_t), intent(in) :: tree
+    real(dp), intent(in)   :: rmax         !< Integrate up to this radius
+    real(dp), intent(in)   :: z            !< z-coordinate
+    real(dp), intent(out)  :: sigma        !< The conductivity
+    real(dp), intent(out)  :: elec_dens    !< electron density
+    real(dp), intent(out)  :: charge_dens  !< charge density
+    real(dp), intent(out)  :: current_dens !< current density
+    real(dp), intent(out)  :: ion_current_dens
+
+    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv, tot_ion_dens, ion_dens(7)
+    real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens, d_ion_current_dens
+    logical  :: success
+    integer  :: id_guess, i, m, n
+    real(dp), parameter :: mu_ion = 2.0e-4
+
+    id_guess     = -1
+    sigma        = 0.0_dp
+    elec_dens    = 0.0_dp
+    charge_dens  = 0.0_dp
+    current_dens = 0.0_dp
+    N_inv = 1.0_dp/gas_number_density
+    dr = af_min_dr(tree)
+    m = int(rmax/dr) + 1
+
+    do i = 1, m
+       r = i * rmax / (m + 1)
+#if NDIM == 2
+       ne_fld_rhs = af_interp1(tree, [r, z], [i_electron, i_electric_fld, i_rhs], &
+            success, id_guess)
+       if (.not. success) error stop "unsuccessful interp1"
+#endif
+       Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
+       mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+       d_sigma = UC_elem_charge * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
+       d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
+       d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
+       d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
+       !sum up ion densities
+       ion_dens = af_interp1(tree, [r, z], charged_species_itree, &
+            success, id_guess)
+       if (.not. success) error stop "unsuccessful interp1"
+       tot_ion_dens = 0.0
+       do n = 1, 7
+         tot_ion_dens = tot_ion_dens + ion_dens(n)
+       end do
+       d_ion_current_dens = ne_fld_rhs(2) * mu_ion * tot_ion_dens * 2.0_dp * UC_pi * r * dr * UC_elem_charge
+
+       ! Update total
+       sigma = sigma + d_sigma
+       elec_dens = elec_dens + d_elec_dens
+       charge_dens = charge_dens + d_charge_dens
+       current_dens = current_dens + d_current_dens
+    end do
+
+  end subroutine analysis_get_cross
+
 end module m_analysis
