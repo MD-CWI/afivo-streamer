@@ -1,8 +1,10 @@
 # Writing output
 
-# Silo and VTK output
+# Supported output types
 
-TODO
+By default, output is written in the Silo format. More information about this
+format and other output options can be found in the [Afivo
+documentation](https://teunissen.net/afivo/md_documentation_writing_viewing_output.html).
 
 # Binary output
 
@@ -40,8 +42,41 @@ name | meaning
 
 # 2D planes
 
-TODO
+It is possible to extract output in a 2D plane using the following settings:
+
+    [plane]
+        # Use this many pixels for plane data:
+        npixels = 64 64
+
+        # Relative position of plane maximum coordinate:
+        rmax =  1.0000E+00  1.0000E+00
+
+        # Relative position of plane minimum coordinate:
+        rmin =  0.0000E+00  0.0000E+00
+
+        # Names of variable to write in a plane:
+        varname = 'e'
+
+        # Write uniform output in a plane:
+        write = F
+
 
 # 1D lines
 
-TODO
+It is possible to extract output along a line using the following settings:
+
+    [lineout]
+        # Use this many points for lineout data:
+        npoints = 500
+
+        # Relative position of line maximum coordinate:
+        rmax =  1.0000E+00  1.0000E+00
+
+        # Relative position of line minimum coordinate:
+        rmin =  0.0000E+00  0.0000E+00
+
+        # Write output along a line:
+        write = F
+
+It is also possible to extract such data from normal Silo files using the `visit_lineout.py` script in the `tools` folder.
+
