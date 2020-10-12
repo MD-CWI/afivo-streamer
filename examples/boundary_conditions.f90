@@ -131,7 +131,7 @@ contains
     if (n_gc /= 1) error stop "not implemented"
 
     ! Get ghost cell index range
-    call af_get_index_bc_inside(nb, box%n_cell, 1, lo, hi)
+    call af_get_index_bc_outside(nb, box%n_cell, 1, lo, hi)
 
     ! Set all ghost cells to a scalar value
     box%cc(DSLICE(lo,hi), iv) = 0.0_dp
