@@ -55,3 +55,4 @@
 documentation/html/*
 external_libraries/*
 tests/results/*
+/examples/electrode_example_?d
