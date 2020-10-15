@@ -88,6 +88,10 @@ contains
     if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
 
+    if (mg%i_lsf /= -1) then
+       call check_coarse_representation_lsf(tree, mg)
+    end if
+
     call mg_set_box_tag_lvl(tree, mg, 1)
     call coarse_solver_initialize(tree, mg)
 
@@ -2025,5 +2029,29 @@ contains
 
     call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_lpllsf_stencil
+
+  subroutine check_coarse_representation_lsf(tree, mg)
+    type(af_t), intent(in) :: tree
+    type(mg_t), intent(in) :: mg
+    integer                :: i, id, nc
+    real(dp)               :: max_lsf, min_lsf
+
+    nc      = tree%n_cell
+    max_lsf = -1e100_dp
+    min_lsf = 1e100_dp
+
+    do i = 1, size(tree%lvls(1)%ids)
+       id = tree%lvls(1)%ids(i)
+       max_lsf = max(max_lsf, &
+            maxval(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_lsf)))
+       min_lsf = min(min_lsf, &
+            minval(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_lsf)))
+    end do
+
+    if (max_lsf * min_lsf >= 0) then
+       print *, "Make the coarse grid finer?"
+       error stop "Level set function does not change sign on coarse grid"
+    end if
+  end subroutine check_coarse_representation_lsf
 
 end module m_af_multigrid
