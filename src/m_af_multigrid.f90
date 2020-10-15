@@ -782,11 +782,7 @@ contains
           call mg_box_gsrb_lpl(box, redblack_cntr, mg)
        end if
     case (mg_lsf_box)
-       if (box%coord_t == af_cyl) then
-          error stop "Not implemented yet"
-       else
-          call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
-       end if
+       call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
     case (mg_veps_box, mg_ceps_box)
        if (box%coord_t == af_cyl) then
           call mg_box_gsrb_clpld(box, redblack_cntr, mg)
@@ -821,11 +817,7 @@ contains
           call mg_box_lpl(box, i_out, mg)
        end if
     case (mg_lsf_box)
-       if (box%coord_t == af_cyl) then
-          error stop "Not implemented yet"
-       else
-          call mg_box_lpllsf(box, i_out, mg)
-       end if
+       call mg_box_lpllsf(box, i_out, mg)
     case (mg_veps_box, mg_ceps_box)
        if (box%coord_t == af_cyl) then
           call mg_box_clpld(box, i_out, mg)
@@ -864,11 +856,7 @@ contains
           call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
        end if
     case (mg_lsf_box)
-       if (box%coord_t == af_cyl) then
-          error stop "Not implemented yet"
-       else
-          call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-       end if
+       call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     case (mg_veps_box, mg_ceps_box)
        if (box%coord_t == af_cyl) then
           call mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
@@ -1753,6 +1741,9 @@ contains
     integer                    :: IJK, i0, nc, i_phi, i_rhs, i_lsf
     real(dp)                   :: dd(2*NDIM), val(2*NDIM), lsf_a, v_b(2)
     real(dp)                   :: dr2(NDIM), idr2(NDIM)
+#if NDIM == 2
+    real(dp)                   :: r(box%n_cell), tmp
+#endif
 
     dr2    = box%dr**2
     nc     = box%n_cell
@@ -1781,6 +1772,10 @@ contains
             box%cc(i, i_rhs))
     end do
 #elif NDIM == 2
+    if (box%coord_t == af_cyl) then
+       r = [(box%r_min(1) + (i-0.5_dp) * box%dr(1), i=1,nc)]
+    end if
+
     do j = 1, nc
        i0 = 2 - iand(ieor(redblack_cntr, j), 1)
        do i = i0, nc, 2
@@ -1800,12 +1795,18 @@ contains
 
           ! Solve for generalized Laplacian (see routine mg_box_lpllsf)
           idr2 = [1/(dr2(1) * dd(1) * dd(2)), 1/(dr2(2) * dd(3) * dd(4))]
+          if (box%coord_t == af_cyl) then
+             tmp = (val(2) - val(1))/(r(i) * (dd(1) + dd(2)) * box%dr(1))
+          else
+             tmp = 0.0_dp
+          end if
+
           box%cc(i, j, i_phi) = 1 / (2 * sum(idr2)) * (&
                (dd(2) * val(1) + dd(1) * val(2)) / &
                (0.5_dp * (dd(1) + dd(2))) * idr2(1) + &
                (dd(4) * val(3) + dd(3) * val(4)) / &
                (0.5_dp * (dd(3) + dd(4))) * idr2(2) - &
-               box%cc(i, j, i_rhs))
+               box%cc(i, j, i_rhs) + tmp)
        end do
     end do
 #elif NDIM == 3
@@ -1858,6 +1859,9 @@ contains
     integer                    :: IJK, nc, i_phi, i_lsf
     real(dp)                   :: dr2(NDIM), dd(2*NDIM), val(2*NDIM)
     real(dp)                   :: f0, lsf_a, v_b(2)
+#if NDIM == 2
+    real(dp)                   :: r(box%n_cell)
+#endif
 
     nc     = box%n_cell
     dr2    = box%dr**2
@@ -1881,6 +1885,10 @@ contains
             (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2))
     end do
 #elif NDIM == 2
+    if (box%coord_t == af_cyl) then
+       r = [(box%r_min(1) + (i-0.5_dp) * box%dr(1), i=1,nc)]
+    end if
+
     do j = 1, nc
        do i = 1, nc
           lsf_a = box%cc(i, j, i_lsf)
@@ -1904,6 +1912,10 @@ contains
                (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2)) + &
                (dd(4) * val(3) + dd(3) * val(4) - (dd(3)+dd(4)) * f0) / &
                (0.5_dp * dr2(2) * (dd(3) + dd(4)) * dd(3) * dd(4))
+          if (box%coord_t == af_cyl) then
+             box%cc(i, j, i_out) = box%cc(i, j, i_out) + &
+                  (val(2) - val(1))/(r(i) * (dd(1) + dd(2)) * box%dr(1))
+          end if
        end do
     end do
 #elif NDIM == 3
@@ -1955,6 +1967,9 @@ contains
     real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
     integer                 :: IJK, n, nc, idim
     real(dp)                :: lsf_a, dd(2*NDIM), dr2(NDIM)
+#if NDIM == 2
+    real(dp)                :: tmp
+#endif
 
     nc = box%n_cell
     dr2 = box%dr**2
@@ -1985,6 +2000,16 @@ contains
                  (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
                  dd(2*idim-1) * dd(2*idim))
          end do
+
+#if NDIM == 2
+         if (box%coord_t == af_cyl) then
+            ! Add correction for cylindrical coordinate system. This is a
+            ! discretization of 1/r d/dr phi.
+            tmp = 1/(box%dr(1) * (dd(1) + dd(2)) * af_cyl_radius_cc(box, i))
+            stencil(2, IJK) = stencil(2, IJK) - tmp
+            stencil(3, IJK) = stencil(3, IJK) + tmp
+         end if
+#endif
 
          stencil(1, IJK) = -sum(stencil(2:, IJK))
 
