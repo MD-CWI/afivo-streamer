@@ -44,6 +44,9 @@ module m_af_multigrid
   ! To adjust operator stencils near boundaries
   public :: mg_stencil_handle_boundaries
 
+  ! To compute the gradient of the solution
+  public :: mg_compute_phi_gradient
+
 #if NDIM == 2
   public :: mg_box_clpl
   public :: mg_box_clpl_stencil
@@ -2030,6 +2033,233 @@ contains
     call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_lpllsf_stencil
 
+  !> Compute the gradient of the potential and store in face-centered variables
+  subroutine mg_compute_phi_gradient(tree, mg, i_fc, fac, i_norm)
+    type(af_t), intent(inout)     :: tree
+    type(mg_t), intent(in)        :: mg
+    integer, intent(in)           :: i_fc !< Face-centered indices
+    real(dp), intent(in)          :: fac  !< Multiply with this factor
+    !> If present, store norm in this cell-centered variable
+    integer, intent(in), optional :: i_norm
+    integer                       :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+
+          associate (box => tree%boxes(id))
+            select case(box%tag)
+            case (mg_normal_box, mg_ceps_box)
+               call mg_box_gradient(box, mg, i_fc, fac)
+            case (mg_lsf_box)
+               call mg_box_lpllsf_gradient(box, mg, i_fc, fac)
+            case (mg_veps_box)
+               error stop "Use dielectric_correct_field_fc instead"
+            case (af_init_tag)
+               error stop "mg_auto_op: box tag not set"
+            case default
+               error stop "mg_auto_op: unknown box tag"
+            end select
+
+            if (present(i_norm)) then
+               call mg_box_gradient_norm(box, i_fc, i_norm)
+            end if
+          end associate
+       end do
+       !$omp end do nowait
+    end do
+    !$omp end parallel
+  end subroutine mg_compute_phi_gradient
+
+  !> Compute the gradient of the potential
+  subroutine mg_box_gradient(box, mg, i_fc, fac)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: i_fc !< Face-centered indices
+    real(dp), intent(in)       :: fac  !< Multiply with this factor
+    integer                    :: nc, i_phi
+    real(dp)                   :: inv_dr(NDIM)
+
+    nc     = box%n_cell
+    i_phi  = mg%i_phi
+    inv_dr = fac / box%dr
+
+#if NDIM == 1
+    box%fc(1:nc+1, 1, i_fc) = inv_dr(1) * &
+         (box%cc(1:nc+1, i_phi) - box%cc(0:nc, i_phi))
+#elif NDIM == 2
+    box%fc(1:nc+1, 1:nc, 1, i_fc) = inv_dr(1) * &
+         (box%cc(1:nc+1, 1:nc, i_phi) - box%cc(0:nc, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc+1, 2, i_fc) = inv_dr(2) * &
+         (box%cc(1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 0:nc, i_phi))
+#elif NDIM == 3
+    box%fc(1:nc+1, 1:nc, 1:nc, 1, i_fc) = inv_dr(1) * &
+         (box%cc(1:nc+1, 1:nc, 1:nc, i_phi) - &
+         box%cc(0:nc, 1:nc, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc+1, 1:nc, 2, i_fc) = inv_dr(2) * &
+         (box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - &
+         box%cc(1:nc, 0:nc, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc, 1:nc+1, 3, i_fc) = inv_dr(3) * &
+         (box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
+         box%cc(1:nc, 1:nc, 0:nc, i_phi))
+#endif
+  end subroutine mg_box_gradient
+
+  subroutine mg_box_gradient_norm(box, i_fc, i_norm)
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: i_fc !< Face-centered indices
+    !> Store norm in this cell-centered variable
+    integer, intent(in)        :: i_norm
+    integer                    :: nc
+
+    nc = box%n_cell
+
+#if NDIM == 1
+    box%cc(1:nc, i_norm) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1, i_fc) + &
+         box%fc(2:nc+1, 1, i_fc))**2)
+#elif NDIM == 2
+    box%cc(1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1:nc, 1, i_fc) + &
+         box%fc(2:nc+1, 1:nc, 1, i_fc))**2 + &
+         (box%fc(1:nc, 1:nc, 2, i_fc) + &
+         box%fc(1:nc, 2:nc+1, 2, i_fc))**2)
+#elif NDIM == 3
+    box%cc(1:nc, 1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1:nc, 1:nc, 1, i_fc) + &
+         box%fc(2:nc+1, 1:nc, 1:nc, 1, i_fc))**2 + &
+         (box%fc(1:nc, 1:nc, 1:nc, 2, i_fc) + &
+         box%fc(1:nc, 2:nc+1, 1:nc, 2, i_fc))**2 + &
+         (box%fc(1:nc, 1:nc, 1:nc, 3, i_fc) + &
+         box%fc(1:nc, 1:nc, 2:nc+1, 3, i_fc))**2)
+#endif
+  end subroutine mg_box_gradient_norm
+
+  !> Compute the gradient of the potential with a level set function and store
+  !> in face-centered variables. The gradients are computed from the positive
+  !> side of the level set function.
+  subroutine mg_box_lpllsf_gradient(box, mg, i_fc, fac)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: i_fc !< Face-centered indices
+    real(dp), intent(in)       :: fac  !< Multiply with this factor
+    integer                    :: IJK, nc, i_phi, i_lsf
+    real(dp)                   :: dd, val, v_a(2), v_b(2)
+    integer                    :: grad_sign
+
+    nc     = box%n_cell
+    i_phi  = mg%i_phi
+    i_lsf  = mg%i_lsf
+
+#if NDIM == 1
+    do i = 1, nc+1
+       if (box%cc(i, i_lsf) > 0) then
+          v_a = box%cc(i, [i_lsf, i_phi])
+          v_b = box%cc(i-1, [i_lsf, i_phi])
+          grad_sign = 1
+       else
+          v_a = box%cc(i-1, [i_lsf, i_phi])
+          v_b = box%cc(i, [i_lsf, i_phi])
+          grad_sign = -1
+       end if
+
+       call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+            mg%lsf_boundary_value, dd, val)
+       box%fc(IJK, 1, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+            (box%dr(1) * dd)
+    end do
+#elif NDIM == 2
+    do j = 1, nc
+       do i = 1, nc+1
+          if (box%cc(i, j, i_lsf) > 0) then
+             v_a = box%cc(i, j, [i_lsf, i_phi])
+             v_b = box%cc(i-1, j, [i_lsf, i_phi])
+             grad_sign = 1
+          else
+             v_a = box%cc(i-1, j, [i_lsf, i_phi])
+             v_b = box%cc(i, j, [i_lsf, i_phi])
+             grad_sign = -1
+          end if
+
+          call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd, val)
+          box%fc(IJK, 1, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+               (box%dr(1) * dd)
+
+          if (box%cc(j, i, i_lsf) > 0) then
+             v_a = box%cc(j, i, [i_lsf, i_phi])
+             v_b = box%cc(j, i-1, [i_lsf, i_phi])
+             grad_sign = 1
+          else
+             v_a = box%cc(j, i-1, [i_lsf, i_phi])
+             v_b = box%cc(j, i, [i_lsf, i_phi])
+             grad_sign = -1
+          end if
+
+          call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd, val)
+          box%fc(j, i, 2, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+               (box%dr(2) * dd)
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc+1
+             if (box%cc(i, j, k, i_lsf) > 0) then
+                v_a = box%cc(i, j, k, [i_lsf, i_phi])
+                v_b = box%cc(i-1, j, k, [i_lsf, i_phi])
+                grad_sign = 1
+             else
+                v_a = box%cc(i-1, j, k, [i_lsf, i_phi])
+                v_b = box%cc(i, j, k, [i_lsf, i_phi])
+                grad_sign = -1
+             end if
+
+             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd, val)
+             box%fc(IJK, 1, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+                  (box%dr(1) * dd)
+
+             if (box%cc(j, i, k, i_lsf) > 0) then
+                v_a = box%cc(j, i, k, [i_lsf, i_phi])
+                v_b = box%cc(j, i-1, k, [i_lsf, i_phi])
+                grad_sign = 1
+             else
+                v_a = box%cc(j, i-1, k, [i_lsf, i_phi])
+                v_b = box%cc(j, i, k, [i_lsf, i_phi])
+                grad_sign = -1
+             end if
+
+             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd, val)
+             box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+                  (box%dr(2) * dd)
+
+             if (box%cc(j, k, i, i_lsf) > 0) then
+                v_a = box%cc(j, k, i, [i_lsf, i_phi])
+                v_b = box%cc(j, k, i-1, [i_lsf, i_phi])
+                grad_sign = 1
+             else
+                v_a = box%cc(j, k, i-1, [i_lsf, i_phi])
+                v_b = box%cc(j, k, i, [i_lsf, i_phi])
+                grad_sign = -1
+             end if
+
+             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd, val)
+             box%fc(j, k, i, 3, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+                  (box%dr(3) * dd)
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg_box_lpllsf_gradient
+
+  !> This method checks whether the level set function is properly defined on
+  !> the coarse grid
   subroutine check_coarse_representation_lsf(tree, mg)
     type(af_t), intent(in) :: tree
     type(mg_t), intent(in) :: mg
@@ -2052,6 +2282,7 @@ contains
        print *, "Make the coarse grid finer?"
        error stop "Level set function does not change sign on coarse grid"
     end if
+
   end subroutine check_coarse_representation_lsf
 
 end module m_af_multigrid

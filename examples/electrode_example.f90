@@ -14,6 +14,8 @@ program dielectric_surface
   integer            :: i_rhs
   integer            :: i_tmp
   integer            :: i_lsf
+  integer            :: i_field
+  integer            :: i_field_norm
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -26,6 +28,9 @@ program dielectric_surface
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
   call af_add_cc_variable(tree, "lsf", ix=i_lsf)
+  call af_add_cc_variable(tree, "field_norm", ix=i_field_norm)
+  call af_add_fc_variable(tree, "field", ix=i_field)
+
 
   call af_set_cc_methods(tree, i_lsf, af_bc_neumann_zero)
   call af_set_cc_methods(tree, i_rhs, af_bc_neumann_zero)
@@ -63,6 +68,7 @@ program dielectric_surface
 
   do mg_iter = 1, n_iterations
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
+     call mg_compute_phi_gradient(tree, mg, i_field, 1.0_dp, i_field_norm)
 
      ! Determine the minimum and maximum residual and error
      call af_tree_maxabs_cc(tree, i_tmp, residu)
@@ -79,7 +85,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
 
-    if (box%lvl < 5 .and. box%r_min(1) < 0.5_dp) then
+    if (box%lvl < 9 - 2 * NDIM .and. box%r_min(1) < 0.5_dp) then
        cell_flags(DTIMES(:)) = af_do_ref
     else
        cell_flags(DTIMES(:)) = af_keep_ref

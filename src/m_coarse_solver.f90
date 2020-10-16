@@ -92,7 +92,9 @@ contains
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%rhs)
 
     if (tree%coord_t == af_cyl .or. mg%i_lsf /= -1) then
-       ! The symmetry option does not seem to work well with axisymmetric problems
+       ! The symmetry option does not seem to work well with axisymmetric
+       ! problems. It also doesn't work with a level set function internal
+       ! boundary.
        mg%csolver%symmetric = 0
     end if
 
