@@ -31,8 +31,7 @@ program dielectric_surface
   call af_add_cc_variable(tree, "field_norm", ix=i_field_norm)
   call af_add_fc_variable(tree, "field", ix=i_field)
 
-
-  call af_set_cc_methods(tree, i_lsf, af_bc_neumann_zero)
+  call af_set_cc_methods(tree, i_lsf, funcval=set_lsf)
   call af_set_cc_methods(tree, i_rhs, af_bc_neumann_zero)
 
   ! If an argument is given, switch to cylindrical coordinates in 2D
@@ -54,8 +53,6 @@ program dielectric_surface
      call af_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
-
-  call af_loop_box(tree, set_init_cond)
 
   mg%i_phi    = i_phi
   mg%i_rhs    = i_rhs
@@ -92,9 +89,10 @@ contains
     end if
   end subroutine ref_routine
 
-  ! This routine sets the initial conditions for each box
-  subroutine set_init_cond(box)
+  ! This routine sets the level set function
+  subroutine set_lsf(box, iv)
     type(box_t), intent(inout) :: box
+    integer, intent(in)        :: iv
     integer                    :: IJK, nc
     real(dp)                   :: rr(NDIM), r0(NDIM), r1(NDIM)
     real(dp)                   :: radius
@@ -108,10 +106,10 @@ contains
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
-       box%cc(IJK, i_lsf) = dist_vec_line(rr, r0, r1, NDIM) - radius
+       box%cc(IJK, iv) = dist_vec_line(rr, r0, r1, NDIM) - radius
     end do; CLOSE_DO
 
-  end subroutine set_init_cond
+  end subroutine set_lsf
 
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1

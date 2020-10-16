@@ -247,6 +247,8 @@ module m_af_types
      procedure(af_subr_rb), pointer, nopass :: rb => null()
      !> Custom boundary condition routine
      procedure(af_subr_bc_custom), pointer, nopass :: bc_custom => null()
+     !> Function defining the values of this variables
+     procedure(af_subr_funcval), pointer, nopass :: funcval => null()
   end type af_cc_methods
 
   !> The basic building block of afivo: a box with cell-centered and face
@@ -313,6 +315,9 @@ module m_af_types
 
      !> Indices of cell-centered variables with methods
      integer, allocatable :: cc_auto_vars(:)
+
+     !> Indices of cell-centered variables defined by a function
+     integer, allocatable :: cc_func_vars(:)
 
      !> List storing the tree levels
      type(lvl_t) :: lvls(af_min_lvl:af_max_lvl)
@@ -419,6 +424,15 @@ module m_af_types
        real(dp), intent(inout), optional :: &
             cc(DTIMES(1-n_gc:box%n_cell+n_gc))
      end subroutine af_subr_bc_custom
+
+     !> To set cell-centered variables based on a user-defined function. This
+     !> can be useful to avoid recomputing values. The values should also be set
+     !> in ghost cells.
+     subroutine af_subr_funcval(box, iv)
+       import
+       type(box_t), intent(inout) :: box !< Box to fill values in
+       integer, intent(in)        :: iv  !< Index of variable
+     end subroutine af_subr_funcval
 
      !> Subroutine for prolongation
      subroutine af_subr_prolong(box_p, box_c, iv, iv_to, add)

@@ -175,6 +175,8 @@ contains
     ! Initialize list of cell-centered variables with methods
     if (.not. allocated(tree%cc_auto_vars)) &
          allocate(tree%cc_auto_vars(0))
+    if (.not. allocated(tree%cc_func_vars)) &
+         allocate(tree%cc_func_vars(0))
 
     call af_set_coarse_grid(tree, grid_size, periodic)
 
@@ -190,6 +192,7 @@ contains
     logical, intent(in), optional :: periodic_dims(NDIM)
     logical                       :: periodic(NDIM)
     integer                       :: nx(NDIM), ix(NDIM), IJK, id, n_boxes, nb
+    integer                       :: n, iv
     integer, allocatable          :: id_array(DTIMES(:))
 
     if (tree%highest_id > 0) &
@@ -227,29 +230,29 @@ contains
 
     ! Loop over the boxes and set their neighbors
 #if NDIM == 1
-       do i = 1, nx(1)
-          id                     = id_array(IJK)
-          tree%boxes(id)%lvl     = 1
-          tree%boxes(id)%ix      = [IJK]
-          tree%boxes(id)%dr      = tree%dr_base
-          tree%boxes(id)%r_min   = tree%r_base + &
-               (tree%boxes(id)%ix - 1) * tree%dr_base * tree%n_cell
-          tree%boxes(id)%n_cell  = tree%n_cell
-          tree%boxes(id)%coord_t = tree%coord_t
+    do i = 1, nx(1)
+       id                     = id_array(IJK)
+       tree%boxes(id)%lvl     = 1
+       tree%boxes(id)%ix      = [IJK]
+       tree%boxes(id)%dr      = tree%dr_base
+       tree%boxes(id)%r_min   = tree%r_base + &
+            (tree%boxes(id)%ix - 1) * tree%dr_base * tree%n_cell
+       tree%boxes(id)%n_cell  = tree%n_cell
+       tree%boxes(id)%coord_t = tree%coord_t
 
-          tree%boxes(id)%parent      = af_no_box
-          tree%boxes(id)%children(:) = af_no_box
+       tree%boxes(id)%parent      = af_no_box
+       tree%boxes(id)%children(:) = af_no_box
 
-          ! Connectivity
-          do nb = 1, af_num_neighbors
-             ix = [IJK] + af_neighb_dix(:, nb)
-             tree%boxes(id)%neighbors(nb) = id_array(ix(1))
-          end do
-          tree%boxes(id)%neighbor_mat = id_array(i-1:i+1)
-
-          call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
-               tree%n_var_cell, tree%n_var_face)
+       ! Connectivity
+       do nb = 1, af_num_neighbors
+          ix = [IJK] + af_neighb_dix(:, nb)
+          tree%boxes(id)%neighbors(nb) = id_array(ix(1))
        end do
+       tree%boxes(id)%neighbor_mat = id_array(i-1:i+1)
+
+       call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+            tree%n_var_cell, tree%n_var_face)
+    end do
 #elif NDIM == 2
     do j = 1, nx(2)
        do i = 1, nx(1)
@@ -308,22 +311,32 @@ contains
 
     tree%highest_lvl = 1
 
+    ! Set values for variables with a 'funcval'
+    do i = 1, size(tree%lvls(1)%ids)
+       id = tree%lvls(1)%ids(i)
+       do n = 1, size(tree%cc_func_vars)
+          iv = tree%cc_func_vars(n)
+          call tree%cc_methods(iv)%funcval(tree%boxes(id), iv)
+       end do
+    end do
+
   end subroutine af_set_coarse_grid
 
   !> Set the methods for a cell-centered variable
   subroutine af_set_cc_methods(tree, iv, bc, rb, prolong, restrict, &
-       bc_custom)
+       bc_custom, funcval)
     use m_af_ghostcell, only: af_gc_interp
     use m_af_prolong, only: af_prolong_linear
     use m_af_restrict, only: af_restrict_box
-    type(af_t), intent(inout)             :: tree     !< Tree to operate on
-    integer, intent(in)                   :: iv       !< Index of variable
-    procedure(af_subr_bc), optional       :: bc       !< Boundary condition method
-    procedure(af_subr_rb), optional       :: rb       !< Refinement boundary method
-    procedure(af_subr_prolong), optional  :: prolong  !< Prolongation method
-    procedure(af_subr_restrict), optional :: restrict !< Restriction method
+    type(af_t), intent(inout)              :: tree      !< Tree to operate on
+    integer, intent(in)                    :: iv        !< Index of variable
+    procedure(af_subr_bc), optional        :: bc        !< Boundary condition method
+    procedure(af_subr_rb), optional        :: rb        !< Refinement boundary method
+    procedure(af_subr_prolong), optional   :: prolong   !< Prolongation method
+    procedure(af_subr_restrict), optional  :: restrict  !< Restriction method
     procedure(af_subr_bc_custom), optional :: bc_custom !< Custom b.c. method
-    integer                               :: i
+    procedure(af_subr_funcval), optional   :: funcval   !< Variable defined by function
+    integer                                :: i
 
     if (tree%has_cc_method(iv)) then
        print *, "Cannot call af_set_cc_methods twice for ", &
@@ -337,8 +350,12 @@ contains
           tree%cc_methods(i)%bc => bc
        else if (present(bc_custom)) then
           tree%cc_methods(i)%bc_custom => bc_custom
-       else
-          error stop "af_set_cc_methods: either bc or bc_custom required"
+       else if (.not. present(funcval)) then
+          error stop "af_set_cc_methods: bc, bc_custom or funcval required"
+       end if
+
+       if (present(funcval)) then
+          tree%cc_methods(i)%funcval => funcval
        end if
 
        if (present(rb)) then
@@ -364,10 +381,17 @@ contains
 
     if (.not. allocated(tree%cc_auto_vars)) &
          allocate(tree%cc_auto_vars(0))
+    if (.not. allocated(tree%cc_func_vars)) &
+         allocate(tree%cc_func_vars(0))
 
-    ! Append only original variable to cc_auto_vars, so that the copies are not
-    ! automatically prolongated etc.
-    tree%cc_auto_vars = [tree%cc_auto_vars, iv]
+
+    ! Append only original variable, so that the copies are not automatically
+    ! prolongated etc.
+    if (present(funcval)) then
+       tree%cc_func_vars = [tree%cc_func_vars, iv]
+    else
+       tree%cc_auto_vars = [tree%cc_auto_vars, iv]
+    end if
 
   end subroutine af_set_cc_methods
 
@@ -381,6 +405,7 @@ contains
     deallocate(tree%boxes)
     deallocate(tree%removed_ids)
     deallocate(tree%cc_auto_vars)
+    deallocate(tree%cc_func_vars)
 
     do lvl = af_min_lvl, af_max_lvl
        deallocate(tree%lvls(lvl)%ids)
@@ -762,18 +787,17 @@ contains
   subroutine auto_restrict(tree, id)
     type(af_t), intent(inout) :: tree
     integer, intent(in)        :: id
-    integer                    :: iv, i_ch, ch_id
+    integer                    :: i, iv, i_ch, ch_id
 
     if (.not. any(tree%has_cc_method(:))) return
 
-    do iv = 1, tree%n_var_cell
-       if (tree%has_cc_method(iv)) then
-          do i_ch = 1, af_num_children
-             ch_id = tree%boxes(id)%children(i_ch)
-             call tree%cc_methods(iv)%restrict(tree%boxes(ch_id), &
-                  tree%boxes(id), [iv])
-          end do
-       end if
+    do i_ch = 1, af_num_children
+       ch_id = tree%boxes(id)%children(i_ch)
+       do i = 1, size(tree%cc_auto_vars)
+          iv = tree%cc_auto_vars(i)
+          call tree%cc_methods(iv)%restrict(tree%boxes(ch_id), &
+               tree%boxes(id), [iv])
+       end do
     end do
   end subroutine auto_restrict
 
@@ -800,6 +824,10 @@ contains
              iv = tree%cc_auto_vars(n)
              call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
                   tree%boxes(id), iv)
+          end do
+          do n = 1, size(tree%cc_func_vars)
+             iv = tree%cc_func_vars(n)
+             call tree%cc_methods(iv)%funcval(tree%boxes(id), iv)
           end do
        end do
        !$omp end do
