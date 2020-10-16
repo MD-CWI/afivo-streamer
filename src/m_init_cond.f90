@@ -211,7 +211,6 @@ contains
     real(dp)                   :: density
 
     nc = box%n_cell
-    box%cc(DTIMES(:), :) = 0.0_dp ! Set initial densities/voltage to zero
     box%cc(DTIMES(:), i_electron) = init_conds%background_density
     box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
 

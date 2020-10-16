@@ -31,8 +31,10 @@ module m_streamer
   integer, public, protected :: i_rhs          = -1
   !> Index of temporary variable
   integer, public, protected :: i_tmp          = -1
-  !> Index of can be set to include a dielectric
+  !> Index can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
+  !> Index can be set to include an electrode
+  integer, public, protected :: i_lsf          = -1
 
   !> Include deposited power density in output
   logical, public, protected :: compute_power_density = .false.
@@ -57,6 +59,9 @@ module m_streamer
 
   !> Whether a dielectric is used
   logical, public, protected :: ST_use_dielectric = .false.
+
+  !> Whether to include an electrode
+  logical, public, protected :: ST_use_electrode = .false.
 
   !> Boundary condition for the plasma species
   procedure(af_subr_bc), public, protected, pointer :: &
@@ -210,6 +215,12 @@ contains
        call af_add_cc_variable(tree, "eps", ix=i_eps)
        call af_set_cc_methods(tree, i_eps, af_bc_neumann_zero, &
             af_gc_prolong_copy, af_prolong_zeroth)
+    end if
+
+    call CFG_add_get(cfg, "use_electrode", ST_use_electrode, &
+         "Whether to include an electrode")
+    if (ST_use_electrode) then
+       call af_add_cc_variable(tree, "lsf", ix=i_lsf)
     end if
 
     bc_method = "neumann_zero"

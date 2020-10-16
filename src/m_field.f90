@@ -53,6 +53,18 @@ module m_field
   !> Whether the voltage has been set externally
   logical :: voltage_set_externally = .false.
 
+  !> Whether the electrode is grounded or at the applied voltage
+  logical, public, protected :: field_electrode_grounded = .false.
+
+  !> Electrode relative start position (for standard rod electrode)
+  real(dp), public, protected :: field_rod_r0(NDIM) = -1.0_dp
+
+  !> Electrode relative end position (for standard rod electrode)
+  real(dp), public, protected :: field_rod_r1(NDIM) = -1.0_dp
+
+  !> Electrode radius (in m, for standard rod electrode)
+  real(dp), public, protected :: field_rod_radius = -1.0_dp
+
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
   real(dp) :: field_stability_zmax      = 1.0_dp
@@ -133,6 +145,15 @@ contains
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
 
+    call CFG_add_get(cfg, "field_electrode_grounded", field_electrode_grounded, &
+         "Whether the electrode is grounded or at the applied voltage")
+    call CFG_add_get(cfg, "field_rod_r0", field_rod_r0, &
+         "Electrode relative start position (for standard rod electrode)")
+    call CFG_add_get(cfg, "field_rod_r1", field_rod_r1, &
+         "Electrode relative end position (for standard rod electrode)")
+    call CFG_add_get(cfg, "field_rod_radius", field_rod_radius, &
+         "Electrode radius (in m, for standard rod electrode)")
+
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
     else
@@ -153,7 +174,20 @@ contains
     mg%i_phi = i_phi
     mg%i_tmp = i_tmp
     mg%i_rhs = i_rhs
+
     if (ST_use_dielectric) mg%i_eps = i_eps
+
+    if (ST_use_electrode) then
+       if (any(field_rod_r0 <= -1.0_dp)) &
+            error stop "field_rod_r0 not set correctly"
+       if (any(field_rod_r1 <= -1.0_dp)) &
+            error stop "field_rod_r1 not set correctly"
+       if (field_rod_radius <= 0) &
+            error stop "field_rod_radius not set correctly"
+
+       call af_set_cc_methods(tree, i_lsf, funcval=field_rod_lsf)
+       mg%i_lsf = i_lsf
+    end if
 
     ! This automatically handles cylindrical symmetry
     mg%box_op => mg_auto_op
@@ -215,6 +249,14 @@ contains
 
     call field_set_rhs(tree, s_in)
     call field_set_voltage(tree, time)
+
+    if (ST_use_electrode) then
+       if (field_electrode_grounded) then
+          mg%lsf_boundary_value = 0.0_dp
+       else
+          mg%lsf_boundary_value = field_voltage
+       end if
+    end if
 
     if (.not. have_guess) then
        ! Perform a FMG cycle when we have no guess
@@ -480,5 +522,23 @@ contains
 #endif
 
   end subroutine field_from_potential
+
+  ! This routine sets the level set function for a simple rod
+  subroutine field_rod_lsf(box, iv)
+    use m_geometry
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: iv
+    integer                    :: IJK, nc
+    real(dp)                   :: rr(NDIM)
+
+    nc = box%n_cell
+
+    do KJI_DO(0,nc+1)
+       rr = af_r_cc(box, [IJK])
+       box%cc(IJK, iv) = GM_dist_line(rr, field_rod_r0 * ST_domain_len, &
+            field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
+    end do; CLOSE_DO
+
+  end subroutine field_rod_lsf
 
 end module m_field
