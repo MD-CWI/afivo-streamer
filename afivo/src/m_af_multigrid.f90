@@ -33,6 +33,7 @@ module m_af_multigrid
   public :: mg_box_gsrb_lpl
   public :: mg_box_corr_lpl
   public :: mg_box_rstr_lpl
+  public :: mg_box_lpl_gradient
   public :: mg_sides_rb
 
   ! Methods for Laplacian with jump in coefficient between boxes
@@ -40,6 +41,12 @@ module m_af_multigrid
   public :: mg_box_gsrb_lpld
   public :: mg_box_corr_lpld
   public :: mg_box_lpld_stencil
+
+  ! Methods for Laplacian with level set function
+  public :: mg_box_lpllsf
+  public :: mg_box_lpllsf_stencil
+  public :: mg_box_gsrb_lpllsf
+  public :: mg_box_lpllsf_gradient
 
   ! To adjust operator stencils near boundaries
   public :: mg_stencil_handle_boundaries
@@ -2052,11 +2059,12 @@ contains
           associate (box => tree%boxes(id))
             select case(box%tag)
             case (mg_normal_box, mg_ceps_box)
-               call mg_box_gradient(box, mg, i_fc, fac)
+               call mg_box_lpl_gradient(box, mg, i_fc, fac)
             case (mg_lsf_box)
                call mg_box_lpllsf_gradient(box, mg, i_fc, fac)
             case (mg_veps_box)
-               error stop "Use dielectric_correct_field_fc instead"
+               ! Should call dielectric_correct_field_fc afterwards
+               call mg_box_lpl_gradient(box, mg, i_fc, fac)
             case (af_init_tag)
                error stop "mg_auto_op: box tag not set"
             case default
@@ -2074,12 +2082,12 @@ contains
   end subroutine mg_compute_phi_gradient
 
   !> Compute the gradient of the potential
-  subroutine mg_box_gradient(box, mg, i_fc, fac)
+  subroutine mg_box_lpl_gradient(box, mg, i_fc, fac)
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: i_fc !< Face-centered indices
     real(dp), intent(in)       :: fac  !< Multiply with this factor
-    integer                    :: nc, i_phi
+    integer                    :: nc, i_phi, i_eps
     real(dp)                   :: inv_dr(NDIM)
 
     nc     = box%n_cell
@@ -2105,7 +2113,65 @@ contains
          (box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
          box%cc(1:nc, 1:nc, 0:nc, i_phi))
 #endif
-  end subroutine mg_box_gradient
+
+    if (box%tag == mg_veps_box) then
+       ! Compute fields at the boundaries of the box, where eps can change
+       i_eps = mg%i_eps
+
+#if NDIM == 1
+       box%fc(1, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, i_phi) - box%cc(1, i_phi)) * &
+            box%cc(0, i_eps) / &
+            (box%cc(1, i_eps) + box%cc(0, i_eps))
+       box%fc(nc+1, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, i_phi) - box%cc(nc+1, i_phi)) * &
+            box%cc(nc+1, i_eps) / &
+            (box%cc(nc+1, i_eps) + box%cc(nc, i_eps))
+#elif NDIM == 2
+       box%fc(1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
+       box%fc(1:nc, nc+1, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
+#elif NDIM == 3
+       box%fc(1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
+            box%cc(1:nc, 0, 1:nc, i_eps) / &
+            (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
+       box%fc(1:nc, nc+1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
+            box%cc(1:nc, nc+1, 1:nc, i_eps) / &
+            (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
+       box%fc(1:nc, 1:nc, 1, 3, i_fc) = 2 * inv_dr(3) * &
+            (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
+       box%fc(1:nc, 1:nc, nc+1, 3, i_fc) = 2 * inv_dr(3) * &
+            (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, 1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
+#endif
+    end if
+  end subroutine mg_box_lpl_gradient
 
   subroutine mg_box_gradient_norm(box, i_fc, i_norm)
     type(box_t), intent(inout) :: box
@@ -2167,7 +2233,7 @@ contains
 
        call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
             mg%lsf_boundary_value, dd, val)
-       box%fc(IJK, 1, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+       box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
             (box%dr(1) * dd)
     end do
 #elif NDIM == 2
@@ -2185,7 +2251,7 @@ contains
 
           call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
                mg%lsf_boundary_value, dd, val)
-          box%fc(IJK, 1, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+          box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                (box%dr(1) * dd)
 
           if (box%cc(j, i, i_lsf) > 0) then
@@ -2200,7 +2266,7 @@ contains
 
           call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
                mg%lsf_boundary_value, dd, val)
-          box%fc(j, i, 2, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+          box%fc(j, i, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                (box%dr(2) * dd)
        end do
     end do
@@ -2220,7 +2286,7 @@ contains
 
              call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
                   mg%lsf_boundary_value, dd, val)
-             box%fc(IJK, 1, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+             box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                   (box%dr(1) * dd)
 
              if (box%cc(j, i, k, i_lsf) > 0) then
@@ -2235,7 +2301,7 @@ contains
 
              call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
                   mg%lsf_boundary_value, dd, val)
-             box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+             box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                   (box%dr(2) * dd)
 
              if (box%cc(j, k, i, i_lsf) > 0) then
@@ -2250,7 +2316,7 @@ contains
 
              call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
                   mg%lsf_boundary_value, dd, val)
-             box%fc(j, k, i, 3, i_fc) = grad_sign * fac * (val - v_a(2)) / &
+             box%fc(j, k, i, 3, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                   (box%dr(3) * dd)
           end do
        end do
@@ -2279,7 +2345,8 @@ contains
     end do
 
     if (max_lsf * min_lsf >= 0) then
-       print *, "Make the coarse grid finer?"
+       print *, "Min/max level set function:", min_lsf, max_lsf
+       print *, "Perhaps make the coarse grid finer?"
        error stop "Level set function does not change sign on coarse grid"
     end if
 
