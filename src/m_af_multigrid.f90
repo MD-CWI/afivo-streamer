@@ -2087,7 +2087,7 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: i_fc !< Face-centered indices
     real(dp), intent(in)       :: fac  !< Multiply with this factor
-    integer                    :: nc, i_phi
+    integer                    :: nc, i_phi, i_eps
     real(dp)                   :: inv_dr(NDIM)
 
     nc     = box%n_cell
@@ -2113,6 +2113,64 @@ contains
          (box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
          box%cc(1:nc, 1:nc, 0:nc, i_phi))
 #endif
+
+    if (box%tag == mg_veps_box) then
+       ! Compute fields at the boundaries of the box, where eps can change
+       i_eps = mg%i_eps
+
+#if NDIM == 1
+       box%fc(1, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, i_phi) - box%cc(1, i_phi)) * &
+            box%cc(0, i_eps) / &
+            (box%cc(1, i_eps) + box%cc(0, i_eps))
+       box%fc(nc+1, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, i_phi) - box%cc(nc+1, i_phi)) * &
+            box%cc(nc+1, i_eps) / &
+            (box%cc(nc+1, i_eps) + box%cc(nc, i_eps))
+#elif NDIM == 2
+       box%fc(1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
+       box%fc(1:nc, nc+1, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
+#elif NDIM == 3
+       box%fc(1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
+            box%cc(1:nc, 0, 1:nc, i_eps) / &
+            (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
+       box%fc(1:nc, nc+1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
+            box%cc(1:nc, nc+1, 1:nc, i_eps) / &
+            (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
+       box%fc(1:nc, 1:nc, 1, 3, i_fc) = 2 * inv_dr(3) * &
+            (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
+       box%fc(1:nc, 1:nc, nc+1, 3, i_fc) = 2 * inv_dr(3) * &
+            (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, 1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
+#endif
+    end if
   end subroutine mg_box_lpl_gradient
 
   subroutine mg_box_gradient_norm(box, i_fc, i_norm)
