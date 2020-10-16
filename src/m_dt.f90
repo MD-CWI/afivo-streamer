@@ -82,6 +82,7 @@ contains
     n_threads = af_get_max_threads()
     ! Prevent cache invalidation issues by enlarging the array
     allocate(dt_matrix(dt_num_cond+32, n_threads))
+    dt_matrix(:, :) = 0.0_dp
 
   end subroutine dt_initialize
 
