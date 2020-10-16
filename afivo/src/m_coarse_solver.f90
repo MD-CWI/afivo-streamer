@@ -91,8 +91,10 @@ contains
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%phi)
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%rhs)
 
-    if (tree%coord_t == af_cyl) then
-       ! The symmetry option does not seem to work well with axisymmetric problems
+    if (tree%coord_t == af_cyl .or. mg%i_lsf /= -1) then
+       ! The symmetry option does not seem to work well with axisymmetric
+       ! problems. It also doesn't work with a level set function internal
+       ! boundary.
        mg%csolver%symmetric = 0
     end if
 
@@ -123,12 +125,17 @@ contains
          stencil_size, stencil_offsets(:, stencil_ix), mg%csolver%symmetric)
 
     allocate(mg%csolver%bc_to_rhs(nc**(NDIM-1), af_num_neighbors, n_boxes))
+    allocate(mg%csolver%lsf_fac(DTIMES(nc), n_boxes))
     allocate(coeffs(stencil_size, tree%n_cell**NDIM))
+
+    mg%csolver%bc_to_rhs    = 0.0_dp
+    mg%csolver%lsf_fac = 0.0_dp
+    coeffs                  = 0.0_dp
 
     do n = 1, size(tree%lvls(1)%ids)
        id  = tree%lvls(1)%ids(n)
        call mg%box_stencil(tree%boxes(id), mg, full_coeffs, &
-            mg%csolver%bc_to_rhs(:, :, n))
+            mg%csolver%bc_to_rhs(:, :, n), mg%csolver%lsf_fac(DTIMES(:), n))
 
        cnt = 0
        do KJI_DO(1, nc)
@@ -262,6 +269,11 @@ contains
                   [ihi - ilo + 1])
           end if
        end do
+
+       ! Add contribution of level-set function to rhs
+       if (mg%i_lsf /= -1) then
+          tmp = tmp + mg%csolver%lsf_fac(DTIMES(:), n) * mg%lsf_boundary_value
+       end if
 
        ilo = (tree%boxes(id)%ix - 1) * nc + 1
        ihi = ilo + nc - 1

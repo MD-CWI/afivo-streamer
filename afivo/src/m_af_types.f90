@@ -245,6 +245,8 @@ module m_af_types
      procedure(af_subr_bc), pointer, nopass :: bc => null()
      !> Refinement boundary routine
      procedure(af_subr_rb), pointer, nopass :: rb => null()
+     !> Custom boundary condition routine
+     procedure(af_subr_bc_custom), pointer, nopass :: bc_custom => null()
   end type af_cc_methods
 
   !> The basic building block of afivo: a box with cell-centered and face
@@ -403,6 +405,20 @@ module m_af_types
        real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1)) !< Boundary values
        integer, intent(out)    :: bc_type !< Type of b.c.
      end subroutine af_subr_bc
+
+     !> To fill ghost cells near physical boundaries in a custom way. If the
+     !> number of ghost cells to fill is greater than one (n_gc > 1), fill ghost
+     !> cells in the optional argument cc.
+     subroutine af_subr_bc_custom(box, nb, iv, n_gc, cc)
+       import
+       type(box_t), intent(inout) :: box     !< Box that needs b.c.
+       integer, intent(in)     :: nb      !< Direction
+       integer, intent(in)     :: iv      !< Index of variable
+       integer, intent(in)     :: n_gc !< Number of ghost cells to fill
+       !> If n_gc > 1, fill ghost cell values in this array instead of box%cc
+       real(dp), intent(inout), optional :: &
+            cc(DTIMES(1-n_gc:box%n_cell+n_gc))
+     end subroutine af_subr_bc_custom
 
      !> Subroutine for prolongation
      subroutine af_subr_prolong(box_p, box_c, iv, iv_to, add)

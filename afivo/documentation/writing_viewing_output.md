@@ -21,6 +21,19 @@ At the moment, only cell-centered variables are included in the output.
 
 See `m_af_output` for more details.
 
+## Silo output
+
+Silo is the preferred output format. With this format, ghost cells are included so that no clear artifacts should be visible near refinement boundaries.
+
+Some details about this format:
+* Only data from the AMR leaves (so the highest visible refinement levels) is included
+* In 2D and 3D, multiple quadtree/octree boxes is converted into rectangular regions for efficiency. These are written as so-called *quadmeshes* into a Silo *multimesh*.
+* In 1D, output is written in the *curve* format
+
+## VTK output
+
+Write the grid as an unstructured grid in the VTK XML format. Not very efficient, especially in 3D. Does not properly handle the refinement boundaries.
+
 # Visualizing results
 
 The Silo and VTK files can be visualized
