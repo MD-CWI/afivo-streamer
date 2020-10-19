@@ -6,6 +6,19 @@ By default, output is written in the Silo format. More information about this
 format and other output options can be found in the [Afivo
 documentation](https://teunissen.net/afivo/md_documentation_writing_viewing_output.html).
 
+## Description of variables
+
+name | meaning
+---|---
+e | Electron density (1/m3)
+electric_fld | Electric field strength (V/m)
+`M_min` | Negative ion species (if no chemistry is defined) (1/m3)
+`M_plus` | Positive ion species (if no chemistry is defined) (1/m3)
+phi | Electric potential (V)
+rhs | `-rho/eps0`, right-hand side for Poisson's equation, where `rho` is the charge density and `eps0` the dielectric permittivity of vacuum.
+
+Species defined by the plasma chemistry will also be present in the output.
+
 # Binary output
 
 Afivo-streamer allows a simulation to be continued at a later time through the use of binary output files (DAT files). To do this, the simulation is initially run and set up to write DAT files, which could be achieved by using the following `.cfg` file options:
