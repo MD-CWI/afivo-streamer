@@ -215,7 +215,7 @@ contains
        end if
 
        ! Refine around electrode
-       if (ST_use_electrode .and. max_dx > refine_electrode_dx) then
+       if (box%tag == mg_lsf_box .and. max_dx > refine_electrode_dx) then
           i0 = [IJK] - 1
           i1 = [IJK] + 1
           if (minval(box%cc(DSLICE(i0, i1), i_lsf)) * &
