@@ -262,6 +262,12 @@ contains
              end select
           end if
        end do
+
+       if (ST_use_electrode) then
+          if (box%cc(IJK, i_lsf) <= 0) then
+             box%cc(IJK, species_itree(n_gas_species+1:n_species)) = 0.0_dp
+          end if
+       end if
     end do; CLOSE_DO
 
   end subroutine init_cond_set_box
