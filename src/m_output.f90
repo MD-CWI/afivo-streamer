@@ -81,6 +81,9 @@ module m_output
   ! Print status every this many seconds
   real(dp), public, protected :: output_status_delay = 60.0_dp
 
+  ! Density threshold for detecting plasma regions
+  real(dp) :: density_threshold = 1e18_dp
+
   ! Public methods
   public :: output_initialize
   public :: output_initial_summary
@@ -127,6 +130,8 @@ contains
          "Include ionization source term in output")
     call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
          "Write to a log file for regression testing")
+    call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
+         "Electron density threshold (1/m3, will be scaled by N)")
 
     if (output_src_term) then
        call af_add_cc_variable(tree, "src", ix=i_src)
@@ -277,6 +282,7 @@ contains
     use m_field, only: field_voltage
     use m_user_methods
     use m_chemistry
+    use m_analysis
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
@@ -287,8 +293,10 @@ contains
     real(dp), save               :: prev_pos(NDIM) = 0
     real(dp)                     :: sum_elec, sum_pos_ion
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
-    real(dp)                     :: sum_elem_charge, tmp
-    type(af_loc_t)               :: loc_elec, loc_field, loc_Er
+    real(dp)                     :: sum_elem_charge, tmp, ne_zminmax(2)
+    real(dp)                     :: elecdens_threshold, max_field_tip
+    real(dp)                     :: r(NDIM), r0(NDIM), r1(NDIM)
+    type(af_loc_t)               :: loc_elec, loc_field, loc_Er, loc_tip
     integer                      :: i, n_reals, n_user_vars
     character(len=name_len)      :: var_names(user_max_log_vars)
     real(dp)                     :: var_values(user_max_log_vars)
@@ -311,6 +319,33 @@ contains
     call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
     call af_tree_min_fc(tree, 1, electric_fld, min_Er)
 
+    ! Scale threshold with gas number density
+    elecdens_threshold = density_threshold * &
+         (gas_number_density/2.414e25_dp)**2
+    call analysis_zmin_zmax_threshold(tree, i_electron, elecdens_threshold, &
+         [ST_domain_len(NDIM), 0.0_dp], ne_zminmax)
+
+    ! Check if maximal field is close to a boundary
+    r = af_r_loc(tree, loc_field)
+    r0 = 0.0_dp
+    r1 = ST_domain_len
+    if (r(NDIM) < 0.02_dp * ST_domain_len(NDIM)) then
+       ! Close to lower boundary, use farthest location away from it
+       r0(NDIM) = ne_zminmax(2) - 0.05_dp * ST_domain_len(NDIM)
+       r1(NDIM) = ne_zminmax(2) + 0.05_dp * ST_domain_len(NDIM)
+       call analysis_max_var_region(tree, i_electric_fld, r0, r1, &
+         max_field_tip, loc_tip)
+    else if (ST_domain_len(NDIM) - r(NDIM) < 0.02_dp * ST_domain_len(NDIM)) then
+       ! Close to upper boundary, use farthest location away from it
+       r0(NDIM) = ne_zminmax(1) - 0.05_dp * ST_domain_len(NDIM)
+       r1(NDIM) = ne_zminmax(1) + 0.05_dp * ST_domain_len(NDIM)
+       call analysis_max_var_region(tree, i_electric_fld, r0, r1, &
+         max_field_tip, loc_tip)
+    else
+       max_field_tip = max_field
+       loc_tip = loc_field
+    end if
+
     sum_elem_charge = 0
     do n = n_gas_species+1, n_species
        if (species_charge(n) /= 0) then
@@ -327,16 +362,17 @@ contains
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x max(n_e) x voltage wc_time n_cells min(dx) &
+            &sum(charge) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
+            &max(Etip) x wc_time n_cells min(dx) &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
-            &wc_time n_cells min(dx) highest(lvl)"
+            &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) max(E) x y z max(n_e) x y z voltage &
-            &wc_time n_cells min(dx) highest(lvl)"
+            &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
           do i = 1, n_user_vars
@@ -351,11 +387,11 @@ contains
     end if
 
 #if NDIM == 1
-    n_reals = 12
-#elif NDIM == 2
-    n_reals = 18
-#elif NDIM == 3
     n_reals = 16
+#elif NDIM == 2
+    n_reals = 23
+#elif NDIM == 3
+    n_reals = 22
 #endif
 
     if (associated(user_log_variables)) then
@@ -374,22 +410,25 @@ contains
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), field_voltage, &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
+         af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
+         max_field_tip, af_r_loc(tree, loc_tip), &
+         wc_time, af_num_cells_used(tree), &
+         af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         field_voltage, &
+         field_voltage, ne_zminmax, max_field_tip, af_r_loc(tree, loc_tip), &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), field_voltage, &
+         af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
+         max_field_tip, af_r_loc(tree, loc_tip), &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
