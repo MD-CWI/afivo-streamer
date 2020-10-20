@@ -240,13 +240,19 @@ contains
     real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
     integer                   :: i
-    real(dp)                  :: max_rhs, max_residual, initial_residual
+    real(dp)                  :: max_rhs, residual_threshold
     integer, parameter        :: max_initial_iterations = 30
+    real(dp)                  :: residuals(max_initial_iterations)
 
     call field_set_rhs(tree, s_in)
     call field_set_voltage(tree, time)
 
     call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
+
+    ! Set threshold based on rhs and on estimate of round-off error, given by
+    ! delta phi / dx^2 = (phi/L * dx)/dx^2
+    residual_threshold = max(max_rhs * ST_multigrid_max_rel_residual, &
+         1e-10_dp * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
 
     if (ST_use_electrode) then
        if (field_electrode_grounded) then
@@ -260,20 +266,26 @@ contains
     if (.not. have_guess) then
        do i = 1, max_initial_iterations
           call mg_fas_fmg(tree, mg, .true., i > 1)
-          call af_tree_maxabs_cc(tree, mg%i_tmp, max_residual)
-          if (i == 1) initial_residual = max_residual
-          if (max_residual < max(max_rhs, initial_residual) * &
-               ST_multigrid_max_rel_residual) exit
+          call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
+          if (residuals(i) < residual_threshold) exit
        end do
-       if (i == max_initial_iterations + 1) &
-            error stop "No convergence in initial field computation"
+
+       ! Check for convergence
+       if (i == max_initial_iterations + 1) then
+          print *, "Iteration    residual"
+          do i = 1, max_initial_iterations
+             write(*, "(I4,E18.2)") i, residuals(i)
+          end do
+          print *, "Maybe increase multigrid_max_rel_residual?"
+          error stop "No convergence in initial field computation"
+       end if
     end if
 
     ! Perform cheaper V-cycles
     do i = 1, ST_multigrid_num_vcycles
        call mg_fas_vcycle(tree, mg, .true.)
-       call af_tree_maxabs_cc(tree, mg%i_tmp, max_residual)
-       if (max_residual < max_rhs * ST_multigrid_max_rel_residual) exit
+       call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
+       if (residuals(i) < residual_threshold) exit
     end do
 
     ! Compute field from potential
