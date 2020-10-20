@@ -9,6 +9,9 @@ module m_analysis
 
   ! Public methods
   public :: analysis_get_maxima
+  public :: analysis_zmin_zmax_threshold
+  public :: analysis_max_var_region
+  public :: analysis_max_var_product
 
 contains
 
@@ -70,5 +73,143 @@ contains
     !$omp end parallel
 
   end subroutine analysis_get_maxima
+
+  !> Find minimum and maximum z coordinate where a variable exceeds a threshold
+  subroutine analysis_zmin_zmax_threshold(tree, iv, threshold, limits, z_minmax)
+    type(af_t), intent(in) :: tree
+    integer, intent(in)    :: iv !< Index of variable
+    !> Threshold for variable
+    real(dp), intent(in)   :: threshold
+    !> Limits for min/max
+    real(dp), intent(in)   :: limits(2)
+    !> Minimum/maximum z coordinate above threshold
+    real(dp), intent(out)  :: z_minmax(2)
+
+    call af_reduction_vec(tree, box_minmax_z, reduce_minmax, &
+         limits, z_minmax, 2)
+
+  contains
+
+    ! Find cell with min/max z coordinate that has a density exceeding a
+    ! threshold
+    function box_minmax_z(box, n_vals) result(vec)
+      type(box_t), intent(in) :: box
+      integer, intent(in)     :: n_vals
+      real(dp)                :: vec(n_vals)
+
+      integer  :: i, j, n, nc, ix(NDIM)
+      logical  :: above
+      real(dp) :: r(NDIM)
+
+      nc = box%n_cell
+      i = -1
+      j = -1
+
+      do n = 1, nc
+#if NDIM == 1
+         above = box%cc(n, iv) > threshold
+#elif NDIM == 2
+         above = maxval(box%cc(1:nc, n, iv)) > threshold
+#elif NDIM == 3
+         above = maxval(box%cc(1:nc, 1:nc, n, iv)) > threshold
+#endif
+         if (above) then
+            if (i == -1) i = n
+            j = n
+         end if
+      end do
+
+      vec = [1e100_dp, -1e100_dp]
+      ix = 1
+      if (i /= -1) then
+         ix(NDIM) = i
+         r = af_r_cc(box, ix)
+         vec(1) = r(NDIM)
+      end if
+
+      if (j /= -1) then
+         ix(NDIM) = i
+         r = af_r_cc(box, ix)
+         vec(2) = r(NDIM)
+      end if
+    end function box_minmax_z
+
+    !> Reduction method (e.g., min, max, sum)
+    function reduce_minmax(vec_1, vec_2, n_vals) result(vec)
+      integer, intent(in)  :: n_vals
+      real(dp), intent(in) :: vec_1(n_vals), vec_2(n_vals)
+      real(dp)             :: vec(n_vals)
+      vec(1) = min(vec_1(1), vec_2(1))
+      vec(2) = max(vec_1(2), vec_2(2))
+    end function reduce_minmax
+
+  end subroutine analysis_zmin_zmax_threshold
+
+  !> Find maximal value for boxes that are (at least partially) in the rectangle
+  !> from r0 to r1
+  subroutine analysis_max_var_region(tree, iv, r0, r1, max_value, loc)
+    type(af_t), intent(in)      :: tree
+    integer, intent(in)         :: iv        !< Index of variable
+    real(dp), intent(in)        :: r0(NDIM)  !< Minimum coordinates
+    real(dp), intent(in)        :: r1(NDIM)  !< Maximum coordinates
+    real(dp), intent(out)       :: max_value !< Found maximum
+    type(af_loc_t), intent(out) :: loc
+
+    call af_reduction_loc(tree, iv, box_max_region, reduce_max, &
+         -1e100_dp, max_value, loc)
+
+  contains
+
+    subroutine box_max_region(box, iv, val, ix)
+      type(box_t), intent(in) :: box
+      integer, intent(in)     :: iv
+      real(dp), intent(out)   :: val
+      integer, intent(out)    :: ix(NDIM)
+      integer                 :: nc
+      real(dp)                :: r_max(NDIM)
+
+      nc = box%n_cell
+      r_max = box%r_min + box%n_cell * box%dr
+
+      if (any(box%r_min > r1) .or. any(r_max < r0)) then
+         ix = -1
+         val = -1e100_dp
+      else
+         ix = maxloc(box%cc(DTIMES(1:nc), iv))
+         val = box%cc(DINDEX(ix), iv)
+      end if
+    end subroutine box_max_region
+
+  end subroutine analysis_max_var_region
+
+  subroutine analysis_max_var_product(tree, ivs, max_value, loc)
+    type(af_t), intent(in)      :: tree
+    integer, intent(in)         :: ivs(:)    !< Indices of variables
+    real(dp), intent(out)       :: max_value !< Found maximum
+    type(af_loc_t), intent(out) :: loc
+
+    call af_reduction_loc(tree, -1, box_max_product, reduce_max, &
+         -1e100_dp, max_value, loc)
+
+  contains
+
+    subroutine box_max_product(box, iv, val, ix)
+      type(box_t), intent(in) :: box
+      integer, intent(in)     :: iv
+      real(dp), intent(out)   :: val
+      integer, intent(out)    :: ix(NDIM)
+      integer                 :: nc
+
+      nc  = box%n_cell
+      ix  = maxloc(product(box%cc(DTIMES(1:nc), ivs), dim=NDIM+1))
+      val = product(box%cc(DINDEX(ix), ivs))
+    end subroutine box_max_product
+
+  end subroutine analysis_max_var_product
+
+  real(dp) function reduce_max(a, b)
+    real(dp), intent(in) :: a, b
+    reduce_max = max(a, b)
+  end function reduce_max
 
 end module m_analysis

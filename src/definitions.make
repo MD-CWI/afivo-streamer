@@ -31,6 +31,7 @@ m_dt.o: m_config.mod
 m_dt.o: m_types.mod
 m_field.o: m_chemistry.mod
 m_field.o: m_config.mod
+m_field.o: m_geometry.mod
 m_field.o: m_lookup_table.mod
 m_field.o: m_streamer.mod
 m_field.o: m_table_data.mod
