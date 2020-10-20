@@ -240,7 +240,7 @@ contains
     real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
     integer                   :: i
-    real(dp)                  :: max_rhs, residual_threshold
+    real(dp)                  :: max_rhs, residual_threshold, conv_fac
     integer, parameter        :: max_initial_iterations = 30
     real(dp)                  :: residuals(max_initial_iterations)
 
@@ -249,10 +249,16 @@ contains
 
     call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
 
+    if (ST_use_electrode) then
+       conv_fac = 1e-8_dp
+    else
+       conv_fac = 1e-10_dp
+    end if
+
     ! Set threshold based on rhs and on estimate of round-off error, given by
     ! delta phi / dx^2 = (phi/L * dx)/dx^2
     residual_threshold = max(max_rhs * ST_multigrid_max_rel_residual, &
-         1e-10_dp * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
+         conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
 
     if (ST_use_electrode) then
        if (field_electrode_grounded) then
