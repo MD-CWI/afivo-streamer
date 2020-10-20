@@ -159,11 +159,15 @@ contains
           mg_helm(n)%box_op => mg_box_clpl
           mg_helm(n)%box_gsrb => mg_box_gsrb_clpl
           mg_helm(n)%box_stencil => mg_box_clpl_stencil
+          mg_helm(n)%box_corr => mg_box_corr_lpl
+          mg_helm(n)%box_rstr => mg_box_rstr_lpl
 #endif
        else
           mg_helm(n)%box_op => mg_box_lpl
           mg_helm(n)%box_gsrb => mg_box_gsrb_lpl
           mg_helm(n)%box_stencil => mg_box_lpl_stencil
+          mg_helm(n)%box_corr => mg_box_corr_lpl
+          mg_helm(n)%box_rstr => mg_box_rstr_lpl
        end if
     end do
   end subroutine photoi_helmh_initialize
