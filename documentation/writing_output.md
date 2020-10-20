@@ -50,7 +50,6 @@ name | meaning
 `voltage` | current applied voltage
 `ne_zmin`, `ne_zmax` | Min/max location where the electron density exceeds a threshold
 `max(Etip) x y` | Maximum electric field at streamer tip (tries to avoid boundaries) + location
-`max(Etip)` | Maximum electric field at streamer tip (tries to avoid maximum at boundary)
 `wc_time` | simulation wall-clock time (how long it has been running)
 `n_cells` | number of grid cells used in simulation
 `min(dx)` | minimum grid spacing
