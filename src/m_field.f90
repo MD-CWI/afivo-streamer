@@ -255,10 +255,16 @@ contains
        conv_fac = 1e-10_dp
     end if
 
+    if (field_rise_time > 0) then
     ! Set threshold based on rhs and on estimate of round-off error, given by
     ! delta phi / dx^2 = (phi/L * dx)/dx^2
     residual_threshold = max(max_rhs * ST_multigrid_max_rel_residual, &
+         conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)), 1e-3_dp) !Make sure simulations could work when the applied voltage is zero.     
+    else
+        residual_threshold = max(max_rhs * ST_multigrid_max_rel_residual, &
          conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
+    end if
+    
 
     if (ST_use_electrode) then
        if (field_electrode_grounded) then
