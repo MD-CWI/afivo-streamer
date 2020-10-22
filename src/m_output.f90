@@ -295,7 +295,7 @@ contains
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
     real(dp)                     :: sum_elem_charge, tmp, ne_zminmax(2)
     real(dp)                     :: elecdens_threshold, max_field_tip
-    real(dp)                     :: r(NDIM), r0(NDIM), r1(NDIM)
+    real(dp)                     :: r0(NDIM), r1(NDIM)
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er, loc_tip
     integer                      :: i, n_reals, n_user_vars
     character(len=name_len)      :: var_names(user_max_log_vars)
@@ -325,26 +325,22 @@ contains
     call analysis_zmin_zmax_threshold(tree, i_electron, elecdens_threshold, &
          [ST_domain_len(NDIM), 0.0_dp], ne_zminmax)
 
-    ! Check if maximal field is close to a boundary
-    r = af_r_loc(tree, loc_field)
-    r0 = 0.0_dp
-    r1 = ST_domain_len
-    if (r(NDIM) < 0.02_dp * ST_domain_len(NDIM)) then
-       ! Close to lower boundary, use farthest location away from it
-       r0(NDIM) = ne_zminmax(2) - 0.05_dp * ST_domain_len(NDIM)
-       r1(NDIM) = ne_zminmax(2) + 0.05_dp * ST_domain_len(NDIM)
-       call analysis_max_var_region(tree, i_electric_fld, r0, r1, &
-         max_field_tip, loc_tip)
-    else if (ST_domain_len(NDIM) - r(NDIM) < 0.02_dp * ST_domain_len(NDIM)) then
-       ! Close to upper boundary, use farthest location away from it
-       r0(NDIM) = ne_zminmax(1) - 0.05_dp * ST_domain_len(NDIM)
-       r1(NDIM) = ne_zminmax(1) + 0.05_dp * ST_domain_len(NDIM)
-       call analysis_max_var_region(tree, i_electric_fld, r0, r1, &
-         max_field_tip, loc_tip)
+    ! Assume streamer tip is located at the farthest plasma density (above a
+    ! threshold) away from the electrode boundaries
+    r0 = ST_domain_origin
+    r1 = ST_domain_origin + ST_domain_len
+
+    if (ne_zminmax(1) - ST_domain_origin(NDIM) < &
+         ST_domain_origin(NDIM) + ST_domain_len(NDIM) - ne_zminmax(2)) then
+       r0(NDIM) = ne_zminmax(2) - 0.02_dp * ST_domain_len(NDIM)
+       r1(NDIM) = ne_zminmax(2) + 0.02_dp * ST_domain_len(NDIM)
     else
-       max_field_tip = max_field
-       loc_tip = loc_field
+       r0(NDIM) = ne_zminmax(1) - 0.02_dp * ST_domain_len(NDIM)
+       r1(NDIM) = ne_zminmax(1) + 0.02_dp * ST_domain_len(NDIM)
     end if
+
+    call analysis_max_var_region(tree, i_electric_fld, r0, r1, &
+         max_field_tip, loc_tip)
 
     sum_elem_charge = 0
     do n = n_gas_species+1, n_species
