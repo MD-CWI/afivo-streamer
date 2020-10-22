@@ -241,7 +241,9 @@ contains
     logical, intent(in)       :: have_guess
     integer                   :: i
     real(dp)                  :: max_rhs, residual_threshold, conv_fac
+    real(dp)                  :: residual_ratio
     integer, parameter        :: max_initial_iterations = 30
+    real(dp), parameter       :: residual_limit = 1e8_dp
     real(dp)                  :: residuals(max_initial_iterations)
 
     call field_set_rhs(tree, s_in)
@@ -249,6 +251,7 @@ contains
 
     call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
 
+    ! With an electrode, the initial convergence testing should be less strict
     if (ST_use_electrode) then
        conv_fac = 1e-8_dp
     else
@@ -273,7 +276,16 @@ contains
        do i = 1, max_initial_iterations
           call mg_fas_fmg(tree, mg, .true., i > 1)
           call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
-          if (residuals(i) < residual_threshold) exit
+
+          if (residuals(i) < residual_threshold) then
+             exit
+          else if (i > 3) then
+             ! Check if the residual is not changing much anymore, and if it is
+             ! small enough, in which case we assume convergence
+             residual_ratio = minval(residuals(i-3:i)) / maxval(residuals(i-3:i))
+             if (residual_ratio < 2.0_dp .and. residual_ratio > 0.5_dp &
+                  .and. residuals(i) < residual_limit) exit
+          end if
        end do
 
        ! Check for convergence
