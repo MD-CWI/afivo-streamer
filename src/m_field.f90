@@ -277,15 +277,16 @@ contains
     ! Perform a FMG cycle when we have no guess
     if (.not. have_guess) then
        do i = 1, max_initial_iterations
-          call mg_fas_fmg(tree, mg, .true., i > 1)
+          call mg_fas_fmg(tree, mg, .true., .true.)
           call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
 
           if (residuals(i) < residual_threshold) then
              exit
-          else if (i > 3) then
+          else if (i > 2) then
              ! Check if the residual is not changing much anymore, and if it is
              ! small enough, in which case we assume convergence
-             residual_ratio = minval(residuals(i-3:i)) / maxval(residuals(i-3:i))
+             residual_ratio = minval(residuals(i-2:i)) / &
+                  maxval(residuals(i-2:i))
              if (residual_ratio < 2.0_dp .and. residual_ratio > 0.5_dp &
                   .and. residuals(i) < max_residual) exit
           end if
