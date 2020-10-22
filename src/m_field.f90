@@ -243,7 +243,8 @@ contains
     real(dp)                  :: max_rhs, residual_threshold, conv_fac
     real(dp)                  :: residual_ratio
     integer, parameter        :: max_initial_iterations = 30
-    real(dp), parameter       :: residual_limit = 1e8_dp
+    real(dp), parameter       :: max_residual = 1e8_dp
+    real(dp), parameter       :: min_residual = 1e-6_dp
     real(dp)                  :: residuals(max_initial_iterations)
 
     call field_set_rhs(tree, s_in)
@@ -258,16 +259,12 @@ contains
        conv_fac = 1e-10_dp
     end if
 
-    if (field_rise_time > 0) then
     ! Set threshold based on rhs and on estimate of round-off error, given by
     ! delta phi / dx^2 = (phi/L * dx)/dx^2
-    residual_threshold = max(max_rhs * ST_multigrid_max_rel_residual, &
-         conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)), 1e-3_dp) !Make sure simulations could work when the applied voltage is zero.     
-    else
-        residual_threshold = max(max_rhs * ST_multigrid_max_rel_residual, &
+    ! Note that we use min_residual in case max_rhs and field_voltage are zero
+    residual_threshold = max(min_residual, &
+         max_rhs * ST_multigrid_max_rel_residual, &
          conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
-    end if
-    
 
     if (ST_use_electrode) then
        if (field_electrode_grounded) then
@@ -290,7 +287,7 @@ contains
              ! small enough, in which case we assume convergence
              residual_ratio = minval(residuals(i-3:i)) / maxval(residuals(i-3:i))
              if (residual_ratio < 2.0_dp .and. residual_ratio > 0.5_dp &
-                  .and. residuals(i) < residual_limit) exit
+                  .and. residuals(i) < max_residual) exit
           end if
        end do
 
