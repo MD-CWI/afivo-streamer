@@ -293,21 +293,20 @@ contains
   subroutine set_initial_conditions(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg
-    integer                   :: n
+    integer                   :: n, lvl, i, id
+
+    call af_loop_box(tree, init_cond_set_box)
+    if (associated(user_initial_conditions)) then
+       call af_loop_box(tree, user_initial_conditions)
+    else if (ST_use_dielectric) then
+       error stop "use_dielectric requires user_initial_conditions to be set"
+    end if
+
+    ! This placement is so that users can set epsilon before the coarse grid
+    ! solver is constructed
+    call mg_init(tree, mg)
 
     do n = 1, 100
-       call af_loop_box(tree, init_cond_set_box)
-
-       if (associated(user_initial_conditions)) then
-          call af_loop_box(tree, user_initial_conditions)
-       else if (ST_use_dielectric) then
-          error stop "use_dielectric requires user_initial_conditions to be set"
-       end if
-
-       ! This placement is so that users can set epsilon before the coarse grid
-       ! solver is constructed
-       if (n == 1) call mg_init(tree, mg)
-
        call field_compute(tree, mg, 0, time, .false.)
 
        if (associated(user_refine)) then
@@ -317,6 +316,18 @@ contains
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width)
        end if
+
+       ! Set initial conditions on newly added boxes
+       do lvl = 1, size(ref_info%lvls)
+          !$omp parallel do private(id)
+          do i = 1, size(ref_info%lvls(lvl)%add)
+             id = ref_info%lvls(lvl)%add(i)
+             call init_cond_set_box(tree%boxes(id))
+             if (associated(user_initial_conditions)) &
+                  call user_initial_conditions(tree%boxes(id))
+          end do
+          !$omp end parallel do
+       end do
 
        if (ref_info%n_add == 0) exit
     end do

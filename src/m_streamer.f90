@@ -31,10 +31,10 @@ module m_streamer
   integer, public, protected :: i_rhs          = -1
   !> Index of temporary variable
   integer, public, protected :: i_tmp          = -1
-  !> Index of can be set to include a dielectric
+  !> Index can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
-  !> Index of conductivity
-  integer, public, protected :: i_conductivity = -1
+  !> Index can be set to include an electrode
+  integer, public, protected :: i_lsf          = -1
 
   !> Include deposited power density in output
   logical, public, protected :: compute_power_density = .false.
@@ -61,6 +61,9 @@ module m_streamer
 
   !> Whether a dielectric is used
   logical, public, protected :: ST_use_dielectric = .false.
+
+  !> Whether to include an electrode
+  logical, public, protected :: ST_use_electrode = .false.
 
   !> Boundary condition for the plasma species
   procedure(af_subr_bc), public, protected, pointer :: &
@@ -123,6 +126,9 @@ module m_streamer
 
   !> Number of V-cycles to perform per time step
   integer, public, protected :: ST_multigrid_num_vcycles = 2
+
+  ! Stop multigrid when residual is smaller than this factor times max(|rhs|)
+  real(dp), public, protected :: ST_multigrid_max_rel_residual = 1e-4_dp
 
   !> Global time
   real(dp), public :: global_time = 0.0_dp
@@ -217,6 +223,12 @@ contains
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
 
+    call CFG_add_get(cfg, "use_electrode", ST_use_electrode, &
+         "Whether to include an electrode")
+    if (ST_use_electrode) then
+       call af_add_cc_variable(tree, "lsf", ix=i_lsf)
+    end if
+
     bc_method = "neumann_zero"
     call CFG_add_get(cfg, "species_boundary_condition", &
          bc_method, &
@@ -279,6 +291,9 @@ contains
 
     call CFG_add_get(cfg, "multigrid_num_vcycles", ST_multigrid_num_vcycles, &
          "Number of V-cycles to perform per time step")
+    call CFG_add_get(cfg, "multigrid_max_rel_residual", &
+         ST_multigrid_max_rel_residual, &
+         "Stop multigrid when residual is smaller than this factor times max(|rhs|)")
 
     prolong_method = "limit"
     call CFG_add_get(cfg, "prolong_density", prolong_method, &

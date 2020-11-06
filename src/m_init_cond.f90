@@ -211,7 +211,6 @@ contains
     real(dp)                   :: density
 
     nc = box%n_cell
-    box%cc(DTIMES(:), :) = 0.0_dp ! Set initial densities/voltage to zero
     box%cc(DTIMES(:), i_electron) = init_conds%background_density
     box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
 
@@ -263,6 +262,12 @@ contains
              end select
           end if
        end do
+
+       if (ST_use_electrode) then
+          if (box%cc(IJK, i_lsf) <= 0) then
+             box%cc(IJK, species_itree(n_gas_species+1:n_species)) = 0.0_dp
+          end if
+       end if
     end do; CLOSE_DO
 
   end subroutine init_cond_set_box

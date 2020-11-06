@@ -65,63 +65,62 @@ contains
 
   !> Fill ghost cells for variables ivs
   subroutine af_gc_box(tree, id, ivs, corners)
-    type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
-    integer, intent(in)              :: id      !< Id of box for which we set ghost cells
-    integer, intent(in)              :: ivs(:)  !< Variables for which ghost cells are set
-    logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
-    logical                          :: do_corners
-    integer                          :: i, iv
+    type(af_t), intent(inout)     :: tree    !< Tree to fill ghost cells on
+    integer, intent(in)           :: id      !< Id of box for which we set ghost cells
+    integer, intent(in)           :: ivs(:)  !< Variables for which ghost cells are set
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
+    logical                       :: do_corners
+    integer                       :: i, iv
+    integer                       :: nb, nb_id, bc_type
+    integer                       :: lo(NDIM), hi(NDIM), dnb(NDIM)
+    real(dp)                      :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp)                      :: bc_val(tree%n_cell**(NDIM-1))
 
     do_corners = .true.
     if (present(corners)) do_corners = corners
 
     do i = 1, size(ivs)
        iv = ivs(i)
-
        if (.not. tree%has_cc_method(iv)) then
           print *, "For variable ", trim(tree%cc_names(iv))
           error stop "af_gc_box: no methods stored"
        end if
-
-       call af_gc_box_sides(tree%boxes, id, iv, tree%cc_methods(iv)%rb, &
-            tree%cc_methods(iv)%bc)
-       if (do_corners) call af_gc_box_corner(tree%boxes, id, iv)
     end do
-  end subroutine af_gc_box
-
-  !> Fill ghost cells for variable iv on the sides of a box, using subr_rb on
-  !> refinement boundaries and subr_bc on physical boundaries.
-  subroutine af_gc_box_sides(boxes, id, iv, subr_rb, subr_bc)
-    type(box_t), intent(inout) :: boxes(:) !< List of all the boxes
-    integer, intent(in)        :: id       !< Id of box for which we set ghost cells
-    integer, intent(in)        :: iv       !< Variable for which ghost cells are set
-    procedure(af_subr_rb)      :: subr_rb  !< Procedure called at refinement boundaries
-    procedure(af_subr_bc)      :: subr_bc  !< Procedure called at physical boundaries
-    integer                    :: nb, nb_id, bc_type
-    integer                    :: lo(NDIM), hi(NDIM), dnb(NDIM)
-    real(dp)                   :: coords(NDIM, boxes(id)%n_cell**(NDIM-1))
-    real(dp)                   :: bc_val(boxes(id)%n_cell**(NDIM-1))
 
     do nb = 1, af_num_neighbors
-       nb_id = boxes(id)%neighbors(nb)
+       nb_id = tree%boxes(id)%neighbors(nb)
 
        if (nb_id > af_no_box) then
           ! There is a neighbor
-          call af_get_index_bc_outside(nb, boxes(id)%n_cell, 1, lo, hi)
+          call af_get_index_bc_outside(nb, tree%boxes(id)%n_cell, 1, lo, hi)
           dnb = af_neighb_offset([nb])
-          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
+          call copy_from_nb(tree%boxes(id), tree%boxes(nb_id), dnb, lo, hi, ivs)
        else if (nb_id == af_no_box) then
           ! Refinement boundary
-          call subr_rb(boxes, id, nb, iv)
+          do i = 1, size(ivs)
+             iv = ivs(i)
+             call tree%cc_methods(iv)%rb(tree%boxes, id, nb, iv)
+          end do
        else
           ! Physical boundary
-          call af_gc_get_boundary_coords(boxes(id), nb, coords)
-          call subr_bc(boxes(id), nb, iv, coords, bc_val, bc_type)
-          call bc_to_gc(boxes(id), nb, iv, bc_val, bc_type)
+          call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
+
+          do i = 1, size(ivs)
+             iv = ivs(i)
+             if (associated(tree%cc_methods(iv)%bc_custom)) then
+                call tree%cc_methods(iv)%bc_custom(tree%boxes(id), &
+                     nb, iv, 1)
+             else
+                call tree%cc_methods(iv)%bc(tree%boxes(id), nb, iv, &
+                     coords, bc_val, bc_type)
+                call bc_to_gc(tree%boxes(id), nb, iv, bc_val, bc_type)
+             end if
+          end do
        end if
     end do
 
-  end subroutine af_gc_box_sides
+    if (do_corners) call af_gc_box_corner(tree%boxes, id, ivs)
+  end subroutine af_gc_box
 
   !> Get coordinates at the faces of a box boundary
   subroutine af_gc_get_boundary_coords(box, nb, coords)
@@ -167,10 +166,10 @@ contains
   !> Fill corner ghost cells for variable iv on corners/edges of a box. If there
   !> is no box to copy the data from, use linear extrapolation. This routine
   !> assumes ghost cells on the sides of the box are available.
-  subroutine af_gc_box_corner(boxes, id, iv)
+  subroutine af_gc_box_corner(boxes, id, ivs)
     type(box_t), intent(inout)  :: boxes(:)              !< List of all the boxes
     integer, intent(in)          :: id                    !< Id of box for which we set ghost cells
-    integer, intent(in)          :: iv                    !< Variable for which ghost cells are set
+    integer, intent(in)          :: ivs(:)                !< Variable for which ghost cells are set
     integer                      :: n, nb_id, dnb(NDIM), lo(NDIM)
 #if NDIM == 3
     integer                      :: hi(NDIM), dim
@@ -192,9 +191,9 @@ contains
           hi      = lo
           hi(dim) = boxes(id)%n_cell
           dnb   = af_neighb_offset(af_nb_adj_edge(:, n))
-          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, iv)
+          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, hi, ivs)
        else
-          call af_edge_gc_extrap(boxes(id), lo, dim, iv)
+          call af_edge_gc_extrap(boxes(id), lo, dim, ivs)
        end if
     end do
 #endif
@@ -207,9 +206,9 @@ contains
        lo    = af_child_dix(:, n) * (boxes(id)%n_cell + 1)
 
        if (nb_id > af_no_box) then
-          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, lo, iv)
+          call copy_from_nb(boxes(id), boxes(nb_id), dnb, lo, lo, ivs)
        else
-          call af_corner_gc_extrap(boxes(id), lo, iv)
+          call af_corner_gc_extrap(boxes(id), lo, ivs)
        end if
     end do
   end subroutine af_gc_box_corner
@@ -693,21 +692,21 @@ contains
     bc_val  = 0.0_dp
   end subroutine af_bc_set_continuous
 
-  subroutine copy_from_nb(box, box_nb, dnb, lo, hi, iv)
+  subroutine copy_from_nb(box, box_nb, dnb, lo, hi, ivs)
     type(box_t), intent(inout) :: box     !< Box on which to fill ghost cells
     type(box_t), intent(in)    :: box_nb  !< Neighbouring box
     integer, intent(in)          :: dnb(NDIM) !< Neighbor spatial index offset
     integer, intent(in)          :: lo(NDIM)  !< Ghost cell low index
     integer, intent(in)          :: hi(NDIM)  !< Ghost cell high index
-    integer, intent(in)          :: iv      !< Ghost cell variable
+    integer, intent(in)          :: ivs(:)      !< Ghost cell variable
     integer                      :: nlo(NDIM), nhi(NDIM)
 
     ! Get indices on neighbor
     nlo = lo - dnb * box%n_cell
     nhi = hi - dnb * box%n_cell
 
-    box%cc(DSLICE(lo, hi), iv) = &
-         box_nb%cc(DSLICE(nlo, nhi), iv)
+    box%cc(DSLICE(lo, hi), ivs) = &
+         box_nb%cc(DSLICE(nlo, nhi), ivs)
   end subroutine copy_from_nb
 
   !> Get array of cell-centered variables with multiple ghost cells, excluding corners
@@ -762,10 +761,15 @@ contains
           call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
           do i = 1, size(ivs)
              iv = ivs(i)
-             call tree%cc_methods(iv)%bc(tree%boxes(id), &
-                  nb, iv, coords, bc_val, bc_type)
-             call bc_to_gc2(nc, cc(DTIMES(:), i), nb, bc_val, &
-                  bc_type, tree%boxes(id)%dr)
+             if (associated(tree%cc_methods(iv)%bc_custom)) then
+                call tree%cc_methods(iv)%bc_custom(tree%boxes(id), &
+                     nb, iv, 2, cc(DTIMES(:), i))
+             else
+                call tree%cc_methods(iv)%bc(tree%boxes(id), &
+                     nb, iv, coords, bc_val, bc_type)
+                call bc_to_gc2(nc, cc(DTIMES(:), i), nb, bc_val, &
+                     bc_type, tree%boxes(id)%dr)
+             end if
           end do
        end if
     end do
@@ -900,24 +904,24 @@ contains
 
   !> This fills corner ghost cells using linear extrapolation. The ghost cells
   !> on the sides already need to be filled.
-  subroutine af_corner_gc_extrap(box, ix, iv)
+  subroutine af_corner_gc_extrap(box, ix, ivs)
     type(box_t), intent(inout) :: box !< Box to fill ghost cells for
     integer, intent(in)          :: ix(NDIM) !< Cell-index of corner
-    integer, intent(in)          :: iv     !< Variable to fill
+    integer, intent(in)          :: ivs(:)     !< Variable to fill
     integer                      :: di(NDIM)
 
     di = 1 - 2 * iand(ix, 1)    ! 0 -> di = 1, nc+1 -> di = -1
 
 #if NDIM == 2
-    box%cc(ix(1), ix(2), iv) = box%cc(ix(1)+di(1), ix(2), iv) &
-         + box%cc(ix(1), ix(2)+di(2), iv) &
-         - box%cc(ix(1)+di(1), ix(2)+di(2), iv)
+    box%cc(ix(1), ix(2), ivs) = box%cc(ix(1)+di(1), ix(2), ivs) &
+         + box%cc(ix(1), ix(2)+di(2), ivs) &
+         - box%cc(ix(1)+di(1), ix(2)+di(2), ivs)
 #elif NDIM == 3
-    box%cc(ix(1), ix(2), ix(3), iv) = &
-         box%cc(ix(1), ix(2)+di(2), ix(3)+di(3), iv) + &
-         box%cc(ix(1)+di(1), ix(2), ix(3)+di(3), iv) + &
-         box%cc(ix(1)+di(1), ix(2)+di(2), ix(3), iv) - 2 * &
-         box%cc(ix(1)+di(1), ix(2)+di(2), ix(3)+di(3), iv)
+    box%cc(ix(1), ix(2), ix(3), ivs) = &
+         box%cc(ix(1), ix(2)+di(2), ix(3)+di(3), ivs) + &
+         box%cc(ix(1)+di(1), ix(2), ix(3)+di(3), ivs) + &
+         box%cc(ix(1)+di(1), ix(2)+di(2), ix(3), ivs) - 2 * &
+         box%cc(ix(1)+di(1), ix(2)+di(2), ix(3)+di(3), ivs)
 #endif
   end subroutine af_corner_gc_extrap
 
@@ -925,11 +929,11 @@ contains
   !> This fills edge ghost cells using linear extrapolation. The ghost cells on
   !> the sides already need to be filled. This routine basically performs the
   !> same operation as af_corner_gc_extrap does in 2D.
-  subroutine af_edge_gc_extrap(box, lo, dim, iv)
+  subroutine af_edge_gc_extrap(box, lo, dim, ivs)
     type(box_t), intent(inout) :: box !< Box to operate on
     integer, intent(in)          :: lo(NDIM) !< Lowest index of edge ghost cells
     integer, intent(in)          :: dim !< Dimension parallel to edge
-    integer, intent(in)          :: iv !< Variable to fill
+    integer, intent(in)          :: ivs(:) !< Variable to fill
     integer                      :: di(NDIM), ix(NDIM), ia(NDIM), ib(NDIM), ic(NDIM)
     integer                      :: n, o_dims(NDIM-1)
 
@@ -958,10 +962,10 @@ contains
        ic(dim) = n
        ix(dim) = n
 
-       box%cc(ix(1), ix(2), ix(3), iv) = &
-            box%cc(ia(1), ia(2), ia(3), iv) + &
-            box%cc(ib(1), ib(2), ib(3), iv) - &
-            box%cc(ic(1), ic(2), ic(3), iv)
+       box%cc(ix(1), ix(2), ix(3), ivs) = &
+            box%cc(ia(1), ia(2), ia(3), ivs) + &
+            box%cc(ib(1), ib(2), ib(3), ivs) - &
+            box%cc(ic(1), ic(2), ic(3), ivs)
     end do
 
   end subroutine af_edge_gc_extrap

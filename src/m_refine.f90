@@ -39,6 +39,9 @@ module m_refine
   ! Refine until dx is smaller than this factor times the seed width
   real(dp), protected :: refine_init_fac = 0.25_dp
 
+  ! Ensure grid spacing around electrode is less than this value
+  real(dp), protected :: refine_electrode_dx = 1e99_dp
+
   ! Minimum electron density for adding grid refinement
   real(dp), protected :: refine_min_dens = -1.0e99_dp
 
@@ -104,6 +107,8 @@ contains
          "Refine around initial conditions up to this time")
     call CFG_add_get(cfg, "refine_init_fac", refine_init_fac, &
          "Refine until dx is smaller than this factor times the seed width")
+    call CFG_add_get(cfg, "refine_electrode_dx", refine_electrode_dx, &
+         "Ensure grid spacing around electrode is less than this value")
     call CFG_add_get(cfg, "refine_min_dens", refine_min_dens, &
          "Minimum electron density for adding grid refinement")
 
@@ -166,7 +171,7 @@ contains
     !> Refinement flags for the cells of the box
     integer, intent(out)    :: &
          cell_flags(DTIMES(box%n_cell))
-    integer                 :: IJK, n, nc
+    integer                 :: IJK, n, nc, i0(NDIM), i1(NDIM)
     real(dp)                :: min_dx, max_dx, gas_dens
     real(dp)                :: alpha, adx, fld, elec_dens
     real(dp)                :: dist, rmin(NDIM), rmax(NDIM)
@@ -209,6 +214,15 @@ contains
           end do
        end if
 
+       ! Refine around electrode
+       if (box%tag == mg_lsf_box .and. max_dx > refine_electrode_dx) then
+          i0 = [IJK] - 1
+          i1 = [IJK] + 1
+          if (minval(box%cc(DSLICE(i0, i1), i_lsf)) * &
+               maxval(box%cc(DSLICE(i0, i1), i_lsf)) <= 0) then
+             cell_flags(IJK) = af_do_ref
+          end if
+       end if
     end do; CLOSE_DO
 
     ! Check fixed refinements

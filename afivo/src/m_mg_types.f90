@@ -29,6 +29,9 @@ module m_mg_types
      !> Stores coefficient to convert boundary conditions to the right-hand side
      real(dp), allocatable :: bc_to_rhs(:, :, :)
 
+     !> Stores coefficients to use with level set function
+     real(dp), allocatable :: lsf_fac(DTIMES(:), :)
+
      integer  :: symmetric      = 1
      integer  :: solver_type    = -1
      integer  :: max_iterations = 50
@@ -45,7 +48,6 @@ module m_mg_types
 
      integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
      integer :: i_lsf        = -1 !< Optional variable for level set function
-     integer :: i_bval       = -1 !< Optional variable for boundary value
 
      integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
      integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
@@ -56,6 +58,9 @@ module m_mg_types
 
      !> Store lambda^2 for Helmholtz equations (L phi - lamda phi = f)
      real(dp) :: helmholtz_lambda = 0.0_dp
+
+     !> Boundary value for level set function
+     real(dp) :: lsf_boundary_value = 0.0_dp
 
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(af_subr_bc), pointer, nopass   :: sides_bc => null()
@@ -113,12 +118,13 @@ module m_mg_types
        type(mg_t), intent(in)     :: mg    !< Multigrid options
      end subroutine mg_box_rstr
 
-     subroutine mg_box_stencil(box, mg, stencil, bc_to_rhs)
+     subroutine mg_box_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
        import
        type(box_t), intent(in) :: box
        type(mg_t), intent(in)  :: mg
        real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
        real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+       real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
      end subroutine mg_box_stencil
   end interface
 

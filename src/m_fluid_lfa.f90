@@ -641,6 +641,12 @@ contains
           end if
        end if
 
+       if (ST_use_electrode) then
+          if (box%cc(IJK, i_lsf) <= 0.0_dp) then
+             derivs(ix, :) = 0
+          end if
+       end if
+
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_prev) + dt * derivs(ix, n)
@@ -654,6 +660,9 @@ contains
 
        do KJI_DO(1,nc)
           ! Contribution of ion flux
+          if (ST_use_electrode) then
+             if (box%cc(IJK, i_lsf) <= 0.0_dp) cycle
+          end if
 #if NDIM == 1
           tmp = inv_dr(1) * (box%fc(i, 1, i_flux) - &
                box%fc(i+1, 1, i_flux))

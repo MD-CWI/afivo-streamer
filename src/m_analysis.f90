@@ -9,8 +9,10 @@ module m_analysis
 
   ! Public methods
   public :: analysis_get_maxima
-  public :: analysis_get_sigma
   public :: analysis_get_cross
+  public :: analysis_zmin_zmax_threshold
+  public :: analysis_max_var_region
+  public :: analysis_max_var_product
 
 contains
 
@@ -73,67 +75,146 @@ contains
 
   end subroutine analysis_get_maxima
 
-  subroutine sigma_calculator(boxes, id, nc)
-    use m_lookup_table
-    use m_units_constants
-    use m_gas
-    use m_transport_data
-    use m_streamer
-    type(box_t), intent(inout) :: boxes(:)
-    integer, intent(in)        :: id, nc
+  !> Find minimum and maximum z coordinate where a variable exceeds a threshold
+  subroutine analysis_zmin_zmax_threshold(tree, iv, threshold, limits, z_minmax)
+    type(af_t), intent(in) :: tree
+    integer, intent(in)    :: iv !< Index of variable
+    !> Threshold for variable
+    real(dp), intent(in)   :: threshold
+    !> Limits for min/max
+    real(dp), intent(in)   :: limits(2)
+    !> Minimum/maximum z coordinate above threshold
+    real(dp), intent(out)  :: z_minmax(2)
 
-    real(dp) :: ne_fld(2), mu, Td, N_inv
-    integer  :: n, m, o
+    call af_reduction_vec(tree, box_minmax_z, reduce_minmax, &
+         limits, z_minmax, 2)
 
-    N_inv = 1.0_dp/gas_number_density
+  contains
 
-#if NDIM == 2
-    do n = 1, nc
-      do m = 1, nc
-        ne_fld = boxes(id)%cc(n, m, [i_electron, i_electric_fld])
-        Td = ne_fld(2) * SI_to_Townsend * N_inv
-        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
-      end do
-    end do
+    ! Find cell with min/max z coordinate that has a density exceeding a
+    ! threshold
+    function box_minmax_z(box, n_vals) result(vec)
+      type(box_t), intent(in) :: box
+      integer, intent(in)     :: n_vals
+      real(dp)                :: vec(n_vals)
+
+      integer  :: i, j, n, nc, ix(NDIM)
+      logical  :: above
+      real(dp) :: r(NDIM)
+
+      nc = box%n_cell
+      i = -1
+      j = -1
+
+      do n = 1, nc
+#if NDIM == 1
+         above = box%cc(n, iv) > threshold
+#elif NDIM == 2
+         above = maxval(box%cc(1:nc, n, iv)) > threshold
+#elif NDIM == 3
+         above = maxval(box%cc(1:nc, 1:nc, n, iv)) > threshold
 #endif
-
-#if NDIM == 3
-    do n = 1, nc
-    	do m = 1, nc
-    		do o = 1, nc
-                ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
-                Td = ne_fld(2) * SI_to_Townsend * N_inv
-                mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-                boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
-    		end do
-    	end do
-    end do
-#endif
-
-  end subroutine sigma_calculator
-
-  subroutine analysis_get_sigma(tree)
-    type(af_t), intent(inout) :: tree
-
-    integer     :: lvl, id, i, nc
-
-    nc = tree%n_cell
-
-    !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%highest_lvl
-      !$omp do
-      do i = 1, size(tree%lvls(lvl)%leaves)
-        id = tree%lvls(lvl)%leaves(i)
-        call sigma_calculator(tree%boxes, id, nc)
+         if (above) then
+            if (i == -1) i = n
+            j = n
+         end if
       end do
-      !$omp end do
-    end do
-    !$omp end parallel
-  end subroutine analysis_get_sigma
 
-  !> Get the conductivity and densities of an axisymmetric streamer at a z-coordinate
-  subroutine analysis_get_cross(tree, rmax, z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens)
+      vec = [1e100_dp, -1e100_dp]
+      ix = 1
+      if (i /= -1) then
+         ix(NDIM) = i
+         r = af_r_cc(box, ix)
+         vec(1) = r(NDIM)
+      end if
+
+      if (j /= -1) then
+         ix(NDIM) = i
+         r = af_r_cc(box, ix)
+         vec(2) = r(NDIM)
+      end if
+    end function box_minmax_z
+
+    !> Reduction method (e.g., min, max, sum)
+    function reduce_minmax(vec_1, vec_2, n_vals) result(vec)
+      integer, intent(in)  :: n_vals
+      real(dp), intent(in) :: vec_1(n_vals), vec_2(n_vals)
+      real(dp)             :: vec(n_vals)
+      vec(1) = min(vec_1(1), vec_2(1))
+      vec(2) = max(vec_1(2), vec_2(2))
+    end function reduce_minmax
+
+  end subroutine analysis_zmin_zmax_threshold
+
+  !> Find maximal value for boxes that are (at least partially) in the rectangle
+  !> from r0 to r1
+  subroutine analysis_max_var_region(tree, iv, r0, r1, max_value, loc)
+    type(af_t), intent(in)      :: tree
+    integer, intent(in)         :: iv        !< Index of variable
+    real(dp), intent(in)        :: r0(NDIM)  !< Minimum coordinates
+    real(dp), intent(in)        :: r1(NDIM)  !< Maximum coordinates
+    real(dp), intent(out)       :: max_value !< Found maximum
+    type(af_loc_t), intent(out) :: loc
+
+    call af_reduction_loc(tree, iv, box_max_region, reduce_max, &
+         -1e100_dp, max_value, loc)
+
+  contains
+
+    subroutine box_max_region(box, iv, val, ix)
+      type(box_t), intent(in) :: box
+      integer, intent(in)     :: iv
+      real(dp), intent(out)   :: val
+      integer, intent(out)    :: ix(NDIM)
+      integer                 :: nc
+      real(dp)                :: r_max(NDIM)
+
+      nc = box%n_cell
+      r_max = box%r_min + box%n_cell * box%dr
+
+      if (any(box%r_min > r1) .or. any(r_max < r0)) then
+         ix = -1
+         val = -1e100_dp
+      else
+         ix = maxloc(box%cc(DTIMES(1:nc), iv))
+         val = box%cc(DINDEX(ix), iv)
+      end if
+    end subroutine box_max_region
+
+  end subroutine analysis_max_var_region
+
+  subroutine analysis_max_var_product(tree, ivs, max_value, loc)
+    type(af_t), intent(in)      :: tree
+    integer, intent(in)         :: ivs(:)    !< Indices of variables
+    real(dp), intent(out)       :: max_value !< Found maximum
+    type(af_loc_t), intent(out) :: loc
+
+    call af_reduction_loc(tree, -1, box_max_product, reduce_max, &
+         -1e100_dp, max_value, loc)
+
+  contains
+
+    subroutine box_max_product(box, iv, val, ix)
+      type(box_t), intent(in) :: box
+      integer, intent(in)     :: iv
+      real(dp), intent(out)   :: val
+      integer, intent(out)    :: ix(NDIM)
+      integer                 :: nc
+
+      nc  = box%n_cell
+      ix  = maxloc(product(box%cc(DTIMES(1:nc), ivs), dim=NDIM+1))
+      val = product(box%cc(DINDEX(ix), ivs))
+    end subroutine box_max_product
+
+  end subroutine analysis_max_var_product
+
+  real(dp) function reduce_max(a, b)
+    real(dp), intent(in) :: a, b
+    reduce_max = max(a, b)
+  end function reduce_max
+
+  !> Get integrated quantities of an axisymmetric streamer at a z-coordinate
+  subroutine analysis_get_cross(tree, rmax, z, elec_dens, charge_dens, current_dens)
     use m_lookup_table
     use m_transport_data
     use m_gas
@@ -143,20 +224,16 @@ contains
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: rmax         !< Integrate up to this radius
     real(dp), intent(in)   :: z            !< z-coordinate
-    real(dp), intent(out)  :: sigma        !< The conductivity
     real(dp), intent(out)  :: elec_dens    !< electron density
     real(dp), intent(out)  :: charge_dens  !< charge density
     real(dp), intent(out)  :: current_dens !< current density
-    real(dp), intent(out)  :: ion_current_dens
 
-    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv, tot_ion_dens, ion_dens(7)
-    real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens, d_ion_current_dens
+    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv
+    real(dp) :: d_elec_dens, d_charge_dens, d_current_dens
     logical  :: success
     integer  :: id_guess, i, m, n
-    real(dp), parameter :: mu_ion = 2.0e-4
 
     id_guess     = -1
-    sigma        = 0.0_dp
     elec_dens    = 0.0_dp
     charge_dens  = 0.0_dp
     current_dens = 0.0_dp
@@ -172,23 +249,12 @@ contains
        if (.not. success) error stop "unsuccessful interp1"
 #endif
        Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
-       mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-       d_sigma = UC_elem_charge * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
+       mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv       
        d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
        d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
        d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
-       !sum up ion densities
-       ion_dens = 0.0_dp !af_interp1(tree, [r, z], charged_species_itree, &
-            !success, id_guess)
-       if (.not. success) error stop "unsuccessful interp1"
-       tot_ion_dens = 0.0
-       do n = 1, 7
-         tot_ion_dens = tot_ion_dens + ion_dens(n)
-       end do
-       d_ion_current_dens = ne_fld_rhs(2) * mu_ion * tot_ion_dens * 2.0_dp * UC_pi * r * dr * UC_elem_charge
 
        ! Update total
-       sigma = sigma + d_sigma
        elec_dens = elec_dens + d_elec_dens
        charge_dens = charge_dens + d_charge_dens
        current_dens = current_dens + d_current_dens
