@@ -46,10 +46,8 @@ if __name__ == '__main__':
     args = pr.parse_args()
 
     v.OpenDatabase(args.silo_file)
-    v.AddPlot("Curve", "operators/Lineout/" + "e", 1, 1)
-
+    v.AddPlot("Curve", "operators/Lineout/" + "electric_fld", 1, 1)
     v.DrawPlots()
-
     z_values = np.linspace(args.zrange[0], args.zrange[1], args.npoints)
     r_values = np.zeros(args.npoints)
 
@@ -77,22 +75,29 @@ if __name__ == '__main__':
 
             r_data = np.genfromtxt(fname.name + '.curve')
 
-            max_dens = r_data[:, 1].max()
-
-            if args.threshold_e < max_dens:
-                # Check at which index the density has dropped by factor 2
-                j = np.where(r_data[:, 1] < args.threshold_e)[0][0]
-
-                if j > 0:
-                    # Linear interpolation to get intersection
-                    w0 = r_data[j-1, 1]/args.threshold_e
-                    w1 = r_data[j, 1]/args.threshold_e
-                    c = (1 - w1)/(w0 - w1)
-                    r_values[i] = c * r_data[j, 0] + (1-c) * r_data[j-1, 0]
+           # max_field_slope = np.diff(r_data[:, 1]).max()
+            # Obtain the index of the max value of the slope
+            j = np.argmax(np.diff(r_data[:,1]))+1
+            if i > 0:
+                if r_values[i-1] == r_data[j,0]:
+                    r_values[i] = r_data[j-1,0]
                 else:
-                    r_values[i] = r_data[j, 0]
-            else:
-                r_values[i] = 0.
+                    r_values[i] = r_data[j,0]
+
+#            if args.threshold_e < max_dens:
+#                # Check at which index the density has dropped by factor 2
+#                j = np.where(r_data[:, 1] < args.threshold_e)[0][0]
+#
+#                if j > 0:
+#                    # Linear interpolation to get intersection
+#                    w0 = r_data[j-1, 1]/args.threshold_e
+#                    w1 = r_data[j, 1]/args.threshold_e
+#                    c = (1 - w1)/(w0 - w1)
+#                    r_values[i] = c * r_data[j, 0] + (1-c) * r_data[j-1, 0]
+#                else:
+#                    r_values[i] = r_data[j, 0]
+#            else:
+#                r_values[i] = 0.
 
     np.savetxt(args.output, np.vstack([z_values, r_values]).T)
     print('Saved {}'.format(args.output))

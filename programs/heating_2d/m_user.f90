@@ -17,8 +17,10 @@ contains
     type(af_t), intent(inout) :: tree
 
 !    user_evolve_electrons => gas_active
-    
+    print *, 'Debug'
+
     user_log_variables => total_power_deposited
+!    user_log_variables => total_energy_deposited
   end subroutine user_initialize
 
   logical function electrons_active(tree, time)
@@ -49,7 +51,7 @@ contains
 
   end function gas_active
   
-  subroutine total_power_deposited(tree, n_vars, var_names, var_values)
+  subroutine total_energy_deposited(tree, n_vars, var_names, var_values)
        use m_streamer
        type(af_t), intent(in)                 :: tree
        integer, intent(out)                   :: n_vars
@@ -61,8 +63,21 @@ contains
        var_names(1) = 'total_energy'
        
        call af_tree_sum_cc(tree, i_energy_density, var_values(1))
+  end subroutine total_energy_deposited
+  
+  
+  subroutine total_power_deposited(tree, n_vars, var_names, var_values)
+       use m_streamer
+       type(af_t), intent(in)                 :: tree
+       integer, intent(out)                   :: n_vars
+       character(len=name_len), intent(inout) :: var_names(user_max_log_vars)
+       real(dp), intent(inout)                :: var_values(user_max_log_vars)
+       
+       
+       n_vars = 1
+       var_names(1) = 'total_power'
+       
+       call af_tree_sum_cc(tree, i_power_density, var_values(1))
   end subroutine total_power_deposited
-  
-  
 
 end module m_user
