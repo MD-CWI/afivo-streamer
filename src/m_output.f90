@@ -54,6 +54,15 @@ module m_output
   ! Relative position of line maximum coordinate
   real(dp), public, protected :: lineout_rmax(3) = 1.0_dp
 
+  ! Write integral over cross-section data output
+  logical, public, protected :: cross_write = .false.
+
+  ! Integrate up to this r value
+  real(dp), public, protected :: cross_rmax = 2.0e-3_dp
+
+  ! Use this many points for cross-section data
+  integer, public, protected :: cross_npoints = 500
+
   ! Write uniform output in a plane
   logical, public, protected :: plane_write = .false.
 
@@ -162,6 +171,13 @@ contains
     call CFG_add_get(cfg, "lineout%rmax", lineout_rmax(1:NDIM), &
          "Relative position of line maximum coordinate")
 
+    call CFG_add_get(cfg, "cross%write", cross_write, &
+         "Write integral over cross-section data output")
+    call CFG_add_get(cfg, "cross%rmax", cross_rmax, &
+         "Integrate up to this r value")
+    call CFG_add_get(cfg, "cross%npoints", cross_npoints, &
+         "Use this many points for cross-section data")
+
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
     varname = "e"
@@ -197,6 +213,7 @@ contains
     use m_photoi
     use m_field
     use m_user_methods
+    use m_analysis
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
@@ -274,6 +291,14 @@ contains
             r_min = lineout_rmin(1:NDIM) * ST_domain_len + ST_domain_origin, &
             r_max = lineout_rmax(1:NDIM) * ST_domain_len + ST_domain_origin, &
             n_points=lineout_npoints)
+    end if
+
+    if (ST_cylindrical) then
+      if(cross_write) then
+       write(fname, "(A,I6.6)") trim(output_name) // &
+            "_cross_", output_cnt
+       call output_cross(tree, fname)
+      end if
     end if
 
   end subroutine output_write
@@ -558,6 +583,27 @@ contains
     close(my_unit)
 
   end subroutine output_fld_maxima
+
+  subroutine output_cross(tree, filename)
+    use m_af_all
+    use m_analysis
+    use m_streamer
+    type(af_t), intent(in) :: tree
+    character(len=*), intent(inout) :: filename
+
+    integer  :: my_unit
+    integer  :: i
+    real(dp) :: z, elec_dens, charge_dens, current_dens
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    write(my_unit, '(A)') "z elec_dens charge_dens current_dens"
+    do i = 1, cross_npoints
+      z = i * ST_domain_len(2) / (cross_npoints + 1)
+      call analysis_get_cross(tree, cross_rmax, z, elec_dens, charge_dens, current_dens)
+      write(my_unit, *) z, elec_dens, charge_dens, current_dens
+    end do
+    close(my_unit)
+  end subroutine output_cross
 
   subroutine set_power_density_box(box)
     use m_units_constants
