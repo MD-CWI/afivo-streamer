@@ -32,6 +32,21 @@ Afterwards, you can recompile the code by typing
 
 either in the `afivo-streamer` folder, or in a specific program folder with a `Makefile`.
 
+# Compilation flags and recompilation
+
+A number of flags can be set to help with debugging or performance testing. To apply these, first remove all previously compiled files:
+
+    make allclean
+
+This is also useful when upgrading e.g. the compiler on your system. Afterwards, a number of flags can be applied, most importantly:
+
+* `make DEBUG=1` leads to a much slower executable that does all kinds of error checking (array bounds, division by zero etc.)
+* `make PROF=gprof` compile with `-pg` support for `gprof`
+* `make PROF=gperftools` link with `libprofiler` to enable `gperftools`, see https://teunissen.net/afivo/md_documentation_profiling.html
+* `make COMPILER=ifort` to use the `ifort` compiler
+
+Afterwards, perform `make allclean` again to revert to the standard compilation settings.
+
 # List of issues and solutions
 
 ## Problems compiling Silo
