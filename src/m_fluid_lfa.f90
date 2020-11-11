@@ -573,6 +573,7 @@ contains
     real(dp)                   :: dens(nc**NDIM, n_species)
     real(dp)                   :: fields(nc**NDIM), box_rates(n_reactions)
     real(dp)                   :: source_factor(nc**NDIM)
+    real(dp)                   :: coords(nc, NDIM), r(NDIM)
 #if NDIM == 2
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
@@ -679,9 +680,31 @@ contains
     end if
 #endif
 
+    if (ST_plasma_region_enabled) then
+       ! Compute box coordinates
+       do n = 1, NDIM
+          coords(:, n) = box%r_min(n) + box%dr(n) * [(i-0.5_dp, i=1,nc)]
+       end do
+    end if
+
     ix = 0
     do KJI_DO(1,nc)
        ix = ix + 1
+
+       if (ST_plasma_region_enabled) then
+          r(1) = coords(i, 1)
+#if NDIM > 1
+          r(2) = coords(j, 2)
+#endif
+#if NDIM > 2
+          r(3) = coords(k, 3)
+#endif
+          if (any(r < ST_plasma_region_rmin) .or. &
+               any(r > ST_plasma_region_rmax)) then
+             ! Disable all reactions outside the plasma region
+             derivs(ix, :) = 0.0_dp
+          end if
+       end if
 
        ! Contribution of flux
 #if NDIM == 1
