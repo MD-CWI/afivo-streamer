@@ -122,6 +122,15 @@ module m_streamer
   !> Whether the domain is periodic (per dimension)
   logical, public, protected :: ST_periodic(NDIM) = .false.
 
+  !> Whether to limit plasma reactions to a certain region
+  logical, public, protected :: ST_plasma_region_enabled = .false.
+
+  !> Limit plasma reactions to coordinates between rmin and rmax
+  real(dp), public, protected :: ST_plasma_region_rmin(NDIM) = -1e100_dp
+
+  !> Limit plasma reactions to coordinates between rmin and rmax
+  real(dp), public, protected :: ST_plasma_region_rmax(NDIM) = 1e100_dp
+
   !> Number of V-cycles to perform per time step
   integer, public, protected :: ST_multigrid_num_vcycles = 2
 
@@ -271,6 +280,13 @@ contains
          "The origin of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
          "Whether the domain is periodic (per dimension)")
+
+    call CFG_add_get(cfg, "plasma_region_enabled", ST_plasma_region_enabled, &
+         "Whether to limit plasma reactions to a certain region")
+    call CFG_add_get(cfg, "plasma_region_rmin", ST_plasma_region_rmin, &
+         "Limit plasma reactions to coordinates between rmin and rmax")
+    call CFG_add_get(cfg, "plasma_region_rmax", ST_plasma_region_rmax, &
+         "Limit plasma reactions to coordinates between rmin and rmax")
 
     if (all(ST_coarse_grid_size == -1)) then
        ! Not set, automatically determine size
