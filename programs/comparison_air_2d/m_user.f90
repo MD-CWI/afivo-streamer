@@ -13,6 +13,8 @@ module m_user
   ! Public methods
   public :: user_initialize
   type(LT_t), public, protected :: potential_table
+  integer                       :: upper_electrode = 1
+  integer                       :: lower_electrode = 2
 
 contains
 
@@ -37,13 +39,16 @@ contains
     use m_lookup_table
     character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: x_data(:), y_data(:)
-  
-       ! Create a lookup table for the applied potential
-       potential_table = LT_create(0.0_dp, 0.16_dp, 1000, 1)
-       td_file = "applied_voltage.txt";
-       call table_from_file(td_file, "location[m]_vs_potential[V]", x_data, y_data)
-       call LT_set_col(potential_table, 1, x_data, y_data)
-  
+
+    ! Create a lookup table for the applied potential
+    potential_table = LT_create(0.0_dp, 0.16_dp, 1000, 2)
+    td_file = "applied_voltage_upper.txt";
+    call table_from_file(td_file, "location[m]_vs_potential[V]", x_data, y_data)
+    call LT_set_col(potential_table, upper_electrode, x_data, y_data)
+    td_file = "applied_voltage_lower.txt";
+    call table_from_file(td_file, "location[m]_vs_potential[V]", x_data, y_data)
+    call LT_set_col(potential_table, lower_electrode, x_data, y_data)
+
   end subroutine potential_from_table
 
   !> Dirichlet boundary conditions for the potential in the last dimension,
@@ -61,17 +66,15 @@ contains
     if (af_neighb_dim(nb) == NDIM) then
        if (af_neighb_low(nb)) then
           bc_type = af_bc_dirichlet
-          bc_val = 0.0_dp
+          do n = 1, box%n_cell**(NDIM-1)
+             bc_val(n) = field_voltage * &
+                  LT_get_col(potential_table, lower_electrode, coords(1, n));
+          end do
        else
           bc_type = af_bc_dirichlet
           do n = 1, box%n_cell**(NDIM-1)
-          !y=coords(:, n)
-            bc_val(n) = LT_get_col(potential_table, 1, coords(1, n));
-!             if (coords(1, n) < l_electrode) then
-!             bc_val(n) = 15000
-!             else
-!             bc_val(n) = -1920+6732*exp(-(coords(1, n)-l_electrode)/0.012)+10655*exp(-(coords(1, n)-l_electrode)/0.072)
-!             end if
+             bc_val(n) = field_voltage * &
+                  LT_get_col(potential_table, upper_electrode, coords(1, n));
           end do
        end if
     else
