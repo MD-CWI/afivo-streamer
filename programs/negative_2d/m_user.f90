@@ -11,11 +11,17 @@ module m_user
   ! Public methods
   public :: user_initialize
 
+  ! Whether field_decay versus length is enabled
+  logical, protected, public :: field_decay_enabled = .false.
+
+  ! Decay parameters of the applied electric field
+  character(len=32) :: decay_profile = "exponential" ! (constant, exponential, linear_across_zero, linear_over_zero, step)
   real(dp) :: initial_field = 2.5e6_dp
-  real(dp) :: min_field = 1.0e6_dp
+  real(dp) :: min_field =0.8e6_dp
   real(dp) :: decay_distance = 10e-3_dp
-  real(dp) :: detection_density = 1e17_dp
-  real(dp) :: decay_start_z = 30e-3_dp
+  real(dp) :: decay_slope = -0.4e8_dp
+  real(dp) :: decay_start_z = 60e-3_dp
+  real(dp) :: detection_density = 1e16_dp
 
 contains
 
@@ -23,18 +29,29 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout) :: tree
 
-    call CFG_add_get(cfg, "my%initial_field", initial_field, &
-         "Initial field before any decay (V/m)")
-    call CFG_add_get(cfg, "my%min_field", min_field, &
-         "Minimal field (V/m)")
-    call CFG_add_get(cfg, "my%decay_distance", decay_distance, &
+   call CFG_add_get(cfg, "field_decay%enabled", field_decay_enabled, &
+         "Whether field decay versus length is enabled")
+   call CFG_add_get(cfg, "field_decay%decay_profile", decay_profile, &
+         "Decay type for applied electric field (constant, exponential, linear_across_zero, linear_over_zero, step)")
+    call CFG_add_get(cfg, "field_decay%initial_field", initial_field, &
+         "Initial electric field before any decay (V/m)")
+    call CFG_add_get(cfg, "field_decay%min_field", min_field, &
+         "Minimal electric field (V/m)")
+    call CFG_add_get(cfg, "field_decay%decay_distance", decay_distance, &
          "Decay distance (m)")
-    call CFG_add_get(cfg, "my%decay_start_z", decay_start_z, &
-         "Decay starts from this z-coordinate")
+    call CFG_add_get(cfg, "field_decay%decay_slope", decay_slope, &
+         "Decay slope (V/m2)")
+    call CFG_add_get(cfg, "field_decay%decay_start_z", decay_start_z, &
+         "Decay starts from this z-coordinate (m)")
+    call CFG_add_get(cfg, "field_decay%detection_density", detection_density, &
+         "Detection density (1/m3)")
 
-    user_field_amplitude => my_field_amplitude
+    if (field_decay_enabled) then
+      user_field_amplitude => my_field_amplitude
+    end if
 
   end subroutine user_initialize
+
 
   ! Get the electric field amplitude
   function my_field_amplitude(tree, time) result(amplitude)
@@ -47,9 +64,29 @@ contains
 
     dist = max(decay_start_z - zmin, 0.0_dp)
 
-    ! This function can be customized
-    amplitude = min_field + (initial_field - min_field) * &
-         exp(-dist / decay_distance)
+  ! Electric field proflie
+  select case (decay_profile)
+  case ("constant")  ! constant electric field versus length
+    amplitude = initial_field
+  case ("exponential")  ! exponential decay electric field versus length
+    amplitude = min_field + (initial_field - min_field) * exp(-dist / decay_distance)
+  case ("linear_across_zero")  ! linear decay electric field versus length (across zero)
+    amplitude = initial_field+decay_slope * dist
+    if (amplitude<=-initial_field) then
+       amplitude = -initial_field
+    end if
+  case ("linear_over_zero")  ! linear decay electric field versus length (over zero)
+    amplitude = initial_field+decay_slope * dist
+    if (amplitude<=0) then
+       amplitude = 0
+    end if
+  case ("step")  ! step decay electric field versus length
+    if (dist == 0) then
+       amplitude = initial_field
+    else
+       amplitude = min_field
+    end if
+   end select
 
   end function my_field_amplitude
 
