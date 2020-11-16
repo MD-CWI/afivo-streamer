@@ -9,7 +9,13 @@ m_photoi_helmh.o: FFLAGS += -Wno-unused-function
 m_photoi.o: FFLAGS += -Wno-unused-function
 
 # Dependency information (generated with ./list_dependencies.sh)
+m_analysis.o: m_chemistry.mod
+m_analysis.o: m_gas.mod
+m_analysis.o: m_lookup_table.mod
+m_analysis.o: m_streamer.mod
+m_analysis.o: m_transport_data.mod
 m_analysis.o: m_types.mod
+m_analysis.o: m_units_constants.mod
 m_chemistry.o: m_config.mod
 m_chemistry.o: m_dt.mod
 m_chemistry.o: m_gas.mod

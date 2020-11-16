@@ -180,6 +180,10 @@ program streamer
            photoi_prev_time = time
         end if
 
+        if (ST_use_electrode) then
+           call set_electrode_densities(tree)
+        end if
+
         call af_advance(tree, dt, dt_lim, time, &
              species_itree(n_gas_species+1:n_species), &
              af_heuns_method, forward_euler)
@@ -364,5 +368,74 @@ contains
     print *, " /_/    \_\_| |_| \_/ \___/     |_____/ \__|_|  \___|\__,_|_| |_| |_|\___|_|   "
     print *, "                                                                               "
   end subroutine print_program_name
+
+  !> Set species boundary conditions at the electrode
+  subroutine set_electrode_densities(tree)
+    type(af_t), intent(inout) :: tree
+
+    call af_loop_box(tree, electrode_species_bc)
+  end subroutine set_electrode_densities
+
+  !> Set species boundary conditions at the electrode
+  !> @todo Set Neumann boundary conditions in the actual flux computation
+  subroutine electrode_species_bc(box)
+    type(box_t), intent(inout) :: box
+    real(dp)                   :: lsf_nb(2*NDIM), dens_nb(2*NDIM)
+    integer                    :: nc, IJK
+
+    if (box%tag /= mg_lsf_box) return
+
+    nc = box%n_cell
+    do KJI_DO(1, nc)
+       if (box%cc(IJK, i_lsf) < 0) then
+          ! Set all species densities to zero
+          box%cc(IJK, species_itree(n_gas_species+1:n_species)) = 0.0_dp
+
+#if NDIM == 1
+          lsf_nb = [box%cc(i-1, i_lsf), &
+               box%cc(i+1, i_lsf)]
+#elif NDIM == 2
+          lsf_nb = [box%cc(i-1, j, i_lsf), &
+               box%cc(i+1, j, i_lsf), &
+               box%cc(i, j-1, i_lsf), &
+               box%cc(i, j+1, i_lsf)]
+#elif NDIM == 3
+          lsf_nb = [box%cc(i-1, j, k, i_lsf), &
+               box%cc(i+1, j, k, i_lsf), &
+               box%cc(i, j-1, k, i_lsf), &
+               box%cc(i, j+1, k, i_lsf), &
+               box%cc(i, j, k-1, i_lsf), &
+               box%cc(i, j, k+1, i_lsf)]
+#endif
+
+          if (any(lsf_nb > 0) .and. &
+            associated(bc_species, af_bc_neumann_zero)) then
+             ! At the boundary of the electrode
+#if NDIM == 1
+             dens_nb = [box%cc(i-1, i_lsf), &
+                  box%cc(i+1, i_electron)]
+#elif NDIM == 2
+             dens_nb = [box%cc(i-1, j, i_electron), &
+                  box%cc(i+1, j, i_electron), &
+                  box%cc(i, j-1, i_electron), &
+                  box%cc(i, j+1, i_electron)]
+#elif NDIM == 3
+             dens_nb = [box%cc(i-1, j, k, i_electron), &
+                  box%cc(i+1, j, k, i_electron), &
+                  box%cc(i, j-1, k, i_electron), &
+                  box%cc(i, j+1, k, i_electron), &
+                  box%cc(i, j, k-1, i_electron), &
+                  box%cc(i, j, k+1, i_electron)]
+#endif
+
+             ! Set electron density to average of outside neighbors
+             box%cc(IJK, i_electron) = sum(dens_nb, mask=(lsf_nb > 0)) / &
+                  count(lsf_nb > 0)
+             ! Set first positive ion density for charge neutrality
+             box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_electron)
+          end if
+       end if
+    end do; CLOSE_DO
+  end subroutine electrode_species_bc
 
 end program streamer
