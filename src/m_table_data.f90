@@ -19,9 +19,16 @@ module m_table_data
   ! The maximum number of rows per entry
   integer, parameter :: table_max_rows   = 1500
 
+  ! Interpolation methods
+  integer, parameter :: interp_linear = 1
+  integer, parameter :: interp_cubic_spline = 2
+
+  integer :: input_interpolation = interp_linear
+
   ! Public methods
   public :: table_data_initialize
   public :: table_from_file
+  public :: table_set_column
 
 contains
 
@@ -29,6 +36,7 @@ contains
   subroutine table_data_initialize(cfg)
     use m_config
     type(CFG_t), intent(inout) :: cfg
+    character(len=20) :: method
 
     call CFG_add_get(cfg, "table_data%size", table_size, &
          "Size of the lookup table for reaction rates")
@@ -37,7 +45,46 @@ contains
     call CFG_add_get(cfg, "table_data%max_townsend", table_max_townsend, &
          "Maximal field (in Td) for the rate coeff. lookup table")
 
+    method = "linear"
+    call CFG_add_get(cfg, "table_data%input_interpolation", method, &
+         "Input interpolation method (linear, cubic_spline)")
+    select case (method)
+    case ("linear")
+       input_interpolation = interp_linear
+    case ("cubic_spline")
+       input_interpolation = interp_cubic_spline
+    case default
+       error stop "invalid input_interpolation method"
+    end select
+
   end subroutine table_data_initialize
+
+  !> Interpolate data and store in lookup table
+  subroutine table_set_column(tbl, i_col, x, y)
+    use m_spline_interp
+    use m_lookup_table
+    type(LT_t), intent(inout) :: tbl   !< Lookup table
+    integer, intent(in)       :: i_col !< Index of column
+    real(dp), intent(in)      :: x(:)
+    real(dp), intent(in)      :: y(:)
+    real(dp), allocatable     :: x_table(:), y_table(:)
+    type(spline_t)            :: spl
+
+    if (size(x) /= size(y)) error stop "size(x) /= size(y)"
+
+    select case (input_interpolation)
+    case (interp_linear)
+       call LT_set_col(tbl, i_col, x, y)
+    case (interp_cubic_spline)
+       ! Perform cubic spline interpolation
+       call spline_set_coeffs(x, y, size(x), spl)
+       x_table = LT_get_xdata(tbl)
+       y_table = spline_evaluate(x_table, spl)
+       call LT_set_col(tbl, i_col, y=y_table)
+    case default
+       error stop "invalid input_interpolation"
+    end select
+  end subroutine table_set_column
 
   !> Routine to read in tabulated data from a file
   subroutine table_from_file(file_name, data_name, x_data, y_data)

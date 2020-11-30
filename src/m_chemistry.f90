@@ -239,7 +239,7 @@ contains
        if (reactions(n)%rate_type == rate_tabulated_field) then
           i = i + 1
           reactions(n)%lookup_table_index = i
-          call LT_set_col(chemtbl, i, reactions(n)%x_data, reactions(n)%y_data)
+          call table_set_column(chemtbl, i, reactions(n)%x_data, reactions(n)%y_data)
        end if
     end do
 
