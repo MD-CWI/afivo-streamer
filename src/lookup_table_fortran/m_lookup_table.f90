@@ -88,6 +88,7 @@ module m_lookup_table
   ! Public methods
   public :: LT_create           ! Create a new lookup table
   public :: LT_get_xdata        ! Get the x-values of a table
+  public :: LT_compute_xdata    ! Compute x-values of a table
   public :: LT_get_spaced_data  ! Convert values to regularly spaced
   public :: LT_set_col          ! Set one table column
   public :: LT_add_col          ! Add a column
@@ -101,7 +102,7 @@ module m_lookup_table
   public :: LT_to_file          ! Store lookup table in file
   public :: LT_from_file        ! Restore lookup table from file
 
-  ! Public methods
+  ! Public methods for 2D tables
   public :: LT2_create           ! Create a new lookup table
   public :: LT2_create_from_data ! Create a new lookup table from existing data
   public :: LT2_set_col          ! Set one table column
@@ -109,6 +110,7 @@ module m_lookup_table
   public :: LT2_get_col          ! Interpolate one column
   public :: LT2_get_col_at_loc   ! Get one column at location
 
+  ! Public methods for 3D tables
   public :: LT3_create           ! Create a new lookup table
   public :: LT3_create_from_data ! Create a new lookup table from existing data
   public :: LT3_get_loc          ! Get the index (row) of a value
@@ -182,8 +184,8 @@ contains
     integer, intent(in)  :: n_cols !< Number of variables that will be looked up
     type(LT_t)           :: my_lt
 
-    if (x_max <= x_min) stop "set_xdata: x_max should be > x_min"
-    if (n_points <= 1)    stop "set_xdata: n_points should be bigger than 1"
+    if (x_max <= x_min) error stop "x_max should be > x_min"
+    if (n_points <= 1) error stop "n_points should be bigger than 1"
 
     my_lt%n_points = n_points
     my_lt%x_min    = x_min
@@ -197,8 +199,8 @@ contains
     my_lt%n_cols    = n_cols
   end function LT_create
 
-  !> Returns the x-coordinates of the lookup table
-  pure function LT_get_xdata(x_min, dx, n_points) result(xdata)
+  !> Returns the x-coordinates for a given x_min, dx and n_points
+  pure function LT_compute_xdata(x_min, dx, n_points) result(xdata)
     real(dp), intent(in) :: x_min, dx
     integer, intent(in)  :: n_points
     real(dp)             :: xdata(n_points)
@@ -206,6 +208,17 @@ contains
 
     do ix = 1, n_points
        xdata(ix) = x_min + (ix-1) * dx
+    end do
+  end function LT_compute_xdata
+
+  !> Returns the x-coordinates of the lookup table
+  pure function LT_get_xdata(my_lt) result(xdata)
+    type(LT_t), intent(in) :: my_lt
+    real(dp)               :: xdata(my_lt%n_points)
+    integer                :: ix
+
+    do ix = 1, my_lt%n_points
+       xdata(ix) = my_lt%x_min + (ix-1) * my_lt%dx
     end do
   end function LT_get_xdata
 
@@ -220,14 +233,26 @@ contains
     end do
   end function LT_get_spaced_data
 
-  !> Fill the column with index col_ix using the linearly interpolated (x, y)
-  !> data
-  pure subroutine LT_set_col(my_lt, col_ix, x, y)
+  !> Fill the column with index col_ix. If both x, y are given, linearly
+  !> interpolate the data. If only y is given, size(y) should be n_rows, and the
+  !> y-values are used directly.
+  subroutine LT_set_col(my_lt, col_ix, x, y)
     type(LT_t), intent(inout) :: my_lt
     integer, intent(in)       :: col_ix
-    real(dp), intent(in)      :: x(:), y(:)
-    my_lt%cols_rows(col_ix, :) = LT_get_spaced_data(x, y, &
-         LT_get_xdata(my_lt%x_min, my_lt%dx, my_lt%n_points))
+    real(dp), intent(in), optional :: x(:), y(:)
+
+    if (col_ix < 0 .or. col_ix > my_lt%n_cols) &
+         error stop "should have 1 <= col_ix <= n_cols"
+    if (present(x) .and. present(y)) then
+       my_lt%cols_rows(col_ix, :) = LT_get_spaced_data(x, y, &
+            LT_get_xdata(my_lt))
+    else if (present(y)) then
+       if (size(y) /= my_lt%n_points) &
+            error stop "argument y should be of size n_rows"
+       my_lt%cols_rows(col_ix, :) = y
+    else
+       error stop "arguments x, y should be given or only y"
+    end if
     my_lt%rows_cols(:, col_ix) = my_lt%cols_rows(col_ix, :)
   end subroutine LT_set_col
 
@@ -247,7 +272,7 @@ contains
     my_lt%rows_cols(:, 1:my_lt%n_cols) = temp_lt%rows_cols
     my_lt%n_cols                       = my_lt%n_cols + 1
     my_lt%cols_rows(my_lt%n_cols, :)   = LT_get_spaced_data(x, y, &
-         LT_get_xdata(my_lt%x_min, my_lt%dx, my_lt%n_points))
+         LT_get_xdata(my_lt))
     my_lt%rows_cols(:, my_lt%n_cols)   = my_lt%cols_rows(my_lt%n_cols, :)
   end subroutine LT_add_col
 
@@ -321,7 +346,7 @@ contains
     type(LT_t), intent(in) :: my_lt
     real(dp), intent(out)  :: x_data(:), cols_rows(:, :)
 
-    x_data    = LT_get_xdata(my_lt%x_min, my_lt%dx, my_lt%n_points)
+    x_data    = LT_get_xdata(my_lt)
     cols_rows = my_lt%cols_rows
   end subroutine LT_get_data
 
@@ -444,9 +469,10 @@ contains
 
     allocate(c1(my_lt%n_points(1)))
     allocate(c2(my_lt%n_points(2)))
-    c1 = LT_get_xdata(my_lt%x_min(1), my_lt%dx(1), my_lt%n_points(1))
-    c2 = LT_get_xdata(my_lt%x_min(2), my_lt%dx(2), my_lt%n_points(2))
     allocate(tmp(my_lt%n_points(1), size(x2)))
+
+    c1 = LT_compute_xdata(my_lt%x_min(1), my_lt%dx(1), my_lt%n_points(1))
+    c2 = LT_compute_xdata(my_lt%x_min(2), my_lt%dx(2), my_lt%n_points(2))
 
     ! Interpolate along first coordinate
     do ix = 1, size(x2)
