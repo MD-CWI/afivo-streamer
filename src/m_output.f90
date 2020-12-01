@@ -65,15 +65,6 @@ module m_output
   ! Relative position of line maximum coordinate
   real(dp), public, protected :: lineout_rmax(3) = 1.0_dp
 
-  ! Write integral over cross-section data output
-  logical, public, protected :: cross_write = .false.
-
-  ! Integrate up to this r value
-  real(dp), public, protected :: cross_rmax = 2.0e-3_dp
-
-  ! Use this many points for cross-section data
-  integer, public, protected :: cross_npoints = 500
-
   ! Write uniform output in a plane
   logical, public, protected :: plane_write = .false.
 

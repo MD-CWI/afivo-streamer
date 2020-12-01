@@ -93,13 +93,14 @@ if __name__ == '__main__':
             s.family = 0
             v.SetSaveWindowAttributes(s)
     
-            v.TimeSliderSetState(i)
+            v.SetTimeSliderState(i)
+            Query(str('Time'))
+            t_values[it] = v.GetQueryOutputValue()
             v.SaveWindow()
 
             line_data = np.genfromtxt(fname.name + '.curve')
-            t_values[it] = i
             var_values[it] = np.interp(args.r, line_data[:,0], line_data[:,1])
             it = it+1
-    np.savetxt('point_vs_time.txt', np.vstack([t_values, var_values]).T)
+    np.savetxt(args.varname+'_point_vs_time.txt', np.vstack([t_values, var_values]).T)
     print('Saved {}'.format(args.output))
     sys.exit()

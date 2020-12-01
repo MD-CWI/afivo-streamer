@@ -43,6 +43,8 @@ module m_streamer
   !> Index of deposited energy density
   integer, public, protected :: i_energy_density = -1
 
+  !> Index of conductivity (probably unused)
+  integer, public, protected :: i_conductivity = -1
   !> Number of face-centered variables
   integer, public, protected :: n_var_face   = 0
   !> Index of electron flux
