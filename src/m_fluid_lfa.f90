@@ -119,7 +119,7 @@ contains
     real(dp)                   :: fmax(DTIMES(1:nc+1), NDIM)
     ! Cell-centered densities
     real(dp)                   :: cc(DTIMES(-1:nc+2), 1)
-    real(dp)                   :: mu, fld_face, drt_fac, tmp
+    real(dp)                   :: mu, max_mu_ion, fld_face, drt_fac, tmp
     real(dp)                   :: nsmall, N_inv
     real(dp)                   :: dt_cfl, dt_drt, dt_dif
     real(dp)                   :: vmean(NDIM)
@@ -350,14 +350,24 @@ contains
              N_inv = 1 / tree%boxes(id)%cc(IJK, i_gas_dens)
           end if
 
+          ! Ion mobility
+          if (size(transport_data_ions%mobilities) > 0) then
+             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv
+          else
+             max_mu_ion = 0.0_dp
+          end if
+
+          ! Electron mobility
           if (ST_drt_limit_flux) then
-             mu = maxval(abs(transport_data_ions%mobilities)) * N_inv
+             mu = 0.0_dp
           else
              Td = tree%boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
              mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-             mu = max(mu, &
-                  maxval(abs(transport_data_ions%mobilities)) * N_inv)
           end if
+
+          ! Take maximum of electron and ion mobility, in the future we should
+          ! probably apply a weighted sum (weighted with species densities)
+          mu = max(mu, max_mu_ion)
 
           ! Dielectric relaxation time
           dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK, 1), epsilon(1.0_dp))
@@ -576,6 +586,18 @@ contains
 
     call get_derivatives(dens, rates, derivs, n_cells)
 
+    ! TODO clean this up in the future (when we set electrode Neumann boundary
+    ! conditions in actual flux computation)
+    if (box%tag == mg_lsf_box) then
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
+          if (box%cc(IJK, i_lsf) <= 0.0_dp) then
+             derivs(ix, :) = 0
+          end if
+       end do; CLOSE_DO
+    end if
+
     if (set_dt) then
        tid = omp_get_thread_num() + 1
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
@@ -631,6 +653,12 @@ contains
           end if
        end if
 
+       if (ST_use_electrode) then
+          if (box%cc(IJK, i_lsf) <= 0.0_dp) then
+             derivs(ix, :) = 0
+          end if
+       end if
+
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_prev) + dt * derivs(ix, n)
@@ -644,6 +672,9 @@ contains
 
        do KJI_DO(1,nc)
           ! Contribution of ion flux
+          if (ST_use_electrode) then
+             if (box%cc(IJK, i_lsf) <= 0.0_dp) cycle
+          end if
 #if NDIM == 1
           tmp = inv_dr(1) * (box%fc(i, 1, i_flux) - &
                box%fc(i+1, 1, i_flux))

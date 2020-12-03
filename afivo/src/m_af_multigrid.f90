@@ -33,6 +33,7 @@ module m_af_multigrid
   public :: mg_box_gsrb_lpl
   public :: mg_box_corr_lpl
   public :: mg_box_rstr_lpl
+  public :: mg_box_lpl_gradient
   public :: mg_sides_rb
 
   ! Methods for Laplacian with jump in coefficient between boxes
@@ -41,8 +42,17 @@ module m_af_multigrid
   public :: mg_box_corr_lpld
   public :: mg_box_lpld_stencil
 
+  ! Methods for Laplacian with level set function
+  public :: mg_box_lpllsf
+  public :: mg_box_lpllsf_stencil
+  public :: mg_box_gsrb_lpllsf
+  public :: mg_box_lpllsf_gradient
+
   ! To adjust operator stencils near boundaries
   public :: mg_stencil_handle_boundaries
+
+  ! To compute the gradient of the solution
+  public :: mg_compute_phi_gradient
 
 #if NDIM == 2
   public :: mg_box_clpl
@@ -64,8 +74,6 @@ contains
     if (mg%i_phi < 0)                  stop "mg_init: i_phi not set"
     if (mg%i_tmp < 0)                  stop "mg_init: i_tmp not set"
     if (mg%i_rhs < 0)                  stop "mg_init: i_rhs not set"
-    if (mg%i_lsf * mg%i_bval < 0) &
-         stop "mg_init: you have to set both i_lsf and i_bval"
 
     if (.not. associated(mg%sides_bc)) stop "mg_init: sides_bc not set"
     if (.not. tree%ready) error stop "mg_init: tree not initialized"
@@ -89,6 +97,10 @@ contains
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_auto_gsrb
     if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
+
+    if (mg%i_lsf /= -1) then
+       call check_coarse_representation_lsf(tree, mg)
+    end if
 
     call mg_set_box_tag_lvl(tree, mg, 1)
     call coarse_solver_initialize(tree, mg)
@@ -783,8 +795,8 @@ contains
        else
           call mg_box_gsrb_lpl(box, redblack_cntr, mg)
        end if
-    ! case (mg_lsf_box)
-    !    call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
+    case (mg_lsf_box)
+       call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
     case (mg_veps_box, mg_ceps_box)
        if (box%coord_t == af_cyl) then
           call mg_box_gsrb_clpld(box, redblack_cntr, mg)
@@ -794,8 +806,8 @@ contains
 #else
     case (mg_normal_box)
        call mg_box_gsrb_lpl(box, redblack_cntr, mg)
-    ! case (mg_lsf_box)
-    !    call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
+    case (mg_lsf_box)
+       call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
     case (mg_veps_box, mg_ceps_box)
        call mg_box_gsrb_lpld(box, redblack_cntr, mg)
 #endif
@@ -818,8 +830,8 @@ contains
        else
           call mg_box_lpl(box, i_out, mg)
        end if
-    ! case (mg_lsf_box)
-    !    call mg_box_lpllsf(box, i_out, mg)
+    case (mg_lsf_box)
+       call mg_box_lpllsf(box, i_out, mg)
     case (mg_veps_box, mg_ceps_box)
        if (box%coord_t == af_cyl) then
           call mg_box_clpld(box, i_out, mg)
@@ -829,8 +841,8 @@ contains
 #else
     case (mg_normal_box)
        call mg_box_lpl(box, i_out, mg)
-    ! case (mg_lsf_box)
-    !    call mg_box_lpllsf(box, i_out, mg)
+    case (mg_lsf_box)
+       call mg_box_lpllsf(box, i_out, mg)
     case (mg_veps_box, mg_ceps_box)
        call mg_box_lpld(box, i_out, mg)
 #endif
@@ -842,35 +854,36 @@ contains
   end subroutine mg_auto_op
 
   !> Based on the box type, use the appropriate stencil method
-  subroutine mg_auto_stencil(box, mg, stencil, bc_to_rhs)
+  subroutine mg_auto_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
 
     select case(box%tag)
 #if NDIM == 2
     case (mg_normal_box)
        if (box%coord_t == af_cyl) then
-          call mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs)
+          call mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
        else
-          call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs)
+          call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
        end if
-    ! case (mg_lsf_box)
-    !    call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs)
+    case (mg_lsf_box)
+       call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     case (mg_veps_box, mg_ceps_box)
        if (box%coord_t == af_cyl) then
-          call mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs)
+          call mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
        else
-          call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs)
+          call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
        end if
 #else
     case (mg_normal_box)
-       call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs)
-    ! case (mg_lsf_box)
-    !    call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs)
+       call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
+    case (mg_lsf_box)
+       call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     case (mg_veps_box, mg_ceps_box)
-       call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs)
+       call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
 #endif
     case (af_init_tag)
        error stop "mg_auto_stencil: box tag not set"
@@ -887,10 +900,8 @@ contains
     type(mg_t), intent(in)     :: mg    !< Multigrid options
 
     select case(box_c%tag)
-    case (mg_normal_box, mg_veps_box, mg_ceps_box)
+    case (mg_normal_box, mg_veps_box, mg_ceps_box, mg_lsf_box)
        call mg_box_rstr_lpl(box_c, box_p, iv, mg)
-    ! case (mg_lsf_box)
-       !    call mg_box_rstr_lpllsf(box_c, box_p, iv, mg)
     case (af_init_tag)
        error stop "mg_auto_rstr: box_c tag not set"
     case default
@@ -907,8 +918,8 @@ contains
     select case(box_c%tag)
     case (mg_normal_box)
        call mg_box_corr_lpl(box_p, box_c, mg)
-    ! case (mg_lsf_box)
-    !    call mg_box_corr_lpllsf(box_p, box_c, mg)
+    case (mg_lsf_box)
+       call mg_box_corr_lpllsf(box_p, box_c, mg)
     case (mg_veps_box, mg_ceps_box)
        call mg_box_corr_lpld(box_p, box_c, mg)
     case (af_init_tag)
@@ -1098,11 +1109,12 @@ contains
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs)
+  subroutine mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
     real(dp)                :: inv_dr2(NDIM)
     integer                 :: idim
 
@@ -1286,11 +1298,12 @@ contains
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs)
+  subroutine mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
     integer                 :: IJK, nc
     real(dp)                :: idr2(2*NDIM), a0, a(2*NDIM)
 
@@ -1469,11 +1482,12 @@ contains
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs)
+  subroutine mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
     integer                 :: i, j, nc
     real(dp)                :: idr2(NDIM), rfac(2, box%n_cell)
 
@@ -1527,11 +1541,12 @@ contains
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs)
+  subroutine mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
     real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
     integer                 :: i, j, nc, i_eps
     real(dp)                :: idr2(2*NDIM), a0, a(4)
     real(dp)                :: rfac(2, box%n_cell), r_weight(4)
@@ -1594,5 +1609,747 @@ contains
     end associate
   end subroutine mg_box_gsrb_clpld
 #endif
+
+  !> For a point a, compute distance (between 0, 1) of a neighbor b.
+  elemental function lsf_dist(lsf_a, lsf_b) result(distance)
+    !> Level set function at a
+    real(dp), intent(in) :: lsf_a
+    !> Level set function at b
+    real(dp), intent(in) :: lsf_b
+    !> Distance to neighbor point b (value between 0 and 1)
+    real(dp) :: distance
+
+    if (lsf_a * lsf_b < 0) then
+       ! There is a boundary between the points
+       distance = lsf_a / (lsf_a - lsf_b)
+    else
+       distance = 1
+    end if
+  end function lsf_dist
+
+  !> For a point a, compute value and distance (between 0, 1) of a neighbor b.
+  subroutine lsf_dist_val(lsf_a, lsf_b, val_b, boundary_value, dist, val)
+    !> Level set function at a
+    real(dp), intent(in)  :: lsf_a
+    !> Level set function at b
+    real(dp), intent(in)  :: lsf_b
+    !> Value at b
+    real(dp), intent(in)  :: val_b
+    !> Boundary value
+    real(dp), intent(in)  :: boundary_value
+    !> Distance to neighbor point (value between 0 and 1)
+    real(dp), intent(out) :: dist
+    !> Value at neighbor point
+    real(dp), intent(out) :: val
+
+    if (lsf_a * lsf_b < 0) then
+       ! There is a boundary between the points
+       dist = lsf_a / (lsf_a - lsf_b)
+       val  = boundary_value
+    else
+       ! Simply use the value at b
+       dist = 1
+       val  = val_b
+    end if
+  end subroutine lsf_dist_val
+
+  subroutine mg_box_corr_lpllsf(box_p, box_c, mg)
+    type(box_t), intent(inout) :: box_c !< Child box
+    type(box_t), intent(in)    :: box_p !< Parent box
+    type(mg_t), intent(in)     :: mg    !< Multigrid options
+    integer                    :: i_phi, i_corr, i_lsf, ix_offset(NDIM)
+    integer                    :: nc
+    integer                    :: IJK, IJK_(c1), IJK_(c2)
+    real(dp)                   :: lsf_a, v_b(2)
+    real(dp)                   :: val(NDIM+1), dist(NDIM+1), c(NDIM+1)
+
+    nc        = box_c%n_cell
+    ix_offset = af_get_child_offset(box_c)
+    i_phi     = mg%i_phi
+    i_corr    = mg%i_tmp
+    i_lsf     = mg%i_lsf
+
+    ! In these loops, we calculate the closest coarse index (_c1), and the
+    ! one-but-closest (_c2). The fine cell lies in between.
+#if NDIM == 1
+    do i = 1, nc
+       i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+       i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+       lsf_a = box_c%cc(i, i_lsf)
+       v_b(1:2) = box_p%cc(i_c1, [i_lsf, i_corr])
+       call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(1), val(1))
+       v_b(1:2) = box_p%cc(i_c2, [i_lsf, i_corr])
+       call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(2), val(2))
+
+       ! Interpolate between the two coarse values, but account for distance to
+       ! potential boundary
+       c(1) = 3 * dist(2)
+       c(2) = dist(1)
+       box_c%cc(i, i_phi) = box_c%cc(i, i_phi) + sum(c * val)/sum(c)
+    end do
+#elif NDIM == 2
+    do j = 1, nc
+       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+       j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+          lsf_a = box_c%cc(i, j, i_lsf)
+          v_b(1:2) = box_p%cc(i_c1, j_c1, [i_lsf, i_corr])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(1), val(1))
+          v_b(1:2) = box_p%cc(i_c2, j_c1, [i_lsf, i_corr])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(2), val(2))
+          v_b(1:2) = box_p%cc(i_c1, j_c2, [i_lsf, i_corr])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(3), val(3))
+
+          ! This expresses general interpolation between 3 points (on the lines
+          ! between the fine and the 3 coarse values).
+          c(1) = 2 * dist(2) * dist(3)
+          c(2) = dist(1) * dist(3)
+          c(3) = dist(1) * dist(2)
+          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + sum(c * val)/sum(c)
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+             lsf_a = box_c%cc(i, j, k, i_lsf)
+             v_b(1:2) = box_p%cc(i_c1, j_c1, k_c1, [i_lsf, i_corr])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(1), val(1))
+             v_b(1:2) = box_p%cc(i_c2, j_c1, k_c1, [i_lsf, i_corr])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(2), val(2))
+             v_b(1:2) = box_p%cc(i_c1, j_c2, k_c1, [i_lsf, i_corr])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(3), val(3))
+             v_b(1:2) = box_p%cc(i_c1, j_c1, k_c2, [i_lsf, i_corr])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(4), val(4))
+
+             ! This expresses general interpolation between 4 points (on the lines
+             ! between the fine and the 4 coarse values).
+             c(1) = dist(2) * dist(3) * dist(4)
+             c(2) = dist(1) * dist(3) * dist(4)
+             c(3) = dist(1) * dist(2) * dist(4)
+             c(4) = dist(1) * dist(2) * dist(3)
+             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + &
+                  sum(c * val)/sum(c)
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg_box_corr_lpllsf
+
+  !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
+  subroutine mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
+    type(box_t), intent(inout) :: box            !< Box to operate on
+    integer, intent(in)        :: redblack_cntr !< Iteration counter
+    type(mg_t), intent(in)     :: mg             !< Multigrid options
+    integer                    :: IJK, i0, nc, i_phi, i_rhs, i_lsf
+    real(dp)                   :: dd(2*NDIM), val(2*NDIM), lsf_a, v_b(2)
+    real(dp)                   :: dr2(NDIM), idr2(NDIM)
+#if NDIM == 2
+    real(dp)                   :: r(box%n_cell), tmp
+#endif
+
+    dr2    = box%dr**2
+    nc     = box%n_cell
+    i_phi  = mg%i_phi
+    i_rhs  = mg%i_rhs
+    i_lsf  = mg%i_lsf
+
+    ! The parity of redblack_cntr determines which cells we use. If
+    ! redblack_cntr is even, we use the even cells and vice versa.
+#if NDIM == 1
+    i0 = 2 - iand(redblack_cntr, 1)
+    do i = i0, nc, 2
+       lsf_a = box%cc(i, i_lsf)
+       v_b = box%cc(i-1, [i_lsf, i_phi])
+       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+            mg%lsf_boundary_value, dd(1), val(1))
+       v_b = box%cc(i+1, [i_lsf, i_phi])
+       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+            mg%lsf_boundary_value, dd(2), val(2))
+
+       ! Solve for generalized Laplacian (see routine mg_box_lpllsf)
+       idr2 = [1/(dr2(1) * dd(1) * dd(2))]
+       box%cc(i, i_phi) = 1 / (2 * sum(idr2)) * (&
+            (dd(2) * val(1) + dd(1) * val(2)) / &
+            (0.5_dp * (dd(1) + dd(2))) * idr2(1) - &
+            box%cc(i, i_rhs))
+    end do
+#elif NDIM == 2
+    if (box%coord_t == af_cyl) then
+       r = [(box%r_min(1) + (i-0.5_dp) * box%dr(1), i=1,nc)]
+    end if
+
+    do j = 1, nc
+       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
+       do i = i0, nc, 2
+          lsf_a = box%cc(i, j, i_lsf)
+          v_b = box%cc(i-1, j, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(1), val(1))
+          v_b = box%cc(i+1, j, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(2), val(2))
+          v_b = box%cc(i, j-1, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(3), val(3))
+          v_b = box%cc(i, j+1, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(4), val(4))
+
+          ! Solve for generalized Laplacian (see routine mg_box_lpllsf)
+          idr2 = [1/(dr2(1) * dd(1) * dd(2)), 1/(dr2(2) * dd(3) * dd(4))]
+          if (box%coord_t == af_cyl) then
+             tmp = (val(2) - val(1))/(r(i) * (dd(1) + dd(2)) * box%dr(1))
+          else
+             tmp = 0.0_dp
+          end if
+
+          box%cc(i, j, i_phi) = 1 / (2 * sum(idr2)) * (&
+               (dd(2) * val(1) + dd(1) * val(2)) / &
+               (0.5_dp * (dd(1) + dd(2))) * idr2(1) + &
+               (dd(4) * val(3) + dd(3) * val(4)) / &
+               (0.5_dp * (dd(3) + dd(4))) * idr2(2) - &
+               box%cc(i, j, i_rhs) + tmp)
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       do j = 1, nc
+          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
+          do i = i0, nc, 2
+             lsf_a = box%cc(i, j, k, i_lsf)
+             v_b = box%cc(i-1, j, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(1), val(1))
+             v_b = box%cc(i+1, j, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(2), val(2))
+             v_b = box%cc(i, j-1, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(3), val(3))
+             v_b = box%cc(i, j+1, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(4), val(4))
+             v_b = box%cc(i, j, k-1, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(5), val(5))
+             v_b = box%cc(i, j, k+1, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(6), val(6))
+
+             ! Solve for generalized Laplacian (see routine mg_box_lpllsf)
+             idr2 = [1/(dr2(1) * dd(1) * dd(2)), 1/(dr2(2) * dd(3) * dd(4)), &
+                  1/(dr2(3) * dd(5) * dd(6))]
+             box%cc(i, j, k, i_phi) = 1 / (2 * sum(idr2)) * (&
+                  (dd(2) * val(1) + dd(1) * val(2)) / &
+                  (0.5_dp * (dd(1) + dd(2))) * idr2(1) + &
+                  (dd(4) * val(3) + dd(3) * val(4)) / &
+                  (0.5_dp * (dd(3) + dd(4))) * idr2(2) + &
+                  (dd(6) * val(5) + dd(5) * val(6)) / &
+                  (0.5_dp * (dd(5) + dd(6))) * idr2(3) - &
+                  box%cc(i, j, k, i_rhs))
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg_box_gsrb_lpllsf
+
+  !> Perform Laplacian operator on a box
+  subroutine mg_box_lpllsf(box, i_out, mg)
+    type(box_t), intent(inout) :: box   !< Box to operate on
+    integer, intent(in)        :: i_out !< Index of variable to store Laplacian in
+    type(mg_t), intent(in)     :: mg    !< Multigrid options
+    integer                    :: IJK, nc, i_phi, i_lsf
+    real(dp)                   :: dr2(NDIM), dd(2*NDIM), val(2*NDIM)
+    real(dp)                   :: f0, lsf_a, v_b(2)
+#if NDIM == 2
+    real(dp)                   :: r(box%n_cell)
+#endif
+
+    nc     = box%n_cell
+    dr2    = box%dr**2
+    i_phi  = mg%i_phi
+    i_lsf  = mg%i_lsf
+
+#if NDIM == 1
+    do i = 1, nc
+       lsf_a = box%cc(i, i_lsf)
+       v_b = box%cc(i-1, [i_lsf, i_phi])
+       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+            mg%lsf_boundary_value, dd(1), val(1))
+       v_b = box%cc(i+1, [i_lsf, i_phi])
+       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+            mg%lsf_boundary_value, dd(2), val(2))
+
+       ! Generalized Laplacian for neighbors at distance dd * dx
+       f0 = box%cc(i, i_phi)
+       box%cc(i, i_out) = &
+            (dd(2) * val(1) + dd(1) * val(2) - (dd(1)+dd(2)) * f0) / &
+            (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2))
+    end do
+#elif NDIM == 2
+    if (box%coord_t == af_cyl) then
+       r = [(box%r_min(1) + (i-0.5_dp) * box%dr(1), i=1,nc)]
+    end if
+
+    do j = 1, nc
+       do i = 1, nc
+          lsf_a = box%cc(i, j, i_lsf)
+          v_b = box%cc(i-1, j, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(1), val(1))
+          v_b = box%cc(i+1, j, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(2), val(2))
+          v_b = box%cc(i, j-1, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(3), val(3))
+          v_b = box%cc(i, j+1, [i_lsf, i_phi])
+          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd(4), val(4))
+
+          ! Generalized Laplacian for neighbors at distance dd * dx
+          f0 = box%cc(i, j, i_phi)
+          box%cc(i, j, i_out) = &
+               (dd(2) * val(1) + dd(1) * val(2) - (dd(1)+dd(2)) * f0) / &
+               (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2)) + &
+               (dd(4) * val(3) + dd(3) * val(4) - (dd(3)+dd(4)) * f0) / &
+               (0.5_dp * dr2(2) * (dd(3) + dd(4)) * dd(3) * dd(4))
+          if (box%coord_t == af_cyl) then
+             box%cc(i, j, i_out) = box%cc(i, j, i_out) + &
+                  (val(2) - val(1))/(r(i) * (dd(1) + dd(2)) * box%dr(1))
+          end if
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc
+             lsf_a = box%cc(i, j, k, i_lsf)
+             v_b = box%cc(i-1, j, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(1), val(1))
+             v_b = box%cc(i+1, j, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(2), val(2))
+             v_b = box%cc(i, j-1, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(3), val(3))
+             v_b = box%cc(i, j+1, k, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(4), val(4))
+             v_b = box%cc(i, j, k-1, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(5), val(5))
+             v_b = box%cc(i, j, k+1, [i_lsf, i_phi])
+             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd(6), val(6))
+
+             ! Generalized Laplacian for neighbors at distance dd * dx
+             f0 = box%cc(i, j, k, i_phi)
+             box%cc(i, j, k, i_out) = &
+                  (dd(2) * val(1) + dd(1) * val(2) - (dd(1)+dd(2)) * f0) / &
+                  (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2)) + &
+                  (dd(4) * val(3) + dd(3) * val(4) - (dd(3)+dd(4)) * f0) / &
+                  (0.5_dp * dr2(2) * (dd(3) + dd(4)) * dd(3) * dd(4)) + &
+                  (dd(6) * val(5) + dd(5) * val(6) - (dd(5)+dd(6)) * f0) / &
+                  (0.5_dp * dr2(3) * (dd(5) + dd(6)) * dd(5) * dd(6))
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg_box_lpllsf
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
+    integer                 :: IJK, n, nc, idim
+    real(dp)                :: lsf_a, dd(2*NDIM), dr2(NDIM)
+#if NDIM == 2
+    real(dp)                :: tmp
+#endif
+
+    nc = box%n_cell
+    dr2 = box%dr**2
+
+    associate (cc => box%cc, i_lsf => mg%i_lsf)
+      do KJI_DO(1, nc)
+         lsf_a = box%cc(IJK, i_lsf)
+#if NDIM == 1
+         dd(1) = lsf_dist(lsf_a, box%cc(i-1, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box%cc(i+1, i_lsf))
+#elif NDIM == 2
+         dd(1) = lsf_dist(lsf_a, box%cc(i-1, j, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box%cc(i+1, j, i_lsf))
+         dd(3) = lsf_dist(lsf_a, box%cc(i, j-1, i_lsf))
+         dd(4) = lsf_dist(lsf_a, box%cc(i, j+1, i_lsf))
+#elif NDIM == 3
+         dd(1) = lsf_dist(lsf_a, box%cc(i-1, j, k, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box%cc(i+1, j, k, i_lsf))
+         dd(3) = lsf_dist(lsf_a, box%cc(i, j-1, k, i_lsf))
+         dd(4) = lsf_dist(lsf_a, box%cc(i, j+1, k, i_lsf))
+         dd(5) = lsf_dist(lsf_a, box%cc(i, j, k-1, i_lsf))
+         dd(6) = lsf_dist(lsf_a, box%cc(i, j, k+1, i_lsf))
+#endif
+
+         ! Generalized Laplacian for neighbors at distance dd * dx
+         do idim = 1, NDIM
+            stencil(1+2*idim-1:1+2*idim, IJK) = [dd(2*idim), dd(2*idim-1)] / &
+                 (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
+                 dd(2*idim-1) * dd(2*idim))
+         end do
+
+#if NDIM == 2
+         if (box%coord_t == af_cyl) then
+            ! Add correction for cylindrical coordinate system. This is a
+            ! discretization of 1/r d/dr phi.
+            tmp = 1/(box%dr(1) * (dd(1) + dd(2)) * af_cyl_radius_cc(box, i))
+            stencil(2, IJK) = stencil(2, IJK) - tmp
+            stencil(3, IJK) = stencil(3, IJK) + tmp
+         end if
+#endif
+
+         stencil(1, IJK) = -sum(stencil(2:, IJK))
+
+         ! Move internal boundaries to right-hand side
+         do n = 1, 2 * NDIM
+            if (dd(n) < 1.0_dp) then
+               lsf_fac(IJK) = lsf_fac(IJK) - stencil(n+1, IJK)
+               stencil(n+1, IJK) = 0.0_dp
+            end if
+         end do
+      end do; CLOSE_DO
+    end associate
+
+    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+  end subroutine mg_box_lpllsf_stencil
+
+  !> Compute the gradient of the potential and store in face-centered variables
+  subroutine mg_compute_phi_gradient(tree, mg, i_fc, fac, i_norm)
+    type(af_t), intent(inout)     :: tree
+    type(mg_t), intent(in)        :: mg
+    integer, intent(in)           :: i_fc !< Face-centered indices
+    real(dp), intent(in)          :: fac  !< Multiply with this factor
+    !> If present, store norm in this cell-centered variable
+    integer, intent(in), optional :: i_norm
+    integer                       :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+
+          associate (box => tree%boxes(id))
+            select case(box%tag)
+            case (mg_normal_box, mg_ceps_box)
+               call mg_box_lpl_gradient(box, mg, i_fc, fac)
+            case (mg_lsf_box)
+               call mg_box_lpllsf_gradient(box, mg, i_fc, fac)
+            case (mg_veps_box)
+               ! Should call dielectric_correct_field_fc afterwards
+               call mg_box_lpl_gradient(box, mg, i_fc, fac)
+            case (af_init_tag)
+               error stop "mg_auto_op: box tag not set"
+            case default
+               error stop "mg_auto_op: unknown box tag"
+            end select
+
+            if (present(i_norm)) then
+               call mg_box_gradient_norm(box, i_fc, i_norm)
+            end if
+          end associate
+       end do
+       !$omp end do nowait
+    end do
+    !$omp end parallel
+  end subroutine mg_compute_phi_gradient
+
+  !> Compute the gradient of the potential
+  subroutine mg_box_lpl_gradient(box, mg, i_fc, fac)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: i_fc !< Face-centered indices
+    real(dp), intent(in)       :: fac  !< Multiply with this factor
+    integer                    :: nc, i_phi, i_eps
+    real(dp)                   :: inv_dr(NDIM)
+
+    nc     = box%n_cell
+    i_phi  = mg%i_phi
+    inv_dr = fac / box%dr
+
+#if NDIM == 1
+    box%fc(1:nc+1, 1, i_fc) = inv_dr(1) * &
+         (box%cc(1:nc+1, i_phi) - box%cc(0:nc, i_phi))
+#elif NDIM == 2
+    box%fc(1:nc+1, 1:nc, 1, i_fc) = inv_dr(1) * &
+         (box%cc(1:nc+1, 1:nc, i_phi) - box%cc(0:nc, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc+1, 2, i_fc) = inv_dr(2) * &
+         (box%cc(1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 0:nc, i_phi))
+#elif NDIM == 3
+    box%fc(1:nc+1, 1:nc, 1:nc, 1, i_fc) = inv_dr(1) * &
+         (box%cc(1:nc+1, 1:nc, 1:nc, i_phi) - &
+         box%cc(0:nc, 1:nc, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc+1, 1:nc, 2, i_fc) = inv_dr(2) * &
+         (box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - &
+         box%cc(1:nc, 0:nc, 1:nc, i_phi))
+    box%fc(1:nc, 1:nc, 1:nc+1, 3, i_fc) = inv_dr(3) * &
+         (box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
+         box%cc(1:nc, 1:nc, 0:nc, i_phi))
+#endif
+
+    if (box%tag == mg_veps_box) then
+       ! Compute fields at the boundaries of the box, where eps can change
+       i_eps = mg%i_eps
+
+#if NDIM == 1
+       box%fc(1, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, i_phi) - box%cc(1, i_phi)) * &
+            box%cc(0, i_eps) / &
+            (box%cc(1, i_eps) + box%cc(0, i_eps))
+       box%fc(nc+1, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, i_phi) - box%cc(nc+1, i_phi)) * &
+            box%cc(nc+1, i_eps) / &
+            (box%cc(nc+1, i_eps) + box%cc(nc, i_eps))
+#elif NDIM == 2
+       box%fc(1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
+       box%fc(1:nc, nc+1, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
+#elif NDIM == 3
+       box%fc(1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(0, 1:nc, 1:nc, i_eps) / &
+            (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
+       box%fc(nc+1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+            (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+            box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
+            (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
+       box%fc(1:nc, 1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
+            box%cc(1:nc, 0, 1:nc, i_eps) / &
+            (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
+       box%fc(1:nc, nc+1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+            (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
+            box%cc(1:nc, nc+1, 1:nc, i_eps) / &
+            (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
+       box%fc(1:nc, 1:nc, 1, 3, i_fc) = 2 * inv_dr(3) * &
+            (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
+            box%cc(1:nc, 1:nc, 0, i_eps) / &
+            (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
+       box%fc(1:nc, 1:nc, nc+1, 3, i_fc) = 2 * inv_dr(3) * &
+            (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
+            box%cc(1:nc, 1:nc, nc+1, i_eps) / &
+            (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
+#endif
+    end if
+  end subroutine mg_box_lpl_gradient
+
+  subroutine mg_box_gradient_norm(box, i_fc, i_norm)
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: i_fc !< Face-centered indices
+    !> Store norm in this cell-centered variable
+    integer, intent(in)        :: i_norm
+    integer                    :: nc
+
+    nc = box%n_cell
+
+#if NDIM == 1
+    box%cc(1:nc, i_norm) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1, i_fc) + &
+         box%fc(2:nc+1, 1, i_fc))**2)
+#elif NDIM == 2
+    box%cc(1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1:nc, 1, i_fc) + &
+         box%fc(2:nc+1, 1:nc, 1, i_fc))**2 + &
+         (box%fc(1:nc, 1:nc, 2, i_fc) + &
+         box%fc(1:nc, 2:nc+1, 2, i_fc))**2)
+#elif NDIM == 3
+    box%cc(1:nc, 1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
+         (box%fc(1:nc, 1:nc, 1:nc, 1, i_fc) + &
+         box%fc(2:nc+1, 1:nc, 1:nc, 1, i_fc))**2 + &
+         (box%fc(1:nc, 1:nc, 1:nc, 2, i_fc) + &
+         box%fc(1:nc, 2:nc+1, 1:nc, 2, i_fc))**2 + &
+         (box%fc(1:nc, 1:nc, 1:nc, 3, i_fc) + &
+         box%fc(1:nc, 1:nc, 2:nc+1, 3, i_fc))**2)
+#endif
+  end subroutine mg_box_gradient_norm
+
+  !> Compute the gradient of the potential with a level set function and store
+  !> in face-centered variables. The gradients are computed from the positive
+  !> side of the level set function.
+  subroutine mg_box_lpllsf_gradient(box, mg, i_fc, fac)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: i_fc !< Face-centered indices
+    real(dp), intent(in)       :: fac  !< Multiply with this factor
+    integer                    :: IJK, nc, i_phi, i_lsf
+    real(dp)                   :: dd, val, v_a(2), v_b(2)
+    integer                    :: grad_sign
+
+    nc     = box%n_cell
+    i_phi  = mg%i_phi
+    i_lsf  = mg%i_lsf
+
+#if NDIM == 1
+    do i = 1, nc+1
+       if (box%cc(i, i_lsf) > 0) then
+          v_a = box%cc(i, [i_lsf, i_phi])
+          v_b = box%cc(i-1, [i_lsf, i_phi])
+          grad_sign = 1
+       else
+          v_a = box%cc(i-1, [i_lsf, i_phi])
+          v_b = box%cc(i, [i_lsf, i_phi])
+          grad_sign = -1
+       end if
+
+       call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+            mg%lsf_boundary_value, dd, val)
+       box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+            (box%dr(1) * dd)
+    end do
+#elif NDIM == 2
+    do j = 1, nc
+       do i = 1, nc+1
+          if (box%cc(i, j, i_lsf) > 0) then
+             v_a = box%cc(i, j, [i_lsf, i_phi])
+             v_b = box%cc(i-1, j, [i_lsf, i_phi])
+             grad_sign = 1
+          else
+             v_a = box%cc(i-1, j, [i_lsf, i_phi])
+             v_b = box%cc(i, j, [i_lsf, i_phi])
+             grad_sign = -1
+          end if
+
+          call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd, val)
+          box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+               (box%dr(1) * dd)
+
+          if (box%cc(j, i, i_lsf) > 0) then
+             v_a = box%cc(j, i, [i_lsf, i_phi])
+             v_b = box%cc(j, i-1, [i_lsf, i_phi])
+             grad_sign = 1
+          else
+             v_a = box%cc(j, i-1, [i_lsf, i_phi])
+             v_b = box%cc(j, i, [i_lsf, i_phi])
+             grad_sign = -1
+          end if
+
+          call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+               mg%lsf_boundary_value, dd, val)
+          box%fc(j, i, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+               (box%dr(2) * dd)
+       end do
+    end do
+#elif NDIM == 3
+    do k = 1, nc
+       do j = 1, nc
+          do i = 1, nc+1
+             if (box%cc(i, j, k, i_lsf) > 0) then
+                v_a = box%cc(i, j, k, [i_lsf, i_phi])
+                v_b = box%cc(i-1, j, k, [i_lsf, i_phi])
+                grad_sign = 1
+             else
+                v_a = box%cc(i-1, j, k, [i_lsf, i_phi])
+                v_b = box%cc(i, j, k, [i_lsf, i_phi])
+                grad_sign = -1
+             end if
+
+             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd, val)
+             box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                  (box%dr(1) * dd)
+
+             if (box%cc(j, i, k, i_lsf) > 0) then
+                v_a = box%cc(j, i, k, [i_lsf, i_phi])
+                v_b = box%cc(j, i-1, k, [i_lsf, i_phi])
+                grad_sign = 1
+             else
+                v_a = box%cc(j, i-1, k, [i_lsf, i_phi])
+                v_b = box%cc(j, i, k, [i_lsf, i_phi])
+                grad_sign = -1
+             end if
+
+             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd, val)
+             box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                  (box%dr(2) * dd)
+
+             if (box%cc(j, k, i, i_lsf) > 0) then
+                v_a = box%cc(j, k, i, [i_lsf, i_phi])
+                v_b = box%cc(j, k, i-1, [i_lsf, i_phi])
+                grad_sign = 1
+             else
+                v_a = box%cc(j, k, i-1, [i_lsf, i_phi])
+                v_b = box%cc(j, k, i, [i_lsf, i_phi])
+                grad_sign = -1
+             end if
+
+             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                  mg%lsf_boundary_value, dd, val)
+             box%fc(j, k, i, 3, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                  (box%dr(3) * dd)
+          end do
+       end do
+    end do
+#endif
+  end subroutine mg_box_lpllsf_gradient
+
+  !> This method checks whether the level set function is properly defined on
+  !> the coarse grid
+  subroutine check_coarse_representation_lsf(tree, mg)
+    type(af_t), intent(in) :: tree
+    type(mg_t), intent(in) :: mg
+    integer                :: i, id, nc
+    real(dp)               :: max_lsf, min_lsf
+
+    nc      = tree%n_cell
+    max_lsf = -1e100_dp
+    min_lsf = 1e100_dp
+
+    do i = 1, size(tree%lvls(1)%ids)
+       id = tree%lvls(1)%ids(i)
+       max_lsf = max(max_lsf, &
+            maxval(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_lsf)))
+       min_lsf = min(min_lsf, &
+            minval(tree%boxes(id)%cc(DTIMES(1:nc), mg%i_lsf)))
+    end do
+
+    if (max_lsf * min_lsf >= 0) then
+       print *, "Min/max level set function:", min_lsf, max_lsf
+       print *, "Perhaps make the coarse grid finer?"
+       error stop "Level set function does not change sign on coarse grid"
+    end if
+
+  end subroutine check_coarse_representation_lsf
 
 end module m_af_multigrid
