@@ -140,12 +140,13 @@ contains
   end subroutine analysis_get_sigma
 
   !> Get the conductivity and densities of an axisymmetric streamer at a z-coordinate
-  subroutine analysis_get_cross(tree, rmax, z, sigma, elec_dens, charge_dens, current_dens)
+  subroutine analysis_get_cross(tree, rmax, z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens)
     use m_lookup_table
     use m_transport_data
     use m_gas
     use m_streamer
     use m_units_constants
+    use m_chemistry
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: rmax         !< Integrate up to this radius
     real(dp), intent(in)   :: z            !< z-coordinate
@@ -153,11 +154,13 @@ contains
     real(dp), intent(out)  :: elec_dens    !< electron density
     real(dp), intent(out)  :: charge_dens  !< charge density
     real(dp), intent(out)  :: current_dens !< current density
+    real(dp), intent(out)  :: ion_current_dens
 
-    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv
-    real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens
+    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv, tot_ion_dens, ion_dens(7)
+    real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens, d_ion_current_dens
     logical  :: success
-    integer  :: id_guess, i, m
+    integer  :: id_guess, i, m, n
+    real(dp), parameter :: mu_ion = 2.0e-4
 
     id_guess     = -1
     sigma        = 0.0_dp
@@ -181,6 +184,15 @@ contains
        d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
        d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
        d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
+       !sum up ion densities
+       ion_dens = af_interp1(tree, [r, z], charged_species_itree, &
+            success, id_guess)
+       if (.not. success) error stop "unsuccessful interp1"
+       tot_ion_dens = 0.0
+       do n = 1, 7
+         tot_ion_dens = tot_ion_dens + ion_dens(n)
+       end do
+       d_ion_current_dens = ne_fld_rhs(2) * mu_ion * tot_ion_dens * 2.0_dp * UC_pi * r * dr * UC_elem_charge
 
        ! Update total
        sigma = sigma + d_sigma
