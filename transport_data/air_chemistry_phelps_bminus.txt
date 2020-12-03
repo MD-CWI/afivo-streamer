@@ -6,6 +6,7 @@ reaction_list
 -----------------------
 # Ionization
 e + N2 -> e + e + N2+,field_table,C26 N2 Ionization 15.60 eV
+e + N2 -> e + e + N2+,field_table,C27 N2 Ionization 18.80 eV
 e + O2 -> e + e + O2+,field_table,C45 O2 Ionization 12.06 eV
 # Attachment
 e + O2 + O2 -> O2- + O2,field_table,C29 O2 Attachment
