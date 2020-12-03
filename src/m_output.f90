@@ -236,6 +236,8 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
+    call af_loop_box(tree, set_attachment_reaction_rates_box)
+
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
     end if
@@ -615,6 +617,71 @@ contains
     end do
     close(my_unit)
   end subroutine output_cross
+
+  subroutine set_attachment_reaction_rates_box(box)
+    use m_chemistry
+    use m_lookup_table
+    use m_transport_data
+    use m_units_constants
+    use m_gas
+    use m_streamer
+
+    type(box_t), intent(inout) :: box
+    integer                    :: nc
+    real(dp), allocatable      :: rates(:,:)
+    real(dp), allocatable      :: derivs(:,:)
+    real(dp), allocatable      :: dens(:,:)
+    real(dp), allocatable      :: fields(:)
+    real(dp)                   :: tmp
+    integer                    :: IJK, ix, n_cells, n
+    character(len=20)          :: attach_name
+    integer                    :: max_attach_reactions
+
+    max_attach_reactions = 0
+    n_cells = box%n_cell**NDIM
+    nc = box%n_cell
+    !print *, "NCCCCCCC: ", nc
+    allocate(rates(n_cells, n_reactions))
+    allocate(derivs(n_cells, n_species))
+    allocate(dens(n_cells, n_species))
+    allocate(fields(n_cells))
+
+    if (gas_constant_density) then
+       ! Compute field in Townsends
+       tmp = 1 / gas_number_density
+       fields = SI_to_Townsend * tmp * &
+            pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.)
+    else
+       do n = 1, n_gas_species
+          dens(:, n) = gas_fractions(n) * &
+               pack(box%cc(DTIMES(1:nc), i_gas_dens), .true.)
+       end do
+
+       fields(:) = SI_to_Townsend * pack( &
+            box%cc(DTIMES(1:nc), i_electric_fld) / &
+            box%cc(DTIMES(1:nc), i_gas_dens), .true.)
+    end if
+
+
+    call get_rates(fields, rates, n_cells)
+
+
+    call get_derivatives(dens, rates, derivs, n_cells)
+   
+    do n = 1, n_reactions
+       if (reactions(n)%reaction_type == attachment_reaction) then
+         max_attach_reactions = max_attach_reactions + 1
+         write(attach_name, "(A3,I3.3)") "att",max_attach_reactions
+         ix = 0
+         do KJI_DO(1,nc)
+           ix = ix+1
+           !box%cc(IJK, attachment_source_itree(max_attach_reactions)) = box%cc(IJK, i_energy_density) 
+           box%cc(IJK, attachment_source_itree(max_attach_reactions)) = derivs(ix, n)
+         end do;CLOSE_DO
+       
+       end if
+    end do
+  end subroutine set_attachment_reaction_rates_box
 
   subroutine set_power_density_box(box)
     use m_units_constants

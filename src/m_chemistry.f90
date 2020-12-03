@@ -109,6 +109,9 @@ module m_chemistry
   !> Maximum number of reactions
   integer, parameter :: max_num_reactions    = 500
 
+  !> Number of attachment reactions(used to count during init.)
+  integer, protected :: max_attach_reactions    = 0
+
   !> Number of species present
   integer, public, protected :: n_species = 0
 
@@ -129,6 +132,9 @@ module m_chemistry
 
   !> species_itree(n) holds the index of species n in the tree (cell-centered variables)
   integer, public, protected                 :: species_itree(max_num_species)
+
+  !> attachment_source_itree(n) (cell-centered variables)
+  integer, public, protected                 :: attachment_source_itree(max_num_species)
 
   !> List of reactions
   type(reaction_t), public, protected        :: reactions(max_num_reactions)
@@ -170,6 +176,7 @@ contains
     integer                    :: n, i, i_elec
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
+    character(len=20)          :: attach_name
     logical                    :: read_success
 
     call CFG_get(cfg, "input_data%file", reaction_file)
@@ -287,6 +294,10 @@ contains
             .not. any(species_charge(reactions(n)%ix_in) > 0)) then
           ! In: an electron and no positive ions, out: no electrons
           reactions(n)%reaction_type = attachment_reaction
+          max_attach_reactions = max_attach_reactions + 1
+          write(attach_name, "(A3,I3.3)") "att",max_attach_reactions
+          call af_add_cc_variable(tree, trim(attach_name), &
+          ix = attachment_source_itree(max_attach_reactions)) 
        else if (any(reactions(n)%ix_in == i_elec) .and. &
             any(reactions(n)%ix_out == i_elec .and. &
             reactions(n)%multiplicity_out == 2)) then
