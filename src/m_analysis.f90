@@ -79,10 +79,12 @@ contains
     use m_gas
     use m_transport_data
     use m_streamer
+    use m_chemistry
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id, nc
 
-    real(dp) :: ne_fld(2), mu, Td, N_inv
+    real(dp) :: ne_fld(2), mu, Td, N_inv, tot_ion_dens, ion_dens(7)
+    real(dp), parameter :: mu_ion = 2.0e-4
     integer  :: n, m, o
 
     N_inv = 1.0_dp/gas_number_density
@@ -94,6 +96,11 @@ contains
         Td = ne_fld(2) * SI_to_Townsend * N_inv
         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
         boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+        tot_ion_dens = 0.0
+        do o = 1, 7
+         tot_ion_dens = tot_ion_dens + ion_dens(o)
+        end do
+        boxes(id)%cc(n , m, i_ion_conductivity) = mu_ion * tot_ion_dens * UC_elec_charge
       end do
     end do
 #endif
