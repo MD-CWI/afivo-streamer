@@ -443,12 +443,13 @@ contains
        case (rate_analytic_exp_v2)
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
        case (rate_analytic_k1)
-          Te = LT_get_col(td_tbl, td_energy_eV, fields) / UC_boltzmann_const
+          Te = 2 * LT_get_col(td_tbl, td_energy_eV, fields) * 1.6e-19 / (3 * UC_boltzmann_const)  ! K
           rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
        case (rate_analytic_k2)
           rates(:, n) = c0 * c(1)
        case (rate_analytic_k3)
-          Te = LT_get_col(td_tbl, td_energy_eV, fields) / UC_boltzmann_const
+          Te = 2 * LT_get_col(td_tbl, td_energy_eV, fields) * 1.6e-19 / (3 * UC_boltzmann_const)  ! K
+          Te = Te * (UC_boltzmann_const  * (1e19 / 1.6))  ! eV
           rates(:, n) = c0 * (c(1) * (UC_boltzmann_const * Te + c(2))**2 - c(3)) * c(4)
        case (rate_analytic_k4)
           rates(:, n) = c0 * c(1) * (gas_temperature / 300)**c(2) * exp(-c(3) / gas_temperature)
