@@ -449,8 +449,7 @@ contains
           rates(:, n) = c0 * c(1)
        case (rate_analytic_k3)
           Te = 2 * LT_get_col(td_tbl, td_energy_eV, fields) * 1.6e-19 / (3 * UC_boltzmann_const)  ! K
-          Te = Te * (UC_boltzmann_const  * (1e19 / 1.6))  ! eV
-          rates(:, n) = c0 * (c(1) * (UC_boltzmann_const * Te + c(2))**2 - c(3)) * c(4)
+          rates(:, n) = c0 * (c(1) * ((UC_boltzmann_const  * (1e19 / 1.6)) * Te + c(2))**2 - c(3)) * c(4)  ! We convert boltzmann_const from J / K to eV / K
        case (rate_analytic_k4)
           rates(:, n) = c0 * c(1) * (gas_temperature / 300)**c(2) * exp(-c(3) / gas_temperature)
        case (rate_analytic_k5)
