@@ -115,7 +115,7 @@ program streamer
      end do   
 #endif
      ! compute E field and equipotential lines
-     call field_compute_rhs(tree, mg, time)
+     call field_compute_rhs(tree, mg, 0, time, .false.)
      ! output and end 
      call output_write(tree, 1, 0.0_dp, lc_reading, write_sim_data)
 
@@ -216,7 +216,7 @@ program streamer
           write_out        = .true.
           dt               = time_last_output + output_dt - time
           time_last_output = time_last_output + output_dt
-         output_cnt       = output_cnt + 1
+          output_cnt       = output_cnt + 1
        else
           write_out = .false.
        end if

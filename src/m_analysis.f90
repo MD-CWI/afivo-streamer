@@ -76,7 +76,6 @@ contains
 
   end subroutine analysis_get_maxima
 
-<<<<<<< HEAD
   subroutine sigma_calculator(boxes, id, nc)
     use m_lookup_table
     use m_units_constants

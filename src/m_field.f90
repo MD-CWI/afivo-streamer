@@ -318,19 +318,86 @@ contains
     call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute
 
-  subroutine field_compute_rhs(tree, mg, time)
+  subroutine field_compute_rhs(tree, mg, s_in, time, have_guess)
     use m_units_constants
     use m_chemistry
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg ! Multigrid option struct
+    integer, intent(in)       :: s_in
     real(dp), intent(in)      :: time
+    logical, intent(in)       :: have_guess
+    integer                   :: i
+    real(dp)                  :: max_rhs, residual_threshold, conv_fac
+    real(dp)                  :: residual_ratio
+    integer, parameter        :: max_initial_iterations = 30
+    real(dp), parameter       :: max_residual = 1e8_dp
+    real(dp), parameter       :: min_residual = 1e-6_dp
+    real(dp)                  :: residuals(max_initial_iterations)
 
     call field_set_voltage(tree, time)
 
-    call mg_fas_fmg(tree, mg, .false., .false.)
+    call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
+
+    ! With an electrode, the initial convergence testing should be less strict
+    if (ST_use_electrode) then
+       conv_fac = 1e-8_dp
+    else
+       conv_fac = 1e-10_dp
+    end if
+
+    ! Set threshold based on rhs and on estimate of round-off error, given by
+    ! delta phi / dx^2 = (phi/L * dx)/dx^2
+    ! Note that we use min_residual in case max_rhs and field_voltage are zero
+    residual_threshold = max(min_residual, &
+         max_rhs * ST_multigrid_max_rel_residual, &
+         conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
+
+    if (ST_use_electrode) then
+       if (field_electrode_grounded) then
+          mg%lsf_boundary_value = 0.0_dp
+       else
+          mg%lsf_boundary_value = field_voltage
+       end if
+    end if
+
+    ! Perform a FMG cycle when we have no guess
+    if (.not. have_guess) then
+       do i = 1, max_initial_iterations
+          call mg_fas_fmg(tree, mg, .true., .true.)
+          call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
+
+          if (residuals(i) < residual_threshold) then
+             exit
+          else if (i > 2) then
+             ! Check if the residual is not changing much anymore, and if it is
+             ! small enough, in which case we assume convergence
+             residual_ratio = minval(residuals(i-2:i)) / &
+                  maxval(residuals(i-2:i))
+             if (residual_ratio < 2.0_dp .and. residual_ratio > 0.5_dp &
+                  .and. residuals(i) < max_residual) exit
+          end if
+       end do
+
+       ! Check for convergence
+       if (i == max_initial_iterations + 1) then
+          print *, "Iteration    residual"
+          do i = 1, max_initial_iterations
+             write(*, "(I4,E18.2)") i, residuals(i)
+          end do
+          print *, "Maybe increase multigrid_max_rel_residual?"
+          error stop "No convergence in initial field computation"
+       end if
+    end if
+
+    ! Perform cheaper V-cycles
+    do i = 1, ST_multigrid_num_vcycles
+       call mg_fas_vcycle(tree, mg, .true.)
+       call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
+       if (residuals(i) < residual_threshold) exit
+    end do
 
     ! Compute field from potential
-    call af_loop_box(tree, field_from_potential)
+    call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])

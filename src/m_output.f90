@@ -30,17 +30,11 @@ module m_output
   ! Write to a log file for regression testing
   logical, protected :: output_regression_test = .false.
 
+  ! Write output for extra points on axis
+  logical, public, protected :: etc_write = .false.
+
   ! Write output along a line
   logical, public, protected :: lineout_write = .false.
-
-  ! Write integral over cross-section data output
-  logical, public, protected :: cross_write = .false.
-
-  ! Integrate up to this r value
-  real(dp), public, protected :: cross_rmax = 2.0e-3_dp
-
-  ! Use this many points for cross-section data
-  integer, public, protected :: cross_npoints = 500
 
   ! Write Silo output
   logical, public, protected :: silo_write = .true.
@@ -160,6 +154,9 @@ contains
     call CFG_add_get(cfg, "output%src_decay_time", tmp, &
          "If positive: decay time for source term (s) for time-averaged values")
     output_src_decay_rate = 1/tmp
+
+    call CFG_add_get(cfg, "etc_write", etc_write, &
+         "Write output for extra points on axis")
 
     call CFG_add_get(cfg, "silo_write", silo_write, &
          "Write silo output")
@@ -317,7 +314,87 @@ contains
       endif
     end if
 
+    if(etc_write) then
+      write(fname, "(A,I6.6)") trim(output_name) // "_etc.txt"
+      call output_etc(tree, fname, output_cnt, wc_time)
+    end if
+
   end subroutine output_write
+
+  subroutine output_etc(tree, filename, out_cnt, wc_time)
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: filename
+    integer, intent(in)          :: out_cnt
+    real(dp), intent(in)         :: wc_time
+    character(len=50), save      :: fmt
+    integer                      :: my_unit
+    real(dp)                     :: maxE, maxE_e, maxE_rhs, maxE_sigma
+    real(dp)                     :: azone_Efield, azone_e, azone_rhs, azone_sigma
+    real(dp)                     :: scl_Efield, scl_e, scl_rhs, scl_sigma
+    real(dp)                     :: bhnd_Efield, bhnd_e, bhnd_rhs, bhnd_sigma
+    type(af_loc_t)               :: loc_maxE, loc_scl, loc_azone, loc_bhnd
+    real(dp), dimension (2)      :: rr_azone, rr_bhnd
+    real(dp)                     :: mnm_dr
+
+    call af_tree_max_cc(tree, i_electric_fld, maxE, loc_maxE)
+    call af_tree_min_cc(tree, i_rhs, scl_rhs, loc_scl)
+    mnm_dr = af_min_dr(tree)
+
+    if (out_cnt == 1) then
+      open(newunit = my_unit, file=trim(filename), action="write")
+#if NDIM == 2
+       write(my_unit, "(A)", advance="no") "time max(E) x y e rhs sigma &
+            &active_zone_x y elec_field e rhs sigma space_charge_x y &
+            &elec_field e rhs sigma behind_x y elec_field e rhs sigma"
+#endif
+       write(my_unit, *) ""
+       close(my_unit)
+    end if
+
+#if NDIM == 2
+    fmt = "(25E16.8)"
+
+    maxE_e = tree%boxes(loc_maxE%id)%cc(loc_maxE%ix(1), loc_maxE%ix(2), i_electron)
+    maxE_rhs = tree%boxes(loc_maxE%id)%cc(loc_maxE%ix(1), loc_maxE%ix(2), i_rhs)
+    maxE_sigma = tree%boxes(loc_maxE%id)%cc(loc_maxE%ix(1), loc_maxE%ix(2), i_conductivity)
+
+    scl_Efield = tree%boxes(loc_scl%id)%cc(loc_scl%ix(1), loc_scl%ix(2), i_electric_fld)
+    scl_e = tree%boxes(loc_scl%id)%cc(loc_scl%ix(1), loc_scl%ix(2), i_electron)
+    scl_sigma = tree%boxes(loc_scl%id)%cc(loc_scl%ix(1), loc_scl%ix(2), i_conductivity)
+
+    rr_azone = af_r_loc(tree, loc_maxE)
+    azone_Efield = maxE
+    do while (abs(azone_Efield) >= 2.8e06)
+      rr_azone(2) = rr_azone(2) - mnm_dr
+      loc_azone = af_get_loc(tree, rr_azone)
+      azone_Efield = tree%boxes(loc_azone%id)%cc(loc_azone%ix(1), loc_azone%ix(2), i_electric_fld)
+      azone_e = tree%boxes(loc_azone%id)%cc(loc_azone%ix(1), loc_azone%ix(2), i_electron)
+      azone_rhs = tree%boxes(loc_azone%id)%cc(loc_azone%ix(1), loc_azone%ix(2), i_rhs)
+      azone_sigma = tree%boxes(loc_azone%id)%cc(loc_azone%ix(1), loc_azone%ix(2), i_conductivity)
+    end do
+    
+    rr_bhnd = af_r_loc(tree, loc_maxE)
+    bhnd_Efield = maxE
+    do while(abs(bhnd_Efield) >= 2.8e06)
+      rr_bhnd(2) = rr_bhnd(2) + mnm_dr
+      loc_bhnd = af_get_loc(tree, rr_bhnd)
+      bhnd_Efield = tree%boxes(loc_bhnd%id)%cc(loc_bhnd%ix(1), loc_bhnd%ix(2), i_electric_fld)
+      bhnd_e = tree%boxes(loc_bhnd%id)%cc(loc_bhnd%ix(1), loc_bhnd%ix(2), i_electron)
+      bhnd_rhs = tree%boxes(loc_bhnd%id)%cc(loc_bhnd%ix(1), loc_bhnd%ix(2), i_rhs)
+      bhnd_sigma = tree%boxes(loc_bhnd%id)%cc(loc_bhnd%ix(1), loc_bhnd%ix(2), i_conductivity)
+    end do
+#endif
+
+    open(newunit=my_unit, file=trim(filename), action="write", &
+         position="append")
+#if NDIM == 2
+    write(my_unit, fmt) global_time, maxE, af_r_loc(tree, loc_maxE), maxE_e, maxE_rhs, maxE_sigma, &
+         af_r_loc(tree, loc_azone), azone_Efield, azone_e, azone_rhs, azone_sigma, &
+         af_r_loc(tree, loc_scl), scl_Efield, scl_e, scl_rhs, scl_sigma, &
+         af_r_loc(tree, loc_bhnd), bhnd_Efield, bhnd_e, bhnd_rhs, bhnd_sigma
+#endif
+    close(my_unit)
+  end subroutine output_etc
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
     use m_field, only: field_voltage
