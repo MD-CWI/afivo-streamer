@@ -644,7 +644,7 @@ contains
 
        !$omp do
        do i = 1, size(ids)
-          call af_gc_box(tree, ids(i), [mg%i_phi])
+          call af_gc_box(tree, ids(i), [mg%i_phi], use_corners)
        end do
        !$omp end do
     end do
