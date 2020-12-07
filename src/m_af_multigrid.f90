@@ -914,6 +914,9 @@ contains
     integer, intent(in)        :: nb     !< Ghost cell direction
     integer, intent(in)        :: iv     !< Ghost cell variable
 
+    ! This routine could be called for setting initial refinement
+    if (boxes(id)%tag == af_init_tag) call mg_set_box_tag(box, mg)
+
     select case(boxes(id)%tag)
     case (mg_normal_box)
        call mg_sides_rb(boxes, id, nb, iv)
