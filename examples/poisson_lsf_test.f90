@@ -27,7 +27,7 @@ program poisson_lsf_test
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
   integer            :: n, mg_iter, coord, n_args
-  real(dp)           :: residu, max_error
+  real(dp)           :: residu, max_error, max_field
   character(len=100) :: fname, argv
   type(mg_t)         :: mg
 
@@ -40,7 +40,7 @@ program poisson_lsf_test
   call af_add_fc_variable(tree, "field", ix=i_field)
 
   call af_set_cc_methods(tree, i_lsf, funcval=set_lsf)
-  call af_set_cc_methods(tree, i_rhs, af_bc_neumann_zero)
+  call af_set_cc_methods(tree, i_field_norm, af_bc_neumann_zero)
 
   ! If an argument is given, switch to cylindrical coordinates in 2D
   n_args = command_argument_count()
@@ -85,12 +85,14 @@ program poisson_lsf_test
   do mg_iter = 1, n_iterations
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      call mg_compute_phi_gradient(tree, mg, i_field, 1.0_dp, i_field_norm)
+     call af_gc_tree(tree, [i_field_norm])
      call af_loop_box(tree, set_error)
 
      ! Determine the minimum and maximum residual and error
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      call af_tree_maxabs_cc(tree, i_error, max_error)
-     write(*, "(I8,2E14.5)") mg_iter, residu, max_error
+     call af_tree_maxabs_cc(tree, i_field_norm, max_field)
+     write(*, "(I8,3E14.5)") mg_iter, residu, max_error, max_field
 
      write(fname, "(A,I0)") "poisson_lsf_test_" // DIMNAME // "_", mg_iter
      call af_write_silo(tree, trim(fname), dir="output")
@@ -102,12 +104,39 @@ contains
   subroutine ref_routine(box, cell_flags)
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
+    integer                 :: nc
+    integer, parameter      :: refinement_type = 1
 
-    if (box%lvl < max_refine_level) then
-       cell_flags(DTIMES(:)) = af_do_ref
-    else
-       cell_flags(DTIMES(:)) = af_keep_ref
-    end if
+    nc = box%n_cell
+
+    select case (refinement_type)
+    case (1)
+       ! Uniform refinement
+       if (box%lvl < max_refine_level) then
+          cell_flags(DTIMES(:)) = af_do_ref
+       else
+          cell_flags(DTIMES(:)) = af_keep_ref
+       end if
+
+    case (2)
+       ! Only refine at boundary
+       if (box%lvl < max_refine_level .and. &
+            minval(box%cc(DTIMES(:), i_lsf)) * &
+            maxval(box%cc(DTIMES(:), i_lsf)) <= 0) then
+          cell_flags(DTIMES(:)) = af_do_ref
+       else
+          cell_flags(DTIMES(:)) = af_keep_ref
+       end if
+
+    case (3)
+       ! 'Bad' refinement to test the method
+       if (norm2(box%r_min - solution_r0) < solution_radius .and. &
+            box%lvl < max_refine_level) then
+          cell_flags(DTIMES(:)) = af_do_ref
+       else
+          cell_flags(DTIMES(:)) = af_keep_ref
+       end if
+    end select
   end subroutine ref_routine
 
   real(dp) function solution(r)
