@@ -159,7 +159,6 @@ contains
             set_residual .and. lvl == tree%highest_lvl, lvl, standalone=.false.)
     end do
 
-    if (mg%i_lsf > 0) call fix_gc_ref_boundary_lsf(tree, mg)
   end subroutine mg_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
@@ -242,8 +241,6 @@ contains
        !$omp end parallel
     end if
 
-    if (by_itself .and. mg%i_lsf > 0) &
-         call fix_gc_ref_boundary_lsf(tree, mg)
   end subroutine mg_fas_vcycle
 
   subroutine solve_coarse_grid(tree, mg)
@@ -2234,23 +2231,41 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: i_fc !< Face-centered indices
     real(dp), intent(in)       :: fac  !< Multiply with this factor
+    real(dp)                   :: cc(DTIMES(0:box%n_cell+1), 2)
     integer                    :: IJK, nc, i_phi, i_lsf
     real(dp)                   :: dd, val, v_a(2), v_b(2)
-    integer                    :: grad_sign
+    integer                    :: grad_sign, nb
+    integer                    :: ilo(NDIM), ihi(NDIM)
+    integer                    :: olo(NDIM), ohi(NDIM)
 
     nc     = box%n_cell
     i_phi  = mg%i_phi
     i_lsf  = mg%i_lsf
 
+    ! Store a copy because we might need to modify phi in ghost cells
+    cc = box%cc(DTIMES(:), [i_lsf, i_phi])
+
+    do nb = 1, af_num_neighbors
+       ! If lsf value changes sign in ghost cell, use boundary value
+       if (box%neighbors(nb) == af_no_box) then
+          call af_get_index_bc_inside(nb, box%n_cell, 1, ilo, ihi)
+          call af_get_index_bc_outside(nb, box%n_cell, 1, olo, ohi)
+          where (cc(DSLICE(ilo,ihi), 1) * &
+               cc(DSLICE(olo,ohi), 1) <= 0.0_dp)
+             cc(DSLICE(olo,ohi), 2) = mg%lsf_boundary_value
+          end where
+       end if
+    end do
+
 #if NDIM == 1
     do i = 1, nc+1
-       if (box%cc(i, i_lsf) > 0) then
-          v_a = box%cc(i, [i_lsf, i_phi])
-          v_b = box%cc(i-1, [i_lsf, i_phi])
+       if (cc(i, 1) > 0) then
+          v_a = cc(i, :)
+          v_b = cc(i-1, :)
           grad_sign = 1
        else
-          v_a = box%cc(i-1, [i_lsf, i_phi])
-          v_b = box%cc(i, [i_lsf, i_phi])
+          v_a = cc(i-1, :)
+          v_b = cc(i, :)
           grad_sign = -1
        end if
 
@@ -2262,13 +2277,13 @@ contains
 #elif NDIM == 2
     do j = 1, nc
        do i = 1, nc+1
-          if (box%cc(i, j, i_lsf) > 0) then
-             v_a = box%cc(i, j, [i_lsf, i_phi])
-             v_b = box%cc(i-1, j, [i_lsf, i_phi])
+          if (cc(i, j, 1) > 0) then
+             v_a = cc(i, j, :)
+             v_b = cc(i-1, j, :)
              grad_sign = 1
           else
-             v_a = box%cc(i-1, j, [i_lsf, i_phi])
-             v_b = box%cc(i, j, [i_lsf, i_phi])
+             v_a = cc(i-1, j, :)
+             v_b = cc(i, j, :)
              grad_sign = -1
           end if
 
@@ -2277,13 +2292,13 @@ contains
           box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                (box%dr(1) * dd)
 
-          if (box%cc(j, i, i_lsf) > 0) then
-             v_a = box%cc(j, i, [i_lsf, i_phi])
-             v_b = box%cc(j, i-1, [i_lsf, i_phi])
+          if (cc(j, i, 1) > 0) then
+             v_a = cc(j, i, :)
+             v_b = cc(j, i-1, :)
              grad_sign = 1
           else
-             v_a = box%cc(j, i-1, [i_lsf, i_phi])
-             v_b = box%cc(j, i, [i_lsf, i_phi])
+             v_a = cc(j, i-1, :)
+             v_b = cc(j, i, :)
              grad_sign = -1
           end if
 
@@ -2297,13 +2312,13 @@ contains
     do k = 1, nc
        do j = 1, nc
           do i = 1, nc+1
-             if (box%cc(i, j, k, i_lsf) > 0) then
-                v_a = box%cc(i, j, k, [i_lsf, i_phi])
-                v_b = box%cc(i-1, j, k, [i_lsf, i_phi])
+             if (cc(i, j, k, 1) > 0) then
+                v_a = cc(i, j, k, :)
+                v_b = cc(i-1, j, k, :)
                 grad_sign = 1
              else
-                v_a = box%cc(i-1, j, k, [i_lsf, i_phi])
-                v_b = box%cc(i, j, k, [i_lsf, i_phi])
+                v_a = cc(i-1, j, k, :)
+                v_b = cc(i, j, k, :)
                 grad_sign = -1
              end if
 
@@ -2312,13 +2327,13 @@ contains
              box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                   (box%dr(1) * dd)
 
-             if (box%cc(j, i, k, i_lsf) > 0) then
-                v_a = box%cc(j, i, k, [i_lsf, i_phi])
-                v_b = box%cc(j, i-1, k, [i_lsf, i_phi])
+             if (cc(j, i, k, 1) > 0) then
+                v_a = cc(j, i, k, :)
+                v_b = cc(j, i-1, k, :)
                 grad_sign = 1
              else
-                v_a = box%cc(j, i-1, k, [i_lsf, i_phi])
-                v_b = box%cc(j, i, k, [i_lsf, i_phi])
+                v_a = cc(j, i-1, k, :)
+                v_b = cc(j, i, k, :)
                 grad_sign = -1
              end if
 
@@ -2327,13 +2342,13 @@ contains
              box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
                   (box%dr(2) * dd)
 
-             if (box%cc(j, k, i, i_lsf) > 0) then
-                v_a = box%cc(j, k, i, [i_lsf, i_phi])
-                v_b = box%cc(j, k, i-1, [i_lsf, i_phi])
+             if (cc(j, k, i, 1) > 0) then
+                v_a = cc(j, k, i, :)
+                v_b = cc(j, k, i-1, :)
                 grad_sign = 1
              else
-                v_a = box%cc(j, k, i-1, [i_lsf, i_phi])
-                v_b = box%cc(j, k, i, [i_lsf, i_phi])
+                v_a = cc(j, k, i-1, :)
+                v_b = cc(j, k, i, :)
                 grad_sign = -1
              end if
 
@@ -2374,43 +2389,5 @@ contains
     end if
 
   end subroutine check_coarse_representation_lsf
-
-  !> Fix ghost cells where refinement boundaries intersect with the level set
-  !> function. The values in these ghost cells is not used in the multigrid
-  !> computation, but they might be used later by the user.
-  subroutine fix_gc_ref_boundary_lsf(tree, mg)
-    type(af_t), intent(inout) :: tree
-    type(mg_t), intent(in)    :: mg
-    integer                   :: lvl, i, id, nb
-    integer                   :: ilo(NDIM), ihi(NDIM)
-    integer                   :: olo(NDIM), ohi(NDIM)
-
-    if (mg%i_lsf <= 0) error stop "mg%i_lsf not set"
-
-    !$omp parallel private(lvl, i, id, nb, ilo, ihi, olo, ohi)
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          associate(box => tree%boxes(id))
-            if (box%tag == mg_lsf_box) then
-               do nb = 1, af_num_neighbors
-                  ! If lsf value changes sign in ghost cell, use boundary value
-                  if (tree%boxes(id)%neighbors(nb) == af_no_box) then
-                     call af_get_index_bc_inside(nb, tree%n_cell, 1, ilo, ihi)
-                     call af_get_index_bc_outside(nb, tree%n_cell, 1, olo, ohi)
-                     where (box%cc(DSLICE(ilo,ihi), mg%i_lsf) * &
-                          box%cc(DSLICE(olo,ohi), mg%i_lsf) <= 0.0_dp)
-                        box%cc(DSLICE(olo,ohi), mg%i_phi) = mg%lsf_boundary_value
-                     end where
-                  end if
-               end do
-            end if
-          end associate
-       end do
-       !$omp end do nowait
-    end do
-    !$omp end parallel
-  end subroutine fix_gc_ref_boundary_lsf
 
 end module m_af_multigrid
