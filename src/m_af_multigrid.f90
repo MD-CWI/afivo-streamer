@@ -914,9 +914,6 @@ contains
     integer, intent(in)        :: nb     !< Ghost cell direction
     integer, intent(in)        :: iv     !< Ghost cell variable
 
-    ! This routine could be called for setting initial refinement
-    if (boxes(id)%tag == af_init_tag) call mg_set_box_tag(box, mg)
-
     select case(boxes(id)%tag)
     case (mg_normal_box)
        call mg_sides_rb(boxes, id, nb, iv)
@@ -926,7 +923,9 @@ contains
     case (mg_lsf_box)
        call mg_sides_rb(boxes, id, nb, iv)
     case (af_init_tag)
-       error stop "mg_auto_rb: box tag not set"
+       ! Use default method; this is useful for initial refinement when box tags
+       ! are not yet set
+       call mg_sides_rb(boxes, id, nb, iv)
     case default
        error stop "mg_auto_rb: unknown box tag"
     end select
