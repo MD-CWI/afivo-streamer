@@ -83,20 +83,12 @@ contains
     if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
 
     ! Check whether methods are set, otherwise use default (for laplacian)
-    if (.not. associated(mg%sides_rb)) then
-       if (mg%i_eps > 0) then
-          ! With a dielectric, use local extrapolation for ghost cells
-          mg%sides_rb => mg_sides_rb_extrap
-       else
-          mg%sides_rb => mg_sides_rb
-       end if
-    end if
-
     if (.not. associated(mg%box_op)) mg%box_op => mg_auto_op
     if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_auto_gsrb
     if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
+    if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_auto_rb
 
     if (mg%i_lsf /= -1) then
        call check_coarse_representation_lsf(tree, mg)
@@ -166,6 +158,8 @@ contains
        call mg_fas_vcycle(tree, mg, &
             set_residual .and. lvl == tree%highest_lvl, lvl, standalone=.false.)
     end do
+
+    if (mg%i_lsf > 0) call fix_gc_ref_boundary_lsf(tree, mg)
   end subroutine mg_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
@@ -183,10 +177,12 @@ contains
     logical                       :: by_itself
     real(dp)                      :: sum_phi, mean_phi
 
-    call check_mg(mg)           ! Check whether mg options are set
-
     by_itself = .true.; if (present(standalone)) by_itself = standalone
-    if (by_itself) call mg_set_box_tag_tree(tree, mg)
+
+    if (by_itself) then
+       call check_mg(mg)        ! Check whether mg options are set
+       call mg_set_box_tag_tree(tree, mg)
+    end if
 
     max_lvl = tree%highest_lvl
     if (present(highest_lvl)) max_lvl = highest_lvl
@@ -246,6 +242,8 @@ contains
        !$omp end parallel
     end if
 
+    if (by_itself .and. mg%i_lsf > 0) &
+         call fix_gc_ref_boundary_lsf(tree, mg)
   end subroutine mg_fas_vcycle
 
   subroutine solve_coarse_grid(tree, mg)
@@ -908,6 +906,29 @@ contains
        error stop "mg_auto_rstr: unknown box tag"
     end select
   end subroutine mg_auto_rstr
+
+  !> Set ghost cells near refinement boundaries
+  subroutine mg_auto_rb(boxes, id, nb, iv)
+    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)        :: id     !< Id of box
+    integer, intent(in)        :: nb     !< Ghost cell direction
+    integer, intent(in)        :: iv     !< Ghost cell variable
+
+    select case(boxes(id)%tag)
+    case (mg_normal_box)
+       call mg_sides_rb(boxes, id, nb, iv)
+    case (mg_veps_box, mg_ceps_box)
+       ! With a dielectric, use local extrapolation for ghost cells
+       call mg_sides_rb_extrap(boxes, id, nb, iv)
+    case (mg_lsf_box)
+       call mg_sides_rb(boxes, id, nb, iv)
+    case (af_init_tag)
+       error stop "mg_auto_rb: box tag not set"
+    case default
+       error stop "mg_auto_rb: unknown box tag"
+    end select
+
+  end subroutine mg_auto_rb
 
   !> Based on the box type, correct the solution of the children
   subroutine mg_auto_corr(box_p, box_c, mg)
@@ -2351,5 +2372,43 @@ contains
     end if
 
   end subroutine check_coarse_representation_lsf
+
+  !> Fix ghost cells where refinement boundaries intersect with the level set
+  !> function. The values in these ghost cells is not used in the multigrid
+  !> computation, but they might be used later by the user.
+  subroutine fix_gc_ref_boundary_lsf(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(in)    :: mg
+    integer                   :: lvl, i, id, nb
+    integer                   :: ilo(NDIM), ihi(NDIM)
+    integer                   :: olo(NDIM), ohi(NDIM)
+
+    if (mg%i_lsf <= 0) error stop "mg%i_lsf not set"
+
+    !$omp parallel private(lvl, i, id, nb, ilo, ihi, olo, ohi)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          associate(box => tree%boxes(id))
+            if (box%tag == mg_lsf_box) then
+               do nb = 1, af_num_neighbors
+                  ! If lsf value changes sign in ghost cell, use boundary value
+                  if (tree%boxes(id)%neighbors(nb) == af_no_box) then
+                     call af_get_index_bc_inside(nb, tree%n_cell, 1, ilo, ihi)
+                     call af_get_index_bc_outside(nb, tree%n_cell, 1, olo, ohi)
+                     where (box%cc(DSLICE(ilo,ihi), mg%i_lsf) * &
+                          box%cc(DSLICE(olo,ohi), mg%i_lsf) <= 0.0_dp)
+                        box%cc(DSLICE(olo,ohi), mg%i_phi) = mg%lsf_boundary_value
+                     end where
+                  end if
+               end do
+            end if
+          end associate
+       end do
+       !$omp end do nowait
+    end do
+    !$omp end parallel
+  end subroutine fix_gc_ref_boundary_lsf
 
 end module m_af_multigrid
