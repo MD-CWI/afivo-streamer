@@ -158,6 +158,7 @@ module m_chemistry
   public :: chemistry_write_summary
   public :: get_rates
   public :: get_derivatives
+  public :: get_prates
 
   public :: species_index
 
@@ -262,6 +263,9 @@ contains
     ! Gas species are not stored in the tree for now
     species_itree(1:n_gas_species) = -1
     n_plasma_species = n_species - n_gas_species
+    print *,"Gas_species:", n_gas_species
+    print *, "Species_itree_size:", size(species_itree)
+    print *,"Species_itree:", species_itree
 
     do n = n_gas_species+1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
@@ -456,6 +460,7 @@ contains
        case (rate_analytic_exp_v2)
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
        case (rate_analytic_k1)
+          print *, 'using k1'
           Te = LT_get_col(td_tbl, td_energy_eV, fields) / UC_boltzmann_const
           rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
        case (rate_analytic_k2)
@@ -516,6 +521,26 @@ contains
        end do
     end do
   end subroutine get_derivatives
+  
+
+  !> Compute the production rates of each chemical reaction
+  subroutine get_prates(dens, rates, prate, n_cells)
+    integer, intent(in)   :: n_cells
+    real(dp), intent(in)  :: dens(n_cells, n_species)
+    real(dp), intent(in)  :: rates(n_cells, n_reactions)
+    real(dp), intent(out) :: prate(n_cells, n_reactions)
+    integer               :: n, i, ix
+
+
+    ! Loop over reactions and add compute the production rate
+    do n = 1, n_reactions
+       ! Determine production rate of 'full' reaction
+       prate(:, n) = rates(:, n) * &
+            product(dens(:, tiny_react(n)%ix_in), dim=2)
+    end do
+  end subroutine get_prates
+
+
 
   !> Read reactions from a file
   subroutine read_reactions(filename, read_success)

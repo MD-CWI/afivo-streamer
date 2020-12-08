@@ -629,7 +629,7 @@ contains
     type(box_t), intent(inout) :: box
     integer                    :: nc
     real(dp), allocatable      :: rates(:,:)
-    real(dp), allocatable      :: derivs(:,:)
+    real(dp), allocatable      :: prates(:,:)
     real(dp), allocatable      :: dens(:,:)
     real(dp), allocatable      :: fields(:)
     real(dp)                   :: tmp
@@ -642,7 +642,7 @@ contains
     nc = box%n_cell
     !print *, "NCCCCCCC: ", nc
     allocate(rates(n_cells, n_reactions))
-    allocate(derivs(n_cells, n_species))
+    allocate(prates(n_cells, n_reactions))
     allocate(dens(n_cells, n_species))
     allocate(fields(n_cells))
 
@@ -666,7 +666,8 @@ contains
     call get_rates(fields, rates, n_cells)
 
 
-    call get_derivatives(dens, rates, derivs, n_cells)
+    call get_prates(dens, rates, prates, n_cells)
+    !print *,"Derivatives: ", maxval(derivs)
    
     do n = 1, n_reactions
        if (reactions(n)%reaction_type == attachment_reaction) then
@@ -676,7 +677,7 @@ contains
          do KJI_DO(1,nc)
            ix = ix+1
            !box%cc(IJK, attachment_source_itree(max_attach_reactions)) = box%cc(IJK, i_energy_density) 
-           box%cc(IJK, attachment_source_itree(max_attach_reactions)) = derivs(ix, n)
+           box%cc(IJK, attachment_source_itree(max_attach_reactions)) = prates(ix, n)
          end do;CLOSE_DO
        
        end if
