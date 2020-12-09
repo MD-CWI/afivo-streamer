@@ -1,3 +1,4 @@
+!> BLAH BLAHBLAH
 !> Template for user code, this one simply uses the default routines
 module m_user
   use m_af_all
