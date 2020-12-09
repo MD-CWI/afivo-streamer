@@ -2075,26 +2075,23 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
+          select case(tree%boxes(id)%tag)
+          case (mg_normal_box, mg_ceps_box)
+             call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
+          case (mg_lsf_box)
+             call mg_box_lpllsf_gradient(tree, id, mg, i_fc, fac)
+          case (mg_veps_box)
+             ! Should call dielectric_correct_field_fc afterwards
+             call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
+          case (af_init_tag)
+             error stop "mg_auto_op: box tag not set"
+          case default
+             error stop "mg_auto_op: unknown box tag"
+          end select
 
-          associate (box => tree%boxes(id))
-            select case(box%tag)
-            case (mg_normal_box, mg_ceps_box)
-               call mg_box_lpl_gradient(box, mg, i_fc, fac)
-            case (mg_lsf_box)
-               call mg_box_lpllsf_gradient(box, mg, i_fc, fac)
-            case (mg_veps_box)
-               ! Should call dielectric_correct_field_fc afterwards
-               call mg_box_lpl_gradient(box, mg, i_fc, fac)
-            case (af_init_tag)
-               error stop "mg_auto_op: box tag not set"
-            case default
-               error stop "mg_auto_op: unknown box tag"
-            end select
-
-            if (present(i_norm)) then
-               call mg_box_gradient_norm(box, i_fc, i_norm)
-            end if
-          end associate
+          if (present(i_norm)) then
+             call mg_box_gradient_norm(tree, id, i_fc, i_norm)
+          end if
        end do
        !$omp end do nowait
     end do
@@ -2102,264 +2099,273 @@ contains
   end subroutine mg_compute_phi_gradient
 
   !> Compute the gradient of the potential
-  subroutine mg_box_lpl_gradient(box, mg, i_fc, fac)
-    type(box_t), intent(inout) :: box
-    type(mg_t), intent(in)     :: mg
-    integer, intent(in)        :: i_fc !< Face-centered indices
-    real(dp), intent(in)       :: fac  !< Multiply with this factor
-    integer                    :: nc, i_phi, i_eps
-    real(dp)                   :: inv_dr(NDIM)
+  subroutine mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id
+    type(mg_t), intent(in)    :: mg
+    integer, intent(in)       :: i_fc !< Face-centered indices
+    real(dp), intent(in)      :: fac  !< Multiply with this factor
+    integer                   :: nc, i_phi, i_eps
+    real(dp)                  :: inv_dr(NDIM)
 
-    nc     = box%n_cell
-    i_phi  = mg%i_phi
-    inv_dr = fac / box%dr
-
-#if NDIM == 1
-    box%fc(1:nc+1, 1, i_fc) = inv_dr(1) * &
-         (box%cc(1:nc+1, i_phi) - box%cc(0:nc, i_phi))
-#elif NDIM == 2
-    box%fc(1:nc+1, 1:nc, 1, i_fc) = inv_dr(1) * &
-         (box%cc(1:nc+1, 1:nc, i_phi) - box%cc(0:nc, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 2, i_fc) = inv_dr(2) * &
-         (box%cc(1:nc, 1:nc+1, i_phi) - box%cc(1:nc, 0:nc, i_phi))
-#elif NDIM == 3
-    box%fc(1:nc+1, 1:nc, 1:nc, 1, i_fc) = inv_dr(1) * &
-         (box%cc(1:nc+1, 1:nc, 1:nc, i_phi) - &
-         box%cc(0:nc, 1:nc, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 1:nc, 2, i_fc) = inv_dr(2) * &
-         (box%cc(1:nc, 1:nc+1, 1:nc, i_phi) - &
-         box%cc(1:nc, 0:nc, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc, 1:nc+1, 3, i_fc) = inv_dr(3) * &
-         (box%cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
-         box%cc(1:nc, 1:nc, 0:nc, i_phi))
-#endif
-
-    if (box%tag == mg_veps_box) then
-       ! Compute fields at the boundaries of the box, where eps can change
-       i_eps = mg%i_eps
+    associate(box => tree%boxes(id), cc => tree%boxes(id)%cc)
+      nc     = box%n_cell
+      i_phi  = mg%i_phi
+      inv_dr = fac / box%dr
 
 #if NDIM == 1
-       box%fc(1, 1, i_fc) = 2 * inv_dr(1) * &
-            (box%cc(0, i_phi) - box%cc(1, i_phi)) * &
-            box%cc(0, i_eps) / &
-            (box%cc(1, i_eps) + box%cc(0, i_eps))
-       box%fc(nc+1, 1, i_fc) = 2 * inv_dr(1) * &
-            (box%cc(nc, i_phi) - box%cc(nc+1, i_phi)) * &
-            box%cc(nc+1, i_eps) / &
-            (box%cc(nc+1, i_eps) + box%cc(nc, i_eps))
+      box%fc(1:nc+1, 1, i_fc) = inv_dr(1) * &
+           (cc(1:nc+1, i_phi) - cc(0:nc, i_phi))
 #elif NDIM == 2
-       box%fc(1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-            (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
-            box%cc(0, 1:nc, i_eps) / &
-            (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-            (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
-            box%cc(nc+1, 1:nc, i_eps) / &
-            (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 2, i_fc) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
-            box%cc(1:nc, 0, i_eps) / &
-            (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-       box%fc(1:nc, nc+1, 2, i_fc) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
-            box%cc(1:nc, nc+1, i_eps) / &
-            (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
+      box%fc(1:nc+1, 1:nc, 1, i_fc) = inv_dr(1) * &
+           (cc(1:nc+1, 1:nc, i_phi) - cc(0:nc, 1:nc, i_phi))
+      box%fc(1:nc, 1:nc+1, 2, i_fc) = inv_dr(2) * &
+           (cc(1:nc, 1:nc+1, i_phi) - cc(1:nc, 0:nc, i_phi))
 #elif NDIM == 3
-       box%fc(1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-            (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
-            box%cc(0, 1:nc, 1:nc, i_eps) / &
-            (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-            (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
-            box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
-            (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
-            box%cc(1:nc, 0, 1:nc, i_eps) / &
-            (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
-       box%fc(1:nc, nc+1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
-            box%cc(1:nc, nc+1, 1:nc, i_eps) / &
-            (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
-       box%fc(1:nc, 1:nc, 1, 3, i_fc) = 2 * inv_dr(3) * &
-            (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
-            box%cc(1:nc, 1:nc, 0, i_eps) / &
-            (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
-       box%fc(1:nc, 1:nc, nc+1, 3, i_fc) = 2 * inv_dr(3) * &
-            (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
-            box%cc(1:nc, 1:nc, nc+1, i_eps) / &
-            (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
+      box%fc(1:nc+1, 1:nc, 1:nc, 1, i_fc) = inv_dr(1) * &
+           (cc(1:nc+1, 1:nc, 1:nc, i_phi) - &
+           cc(0:nc, 1:nc, 1:nc, i_phi))
+      box%fc(1:nc, 1:nc+1, 1:nc, 2, i_fc) = inv_dr(2) * &
+           (cc(1:nc, 1:nc+1, 1:nc, i_phi) - &
+           cc(1:nc, 0:nc, 1:nc, i_phi))
+      box%fc(1:nc, 1:nc, 1:nc+1, 3, i_fc) = inv_dr(3) * &
+           (cc(1:nc, 1:nc, 1:nc+1, i_phi) - &
+           cc(1:nc, 1:nc, 0:nc, i_phi))
 #endif
-    end if
+
+      if (box%tag == mg_veps_box) then
+         ! Compute fields at the boundaries of the box, where eps can change
+         i_eps = mg%i_eps
+
+#if NDIM == 1
+         box%fc(1, 1, i_fc) = 2 * inv_dr(1) * &
+              (cc(0, i_phi) - cc(1, i_phi)) * &
+              cc(0, i_eps) / &
+              (cc(1, i_eps) + cc(0, i_eps))
+         box%fc(nc+1, 1, i_fc) = 2 * inv_dr(1) * &
+              (cc(nc, i_phi) - cc(nc+1, i_phi)) * &
+              cc(nc+1, i_eps) / &
+              (cc(nc+1, i_eps) + cc(nc, i_eps))
+#elif NDIM == 2
+         box%fc(1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+              (cc(0, 1:nc, i_phi) - cc(1, 1:nc, i_phi)) * &
+              cc(0, 1:nc, i_eps) / &
+              (cc(1, 1:nc, i_eps) + cc(0, 1:nc, i_eps))
+         box%fc(nc+1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+              (cc(nc, 1:nc, i_phi) - cc(nc+1, 1:nc, i_phi)) * &
+              cc(nc+1, 1:nc, i_eps) / &
+              (cc(nc+1, 1:nc, i_eps) + cc(nc, 1:nc, i_eps))
+         box%fc(1:nc, 1, 2, i_fc) = 2 * inv_dr(2) * &
+              (cc(1:nc, 0, i_phi) - cc(1:nc, 1, i_phi)) * &
+              cc(1:nc, 0, i_eps) / &
+              (cc(1:nc, 1, i_eps) + cc(1:nc, 0, i_eps))
+         box%fc(1:nc, nc+1, 2, i_fc) = 2 * inv_dr(2) * &
+              (cc(1:nc, nc, i_phi) - cc(1:nc, nc+1, i_phi)) * &
+              cc(1:nc, nc+1, i_eps) / &
+              (cc(1:nc, nc+1, i_eps) + cc(1:nc, nc, i_eps))
+#elif NDIM == 3
+         box%fc(1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+              (cc(0, 1:nc, 1:nc, i_phi) - cc(1, 1:nc, 1:nc, i_phi)) * &
+              cc(0, 1:nc, 1:nc, i_eps) / &
+              (cc(1, 1:nc, 1:nc, i_eps) + cc(0, 1:nc, 1:nc, i_eps))
+         box%fc(nc+1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
+              (cc(nc, 1:nc, 1:nc, i_phi) - cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+              cc(nc+1, 1:nc, 1:nc, i_eps) / &
+              (cc(nc+1, 1:nc, 1:nc, i_eps) + cc(nc, 1:nc, 1:nc, i_eps))
+         box%fc(1:nc, 1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+              (cc(1:nc, 0, 1:nc, i_phi) - cc(1:nc, 1, 1:nc, i_phi)) * &
+              cc(1:nc, 0, 1:nc, i_eps) / &
+              (cc(1:nc, 1, 1:nc, i_eps) + cc(1:nc, 0, 1:nc, i_eps))
+         box%fc(1:nc, nc+1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
+              (cc(1:nc, nc, 1:nc, i_phi) - cc(1:nc, nc+1, 1:nc, i_phi)) * &
+              cc(1:nc, nc+1, 1:nc, i_eps) / &
+              (cc(1:nc, nc+1, 1:nc, i_eps) + cc(1:nc, nc, 1:nc, i_eps))
+         box%fc(1:nc, 1:nc, 1, 3, i_fc) = 2 * inv_dr(3) * &
+              (cc(1:nc, 1:nc, 0, i_phi) - cc(1:nc, 1:nc, 1, i_phi)) * &
+              cc(1:nc, 1:nc, 0, i_eps) / &
+              (cc(1:nc, 1:nc, 1, i_eps) + cc(1:nc, 1:nc, 0, i_eps))
+         box%fc(1:nc, 1:nc, nc+1, 3, i_fc) = 2 * inv_dr(3) * &
+              (cc(1:nc, 1:nc, nc, i_phi) - cc(1:nc, 1:nc, nc+1, i_phi)) * &
+              cc(1:nc, 1:nc, nc+1, i_eps) / &
+              (cc(1:nc, 1:nc, nc+1, i_eps) + cc(1:nc, 1:nc, nc, i_eps))
+#endif
+      end if
+    end associate
   end subroutine mg_box_lpl_gradient
 
-  subroutine mg_box_gradient_norm(box, i_fc, i_norm)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)        :: i_fc !< Face-centered indices
+  subroutine mg_box_gradient_norm(tree, id, i_fc, i_norm)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id
+    integer, intent(in)       :: i_fc !< Face-centered indices
     !> Store norm in this cell-centered variable
-    integer, intent(in)        :: i_norm
-    integer                    :: nc
+    integer, intent(in)       :: i_norm
+    integer                   :: nc
 
-    nc = box%n_cell
-
+    associate(box => tree%boxes(id))
+      nc = box%n_cell
 #if NDIM == 1
-    box%cc(1:nc, i_norm) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1, i_fc) + &
-         box%fc(2:nc+1, 1, i_fc))**2)
+      box%cc(1:nc, i_norm) = 0.5_dp * sqrt(&
+           (box%fc(1:nc, 1, i_fc) + &
+           box%fc(2:nc+1, 1, i_fc))**2)
 #elif NDIM == 2
-    box%cc(1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1, i_fc) + &
-         box%fc(2:nc+1, 1:nc, 1, i_fc))**2 + &
-         (box%fc(1:nc, 1:nc, 2, i_fc) + &
-         box%fc(1:nc, 2:nc+1, 2, i_fc))**2)
+      box%cc(1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
+           (box%fc(1:nc, 1:nc, 1, i_fc) + &
+           box%fc(2:nc+1, 1:nc, 1, i_fc))**2 + &
+           (box%fc(1:nc, 1:nc, 2, i_fc) + &
+           box%fc(1:nc, 2:nc+1, 2, i_fc))**2)
 #elif NDIM == 3
-    box%cc(1:nc, 1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1:nc, 1, i_fc) + &
-         box%fc(2:nc+1, 1:nc, 1:nc, 1, i_fc))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 2, i_fc) + &
-         box%fc(1:nc, 2:nc+1, 1:nc, 2, i_fc))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 3, i_fc) + &
-         box%fc(1:nc, 1:nc, 2:nc+1, 3, i_fc))**2)
+      box%cc(1:nc, 1:nc, 1:nc, i_norm) = 0.5_dp * sqrt(&
+           (box%fc(1:nc, 1:nc, 1:nc, 1, i_fc) + &
+           box%fc(2:nc+1, 1:nc, 1:nc, 1, i_fc))**2 + &
+           (box%fc(1:nc, 1:nc, 1:nc, 2, i_fc) + &
+           box%fc(1:nc, 2:nc+1, 1:nc, 2, i_fc))**2 + &
+           (box%fc(1:nc, 1:nc, 1:nc, 3, i_fc) + &
+           box%fc(1:nc, 1:nc, 2:nc+1, 3, i_fc))**2)
 #endif
+    end associate
   end subroutine mg_box_gradient_norm
 
   !> Compute the gradient of the potential with a level set function and store
   !> in face-centered variables. The gradients are computed from the positive
   !> side of the level set function.
-  subroutine mg_box_lpllsf_gradient(box, mg, i_fc, fac)
-    type(box_t), intent(inout) :: box
-    type(mg_t), intent(in)     :: mg
-    integer, intent(in)        :: i_fc !< Face-centered indices
-    real(dp), intent(in)       :: fac  !< Multiply with this factor
-    real(dp)                   :: cc(DTIMES(0:box%n_cell+1), 2)
-    integer                    :: IJK, nc, i_phi, i_lsf
-    real(dp)                   :: dd, val, v_a(2), v_b(2)
-    integer                    :: grad_sign, nb
-    integer                    :: ilo(NDIM), ihi(NDIM)
-    integer                    :: olo(NDIM), ohi(NDIM)
+  subroutine mg_box_lpllsf_gradient(tree, id, mg, i_fc, fac)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id
+    type(mg_t), intent(in)    :: mg
+    integer, intent(in)       :: i_fc !< Face-centered indices
+    real(dp), intent(in)      :: fac  !< Multiply with this factor
+    real(dp)                  :: &
+         cc(DTIMES(0:tree%n_cell+1), 2)
+    integer                   :: IJK, nc, i_phi, i_lsf
+    real(dp)                  :: dd, val, v_a(2), v_b(2)
+    integer                   :: grad_sign, nb
+    integer                   :: ilo(NDIM), ihi(NDIM)
+    integer                   :: olo(NDIM), ohi(NDIM)
 
-    nc     = box%n_cell
-    i_phi  = mg%i_phi
-    i_lsf  = mg%i_lsf
+    associate(box => tree%boxes(id))
+      nc     = box%n_cell
+      i_phi  = mg%i_phi
+      i_lsf  = mg%i_lsf
 
-    ! Store a copy because we might need to modify phi in ghost cells
-    cc = box%cc(DTIMES(:), [i_lsf, i_phi])
+      ! Store a copy because we might need to modify phi in ghost cells
+      cc = box%cc(DTIMES(:), [i_lsf, i_phi])
 
-    do nb = 1, af_num_neighbors
-       ! If lsf value changes sign in ghost cell, use boundary value
-       if (box%neighbors(nb) == af_no_box) then
-          call af_get_index_bc_inside(nb, box%n_cell, 1, ilo, ihi)
-          call af_get_index_bc_outside(nb, box%n_cell, 1, olo, ohi)
-          where (cc(DSLICE(ilo,ihi), 1) * &
-               cc(DSLICE(olo,ohi), 1) <= 0.0_dp)
-             cc(DSLICE(olo,ohi), 2) = mg%lsf_boundary_value
-          end where
-       end if
-    end do
+      do nb = 1, af_num_neighbors
+         ! If lsf value changes sign in ghost cell, use boundary value
+         if (af_is_ref_boundary(tree%boxes, id, nb)) then
+            call af_get_index_bc_inside(nb, box%n_cell, 1, ilo, ihi)
+            call af_get_index_bc_outside(nb, box%n_cell, 1, olo, ohi)
+            where (cc(DSLICE(ilo,ihi), 1) * &
+                 cc(DSLICE(olo,ohi), 1) <= 0.0_dp)
+               cc(DSLICE(olo,ohi), 2) = mg%lsf_boundary_value
+            end where
+         end if
+      end do
 
 #if NDIM == 1
-    do i = 1, nc+1
-       if (cc(i, 1) > 0) then
-          v_a = cc(i, :)
-          v_b = cc(i-1, :)
-          grad_sign = 1
-       else
-          v_a = cc(i-1, :)
-          v_b = cc(i, :)
-          grad_sign = -1
-       end if
+      do i = 1, nc+1
+         if (cc(i, 1) > 0) then
+            v_a = cc(i, :)
+            v_b = cc(i-1, :)
+            grad_sign = 1
+         else
+            v_a = cc(i-1, :)
+            v_b = cc(i, :)
+            grad_sign = -1
+         end if
 
-       call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-            mg%lsf_boundary_value, dd, val)
-       box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-            (box%dr(1) * dd)
-    end do
+         call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+              mg%lsf_boundary_value, dd, val)
+         box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+              (box%dr(1) * dd)
+      end do
 #elif NDIM == 2
-    do j = 1, nc
-       do i = 1, nc+1
-          if (cc(i, j, 1) > 0) then
-             v_a = cc(i, j, :)
-             v_b = cc(i-1, j, :)
-             grad_sign = 1
-          else
-             v_a = cc(i-1, j, :)
-             v_b = cc(i, j, :)
-             grad_sign = -1
-          end if
+      do j = 1, nc
+         do i = 1, nc+1
+            if (cc(i, j, 1) > 0) then
+               v_a = cc(i, j, :)
+               v_b = cc(i-1, j, :)
+               grad_sign = 1
+            else
+               v_a = cc(i-1, j, :)
+               v_b = cc(i, j, :)
+               grad_sign = -1
+            end if
 
-          call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd, val)
-          box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-               (box%dr(1) * dd)
+            call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                 mg%lsf_boundary_value, dd, val)
+            box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                 (box%dr(1) * dd)
 
-          if (cc(j, i, 1) > 0) then
-             v_a = cc(j, i, :)
-             v_b = cc(j, i-1, :)
-             grad_sign = 1
-          else
-             v_a = cc(j, i-1, :)
-             v_b = cc(j, i, :)
-             grad_sign = -1
-          end if
+            if (cc(j, i, 1) > 0) then
+               v_a = cc(j, i, :)
+               v_b = cc(j, i-1, :)
+               grad_sign = 1
+            else
+               v_a = cc(j, i-1, :)
+               v_b = cc(j, i, :)
+               grad_sign = -1
+            end if
 
-          call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd, val)
-          box%fc(j, i, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-               (box%dr(2) * dd)
-       end do
-    end do
+            call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                 mg%lsf_boundary_value, dd, val)
+            box%fc(j, i, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                 (box%dr(2) * dd)
+         end do
+      end do
 #elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc+1
-             if (cc(i, j, k, 1) > 0) then
-                v_a = cc(i, j, k, :)
-                v_b = cc(i-1, j, k, :)
-                grad_sign = 1
-             else
-                v_a = cc(i-1, j, k, :)
-                v_b = cc(i, j, k, :)
-                grad_sign = -1
-             end if
+      do k = 1, nc
+         do j = 1, nc
+            do i = 1, nc+1
+               if (cc(i, j, k, 1) > 0) then
+                  v_a = cc(i, j, k, :)
+                  v_b = cc(i-1, j, k, :)
+                  grad_sign = 1
+               else
+                  v_a = cc(i-1, j, k, :)
+                  v_b = cc(i, j, k, :)
+                  grad_sign = -1
+               end if
 
-             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd, val)
-             box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                  (box%dr(1) * dd)
+               call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                    mg%lsf_boundary_value, dd, val)
+               box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                    (box%dr(1) * dd)
 
-             if (cc(j, i, k, 1) > 0) then
-                v_a = cc(j, i, k, :)
-                v_b = cc(j, i-1, k, :)
-                grad_sign = 1
-             else
-                v_a = cc(j, i-1, k, :)
-                v_b = cc(j, i, k, :)
-                grad_sign = -1
-             end if
+               if (cc(j, i, k, 1) > 0) then
+                  v_a = cc(j, i, k, :)
+                  v_b = cc(j, i-1, k, :)
+                  grad_sign = 1
+               else
+                  v_a = cc(j, i-1, k, :)
+                  v_b = cc(j, i, k, :)
+                  grad_sign = -1
+               end if
 
-             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd, val)
-             box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                  (box%dr(2) * dd)
+               call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                    mg%lsf_boundary_value, dd, val)
+               box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                    (box%dr(2) * dd)
 
-             if (cc(j, k, i, 1) > 0) then
-                v_a = cc(j, k, i, :)
-                v_b = cc(j, k, i-1, :)
-                grad_sign = 1
-             else
-                v_a = cc(j, k, i-1, :)
-                v_b = cc(j, k, i, :)
-                grad_sign = -1
-             end if
+               if (cc(j, k, i, 1) > 0) then
+                  v_a = cc(j, k, i, :)
+                  v_b = cc(j, k, i-1, :)
+                  grad_sign = 1
+               else
+                  v_a = cc(j, k, i-1, :)
+                  v_b = cc(j, k, i, :)
+                  grad_sign = -1
+               end if
 
-             call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd, val)
-             box%fc(j, k, i, 3, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                  (box%dr(3) * dd)
-          end do
-       end do
-    end do
+               call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
+                    mg%lsf_boundary_value, dd, val)
+               box%fc(j, k, i, 3, i_fc) = grad_sign * fac * (v_a(2) - val) / &
+                    (box%dr(3) * dd)
+            end do
+         end do
+      end do
 #endif
+    end associate
   end subroutine mg_box_lpllsf_gradient
 
   !> This method checks whether the level set function is properly defined on
