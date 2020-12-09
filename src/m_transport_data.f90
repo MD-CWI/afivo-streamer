@@ -2,6 +2,7 @@
 module m_transport_data
   use m_lookup_table
   use m_types
+  use m_spline_interp
 
   implicit none
   private
@@ -70,48 +71,48 @@ contains
        call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", x_data, y_data)
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data * gas_number_density
-       call LT_set_col(td_tbl, td_mobility, x_data, y_data)
+       call table_set_column(td_tbl, td_mobility, x_data, y_data)
 
        call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", &
             x_data, y_data)
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data * gas_number_density
-       call LT_set_col(td_tbl, td_diffusion, x_data, y_data)
+       call table_set_column(td_tbl, td_diffusion, x_data, y_data)
 
        call table_from_file(td_file, "efield[V/m]_vs_alpha[1/m]", &
             x_data, y_data)
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data / gas_number_density
-       call LT_set_col(td_tbl, td_alpha, x_data, y_data)
+       call table_set_column(td_tbl, td_alpha, x_data, y_data)
 
        call table_from_file(td_file, "efield[V/m]_vs_eta[1/m]", &
             x_data, y_data)
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data / gas_number_density
-       call LT_set_col(td_tbl, td_eta, x_data, y_data)
+       call table_set_column(td_tbl, td_eta, x_data, y_data)
     else
        ! Create a lookup table for the model coefficients
        td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 5)
 
        call table_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
-       call LT_set_col(td_tbl, td_mobility, x_data, y_data)
+       call table_set_column(td_tbl, td_mobility, x_data, y_data)
 
        call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
             x_data, y_data)
-       call LT_set_col(td_tbl, td_diffusion, x_data, y_data)
+       call table_set_column(td_tbl, td_diffusion, x_data, y_data)
 
        call table_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
             x_data, y_data)
-       call LT_set_col(td_tbl, td_alpha, x_data, y_data)
+       call table_set_column(td_tbl, td_alpha, x_data, y_data)
 
        call table_from_file(td_file, "Townsend attach. coef. eta/N (m2)", &
             x_data, y_data)
-       call LT_set_col(td_tbl, td_eta, x_data, y_data)
+       call table_set_column(td_tbl, td_eta, x_data, y_data)
 
        td_energy_eV = 5
        call table_from_file(td_file, "Mean energy (eV)", &
             x_data, y_data)
-       call LT_set_col(td_tbl, td_energy_eV, x_data, y_data)
+       call table_set_column(td_tbl, td_energy_eV, x_data, y_data)
     end if
 
     call CFG_add(cfg, "input_data%mobile_ions", dummy_string, &

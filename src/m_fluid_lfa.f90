@@ -586,6 +586,18 @@ contains
 
     call get_derivatives(dens, rates, derivs, n_cells)
 
+    ! TODO clean this up in the future (when we set electrode Neumann boundary
+    ! conditions in actual flux computation)
+    if (box%tag == mg_lsf_box) then
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
+          if (box%cc(IJK, i_lsf) <= 0.0_dp) then
+             derivs(ix, :) = 0
+          end if
+       end do; CLOSE_DO
+    end if
+
     if (set_dt) then
        tid = omp_get_thread_num() + 1
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
