@@ -26,6 +26,10 @@ if [ ! -d ${SILO_DIRNAME} ]; then
     tar -xzf ${SILO_TARNAME}
 fi
 
+export CC=/usr/bin/gcc
+export CXX=/usr/bin/g++
+export FC=/usr/bin/gfortran
+
 # Configure
 cd ${SILO_DIRNAME}
 ./configure --disable-shared --disable-fpzip --disable-hzip --disable-silex \
