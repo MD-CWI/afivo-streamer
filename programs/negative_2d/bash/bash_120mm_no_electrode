@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each other
+
+cd ../
+
+# background density=0, seed density=5e19, initial_field=2.1e6, decay_distance=5e-3, chemistry_transport_data_300points
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.27e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.27e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.26e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.26e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.258e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.258e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.254e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.254e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.25e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.25e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.24e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.24e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.22e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.22e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.19e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.19e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.15e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.15e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.1e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.1e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=1.0e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_1.0e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=0.8e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_0.8e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=0.4e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_0.4e6_5e-3_105e-3
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%min_field=0e6 -refine_min_dx=1e-6 -cross%write=T -output%name+=field_decay/exponential/min_field/sd5e19_2.1e6_5e-3_105e-3/2.1e6_0e6_5e-3_105e-3
+
+
+

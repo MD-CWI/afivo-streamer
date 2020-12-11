@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each  other
+
+# Change a certain parametere	
+
+cd ../
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=5e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_5e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=10e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_10e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=15e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=20e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_20e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=30e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_30e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=40e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_40e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=60e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_60e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%decay_distance=120e-3 -output%name+=exponential/decay_distance/2.5e6_0.9e6_120e-3_60e-3
+
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=1e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_1e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=5e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=10e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=15e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_15e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=20e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=25e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_25e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=30e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=35e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_35e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=40e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_40e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=45e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_45e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=50e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_50e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=60e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_60e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=70e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_70e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%decay_distance=100e-3 -output%name+=exponential/decay_distance/sd5e19_2.1e6_0.8e6_100e-3_145e-3
+
+

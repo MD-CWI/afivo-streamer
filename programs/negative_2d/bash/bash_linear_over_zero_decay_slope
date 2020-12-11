@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each  other
+
+# Change a certain parameter
+
+cd ../
+
+./streamer air_negative_v80mm.cfg  -field_decay%decay_slope=-0.1e8 -output%name+=linear_over_zero/decay_slope/2.5e6_-0.1e8
+
+./streamer air_negative_v80mm.cfg  -field_decay%decay_slope=-0.2e8 -output%name+=linear_over_zero/decay_slope/2.5e6_-0.2e8
+
+./streamer air_negative_v80mm.cfg  -field_decay%decay_slope=-0.3e8 -output%name+=linear_over_zero/decay_slope/2.5e6_-0.3e8
+
+./streamer air_negative_v80mm.cfg  -field_decay%decay_slope=-0.4e8 -output%name+=linear_over_zero/decay_slope/2.5e6_-0.4e8
+
+./streamer air_negative_v80mm.cfg  -field_decay%decay_slope=-0.5e8 -output%name+=linear_over_zero/decay_slope/2.5e6_-0.5e8
+
+./streamer air_negative_v80mm.cfg  -field_decay%decay_slope=-0.6e8 -output%name+=linear_over_zero/decay_slope/2.5e6_-0.6e8

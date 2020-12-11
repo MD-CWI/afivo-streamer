@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each other
+
+cd ../
+
+# background density=0, seed density=5e19, constant, chemistry_transport_data_300points
+
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%enabled=F -cross%write=T -refine_min_dx=1e-6 -field_amplitude=2.1e6 -output%name+=constant/sd5e19_2.1e6
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%enabled=F -cross%write=T -refine_min_dx=1e-6 -field_amplitude=2.3e6 -output%name+=constant/sd5e19_2.3e6
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%enabled=F -cross%write=T -refine_min_dx=1e-6 -field_amplitude=2.5e6 -output%name+=constant/sd5e19_2.5e6
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%enabled=F -cross%write=T -refine_min_dx=1e-6 -field_amplitude=2.7e6 -output%name+=constant/sd5e19_2.7e6
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%enabled=F -cross%write=T -refine_min_dx=1e-6 -field_amplitude=2.2e6 -output%name+=constant/sd5e19_2.2e6
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%enabled=F -cross%write=T -refine_min_dx=1e-6 -field_amplitude=2.4e6 -output%name+=constant/sd5e19_2.4e6
+
+./streamer air_negative_chemistry_v120mm.cfg -field_decay%enabled=F -cross%write=T -refine_min_dx=1e-6 -field_amplitude=2.6e6 -output%name+=constant/sd5e19_2.6e6

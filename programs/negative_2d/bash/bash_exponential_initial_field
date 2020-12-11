@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each  other
+
+# Change a certain parameter
+
+cd ../
+
+./streamer air_negative_v80mm.cfg  -field_decay%initial_field=2.7e6 -output%name+=exponential/initial_field/2.7e6_0.8e6_15e-3_60e-3
+
+./streamer air_negative_v80mm.cfg  -field_decay%initial_field=2.6e6 -output%name+=exponential/initial_field/2.6e6_0.8e6_15e-3_60e-3
+
+./streamer air_negative_v80mm.cfg  -field_decay%initial_field=2.5e6 -output%name+=exponential/initial_field/2.5e6_0.8e6_15e-3_60e-3
+
+./streamer air_negative_v80mm.cfg  -field_decay%initial_field=2.4e6 -output%name+=exponential/initial_field/2.4e6_0.8e6_15e-3_60e-3
+
+./streamer air_negative_v80mm.cfg  -field_decay%initial_field=2.3e6 -output%name+=exponential/initial_field/2.3e6_0.8e6_15e-3_60e-3
+

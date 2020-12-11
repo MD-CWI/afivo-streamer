@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each  other
+
+# Change a certain parameter
+
+cd ../
+
+#background density=0, seed density=7.5e18
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.7e6 -output%name+=constant/dirichlet_E2.7e6_sd7.5e18
+
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.6e6 -output%name+=constant/dirichlet_E2.6e6_sd7.5e18
+
+./streamer air_negative_v80mm.cfg  -field_amplitude=2.5e6 -output%name+=constant/dirichlet_E2.5e6_sd7.5e18
+
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.4e6 -output%name+=constant/dirichlet_E2.4e6_sd7.5e18
+
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.3e6 -output%name+=constant/dirichlet_E2.3e6_sd7.5e18
+
+
+#background density=0, seed density=1e20
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.7e6 -output%name+=constant/dirichlet_E2.7e6_sd1e20
+
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.6e6 -output%name+=constant/dirichlet_E2.6e6_sd1e20
+
+./streamer air_negative_v80mm.cfg  -field_amplitude=2.5e6 -output%name+=constant/dirichlet_E2.5e6_sd1e20
+
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.4e6 -output%name+=constant/dirichlet_E2.4e6_sd1e20
+
+#./streamer air_negative_v80mm.cfg  -field_amplitude=2.3e6 -output%name+=constant/dirichlet_E2.3e6_sd1e20
+
+

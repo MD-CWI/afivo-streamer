@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each  other
+
+# Change a certain parameter
+
+cd ../
+
+./streamer air_positive.cfg  -field_amplitude=-2.4e6 -output%name+=constant/neumann_2.4e6_bd0_sd1e19
+
+./streamer air_positive.cfg  -field_amplitude=-2.3e6 -output%name+=constant/neumann_2.3e6_bd0_sd1e19
+
+./streamer air_positive.cfg  -field_amplitude=-2.2e6 -output%name+=constant/neumann_2.2e6_bd0_sd1e19
+
+./streamer air_positive.cfg  -field_amplitude=-2.1e6 -output%name+=constant/neumann_2.1e6_bd0_sd1e19
+
+./streamer air_positive.cfg  -field_amplitude=-2.0e6 -output%name+=constant/neumann_2.0e6_bd0_sd1e19
+

@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each other
+
+cd ../
+
+
+# bd=1e13, ER1mm, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, CO2_chemistry_200points
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1e-3 -background_density=1e13 -field_amplitude=0.7e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1mm_EL18mm/bd1e13_1mm_18mm_0.7e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1e-3 -background_density=1e13 -field_amplitude=0.65e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1mm_EL18mm/bd1e13_1mm_18mm_0.65e6
+
+
+
+
+# bd=1e14, ER1mm, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, CO2_chemistry_200points
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1e-3 -background_density=1e14 -field_amplitude=0.6e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1mm_EL18mm/bd1e14_1mm_18mm_0.6e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1e-3 -background_density=1e14 -field_amplitude=0.65e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1mm_EL18mm/bd1e14_1mm_18mm_0.65e6

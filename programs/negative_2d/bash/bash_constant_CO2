@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each  other
+
+# Change a certain parameter
+
+cd ../
+
+#background density=1e15, seed density=7.5e18
+#./streamer CO2_negative.cfg  -field_amplitude=2.0e6 -output%name+=constant/dirichlet_E2.0e6_bd1e15_sd7.5e18
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.9e6 -output%name+=constant/dirichlet_E1.9e6_bd1e15_sd7.5e18
+
+./streamer CO2_negative.cfg  -field_amplitude=1.8e6 -output%name+=constant/dirichlet_E1.8e6_bd1e15_sd7.5e18
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.7e6 -output%name+=constant/dirichlet_E1.7e6_bd1e15_sd7.5e18
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.6e6 -output%name+=constant/dirichlet_E1.6e6_bd1e15_sd7.5e18
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.5e6 -output%name+=constant/dirichlet_E1.5e6_bd1e15_sd7.5e18
+
+
+#background density=1e15, seed density=5e19
+#./streamer CO2_negative.cfg  -field_amplitude=2.0e6 -output%name+=constant/dirichlet_E2.0e6_bd1e15_sd5e19
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.9e6 -output%name+=constant/dirichlet_E1.9e6_bd1e15_sd5e19
+
+./streamer CO2_negative.cfg  -field_amplitude=1.8e6 -output%name+=constant/dirichlet_E1.8e6_bd1e15_sd5e19
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.7e6 -output%name+=constant/dirichlet_E1.7e6_bd1e15_sd5e19
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.6e6 -output%name+=constant/dirichlet_E1.6e6_bd1e15_sd5e19
+
+#./streamer CO2_negative.cfg  -field_amplitude=1.5e6 -output%name+=constant/dirichlet_E1.5e6_bd1e15_sd5e19
+
+
+
+

@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each other
+
+cd ../
+
+# ER1.5mm, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, chemistry_transport_data_300points
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=0.9e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/ER1.5mm_EL18mm_bd1e9_0.9e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=0.9e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/ER1.5mm_EL18mm_sw1.5e-3_sd5e19_0.9e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=0.9e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/ER1.5mm_EL18mm_sw1.2e-3_sl0.01_sd5e19_0.9e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=0.9e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/ER1.5mm_EL18mm_sw1.2e-3_sl0.01_sd7.5e19_0.9e6
+
+
+
+
+# No_electrode, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, chemistry_transport_data_300points
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.6e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.2e-3_sl0.15_sd5e19_1.6e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.65e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.2e-3_sl0.15_sd5e19_1.65e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.7e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.2e-3_sl0.15_sd5e19_1.7e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.707e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.2e-3_sl0.15_sd5e19_1.707e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.71e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.2e-3_sl0.15_sd5e19_1.71e6
+
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.19e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.3e-3_sl0.15_sd5e19_1.19e6
+
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.19e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.4e-3_sl0.15_sd5e19_1.19e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.25e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.4e-3_sl0.15_sd5e19_1.25e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.27e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.4e-3_sl0.15_sd5e19_1.27e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.28e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.4e-3_sl0.15_sd5e19_1.28e6
+
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.18e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.5e-3_sl0.15_sd5e19_1.18e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.19e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.5e-3_sl0.15_sd5e19_1.19e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.2e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.5e-3_sl0.15_sd5e19_1.2e6
+
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.19e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.6e-3_sl0.15_sd5e19_1.19e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.29e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.6e-3_sl0.15_sd5e19_1.29e6
+
+./streamer air_negative_chemistry_v120mm_electrode.cfg -field_amplitude=1.3e6 -use_electrode=F -field_decay%enabled=F -cross%write=F -output%name+=constant/bd_seed_comparison/noelectrode_sw0.6e-3_sl0.15_sd5e19_1.3e6
+

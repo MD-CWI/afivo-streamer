@@ -1,0 +1,242 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each  other
+
+# Change a certain parameter
+
+cd ../
+
+#background density=0, seed density=1e20
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=1.2e6 -output%name+=exponential/min_field/dirichlet_2.5e6_1.2e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=1.0e6 -output%name+=exponential/min_field/dirichlet_2.5e6_1.0e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=0.8e6 -output%name+=exponential/min_field/dirichlet_2.5e6_0.8e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=0.6e6 -output%name+=exponential/min_field/dirichlet_2.5e6_0.6e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=0.4e6 -output%name+=exponential/min_field/dirichlet_2.5e6_0.4e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=0.3e6 -output%name+=exponential/min_field/dirichlet_2.5e6_0.3e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=0.2e6 -output%name+=exponential/min_field/dirichlet_2.5e6_0.2e6_15e-3_60e-3
+
+#./streamer air_negative_v80mm.cfg  -field_decay%min_field=0.1e6 -output%name+=exponential/min_field/dirichlet_2.5e6_0.1e6_15e-3_60e-3
+
+
+
+
+
+#background density=0, seed density=5e19, decay_distance=5e-3
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.335e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.335e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.332e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.332e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.331e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.331e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.3305e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.3305e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.3304e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.3304e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.33035e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.33035e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.3303e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.3303e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.33e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.33e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.3298e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.3298e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.3292e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.3292e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.328e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.328e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.326e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.326e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.324e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.324e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.32e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.32e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.312e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.312e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.3e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.3e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.27e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.27e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.2e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.2e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.0e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_1.0e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.8e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_0.8e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.4e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_0.4e6_5e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.0e6 -field_decay%decay_distance=5e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_5e-3_145e-3/sd5e19_2.1e6_0.0e6_5e-3_145e-3
+
+
+
+
+#background density=0, seed density=5e19, decay_distance=10e-3
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.24e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.24e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.2375e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.2375e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.2355e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.2355e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.235e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.235e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.2345e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.2345e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.234e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.234e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.233e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.233e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.232e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.232e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.23e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.23e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.225e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.225e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.215e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.215e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.2e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.2e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.17e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.17e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.0e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_1.0e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.85e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_0.85e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.6e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_0.6e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.3e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_0.3e6_10e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.0e6 -field_decay%decay_distance=10e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_10e-3_145e-3/sd5e19_2.1e6_0.0e6_10e-3_145e-3
+
+
+
+#background density=0, seed density=5e19, decay_distance=20e-3
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=2.1e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_2.1e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.8e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.8e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.5e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.5e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.2e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.2e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.1e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.1e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.09e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.09e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.083e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.083e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.08e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.08e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.07e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.07e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.06e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.06e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.04e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.04e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.02e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_1.02e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.98e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_0.98e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.9e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_0.9e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.8e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_0.8e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.6e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_0.6e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.4e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_0.4e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.2e6 -field_decay%decay_distance=20e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_0.2e6_20e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.0e6 -field_decay%decay_distance=20e-3 -utput%name+=exponential/min_field/sd5e19_2.1e6_20e-3_145e-3/sd5e19_2.1e6_0.0e6_20e-3_145e-3
+
+
+#background density=0, seed density=5e19, decay_distance=30e-3
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=1.0e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_1.0e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.95e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.95e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.94e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.94e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.92e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.92e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.9e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.9e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.86e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.86e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.8e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.8e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.7e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.7e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.6e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.6e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.5e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.5e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.4e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.4e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.3e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.3e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.2e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.2e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.1e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.1e6_30e-3_145e-3
+
+./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.0e6 -field_decay%decay_distance=30e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_30e-3_145e-3/sd5e19_2.1e6_0.0e6_30e-3_145e-3
+
+
+
+#background density=0, seed density=5e19, decay_distance=40e-3
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.9e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.9e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.83e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.83e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.8e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.8e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.76e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.76e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.7e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.7e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.6e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.6e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.5e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.5e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.4e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.4e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.3e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.3e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.2e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.2e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.1e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.1e6_40e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.0e6 -field_decay%decay_distance=40e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_40e-3_145e-3/sd5e19_2.1e6_0.0e6_40e-3_145e-3
+
+
+
+#background density=0, seed density=5e19, decay_distance=50e-3
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.9e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.9e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.8e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.8e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.7e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.7e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.66e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.66e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.6e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.6e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.5e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.5e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.4e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.4e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.3e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.3e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.2e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.2e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.1e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.1e6_50e-3_145e-3
+
+#./streamer air_negative_v160mm.cfg  -field_decay%min_field=0.0e6 -field_decay%decay_distance=50e-3 -output%name+=exponential/min_field/sd5e19_2.1e6_50e-3_145e-3/sd5e19_2.1e6_0.0e6_50e-3_145e-3
+
+
+
+

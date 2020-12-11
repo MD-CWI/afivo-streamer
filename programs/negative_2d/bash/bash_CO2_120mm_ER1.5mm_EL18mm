@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# This is an example to show how you can run multiple simulations after each other
+
+cd ../
+
+# bd=1e9, ER1.5mm, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, CO2_chemistry_200points
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e9 -field_amplitude=0.7e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e9_1.5mm_18mm_0.7e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e9 -field_amplitude=0.9e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e9_1.5mm_18mm_0.9e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e9 -field_amplitude=1.2e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e9_1.5mm_18mm_1.2e6
+
+
+
+
+# bd=1e13, ER1.5mm, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, CO2_chemistry_200points
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.7e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.7e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.702e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.702e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.705e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.705e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.71e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.71e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.72e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.72e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.75e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.75e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.8e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.8e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e13 -field_amplitude=0.9e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e13_1.5mm_18mm_0.9e6
+
+
+
+# bd=1e14, ER1.5mm, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, CO2_chemistry_200points
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e14 -field_amplitude=0.7e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e14_1.5mm_18mm_0.7e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e14 -field_amplitude=0.702e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e14_1.5mm_18mm_0.702e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e14 -field_amplitude=0.703e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e14_1.5mm_18mm_0.703e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e14 -field_amplitude=0.704e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e14_1.5mm_18mm_0.704e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e14 -field_amplitude=0.705e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e14_1.5mm_18mm_0.705e6
+
+
+
+
+
+# bd=1e15, ER1.5mm, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.2, CO2_chemistry_200points
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.6e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.6e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.61e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.61e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.615e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.615e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.618e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.618e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.619e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.619e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.62e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.62e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.65e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.65e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.68e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.68e6
+
+./streamer CO2_negative_chemistry_v120mm_electrode.cfg -field_rod_radius=1.5e-3 -background_density=1e15 -field_amplitude=0.7e6 -field_decay%enabled=F -cross%write=F -output%name+=constant/ER1.5mm_EL18mm/bd1e15_1.5mm_18mm_0.7e6
+
+
+
+

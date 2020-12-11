@@ -1,0 +1,29 @@
+#!/bin/bash
+
+cd ../
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry1000points_mindx5e-6_adx1_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_100points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry100points_mindx5e-6_adx1_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=1 -refine_adx_fac=1 -dt_min=1e-16 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx5e-6_adx1_fac1_dtmin1e-16
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=1 -refine_adx_fac=1.5 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx5e-6_adx1_fac1.5
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=1 -refine_adx_fac=1.2 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx5e-6_adx1_fac1.2
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=0.5 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx5e-6_adx0.5_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=0.8 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx5e-6_adx0.8_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=1e-5 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx1e-5_adx1_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=5e-6 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx5e-6_adx1_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=2e-6 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx2e-6_adx1_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=1e-6 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx1e-6_adx1_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=1e-7 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx1e-7_adx1_fac1
+
+./streamer air_negative_chemistry_v160mm.cfg -field_decay%min_field=1.25e6 -field_decay%decay_distance=5e-3 -refine_min_dx=0 -refine_adx=1 -refine_adx_fac=1 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_50points.txt -output%name+=exponential/min_field/chemistry_style/sd5e19_2.1e6_5e-3_145e-3/50points_runtime/1.25e6_chemistry50points_mindx0_adx1_fac1
