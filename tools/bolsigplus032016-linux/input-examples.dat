@@ -1,0 +1,235 @@
+! Comment
+/ Comment
+
+/NOSCREEN
+
+/READCOLLISIONS can be called multiple times to read from different files
+
+READCOLLISIONS
+LXCat-June2013.txt   / File 
+Ar                  / Species
+1                    / Extrapolate: 0= No 1= Yes
+
+READCOLLISIONS
+LXCat-June2013.txt   / File 
+N2                   / Species
+1                    / Extrapolate: 0= No 1= Yes
+
+CONDITIONS
+10.       / Electric field / N (Td)
+0.        / Angular field frequency / N (m3/s)
+0.        / Cosine of E-B field angle
+300.      / Gas temperature (K)
+300.      / Excitation temperature (K)
+0.        / Transition energy (eV)
+0.        / Ionization degree
+1e18      / Plasma density (1/m3)
+1.        / Ion charge parameter
+1.        / Ion/neutral mass ratio
+1         / e-e momentum effects: 0=No; 1=Yes*
+1         / Energy sharing: 1=Equal*; 2=One takes all
+1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
+0.        / Maxwellian mean energy (eV) 
+200       / # of grid points
+0         / Manual grid: 0=No; 1=Linear; 2=Parabolic 
+200.      / Manual maximum energy (eV)
+1e-10     / Precision
+1e-4      / Convergence
+1000      / Maximum # of iterations
+0.7  0.3  / Gas composition fractions       
+1         / Normalize composition to unity: 0=No; 1=Yes
+
+RUN
+
+CLEARRUNS
+
+RUNSERIES
+1          / Variable: 1=E/N; 2=Mean energy; 3=Maxwellian energy 
+0.1  100.  / Min Max
+31         / Number 
+3          / Type: 1=Linear; 2=Quadratic; 3=Exponential
+
+RUNSERIES
+1           / Variable: 1=E/N; 2=Mean energy; 3=Maxwellian energy 
+200.  1000. / Min Max
+9           / Number 
+1           / Type: 1=Linear; 2=Quadratic; 3=Exponential
+
+/SAVERESULTS can be called multiple times to write in different formats
+
+SAVERESULTS
+example1.dat        / File 
+3        / Format: 1=Run by run; 2=Combined; 3=E/N; 4=Energy; 5=SIGLO; 6=PLASIMO
+1        / Conditions: 0=No; 1=Yes
+1        / Transport coefficients: 0=No; 1=Yes
+1        / Rate coefficients: 0=No; 1=Yes
+0        / Reverse rate coefficients: 0=No; 1=Yes
+0        / Energy loss coefficients: 0=No; 1=Yes
+1        / Distribution function: 0=No; 1=Yes 
+0        / Skip failed runs: 0=No; 1=Yes
+
+
+
+
+
+!--------------------------------------------------------------------------
+! Second example: variable conditions
+! In the CONDITIONS list, write VAR instead of value
+! As many VARs as you like
+! Specify values later, after RUN
+
+CLEARRUNS
+
+CONDITIONS
+VAR       / Electric field / N (Td)
+VAR       / Angular field frequency / N (m3/s)
+0.        / Cosine of E-B field angle
+300.      / Gas temperature (K)
+300.      / Excitation temperature (K)
+0.        / Transition energy (eV)
+0.        / Ionization degree
+1e18      / Plasma density (1/m3)
+1.        / Ion charge parameter
+1.        / Ion/neutral mass ratio
+1         / e-e momentum effects: 0=No; 1=Yes*
+1         / Energy sharing: 1=Equal*; 2=One takes all
+1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
+0.        / Maxwellian mean energy (eV) 
+200       / # of grid points
+0         / Manual grid: 0=No; 1=Linear; 2=Parabolic 
+200.      / Manual maximum energy (eV)
+1e-10     / Precision
+1e-4      / Convergence
+1000      / Maximum # of iterations
+0.99 0.01 / Gas composition fractions       
+1         / Normalize composition to unity: 0=No; 1=Yes
+
+RUN
+100.  0.
+100.  1e-16
+100.  1e-15
+100.  1e-14
+100.  1e-13
+100.  1e-12
+100.  1e-11
+
+RUN
+100.  1e-10
+
+RUN
+1000.  1e-10
+10000. 1e-10
+
+SAVERESULTS
+example2.dat        / File 
+2        / Format: 1=Run by run; 2=Combined; 3=E/N; 4=Energy; 5=SIGLO; 6=PLASIMO
+1        / Conditions: 0=No; 1=Yes
+1        / Transport coefficients: 0=No; 1=Yes
+1        / Rate coefficients: 0=No; 1=Yes
+0        / Reverse rate coefficients: 0=No; 1=Yes
+0        / Energy loss coefficients: 0=No; 1=Yes
+1        / Distribution function: 0=No; 1=Yes 
+0        / Skip failed runs: 0=No; 1=Yes
+
+
+
+!---------------------------------
+!  Third example: generate 2D tables using RUN2D
+!  Similar to RUNSERIES but with a 2nd variable, 
+!  indicated with VAR in the CONDITIONS list
+!  RUN2D also writes output file
+
+CLEARRUNS
+
+CONDITIONS
+10.       / Electric field / N (Td)
+0.        / Angular field frequency / N (m3/s)
+0.        / Cosine of E-B field angle
+300.      / Gas temperature (K)
+300.      / Excitation temperature (K)
+0.        / Transition energy (eV)
+0.        / Ionization degree
+1e18      / Plasma density (1/m3)
+1.        / Ion charge parameter
+1.        / Ion/neutral mass ratio
+1         / e-e momentum effects: 0=No; 1=Yes*
+1         / Energy sharing: 1=Equal*; 2=One takes all
+1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
+0.        / Maxwellian mean energy (eV) 
+100       / # of grid points
+0         / Manual grid: 0=No; 1=Linear; 2=Parabolic 
+200.      / Manual maximum energy (eV)
+1e-10     / Precision
+1e-4      / Convergence
+1000      / Maximum # of iterations
+1.  VAR   / Gas composition fractions       
+1         / Normalize composition to unity: 0=No; 1=Yes
+
+
+RUN2D
+1                   / First variable: 1=E/N; 2=Mean energy; 3=Maxwellian energy 
+0.1  100.  0.  1.  / Min1 Max1 Min2 Max2 
+20   5            / Num1 Num2
+2    1            / Type1 Type2: 1=Linear; 2=Quadratic; 3=Exponential
+example3.dat     / Output file
+
+! In the above example, the second variable is the mole fraction of the
+! second gas component, which is then varied from 0. to 1. in 5 steps
+
+
+
+!----------------------------------------------------------------------------
+! 4th example: gas mixture with many species
+! Within one READCOLLISIONS block, multiple species can be read at once from the same file
+! In the CONDITIONS list, composition fractions can be specified on separate lines 
+! by using the '&' character 
+
+
+CLEARCOLLISIONS
+
+READCOLLISIONS
+LXCat-June2013.txt   / File 
+Ar  He  N2 O2      / Species
+1                    / Extrapolate: 0= No 1= Yes
+
+
+CONDITIONS
+10.       / Electric field / N (Td)
+0.        / Angular field frequency / N (m3/s)
+0.        / Cosine of E-B field angle
+300.      / Gas temperature (K)
+300.      / Excitation temperature (K)
+0.        / Transition energy (eV)
+0.        / Ionization degree
+1e18      / Plasma density (1/m3)
+1.        / Ion charge parameter
+1.        / Ion/neutral mass ratio
+1         / e-e momentum effects: 0=No; 1=Yes*
+1         / Energy sharing: 1=Equal*; 2=One takes all
+1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
+0.        / Maxwellian mean energy (eV) 
+200       / # of grid points
+0         / Manual grid: 0=No; 1=Linear; 2=Parabolic 
+200.      / Manual maximum energy (eV)
+1e-10     / Precision
+1e-4      / Convergence
+1000      / Maximum # of iterations
+0.7   &   / Ar fraction
+0.2   &   / He fraction
+0.08  0.02  / N2 and O2 fractions       
+1         / Normalize composition to unity: 0=No; 1=Yes
+
+RUN
+
+SAVERESULTS
+example4.dat        / File 
+1        / Format: 1=Run by run; 2=Combined; 3=E/N; 4=Energy; 5=SIGLO; 6=PLASIMO
+1        / Conditions: 0=No; 1=Yes
+1        / Transport coefficients: 0=No; 1=Yes
+1        / Rate coefficients: 0=No; 1=Yes
+0        / Reverse rate coefficients: 0=No; 1=Yes
+0        / Energy loss coefficients: 0=No; 1=Yes
+1        / Distribution function: 0=No; 1=Yes 
+0        / Skip failed runs: 0=No; 1=Yes
+
+END

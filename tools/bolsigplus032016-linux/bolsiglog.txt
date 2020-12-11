@@ -1,0 +1,60 @@
+BOLSIG+ script file: bolsig_script.txt
+READCOLLISIONS
+N2
+cross_section_air_phelps.txt
+C1    N2    Excitation    0.020 eV                              
+C2    N2    Effective (momentum)                                
+C3    N2    Excitation    0.020 eV                              
+C4    N2    Excitation    0.29 eV                               
+C5    N2    Excitation    0.29 eV                               
+C6    N2    Excitation    0.59 eV                               
+C7    N2    Excitation    0.88 eV                               
+C8    N2    Excitation    1.17 eV                               
+C9    N2    Excitation    1.47 eV                               
+C10   N2    Excitation    1.76 eV                               
+C11   N2    Excitation    2.06 eV                               
+C12   N2    Excitation    2.35 eV                               
+C13   N2    Excitation    6.17 eV                               
+C14   N2    Excitation    7.00 eV                               
+C15   N2    Excitation    7.35 eV                               
+C16   N2    Excitation    7.36 eV                               
+C17   N2    Excitation    7.80 eV                               
+C18   N2    Excitation    8.16 eV                               
+C19   N2    Excitation    8.40 eV                               
+C20   N2    Excitation    8.55 eV                               
+C21   N2    Excitation    8.89 eV                               
+C22   N2    Excitation    11.03 eV                              
+C23   N2    Excitation    11.87 eV                              
+C24   N2    Excitation    12.25 eV                              
+C25   N2    Excitation    13.00 eV                              
+C26   N2    Ionization    15.60 eV                              
+C27   N2    Ionization    18.80 eV                              
+READCOLLISIONS
+O2
+cross_section_air_phelps.txt
+C28   O2    Excitation    0.0000 eV                             
+C29   O2    Attachment                                          
+C30   O2    Attachment                                          
+C31   O2    Effective (momentum)                                
+C32   O2    Excitation    0.020 eV                              
+C33   O2    Excitation    0.19 eV                               
+C34   O2    Excitation    0.19 eV                               
+C35   O2    Excitation    0.38 eV                               
+C36   O2    Excitation    0.38 eV                               
+C37   O2    Excitation    0.57 eV                               
+C38   O2    Excitation    0.75 eV                               
+C39   O2    Excitation    0.98 eV                               
+C40   O2    Excitation    1.63 eV                               
+C41   O2    Excitation    4.50 eV                               
+C42   O2    Excitation    6.00 eV                               
+C43   O2    Excitation    8.40 eV                               
+C44   O2    Excitation    9.97 eV                               
+C45   O2    Ionization    12.06 eV                              
+RUN
+R1    1000. Td    16.6 eV                                       
+CLEARRUNS
+RUNSERIES
+Too many runs
+SAVERESULTS
+td_bolsigmin_air_phelps_2000points.txt
+FINISHED
