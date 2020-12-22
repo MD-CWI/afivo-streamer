@@ -200,8 +200,7 @@ contains
           reactions(1)%n_species_in = 2
           reactions(1)%rate_type = rate_tabulated_field
           reactions(1)%rate_factor = 1.0_dp
-          reactions(1)%x_data = &
-               LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
+          reactions(1)%x_data = LT_get_xdata(td_tbl)
           reactions(1)%y_data = td_tbl%rows_cols(:, td_alpha) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(1)%x_data * &
                Townsend_to_SI * gas_number_density
@@ -214,8 +213,7 @@ contains
           reactions(2)%n_species_in = 2
           reactions(2)%rate_type = rate_tabulated_field
           reactions(2)%rate_factor = 1.0_dp
-          reactions(2)%x_data = &
-               LT_get_xdata(td_tbl%x_min, td_tbl%dx, td_tbl%n_points)
+          reactions(2)%x_data = LT_get_xdata(td_tbl)
           reactions(2)%y_data = td_tbl%rows_cols(:, td_eta) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(2)%x_data * &
                Townsend_to_SI * gas_number_density
@@ -241,7 +239,7 @@ contains
        if (reactions(n)%rate_type == rate_tabulated_field) then
           i = i + 1
           reactions(n)%lookup_table_index = i
-          call LT_set_col(chemtbl, i, reactions(n)%x_data, reactions(n)%y_data)
+          call table_set_column(chemtbl, i, reactions(n)%x_data, reactions(n)%y_data)
        end if
     end do
 
@@ -343,7 +341,7 @@ contains
        n_fields = td_tbl%n_points
 
        allocate(fields(n_fields))
-       fields = LT_get_xdata(td_tbl%x_min, td_tbl%dx, n_fields)
+       fields = LT_get_xdata(td_tbl)
 
        allocate(rates(n_fields, n_reactions))
        allocate(eta(n_fields), alpha(n_fields), src(n_fields), loss(n_fields))
@@ -445,13 +443,13 @@ contains
        case (rate_analytic_exp_v2)
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
        case (rate_analytic_k1)
-          Te = LT_get_col(td_tbl, td_energy_eV, fields) / UC_boltzmann_const
+          Te = 2 * LT_get_col(td_tbl, td_energy_eV, fields) * 1.6e-19 / (3 * UC_boltzmann_const)  ! K
           rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
        case (rate_analytic_k2)
           rates(:, n) = c0 * c(1)
        case (rate_analytic_k3)
-          Te = LT_get_col(td_tbl, td_energy_eV, fields) / UC_boltzmann_const
-          rates(:, n) = c0 * (c(1) * (UC_boltzmann_const * Te + c(2))**2 - c(3)) * c(4)
+          Te = 2 * LT_get_col(td_tbl, td_energy_eV, fields) * 1.6e-19 / (3 * UC_boltzmann_const)  ! K
+          rates(:, n) = c0 * (c(1) * ((UC_boltzmann_const  * (1e19 / 1.6)) * Te + c(2))**2 - c(3)) * c(4)  ! We convert boltzmann_const from J / K to eV / K
        case (rate_analytic_k4)
           rates(:, n) = c0 * c(1) * (gas_temperature / 300)**c(2) * exp(-c(3) / gas_temperature)
        case (rate_analytic_k5)

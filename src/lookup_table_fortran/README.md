@@ -7,22 +7,32 @@ understand the usage of this module is to run:
     make
     ./usage_example
 
-After which you can inspect the file `usage_example.f90` to see how you can
-incorporate the module in your own programs.
+After which you can inspect the file [usage_example.f90](usage_example.f90) to
+see how you can incorporate the module in your own programs.
 
 ## Requirements
 
 A modern Fortran compiler, such as `gfortran 4.8` or newer.
 
+## Examples
+
+* [usage_example.f90](usage_example.f90) Shows several examples of how values
+  can be looked up, a good starting point.
+* [test_lookup_table_performance.f90](test_lookup_table_performance.f90)
+  Compares the performance of different types of lookups.
+* [test_lookup_table_2d.f90](test_lookup_table_2d.f90) Simple example of a 2D lookup table
+* [test_find_index_performance.f90](test_find_index_performance.f90) Compares the performance of linear search,
+  binary search and automatically switching between the two.
+
 ## The lookup table type
 
 The package `lookup_table` can easily be used in program environments where the
 use of lookup tables makes sense. The tables may be precalculated and stored in
-a `lookup_table_t` type defined as
+a `LT_t` type defined as
 
     !> The lookup table type. There can be one or more columns, for which values
     !> can be looked up for a given 'x-coordinate'.
-    type lookup_table_t
+    type LT_t
        integer  :: n_rows !< The number of rows
        integer  :: n_cols !< The number of columns
        real(dp) :: x_min  !< The minimum lookup coordinate
@@ -32,7 +42,7 @@ a `lookup_table_t` type defined as
        ! The table is stored in two ways, to speed up different types of lookups.
        real(dp), allocatable :: cols_rows(:, :) !< The table in column-major order
        real(dp), allocatable :: rows_cols(:, :) !< The table in row-major order
-    end type lookup_table_t
+    end type LT_t
 
 ## Creating a lookup table
 
@@ -77,24 +87,6 @@ The type `lt_loc_t` is defined as:
                             !< as a real number between 0 and 1.
     end type LT_loc_t
 
-The values in the table are calculated once only as part of a program's
-initialization phase. To transform the input of the table to regularly spaced
-data, we need some subroutines for finding indices in sorted lists. Such
-subroutines can be found in module `m_find_index.f90`
-
-    !> Linear search of sorted list for the smallest ix such that list(ix) >= val.
-    !> On failure, returns size(list)+1
-    function find_index_linear(list, val) result(ix)
-
-    !> Binary search of sorted list for the smallest ix such that list(ix) >= val.
-    !> On failure, returns size(list)+1
-    function find_index_bsearch(list, val) result(ix)
-
-    !> Adaptive search (combination of linear and binary search) of sorted list
-    !> for the smallest ix such that list(ix) >= val. On failure, returns
-    !> size(list)+1
-    function find_index_adaptive(list, val) result(ix)
-
 ## Public methods
 
 The following public functions and subroutines are presented in module
@@ -116,13 +108,17 @@ The following public functions and subroutines are presented in module
     public :: LT_to_file          ! Store lookup table in file
     public :: LT_from_file        ! Restore lookup table from file
 
-## Tests
+For 2D lookup tables, a less extensive interface is provided:
 
-An example how to add data is shown in the test programs
+    ! Public methods for 2D tables
+    public :: LT2_create           ! Create a new lookup table
+    public :: LT2_create_from_data ! Create a new lookup table from existing data
+    public :: LT2_set_col          ! Set one table column
+    public :: LT2_get_loc          ! Get the index (row) of a value
+    public :: LT2_get_col          ! Interpolate one column
+    public :: LT2_get_col_at_loc   ! Get one column at location
 
-* `test_lookup_table_performance`
-* `test_find_index_performance`
-* `test_find_index_simple`
+For 3D lookup tables, simply change `LT2` to `LT3`.
 
 ## Contributors
 
@@ -131,7 +127,3 @@ An example how to add data is shown in the test programs
   now by [FWO](http://www.fwo.be/) while working
   at [KU Leuven](https://wis.kuleuven.be/CmPA).
 * [Margreet Nool](https://www.cwi.nl/people/211): Documentation
-
-## TODO
-
-* Add option to use `ifort` compiler in `Makefile`
