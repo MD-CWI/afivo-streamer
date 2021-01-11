@@ -20,6 +20,9 @@ e + O2 -> O-,field_table,C30 O2 Attachment
 # Detachment (Panchesnyi 2013)
 O2- + M -> e,exp_v1,1.24e-17 179.0 8.8
 O- + N2 -> e,exp_v1,1.16e-18 48.9 11.0
+# Negative ion conversion (Panchesnyi 2013)
+O- + O2 -> O2-,exp_v1,6.96e-17 198.0 5.6
+O- + O2 + M -> O3-,exp_v2,1.1e-42 65.0
 -----------------------
 
 Mean energy (eV)
