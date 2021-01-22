@@ -120,10 +120,7 @@ contains
           print *, "Unknown photoi_method: ", trim(photoi_method)
           error stop
     end select
-    
-    if (photoe_enabled) then
-        call phe_mc_initialize(cfg)
-    end if
+
   end subroutine photoi_initialize
 
   subroutine photoi_set_methods(tree)

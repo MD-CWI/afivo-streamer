@@ -39,7 +39,6 @@ module m_photoi_mc
   public :: phmc_do_absorption
   public :: phmc_absorption_func_air
   public :: phmc_set_src
-  public :: phe_mc_initialize
   public :: phe_mc_set_src
 
 contains
@@ -87,23 +86,6 @@ contains
     end if
 
   end subroutine phmc_initialize
-
-  !> Initialize photoemission parameters
-  subroutine phe_mc_initialize(cfg)
-    use m_config
-    use m_streamer
-    use m_gas
-    type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
-
-    if (ST_use_dielectric) then
-        if (.not. phmc_const_dx) &
-            error stop "phmc_initialize: with dielectric use const_dx"
-        if (phmc_absorp_fac > 1e-9_dp) &
-            error stop "Use phmc_absorp_fac <= 1e-9 with dielectric"
-    end if
-
-  end subroutine phe_mc_initialize
-
 
   !> Print the grid spacing used for the absorption of photons
   subroutine phmc_print_grid_spacing(dr_base)
