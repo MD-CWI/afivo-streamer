@@ -27,7 +27,7 @@ program streamer
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, s, it, coord_type, box_bytes
   logical                   :: write_out
-  real(dp)                  :: time, dt, photoi_prev_time
+  real(dp)                  :: time, dt, photoi_prev_time, photoe_prev_time
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
@@ -92,6 +92,7 @@ program streamer
      time             = 0.0_dp ! Simulation time (all times are in s)
      global_time      = time
      photoi_prev_time = time   ! Time of last photoionization computation
+     photoe_prev_time = time   ! Time of last photoemission computation
      dt               = advance_max_dt
      initial_streamer_pos = 0.0_dp ! Initial streamer position
 
@@ -161,6 +162,11 @@ program streamer
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
         call photoi_set_src(tree, time - photoi_prev_time)
         photoi_prev_time = time
+     end if
+     
+     if (photoe_enabled .and. mod(it, photoe_per_steps) == 0) then
+        call photoe_set_src(tree, time - photoe_prev_time)
+        photoe_prev_time = time
      end if
 
      call advance(tree, mg, dt, time)
@@ -275,7 +281,7 @@ contains
     end do
     
     !set preset surface charge after initial refinement of the meshes
-    call dielectric_set_preset_charge(tree)
+    !call dielectric_set_preset_charge(tree)
   end subroutine set_initial_conditions
 
   subroutine write_sim_data(my_unit)

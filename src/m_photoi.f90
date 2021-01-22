@@ -13,6 +13,9 @@ module m_photoi
   ! Whether photoionization is enabled
   logical, protected, public :: photoi_enabled = .false.
 
+  ! Whether photoemission is enabled
+  logical, protected, public :: photoe_enabled = .false.
+
   ! Whether photoionization is enabled in gas
   logical, protected, public :: photoi_enabled_ingas = .true.
 
@@ -40,12 +43,16 @@ module m_photoi
   ! Update photoionization every N time step
   integer, protected, public :: photoi_per_steps = 10
 
+  ! Update photoemission every N time step
+  integer, protected, public :: photoe_per_steps = 10
+
   ! Optional variable (when using photoionization)
   integer, public, protected :: i_photo = -1 ! Photoionization rate
 
   public :: photoi_initialize
   public :: photoi_set_methods
   public :: photoi_set_src
+  public :: photoe_set_src
 
 contains
 
@@ -73,6 +80,11 @@ contains
          "Which excited species to use when photoi%source_type = from_species")
     call CFG_add_get(cfg, "photoi%decay_time", photoi_decay_time, &
          "Decay time in case photoi_source_type is 'from_species'")
+
+    call CFG_add_get(cfg, "photoe%enabled", photoe_enabled, &
+         "Whether photoemission is enabled")
+    call CFG_add_get(cfg, "photoe%per_steps", photoe_per_steps, &
+         "Update photoemission every N time step")
 
     if (photoi_enabled) then
        if (photoi_eta <= 0.0_dp) error stop "photoi%eta <= 0.0"
@@ -108,6 +120,10 @@ contains
           print *, "Unknown photoi_method: ", trim(photoi_method)
           error stop
     end select
+    
+    if (photoe_enabled) then
+        call phe_mc_initialize(cfg)
+    end if
   end subroutine photoi_initialize
 
   subroutine photoi_set_methods(tree)
@@ -173,6 +189,49 @@ contains
     end select
 
   end subroutine photoi_set_src
+  
+  !> Sets the photoemission
+  subroutine photoe_set_src(tree, dt)
+    use m_units_constants
+    use m_gas
+
+    type(af_t), intent(inout)     :: tree
+    real(dp), intent(in), optional :: dt
+    real(dp), parameter            :: p_quench = 40.0e-3_dp
+    real(dp)                       :: quench_fac, decay_fraction, decay_rate
+
+    ! Compute quench factor, because some excited species will be quenched by
+    ! collisions, preventing the emission of a UV photon
+    quench_fac = p_quench / (gas_pressure + p_quench)
+
+    ! Set photon production rate per cell, which is proportional to the
+    ! ionization rate.
+    select case (photoi_source_type)
+    case ('Zheleznyak')
+       call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
+            [photoi_eta * quench_fac], .true.)
+    case ('from_species')
+       decay_fraction = 1 - exp(-dt / photoi_decay_time)
+
+       if (dt > 1e-6_dp * photoi_decay_time) then
+          decay_rate = decay_fraction / dt
+       else
+          decay_rate = 1 / photoi_decay_time
+       end if
+
+       call af_loop_box_arg(tree, photoionization_rate_from_species, &
+            [photoi_eta * quench_fac * decay_rate, 1-decay_fraction], .true.)
+    end select
+
+       if (phmc_physical_photons) then
+          call phe_mc_set_src(tree, ST_rng, i_rhs, &
+               i_photo, ST_cylindrical, dt)
+       else
+          call phe_mc_set_src(tree, ST_rng, i_rhs, &
+               i_photo, ST_cylindrical)
+       end if
+
+  end subroutine photoe_set_src
 
   !> Sets the photoionization_rate
   subroutine photoionization_rate_from_alpha(box, coeff)

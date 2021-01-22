@@ -39,6 +39,8 @@ module m_photoi_mc
   public :: phmc_do_absorption
   public :: phmc_absorption_func_air
   public :: phmc_set_src
+  public :: phe_mc_initialize
+  public :: phe_mc_set_src
 
 contains
 
@@ -85,6 +87,23 @@ contains
     end if
 
   end subroutine phmc_initialize
+
+  !> Initialize photoemission parameters
+  subroutine phe_mc_initialize(cfg)
+    use m_config
+    use m_streamer
+    use m_gas
+    type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
+
+    if (ST_use_dielectric) then
+        if (.not. phmc_const_dx) &
+            error stop "phmc_initialize: with dielectric use const_dx"
+        if (phmc_absorp_fac > 1e-9_dp) &
+            error stop "Use phmc_absorp_fac <= 1e-9 with dielectric"
+    end if
+
+  end subroutine phe_mc_initialize
+
 
   !> Print the grid spacing used for the absorption of photons
   subroutine phmc_print_grid_spacing(dr_base)
@@ -515,6 +534,95 @@ contains
 
     call prng%update_seed(rng)
   end subroutine phmc_set_src
+
+  !> Whole photoemission procedure
+  subroutine phe_mc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
+    use m_random
+    use m_lookup_table
+    use m_dielectric
+    use omp_lib
+
+    type(af_t), intent(inout)  :: tree   !< Tree
+    type(RNG_t), intent(inout) :: rng    !< Random number generator
+    !> Input variable that contains photon production per cell
+    integer, intent(in)        :: i_src
+    !> Input variable that contains photoionization source rate
+    integer, intent(in)        :: i_photo
+    !> Use cylindrical coordinates (only in 2D)
+    logical, intent(in)        :: use_cyl
+    !> Time step, if present use "physical" photons
+    real(dp), intent(in), optional :: dt
+
+    integer                     :: lvl, id, nc, min_lvl
+    integer                     :: IJK, n, n_used
+    integer                     :: proc_id, n_procs
+    integer                     :: pho_lvl, max_num_photons
+    real(dp)                    :: tmp, dr(NDIM), dt_fac, dist, r(3)
+    real(dp)                    :: sum_production_rate, pi_lengthscale
+    real(dp), allocatable       :: xyz_src(:, :)
+    real(dp), allocatable       :: xyz_abs(:, :)
+#if NDIM == 2
+    real(dp), parameter         :: pi = acos(-1.0_dp)
+#endif
+    type(PRNG_t)                :: prng
+    type(af_loc_t), allocatable :: ph_loc(:)
+    real(dp), parameter         :: small_value = 1e-100_dp
+
+    if (NDIM == 3 .and. use_cyl) error stop "phmc_set_src: use_cyl is .true."
+
+    if (ST_use_dielectric) then
+       call dielectric_reset_photons()
+    end if
+
+    nc = tree%n_cell
+
+    ! Initialize parallel random numbers
+    n_procs = omp_get_max_threads()
+    call prng%init_parallel(n_procs, rng)
+
+    ! Compute the sum of the photon production rate
+    call af_tree_sum_cc(tree, i_src, sum_production_rate)
+
+    ! dt_fac is used to convert a discrete number of photons to a number of
+    ! photons per unit time. Depending on the arguments dt and phmc_num_photons,
+    ! 'physical' photons with a weight of 1.0, or super-photons with a weight
+    ! larger (or smaller) than one can be used.
+    if (present(dt)) then
+       ! Create "physical" photons when less than phmc_num_photons are produced,
+       ! otherwise create approximately phmc_num_photons
+       dt_fac = min(dt, phmc_num_photons / (sum_production_rate + small_value))
+    else
+       ! Create approximately phmc_num_photons by setting dt_fac like this
+       dt_fac = phmc_num_photons / (sum_production_rate + small_value)
+    end if
+
+    ! Over-estimate number of photons because of stochastic production
+    max_num_photons = nint(1.2_dp * dt_fac * sum_production_rate + 1000)
+
+    call phmc_generate_photons(tree, dt_fac, i_src, xyz_src, &
+         max_num_photons, n_used, prng)
+
+    allocate(xyz_abs(3, n_used))
+
+    if (use_cyl) then           ! 2D only
+
+       if (ST_use_dielectric) then
+          ! Handle photons that collide with dielectrics separately
+          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
+               2, n_used, 1.0_dp/dt_fac)
+       end if
+    else
+
+       if (ST_use_dielectric) then
+          ! Handle photons that collide with dielectrics separately
+          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
+               NDIM, n_used, 1.0_dp/dt_fac)
+       end if
+    end if
+
+    call prng%update_seed(rng)
+  end subroutine phe_mc_set_src
+
 
   subroutine phmc_generate_photons(tree, dt_fac, i_src, xyz_src, n_max, n_used, prng)
     use omp_lib

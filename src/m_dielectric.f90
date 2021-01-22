@@ -278,10 +278,10 @@ contains
         tmp_up = preset_charge_to_cell(loc_up)
         if (tmp_down == tmp_up) then
         surface%charge(i, :) = preset_charge_to_cell(loc_mid)
-        print *,loc_down, loc_up, loc_mid, tmp_down, tmp_up, "same",preset_charge_to_cell(loc_mid)
+        !print *,loc_down, loc_up, loc_mid, tmp_down, tmp_up, "same",preset_charge_to_cell(loc_mid)
         else
         !TODO_lixiaoran: if tmp_down != tmp_up, we need to do refine. now we just ignore.
-        print *,loc_down, loc_up, loc_mid, tmp_down, tmp_up, "tmp_down!=tmp_up",preset_charge_to_cell(loc_mid)
+        !print *,loc_down, loc_up, loc_mid, tmp_down, tmp_up, "tmp_down!=tmp_up",preset_charge_to_cell(loc_mid)
         surface%charge(i, :) = preset_charge_to_cell(loc_mid)
         end if
     end do
