@@ -141,10 +141,10 @@ contains
        call table_set_column(td_tbl, td_mobility, x_data, y_data)
 
        if (td_bulk_transport) then
-          call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
+          call table_from_file(td_file, "Bulk diffusion coef. *N (1/m/s)", &
                x_data, y_data)
        else
-          call table_from_file(td_file, "Bulk diffusion coef. *N (1/m/s)", &
+          call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
                x_data, y_data)
        end if
        call table_set_column(td_tbl, td_diffusion, x_data, y_data)
