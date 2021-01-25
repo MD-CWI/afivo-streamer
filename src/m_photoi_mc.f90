@@ -323,6 +323,51 @@ contains
 
   end subroutine phmc_do_absorption
 
+  !> Given a list of photon production positions (xyz_in), compute where they
+  !> end up (xyz_out).
+  subroutine phe_mc_get_endloc(xyz_in, xyz_out, n_dim, n_photons, prng)
+    use m_lookup_table
+    use m_random
+    use omp_lib
+    integer, intent(in)        :: n_photons !< Number of photons
+    !> Input (x,y,z) values
+    real(dp), intent(in)       :: xyz_in(3, n_photons)
+    !> Output (x,y,z) values
+    real(dp), intent(out)      :: xyz_out(3, n_photons)
+    integer, intent(in)        :: n_dim     !< 2 or 3 dimensional
+    type(PRNG_t), intent(inout) :: prng       !< Random number generator
+    integer                    :: n, proc_id
+    real(dp)                   :: rr, dist
+
+    !$omp parallel private(n, rr, dist, proc_id)
+    proc_id = 1+omp_get_thread_num()
+
+    if (n_dim == 2) then
+       !$omp do
+       do n = 1, n_photons
+          rr = prng%rngs(proc_id)%unif_01()
+          dist = 0.00001_dp
+          ! Pick a random point on a sphere, and ignore the last dimension
+          xyz_out(1:3, n) =  xyz_in(1:3, n) + &
+               prng%rngs(proc_id)%sphere(dist)
+       end do
+       !$omp end do
+    else if (n_dim == 3) then
+       !$omp do
+       do n = 1, n_photons
+          rr = prng%rngs(proc_id)%unif_01()
+          dist = 0.00001_dp
+          xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
+       end do
+       !$omp end do
+    else
+       print *, "phmc_do_absorption: unknown n_dim", n_dim
+       stop
+    end if
+    !$omp end parallel
+
+  end subroutine phe_mc_get_endloc
+
   !> Set the source term due to photoionization. At most phmc_num_photons
   !> discrete photons are produced.
   subroutine phmc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
@@ -587,6 +632,18 @@ contains
     allocate(xyz_abs(3, n_used))
 
     if (use_cyl) then           ! 2D only
+       ! Get location of absorption. On input, xyz is set to (r, z, 0). On
+       ! output, the coordinates thus correspond to (x, z, y)
+       call phe_mc_get_endloc(xyz_src, xyz_abs, 3, n_used, prng)
+
+       !$omp do
+       do n = 1, n_used
+          ! Convert back to (r,z) coordinates
+          xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(3, n)**2)
+          xyz_abs(2, n) = xyz_abs(2, n)
+          xyz_src(2, n) = xyz_src(3, n)
+       end do
+       !$omp end do
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
@@ -594,6 +651,8 @@ contains
                2, n_used, 1.0_dp/dt_fac)
        end if
     else
+       ! Get location of absorbption
+       call phe_mc_get_endloc(xyz_src, xyz_abs, NDIM, n_used, prng)
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
