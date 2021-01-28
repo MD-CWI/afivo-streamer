@@ -183,6 +183,8 @@ contains
     ! Skip methods (these have to be set again)
     if (.not. allocated(tree%cc_auto_vars)) &
          allocate(tree%cc_auto_vars(0))
+    if (.not. allocated(tree%cc_func_vars)) &
+         allocate(tree%cc_func_vars(0))
 
     read(my_unit) tree%cc_names
     read(my_unit) tree%fc_names

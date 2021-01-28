@@ -245,6 +245,10 @@ module m_af_types
      procedure(af_subr_bc), pointer, nopass :: bc => null()
      !> Refinement boundary routine
      procedure(af_subr_rb), pointer, nopass :: rb => null()
+     !> Custom boundary condition routine
+     procedure(af_subr_bc_custom), pointer, nopass :: bc_custom => null()
+     !> Function defining the values of this variables
+     procedure(af_subr_funcval), pointer, nopass :: funcval => null()
   end type af_cc_methods
 
   !> The basic building block of afivo: a box with cell-centered and face
@@ -311,6 +315,9 @@ module m_af_types
 
      !> Indices of cell-centered variables with methods
      integer, allocatable :: cc_auto_vars(:)
+
+     !> Indices of cell-centered variables defined by a function
+     integer, allocatable :: cc_func_vars(:)
 
      !> List storing the tree levels
      type(lvl_t) :: lvls(af_min_lvl:af_max_lvl)
@@ -403,6 +410,29 @@ module m_af_types
        real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1)) !< Boundary values
        integer, intent(out)    :: bc_type !< Type of b.c.
      end subroutine af_subr_bc
+
+     !> To fill ghost cells near physical boundaries in a custom way. If the
+     !> number of ghost cells to fill is greater than one (n_gc > 1), fill ghost
+     !> cells in the optional argument cc.
+     subroutine af_subr_bc_custom(box, nb, iv, n_gc, cc)
+       import
+       type(box_t), intent(inout) :: box     !< Box that needs b.c.
+       integer, intent(in)     :: nb      !< Direction
+       integer, intent(in)     :: iv      !< Index of variable
+       integer, intent(in)     :: n_gc !< Number of ghost cells to fill
+       !> If n_gc > 1, fill ghost cell values in this array instead of box%cc
+       real(dp), intent(inout), optional :: &
+            cc(DTIMES(1-n_gc:box%n_cell+n_gc))
+     end subroutine af_subr_bc_custom
+
+     !> To set cell-centered variables based on a user-defined function. This
+     !> can be useful to avoid recomputing values. The values should also be set
+     !> in ghost cells.
+     subroutine af_subr_funcval(box, iv)
+       import
+       type(box_t), intent(inout) :: box !< Box to fill values in
+       integer, intent(in)        :: iv  !< Index of variable
+     end subroutine af_subr_funcval
 
      !> Subroutine for prolongation
      subroutine af_subr_prolong(box_p, box_c, iv, iv_to, add)
@@ -578,6 +608,27 @@ contains
     end do
 
   end function af_is_phys_boundary
+
+  !> Check whether a refinement boundary is present, either fine-to-coarse or
+  !> coarse-to-fine
+  pure logical function af_is_ref_boundary(boxes, id, nb)
+    type(box_t), intent(in) :: boxes(:) !< List of boxes
+    integer, intent(in)     :: id       !< Box to inspect
+    integer, intent(in)     :: nb       !< Neighbor direction
+    integer                 :: nb_id
+
+    af_is_ref_boundary = .false.
+    nb_id = boxes(id)%neighbors(nb)
+
+    if (nb_id == af_no_box) then
+       af_is_ref_boundary = .true.
+    else if (nb_id > af_no_box) then
+       if (.not. af_has_children(boxes(id)) .and. &
+            af_has_children(boxes(nb_id))) then
+          af_is_ref_boundary = .true.
+       end if
+    end if
+  end function af_is_ref_boundary
 
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 and one at

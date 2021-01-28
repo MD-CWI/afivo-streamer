@@ -23,9 +23,6 @@ module m_field
   !> Stop modifying the vertical background field after this time
   real(dp) :: field_mod_t1 = 1e99_dp
 
-  !> Add this uniform background field (V/m)
-  real(dp) :: field_background(NDIM) = 0.0_dp
-
   !> Amplitude of sinusoidal modification
   real(dp) :: field_sin_amplitude = 0.0_dp
 
@@ -38,6 +35,9 @@ module m_field
   !> Decay time of background field
   real(dp) :: field_decay_time = huge(1.0_dp)
 
+  !> Linear rise time of field (s)
+  real(dp) :: field_rise_time = 0.0_dp
+
   !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = 1.0e6_dp
 
@@ -49,6 +49,18 @@ module m_field
 
   !> Whether the voltage has been set externally
   logical :: voltage_set_externally = .false.
+
+  !> Whether the electrode is grounded or at the applied voltage
+  logical, public, protected :: field_electrode_grounded = .false.
+
+  !> Electrode relative start position (for standard rod electrode)
+  real(dp), public, protected :: field_rod_r0(NDIM) = -1.0_dp
+
+  !> Electrode relative end position (for standard rod electrode)
+  real(dp), public, protected :: field_rod_r1(NDIM) = -1.0_dp
+
+  !> Electrode radius (in m, for standard rod electrode)
+  real(dp), public, protected :: field_rod_radius = -1.0_dp
 
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
@@ -63,7 +75,6 @@ module m_field
   public :: field_initialize
   public :: field_compute
   public :: field_set_rhs
-  public :: field_from_potential
   public :: field_get_amplitude
   public :: field_set_voltage
   public :: field_set_voltage_externally
@@ -97,8 +108,6 @@ contains
          "Modify electric field after this time (s)")
     call CFG_add_get(cfg, "field_mod_t1", field_mod_t1, &
          "Modify electric field up to this time (s)")
-    call CFG_add_get(cfg, "field_background", field_background, &
-         "Add this uniform background field (V/m)")
     call CFG_add_get(cfg, "field_sin_amplitude", field_sin_amplitude, &
          "Amplitude of sinusoidal modification (V/m)")
     call CFG_add_get(cfg, "field_sin_freq", field_sin_freq, &
@@ -107,6 +116,8 @@ contains
          "Linear derivative of field [V/(ms)]")
     call CFG_add_get(cfg, "field_decay_time", field_decay_time, &
          "Decay time of field (s)")
+    call CFG_add_get(cfg, "field_rise_time", field_rise_time, &
+         "Linear rise time of field (s)")
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
          "The (initial) vertical applied electric field (V/m)")
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
@@ -128,6 +139,15 @@ contains
     call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
          "Relative position of point charge (outside domain)")
 
+    call CFG_add_get(cfg, "field_electrode_grounded", field_electrode_grounded, &
+         "Whether the electrode is grounded or at the applied voltage")
+    call CFG_add_get(cfg, "field_rod_r0", field_rod_r0, &
+         "Electrode relative start position (for standard rod electrode)")
+    call CFG_add_get(cfg, "field_rod_r1", field_rod_r1, &
+         "Electrode relative end position (for standard rod electrode)")
+    call CFG_add_get(cfg, "field_rod_radius", field_rod_radius, &
+         "Electrode radius (in m, for standard rod electrode)")
+
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
     else
@@ -148,7 +168,20 @@ contains
     mg%i_phi = i_phi
     mg%i_tmp = i_tmp
     mg%i_rhs = i_rhs
+
     if (ST_use_dielectric) mg%i_eps = i_eps
+
+    if (ST_use_electrode) then
+       if (any(field_rod_r0 <= -1.0_dp)) &
+            error stop "field_rod_r0 not set correctly"
+       if (any(field_rod_r1 <= -1.0_dp)) &
+            error stop "field_rod_r1 not set correctly"
+       if (field_rod_radius <= 0) &
+            error stop "field_rod_radius not set correctly"
+
+       call af_set_cc_methods(tree, i_lsf, funcval=field_rod_lsf)
+       mg%i_lsf = i_lsf
+    end if
 
     ! This automatically handles cylindrical symmetry
     mg%box_op => mg_auto_op
@@ -207,22 +240,78 @@ contains
     real(dp), intent(in)      :: time
     logical, intent(in)       :: have_guess
     integer                   :: i
+    real(dp)                  :: max_rhs, residual_threshold, conv_fac
+    real(dp)                  :: residual_ratio
+    integer, parameter        :: max_initial_iterations = 30
+    real(dp), parameter       :: max_residual = 1e8_dp
+    real(dp), parameter       :: min_residual = 1e-6_dp
+    real(dp)                  :: residuals(max_initial_iterations)
 
     call field_set_rhs(tree, s_in)
     call field_set_voltage(tree, time)
 
-    if (.not. have_guess) then
-       ! Perform a FMG cycle when we have no guess
-       call mg_fas_fmg(tree, mg, .false., have_guess)
+    call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
+
+    ! With an electrode, the initial convergence testing should be less strict
+    if (ST_use_electrode) then
+       conv_fac = 1e-8_dp
     else
-       ! Perform cheaper V-cycles
-       do i = 1, ST_multigrid_num_vcycles
-          call mg_fas_vcycle(tree, mg, .false.)
-       end do
+       conv_fac = 1e-10_dp
     end if
 
+    ! Set threshold based on rhs and on estimate of round-off error, given by
+    ! delta phi / dx^2 = (phi/L * dx)/dx^2
+    ! Note that we use min_residual in case max_rhs and field_voltage are zero
+    residual_threshold = max(min_residual, &
+         max_rhs * ST_multigrid_max_rel_residual, &
+         conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
+
+    if (ST_use_electrode) then
+       if (field_electrode_grounded) then
+          mg%lsf_boundary_value = 0.0_dp
+       else
+          mg%lsf_boundary_value = field_voltage
+       end if
+    end if
+
+    ! Perform a FMG cycle when we have no guess
+    if (.not. have_guess) then
+       do i = 1, max_initial_iterations
+          call mg_fas_fmg(tree, mg, .true., .true.)
+          call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
+
+          if (residuals(i) < residual_threshold) then
+             exit
+          else if (i > 2) then
+             ! Check if the residual is not changing much anymore, and if it is
+             ! small enough, in which case we assume convergence
+             residual_ratio = minval(residuals(i-2:i)) / &
+                  maxval(residuals(i-2:i))
+             if (residual_ratio < 2.0_dp .and. residual_ratio > 0.5_dp &
+                  .and. residuals(i) < max_residual) exit
+          end if
+       end do
+
+       ! Check for convergence
+       if (i == max_initial_iterations + 1) then
+          print *, "Iteration    residual"
+          do i = 1, max_initial_iterations
+             write(*, "(I4,E18.2)") i, residuals(i)
+          end do
+          print *, "Maybe increase multigrid_max_rel_residual?"
+          error stop "No convergence in initial field computation"
+       end if
+    end if
+
+    ! Perform cheaper V-cycles
+    do i = 1, ST_multigrid_num_vcycles
+       call mg_fas_vcycle(tree, mg, .true.)
+       call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
+       if (residuals(i) < residual_threshold) exit
+    end do
+
     ! Compute field from potential
-    call af_loop_box(tree, field_from_potential)
+    call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
@@ -243,17 +332,21 @@ contains
        call LT_lin_interp_list(field_table_times, field_table_fields, &
             time, electric_fld)
     else
+       electric_fld = field_amplitude
+
+       if (time < field_rise_time) then
+          electric_fld = electric_fld * (time/field_rise_time)
+       end if
+
        ! TODO: simplify stuff below
        t_rel = time - field_mod_t0
        t_rel = min(t_rel, field_mod_t1-field_mod_t0)
 
        if (t_rel > 0) then
-          electric_fld = field_amplitude * exp(-t_rel/field_decay_time) + &
+          electric_fld = electric_fld * exp(-t_rel/field_decay_time) + &
                t_rel * field_lin_deriv + &
                field_sin_amplitude * &
                sin(t_rel * field_sin_freq * 2 * UC_pi)
-       else
-          electric_fld = field_amplitude
        end if
     end if
 
@@ -357,119 +450,22 @@ contains
     end if
   end subroutine field_bc_point_charge
 
-  !> Compute electric field from electrical potential
-  subroutine field_from_potential(box)
+  ! This routine sets the level set function for a simple rod
+  subroutine field_rod_lsf(box, iv)
+    use m_geometry
     type(box_t), intent(inout) :: box
-    integer                    :: nc
-    real(dp)                   :: inv_dr(NDIM)
+    integer, intent(in)        :: iv
+    integer                    :: IJK, nc
+    real(dp)                   :: rr(NDIM)
 
-    nc     = box%n_cell
-    inv_dr = 1 / box%dr
+    nc = box%n_cell
 
-#if NDIM == 1
-    box%fc(1:nc+1, 1, electric_fld) = inv_dr(1) * &
-         (box%cc(0:nc, i_phi) - box%cc(1:nc+1, i_phi)) + &
-         field_background(1)
+    do KJI_DO(0,nc+1)
+       rr = af_r_cc(box, [IJK])
+       box%cc(IJK, iv) = GM_dist_line(rr, field_rod_r0 * ST_domain_len, &
+            field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
+    end do; CLOSE_DO
 
-    if (ST_use_dielectric) then
-       ! Compute fields at the boundaries of the box, where eps can change
-       box%fc(1, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(0, i_phi) - box%cc(1, i_phi)) * &
-            box%cc(0, i_eps) / &
-            (box%cc(1, i_eps) + box%cc(0, i_eps))
-       box%fc(nc+1, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(nc, i_phi) - box%cc(nc+1, i_phi)) * &
-            box%cc(nc+1, i_eps) / &
-            (box%cc(nc+1, i_eps) + box%cc(nc, i_eps))
-    end if
-
-    box%cc(1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1, electric_fld))**2)
-#elif NDIM == 2
-    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr(1) * &
-         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi)) + &
-         field_background(1)
-    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr(2) * &
-         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi)) + &
-         field_background(2)
-
-    if (ST_use_dielectric) then
-       ! Compute fields at the boundaries of the box, where eps can change
-       box%fc(1, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(0, 1:nc, i_phi) - box%cc(1, 1:nc, i_phi)) * &
-            box%cc(0, 1:nc, i_eps) / &
-            (box%cc(1, 1:nc, i_eps) + box%cc(0, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, i_phi)) * &
-            box%cc(nc+1, 1:nc, i_eps) / &
-            (box%cc(nc+1, 1:nc, i_eps) + box%cc(nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, 0, i_phi) - box%cc(1:nc, 1, i_phi)) * &
-            box%cc(1:nc, 0, i_eps) / &
-            (box%cc(1:nc, 1, i_eps) + box%cc(1:nc, 0, i_eps))
-       box%fc(1:nc, nc+1, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, nc, i_phi) - box%cc(1:nc, nc+1, i_phi)) * &
-            box%cc(1:nc, nc+1, i_eps) / &
-            (box%cc(1:nc, nc+1, i_eps) + box%cc(1:nc, nc, i_eps))
-    end if
-
-    box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 2, electric_fld))**2)
-#elif NDIM == 3
-    box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr(1) * &
-         (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
-         box%cc(1:nc+1, 1:nc, 1:nc, i_phi)) + &
-         field_background(1)
-    box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr(2) * &
-         (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
-         box%cc(1:nc, 1:nc+1, 1:nc, i_phi)) + &
-         field_background(2)
-    box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr(3) * &
-         (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
-         box%cc(1:nc, 1:nc, 1:nc+1, i_phi)) + &
-         field_background(3)
-
-    if (ST_use_dielectric) then
-       ! Compute fields at the boundaries of the box, where eps can change
-       box%fc(1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(0, 1:nc, 1:nc, i_phi) - box%cc(1, 1:nc, 1:nc, i_phi)) * &
-            box%cc(0, 1:nc, 1:nc, i_eps) / &
-            (box%cc(1, 1:nc, 1:nc, i_eps) + box%cc(0, 1:nc, 1:nc, i_eps))
-       box%fc(nc+1, 1:nc, 1:nc, 1, electric_fld) = 2 * inv_dr(1) * &
-            (box%cc(nc, 1:nc, 1:nc, i_phi) - box%cc(nc+1, 1:nc, 1:nc, i_phi)) * &
-            box%cc(nc+1, 1:nc, 1:nc, i_eps) / &
-            (box%cc(nc+1, 1:nc, 1:nc, i_eps) + box%cc(nc, 1:nc, 1:nc, i_eps))
-       box%fc(1:nc, 1, 1:nc, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, 0, 1:nc, i_phi) - box%cc(1:nc, 1, 1:nc, i_phi)) * &
-            box%cc(1:nc, 0, 1:nc, i_eps) / &
-            (box%cc(1:nc, 1, 1:nc, i_eps) + box%cc(1:nc, 0, 1:nc, i_eps))
-       box%fc(1:nc, nc+1, 1:nc, 2, electric_fld) = 2 * inv_dr(2) * &
-            (box%cc(1:nc, nc, 1:nc, i_phi) - box%cc(1:nc, nc+1, 1:nc, i_phi)) * &
-            box%cc(1:nc, nc+1, 1:nc, i_eps) / &
-            (box%cc(1:nc, nc+1, 1:nc, i_eps) + box%cc(1:nc, nc, 1:nc, i_eps))
-       box%fc(1:nc, 1:nc, 1, 3, electric_fld) = 2 * inv_dr(3) * &
-            (box%cc(1:nc, 1:nc, 0, i_phi) - box%cc(1:nc, 1:nc, 1, i_phi)) * &
-            box%cc(1:nc, 1:nc, 0, i_eps) / &
-            (box%cc(1:nc, 1:nc, 1, i_eps) + box%cc(1:nc, 1:nc, 0, i_eps))
-       box%fc(1:nc, 1:nc, nc+1, 3, electric_fld) = 2 * inv_dr(3) * &
-            (box%cc(1:nc, 1:nc, nc, i_phi) - box%cc(1:nc, 1:nc, nc+1, i_phi)) * &
-            box%cc(1:nc, 1:nc, nc+1, i_eps) / &
-            (box%cc(1:nc, 1:nc, nc+1, i_eps) + box%cc(1:nc, 1:nc, nc, i_eps))
-    end if
-
-    box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
-         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))**2)
-#endif
-
-  end subroutine field_from_potential
+  end subroutine field_rod_lsf
 
 end module m_field

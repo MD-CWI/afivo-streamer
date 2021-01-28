@@ -55,3 +55,5 @@
 documentation/html/*
 external_libraries/*
 tests/results/*
+/examples/electrode_example_?d
+/examples/poisson_lsf_test_?d
