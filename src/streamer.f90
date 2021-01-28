@@ -71,6 +71,9 @@ program streamer
                                         
   real(dp) :: HV_source = 0.0  ! Constant Voltage Source
   real(dp) :: HV_power = 30  ! Power limit of voltage source
+  real(dp) :: T_switch_on = 10e-9  ! Time the switch connects the electrode to the HV source
+  real(dp) :: T_switch_off = 20e-9  ! Time the switch connects the electrode to ground
+  real(dp) :: slc_pulse_period = 0  ! Complete pulse time = T_switch_on + T_switch_off
   real(dp) :: R_preswitch = 10e3  ! Resistor for charging capacitor
   real(dp) :: R_postswitch = 300  ! Current limiting resistor for electrode
   real(dp) :: R_gnd = 10  ! Resistance between "ground" electrode and actual GND
@@ -125,6 +128,10 @@ program streamer
    "(slc) Fixed applied HV. (V)")
    call CFG_add_get(cfg, "HV_power", HV_power, &
    "(slc) Power limit of HV supply. (W)")
+   call CFG_add_get(cfg, "T_switch_on", T_switch_on, &
+   "(slc) Time the switch connects the electrode to the HV source. (s)")
+   call CFG_add_get(cfg, "T_switch_off", T_switch_off, &
+   "(slc) Time the switch connects the electrode to ground. (s)")
    call CFG_add_get(cfg, "R_preswitch", R_preswitch, &
    "(slc) Resistor connected to HV supply. (Ohm)")
    call CFG_add_get(cfg, "R_postswitch", R_postswitch, &
@@ -297,7 +304,9 @@ program streamer
       end if
 
       if (circuit_method /= "none") then
-         call add_circuit_effect()
+         if (circuit_type == "slc") then
+            call add_slc_effect()
+         end if
       end if
 #endif
         ! Make sure field is available for latest time state
@@ -464,6 +473,10 @@ contains
     if (circuit_method /= "none") then
       call initialize_electrode_capacitance()
 
+      if (circuit_type == "slc") then
+         call initialize_slc()
+      end if
+
       ! Create an output file
       open(newunit=circuit_output_unit, file=trim(output_name) // "_" // "output", action='write')
       write(circuit_output_unit, *) "dt(s)           I(A)           Ve(V)           Vc(V)           Vgnd(V)           Ignd(A)"
@@ -513,40 +526,43 @@ contains
   end subroutine print_program_name
 
    subroutine initialize_electrode_capacitance()
-      ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
-      if (use_top_electrode_sphere) then
+      use m_field
+      if (use_top_electrode_sphere .and. ST_use_electrode) then
          ! Formula for self capacitance of a sphere with radius R; C = 4 * pi * eps0 * R
-         top_electrode_self_capacitance = 4 * UC_pi * UC_eps0 * top_electrode_sphere_radius
+         C_top = 4 * UC_pi * UC_eps0 * field_rod_radius
       else
          ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
-         top_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
+         C_top = 8 * UC_eps0 * ST_domain_len(1)
       end if
 
-      if (use_bottom_electrode_sphere) then
-         ! Formula for self capacitance of a sphere with radius R; C = 4 * pi * eps0 * R
-         bottom_electrode_self_capacitance = 4 * UC_pi * UC_eps0 * bottom_electrode_sphere_radius
-      else
-         ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
-         bottom_electrode_self_capacitance = 8 * UC_eps0 * ST_domain_len(1)
-      end if
+      ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
+      C_bottom = 8 * UC_eps0 * ST_domain_len(1)
+
    end subroutine initialize_electrode_capacitance
+
+
+   subroutine initialize_slc()
+      ! Initialize the starting voltage of the main capacitor and the electrode
+      C_preswitch_voltage = C_preswitch_initial_voltage_fraction * HV_source
+      print *, "Initial main capacitor voltage: ", C_preswitch_voltage
+
+      top_electrode_voltage = top_electrode_initial_voltage_fraction * HV_source
+      call field_set_voltage_externally(top_electrode_voltage)
+      print *, "Initial electrode voltage: ", top_electrode_voltage
+
+      slc_pulse_period = T_switch_on + T_switch_off
+
+   end subroutine initialize_slc
 
    subroutine initialize_circuit_andy(tree, cfg)
       use m_field
       type(CFG_t), intent(inout) :: cfg
       type(af_t), intent(inout)  :: tree
 
-      ! Initialize capacitor voltage
-      top_electrode_connected_capacitor_voltage = top_electrode_connected_capacitor_initial_voltage_fraction * &
-                                                   applied_voltage_top_circuit
-      print *, "Initial top capacitor voltage: ", top_electrode_connected_capacitor_voltage
       r_top_electrode(1) = 0
       r_top_electrode(2) = 0
       r_top_electrode(NDIM) = ST_domain_len(NDIM) + delta_electrode_position
-      top_electrode_voltage = top_electrode_initial_voltage_fraction * applied_voltage_top_circuit
-      call field_set_voltage_externally(top_electrode_voltage)
-      
-
+    
       r_bottom_electrode(1) = 0
       r_bottom_electrode(2) = 0
       r_bottom_electrode(NDIM) = 0 - delta_electrode_position
@@ -691,13 +707,6 @@ contains
       real(dp) :: min_potential = 0.0
       integer :: i_fas_fmg
 
-      ! Initialize capacitor voltage to be the a fraction of the applied voltage
-      top_electrode_connected_capacitor_voltage = top_electrode_connected_capacitor_initial_voltage_fraction * &
-                                                   applied_voltage_top_circuit
-      print *, "Initial capacitor voltage: ", top_electrode_connected_capacitor_voltage
-      top_electrode_voltage = top_electrode_initial_voltage_fraction * applied_voltage_top_circuit
-      call field_set_voltage_externally(top_electrode_voltage)
-
       !!!!! Calculate weighting potential at t = 0 !!!!!
       ! TOP ELECTRODE
       ! Set RHS to 0
@@ -705,7 +714,7 @@ contains
       ! Store field voltage in temp
       field_voltage_temp = field_voltage
       ! Set field voltage to desired value
-      call field_set_voltage_externally(Q0_R / top_electrode_self_capacitance)
+      call field_set_voltage_externally(Q0_R / C_top)
       ! Calculate the weighting potential field using FAS FMG
       do i_fas_fmg = 1, 100
          call mg_fas_fmg(tree, mg, .false., .false.)
@@ -744,7 +753,7 @@ contains
    
       call af_tree_max_cc(tree, ix_weighting_potential_bottom, max_potential)
       print *, "Max potential: ", max_potential
-      print *, "Real max potential: ", Q0_R / top_electrode_self_capacitance
+      print *, "Real max potential: ", Q0_R / C_top
       call af_tree_min_cc(tree, ix_weighting_potential_bottom, min_potential)
       print *, "Min potential: ", min_potential
       print *, "Real min potential: ", 0
@@ -875,7 +884,7 @@ contains
       if (af_neighb_dim(nb) == NDIM) then
          if (af_neighb_low(nb)) then
             bc_type = af_bc_dirichlet
-            bc_val = Q0_R / top_electrode_self_capacitance
+            bc_val = Q0_R / C_top
          else
             bc_type = af_bc_dirichlet
             bc_val  = 0.0
@@ -922,12 +931,15 @@ contains
 
    end subroutine calc_induced_potential_from_box_pederson
 
-   subroutine add_circuit_effect()
+   subroutine add_slc_effect()
       real(dp) :: delta_V_top_electrode_dt
       real(dp) :: delta_V_electrode_capacitor
       real(dp) :: current_top
       real(dp) :: delta_V_bottom_electrode_dt
       real(dp) :: current_bottom
+      real(dp) :: time_within_slc_pulse_period
+
+      time_within_slc_pulse_period = time - floor(time / slc_pulse_period) * slc_pulse_period
 
       !!!! TOP ELECTRODE !!!!
       ! The change in potential at the top electrode
@@ -939,28 +951,39 @@ contains
       ! Change the potential of the top electrode
       top_electrode_voltage = top_electrode_voltage + delta_V_top_electrode_dt
 
-      ! There is now a new potential difference between capacitor and the top electrode
-      delta_V_electrode_capacitor = top_electrode_connected_capacitor_voltage - top_electrode_voltage
+      if (time_within_slc_pulse_period <= T_switch_on) then
+         ! Electrode is connected via the switch to the main capacitor and HV source
 
-      ! This potential difference creates a current from capacitor to top electrode (conventional)
-      current_top = delta_V_electrode_capacitor / top_electrode_connected_resistor
-
-      ! This current will change the potential of the capacitor
-      top_electrode_connected_capacitor_voltage = top_electrode_connected_capacitor_voltage &
-                                                   - (current_top * dt) / top_electrode_connected_capacitor
-
-      ! This current will also charge the top electrode again
-      top_electrode_voltage = top_electrode_voltage + (current_top * dt) / top_electrode_self_capacitance
+         ! There is now a new potential difference between capacitor and the top electrode
+         delta_V_electrode_capacitor = C_preswitch_voltage - top_electrode_voltage
       
+         ! This potential difference creates a current from capacitor to top electrode (conventional)
+         current_top = delta_V_electrode_capacitor / R_postswitch
+
+         ! This current will change the potential of the capacitor
+         C_preswitch_voltage = C_preswitch_voltage - (current_top * dt) / C_preswitch
+
+         ! This current will also charge the top electrode again
+         top_electrode_voltage = top_electrode_voltage + (current_top * dt) / C_top
+      
+
+      else
+         ! Electrode is connected via R_postswitch to ground
+
+         ! C_preswitch is being charged by HV_source through R_preswitch
+
+      end if
+
+
       !!!! BOTTOM ELECTRODE !!!!
       delta_V_bottom_electrode_dt = bottom_electrode_new_calculated_voltage - bottom_electrode_old_calculated_voltage
 
       bottom_electrode_voltage = bottom_electrode_voltage + delta_V_bottom_electrode_dt
 
       ! Current from bottom electrode to ground (conventional)
-      current_bottom = (bottom_electrode_voltage - 0) / bottom_electrode_connected_resistor
+      current_bottom = (bottom_electrode_voltage - 0) / R_gnd
 
-      bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / bottom_electrode_self_capacitance
+      bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / C_bottom
 
       ! Change the applied voltage at the top electrode for the simulation
       ! For simulations we still have bottom electrode  = 0 V and top electrode has the applied potential
@@ -972,10 +995,11 @@ contains
       bottom_electrode_old_calculated_voltage = bottom_electrode_new_calculated_voltage
       bottom_electrode_new_calculated_voltage = 0.0
 
-      write(circuit_output_unit, *) dt, current_top, top_electrode_voltage, top_electrode_connected_capacitor_voltage, &
+      write(circuit_output_unit, *) dt, current_top, top_electrode_voltage, C_preswitch_voltage, &
                                        bottom_electrode_voltage, current_bottom
 
-   end subroutine add_circuit_effect
+   end subroutine add_slc_effect
+
   !> Set species boundary conditions at the electrode
   subroutine set_electrode_densities(tree)
     type(af_t), intent(inout) :: tree
