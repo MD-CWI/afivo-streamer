@@ -80,13 +80,17 @@ program streamer
 
   real(dp) :: C_preswitch = 200e-12  ! Main capacitor
   real(dp) :: C_preswitch_initial_voltage_fraction = 1
-  real(dp) :: C_preswitch_voltage = 0
-  
+  real(dp) :: C_preswitch_voltage = 0  ! Stores V(t + 1)
+  real(dp) :: C_preswitch_voltage_old = 0  ! Used for when V(t) is needed.
+  real(dp) :: C_preswitch_voltage_oldold = 0  ! Used for when V(t - 1) is needed.
+
   real(dp) :: L_postswitch = 0  ! Self inductance of wire connecting electrode
   real(dp) :: L_gnd = 0  ! Self inductance of wire connecting bottom electrode to GND
 
   real(dp) :: C_top = 0  ! Self inductance of top electrode
-  real(dp) :: top_electrode_voltage = 0.0
+  real(dp) :: top_electrode_voltage = 0.0  ! Stores V(t + 1)
+  real(dp) :: top_electrode_voltage_old = 0.0  ! Used for when V(t) is needed
+  real(dp) :: top_electrode_voltage_oldold = 0.0  ! Used for when V(t - 1) is needed
   real(dp) :: top_electrode_initial_voltage_fraction = 1
   real(dp) :: top_electrode_old_calculated_voltage = 0.0
   real(dp) :: top_electrode_new_calculated_voltage = 0.0
@@ -479,7 +483,7 @@ contains
 
       ! Create an output file
       open(newunit=circuit_output_unit, file=trim(output_name) // "_" // "output", action='write')
-      write(circuit_output_unit, *) "dt(s)           I(A)           Ve(V)           Vc(V)           Vgnd(V)           Ignd(A)"
+      write(circuit_output_unit, *) "dt(s)\tI_HV(A)\tIe(A)\tIc(A)\tV_Cpre(V)\tV_Ctop(V)\tV_gnd(V)\tI_gnd(A)"
 
     endif
 
@@ -934,10 +938,18 @@ contains
    subroutine add_slc_effect()
       real(dp) :: delta_V_top_electrode_dt
       real(dp) :: delta_V_electrode_capacitor
-      real(dp) :: current_top
       real(dp) :: delta_V_bottom_electrode_dt
-      real(dp) :: current_bottom
       real(dp) :: time_within_slc_pulse_period
+      real(dp) :: I_HV
+      real(dp) :: Ie
+      real(dp) :: Ic
+      real(dp) :: I_gnd
+
+      C_preswitch_voltage_oldold = C_preswitch_voltage_old
+      C_preswitch_voltage_old = C_preswitch_voltage
+
+      top_electrode_voltage_oldold = top_electrode_voltage_old
+      top_electrode_voltage_old = top_electrode_voltage
 
       time_within_slc_pulse_period = time - floor(time / slc_pulse_period) * slc_pulse_period
 
@@ -945,26 +957,46 @@ contains
       ! The change in potential at the top electrode
       delta_V_top_electrode_dt = top_electrode_new_calculated_voltage &
                                  - top_electrode_old_calculated_voltage
-      print *, "Change in potential top electrode: ", delta_V_top_electrode_dt
+      !print *, "Change in potential top electrode: ", delta_V_top_electrode_dt
 
 
       ! Change the potential of the top electrode
-      top_electrode_voltage = top_electrode_voltage + delta_V_top_electrode_dt
+      top_electrode_voltage_old = top_electrode_voltage_old + delta_V_top_electrode_dt
 
       if (time_within_slc_pulse_period <= T_switch_on) then
          ! Electrode is connected via the switch to the main capacitor and HV source
 
+         top_electrode_voltage = (1 / ((C_top * R_postswitch / dt) +  (L_postswitch * C_top / dt**2))) * &
+         (&
+            ((C_top * R_postswitch / dt) + (2 * L_postswitch * C_top / dt**2) -1) * top_electrode_voltage_old &
+            - (L_postswitch * C_top / dt**2) * top_electrode_voltage_oldold &
+            + C_preswitch_voltage_old &
+         )
+
+         C_preswitch_voltage = (dt / (C_preswitch * R_preswitch)) * &
+         (&
+            - (1 - C_preswitch * R_preswitch) * C_preswitch_voltage_old &
+            - (C_top * R_preswitch / dt) * top_electrode_voltage &
+            + (C_top * R_preswitch / dt) * top_electrode_voltage_old &
+            + HV_source &
+         )
+
+
+         Ie = C_top * (top_electrode_voltage_old - top_electrode_voltage_oldold) / dt
+         I_HV = (C_top * (top_electrode_voltage_old - top_electrode_voltage_oldold) / dt) &
+               + (C_preswitch * (C_preswitch_voltage_old - C_preswitch_voltage_oldold) / dt)
+         Ic = C_preswitch * (C_preswitch_voltage_old - C_preswitch_voltage_oldold) / dt
          ! There is now a new potential difference between capacitor and the top electrode
-         delta_V_electrode_capacitor = C_preswitch_voltage - top_electrode_voltage
+         !delta_V_electrode_capacitor = C_preswitch_voltage - top_electrode_voltage
       
          ! This potential difference creates a current from capacitor to top electrode (conventional)
-         current_top = delta_V_electrode_capacitor / R_postswitch
+         !current_top = delta_V_electrode_capacitor / R_postswitch
 
          ! This current will change the potential of the capacitor
-         C_preswitch_voltage = C_preswitch_voltage - (current_top * dt) / C_preswitch
+         !C_preswitch_voltage = C_preswitch_voltage - (current_top * dt) / C_preswitch
 
          ! This current will also charge the top electrode again
-         top_electrode_voltage = top_electrode_voltage + (current_top * dt) / C_top
+         !top_electrode_voltage = top_electrode_voltage + (current_top * dt) / C_top
       
 
       else
@@ -981,9 +1013,9 @@ contains
       bottom_electrode_voltage = bottom_electrode_voltage + delta_V_bottom_electrode_dt
 
       ! Current from bottom electrode to ground (conventional)
-      current_bottom = (bottom_electrode_voltage - 0) / R_gnd
+      I_gnd = (bottom_electrode_voltage - 0) / R_gnd
 
-      bottom_electrode_voltage = bottom_electrode_voltage - (current_bottom * dt) / C_bottom
+      bottom_electrode_voltage = bottom_electrode_voltage - (I_gnd * dt) / C_bottom
 
       ! Change the applied voltage at the top electrode for the simulation
       ! For simulations we still have bottom electrode  = 0 V and top electrode has the applied potential
@@ -995,8 +1027,8 @@ contains
       bottom_electrode_old_calculated_voltage = bottom_electrode_new_calculated_voltage
       bottom_electrode_new_calculated_voltage = 0.0
 
-      write(circuit_output_unit, *) dt, current_top, top_electrode_voltage, C_preswitch_voltage, &
-                                       bottom_electrode_voltage, current_bottom
+      write(circuit_output_unit, *) dt, I_HV, Ie, Ic, C_preswitch_voltage, top_electrode_voltage, &
+                                    bottom_electrode_voltage, I_gnd
 
    end subroutine add_slc_effect
 
