@@ -62,6 +62,13 @@ module m_field
   !> Electrode radius (in m, for standard rod electrode)
   real(dp), public, protected :: field_rod_radius = -1.0_dp
 
+  !> Electrode voltage (in V)
+  real(dp), public, protected :: electrode_voltage = 0.0_dp
+
+  !> Whether the voltage of the electrode is used or the current field amplitude
+  logical, public, protected :: use_electrode_voltage = .false.
+
+
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
   real(dp) :: field_stability_zmax      = 1.0_dp
@@ -147,7 +154,11 @@ contains
          "Electrode relative end position (for standard rod electrode)")
     call CFG_add_get(cfg, "field_rod_radius", field_rod_radius, &
          "Electrode radius (in m, for standard rod electrode)")
-
+    call CFG_add_get(cfg, "electrode_voltage", electrode_voltage, &
+         "The (initial) applied electrode voltage (V).")
+    call CFG_add_get(cfg, "use_electrode_voltage", use_electrode_voltage, &
+         "Whether the defined electrode voltage is used instead of the field amplitude.")
+    
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
     else
@@ -358,9 +369,18 @@ contains
     real(dp), intent(in)   :: time
 
     if (.not. voltage_set_externally) then
-       current_field_amplitude = field_get_amplitude(tree, time)
-       field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
-    end if
+      current_field_amplitude = field_get_amplitude(tree, time)
+      if (.not. ST_use_electrode) then
+         field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
+      else
+        if (use_electrode_voltage) then
+            field_voltage = electrode_voltage
+        else
+            field_voltage = -(ST_domain_len(NDIM) * (1 - (abs(field_rod_r0(NDIM) - field_rod_r1(NDIM)))))&
+                         * current_field_amplitude
+        end if
+      end if
+   end if
   end subroutine field_set_voltage
 
   !> Set the voltage
@@ -368,7 +388,12 @@ contains
     real(dp), intent(in) :: voltage
     voltage_set_externally = .true.
     field_voltage = voltage
-    current_field_amplitude = -voltage/ST_domain_len(NDIM)
+
+    if (.not. ST_use_electrode) then
+      current_field_amplitude = -voltage / ST_domain_len(NDIM)
+    else
+      current_field_amplitude = -voltage / (ST_domain_len(NDIM) * (1 - (abs(field_rod_r0(NDIM) - field_rod_r1(NDIM)))))
+    end if  
   end subroutine field_set_voltage_externally
 
   !> Dirichlet boundary conditions for the potential in the last dimension,

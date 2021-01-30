@@ -98,6 +98,8 @@ program streamer
 
   real(dp) :: C_bottom = 0  ! Self inductance of bottom electrode
   real(dp) :: bottom_electrode_voltage = 0.0
+  real(dp) :: bottom_electrode_voltage_old = 0.0
+  real(dp) :: bottom_electrode_voltage_oldold = 0.0
   real(dp) :: bottom_electrode_old_calculated_voltage = 0.0
   real(dp) :: bottom_electrode_new_calculated_voltage = 0.0
 
@@ -299,25 +301,22 @@ program streamer
              af_heuns_method, forward_euler)
 
 #if NDIM >= 2
-      if (circuit_method == "andy") then
-         call calc_induced_potential_andy(tree)
-      else if (circuit_method == "riegler") then
-         call calc_induced_potential_riegler(tree)
-      else if (circuit_method == "pederson") then
-         call calc_induced_potential_pederson(tree)
-      end if
-
-      if (circuit_method /= "none") then
-         if (circuit_type == "slc") then
-            call add_slc_effect()
+         if (circuit_method == "andy") then
+            call calc_induced_potential_andy(tree)
+         else if (circuit_method == "riegler") then
+            call calc_induced_potential_riegler(tree)
+         else if (circuit_method == "pederson") then
+            call calc_induced_potential_pederson(tree)
          end if
-      end if
+
+         if (circuit_method /= "none") then
+            if (circuit_type == "slc") then
+               call add_slc_effect()
+            end if
+         end if
 #endif
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
-
-        !print *, "Top electrode voltage: ", top_electrode_voltage
-        !print *, "Field amplitude: ", field_get_amplitude(tree, time)
 
         if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
         if (circuit_used) call circuit_update(tree, dt)
@@ -542,6 +541,8 @@ contains
       ! Formula for self capacitance of a infinitely flat disc with radius R; C = 8 * eps0 * R
       C_bottom = 8 * UC_eps0 * ST_domain_len(1)
 
+      print *, "Self capacitance top electrode: ", C_top
+      print *, "Self capacitance bottom electrode: ", C_bottom
    end subroutine initialize_electrode_capacitance
 
 
@@ -555,7 +556,7 @@ contains
       print *, "Initial electrode voltage: ", top_electrode_voltage
 
       slc_pulse_period = T_switch_on + T_switch_off
-
+      print *, "SLC Pulse Period: ", slc_pulse_period
    end subroutine initialize_slc
 
    subroutine initialize_circuit_andy(tree, cfg)
@@ -785,6 +786,10 @@ contains
       real(dp) :: total_charge_cell
       real(dp) :: potential_from_cell_top
       real(dp) :: potential_from_cell_bottom
+
+      !real(dp) :: ne_cell
+      !real(dp) :: nO2m_cell
+      !real(dp) :: nO2p_cell
 #if NDIM == 3
       integer :: k_cell
 #endif
@@ -809,10 +814,19 @@ contains
                charge_density_cell = charge_density_cell + &
                                  charged_species_charge(i_plasma_species) * &
                                  box%cc(i_cell, j_cell, charged_species_itree(i_plasma_species))
+               !print *, "i species charge and density: ", i_plasma_species, charged_species_charge(i_plasma_species), &
+                !                                         box%cc(i_cell, j_cell, charged_species_itree(i_plasma_species))
             end do
+            !ne_cell = charged_species_charge(1) * box%cc(i_cell, j_cell, charged_species_itree(1))
+            !nO2m_cell = charged_species_charge(8) * box%cc(i_cell, j_cell, charged_species_itree(8))
+            !nO2p_cell = charged_species_charge(2) * box%cc(i_cell, j_cell, charged_species_itree(2))
+
+            !print *, "ne- + nO2- = nO2+: ", ne_cell + nO2m_cell, nO2p_cell
+            !print *, "Net charge density cell: ", charge_density_cell
             charge_density_cell = charge_density_cell * UC_elem_charge
 
             total_charge_cell = charge_density_cell * cell_volume * n_streamers_circuit
+            !print *, "Total charge in cell: ", total_charge_cell
 
             ! Multiply the total charge of this cell with the weighting potential to get the induced potential
             potential_from_cell_top = total_charge_cell * box%cc(i_cell, j_cell, ix_weighting_potential_top) / Q0_R
@@ -944,12 +958,17 @@ contains
       real(dp) :: Ie
       real(dp) :: Ic
       real(dp) :: I_gnd
+      real(dp) :: temp_I_HV
+      real(dp) :: temp_C_preswitch_voltage
 
       C_preswitch_voltage_oldold = C_preswitch_voltage_old
       C_preswitch_voltage_old = C_preswitch_voltage
 
       top_electrode_voltage_oldold = top_electrode_voltage_old
       top_electrode_voltage_old = top_electrode_voltage
+
+      bottom_electrode_voltage_oldold = bottom_electrode_voltage_old
+      bottom_electrode_voltage_old = bottom_electrode_voltage
 
       time_within_slc_pulse_period = time - floor(time / slc_pulse_period) * slc_pulse_period
 
@@ -963,63 +982,120 @@ contains
       ! Change the potential of the top electrode
       top_electrode_voltage_old = top_electrode_voltage_old + delta_V_top_electrode_dt
 
-      if (time_within_slc_pulse_period <= T_switch_on) then
-         ! Electrode is connected via the switch to the main capacitor and HV source
 
+      ! First the capacitor needs to be charged:
+      if (time_within_slc_pulse_period <= T_switch_off) then
+         !print *, "Switch Open !"
+         ! This will split the SLC circuit into 2 independent circuits
+         
+         ! C_preswitch is being charged by HV_source through R_preswitch
+         temp_C_preswitch_voltage = C_preswitch_voltage_old &
+            + (dt / (C_preswitch * R_preswitch)) &
+            * (HV_source - C_preswitch_voltage_old)
+
+         temp_I_HV = C_preswitch * (temp_C_preswitch_voltage - C_preswitch_voltage_old) / dt
+
+         ! Check if I_HV exceeds power rating of the source
+         if (temp_I_HV > HV_power / HV_source) then
+            ! Constant Current Mode
+            !print *, "CC Mode: ", temp_I_HV
+            I_HV = HV_power / HV_source
+            C_preswitch_voltage = (dt * I_HV / C_preswitch) + C_preswitch_voltage_old
+         else
+            ! Constant Voltage Mode
+            !print *, "CV Mode: ", temp_I_HV
+
+            ! C_preswitch is being charged by HV_source through R_preswitch
+            C_preswitch_voltage = temp_C_preswitch_voltage
+
+            I_HV = temp_I_HV
+         end if
+         Ic = I_HV
+
+
+         ! Electrode is connected via R_postswitch to ground
+         top_electrode_voltage = (1 / ((C_top * R_postswitch / dt) + (L_postswitch * C_top / dt**2))) * &
+         (&
+            ((C_top * R_postswitch / dt) + (2 * L_postswitch * C_top / dt**2) - 1) * top_electrode_voltage_old &
+            - (L_postswitch * C_top / dt**2) * top_electrode_voltage_oldold &
+         )
+
+         Ie = C_top * (top_electrode_voltage - top_electrode_voltage_old) / dt
+      else
+         ! Electrode is connected via the switch to the main capacitor and HV source
+         !print *, "Switch closed !"
          top_electrode_voltage = (1 / ((C_top * R_postswitch / dt) +  (L_postswitch * C_top / dt**2))) * &
          (&
             ((C_top * R_postswitch / dt) + (2 * L_postswitch * C_top / dt**2) -1) * top_electrode_voltage_old &
             - (L_postswitch * C_top / dt**2) * top_electrode_voltage_oldold &
             + C_preswitch_voltage_old &
          )
+         !print *, "Top electrode voltage: ", top_electrode_voltage, top_electrode_voltage_old, top_electrode_voltage_oldold
 
-         C_preswitch_voltage = (dt / (C_preswitch * R_preswitch)) * &
+         temp_C_preswitch_voltage = (dt / (C_preswitch * R_preswitch)) * &
          (&
             - (1 - C_preswitch * R_preswitch) * C_preswitch_voltage_old &
             - (C_top * R_preswitch / dt) * top_electrode_voltage &
             + (C_top * R_preswitch / dt) * top_electrode_voltage_old &
             + HV_source &
          )
+         !print *, "C_preswitch voltage: ", C_preswitch_voltage, C_preswitch_voltage_old, C_preswitch_voltage_oldold
+
+         temp_I_HV = (C_top * (top_electrode_voltage - top_electrode_voltage_old) / dt) &
+               + (C_preswitch * (temp_C_preswitch_voltage - C_preswitch_voltage_old) / dt)
+         !print *, "I_HV: ", I_HV
+         
+         
+         if (temp_I_HV > HV_power / HV_source) then
+            ! Constant Current Mode
+            I_HV = HV_power / HV_source
+
+            C_preswitch_voltage = C_preswitch_voltage_old &
+               - (C_top / C_preswitch) * (top_electrode_voltage - top_electrode_voltage_old) &
+               + (dt * I_HV / C_preswitch)
+         elseif (temp_I_HV < 0) then
+            ! Reverse current protection
+            I_HV = 0
+            
+            C_preswitch_voltage = C_preswitch_voltage_old &
+            - (C_top / C_preswitch) * (top_electrode_voltage - top_electrode_voltage_old) &
+            + (dt * I_HV / C_preswitch)
+         else
+            ! Constant Voltage Mode
+            C_preswitch_voltage = temp_C_preswitch_voltage
+            I_HV = temp_I_HV
+         end if
 
 
-         Ie = C_top * (top_electrode_voltage_old - top_electrode_voltage_oldold) / dt
-         I_HV = (C_top * (top_electrode_voltage_old - top_electrode_voltage_oldold) / dt) &
-               + (C_preswitch * (C_preswitch_voltage_old - C_preswitch_voltage_oldold) / dt)
-         Ic = C_preswitch * (C_preswitch_voltage_old - C_preswitch_voltage_oldold) / dt
-         ! There is now a new potential difference between capacitor and the top electrode
-         !delta_V_electrode_capacitor = C_preswitch_voltage - top_electrode_voltage
-      
-         ! This potential difference creates a current from capacitor to top electrode (conventional)
-         !current_top = delta_V_electrode_capacitor / R_postswitch
+         Ie = C_top * (top_electrode_voltage - top_electrode_voltage_old) / dt
+         !print *, "Ie: ", Ie
 
-         ! This current will change the potential of the capacitor
-         !C_preswitch_voltage = C_preswitch_voltage - (current_top * dt) / C_preswitch
-
-         ! This current will also charge the top electrode again
-         !top_electrode_voltage = top_electrode_voltage + (current_top * dt) / C_top
-      
-
-      else
-         ! Electrode is connected via R_postswitch to ground
-
-         ! C_preswitch is being charged by HV_source through R_preswitch
-
+         Ic = C_preswitch * (C_preswitch_voltage - C_preswitch_voltage_old) / dt
+         !print *, "Ic: ", Ic
       end if
 
 
       !!!! BOTTOM ELECTRODE !!!!
       delta_V_bottom_electrode_dt = bottom_electrode_new_calculated_voltage - bottom_electrode_old_calculated_voltage
 
-      bottom_electrode_voltage = bottom_electrode_voltage + delta_V_bottom_electrode_dt
+      bottom_electrode_voltage_old = bottom_electrode_voltage_old + delta_V_bottom_electrode_dt
+
+      bottom_electrode_voltage = (1 / ((C_bottom * R_gnd / dt) +  (L_gnd * C_bottom / dt**2))) * &
+      (&
+         ((2 * L_gnd * C_bottom / dt**2) + (C_bottom * R_gnd / dt) - 1) * bottom_electrode_voltage_old &
+         - (L_gnd * C_bottom / dt**2) * bottom_electrode_voltage_oldold &
+      )
 
       ! Current from bottom electrode to ground (conventional)
-      I_gnd = (bottom_electrode_voltage - 0) / R_gnd
+      I_gnd = C_bottom * (bottom_electrode_voltage - bottom_electrode_voltage_old) / dt
 
-      bottom_electrode_voltage = bottom_electrode_voltage - (I_gnd * dt) / C_bottom
 
       ! Change the applied voltage at the top electrode for the simulation
       ! For simulations we still have bottom electrode  = 0 V and top electrode has the applied potential
       call field_set_voltage_externally(top_electrode_voltage - bottom_electrode_voltage)
+      !print *, "Field set: ", top_electrode_voltage - bottom_electrode_voltage
+      !print *, "Top V: ", top_electrode_voltage
+      !print *, "Bottom V: ", bottom_electrode_voltage
 
       top_electrode_old_calculated_voltage = top_electrode_new_calculated_voltage
       top_electrode_new_calculated_voltage = 0.0
