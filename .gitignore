@@ -37,3 +37,4 @@ documentation/html/*
 **/run.log
 /programs/heating_2d/misc*
 /programs/heating_2d/old_cfg/
+*.mp4
