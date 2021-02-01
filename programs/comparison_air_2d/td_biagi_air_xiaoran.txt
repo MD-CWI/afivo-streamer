@@ -957,7 +957,6 @@ Flux T diffusion coef. *N (1/m/s)
 1.03548800E+03 6.23271100E+24
 -----------------------
 
-#Bulk T diffusion coef. *N (1/m/s)
 Bulk diffusion coef. *N (1/m/s)
 -----------------------
 4.14195100E+00 1.59595400E+24
