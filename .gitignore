@@ -35,3 +35,5 @@ afivo/external_libraries/*
 documentation/html/*
 **/tests/output/*
 **/run.log
+/programs/heating_2d/misc*
+/programs/heating_2d/old_cfg/
