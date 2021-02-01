@@ -551,7 +551,7 @@ contains
 
     n_cells = box%n_cell**NDIM
     inv_dr  = 1/box%dr
-
+    !print *, "NC_update: ", nc
     if (gas_constant_density) then
        ! Compute field in Townsends
        tmp = 1 / gas_number_density
