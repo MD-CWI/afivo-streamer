@@ -11,7 +11,7 @@ PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
  computational_domain boundary_conditions poisson_neumann particles_to_grid	\
  ghostcell_benchmark particles_gravity poisson_coarse_solver implicit_diffusion	\
  poisson_dielectric poisson_helmholtz reaction_diffusion dielectric_surface	\
- advection_v2 electrode_example
+ advection_v2 electrode_example poisson_lsf_test
 
 PROGS_1D := $(PROGS_XD:%=%_1d)
 

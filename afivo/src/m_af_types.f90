@@ -609,6 +609,27 @@ contains
 
   end function af_is_phys_boundary
 
+  !> Check whether a refinement boundary is present, either fine-to-coarse or
+  !> coarse-to-fine
+  pure logical function af_is_ref_boundary(boxes, id, nb)
+    type(box_t), intent(in) :: boxes(:) !< List of boxes
+    integer, intent(in)     :: id       !< Box to inspect
+    integer, intent(in)     :: nb       !< Neighbor direction
+    integer                 :: nb_id
+
+    af_is_ref_boundary = .false.
+    nb_id = boxes(id)%neighbors(nb)
+
+    if (nb_id == af_no_box) then
+       af_is_ref_boundary = .true.
+    else if (nb_id > af_no_box) then
+       if (.not. af_has_children(boxes(id)) .and. &
+            af_has_children(boxes(nb_id))) then
+          af_is_ref_boundary = .true.
+       end if
+    end if
+  end function af_is_ref_boundary
+
   !> Get the offset of a box with respect to its parent (e.g. in 2d, there can
   !> be a child at offset 0,0, one at n_cell/2,0, one at 0,n_cell/2 and one at
   !> n_cell/2, n_cell/2)

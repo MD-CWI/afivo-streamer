@@ -182,3 +182,20 @@ pre-multiplied by the O2 density when it was used in the Boltzmann solver.
 
 Further details about the format of chemical reactions can be found in the
 [chemistry documentation](documentation/chemistry.md).
+
+# Transport data interpolation {#td-interpolation}
+
+To speed up computations, transport and reaction coefficients are stored in lookup tables, see [lookup_table_fortran](https://github.com/jannisteunissen/lookup_table_fortran). These tables have a fixed size and spacing, so that values can quickly be obtained without searching through a list. These tables are constructed and used as follows:
+
+**Step 1** The input data is read in from a text file
+
+**Step 2** The input data is interpolated to have a regular spacing in `E/N`. This interpolation is controlled by the following parameters:
+
+    table_data%min_townsend = 0. (minimum E/N)
+    table_data%max_townsend = 1000. (maximum E/N)
+    table_data%size = 1000 (number of points in the table)
+    table_data%input_interpolation = linear (or cubic_spline)
+
+Note there are two options for the interpolation of input data: linear (the default) and cubic spline interpolation. The interpolated data is then stored in a lookup table.
+
+**Step 3** When a value is required at a certain `E/N`, the values in the lookup table are *linearly interpolated*.
