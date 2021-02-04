@@ -35,3 +35,4 @@ afivo/external_libraries/*
 documentation/html/*
 **/tests/output/*
 **/run.log
+programs/standard_2d/configFiles/*
