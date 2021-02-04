@@ -16,6 +16,8 @@ module m_transport_data
   integer, parameter, public :: td_eta       = 4 !< Attachment coefficient
   !> Electron energy in eV (used with chemistry)
   integer, protected, public :: td_energy_eV = -1
+  !> Scale factor for bulk mobilities
+  integer, protected, public :: td_bulk_scaling = -1
 
   ! Table with transport data vs electric field
   type(LT_t), public, protected :: td_tbl
@@ -35,6 +37,12 @@ module m_transport_data
   !> Secondary electron emission yield for positive ions
   real(dp), public, protected   :: ion_se_yield = 0.0_dp
 
+  !> Whether to use bulk transport coefficients (mu, D)
+  logical, public, protected :: td_bulk_transport = .false.
+
+  !> Whether to scale reactions proportional to mu_bulk/mu
+  logical, public, protected :: td_bulk_scale_reactions = .false.
+
   public :: transport_data_initialize
 
 contains
@@ -48,6 +56,7 @@ contains
     type(CFG_t), intent(inout) :: cfg
     character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: x_data(:), y_data(:)
+    real(dp), allocatable      :: x_data2(:), y_data2(:)
     real(dp)                   :: dummy_real(0)
     character(len=10)          :: dummy_string(0)
     integer                    :: n
@@ -59,22 +68,40 @@ contains
     call CFG_add_get(cfg, "input_data%old_style", td_old_style, &
          "Use old style transport data (alpha, eta, mu, D vs V/m)")
 
+    call CFG_add_get(cfg, "input_data%bulk_transport", td_bulk_transport, &
+         "Whether to use bulk transport coefficients (mu, D)")
+    call CFG_add_get(cfg, "input_data%bulk_scale_reactions", td_bulk_scale_reactions, &
+         "Whether to scale reactions proportional to mu_bulk/mu")
+
+    if (td_bulk_scale_reactions .and. .not. td_bulk_transport) &
+         error stop "Cannot have bulk_scale_reactions without bulk_transport"
+
     ! Fill table with data
     if (td_old_style) then
-       if (.not. gas_constant_density) then
-          error stop "Old style transport used with varying gas density"
-       end if
+       if (.not. gas_constant_density) &
+            error stop "Old style transport used with varying gas density"
+       if (td_bulk_transport .and. .not. td_bulk_scale_reactions) &
+            error stop "Old style bulk data requires bulk_scale_reactions = T"
 
        ! Create a lookup table for the model coefficients
        td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 4)
 
-       call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", x_data, y_data)
+       if (td_bulk_transport) then
+          call table_from_file(td_file, "efield[V/m]_vs_mu_bulk[m2/Vs]", x_data, y_data)
+       else
+          call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", x_data, y_data)
+       end if
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data * gas_number_density
        call table_set_column(td_tbl, td_mobility, x_data, y_data)
 
-       call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", &
-            x_data, y_data)
+       if (td_bulk_transport) then
+          call table_from_file(td_file, "efield[V/m]_vs_dif_bulk[m2/s]", &
+               x_data, y_data)
+       else
+          call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", &
+               x_data, y_data)
+       end if
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data * gas_number_density
        call table_set_column(td_tbl, td_diffusion, x_data, y_data)
@@ -92,13 +119,34 @@ contains
        call table_set_column(td_tbl, td_eta, x_data, y_data)
     else
        ! Create a lookup table for the model coefficients
-       td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 5)
+       if (td_bulk_scale_reactions) then
+          td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 6)
 
-       call table_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
+          ! Store scale factor for reactions
+          td_bulk_scaling = 6
+          call table_from_file(td_file, "Bulk mobility *N (1/m/V/s)", x_data, y_data)
+          call table_from_file(td_file, "Mobility *N (1/m/V/s)", x_data2, y_data2)
+          if (maxval(abs(x_data - x_data2)) > 0) &
+               error stop "Mobility and Bulk mobility not given at same E/N"
+          call table_set_column(td_tbl, td_bulk_scaling, x_data, y_data/y_data2)
+       else
+          td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 5)
+       end if
+
+       if (td_bulk_transport) then
+          call table_from_file(td_file, "Bulk mobility *N (1/m/V/s)", x_data, y_data)
+       else
+          call table_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
+       end if
        call table_set_column(td_tbl, td_mobility, x_data, y_data)
 
-       call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
-            x_data, y_data)
+       if (td_bulk_transport) then
+          call table_from_file(td_file, "Bulk diffusion coef. *N (1/m/s)", &
+               x_data, y_data)
+       else
+          call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
+               x_data, y_data)
+       end if
        call table_set_column(td_tbl, td_diffusion, x_data, y_data)
 
        call table_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
