@@ -9,6 +9,7 @@ module m_analysis
 
   ! Public methods
   public :: analysis_get_maxima
+  public :: analysis_get_sigma
   public :: analysis_get_cross
   public :: analysis_zmin_zmax_threshold
   public :: analysis_max_var_region
@@ -74,6 +75,67 @@ contains
     !$omp end parallel
 
   end subroutine analysis_get_maxima
+
+  subroutine sigma_calculator(boxes, id, nc)
+    use m_lookup_table
+    use m_units_constants
+    use m_gas
+    use m_transport_data
+    use m_streamer
+    use m_chemistry
+    type(box_t), intent(inout) :: boxes(:)
+    integer, intent(in)        :: id, nc
+
+    real(dp) :: ne_fld(2), mu, Td, N_inv
+    integer  :: n, m, o
+
+    N_inv = 1.0_dp/gas_number_density
+
+#if NDIM == 2
+    do n = 1, nc
+      do m = 1, nc
+        ne_fld = boxes(id)%cc(n, m, [i_electron, i_electric_fld])
+        Td = ne_fld(2) * SI_to_Townsend * N_inv
+        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+      end do
+    end do
+#endif
+
+#if NDIM == 3
+    do n = 1, nc
+      do m = 1, nc
+        do o = 1, nc
+          ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
+          Td = ne_fld(2) * SI_to_Townsend * N_inv
+          mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+          boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+        end do
+      end do
+    end do
+#endif
+
+  end subroutine sigma_calculator
+
+  !subroutine for conductivity calculation
+  subroutine analysis_get_sigma(tree)
+    type(af_t), intent(inout) :: tree
+
+    integer     :: lvl, id, i, nc
+
+    nc = tree%n_cell
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+      !$omp do
+      do i = 1, size(tree%lvls(lvl)%leaves)
+        id = tree%lvls(lvl)%leaves(i)
+        call sigma_calculator(tree%boxes, id, nc)
+      end do
+      !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine analysis_get_sigma
 
   !> Find minimum and maximum z coordinate where a variable exceeds a threshold
   subroutine analysis_zmin_zmax_threshold(tree, iv, threshold, limits, z_minmax)
@@ -231,7 +293,7 @@ contains
     real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv
     real(dp) :: d_elec_dens, d_charge_dens, d_current_dens
     logical  :: success
-    integer  :: id_guess, i, m, n
+    integer  :: id_guess, i, m
 
     id_guess     = -1
     elec_dens    = 0.0_dp

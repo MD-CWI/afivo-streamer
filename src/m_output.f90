@@ -225,6 +225,11 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
+    !compute conductivity at each cell for 2D and 3D
+#if NDIM > 1
+    call analysis_get_sigma(tree)
+#endif
+
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
     end if
@@ -287,12 +292,13 @@ contains
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_line_", output_cnt
        call af_write_line(tree, trim(fname), &
-            [i_electron, i_1pos_ion, i_phi, i_electric_fld], &
+            [i_electron, i_1pos_ion, i_phi, i_electric_fld, i_conductivity], &
             r_min = lineout_rmin(1:NDIM) * ST_domain_len + ST_domain_origin, &
             r_max = lineout_rmax(1:NDIM) * ST_domain_len + ST_domain_origin, &
             n_points=lineout_npoints)
     end if
 
+#if NDIM == 2
     if (ST_cylindrical) then
       if(cross_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
@@ -300,6 +306,7 @@ contains
        call output_cross(tree, fname)
       end if
     end if
+#endif
 
   end subroutine output_write
 
