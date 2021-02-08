@@ -502,13 +502,21 @@ contains
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
     integer                    :: IJK, nc
-    real(dp)                   :: rr(NDIM), r0(NDIM), r1(NDIM), r2(NDIM)
+    real(dp)                   :: rr(NDIM), r0(NDIM), r1(NDIM), r2(NDIM), ro(NDIM)
     real(dp)                   :: radius_at_height
+    real(dp)                   :: R_rod, R_tip, y_tip, alpha, R_o, y_o
 
     nc = box%n_cell
     r0 = field_rod_r0 * ST_domain_len
     r1 = field_rod_r1 * ST_domain_len
     r2 = field_rod_r2 * ST_domain_len
+    R_rod = field_rod_radius
+    R_tip = field_tip_radius
+    y_tip = (r0(NDIM)*R_rod-r1(NDIM)*R_tip)/(R_rod-R_tip)
+    alpha = atan(R_rod/(r1(NDIM)-y_tip))
+    R_o = R_tip/cos(alpha)
+    y_o = r0(NDIM) + R_tip * tan(alpha)
+    ro = [r0(1), y_o]
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
@@ -520,7 +528,7 @@ contains
                (r1(NDIM) - r0(NDIM)) * (field_rod_radius - field_tip_radius)
           box%cc(IJK, iv) = GM_dist_line(rr, r0, r1, NDIM) - radius_at_height
        else
-          box%cc(IJK, iv) = GM_dist_line(rr, r0, r0, NDIM) - field_tip_radius
+          box%cc(IJK, iv) = GM_dist_line(rr, ro, ro, NDIM) - R_o
        end if
     end do; CLOSE_DO
 
