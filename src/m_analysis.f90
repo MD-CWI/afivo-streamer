@@ -86,12 +86,8 @@ contains
     type(box_t), intent(inout) :: boxes(:)
     integer, intent(in)        :: id, nc
 
-<<<<<<< HEAD
     real(dp) :: ne_fld(2), mu, Td, N_inv, tot_ion_dens, ion_dens(7)
     real(dp), parameter :: mu_ion = 2.0e-4
-=======
-    real(dp) :: ne_fld(2), mu, Td, N_inv
->>>>>>> master
     integer  :: n, m, o
 
     N_inv = 1.0_dp/gas_number_density
@@ -103,30 +99,17 @@ contains
         Td = ne_fld(2) * SI_to_Townsend * N_inv
         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
         boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
-<<<<<<< HEAD
         tot_ion_dens = 0.0
         do o = 1, 7
          tot_ion_dens = tot_ion_dens + ion_dens(o)
         end do
         boxes(id)%cc(n , m, i_ion_conductivity) = mu_ion * tot_ion_dens * UC_elec_charge
-=======
->>>>>>> master
       end do
     end do
 #endif
 
 #if NDIM == 3
     do n = 1, nc
-<<<<<<< HEAD
-    	do m = 1, nc
-    		do o = 1, nc
-                ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
-                Td = ne_fld(2) * SI_to_Townsend * N_inv
-                mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-                boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
-    		end do
-    	end do
-=======
       do m = 1, nc
         do o = 1, nc
           ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
@@ -135,16 +118,12 @@ contains
           boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
         end do
       end do
->>>>>>> master
     end do
 #endif
 
   end subroutine sigma_calculator
 
-<<<<<<< HEAD
-=======
   !subroutine for conductivity calculation
->>>>>>> master
   subroutine analysis_get_sigma(tree)
     type(af_t), intent(inout) :: tree
 
@@ -164,11 +143,7 @@ contains
     !$omp end parallel
   end subroutine analysis_get_sigma
 
-<<<<<<< HEAD
-    !> Find minimum and maximum z coordinate where a variable exceeds a threshold
-=======
   !> Find minimum and maximum z coordinate where a variable exceeds a threshold
->>>>>>> master
   subroutine analysis_zmin_zmax_threshold(tree, iv, threshold, limits, z_minmax)
     type(af_t), intent(in) :: tree
     integer, intent(in)    :: iv !< Index of variable
