@@ -322,7 +322,6 @@ contains
       write(fname, "(A,I6.6)") trim(output_name) // "_etc.txt"
       call output_etc(tree, fname, output_cnt, wc_time)
     end if
-#endif
 
   end subroutine output_write
 
@@ -331,6 +330,8 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt
     real(dp), intent(in)         :: wc_time
+
+#if NDIM == 2
     character(len=50), save      :: fmt
     integer                      :: my_unit
     real(dp)                     :: maxE, maxE_e, maxE_rhs, maxE_sigma
@@ -347,16 +348,13 @@ contains
 
     if (out_cnt == 1) then
       open(newunit = my_unit, file=trim(filename), action="write")
-#if NDIM == 2
        write(my_unit, "(A)", advance="no") "time max(E) x y e rhs sigma &
             &active_zone_x y elec_field e rhs sigma space_charge_x y &
             &elec_field e rhs sigma behind_x y elec_field e rhs sigma"
-#endif
        write(my_unit, *) ""
        close(my_unit)
     end if
 
-#if NDIM == 2
     fmt = "(25E16.8)"
 
     maxE_e = tree%boxes(loc_maxE%id)%cc(loc_maxE%ix(1), loc_maxE%ix(2), i_electron)
@@ -388,17 +386,15 @@ contains
       bhnd_rhs = tree%boxes(loc_bhnd%id)%cc(loc_bhnd%ix(1), loc_bhnd%ix(2), i_rhs)
       bhnd_sigma = tree%boxes(loc_bhnd%id)%cc(loc_bhnd%ix(1), loc_bhnd%ix(2), i_conductivity)
     end do
-#endif
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
-#if NDIM == 2
     write(my_unit, fmt) global_time, maxE, af_r_loc(tree, loc_maxE), maxE_e, maxE_rhs, maxE_sigma, &
          af_r_loc(tree, loc_azone), azone_Efield, azone_e, azone_rhs, azone_sigma, &
          af_r_loc(tree, loc_scl), scl_Efield, scl_e, scl_rhs, scl_sigma, &
          af_r_loc(tree, loc_bhnd), bhnd_Efield, bhnd_e, bhnd_rhs, bhnd_sigma
-#endif
     close(my_unit)
+#endif
   end subroutine output_etc
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
@@ -689,18 +685,20 @@ contains
     type(af_t), intent(in) :: tree
     character(len=*), intent(inout) :: filename
 
+#if NDIM == 2
     integer  :: my_unit
     integer  :: i 
-    real(dp) :: z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens
+    real(dp) :: z, sigma, elec_dens, charge_dens, current_dens
 
     open(newunit=my_unit, file=trim(filename), action="write")
     write(my_unit, '(A)') "z sigma elec_dens charge_dens current_dens ion_current_dens"
     do i = 1, cross_npoints
       z = i * ST_domain_len(2) / (cross_npoints + 1)
-      call analysis_get_cross(tree, cross_rmax, z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens)
-      write(my_unit, *) z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens
+      call analysis_get_cross(tree, cross_rmax, z, sigma, elec_dens, charge_dens, current_dens)
+      write(my_unit, *) z, sigma, elec_dens, charge_dens, current_dens
     end do
     close(my_unit)
+#endif
   end subroutine output_cross
 
   subroutine set_power_density_box(box)

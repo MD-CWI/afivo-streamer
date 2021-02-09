@@ -42,12 +42,15 @@ program streamer
   character(len=string_len) :: restart_from_file = undefined_str
   logical                   :: lc_reading = .false.
   real(dp)                  :: max_field, initial_streamer_pos, lc_r = 1.5e-06_dp
-  type(af_loc_t)            :: loc_field, loc_field_initial, loc_z
+  type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp), allocatable     :: x_data(:), y_data(:), z_data(:)
-  integer                   :: n
   character(len=string_len) :: lc_file = undefined_str
+#if NDIM == 2
+  integer                   :: n
+  type(af_loc_t)            :: loc_z
   real(dp), dimension (2)   :: rr_val
+#endif
 
   call print_program_name()
 
