@@ -309,7 +309,7 @@ contains
     end if
 
 #if NDIM == 2
-    if(ST_cylindrical) then
+    if (ST_cylindrical) then
       if(cross_write) then
         write(fname, "(A,I6.6)") trim(output_name) // &
         "_cross_", output_cnt
@@ -322,6 +322,7 @@ contains
       write(fname, "(A,I6.6)") trim(output_name) // "_etc.txt"
       call output_etc(tree, fname, output_cnt, wc_time)
     end if
+#endif
 
   end subroutine output_write
 

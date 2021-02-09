@@ -31,8 +31,11 @@ module m_streamer
   integer, public, protected :: i_rhs          = -1
   !> Index of conductivity
   integer, public, protected :: i_conductivity = -1
+<<<<<<< HEAD
   !> Index of ion conductivity
   integer, public, protected :: i_ion_conductivity = -1
+=======
+>>>>>>> master
   !> Index of temporary variable
   integer, public, protected :: i_tmp          = -1
   !> Index can be set to include a dielectric
