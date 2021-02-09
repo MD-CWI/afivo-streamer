@@ -300,7 +300,7 @@ contains
     real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv, tot_ion_dens, ion_dens(7)
     real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens, d_ion_current_dens
     logical  :: success
-    integer  :: id_guess, i, m, n
+    integer  :: id_guess, i, m
     real(dp), parameter :: mu_ion = 2.0e-4
 
     id_guess     = -1

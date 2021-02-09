@@ -233,8 +233,10 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
-    !compute conductivity of the entire domain
+    !compute conductivity at each cell for 2D and 3D
+#if NDIM > 1
     call analysis_get_sigma(tree)
+#endif
 
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
@@ -306,6 +308,7 @@ contains
             n_points=lineout_npoints)
     end if
 
+#if NDIM == 2
     if(ST_cylindrical) then
       if(cross_write) then
         write(fname, "(A,I6.6)") trim(output_name) // &
@@ -313,6 +316,7 @@ contains
         call output_cross(tree, fname)
       endif
     end if
+#endif
 
     if(etc_write) then
       write(fname, "(A,I6.6)") trim(output_name) // "_etc.txt"
