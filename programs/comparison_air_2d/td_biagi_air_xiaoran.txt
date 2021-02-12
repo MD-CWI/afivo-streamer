@@ -18,7 +18,6 @@ N2_C3 + N2 -> N2 + N2,constant,0.13e-16
 N2_C3 + O2 -> N2 + O2,constant,3.0e-16
 # Radiative lifetime is 42 ns
 N2_C3 -> N2_B3,constant,2.381e7
-N2_B3 -> N2,constant,1.11e9
 -----------------------
 
 Diffusion coefficient *N (1/m/s)
