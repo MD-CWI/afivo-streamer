@@ -1,0 +1,18 @@
+#!/bin/bash
+
+cd ../
+
+# air, bd=1e11, electrode_12mm_1.2mm, refine_min_dx=1e-6, refine_adx=1, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+# the fading out of positive streamers under constant electric field (long electrode)
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -background_density=1e13 -field_amplitude=-0.69e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_pos/pos_bd1e13_12mm_1.2mm_0.69e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -background_density=1e14 -field_amplitude=-0.69e6 -field_decay%enabled=F -cross%write=F -output%name+=bd1e11_EL12mm_ER1.2mm_pos/pos_bd1e14_12mm_1.2mm_0.69e6
+
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -background_density=1e15 -field_amplitude=-0.68e6 -field_decay%enabled=F -cross%write=F -output%name+=bd1e11_EL12mm_ER1.2mm_pos/pos_bd1e15_12mm_1.2mm_0.68e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -background_density=1e15 -field_amplitude=-0.67e6 -field_decay%enabled=F -cross%write=F -output%name+=bd1e11_EL12mm_ER1.2mm_pos/pos_bd1e15_12mm_1.2mm_0.67e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -background_density=1e15 -field_amplitude=-0.65e6 -field_decay%enabled=F -cross%write=F -output%name+=bd1e11_EL12mm_ER1.2mm_pos/pos_bd1e15_12mm_1.2mm_0.65e6

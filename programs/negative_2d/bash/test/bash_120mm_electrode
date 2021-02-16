@@ -1,0 +1,50 @@
+#!/bin/bash
+
+cd ../
+
+# bd=1e11, EL1.2mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.25, chemistry_transport_data_1000points
+
+#./streamer air_negative_120mm_chem_electrode.cfg  -field_rod_radius=0.8e-3 -field_amplitude=1.9e6 -background_density=1e11 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd1e11/bd1e11_1.2mm_0.8mm_1.9e6
+
+
+
+# bd=1e11, EL3mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.25, chemistry_transport_data_1000points
+
+#./streamer air_negative_120mm_chem_electrode.cfg  -field_rod_radius=0.95e-3 -field_amplitude=1.54e6 -background_density=1e11 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd1e11/bd1e11_3mm_0.95mm_1.54e6
+
+
+
+# bd=1e11, EL6mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.25, chemistry_transport_data_1000points
+
+#./streamer air_negative_120mm_chem_electrode.cfg  -field_rod_radius=1.05e-3 -field_amplitude=1.28e6 -background_density=1e11 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd1e11/bd1e11_6mm_1.05mm_1.28e6
+
+
+
+
+# bd=1e11, EL9mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.25, chemistry_transport_data_1000points
+
+#./streamer air_negative_120mm_chem_electrode.cfg  -field_rod_radius=1.15e-3 -field_amplitude=1.14e6 -background_density=1e11 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd1e11/bd1e11_9mm_1.15mm_1.14e6
+
+
+
+
+# bd=1e11, EL12mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.25, chemistry_transport_data_1000points
+
+#./streamer air_negative_120mm_chem_electrode.cfg  -field_rod_radius=1.2e-3 -field_amplitude=1.04e6 -background_density=1e11 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd1e11/bd1e11_12mm_1.2mm_1.04e6
+
+
+
+
+# bd=1e11, EL15mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.25, chemistry_transport_data_1000points
+
+#./streamer air_negative_120mm_chem_electrode.cfg  -field_rod_radius=1.4e-3 -field_amplitude=0.97e6 -background_density=1e11 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd1e11/bd1e11_15mm_1.4mm_0.97e6
+
+
+
+# bd=1e11, EL18mm, refine_min_dx=2e-6, refine_adx=1, refine_adx_fac=1.25, chemistry_transport_data_1000points
+
+#./streamer air_negative_120mm_chem_electrode.cfg  -field_rod_radius=1.5e-3 -field_amplitude=0.91e6 -background_density=1e11 -field_decay%enabled=F -cross%write=F -output%name+=constant/bd1e11/bd1e11_18mm_1.5mm_0.91e6
+
+
+
+

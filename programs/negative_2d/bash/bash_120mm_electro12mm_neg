@@ -1,0 +1,50 @@
+#!/bin/bash
+
+cd ../
+
+# air, bd=1e11, electrode_12mm_1.2mm, refine_min_dx=1e-6, refine_adx=1, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+# the fading out of negative streamers under constant electric field (long electrode)
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.6e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.6e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.5e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.5e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.4e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.4e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.3e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.3e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.2e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.2e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.1e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.1e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.06e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.06e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.045e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.045e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.04e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.04e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.03e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.03e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.01e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_1.01e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.98e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.98e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.94e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.94e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.89e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.89e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.88e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.88e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.8e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.8e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.7e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.7e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.6e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.6e6
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=0.5e6 -field_decay%enabled=F -cross%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_neg/neg_bd1e11_12mm_1.2mm_0.5e6
+
+
+
+
+
+

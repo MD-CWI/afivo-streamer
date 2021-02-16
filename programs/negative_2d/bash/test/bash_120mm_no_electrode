@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# This is an example to show how you can run multiple simulations after each other
-
 cd ../
 
 # background density=0, seed density=5e19, initial_field=2.1e6, decay_distance=5e-3, chemistry_transport_data_300points

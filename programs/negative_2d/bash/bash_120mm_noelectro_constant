@@ -1,0 +1,27 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=0, seed density=5e19, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, constant, air_phelps_chemistry_small_v0_1000points.txt
+
+# Negative streamers propagation
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=2.0e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_neg/neg_sd5e19_2.0e6
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=2.2e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_neg/neg_sd5e19_2.2e6
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=2.4e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_neg/neg_sd5e19_2.4e6
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=2.6e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_neg/neg_sd5e19_2.6e6
+
+# Positive streamers propagation
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=-2.0e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_pos/pos_sd5e19_2.0e6
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=-2.2e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_pos/pos_sd5e19_2.2e6
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=-2.4e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_pos/pos_sd5e19_2.4e6
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_amplitude=-2.6e6 -output%dt=2e-10 -field_decay%enabled=F -cross%write=T -output%name=output/domain_120mm/no_electrode/air/sd5e19_constant_pos/pos_sd5e19_2.6e6
+
+
