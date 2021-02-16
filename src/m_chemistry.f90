@@ -230,26 +230,6 @@ contains
             species_charge(n))
     end do
 
-    ! Store reactions of the tabulated field type
-    i = count(reactions(1:n_reactions)%rate_type == rate_tabulated_field)
-    chemtbl = LT_create(table_min_townsend, table_max_townsend, table_size, i)
-
-    i = 0
-    do n = 1, n_reactions
-       if (reactions(n)%rate_type == rate_tabulated_field) then
-          i = i + 1
-          reactions(n)%lookup_table_index = i
-          if (td_bulk_scale_reactions) then
-             call table_set_column(chemtbl, i, reactions(n)%x_data, &
-                  reactions(n)%y_data * &
-                  LT_get_col(td_tbl, td_bulk_scaling, reactions(n)%x_data))
-          else
-             call table_set_column(chemtbl, i, reactions(n)%x_data, &
-                  reactions(n)%y_data)
-          end if
-       end if
-    end do
-
     ! Also store in more memory-efficient structure
     do n = 1, n_reactions
        tiny_react(n)%ix_in            = reactions(n)%ix_in
@@ -305,6 +285,44 @@ contains
             any(reactions(n)%ix_out == i_elec)) then
           ! In: no electrons, out: an electron
           reactions(n)%reaction_type = detachment_reaction
+       end if
+    end do
+
+    ! Store reactions of the tabulated field type
+    i = count(reactions(1:n_reactions)%rate_type == rate_tabulated_field)
+    chemtbl = LT_create(table_min_townsend, table_max_townsend, table_size, i)
+
+    i = 0
+    do n = 1, n_reactions
+       if (reactions(n)%rate_type == rate_tabulated_field) then
+          i = i + 1
+          reactions(n)%lookup_table_index = i
+          if (td_bulk_scale_reactions) then
+            if (reactions(n)%reaction_type == ionization_reaction) then
+                call table_set_column(chemtbl, i, reactions(n)%x_data, &
+                  reactions(n)%y_data * factor_alpha *&
+                  LT_get_col(td_tbl, td_bulk_scaling, reactions(n)%x_data))
+            else if (reactions(n)%reaction_type == attachment_reaction) then
+                call table_set_column(chemtbl, i, reactions(n)%x_data, &
+                  reactions(n)%y_data * factor_eta *&
+                  LT_get_col(td_tbl, td_bulk_scaling, reactions(n)%x_data))
+            else
+                call table_set_column(chemtbl, i, reactions(n)%x_data, &
+                  reactions(n)%y_data * &
+                  LT_get_col(td_tbl, td_bulk_scaling, reactions(n)%x_data))
+            end if
+          else
+            if (reactions(n)%reaction_type == ionization_reaction) then
+                call table_set_column(chemtbl, i, reactions(n)%x_data, &
+                  reactions(n)%y_data * factor_alpha)
+            else if (reactions(n)%reaction_type == attachment_reaction) then
+                call table_set_column(chemtbl, i, reactions(n)%x_data, &
+                  reactions(n)%y_data * factor_eta)
+            else
+                call table_set_column(chemtbl, i, reactions(n)%x_data, &
+                  reactions(n)%y_data)
+            end if
+          end if
        end if
     end do
 

@@ -43,6 +43,15 @@ module m_transport_data
   !> Whether to scale reactions proportional to mu_bulk/mu
   logical, public, protected :: td_bulk_scale_reactions = .false.
 
+  !> A scale factor for alpha
+  real(dp), public, protected :: factor_alpha = 1.0_dp
+
+  !> A scale factor for eta
+  real(dp), public, protected :: factor_eta = 1.0_dp
+
+  !> A scale factor for mu
+  real(dp), public, protected :: factor_mu = 1.0_dp
+
   public :: transport_data_initialize
 
 contains
@@ -76,6 +85,13 @@ contains
     if (td_bulk_scale_reactions .and. .not. td_bulk_transport) &
          error stop "Cannot have bulk_scale_reactions without bulk_transport"
 
+    call CFG_add_get(cfg, "factor_alpha", factor_alpha, &
+         "A scale factor for alpha")
+    call CFG_add_get(cfg, "factor_eta", factor_eta, &
+         "A scale factor for eta")
+    call CFG_add_get(cfg, "factor_mu", factor_mu, &
+         "A scale factor for mu")
+
     ! Fill table with data
     if (td_old_style) then
        if (.not. gas_constant_density) &
@@ -93,7 +109,7 @@ contains
        end if
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data * gas_number_density
-       call table_set_column(td_tbl, td_mobility, x_data, y_data)
+       call table_set_column(td_tbl, td_mobility, x_data, y_data * factor_mu)
 
        if (td_bulk_transport) then
           call table_from_file(td_file, "efield[V/m]_vs_dif_bulk[m2/s]", &
@@ -138,7 +154,7 @@ contains
        else
           call table_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
        end if
-       call table_set_column(td_tbl, td_mobility, x_data, y_data)
+       call table_set_column(td_tbl, td_mobility, x_data, y_data * factor_mu)
 
        if (td_bulk_transport) then
           call table_from_file(td_file, "Bulk diffusion coef. *N (1/m/s)", &
