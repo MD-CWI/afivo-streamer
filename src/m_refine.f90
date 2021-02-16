@@ -171,7 +171,7 @@ contains
     !> Refinement flags for the cells of the box
     integer, intent(out)    :: &
          cell_flags(DTIMES(box%n_cell))
-    integer                 :: IJK, n, nc, i0(NDIM), i1(NDIM)
+    integer                 :: IJK, n, nc
     real(dp)                :: min_dx, max_dx, gas_dens
     real(dp)                :: alpha, adx, fld, elec_dens
     real(dp)                :: dist, rmin(NDIM), rmax(NDIM)
@@ -216,10 +216,7 @@ contains
 
        ! Refine around electrode
        if (box%tag == mg_lsf_box .and. max_dx > refine_electrode_dx) then
-          i0 = [IJK] - 1
-          i1 = [IJK] + 1
-          if (minval(box%cc(DSLICE(i0, i1), i_lsf)) * &
-               maxval(box%cc(DSLICE(i0, i1), i_lsf)) <= 0) then
+          if (box%cc(IJK, i_lsf) < 0) then
              cell_flags(IJK) = af_do_ref
           end if
        end if
