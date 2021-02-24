@@ -883,6 +883,15 @@ contains
     r = box%r_min(1) + (i-0.5_dp) * box%dr(1)
   end function af_cyl_radius_cc
 
+  !> Get the volume of the cell with first index i
+  pure function af_cyl_volume_cc(box, i) result(dvol)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: i
+    real(dp), parameter     :: two_pi = 2 * acos(-1.0_dp)
+    real(dp)                :: dvol
+    dvol = two_pi * (box%r_min(1) + (i-0.5_dp) * box%dr(1)) * product(box%dr)
+  end function af_cyl_volume_cc
+
   !> Get the normalized weights of the 'inner' and 'outer' children of a cell
   !> with index ix. Note that the cell centers of the children are located at
   !> -/+ 0.25 dr compared to the parent.
