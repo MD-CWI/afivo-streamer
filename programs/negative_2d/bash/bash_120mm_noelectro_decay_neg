@@ -2,50 +2,41 @@
 
 cd ../
 
-# the fading out of negative streamers under exponentially decaying electric field
-
 # air, background density=0, seed density=5e19, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, initial_field=2.0e6, decay_distance=5e-3, decay_start_z=106.8e-3, air_phelps_chemistry_small_v0_1000points.txt
 
 
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=2.0e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_2.0e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.6e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.6e6_5e-3_106.8e-3
-
-./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.278e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.278e6_5e-3_106.8e-3
-
-./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.276e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.276e6_5e-3_106.8e-3
-
-./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.275e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.275e6_5e-3_106.8e-3
-
-./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.274e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.274e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.272e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.272e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.266e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.266e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.262e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.262e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.258e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.258e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.252e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.252e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.242e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.242e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.226e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.226e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.2e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.2e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.15e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.15e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.05e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.05e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=0.85e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_0.85e6_5e-3_106.8e-3
-
-#./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=0e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_0e6_5e-3_106.8e-3
+# the fading out of negative streamers under exponentially decaying electric field without electrode
 
 
-#./streamer air_negative_120mm_chem_noelectro.cfg -end_time=5e-7 -field_decay%enabled=T -field_decay%min_field=1.262e6 -cross%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.262e6_5e-3_106.8e-3_500ns
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=2.0e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_2.0e6_5e-3_106.8e-3
 
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.6e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.6e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.288e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.288e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.274e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.274e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.266e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.266e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.259e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.259e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.253e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.253e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.243e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.243e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.228e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.228e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.202e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.202e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.156e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.156e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=1.072e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_1.072e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=0.858e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_0.858e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=0e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_0e6_5e-3_106.8e-3
+
+./streamer air_negative_120mm_chem_noelectro.cfg -field_decay%enabled=T -field_decay%min_field=-0.5e6 -cross%write=T -lineout%write=T -output%name+=sd5e19_decay_neg/neg_sd5e19_2.0e6_-0.5e6_5e-3_106.8e-3
 
 
 
