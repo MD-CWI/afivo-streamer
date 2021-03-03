@@ -25,6 +25,8 @@ program electrode_dielectric
   character(len=100) :: fname
   type(mg_t)         :: mg
 
+  if (NDIM /= 2) error stop "Example only set up for 2D"
+
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
@@ -74,8 +76,9 @@ program electrode_dielectric
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      write(*, "(I8,Es14.5)") mg_iter, residu
 
-     write(fname, "(A,I0)") "electrode_dielectric_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/electrode_dielectric_" // &
+          DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname))
   end do
 
 contains

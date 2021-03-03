@@ -94,8 +94,8 @@ program poisson_lsf_test
      call af_tree_maxabs_cc(tree, i_field_norm, max_field)
      write(*, "(I8,3E14.5)") mg_iter, residu, max_error, max_field
 
-     write(fname, "(A,I0)") "poisson_lsf_test_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname))
   end do
 
 contains

@@ -25,11 +25,11 @@ module m_af_output
      end subroutine subr_other_data
   end interface
 
-  public :: af_prepend_directory
   public :: af_write_tree
   public :: af_read_tree
   public :: af_tree_copy_variable
   public :: af_write_vtk
+  public :: af_write_uniform
 #if NDIM > 1
   public :: af_write_plane
 #endif
@@ -37,27 +37,6 @@ module m_af_output
   public :: af_write_line
 
 contains
-
-  subroutine af_prepend_directory(filename, dir, out_name)
-    character(len=*), intent(in)           :: filename
-    character(len=*), optional, intent(in) :: dir
-    character(len=*), intent(inout)        :: out_name
-    integer                                :: i
-
-    ! Construct file name
-    if (present(dir)) then
-       i = len_trim(dir)
-       if (i > 0) then
-          if (dir(i:i) == "/") then ! Dir has trailing slash
-             out_name = trim(dir) // trim(filename)
-          else
-             out_name = trim(dir) // "/" // trim(filename)
-          end if
-       end if
-    else
-       out_name = filename
-    end if
-  end subroutine af_prepend_directory
 
   !> Write full tree in binary format
   subroutine af_write_tree(tree, filename, write_other_data)
@@ -295,7 +274,7 @@ contains
   end subroutine af_tree_copy_variable
 
   !> Write line data in a text file
-  subroutine af_write_line(tree, filename, ivs, r_min, r_max, n_points, dir)
+  subroutine af_write_line(tree, filename, ivs, r_min, r_max, n_points)
     use m_af_interp, only: af_interp1
     type(af_t), intent(in)       :: tree        !< Tree to write out
     character(len=*), intent(in) :: filename    !< Filename for the vtk file
@@ -303,7 +282,6 @@ contains
     real(dp), intent(in)         :: r_min(NDIM)   !< Minimum coordinate of line
     real(dp), intent(in)         :: r_max(NDIM)   !< Maximum coordinate of line
     integer, intent(in)          :: n_points !< Number of points along line
-    character(len=*), optional, intent(in) :: dir !< Directory to place files in
 
     integer, parameter    :: my_unit = 100
     character(len=400)    :: fname
@@ -326,7 +304,7 @@ contains
     end do
     !$omp end parallel do
 
-    call af_prepend_directory(trim(filename) // ".txt", dir, fname)
+    fname = trim(filename) // ".txt"
 
     ! Write header
     open(my_unit, file=trim(fname), action="write")
@@ -354,7 +332,7 @@ contains
   !> Write data in a plane (2D) to a VTK ASCII file. In 3D, r_min and r_max
   !> should have one identical coordinate (i.e., they differ in two
   !> coordinates).
-  subroutine af_write_plane(tree, filename, ivs, r_min, r_max, n_pixels, dir)
+  subroutine af_write_plane(tree, filename, ivs, r_min, r_max, n_pixels)
     use m_af_interp, only: af_interp1
     type(af_t), intent(in)       :: tree        !< Tree to write out
     character(len=*), intent(in) :: filename    !< Filename for the vtk file
@@ -362,7 +340,6 @@ contains
     real(dp), intent(in)         :: r_min(NDIM)   !< Minimum coordinate of plane
     real(dp), intent(in)         :: r_max(NDIM)   !< Maximum coordinate of plane
     integer, intent(in)          :: n_pixels(2) !< Number of pixels in the plane
-    character(len=*), optional, intent(in) :: dir !< Directory to place files in
 
     integer, parameter    :: my_unit = 100
     character(len=100)    :: fmt_string
@@ -417,7 +394,7 @@ contains
     write(fmt_string, '(A,I0,A)') '(', n_pixels(1), 'E16.8)'
 
     ! Construct file name
-    call af_prepend_directory(trim(filename) // ".vtk", dir, fname)
+    fname = trim(filename) // ".vtk"
 
     open(my_unit, file=trim(fname), action="write")
     write(my_unit, '(A)') "# vtk DataFile Version 2.0"
@@ -446,7 +423,7 @@ contains
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the
   !> leaves of the tree are used
-  subroutine af_write_vtk(tree, filename, n_cycle, time, ixs_cc, dir, &
+  subroutine af_write_vtk(tree, filename, n_cycle, time, ixs_cc, &
        add_vars, add_names)
     use m_vtk
 
@@ -454,8 +431,7 @@ contains
     character(len=*), intent(in)  :: filename    !< Filename for the vtk file
     integer, intent(in), optional :: n_cycle     !< Cycle-number for vtk file (counter)
     real(dp), intent(in), optional :: time        !< Time for output file
-    integer, intent(in), optional :: ixs_cc(:)   !< Oncly include these cell variables
-    character(len=*), optional, intent(in) :: dir !< Directory to place files in
+    integer, intent(in), optional :: ixs_cc(:)   !< Only include these cell variables
     procedure(subr_add_vars), optional :: add_vars !< Optional routine to add extra variables
     character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
 
@@ -626,7 +602,7 @@ contains
        end do
     end do
 
-    call af_prepend_directory(trim(filename) // ".vtu", dir, fname)
+    fname = trim(filename) // ".vtu"
 
     call vtk_ini_xml(vtkf, trim(fname), 'UnstructuredGrid')
     call vtk_dat_xml(vtkf, "UnstructuredGrid", .true.)
@@ -646,7 +622,7 @@ contains
   end subroutine af_write_vtk
 
 #if NDIM == 1
-  subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, dir, &
+  subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, &
        add_vars, add_names)
     use m_write_silo
     use m_mrgrnk
@@ -655,8 +631,7 @@ contains
     character(len=*)                       :: filename     !< Filename for the vtk file
     integer, intent(in), optional          :: n_cycle      !< Cycle-number for vtk file (counter)
     real(dp), intent(in), optional         :: time         !< Time for output file
-    integer, intent(in), optional          :: ixs_cc(:)    !< Oncly include these cell variables
-    character(len=*), optional, intent(in) :: dir          !< Directory to place files in
+    integer, intent(in), optional          :: ixs_cc(:)    !< Only include these cell variables
     procedure(subr_add_vars), optional     :: add_vars     !< Optional routine to add extra variables
     character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
     integer                                :: n, i, id, ix, lvl, n_boxes
@@ -713,7 +688,7 @@ contains
        end do
     end do
 
-    call af_prepend_directory(trim(filename) // ".silo", dir, fname)
+    fname = trim(filename) // ".silo"
     call SILO_create_file(trim(fname), dbix)
     call SILO_set_time_varying(dbix)
 
@@ -731,7 +706,7 @@ contains
   !>
   !> Note: a 1D version is present below, and seems to work, but its output
   !> cannot be visualized by Visit. That's why we use curve output for 1D cases.
-  subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, dir, &
+  subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, &
        add_vars, add_names)
     use m_write_silo
 
@@ -739,8 +714,7 @@ contains
     character(len=*)              :: filename    !< Filename for the vtk file
     integer, intent(in), optional :: n_cycle     !< Cycle-number for vtk file (counter)
     real(dp), intent(in), optional :: time        !< Time for output file
-    integer, intent(in), optional :: ixs_cc(:)      !< Oncly include these cell variables
-    character(len=*), optional, intent(in) :: dir !< Directory to place files in
+    integer, intent(in), optional :: ixs_cc(:)      !< Only include these cell variables
     procedure(subr_add_vars), optional :: add_vars !< Optional routine to add extra variables
     character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
 
@@ -808,7 +782,7 @@ contains
 
     allocate(cc(DTIMES(0:nc+1), n_cc + n_add))
 
-    call af_prepend_directory(trim(filename) // ".silo", dir, fname)
+    fname = trim(filename) // ".silo"
     call SILO_create_file(trim(fname), dbix)
     call SILO_set_time_varying(dbix)
     call SILO_mkdir(dbix, meshdir)
