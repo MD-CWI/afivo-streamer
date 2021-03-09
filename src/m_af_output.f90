@@ -30,7 +30,6 @@ module m_af_output
   public :: af_tree_copy_variable
   public :: af_write_vtk
   public :: af_write_numpy
-  public :: af_write_region_numpy
 #if NDIM > 1
   public :: af_write_plane
 #endif
@@ -622,119 +621,9 @@ contains
     print *, "af_write_vtk: written " // trim(fname)
   end subroutine af_write_vtk
 
-  !> Write uniform data to a .npy or .npz numpy file. The format is determined
-  !> based on the extension of filename
-  subroutine af_write_numpy(tree, filename, n_cycle, time, ixs_cc)
-    use m_npy
-    use m_af_restrict, only: af_restrict_tree
-
-    type(af_t), intent(inout)      :: tree !< Tree to save
-    !> Filename, possible extensions: .npz
-    character(len=*), intent(in)   :: filename
-    integer, intent(in), optional  :: n_cycle   !< Cycle-number (counter)
-    real(dp), intent(in), optional :: time     !< Time
-    integer, intent(in), optional  :: ixs_cc(:) !< Only include these cell variables
-
-    integer                             :: lvl, n, id
-    integer                             :: n_cycle_val
-    integer                             :: n_cc, nc
-    integer                             :: nx(NDIM), lo(NDIM), hi(NDIM)
-    real(dp)                            :: time_val
-    integer, allocatable                :: icc_val(:)
-    character(len=af_nlen), allocatable :: var_names(:)
-    character(len=400)                  :: fname
-    real(dp), allocatable               :: cc(DTIMES(:), :)
-
-    if (.not. tree%ready) error stop "Tree not ready"
-    time_val = 0.0_dp; if (present(time)) time_val = time
-    n_cycle_val = 0; if (present(n_cycle)) n_cycle_val = n_cycle
-
-    if (present(ixs_cc)) then
-       if (maxval(ixs_cc) > tree%n_var_cell .or. &
-            minval(ixs_cc) < 1) stop "af_write_vtk: wrong indices given (ixs_cc)"
-       allocate(icc_val(size(ixs_cc)))
-       icc_val = ixs_cc
-    else
-       call get_output_vars(tree, icc_val)
-    end if
-
-    n_cc = size(icc_val)
-    nc = tree%n_cell
-
-    allocate(var_names(n_cc))
-    var_names(1:n_cc) = tree%cc_names(icc_val)
-
-    ! Determine highest fully refined grid level
-    do lvl = 1, tree%highest_lvl-1
-       if (size(tree%lvls(lvl)%leaves) > 0) exit
-    end do
-
-    ! Determine size of uniform grid
-    nx = 2**(lvl-1) * tree%coarse_grid_size
-    allocate(cc(DINDEX(nx), n_cc))
-
-    ! Restrict so that we up-to-date values
-    call af_restrict_tree(tree, icc_val)
-
-    do n = 1, size(tree%lvls(lvl)%ids)
-       id = tree%lvls(lvl)%ids(n)
-
-       lo = (tree%boxes(id)%ix - 1) * nc + 1
-       hi = lo + nc - 1
-       cc(DSLICE(lo,hi), 1:n_cc) = &
-            tree%boxes(id)%cc(DTIMES(1:nc), icc_val)
-    end do
-
-    n = len_trim(filename)
-
-    ! Check last four characters of filename
-    select case (filename(n-3:n))
-    case ('.npy')
-       call save_npy(filename, cc)
-    case ('.npz')
-       call remove_file(filename) ! Clear npz file
-
-       ! Add variables separately
-       do n = 1, n_cc
-          fname = filename(:n-4)//trim(var_names(n))//'.npy'
-          call save_npy(fname, cc(DTIMES(:), n))
-          call add_to_zip(filename, fname, .false., var_names(n))
-       end do
-
-       fname = filename(:n-4)//'nx.npy'
-       call save_npy(fname, nx)
-       call add_to_zip(filename, fname, .false., 'nx')
-
-       fname = filename(:n-4)//'r_min.npy'
-       call save_npy(fname, tree%r_base)
-       call add_to_zip(filename, fname, .false., 'r_min')
-
-       fname = filename(:n-4)//'r_max.npy'
-       call save_npy(fname, tree%r_base + tree%coarse_grid_size * &
-            af_lvl_dr(tree, 1))
-       call add_to_zip(filename, fname, .false., 'r_max')
-
-       fname = filename(:n-4)//'dr.npy'
-       call save_npy(fname, af_lvl_dr(tree, lvl))
-       call add_to_zip(filename, fname, .false., 'dr')
-
-       fname = filename(:n-4)//'coord_t.npy'
-       call save_npy(fname, [tree%coord_t])
-       call add_to_zip(filename, fname, .false., 'coord_t')
-
-       fname = filename(:n-4)//'time_cycle.npy'
-       call save_npy(fname, [time_val, real(n_cycle_val, dp)])
-       call add_to_zip(filename, fname, .false., 'time_cycle')
-    case default
-       error stop "Unknown file extension"
-    end select
-
-    print *, "af_write_numpy: written " // trim(filename)
-  end subroutine af_write_numpy
-
   !> Write uniform data interpolated from a region to a .npy or .npz numpy file.
   !> The format is determined based on the extension of filename
-  subroutine af_write_region_numpy(tree, filename, n_points, r_min, r_max, &
+  subroutine af_write_numpy(tree, filename, r_min, r_max, n_points, &
        n_cycle, time, ixs_cc)
     use m_npy
     use m_af_interp, only: af_interp1
@@ -742,14 +631,14 @@ contains
     type(af_t), intent(inout)      :: tree           !< Tree to save
     !> Filename, possible extensions: .npz, .npy
     character(len=*), intent(in)   :: filename
-    integer, intent(in)            :: n_points(NDIM) !< Number of points to use
+    integer, intent(in), optional  :: n_points(NDIM) !< Number of points to use
     real(dp), intent(in), optional :: r_min(NDIM)    !< Minimum coordinates
     real(dp), intent(in), optional :: r_max(NDIM)    !< Maximum coordinates
     integer, intent(in), optional  :: n_cycle        !< Cycle-number (counter)
     real(dp), intent(in), optional :: time           !< Time
     integer, intent(in), optional  :: ixs_cc(:)      !< Only include these cell variables
 
-    integer                             :: n, IJK, id_guess
+    integer                             :: n, IJK, id, lvl, id_guess, nx(NDIM)
     integer                             :: n_cycle_val, n_cc, nc
     logical                             :: success
     real(dp)                            :: time_val, dr(NDIM), r(NDIM)
@@ -760,6 +649,7 @@ contains
     real(dp), allocatable               :: cc(DTIMES(:), :)
 
     if (.not. tree%ready) error stop "Tree not ready"
+    nc = tree%n_cell
     time_val = 0.0_dp; if (present(time)) time_val = time
     n_cycle_val = 0; if (present(n_cycle)) n_cycle_val = n_cycle
     rmin = tree%r_base
@@ -775,36 +665,54 @@ contains
     else
        call get_output_vars(tree, icc_val)
     end if
-
     n_cc = size(icc_val)
-    nc = tree%n_cell
-    dr = (rmax - rmin)/n_points
+
+    if (present(n_points)) then
+       nx = n_points
+    else
+       ! Determine highest fully refined grid level
+       outer: do lvl = 1, tree%highest_lvl-1
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+
+             ! If there is a leave in the region, the highest is found
+             if (all(tree%boxes(id)%r_min <= rmax .and. &
+                  tree%boxes(id)%r_min + nc * &
+                  tree%boxes(id)%dr >= rmin)) exit outer
+          end do
+       end do outer
+
+       ! Use same grid spacing as the grid
+       nx = nint((rmax - rmin)/af_lvl_dr(tree, lvl))
+    end if
+
+    dr = (rmax - rmin)/nx
 
     allocate(var_names(n_cc))
     var_names(1:n_cc) = tree%cc_names(icc_val)
-    allocate(cc(DINDEX(n_points), n_cc))
+    allocate(cc(DINDEX(nx), n_cc))
 
     id_guess = -1
     !$omp parallel do private(IJK, r) firstprivate(id_guess)
 #if NDIM == 1
-    do i = 1, n_points(1)
-       r = rmin + ([IJK] - 1) * dr
+    do i = 1, nx(1)
+       r = rmin + ([IJK] - 0.5_dp) * dr
        cc(IJK, :) = af_interp1(tree, r, icc_val, success, id_guess)
        if (.not. success) error stop "af_write_plane: interpolation error"
     end do
 #elif NDIM == 2
-    do j = 1, n_points(2)
-       do i = 1, n_points(1)
-          r = rmin + ([IJK] - 1) * dr
+    do j = 1, nx(2)
+       do i = 1, nx(1)
+          r = rmin + ([IJK] - 0.5) * dr
           cc(IJK, :) = af_interp1(tree, r, icc_val, success, id_guess)
           if (.not. success) error stop "af_write_plane: interpolation error"
        end do
     end do
 #elif NDIM == 3
-    do k = 1, n_points(3)
-       do j = 1, n_points(2)
-          do i = 1, n_points(1)
-             r = rmin + ([IJK] - 1) * dr
+    do k = 1, nx(3)
+       do j = 1, nx(2)
+          do i = 1, nx(1)
+             r = rmin + ([IJK] - 0.5) * dr
              cc(IJK, :) = af_interp1(tree, r, icc_val, success, id_guess)
              if (.not. success) error stop "af_write_plane: interpolation error"
           end do
@@ -830,7 +738,7 @@ contains
        end do
 
        fname = filename(:n-4)//'nx.npy'
-       call save_npy(fname, n_points)
+       call save_npy(fname, nx)
        call add_to_zip(filename, fname, .false., 'nx')
 
        fname = filename(:n-4)//'r_min.npy'
@@ -857,7 +765,7 @@ contains
     end select
 
     print *, "af_write_numpy: written " // trim(filename)
-  end subroutine af_write_region_numpy
+  end subroutine af_write_numpy
 
 #if NDIM == 1
   subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, &
