@@ -1,0 +1,17 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=0, seed density=5e19, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, initial_field=2.0e6, decay_distance=5e-3, decay_start_z=106.8e-3, air_phelps_chemistry_small_v0_1000points.txt
+
+
+# the fading out of negative streamers under exponentially decaying electric field without electrode
+
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.05821e6 -field_decay%enabled=F -cross%write=T -lineout%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_fadingout_neg/neg_bd1e11_EL12mm_1.189e6
+
+
+./streamer air_negative_120mm_chem_electro12mm.cfg -field_amplitude=1.05732e6 -field_decay%enabled=F -cross%write=T -lineout%write=T -output%name+=bd1e11_EL12mm_ER1.2mm_fadingout_neg/neg_bd1e11_EL12mm_1.188e6
+
+
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.1049e6 -cross%write=T -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.143e6_5e-3_106.8e-3

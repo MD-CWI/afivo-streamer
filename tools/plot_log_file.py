@@ -19,7 +19,7 @@ fig.suptitle('\n'.join(numbered_files))
 
 for i, log in enumerate(logs):
     # Compute smoothed velocity
-    log['velocity'] = np.gradient(log['y'], log['time'])
+    log['velocity'] = -np.gradient(log['y'], log['time'])
 
     # Remove outliers in velocity
     v_low = log["velocity"].abs().quantile(0.1)

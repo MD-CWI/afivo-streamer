@@ -5,27 +5,27 @@ import argparse
 
 p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-p.add_argument('-field_file', type=str, default='2.1e6_0.6e6_50e-3_145e-3.txt', help='Output file name')
+p.add_argument('-field_file', type=str, default='2.0e6_-0.5e6_5e-3_146.8e-3.txt', help='Output file name')
 args = p.parse_args()
 
 
 # Initial field before any decay (V/m)
-initial_field=2.1e6
+initial_field=2.0e6
 
 # Minimal field (V/m)
-min_field=0.6e6
+min_field=-0.5e6
 
 # Decay distance (m)
-decay_distance = 50e-3
+decay_distance = 5e-3
 
 # Decay slope
 decay_slope = -0.5e8
 
 # Pulse length (m)
-zPulse = 15e-3
+zPulse = 13.2e-3
 
 # Fall length (m)
-zFall = 145e-3
+zFall = 106.8e-3
 
 # Total length (m)
 zTotal = zPulse + zFall
@@ -84,7 +84,7 @@ eField=eField/1e5
 length=length/1e-3
 
 plt.figure(figsize=(10,6))
-plt.plot(160-length, eField, label='2.1e6_0.6e6_50e-3_145e-3', color='red', linestyle='-', linewidth=2, marker='D', markersize=0)
+plt.plot(160-length, eField, label='2.0e6_-0.5e6_5e-3_106.8e-3', color='red', linestyle='-', linewidth=2, marker='D', markersize=0)
 plt.tick_params(labelsize=14)
 plt.xlim((170,-10))
 plt.xlabel('z-axis (mm)', fontsize=14)
@@ -92,7 +92,7 @@ plt.ylabel('Electric field (kV/cm)', fontsize=14)
 plt.grid(True)
 plt.grid(linestyle='-.')
 plt.legend(bbox_to_anchor=(0.95,0.95), frameon=False, fontsize=16 )
-plt.savefig('2.1e6_0.6e6_50e-3_145e-3.jpg')
+plt.savefig('2.0e6_-0.5e6_5e-3_106.8e-3.jpg')
 plt.show()
 
 
