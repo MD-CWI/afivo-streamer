@@ -336,7 +336,6 @@ contains
                [v(i+1, j, k, 1), v(i, j+1, k, 2), v(i, j, k+1, 3)])
 #endif
           ! CFL condition
-          !> @todo address/discuss multidimensional CFL aspects more properly
           dt_cfl = 1.0_dp/sum(max(abs(vmean), eps) * inv_dr)
 
           ! Diffusion condition
