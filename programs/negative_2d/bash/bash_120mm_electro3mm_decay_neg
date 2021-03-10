@@ -39,5 +39,3 @@ cd ../
 ./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=-0.483333e6 -cross%write=T -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_-0.5e6_5e-3_106.8e-3
 
 
-
-

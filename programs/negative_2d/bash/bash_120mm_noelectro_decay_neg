@@ -2,6 +2,7 @@
 
 cd ../
 
+
 # air, background density=0, seed density=5e19, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, initial_field=2.0e6, decay_distance=5e-3, decay_start_z=106.8e-3, air_phelps_chemistry_small_v0_1000points.txt
 
 
