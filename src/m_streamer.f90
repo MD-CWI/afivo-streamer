@@ -33,6 +33,8 @@ module m_streamer
   integer, public, protected :: i_conductivity = -1
   !> Index of ion conductivity
   integer, public, protected :: i_ion_conductivity = -1
+  !> Index of ion conductivity
+  integer, public, protected :: i_efield_radial = -1
   !> Index of temporary variable
   integer, public, protected :: i_tmp          = -1
   !> Index can be set to include a dielectric
@@ -212,6 +214,9 @@ contains
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
     call af_add_cc_variable(tree, "conductivity", ix=i_conductivity)
     call af_add_cc_variable(tree, "ion_conductivity", ix=i_ion_conductivity)
+#if NDIM == 2
+    call af_add_cc_variable(tree, "efield_radial", ix=i_efield_radial)
+#endif
     call af_add_cc_variable(tree, "tmp", write_out=.false., &
          write_binary=.false., ix=i_tmp)
 

@@ -688,14 +688,14 @@ contains
 #if NDIM == 2
     integer  :: my_unit
     integer  :: i 
-    real(dp) :: z, sigma, elec_dens, charge_dens, current_dens
+    real(dp) :: z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens
 
     open(newunit=my_unit, file=trim(filename), action="write")
     write(my_unit, '(A)') "z sigma elec_dens charge_dens current_dens ion_current_dens"
     do i = 1, cross_npoints
       z = i * ST_domain_len(2) / (cross_npoints + 1)
-      call analysis_get_cross(tree, cross_rmax, z, sigma, elec_dens, charge_dens, current_dens)
-      write(my_unit, *) z, sigma, elec_dens, charge_dens, current_dens
+      call analysis_get_cross(tree, cross_rmax, z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens)
+      write(my_unit, *) z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens
     end do
     close(my_unit)
 #endif

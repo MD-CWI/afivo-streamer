@@ -105,12 +105,14 @@ contains
         ne_fld = boxes(id)%cc(n, m, [i_electron, i_electric_fld])
         Td = ne_fld(2) * SI_to_Townsend * N_inv
         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
+        ion_dens = boxes(id)%cc(n, m, charged_species_itree)
         tot_ion_dens = 0.0
         do o = 1, 7
          tot_ion_dens = tot_ion_dens + ion_dens(o)
         end do
-        boxes(id)%cc(n , m, i_ion_conductivity) = mu_ion * tot_ion_dens * UC_elec_charge
+        boxes(id)%cc(n, m, i_ion_conductivity) = mu_ion * tot_ion_dens * UC_elem_charge
+        boxes(id)%cc(n, m, i_efield_radial) = (boxes(id)%fc(n+1, m, 1, electric_fld) - boxes(id)%fc(n, m, 1, electric_fld))/2.0
       end do
     end do
 #endif
@@ -122,7 +124,7 @@ contains
           ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
           Td = ne_fld(2) * SI_to_Townsend * N_inv
           mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-          boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+          boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
         end do
       end do
     end do
@@ -289,7 +291,7 @@ contains
   end function reduce_max
 
   !> Get the conductivity and densities of an axisymmetric streamer at a z-coordinate
-  subroutine analysis_get_cross(tree, rmax, z, sigma, elec_dens, charge_dens, current_dens)
+  subroutine analysis_get_cross(tree, rmax, z, sigma, elec_dens, charge_dens, current_dens, ion_current_dens)
     use m_lookup_table
     use m_transport_data
     use m_gas
@@ -303,18 +305,21 @@ contains
     real(dp), intent(out)  :: elec_dens    !< electron density
     real(dp), intent(out)  :: charge_dens  !< charge density
     real(dp), intent(out)  :: current_dens !< current density
+    real(dp), intent(out)  :: ion_current_dens !< ion current density
 
 #if NDIM == 2
-    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv
-    real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens
+    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv, ion_dens(7), tot_ion_dens
+    real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens, d_ion_current_dens
     logical  :: success
-    integer  :: id_guess, i, m
+    integer  :: id_guess, i, m, o
+    real(dp), parameter :: mu_ion = 2.0e-4
 
     id_guess     = -1
     sigma        = 0.0_dp
     elec_dens    = 0.0_dp
     charge_dens  = 0.0_dp
     current_dens = 0.0_dp
+    ion_current_dens = 0.0_dp
     N_inv = 1.0_dp/gas_number_density
     dr = af_min_dr(tree)
     m = int(rmax/dr) + 1
@@ -323,6 +328,8 @@ contains
        r = i * rmax / (m + 1)
        ne_fld_rhs = af_interp1(tree, [r, z], [i_electron, i_electric_fld, i_rhs], &
             success, id_guess)
+       ion_dens = af_interp1(tree, [r,z], charged_species_itree, &
+            success, id_guess)
        if (.not. success) error stop "unsuccessful interp1"
        Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
@@ -330,12 +337,18 @@ contains
        d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
        d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
        d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
+       tot_ion_dens = 0.0_dp
+       do o = 1, 7
+        tot_ion_dens = tot_ion_dens + ion_dens(o)
+       end do
+       d_ion_current_dens = mu_ion * tot_ion_dens * ne_fld_rhs(2) * 2.0_dp * UC_pi * r * dr * UC_elem_charge 
 
        ! Update total
        sigma = sigma + d_sigma
        elec_dens = elec_dens + d_elec_dens
        charge_dens = charge_dens + d_charge_dens
        current_dens = current_dens + d_current_dens
+       ion_current_dens = ion_current_dens + d_ion_current_dens
     end do
 #endif
   end subroutine analysis_get_cross
