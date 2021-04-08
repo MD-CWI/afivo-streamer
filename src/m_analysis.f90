@@ -106,6 +106,7 @@ contains
         Td = ne_fld(2) * SI_to_Townsend * N_inv
         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
         boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
+<<<<<<< HEAD
         ion_dens = boxes(id)%cc(n, m, charged_species_itree)
         tot_ion_dens = 0.0
         do o = 1, 7
@@ -113,6 +114,8 @@ contains
         end do
         boxes(id)%cc(n, m, i_ion_conductivity) = mu_ion * tot_ion_dens * UC_elem_charge
         boxes(id)%cc(n, m, i_efield_radial) = (boxes(id)%fc(n+1, m, 1, electric_fld) - boxes(id)%fc(n, m, 1, electric_fld))/2.0
+=======
+>>>>>>> master
       end do
     end do
 #endif

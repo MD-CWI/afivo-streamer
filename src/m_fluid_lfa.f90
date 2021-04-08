@@ -123,6 +123,7 @@ contains
     real(dp)                   :: nsmall, N_inv
     real(dp)                   :: dt_cfl, dt_drt, dt_dif
     real(dp)                   :: vmean(NDIM)
+    real(dp), parameter        :: eps = 1e-100_dp
     integer                    :: n, IJK, tid
 #if NDIM > 1
     integer                    :: m
@@ -335,11 +336,11 @@ contains
                [v(i+1, j, k, 1), v(i, j+1, k, 2), v(i, j, k+1, 3)])
 #endif
           ! CFL condition
-          dt_cfl = 1.0_dp/sum(abs(vmean) * inv_dr)
+          dt_cfl = 1.0_dp/sum(max(abs(vmean), eps) * inv_dr)
 
           ! Diffusion condition
           dt_dif = minval(tree%boxes(id)%dr)**2 / &
-               max(2 * NDIM * maxval(dc(IJK, :)), epsilon(1.0_dp))
+               max(2 * NDIM * maxval(dc(IJK, :)), eps)
 
           ! Take the combined CFL-diffusion condition with Courant number 0.5
           dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
@@ -370,7 +371,7 @@ contains
           mu = max(mu, max_mu_ion)
 
           ! Dielectric relaxation time
-          dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK, 1), epsilon(1.0_dp))
+          dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK, 1), eps)
 
           dt_matrix(dt_ix_drt, tid) = min(dt_matrix(dt_ix_drt, tid), dt_drt)
           dt_matrix(dt_ix_cfl, tid) = min(dt_matrix(dt_ix_cfl, tid), dt_cfl)

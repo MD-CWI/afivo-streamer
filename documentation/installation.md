@@ -49,6 +49,13 @@ Afterwards, perform `make allclean` again to revert to the standard compilation 
 
 # List of issues and solutions
 
+## Installation 'Error 2':
+* Simply typing `make` to compile the code in Fedora systems (30 and above) gives an error. A closer inspection indicates that the `g77` compiler is missing. This is because the makefile is unable to find the `gcc`, `gfortran` and `g++` compilers. This can be overcome by typing the following in the terminal:
+    * `export CC=/usr/bin/gcc`
+    * `export CXX=/usr/bin/g++`
+    * `export FORT=/usr/bin/gfortran`
+* *Attention*: The above locations `/usr/bin` is the default installation location for the GNU compilers. If you have them installed in a different directory (in case you have multiple versions of compilers), then make sure you use that particular location (instead of `/usr/bin`).
+
 ## Problems compiling Silo
 
 * The script `build_silo.sh` can be executed manually from the `afivo/external_libraries' folder for easier debugging. 
