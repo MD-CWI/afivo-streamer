@@ -93,8 +93,12 @@ contains
 #endif
 
 #if NDIM == 2
-    real(dp) :: tot_ion_dens, ion_dens(7)
+    real(dp) :: tot_ion_dens
     real(dp), parameter :: mu_ion = 2.0e-4
+    integer  :: n_ion
+
+    real(dp), DIMENSION(SIZE(charged_species_itree)):: ion_dens
+    n_ion = SIZE(charged_species_itree)
 #endif
 
     N_inv = 1.0_dp/gas_number_density
@@ -108,11 +112,12 @@ contains
         boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
         ion_dens = boxes(id)%cc(n, m, charged_species_itree)
         tot_ion_dens = 0.0
-        do o = 1, 7
+        do o = 1, (n_ion-2)
          tot_ion_dens = tot_ion_dens + ion_dens(o)
         end do
         boxes(id)%cc(n, m, i_ion_conductivity) = mu_ion * tot_ion_dens * UC_elem_charge
         boxes(id)%cc(n, m, i_efield_radial) = (boxes(id)%fc(n+1, m, 1, electric_fld) - boxes(id)%fc(n, m, 1, electric_fld))/2.0
+        boxes(id)%cc(n, m, i_efield_z) = (boxes(id)%fc(n, m+1, 2, electric_fld) - boxes(id)%fc(n, m, 2, electric_fld))/2.0
       end do
     end do
 #endif
@@ -308,11 +313,15 @@ contains
     real(dp), intent(out)  :: ion_current_dens !< ion current density
 
 #if NDIM == 2
-    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv, ion_dens(7), tot_ion_dens
+    real(dp) :: ne_fld_rhs_z(4), mu, Td, r, dr, N_inv, tot_ion_dens, fld_z
     real(dp) :: d_sigma, d_elec_dens, d_charge_dens, d_current_dens, d_ion_current_dens
     logical  :: success
-    integer  :: id_guess, i, m, o
+    integer  :: id_guess, i, m, o, n_ion
     real(dp), parameter :: mu_ion = 2.0e-4
+
+    real(dp), allocatable :: ion_dens(:)
+    allocate(ion_dens(SIZE(charged_species_itree)))
+    n_ion =  SIZE(charged_species_itree)
 
     id_guess     = -1
     sigma        = 0.0_dp
@@ -326,22 +335,22 @@ contains
 
     do i = 1, m
        r = i * rmax / (m + 1)
-       ne_fld_rhs = af_interp1(tree, [r, z], [i_electron, i_electric_fld, i_rhs], &
+       ne_fld_rhs_z = af_interp1(tree, [r, z], [i_electron, i_electric_fld, i_rhs, i_efield_z], &
             success, id_guess)
        ion_dens = af_interp1(tree, [r,z], charged_species_itree, &
             success, id_guess)
        if (.not. success) error stop "unsuccessful interp1"
-       Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
+       Td = ne_fld_rhs_z(2) * SI_to_Townsend * N_inv
        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-       d_sigma = UC_elem_charge * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
-       d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
-       d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
-       d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
+       d_sigma = UC_elem_charge * mu * ne_fld_rhs_z(1) * 2.0_dp * UC_pi * r * dr
+       d_elec_dens = ne_fld_rhs_z(1) * 2.0_dp * UC_pi * r * dr
+       d_charge_dens = ne_fld_rhs_z(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
+       d_current_dens = ne_fld_rhs_z(4) * mu * ne_fld_rhs_z(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
        tot_ion_dens = 0.0_dp
-       do o = 1, 7
+       do o = 1, (n_ion-2) 
         tot_ion_dens = tot_ion_dens + ion_dens(o)
        end do
-       d_ion_current_dens = mu_ion * tot_ion_dens * ne_fld_rhs(2) * 2.0_dp * UC_pi * r * dr * UC_elem_charge 
+       d_ion_current_dens = mu_ion * tot_ion_dens * ne_fld_rhs_z(4) * 2.0_dp * UC_pi * r * dr * UC_elem_charge 
 
        ! Update total
        sigma = sigma + d_sigma
