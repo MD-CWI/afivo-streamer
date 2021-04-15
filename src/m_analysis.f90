@@ -116,8 +116,10 @@ contains
          tot_ion_dens = tot_ion_dens + ion_dens(o)
         end do
         boxes(id)%cc(n, m, i_ion_conductivity) = mu_ion * tot_ion_dens * UC_elem_charge
-        boxes(id)%cc(n, m, i_efield_radial) = (boxes(id)%fc(n+1, m, 1, electric_fld) - boxes(id)%fc(n, m, 1, electric_fld))/2.0
-        boxes(id)%cc(n, m, i_efield_z) = (boxes(id)%fc(n, m+1, 2, electric_fld) - boxes(id)%fc(n, m, 2, electric_fld))/2.0
+        boxes(id)%cc(n, m, i_efield_radial) = boxes(id)%fc(n, m, 1, electric_fld) + &
+             ((boxes(id)%fc(n+1, m, 1, electric_fld) - boxes(id)%fc(n, m, 1, electric_fld))/2.0)
+        boxes(id)%cc(n, m, i_efield_z) = boxes(id)%fc(n, m, 2, electric_fld) + &
+             ((boxes(id)%fc(n, m+1, 2, electric_fld) - boxes(id)%fc(n, m, 2, electric_fld))/2.0)
       end do
     end do
 #endif
