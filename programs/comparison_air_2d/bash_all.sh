@@ -1,10 +1,10 @@
-#./streamer standard.cfg
+./streamer standard.cfg
 
 ./bash_mesh.sh
 
-#./bash_transport_data.sh
+./bash_transport_data.sh
 
-#./bash_risetime.sh
+./bash_risetime.sh
 
 ./bash_bg.sh
 

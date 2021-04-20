@@ -1,4 +1,6 @@
-#mkdir output/phoi/
+mkdir output/phoi/
+
+./streamer standard.cfg -output%name="output/phoi/phoi_0.005" -photoi%eta=0.005
 
 ./streamer standard.cfg -output%name="output/phoi/phoi_0.0075" -photoi%eta=0.0075
 

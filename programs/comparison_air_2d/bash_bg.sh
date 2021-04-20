@@ -1,5 +1,5 @@
 #./streamer standard.cfg -background_density=0.0 -output%name="output/no_background"
-#mkdir output/BG/
+mkdir output/BG/
 
 ./streamer standard.cfg -background_density=1.0E+3 -output%name="output/BG/BG_1e3"
 

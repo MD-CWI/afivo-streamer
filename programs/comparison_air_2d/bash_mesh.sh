@@ -1,4 +1,4 @@
-#mkdir output/mesh/
+mkdir output/mesh/
 
 ./streamer standard.cfg -output%name="output/mesh/adx02" -refine_adx=0.2
 

@@ -1,3 +1,4 @@
+mkdir output/transport/
 
 ./streamer standard.cfg -output%name="output/transport/IST_Lisbon" -input_data%file="IST_Lisbon_xiaoran.txt"
 

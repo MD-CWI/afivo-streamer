@@ -1,4 +1,4 @@
-#mkdir output/gas_temperature
+mkdir output/gas_temperature
 
 ./streamer standard.cfg -gas%temperature=290.0 -output%name="output/gas_temperature/290K"
 
