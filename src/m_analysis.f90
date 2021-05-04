@@ -97,7 +97,7 @@ contains
         ne_fld = boxes(id)%cc(n, m, [i_electron, i_electric_fld])
         Td = ne_fld(2) * SI_to_Townsend * N_inv
         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
       end do
     end do
 #endif
@@ -109,7 +109,7 @@ contains
           ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
           Td = ne_fld(2) * SI_to_Townsend * N_inv
           mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-          boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elec_charge
+          boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
         end do
       end do
     end do
