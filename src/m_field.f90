@@ -516,7 +516,7 @@ contains
     alpha = atan(R_rod/(r1(NDIM)-y_tip))
     R_o = R_tip/cos(alpha)
     y_o = r0(NDIM) + R_tip * tan(alpha)
-    ro = [r0(1), y_o]
+    ro = [r0(1:NDIM-1), y_o]
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
