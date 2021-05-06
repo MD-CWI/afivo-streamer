@@ -412,7 +412,7 @@ contains
             associated(bc_species, af_bc_neumann_zero)) then
              ! At the boundary of the electrode
 #if NDIM == 1
-             dens_nb = [box%cc(i-1, i_lsf), &
+             dens_nb = [box%cc(i-1, i_electron), &
                   box%cc(i+1, i_electron)]
 #elif NDIM == 2
              dens_nb = [box%cc(i-1, j, i_electron), &
