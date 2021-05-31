@@ -19,6 +19,7 @@ program streamer
   use m_output
   use m_circuit
   use m_dielectric
+  use m_dielectric2
 
   implicit none
 
@@ -32,16 +33,18 @@ program streamer
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
-  type(CFG_t)               :: cfg            ! The configuration for the simulation
-  type(af_t)                :: tree           ! This contains the full grid information
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
-  type(dielectric_t)        :: diel           ! To store dielectric surface
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+
+  !> The configuration for the simulation
+  type(CFG_t) :: cfg
+  !> This contains the full grid information
+  type(af_t)  :: tree
 
   call print_program_name()
 
@@ -192,6 +195,7 @@ program streamer
         call af_advance(tree, dt, dt_lim, time, &
              species_itree(n_gas_species+1:n_species), &
              time_integrator, forward_euler)
+        ! @todo Also combine substeps for surface variables
 
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
@@ -297,6 +301,7 @@ contains
     call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
+    call dielectric2_initialize(tree, cfg)
 
     call output_initial_summary()
 

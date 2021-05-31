@@ -227,6 +227,7 @@ contains
     use m_units_constants
     use m_chemistry
     use m_dielectric
+    use m_dielectric2
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: s_in
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
@@ -268,6 +269,7 @@ contains
   subroutine field_compute(tree, mg, s_in, time, have_guess)
     use m_units_constants
     use m_chemistry
+    use m_dielectric2
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg ! Multigrid option struct
     integer, intent(in)       :: s_in
@@ -346,6 +348,9 @@ contains
 
     ! Compute field from potential
     call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
+
+    call dielectric_correct_field_fc(tree, diel, i_surf_dens, &
+         i_electric_fld, i_phi, UC_eps0)
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])

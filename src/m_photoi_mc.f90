@@ -39,7 +39,7 @@ module m_photoi_mc
   public :: phmc_do_absorption
   public :: phmc_absorption_func_air
   public :: phmc_set_src
-  public :: phe_mc_set_src
+  ! public :: phe_mc_set_src
 
 contains
 
@@ -323,57 +323,57 @@ contains
 
   end subroutine phmc_do_absorption
 
-  !> Given a list of photon production positions (xyz_in), compute where they
-  !> end up (xyz_out).
-  subroutine phe_mc_get_endloc(xyz_in, xyz_out, n_dim, n_photons, prng)
-    use m_lookup_table
-    use m_random
-    use omp_lib
-    integer, intent(in)        :: n_photons !< Number of photons
-    !> Input (x,y,z) values
-    real(dp), intent(in)       :: xyz_in(3, n_photons)
-    !> Output (x,y,z) values
-    real(dp), intent(out)      :: xyz_out(3, n_photons)
-    integer, intent(in)        :: n_dim     !< 2 or 3 dimensional
-    type(PRNG_t), intent(inout) :: prng       !< Random number generator
-    integer                    :: n, proc_id
-    real(dp)                   :: rr, dist
+  ! !> Given a list of photon production positions (xyz_in), compute where they
+  ! !> end up (xyz_out).
+  ! subroutine phe_mc_get_endloc(xyz_in, xyz_out, n_dim, n_photons, prng)
+  !   use m_lookup_table
+  !   use m_random
+  !   use omp_lib
+  !   integer, intent(in)        :: n_photons !< Number of photons
+  !   !> Input (x,y,z) values
+  !   real(dp), intent(in)       :: xyz_in(3, n_photons)
+  !   !> Output (x,y,z) values
+  !   real(dp), intent(out)      :: xyz_out(3, n_photons)
+  !   integer, intent(in)        :: n_dim     !< 2 or 3 dimensional
+  !   type(PRNG_t), intent(inout) :: prng       !< Random number generator
+  !   integer                    :: n, proc_id
+  !   real(dp)                   :: rr, dist
 
-    !$omp parallel private(n, rr, dist, proc_id)
-    proc_id = 1+omp_get_thread_num()
+  !   !$omp parallel private(n, rr, dist, proc_id)
+  !   proc_id = 1+omp_get_thread_num()
 
-    if (n_dim == 2) then
-       !$omp do
-       do n = 1, n_photons
-          rr = prng%rngs(proc_id)%unif_01()
-          dist = 0.00001_dp
-          ! Pick a random point on a sphere, and ignore the last dimension
-          xyz_out(1:3, n) =  xyz_in(1:3, n) + &
-               prng%rngs(proc_id)%sphere(dist)
-       end do
-       !$omp end do
-    else if (n_dim == 3) then
-       !$omp do
-       do n = 1, n_photons
-          rr = prng%rngs(proc_id)%unif_01()
-          dist = 0.00001_dp
-          xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
-       end do
-       !$omp end do
-    else
-       print *, "phmc_do_absorption: unknown n_dim", n_dim
-       stop
-    end if
-    !$omp end parallel
+  !   if (n_dim == 2) then
+  !      !$omp do
+  !      do n = 1, n_photons
+  !         rr = prng%rngs(proc_id)%unif_01()
+  !         dist = 0.00001_dp
+  !         ! Pick a random point on a sphere, and ignore the last dimension
+  !         xyz_out(1:3, n) =  xyz_in(1:3, n) + &
+  !              prng%rngs(proc_id)%sphere(dist)
+  !      end do
+  !      !$omp end do
+  !   else if (n_dim == 3) then
+  !      !$omp do
+  !      do n = 1, n_photons
+  !         rr = prng%rngs(proc_id)%unif_01()
+  !         dist = 0.00001_dp
+  !         xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
+  !      end do
+  !      !$omp end do
+  !   else
+  !      print *, "phmc_do_absorption: unknown n_dim", n_dim
+  !      stop
+  !   end if
+  !   !$omp end parallel
 
-  end subroutine phe_mc_get_endloc
+  ! end subroutine phe_mc_get_endloc
 
   !> Set the source term due to photoionization. At most phmc_num_photons
   !> discrete photons are produced.
   subroutine phmc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
     use m_random
     use m_lookup_table
-    use m_dielectric
+    use m_dielectric2
     use omp_lib
 
     type(af_t), intent(inout)  :: tree   !< Tree
@@ -405,7 +405,7 @@ contains
     if (NDIM == 3 .and. use_cyl) error stop "phmc_set_src: use_cyl is .true."
 
     if (ST_use_dielectric) then
-       call dielectric_reset_photons()
+       call dielectric2_reset_photons()
     end if
 
     nc = tree%n_cell
@@ -454,7 +454,7 @@ contains
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
-          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
+          call dielectric2_photon_absorption(tree, xyz_src, xyz_abs, &
                2, n_used, 1.0_dp/dt_fac)
        end if
     else
@@ -463,7 +463,7 @@ contains
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
-          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
+          call dielectric2_photon_absorption(tree, xyz_src, xyz_abs, &
                NDIM, n_used, 1.0_dp/dt_fac)
        end if
     end if
@@ -568,107 +568,107 @@ contains
     call prng%update_seed(rng)
   end subroutine phmc_set_src
 
-  !> Whole photoemission procedure
-  subroutine phe_mc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
-    use m_random
-    use m_lookup_table
-    use m_dielectric
-    use omp_lib
+!   !> Whole photoemission procedure
+!   subroutine phe_mc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
+!     use m_random
+!     use m_lookup_table
+!     use m_dielectric2
+!     use omp_lib
 
-    type(af_t), intent(inout)  :: tree   !< Tree
-    type(RNG_t), intent(inout) :: rng    !< Random number generator
-    !> Input variable that contains photon production per cell
-    integer, intent(in)        :: i_src
-    !> Input variable that contains photoionization source rate
-    integer, intent(in)        :: i_photo
-    !> Use cylindrical coordinates (only in 2D)
-    logical, intent(in)        :: use_cyl
-    !> Time step, if present use "physical" photons
-    real(dp), intent(in), optional :: dt
+!     type(af_t), intent(inout)  :: tree   !< Tree
+!     type(RNG_t), intent(inout) :: rng    !< Random number generator
+!     !> Input variable that contains photon production per cell
+!     integer, intent(in)        :: i_src
+!     !> Input variable that contains photoionization source rate
+!     integer, intent(in)        :: i_photo
+!     !> Use cylindrical coordinates (only in 2D)
+!     logical, intent(in)        :: use_cyl
+!     !> Time step, if present use "physical" photons
+!     real(dp), intent(in), optional :: dt
 
-    integer                     :: lvl, id, nc, min_lvl
-    integer                     :: IJK, n, n_used
-    integer                     :: proc_id, n_procs
-    integer                     :: pho_lvl, max_num_photons
-    real(dp)                    :: tmp, dr(NDIM), dt_fac, dist, r(3)
-    real(dp)                    :: sum_production_rate, pi_lengthscale
-    real(dp), allocatable       :: xyz_src(:, :)
-    real(dp), allocatable       :: xyz_abs(:, :)
-#if NDIM == 2
-    real(dp), parameter         :: pi = acos(-1.0_dp)
-#endif
-    type(PRNG_t)                :: prng
-    type(af_loc_t), allocatable :: ph_loc(:)
-    real(dp), parameter         :: small_value = 1e-100_dp
+!     integer                     :: nc
+!     integer                     :: n, n_used
+!     integer                     :: proc_id, n_procs
+!     integer                     :: pho_lvl, max_num_photons
+!     real(dp)                    :: tmp, dt_fac, r(3)
+!     real(dp)                    :: sum_production_rate, pi_lengthscale
+!     real(dp), allocatable       :: xyz_src(:, :)
+!     real(dp), allocatable       :: xyz_abs(:, :)
+! #if NDIM == 2
+!     real(dp), parameter         :: pi = acos(-1.0_dp)
+! #endif
+!     type(PRNG_t)                :: prng
+!     type(af_loc_t), allocatable :: ph_loc(:)
+!     real(dp), parameter         :: small_value = 1e-100_dp
 
-    if (NDIM == 3 .and. use_cyl) error stop "phmc_set_src: use_cyl is .true."
+!     if (NDIM == 3 .and. use_cyl) error stop "phmc_set_src: use_cyl is .true."
 
-    if (ST_use_dielectric) then
-       call dielectric_reset_photons()
-    end if
+!     if (ST_use_dielectric) then
+!        call dielectric2_reset_photons()
+!     end if
 
-    nc = tree%n_cell
+!     nc = tree%n_cell
 
-    ! Initialize parallel random numbers
-    n_procs = omp_get_max_threads()
-    call prng%init_parallel(n_procs, rng)
+!     ! Initialize parallel random numbers
+!     n_procs = omp_get_max_threads()
+!     call prng%init_parallel(n_procs, rng)
 
-    ! Compute the sum of the photon production rate
-    call af_tree_sum_cc(tree, i_src, sum_production_rate)
+!     ! Compute the sum of the photon production rate
+!     call af_tree_sum_cc(tree, i_src, sum_production_rate)
 
-    ! dt_fac is used to convert a discrete number of photons to a number of
-    ! photons per unit time. Depending on the arguments dt and phmc_num_photons,
-    ! 'physical' photons with a weight of 1.0, or super-photons with a weight
-    ! larger (or smaller) than one can be used.
-    if (present(dt)) then
-       ! Create "physical" photons when less than phmc_num_photons are produced,
-       ! otherwise create approximately phmc_num_photons
-       dt_fac = min(dt, phmc_num_photons / (sum_production_rate + small_value))
-    else
-       ! Create approximately phmc_num_photons by setting dt_fac like this
-       dt_fac = phmc_num_photons / (sum_production_rate + small_value)
-    end if
+!     ! dt_fac is used to convert a discrete number of photons to a number of
+!     ! photons per unit time. Depending on the arguments dt and phmc_num_photons,
+!     ! 'physical' photons with a weight of 1.0, or super-photons with a weight
+!     ! larger (or smaller) than one can be used.
+!     if (present(dt)) then
+!        ! Create "physical" photons when less than phmc_num_photons are produced,
+!        ! otherwise create approximately phmc_num_photons
+!        dt_fac = min(dt, phmc_num_photons / (sum_production_rate + small_value))
+!     else
+!        ! Create approximately phmc_num_photons by setting dt_fac like this
+!        dt_fac = phmc_num_photons / (sum_production_rate + small_value)
+!     end if
 
-    ! Over-estimate number of photons because of stochastic production
-    max_num_photons = nint(1.2_dp * dt_fac * sum_production_rate + 1000)
+!     ! Over-estimate number of photons because of stochastic production
+!     max_num_photons = nint(1.2_dp * dt_fac * sum_production_rate + 1000)
 
-    call phmc_generate_photons(tree, dt_fac, i_src, xyz_src, &
-         max_num_photons, n_used, prng)
+!     call phmc_generate_photons(tree, dt_fac, i_src, xyz_src, &
+!          max_num_photons, n_used, prng)
 
-    allocate(xyz_abs(3, n_used))
+!     allocate(xyz_abs(3, n_used))
 
-    if (use_cyl) then           ! 2D only
-       ! Get location of absorption. On input, xyz is set to (r, z, 0). On
-       ! output, the coordinates thus correspond to (x, z, y)
-       call phe_mc_get_endloc(xyz_src, xyz_abs, 3, n_used, prng)
+!     if (use_cyl) then           ! 2D only
+!        ! Get location of absorption. On input, xyz is set to (r, z, 0). On
+!        ! output, the coordinates thus correspond to (x, z, y)
+!        call phe_mc_get_endloc(xyz_src, xyz_abs, 3, n_used, prng)
 
-       !$omp do
-       do n = 1, n_used
-          ! Convert back to (r,z) coordinates
-          xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(3, n)**2)
-          xyz_abs(2, n) = xyz_abs(2, n)
-          xyz_src(2, n) = xyz_src(3, n)
-       end do
-       !$omp end do
+!        !$omp do
+!        do n = 1, n_used
+!           ! Convert back to (r,z) coordinates
+!           xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(3, n)**2)
+!           xyz_abs(2, n) = xyz_abs(2, n)
+!           xyz_src(2, n) = xyz_src(3, n)
+!        end do
+!        !$omp end do
 
-       if (ST_use_dielectric) then
-          ! Handle photons that collide with dielectrics separately
-          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
-               2, n_used, 1.0_dp/dt_fac)
-       end if
-    else
-       ! Get location of absorbption
-       call phe_mc_get_endloc(xyz_src, xyz_abs, NDIM, n_used, prng)
+!        if (ST_use_dielectric) then
+!           ! Handle photons that collide with dielectrics separately
+!           call dielectric2_photon_absorption(tree, xyz_src, xyz_abs, &
+!                2, n_used, 1.0_dp/dt_fac)
+!        end if
+!     else
+!        ! Get location of absorbption
+!        call phe_mc_get_endloc(xyz_src, xyz_abs, NDIM, n_used, prng)
 
-       if (ST_use_dielectric) then
-          ! Handle photons that collide with dielectrics separately
-          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
-               NDIM, n_used, 1.0_dp/dt_fac)
-       end if
-    end if
+!        if (ST_use_dielectric) then
+!           ! Handle photons that collide with dielectrics separately
+!           call dielectric2_photon_absorption(tree, xyz_src, xyz_abs, &
+!                NDIM, n_used, 1.0_dp/dt_fac)
+!        end if
+!     end if
 
-    call prng%update_seed(rng)
-  end subroutine phe_mc_set_src
+!     call prng%update_seed(rng)
+!   end subroutine phe_mc_set_src
 
 
   subroutine phmc_generate_photons(tree, dt_fac, i_src, xyz_src, n_max, n_used, prng)

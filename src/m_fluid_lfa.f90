@@ -36,7 +36,7 @@ contains
     !< Time state to store result in
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
-    integer                   :: lvl, i, id, p_id, nc
+    integer                   :: lvl, i, id, p_id, nc, ix, id_out
     logical                   :: set_dt
 
     nc = tree%n_cell
@@ -153,13 +153,12 @@ contains
 #if NDIM == 3
     integer                    :: l
 #endif
-    real(dp), parameter        :: small_value = 1e-100_dp
 
     ! Inside the dielectric, set the flux to zero. We later determine the
     ! boundary flux onto dielectrics
     if (ST_use_dielectric) then
-       if (boxes(id)%cc(DTIMES(1), i_eps) > 1.0_dp) then
-          boxes(id)%fc(DTIMES(:), :, flux_elec) = 0.0_dp
+       if (tree%boxes(id)%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          tree%boxes(id)%fc(DTIMES(:), :, flux_elec) = 0.0_dp
           return
        end if
     end if

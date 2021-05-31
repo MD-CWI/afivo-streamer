@@ -51,7 +51,7 @@ module m_photoi
 
   public :: photoi_initialize
   public :: photoi_set_src
-  public :: photoe_set_src
+  ! public :: photoe_set_src
 
 contains
 
@@ -173,48 +173,48 @@ contains
 
   end subroutine photoi_set_src
 
-  !> Sets the photoemission
-  subroutine photoe_set_src(tree, dt)
-    use m_units_constants
-    use m_gas
+  ! !> Sets the photoemission
+  ! subroutine photoe_set_src(tree, dt)
+  !   use m_units_constants
+  !   use m_gas
 
-    type(af_t), intent(inout)     :: tree
-    real(dp), intent(in), optional :: dt
-    real(dp), parameter            :: p_quench = 40.0e-3_dp
-    real(dp)                       :: quench_fac, decay_fraction, decay_rate
+  !   type(af_t), intent(inout)     :: tree
+  !   real(dp), intent(in), optional :: dt
+  !   real(dp), parameter            :: p_quench = 40.0e-3_dp
+  !   real(dp)                       :: quench_fac, decay_fraction, decay_rate
 
-    ! Compute quench factor, because some excited species will be quenched by
-    ! collisions, preventing the emission of a UV photon
-    quench_fac = p_quench / (gas_pressure + p_quench)
+  !   ! Compute quench factor, because some excited species will be quenched by
+  !   ! collisions, preventing the emission of a UV photon
+  !   quench_fac = p_quench / (gas_pressure + p_quench)
 
-    ! Set photon production rate per cell, which is proportional to the
-    ! ionization rate.
-    select case (photoi_source_type)
-    case ('Zheleznyak')
-       call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
-            [photoi_eta * quench_fac], .true.)
-    case ('from_species')
-       decay_fraction = 1 - exp(-dt / photoi_decay_time)
+  !   ! Set photon production rate per cell, which is proportional to the
+  !   ! ionization rate.
+  !   select case (photoi_source_type)
+  !   case ('Zheleznyak')
+  !      call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
+  !           [photoi_eta * quench_fac], .true.)
+  !   case ('from_species')
+  !      decay_fraction = 1 - exp(-dt / eff_decay_time)
 
-       if (dt > 1e-6_dp * photoi_decay_time) then
-          decay_rate = decay_fraction / dt
-       else
-          decay_rate = 1 / photoi_decay_time
-       end if
+  !      if (dt > 1e-6_dp * photoi_decay_time) then
+  !         decay_rate = decay_fraction / dt
+  !      else
+  !         decay_rate = 1 / photoi_decay_time
+  !      end if
 
-       call af_loop_box_arg(tree, photoionization_rate_from_species, &
-            [photoi_eta * quench_fac * decay_rate, 1-decay_fraction], .true.)
-    end select
+  !      call af_loop_box_arg(tree, photoionization_rate_from_species, &
+  !           [photoi_eta * quench_fac * decay_rate, 1-decay_fraction], .true.)
+  !   end select
 
-       if (phmc_physical_photons) then
-          call phe_mc_set_src(tree, ST_rng, i_rhs, &
-               i_photo, ST_cylindrical, dt)
-       else
-          call phe_mc_set_src(tree, ST_rng, i_rhs, &
-               i_photo, ST_cylindrical)
-       end if
+  !      if (phmc_physical_photons) then
+  !         call phe_mc_set_src(tree, ST_rng, i_rhs, &
+  !              i_photo, ST_cylindrical, dt)
+  !      else
+  !         call phe_mc_set_src(tree, ST_rng, i_rhs, &
+  !              i_photo, ST_cylindrical)
+  !      end if
 
-  end subroutine photoe_set_src
+  ! end subroutine photoe_set_src
 
   !> Sets the photoionization_rate
   subroutine photoionization_rate_from_alpha(box, coeff)

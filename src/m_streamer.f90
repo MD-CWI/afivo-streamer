@@ -9,6 +9,7 @@ module m_streamer
   use m_af_all
   use m_random
   use m_lookup_table
+  use m_config
 
   implicit none
   private

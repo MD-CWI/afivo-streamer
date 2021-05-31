@@ -105,9 +105,7 @@ module m_output
   public :: output_initial_summary
   public :: output_write
   public :: output_log
-  public :: output_headline
   public :: output_status
-  public :: output_point
 
 contains
 
@@ -116,13 +114,12 @@ contains
     use m_table_data
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    character(len=name_len)    :: varname
+    character(len=name_len), allocatable :: varname(:)
     character(len=af_nlen)     :: empty_names(0)
     integer                    :: n, i
     character(len=string_len)  :: td_file
     real(dp)                   :: tmp
     real(dp), allocatable      :: x_data(:), y_data(:)
-    real(dp)                   :: dummy_real(0)
 
     call CFG_add_get(cfg, "output%name", output_name, &
          "Name for the output files (e.g. output/my_sim)")
@@ -194,15 +191,18 @@ contains
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
     call CFG_add(cfg, "plane%varname", ["e"], &
-       "Names of variable to write in a plane", dynamic_size=.true.)
-    call CFG_get_size(cfg, "plane%varname", varname_size)
-    allocate(varname(varname_size))
+         "Names of variable to write in a plane", dynamic_size=.true.)
+
+    call CFG_get_size(cfg, "plane%varname", n)
+    allocate(varname(n))
     call CFG_get(cfg, "plane%varname", varname)
-    print *,"cc_variables include in plane output:", varname
-    allocate(plane_ivar(varname_size))
-    do i = 1, varname_size
+    print *, "cc_variables include in plane output:", varname
+
+    allocate(plane_ivar(n))
+    do i = 1, n
        plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
     end do
+
     call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
          "Use this many pixels for plane data")
     call CFG_add_get(cfg, "plane%rmin", plane_rmin(1:NDIM), &
@@ -408,10 +408,6 @@ contains
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
     call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_maxEr)
-    call af_tree_min_fc(tree, 1, electric_fld, min_Er, loc_minEr)
-    call af_tree_max_fc(tree, 2, electric_fld, max_Ey, loc_maxEy)
-    call af_tree_min_fc(tree, 2, electric_fld, min_Ey, loc_minEy)
 
     ! Scale threshold with gas number density
     elecdens_threshold = density_threshold * &
