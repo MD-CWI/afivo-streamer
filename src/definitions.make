@@ -45,6 +45,7 @@ m_field.o: m_types.mod
 m_field.o: m_units_constants.mod
 m_field.o: m_user_methods.mod
 m_fluid_lfa.o: m_chemistry.mod
+m_fluid_lfa.o: m_dielectric.mod
 m_fluid_lfa.o: m_dt.mod
 m_fluid_lfa.o: m_field.mod
 m_fluid_lfa.o: m_gas.mod
@@ -68,11 +69,13 @@ m_init_cond.o: m_user_methods.mod
 m_output.o: m_analysis.mod
 m_output.o: m_chemistry.mod
 m_output.o: m_config.mod
+m_output.o: m_dielectric.mod
 m_output.o: m_dt.mod
 m_output.o: m_field.mod
 m_output.o: m_gas.mod
 m_output.o: m_photoi.mod
 m_output.o: m_streamer.mod
+m_output.o: m_table_data.mod
 m_output.o: m_types.mod
 m_output.o: m_units_constants.mod
 m_output.o: m_user_methods.mod
@@ -81,6 +84,7 @@ m_photoi_helmh.o: m_gas.mod
 m_photoi_helmh.o: m_streamer.mod
 m_photoi_helmh.o: m_units_constants.mod
 m_photoi_mc.o: m_config.mod
+m_photoi_mc.o: m_dielectric.mod
 m_photoi_mc.o: m_gas.mod
 m_photoi_mc.o: m_lookup_table.mod
 m_photoi_mc.o: m_random.mod
@@ -102,6 +106,7 @@ m_refine.o: m_init_cond.mod
 m_refine.o: m_lookup_table.mod
 m_refine.o: m_streamer.mod
 m_refine.o: m_transport_data.mod
+m_refine.o: m_user_methods.mod
 m_streamer.o: m_chemistry.mod
 m_streamer.o: m_config.mod
 m_streamer.o: m_gas.mod

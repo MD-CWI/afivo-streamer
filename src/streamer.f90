@@ -18,6 +18,7 @@ program streamer
   use m_user_methods
   use m_output
   use m_circuit
+  use m_dielectric
 
   implicit none
 
@@ -26,6 +27,7 @@ program streamer
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
+  integer, allocatable      :: ref_links(:, :)
   logical                   :: write_out, evolve_electrons
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: dt_gas_lim
@@ -33,6 +35,7 @@ program streamer
   type(CFG_t)               :: cfg            ! The configuration for the simulation
   type(af_t)                :: tree           ! This contains the full grid information
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
+  type(dielectric_t)        :: diel           ! To store dielectric surface
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
@@ -94,6 +97,8 @@ program streamer
         print *, "n_var_cell file:", tree%n_var_cell
         error stop "restart_from_file: incompatible variable list"
      end if
+
+     if (ST_use_dielectric) error stop "Restarting not support with dielectric"
 
      ! @todo more consistency checks
 
@@ -186,7 +191,7 @@ program streamer
 
         call af_advance(tree, dt, dt_lim, time, &
              species_itree(n_gas_species+1:n_species), &
-             af_heuns_method, forward_euler)
+             time_integrator, forward_euler)
 
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
@@ -245,9 +250,12 @@ program streamer
            call af_gc_tree(tree, gas_vars)
         end if
 
-        if (associated(user_refine)) then
-           call af_adjust_refinement(tree, user_refine, ref_info, &
-                refine_buffer_width)
+        if (ST_use_dielectric) then
+           ! Make sure there are no refinement jumps across the dielectric
+           call dielectric_get_refinement_links(diel, ref_links)
+           call af_adjust_refinement(tree, refine_routine, ref_info, &
+             refine_buffer_width, ref_links)
+           call dielectric_update_after_refinement(tree, diel, ref_info)
         else
            call af_adjust_refinement(tree, refine_routine, ref_info, &
                 refine_buffer_width)
@@ -297,7 +305,7 @@ contains
   subroutine set_initial_conditions(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg
-    integer                   :: n, lvl, i, id
+    integer                   :: n, lvl, i, id, n_surface_variables
 
     call af_loop_box(tree, init_cond_set_box)
     if (associated(user_initial_conditions)) then
@@ -310,12 +318,21 @@ contains
     ! solver is constructed
     call mg_init(tree, mg)
 
+    if (ST_use_dielectric) then
+       ! To store surface charge and the photon flux
+       n_surface_variables = af_advance_num_steps(time_integrator) + 1
+       call dielectric_initialize(tree, i_eps, diel, n_surface_variables)
+    end if
+
     do n = 1, 100
        call field_compute(tree, mg, 0, time, .false.)
 
-       if (associated(user_refine)) then
-          call af_adjust_refinement(tree, user_refine, ref_info, &
-               refine_buffer_width)
+       if (ST_use_dielectric) then
+          ! Make sure there are no refinement jumps across the dielectric
+          call dielectric_get_refinement_links(diel, ref_links)
+          call af_adjust_refinement(tree, refine_routine, ref_info, &
+               refine_buffer_width, ref_links)
+          call dielectric_update_after_refinement(tree, diel, ref_info)
        else
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width)
@@ -335,6 +352,7 @@ contains
 
        if (ref_info%n_add == 0) exit
     end do
+
   end subroutine set_initial_conditions
 
   subroutine write_sim_data(my_unit)

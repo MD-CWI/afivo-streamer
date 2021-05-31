@@ -5,6 +5,7 @@ module m_output
   use m_types
   use m_streamer
   use m_gas
+  use m_lookup_table
 
   implicit none
   private
@@ -67,7 +68,7 @@ module m_output
   logical, public, protected :: plane_write = .false.
 
   ! Which variable to include in plane
-  integer, public, protected :: plane_ivar
+  integer, allocatable, public, protected :: plane_ivar(:)
 
   ! Use this many points for plane data
   integer, public, protected :: plane_npixels(2) = [64, 64]
@@ -93,23 +94,35 @@ module m_output
   ! Density threshold for detecting plasma regions
   real(dp) :: density_threshold = 1e18_dp
 
+  ! Show the electron energy in eV from the local field approximation
+  logical :: show_electron_energy = .false.
+
+  ! Table with energy in eV vs electric field
+  type(LT_t) :: eV_vs_fld
+
   ! Public methods
   public :: output_initialize
   public :: output_initial_summary
   public :: output_write
   public :: output_log
+  public :: output_headline
   public :: output_status
+  public :: output_point
 
 contains
 
   subroutine output_initialize(tree, cfg)
     use m_config
+    use m_table_data
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     character(len=name_len)    :: varname
     character(len=af_nlen)     :: empty_names(0)
     integer                    :: n, i
+    character(len=string_len)  :: td_file
     real(dp)                   :: tmp
+    real(dp), allocatable      :: x_data(:), y_data(:)
+    real(dp)                   :: dummy_real(0)
 
     call CFG_add_get(cfg, "output%name", output_name, &
          "Name for the output files (e.g. output/my_sim)")
@@ -180,10 +193,16 @@ contains
 
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
-    varname = "e"
-    call CFG_add_get(cfg, "plane%varname", varname, &
-         "Names of variable to write in a plane")
-    plane_ivar = af_find_cc_variable(tree, trim(varname))
+    call CFG_add(cfg, "plane%varname", ["e"], &
+       "Names of variable to write in a plane", dynamic_size=.true.)
+    call CFG_get_size(cfg, "plane%varname", varname_size)
+    allocate(varname(varname_size))
+    call CFG_get(cfg, "plane%varname", varname)
+    print *,"cc_variables include in plane output:", varname
+    allocate(plane_ivar(varname_size))
+    do i = 1, varname_size
+       plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
+    end do
     call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
          "Use this many pixels for plane data")
     call CFG_add_get(cfg, "plane%rmin", plane_rmin(1:NDIM), &
@@ -197,6 +216,20 @@ contains
          "Threshold value (V/m) for electric field maxima")
     call CFG_add_get(cfg, "field_maxima%distance", field_maxima_distance, &
          "Minimal distance (m) between electric field maxima")
+
+    call CFG_add_get(cfg, "output%electron_energy", show_electron_energy, &
+         "Show the electron energy in eV from the local field approximation")
+
+    if (show_electron_energy) then
+       ! Create a lookup table for the model coefficients
+       eV_vs_fld = LT_create(table_min_townsend, table_max_townsend, &
+            table_size, 1)
+       call CFG_get(cfg, "input_data%file", td_file)
+
+       ! Read table with E/N vs electron energy (eV)
+       call table_from_file(td_file, "Mean energy (eV)", x_data, y_data)
+       call LT_set_col(eV_vs_fld, 1, x_data, y_data)
+    end if
 
   end subroutine output_initialize
 
@@ -225,8 +258,9 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
-    !compute conductivity at each cell for 2D and 3D
 #if NDIM > 1
+    ! Compute conductivity at each cell for 2D and 3D
+    ! @todo Do not always call this, and fix bug in implementation
     call analysis_get_sigma(tree)
 #endif
 
@@ -251,7 +285,12 @@ contains
        end do
 
        write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
-       call af_write_silo(tree, fname, output_cnt, global_time)
+       if (show_electron_energy) then
+          call af_write_silo(tree, fname, output_cnt, global_time, &
+               add_vars=add_variables, add_names=["eV"])
+       else
+          call af_write_silo(tree, fname, output_cnt, global_time)
+       end if
     end if
 
     if (datfile_write .and. &
@@ -281,7 +320,7 @@ contains
     if (plane_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_plane_", output_cnt
-       call af_write_plane(tree, fname, [plane_ivar], &
+       call af_write_plane(tree, fname, plane_ivar, &
             plane_rmin * ST_domain_len + ST_domain_origin, &
             plane_rmax * ST_domain_len + ST_domain_origin, &
             plane_npixels)
@@ -309,6 +348,27 @@ contains
 #endif
 
   end subroutine output_write
+
+  subroutine add_variables(box, new_vars, n_var)
+    use m_gas
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: n_var
+    real(dp)                :: new_vars(DTIMES(0:box%n_cell+1), n_var)
+    real(dp)                :: tmp(DTIMES(0:box%n_cell+1))
+
+    if (n_var > 0) then
+       ! Add electron energy in eV
+
+       if (.not. gas_constant_density) then
+          tmp = box%cc(DTIMES(:), i_gas_dens)
+       else
+          tmp = gas_number_density
+       end if
+
+       new_vars(DTIMES(:), 1) = LT_get_col(eV_vs_fld, 1, &
+            SI_to_Townsend * box%cc(DTIMES(:), i_electric_fld)/tmp)
+    end if
+  end subroutine add_variables
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
     use m_field, only: field_voltage
@@ -348,8 +408,10 @@ contains
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
     call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
-    call af_tree_min_fc(tree, 1, electric_fld, min_Er)
+    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_maxEr)
+    call af_tree_min_fc(tree, 1, electric_fld, min_Er, loc_minEr)
+    call af_tree_max_fc(tree, 2, electric_fld, max_Ey, loc_maxEy)
+    call af_tree_min_fc(tree, 2, electric_fld, min_Ey, loc_minEy)
 
     ! Scale threshold with gas number density
     elecdens_threshold = density_threshold * &

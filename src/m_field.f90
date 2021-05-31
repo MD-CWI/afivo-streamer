@@ -226,6 +226,7 @@ contains
   subroutine field_set_rhs(tree, s_in)
     use m_units_constants
     use m_chemistry
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: s_in
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
@@ -255,6 +256,11 @@ contains
        !$omp end do nowait
     end do
     !$omp end parallel
+
+    if (ST_use_dielectric) then
+       call dielectric_surface_charge_to_rhs(tree, diel, i_surf_dens, i_rhs, fac)
+    end if
+
   end subroutine field_set_rhs
 
   !> Compute electric field on the tree. First perform multigrid to get electric
