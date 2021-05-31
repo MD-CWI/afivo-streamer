@@ -101,8 +101,9 @@ program dielectric_surface
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      write(*, "(I8,Es14.5)") mg_iter, residu
 
-     write(fname, "(A,I0)") "dielectric_surface_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/dielectric_surface_" // &
+          DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname))
   end do
 
 contains

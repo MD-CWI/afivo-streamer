@@ -1,8 +1,8 @@
 #include "../src/cpp_macros.h"
-!> \example dielectric_surface.f90
+!> \example electrode_dielectric.f90
 !>
 !> Example showing how to include a dielectric surface
-program dielectric_surface
+program electrode_dielectric
   use m_af_all
   use m_dielectric
 
@@ -14,6 +14,7 @@ program dielectric_surface
   integer            :: i_rhs
   integer            :: i_tmp
   integer            :: i_lsf
+  integer            :: i_eps
   integer            :: i_field
   integer            :: i_field_norm
 
@@ -24,10 +25,13 @@ program dielectric_surface
   character(len=100) :: fname
   type(mg_t)         :: mg
 
+  if (NDIM /= 2) error stop "Example only set up for 2D"
+
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
   call af_add_cc_variable(tree, "lsf", ix=i_lsf)
+  call af_add_cc_variable(tree, "eps", ix=i_eps)
   call af_add_cc_variable(tree, "field_norm", ix=i_field_norm)
   call af_add_fc_variable(tree, "field", ix=i_field)
 
@@ -58,6 +62,7 @@ program dielectric_surface
   mg%i_rhs    = i_rhs
   mg%i_tmp    = i_tmp
   mg%i_lsf    = i_lsf
+  mg%i_eps    = i_eps
   mg%sides_bc => af_bc_dirichlet_zero
   mg%lsf_boundary_value = 1.0_dp
 
@@ -71,7 +76,8 @@ program dielectric_surface
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      write(*, "(I8,Es14.5)") mg_iter, residu
 
-     write(fname, "(A,I0)") "output/electrode_example_" // DIMNAME // "_", mg_iter
+     write(fname, "(A,I0)") "output/electrode_dielectric_" // &
+          DIMNAME // "_", mg_iter
      call af_write_silo(tree, trim(fname))
   end do
 
@@ -82,7 +88,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
 
-    if (box%lvl < 9 - 2 * NDIM .and. box%r_min(1) < 0.5_dp) then
+    if (box%lvl < 9 - 2 * NDIM .and. box%r_min(2) < 0.5_dp) then
        cell_flags(DTIMES(:)) = af_do_ref
     else
        cell_flags(DTIMES(:)) = af_keep_ref
@@ -100,13 +106,18 @@ contains
     nc = box%n_cell
 
     ! Start and end point of line
-    r0(:) = 0.4_dp
-    r1(:) = 0.6_dp
+    r0(:) = 0.3_dp
+    r1(:) = 0.5_dp
     radius = 0.02_dp
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, iv) = dist_vec_line(rr, r0, r1, NDIM) - radius
+       if (rr(1) < 0.125_dp) then
+          box%cc(IJK, i_eps) = 20.0_dp
+       else
+          box%cc(IJK, i_eps) = 1.0_dp
+       end if
     end do; CLOSE_DO
 
   end subroutine set_lsf
@@ -133,4 +144,4 @@ contains
     dist = norm2(dist_vec)
   end function dist_vec_line
 
-end program dielectric_surface
+end program electrode_dielectric

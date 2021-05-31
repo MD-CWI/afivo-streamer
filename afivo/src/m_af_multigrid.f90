@@ -2139,53 +2139,53 @@ contains
 
 #if NDIM == 1
          box%fc(1, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(0, i_phi) - cc(1, i_phi)) * &
+              (cc(1, i_phi) - cc(0, i_phi)) * &
               cc(0, i_eps) / &
               (cc(1, i_eps) + cc(0, i_eps))
          box%fc(nc+1, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(nc, i_phi) - cc(nc+1, i_phi)) * &
+              (cc(nc+1, i_phi) - cc(nc, i_phi)) * &
               cc(nc+1, i_eps) / &
               (cc(nc+1, i_eps) + cc(nc, i_eps))
 #elif NDIM == 2
          box%fc(1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(0, 1:nc, i_phi) - cc(1, 1:nc, i_phi)) * &
+              (cc(1, 1:nc, i_phi) - cc(0, 1:nc, i_phi)) * &
               cc(0, 1:nc, i_eps) / &
               (cc(1, 1:nc, i_eps) + cc(0, 1:nc, i_eps))
          box%fc(nc+1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(nc, 1:nc, i_phi) - cc(nc+1, 1:nc, i_phi)) * &
+              (cc(nc+1, 1:nc, i_phi) - cc(nc, 1:nc, i_phi)) * &
               cc(nc+1, 1:nc, i_eps) / &
               (cc(nc+1, 1:nc, i_eps) + cc(nc, 1:nc, i_eps))
          box%fc(1:nc, 1, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, 0, i_phi) - cc(1:nc, 1, i_phi)) * &
+              (cc(1:nc, 1, i_phi) - cc(1:nc, 0, i_phi)) * &
               cc(1:nc, 0, i_eps) / &
               (cc(1:nc, 1, i_eps) + cc(1:nc, 0, i_eps))
          box%fc(1:nc, nc+1, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, nc, i_phi) - cc(1:nc, nc+1, i_phi)) * &
+              (cc(1:nc, nc+1, i_phi) - cc(1:nc, nc, i_phi)) * &
               cc(1:nc, nc+1, i_eps) / &
               (cc(1:nc, nc+1, i_eps) + cc(1:nc, nc, i_eps))
 #elif NDIM == 3
          box%fc(1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(0, 1:nc, 1:nc, i_phi) - cc(1, 1:nc, 1:nc, i_phi)) * &
+              (cc(1, 1:nc, 1:nc, i_phi) - cc(0, 1:nc, 1:nc, i_phi)) * &
               cc(0, 1:nc, 1:nc, i_eps) / &
               (cc(1, 1:nc, 1:nc, i_eps) + cc(0, 1:nc, 1:nc, i_eps))
          box%fc(nc+1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(nc, 1:nc, 1:nc, i_phi) - cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+              (cc(nc+1, 1:nc, 1:nc, i_phi) - cc(nc, 1:nc, 1:nc, i_phi)) * &
               cc(nc+1, 1:nc, 1:nc, i_eps) / &
               (cc(nc+1, 1:nc, 1:nc, i_eps) + cc(nc, 1:nc, 1:nc, i_eps))
          box%fc(1:nc, 1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, 0, 1:nc, i_phi) - cc(1:nc, 1, 1:nc, i_phi)) * &
+              (cc(1:nc, 1, 1:nc, i_phi) - cc(1:nc, 0, 1:nc, i_phi)) * &
               cc(1:nc, 0, 1:nc, i_eps) / &
               (cc(1:nc, 1, 1:nc, i_eps) + cc(1:nc, 0, 1:nc, i_eps))
          box%fc(1:nc, nc+1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, nc, 1:nc, i_phi) - cc(1:nc, nc+1, 1:nc, i_phi)) * &
+              (cc(1:nc, nc+1, 1:nc, i_phi) - cc(1:nc, nc, 1:nc, i_phi)) * &
               cc(1:nc, nc+1, 1:nc, i_eps) / &
               (cc(1:nc, nc+1, 1:nc, i_eps) + cc(1:nc, nc, 1:nc, i_eps))
          box%fc(1:nc, 1:nc, 1, 3, i_fc) = 2 * inv_dr(3) * &
-              (cc(1:nc, 1:nc, 0, i_phi) - cc(1:nc, 1:nc, 1, i_phi)) * &
+              (cc(1:nc, 1:nc, 1, i_phi) - cc(1:nc, 1:nc, 0, i_phi)) * &
               cc(1:nc, 1:nc, 0, i_eps) / &
               (cc(1:nc, 1:nc, 1, i_eps) + cc(1:nc, 1:nc, 0, i_eps))
          box%fc(1:nc, 1:nc, nc+1, 3, i_fc) = 2 * inv_dr(3) * &
-              (cc(1:nc, 1:nc, nc, i_phi) - cc(1:nc, 1:nc, nc+1, i_phi)) * &
+              (cc(1:nc, 1:nc, nc+1, i_phi) - cc(1:nc, 1:nc, nc, i_phi)) * &
               cc(1:nc, 1:nc, nc+1, i_eps) / &
               (cc(1:nc, 1:nc, nc+1, i_eps) + cc(1:nc, 1:nc, nc, i_eps))
 #endif
