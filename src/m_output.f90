@@ -375,6 +375,7 @@ contains
     use m_user_methods
     use m_chemistry
     use m_analysis
+    use m_dielectric2
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
@@ -441,6 +442,12 @@ contains
           sum_elem_charge = sum_elem_charge + tmp * species_charge(n)
        end if
     end do
+
+    if (ST_use_dielectric) then
+       call todo_diel_get_integral(diel, i_surf_dens, tmp)
+       print *, global_time, sum_elem_charge, tmp
+       sum_elem_charge = sum_elem_charge + tmp
+    end if
 
     dt = global_dt
 
@@ -722,5 +729,27 @@ contains
 
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
+
+  !> @todo replace this by routine in afivo/src/m_dielectric
+  subroutine todo_diel_get_integral(diel, i_surf, surf_int)
+    type(dielectric_t), intent(inout) :: diel
+    integer, intent(in)               :: i_surf   !< Surface variables
+    real(dp), intent(out)             :: surf_int !< Surface integral
+    integer                           :: ix
+
+    surf_int = 0
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+#if NDIM == 2
+          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
+               sum(diel%surfaces(ix)%sd(:, i_surf))
+#elif NDIM == 3
+!FLAG
+          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
+               sum(diel%surfaces(ix)%sd(:, :, i_surf))
+#endif
+       end if
+    end do
+  end subroutine todo_diel_get_integral
 
 end module m_output

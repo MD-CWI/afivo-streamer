@@ -196,6 +196,7 @@ program streamer
              species_itree(n_gas_species+1:n_species), &
              time_integrator, forward_euler)
         ! @todo Also combine substeps for surface variables
+        ! call dielectric2_combine_substeps(tree, [0, 1], [0.5_dp, 0.5_dp], 0)
 
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)

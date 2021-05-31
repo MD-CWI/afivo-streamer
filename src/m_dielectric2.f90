@@ -563,17 +563,16 @@ contains
     real(dp)                            :: se_flux(box%n_cell, box%n_cell)
 #endif
     integer                             :: nc
-    real(dp)                            :: fac, dr
+    real(dp)                            :: dr
 
     nc  = box%n_cell
-    fac = dt * UC_elem_charge
     dr  = box%dr(af_neighb_dim(surface%direction))
 
     select case (surface%direction)
 #if NDIM == 2
     case (af_neighb_lowx)
        surface%sd(:, 1+s_out) = surface%sd(:, i_surf_dens+s_in) - &
-            fac * matmul(box%fc(1, 1:nc, 1, flux_variables), &
+            dt * matmul(box%fc(1, 1:nc, 1, flux_variables), &
             flux_species_charge)
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
@@ -582,11 +581,11 @@ contains
           box%cc(1, 1:nc, i_electron+s_out) = &
                box%cc(1, 1:nc, i_electron+s_out) + dt * se_flux / dr
           surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_out) + &
-               fac * se_flux
+               dt * se_flux
        end if
     case (af_neighb_highx)
        surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) + &
-            fac * matmul(box%fc(nc+1, 1:nc, 1, flux_variables), &
+            dt * matmul(box%fc(nc+1, 1:nc, 1, flux_variables), &
             flux_species_charge)
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
@@ -595,11 +594,11 @@ contains
           box%cc(nc, 1:nc, i_electron+s_out) = &
                box%cc(nc, 1:nc, i_electron+s_out) + dt * se_flux / dr
           surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_out) + &
-               fac * se_flux
+               dt * se_flux
        end if
     case (af_neighb_lowy)
        surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) - &
-            fac * matmul(box%fc(1:nc, 1, 2, flux_variables), &
+            dt * matmul(box%fc(1:nc, 1, 2, flux_variables), &
             flux_species_charge)
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
@@ -608,11 +607,11 @@ contains
           box%cc(1:nc, 1, i_electron+s_out) = &
                box%cc(1:nc, 1, i_electron+s_out) + dt * se_flux / dr
           surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_out) + &
-               fac * se_flux
+               dt * se_flux
        end if
     case (af_neighb_highy)
        surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) + &
-            fac * matmul(box%fc(1:nc, nc+1, 2, flux_variables), &
+            dt * matmul(box%fc(1:nc, nc+1, 2, flux_variables), &
             flux_species_charge)
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
@@ -621,7 +620,7 @@ contains
           box%cc(1:nc, nc, i_electron+s_out) = &
                box%cc(1:nc, nc, i_electron+s_out) + dt * se_flux / dr
           surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_out) + &
-               fac * se_flux
+               dt * se_flux
        end if
 #elif NDIM == 3
     case default
