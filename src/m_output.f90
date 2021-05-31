@@ -408,6 +408,8 @@ contains
     call af_tree_sum_cc(tree, i_1pos_ion, sum_pos_ion)
     call af_tree_max_cc(tree, i_electron, max_elec, loc_elec)
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+    call af_tree_max_fc(tree, 1, electric_fld, max_Er, loc_Er)
+    call af_tree_min_fc(tree, 1, electric_fld, min_Er)
 
     ! Scale threshold with gas number density
     elecdens_threshold = density_threshold * &

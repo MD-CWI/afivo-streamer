@@ -49,6 +49,7 @@ m_field.o: m_table_data.mod
 m_field.o: m_types.mod
 m_field.o: m_units_constants.mod
 m_field.o: m_user_methods.mod
+m_field.o: m_dielectric2.mod
 m_fluid_lfa.o: m_chemistry.mod
 m_fluid_lfa.o: m_dielectric2.mod
 m_fluid_lfa.o: m_dt.mod

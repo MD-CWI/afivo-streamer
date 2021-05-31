@@ -350,7 +350,7 @@ contains
     call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
 
     call dielectric_correct_field_fc(tree, diel, i_surf_dens, &
-         i_electric_fld, i_phi, UC_eps0)
+         electric_fld, i_phi, UC_eps0)
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
