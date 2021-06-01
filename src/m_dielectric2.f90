@@ -571,7 +571,7 @@ contains
     select case (surface%direction)
 #if NDIM == 2
     case (af_neighb_lowx)
-       surface%sd(:, 1+s_out) = surface%sd(:, i_surf_dens+s_in) - &
+       surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) - &
             dt * matmul(box%fc(1, 1:nc, 1, flux_variables), &
             flux_species_charge)
 
