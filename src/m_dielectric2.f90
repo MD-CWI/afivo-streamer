@@ -685,30 +685,31 @@ contains
 
   end subroutine dielectric2_photon_emission
 
-  subroutine dielectric2_combine_substeps(tree, in_steps, coeffs, out_step)
-    type(af_t), intent(in) :: tree
-    integer, intent(in)    :: in_steps(:)
-    real(dp), intent(in)   :: coeffs(:)
-    integer, intent(in)    :: out_step
-    integer                :: n, k
+  subroutine dielectric2_combine_substeps(tree, n_in, s_in, coeffs, s_out)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: n_in         !< Number of steps
+    integer, intent(in)       :: s_in(n_in)   !< States for the steps
+    real(dp), intent(in)      :: coeffs(n_in) !< Coefficients
+    integer, intent(in)       :: s_out        !< Output state
+    integer                   :: n, k
 #if NDIM == 2
-    real(dp)               :: tmp(tree%n_cell)
+    real(dp)                  :: tmp(tree%n_cell)
 #elif NDIM == 3
-    real(dp)               :: tmp(tree%n_cell, tree%n_cell)
+    real(dp)                  :: tmp(tree%n_cell, tree%n_cell)
 #endif
 
     do n = 1, diel%max_ix
        if (.not. diel%surfaces(n)%in_use) cycle
 
        tmp = 0.0_dp
-       do k = 1, size(in_steps)
+       do k = 1, n_in
 #if NDIM == 2
-          tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(:, i_surf_dens+in_steps(k))
+          tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(:, i_surf_dens+s_in(k))
 #elif NDIM == 3
           error stop
 #endif
        end do
-       diel%surfaces(n)%sd(:, i_surf_dens+out_step) = tmp
+       diel%surfaces(n)%sd(:, i_surf_dens+s_out) = tmp
     end do
   end subroutine dielectric2_combine_substeps
 

@@ -192,11 +192,16 @@ program streamer
            call set_electrode_densities(tree)
         end if
 
-        call af_advance(tree, dt, dt_lim, time, &
-             species_itree(n_gas_species+1:n_species), &
+        if (ST_use_dielectric) then
+           call af_advance(tree, dt, dt_lim, time, &
+                species_itree(n_gas_species+1:n_species), &
+                time_integrator, forward_euler, &
+                dielectric2_combine_substeps)
+        else
+           call af_advance(tree, dt, dt_lim, time, &
+                species_itree(n_gas_species+1:n_species), &
              time_integrator, forward_euler)
-        ! @todo Also combine substeps for surface variables
-        ! call dielectric2_combine_substeps(tree, [0, 1], [0.5_dp, 0.5_dp], 0)
+        end if
 
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
