@@ -4,6 +4,7 @@ module m_photoi_mc
   use m_streamer
   use m_lookup_table
   use m_af_all
+  use m_units_constants
 
   implicit none
   private
@@ -391,11 +392,12 @@ contains
     integer                     :: IJK, n, n_used
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl, max_num_photons
-    real(dp)                    :: tmp, dr(NDIM), dt_fac, dist, r(3)
+    real(dp)                    :: dr(NDIM), dt_fac, dist
     real(dp)                    :: sum_production_rate, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
 #if NDIM == 2
+    real(dp)                    :: tmp, r(3)
     real(dp), parameter         :: pi = acos(-1.0_dp)
 #endif
     type(PRNG_t)                :: prng
@@ -509,7 +511,7 @@ contains
 
           tree%boxes(id)%cc(IJK, i_photo) = &
                   tree%boxes(id)%cc(IJK, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(fac * product(dr))
+                  phmc_tbl%frac_in_tbl/(dt_fac * product(dr))
 #elif NDIM == 2
           i = ph_loc(n)%ix(1)
           j = ph_loc(n)%ix(2)
@@ -674,7 +676,6 @@ contains
   subroutine phmc_generate_photons(tree, dt_fac, i_src, xyz_src, n_max, n_used, prng)
     use omp_lib
     use m_random
-    use m_units_constants, only: UC_pi
     type(af_t), intent(in)               :: tree
     !> Time step to convert photon production rate to number of photons
     real(dp), intent(in)                 :: dt_fac
@@ -719,6 +720,7 @@ contains
           id = tree%lvls(lvl)%leaves(ix)
 
           do KJI_DO(1,nc)
+
 #if NDIM == 2
              if (tree%boxes(id)%coord_t == af_cyl) then
                 tmp = af_cyl_radius_cc(tree%boxes(id), i)
@@ -727,8 +729,8 @@ contains
              else
                 tmp = dt_fac * tree%boxes(id)%cc(i, j, i_src) * product(dr)
              end if
-#elif NDIM == 3
-             tmp = dt_fac * tree%boxes(id)%cc(i, j, k, i_src) * product(dr)
+#else
+             tmp = dt_fac * tree%boxes(id)%cc(IJK, i_src) * product(dr)
 #endif
 
              n_create = floor(tmp)
@@ -781,8 +783,8 @@ contains
     do n = 1, n_used
        i = photon_thread(n)
        photons_per_thread(i) = photons_per_thread(i) + 1
-       j = ix_offset(i) + photons_per_thread(i)
-       xyz_tmp(:, j) = xyz_src(:, n)
+       ix = ix_offset(i) + photons_per_thread(i)
+       xyz_tmp(:, ix) = xyz_src(:, n)
     end do
     xyz_src(:, 1:n_used) = xyz_tmp(:, 1:n_used)
 

@@ -113,7 +113,7 @@ contains
     allocate(preset_charge_distribution(n_surface_charge))
     call CFG_get(cfg, "dielectric%preset_charge", preset_charge)
     call CFG_get(cfg, "dielectric%preset_charge_distribution", preset_charge_distribution)
-    preset_charge_distribution = preset_charge_distribution * ST_domain_len(2)
+    preset_charge_distribution = preset_charge_distribution * ST_domain_len(NDIM)
 !     call CFG_add_get(cfg, "dielectric%preset_charge", &
 !          preset_charge, &
 !          "Preset surface charge")
@@ -692,7 +692,9 @@ contains
     real(dp), intent(in)      :: coeffs(n_in) !< Coefficients
     integer, intent(in)       :: s_out        !< Output state
     integer                   :: n, k
-#if NDIM == 2
+#if NDIM == 1
+    real(dp)                  :: tmp
+#elif NDIM == 2
     real(dp)                  :: tmp(tree%n_cell)
 #elif NDIM == 3
     real(dp)                  :: tmp(tree%n_cell, tree%n_cell)
@@ -703,13 +705,21 @@ contains
 
        tmp = 0.0_dp
        do k = 1, n_in
-#if NDIM == 2
+#if NDIM == 1
+          tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(i_surf_dens+s_in(k))
+#elif NDIM == 2
           tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(:, i_surf_dens+s_in(k))
 #elif NDIM == 3
-          error stop
+          tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(:, :, i_surf_dens+s_in(k))
 #endif
        end do
+#if NDIM == 1
+       diel%surfaces(n)%sd(i_surf_dens+s_out) = tmp
+#elif NDIM == 2
        diel%surfaces(n)%sd(:, i_surf_dens+s_out) = tmp
+#elif NDIM == 3
+       diel%surfaces(n)%sd(:, :, i_surf_dens+s_out) = tmp
+#endif
     end do
   end subroutine dielectric2_combine_substeps
 
@@ -819,7 +829,13 @@ contains
 
     do n = 1, diel%max_ix
        if (diel%surfaces(n)%in_use) then
+#if NDIM == 1
+          diel%surfaces(n)%sd(i_photon_flux) = 0.0_dp
+#elif NDIM == 2
           diel%surfaces(n)%sd(:, i_photon_flux) = 0.0_dp
+#elif NDIM == 3
+          diel%surfaces(n)%sd(:, :, i_photon_flux) = 0.0_dp
+#endif
        end if
     end do
   end subroutine dielectric2_reset_photons

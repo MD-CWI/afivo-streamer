@@ -659,6 +659,7 @@ contains
 
   end subroutine output_fld_maxima
 
+#if NDIM == 2
   subroutine output_cross(tree, filename)
     use m_af_all
     use m_analysis
@@ -679,6 +680,7 @@ contains
     end do
     close(my_unit)
   end subroutine output_cross
+#endif
 
   subroutine set_power_density_box(box)
     use m_units_constants

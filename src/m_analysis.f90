@@ -10,7 +10,9 @@ module m_analysis
   ! Public methods
   public :: analysis_get_maxima
   public :: analysis_get_sigma
+#if NDIM == 2
   public :: analysis_get_cross
+#endif
   public :: analysis_zmin_zmax_threshold
   public :: analysis_max_var_region
   public :: analysis_max_var_product
@@ -87,33 +89,18 @@ contains
     integer, intent(in)        :: id, nc
 
     real(dp) :: ne_fld(2), mu, Td, N_inv
-    integer  :: n, m, o
+    integer  :: IJK
 
+    !> @todo handle variable gas density
     N_inv = 1.0_dp/gas_number_density
 
-#if NDIM == 2
-    do n = 1, nc
-      do m = 1, nc
-        ne_fld = boxes(id)%cc(n, m, [i_electron, i_electric_fld])
-        Td = ne_fld(2) * SI_to_Townsend * N_inv
-        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-        boxes(id)%cc(n , m, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
-      end do
-    end do
-#endif
+    do KJI_DO(1, nc)
+       ne_fld = boxes(id)%cc(IJK, [i_electron, i_electric_fld])
+       Td     = ne_fld(2) * SI_to_Townsend * N_inv
+       mu     = LT_get_col(td_tbl, td_mobility, Td) * N_inv
 
-#if NDIM == 3
-    do n = 1, nc
-      do m = 1, nc
-        do o = 1, nc
-          ne_fld = boxes(id)%cc(n, m , o, [i_electron, i_electric_fld])
-          Td = ne_fld(2) * SI_to_Townsend * N_inv
-          mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-          boxes(id)%cc(n, m, o, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
-        end do
-      end do
-    end do
-#endif
+       boxes(id)%cc(IJK, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
+    end do; CLOSE_DO
 
   end subroutine sigma_calculator
 
@@ -275,6 +262,7 @@ contains
     reduce_max = max(a, b)
   end function reduce_max
 
+#if NDIM == 2
   !> Get integrated quantities of an axisymmetric streamer at a z-coordinate
   subroutine analysis_get_cross(tree, rmax, z, elec_dens, charge_dens, current_dens)
     use m_lookup_table
@@ -305,11 +293,9 @@ contains
 
     do i = 1, m
        r = i * rmax / (m + 1)
-#if NDIM == 2
        ne_fld_rhs = af_interp1(tree, [r, z], [i_electron, i_electric_fld, i_rhs], &
             success, id_guess)
        if (.not. success) error stop "unsuccessful interp1"
-#endif
        Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv       
        d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
@@ -323,5 +309,6 @@ contains
     end do
 
   end subroutine analysis_get_cross
+#endif
 
 end module m_analysis
