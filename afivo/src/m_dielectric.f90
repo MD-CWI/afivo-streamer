@@ -66,12 +66,17 @@ module m_dielectric
   public :: dielectric_t
   public :: dielectric_initialize
   public :: dielectric_set_values
+  public :: dielectric_set_weighted_sum
+  public :: dielectric_get_integral
   public :: dielectric_update_after_refinement
+  public :: dielectric_inside_layer_to_surface
   public :: dielectric_surface_charge_to_rhs
   public :: dielectric_correct_field_fc
-  public :: dielectric_correct_field_cc
   public :: dielectric_get_refinement_links
   public :: dielectric_get_surface_cell
+#if NDIM == 2
+  public :: dielectric_correct_field_cc
+#endif
 
 contains
 
@@ -233,6 +238,56 @@ contains
     end do
   end subroutine dielectric_set_values
 
+  !> Set surface variable to a weighted sum of other variables
+  subroutine dielectric_set_weighted_sum(diel, i_out, i_in, w_in)
+    type(dielectric_t), intent(inout) :: diel
+    integer, intent(in)               :: i_out   !< Output surface density
+    integer, intent(in)               :: i_in(:) !< List of input surface densities
+    real(dp), intent(in)              :: w_in(:) !< Weights of input densities
+    integer                           :: ix
+#if NDIM == 3
+    integer                           :: ii
+#endif
+
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+#if NDIM == 2
+          diel%surfaces(ix)%sd(:, i_out) = &
+               matmul(diel%surfaces(ix)%sd(:, i_in), w_in)
+#elif NDIM == 3
+          ! TODO improve by removing do-loop??
+          diel%surfaces(ix)%sd(:, :, i_out) = 0.0_dp
+          do ii=1, size(i_in)
+            diel%surfaces(ix)%sd(:, :, i_out) =  diel%surfaces(ix)%sd(:, :, i_out) &
+              + w_in(ii) * diel%surfaces(ix)%sd(:, :, i_in(ii))
+          end do
+#endif
+       end if
+    end do
+  end subroutine dielectric_set_weighted_sum
+
+  !> Compute integral of surface variable
+  subroutine dielectric_get_integral(diel, i_surf, surf_int)
+    type(dielectric_t), intent(inout) :: diel
+    integer, intent(in)               :: i_surf   !< Surface variables
+    real(dp), intent(out)             :: surf_int !< Surface integral
+    integer                           :: ix
+
+    surf_int = 0
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+#if NDIM == 2
+          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
+               sum(diel%surfaces(ix)%sd(:, i_surf))
+#elif NDIM == 3
+!FLAG
+          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
+               sum(diel%surfaces(ix)%sd(:, :, i_surf))
+#endif
+       end if
+    end do
+  end subroutine dielectric_get_integral
+
   !> Update the dielectric surface after the mesh has been refined
   subroutine dielectric_update_after_refinement(tree, diel, ref_info)
     type(af_t), intent(in)            :: tree
@@ -324,8 +379,12 @@ contains
          ! Copy the values from the parent
          sd(1:nc:2, :) = sd_p(dix(1)+1:dix(1)+nc/2, :)
          sd(2:nc:2, :) = sd(1:nc:2, :)
-#else
-         error stop
+#elif NDIM == 3
+        ! Copy the values from the parent
+!FLAG
+         sd(1:nc:2, 1:nc:2, :) = sd_p(dix(1)+1:dix(1)+nc/2, dix(2)+1:dix(2)+nc/2, :)
+         sd(2:nc:2, 1:nc:2, :) = sd(1:nc:2, 1:nc:2, :)
+         sd(:, 2:nc:2, :)      = sd(:, 1:nc:2, :)
 #endif
        end associate
     end do
@@ -351,8 +410,10 @@ contains
 #if NDIM == 2
       ! Average the value on the children
       sd_p(dix(1)+1:dix(1)+nc/2, :) = 0.5_dp * (sd(1:nc:2, :) + sd(2:nc:2, :))
-#else
-      error stop
+#elif NDIM == 3
+!FLAG
+      sd_p(dix(1)+1:dix(1)+nc/2, dix(2)+1:dix(2)+nc/2, :) = 0.25_dp * &
+      (sd(1:nc:2, 1:nc:2, :) + sd(2:nc:2, 1:nc:2, :) + sd(1:nc:2, 2:nc:2, :) + sd(2:nc:2, 1:nc:2, :) + sd(2:nc:2, 2:nc:2, :))
 #endif
     end associate
 
@@ -454,22 +515,96 @@ contains
          boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_rhs) &
          + (1-frac_gas) * fac * fac_to_volume * &
          reshape(surface%sd(:, i_sigma), [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1])
-#else
-    error stop
+#elif NDIM == 3
+!FLAG
+    boxes(id_out)%cc(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), i_rhs) = &
+      boxes(id_out)%cc(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), i_rhs) &
+      + frac_gas * fac * fac_to_volume * &
+      reshape(surface%sd(:, :, i_sigma), [ghi(1)-glo(1)+1, ghi(2)-glo(2)+1, ghi(3)-glo(3)+1])
+
+    boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_rhs) = &
+      boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_rhs) &
+      + (1-frac_gas) * fac * fac_to_volume * &
+      reshape(surface%sd(:, :, i_sigma), [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1, dhi(3)-dlo(3)+1])
 #endif
 
   end subroutine surface_charge_to_rhs
 
+  !> Map first layer inside the dielectric to surface density
+  subroutine dielectric_inside_layer_to_surface(tree, diel, i_cc, i_sigma, &
+       fac, clear_cc, clear_surf)
+    type(af_t), intent(inout)         :: tree
+    type(dielectric_t), intent(inout) :: diel
+    integer, intent(in)               :: i_cc       !< Cell-centered variable (in the tree)
+    integer, intent(in)               :: i_sigma    !< Surface charage variable
+    real(dp), intent(in)              :: fac        !< Multiplication factor
+    logical, intent(in)               :: clear_cc   !< Set density to zero afterwards
+    logical, intent(in)               :: clear_surf !< Set surface density to zero initially
+    integer                           :: n
+
+    if (.not. diel%initialized) error stop "dielectric not initialized"
+
+    do n = 1, diel%max_ix
+       if (.not. diel%surfaces(n)%in_use) cycle
+
+       call inside_layer_to_surface(tree%boxes, diel%surfaces(n), &
+            i_cc, i_sigma, fac, clear_cc, clear_surf)
+    end do
+  end subroutine dielectric_inside_layer_to_surface
+
+  !> Map first layer inside the dielectric to surface density
+  subroutine inside_layer_to_surface(boxes, surface, i_cc, i_sigma, fac, &
+       clear_cc, clear_surf)
+    type(box_t), intent(inout)     :: boxes(:)
+    type(surface_t), intent(inout) :: surface
+    integer, intent(in)            :: i_cc       !< Cell-centered variable (in the tree)
+    integer, intent(in)            :: i_sigma    !< Surface charage variable
+    real(dp), intent(in)           :: fac        !< Multiplication factor
+    logical, intent(in)            :: clear_cc   !< Set density to zero afterwards
+    logical, intent(in)            :: clear_surf !< Set surface density to zero initially
+    integer                        :: nb, nc, id_in
+    integer                        :: dlo(NDIM), dhi(NDIM)
+    real(dp)                       :: dr
+
+    nb     = surface%direction
+    id_in  = surface%id_in
+    nc     = boxes(id_in)%n_cell
+    dr     = boxes(id_in)%dr(af_neighb_dim(nb))
+
+    ! Get index range for cells adjacent to the boundary of the dielectric box
+    call af_get_index_bc_inside(af_neighb_rev(nb), nc, 1, dlo, dhi)
+
+#if NDIM == 2
+    if (clear_surf) surface%sd(:, i_sigma) = 0.0_dp
+
+    surface%sd(:, i_sigma) = surface%sd(:, i_sigma) + fac * dr * &
+         pack(boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_cc), .true.)
+    if (clear_cc) boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), i_cc) = 0.0_dp
+#elif NDIM == 3
+    if (clear_surf) surface%sd(:, :, i_sigma) = 0.0_dp
+!FLAG
+    surface%sd(:,:, i_sigma) = surface%sd(:, :, i_sigma) + fac * dr * &
+         reshape(boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_cc), [nc, nc])
+    if (clear_cc) boxes(id_in)%cc(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_cc) = 0.0_dp
+#endif
+
+  end subroutine inside_layer_to_surface
+
   !> Compute the electric field at face centers near surfaces
-  subroutine dielectric_correct_field_fc(tree, diel, i_sigma, i_fld, i_phi, eps0)
+  subroutine dielectric_correct_field_fc(tree, diel, i_sigma, i_fld, i_phi, fac)
     type(af_t), intent(inout)      :: tree
     type(dielectric_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma !< Surface charge variable
     integer, intent(in)            :: i_fld   !< Face-centered field variable
     integer, intent(in)            :: i_phi   !< Cell-centered potential variable
-    real(dp), intent(in)           :: eps0    !< Dielectric permittivity (vacuum)
+    real(dp), intent(in)           :: fac     !< Elementary charge over eps0
     integer                        :: id_in, id_out, nc, nb, ix
     real(dp)                       :: eps, fac_fld(2), fac_charge, inv_dr(NDIM)
+    integer                        :: dlo(NDIM), dhi(NDIM)
+    integer                        :: glo(NDIM), ghi(NDIM)
+    integer                        :: dlo_shft(NDIM), dhi_shft(NDIM)
+    integer                        :: glo_shft(NDIM), ghi_shft(NDIM)
+    integer                        :: shft(NDIM, 2*NDIM)
 
     if (.not. diel%initialized) error stop "dielectric not initialized"
 
@@ -484,7 +619,21 @@ contains
           inv_dr = 1/tree%boxes(id_out)%dr
 
           fac_fld = [2 * eps, 2.0_dp] / (1 + eps)
-          fac_charge = 1 / (eps0 * (1 + eps))
+          fac_charge = fac / (1 + eps)
+
+          ! Get index range for cells adjacent to the boundary of the dielectric box
+          call af_get_index_bface_inside(af_neighb_rev(nb), nc, 1, dlo, dhi)
+
+          ! Get similar index range for gas-phase box
+          call af_get_index_bface_inside(nb, nc, 1, glo, ghi)
+
+          ! Compute the offset for finite difference
+          shft = - abs(af_neighb_dix(:, :))
+
+          dlo_shft(:) = dlo(:) + shft(:, nb)
+          dhi_shft(:) = dhi(:) + shft(:, nb)
+          glo_shft(:) = glo(:) + shft(:, nb)
+          ghi_shft(:) = ghi(:) + shft(:, nb)
 
           associate (fc_out => tree%boxes(id_out)%fc, &
                fc_in => tree%boxes(id_in)%fc, &
@@ -496,34 +645,44 @@ contains
             case (af_neighb_lowx)
                fc_out(1, 1:nc, 1, i_fld) = fac_fld(1) * inv_dr(1) * &
                     (cc_out(0, 1:nc, i_phi) - cc_out(1, 1:nc, i_phi)) &
-                    - fac_charge * sd(:, i_sigma)
+                    + fac_charge * sd(:, i_sigma)
                fc_in(nc+1, 1:nc, 1, i_fld)  = fac_fld(2) * inv_dr(1) * &
                     (cc_in(nc, 1:nc, i_phi) - cc_in(nc+1, 1:nc, i_phi)) &
-                    + fac_charge * sd(:, i_sigma)
+                    - fac_charge * sd(:, i_sigma)
             case (af_neighb_highx)
                fc_out(nc+1, 1:nc, 1, i_fld)  = fac_fld(1) * inv_dr(1) * &
                     (cc_out(nc, 1:nc, i_phi) - cc_out(nc+1, 1:nc, i_phi)) &
-                    + fac_charge * sd(:, i_sigma)
+                    - fac_charge * sd(:, i_sigma)
                fc_in(1, 1:nc, 1, i_fld) = fac_fld(2) * inv_dr(1) * &
                     (cc_in(0, 1:nc, i_phi) - cc_in(1, 1:nc, i_phi)) &
-                    - fac_charge * sd(:, i_sigma)
+                    + fac_charge * sd(:, i_sigma)
             case (af_neighb_lowy)
                fc_out(1:nc, 1, 2, i_fld)  = fac_fld(1) * inv_dr(2) * &
                     (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma)
+                    + fac_charge * sd(:, i_sigma)
                fc_in(1:nc, nc+1, 2, i_fld) = fac_fld(2) * inv_dr(2) * &
                     (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma)
+                    - fac_charge * sd(:, i_sigma)
             case (af_neighb_highy)
                fc_out(1:nc, nc+1, 2, i_fld) = fac_fld(1) * inv_dr(2) * &
                     (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma)
+                    - fac_charge * sd(:, i_sigma)
                fc_in(1:nc, 1, 2, i_fld)  = fac_fld(2) * inv_dr(2) * &
                     (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma)
-#else
+                    + fac_charge * sd(:, i_sigma)
+#elif NDIM == 3
             case default
-               error stop
+                fc_out(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), af_neighb_dim(nb), i_fld) = &
+                  fac_fld(1) * inv_dr(af_neighb_dim(nb)) * &
+                  (cc_out(glo_shft(1):ghi_shft(1), glo_shft(2):ghi_shft(2), glo_shft(3):ghi_shft(3), i_phi) - &
+                   cc_out(glo(1):ghi(1), glo(2):ghi(2), glo(3):ghi(3), i_phi)) &
+                   + fac_charge * reshape(sd(:, :, i_sigma), [ghi(1)-glo(1)+1, ghi(2)-glo(2)+1, ghi(3)-glo(3)+1])
+
+                fc_in(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), af_neighb_dim(nb), i_fld) = &
+                  fac_fld(2) * inv_dr(af_neighb_dim(nb)) * &
+                  (cc_in(dlo_shft(1):dhi_shft(1), dlo_shft(2):dhi_shft(2), dlo_shft(3):dhi_shft(3), i_phi) - &
+                  cc_in(dlo(1):dhi(1), dlo(2):dhi(2), dlo(3):dhi(3), i_phi)) &
+                   - fac_charge * reshape(sd(:, :, i_sigma), [dhi(1)-dlo(1)+1, dhi(2)-dlo(2)+1, dhi(3)-dlo(3)+1])
 #endif
             end select
           end associate
@@ -532,16 +691,18 @@ contains
 
   end subroutine dielectric_correct_field_fc
 
+#if NDIM == 2
   !> Compute the electric field at cell centers near surfaces
-  subroutine dielectric_correct_field_cc(tree, diel, i_sigma, i_fld, i_phi, eps0)
+  subroutine dielectric_correct_field_cc(tree, diel, i_sigma, i_fld, i_phi, fac)
     type(af_t), intent(inout)      :: tree
     type(dielectric_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma     !< Surface charge variable
     integer, intent(in)            :: i_fld(NDIM) !< Cell-centered field variables
     integer, intent(in)            :: i_phi       !< Cell-centered potential variable
-    real(dp), intent(in)           :: eps0        !< Dielectric permittivity (vacuum)
+    real(dp), intent(in)           :: fac         !< Elementary charge over eps0
     integer                        :: id_in, id_out, nc, nb, ix
     real(dp)                       :: eps, fac_fld(2), fac_charge, inv_dr(NDIM)
+    real(dp)                       :: f_out(tree%n_cell), f_in(tree%n_cell)
 
     if (.not. diel%initialized) error stop "dielectric not initialized"
 
@@ -556,7 +717,7 @@ contains
           inv_dr = 1/tree%boxes(id_out)%dr
 
           fac_fld = [2 * eps, 2.0_dp] / (1 + eps)
-          fac_charge = 1 / (eps0 * (1 + eps))
+          fac_charge = fac / (1 + eps)
 
           associate (cc_out => tree%boxes(id_out)%cc, &
                cc_in => tree%boxes(id_in)%cc, &
@@ -564,53 +725,64 @@ contains
 
             ! Compute field at two cell faces and average them
             select case (nb)
-#if NDIM == 2
             case (af_neighb_lowx)
-               cc_out(1, 1:nc, i_fld(1)) = 0.5_dp * (fac_fld(1) * inv_dr(1) * &
+               f_out = fac_fld(1) * inv_dr(1) * &
                     (cc_out(0, 1:nc, i_phi) - cc_out(1, 1:nc, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(1) * &
-                    (cc_out(1, 1:nc, i_phi) - cc_out(2, 1:nc, i_phi)))
-               cc_in(nc, 1:nc, i_fld(1))  = 0.5_dp * (fac_fld(2) * inv_dr(1) * &
+                    + fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(1) * &
                     (cc_in(nc, 1:nc, i_phi) - cc_in(nc+1, 1:nc, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(1) * &
+                    - fac_charge * sd(:, i_sigma)
+               cc_out(1, 1:nc, i_fld(1)) = 0.5_dp * (f_out + inv_dr(1) * &
+                    (cc_out(1, 1:nc, i_phi) - cc_out(2, 1:nc, i_phi)))
+               cc_out(0, 1:nc, i_fld(1)) = f_out
+               cc_in(nc, 1:nc, i_fld(1))  = 0.5_dp * (f_in + inv_dr(1) * &
                     (cc_in(nc-1, 1:nc, i_phi) - cc_in(nc, 1:nc, i_phi)))
+               cc_in(nc+1, 1:nc, i_fld(1)) = f_in
             case (af_neighb_highx)
-               cc_out(nc, 1:nc, i_fld(1))  = 0.5_dp * (fac_fld(1) * inv_dr(1) * &
+               f_out = fac_fld(1) * inv_dr(1) * &
                     (cc_out(nc, 1:nc, i_phi) - cc_out(nc+1, 1:nc, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(1) * &
-                    (cc_out(nc-1, 1:nc, i_phi) - cc_out(nc, 1:nc, i_phi)))
-               cc_in(1, 1:nc, i_fld(1)) = 0.5_dp * (fac_fld(2) * inv_dr(1) * &
+                    - fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(1) * &
                     (cc_in(0, 1:nc, i_phi) - cc_in(1, 1:nc, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(1) * &
+                    + fac_charge * sd(:, i_sigma)
+               cc_out(nc, 1:nc, i_fld(1))  = 0.5_dp * (f_out + inv_dr(1) * &
+                    (cc_out(nc-1, 1:nc, i_phi) - cc_out(nc, 1:nc, i_phi)))
+               cc_out(nc+1, 1:nc, i_fld(1)) = f_out
+               cc_in(1, 1:nc, i_fld(1)) = 0.5_dp * (f_in + inv_dr(1) * &
                     (cc_in(1, 1:nc, i_phi) - cc_in(2, 1:nc, i_phi)))
+               cc_in(0, 1:nc, i_fld(1)) = f_in
             case (af_neighb_lowy)
-               cc_out(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
+               f_out = fac_fld(1) * inv_dr(2) * &
                     (cc_out(1:nc, 0, i_phi) - cc_out(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_out(1:nc, 1, i_phi) - cc_out(1:nc, 2, i_phi)))
-               cc_in(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
+                    + fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(2) * &
                     (cc_in(1:nc, nc, i_phi) - cc_in(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
+                    - fac_charge * sd(:, i_sigma)
+               cc_out(1:nc, 1, i_fld(2))  = 0.5_dp * (f_out + inv_dr(2) * &
+                    (cc_out(1:nc, 1, i_phi) - cc_out(1:nc, 2, i_phi)))
+               cc_out(1:nc, 0, i_fld(2)) = f_out
+               cc_in(1:nc, nc, i_fld(2)) = 0.5_dp * (f_in + inv_dr(2) * &
                     (cc_in(1:nc, nc-1, i_phi) - cc_in(1:nc, nc, i_phi)))
+               cc_in(1:nc, nc+1, i_fld(2)) = f_in
             case (af_neighb_highy)
-               cc_out(1:nc, nc, i_fld(2)) = 0.5_dp * (fac_fld(1) * inv_dr(2) * &
+               f_out = fac_fld(1) * inv_dr(2) * &
                     (cc_out(1:nc, nc, i_phi) - cc_out(1:nc, nc+1, i_phi)) &
-                    + fac_charge * sd(:, i_sigma) + inv_dr(2) * &
-                    (cc_out(1:nc, nc-1, i_phi) - cc_out(1:nc, nc, i_phi)))
-               cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (fac_fld(2) * inv_dr(2) * &
+                    - fac_charge * sd(:, i_sigma)
+               f_in = fac_fld(2) * inv_dr(2) * &
                     (cc_in(1:nc, 0, i_phi) - cc_in(1:nc, 1, i_phi)) &
-                    - fac_charge * sd(:, i_sigma) + inv_dr(2) * &
+                    + fac_charge * sd(:, i_sigma)
+               cc_out(1:nc, nc, i_fld(2)) = 0.5_dp * (f_out + inv_dr(2) * &
+                    (cc_out(1:nc, nc-1, i_phi) - cc_out(1:nc, nc, i_phi)))
+               cc_out(1:nc, nc+1, i_fld(2)) = f_out
+               cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (f_in + inv_dr(2) * &
                     (cc_in(1:nc, 1, i_phi) - cc_in(1:nc, 2, i_phi)))
-#else
-            case default
-               error stop
-#endif
+               cc_in(1:nc, 0, i_fld(2)) = f_in
             end select
           end associate
        end if
     end do
-
   end subroutine dielectric_correct_field_cc
+#endif
 
   subroutine dielectric_get_surface_cell(tree, diel, x, ix_surf, ix_cell)
     use m_af_utils
