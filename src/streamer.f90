@@ -318,6 +318,13 @@ contains
     type(mg_t), intent(inout) :: mg
     integer                   :: n, lvl, i, id, n_surface_variables
 
+    ! Refine up to maximal grid spacing
+    do lvl = 1, af_max_lvl-1
+       if (all(af_lvl_dr(tree, lvl) <= refine_max_dx)) exit
+    end do
+    call af_refine_up_to_lvl(tree, lvl)
+
+    ! Set initial conditions
     call af_loop_box(tree, init_cond_set_box)
     if (associated(user_initial_conditions)) then
        call af_loop_box(tree, user_initial_conditions)

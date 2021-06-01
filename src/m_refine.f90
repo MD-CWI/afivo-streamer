@@ -13,10 +13,10 @@ module m_refine
   integer, public, protected :: refine_per_steps = 2
 
   ! The grid spacing will always be larger than this value
-  real(dp), protected :: refine_min_dx = 1.0e-7_dp
+  real(dp), public, protected :: refine_min_dx = 1.0e-7_dp
 
   ! The grid spacing will always be smaller than this value
-  real(dp), protected :: refine_max_dx = 1.0e-3_dp
+  real(dp), public, protected :: refine_max_dx = 1.0e-3_dp
 
   ! Refine if alpha*dx is larger than this value
   real(dp), protected :: refine_adx = 1.0_dp
