@@ -62,6 +62,7 @@ module m_dielectric
      end function value_func
   end interface
 
+  public :: surface_t
   public :: dielectric_t
   public :: dielectric_initialize
   public :: dielectric_set_values
