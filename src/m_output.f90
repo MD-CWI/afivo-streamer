@@ -190,26 +190,27 @@ contains
 
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
-    call CFG_add(cfg, "plane%varname", ["e"], &
+    if (plane_write) then
+     call CFG_add(cfg, "plane%varname", ["e"], &
          "Names of variable to write in a plane", dynamic_size=.true.)
 
-    call CFG_get_size(cfg, "plane%varname", n)
-    allocate(varname(n))
-    call CFG_get(cfg, "plane%varname", varname)
-    print *, "cc_variables include in plane output:", varname
+     call CFG_get_size(cfg, "plane%varname", n)
+     allocate(varname(n))
+     call CFG_get(cfg, "plane%varname", varname)
+     print *, "cc_variables include in plane output:", varname
 
-    allocate(plane_ivar(n))
-    do i = 1, n
-       plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
-    end do
+     allocate(plane_ivar(n))
+     do i = 1, n
+        plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
+     end do
 
-    call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
-         "Use this many pixels for plane data")
-    call CFG_add_get(cfg, "plane%rmin", plane_rmin(1:NDIM), &
-         "Relative position of plane minimum coordinate")
-    call CFG_add_get(cfg, "plane%rmax", plane_rmax(1:NDIM), &
-         "Relative position of plane maximum coordinate")
-
+     call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
+          "Use this many pixels for plane data")
+     call CFG_add_get(cfg, "plane%rmin", plane_rmin(1:NDIM), &
+          "Relative position of plane minimum coordinate")
+     call CFG_add_get(cfg, "plane%rmax", plane_rmax(1:NDIM), &
+          "Relative position of plane maximum coordinate")
+     end if
     call CFG_add_get(cfg, "field_maxima%write", field_maxima_write, &
          "Output electric field maxima and their locations")
     call CFG_add_get(cfg, "field_maxima%threshold", field_maxima_threshold, &
