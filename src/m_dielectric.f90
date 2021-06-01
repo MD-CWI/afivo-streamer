@@ -71,9 +71,11 @@ module m_dielectric
   public :: dielectric_inside_layer_to_surface
   public :: dielectric_surface_charge_to_rhs
   public :: dielectric_correct_field_fc
-  public :: dielectric_correct_field_cc
   public :: dielectric_get_refinement_links
   public :: dielectric_get_surface_cell
+#if NDIM == 2
+  public :: dielectric_correct_field_cc
+#endif
 
 contains
 
@@ -241,7 +243,10 @@ contains
     integer, intent(in)               :: i_out   !< Output surface density
     integer, intent(in)               :: i_in(:) !< List of input surface densities
     real(dp), intent(in)              :: w_in(:) !< Weights of input densities
-    integer                           :: ix, ii
+    integer                           :: ix
+#if NDIM == 3
+    integer                           :: ii
+#endif
 
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
@@ -685,6 +690,7 @@ contains
 
   end subroutine dielectric_correct_field_fc
 
+#if NDIM == 2
   !> Compute the electric field at cell centers near surfaces
   subroutine dielectric_correct_field_cc(tree, diel, i_sigma, i_fld, i_phi, fac)
     type(af_t), intent(inout)      :: tree
@@ -718,7 +724,6 @@ contains
 
             ! Compute field at two cell faces and average them
             select case (nb)
-#if NDIM == 2
             case (af_neighb_lowx)
                f_out = fac_fld(1) * inv_dr(1) * &
                     (cc_out(0, 1:nc, i_phi) - cc_out(1, 1:nc, i_phi)) &
@@ -771,17 +776,12 @@ contains
                cc_in(1:nc, 1, i_fld(2))  = 0.5_dp * (f_in + inv_dr(2) * &
                     (cc_in(1:nc, 1, i_phi) - cc_in(1:nc, 2, i_phi)))
                cc_in(1:nc, 0, i_fld(2)) = f_in
-#elif NDIM == 3
-            case default
-               error stop "Cell-centered field correction not implemented. &
-                            Consider switching to face-centered form."!TODO3D
-#endif
             end select
           end associate
        end if
     end do
-
   end subroutine dielectric_correct_field_cc
+#endif
 
   subroutine dielectric_get_surface_cell(tree, diel, x, ix_surf, ix_cell)
     use m_af_utils

@@ -147,7 +147,7 @@ contains
     logical, intent(out)             :: success  !< Whether the interpolation worked
     integer, intent(inout), optional :: id_guess !< Guess for box id (will be updated)
     real(dp)                         :: vals(NDIM), inv_dr(NDIM)
-    integer                          :: i, iv, id, ix(NDIM)
+    integer                          :: id, ix(NDIM)
     real(dp)                         :: ix_frac(NDIM), r_rel(NDIM)
 
     id = af_get_id_at(tree, r, guess=id_guess)
