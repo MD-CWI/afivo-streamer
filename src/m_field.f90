@@ -347,11 +347,15 @@ contains
     end do
 
     ! Compute field from potential
-    call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
-   if (ST_use_dielectric) then
-    call dielectric_correct_field_fc(tree, diel, i_surf_dens, &
-         electric_fld, i_phi, UC_eps0)
-   end if
+    if (ST_use_dielectric) then
+       call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp)
+       call dielectric_correct_field_fc(tree, diel, i_surf_dens, &
+            electric_fld, i_phi, UC_eps0)
+       call mg_compute_field_norm(tree, electric_fld, i_electric_fld)
+    else
+       call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
+    end if
+
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute
