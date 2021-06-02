@@ -450,7 +450,6 @@ contains
           ! Convert back to (r,z) coordinates
           xyz_abs(1, n) = sqrt(xyz_abs(1, n)**2 + xyz_abs(3, n)**2)
           xyz_abs(2, n) = xyz_abs(2, n)
-          xyz_src(2, n) = xyz_src(3, n)
        end do
        !$omp end do
 

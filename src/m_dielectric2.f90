@@ -57,7 +57,7 @@ module m_dielectric2
   real(dp), protected :: gamma_se_ph_lowenergy = 0.1_dp
   
   !> Assume photons are not absorbed for photoemission computation
-  logical :: photons_no_absorption = .true.
+  logical :: photons_no_absorption = .false.
 
   !> Preset surface charge numbers
   integer, protected :: n_surface_charge
@@ -739,10 +739,11 @@ contains
     real(dp), intent(inout) :: xyz_end(3, n_photons)
     real(dp), intent(in)    :: photon_weight
     real(dp)                :: xyz(n_dim), dvec(n_dim)
+    real(dp)                :: dvec_small(n_dim), dvec_large(n_dim)
     real(dp)                :: xyz_gas(n_dim), xyz_nogas(n_dim)
     real(dp)                :: xyz_middle(n_dim), eps(1)
     real(dp)                :: travel_distance
-    integer                 :: n, n_steps_extra, i, k, n_bisect
+    integer                 :: n, n_steps, n_steps_extra, i, k, n_bisect
     logical                 :: success
 
     ! Determine the number of bisection steps to find the first cell inside the
@@ -750,7 +751,11 @@ contains
     n_bisect = -ceiling(&
          log(af_min_dr(tree)/photon_step_length) / log(2.0_dp))
 
+    if (photons_no_absorption) then
        n_steps_extra = ceiling(norm2(ST_domain_len) / photon_step_length)
+    else
+       n_steps_extra = 0
+    end if
 
     do n = 1, n_photons
        xyz             = xyz_start(1:n_dim, n)
@@ -758,13 +763,20 @@ contains
        travel_distance = norm2(dvec)
 
        ! Large photon step length
-       dvec = (dvec/travel_distance) * photon_step_length
+       dvec_large = (dvec/travel_distance) * photon_step_length
 
+       n_steps    = ceiling(travel_distance/photon_step_length)
        ! Normalize direction vector to right length. Possible TODO: near the
        ! boundary of the domain, a photon can fly out crossing on a small
        ! piece of a dielectric.
+       dvec_small = dvec / n_steps
 
-       do i = 1, n_steps_extra
+       do i = 1, n_steps + n_steps_extra
+          if (i <= n_steps) then
+             dvec = dvec_small
+          else
+             dvec = dvec_large
+          end if
 
           xyz = xyz + dvec
 
@@ -796,8 +808,12 @@ contains
                 end if
              end do
 
-             call add_to_surface_photons(tree, xyz_nogas, photon_weight, &
-                  gamma_se_ph_lowenergy)
+             if (i <= n_steps) then
+                ! The photon was absorbed within its normal travel path
+                xyz_end(1:n_dim, n) = -1e50_dp
+                call add_to_surface_photons(tree, xyz_nogas, photon_weight, gamma_se_ph_highenergy)
+            end if
+                call add_to_surface_photons(tree, xyz_nogas, photon_weight, gamma_se_ph_lowenergy)
              exit
           end if
        end do
