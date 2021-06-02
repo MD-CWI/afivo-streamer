@@ -350,7 +350,7 @@ contains
     if (ST_use_dielectric) then
        call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp)
        call dielectric_correct_field_fc(tree, diel, i_surf_dens, &
-            electric_fld, i_phi, UC_eps0)
+            electric_fld, i_phi, UC_elem_charge / UC_eps0)
        call mg_compute_field_norm(tree, electric_fld, i_electric_fld)
     else
        call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
