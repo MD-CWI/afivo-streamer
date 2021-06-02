@@ -446,7 +446,6 @@ contains
 
     if (ST_use_dielectric) then
        call todo_diel_get_integral(diel, i_surf_dens, tmp)
-       print *, global_time, sum_elem_charge, tmp
        sum_elem_charge = sum_elem_charge + tmp
     end if
 
