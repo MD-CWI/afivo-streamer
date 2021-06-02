@@ -50,6 +50,17 @@ contains
                 box%cc(IJK, i_eps) = 1.0_dp
              end if
           end do; CLOSE_DO
+       case ("bottom")
+          do KJI_DO(0,nc+1)
+             rr   = af_r_cc(box, [IJK])
+             if (rr(2) < 0.25_dp * ST_domain_len(2)) then
+                box%cc(IJK, i_eps) = dielectric_eps
+                box%cc(IJK, i_electron) = 0.0_dp
+                box%cc(IJK, i_1pos_ion) = 0.0_dp
+             else
+                box%cc(IJK, i_eps) = 1.0_dp
+             end if
+          end do; CLOSE_DO
        case ("top_bottom")
           do KJI_DO(0,nc+1)
              rr   = af_r_cc(box, [IJK])
