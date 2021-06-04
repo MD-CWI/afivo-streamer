@@ -479,9 +479,9 @@ contains
        case (rate_analytic_k12)
           rates(:, n) = c0 * c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature)
        case (rate_analytic_k13)
-          rates(:, n) = c0 * c(1) * exp(-c(2) /  (UC_boltzmann_const * (1e19 / 1.6) *  (gas_temperature + fields/c(3)) ) )
+          rates(:, n) = c0 * c(1) * exp(-c(2) /  (UC_boltzmann_const *  (gas_temperature + fields / c(3) )  )  )
           !Note that this reaction depends on Ti, ionic temperature, which according to Galimberti 1979, Ti = T + fields/g with g =
-          !0.18 Td/Kelvin, To Do: not sure the units of c(2)  
+          !0.18 Td/Kelvin, c(2) is given in joul in the input file! 
       end select
     end do
   end subroutine get_rates
@@ -646,7 +646,7 @@ contains
           read(data_value(n), *) new_reaction%rate_data(1:3)
        case ("k12_func")
           new_reaction%rate_type = rate_analytic_k12
-          read(data_value(n), *) new_reaction%rate_data(1:3)
+        read(data_value(n), *) new_reaction%rate_data(1:3)
        case ("k13_func")
           new_reaction%rate_type = rate_analytic_k13
           read(data_value(n), *) new_reaction%rate_data(1:3)
