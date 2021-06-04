@@ -6,6 +6,7 @@ module m_output
   use m_streamer
   use m_gas
   use m_lookup_table
+  use m_units_constants
 
   implicit none
   private
@@ -55,6 +56,9 @@ module m_output
   ! Relative position of line maximum coordinate
   real(dp), public, protected :: lineout_rmax(3) = 1.0_dp
 
+  ! Which variable to include in lineout
+  integer, allocatable, public, protected :: lineout_ivar(:)
+
   ! Write integral over cross-section data output
   logical, public, protected :: cross_write = .false.
 
@@ -94,8 +98,17 @@ module m_output
   ! Density threshold for detecting plasma regions
   real(dp) :: density_threshold = 1e18_dp
 
-  ! Show the electron energy in eV from the local field approximation
-  logical :: show_electron_energy = .false.
+  ! Number of extra variables to add to output
+  integer :: n_extra_vars = 0
+
+  ! Names of extra variables to add to output
+  character(len=af_nlen) :: output_extra_vars(10)
+
+  ! Output the electron energy in eV from the local field approximation
+  logical :: output_electron_energy = .false.
+
+  ! Output the conductivity of the plasma
+  logical :: output_conductivity = .false.
 
   ! Table with energy in eV vs electric field
   type(LT_t) :: eV_vs_fld
@@ -174,12 +187,25 @@ contains
 
     call CFG_add_get(cfg, "lineout%write", lineout_write, &
          "Write output along a line")
-    call CFG_add_get(cfg, "lineout%npoints", lineout_npoints, &
-         "Use this many points for lineout data")
-    call CFG_add_get(cfg, "lineout%rmin", lineout_rmin(1:NDIM), &
-         "Relative position of line minimum coordinate")
-    call CFG_add_get(cfg, "lineout%rmax", lineout_rmax(1:NDIM), &
-         "Relative position of line maximum coordinate")
+    if (lineout_write) then
+       call CFG_add(cfg, "lineout%varname", ["e"], &
+            "Names of variable to write in lineout", dynamic_size=.true.)
+       call CFG_get_size(cfg, "lineout%varname", n)
+       allocate(varname(n))
+       call CFG_get(cfg, "lineout%varname", varname)
+
+       allocate(lineout_ivar(n))
+       do i = 1, n
+          lineout_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
+       end do
+
+       call CFG_add_get(cfg, "lineout%npoints", lineout_npoints, &
+            "Use this many points for lineout data")
+       call CFG_add_get(cfg, "lineout%rmin", lineout_rmin(1:NDIM), &
+            "Relative position of line minimum coordinate")
+       call CFG_add_get(cfg, "lineout%rmax", lineout_rmax(1:NDIM), &
+            "Relative position of line maximum coordinate")
+    end if
 
     call CFG_add_get(cfg, "cross%write", cross_write, &
          "Write integral over cross-section data output")
@@ -190,27 +216,28 @@ contains
 
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
+
     if (plane_write) then
-     call CFG_add(cfg, "plane%varname", ["e"], &
-         "Names of variable to write in a plane", dynamic_size=.true.)
+       call CFG_add(cfg, "plane%varname", ["e"], &
+            "Names of variable to write in a plane", dynamic_size=.true.)
 
-     call CFG_get_size(cfg, "plane%varname", n)
-     allocate(varname(n))
-     call CFG_get(cfg, "plane%varname", varname)
-     print *, "cc_variables include in plane output:", varname
+       call CFG_get_size(cfg, "plane%varname", n)
+       allocate(varname(n))
+       call CFG_get(cfg, "plane%varname", varname)
 
-     allocate(plane_ivar(n))
-     do i = 1, n
-        plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
-     end do
+       allocate(plane_ivar(n))
+       do i = 1, n
+          plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
+       end do
 
-     call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
-          "Use this many pixels for plane data")
-     call CFG_add_get(cfg, "plane%rmin", plane_rmin(1:NDIM), &
-          "Relative position of plane minimum coordinate")
-     call CFG_add_get(cfg, "plane%rmax", plane_rmax(1:NDIM), &
-          "Relative position of plane maximum coordinate")
-     end if
+       call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
+            "Use this many pixels for plane data")
+       call CFG_add_get(cfg, "plane%rmin", plane_rmin(1:NDIM), &
+            "Relative position of plane minimum coordinate")
+       call CFG_add_get(cfg, "plane%rmax", plane_rmax(1:NDIM), &
+            "Relative position of plane maximum coordinate")
+    end if
+
     call CFG_add_get(cfg, "field_maxima%write", field_maxima_write, &
          "Output electric field maxima and their locations")
     call CFG_add_get(cfg, "field_maxima%threshold", field_maxima_threshold, &
@@ -218,10 +245,15 @@ contains
     call CFG_add_get(cfg, "field_maxima%distance", field_maxima_distance, &
          "Minimal distance (m) between electric field maxima")
 
-    call CFG_add_get(cfg, "output%electron_energy", show_electron_energy, &
+    call CFG_add_get(cfg, "output%electron_energy", output_electron_energy, &
          "Show the electron energy in eV from the local field approximation")
+    call CFG_add_get(cfg, "output%conductivity", output_conductivity, &
+         "Output the conductivity of the plasma")
 
-    if (show_electron_energy) then
+    if (output_electron_energy) then
+       n_extra_vars = n_extra_vars + 1
+       output_extra_vars(n_extra_vars) = "eV"
+
        ! Create a lookup table for the model coefficients
        eV_vs_fld = LT_create(table_min_townsend, table_max_townsend, &
             table_size, 1)
@@ -230,6 +262,11 @@ contains
        ! Read table with E/N vs electron energy (eV)
        call table_from_file(td_file, "Mean energy (eV)", x_data, y_data)
        call LT_set_col(eV_vs_fld, 1, x_data, y_data)
+    end if
+
+    if (output_conductivity) then
+       n_extra_vars = n_extra_vars + 1
+       output_extra_vars(n_extra_vars) = "sigma"
     end if
 
   end subroutine output_initialize
@@ -259,18 +296,14 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
-#if NDIM > 1
-    ! Compute conductivity at each cell for 2D and 3D
-    ! @todo Do not always call this, and fix bug in implementation
-    call analysis_get_sigma(tree)
-#endif
-
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
     end if
-    if (gas_dynamics) then 
+
+    if (gas_dynamics) then
        call af_loop_box(tree, set_gas_primitives_box)
     end if
+
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
@@ -286,9 +319,10 @@ contains
        end do
 
        write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
-       if (show_electron_energy) then
+       if (n_extra_vars > 0) then
           call af_write_silo(tree, fname, output_cnt, global_time, &
-               add_vars=add_variables, add_names=["eV"])
+               add_vars=add_variables, &
+               add_names=output_extra_vars(1:n_extra_vars))
        else
           call af_write_silo(tree, fname, output_cnt, global_time)
        end if
@@ -331,8 +365,7 @@ contains
     if (lineout_write) then
        write(fname, "(A,I6.6)") trim(output_name) // &
             "_line_", output_cnt
-       call af_write_line(tree, trim(fname), &
-            [i_electron, i_1pos_ion, i_phi, i_electric_fld, i_conductivity], &
+       call af_write_line(tree, trim(fname), lineout_ivar, &
             r_min = lineout_rmin(1:NDIM) * ST_domain_len + ST_domain_origin, &
             r_max = lineout_rmax(1:NDIM) * ST_domain_len + ST_domain_origin, &
             n_points=lineout_npoints)
@@ -352,23 +385,35 @@ contains
 
   subroutine add_variables(box, new_vars, n_var)
     use m_gas
+    use m_transport_data
     type(box_t), intent(in) :: box
     integer, intent(in)     :: n_var
     real(dp)                :: new_vars(DTIMES(0:box%n_cell+1), n_var)
-    real(dp)                :: tmp(DTIMES(0:box%n_cell+1))
+    integer                 :: n
+    real(dp)                :: N_inv(DTIMES(0:box%n_cell+1))
+    real(dp)                :: Td(DTIMES(0:box%n_cell+1))
 
-    if (n_var > 0) then
-       ! Add electron energy in eV
-
-       if (.not. gas_constant_density) then
-          tmp = box%cc(DTIMES(:), i_gas_dens)
-       else
-          tmp = gas_number_density
-       end if
-
-       new_vars(DTIMES(:), 1) = LT_get_col(eV_vs_fld, 1, &
-            SI_to_Townsend * box%cc(DTIMES(:), i_electric_fld)/tmp)
+    if (.not. gas_constant_density) then
+       N_inv = 1/box%cc(DTIMES(:), i_gas_dens)
+    else
+       N_inv = 1/gas_number_density
     end if
+
+    Td = SI_to_Townsend * box%cc(DTIMES(:), i_electric_fld) * N_inv
+
+    do n = 1, n_var
+       select case (output_extra_vars(n))
+       case ("eV")
+          ! Add electron energy in eV
+          new_vars(DTIMES(:), n) = LT_get_col(eV_vs_fld, 1, Td)
+       case ("sigma")
+          ! Add plasma conductivity (e mu n_e)
+          new_vars(DTIMES(:), n) = LT_get_col(td_tbl, td_mobility, Td) * &
+               N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
+       case default
+          error stop "Unknown variable"
+       end select
+    end do
   end subroutine add_variables
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
@@ -670,19 +715,21 @@ contains
     integer  :: i
     real(dp) :: z, elec_dens, charge_dens, current_dens
 
-    open(newunit=my_unit, file=trim(filename), action="write")
+    open(newunit=my_unit, file=trim(filename)//".txt", action="write")
     write(my_unit, '(A)') "z elec_dens charge_dens current_dens"
+
     do i = 1, cross_npoints
-      z = i * ST_domain_len(2) / (cross_npoints + 1)
-      call analysis_get_cross(tree, cross_rmax, z, elec_dens, charge_dens, current_dens)
-      write(my_unit, *) z, elec_dens, charge_dens, current_dens
+       z = i * ST_domain_len(2) / (cross_npoints + 1)
+       call analysis_get_cross(tree, cross_rmax, z, elec_dens, &
+            charge_dens, current_dens)
+       write(my_unit, *) z, elec_dens, charge_dens, current_dens
     end do
+
     close(my_unit)
   end subroutine output_cross
 #endif
 
   subroutine set_power_density_box(box)
-    use m_units_constants
     type(box_t), intent(inout) :: box
     integer                    :: IJK, nc
     real(dp)                   :: J_dot_E
@@ -710,7 +757,6 @@ contains
   end subroutine set_power_density_box
 
   subroutine set_gas_primitives_box(box)
-    use m_units_constants
     type(box_t), intent(inout) :: box
     integer                    :: IJK, nc, idim
 
