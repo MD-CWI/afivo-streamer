@@ -376,7 +376,7 @@ contains
     use m_user_methods
     use m_chemistry
     use m_analysis
-    use m_dielectric2
+    use m_dielectric
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number

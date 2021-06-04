@@ -18,7 +18,7 @@ program streamer
   use m_user_methods
   use m_output
   use m_circuit
-  use m_dielectric2
+  use m_dielectric
 
   implicit none
 
@@ -195,7 +195,7 @@ program streamer
            call af_advance(tree, dt, dt_lim, time, &
                 species_itree(n_gas_species+1:n_species), &
                 time_integrator, forward_euler, &
-                dielectric2_combine_substeps)
+                dielectric_combine_substeps)
         else
            call af_advance(tree, dt, dt_lim, time, &
                 species_itree(n_gas_species+1:n_species), &
@@ -306,7 +306,7 @@ contains
     call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
-    call dielectric2_initialize(tree, cfg)
+    call dielectric_initialize(tree, cfg)
 
     call output_initial_summary()
 

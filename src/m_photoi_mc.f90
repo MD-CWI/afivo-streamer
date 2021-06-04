@@ -374,7 +374,7 @@ contains
   subroutine phmc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
     use m_random
     use m_lookup_table
-    use m_dielectric2
+    use m_dielectric
     use omp_lib
 
     type(af_t), intent(inout)  :: tree   !< Tree
@@ -407,7 +407,7 @@ contains
     if (NDIM == 3 .and. use_cyl) error stop "phmc_set_src: use_cyl is .true."
 
     if (ST_use_dielectric) then
-       call dielectric2_reset_photons()
+       call dielectric_reset_photons()
     end if
 
     nc = tree%n_cell
@@ -455,7 +455,7 @@ contains
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
-          call dielectric2_photon_absorption(tree, xyz_src, xyz_abs, &
+          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
                2, n_used, 1.0_dp/dt_fac)
        end if
     else
@@ -464,7 +464,7 @@ contains
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
-          call dielectric2_photon_absorption(tree, xyz_src, xyz_abs, &
+          call dielectric_photon_absorption(tree, xyz_src, xyz_abs, &
                NDIM, n_used, 1.0_dp/dt_fac)
        end if
     end if

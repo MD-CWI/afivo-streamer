@@ -23,7 +23,7 @@ contains
     use m_field
     use m_dt
     use m_transport_data
-    use m_dielectric2           ! @todo rename
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
     real(dp), intent(inout)   :: dt_lim !< Time step limitation
@@ -99,11 +99,11 @@ contains
 
              ! Convert fluxes onto dielectric to surface charge, and handle
              ! secondary emission
-             call dielectric2_update_surface_charge(tree%boxes(id_out), &
+             call dielectric_update_surface_charge(tree%boxes(id_out), &
                   diel%surfaces(ix), dt, s_deriv, s_out)
 
              ! Add secondary emission from photons hitting the surface
-             call dielectric2_photon_emission(tree%boxes(id_out), &
+             call dielectric_photon_emission(tree%boxes(id_out), &
                   diel%surfaces(ix), dt, s_deriv, s_out)
           end if
        end do
