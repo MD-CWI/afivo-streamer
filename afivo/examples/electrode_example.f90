@@ -4,7 +4,6 @@
 !> Example showing how to include a dielectric surface
 program dielectric_surface
   use m_af_all
-  use m_dielectric
 
   implicit none
 

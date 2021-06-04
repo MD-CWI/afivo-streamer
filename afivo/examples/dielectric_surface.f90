@@ -4,7 +4,6 @@
 !> Example showing how to include a dielectric surface
 program dielectric_surface
   use m_af_all
-  ! use m_dielectric
 
   implicit none
 
@@ -26,11 +25,11 @@ program dielectric_surface
   ! Where the interface is located
   real(dp), parameter :: interface_location = 0.25_dp
   ! Along which dimension the interface occurs
-  integer, parameter :: interface_dimension = 2
+  integer, parameter :: interface_dimension = NDIM
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
-  type(dielectric_t) :: dielectric
+  type(surfaces_t)   :: dielectric
   integer            :: n, mg_iter
   real(dp)           :: residu
   character(len=100) :: fname
@@ -71,17 +70,17 @@ program dielectric_surface
 
   call af_loop_box(tree, set_init_cond)
 
-  call dielectric_initialize(tree, i_eps, dielectric, 1)
+  call surface_initialize(tree, i_eps, dielectric, 1)
 
-  call dielectric_set_values(tree, dielectric, 1, sigma_function)
+  call surface_set_values(tree, dielectric, 1, sigma_function)
 
   do n = 1, 3
-     call dielectric_get_refinement_links(dielectric, ref_links)
+     call surface_get_refinement_links(dielectric, ref_links)
      call af_adjust_refinement(tree, ref_random, ref_info, ref_links=ref_links)
-     call dielectric_update_after_refinement(tree, dielectric, ref_info)
+     call surface_update_after_refinement(tree, dielectric, ref_info)
   end do
 
-  call dielectric_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, fac)
+  call surface_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, fac)
 
   mg%i_phi        = i_phi
   mg%i_rhs        = i_rhs
@@ -94,8 +93,8 @@ program dielectric_surface
   do mg_iter = 1, n_iterations
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      call af_loop_box(tree, compute_fields)
-     call dielectric_correct_field_fc(tree, dielectric, 1, i_fld_fc, i_phi, -fac)
-     ! call dielectric_correct_field_cc(tree, dielectric, 1, i_fld_cc, i_phi, -fac)
+     call surface_correct_field_fc(tree, dielectric, 1, i_fld_fc, i_phi, -fac)
+     ! call surface_correct_field_cc(tree, dielectric, 1, i_fld_cc, i_phi, -fac)
      call af_loop_box(tree, compute_field_norms)
 
      ! Determine the minimum and maximum residual and error
