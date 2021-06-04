@@ -42,8 +42,8 @@ program boundary_conditions
 
      call af_gc_tree(tree, [i_phi, i_rho])
 
-     write(fname, "(A,I0)") "boundary_conditions_" // DIMNAME // "_", iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/boundary_conditions_" // DIMNAME // "_", iter
+     call af_write_silo(tree, trim(fname))
   end do
 
 contains

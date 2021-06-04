@@ -4,7 +4,6 @@
 !> Example showing how to include a dielectric surface
 program dielectric_surface
   use m_af_all
-  use m_dielectric
 
   implicit none
 
@@ -71,8 +70,8 @@ program dielectric_surface
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      write(*, "(I8,Es14.5)") mg_iter, residu
 
-     write(fname, "(A,I0)") "electrode_example_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/electrode_example_" // DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname))
   end do
 
 contains

@@ -53,14 +53,20 @@ module m_field
   !> Whether the electrode is grounded or at the applied voltage
   logical, public, protected :: field_electrode_grounded = .false.
 
-  !> Electrode relative start position (for standard rod electrode)
+  !> First electrode position
   real(dp), public, protected :: field_rod_r0(NDIM) = -1.0_dp
 
-  !> Electrode relative end position (for standard rod electrode)
+  !> Second electrode position
   real(dp), public, protected :: field_rod_r1(NDIM) = -1.0_dp
+
+  !> Third electrode position
+  real(dp), public, protected :: field_rod_r2(NDIM) = -1.0_dp
 
   !> Electrode radius (in m, for standard rod electrode)
   real(dp), public, protected :: field_rod_radius = -1.0_dp
+
+  !> Electrode tip radius (for conical electrode)
+  real(dp), public, protected :: field_tip_radius = -1.0_dp
 
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
@@ -91,7 +97,7 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg !< Settings
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
-    character(len=string_len)  :: field_table
+    character(len=string_len)  :: field_table, electrode_type
 
     field_table = undefined_str
     call CFG_add_get(cfg, "field_table", field_table, &
@@ -142,11 +148,19 @@ contains
     call CFG_add_get(cfg, "field_electrode_grounded", field_electrode_grounded, &
          "Whether the electrode is grounded or at the applied voltage")
     call CFG_add_get(cfg, "field_rod_r0", field_rod_r0, &
-         "Electrode relative start position (for standard rod electrode)")
+         "First electrode relative position")
     call CFG_add_get(cfg, "field_rod_r1", field_rod_r1, &
-         "Electrode relative end position (for standard rod electrode)")
+         "Second electrode relative position")
+    call CFG_add_get(cfg, "field_rod_r2", field_rod_r2, &
+         "Third electrode relative position")
     call CFG_add_get(cfg, "field_rod_radius", field_rod_radius, &
          "Electrode radius (in m, for standard rod electrode)")
+    call CFG_add_get(cfg, "field_tip_radius", field_tip_radius, &
+         "Electrode tip radius (for conical electrode)")
+
+    electrode_type = "rod"
+    call CFG_add_get(cfg, "field_electrode_type", electrode_type, &
+         "Type of electrode")
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
@@ -178,8 +192,22 @@ contains
             error stop "field_rod_r1 not set correctly"
        if (field_rod_radius <= 0) &
             error stop "field_rod_radius not set correctly"
+       if (any(field_rod_r1 < field_rod_r0)) &
+            error stop "Should have field_rod_r1 >= field_rod_r0"
 
-       call af_set_cc_methods(tree, i_lsf, funcval=field_rod_lsf)
+       select case (electrode_type)
+       case ("rod")
+          call af_set_cc_methods(tree, i_lsf, funcval=field_rod_lsf)
+       case ("rod_cone_top")
+          if (any(field_rod_r2 < field_rod_r1)) &
+               error stop "Should have field_rod_r2 >= field_rod_r1"
+          if (field_tip_radius <= 0) &
+            error stop "field_tip_radius not set correctly"
+          call af_set_cc_methods(tree, i_lsf, funcval=field_conical_rod_top_lsf)
+       case default
+          error stop "Invalid electrode type (option: rod, rod_cone_top)"
+       end select
+
        mg%i_lsf = i_lsf
     end if
 
@@ -198,6 +226,7 @@ contains
   subroutine field_set_rhs(tree, s_in)
     use m_units_constants
     use m_chemistry
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: s_in
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
@@ -227,6 +256,11 @@ contains
        !$omp end do nowait
     end do
     !$omp end parallel
+
+    if (ST_use_dielectric) then
+       call surface_surface_charge_to_rhs(tree, diel, i_surf_dens, i_rhs, fac)
+    end if
+
   end subroutine field_set_rhs
 
   !> Compute electric field on the tree. First perform multigrid to get electric
@@ -234,6 +268,7 @@ contains
   subroutine field_compute(tree, mg, s_in, time, have_guess)
     use m_units_constants
     use m_chemistry
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg ! Multigrid option struct
     integer, intent(in)       :: s_in
@@ -311,7 +346,14 @@ contains
     end do
 
     ! Compute field from potential
-    call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
+    if (ST_use_dielectric) then
+       call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp)
+       call surface_correct_field_fc(tree, diel, i_surf_dens, &
+            electric_fld, i_phi, UC_elem_charge / UC_eps0)
+       call mg_compute_field_norm(tree, electric_fld, i_electric_fld)
+    else
+       call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
+    end if
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
@@ -467,5 +509,43 @@ contains
     end do; CLOSE_DO
 
   end subroutine field_rod_lsf
+
+  ! This routine sets the level set function for a simple rod
+  subroutine field_conical_rod_top_lsf(box, iv)
+    use m_geometry
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: iv
+    integer                    :: IJK, nc
+    real(dp)                   :: rr(NDIM), r0(NDIM), r1(NDIM), r2(NDIM), ro(NDIM)
+    real(dp)                   :: radius_at_height
+    real(dp)                   :: R_rod, R_tip, y_tip, alpha, R_o, y_o
+
+    nc = box%n_cell
+    r0 = field_rod_r0 * ST_domain_len
+    r1 = field_rod_r1 * ST_domain_len
+    r2 = field_rod_r2 * ST_domain_len
+    R_rod = field_rod_radius
+    R_tip = field_tip_radius
+    y_tip = (r0(NDIM)*R_rod-r1(NDIM)*R_tip)/(R_rod-R_tip)
+    alpha = atan(R_rod/(r1(NDIM)-y_tip))
+    R_o = R_tip/cos(alpha)
+    y_o = r0(NDIM) + R_tip * tan(alpha)
+    ro = [r0(1:NDIM-1), y_o]
+
+    do KJI_DO(0,nc+1)
+       rr = af_r_cc(box, [IJK])
+
+       if (rr(NDIM) > r1(NDIM)) then
+          box%cc(IJK, iv) = GM_dist_line(rr, r1, r2, NDIM) - field_rod_radius
+       else if (rr(NDIM) > r0(NDIM)) then
+          radius_at_height = field_tip_radius + (rr(NDIM) - r0(NDIM)) / &
+               (r1(NDIM) - r0(NDIM)) * (field_rod_radius - field_tip_radius)
+          box%cc(IJK, iv) = GM_dist_line(rr, r0, r1, NDIM) - radius_at_height
+       else
+          box%cc(IJK, iv) = GM_dist_line(rr, ro, ro, NDIM) - R_o
+       end if
+    end do; CLOSE_DO
+
+  end subroutine field_conical_rod_top_lsf
 
 end module m_field

@@ -9,12 +9,11 @@ module m_streamer
   use m_af_all
   use m_random
   use m_lookup_table
+  use m_config
 
   implicit none
   private
 
-  !> Number of cell-centered variables
-  integer, public, protected :: n_var_cell     = 0
   !> Index of electrical potential
   integer, public, protected :: i_phi          = -1
   !> Index of electron density
@@ -43,8 +42,6 @@ module m_streamer
   !> Index of deposited power density
   integer, public, protected :: i_power_density = -1
 
-  !> Number of face-centered variables
-  integer, public, protected :: n_var_face   = 0
   !> Index of electron flux
   integer, public, protected :: flux_elec    = -1
   !> Index of electric field vector
@@ -55,6 +52,8 @@ module m_streamer
   integer, public, protected, allocatable :: flux_species(:)
   !> List of the charges of the flux species
   integer, public, protected, allocatable :: flux_species_charge(:)
+  !> List of positive ion fluxes (useful for secondary emission)
+  integer, public, protected, allocatable :: flux_pos_ion(:)
 
   !> Whether cylindrical coordinates are used
   logical, public, protected :: ST_cylindrical = .false.
@@ -156,7 +155,7 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
-    integer                    :: n, n_threads, ix_chemistry
+    integer                    :: n, k, n_threads, ix_chemistry
     character(len=name_len)    :: prolong_method, bc_method
     character(len=string_len)  :: tmp_str
     integer                    :: rng_int4_seed(4) = &
@@ -204,6 +203,18 @@ contains
     end do
 
     if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
+
+    ! Create a list of positive ion fluxes for secondary emission
+    n = count(flux_species_charge > 0)
+    allocate(flux_pos_ion(n))
+
+    k = 0
+    do n = 1, size(flux_species_charge)
+       if (flux_species_charge(n) > 0) then
+          k = k + 1
+          flux_pos_ion(k) = flux_variables(n)
+       end if
+    end do
 
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
