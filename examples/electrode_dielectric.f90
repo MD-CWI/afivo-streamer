@@ -4,7 +4,6 @@
 !> Example showing how to include a dielectric surface
 program electrode_dielectric
   use m_af_all
-  use m_dielectric
 
   implicit none
 

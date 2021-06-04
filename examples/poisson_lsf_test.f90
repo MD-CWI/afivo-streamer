@@ -4,7 +4,6 @@
 !> Test of the level-set functionality of the Poisson solver
 program poisson_lsf_test
   use m_af_all
-  use m_dielectric
 
   implicit none
 
@@ -20,7 +19,7 @@ program poisson_lsf_test
   integer            :: i_field_norm
 
   ! Which shape to use, 1 = circle, 2 = heart
-  integer, parameter  :: shape             = 2
+  integer, parameter  :: shape             = 1
 
   real(dp), parameter :: boundary_value    = 1.0_dp
   real(dp), parameter :: solution_coeff    = 1.0_dp
@@ -181,11 +180,15 @@ contains
        case (1)
           distance = norm2(rr-solution_r0) / solution_radius
           box%cc(IJK, iv) = distance - 1.0_dp
+#if NDIM > 1
        case (2)
           ! Center on r0
           rr = (rr - solution_r0) * 4.0_dp
           box%cc(IJK, iv) = (rr(1)**2 + rr(2)**2 - 1)**3 - &
                rr(1)**2 * rr(2)**3
+#endif
+       case default
+          error stop "Unavailable shape"
        end select
     end do; CLOSE_DO
   end subroutine set_lsf

@@ -1,6 +1,8 @@
 #include "cpp_macros.h"
-!> This module contains routines for including flat dielectric surfaces
-module m_dielectric
+!> This module contains routines for including flat surfaces between changes in
+!> epsilon (some material property). This can for example be used to include
+!> flat dielectrics in electrostatic computations.
+module m_af_surface
   use m_af_types
 
   implicit none
@@ -19,14 +21,13 @@ module m_dielectric
      real(dp)              :: dr(NDIM-1) !< Grid spacing on surface
      !> Surface densities
      real(dp), allocatable :: sd(DTIMES(:))
-
   end type surface_t
 
   !> Value indicating there is no surface
   integer, parameter :: no_surface = -1
 
   !> Type for storing all the surfaces on a mesh
-  type dielectric_t
+  type surfaces_t
      !> Whether the dielectric is initialized
      logical :: initialized = .false.
      !> Number of variables to store on the surface
@@ -52,7 +53,7 @@ module m_dielectric
      integer, allocatable         :: box_id_out_to_surface_ix(:)
      !> Mapping of boxes inside a dielectric to surfaces
      integer, allocatable         :: box_id_in_to_surface_ix(:)
-  end type dielectric_t
+  end type surfaces_t
 
   interface
      function value_func(x) result(my_val)
@@ -63,29 +64,29 @@ module m_dielectric
   end interface
 
   public :: surface_t
-  public :: dielectric_t
-  public :: dielectric_initialize
-  public :: dielectric_set_values
-  public :: dielectric_set_weighted_sum
-  public :: dielectric_get_integral
-  public :: dielectric_update_after_refinement
-  public :: dielectric_inside_layer_to_surface
-  public :: dielectric_surface_charge_to_rhs
-  public :: dielectric_correct_field_fc
-  public :: dielectric_get_refinement_links
-  public :: dielectric_get_surface_cell
+  public :: surfaces_t
+  public :: surface_initialize
+  public :: surface_set_values
+  public :: surface_set_weighted_sum
+  public :: surface_get_integral
+  public :: surface_update_after_refinement
+  public :: surface_inside_layer_to_surface
+  public :: surface_surface_charge_to_rhs
+  public :: surface_correct_field_fc
+  public :: surface_get_refinement_links
+  public :: surface_get_surface_cell
 #if NDIM == 2
-  public :: dielectric_correct_field_cc
+  public :: surface_correct_field_cc
 #endif
 
 contains
 
   !> Initialize a set of surfaces based on the value of epsilon
-  subroutine dielectric_initialize(tree, i_eps, diel, n_variables)
+  subroutine surface_initialize(tree, i_eps, diel, n_variables)
     use m_af_ghostcell, only: af_gc_tree
     type(af_t), intent(inout)         :: tree        !< Initialized grid
     integer, intent(in)               :: i_eps       !< Which variable stores epsilon
-    type(dielectric_t), intent(inout) :: diel        !< The dielectric surface
+    type(surfaces_t), intent(inout) :: diel        !< The dielectric surface
     integer, intent(in)               :: n_variables !< Number of surface variables
     integer                           :: nc, id, i, j, ix
     integer                           :: nb, nb_id
@@ -163,11 +164,11 @@ contains
        end do
     end do
 
-  end subroutine dielectric_initialize
+  end subroutine surface_initialize
 
   !> Get index for new surface
   function get_new_surface_ix(diel) result(ix)
-    type(dielectric_t), intent(inout) :: diel
+    type(surfaces_t), intent(inout) :: diel
     logical                           :: use_removed
     integer                           :: ix, nc
 
@@ -196,10 +197,10 @@ contains
   end function get_new_surface_ix
 
   !> Set values on a dielectric with a user-defined function
-  subroutine dielectric_set_values(tree, diel, iv, user_func)
+  subroutine surface_set_values(tree, diel, iv, user_func)
     use m_af_ghostcell, only: af_gc_get_boundary_coords
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: diel
+    type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: iv        !< Surface variable
     procedure(value_func)             :: user_func !< User supplied function
     integer                           :: ix, id_out
@@ -236,11 +237,11 @@ contains
 #endif
        end if
     end do
-  end subroutine dielectric_set_values
+  end subroutine surface_set_values
 
   !> Set surface variable to a weighted sum of other variables
-  subroutine dielectric_set_weighted_sum(diel, i_out, i_in, w_in)
-    type(dielectric_t), intent(inout) :: diel
+  subroutine surface_set_weighted_sum(diel, i_out, i_in, w_in)
+    type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: i_out   !< Output surface density
     integer, intent(in)               :: i_in(:) !< List of input surface densities
     real(dp), intent(in)              :: w_in(:) !< Weights of input densities
@@ -264,11 +265,11 @@ contains
 #endif
        end if
     end do
-  end subroutine dielectric_set_weighted_sum
+  end subroutine surface_set_weighted_sum
 
   !> Compute integral of surface variable
-  subroutine dielectric_get_integral(diel, i_surf, surf_int)
-    type(dielectric_t), intent(inout) :: diel
+  subroutine surface_get_integral(diel, i_surf, surf_int)
+    type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: i_surf   !< Surface variables
     real(dp), intent(out)             :: surf_int !< Surface integral
     integer                           :: ix
@@ -286,12 +287,12 @@ contains
 #endif
        end if
     end do
-  end subroutine dielectric_get_integral
+  end subroutine surface_get_integral
 
   !> Update the dielectric surface after the mesh has been refined
-  subroutine dielectric_update_after_refinement(tree, diel, ref_info)
+  subroutine surface_update_after_refinement(tree, diel, ref_info)
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: diel
+    type(surfaces_t), intent(inout) :: diel
     type(ref_info_t), intent(in)      :: ref_info
     integer                           :: lvl, i, id, p_id, ix, p_ix, nc
 
@@ -325,12 +326,12 @@ contains
        end do
     end do
 
-  end subroutine dielectric_update_after_refinement
+  end subroutine surface_update_after_refinement
 
   !> Prolong a parent surface to newly created child surfaces
   subroutine prolong_surface_from_parent(tree, diel, p_ix, p_id)
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: diel
+    type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: p_ix !< Index of parent surface
     integer, intent(in)               :: p_id !< Index of parent box (on outside)
     integer                           :: i, n, ix, ix_offset(NDIM)
@@ -396,7 +397,7 @@ contains
   !> Restrict a child surface to its parent
   subroutine restrict_surface_to_parent(tree, diel, ix)
     type(af_t), intent(in)            :: tree
-    type(dielectric_t), intent(inout) :: diel
+    type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: ix
     integer                           :: p_ix, nc, dix(NDIM-1), id_out, id_in
 
@@ -434,8 +435,8 @@ contains
   !> Get an array of pairs of boxes (their indices) across a surface. This can
   !> be used in af_adjust_refinement to prevent refinement jumps over the
   !> surface.
-  subroutine dielectric_get_refinement_links(diel, refinement_links)
-    type(dielectric_t), intent(in)      :: diel
+  subroutine surface_get_refinement_links(diel, refinement_links)
+    type(surfaces_t), intent(in)      :: diel
     !> Array of linked boxes, on output of size (2, n_links)
     integer, allocatable, intent(inout) :: refinement_links(:, :)
     integer                             :: max_ix, n, ix
@@ -453,12 +454,12 @@ contains
                diel%surfaces(ix)%id_in]
        end if
     end do
-  end subroutine dielectric_get_refinement_links
+  end subroutine surface_get_refinement_links
 
   !> Map surface charge to a cell-centered right-hand side
-  subroutine dielectric_surface_charge_to_rhs(tree, diel, i_sigma, i_rhs, fac)
+  subroutine surface_surface_charge_to_rhs(tree, diel, i_sigma, i_rhs, fac)
     type(af_t), intent(inout)      :: tree
-    type(dielectric_t), intent(in) :: diel
+    type(surfaces_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma !< Surface charage variable
     integer, intent(in)            :: i_rhs   !< Rhs variable (in the tree)
     real(dp), intent(in)           :: fac     !< Multiplication factor
@@ -472,7 +473,7 @@ contains
        call surface_charge_to_rhs(tree%boxes, diel%surfaces(n), &
             i_sigma, i_rhs, fac)
     end do
-  end subroutine dielectric_surface_charge_to_rhs
+  end subroutine surface_surface_charge_to_rhs
 
   !> Routine that implements the mapping of surface charge to a cell-centered
   !> right-hand side
@@ -531,10 +532,10 @@ contains
   end subroutine surface_charge_to_rhs
 
   !> Map first layer inside the dielectric to surface density
-  subroutine dielectric_inside_layer_to_surface(tree, diel, i_cc, i_sigma, &
+  subroutine surface_inside_layer_to_surface(tree, diel, i_cc, i_sigma, &
        fac, clear_cc, clear_surf)
     type(af_t), intent(inout)         :: tree
-    type(dielectric_t), intent(inout) :: diel
+    type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: i_cc       !< Cell-centered variable (in the tree)
     integer, intent(in)               :: i_sigma    !< Surface charage variable
     real(dp), intent(in)              :: fac        !< Multiplication factor
@@ -550,7 +551,7 @@ contains
        call inside_layer_to_surface(tree%boxes, diel%surfaces(n), &
             i_cc, i_sigma, fac, clear_cc, clear_surf)
     end do
-  end subroutine dielectric_inside_layer_to_surface
+  end subroutine surface_inside_layer_to_surface
 
   !> Map first layer inside the dielectric to surface density
   subroutine inside_layer_to_surface(boxes, surface, i_cc, i_sigma, fac, &
@@ -591,9 +592,9 @@ contains
   end subroutine inside_layer_to_surface
 
   !> Compute the electric field at face centers near surfaces
-  subroutine dielectric_correct_field_fc(tree, diel, i_sigma, i_fld, i_phi, fac)
+  subroutine surface_correct_field_fc(tree, diel, i_sigma, i_fld, i_phi, fac)
     type(af_t), intent(inout)      :: tree
-    type(dielectric_t), intent(in) :: diel
+    type(surfaces_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma !< Surface charge variable
     integer, intent(in)            :: i_fld   !< Face-centered field variable
     integer, intent(in)            :: i_phi   !< Cell-centered potential variable
@@ -689,13 +690,13 @@ contains
        end if
     end do
 
-  end subroutine dielectric_correct_field_fc
+  end subroutine surface_correct_field_fc
 
 #if NDIM == 2
   !> Compute the electric field at cell centers near surfaces
-  subroutine dielectric_correct_field_cc(tree, diel, i_sigma, i_fld, i_phi, fac)
+  subroutine surface_correct_field_cc(tree, diel, i_sigma, i_fld, i_phi, fac)
     type(af_t), intent(inout)      :: tree
-    type(dielectric_t), intent(in) :: diel
+    type(surfaces_t), intent(in) :: diel
     integer, intent(in)            :: i_sigma     !< Surface charge variable
     integer, intent(in)            :: i_fld(NDIM) !< Cell-centered field variables
     integer, intent(in)            :: i_phi       !< Cell-centered potential variable
@@ -781,13 +782,13 @@ contains
           end associate
        end if
     end do
-  end subroutine dielectric_correct_field_cc
+  end subroutine surface_correct_field_cc
 #endif
 
-  subroutine dielectric_get_surface_cell(tree, diel, x, ix_surf, ix_cell)
+  subroutine surface_get_surface_cell(tree, diel, x, ix_surf, ix_cell)
     use m_af_utils
     type(af_t), intent(in)         :: tree
-    type(dielectric_t), intent(in) :: diel
+    type(surfaces_t), intent(in) :: diel
     real(dp), intent(in)           :: x(NDIM)         !< Coordinate inside dielectric
     integer, intent(out)           :: ix_surf         !< Index of surface
     integer, intent(out)           :: ix_cell(NDIM-1) !< Index of cell on surface
@@ -810,6 +811,6 @@ contains
     direction = diel%surfaces(ix_surf)%direction
     dim       = af_neighb_dim(direction)
     ix_cell   = pack(loc%ix, [(i, i=1,NDIM)] /= dim)
-  end subroutine dielectric_get_surface_cell
+  end subroutine surface_get_surface_cell
 
-end module m_dielectric
+end module m_af_surface
