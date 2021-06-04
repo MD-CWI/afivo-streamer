@@ -8,35 +8,35 @@ cd ../
 # the fading out of negative streamers under exponentially decaying electric field with short electrode
 
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.933333e6 -cross%write=T -cross%npoints=2300 -lineout%write=T -lineout%npoints=2300 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_2.0e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.933333e6 -cross%write=T -cross%npoints=2300 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_2.0e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.546667e6 -cross%write=T -cross%npoints=1800 -lineout%write=T -lineout%npoints=1800 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.6e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.546667e6 -cross%write=T -cross%npoints=1800 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.6e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.1455e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.185e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.1455e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.185e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.105867e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.144e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.105867e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.144e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.0846e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.122e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.0846e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.122e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.069133e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.106e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.069133e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.106e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.059467e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.096e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.059467e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.096e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.044e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.08e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.044e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.08e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.022733e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.058e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=1.022733e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.058e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.990833e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.025e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.990833e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_1.025e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.940567e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0.973e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.940567e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0.973e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.856467e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0.886e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.856467e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0.886e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.657333e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0.68e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0.657333e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0.68e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=0e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_0e6_5e-3_106.8e-3
 
-./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=-0.483333e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -lineout%npoints=1500 -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_-0.5e6_5e-3_106.8e-3
+./streamer air_negative_120mm_chem_electro3mm.cfg -field_decay%enabled=T -field_decay%min_field=-0.483333e6 -cross%write=T -cross%npoints=1500 -lineout%write=T -output%name+=bd1e11_EL3mm_ER1mm_decay_neg/neg_bd1e11_EL3mm_2.0e6_-0.5e6_5e-3_106.8e-3
 
 
 
