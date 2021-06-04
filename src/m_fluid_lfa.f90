@@ -23,7 +23,6 @@ contains
     use m_field
     use m_dt
     use m_transport_data
-    use m_dielectric
     use m_dielectric2           ! @todo rename
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step

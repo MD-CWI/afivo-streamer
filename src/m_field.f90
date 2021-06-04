@@ -226,7 +226,6 @@ contains
   subroutine field_set_rhs(tree, s_in)
     use m_units_constants
     use m_chemistry
-    use m_dielectric
     use m_dielectric2
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: s_in
@@ -259,7 +258,7 @@ contains
     !$omp end parallel
 
     if (ST_use_dielectric) then
-       call dielectric_surface_charge_to_rhs(tree, diel, i_surf_dens, i_rhs, fac)
+       call surface_surface_charge_to_rhs(tree, diel, i_surf_dens, i_rhs, fac)
     end if
 
   end subroutine field_set_rhs
@@ -349,7 +348,7 @@ contains
     ! Compute field from potential
     if (ST_use_dielectric) then
        call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp)
-       call dielectric_correct_field_fc(tree, diel, i_surf_dens, &
+       call surface_correct_field_fc(tree, diel, i_surf_dens, &
             electric_fld, i_phi, UC_elem_charge / UC_eps0)
        call mg_compute_field_norm(tree, electric_fld, i_electric_fld)
     else

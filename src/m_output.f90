@@ -734,7 +734,7 @@ contains
 
   !> @todo replace this by routine in afivo/src/m_dielectric
   subroutine todo_diel_get_integral(diel, i_surf, surf_int)
-    type(dielectric_t), intent(inout) :: diel
+    type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: i_surf   !< Surface variables
     real(dp), intent(out)             :: surf_int !< Surface integral
     integer                           :: ix

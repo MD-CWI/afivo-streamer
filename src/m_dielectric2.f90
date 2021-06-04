@@ -7,7 +7,6 @@ module m_dielectric2
   use m_af_all
   use m_streamer
   use m_types
-  use m_dielectric
 
   implicit none
   private
@@ -17,7 +16,7 @@ module m_dielectric2
   integer, parameter, public :: i_surf_dens = 2
 
   !> To store dielectric surface
-  type(dielectric_t), public :: diel
+  type(surfaces_t), public :: diel
 
 !   type surface_data_t
 !      logical :: in_use = .false.
@@ -828,7 +827,7 @@ contains
     integer                :: ix, ix_cell(NDIM-1)
     real(dp)               :: area
 
-    call dielectric_get_surface_cell(tree, diel, xyz, ix, ix_cell)
+    call surface_get_surface_cell(tree, diel, xyz, ix, ix_cell)
     area = product(diel%surfaces(ix)%dr)
 
 #if NDIM == 2

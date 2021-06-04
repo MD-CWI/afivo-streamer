@@ -18,7 +18,6 @@ program streamer
   use m_user_methods
   use m_output
   use m_circuit
-  use m_dielectric
   use m_dielectric2
 
   implicit none
@@ -262,10 +261,10 @@ program streamer
 
         if (ST_use_dielectric) then
            ! Make sure there are no refinement jumps across the dielectric
-           call dielectric_get_refinement_links(diel, ref_links)
+           call surface_get_refinement_links(diel, ref_links)
            call af_adjust_refinement(tree, refine_routine, ref_info, &
              refine_buffer_width, ref_links)
-           call dielectric_update_after_refinement(tree, diel, ref_info)
+           call surface_update_after_refinement(tree, diel, ref_info)
         else
            call af_adjust_refinement(tree, refine_routine, ref_info, &
                 refine_buffer_width)
@@ -339,7 +338,7 @@ contains
     if (ST_use_dielectric) then
        ! To store surface charge and the photon flux
        n_surface_variables = af_advance_num_steps(time_integrator) + 1
-       call dielectric_initialize(tree, i_eps, diel, n_surface_variables)
+       call surface_initialize(tree, i_eps, diel, n_surface_variables)
     end if
 
     do n = 1, 100
@@ -347,10 +346,10 @@ contains
 
        if (ST_use_dielectric) then
           ! Make sure there are no refinement jumps across the dielectric
-          call dielectric_get_refinement_links(diel, ref_links)
+          call surface_get_refinement_links(diel, ref_links)
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width, ref_links)
-          call dielectric_update_after_refinement(tree, diel, ref_info)
+          call surface_update_after_refinement(tree, diel, ref_info)
        else
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width)
