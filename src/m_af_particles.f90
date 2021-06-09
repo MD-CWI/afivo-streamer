@@ -46,6 +46,7 @@ contains
     integer, allocatable :: threads(:)
     logical              :: as_density
     logical              :: fill_gc_at_end
+    logical              :: use_tmp_var
 
     allocate(ids(n_particles))
     allocate(npart_per_box(-1:tree%highest_id))
@@ -57,8 +58,12 @@ contains
     if (present(density)) as_density = density
     fill_gc_at_end = .true.
     if (present(fill_gc)) fill_gc_at_end = fill_gc
+    use_tmp_var = .false.
+    if (present(iv_tmp)) then
+       if (iv_tmp > 0) use_tmp_var = .true.
+    end if
 
-    if (present(iv_tmp) .and. .not. as_density) &
+    if (use_tmp_var .and. .not. as_density) &
          error stop "Use iv_tmp only for density = .true."
 
     if (present(id_guess)) then
@@ -122,11 +127,11 @@ contains
     call af_tree_clear_ghostcells(tree, iv)
 
     ! Set density to zero in all cells
-    if (present(iv_tmp)) call af_tree_clear_cc(tree, iv_tmp)
+    if (use_tmp_var) call af_tree_clear_cc(tree, iv_tmp)
 
     select case (order)
     case (0)
-       if (present(iv_tmp)) then
+       if (use_tmp_var) then
           call particles_to_grid_0(tree, iv_tmp, coords, weights, ids, &
                threads, n_particles, .false.)
           call add_as_density(tree, iv_tmp, iv)
@@ -135,7 +140,7 @@ contains
                threads, n_particles, as_density)
        end if
     case (1)
-       if (present(iv_tmp)) then
+       if (use_tmp_var) then
           call particles_to_grid_1(tree, iv_tmp, coords, weights, ids, &
                threads, n_particles, .false.)
           call tree_add_from_ghostcells(tree, iv_tmp)
