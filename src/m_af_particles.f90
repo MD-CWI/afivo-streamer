@@ -16,11 +16,11 @@ contains
   !> to the containing cell) or one (use bi/tri-linear interpolation). Note that
   !> ghost cells are automatically filled by this routine.
   subroutine af_particles_to_grid(tree, iv, coords, weights, n_particles, &
-       order, id_guess, density, fill_gc)
+       order, id_guess, density, fill_gc, iv_tmp)
     use m_af_restrict, only: af_restrict_tree
     use m_af_ghostcell, only: af_gc_tree
-    use m_af_utils, only: af_get_id_at, af_tree_clear_ghostcells
-    type(af_t), intent(inout)       :: tree
+    use m_af_utils, only: af_get_id_at, af_tree_clear_cc, af_tree_clear_ghostcells
+    type(af_t), intent(inout)        :: tree
     integer, intent(in)              :: iv                      !< Variable to store density
     integer, intent(in)              :: n_particles             !< The number of particles
     real(dp), intent(in)             :: coords(NDIM, n_particles) !< The particle coordinates
@@ -32,6 +32,10 @@ contains
     logical, intent(in), optional    :: density
     !> Fill ghost cells afterwards (default: true)
     logical, intent(in), optional    :: fill_gc
+    !> Use temporary variable to convert to density. This can be faster, and is
+    !> slightly more accurate for cylindrical coordinate systems, due to the way
+    !> ghost cells are exchanged near refinement boundaries
+    integer, intent(in), optional    :: iv_tmp
 
     integer              :: n, m
     integer              :: current_thread, current_work
@@ -53,6 +57,9 @@ contains
     if (present(density)) as_density = density
     fill_gc_at_end = .true.
     if (present(fill_gc)) fill_gc_at_end = fill_gc
+
+    if (present(iv_tmp) .and. .not. as_density) &
+         error stop "Use iv_tmp only for density = .true."
 
     if (present(id_guess)) then
        !$omp parallel do reduction(+:npart_per_box)
@@ -111,17 +118,33 @@ contains
     end do
     !$omp end parallel do
 
-    ! Set density to zero
+    ! Set density to zero in ghost cells
     call af_tree_clear_ghostcells(tree, iv)
+
+    ! Set density to zero in all cells
+    if (present(iv_tmp)) call af_tree_clear_cc(tree, iv_tmp)
 
     select case (order)
     case (0)
-       call particles_to_grid_0(tree, iv, coords, weights, ids, &
-            threads, n_particles, as_density)
+       if (present(iv_tmp)) then
+          call particles_to_grid_0(tree, iv_tmp, coords, weights, ids, &
+               threads, n_particles, .false.)
+          call add_as_density(tree, iv_tmp, iv)
+       else
+          call particles_to_grid_0(tree, iv, coords, weights, ids, &
+               threads, n_particles, as_density)
+       end if
     case (1)
-       call particles_to_grid_1(tree, iv, coords, weights, ids, &
-            threads, n_particles, as_density)
-       call tree_add_from_ghostcells(tree, iv)
+       if (present(iv_tmp)) then
+          call particles_to_grid_1(tree, iv_tmp, coords, weights, ids, &
+               threads, n_particles, .false.)
+          call tree_add_from_ghostcells(tree, iv_tmp)
+          call add_as_density(tree, iv_tmp, iv)
+       else
+          call particles_to_grid_1(tree, iv, coords, weights, ids, &
+               threads, n_particles, as_density)
+          call tree_add_from_ghostcells(tree, iv)
+       end if
     case default
        error stop "af_particles_to_grid: Invalid interpolation order"
     end select
@@ -385,5 +408,57 @@ contains
        end if
     end do; CLOSE_DO
   end subroutine add_from_ghostcells
+
+  !> Convert particle weights to densities and add to another variable
+  subroutine add_as_density(tree, iv_from, iv_to)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: iv_from
+    integer, intent(in)       :: iv_to
+    integer                   :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          call add_as_density_box(tree%boxes(id), iv_from, iv_to)
+       end do
+       !$omp end do nowait
+    end do
+    !$omp end parallel
+  end subroutine add_as_density
+
+  !> Convert particle weights to densities and add to another variable
+  subroutine add_as_density_box(box, iv_from, iv_to)
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: iv_from
+    integer, intent(in)        :: iv_to
+    real(dp)                   :: inv_volume
+#if NDIM == 2
+    integer                    :: i
+    real(dp), parameter        :: twopi = 2 * acos(-1.0_dp)
+    real(dp)                   :: radius, inv_cyl
+#endif
+
+    inv_volume = 1.0_dp / product(box%dr)
+
+#if NDIM == 2
+    if (box%coord_t == af_cyl) then
+       do i = 0, box%n_cell+1
+          ! abs() accounts for ghost cell on other side of r = 0
+          radius = abs(af_cyl_radius_cc(box, i))
+          inv_cyl = inv_volume / (twopi * radius)
+          box%cc(i, :, iv_to) = box%cc(i, :, iv_to) + &
+               box%cc(i, :, iv_from) * inv_cyl
+       end do
+    else
+       box%cc(DTIMES(:), iv_to) = box%cc(DTIMES(:), iv_to) + &
+         box%cc(DTIMES(:), iv_from) * inv_volume
+    end if
+#else
+    box%cc(DTIMES(:), iv_to) = box%cc(DTIMES(:), iv_to) + &
+         box%cc(DTIMES(:), iv_from) * inv_volume
+#endif
+  end subroutine add_as_density_box
 
 end module m_af_particles
