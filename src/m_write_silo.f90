@@ -107,7 +107,7 @@ contains
     integer                      :: iostat, ierr, dboptix
 
     interface
-      function dbputcurve(dbid, curvename, lcurvename, &
+      integer (c_int) function dbputcurve(dbid, curvename, lcurvename, &
         xvals, yvals, datatype, npoints, optlist_id, status)
         use, intrinsic :: iso_c_binding
         integer(c_int) :: dbid, lcurvename, datatype, npoints, status, optlist_id
