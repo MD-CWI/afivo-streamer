@@ -265,7 +265,7 @@ contains
 
   !> Compute electric field on the tree. First perform multigrid to get electric
   !> potential, then take numerical gradient to geld field.
-  subroutine field_compute(tree, mg, s_in, time, dt, have_guess)
+  subroutine field_compute(tree, mg, s_in, time, have_guess)
     use m_units_constants
     use m_chemistry
     use m_dielectric
@@ -273,7 +273,6 @@ contains
     type(mg_t), intent(inout) :: mg ! Multigrid option struct
     integer, intent(in)       :: s_in
     real(dp), intent(in)      :: time
-    real(dp), intent(in)      :: dt
     logical, intent(in)       :: have_guess
     integer                   :: i
     real(dp)                  :: max_rhs, residual_threshold, conv_fac
@@ -284,7 +283,7 @@ contains
     real(dp)                  :: residuals(max_initial_iterations)
 
     call field_set_rhs(tree, s_in)
-    call field_set_voltage(tree, time, dt)
+    call field_set_voltage(tree, time)
 
     call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
 
@@ -361,17 +360,16 @@ contains
   end subroutine field_compute
 
   !> Compute the electric field at a given time
-  function field_get_amplitude(tree, time, dt) result(electric_fld)
+  function field_get_amplitude(tree, time) result(electric_fld)
     use m_units_constants
     use m_lookup_table
     use m_user_methods
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
-    real(dp), intent(in)   :: dt
     real(dp)               :: electric_fld, t_rel
 
     if (associated(user_field_amplitude)) then
-       electric_fld = user_field_amplitude(tree, time, dt)
+       electric_fld = user_field_amplitude(tree, time)
     else if (field_table_use) then
        call LT_lin_interp_list(field_table_times, field_table_fields, &
             time, electric_fld)
@@ -397,13 +395,12 @@ contains
   end function field_get_amplitude
 
   !> Compute the voltage at a given time
-  subroutine field_set_voltage(tree, time, dt)
+  subroutine field_set_voltage(tree, time)
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
-    real(dp), intent(in)   :: dt
 
     if (.not. voltage_set_externally) then
-       current_field_amplitude = field_get_amplitude(tree, time, dt)
+       current_field_amplitude = field_get_amplitude(tree, time)
        field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
     end if
   end subroutine field_set_voltage

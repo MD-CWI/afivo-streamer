@@ -199,7 +199,6 @@ contains
        alpha = LT_get_col(td_tbl, td_alpha, refine_adx_fac * fld) * &
             gas_dens / refine_adx_fac
        adx   = max_dx * alpha
-       adx = adx * (1e-4_dp + box%r_min(1))/(0.25e-4_dp + box%r_min(1))
        elec_dens = box%cc(IJK, i_electron)
 
        if (adx > refine_adx .and. elec_dens > refine_min_dens) then

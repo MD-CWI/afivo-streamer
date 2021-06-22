@@ -203,7 +203,7 @@ program streamer
         end if
 
         ! Make sure field is available for latest time state
-        call field_compute(tree, mg, 0, time, dt, .true.)
+        call field_compute(tree, mg, 0, time, .true.)
 
         if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
         if (circuit_used) call circuit_update(tree, dt)
@@ -272,7 +272,7 @@ program streamer
 
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
-           call field_compute(tree, mg, 0, time, dt, .true.)
+           call field_compute(tree, mg, 0, time, .true.)
         end if
      end if
   end do
@@ -342,7 +342,7 @@ contains
     end if
 
     do n = 1, 100
-       call field_compute(tree, mg, 0, time, dt, .false.)
+       call field_compute(tree, mg, 0, time, .false.)
 
        if (ST_use_dielectric) then
           ! Make sure there are no refinement jumps across the dielectric
