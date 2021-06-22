@@ -50,7 +50,7 @@ contains
 
     ! Since field_compute is called after performing time integration, we don't
     ! have to call it again for the first sub-step of the next iteration
-    if (i_step > 1) call field_compute(tree, mg, s_deriv, time, .true.)
+    if (i_step > 1) call field_compute(tree, mg, s_deriv, time, dt, .true.)
 
     ! First calculate fluxes
     !$omp parallel private(lvl, i, id)
