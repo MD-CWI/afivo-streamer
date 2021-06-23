@@ -13,10 +13,10 @@ module m_refine
   integer, public, protected :: refine_per_steps = 2
 
   ! The grid spacing will always be larger than this value
-  real(dp), protected :: refine_min_dx = 1.0e-7_dp
+  real(dp), public, protected :: refine_min_dx = 1.0e-7_dp
 
   ! The grid spacing will always be smaller than this value
-  real(dp), protected :: refine_max_dx = 1.0e-3_dp
+  real(dp), public, protected :: refine_max_dx = 1.0e-3_dp
 
   ! Refine if alpha*dx is larger than this value
   real(dp), protected :: refine_adx = 1.0_dp
@@ -66,6 +66,8 @@ module m_refine
   ! Maximum coordinate of the refinement limits
   real(dp), protected, allocatable :: refine_limits_rmax(:,:)
 
+  procedure(af_subr_ref), pointer :: refine_routine => null()
+
   ! Public methods
   public :: refine_initialize
   public :: refine_routine
@@ -76,6 +78,7 @@ contains
   subroutine refine_initialize(cfg)
     use m_config
     use m_gas
+    use m_user_methods
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n
     real(dp)                   :: vec(NDIM)
@@ -157,10 +160,16 @@ contains
     call CFG_get(cfg, "refine_limits_rmax", dbuffer)
     refine_limits_rmax = reshape(dbuffer, [NDIM, n])
 
+    if (associated(user_refine)) then
+       refine_routine => user_refine
+    else
+       refine_routine => default_refinement
+    end if
+
   end subroutine refine_initialize
 
   !> Set the cell refinement flags for box
-  subroutine refine_routine(box, cell_flags)
+  subroutine default_refinement(box, cell_flags)
     use m_streamer
     use m_geometry
     use m_init_cond
@@ -252,6 +261,6 @@ contains
        where(cell_flags == af_do_ref) cell_flags = af_keep_ref
     end if
 
-  end subroutine refine_routine
+  end subroutine default_refinement
 
 end module m_refine

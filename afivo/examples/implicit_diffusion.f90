@@ -99,14 +99,14 @@ program implicit_diffusion
      time_steps = time_steps + 1
 
      output_cnt = output_cnt + 1
-     write(fname, "(A,I0)") "implicit_diffusion_" // DIMNAME // "_", output_cnt
+     write(fname, "(A,I0)") "output/implicit_diffusion_" // DIMNAME // "_", output_cnt
 
      ! Call procedure set_error (see below) for each box in tree, with argument time
      call af_loop_box_arg(tree, set_error, [time])
 
      ! Write the cell centered data of tree to a vtk unstructured file fname.
      ! Only the leaves of the tree are used
-     call af_write_silo(tree, trim(fname), output_cnt, time, dir="output")
+     call af_write_silo(tree, trim(fname), output_cnt, time)
 
      if (time > end_time) exit
 
