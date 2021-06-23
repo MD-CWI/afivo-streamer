@@ -39,7 +39,7 @@ module m_field
   real(dp) :: field_rise_time = 0.0_dp
 
   !> The (initial) vertical applied electric field
-  real(dp) :: field_amplitude = 1.0e6_dp
+  real(dp), public, protected :: field_amplitude = 1.0e6_dp
 
   !> The current vertical applied electric field
   real(dp), public, protected :: current_field_amplitude

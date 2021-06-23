@@ -144,6 +144,10 @@ program streamer
   do it = 1, huge(1)-1
      if (ST_use_end_time .and. time >= ST_end_time) exit
 
+     if (associated(user_generic_method)) then
+        call user_generic_method(tree, time)
+     end if
+
      ! Initialize starting position of streamer
      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
         call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
