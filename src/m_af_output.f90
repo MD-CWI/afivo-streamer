@@ -840,7 +840,7 @@ contains
 
     do n = 1, n_cc
        yname = tree%cc_names(icc_val(n))
-       call SILO_add_curve(dbix, yname, xdata, ydata(:, n), "x", yname)
+       call SILO_add_curve(dbix, yname, xdata, ydata(:, n))
     end do
 
     call SILO_close_file(dbix)
