@@ -70,10 +70,11 @@ program particles_to_grid
   call system_clock(t_start, count_rate)
 
   if (use_tmp_var) then
-     call af_particles_to_grid(tree, i_phi, coordinates, weights, &
-          n_particles, 0, iv_tmp=i_tmp)
+     call af_particles_to_grid(tree, i_phi, n_particles, &
+          get_id, get_rw, 0, iv_tmp=i_tmp)
   else
-     call af_particles_to_grid(tree, i_phi, coordinates, weights, n_particles, 0)
+     call af_particles_to_grid(tree, i_phi, n_particles, &
+          get_id, get_rw, 0)
   end if
 
   call system_clock(t_end, count_rate)
@@ -87,10 +88,11 @@ program particles_to_grid
   call system_clock(t_start, count_rate)
 
   if (use_tmp_var) then
-     call af_particles_to_grid(tree, i_phi, coordinates, weights, &
-          n_particles, 1, iv_tmp=i_tmp)
+     call af_particles_to_grid(tree, i_phi, n_particles, &
+          get_id, get_rw, 1, iv_tmp=i_tmp)
   else
-     call af_particles_to_grid(tree, i_phi, coordinates, weights, n_particles, 1)
+     call af_particles_to_grid(tree, i_phi, n_particles, &
+          get_id, get_rw, 1)
   end if
 
   call system_clock(t_end, count_rate)
@@ -111,5 +113,21 @@ contains
        cell_flags(DTIMES(:)) = af_keep_ref
     end if
   end subroutine refine_routine
+
+  subroutine get_id(n, id)
+    integer, intent(in)  :: n
+    integer, intent(out) :: id
+
+    id = af_get_id_at(tree, coordinates(:, n))
+  end subroutine get_id
+
+  subroutine get_rw(n, r, w)
+    integer, intent(in)   :: n
+    real(dp), intent(out) :: r(NDIM)
+    real(dp), intent(out) :: w
+
+    r = coordinates(:, n)
+    w = weights(n)
+  end subroutine get_rw
 
 end program particles_to_grid
