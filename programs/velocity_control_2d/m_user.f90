@@ -14,13 +14,21 @@ module m_user
   integer :: buffer_index = 0
   real(dp) :: vring(buffer_size) = 0
   real(dp) :: goal_velocity = 3.0e5_dp
-  real(dp), parameter :: dfieldt = -2e14_dp
+  real(dp) :: delay_time = 2.0e-9_dp
+  real(dp) :: dfieldt = -2e14_dp
 
 contains
 
   subroutine user_initialize(cfg, tree)
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout) :: tree
+
+    call CFG_add_get(cfg, "my%goal_velocity", goal_velocity, &
+         "Goal velocity (m/s)")
+    call CFG_add_get(cfg, "my%control_factor", dfieldt, &
+         "Control factor")
+    call CFG_add_get(cfg, "my%delay_time", delay_time, &
+         "Delay time")
 
     user_generic_method => my_velocity
     user_field_amplitude => my_field_amplitude
@@ -35,7 +43,7 @@ contains
 
     v = sum(vring)/buffer_size
 
-    if (time < 1e-9_dp) then
+    if (time < delay_time) then
        my_field_amplitude = field_amplitude
        prev_field         = field_amplitude
        prev_time          = time
@@ -45,7 +53,7 @@ contains
        my_field_amplitude = prev_field + diff_amplitude
        prev_time          = time
        prev_field         = my_field_amplitude
-       print *, time, my_field_amplitude, (goal_velocity - v)/goal_velocity
+       !print *, time, my_field_amplitude, (goal_velocity - v)/goal_velocity
     end if
 
   end function my_field_amplitude
