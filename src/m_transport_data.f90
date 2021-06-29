@@ -126,13 +126,13 @@ contains
             x_data, y_data)
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data / gas_number_density
-       call table_set_column(td_tbl, td_alpha, x_data, y_data)
+       call table_set_column(td_tbl, td_alpha, x_data, y_data *factor_alpha)
 
        call table_from_file(td_file, "efield[V/m]_vs_eta[1/m]", &
             x_data, y_data)
        x_data = x_data * SI_to_Townsend / gas_number_density
        y_data = y_data / gas_number_density
-       call table_set_column(td_tbl, td_eta, x_data, y_data)
+       call table_set_column(td_tbl, td_eta, x_data, y_data *factor_eta)
     else
        ! Create a lookup table for the model coefficients
        if (td_bulk_scale_reactions) then
@@ -167,11 +167,11 @@ contains
 
        call table_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
             x_data, y_data)
-       call table_set_column(td_tbl, td_alpha, x_data, y_data)
+       call table_set_column(td_tbl, td_alpha, x_data, y_data *factor_alpha)
 
        call table_from_file(td_file, "Townsend attach. coef. eta/N (m2)", &
             x_data, y_data)
-       call table_set_column(td_tbl, td_eta, x_data, y_data)
+       call table_set_column(td_tbl, td_eta, x_data, y_data *factor_eta)
 
        td_energy_eV = 5
        call table_from_file(td_file, "Mean energy (eV)", &
