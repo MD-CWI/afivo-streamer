@@ -37,7 +37,7 @@ contains
   !> to the containing cell) or one (use bi/tri-linear interpolation). Note that
   !> ghost cells are automatically filled by this routine.
   subroutine af_particles_to_grid(tree, iv, n_particles, get_id, get_rw, &
-       order, density, fill_gc, iv_tmp)
+       order, density, fill_gc, iv_tmp, offset_particles)
     use m_af_restrict, only: af_restrict_tree
     use m_af_ghostcell, only: af_gc_tree
     use m_af_utils, only: af_get_id_at, af_tree_clear_cc, af_tree_clear_ghostcells
@@ -55,8 +55,10 @@ contains
     !> slightly more accurate for cylindrical coordinate systems, due to the way
     !> ghost cells are exchanged near refinement boundaries
     integer, intent(in), optional :: iv_tmp
+    !> Start offset for indexing the particles (if zero, start at index 1)
+    integer, intent(in), optional :: offset_particles
 
-    integer              :: n, m
+    integer              :: n, m, p_offset
     integer              :: current_thread, current_work
     integer              :: threads_left, work_left
     integer, allocatable :: ids(:)
@@ -82,13 +84,15 @@ contains
     if (present(iv_tmp)) then
        if (iv_tmp > 0) use_tmp_var = .true.
     end if
+    p_offset = 0
+    if (present(offset_particles)) p_offset = offset_particles
 
     if (use_tmp_var .and. .not. as_density) &
          error stop "Use iv_tmp only for density = .true."
 
     !$omp parallel do reduction(+:npart_per_box)
     do n = 1, n_particles
-       call get_id(n, ids(n))
+       call get_id(p_offset + n, ids(n))
        npart_per_box(ids(n)) = npart_per_box(ids(n)) + 1
     end do
     !$omp end parallel do
@@ -98,7 +102,7 @@ contains
        m = 0
        do n = 1, n_particles
           if (ids(n) <= af_no_box) then
-             call get_rw(n, r, weight)
+             call get_rw(p_offset + n, r, weight)
              print *, n, r
              m = m + 1
           end if
@@ -143,21 +147,21 @@ contains
     case (0)
        if (use_tmp_var) then
           call particles_to_grid_0(tree, iv_tmp, get_rw, ids, &
-               threads, n_particles, .false.)
+               threads, n_particles, .false., p_offset)
           call add_as_density(tree, iv_tmp, iv)
        else
           call particles_to_grid_0(tree, iv, get_rw, ids, &
-               threads, n_particles, as_density)
+               threads, n_particles, as_density, p_offset)
        end if
     case (1)
        if (use_tmp_var) then
           call particles_to_grid_1(tree, iv_tmp, get_rw, ids, &
-               threads, n_particles, .false.)
+               threads, n_particles, .false., p_offset)
           call tree_add_from_ghostcells(tree, iv_tmp)
           call add_as_density(tree, iv_tmp, iv)
        else
           call particles_to_grid_1(tree, iv, get_rw, ids, &
-               threads, n_particles, as_density)
+               threads, n_particles, as_density, p_offset)
           call tree_add_from_ghostcells(tree, iv)
        end if
     case default
@@ -178,7 +182,7 @@ contains
   end subroutine af_particles_to_grid
 
   subroutine particles_to_grid_0(tree, iv, get_rw, ids, &
-       threads, n_particles, density)
+       threads, n_particles, density, p_offset)
     use omp_lib
     type(af_t), intent(inout) :: tree
     integer, intent(in)        :: iv !< Variable to store particle density
@@ -187,6 +191,7 @@ contains
     integer, intent(in)        :: ids(n_particles)
     integer, intent(in)        :: threads(n_particles)
     logical, intent(in)        :: density
+    integer, intent(in)        :: p_offset !< Offset for particle indexing
     integer                    :: n, thread_id, ix(NDIM)
     real(dp)                   :: r(NDIM), weight, inv_volume
 
@@ -196,7 +201,7 @@ contains
     do n = 1, n_particles
        if (threads(n) /= thread_id) cycle
        ! Handle this particle
-       call get_rw(n, r, weight)
+       call get_rw(p_offset + n, r, weight)
 
        ix = af_cc_ix(tree%boxes(ids(n)), r)
 
@@ -232,7 +237,7 @@ contains
   !> Add weights to the cell centers using linear interpolation @todo Support
   !> cylindrical coordinates
   subroutine particles_to_grid_1(tree, iv, get_rw, ids, &
-       threads, n_particles, density)
+       threads, n_particles, density, p_offset)
     use omp_lib
     type(af_t), intent(inout) :: tree
     integer, intent(in)        :: iv !< Variable to store particle density
@@ -241,6 +246,7 @@ contains
     integer, intent(in)        :: ids(n_particles)
     integer, intent(in)        :: threads(n_particles)
     logical, intent(in)        :: density !< Add particle as a density
+    integer, intent(in)        :: p_offset !< Offset for particle indexing
     real(dp)                   :: tmp(NDIM), inv_dr(NDIM)
     real(dp)                   :: wu(NDIM), wl(NDIM), w(DTIMES(2))
     real(dp)                   :: inv_volume, r(NDIM), weight
@@ -256,7 +262,7 @@ contains
     do n = 1, n_particles
        if (threads(n) /= thread_id) cycle
 
-       call get_rw(n, r, weight)
+       call get_rw(p_offset + n, r, weight)
 
        id     = ids(n)
        inv_dr = 1.0_dp/tree%boxes(id)%dr
