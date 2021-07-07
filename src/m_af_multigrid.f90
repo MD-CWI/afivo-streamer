@@ -2,6 +2,7 @@
 !> This module contains the geometric multigrid routines that come with Afivo
 module m_af_multigrid
   use m_af_types
+  use m_af_stencil
   use m_mg_types
   use m_coarse_solver
 
@@ -778,9 +779,15 @@ contains
 
   !> Based on the box type, apply a Gauss-Seidel relaxation scheme
   subroutine mg_auto_gsrb(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    integer, intent(in)         :: redblack_cntr !< Iteration count
-    type(mg_t), intent(in)     :: mg !< Multigrid options
+    type(box_t), intent(inout) :: box           !< Box to operate on
+    integer, intent(in)        :: redblack_cntr !< Iteration count
+    type(mg_t), intent(in)     :: mg            !< Multigrid options
+
+    if (mg%box_op_key /= af_stencil_none) then
+       call af_stencil_gsrb_box(box, mg%box_op_key, redblack_cntr, &
+            mg%i_phi, mg%i_rhs)
+       return
+    end if
 
     select case(box%tag)
 #if NDIM == 2
@@ -811,11 +818,36 @@ contains
     end select
   end subroutine mg_auto_gsrb
 
+  !> Store stencil for a box
+  subroutine mg_store_stencil(box, mg)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer                    :: ix
+
+    call af_stencil_prepare_store(box, mg%box_op_key, ix)
+
+    select case(mg%box_op_key)
+    case (mg_normal_box)
+       call mg_box_lpl_stencil_v2(box, mg, ix)
+    case (mg_lsf_box)
+       call mg_box_lpllsf_stencil_v2(box, mg, ix)
+    case (mg_veps_box, mg_ceps_box)
+       call mg_box_lpld_stencil_v2(box, mg, ix)
+    case default
+       error stop "mg_store_stencil: unknown stencil"
+    end select
+  end subroutine mg_store_stencil
+
   !> Based on the box type, apply the approriate operator
   subroutine mg_auto_op(box, i_out, mg)
     type(box_t), intent(inout) :: box   !< Operate on this box
     integer, intent(in)        :: i_out !< Index of output variable
     type(mg_t), intent(in)     :: mg    !< Multigrid options
+
+    if (mg%box_op_key /= af_stencil_none) then
+       call af_stencil_apply_box(box, mg%box_op_key, mg%i_phi, i_out)
+       return
+    end if
 
     select case(box%tag)
 #if NDIM == 2
@@ -954,6 +986,7 @@ contains
     type(mg_t), intent(in)     :: mg  !< Multigrid options
     real(dp)                   :: a, b
     logical                    :: is_lsf, is_deps, is_eps
+    integer                    :: i
 
     is_lsf = .false.
     is_eps = .false.
@@ -978,6 +1011,15 @@ contains
     if (is_lsf) box%tag = mg_lsf_box
     if (is_eps) box%tag = mg_ceps_box
     if (is_deps) box%tag = mg_veps_box
+
+    ! Store required stencils
+    if (mg%box_op_key /= af_stencil_none) then
+       i = af_stencil_index(box, mg%box_op_key)
+       if (i == af_stencil_none) then
+          call mg_store_stencil(box, mg)
+       end if
+    end if
+
   end subroutine mg_set_box_tag
 
   subroutine mg_set_box_tag_lvl(tree, mg, lvl)
@@ -999,16 +1041,27 @@ contains
   subroutine mg_set_box_tag_tree(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
-    integer                   :: lvl, i, id
+    integer                   :: lvl, i, id, n
 
-    !$omp parallel private(lvl, i, id)
+    !$omp parallel private(lvl, i, id, n)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          if (tree%boxes(id)%tag == af_init_tag) then
-             call mg_set_box_tag(tree%boxes(id), mg)
-          end if
+          associate (box => tree%boxes(id))
+            if (box%tag == af_init_tag) then
+               call mg_set_box_tag(box, mg)
+            end if
+
+            ! Right-hand side correction for internal boundaries
+            n = af_stencil_index(box, mg%box_op_key)
+            if (n /= af_stencil_none) then
+               if (allocated(box%stencils(n)%f)) then
+                  box%stencils(n)%bc_correction = &
+                       box%stencils(n)%f * mg%lsf_boundary_value
+               end if
+            end if
+          end associate
        end do
        !$omp end do
     end do
@@ -1146,9 +1199,31 @@ contains
     call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_lpl_stencil
 
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_lpl_stencil_v2(box, mg, ix)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix !< Stencil index
+    real(dp)                   :: inv_dr2(NDIM)
+    integer                    :: n_coeff, idim
+
+    box%stencils(ix)%shape    = af_stencil_357
+    box%stencils(ix)%constant = .true.
+    box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
+    n_coeff                   = af_stencil_sizes(af_stencil_357)
+    inv_dr2                   = 1 / box%dr**2
+
+    allocate(box%stencils(ix)%c(n_coeff))
+    do idim = 1, NDIM
+       box%stencils(ix)%c(2*idim:2*idim+1) = inv_dr2(idim)
+    end do
+    box%stencils(ix)%c(1) = -sum(box%stencils(ix)%c(2:)) - mg%helmholtz_lambda
+
+  end subroutine mg_box_lpl_stencil_v2
+
   !> Incorporate boundary conditions into stencil
   subroutine mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-    use m_af_ghostcell, only: af_gc_get_boundary_coords
     type(box_t), intent(in) :: box
     type(mg_t), intent(in)  :: mg
     real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
@@ -1166,7 +1241,7 @@ contains
 
        if (nb_id < af_no_box) then
           nb_dim = af_neighb_dim(nb)
-          call af_gc_get_boundary_coords(box, nb, coords)
+          call af_get_face_coords(box, nb, coords)
           call mg%sides_bc(box, nb, mg%i_phi, coords, bc_val, bc_type)
 
           ! Determine index range next to boundary
@@ -1360,6 +1435,50 @@ contains
 
     call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_lpld_stencil
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_lpld_stencil_v2(box, mg, ix)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix !< Index of the stencil
+    integer                    :: IJK, nc, n_coeff
+    real(dp)                   :: idr2(2*NDIM), a0, a(2*NDIM)
+
+    nc               = box%n_cell
+    idr2(1:2*NDIM:2) = 1/box%dr**2
+    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
+
+    box%stencils(ix)%shape    = af_stencil_357
+    box%stencils(ix)%constant = .false.
+    box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
+    n_coeff                   = af_stencil_sizes(af_stencil_357)
+
+    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+
+    associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
+      do KJI_DO(1, nc)
+#if NDIM == 1
+         a0 = box%cc(i, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, i_eps)
+#elif NDIM == 2
+         a0 = box%cc(i, j, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+         a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+#elif NDIM == 3
+         a0 = box%cc(i, j, k, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, j, k, i_eps)
+         a(3:4) = box%cc(i, j-1:j+1:2, k, i_eps)
+         a(5:6) = box%cc(i, j, k-1:k+1:2, i_eps)
+#endif
+         box%stencils(ix)%v(2:, IJK) = idr2 * 2 * a0*a(:)/(a0 + a(:))
+         box%stencils(ix)%v(1, IJK) = -sum(box%stencils(ix)%v(2:, IJK))
+      end do; CLOSE_DO
+    end associate
+
+    call af_stencil_try_constant(box, ix, epsilon(1.0_dp))
+
+  end subroutine mg_box_lpld_stencil_v2
 
   !> Correct fine grid values based on the change in the coarse grid, in the
   !> case of a jump in epsilon
@@ -2059,6 +2178,97 @@ contains
 
     call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
   end subroutine mg_box_lpllsf_stencil
+
+  !> Store the matrix stencil for each cell of the box. The order of the stencil
+  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
+  subroutine mg_box_lpllsf_stencil_v2(box, mg, ix)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix !< Index of stencil
+    integer                    :: IJK, n, nc, idim, n_coeff
+    real(dp)                   :: lsf_a, dd(2*NDIM), dr2(NDIM)
+    logical                    :: has_boundary
+#if NDIM == 2
+    real(dp)                   :: tmp
+#endif
+
+    nc = box%n_cell
+    dr2 = box%dr**2
+
+    box%stencils(ix)%shape    = af_stencil_357
+    box%stencils(ix)%constant = .false.
+    ! Perform a custom correction in cylindrical coordinates
+    box%stencils(ix)%cylindrical_gradient = .false.
+    n_coeff                   = af_stencil_sizes(af_stencil_357)
+
+    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    allocate(box%stencils(ix)%f(DTIMES(nc)))
+    allocate(box%stencils(ix)%bc_correction(DTIMES(nc)))
+    box%stencils(ix)%f = 0.0_dp
+
+    has_boundary = .false.
+
+    associate (cc => box%cc, i_lsf => mg%i_lsf)
+      do KJI_DO(1, nc)
+         lsf_a = box%cc(IJK, i_lsf)
+#if NDIM == 1
+         dd(1) = lsf_dist(lsf_a, box%cc(i-1, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box%cc(i+1, i_lsf))
+#elif NDIM == 2
+         dd(1) = lsf_dist(lsf_a, box%cc(i-1, j, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box%cc(i+1, j, i_lsf))
+         dd(3) = lsf_dist(lsf_a, box%cc(i, j-1, i_lsf))
+         dd(4) = lsf_dist(lsf_a, box%cc(i, j+1, i_lsf))
+#elif NDIM == 3
+         dd(1) = lsf_dist(lsf_a, box%cc(i-1, j, k, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box%cc(i+1, j, k, i_lsf))
+         dd(3) = lsf_dist(lsf_a, box%cc(i, j-1, k, i_lsf))
+         dd(4) = lsf_dist(lsf_a, box%cc(i, j+1, k, i_lsf))
+         dd(5) = lsf_dist(lsf_a, box%cc(i, j, k-1, i_lsf))
+         dd(6) = lsf_dist(lsf_a, box%cc(i, j, k+1, i_lsf))
+#endif
+         if (any(dd < 1)) has_boundary = .true.
+
+         ! Generalized Laplacian for neighbors at distance dd * dx
+         do idim = 1, NDIM
+            box%stencils(ix)%v(1+2*idim-1:1+2*idim, IJK) = &
+                 [dd(2*idim), dd(2*idim-1)] / &
+                 (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
+                 dd(2*idim-1) * dd(2*idim))
+         end do
+
+#if NDIM == 2
+         if (box%coord_t == af_cyl) then
+            ! Add correction for cylindrical coordinate system. This is a
+            ! discretization of 1/r d/dr phi.
+            tmp = 1/(box%dr(1) * (dd(1) + dd(2)) * af_cyl_radius_cc(box, i))
+            box%stencils(ix)%v(2, IJK) = box%stencils(ix)%v(2, IJK) - tmp
+            box%stencils(ix)%v(3, IJK) = box%stencils(ix)%v(3, IJK) + tmp
+         end if
+#endif
+         box%stencils(ix)%v(1, IJK) = -sum(box%stencils(ix)%v(2:, IJK))
+
+         ! Move internal boundaries to right-hand side
+         do n = 1, 2 * NDIM
+            if (dd(n) < 1.0_dp) then
+               box%stencils(ix)%f(IJK) = box%stencils(ix)%f(IJK) - &
+                    box%stencils(ix)%v(n+1, IJK)
+               box%stencils(ix)%v(n+1, IJK) = 0.0_dp
+            end if
+         end do
+      end do; CLOSE_DO
+    end associate
+
+    ! If no boundary was found, remove stored coefficients and use a standard
+    ! stencil instead
+    if (.not. has_boundary) then
+       deallocate(box%stencils(ix)%v)
+       deallocate(box%stencils(ix)%f)
+       deallocate(box%stencils(ix)%bc_correction)
+       call mg_box_lpl_stencil_v2(box, mg, ix)
+    end if
+
+  end subroutine mg_box_lpllsf_stencil_v2
 
   !> Compute the gradient of the potential and store in face-centered variables
   subroutine mg_compute_phi_gradient(tree, mg, i_fc, fac, i_norm)

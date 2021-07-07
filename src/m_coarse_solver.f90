@@ -235,13 +235,11 @@ contains
   !> Set the right-hand side and copy phi from the tree. Also move the boundary
   !> conditions for phi to the rhs.
   subroutine coarse_solver_set_rhs_phi(tree, mg)
-    use m_af_ghostcell, only: af_gc_get_boundary_coords
-    type(af_t), intent(in) :: tree
+    type(af_t), intent(inout) :: tree
     type(mg_t), intent(in) :: mg
     integer                :: n, nb, nc, id, bc_type, ierr
-    integer                :: ilo(NDIM), ihi(NDIM)
+    integer                :: ilo(NDIM), ihi(NDIM), ix
     real(dp)               :: tmp(DTIMES(tree%n_cell))
-    real(dp)               :: coords(NDIM, tree%n_cell**(NDIM-1))
     real(dp)               :: bc_val(tree%n_cell**(NDIM-1))
 
     nc = tree%n_cell
@@ -254,9 +252,12 @@ contains
        ! Add contribution of boundary conditions to rhs
        do nb = 1, af_num_neighbors
           if (tree%boxes(id)%neighbors(nb) < af_no_box) then
-             ! Put the boundary condition into the ghost cells of mg%i_phi
-             call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
-             call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, coords, bc_val, bc_type)
+             ix = tree%boxes(id)%nb_to_bc_index(nb)
+             call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, &
+                  tree%boxes(id)%bc_coords(:, :, ix), &
+                  bc_val, bc_type)
+             tree%boxes(id)%bc_val(:, mg%i_phi, ix) = bc_val
+             tree%boxes(id)%bc_type(mg%i_phi, ix) = bc_type
 
              ! Get index range near neighbor
              call af_get_index_bc_inside(nb, nc, 1, ilo, ihi)

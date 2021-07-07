@@ -203,8 +203,7 @@ contains
        if (.not. tree%boxes(id)%in_use) cycle
 
        read(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
-       call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
-            tree%n_var_cell, tree%n_var_face)
+       call af_init_box(tree, id)
 
        read(my_unit) tree%boxes(id)%lvl     !< level of the box
        read(my_unit) tree%boxes(id)%tag     !< for the user

@@ -10,7 +10,6 @@ module m_af_ghostcell
   public :: af_gc_tree
   public :: af_gc_ids
   public :: af_gc_box
-  public :: af_gc_get_boundary_coords
   public :: af_bc_dirichlet_zero
   public :: af_bc_neumann_zero
   public :: af_bc_set_continuous
@@ -71,9 +70,8 @@ contains
     logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
     logical                       :: do_corners
     integer                       :: i, iv
-    integer                       :: nb, nb_id, bc_type
+    integer                       :: nb, nb_id, bc_type, ix
     integer                       :: lo(NDIM), hi(NDIM), dnb(NDIM)
-    real(dp)                      :: coords(NDIM, tree%n_cell**(NDIM-1))
     real(dp)                      :: bc_val(tree%n_cell**(NDIM-1))
 
     do_corners = .true.
@@ -102,18 +100,18 @@ contains
              call tree%cc_methods(iv)%rb(tree%boxes, id, nb, iv)
           end do
        else
-          ! Physical boundary
-          call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
-
           do i = 1, size(ivs)
              iv = ivs(i)
              if (associated(tree%cc_methods(iv)%bc_custom)) then
                 call tree%cc_methods(iv)%bc_custom(tree%boxes(id), &
                      nb, iv, 1)
              else
+                ix = tree%boxes(id)%nb_to_bc_index(nb)
                 call tree%cc_methods(iv)%bc(tree%boxes(id), nb, iv, &
-                     coords, bc_val, bc_type)
+                     tree%boxes(id)%bc_coords(:, :, ix), bc_val, bc_type)
                 call bc_to_gc(tree%boxes(id), nb, iv, bc_val, bc_type)
+                tree%boxes(id)%bc_val(:, iv, ix) = bc_val
+                tree%boxes(id)%bc_type(iv, ix) = bc_type
              end if
           end do
        end if
@@ -121,47 +119,6 @@ contains
 
     if (do_corners) call af_gc_box_corner(tree%boxes, id, ivs)
   end subroutine af_gc_box
-
-  !> Get coordinates at the faces of a box boundary
-  subroutine af_gc_get_boundary_coords(box, nb, coords)
-    type(box_t), intent(in) :: box
-    integer, intent(in)     :: nb
-    real(dp), intent(out)   :: coords(NDIM, box%n_cell**(NDIM-1))
-    integer                 :: i, nb_dim, bc_dim(NDIM-1)
-    integer, parameter      :: all_dims(NDIM) = [(i, i = 1, NDIM)]
-    real(dp)                :: rmin(NDIM)
-#if NDIM == 3
-    integer                 :: j, ix
-#endif
-
-    nb_dim       = af_neighb_dim(nb)
-    bc_dim       = pack(all_dims, all_dims /= nb_dim)
-    rmin(bc_dim) = box%r_min(bc_dim) + 0.5_dp * box%dr(bc_dim)
-
-    if (af_neighb_low(nb)) then
-       rmin(nb_dim) = box%r_min(nb_dim)
-    else
-       rmin(nb_dim) = box%r_min(nb_dim) + box%n_cell * box%dr(nb_dim)
-    end if
-
-#if NDIM == 1
-    coords(nb_dim, 1) = rmin(nb_dim)
-#elif NDIM == 2
-    do i = 1, box%n_cell
-       coords(bc_dim, i) = rmin(bc_dim) + (i-1) * box%dr(bc_dim)
-       coords(nb_dim, i) = rmin(nb_dim)
-    end do
-#elif NDIM == 3
-    ix = 0
-    do j = 1, box%n_cell
-       do i = 1, box%n_cell
-          ix = ix + 1
-          coords(bc_dim, ix) = rmin(bc_dim) + [i-1, j-1] * box%dr(bc_dim)
-          coords(nb_dim, ix) = rmin(nb_dim)
-       end do
-    end do
-#endif
-  end subroutine af_gc_get_boundary_coords
 
   !> Fill corner ghost cells for variable iv on corners/edges of a box. If there
   !> is no box to copy the data from, use linear extrapolation. This routine
@@ -715,10 +672,9 @@ contains
     integer, intent(in)       :: id     !< Id of box for which we set ghost cells
     integer, intent(in)       :: ivs(:) !< Variables for which ghost cells are set
     real(dp)                  :: cc(DTIMES(-1:tree%n_cell+2), size(ivs))
-    integer                   :: i, iv, nb, nc, nb_id, bc_type
+    integer                   :: i, iv, nb, nc, nb_id, bc_type, ix
     integer                   :: lo(NDIM), hi(NDIM), dnb(NDIM)
     integer                   :: nlo(NDIM), nhi(NDIM)
-    real(dp)                  :: coords(NDIM, tree%n_cell**(NDIM-1))
     real(dp)                  :: bc_val(tree%n_cell**(NDIM-1))
 
     nc = tree%n_cell
@@ -758,17 +714,19 @@ contains
           end do
        else
           ! Physical boundary
-          call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
           do i = 1, size(ivs)
              iv = ivs(i)
              if (associated(tree%cc_methods(iv)%bc_custom)) then
                 call tree%cc_methods(iv)%bc_custom(tree%boxes(id), &
                      nb, iv, 2, cc(DTIMES(:), i))
              else
-                call tree%cc_methods(iv)%bc(tree%boxes(id), &
-                     nb, iv, coords, bc_val, bc_type)
-                call bc_to_gc2(nc, cc(DTIMES(:), i), nb, bc_val, &
-                     bc_type, tree%boxes(id)%dr)
+                ix = tree%boxes(id)%nb_to_bc_index(nb)
+                call tree%cc_methods(iv)%bc(tree%boxes(id), nb, iv, &
+                     tree%boxes(id)%bc_coords(:, :, ix), bc_val, bc_type)
+                call bc_to_gc2(nc, cc(DTIMES(:), i), nb, bc_val, bc_type, &
+                     tree%boxes(id)%dr)
+                tree%boxes(id)%bc_val(:, iv, ix) = bc_val
+                tree%boxes(id)%bc_type(iv, ix) = bc_type
              end if
           end do
        end if

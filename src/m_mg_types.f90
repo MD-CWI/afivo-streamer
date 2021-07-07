@@ -71,6 +71,9 @@ module m_mg_types
      !> Subroutine that performs the (non)linear operator
      procedure(mg_box_op), pointer, nopass   :: box_op => null()
 
+     !> Key indicating which stencil is to be used
+     integer :: box_op_key = af_stencil_none
+
      !> Subroutine that performs Gauss-Seidel relaxation on a box
      procedure(mg_box_gsrb), pointer, nopass :: box_gsrb => null()
 
