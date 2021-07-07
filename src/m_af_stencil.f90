@@ -31,6 +31,7 @@ module m_af_stencil
   public :: af_stencil_apply
   public :: af_stencil_apply_box
   public :: af_stencil_gsrb_box
+  public :: af_stencil_get_box
   public :: af_stencil_try_constant
 
 contains
@@ -398,5 +399,64 @@ contains
     box%stencils(ix)%c = box%stencils(ix)%v(:, DTIMES(1))
     deallocate(box%stencils(ix)%v)
   end subroutine af_stencil_try_constant
+
+  !> Get the stencil for a box
+  subroutine af_stencil_get_box(box, key, v)
+    type(box_t), intent(inout) :: box !< Operate on this box
+    integer, intent(in)        :: key !< Stencil key
+    !> Stencil coefficients
+    real(dp), intent(inout)    :: v(:, DTIMES(:))
+    integer                    :: i
+
+    i = af_stencil_index(box, key)
+    if (i == af_stencil_none) error stop "Stencil not stored"
+
+    select case (box%stencils(i)%shape)
+    case (af_stencil_357)
+       call stencil_get_357(box, box%stencils(i), v)
+    case default
+       error stop "Unknown stencil"
+    end select
+  end subroutine af_stencil_get_box
+
+  !> Get the stencil for all cells in a box
+  subroutine stencil_get_357(box, stencil, v)
+    type(box_t), intent(inout)  :: box     !< Box
+    type(stencil_t), intent(in) :: stencil !< Stencil
+    !> Stencil coefficients
+    real(dp), intent(inout)     :: v(:, DTIMES(:))
+#if NDIM == 2
+    real(dp)                    :: c_cyl(size(v, 1)), rfac(2, box%n_cell)
+#endif
+    integer                     :: IJK, nc
+
+    nc = box%n_cell
+
+    if (size(v, 1) /= af_stencil_sizes(stencil%shape)) &
+         error stop "Argument v has wrong size"
+
+    if (stencil%constant) then
+       do KJI_DO(1, nc)
+          v(:, IJK) = stencil%c
+       end do; CLOSE_DO
+    else
+       v = stencil%v
+    end if
+
+#if NDIM == 2
+    if (stencil%cylindrical_gradient) then
+       ! Correct for cylindrical coordinates, assuming the elements correspond
+       ! to a gradient operation
+       call af_cyl_flux_factors(box, rfac)
+       do KJI_DO(1, nc)
+          c_cyl(2:3) = rfac(1:2, i) * v(2:3, IJK)
+          c_cyl(1) = v(1, IJK) - (c_cyl(2) - v(2, IJK)) &
+               - (c_cyl(3) - v(3, IJK))
+          c_cyl(4:) = v(4:, IJK)
+          v(:, IJK) = c_cyl
+       end do; CLOSE_DO
+    end if
+#endif
+  end subroutine stencil_get_357
 
 end module m_af_stencil
