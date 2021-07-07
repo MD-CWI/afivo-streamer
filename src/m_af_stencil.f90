@@ -153,11 +153,12 @@ contains
     integer, intent(in)         :: iv      !< Input variable
     integer, intent(in)         :: i_out   !< Output variable
     real(dp)                    :: c(2*NDIM+1)
-    real(dp)                    :: tmp(DTIMES(box%n_cell))
     integer                     :: IJK
 #if NDIM == 2
     real(dp)                    :: rfac(2, box%n_cell), c_cyl(2*NDIM+1)
 #endif
+
+    if (iv == i_out) error stop "Cannot have iv == i_out"
 
     associate (cc => box%cc, nc => box%n_cell)
       if (stencil%constant) c = stencil%c
@@ -165,8 +166,8 @@ contains
 #if NDIM == 1
       do KJI_DO(1, nc)
          if (.not. stencil%constant) c = stencil%v(:, IJK)
-         tmp(i) = sum(c * &
-              [cc(i, iv), cc(i-1, iv), cc(i+1, iv)])
+         cc(i, i_out) = &
+              c(1) * cc(i, iv) + c(2) * cc(i-1, iv) + c(3) * cc(i+1, iv)
       end do; CLOSE_DO
 #elif NDIM == 2
       if (stencil%cylindrical_gradient) then
@@ -178,36 +179,42 @@ contains
             c_cyl(2:3) = rfac(1:2, i) * c(2:3)
             c_cyl(1) = c(1) - (c_cyl(2) - c(2)) - (c_cyl(3) - c(3))
             c_cyl(4:) = c(4:)
-            tmp(i, j) = sum(c_cyl * &
-                 [cc(i, j, iv), cc(i-1, j, iv), cc(i+1, j, iv), &
-                 cc(i, j-1, iv), cc(i, j+1, iv)])
+            cc(i, j, i_out) = &
+                 c_cyl(1) * cc(i, j, iv) + &
+                 c_cyl(2) * cc(i-1, j, iv) + &
+                 c_cyl(3) * cc(i+1, j, iv) + &
+                 c_cyl(4) * cc(i, j-1, iv) + &
+                 c_cyl(5) * cc(i, j+1, iv)
          end do; CLOSE_DO
       else
          do KJI_DO(1, nc)
             if (.not. stencil%constant) c = stencil%v(:, IJK)
-            tmp(i, j) = sum(c * &
-                 [cc(i, j, iv), cc(i-1, j, iv), cc(i+1, j, iv), &
-                 cc(i, j-1, iv), cc(i, j+1, iv)])
+            cc(i, j, i_out) = &
+                 c(1) * cc(i, j, iv) + &
+                 c(2) * cc(i-1, j, iv) + &
+                 c(3) * cc(i+1, j, iv) + &
+                 c(4) * cc(i, j-1, iv) + &
+                 c(5) * cc(i, j+1, iv)
          end do; CLOSE_DO
       end if
 #elif NDIM == 3
       do KJI_DO(1, nc)
          if (.not. stencil%constant) c = stencil%v(:, IJK)
-         tmp(i, j, k) = sum(c * &
-              [cc(i, j, k, iv), cc(i-1, j, k, iv), cc(i+1, j, k, iv), &
-              cc(i, j-1, k, iv), cc(i, j+1, k, iv), &
-              cc(i, j, k-1, iv), cc(i, j, k+1, iv)])
+         cc(i, j, k, i_out) = &
+              c(1) * cc(i, j, k, iv) + &
+              c(2) * cc(i-1, j, k, iv) + &
+              c(3) * cc(i+1, j, k, iv) + &
+              c(4) * cc(i, j-1, k, iv) + &
+              c(5) * cc(i, j+1, k, iv) + &
+              c(6) * cc(i, j, k-1, iv) + &
+              c(7) * cc(i, j, k+1, iv)
       end do; CLOSE_DO
 #endif
 
-      ! if (box%n_bc > 0) then
-      !    call stencil_correct_bc_357(box, stencil, iv, tmp)
-      ! end if
       if (allocated(stencil%bc_correction)) then
-         tmp = tmp - stencil%bc_correction
+         cc(DTIMES(1:nc), i_out) = cc(DTIMES(1:nc), i_out) - &
+              stencil%bc_correction
       end if
-
-      cc(DTIMES(1:nc), i_out) = tmp
     end associate
 
   end subroutine stencil_apply_357
@@ -294,9 +301,7 @@ contains
     integer, intent(in)         :: iv       !< Solve for variable
     integer, intent(in)         :: i_rhs    !< Right-hand side
 
-    real(dp) :: rhs(DTIMES(box%n_cell))
     real(dp) :: c(2*NDIM+1)
-    real(dp) :: tmp(DTIMES(box%n_cell))
     integer  :: IJK, i0, nc
 #if NDIM == 2
     real(dp) :: rfac(2, box%n_cell), c_cyl(2*NDIM+1)
@@ -311,19 +316,18 @@ contains
     end if
 
     associate (cc => box%cc, nc => box%n_cell)
-      tmp = cc(DTIMES(1:nc), iv)
-      rhs = cc(DTIMES(1:nc), i_rhs)
-
       if (allocated(stencil%bc_correction)) then
-         rhs = rhs + stencil%bc_correction
+         cc(DTIMES(1:nc), i_rhs) = cc(DTIMES(1:nc), i_rhs) + &
+              stencil%bc_correction
       end if
 
 #if NDIM == 1
       i0 = 2 - iand(redblack, 1)
       do i = i0, nc, 2
          if (.not. stencil%constant) c = stencil%v(:, IJK)
-         tmp(IJK) = (rhs(IJK) - &
-              sum(c(2:) * [cc(i-1, iv), cc(i+1, iv)])) / c(1)
+         cc(IJK, iv) = (cc(IJK, i_rhs) &
+              - c(2) * cc(i-1, iv) &
+              - c(3) * cc(i+1, iv)) / c(1)
       end do
 #elif NDIM == 2
       if (stencil%cylindrical_gradient) then
@@ -339,9 +343,11 @@ contains
                c_cyl(1) = c(1) - (c_cyl(2) - c(2)) - (c_cyl(3) - c(3))
                c_cyl(4:) = c(4:)
 
-               tmp(IJK) = (rhs(IJK) - &
-                    sum(c_cyl(2:) * [cc(i-1, j, iv), cc(i+1, j, iv), &
-                    cc(i, j-1, iv), cc(i, j+1, iv)])) / c_cyl(1)
+               cc(IJK, iv) = (cc(IJK, i_rhs) &
+                    - c_cyl(2) * cc(i-1, j, iv) &
+                    - c_cyl(3) * cc(i+1, j, iv) &
+                    - c_cyl(4) * cc(i, j-1, iv) &
+                    - c_cyl(5) * cc(i, j+1, iv)) / c(1)
             end do
          end do
       else
@@ -349,9 +355,11 @@ contains
             i0 = 2 - iand(ieor(redblack, j), 1)
             do i = i0, nc, 2
                if (.not. stencil%constant) c = stencil%v(:, IJK)
-               tmp(IJK) = (rhs(IJK) - &
-                    sum(c(2:) * [cc(i-1, j, iv), cc(i+1, j, iv), &
-                    cc(i, j-1, iv), cc(i, j+1, iv)])) / c(1)
+               cc(IJK, iv) = (cc(IJK, i_rhs) &
+                    - c(2) * cc(i-1, j, iv) &
+                    - c(3) * cc(i+1, j, iv) &
+                    - c(4) * cc(i, j-1, iv) &
+                    - c(5) * cc(i, j+1, iv)) / c(1)
             end do
          end do
       end if
@@ -361,16 +369,22 @@ contains
             i0 = 2 - iand(ieor(redblack, k+j), 1)
             do i = i0, nc, 2
                if (.not. stencil%constant) c = stencil%v(:, IJK)
-               tmp(IJK) = (rhs(IJK) - sum(c(2:) * &
-                    [cc(i-1, j, k, iv), cc(i+1, j, k, iv), &
-                    cc(i, j-1, k, iv), cc(i, j+1, k, iv), &
-                    cc(i, j, k-1, iv), cc(i, j, k+1, iv)])) / c(1)
+               cc(IJK, iv) = (cc(IJK, i_rhs) &
+                    - c(2) * cc(i-1, j, k, iv) &
+                    - c(3) * cc(i+1, j, k, iv) &
+                    - c(4) * cc(i, j-1, k, iv) &
+                    - c(5) * cc(i, j+1, k, iv) &
+                    - c(6) * cc(i, j, k-1, iv) &
+                    - c(7) * cc(i, j, k+1, iv)) / c(1)
             end do
          end do
       end do
 #endif
 
-      cc(DTIMES(1:nc), iv) = tmp
+      if (allocated(stencil%bc_correction)) then
+         cc(DTIMES(1:nc), i_rhs) = cc(DTIMES(1:nc), i_rhs) - &
+              stencil%bc_correction
+      end if
     end associate
   end subroutine stencil_gsrb_357
 
