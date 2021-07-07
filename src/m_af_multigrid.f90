@@ -23,46 +23,16 @@ module m_af_multigrid
   ! Automatic selection of operators
   public :: mg_set_box_tag
   public :: mg_auto_op
-  public :: mg_auto_stencil
   public :: mg_auto_gsrb
   public :: mg_auto_corr
   public :: mg_auto_rstr
 
   ! Methods for normal Laplacian
-  public :: mg_box_lpl
-  public :: mg_box_lpl_stencil
-  public :: mg_box_gsrb_lpl
-  public :: mg_box_corr_lpl
-  public :: mg_box_rstr_lpl
   public :: mg_box_lpl_gradient
   public :: mg_sides_rb
 
-  ! Methods for Laplacian with jump in coefficient between boxes
-  public :: mg_box_lpld
-  public :: mg_box_gsrb_lpld
-  public :: mg_box_corr_lpld
-  public :: mg_box_lpld_stencil
-
-  ! Methods for Laplacian with level set function
-  public :: mg_box_lpllsf
-  public :: mg_box_lpllsf_stencil
-  public :: mg_box_gsrb_lpllsf
-  public :: mg_box_lpllsf_gradient
-
-  ! To adjust operator stencils near boundaries
-  public :: mg_stencil_handle_boundaries
-
   ! To compute the gradient of the solution
   public :: mg_compute_phi_gradient
-
-#if NDIM == 2
-  public :: mg_box_clpl
-  public :: mg_box_clpl_stencil
-  public :: mg_box_gsrb_clpl
-  public :: mg_box_clpld
-  public :: mg_box_gsrb_clpld
-  public :: mg_box_clpld_stencil
-#endif
 
 contains
 
@@ -85,11 +55,21 @@ contains
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%box_op)) mg%box_op => mg_auto_op
-    if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
+    ! if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_auto_gsrb
     if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_auto_rb
+
+    !> @todo improve how operator is set
+    if (mg%box_op_key == af_stencil_none) then
+       mg%box_op_key = mg_normal_box
+       if (mg%i_lsf /= -1) mg%box_op_key = mg_lsf_box
+       if (mg%i_eps /= -1) mg%box_op_key = mg_veps_box
+
+       if (mg%i_lsf /= -1 .and. mg%i_eps /= -1) &
+            error stop "TODO: implement mixing of dielectrics/electrodes"
+    end if
 
     if (mg%i_lsf /= -1) then
        call check_coarse_representation_lsf(tree, mg)
@@ -783,39 +763,8 @@ contains
     integer, intent(in)        :: redblack_cntr !< Iteration count
     type(mg_t), intent(in)     :: mg            !< Multigrid options
 
-    if (mg%box_op_key /= af_stencil_none) then
-       call af_stencil_gsrb_box(box, mg%box_op_key, redblack_cntr, &
-            mg%i_phi, mg%i_rhs)
-       return
-    end if
-
-    select case(box%tag)
-#if NDIM == 2
-    case (mg_normal_box)
-       if (box%coord_t == af_cyl) then
-          call mg_box_gsrb_clpl(box, redblack_cntr, mg)
-       else
-          call mg_box_gsrb_lpl(box, redblack_cntr, mg)
-       end if
-    case (mg_lsf_box)
-       call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
-    case (mg_veps_box, mg_ceps_box)
-       if (box%coord_t == af_cyl) then
-          call mg_box_gsrb_clpld(box, redblack_cntr, mg)
-       else
-          call mg_box_gsrb_lpld(box, redblack_cntr, mg)
-       end if
-#else
-    case (mg_normal_box)
-       call mg_box_gsrb_lpl(box, redblack_cntr, mg)
-    case (mg_lsf_box)
-       call mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
-    case (mg_veps_box, mg_ceps_box)
-       call mg_box_gsrb_lpld(box, redblack_cntr, mg)
-#endif
-    case default
-       error stop "mg_auto_gsrb: unknown box tag"
-    end select
+    call af_stencil_gsrb_box(box, mg%box_op_key, redblack_cntr, &
+         mg%i_phi, mg%i_rhs)
   end subroutine mg_auto_gsrb
 
   !> Store stencil for a box
@@ -828,11 +777,11 @@ contains
 
     select case(mg%box_op_key)
     case (mg_normal_box)
-       call mg_box_lpl_stencil_v2(box, mg, ix)
+       call mg_box_lpl_stencil(box, mg, ix)
     case (mg_lsf_box)
-       call mg_box_lpllsf_stencil_v2(box, mg, ix)
+       call mg_box_lpllsf_stencil(box, mg, ix)
     case (mg_veps_box, mg_ceps_box)
-       call mg_box_lpld_stencil_v2(box, mg, ix)
+       call mg_box_lpld_stencil(box, mg, ix)
     case default
        error stop "mg_store_stencil: unknown stencil"
     end select
@@ -844,80 +793,8 @@ contains
     integer, intent(in)        :: i_out !< Index of output variable
     type(mg_t), intent(in)     :: mg    !< Multigrid options
 
-    if (mg%box_op_key /= af_stencil_none) then
-       call af_stencil_apply_box(box, mg%box_op_key, mg%i_phi, i_out)
-       return
-    end if
-
-    select case(box%tag)
-#if NDIM == 2
-    case (mg_normal_box)
-       if (box%coord_t == af_cyl) then
-          call mg_box_clpl(box, i_out, mg)
-       else
-          call mg_box_lpl(box, i_out, mg)
-       end if
-    case (mg_lsf_box)
-       call mg_box_lpllsf(box, i_out, mg)
-    case (mg_veps_box, mg_ceps_box)
-       if (box%coord_t == af_cyl) then
-          call mg_box_clpld(box, i_out, mg)
-       else
-          call mg_box_lpld(box, i_out, mg)
-       end if
-#else
-    case (mg_normal_box)
-       call mg_box_lpl(box, i_out, mg)
-    case (mg_lsf_box)
-       call mg_box_lpllsf(box, i_out, mg)
-    case (mg_veps_box, mg_ceps_box)
-       call mg_box_lpld(box, i_out, mg)
-#endif
-    case (af_init_tag)
-       error stop "mg_auto_op: box tag not set"
-    case default
-       error stop "mg_auto_op: unknown box tag"
-    end select
+    call af_stencil_apply_box(box, mg%box_op_key, mg%i_phi, i_out)
   end subroutine mg_auto_op
-
-  !> Based on the box type, use the appropriate stencil method
-  subroutine mg_auto_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
-
-    select case(box%tag)
-#if NDIM == 2
-    case (mg_normal_box)
-       if (box%coord_t == af_cyl) then
-          call mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-       else
-          call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-       end if
-    case (mg_lsf_box)
-       call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    case (mg_veps_box, mg_ceps_box)
-       if (box%coord_t == af_cyl) then
-          call mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-       else
-          call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-       end if
-#else
-    case (mg_normal_box)
-       call mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    case (mg_lsf_box)
-       call mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    case (mg_veps_box, mg_ceps_box)
-       call mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-#endif
-    case (af_init_tag)
-       error stop "mg_auto_stencil: box tag not set"
-    case default
-       error stop "mg_auto_stencil: unknown box tag"
-    end select
-  end subroutine mg_auto_stencil
 
   !> Based on the box type, apply the approriate Laplace operator
   subroutine mg_auto_rstr(box_c, box_p, iv, mg)
@@ -986,7 +863,6 @@ contains
     type(mg_t), intent(in)     :: mg  !< Multigrid options
     real(dp)                   :: a, b
     logical                    :: is_lsf, is_deps, is_eps
-    integer                    :: i
 
     is_lsf = .false.
     is_eps = .false.
@@ -1012,28 +888,38 @@ contains
     if (is_eps) box%tag = mg_ceps_box
     if (is_deps) box%tag = mg_veps_box
 
-    ! Store required stencils
-    if (mg%box_op_key /= af_stencil_none) then
-       i = af_stencil_index(box, mg%box_op_key)
-       if (i == af_stencil_none) then
-          call mg_store_stencil(box, mg)
-       end if
-    end if
-
   end subroutine mg_set_box_tag
 
   subroutine mg_set_box_tag_lvl(tree, mg, lvl)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer, intent(in)       :: lvl
-    integer                   :: i, id
+    integer                   :: i, id, n
 
-    !$omp parallel do private(i, id)
+    !$omp parallel do private(i, id, n)
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
-       if (tree%boxes(id)%tag == af_init_tag) then
-          call mg_set_box_tag(tree%boxes(id), mg)
-       end if
+       associate (box => tree%boxes(id))
+         if (box%tag == af_init_tag) then
+            call mg_set_box_tag(box, mg)
+         end if
+
+         ! Store required stencils
+         if (mg%box_op_key == af_stencil_none) &
+              error stop "mg%box_op_key not defined"
+
+         n = af_stencil_index(box, mg%box_op_key)
+         if (n == af_stencil_none) then
+            call mg_store_stencil(box, mg)
+            n = af_stencil_index(box, mg%box_op_key)
+         end if
+
+         ! Right-hand side correction for internal boundaries
+         if (allocated(box%stencils(n)%f)) then
+            box%stencils(n)%bc_correction = &
+                 box%stencils(n)%f * mg%lsf_boundary_value
+         end if
+       end associate
     end do
     !$omp end parallel do
   end subroutine mg_set_box_tag_lvl
@@ -1041,31 +927,11 @@ contains
   subroutine mg_set_box_tag_tree(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
-    integer                   :: lvl, i, id, n
+    integer                   :: lvl
 
-    !$omp parallel private(lvl, i, id, n)
     do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%ids)
-          id = tree%lvls(lvl)%ids(i)
-          associate (box => tree%boxes(id))
-            if (box%tag == af_init_tag) then
-               call mg_set_box_tag(box, mg)
-            end if
-
-            ! Right-hand side correction for internal boundaries
-            n = af_stencil_index(box, mg%box_op_key)
-            if (n /= af_stencil_none) then
-               if (allocated(box%stencils(n)%f)) then
-                  box%stencils(n)%bc_correction = &
-                       box%stencils(n)%f * mg%lsf_boundary_value
-               end if
-            end if
-          end associate
-       end do
-       !$omp end do
+       call mg_set_box_tag_lvl(tree, mg, lvl)
     end do
-    !$omp end parallel
   end subroutine mg_set_box_tag_tree
 
   subroutine mg_box_corr_lpl(box_p, box_c, mg)
@@ -1076,91 +942,6 @@ contains
 
     call af_prolong_linear(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
   end subroutine mg_box_corr_lpl
-
-  !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
-  subroutine mg_box_gsrb_lpl(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box           !< Box to operate on
-    integer, intent(in)        :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg            !< Multigrid options
-    integer                    :: IJK, i0, nc
-    real(dp)                   :: idr2(NDIM), fac
-
-    idr2 = 1 / box%dr**2
-    fac  = 1.0_dp / (2 * sum(idr2) + mg%helmholtz_lambda)
-    nc   = box%n_cell
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-    associate (cc => box%cc, n => mg%i_phi, i_rhs => mg%i_rhs)
-#if NDIM == 1
-      i0 = 2 - iand(redblack_cntr, 1)
-      do i = i0, nc, 2
-         cc(i, n) = fac * ( &
-              idr2(1) * (cc(i+1, n) + cc(i-1, n)) - &
-              cc(i, mg%i_rhs))
-      end do
-#elif NDIM == 2
-      do j = 1, nc
-         i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-         do i = i0, nc, 2
-            cc(i, j, n) = fac * ( &
-                 idr2(1) * (cc(i+1, j, n) + cc(i-1, j, n)) + &
-                 idr2(2) * (cc(i, j+1, n) + cc(i, j-1, n)) - &
-                 cc(i, j, mg%i_rhs))
-         end do
-      end do
-#elif NDIM == 3
-      do k = 1, nc
-         do j = 1, nc
-            i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-            do i = i0, nc, 2
-               cc(i, j, k, n) = fac * ( &
-                    idr2(1) * (cc(i+1, j, k, n) + cc(i-1, j, k, n)) + &
-                    idr2(2) * (cc(i, j+1, k, n) + cc(i, j-1, k, n)) + &
-                    idr2(3) * (cc(i, j, k+1, n) + cc(i, j, k-1, n)) - &
-                    cc(i, j, k, i_rhs))
-            end do
-         end do
-      end do
-#endif
-    end associate
-  end subroutine mg_box_gsrb_lpl
-
-  !> Perform Laplacian operator on a box
-  subroutine mg_box_lpl(box, i_out, mg)
-    type(box_t), intent(inout) :: box   !< Box to operate on
-    integer, intent(in)        :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg    !< Multigrid options
-    integer                    :: IJK, nc
-    real(dp)                   :: idr2(NDIM)
-
-    nc   = box%n_cell
-    idr2 = 1 / box%dr**2
-
-    associate (cc => box%cc, n => mg%i_phi)
-      do KJI_DO(1, nc)
-#if NDIM == 1
-         cc(i, i_out) = &
-              idr2(1) * (cc(i-1, n) + cc(i+1, n) - 2 * cc(i, n)) - &
-              mg%helmholtz_lambda * cc(i, n)
-#elif NDIM == 2
-         cc(i, j, i_out) = &
-              idr2(1) * (cc(i-1, j, n) + cc(i+1, j, n) - 2 * cc(i, j, n)) + &
-              idr2(2) * (cc(i, j-1, n) + cc(i, j+1, n) - 2 * cc(i, j, n)) - &
-              mg%helmholtz_lambda * cc(i, j, n)
-#elif NDIM == 3
-         cc(i, j, k, i_out) = &
-              idr2(1) * (cc(i-1, j, k, n) + cc(i+1, j, k, n) &
-              - 2 * cc(i, j, k, n)) &
-              + idr2(2) * (cc(i, j-1, k, n) + cc(i, j+1, k, n) &
-              - 2 * cc(i, j, k, n)) &
-              + idr2(3) * (cc(i, j, k-1, n) + cc(i, j, k+1, n) &
-              - 2 * cc(i, j, k, n)) - &
-              mg%helmholtz_lambda * cc(i, j, k, n)
-#endif
-      end do; CLOSE_DO
-    end associate
-  end subroutine mg_box_lpl
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg_box_rstr_lpl(box_c, box_p, iv, mg)
@@ -1182,26 +963,7 @@ contains
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
-    real(dp)                :: inv_dr2(NDIM)
-    integer                 :: idim
-
-    inv_dr2                 = 1 / box%dr**2
-    stencil(1, DTIMES(:))   = -2.0_dp * sum(inv_dr2) - mg%helmholtz_lambda
-    do idim = 1, NDIM
-       stencil(2*idim:2*idim+1, DTIMES(:)) = inv_dr2(idim)
-    end do
-    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-  end subroutine mg_box_lpl_stencil
-
-  !> Store the matrix stencil for each cell of the box. The order of the stencil
-  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpl_stencil_v2(box, mg, ix)
+  subroutine mg_box_lpl_stencil(box, mg, ix)
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Stencil index
@@ -1220,225 +982,11 @@ contains
     end do
     box%stencils(ix)%c(1) = -sum(box%stencils(ix)%c(2:)) - mg%helmholtz_lambda
 
-  end subroutine mg_box_lpl_stencil_v2
-
-  !> Incorporate boundary conditions into stencil
-  subroutine mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    integer                 :: nb, nc, lo(NDIM), hi(NDIM)
-    integer                 :: nb_id, nb_dim, bc_type
-    real(dp)                :: coords(NDIM, box%n_cell**(NDIM-1))
-    real(dp)                :: bc_val(box%n_cell**(NDIM-1))
-
-    bc_to_rhs = 0.0_dp
-    nc        = box%n_cell
-
-    do nb = 1, af_num_neighbors
-       nb_id = box%neighbors(nb)
-
-       if (nb_id < af_no_box) then
-          nb_dim = af_neighb_dim(nb)
-          call af_get_face_coords(box, nb, coords)
-          call mg%sides_bc(box, nb, mg%i_phi, coords, bc_val, bc_type)
-
-          ! Determine index range next to boundary
-          call af_get_index_bc_inside(nb, nc, 1, lo, hi)
-
-          select case (bc_type)
-          case (af_bc_dirichlet)
-             ! Dirichlet value at cell face, so compute gradient over h/2
-             ! E.g. 1 -2 1 becomes 0 -3 1 for a 1D Laplacian
-             ! The boundary condition is incorporated in the right-hand side
-             stencil(1, DSLICE(lo, hi)) = &
-                  stencil(1, DSLICE(lo, hi)) - &
-                  stencil(nb+1, DSLICE(lo, hi))
-             bc_to_rhs(:, nb) = pack(-2 * stencil(nb+1, DSLICE(lo, hi)), .true.)
-             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
-          case (af_bc_neumann)
-             ! E.g. 1 -2 1 becomes 0 -1 1 for a 1D Laplacian
-             stencil(1, DSLICE(lo, hi)) = &
-                  stencil(1, DSLICE(lo, hi)) + &
-                  stencil(nb+1, DSLICE(lo, hi))
-             bc_to_rhs(:, nb) = &
-                  -pack(stencil(nb+1, DSLICE(lo, hi)) * &
-                  box%dr(nb_dim), .true.) * af_neighb_high_pm(nb)
-             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
-          case default
-             error stop "mg_box_lpl_stencil: unsupported boundary condition"
-          end select
-       end if
-    end do
-
-  end subroutine mg_stencil_handle_boundaries
-
-  !> Perform Gauss-Seidel relaxation on a box. Epsilon can have a jump at cell
-  !> faces.
-  subroutine mg_box_gsrb_lpld(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box            !< Box to operate on
-    integer, intent(in)        :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg             !< Multigrid options
-    integer                    :: IJK, i0, nc
-    real(dp)                   :: u(2*NDIM), a0
-    real(dp)                   :: idr2(2*NDIM), a(2*NDIM), c(2*NDIM)
-
-    idr2(1:2*NDIM:2) = 1/box%dr**2
-    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
-    nc    = box%n_cell
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-    associate (cc => box%cc, n => mg%i_phi, i_rhs => mg%i_rhs, i_eps => mg%i_eps)
-#if NDIM == 1
-      i0 = 2 - iand(redblack_cntr, 1)
-      do i = i0, nc, 2
-         a0     = cc(i, i_eps)
-         u(1:2) = cc(i-1:i+1:2, n)
-         a(1:2) = cc(i-1:i+1:2, i_eps)
-         c(:)   = 2 * a0 * a(:) / (a0 + a(:)) * idr2
-
-         cc(i, n) = (sum(c(:) * u(:)) - cc(i, i_rhs)) / sum(c(:))
-      end do
-#elif NDIM == 2
-      do j = 1, nc
-         i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-         do i = i0, nc, 2
-            a0     = cc(i, j, i_eps)
-            u(1:2) = cc(i-1:i+1:2, j, n)
-            a(1:2) = cc(i-1:i+1:2, j, i_eps)
-            u(3:4) = cc(i, j-1:j+1:2, n)
-            a(3:4) = cc(i, j-1:j+1:2, i_eps)
-            c(:)   = 2 * a0 * a(:) / (a0 + a(:)) * idr2
-
-            cc(i, j, n) = &
-                 (sum(c(:) * u(:)) - cc(i, j, i_rhs)) / sum(c(:))
-         end do
-      end do
-#elif NDIM == 3
-      do k = 1, nc
-         do j = 1, nc
-            i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-            do i = i0, nc, 2
-               a0     = cc(i, j, k, i_eps)
-               u(1:2) = cc(i-1:i+1:2, j, k, n)
-               a(1:2) = cc(i-1:i+1:2, j, k, i_eps)
-               u(3:4) = cc(i, j-1:j+1:2, k, n)
-               a(3:4) = cc(i, j-1:j+1:2, k, i_eps)
-               u(5:6) = cc(i, j, k-1:k+1:2, n)
-               a(5:6) = cc(i, j, k-1:k+1:2, i_eps)
-               c(:)   = 2 * a0 * a(:) / (a0 + a(:)) * idr2
-
-               cc(i, j, k, n) = (sum(c(:) * u(:)) - &
-                    cc(i, j, k, i_rhs)) / sum(c(:))
-            end do
-         end do
-      end do
-#endif
-    end associate
-  end subroutine mg_box_gsrb_lpld
-
-  !> Perform Laplacian operator on a box where epsilon varies on cell faces
-  subroutine mg_box_lpld(box, i_out, mg)
-    type(box_t), intent(inout) :: box   !< Box to operate on
-    integer, intent(in)        :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg    !< Multigrid options
-    integer                    :: IJK, nc
-    real(dp)                   :: idr2(2*NDIM), a0, u0
-    real(dp)                   :: u(2*NDIM), a(2*NDIM)
-
-    nc               = box%n_cell
-    idr2(1:2*NDIM:2) = 1/box%dr**2
-    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
-
-    associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
-      do KJI_DO(1, nc)
-#if NDIM == 1
-         a0     = cc(i, i_eps)
-         a(1:2) = cc(i-1:i+1:2, i_eps)
-         u0     = cc(i, n)
-         u(1:2) = cc(i-1:i+1:2, n)
-
-         cc(i, i_out) = sum(2 * idr2 * &
-              a0*a(:)/(a0 + a(:)) * (u(:) - u0))
-
-#elif NDIM == 2
-         a0     = cc(i, j, i_eps)
-         a(1:2) = cc(i-1:i+1:2, j, i_eps)
-         a(3:4) = cc(i, j-1:j+1:2, i_eps)
-         u0     = cc(i, j, n)
-         u(1:2) = cc(i-1:i+1:2, j, n)
-         u(3:4) = cc(i, j-1:j+1:2, n)
-
-         cc(i, j, i_out) = sum(2 * idr2 * &
-              a0*a(:)/(a0 + a(:)) * (u(:) - u0))
-
-#elif NDIM == 3
-         u0 = cc(i, j, k, n)
-         a0 = cc(i, j, k, i_eps)
-         u(1:2) = cc(i-1:i+1:2, j, k, n)
-         u(3:4) = cc(i, j-1:j+1:2, k, n)
-         u(5:6) = cc(i, j, k-1:k+1:2, n)
-         a(1:2) = cc(i-1:i+1:2, j, k, i_eps)
-         a(3:4) = cc(i, j-1:j+1:2, k, i_eps)
-         a(5:6) = cc(i, j, k-1:k+1:2, i_eps)
-
-         cc(i, j, k, i_out) = sum(2 * idr2 * &
-              a0*a(:)/(a0 + a(:)) * (u(:) - u0))
-#endif
-      end do; CLOSE_DO
-    end associate
-  end subroutine mg_box_lpld
+  end subroutine mg_box_lpl_stencil
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
-    integer                 :: IJK, nc
-    real(dp)                :: idr2(2*NDIM), a0, a(2*NDIM)
-
-    nc               = box%n_cell
-    idr2(1:2*NDIM:2) = 1/box%dr**2
-    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
-
-    associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
-      do KJI_DO(1, nc)
-#if NDIM == 1
-         a0 = box%cc(i, i_eps)
-         a(1:2) = box%cc(i-1:i+1:2, i_eps)
-
-         stencil(2:, IJK) = idr2 * 2 * a0*a(:)/(a0 + a(:))
-         stencil(1, IJK) = -sum(stencil(2:, IJK))
-#elif NDIM == 2
-         a0 = box%cc(i, j, i_eps)
-         a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
-         a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
-
-         stencil(2:, IJK) = idr2 * 2 * a0*a(:)/(a0 + a(:))
-         stencil(1, IJK) = -sum(stencil(2:, IJK))
-#elif NDIM == 3
-         a0 = box%cc(i, j, k, i_eps)
-         a(1:2) = box%cc(i-1:i+1:2, j, k, i_eps)
-         a(3:4) = box%cc(i, j-1:j+1:2, k, i_eps)
-         a(5:6) = box%cc(i, j, k-1:k+1:2, i_eps)
-
-         stencil(2:, IJK) = idr2 * 2 * a0*a(:)/(a0 + a(:))
-         stencil(1, IJK) = -sum(stencil(2:, IJK))
-#endif
-      end do; CLOSE_DO
-    end associate
-
-    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-  end subroutine mg_box_lpld_stencil
-
-  !> Store the matrix stencil for each cell of the box. The order of the stencil
-  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpld_stencil_v2(box, mg, ix)
+  subroutine mg_box_lpld_stencil(box, mg, ix)
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Index of the stencil
@@ -1478,7 +1026,7 @@ contains
 
     call af_stencil_try_constant(box, ix, epsilon(1.0_dp))
 
-  end subroutine mg_box_lpld_stencil_v2
+  end subroutine mg_box_lpld_stencil
 
   !> Correct fine grid values based on the change in the coarse grid, in the
   !> case of a jump in epsilon
@@ -1564,190 +1112,6 @@ contains
     end do
 #endif
   end subroutine mg_box_corr_lpld
-
-#if NDIM == 2
-  !> Perform Gauss-Seidel relaxation on box for a cylindrical Laplacian operator
-  subroutine mg_box_gsrb_clpl(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box           !< Box to operate on
-    integer, intent(in)        :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg            !< Multigrid options
-    integer                    :: i, i0, j, nc
-    real(dp)                   :: idr2(NDIM), fac, rfac(2, box%n_cell)
-
-    nc   = box%n_cell
-    idr2 = 1/box%dr**2
-    fac  = 1.0_dp / (2 * sum(idr2) + mg%helmholtz_lambda)
-    call af_cyl_flux_factors(box, rfac)
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-    associate (cc => box%cc, n => mg%i_phi, i_rhs => mg%i_rhs)
-      do j = 1, nc
-         i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-         do i = i0, nc, 2
-            cc(i, j, n) = fac * (&
-                 idr2(1) * (rfac(1, i) * cc(i-1, j, n) + &
-                 rfac(2, i) * cc(i+1, j, n)) + &
-                 idr2(2) * (cc(i, j+1, n) + cc(i, j-1, n)) &
-                 - cc(i, j, i_rhs))
-         end do
-      end do
-    end associate
-  end subroutine mg_box_gsrb_clpl
-
-  !> Perform cylindrical Laplacian operator on a box
-  subroutine mg_box_clpl(box, i_out, mg)
-    type(box_t), intent(inout) :: box   !< Box to operate on
-    integer, intent(in)        :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg    !< Multigrid options
-    integer                    :: i, j, nc
-    real(dp)                   :: idr2(NDIM), rfac(2, box%n_cell)
-
-    nc    = box%n_cell
-    idr2  = 1 / box%dr**2
-    call af_cyl_flux_factors(box, rfac)
-
-    associate (cc => box%cc, n => mg%i_phi)
-      do j = 1, nc
-         do i = 1, nc
-            cc(i, j, i_out) = idr2(1) * ( rfac(1, i) * cc(i-1, j, n) + &
-                 rfac(2, i) * cc(i+1, j, n) - 2 * cc(i, j, n)) + &
-                 idr2(2) * (cc(i, j-1, n) + cc(i, j+1, n) - 2 * cc(i, j, n)) &
-                 - mg%helmholtz_lambda * cc(i, j, n)
-         end do
-      end do
-    end associate
-  end subroutine mg_box_clpl
-
-  !> Store the matrix stencil for each cell of the box. The order of the stencil
-  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_clpl_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
-    integer                 :: i, j, nc
-    real(dp)                :: idr2(NDIM), rfac(2, box%n_cell)
-
-    nc   = box%n_cell
-    idr2 = 1 / box%dr**2
-    call af_cyl_flux_factors(box, rfac)
-
-    do j = 1, nc
-       do i = 1, nc
-          stencil(1, i, j)  = -2 * sum(idr2) - mg%helmholtz_lambda
-          stencil(2:3, i, j) = idr2(1) * rfac(:, i)
-          stencil(4:5, i, j) = idr2(2)
-       end do
-    end do
-
-    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-  end subroutine mg_box_clpl_stencil
-
-  !> Perform cylindrical Laplacian operator on a box with varying eps
-  subroutine mg_box_clpld(box, i_out, mg)
-    type(box_t), intent(inout) :: box   !< Box to operate on
-    integer, intent(in)        :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg    !< Multigrid options
-    integer                    :: i, j, nc, i_phi, i_eps
-    real(dp)                   :: idr2(2*NDIM), a0, u0, u(4), a(4)
-    real(dp)                   :: rfac(2, box%n_cell), r_weight(4)
-
-    nc               = box%n_cell
-    idr2(1:2*NDIM:2) = 1/box%dr**2
-    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
-    i_phi            = mg%i_phi
-    i_eps            = mg%i_eps
-    call af_cyl_flux_factors(box, rfac)
-
-    do j = 1, nc
-       do i = 1, nc
-          r_weight(1:2) = rfac(:, i)
-          r_weight(3:4) = 1.0_dp
-          u0 = box%cc(i, j, i_phi)
-          a0 = box%cc(i, j, i_eps)
-          u(1:2) = box%cc(i-1:i+1:2, j, i_phi)
-          u(3:4) = box%cc(i, j-1:j+1:2, i_phi)
-          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
-          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
-
-          box%cc(i, j, i_out) =  2 * &
-               sum(idr2 * r_weight*a0*a(:)/(a0 + a(:)) * (u(:) - u0))
-       end do
-    end do
-  end subroutine mg_box_clpld
-
-  !> Store the matrix stencil for each cell of the box. The order of the stencil
-  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_clpld_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
-    integer                 :: i, j, nc, i_eps
-    real(dp)                :: idr2(2*NDIM), a0, a(4)
-    real(dp)                :: rfac(2, box%n_cell), r_weight(4)
-
-    nc               = box%n_cell
-    i_eps            = mg%i_eps
-    idr2(1:2*NDIM:2) = 1/box%dr**2
-    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
-    call af_cyl_flux_factors(box, rfac)
-
-    do j = 1, nc
-       do i = 1, nc
-          r_weight(1:2) = rfac(:, i)
-          r_weight(3:4) = 1.0_dp
-          a0 = box%cc(i, j, i_eps)
-          a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
-          a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
-
-          stencil(2:, i, j) = 2 * idr2 * r_weight*a0*a(:)/(a0 + a(:))
-          stencil(1, i, j)  = -sum(stencil(2:, i, j))
-       end do
-    end do
-
-    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-  end subroutine mg_box_clpld_stencil
-
-  !> Perform Gauss-Seidel relaxation on box for a cylindrical Laplacian operator
-  !> with a changing eps
-  subroutine mg_box_gsrb_clpld(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box           !< Box to operate on
-    integer, intent(in)        :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg            !< Multigrid options
-    integer                    :: i, i0, j, nc
-    real(dp)                   :: u(4), a0, a(4), c(4), idr2(2*NDIM)
-    real(dp)                   :: rfac(2, box%n_cell), r_weight(4)
-
-    nc               = box%n_cell
-    idr2(1:2*NDIM:2) = 1/box%dr**2
-    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
-    call af_cyl_flux_factors(box, rfac)
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-    associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps, i_rhs => mg%i_rhs)
-      do j = 1, nc
-         i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-         do i = i0, nc, 2
-            r_weight(1:2) = rfac(:, i)
-            r_weight(3:4) = 1.0_dp
-            a0 = box%cc(i, j, i_eps) ! value of eps at i,j
-            u(1:2) = box%cc(i-1:i+1:2, j, n) ! values at neighbors
-            a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
-            u(3:4) = box%cc(i, j-1:j+1:2, n)
-            a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
-            c(:) = 2 * a0 * a(:) / (a0 + a(:)) * idr2 * r_weight
-
-            box%cc(i, j, n) = (sum(c(:) *  u(:)) - box%cc(i, j, i_rhs)) / sum(c(:))
-         end do
-      end do
-    end associate
-  end subroutine mg_box_gsrb_clpld
-#endif
 
   !> For a point a, compute distance (between 0, 1) of a neighbor b.
   elemental function lsf_dist(lsf_a, lsf_b) result(distance)
@@ -1886,302 +1250,9 @@ contains
 #endif
   end subroutine mg_box_corr_lpllsf
 
-  !> Perform Gauss-Seidel relaxation on box for a Laplacian operator
-  subroutine mg_box_gsrb_lpllsf(box, redblack_cntr, mg)
-    type(box_t), intent(inout) :: box            !< Box to operate on
-    integer, intent(in)        :: redblack_cntr !< Iteration counter
-    type(mg_t), intent(in)     :: mg             !< Multigrid options
-    integer                    :: IJK, i0, nc, i_phi, i_rhs, i_lsf
-    real(dp)                   :: dd(2*NDIM), val(2*NDIM), lsf_a, v_b(2)
-    real(dp)                   :: dr2(NDIM), idr2(NDIM)
-#if NDIM == 2
-    real(dp)                   :: r(box%n_cell), tmp
-#endif
-
-    dr2    = box%dr**2
-    nc     = box%n_cell
-    i_phi  = mg%i_phi
-    i_rhs  = mg%i_rhs
-    i_lsf  = mg%i_lsf
-
-    ! The parity of redblack_cntr determines which cells we use. If
-    ! redblack_cntr is even, we use the even cells and vice versa.
-#if NDIM == 1
-    i0 = 2 - iand(redblack_cntr, 1)
-    do i = i0, nc, 2
-       lsf_a = box%cc(i, i_lsf)
-       v_b = box%cc(i-1, [i_lsf, i_phi])
-       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-            mg%lsf_boundary_value, dd(1), val(1))
-       v_b = box%cc(i+1, [i_lsf, i_phi])
-       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-            mg%lsf_boundary_value, dd(2), val(2))
-
-       ! Solve for generalized Laplacian (see routine mg_box_lpllsf)
-       idr2 = [1/(dr2(1) * dd(1) * dd(2))]
-       box%cc(i, i_phi) = 1 / (2 * sum(idr2)) * (&
-            (dd(2) * val(1) + dd(1) * val(2)) / &
-            (0.5_dp * (dd(1) + dd(2))) * idr2(1) - &
-            box%cc(i, i_rhs))
-    end do
-#elif NDIM == 2
-    if (box%coord_t == af_cyl) then
-       r = [(box%r_min(1) + (i-0.5_dp) * box%dr(1), i=1,nc)]
-    end if
-
-    do j = 1, nc
-       i0 = 2 - iand(ieor(redblack_cntr, j), 1)
-       do i = i0, nc, 2
-          lsf_a = box%cc(i, j, i_lsf)
-          v_b = box%cc(i-1, j, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(1), val(1))
-          v_b = box%cc(i+1, j, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(2), val(2))
-          v_b = box%cc(i, j-1, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(3), val(3))
-          v_b = box%cc(i, j+1, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(4), val(4))
-
-          ! Solve for generalized Laplacian (see routine mg_box_lpllsf)
-          idr2 = [1/(dr2(1) * dd(1) * dd(2)), 1/(dr2(2) * dd(3) * dd(4))]
-          if (box%coord_t == af_cyl) then
-             tmp = (val(2) - val(1))/(r(i) * (dd(1) + dd(2)) * box%dr(1))
-          else
-             tmp = 0.0_dp
-          end if
-
-          box%cc(i, j, i_phi) = 1 / (2 * sum(idr2)) * (&
-               (dd(2) * val(1) + dd(1) * val(2)) / &
-               (0.5_dp * (dd(1) + dd(2))) * idr2(1) + &
-               (dd(4) * val(3) + dd(3) * val(4)) / &
-               (0.5_dp * (dd(3) + dd(4))) * idr2(2) - &
-               box%cc(i, j, i_rhs) + tmp)
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          i0 = 2 - iand(ieor(redblack_cntr, k+j), 1)
-          do i = i0, nc, 2
-             lsf_a = box%cc(i, j, k, i_lsf)
-             v_b = box%cc(i-1, j, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(1), val(1))
-             v_b = box%cc(i+1, j, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(2), val(2))
-             v_b = box%cc(i, j-1, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(3), val(3))
-             v_b = box%cc(i, j+1, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(4), val(4))
-             v_b = box%cc(i, j, k-1, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(5), val(5))
-             v_b = box%cc(i, j, k+1, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(6), val(6))
-
-             ! Solve for generalized Laplacian (see routine mg_box_lpllsf)
-             idr2 = [1/(dr2(1) * dd(1) * dd(2)), 1/(dr2(2) * dd(3) * dd(4)), &
-                  1/(dr2(3) * dd(5) * dd(6))]
-             box%cc(i, j, k, i_phi) = 1 / (2 * sum(idr2)) * (&
-                  (dd(2) * val(1) + dd(1) * val(2)) / &
-                  (0.5_dp * (dd(1) + dd(2))) * idr2(1) + &
-                  (dd(4) * val(3) + dd(3) * val(4)) / &
-                  (0.5_dp * (dd(3) + dd(4))) * idr2(2) + &
-                  (dd(6) * val(5) + dd(5) * val(6)) / &
-                  (0.5_dp * (dd(5) + dd(6))) * idr2(3) - &
-                  box%cc(i, j, k, i_rhs))
-          end do
-       end do
-    end do
-#endif
-  end subroutine mg_box_gsrb_lpllsf
-
-  !> Perform Laplacian operator on a box
-  subroutine mg_box_lpllsf(box, i_out, mg)
-    type(box_t), intent(inout) :: box   !< Box to operate on
-    integer, intent(in)        :: i_out !< Index of variable to store Laplacian in
-    type(mg_t), intent(in)     :: mg    !< Multigrid options
-    integer                    :: IJK, nc, i_phi, i_lsf
-    real(dp)                   :: dr2(NDIM), dd(2*NDIM), val(2*NDIM)
-    real(dp)                   :: f0, lsf_a, v_b(2)
-#if NDIM == 2
-    real(dp)                   :: r(box%n_cell)
-#endif
-
-    nc     = box%n_cell
-    dr2    = box%dr**2
-    i_phi  = mg%i_phi
-    i_lsf  = mg%i_lsf
-
-#if NDIM == 1
-    do i = 1, nc
-       lsf_a = box%cc(i, i_lsf)
-       v_b = box%cc(i-1, [i_lsf, i_phi])
-       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-            mg%lsf_boundary_value, dd(1), val(1))
-       v_b = box%cc(i+1, [i_lsf, i_phi])
-       call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-            mg%lsf_boundary_value, dd(2), val(2))
-
-       ! Generalized Laplacian for neighbors at distance dd * dx
-       f0 = box%cc(i, i_phi)
-       box%cc(i, i_out) = &
-            (dd(2) * val(1) + dd(1) * val(2) - (dd(1)+dd(2)) * f0) / &
-            (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2))
-    end do
-#elif NDIM == 2
-    if (box%coord_t == af_cyl) then
-       r = [(box%r_min(1) + (i-0.5_dp) * box%dr(1), i=1,nc)]
-    end if
-
-    do j = 1, nc
-       do i = 1, nc
-          lsf_a = box%cc(i, j, i_lsf)
-          v_b = box%cc(i-1, j, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(1), val(1))
-          v_b = box%cc(i+1, j, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(2), val(2))
-          v_b = box%cc(i, j-1, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(3), val(3))
-          v_b = box%cc(i, j+1, [i_lsf, i_phi])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-               mg%lsf_boundary_value, dd(4), val(4))
-
-          ! Generalized Laplacian for neighbors at distance dd * dx
-          f0 = box%cc(i, j, i_phi)
-          box%cc(i, j, i_out) = &
-               (dd(2) * val(1) + dd(1) * val(2) - (dd(1)+dd(2)) * f0) / &
-               (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2)) + &
-               (dd(4) * val(3) + dd(3) * val(4) - (dd(3)+dd(4)) * f0) / &
-               (0.5_dp * dr2(2) * (dd(3) + dd(4)) * dd(3) * dd(4))
-          if (box%coord_t == af_cyl) then
-             box%cc(i, j, i_out) = box%cc(i, j, i_out) + &
-                  (val(2) - val(1))/(r(i) * (dd(1) + dd(2)) * box%dr(1))
-          end if
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       do j = 1, nc
-          do i = 1, nc
-             lsf_a = box%cc(i, j, k, i_lsf)
-             v_b = box%cc(i-1, j, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(1), val(1))
-             v_b = box%cc(i+1, j, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(2), val(2))
-             v_b = box%cc(i, j-1, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(3), val(3))
-             v_b = box%cc(i, j+1, k, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(4), val(4))
-             v_b = box%cc(i, j, k-1, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(5), val(5))
-             v_b = box%cc(i, j, k+1, [i_lsf, i_phi])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), &
-                  mg%lsf_boundary_value, dd(6), val(6))
-
-             ! Generalized Laplacian for neighbors at distance dd * dx
-             f0 = box%cc(i, j, k, i_phi)
-             box%cc(i, j, k, i_out) = &
-                  (dd(2) * val(1) + dd(1) * val(2) - (dd(1)+dd(2)) * f0) / &
-                  (0.5_dp * dr2(1) * (dd(1) + dd(2)) * dd(1) * dd(2)) + &
-                  (dd(4) * val(3) + dd(3) * val(4) - (dd(3)+dd(4)) * f0) / &
-                  (0.5_dp * dr2(2) * (dd(3) + dd(4)) * dd(3) * dd(4)) + &
-                  (dd(6) * val(5) + dd(5) * val(6) - (dd(5)+dd(6)) * f0) / &
-                  (0.5_dp * dr2(3) * (dd(5) + dd(6)) * dd(5) * dd(6))
-          end do
-       end do
-    end do
-#endif
-  end subroutine mg_box_lpllsf
-
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpllsf_stencil(box, mg, stencil, bc_to_rhs, lsf_fac)
-    type(box_t), intent(in) :: box
-    type(mg_t), intent(in)  :: mg
-    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
-    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
-    real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
-    integer                 :: IJK, n, nc, idim
-    real(dp)                :: lsf_a, dd(2*NDIM), dr2(NDIM)
-#if NDIM == 2
-    real(dp)                :: tmp
-#endif
-
-    nc = box%n_cell
-    dr2 = box%dr**2
-
-    associate (cc => box%cc, i_lsf => mg%i_lsf)
-      do KJI_DO(1, nc)
-         lsf_a = box%cc(IJK, i_lsf)
-#if NDIM == 1
-         dd(1) = lsf_dist(lsf_a, box%cc(i-1, i_lsf))
-         dd(2) = lsf_dist(lsf_a, box%cc(i+1, i_lsf))
-#elif NDIM == 2
-         dd(1) = lsf_dist(lsf_a, box%cc(i-1, j, i_lsf))
-         dd(2) = lsf_dist(lsf_a, box%cc(i+1, j, i_lsf))
-         dd(3) = lsf_dist(lsf_a, box%cc(i, j-1, i_lsf))
-         dd(4) = lsf_dist(lsf_a, box%cc(i, j+1, i_lsf))
-#elif NDIM == 3
-         dd(1) = lsf_dist(lsf_a, box%cc(i-1, j, k, i_lsf))
-         dd(2) = lsf_dist(lsf_a, box%cc(i+1, j, k, i_lsf))
-         dd(3) = lsf_dist(lsf_a, box%cc(i, j-1, k, i_lsf))
-         dd(4) = lsf_dist(lsf_a, box%cc(i, j+1, k, i_lsf))
-         dd(5) = lsf_dist(lsf_a, box%cc(i, j, k-1, i_lsf))
-         dd(6) = lsf_dist(lsf_a, box%cc(i, j, k+1, i_lsf))
-#endif
-
-         ! Generalized Laplacian for neighbors at distance dd * dx
-         do idim = 1, NDIM
-            stencil(1+2*idim-1:1+2*idim, IJK) = [dd(2*idim), dd(2*idim-1)] / &
-                 (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
-                 dd(2*idim-1) * dd(2*idim))
-         end do
-
-#if NDIM == 2
-         if (box%coord_t == af_cyl) then
-            ! Add correction for cylindrical coordinate system. This is a
-            ! discretization of 1/r d/dr phi.
-            tmp = 1/(box%dr(1) * (dd(1) + dd(2)) * af_cyl_radius_cc(box, i))
-            stencil(2, IJK) = stencil(2, IJK) - tmp
-            stencil(3, IJK) = stencil(3, IJK) + tmp
-         end if
-#endif
-
-         stencil(1, IJK) = -sum(stencil(2:, IJK))
-
-         ! Move internal boundaries to right-hand side
-         do n = 1, 2 * NDIM
-            if (dd(n) < 1.0_dp) then
-               lsf_fac(IJK) = lsf_fac(IJK) - stencil(n+1, IJK)
-               stencil(n+1, IJK) = 0.0_dp
-            end if
-         end do
-      end do; CLOSE_DO
-    end associate
-
-    call mg_stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
-  end subroutine mg_box_lpllsf_stencil
-
-  !> Store the matrix stencil for each cell of the box. The order of the stencil
-  !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
-  subroutine mg_box_lpllsf_stencil_v2(box, mg, ix)
+  subroutine mg_box_lpllsf_stencil(box, mg, ix)
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Index of stencil
@@ -2265,10 +1336,10 @@ contains
        deallocate(box%stencils(ix)%v)
        deallocate(box%stencils(ix)%f)
        deallocate(box%stencils(ix)%bc_correction)
-       call mg_box_lpl_stencil_v2(box, mg, ix)
+       call mg_box_lpl_stencil(box, mg, ix)
     end if
 
-  end subroutine mg_box_lpllsf_stencil_v2
+  end subroutine mg_box_lpllsf_stencil
 
   !> Compute the gradient of the potential and store in face-centered variables
   subroutine mg_compute_phi_gradient(tree, mg, i_fc, fac, i_norm)

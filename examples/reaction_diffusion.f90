@@ -98,23 +98,15 @@ program reaction_diffusion
   end do
 
   ! Always initialize multigrid methods, even with explicit time integration
-  mg1%i_phi            = i_phi1
-  mg1%i_rhs            = i_rhs1
-  mg1%i_tmp            = i_tmp
+  mg1%i_phi    = i_phi1
+  mg1%i_rhs    = i_rhs1
+  mg1%i_tmp    = i_tmp
+  mg1%sides_bc => af_bc_neumann_zero
 
-  mg1%sides_bc    => af_bc_neumann_zero
-  mg1%box_op      => mg_box_lpl
-  mg1%box_gsrb    => mg_box_gsrb_lpl
-  mg1%box_stencil => mg_box_lpl_stencil
-
-  mg2%i_phi            = i_phi2
-  mg2%i_rhs            = i_rhs2
-  mg2%i_tmp            = i_tmp
-
-  mg2%sides_bc    => af_bc_neumann_zero
-  mg2%box_op      => mg_box_lpl
-  mg2%box_gsrb    => mg_box_gsrb_lpl
-  mg2%box_stencil => mg_box_lpl_stencil
+  mg2%i_phi    = i_phi2
+  mg2%i_rhs    = i_rhs2
+  mg2%i_tmp    = i_tmp
+  mg2%sides_bc => af_bc_neumann_zero
 
   output_cnt = 0
   time       = 0
