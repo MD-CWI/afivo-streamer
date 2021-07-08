@@ -155,7 +155,8 @@ contains
     real(dp)                    :: c(2*NDIM+1)
     integer                     :: IJK
 #if NDIM == 2
-    real(dp)                    :: rfac(2, box%n_cell), c_cyl(2*NDIM+1)
+    real(dp) :: rfac(2, box%n_cell), c_cyl(2*NDIM+1)
+    real(dp) :: cc_cyl(2*NDIM+1, box%n_cell)
 #endif
 
     if (iv == i_out) error stop "Cannot have iv == i_out"
@@ -164,51 +165,109 @@ contains
       if (stencil%constant) c = stencil%c
 
 #if NDIM == 1
-      do KJI_DO(1, nc)
-         if (.not. stencil%constant) c = stencil%v(:, IJK)
-         cc(i, i_out) = &
-              c(1) * cc(i, iv) + c(2) * cc(i-1, iv) + c(3) * cc(i+1, iv)
-      end do; CLOSE_DO
+      if (stencil%constant) then
+         c = stencil%c
+         do KJI_DO(1, nc)
+            cc(i, i_out) = &
+                 c(1) * cc(i, iv) + c(2) * cc(i-1, iv) + c(3) * cc(i+1, iv)
+         end do; CLOSE_DO
+      else
+         do KJI_DO(1, nc)
+            c = stencil%v(:, IJK)
+            cc(i, i_out) = &
+                 c(1) * cc(i, iv) + c(2) * cc(i-1, iv) + c(3) * cc(i+1, iv)
+         end do; CLOSE_DO
+      end if
 #elif NDIM == 2
       if (stencil%cylindrical_gradient) then
          ! Correct for cylindrical coordinates, assuming the elements correspond
          ! to a gradient operation
          call af_cyl_flux_factors(box, rfac)
+
+         if (stencil%constant) then
+            c = stencil%c
+
+            ! Pre-compute coefficients for each i-index
+            do i = 1, nc
+               cc_cyl(2:3, i) = rfac(1:2, i) * c(2:3)
+               cc_cyl(1, i)   = c(1) - (cc_cyl(2, i) - c(2)) &
+                    - (cc_cyl(3, i) - c(3))
+               cc_cyl(4:, i)  = c(4:)
+            end do
+
+            do KJI_DO(1, nc)
+               cc(i, j, i_out) = &
+                    cc_cyl(1, i) * cc(i, j, iv) + &
+                    cc_cyl(2, i) * cc(i-1, j, iv) + &
+                    cc_cyl(3, i) * cc(i+1, j, iv) + &
+                    cc_cyl(4, i) * cc(i, j-1, iv) + &
+                    cc_cyl(5, i) * cc(i, j+1, iv)
+            end do; CLOSE_DO
+         else
+            ! Variable stencil
+            do KJI_DO(1, nc)
+               c = stencil%v(:, IJK)
+               c_cyl(2:3) = rfac(1:2, i) * c(2:3)
+               c_cyl(1) = c(1) - (c_cyl(2) - c(2)) - (c_cyl(3) - c(3))
+               c_cyl(4:) = c(4:)
+               cc(i, j, i_out) = &
+                    c_cyl(1) * cc(i, j, iv) + &
+                    c_cyl(2) * cc(i-1, j, iv) + &
+                    c_cyl(3) * cc(i+1, j, iv) + &
+                    c_cyl(4) * cc(i, j-1, iv) + &
+                    c_cyl(5) * cc(i, j+1, iv)
+            end do; CLOSE_DO
+         end if
+      else
+         ! No cylindrical gradient correction
+         if (stencil%constant) then
+            c = stencil%c
+            do KJI_DO(1, nc)
+               cc(i, j, i_out) = &
+                    c(1) * cc(i, j, iv) + &
+                    c(2) * cc(i-1, j, iv) + &
+                    c(3) * cc(i+1, j, iv) + &
+                    c(4) * cc(i, j-1, iv) + &
+                    c(5) * cc(i, j+1, iv)
+            end do; CLOSE_DO
+         else
+            do KJI_DO(1, nc)
+               c = stencil%v(:, IJK)
+               cc(i, j, i_out) = &
+                    c(1) * cc(i, j, iv) + &
+                    c(2) * cc(i-1, j, iv) + &
+                    c(3) * cc(i+1, j, iv) + &
+                    c(4) * cc(i, j-1, iv) + &
+                    c(5) * cc(i, j+1, iv)
+            end do; CLOSE_DO
+         end if
+      end if
+#elif NDIM == 3
+      if (stencil%constant) then
+         c = stencil%c
          do KJI_DO(1, nc)
-            if (.not. stencil%constant) c = stencil%v(:, IJK)
-            c_cyl(2:3) = rfac(1:2, i) * c(2:3)
-            c_cyl(1) = c(1) - (c_cyl(2) - c(2)) - (c_cyl(3) - c(3))
-            c_cyl(4:) = c(4:)
-            cc(i, j, i_out) = &
-                 c_cyl(1) * cc(i, j, iv) + &
-                 c_cyl(2) * cc(i-1, j, iv) + &
-                 c_cyl(3) * cc(i+1, j, iv) + &
-                 c_cyl(4) * cc(i, j-1, iv) + &
-                 c_cyl(5) * cc(i, j+1, iv)
+            cc(i, j, k, i_out) = &
+                 c(1) * cc(i, j, k, iv) + &
+                 c(2) * cc(i-1, j, k, iv) + &
+                 c(3) * cc(i+1, j, k, iv) + &
+                 c(4) * cc(i, j-1, k, iv) + &
+                 c(5) * cc(i, j+1, k, iv) + &
+                 c(6) * cc(i, j, k-1, iv) + &
+                 c(7) * cc(i, j, k+1, iv)
          end do; CLOSE_DO
       else
          do KJI_DO(1, nc)
-            if (.not. stencil%constant) c = stencil%v(:, IJK)
-            cc(i, j, i_out) = &
-                 c(1) * cc(i, j, iv) + &
-                 c(2) * cc(i-1, j, iv) + &
-                 c(3) * cc(i+1, j, iv) + &
-                 c(4) * cc(i, j-1, iv) + &
-                 c(5) * cc(i, j+1, iv)
+            c = stencil%v(:, IJK)
+            cc(i, j, k, i_out) = &
+                 c(1) * cc(i, j, k, iv) + &
+                 c(2) * cc(i-1, j, k, iv) + &
+                 c(3) * cc(i+1, j, k, iv) + &
+                 c(4) * cc(i, j-1, k, iv) + &
+                 c(5) * cc(i, j+1, k, iv) + &
+                 c(6) * cc(i, j, k-1, iv) + &
+                 c(7) * cc(i, j, k+1, iv)
          end do; CLOSE_DO
       end if
-#elif NDIM == 3
-      do KJI_DO(1, nc)
-         if (.not. stencil%constant) c = stencil%v(:, IJK)
-         cc(i, j, k, i_out) = &
-              c(1) * cc(i, j, k, iv) + &
-              c(2) * cc(i-1, j, k, iv) + &
-              c(3) * cc(i+1, j, k, iv) + &
-              c(4) * cc(i, j-1, k, iv) + &
-              c(5) * cc(i, j+1, k, iv) + &
-              c(6) * cc(i, j, k-1, iv) + &
-              c(7) * cc(i, j, k+1, iv)
-      end do; CLOSE_DO
 #endif
 
       if (allocated(stencil%bc_correction)) then
@@ -219,59 +278,59 @@ contains
 
   end subroutine stencil_apply_357
 
-  subroutine stencil_correct_bc_357(box, stencil, iv, tmp)
-    type(box_t), intent(inout)  :: box     !< Operate on this box
-    type(stencil_t), intent(in) :: stencil !< Stencil
-    integer, intent(in)         :: iv      !< Input variable
-    real(dp), intent(inout)     :: tmp(DTIMES(box%n_cell))
-    integer                     :: bc_ix, bc_type, nb, lo(NDIM), hi(NDIM)
-    integer                     :: nb_dim, olo(NDIM), ohi(NDIM)
-    real(dp)                    :: bc_val(box%n_cell**(NDIM-1))
-    real(dp)                    :: stencil_coeffs(box%n_cell**(NDIM-1))
-    real(dp)                    :: values_inside(box%n_cell**(NDIM-1))
-    real(dp)                    :: values_outside(box%n_cell**(NDIM-1))
+  ! subroutine stencil_correct_bc_357(box, stencil, iv, tmp)
+  !   type(box_t), intent(inout)  :: box     !< Operate on this box
+  !   type(stencil_t), intent(in) :: stencil !< Stencil
+  !   integer, intent(in)         :: iv      !< Input variable
+  !   real(dp), intent(inout)     :: tmp(DTIMES(box%n_cell))
+  !   integer                     :: bc_ix, bc_type, nb, lo(NDIM), hi(NDIM)
+  !   integer                     :: nb_dim, olo(NDIM), ohi(NDIM)
+  !   real(dp)                    :: bc_val(box%n_cell**(NDIM-1))
+  !   real(dp)                    :: stencil_coeffs(box%n_cell**(NDIM-1))
+  !   real(dp)                    :: values_inside(box%n_cell**(NDIM-1))
+  !   real(dp)                    :: values_outside(box%n_cell**(NDIM-1))
 
-    do bc_ix = 1, box%n_bc
-       nb = box%bc_index_to_nb(bc_ix)
+  !   do bc_ix = 1, box%n_bc
+  !      nb = box%bc_index_to_nb(bc_ix)
 
-       bc_val = box%bc_val(:, iv, bc_ix)
-       bc_type = box%bc_type(iv, bc_ix)
+  !      bc_val = box%bc_val(:, iv, bc_ix)
+  !      bc_type = box%bc_type(iv, bc_ix)
 
-       ! Determine index range next to boundary
-       call af_get_index_bc_inside(nb, box%n_cell, 1, lo, hi)
-       call af_get_index_bc_outside(nb, box%n_cell, 1, olo, ohi)
+  !      ! Determine index range next to boundary
+  !      call af_get_index_bc_inside(nb, box%n_cell, 1, lo, hi)
+  !      call af_get_index_bc_outside(nb, box%n_cell, 1, olo, ohi)
 
-       ! Get stencil coefficients near boundary
-       if (stencil%constant) then
-          stencil_coeffs = stencil%c(nb+1)
-       else
-          stencil_coeffs = pack(stencil%v(nb+1, &
-               DSLICE(lo, hi)), .true.)
-       end if
+  !      ! Get stencil coefficients near boundary
+  !      if (stencil%constant) then
+  !         stencil_coeffs = stencil%c(nb+1)
+  !      else
+  !         stencil_coeffs = pack(stencil%v(nb+1, &
+  !              DSLICE(lo, hi)), .true.)
+  !      end if
 
-       values_inside = pack(box%cc(DSLICE(lo, hi), iv), .true.)
-       values_outside = pack(box%cc(DSLICE(olo, ohi), iv), .true.)
+  !      values_inside = pack(box%cc(DSLICE(lo, hi), iv), .true.)
+  !      values_outside = pack(box%cc(DSLICE(olo, ohi), iv), .true.)
 
-       select case (bc_type)
-       case (af_bc_dirichlet)
-          ! Dirichlet value at cell face, so compute gradient over h/2
-          ! E.g. 1 -2 1 becomes 0 -3 1 for a 1D Laplacian
-          tmp(DSLICE(lo, hi)) = tmp(DSLICE(lo, hi)) &
-               + reshape(2 * stencil_coeffs * bc_val - &
-               stencil_coeffs * (values_inside + values_outside), &
-               hi - lo + 1)
-       case (af_bc_neumann)
-          nb_dim = af_neighb_dim(nb)
-          ! E.g. 1 -2 1 becomes 0 -1 1 for a 1D Laplacian
-          tmp(DSLICE(lo, hi)) = tmp(DSLICE(lo, hi)) &
-               - reshape(stencil_coeffs * (values_outside - values_inside) &
-               - stencil_coeffs * af_neighb_high_pm(nb) * box%dr(nb_dim) * &
-               bc_val, hi - lo + 1)
-       case default
-          error stop "unsupported boundary condition"
-       end select
-    end do
-  end subroutine stencil_correct_bc_357
+  !      select case (bc_type)
+  !      case (af_bc_dirichlet)
+  !         ! Dirichlet value at cell face, so compute gradient over h/2
+  !         ! E.g. 1 -2 1 becomes 0 -3 1 for a 1D Laplacian
+  !         tmp(DSLICE(lo, hi)) = tmp(DSLICE(lo, hi)) &
+  !              + reshape(2 * stencil_coeffs * bc_val - &
+  !              stencil_coeffs * (values_inside + values_outside), &
+  !              hi - lo + 1)
+  !      case (af_bc_neumann)
+  !         nb_dim = af_neighb_dim(nb)
+  !         ! E.g. 1 -2 1 becomes 0 -1 1 for a 1D Laplacian
+  !         tmp(DSLICE(lo, hi)) = tmp(DSLICE(lo, hi)) &
+  !              - reshape(stencil_coeffs * (values_outside - values_inside) &
+  !              - stencil_coeffs * af_neighb_high_pm(nb) * box%dr(nb_dim) * &
+  !              bc_val, hi - lo + 1)
+  !      case default
+  !         error stop "unsupported boundary condition"
+  !      end select
+  !   end do
+  ! end subroutine stencil_correct_bc_357
 
   !> Perform Gauss-Seidel red-black on a stencil
   subroutine af_stencil_gsrb_box(box, key, redblack, iv, i_rhs)
@@ -301,19 +360,14 @@ contains
     integer, intent(in)         :: iv       !< Solve for variable
     integer, intent(in)         :: i_rhs    !< Right-hand side
 
-    real(dp) :: c(2*NDIM+1)
+    real(dp) :: c(2*NDIM+1), inv_c1
     integer  :: IJK, i0, nc
 #if NDIM == 2
     real(dp) :: rfac(2, box%n_cell), c_cyl(2*NDIM+1)
+    real(dp) :: cc_cyl(2*NDIM+1, box%n_cell), inv_cc1(box%n_cell)
 #endif
 
     nc = box%n_cell
-
-    if (stencil%constant) then
-       c = stencil%c
-    else
-       c = 0                    ! avoid warning
-    end if
 
     associate (cc => box%cc, nc => box%n_cell)
       if (allocated(stencil%bc_correction)) then
@@ -323,62 +377,134 @@ contains
 
 #if NDIM == 1
       i0 = 2 - iand(redblack, 1)
-      do i = i0, nc, 2
-         if (.not. stencil%constant) c = stencil%v(:, IJK)
-         cc(IJK, iv) = (cc(IJK, i_rhs) &
-              - c(2) * cc(i-1, iv) &
-              - c(3) * cc(i+1, iv)) / c(1)
-      end do
+      if (stencil%constant) then
+         c = stencil%c
+         inv_c1 = 1 / c(1)
+
+         do i = i0, nc, 2
+            cc(IJK, iv) = (cc(IJK, i_rhs) &
+                 - c(2) * cc(i-1, iv) &
+                 - c(3) * cc(i+1, iv)) * inv_c1
+         end do
+      else
+         do i = i0, nc, 2
+            c = stencil%v(:, IJK)
+            cc(IJK, iv) = (cc(IJK, i_rhs) &
+                 - c(2) * cc(i-1, iv) &
+                 - c(3) * cc(i+1, iv)) / c(1)
+         end do
+      end if
 #elif NDIM == 2
       if (stencil%cylindrical_gradient) then
          ! Correct for cylindrical coordinates, assuming the elements correspond
          ! to a gradient operation
          call af_cyl_flux_factors(box, rfac)
-         do j = 1, nc
-            i0 = 2 - iand(ieor(redblack, j), 1)
-            do i = i0, nc, 2
-               if (.not. stencil%constant) c = stencil%v(:, IJK)
-               c_cyl(2:3) = rfac(1:2, i) * c(2:3)
-               ! Correct central coefficient
-               c_cyl(1) = c(1) - (c_cyl(2) - c(2)) - (c_cyl(3) - c(3))
-               c_cyl(4:) = c(4:)
 
-               cc(IJK, iv) = (cc(IJK, i_rhs) &
-                    - c_cyl(2) * cc(i-1, j, iv) &
-                    - c_cyl(3) * cc(i+1, j, iv) &
-                    - c_cyl(4) * cc(i, j-1, iv) &
-                    - c_cyl(5) * cc(i, j+1, iv)) / c(1)
+         if (stencil%constant) then
+            c = stencil%c
+
+            ! Pre-compute coefficients for each i-index
+            do i = 1, nc
+               cc_cyl(2:3, i) = rfac(1:2, i) * c(2:3)
+               cc_cyl(1, i)   = c(1) - (cc_cyl(2, i) - c(2)) &
+                    - (cc_cyl(3, i) - c(3))
+               cc_cyl(4:, i)  = c(4:)
+               inv_cc1(i)     = 1 / cc_cyl(1, i)
+            end do
+
+            do j = 1, nc
+               i0 = 2 - iand(ieor(redblack, j), 1)
+               do i = i0, nc, 2
+                  cc(IJK, iv) = (cc(IJK, i_rhs) &
+                       - cc_cyl(2, i) * cc(i-1, j, iv) &
+                       - cc_cyl(3, i) * cc(i+1, j, iv) &
+                       - cc_cyl(4, i) * cc(i, j-1, iv) &
+                       - cc_cyl(5, i) * cc(i, j+1, iv)) * inv_cc1(i)
+               end do
+            end do
+         else
+            ! Variable stencil
+            do j = 1, nc
+               i0 = 2 - iand(ieor(redblack, j), 1)
+               do i = i0, nc, 2
+                  c = stencil%v(:, IJK)
+                  c_cyl(2:3) = rfac(1:2, i) * c(2:3)
+                  c_cyl(1) = c(1) - (c_cyl(2) - c(2)) - (c_cyl(3) - c(3))
+                  c_cyl(4:) = c(4:)
+
+                  cc(IJK, iv) = (cc(IJK, i_rhs) &
+                       - c_cyl(2) * cc(i-1, j, iv) &
+                       - c_cyl(3) * cc(i+1, j, iv) &
+                       - c_cyl(4) * cc(i, j-1, iv) &
+                       - c_cyl(5) * cc(i, j+1, iv)) / c_cyl(1)
+               end do
+            end do
+         end if
+      else                      ! No cylindrical gradient correction
+         if (stencil%constant) then
+            c = stencil%c
+            inv_c1 = 1 / c(1)
+
+            do j = 1, nc
+               i0 = 2 - iand(ieor(redblack, j), 1)
+               do i = i0, nc, 2
+                  cc(IJK, iv) = (cc(IJK, i_rhs) &
+                       - c(2) * cc(i-1, j, iv) &
+                       - c(3) * cc(i+1, j, iv) &
+                       - c(4) * cc(i, j-1, iv) &
+                       - c(5) * cc(i, j+1, iv)) * inv_c1
+               end do
+            end do
+         else
+            do j = 1, nc
+               i0 = 2 - iand(ieor(redblack, j), 1)
+               do i = i0, nc, 2
+                  c = stencil%v(:, IJK)
+                  cc(IJK, iv) = (cc(IJK, i_rhs) &
+                       - c(2) * cc(i-1, j, iv) &
+                       - c(3) * cc(i+1, j, iv) &
+                       - c(4) * cc(i, j-1, iv) &
+                       - c(5) * cc(i, j+1, iv)) / c(1)
+               end do
+            end do
+         end if
+      end if
+#elif NDIM == 3
+      if (stencil%constant) then
+         c = stencil%c
+         inv_c1 = 1 / c(1)
+
+         do k = 1, nc
+            do j = 1, nc
+               i0 = 2 - iand(ieor(redblack, k+j), 1)
+               do i = i0, nc, 2
+                  cc(IJK, iv) = (cc(IJK, i_rhs) &
+                       - c(2) * cc(i-1, j, k, iv) &
+                       - c(3) * cc(i+1, j, k, iv) &
+                       - c(4) * cc(i, j-1, k, iv) &
+                       - c(5) * cc(i, j+1, k, iv) &
+                       - c(6) * cc(i, j, k-1, iv) &
+                       - c(7) * cc(i, j, k+1, iv)) * inv_c1
+               end do
             end do
          end do
       else
-         do j = 1, nc
-            i0 = 2 - iand(ieor(redblack, j), 1)
-            do i = i0, nc, 2
-               if (.not. stencil%constant) c = stencil%v(:, IJK)
-               cc(IJK, iv) = (cc(IJK, i_rhs) &
-                    - c(2) * cc(i-1, j, iv) &
-                    - c(3) * cc(i+1, j, iv) &
-                    - c(4) * cc(i, j-1, iv) &
-                    - c(5) * cc(i, j+1, iv)) / c(1)
+         do k = 1, nc
+            do j = 1, nc
+               i0 = 2 - iand(ieor(redblack, k+j), 1)
+               do i = i0, nc, 2
+                  c = stencil%v(:, IJK)
+                  cc(IJK, iv) = (cc(IJK, i_rhs) &
+                       - c(2) * cc(i-1, j, k, iv) &
+                       - c(3) * cc(i+1, j, k, iv) &
+                       - c(4) * cc(i, j-1, k, iv) &
+                       - c(5) * cc(i, j+1, k, iv) &
+                       - c(6) * cc(i, j, k-1, iv) &
+                       - c(7) * cc(i, j, k+1, iv)) / c(1)
+               end do
             end do
          end do
       end if
-#elif NDIM == 3
-      do k = 1, nc
-         do j = 1, nc
-            i0 = 2 - iand(ieor(redblack, k+j), 1)
-            do i = i0, nc, 2
-               if (.not. stencil%constant) c = stencil%v(:, IJK)
-               cc(IJK, iv) = (cc(IJK, i_rhs) &
-                    - c(2) * cc(i-1, j, k, iv) &
-                    - c(3) * cc(i+1, j, k, iv) &
-                    - c(4) * cc(i, j-1, k, iv) &
-                    - c(5) * cc(i, j+1, k, iv) &
-                    - c(6) * cc(i, j, k-1, iv) &
-                    - c(7) * cc(i, j, k+1, iv)) / c(1)
-            end do
-         end do
-      end do
 #endif
 
       if (allocated(stencil%bc_correction)) then
