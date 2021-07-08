@@ -143,8 +143,9 @@ program reaction_diffusion
 
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "reaction_diffusion_" // DIMNAME // "_", output_cnt
-        call af_write_silo(tree, trim(fname), output_cnt, time, dir="output")
+        write(fname, "(A,I0)") "output/reaction_diffusion_" &
+             // DIMNAME // "_", output_cnt
+        call af_write_silo(tree, trim(fname), output_cnt, time)
      end if
 
      select case (time_integrator)

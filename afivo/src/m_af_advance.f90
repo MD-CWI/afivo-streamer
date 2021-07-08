@@ -45,6 +45,17 @@ module m_af_advance
        integer, intent(in)       :: i_step   !< Step of the integrator
        integer, intent(in)       :: n_steps   !< Total number of steps
      end subroutine subr_feuler
+
+     !> Procedure to apply time stepping to variables that are not cell
+     !> centered, for example a scalar quantity or a face-centered variable.
+     subroutine subr_combine_steps(tree, n_in, s_in, coeffs, s_out)
+       import
+       type(af_t), intent(inout) :: tree
+       integer, intent(in)       :: n_in         !< Number of steps
+       integer, intent(in)       :: s_in(n_in)   !< States for the steps
+       real(dp), intent(in)      :: coeffs(n_in) !< Coefficients
+       integer, intent(in)       :: s_out        !< Output state
+     end subroutine subr_combine_steps
   end interface
 
   public :: af_advance
@@ -57,7 +68,8 @@ contains
   !> The indices of the cell-centered variables that will be operated on should
   !> also be provided, so that higher-order schemes can be constructed
   !> automatically from the forward Euler method.
-  subroutine af_advance(tree, dt, dt_lim, time, i_cc, time_integrator, forward_euler)
+  subroutine af_advance(tree, dt, dt_lim, time, i_cc, time_integrator, &
+       forward_euler, user_combine_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt      !< Current time step
     real(dp), intent(out)     :: dt_lim  !< Time step limit
@@ -65,6 +77,8 @@ contains
     integer, intent(in)       :: i_cc(:) !< Index of cell-centered variables
     !> One of the pre-defined time integrators (e.g. af_heuns_method)
     integer, intent(in)       :: time_integrator
+    !> Procedure to apply time stepping to variables that are not cell centered
+    procedure(subr_combine_steps), optional :: user_combine_steps
     !> Forward Euler method provided by the user
     procedure(subr_feuler)    :: forward_euler
     integer                   :: n_steps
@@ -90,12 +104,15 @@ contains
        call forward_euler(tree, dt, dt_lim, time, 0, 0, 1, 1, n_steps)
        time = time + dt
        call forward_euler(tree, dt, dt_lim, time, 1, 1, 1, 2, n_steps)
-       call combine_substeps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
+       call combine_steps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
+       if (present(user_combine_steps)) then
+          call user_combine_steps(tree, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
+       end if
     end select
 
   end subroutine af_advance
 
-  subroutine combine_substeps(tree, ivs, n_in, s_in, coeffs, s_out)
+  subroutine combine_steps(tree, ivs, n_in, s_in, coeffs, s_out)
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: ivs(:)
     integer, intent(in)       :: n_in
@@ -125,6 +142,6 @@ contains
        !$omp end do nowait
     end do
     !$omp end parallel
-  end subroutine combine_substeps
+  end subroutine combine_steps
 
 end module m_af_advance

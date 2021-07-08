@@ -22,6 +22,7 @@ program streamer
   use m_table_data
   use m_units_constants
   use m_circuit
+  use m_dielectric
 
   implicit none
 
@@ -30,12 +31,11 @@ program streamer
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
+  integer, allocatable      :: ref_links(:, :)
   logical                   :: write_out, evolve_electrons
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
-  type(CFG_t)               :: cfg            ! The configuration for the simulation
-  type(af_t)                :: tree           ! This contains the full grid information
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
@@ -51,6 +51,11 @@ program streamer
   type(af_loc_t)            :: loc_z
   real(dp), dimension (2)   :: rr_val
 #endif
+
+  !> The configuration for the simulation
+  type(CFG_t) :: cfg
+  !> This contains the full grid information
+  type(af_t)  :: tree
 
   call print_program_name()
 
@@ -147,24 +152,26 @@ program streamer
           error stop "restart_from_file: incompatible variable list"
        end if
 
+       if (ST_use_dielectric) error stop "Restarting not support with dielectric"
+
        ! @todo more consistency checks
 
        ! This routine always needs to be called when using multigrid
        call mg_init(tree, mg)
-    
-    !start from scratch 
+       
+    !start from scratch
     else
-       time             = 0.0_dp ! Simulation time (all times are in s)
-       global_time      = time
-       photoi_prev_time = time   ! Time of last photoionization computation
-       dt               = global_dt
-       initial_streamer_pos = 0.0_dp ! Initial streamer position
+     time             = 0.0_dp ! Simulation time (all times are in s)
+     global_time      = time
+     photoi_prev_time = time   ! Time of last photoionization computation
+     dt               = global_dt
+     initial_streamer_pos = 0.0_dp ! Initial streamer position
 
-       if (ST_cylindrical) then
-          coord_type = af_cyl
-       else
-          coord_type = af_xyz
-       end if
+     if (ST_cylindrical) then
+        coord_type = af_cyl
+     else
+        coord_type = af_xyz
+     end if
 
        call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
             ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
@@ -183,19 +190,23 @@ program streamer
     call af_print_info(tree)
 
   ! Initial wall clock time
-    call system_clock(t_start, count_rate)
-    inv_count_rate   = 1.0_dp / count_rate
-    time_last_print  = -1e10_dp
-    time_last_output = time
+  call system_clock(t_start, count_rate)
+  inv_count_rate   = 1.0_dp / count_rate
+  time_last_print  = -1e10_dp
+  time_last_output = time
 
-    do it = 1, huge(1)-1
-        if (ST_use_end_time .and. time >= ST_end_time) exit
+  do it = 1, huge(1)-1
+     if (ST_use_end_time .and. time >= ST_end_time) exit
 
-        ! Initialize starting position of streamer
-       if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
-         call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
-         loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
-       end if
+     if (associated(user_generic_method)) then
+        call user_generic_method(tree, time)
+     end if
+
+     ! Initialize starting position of streamer
+     if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
+        loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+     end if
 
        ! Check if streamer length exceeds the defined maximal streamer length
        if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
@@ -238,9 +249,16 @@ program streamer
            call set_electrode_densities(tree)
         end if
 
-        call af_advance(tree, dt, dt_lim, time, &
-             species_itree(n_gas_species+1:n_species), &
-             af_heuns_method, forward_euler)
+        if (ST_use_dielectric) then
+           call af_advance(tree, dt, dt_lim, time, &
+                species_itree(n_gas_species+1:n_species), &
+                time_integrator, forward_euler, &
+                dielectric_combine_substeps)
+        else
+           call af_advance(tree, dt, dt_lim, time, &
+                species_itree(n_gas_species+1:n_species), &
+             time_integrator, forward_euler)
+        end if
 
           ! Make sure field is available for latest time state
           call field_compute(tree, mg, 0, time, .true.)
@@ -299,11 +317,14 @@ program streamer
              call af_gc_tree(tree, gas_vars)
           end if
 
-          if (associated(user_refine)) then
-             call af_adjust_refinement(tree, user_refine, ref_info, &
-                refine_buffer_width)
-          else
-             call af_adjust_refinement(tree, refine_routine, ref_info, &
+        if (ST_use_dielectric) then
+           ! Make sure there are no refinement jumps across the dielectric
+           call surface_get_refinement_links(diel, ref_links)
+           call af_adjust_refinement(tree, refine_routine, ref_info, &
+             refine_buffer_width, ref_links)
+           call surface_update_after_refinement(tree, diel, ref_info)
+        else
+           call af_adjust_refinement(tree, refine_routine, ref_info, &
                 refine_buffer_width)
           end if
 
@@ -345,6 +366,7 @@ contains
     call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
+    call dielectric_initialize(tree, cfg)
 
     call output_initial_summary()
 
@@ -353,8 +375,15 @@ contains
   subroutine set_initial_conditions(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg
-    integer                   :: n, lvl, i, id
+    integer                   :: n, lvl, i, id, n_surface_variables
 
+    ! Refine up to maximal grid spacing
+    do lvl = 1, af_max_lvl-1
+       if (all(af_lvl_dr(tree, lvl) <= refine_max_dx)) exit
+    end do
+    call af_refine_up_to_lvl(tree, lvl)
+
+    ! Set initial conditions
     call af_loop_box(tree, init_cond_set_box)
     if (associated(user_initial_conditions)) then
        call af_loop_box(tree, user_initial_conditions)
@@ -366,12 +395,21 @@ contains
     ! solver is constructed
     call mg_init(tree, mg)
 
+    if (ST_use_dielectric) then
+       ! To store surface charge and the photon flux
+       n_surface_variables = af_advance_num_steps(time_integrator) + 1
+       call surface_initialize(tree, i_eps, diel, n_surface_variables)
+    end if
+
     do n = 1, 100
        call field_compute(tree, mg, 0, time, .false.)
 
-       if (associated(user_refine)) then
-          call af_adjust_refinement(tree, user_refine, ref_info, &
-               refine_buffer_width)
+       if (ST_use_dielectric) then
+          ! Make sure there are no refinement jumps across the dielectric
+          call surface_get_refinement_links(diel, ref_links)
+          call af_adjust_refinement(tree, refine_routine, ref_info, &
+               refine_buffer_width, ref_links)
+          call surface_update_after_refinement(tree, diel, ref_info)
        else
           call af_adjust_refinement(tree, refine_routine, ref_info, &
                refine_buffer_width)
@@ -391,6 +429,7 @@ contains
 
        if (ref_info%n_add == 0) exit
     end do
+
   end subroutine set_initial_conditions
 
   subroutine write_sim_data(my_unit)
@@ -468,7 +507,7 @@ contains
             associated(bc_species, af_bc_neumann_zero)) then
              ! At the boundary of the electrode
 #if NDIM == 1
-             dens_nb = [box%cc(i-1, i_lsf), &
+             dens_nb = [box%cc(i-1, i_electron), &
                   box%cc(i+1, i_electron)]
 #elif NDIM == 2
              dens_nb = [box%cc(i-1, j, i_electron), &

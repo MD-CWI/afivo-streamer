@@ -13,10 +13,10 @@ module m_refine
   integer, public, protected :: refine_per_steps = 2
 
   ! The grid spacing will always be larger than this value
-  real(dp), protected :: refine_min_dx = 1.0e-7_dp
+  real(dp), public, protected :: refine_min_dx = 1.0e-7_dp
 
   ! The grid spacing will always be smaller than this value
-  real(dp), protected :: refine_max_dx = 1.0e-3_dp
+  real(dp), public, protected :: refine_max_dx = 1.0e-3_dp
 
   ! Refine if alpha*dx is larger than this value
   real(dp), protected :: refine_adx = 1.0_dp
@@ -45,8 +45,8 @@ module m_refine
   ! Minimum electron density for adding grid refinement
   real(dp), protected :: refine_min_dens = -1.0e99_dp
 
-  ! For refinement, use c * epsilon_0 * E_c / phi, where c is this factor
-  real(dp), protected :: refine_crho_fac = 1.5e03_dp
+!   ! For refinement, use c * epsilon_0 * E_c / phi, where c is this factor
+!   real(dp), protected :: refine_crho_fac = 1.5e03_dp
 
   ! Refine a region up to this grid spacing
   real(dp), protected, allocatable :: refine_regions_dr(:)
@@ -69,6 +69,8 @@ module m_refine
   ! Maximum coordinate of the refinement limits
   real(dp), protected, allocatable :: refine_limits_rmax(:,:)
 
+  procedure(af_subr_ref), pointer :: refine_routine => null()
+
   ! Public methods
   public :: refine_initialize
   public :: refine_routine
@@ -79,6 +81,7 @@ contains
   subroutine refine_initialize(cfg)
     use m_config
     use m_gas
+    use m_user_methods
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n
     real(dp)                   :: vec(NDIM)
@@ -115,8 +118,8 @@ contains
     call CFG_add_get(cfg, "refine_min_dens", refine_min_dens, &
          "Minimum electron density for adding grid refinement")
 
-    call CFG_add_get(cfg, "refine_crho_fac", refine_crho_fac, &
-          "For refinement, use c * epsilon_0 * E_c / phi, where c is this factor")
+!     call CFG_add_get(cfg, "refine_crho_fac", refine_crho_fac, &
+!           "For refinement, use c * epsilon_0 * E_c / phi, where c is this factor")
 
     call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
          "Refine regions up to this grid spacing", .true.)
@@ -163,10 +166,16 @@ contains
     call CFG_get(cfg, "refine_limits_rmax", dbuffer)
     refine_limits_rmax = reshape(dbuffer, [NDIM, n])
 
+    if (associated(user_refine)) then
+       refine_routine => user_refine
+    else
+       refine_routine => default_refinement
+    end if
+
   end subroutine refine_initialize
 
   !> Set the cell refinement flags for box
-  subroutine refine_routine(box, cell_flags)
+  subroutine default_refinement(box, cell_flags)
     use m_streamer
     use m_geometry
     use m_init_cond
@@ -180,7 +189,7 @@ contains
     integer                 :: IJK, n, nc
     real(dp)                :: min_dx, max_dx, gas_dens
     real(dp)                :: alpha, adx, fld, elec_dens
-    real(dp)                :: rhs, crho
+    real(dp)                :: rhs!, crho
     real(dp)                :: dist, rmin(NDIM), rmax(NDIM)
 
     nc = box%n_cell
@@ -199,15 +208,16 @@ contains
        adx   = max_dx * alpha
        elec_dens = box%cc(IJK, i_electron)
        rhs = box%cc(IJK, i_rhs)
-       if (rhs == 0) then
-        crho = 1.0_dp
-       else
-        crho = abs(refine_crho_fac * 3.0e06_dp / rhs)
-       end if
+     !   if (rhs == 0) then
+     !    crho = 1.0_dp
+     !   else
+     !    crho = abs(refine_crho_fac * 3.0e06_dp / rhs)
+     !   end if
 
        if (adx > refine_adx .and. elec_dens > refine_min_dens) then
           cell_flags(IJK) = af_do_ref
-       else if (adx < 0.125_dp * refine_adx .and. refine_adx < crho .and. max_dx < derefine_dx) then
+     !   else if (adx < 0.125_dp * refine_adx .and. refine_adx < crho .and. max_dx < derefine_dx) then
+       else if (adx < 0.125_dp * refine_adx .and. max_dx < derefine_dx) then
           cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -265,6 +275,6 @@ contains
        where(cell_flags == af_do_ref) cell_flags = af_keep_ref
     end if
 
-  end subroutine refine_routine
+  end subroutine default_refinement
 
 end module m_refine

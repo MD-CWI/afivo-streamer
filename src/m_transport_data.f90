@@ -25,7 +25,7 @@ module m_transport_data
   !> Whether old style transport data is used (alpha, eta, mu, D vs V/m)
   logical, public, protected :: td_old_style = .false.
 
-  ! TODO: move this to separate ion module
+  ! @todo move this to separate ion module
   type ion_transport_t
      integer                        :: n_mobile_ions ! Number of mobile ions
      real(dp), allocatable          :: mobilities(:) ! Mobility of the ions

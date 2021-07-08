@@ -53,6 +53,8 @@ module m_af_multigrid
 
   ! To compute the gradient of the solution
   public :: mg_compute_phi_gradient
+  public :: mg_compute_field_norm
+  public :: mg_box_field_norm
 
 #if NDIM == 2
   public :: mg_box_clpl
@@ -2090,7 +2092,7 @@ contains
           end select
 
           if (present(i_norm)) then
-             call mg_box_gradient_norm(tree, id, i_fc, i_norm)
+             call mg_box_field_norm(tree, id, i_fc, i_norm)
           end if
        end do
        !$omp end do nowait
@@ -2139,53 +2141,53 @@ contains
 
 #if NDIM == 1
          box%fc(1, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(0, i_phi) - cc(1, i_phi)) * &
+              (cc(1, i_phi) - cc(0, i_phi)) * &
               cc(0, i_eps) / &
               (cc(1, i_eps) + cc(0, i_eps))
          box%fc(nc+1, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(nc, i_phi) - cc(nc+1, i_phi)) * &
+              (cc(nc+1, i_phi) - cc(nc, i_phi)) * &
               cc(nc+1, i_eps) / &
               (cc(nc+1, i_eps) + cc(nc, i_eps))
 #elif NDIM == 2
          box%fc(1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(0, 1:nc, i_phi) - cc(1, 1:nc, i_phi)) * &
+              (cc(1, 1:nc, i_phi) - cc(0, 1:nc, i_phi)) * &
               cc(0, 1:nc, i_eps) / &
               (cc(1, 1:nc, i_eps) + cc(0, 1:nc, i_eps))
          box%fc(nc+1, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(nc, 1:nc, i_phi) - cc(nc+1, 1:nc, i_phi)) * &
+              (cc(nc+1, 1:nc, i_phi) - cc(nc, 1:nc, i_phi)) * &
               cc(nc+1, 1:nc, i_eps) / &
               (cc(nc+1, 1:nc, i_eps) + cc(nc, 1:nc, i_eps))
          box%fc(1:nc, 1, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, 0, i_phi) - cc(1:nc, 1, i_phi)) * &
+              (cc(1:nc, 1, i_phi) - cc(1:nc, 0, i_phi)) * &
               cc(1:nc, 0, i_eps) / &
               (cc(1:nc, 1, i_eps) + cc(1:nc, 0, i_eps))
          box%fc(1:nc, nc+1, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, nc, i_phi) - cc(1:nc, nc+1, i_phi)) * &
+              (cc(1:nc, nc+1, i_phi) - cc(1:nc, nc, i_phi)) * &
               cc(1:nc, nc+1, i_eps) / &
               (cc(1:nc, nc+1, i_eps) + cc(1:nc, nc, i_eps))
 #elif NDIM == 3
          box%fc(1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(0, 1:nc, 1:nc, i_phi) - cc(1, 1:nc, 1:nc, i_phi)) * &
+              (cc(1, 1:nc, 1:nc, i_phi) - cc(0, 1:nc, 1:nc, i_phi)) * &
               cc(0, 1:nc, 1:nc, i_eps) / &
               (cc(1, 1:nc, 1:nc, i_eps) + cc(0, 1:nc, 1:nc, i_eps))
          box%fc(nc+1, 1:nc, 1:nc, 1, i_fc) = 2 * inv_dr(1) * &
-              (cc(nc, 1:nc, 1:nc, i_phi) - cc(nc+1, 1:nc, 1:nc, i_phi)) * &
+              (cc(nc+1, 1:nc, 1:nc, i_phi) - cc(nc, 1:nc, 1:nc, i_phi)) * &
               cc(nc+1, 1:nc, 1:nc, i_eps) / &
               (cc(nc+1, 1:nc, 1:nc, i_eps) + cc(nc, 1:nc, 1:nc, i_eps))
          box%fc(1:nc, 1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, 0, 1:nc, i_phi) - cc(1:nc, 1, 1:nc, i_phi)) * &
+              (cc(1:nc, 1, 1:nc, i_phi) - cc(1:nc, 0, 1:nc, i_phi)) * &
               cc(1:nc, 0, 1:nc, i_eps) / &
               (cc(1:nc, 1, 1:nc, i_eps) + cc(1:nc, 0, 1:nc, i_eps))
          box%fc(1:nc, nc+1, 1:nc, 2, i_fc) = 2 * inv_dr(2) * &
-              (cc(1:nc, nc, 1:nc, i_phi) - cc(1:nc, nc+1, 1:nc, i_phi)) * &
+              (cc(1:nc, nc+1, 1:nc, i_phi) - cc(1:nc, nc, 1:nc, i_phi)) * &
               cc(1:nc, nc+1, 1:nc, i_eps) / &
               (cc(1:nc, nc+1, 1:nc, i_eps) + cc(1:nc, nc, 1:nc, i_eps))
          box%fc(1:nc, 1:nc, 1, 3, i_fc) = 2 * inv_dr(3) * &
-              (cc(1:nc, 1:nc, 0, i_phi) - cc(1:nc, 1:nc, 1, i_phi)) * &
+              (cc(1:nc, 1:nc, 1, i_phi) - cc(1:nc, 1:nc, 0, i_phi)) * &
               cc(1:nc, 1:nc, 0, i_eps) / &
               (cc(1:nc, 1:nc, 1, i_eps) + cc(1:nc, 1:nc, 0, i_eps))
          box%fc(1:nc, 1:nc, nc+1, 3, i_fc) = 2 * inv_dr(3) * &
-              (cc(1:nc, 1:nc, nc, i_phi) - cc(1:nc, 1:nc, nc+1, i_phi)) * &
+              (cc(1:nc, 1:nc, nc+1, i_phi) - cc(1:nc, 1:nc, nc, i_phi)) * &
               cc(1:nc, 1:nc, nc+1, i_eps) / &
               (cc(1:nc, 1:nc, nc+1, i_eps) + cc(1:nc, 1:nc, nc, i_eps))
 #endif
@@ -2193,7 +2195,26 @@ contains
     end associate
   end subroutine mg_box_lpl_gradient
 
-  subroutine mg_box_gradient_norm(tree, id, i_fc, i_norm)
+  !> Compute norm of face-centered variable
+  subroutine mg_compute_field_norm(tree, i_fc, i_norm)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: i_fc   !< Index of face-centered variable
+    integer, intent(in)       :: i_norm !< Index of cell-centered variable
+    integer                   :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call mg_box_field_norm(tree, id, i_fc, i_norm)
+       end do
+       !$omp end do nowait
+    end do
+    !$omp end parallel
+  end subroutine mg_compute_field_norm
+
+  subroutine mg_box_field_norm(tree, id, i_fc, i_norm)
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: id
     integer, intent(in)       :: i_fc !< Face-centered indices
@@ -2223,7 +2244,7 @@ contains
            box%fc(1:nc, 1:nc, 2:nc+1, 3, i_fc))**2)
 #endif
     end associate
-  end subroutine mg_box_gradient_norm
+  end subroutine mg_box_field_norm
 
   !> Compute the gradient of the potential with a level set function and store
   !> in face-centered variables. The gradients are computed from the positive

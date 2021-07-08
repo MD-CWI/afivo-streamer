@@ -53,7 +53,7 @@ program particles_to_grid
   call system_clock(t_start, count_rate)
   call af_particles_to_grid(tree, i_phi, coordinates, weights, n_particles, 0)
   call system_clock(t_end, count_rate)
-  call af_write_silo(tree, "particles_to_grid_" // DIMNAME // "_0", 1, 0.0_dp, dir="output")
+  call af_write_silo(tree, "output/particles_to_grid_" // DIMNAME // "_0", 1, 0.0_dp)
   call af_tree_sum_cc(tree, i_phi, sum_density)
   print *, "zeroth order: ", (t_end-t_start) / real(count_rate, dp), " seconds"
   print *, "integrated density: ", sum_density
@@ -63,7 +63,7 @@ program particles_to_grid
   call system_clock(t_start, count_rate)
   call af_particles_to_grid(tree, i_phi, coordinates, weights, n_particles, 1)
   call system_clock(t_end, count_rate)
-  call af_write_silo(tree, "particles_to_grid_" // DIMNAME // "_1", 1, 0.0_dp, dir="output")
+  call af_write_silo(tree, "output/particles_to_grid_" // DIMNAME // "_1", 1, 0.0_dp)
   call af_tree_sum_cc(tree, i_phi, sum_density)
   print *, "first order: ", (t_end-t_start) / real(count_rate, dp), " seconds"
   print *, "integrated density: ", sum_density

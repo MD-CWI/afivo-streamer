@@ -718,6 +718,28 @@ contains
     end if
   end subroutine af_get_index_bc_outside
 
+  !> Get index range of boundary FACES inside a box facing neighbor nb
+  subroutine af_get_index_bface_inside(nb, nc, n_gc, lo, hi)
+    integer, intent(in)  :: nb !< Neighbor direction
+    integer, intent(in)  :: nc !< box size
+    integer, intent(in)  :: n_gc !< Number of ghost cells
+    integer, intent(out) :: lo(NDIM)
+    integer, intent(out) :: hi(NDIM)
+    integer              :: nb_dim
+
+    ! Determine index range next to boundary
+    nb_dim     = af_neighb_dim(nb)
+    lo(:)      = 1
+    hi(:)      = nc
+    if (af_neighb_low(nb)) then
+       lo(nb_dim) = 1
+       hi(nb_dim) = n_gc
+    else
+       lo(nb_dim) = nc - n_gc + 2
+       hi(nb_dim) = nc + 1
+    end if
+  end subroutine af_get_index_bface_inside
+
   !> Compute the 'child index' for a box with spatial index ix. With 'child
   !> index' we mean the index in the children(:) array of its parent.
   pure integer function af_ix_to_ichild(ix)
@@ -882,6 +904,15 @@ contains
     real(dp)                 :: r
     r = box%r_min(1) + (i-0.5_dp) * box%dr(1)
   end function af_cyl_radius_cc
+
+  !> Get the volume of the cell with first index i
+  pure function af_cyl_volume_cc(box, i) result(dvol)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: i
+    real(dp), parameter     :: two_pi = 2 * acos(-1.0_dp)
+    real(dp)                :: dvol
+    dvol = two_pi * (box%r_min(1) + (i-0.5_dp) * box%dr(1)) * product(box%dr)
+  end function af_cyl_volume_cc
 
   !> Get the normalized weights of the 'inner' and 'outer' children of a cell
   !> with index ix. Note that the cell centers of the children are located at

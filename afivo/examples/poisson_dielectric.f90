@@ -96,8 +96,8 @@ program dielectric_test
      call af_tree_max_cc(tree, i_tmp, residu(2))
      write(*,"(I8,Es14.5)") mg_iter, maxval(abs(residu))
 
-     write(fname, "(A,I0)") "dielectric_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/dielectric_" // DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname))
   end do
   call system_clock(t_end, count_rate)
 

@@ -134,8 +134,8 @@ program KT_euler
 
   do
      if (.not. benchmark .and. output_cnt * dt_output <= time) then
-        write(fname, "(A,I0)") "euler_" // DIMNAME // "_", output_cnt
-        call af_write_silo(tree, trim(fname), output_cnt, time, dir="output", &
+        write(fname, "(A,I0)") "output/euler_" // DIMNAME // "_", output_cnt
+        call af_write_silo(tree, trim(fname), output_cnt, time, &
              add_vars = write_primitives, add_names=["xVel","yVel","pres"])
         output_cnt = output_cnt + 1
      end if
