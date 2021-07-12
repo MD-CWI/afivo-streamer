@@ -12,6 +12,7 @@ module m_init_cond
   ! Type to store initial conditions in
   type initcnd_t
      real(dp)                        :: background_density
+     integer                         :: background_charge_type
      real(dp)                        :: stochastic_density
      integer                         :: n_cond
      real(dp), allocatable           :: seed_r0(:, :)
@@ -48,6 +49,8 @@ contains
 
     call CFG_add(cfg, "background_density", 0.0_dp, &
          "The background ion and electron density (1/m3)")
+    call CFG_add(cfg, "background_charge_type", 0, &
+         "Type of background: electron and positive ions (0), negative ions and positive ions (1)")
     call CFG_add(cfg, "stochastic_density", 0.0_dp, &
          "Stochastic background density (1/m3)")
     call CFG_add(cfg, "seed_density", empty_real, &
@@ -104,6 +107,7 @@ contains
     end do
 
     call CFG_get(cfg, "background_density", ic%background_density)
+    call CFG_get(cfg, "background_charge_type", ic%background_charge_type)
     call CFG_get(cfg, "stochastic_density", ic%stochastic_density)
     call CFG_get(cfg, "seed_density", ic%seed_density)
     call CFG_get(cfg, "seed_charge_type", ic%seed_charge_type)
@@ -211,8 +215,16 @@ contains
     real(dp)                   :: density
 
     nc = box%n_cell
-    box%cc(DTIMES(:), i_electron) = init_conds%background_density
-    box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
+    select case (init_conds%background_charge_type)
+    case (0)
+      box%cc(DTIMES(:), i_electron) = init_conds%background_density
+      box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
+    case (1)
+      box%cc(DTIMES(:), i_1neg_ion) = init_conds%background_density
+      box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
+    case default
+       error stop "Invalid background_charge_type"
+    end select
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])

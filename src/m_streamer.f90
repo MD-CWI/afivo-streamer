@@ -25,6 +25,10 @@ module m_streamer
   integer, public, protected :: i_1pos_ion     = -1
   !> Index of first positive ion (in species list)
   integer, public, protected :: ix_1pos_ion    = -1
+  !> Index of first negative ion species
+  integer, public, protected :: i_1neg_ion     = -1
+  !> Index of first negative ion (in species list)
+  integer, public, protected :: ix_1neg_ion    = -1
   !> Index of electric field norm
   integer, public, protected :: i_electric_fld = -1
   !> Index of source term Poisson
@@ -180,6 +184,15 @@ contains
        if (species_charge(n) == 1) then
           i_1pos_ion = species_itree(n)
           ix_1pos_ion = n
+          exit
+       end if
+    end do
+
+    ! Set index of first negative ion species
+    do n = n_gas_species+1, n_species
+       if (species_charge(n) == -1 .and. species_list(n) /= "e") then
+          i_1neg_ion = species_itree(n)
+          ix_1neg_ion = n
           exit
        end if
     end do
