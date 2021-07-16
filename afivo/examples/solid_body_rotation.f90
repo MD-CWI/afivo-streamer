@@ -51,8 +51,9 @@ program solid_body_rotation
   do t_iter = 1, time_steps
 
      if (mod(t_iter, 10) == 0) then
-        write(fname, "(A,I0)") "solid_body_rotation_" // DIMNAME // "_", t_iter
-        call af_write_silo(tree, trim(fname), t_iter, time, dir="output")
+        write(fname, "(A,I0)") "output/solid_body_rotation_" // &
+             DIMNAME // "_", t_iter
+        call af_write_silo(tree, trim(fname), t_iter, time)
      end if
 
 

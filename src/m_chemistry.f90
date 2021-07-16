@@ -534,19 +534,31 @@ contains
     character(len=*), intent(in) :: filename
     logical, intent(out)         :: read_success
     character(len=string_len)    :: line
-    character(len=50)            :: data_value(max_num_reactions)
-    character(len=50)            :: reaction(max_num_reactions)
-    character(len=50)            :: how_to_get(max_num_reactions)
+    integer, parameter           :: field_len    = 50
+    character(len=field_len)     :: data_value(max_num_reactions)
+    character(len=field_len)     :: reaction(max_num_reactions)
+    character(len=field_len)     :: how_to_get(max_num_reactions)
     character(len=10)            :: length_unit(max_num_reactions)
     type(reaction_t)             :: new_reaction
     integer                      :: my_unit
-    integer, parameter           :: n_fields_max = 4
+    integer, parameter           :: n_fields_max = 40
     integer                      :: i0(n_fields_max), i1(n_fields_max)
-    integer                      :: n, n_found
+    integer                      :: n, i, k, n_found, lo, hi
+
+    type group
+       character(len=name_len)               :: name
+       character(len=field_len), allocatable :: members(:)
+    end type group
+
+    integer, parameter :: max_groups = 10
+    integer            :: i_group, group_size
+    type(group)        :: groups(max_groups)
 
     open(newunit=my_unit, file=filename, action="read")
 
     n_reactions  = 0
+    i_group      = 0
+    group_size   = 0
     read_success = .false.
 
     ! Find list of reactions
@@ -574,9 +586,69 @@ contains
        ! Exit when we read a line of dashes
        if (line(1:5) == "-----") exit
 
+       ! Group syntax for multiple species
+       if (line(1:1) == "@") then
+          call get_fields_string(line, "=,", n_fields_max, n_found, i0, i1)
+          i_group = i_group + 1
+
+          if (i_group > max_groups) error stop "Too many groups"
+
+          if (i_group == 1) then
+             group_size = n_found - 1
+          else if (n_found - 1 /= group_size) then
+             print *, trim(line)
+             error stop "Groups for a reaction should have the same size"
+          end if
+
+          groups(i_group)%name = line(i0(1):i1(1))
+          allocate(groups(i_group)%members(n_found - 1))
+
+          do n = 2, n_found
+             groups(i_group)%members(n-1) = adjustl(line(i0(n):i1(n)))
+          end do
+          cycle
+       end if
+
+       if (i_group > 0) then
+          ! Handle groups
+          lo                   = n_reactions
+          hi                   = n_reactions+group_size-1
+          reaction(lo+1:hi)    = reaction(lo)
+          how_to_get(lo+1:hi)  = how_to_get(lo)
+          data_value(lo+1:hi)  = data_value(lo)
+          length_unit(lo+1:hi) = length_unit(lo)
+          n_reactions          = hi
+
+          do k = 1, group_size
+             do i = 1, i_group
+                n = lo + k - 1
+                reaction(n)   = string_replace(reaction(n), &
+                     groups(i)%name, groups(i)%members(k))
+                how_to_get(n) = string_replace(how_to_get(n), &
+                     groups(i)%name, groups(i)%members(k))
+                data_value(n) = string_replace(data_value(n), &
+                     groups(i)%name, groups(i)%members(k))
+             end do
+          end do
+
+          ! Check if there are duplicate reactions
+          do n = lo, hi
+             if (count(reaction(lo:hi) == reaction(n)) > 1 .and. &
+                  count(data_value(lo:hi) == data_value(n)) > 1) then
+                do k = lo, hi
+                   print *, trim(reaction(k)), ",", data_value(k)
+                end do
+                error stop "Groups lead to duplicate reactions"
+             end if
+          end do
+
+          i_group    = 0
+          group_size = 0
+       end if
+
        call get_fields_string(line, ",", n_fields_max, n_found, i0, i1)
 
-       if (n_found < 3 .or. n_found > n_fields_max) then
+       if (n_found < 3 .or. n_found > 4) then
           print *, trim(line)
           error stop "Invalid chemistry syntax"
        end if
@@ -658,7 +730,7 @@ contains
        case ("k12_func")
           new_reaction%rate_type = rate_analytic_k12
           read(data_value(n), *) new_reaction%rate_data(1:3)
-      case default
+       case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
@@ -849,6 +921,32 @@ contains
     end do
 
   end subroutine get_fields_string
+
+  !> Replace text in string, inspired by
+  !> http://fortranwiki.org/fortran/show/String_Functions
+  pure function string_replace(string, text, replacement) result(outs)
+    character(len=*), intent(in)  :: string
+    character(len=*), intent(in)  :: text
+    character(len=*), intent(in)  :: replacement
+    character(len=:), allocatable :: outs
+    integer, parameter :: buffer_space = 256
+    character(len=(len(string)+buffer_space)) :: buffer
+    integer                       :: i, nt, nr, len_outs
+
+    buffer = string
+    nt = len_trim(text)
+    nr = len_trim(replacement)
+
+    do
+       i = index(buffer, text(:nt))
+       if (i == 0) exit
+       buffer = buffer(:i-1) // replacement(:nr) // trim(buffer(i+nt:))
+    end do
+
+    len_outs = len_trim(buffer)
+    allocate(character(len=len_outs) :: outs)
+    outs = buffer(1:len_outs)
+  end function string_replace
 
   !> An inefficient routine to replace *^+- characters in a string
   subroutine to_simple_ascii(text, simple, charge)

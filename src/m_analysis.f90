@@ -9,7 +9,9 @@ module m_analysis
 
   ! Public methods
   public :: analysis_get_maxima
+#if NDIM == 2
   public :: analysis_get_cross
+#endif
   public :: analysis_zmin_zmax_threshold
   public :: analysis_max_var_region
   public :: analysis_max_var_product
@@ -213,6 +215,7 @@ contains
     reduce_max = max(a, b)
   end function reduce_max
 
+#if NDIM == 2
   !> Get integrated quantities of an axisymmetric streamer at a z-coordinate
   subroutine analysis_get_cross(tree, rmax, z, elec_dens, charge_dens, current_dens)
     use m_lookup_table
@@ -229,30 +232,45 @@ contains
     real(dp), intent(out)  :: current_dens !< current density
 
     real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv
+    real(dp) :: ne, fld, Ez, rhs, fld_vec(NDIM)
     real(dp) :: d_elec_dens, d_charge_dens, d_current_dens
     logical  :: success
-    integer  :: id_guess, i, m, n
+    integer  :: id_guess, i, m
+
+    if (.not. ST_cylindrical) &
+         error stop "analysis_get_cross error: need cylindrical coordinates"
+    if (.not. gas_constant_density) &
+         error stop "analysis_get_cross error: need constant gas density"
 
     id_guess     = -1
     elec_dens    = 0.0_dp
     charge_dens  = 0.0_dp
     current_dens = 0.0_dp
-    N_inv = 1.0_dp/gas_number_density
-    dr = af_min_dr(tree)
-    m = int(rmax/dr) + 1
+    N_inv        = 1.0_dp/gas_number_density
+    dr           = af_min_dr(tree)
+    m            = int(rmax/dr) + 1
 
     do i = 1, m
        r = i * rmax / (m + 1)
-#if NDIM == 2
-       ne_fld_rhs = af_interp1(tree, [r, z], [i_electron, i_electric_fld, i_rhs], &
-            success, id_guess)
-       if (.not. success) error stop "unsuccessful interp1"
-#endif
-       Td = ne_fld_rhs(2) * SI_to_Townsend * N_inv
-       mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv       
-       d_elec_dens = ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr
-       d_charge_dens = ne_fld_rhs(3) * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
-       d_current_dens = ne_fld_rhs(2) * mu * ne_fld_rhs(1) * 2.0_dp * UC_pi * r * dr * UC_elem_charge
+
+       ne_fld_rhs = af_interp1(tree, [r, z], &
+            [i_electron, i_electric_fld, i_rhs], success, id_guess)
+       if (.not. success) error stop "unsuccessful af_interp1"
+
+       ! Interpolate field components
+       fld_vec = af_interp1_fc(tree, [r, z], electric_fld, success, id_guess)
+       if (.not. success) error stop "unsuccessful af_interp1_fc"
+
+       ne  = ne_fld_rhs(1)
+       fld = ne_fld_rhs(2)
+       rhs = ne_fld_rhs(3)
+       Ez = fld_vec(2)
+
+       Td = fld * SI_to_Townsend * N_inv
+       mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+       d_elec_dens = ne * 2.0_dp * UC_pi * r * dr
+       d_charge_dens = rhs * UC_eps0 * 2.0_dp * UC_pi * r * dr / UC_elec_charge
+       d_current_dens = Ez * mu * ne * 2.0_dp * UC_pi * r * dr * UC_elem_charge
 
        ! Update total
        elec_dens = elec_dens + d_elec_dens
@@ -261,5 +279,6 @@ contains
     end do
 
   end subroutine analysis_get_cross
+#endif
 
 end module m_analysis
