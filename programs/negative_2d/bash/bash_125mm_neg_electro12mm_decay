@@ -1,0 +1,39 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=12e-3, electode radius=1.2e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+
+
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=0.83554848e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_0.9342e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=0.92463072e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.0338e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=0.9713184e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.0860e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=0.99823984e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.1161e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.01764832e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.1378e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.03115376e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.1529e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.04126048e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.1642e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.04850512e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.1723e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.05700192e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.1818e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.06764528e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.1937e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.0804352e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.2080e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.904" -field_rod_radius=1.2e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.09528224e6 -cross%write=T -output%name+=negative_electro12mm_decay/neg_EL12mm_ER1.2mm_1.2246e6
+
+
+
+
+
+
+

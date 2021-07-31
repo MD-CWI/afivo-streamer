@@ -1,0 +1,80 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=2e-3, electode radius=0.2e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+
+
+# negative streamers propagation under constant electric field
+
+
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.758496e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_1.79e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.76832e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_1.8e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.86656e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_1.9e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.9648e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.0e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=2.06304e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.1e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=2.16128e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.2e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=2.25952e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.3e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=2.35776e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.4e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=2.456e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.5e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=2.55424e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.6e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=2.65248e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/neg_EL2mm_ER0.2mm_2.7e6
+
+
+
+# positive streamers propagation under constant electric field
+
+
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -dt_min=1e-15 -field_amplitude=-1.061224e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.09e6
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -field_amplitude=-1.08064e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.1e6
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -field_amplitude=-1.17888e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.2e6
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -field_amplitude=-1.27712e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.3e6
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -field_amplitude=-1.37536e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.4e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -field_amplitude=-1.4736e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.5e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -field_amplitude=-1.57184e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.6e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=300e-9 -field_amplitude=-1.67008e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.7e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-1.76832e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.8e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-1.86656e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_1.9e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-1.9648e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.0e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-2.06304e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.1e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-2.16128e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.2e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-2.25952e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.3e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-2.35776e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.4e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-2.456e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.5e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-2.55424e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.6e6
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=-2.65248e6 -cross%write=T -output%name+=negative_electro2mm_accelerating/pos_EL2mm_ER0.2mm_2.7e6
+
+
+
+
+

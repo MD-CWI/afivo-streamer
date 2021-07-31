@@ -23,11 +23,11 @@ for i, log in enumerate(logs):
     dt = log['time'][1] - log['time'][0]
     
     # Compute smoothed velocity
-    log['velocity'] = -savgol_filter(log['y'], 21, 2, deriv=1, delta=dt)
+    log['velocity'] = -savgol_filter(log['y'], 3, 2, deriv=1, delta=dt)
     
     # Compute smoothed velocity
     #log['velocity'] = -np.gradient(log['y'], log['time'])
-    #log['velocity'] = savgol_filter(log['velocity'], 21, 2)
+    #log['velocity'] = savgol_filter(log['velocity'], 3, 2)
 
     # Remove outliers in velocity
     v_low = log["velocity"].abs().quantile(0.1)
@@ -36,11 +36,13 @@ for i, log in enumerate(logs):
                          log['velocity'].abs() > 2 * v_hi)
     log['velocity'].mask(mask, np.nan, inplace=True)
     
+    v_linear = np.polyfit(log['y'], log['velocity'], 1)
+    v_fit = np.poly1d(v_linear)
     log.plot('y', 'velocity', ax=axes, label=f'velocity-{i}')
-    #log.plot('y', 'velocity', ax=axes, label=f'velocity-{i}')
+    plt.plot(log['y'], v_fit(log['y']), '--', label=f'v_fit-{i}')
 
 plt.xlabel('y')
-plt.ylabel('Velocity')
+plt.ylabel('velocity')
 plt.grid(linestyle='-.',alpha=0.7)
 plt.legend()
 plt.show()

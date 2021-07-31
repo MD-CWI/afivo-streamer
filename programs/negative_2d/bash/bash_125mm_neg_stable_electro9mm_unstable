@@ -1,0 +1,44 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=9e-3, electode radius=0.9e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+
+#The stable streamers is quite sensitive to the electric field at electrode 9mm
+
+# Estable = 1.2696e6
+#0.980 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1456667264e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.244208e6
+
+#0.985 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1515119648e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.250556e6
+
+#0.990 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1573572032e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.256904e6
+
+#0.995 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1632024416e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.263252e6
+
+#Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.16904768e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.2696e6
+
+#1.005 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1748929184e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.275948e6
+
+#1.010 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1807381568e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.282296e6
+
+#1.015 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1865833952e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.288644e6
+
+#1.020 Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1924286336e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.294992e6
+
+
+
+
+
+
+
+
