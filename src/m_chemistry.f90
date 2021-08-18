@@ -481,7 +481,7 @@ contains
        case (rate_analytic_k13)
           rates(:, n) = c0 * c(1) * exp(-c(2) /  (UC_boltzmann_const *  (gas_temperature + fields / c(3) )  )  )
           !Note that this reaction depends on Ti, ionic temperature, which according to Galimberti 1979, Ti = T + fields/g with g =
-          !0.18 Td/Kelvin, c(2) is given in joul in the input file! 
+          !0.18 Td/Kelvin, UC_boltzmann_const is in J/Kelvin and  c(2) is given in joul in the input file! 
       end select
     end do
   end subroutine get_rates
