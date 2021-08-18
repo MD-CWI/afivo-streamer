@@ -39,7 +39,7 @@ module m_field
   real(dp) :: field_rise_time = 0.0_dp
 
   !> The (initial) vertical applied electric field
-  real(dp) :: field_amplitude = 1.0e6_dp
+  real(dp), public, protected :: field_amplitude = 1.0e6_dp
 
   !> The current vertical applied electric field
   real(dp), public, protected :: current_field_amplitude
@@ -226,6 +226,7 @@ contains
   subroutine field_set_rhs(tree, s_in)
     use m_units_constants
     use m_chemistry
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: s_in
     real(dp), parameter       :: fac = -UC_elem_charge / UC_eps0
@@ -255,6 +256,11 @@ contains
        !$omp end do nowait
     end do
     !$omp end parallel
+
+    if (ST_use_dielectric) then
+       call surface_surface_charge_to_rhs(tree, diel, i_surf_dens, i_rhs, fac)
+    end if
+
   end subroutine field_set_rhs
 
   !> Compute electric field on the tree. First perform multigrid to get electric
@@ -262,6 +268,7 @@ contains
   subroutine field_compute(tree, mg, s_in, time, have_guess)
     use m_units_constants
     use m_chemistry
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg ! Multigrid option struct
     integer, intent(in)       :: s_in
@@ -339,7 +346,14 @@ contains
     end do
 
     ! Compute field from potential
-    call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
+    if (ST_use_dielectric) then
+       call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp)
+       call surface_correct_field_fc(tree, diel, i_surf_dens, &
+            electric_fld, i_phi, UC_elem_charge / UC_eps0)
+       call mg_compute_field_norm(tree, electric_fld, i_electric_fld)
+    else
+       call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
+    end if
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])

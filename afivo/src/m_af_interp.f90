@@ -11,6 +11,7 @@ module m_af_interp
   public :: af_interp0
   public :: af_interp1
   public :: af_interp0_to_grid
+  public :: af_interp1_fc
 
 contains
 
@@ -136,5 +137,52 @@ contains
          tree%boxes(id)%cc(DINDEX(ix), iv) + &
          actual_amount
   end subroutine af_interp0_to_grid
+
+  !> Linearly interpolate face-centered variable to a position r
+  function af_interp1_fc(tree, r, ifc, success, id_guess) result(vals)
+    use m_af_utils, only: af_get_id_at
+    type(af_t), intent(in)           :: tree     !< Parent box
+    real(dp), intent(in)             :: r(NDIM)  !< Where to interpolate
+    integer, intent(in)              :: ifc      !< Face-centered variable
+    logical, intent(out)             :: success  !< Whether the interpolation worked
+    integer, intent(inout), optional :: id_guess !< Guess for box id (will be updated)
+    real(dp)                         :: vals(NDIM), inv_dr(NDIM)
+    integer                          :: id, ix(NDIM)
+    real(dp)                         :: ix_frac(NDIM), r_rel(NDIM)
+
+    id = af_get_id_at(tree, r, guess=id_guess)
+
+    ! Update guess
+    if (present(id_guess)) id_guess = id
+
+    if (id <= af_no_box) then
+       success = .false.
+       vals = 0.0_dp
+    else
+       success = .true.
+       inv_dr  = 1/tree%boxes(id)%dr
+
+       r_rel = r - tree%boxes(id)%r_min
+       ix_frac = r_rel * inv_dr + 1
+       ix = floor(ix_frac)
+       where (ix < 1) ix = 1
+       where (ix > tree%n_cell) ix = tree%n_cell
+       ix_frac = ix_frac - ix
+
+#if NDIM == 2
+       vals(1) = (1 - ix_frac(1)) * tree%boxes(id)%fc(ix(1), ix(2), 1, ifc) + &
+            ix_frac(1) * tree%boxes(id)%fc(ix(1)+1, ix(2), 1, ifc)
+       vals(2) = (1 - ix_frac(2)) * tree%boxes(id)%fc(ix(1), ix(2), 2, ifc) + &
+            ix_frac(2) * tree%boxes(id)%fc(ix(1), ix(2)+1, 2, ifc)
+#elif NDIM == 3
+       vals(1) = (1 - ix_frac(1)) * tree%boxes(id)%fc(ix(1), ix(2), ix(3), 1, ifc) + &
+            ix_frac(1) * tree%boxes(id)%fc(ix(1)+1, ix(2), ix(3), 1, ifc)
+       vals(2) = (1 - ix_frac(2)) * tree%boxes(id)%fc(ix(1), ix(2), ix(3), 2, ifc) + &
+            ix_frac(2) * tree%boxes(id)%fc(ix(1), ix(2)+1, ix(3), 2, ifc)
+       vals(3) = (1 - ix_frac(3)) * tree%boxes(id)%fc(ix(1), ix(2), ix(3), 3, ifc) + &
+            ix_frac(3) * tree%boxes(id)%fc(ix(1), ix(2), ix(3)+1, 3, ifc)
+#endif
+    end if
+  end function af_interp1_fc
 
 end module m_af_interp

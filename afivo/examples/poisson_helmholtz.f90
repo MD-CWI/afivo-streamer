@@ -73,8 +73,8 @@ program poisson_helmholtz
      write(*,"(I8,13x,2(Es14.5))") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
-     write(fname, "(A,I0)") "poisson_helmholtz_" // DIMNAME // "_", mg_iter
-     call af_write_vtk(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/poisson_helmholtz_" // DIMNAME // "_", mg_iter
+     call af_write_vtk(tree, trim(fname))
   end do
   call system_clock(t_end, count_rate)
 

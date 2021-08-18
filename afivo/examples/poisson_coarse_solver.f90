@@ -110,8 +110,8 @@ program poisson_coarse_solver
      !> [write_output]
      ! This writes a Silo output file containing the cell-centered values of the
      ! leaves of the tree (the boxes not covered by refinement).
-     write(fname, "(A,I0)") "poisson_coarse_solver_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/poisson_coarse_solver_" // DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname))
      !> [write_output]
   end do
   call system_clock(t_end, count_rate)

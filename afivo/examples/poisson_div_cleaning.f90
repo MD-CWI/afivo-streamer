@@ -72,8 +72,9 @@ program poisson_div_cleaning
   do mg_iter = 1, n_iterations
      call mg_fas_fmg(tree, mg, set_residual=.true., have_guess=(mg_iter>1))
      call af_loop_box(tree, set_error)
-     write(fname, "(A,I0)") "poisson_div_cleaning_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/poisson_div_cleaning_" // &
+          DIMNAME // "_", mg_iter
+     call af_write_silo(tree, trim(fname))
   end do
 
 contains

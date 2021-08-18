@@ -151,8 +151,9 @@ contains
     integer, intent(in)        :: threads(n_particles)
     logical, intent(in)        :: density
     integer                    :: n, thread_id, ix(NDIM)
+    real(dp)                   :: inv_volume
 
-    !$omp parallel private(n, thread_id, ix)
+    !$omp parallel private(n, thread_id, ix, inv_volume)
     thread_id = omp_get_thread_num()
 
     do n = 1, n_particles
@@ -166,9 +167,20 @@ contains
        where (ix > tree%n_cell) ix = tree%n_cell
 
        if (density) then
+#if NDIM == 2
+          if (tree%coord_t == af_cyl) then
+             inv_volume = 1 / af_cyl_volume_cc(tree%boxes(ids(n)), ix(1))
+          else
+             ! Cartesian
+             inv_volume = 1 / product(tree%boxes(ids(n))%dr)
+          end if
+#else
+          inv_volume = 1 / product(tree%boxes(ids(n))%dr)
+#endif
+
           tree%boxes(ids(n))%cc(DINDEX(ix), iv) = &
                tree%boxes(ids(n))%cc(DINDEX(ix), iv) + &
-               weights(n) / product(tree%boxes(ids(n))%dr)
+               weights(n) * inv_volume
        else
           tree%boxes(ids(n))%cc(DINDEX(ix), iv) = &
                tree%boxes(ids(n))%cc(DINDEX(ix), iv) + &
@@ -193,9 +205,18 @@ contains
     logical, intent(in)        :: density
     real(dp)                   :: tmp(NDIM), inv_dr(NDIM)
     real(dp)                   :: wu(NDIM), wl(NDIM), w(DTIMES(2))
+    real(dp)                   :: inv_volume(DTIMES(2))
     integer                    :: id, ix(NDIM), n, thread_id
+#if NDIM == 2
+    integer                    :: cyl_ix(2)
+#endif
 
-    !$omp parallel private(n, inv_dr, tmp, thread_id, ix, id, wu, wl, w)
+#if NDIM == 2
+    !$omp parallel private(n, inv_dr, tmp, thread_id, ix, id, wu, wl, w, &
+    !$omp &inv_volume, cyl_ix)
+#else
+    !$omp parallel private(n, inv_dr, tmp, thread_id, ix, id, wu, wl, w, inv_volume)
+#endif
     thread_id = omp_get_thread_num()
 
     do n = 1, n_particles
@@ -224,17 +245,45 @@ contains
        ! Linear interpolation
        if (density) then
 #if NDIM == 1
+          inv_volume = 1 / product(tree%boxes(id)%dr)
           tree%boxes(id)%cc(ix(1):ix(1)+1, iv) = &
                tree%boxes(id)%cc(ix(1):ix(1)+1, iv) + &
-               w * weights(n) / product(tree%boxes(id)%dr)
+               w * inv_volume * weights(n)
 #elif NDIM == 2
+          if (tree%coord_t == af_cyl) then
+             ! Particles can be (partially) mapped to ghost cells. If there is a
+             ! physical or refinement boundary, these ghost cells are copied
+             ! back to the interior cell. So we make sure that they in that case
+             ! have the same inverse volume.
+             !
+             ! TODO: this scheme is still not fully conservative, perhaps use a
+             ! two-step approach in which we first map to grid and then convert
+             ! to density
+             cyl_ix = [ix(1), ix(1) + 1]
+             if (tree%boxes(id)%neighbors(af_neighb_lowx) <= af_no_box .or. &
+                  af_is_ref_boundary(tree%boxes, id, af_neighb_lowx)) then
+                cyl_ix(1) = max(cyl_ix(1), 1)
+             end if
+             if (tree%boxes(id)%neighbors(af_neighb_highx) <= af_no_box .or. &
+                  af_is_ref_boundary(tree%boxes, id, af_neighb_highx)) then
+                cyl_ix(2) = min(cyl_ix(2), tree%n_cell)
+             end if
+
+             inv_volume(1, :) = 1 / af_cyl_volume_cc(tree%boxes(ids(n)), cyl_ix(1))
+             inv_volume(2, :) = 1 / af_cyl_volume_cc(tree%boxes(ids(n)), cyl_ix(2))
+          else
+             ! Cartesian
+             inv_volume = 1 / product(tree%boxes(ids(n))%dr)
+          end if
+
           tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) = &
                tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, iv) + &
-               w * weights(n) / product(tree%boxes(id)%dr)
+               w * inv_volume * weights(n)
 #elif NDIM == 3
+          inv_volume = 1 / product(tree%boxes(id)%dr)
           tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) = &
                tree%boxes(id)%cc(ix(1):ix(1)+1, ix(2):ix(2)+1, ix(3):ix(3)+1, iv) + &
-               w * weights(n) / product(tree%boxes(id)%dr)
+               w * inv_volume * weights(n)
 #endif
        else
 #if NDIM == 1

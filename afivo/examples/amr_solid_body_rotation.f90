@@ -59,8 +59,9 @@ program solid_body_rotation
      dt = 0.5_dp/(sum(3.0_dp/dr_min) + epsilon(1.0_dp))
 
      if (mod(t_iter, 50) == 0) then
-        write(fname, "(A,I0)") "amr_solid_body_rotation_" // DIMNAME // "_", t_iter
-        call af_write_silo(tree, trim(fname), t_iter, time, dir="output")
+        write(fname, "(A,I0)") "output/amr_solid_body_rotation_" // &
+             DIMNAME // "_", t_iter
+        call af_write_silo(tree, trim(fname), t_iter, time)
      end if
 
 

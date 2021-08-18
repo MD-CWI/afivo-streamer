@@ -140,8 +140,8 @@ program particles_gravity
         call af_particles_to_grid(tree, i_rho, coordinates, weights, &
           n_particles, 1, ids)
         n_output = n_output + 1
-        write(fname, "(A,I4.4)") "particles_gravity_" // DIMNAME // "_", n_output
-        call af_write_silo(tree, fname, n_output, time, dir="output")
+        write(fname, "(A,I4.4)") "output/particles_gravity_" // DIMNAME // "_", n_output
+        call af_write_silo(tree, fname, n_output, time)
         print *, "Time", time, "n_cells", af_num_cells_used(tree)
      end if
   end do

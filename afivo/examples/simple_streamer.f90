@@ -144,11 +144,11 @@ program simple_streamer
      ! Every dt_output, write output
      if (output_count * dt_output <= time) then
         output_count = output_count + 1
-        write(fname, "(A,I6.6)") "simple_streamer_", output_count
+        write(fname, "(A,I6.6)") "output/simple_streamer_", output_count
 
         ! Write the cell centered data of a tree to a Silo file. Only the
         ! leaves of the tree are used
-        call af_write_silo(tree, fname, output_count, time, dir="output")
+        call af_write_silo(tree, fname, output_count, time)
 
         call af_tree_sum_cc(tree, i_elec, sum_elec)
         call af_tree_sum_cc(tree, i_pion, sum_pion)

@@ -19,7 +19,7 @@ program computational_domain
 
   call af_add_cc_variable(tree, "phi")
   call af_init(tree, n_cell, domain_size, grid_size, mem_limit_gb=0.1_dp)
-  call af_write_silo(tree, "computational_domain_" // DIMNAME // "_1", dir="output")
+  call af_write_silo(tree, "output/computational_domain_" // DIMNAME // "_1")
   call af_destroy(tree)
 
   ! Create mesh 2: two boxes along y-direction
@@ -31,7 +31,7 @@ program computational_domain
 
   call af_add_cc_variable(tree, "phi")
   call af_init(tree, n_cell, domain_size, grid_size, mem_limit_gb=0.1_dp)
-  call af_write_silo(tree, "computational_domain_" // DIMNAME // "_2", dir="output")
+  call af_write_silo(tree, "output/computational_domain_" // DIMNAME // "_2")
   call af_destroy(tree)
 
   ! Create mesh 3: Two boxes along x-direction that are fully periodic
@@ -42,7 +42,7 @@ program computational_domain
 
   call af_add_cc_variable(tree, "phi")
   call af_init(tree, n_cell, domain_size, grid_size, mem_limit_gb=0.1_dp)
-  call af_write_silo(tree, "computational_domain_" // DIMNAME // "_3", dir="output")
+  call af_write_silo(tree, "output/computational_domain_" // DIMNAME // "_3")
   call af_destroy(tree)
 
 end program computational_domain

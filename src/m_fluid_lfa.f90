@@ -23,6 +23,7 @@ contains
     use m_field
     use m_dt
     use m_transport_data
+    use m_dielectric
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt     !< Time step
     real(dp), intent(inout)   :: dt_lim !< Time step limitation
@@ -34,7 +35,7 @@ contains
     !< Time state to store result in
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
-    integer                   :: lvl, i, id, p_id, nc
+    integer                   :: lvl, i, id, p_id, nc, ix, id_out
     logical                   :: set_dt
 
     nc = tree%n_cell
@@ -83,10 +84,30 @@ contains
           id = tree%lvls(lvl)%leaves(i)
           call update_solution(tree%boxes(id), nc, dt, s_deriv, &
                s_prev, s_out, set_dt)
+
        end do
        !$omp end do
     end do
     !$omp end parallel
+
+    if (ST_use_dielectric) then
+       ! Update surface charge and handle photon emission
+       ! @todo For parallelization, think about corner cells with two surfaces
+       do ix = 1, diel%max_ix
+          if (diel%surfaces(ix)%in_use) then
+             id_out = diel%surfaces(ix)%id_out
+
+             ! Convert fluxes onto dielectric to surface charge, and handle
+             ! secondary emission
+             call dielectric_update_surface_charge(tree%boxes(id_out), &
+                  diel%surfaces(ix), dt, s_deriv, s_out)
+
+             ! Add secondary emission from photons hitting the surface
+             call dielectric_photon_emission(tree%boxes(id_out), &
+                  diel%surfaces(ix), dt, s_deriv, s_out)
+          end if
+       end do
+    end if
 
     if (set_dt) then
        dt_lim = min(2 * global_dt, dt_safety_factor * &
@@ -131,6 +152,15 @@ contains
 #if NDIM == 3
     integer                    :: l
 #endif
+
+    ! Inside the dielectric, set the flux to zero. We later determine the
+    ! boundary flux onto dielectrics
+    if (ST_use_dielectric) then
+       if (tree%boxes(id)%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          tree%boxes(id)%fc(DTIMES(:), :, flux_elec) = 0.0_dp
+          return
+       end if
+    end if
 
     inv_dr  = 1/tree%boxes(id)%dr
     drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
@@ -553,6 +583,14 @@ contains
     n_cells = box%n_cell**NDIM
     inv_dr  = 1/box%dr
 
+    ! Inside the dielectric, do not update the species densities, which should
+    ! always be zero
+    if (ST_use_dielectric) then
+       if (box%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          return
+       end if
+    end if
+
     if (gas_constant_density) then
        ! Compute field in Townsends
        tmp = 1 / gas_number_density
@@ -643,15 +681,6 @@ contains
                box%cc(IJK, i_photo)
           derivs(ix, ix_1pos_ion) = derivs(ix, ix_1pos_ion) + &
                box%cc(IJK, i_photo)
-       end if
-
-       if (ST_use_dielectric) then
-          if (box%cc(IJK, i_eps) > 1.0_dp) then
-             ! Convert electrons to 'minus' positive ions, so they remain stuck
-             derivs(ix, ix_1pos_ion) = derivs(ix, ix_1pos_ion) - &
-                  derivs(ix, ix_electron)
-             derivs(ix, ix_electron) = 0.0_dp
-          end if
        end if
 
        if (ST_use_electrode) then

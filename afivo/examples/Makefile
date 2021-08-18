@@ -9,16 +9,18 @@ include $(AF_DIR)/src/makerules.make
 
 PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
  computational_domain boundary_conditions poisson_neumann particles_to_grid	\
- ghostcell_benchmark particles_gravity poisson_coarse_solver implicit_diffusion	\
+ ghostcell_benchmark poisson_coarse_solver implicit_diffusion	\
  poisson_dielectric poisson_helmholtz reaction_diffusion dielectric_surface	\
- advection_v2 electrode_example poisson_lsf_test
+ advection_v2 poisson_lsf_test
 
 PROGS_1D := $(PROGS_XD:%=%_1d)
 
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric		\
-simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl solid_body_rotation amr_solid_body_rotation euler_gas_dynamics
+simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl solid_body_rotation	\
+amr_solid_body_rotation euler_gas_dynamics electrode_dielectric			\
+electrode_example
 
-PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning
+PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning particles_gravity
 
 PROGS := $(PROGS_1D) $(PROGS_2D) $(PROGS_3D)
 

@@ -18,8 +18,8 @@
         equation_type = "gs"
         D1    = 2.0d-5
         D2    = 1.0d-5
-        nx_min = 200
-        end_time = 20000
+        nx_min = 100
+        end_time = 2000
         dt = 0.5d0
         dt_output = 500.0
         time_integrator = "forward_euler"

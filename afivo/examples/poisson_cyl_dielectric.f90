@@ -98,8 +98,8 @@ program poisson_cyl_dielectric
      write(*,"(I8,2Es14.5)") mg_iter, maxval(abs(residu)), &
           maxval(abs(anal_err))
 
-     write(fname, "(A,I0)") "poisson_cyl_dielectric_", mg_iter
-     call af_write_silo(tree, trim(fname), dir="output")
+     write(fname, "(A,I0)") "output/poisson_cyl_dielectric_", mg_iter
+     call af_write_silo(tree, trim(fname))
   end do
   call system_clock(t_end, count_rate)
 

@@ -22,6 +22,9 @@ module m_user_methods
   !> To set the field amplitude manually
   procedure(field_func), pointer :: user_field_amplitude => null()
 
+  !> Generic procedure that is called every time step
+  procedure(generic_subr), pointer :: user_generic_method => null()
+
   !> To write a custom log file
   procedure(log_subr), pointer :: user_write_log => null()
 
@@ -68,6 +71,12 @@ module m_user_methods
        type(af_t), intent(in) :: tree
        real(dp), intent(in)   :: time
      end function bool_subr
+
+     subroutine generic_subr(tree, time)
+       import
+       type(af_t), intent(in) :: tree
+       real(dp), intent(in)   :: time
+     end subroutine generic_subr
   end interface
 
 end module m_user_methods
