@@ -265,6 +265,10 @@ contains
     nc            = box%n_cell
     source_factor = coeff(1)
     decay_factor  = coeff(2)
+       
+       !> Note by Behnaz: We might need to multiply this by a parameter \xi 
+       !> To account for photoionization efficiency
+       !> Look at equation 2 in Bourdon et al PSST 16 656 2007
 
     box%cc(DTIMES(1:nc), i_rhs) = source_factor * &
          box%cc(DTIMES(1:nc), i_excited_species)

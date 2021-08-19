@@ -49,10 +49,10 @@ contains
     type(CFG_t), intent(inout) :: cfg
     logical, intent(in)        :: is_used !< Whether the module is used
     real(dp), intent(in)       :: eta !< Efficiency
-    integer                    :: n, ix
+    integer                    :: n, ix !<, iy
     character(len=12)          :: name
     character(len=12)          :: author = "Bourdon-3"
-    real(dp)                   :: frac_O2, dummy(0)
+    real(dp)                   :: frac_O2, dummy(0) !<, frac_H2O
 
     call CFG_add_get(cfg, "photoi_helmh%author", author, &
          "Can be Luque (default), Bourdon-2, Bourdon-3 or custom")
@@ -77,6 +77,13 @@ contains
        frac_O2 = 0.0_dp         ! No oxygen
     end if
 
+   !< iy = gas_index("H2O")
+   !< if (iy /= -1) then
+   !<    frac_H2O = gas_fractions(iy)
+   !< else
+   !<    frac_H2O = 0.0_dp         ! No H2O
+   !< end if
+    
     select case (author)
     case ("Luque")
        if (frac_O2 <= 0.0_dp) error stop "Photoionization: no oxygen present"
@@ -115,6 +122,7 @@ contains
        lambdas = [4147.85_dp, 10950.93_dp, 66755.67_dp]
        coeffs  = [1117314.935_dp, 28692377.5_dp, 2748842283.0_dp]
 
+    !   if (frac_H2O <= 0.0_dp) then
        ! Convert to correct units by multiplying with pressure in bar
        lambdas = lambdas * frac_O2 * gas_pressure  ! 1/m
        ! Important note: in the case of Bourdon coeffs must be multiplied by
@@ -122,6 +130,12 @@ contains
        ! set_photoionization_rate calculation as [photoi_eta * quench_fac]
        ! please check m_photoi.f90
        coeffs  = coeffs * (frac_O2 * gas_pressure)**2 ! 1/m^2
+    !   else
+    !   lambdas = lambdas * (frac_H2O + frac_O2) * gas_pressure  ! 1/m
+              
+                
+    !   coeffs  = coeffs * ( (frac_H2O + frac_O2) * gas_pressure)**2 ! 1/m^2
+     !  end if 
     case ("custom")
        call CFG_get_size(cfg, "photoi_helmh%lambdas", n_modes)
        allocate(lambdas(n_modes))
