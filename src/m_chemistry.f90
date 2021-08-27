@@ -936,19 +936,28 @@ contains
     character(len=*), intent(inout) :: simple
     integer, intent(out)            :: charge
     integer                         :: n
+    logical                         :: in_brackets = .false.
 
     charge = 0
     simple = ""
 
     do n = 1, len_trim(text)
        select case (text(n:n))
+       case ('(')
+         in_brackets = .true.
+       case (')')
+         in_brackets = .false.
        case ('*')
           simple = trim(simple) // "_star"
        case ('+')
-          charge = charge + 1
+          if (.not. in_brackets) then
+            charge = charge + 1
+          end if
           simple = trim(simple) // "_plus"
        case ('-')
-          charge = charge - 1
+          if (.not. in_brackets) then
+            charge = charge - 1
+          end if
           simple = trim(simple) // "_min"
        case ('^')
           simple = trim(simple) // "_hat"
