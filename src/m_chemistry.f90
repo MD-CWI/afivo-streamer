@@ -962,6 +962,8 @@ contains
           simple = trim(simple) // "_min"
        case ('^')
           simple = trim(simple) // "_hat"
+       case ("'")
+          simple = trim(simple) // "p"
        case default
           simple = trim(simple) // text(n:n)
        end select
