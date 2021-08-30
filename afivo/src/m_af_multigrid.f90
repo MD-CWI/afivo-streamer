@@ -2081,7 +2081,13 @@ contains
           case (mg_normal_box, mg_ceps_box)
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
           case (mg_lsf_box)
-             call mg_box_lpllsf_gradient(tree, id, mg, i_fc, fac)
+             if (af_has_children(tree%boxes(id))) then
+                !> @todo Solution on coarse grid can lead to large gradient due
+                !> to inconsistencies with level set function
+                call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
+             else
+                call mg_box_lpllsf_gradient(tree, id, mg, i_fc, fac)
+             end if
           case (mg_veps_box)
              ! Should call dielectric_correct_field_fc afterwards
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
