@@ -17,7 +17,7 @@ module m_af_types
   integer, parameter :: af_min_lvl = 1
 
   !> Maximum number of variables
-  integer, parameter :: af_max_num_vars = 100
+  integer, parameter :: af_max_num_vars = 1024
 
   !> Value indicating you want to derefine a box
   integer, parameter :: af_rm_ref = -1
