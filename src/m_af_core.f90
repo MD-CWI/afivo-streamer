@@ -47,6 +47,12 @@ contains
 
     if (ncpy < 1) error stop "af_add_cc_variable: n_copies < 1"
 
+    if (tree%n_var_cell + ncpy > af_max_num_vars) then
+       print *, "af_max_num_vars:", af_max_num_vars
+       print *, "Cannot add ", name
+       error stop "Too many cc variables"
+    end if
+
     do n = 1, ncpy
        tree%n_var_cell = tree%n_var_cell + 1
        if (n == 1) then
@@ -79,6 +85,12 @@ contains
     logical                        :: writebin
 
     writebin = .true.; if (present(write_binary)) writebin = write_binary
+
+    if (tree%n_var_face + 1 > af_max_num_vars) then
+       print *, "af_max_num_vars:", af_max_num_vars
+       print *, "Cannot add ", name
+       error stop "Too many fc variables"
+    end if
 
     tree%n_var_face                       = tree%n_var_face + 1
     tree%fc_names(tree%n_var_face)        = name
