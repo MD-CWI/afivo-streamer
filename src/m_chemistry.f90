@@ -945,6 +945,7 @@ contains
        select case (text(n:n))
        case ('(')
          in_brackets = .true.
+         simple = trim(simple) // "_"
        case (')')
          in_brackets = .false.
        case ('*')
