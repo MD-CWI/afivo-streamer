@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-# Author: Jannis Teunissen, CWI
+# Contributors:
+# Jannis Teunissen
+# Behnaz Bagheri
 
 # from sympy import *
 from scipy.integrate import quad, simps
