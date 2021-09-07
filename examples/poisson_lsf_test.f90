@@ -20,7 +20,7 @@ program poisson_lsf_test
   integer            :: i_field_norm
 
   ! Which shape to use, 1 = circle, 2 = heart
-  integer, parameter  :: shape             = 2
+  integer, parameter  :: shape             = 1
 
   real(dp), parameter :: boundary_value    = 1.0_dp
   real(dp), parameter :: solution_coeff    = 1.0_dp
