@@ -131,13 +131,13 @@ Transport data can be computed from cross sections with a so-called Boltzmann so
 ## Bolsig+ {#td-bolsigplus}
 
 An easy way to use Bolsig+ is through the online interface at [lxcat](lxcat.net)
-via the **online calculations** button. After selecting cross sections from the desired database(s), you could for example use the following options
+via the **online calculations** button. (The online version has some downside however, see below!) After selecting cross sections from the desired database(s), you could for example use the following options
 
 option | value | description
 ---|---|---
 EEDF | non-Maxwellian | The EEDF is generally non-Maxwellian
 E/N range | 1-1200 Td | A reasonable range for streamer simulations
-`# of points` | 50 | This seems to be the limit for online calculations
+`# of points` | 100 | This seems to be the limit for online calculations
 E/N profile | exponential | To have more points at lower fields, quadratic could also work
 `Tgas` | 300 K | Gas temperature
 Super-elastic collisions | include | Probably not significant at low gas temperature and high E/N
@@ -156,6 +156,8 @@ where `swarm.txt` is the output of Bolsig+. Execute `bolsig_convert.py` with the
 * Data for specific collisions, either selected by type or by name. By default ionization and attachment processes are included.
 
 One still has to define the reactions before the file can be used as input for the afivo-streamer code, see @ref td-format
+
+A more advanced way to compute transport data is to download an offline version of a Boltzmann solver and compute the data locally, for example using [BOLSIG+](http://www.bolsig.laplace.univ-tlse.fr/download.html) (Windows), [BOLSIG-](http://www.bolsig.laplace.univ-tlse.fr/download.html) (linux), or [particle_swarm](https://gitlab.com/MD-CWI-NL/particle_swarm). When input data is linearly interpolated, it is best to compute a large number of data points to reduce interpolation errors, in particular in the rate coefficients, which are often far from linear. Another option is to enable cubic interpolation of the input data, see @ref td-interpolation.
 
 # Transport data format {#td-format}
 
