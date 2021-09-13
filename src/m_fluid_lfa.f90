@@ -431,6 +431,238 @@ contains
 
   end subroutine fluxes_elec
 
+  subroutine electron_flux_1d(nc, cc_line, fld_fc, fld_cc, N_cc, dx, dt, flux)
+    integer, intent(in) :: nc
+    real(dp), intent(in) :: cc_line(-1:nc+2)
+    real(dp), intent(in) :: fld_fc(1:nc+1)
+    real(dp), intent(in) :: fld_cc(0:nc+1)
+    real(dp), intent(in) :: N_cc(0:nc+1)
+    real(dp), intent(in) :: dx
+    real(dp), intent(in) :: dt
+    real(dp), intent(out) :: flux(1:nc+1)
+
+    real(dp) :: Td_fc(1:nc+1)
+    real(dp) :: mu(1:nc+1), D(1:nc+1)
+    real(dp) :: Ninv_fc(1:nc+1)
+
+    if (gas_constant_density) then
+       Ninv_fc = 1 / N_cc(1)
+    else
+       Ninv_fc = 2 / (N_cc(0:nc) + N_cc(1:nc+1))
+    end if
+
+    ! Get average field at cell faces
+    Td_fc = 0.5_dp * (fld_cc(0:nc) + fld_cc(1:nc+1)) * SI_to_Townsend * Ninv_fc
+
+    mu = LT_get_col(td_tbl, td_mobility, Td_fc) * Ninv_fc
+    v  = -mu * fld_face
+    dc = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
+
+    if (ST_max_velocity > 0.0_dp) then
+       where (abs(v) > ST_max_velocity)
+          v = sign(ST_max_velocity, v)
+       end where
+    end if
+
+    call flux_koren_1d(cc, v, nc, 2)
+    call flux_diff_1d(cc, dc, inv_dr(1), nc, 2)
+
+    if (ST_drt_limit_flux) then
+       fmax = abs(fld_fc) * max(1.0_dp, abs(dc / max(v, 1e-100_dp)))
+       fmax = fmax * UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
+       where (abs(v) > fmax)
+          v = sign(fmax, v)
+       end where
+    end if
+
+    if (set_dt) then
+       tid    = omp_get_thread_num() + 1
+       dt_cfl = dt_max
+       dt_drt = dt_matrix(dt_ix_cfl, tid)
+
+       do KJI_DO(1,nc)
+#if NDIM == 1
+          vmean = 0.5_dp * (v(IJK, :) + [v(i+1, 1)])
+#elif NDIM == 2
+          vmean = 0.5_dp * (v(IJK, :) + &
+               [v(i+1, j, 1), v(i, j+1, 2)])
+#elif NDIM == 3
+          vmean = 0.5_dp * (v(IJK, :) + &
+               [v(i+1, j, k, 1), v(i, j+1, k, 2), v(i, j, k+1, 3)])
+#endif
+          ! CFL condition
+          dt_cfl = 1.0_dp/sum(max(abs(vmean), eps) * inv_dr)
+
+          ! Diffusion condition
+          dt_dif = minval(tree%boxes(id)%dr)**2 / &
+               max(2 * NDIM * maxval(dc(IJK, :)), eps)
+
+          ! Take the combined CFL-diffusion condition with Courant number 0.5
+          dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
+
+          if (gas_constant_density) then
+             N_inv = 1 / gas_number_density
+          else
+             N_inv = 1 / tree%boxes(id)%cc(IJK, i_gas_dens)
+          end if
+
+          ! Ion mobility
+          if (size(transport_data_ions%mobilities) > 0) then
+             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv
+          else
+             max_mu_ion = 0.0_dp
+          end if
+
+          ! Electron mobility
+          if (ST_drt_limit_flux) then
+             mu = 0.0_dp
+          else
+             Td = tree%boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
+             mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+          end if
+
+          ! Take maximum of electron and ion mobility, in the future we should
+          ! probably apply a weighted sum (weighted with species densities)
+          mu = max(mu, max_mu_ion)
+
+          ! Dielectric relaxation time
+          dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK, 1), eps)
+
+          dt_matrix(dt_ix_drt, tid) = min(dt_matrix(dt_ix_drt, tid), dt_drt)
+          dt_matrix(dt_ix_cfl, tid) = min(dt_matrix(dt_ix_cfl, tid), dt_cfl)
+          dt_matrix(dt_ix_diff, tid) = min(dt_matrix(dt_ix_diff, tid), dt_dif)
+       end do; CLOSE_DO
+    end if
+
+  end subroutine electron_flux_1d
+
+  !> Compute the electron fluxes due to drift and diffusion
+  subroutine fluxes_elec_new(tree, id, nc, dt, s_in, set_dt)
+    use m_af_flux_schemes
+    use m_units_constants
+    use omp_lib
+    use m_streamer
+    use m_gas
+    use m_dt
+    use m_lookup_table
+    use m_transport_data
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)        :: id
+    integer, intent(in)        :: nc   !< Number of cells per dimension
+    real(dp), intent(in)       :: dt
+    integer, intent(in)        :: s_in !< Input time state
+    logical, intent(in)        :: set_dt
+
+    real(dp) :: cc(DTIMES(-1:nc+2), 1)
+    real(dp) :: cc_line(-1:nc+2)
+    real(dp) :: fld_fc(1:nc+1)
+    real(dp) :: fld_cc(0:nc+1)
+    real(dp) :: N_cc(0:nc+1)
+#if NDIM == 2
+    integer                    :: n
+#elif NDIM == 3
+    integer                    :: n, m
+#endif
+
+    ! Inside the dielectric, set the flux to zero. We later determine the
+    ! boundary flux onto dielectrics
+    if (ST_use_dielectric) then
+       if (tree%boxes(id)%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          tree%boxes(id)%fc(DTIMES(:), :, flux_elec) = 0.0_dp
+          return
+       end if
+    end if
+
+    N_cc = gas_number_density ! For constant gas densities
+
+    ! Fill cc with interior data plus two layers of ghost cells
+    call af_gc2_box(tree, id, [i_electron+s_in], cc)
+
+    associate(box => tree%boxes(id))
+      ! Collect variables along line and compute flux
+#if NDIM == 1
+      dim = 1
+      cc_line = cc(:, 1)
+      fld_fc = box%fc(1:nc+1, dim, electric_fld)
+      fld_cc = box%cc(:, i_electric_fld)
+      if (.not. gas_constant_density) then
+         N_cc = box%cc(:, i_gas_dens)
+      end if
+
+      call electron_flux_1d(nc, cc_line, fld_fc, fld_cc, N_cc, &
+           box%dr(dim), dt, set_dt, flux)
+      tree%boxes(id)%fc(:, dim, flux_elec) = flux
+#elif NDIM == 2
+      do n = 1, nc
+         dim = 1
+         cc_line = cc(:, n, 1)
+         fld_fc = box%fc(1:nc+1, n, dim, electric_fld)
+         fld_cc = box%cc(:, n, i_electric_fld)
+         if (.not. gas_constant_density) then
+            N_cc = box%cc(:, n, i_gas_dens)
+         end if
+
+         call electron_flux_1d(nc, cc_line, fld_fc, fld_cc, N_cc, &
+              box%dr(dim), dt, set_dt, flux)
+         tree%boxes(id)%fc(:, n, dim, flux_elec) = flux
+
+         dim = 2
+         cc_line = cc(n, :, 1)
+         fld_fc = box%fc(n, 1:nc+1, dim, electric_fld)
+         fld_cc = box%cc(n, :, i_electric_fld)
+         if (.not. gas_constant_density) then
+            N_cc = box%cc(n, :, i_gas_dens)
+         end if
+
+         call electron_flux_1d(nc, cc_line, fld_fc, fld_cc, N_cc, &
+              box%dr(dim), dt, set_dt, flux)
+         tree%boxes(id)%fc(n, :, dim, flux_elec) = flux
+      end do
+#elif NDIM == 3
+      do n = 1, nc
+         do m = 1, nc
+            dim = 1
+            cc_line = cc(:, m, n, 1)
+            fld_fc = box%fc(1:nc+1, m, dim, electric_fld)
+            fld_cc = box%cc(:, m, n, i_electric_fld)
+            if (.not. gas_constant_density) then
+               N_cc = box%cc(:, m, n, i_gas_dens)
+            end if
+
+            call electron_flux_1d(nc, cc_line, fld_fc, fld_cc, N_cc, &
+                 box%dr(dim), dt, set_dt, flux)
+            tree%boxes(id)%fc(:, m, n, dim, flux_elec) = flux
+
+            dim = 2
+            cc_line = cc(m, :, n, 1)
+            fld_fc = box%fc(m, :, n, dim, electric_fld)
+            fld_cc = box%cc(m, :, n, i_electric_fld)
+            if (.not. gas_constant_density) then
+               N_cc = box%cc(m, :, n, i_gas_dens)
+            end if
+
+            call electron_flux_1d(nc, cc_line, fld_fc, fld_cc, N_cc, &
+                 box%dr(dim), dt, set_dt, flux)
+            tree%boxes(id)%fc(m, :, n, dim, flux_elec) = flux
+
+            dim = 3
+            cc_line = cc(m, n, :, 1)
+            fld_fc = box%fc(m, n, :, dim, electric_fld)
+            fld_cc = box%cc(m, n, :, i_electric_fld)
+            if (.not. gas_constant_density) then
+               N_cc = box%cc(m, n, :, i_gas_dens)
+            end if
+
+            call electron_flux_1d(nc, cc_line, fld_fc, fld_cc, N_cc, &
+                 box%dr(dim), dt, set_dt, flux)
+            tree%boxes(id)%fc(m, n, :, dim, flux_elec) = flux
+         end do
+      end do
+#endif
+    end associate
+
+  end subroutine fluxes_elec_new
+
   subroutine fluxes_ions(tree, id, nc, dt, s_in, set_dt)
     use m_af_flux_schemes
     use m_streamer
