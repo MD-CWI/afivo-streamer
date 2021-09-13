@@ -103,6 +103,12 @@ module m_chemistry
   !> Indicates a reaction of the form c1 * T**c2 * exp(-c3 / T)
   integer, parameter :: rate_analytic_k12 = 17
 
+  !> Indicates a reaction of the form c1 * exp(-(c2 / (c3 + EN))^c4)
+  integer, parameter :: rate_analytic_k13 = 18
+
+  !> Indicates a reaction of the form c1 * exp(-(EN / c2)^c3)
+  integer, parameter :: rate_analytic_k14 = 19
+
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
 
@@ -475,6 +481,10 @@ contains
           rates(:, n) = c0 * c(1) * (300 / gas_temperature)**c(2) * exp(-c(3) / gas_temperature)
        case (rate_analytic_k12)
           rates(:, n) = c0 * c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature)
+       case (rate_analytic_k13)
+          rates(:, n) = c0 * c(1) * exp(-(c(2) / (c(3) + fields))**c(4))
+       case (rate_analytic_k14)
+          rates(:, n) = c0 * c(1) * exp(-(fields / c(2))**c(3))
       end select
     end do
   end subroutine get_rates
@@ -711,6 +721,12 @@ contains
           read(data_value(n), *) new_reaction%rate_data(1:3)
        case ("k12_func")
           new_reaction%rate_type = rate_analytic_k12
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k13_func")
+          new_reaction%rate_type = rate_analytic_k13
+          read(data_value(n), *) new_reaction%rate_data(1:4)
+       case ("k14_func")
+          new_reaction%rate_type = rate_analytic_k14
           read(data_value(n), *) new_reaction%rate_data(1:3)
        case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
