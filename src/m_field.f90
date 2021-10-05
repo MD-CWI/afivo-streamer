@@ -355,9 +355,91 @@ contains
        call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
     end if
 
+    select case (ST_field_correction)
+    case ("divE")
+       call af_loop_box(tree, correct_field_divE_box)
+    case ("harmonic")
+       call af_loop_box(tree, correct_field_harmonic_box)
+    case ("none")
+       continue
+    case default
+       error stop "Unknown fixes%field_correction"
+    end select
+
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute
+
+  subroutine correct_field_divE_box(box)
+    type(box_t), intent(inout) :: box
+    integer                    :: IJK
+    real(dp)                   :: tmp, Elo(NDIM), Ehi(NDIM)
+    real(dp)                   :: Emin(NDIM), dE(NDIM)
+    real(dp)                   :: eps = 1e-10_dp
+    integer                    :: nc
+
+    nc = box%n_cell
+
+    do KJI_DO(1, nc)
+       ! Compute f = 1 - |div(E)| / (|d/dx Ex| + |d/dy Ey|)
+       ! Then take min(E) + f * delta_E (component wise)
+       ! Todo: think about unequal mesh spacing
+
+#if NDIM == 2
+       ! Fields on lower and upper cell faces
+       Elo = box%fc(IJK, 1:NDIM, electric_fld)
+       Ehi = [box%fc(i+1, j, 1, electric_fld), &
+            box%fc(i, j+1, 2, electric_fld)]
+#endif
+
+       ! Emin contains the field components of smallest amplitude
+       where (abs(Elo) < abs(Ehi))
+          Emin = Elo
+          dE = Ehi - Elo
+       elsewhere
+          Emin = Ehi
+          dE = Elo - Ehi
+       end where
+
+       tmp = 1 - abs(sum(Ehi-Elo)) / (eps + sum(abs(dE)))
+       box%cc(IJK, i_electric_fld) = norm2(Emin + 0.5_dp * tmp * dE)
+    end do; CLOSE_DO
+  end subroutine correct_field_divE_box
+
+  subroutine correct_field_harmonic_box(box)
+    type(box_t), intent(inout) :: box
+    integer                    :: IJK
+    real(dp)                   :: Elo(NDIM), Ehi(NDIM)
+    real(dp)                   :: Emin(NDIM), Emax(NDIM)
+    real(dp)                   :: a, b
+    real(dp)                   :: eps = 1e-10_dp
+    integer                    :: nc
+
+    nc = box%n_cell
+
+    do KJI_DO(1, nc)
+#if NDIM == 2
+       ! Fields on lower and upper cell faces
+       Elo = box%fc(IJK, 1:NDIM, electric_fld)
+       Ehi = [box%fc(i+1, j, 1, electric_fld), &
+            box%fc(i, j+1, 2, electric_fld)]
+#endif
+
+       ! Determine Emin and Emax (component-wise)
+       where (abs(Elo) < abs(Ehi))
+          Emin = Elo
+          Emax = Ehi
+       elsewhere
+          Emin = Ehi
+          Emax = Elo
+       end where
+
+       ! Compute harmonic mean of field strengths
+       a = norm2(Emin)
+       b = norm2(Emax)
+       box%cc(IJK, i_electric_fld) = 2 * a * b / (a + b + eps)
+    end do; CLOSE_DO
+  end subroutine correct_field_harmonic_box
 
   !> Compute the electric field at a given time
   function field_get_amplitude(tree, time) result(electric_fld)
