@@ -403,8 +403,8 @@ contains
              ! By limiting the flux, we reduce the conductivity of the cell. If
              ! the current through the cell is fixed, this ensures that the
              ! field in the cell will not exceed ST_drt_max_field
-             dt_drt = dt_drt * ST_drt_max_field / &
-                  max(1e-10_dp, tree%boxes(id)%cc(IJK, i_electric_fld))
+             dt_drt = dt_drt * max(1.0_dp, ST_drt_max_field / &
+                  max(1e-10_dp, tree%boxes(id)%cc(IJK, i_electric_fld)))
           end if
 
           dt_matrix(dt_ix_drt, tid) = min(dt_matrix(dt_ix_drt, tid), dt_drt)
