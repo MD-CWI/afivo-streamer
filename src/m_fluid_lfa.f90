@@ -389,12 +389,8 @@ contains
           end if
 
           ! Electron mobility
-          if (ST_drt_limit_flux) then
-             mu = 0.0_dp
-          else
-             Td = tree%boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
-             mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-          end if
+          Td = tree%boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
+          mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
 
           ! Take maximum of electron and ion mobility, in the future we should
           ! probably apply a weighted sum (weighted with species densities)
@@ -402,6 +398,14 @@ contains
 
           ! Dielectric relaxation time
           dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK, 1), eps)
+
+          if (ST_drt_limit_flux) then
+             ! By limiting the flux, we reduce the conductivity of the cell. If
+             ! the current through the cell is fixed, this ensures that the
+             ! field in the cell will not exceed ST_drt_max_field
+             dt_drt = dt_drt * ST_drt_max_field / &
+                  max(1e-10_dp, tree%boxes(id)%cc(IJK, i_electric_fld))
+          end if
 
           dt_matrix(dt_ix_drt, tid) = min(dt_matrix(dt_ix_drt, tid), dt_drt)
           dt_matrix(dt_ix_cfl, tid) = min(dt_matrix(dt_ix_cfl, tid), dt_cfl)
@@ -612,9 +616,26 @@ contains
 
     call get_rates(fields, rates, n_cells)
 
-    if (ST_source_factor .or. ST_source_min_density > 0) then
-       call compute_source_factor(box, nc, dens(:, ix_electron), &
-            fields, source_factor)
+    if (ST_source_factor /= source_factor_none .or. &
+         ST_source_min_density > 0) then
+       if (ST_source_factor /= source_factor_none) then
+          call compute_source_factor(box, nc, dens(:, ix_electron), &
+               fields, s_dt, source_factor)
+       else
+          source_factor(:) = 1.0_dp
+       end if
+
+       if (ST_source_min_density > 0) then
+          where (dens(:, ix_electron) < ST_source_min_density)
+             source_factor = 0.0_dp
+          end where
+       end if
+
+       if (i_srcfac > 0) then
+          ! Write source factor to variable
+          box%cc(DTIMES(1:nc), i_srcfac) = &
+               reshape(source_factor, [DTIMES(nc)])
+       end if
 
        do n = 1, n_reactions
           if (reactions(n)%reaction_type == ionization_reaction) then
@@ -729,28 +750,33 @@ contains
 
   !> Compute adjustment factor for electron source terms. Used to reduce them in
   !> certain regimes.
-  subroutine compute_source_factor(box, nc, elec_dens, fields, source_factor)
+  subroutine compute_source_factor(box, nc, elec_dens, fields, s_dt, source_factor)
     use m_streamer
     use m_gas
     use m_transport_data
     use m_lookup_table
-    type(box_t), intent(in) :: box
-    integer, intent(in)     :: nc
-    real(dp), intent(in)    :: elec_dens(nc**NDIM)
-    real(dp), intent(in)    :: fields(nc**NDIM)
-    real(dp), intent(out)   :: source_factor(nc**NDIM)
-    real(dp)                :: tmp, mobilities(nc**NDIM)
-    integer                 :: ix, IJK
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: nc
+    real(dp), intent(in)       :: elec_dens(nc**NDIM)
+    real(dp), intent(in)       :: fields(nc**NDIM)
+    integer, intent(in)        :: s_dt
+    real(dp), intent(out)      :: source_factor(nc**NDIM)
+    real(dp)                   :: mobilities(nc**NDIM), diffc(nc**NDIM)
+    real(dp)                   :: tmp, inv_dr(NDIM), f(2*NDIM)
+    real(dp)                   :: Evec(NDIM), gradn(NDIM)
+    real(dp), parameter        :: eps = 1e-10_dp
+    real(dp), parameter        :: harmonic_factor = 2.0_dp
+    integer                    :: ix, IJK
 
-    source_factor(:) = 1.0_dp
+    if (.not. gas_constant_density) &
+         error stop "source_factor: gas_constant_density is false"
 
-    if (ST_source_factor) then
-       if (.not. gas_constant_density) &
-            error stop "source_factor: gas_constant_density is false"
+    inv_dr = 1/box%dr
+    tmp = 1 / gas_number_density
+    mobilities = LT_get_col(td_tbl, td_mobility, fields) * tmp
 
-       tmp = 1 / gas_number_density
-       mobilities = LT_get_col(td_tbl, td_mobility, fields) * tmp
-
+    select case (ST_source_factor)
+    case (source_factor_flux)
        ix = 0
        do KJI_DO(1,nc)
           ix = ix + 1
@@ -772,20 +798,90 @@ contains
        end do; CLOSE_DO
 
        ! Compute source factor as |flux|/(n_e * mu * E)
-       source_factor = source_factor / max(1e-10_dp, &
+       source_factor = (source_factor + eps) / (eps + &
             elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
-       source_factor = min(1.0_dp, source_factor)
-       source_factor = max(0.0_dp, source_factor)
-    end if
+    case (source_factor_flux_hmean)
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
 
-    if (ST_source_min_density > 0) then
-       ! Factor goes linearly to zero between n_min and 2 * n_min
-       source_factor = min(source_factor, &
-            max(0.0_dp, elec_dens-ST_source_min_density) / &
-            max(elec_dens, ST_source_min_density))
-    end if
+          ! Compute norm of flux at cell center, but taking harmonic mean of
+          ! flux components
+#if NDIM == 1
+          f = abs([box%fc(i, 1, flux_elec), box%fc(i+1, 1, flux_elec)])
+          source_factor(ix) = 2*f(1)*f(2)/(f(1)+f(2)+eps)
+#elif NDIM == 2
+          f = abs([box%fc(i, j, 1, flux_elec), box%fc(i+1, j, 1, flux_elec), &
+               box%fc(i, j, 2, flux_elec), box%fc(i, j+1, 2, flux_elec)])
+          source_factor(ix) = norm2([2*f(1)*f(2)/(f(1)+f(2)+eps), &
+               2*f(3)*f(4)/(f(3)+f(4)+eps)])
+#elif NDIM == 3
+          f = abs([&
+               box%fc(i, j, k, 1, flux_elec), box%fc(i+1, j, k, 1, flux_elec), &
+               box%fc(i, j, k, 2, flux_elec), box%fc(i, j+1, k, 2, flux_elec), &
+               box%fc(i, j, k, 3, flux_elec), box%fc(i, j, k+1, 3, flux_elec)])
+          source_factor(ix) = norm2([&
+               2*f(1)*f(2)/(f(1)+f(2)+eps), &
+               2*f(3)*f(4)/(f(3)+f(4)+eps), &
+               2*f(5)*f(6)/(f(5)+f(6)+eps)])
+#endif
+       end do; CLOSE_DO
 
+       ! Compute source factor as harmonic_factor * |flux|/(n_e * mu * E). The
+       ! harmonic_factor is used to ensure 'regular' solutions are not affected;
+       ! only when source_factor < 1/harmonic_factor does it start to affect the
+       ! solution.
+       source_factor = harmonic_factor * (source_factor + eps) / (eps + &
+            elec_dens * mobilities * &
+            pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
+    case (source_factor_original)
+       ! This is the 'original' scheme, 1 - (E_hat . F_diff)/F_flux
+       diffc = LT_get_col(td_tbl, td_diffusion, fields) * tmp
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
+#if NDIM == 1
+          Evec = 0.5_dp * [box%fc(i, 1, electric_fld) + &
+               box%fc(i+1, 1, electric_fld)]
+          gradn = 0.5_dp * inv_dr * [&
+               box%cc(i+1, i_electron+s_dt) &
+               - box%cc(i-1, i_electron+s_dt)]
+#elif NDIM == 2
+          Evec = 0.5_dp * [box%fc(i, j, 1, electric_fld) + &
+               box%fc(i+1, j, 1, electric_fld), &
+               box%fc(i, j, 2, electric_fld) + &
+               box%fc(i, j+1, 2, electric_fld)]
+          gradn = 0.5_dp * inv_dr * [&
+               box%cc(i+1, j, i_electron+s_dt) &
+               - box%cc(i-1, j, i_electron+s_dt), &
+               box%cc(i, j+1, i_electron+s_dt) &
+               - box%cc(i, j-1, i_electron+s_dt)]
+#elif NDIM == 3
+          Evec = 0.5_dp * [box%fc(i, j, k, 1, electric_fld) + &
+               box%fc(i+1, j, k, 1, electric_fld), &
+               box%fc(i, j, k, 2, electric_fld) + &
+               box%fc(i, j+1, k, 2, electric_fld), &
+               box%fc(i, j, k, 3, electric_fld) + &
+               box%fc(i, j, k+1, 3, electric_fld)]
+          gradn = 0.5_dp * inv_dr * [&
+               box%cc(i+1, j, k, i_electron+s_dt) &
+               - box%cc(i-1, j, k, i_electron+s_dt), &
+               box%cc(i, j+1, k, i_electron+s_dt) &
+               - box%cc(i, j-1, k, i_electron+s_dt), &
+               box%cc(i, j, k+1, i_electron+s_dt) &
+               - box%cc(i, j, k-1, i_electron+s_dt)]
+#endif
+          source_factor(ix) = 1 + diffc(ix) * sum(Evec * gradn) / &
+               (eps + elec_dens(ix) * mobilities(ix) * &
+               box%cc(IJK, i_electric_fld)**2)
+       end do; CLOSE_DO
+    case default
+       error stop
+    end select
+
+    source_factor = min(1.0_dp, source_factor)
+    source_factor = max(0.0_dp, source_factor)
   end subroutine compute_source_factor
 
   !> Handle secondary emission from positive ions
