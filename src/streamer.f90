@@ -39,6 +39,7 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+  real(dp)                  :: breakdown_field_Td
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -58,6 +59,9 @@ program streamer
   call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
   call CFG_write(cfg, trim(output_name) // "_out.cfg", custom_first=.true.)
+
+  call chemistry_get_breakdown_field(breakdown_field_Td, 1.0e3_dp)
+  write(*, '(A,E12.4)') " Estimated breakdown field (Td): ", breakdown_field_Td
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
