@@ -24,7 +24,7 @@ module m_af_surface
   end type surface_t
 
   !> Value indicating there is no surface
-  integer, parameter :: no_surface = -1
+  integer, public, parameter :: surface_none = -1
 
   !> Type for storing all the surfaces on a mesh
   type surfaces_t
@@ -114,8 +114,8 @@ contains
     allocate(diel%removed_surfaces(diel%surface_limit))
     allocate(diel%box_id_out_to_surface_ix(tree%box_limit))
     allocate(diel%box_id_in_to_surface_ix(tree%box_limit))
-    diel%box_id_out_to_surface_ix = no_surface
-    diel%box_id_in_to_surface_ix = no_surface
+    diel%box_id_out_to_surface_ix = surface_none
+    diel%box_id_in_to_surface_ix = surface_none
 
     ! Construct a list of surfaces
     do i = 1, size(tree%lvls(tree%highest_lvl)%ids)
@@ -143,7 +143,7 @@ contains
              ix = get_new_surface_ix(diel)
 
              diel%surfaces(ix)%in_use    = .true.
-             diel%surfaces(ix)%ix_parent = no_surface
+             diel%surfaces(ix)%ix_parent = surface_none
              diel%surfaces(ix)%offset_parent(:) = 0
              diel%surfaces(ix)%id_in     = nb_id
              diel%surfaces(ix)%id_out    = id
@@ -154,9 +154,9 @@ contains
              diel%surfaces(ix)%dr = &
                   pack(tree%boxes(id)%dr, [(j, j=1,NDIM)] /= af_neighb_dim(nb))
 
-             if (diel%box_id_out_to_surface_ix(id) /= no_surface) &
+             if (diel%box_id_out_to_surface_ix(id) /= surface_none) &
                   error stop "box with multiple adjacent surfaces"
-             if (diel%box_id_in_to_surface_ix(nb_id) /= no_surface) &
+             if (diel%box_id_in_to_surface_ix(nb_id) /= surface_none) &
                   error stop "box with multiple adjacent surfaces"
              diel%box_id_out_to_surface_ix(id) = ix
              diel%box_id_in_to_surface_ix(nb_id) = ix
@@ -303,7 +303,7 @@ contains
     do i = 1, size(ref_info%rm)
        id = ref_info%rm(i)
        ix = diel%box_id_out_to_surface_ix(id)
-       if (ix > no_surface) then
+       if (ix > surface_none) then
           call restrict_surface_to_parent(tree, diel, ix)
        end if
     end do
@@ -317,7 +317,7 @@ contains
           p_id = tree%boxes(id)%parent
           p_ix = diel%box_id_out_to_surface_ix(p_id)
 
-          if (p_ix > no_surface) then
+          if (p_ix > surface_none) then
              ! We only need to prolong once per parent surface
              if (af_ix_to_ichild(tree%boxes(id)%ix) == 1) then
                 call prolong_surface_from_parent(tree, diel, p_ix, p_id)
@@ -402,7 +402,7 @@ contains
     integer                           :: p_ix, nc, dix(NDIM-1), id_out, id_in
 
     p_ix = diel%surfaces(ix)%ix_parent
-    if (p_ix == no_surface) error stop "Too much derefinement on surface"
+    if (p_ix == surface_none) error stop "Too much derefinement on surface"
     dix  = diel%surfaces(ix)%offset_parent
     nc   = tree%n_cell
 
@@ -426,8 +426,8 @@ contains
     !$omp end critical
     id_out = diel%surfaces(ix)%id_out
     id_in = diel%surfaces(ix)%id_in
-    diel%box_id_out_to_surface_ix(id_out) = no_surface
-    diel%box_id_in_to_surface_ix(id_in) = no_surface
+    diel%box_id_out_to_surface_ix(id_out) = surface_none
+    diel%box_id_in_to_surface_ix(id_in) = surface_none
     diel%surfaces(ix)%in_use = .false.
 
   end subroutine restrict_surface_to_parent
@@ -804,8 +804,8 @@ contains
 
     ! Check for a surface from both sides
     ix_surf = diel%box_id_out_to_surface_ix(id)
-    if (ix_surf == no_surface) ix_surf = diel%box_id_in_to_surface_ix(id)
-    if (ix_surf == no_surface) error stop "No surface found"
+    if (ix_surf == surface_none) ix_surf = diel%box_id_in_to_surface_ix(id)
+    if (ix_surf == surface_none) error stop "No surface found"
 
     ! Extract the cell index but only parallel to the surface
     direction = diel%surfaces(ix_surf)%direction

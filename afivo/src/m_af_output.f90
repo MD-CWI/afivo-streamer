@@ -840,7 +840,7 @@ contains
 
     do n = 1, n_cc
        yname = tree%cc_names(icc_val(n))
-       call SILO_add_curve(dbix, yname, xdata, ydata(:, n), "x", yname)
+       call SILO_add_curve(dbix, yname, xdata, ydata(:, n))
     end do
 
     call SILO_close_file(dbix)
@@ -853,7 +853,7 @@ contains
   !> Note: a 1D version is present below, and seems to work, but its output
   !> cannot be visualized by Visit. That's why we use curve output for 1D cases.
   subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, &
-       add_vars, add_names)
+       add_vars, add_names, add_curve_names, add_curve_dat)
     use m_write_silo
 
     type(af_t), intent(in)       :: tree        !< Tree to write out
@@ -862,7 +862,8 @@ contains
     real(dp), intent(in), optional :: time        !< Time for output file
     integer, intent(in), optional :: ixs_cc(:)      !< Only include these cell variables
     procedure(subr_add_vars), optional :: add_vars !< Optional routine to add extra variables
-    character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
+    character(len=*), intent(in), optional :: add_names(:), add_curve_names(:) !< Names of extra variables or curves
+    real(dp), intent(in), optional  :: add_curve_dat(:, :, :) !< Data for additional curves (#curves, x/y-dimensions, #points)
 
     character(len=*), parameter     :: grid_name = "gg", block_prefix = "blk_"
     character(len=*), parameter     :: amr_name  = "mesh", meshdir = "data"
@@ -872,7 +873,7 @@ contains
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
     integer                         :: n_cc, n_add, dbix
     integer                         :: nx, nx_prev, ix
-    integer                         :: n_cycle_val
+    integer                         :: n_cycle_val, ncurve, ncurve_add
     integer                         :: lo(NDIM), hi(NDIM), vlo(NDIM), vhi(NDIM)
     integer                         :: blo(NDIM), bhi(NDIM)
     logical                         :: lo_bnd(NDIM), hi_bnd(NDIM)
@@ -894,7 +895,15 @@ contains
     n_add = 0; if (present(add_names)) n_add = size(add_names)
 
     if (present(add_names) .neqv. present(add_vars)) &
-         stop "af_write_vtk: both arguments (add_names, add_vars) needed"
+         stop "af_write_silo: both arguments (add_names, add_vars) needed"
+
+    if (present(add_curve_names) .neqv. present(add_curve_dat)) &
+         stop "af_write_silo: both arguments (add_curve_names, add_curve_dat) needed"
+
+    if (present(add_curve_names)) then
+       if (size(add_curve_names, 1) .ne. size(add_curve_dat, 1)) &
+            stop "af_write_silo: number of curve names and data do not agree"
+    end if
 
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
@@ -932,6 +941,16 @@ contains
     call SILO_create_file(trim(fname), dbix)
     call SILO_set_time_varying(dbix)
     call SILO_mkdir(dbix, meshdir)
+
+    ! Adding additional curve objects
+    if (present(add_curve_names)) then
+      ncurve_add = size(add_curve_dat, 1)
+      do ncurve = 1, ncurve_add
+        call SILO_add_curve(dbix, add_curve_names(ncurve), &
+          add_curve_dat(ncurve, 1, :), add_curve_dat(ncurve, 2, :))
+      end do
+    end if
+
     i_grid = 0
 
     do lvl = 1, tree%highest_lvl
@@ -1179,17 +1198,17 @@ contains
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 2, &
-               hi - lo + 2, r_min, dr, 1-lo, hi - [nx, ny] * nc)
+               hi - lo + 2, r_min, dr, 1-lo, hi - [nx, ny] * nc, n_cycle_val)
           write(grid_list_block(i_grid), "(A,I0)") meshdir // '/' // block_prefix &
                // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list_block(i_grid), 2, [nx+1, ny+1], &
-               tree%boxes(id)%r_min, nc*dr, [0, 0], [0, 0])
+               tree%boxes(id)%r_min, nc*dr, [0, 0], [0, 0], n_cycle_val)
 
           do iv = 1, n_cc+n_add
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, iv), .true.), hi-lo+1)
+                  pack(var_data(:, :, iv), .true.), hi-lo+1, n_cycle_val)
           end do
 
           deallocate(var_data)
@@ -1361,17 +1380,17 @@ contains
 
           write(grid_list(i_grid), "(A,I0)") meshdir // '/' // grid_name, i_grid
           call SILO_add_grid(dbix, grid_list(i_grid), 3, &
-               hi - lo + 2, r_min, dr, 1-lo, hi-[nx, ny, nz]*nc)
+               hi - lo + 2, r_min, dr, 1-lo, hi-[nx, ny, nz]*nc, n_cycle_val)
           write(grid_list_block(i_grid), "(A,I0)") meshdir // '/' // block_prefix // &
                grid_name, i_grid
           call SILO_add_grid(dbix, grid_list_block(i_grid), 3, [nx+1, ny+1, nz+1], &
-               tree%boxes(id)%r_min, nc*dr, [0, 0, 0], [0, 0, 0])
+               tree%boxes(id)%r_min, nc*dr, [0, 0, 0], [0, 0, 0], n_cycle_val)
 
           do iv = 1, n_cc+n_add
              write(var_list(iv, i_grid), "(A,I0)") meshdir // '/' // &
                   trim(var_names(iv)) // "_", i_grid
              call SILO_add_var(dbix, var_list(iv, i_grid), grid_list(i_grid), &
-                  pack(var_data(:, :, :, iv), .true.), hi-lo+1)
+                  pack(var_data(:, :, :, iv), .true.), hi-lo+1, n_cycle_val)
           end do
 
           deallocate(var_data)
