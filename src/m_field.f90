@@ -409,35 +409,38 @@ contains
   subroutine correct_field_harmonic_box(box)
     type(box_t), intent(inout) :: box
     integer                    :: IJK
-    real(dp)                   :: Elo(NDIM), Ehi(NDIM)
-    real(dp)                   :: Emin(NDIM), Emax(NDIM)
-    real(dp)                   :: a, b
+    real(dp)                   :: f(2*NDIM), hmean
     real(dp)                   :: eps = 1e-10_dp
     integer                    :: nc
 
     nc = box%n_cell
 
     do KJI_DO(1, nc)
-#if NDIM == 2
-       ! Fields on lower and upper cell faces
-       Elo = box%fc(IJK, 1:NDIM, electric_fld)
-       Ehi = [box%fc(i+1, j, 1, electric_fld), &
-            box%fc(i, j+1, 2, electric_fld)]
+#if NDIM == 1
+       f = abs([box%fc(i, 1, electric_fld), &
+            box%fc(i+1, 1, electric_fld)])
+       hmean = 2*f(1)*f(2)/(f(1)+f(2)+eps)
+#elif NDIM == 2
+       f = abs([box%fc(i, j, 1, electric_fld), &
+            box%fc(i+1, j, 1, electric_fld), &
+            box%fc(i, j, 2, electric_fld), &
+            box%fc(i, j+1, 2, electric_fld)])
+       hmean = norm2([2*f(1)*f(2)/(f(1)+f(2)+eps), &
+            2*f(3)*f(4)/(f(3)+f(4)+eps)])
+#elif NDIM == 3
+       f = abs([&
+            box%fc(i, j, k, 1, electric_fld), &
+            box%fc(i+1, j, k, 1, electric_fld), &
+            box%fc(i, j, k, 2, electric_fld), &
+            box%fc(i, j+1, k, 2, electric_fld), &
+            box%fc(i, j, k, 3, electric_fld), &
+            box%fc(i, j, k+1, 3, electric_fld)])
+       hmean = norm2([&
+            2*f(1)*f(2)/(f(1)+f(2)+eps), &
+            2*f(3)*f(4)/(f(3)+f(4)+eps), &
+            2*f(5)*f(6)/(f(5)+f(6)+eps)])
 #endif
-
-       ! Determine Emin and Emax (component-wise)
-       where (abs(Elo) < abs(Ehi))
-          Emin = Elo
-          Emax = Ehi
-       elsewhere
-          Emin = Ehi
-          Emax = Elo
-       end where
-
-       ! Compute harmonic mean of field strengths
-       a = norm2(Emin)
-       b = norm2(Emax)
-       box%cc(IJK, i_electric_fld) = 2 * a * b / (a + b + eps)
+       box%cc(IJK, i_electric_fld) = hmean
     end do; CLOSE_DO
   end subroutine correct_field_harmonic_box
 
