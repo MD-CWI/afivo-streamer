@@ -360,7 +360,7 @@ contains
        ST_source_factor = source_factor_none
     case ("flux")
        ST_source_factor = source_factor_flux
-    case ("flux-hmean")
+    case ("flux_hmean")
        ST_source_factor = source_factor_flux_hmean
     case ("original_cc")
        ST_source_factor = source_factor_original_cc
@@ -372,7 +372,8 @@ contains
           error stop
        end if
     case default
-       print *, "Options fixes%source_factor: none, flux, flux-hmean, original"
+       print *, "Options fixes%source_factor: none, flux, flux_hmean, ", &
+            "original_cc, original_flux"
        error stop "Unknown fixes%source_factor"
     end select
 
