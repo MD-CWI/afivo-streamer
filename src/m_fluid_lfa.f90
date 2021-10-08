@@ -426,6 +426,33 @@ contains
 
     tree%boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
 
+    if (ST_source_factor == source_factor_original_flux) then
+       ! Store approximation of E . [-D grad(n_e)] in temporary variable
+       associate (box => tree%boxes(id))
+         do KJI_DO(1, nc)
+#if NDIM == 1
+            box%cc(IJK, i_srcfac) = 0.5_dp * (&
+                 box%fc(i, 1, electric_fld) * dc(i, 1) + &
+                 box%fc(i+1, 1, electric_fld) * dc(i+1, 1))
+#elif NDIM == 2
+            box%cc(IJK, i_srcfac) = 0.5_dp * (&
+                 box%fc(i, j, 1, electric_fld) * dc(i, j, 1) + &
+                 box%fc(i+1, j, 1, electric_fld) * dc(i+1, j, 1) + &
+                 box%fc(i, j, 2, electric_fld) * dc(i, j, 2) + &
+                 box%fc(i, j+1, 2, electric_fld) * dc(i, j+1, 2))
+#elif NDIM == 3
+            box%cc(IJK, i_srcfac) = 0.5_dp * (&
+                 box%fc(i, j, k, 1, electric_fld) * dc(i, j, k, 1) + &
+                 box%fc(i+1, j, k, 1, electric_fld) * dc(i+1, j, k, 1) + &
+                 box%fc(i, j, k, 2, electric_fld) * dc(i, j, k, 2) + &
+                 box%fc(i, j+1, k, 2, electric_fld) * dc(i, j+1, k, 2) + &
+                 box%fc(i, j, k, 3, electric_fld) * dc(i, j, k, 3) + &
+                 box%fc(i, j, k+1, 3, electric_fld) * dc(i, j, k+1, 3))
+#endif
+         end do; CLOSE_DO
+       end associate
+    end if
+
     if (ST_drt_limit_flux) then
        where (abs(tree%boxes(id)%fc(DTIMES(:), :, flux_elec)) > fmax)
           tree%boxes(id)%fc(DTIMES(:), :, flux_elec) = &
@@ -835,7 +862,7 @@ contains
        source_factor = harmonic_factor * (source_factor + eps) / (eps + &
             elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
-    case (source_factor_original)
+    case (source_factor_original_cc)
        ! This is the 'original' scheme, 1 - (E_hat . F_diff)/F_flux
        diffc = LT_get_col(td_tbl, td_diffusion, fields) * tmp
        ix = 0
@@ -876,6 +903,11 @@ contains
                (eps + elec_dens(ix) * mobilities(ix) * &
                box%cc(IJK, i_electric_fld)**2)
        end do; CLOSE_DO
+    case (source_factor_original_flux)
+       ! Compute source factor as 1 - (E . F_diff)/F_drift
+       source_factor = 1 - pack(box%cc(DTIMES(1:nc), i_srcfac), .true.) / &
+            (eps + elec_dens * mobilities * &
+            pack(box%cc(DTIMES(1:nc), i_electric_fld)**2, .true.))
     case default
        error stop
     end select

@@ -96,7 +96,8 @@ module m_streamer
   integer, public, parameter :: source_factor_none = 0
   integer, public, parameter :: source_factor_flux = 1
   integer, public, parameter :: source_factor_flux_hmean = 2
-  integer, public, parameter :: source_factor_original = 3
+  integer, public, parameter :: source_factor_original_cc = 3
+  integer, public, parameter :: source_factor_original_flux = 4
 
   !> Minimal density for including electron sources
   real(dp), public, protected :: ST_source_min_density = -1e10_dp
@@ -361,8 +362,15 @@ contains
        ST_source_factor = source_factor_flux
     case ("flux-hmean")
        ST_source_factor = source_factor_flux_hmean
-    case ("original")
-       ST_source_factor = source_factor_original
+    case ("original_cc")
+       ST_source_factor = source_factor_original_cc
+    case ("original_flux")
+       ST_source_factor = source_factor_original_flux
+       if (.not. write_source_factor) then
+          print *, "source factor scheme original_flux requires ", &
+               "fixes%write_source_factor = T"
+          error stop
+       end if
     case default
        print *, "Options fixes%source_factor: none, flux, flux-hmean, original"
        error stop "Unknown fixes%source_factor"
