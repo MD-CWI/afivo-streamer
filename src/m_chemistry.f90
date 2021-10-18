@@ -109,6 +109,9 @@ module m_chemistry
   !> Indicates a reaction of the form c1 * exp(-(EN / c2)^c3)
   integer, parameter :: rate_analytic_k14 = 19
 
+  !> Indicates a reaction of the form c1 * exp(-(c2 /(kb * (T + EN/c3)))^c4)
+  integer, parameter :: rate_analytic_k15 = 20
+
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
 
@@ -541,6 +544,11 @@ contains
           rates(:, n) = c0 * c(1) * exp(-(c(2) / (c(3) + fields))**c(4))
        case (rate_analytic_k14)
           rates(:, n) = c0 * c(1) * exp(-(fields / c(2))**c(3))
+       case (rate_analytic_k15)
+          ! Note that this reaction depends on Ti, ionic temperature, which according to Galimberti(1979),
+          ! Ti = T_gas + fields/c(3), with c(3) = 0.18 Td/Kelvin, UC_boltzmann_const is in J/Kelvin, 
+          ! c(2) is given in Joule in the input file
+          rates(:, n) = c0 * c(1) * exp(-(c(2) / (UC_boltzmann_const * (gas_temperature + fields/c(3))))**c(4))
       end select
     end do
   end subroutine get_rates
@@ -784,6 +792,9 @@ contains
        case ("k14_func")
           new_reaction%rate_type = rate_analytic_k14
           read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k15_func")
+          new_reaction%rate_type = rate_analytic_k15
+          read(data_value(n), *) new_reaction%rate_data(1:4)
        case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))

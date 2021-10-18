@@ -426,6 +426,33 @@ contains
 
     tree%boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
 
+    if (ST_source_factor == source_factor_original_flux) then
+       ! Store approximation of E . [-D grad(n_e)] in temporary variable
+       associate (box => tree%boxes(id))
+         do KJI_DO(1, nc)
+#if NDIM == 1
+            box%cc(IJK, i_srcfac) = 0.5_dp * (&
+                 box%fc(i, 1, electric_fld) * dc(i, 1) + &
+                 box%fc(i+1, 1, electric_fld) * dc(i+1, 1))
+#elif NDIM == 2
+            box%cc(IJK, i_srcfac) = 0.5_dp * (&
+                 box%fc(i, j, 1, electric_fld) * dc(i, j, 1) + &
+                 box%fc(i+1, j, 1, electric_fld) * dc(i+1, j, 1) + &
+                 box%fc(i, j, 2, electric_fld) * dc(i, j, 2) + &
+                 box%fc(i, j+1, 2, electric_fld) * dc(i, j+1, 2))
+#elif NDIM == 3
+            box%cc(IJK, i_srcfac) = 0.5_dp * (&
+                 box%fc(i, j, k, 1, electric_fld) * dc(i, j, k, 1) + &
+                 box%fc(i+1, j, k, 1, electric_fld) * dc(i+1, j, k, 1) + &
+                 box%fc(i, j, k, 2, electric_fld) * dc(i, j, k, 2) + &
+                 box%fc(i, j+1, k, 2, electric_fld) * dc(i, j+1, k, 2) + &
+                 box%fc(i, j, k, 3, electric_fld) * dc(i, j, k, 3) + &
+                 box%fc(i, j, k+1, 3, electric_fld) * dc(i, j, k+1, 3))
+#endif
+         end do; CLOSE_DO
+       end associate
+    end if
+
     if (ST_drt_limit_flux) then
        where (abs(tree%boxes(id)%fc(DTIMES(:), :, flux_elec)) > fmax)
           tree%boxes(id)%fc(DTIMES(:), :, flux_elec) = &
@@ -764,7 +791,7 @@ contains
     real(dp)                   :: mobilities(nc**NDIM), diffc(nc**NDIM)
     real(dp)                   :: tmp, inv_dr(NDIM), f(2*NDIM)
     real(dp)                   :: Evec(NDIM), gradn(NDIM)
-    real(dp), parameter        :: eps = 1e-10_dp
+    real(dp), parameter        :: small_flux = 1.0e-9_dp ! A small flux
     real(dp), parameter        :: harmonic_factor = 2.0_dp
     integer                    :: ix, IJK
 
@@ -798,7 +825,7 @@ contains
        end do; CLOSE_DO
 
        ! Compute source factor as |flux|/(n_e * mu * E)
-       source_factor = (source_factor + eps) / (eps + &
+       source_factor = (source_factor + small_flux) / (small_flux + &
             elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
     case (source_factor_flux_hmean)
@@ -810,21 +837,21 @@ contains
           ! flux components
 #if NDIM == 1
           f = abs([box%fc(i, 1, flux_elec), box%fc(i+1, 1, flux_elec)])
-          source_factor(ix) = 2*f(1)*f(2)/(f(1)+f(2)+eps)
+          source_factor(ix) = 2*f(1)*f(2)/(f(1)+f(2)+small_flux)
 #elif NDIM == 2
           f = abs([box%fc(i, j, 1, flux_elec), box%fc(i+1, j, 1, flux_elec), &
                box%fc(i, j, 2, flux_elec), box%fc(i, j+1, 2, flux_elec)])
-          source_factor(ix) = norm2([2*f(1)*f(2)/(f(1)+f(2)+eps), &
-               2*f(3)*f(4)/(f(3)+f(4)+eps)])
+          source_factor(ix) = norm2([2*f(1)*f(2)/(f(1)+f(2)+small_flux), &
+               2*f(3)*f(4)/(f(3)+f(4)+small_flux)])
 #elif NDIM == 3
           f = abs([&
                box%fc(i, j, k, 1, flux_elec), box%fc(i+1, j, k, 1, flux_elec), &
                box%fc(i, j, k, 2, flux_elec), box%fc(i, j+1, k, 2, flux_elec), &
                box%fc(i, j, k, 3, flux_elec), box%fc(i, j, k+1, 3, flux_elec)])
           source_factor(ix) = norm2([&
-               2*f(1)*f(2)/(f(1)+f(2)+eps), &
-               2*f(3)*f(4)/(f(3)+f(4)+eps), &
-               2*f(5)*f(6)/(f(5)+f(6)+eps)])
+               2*f(1)*f(2)/(f(1)+f(2)+small_flux), &
+               2*f(3)*f(4)/(f(3)+f(4)+small_flux), &
+               2*f(5)*f(6)/(f(5)+f(6)+small_flux)])
 #endif
        end do; CLOSE_DO
 
@@ -832,10 +859,10 @@ contains
        ! harmonic_factor is used to ensure 'regular' solutions are not affected;
        ! only when source_factor < 1/harmonic_factor does it start to affect the
        ! solution.
-       source_factor = harmonic_factor * (source_factor + eps) / (eps + &
-            elec_dens * mobilities * &
+       source_factor = harmonic_factor * (source_factor + small_flux) / &
+            (small_flux + elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
-    case (source_factor_original)
+    case (source_factor_original_cc)
        ! This is the 'original' scheme, 1 - (E_hat . F_diff)/F_flux
        diffc = LT_get_col(td_tbl, td_diffusion, fields) * tmp
        ix = 0
@@ -873,9 +900,14 @@ contains
                - box%cc(i, j, k-1, i_electron+s_dt)]
 #endif
           source_factor(ix) = 1 + diffc(ix) * sum(Evec * gradn) / &
-               (eps + elec_dens(ix) * mobilities(ix) * &
+               (small_flux + elec_dens(ix) * mobilities(ix) * &
                box%cc(IJK, i_electric_fld)**2)
        end do; CLOSE_DO
+    case (source_factor_original_flux)
+       ! Compute source factor as 1 - (E . F_diff)/F_drift
+       source_factor = 1 - pack(box%cc(DTIMES(1:nc), i_srcfac), .true.) / &
+            (small_flux + elec_dens * mobilities * &
+            pack(box%cc(DTIMES(1:nc), i_electric_fld)**2, .true.))
     case default
        error stop
     end select
