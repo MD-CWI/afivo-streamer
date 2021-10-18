@@ -774,6 +774,9 @@ contains
        case ("k14_func")
           new_reaction%rate_type = rate_analytic_k14
           read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("k15_func")
+          new_reaction%rate_type = rate_analytic_k15
+          read(data_value(n), *) new_reaction%rate_data(1:4)
        case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
