@@ -14,6 +14,11 @@ module m_mg_types
   integer, parameter :: mg_ceps_box   = 3 !< Box with constant eps /= 1
   integer, parameter :: mg_veps_box   = 4 !< Box with varying eps (on face)
 
+  integer, parameter :: mg_prolong_linear = 33
+  integer, parameter :: mg_prolong_sparse = 34
+  integer, parameter :: mg_prolong_eps = 35
+  integer, parameter :: mg_prolong_lsf = 36
+
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1
   integer, parameter :: mg_cycle_up   = 3
@@ -71,8 +76,11 @@ module m_mg_types
      !> Subroutine that performs the (non)linear operator
      procedure(mg_box_op), pointer, nopass   :: box_op => null()
 
-     !> Key indicating which stencil is to be used
-     integer :: box_op_key = af_stencil_none
+     !> Key indicating which stencil is to be used for the operator
+     integer :: operator_key = af_stencil_none
+
+     !> Key indicating which stencil is to be used for the operator
+     integer :: prolongation_key = af_stencil_none
 
      !> Subroutine that performs Gauss-Seidel relaxation on a box
      procedure(mg_box_gsrb), pointer, nopass :: box_gsrb => null()

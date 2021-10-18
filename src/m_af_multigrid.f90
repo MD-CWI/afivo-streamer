@@ -15,17 +15,9 @@ module m_af_multigrid
   public :: mg_destroy
   public :: mg_fas_fmg
   public :: mg_fas_vcycle
-  public :: mg_box_op
-  public :: mg_box_gsrb
-  public :: mg_box_corr
-  public :: mg_box_rstr
 
   ! Automatic selection of operators
   public :: mg_set_box_tag
-  public :: mg_auto_op
-  public :: mg_auto_gsrb
-  public :: mg_auto_corr
-  public :: mg_auto_rstr
 
   ! Methods for normal Laplacian
   public :: mg_box_lpl_gradient
@@ -42,33 +34,46 @@ contains
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg   !< Multigrid options
 
-    if (mg%i_phi < 0)                  stop "mg_init: i_phi not set"
-    if (mg%i_tmp < 0)                  stop "mg_init: i_tmp not set"
-    if (mg%i_rhs < 0)                  stop "mg_init: i_rhs not set"
+    if (mg%i_phi < 0) stop "mg_init: i_phi not set"
+    if (mg%i_tmp < 0) stop "mg_init: i_tmp not set"
+    if (mg%i_rhs < 0) stop "mg_init: i_rhs not set"
 
     if (.not. associated(mg%sides_bc)) stop "mg_init: sides_bc not set"
     if (.not. tree%ready) error stop "mg_init: tree not initialized"
 
     ! Check whether these are set, otherwise use default
-    if (mg%n_cycle_down < 0)           mg%n_cycle_down = 2
-    if (mg%n_cycle_up < 0)             mg%n_cycle_up = 2
+    if (mg%n_cycle_down < 0) mg%n_cycle_down = 2
+    if (mg%n_cycle_up < 0) mg%n_cycle_up = 2
 
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%box_op)) mg%box_op => mg_auto_op
     ! if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_auto_gsrb
-    if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr
+    if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr_v2
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_auto_rb
 
     !> @todo improve how operator is set
-    if (mg%box_op_key == af_stencil_none) then
-       mg%box_op_key = mg_normal_box
-       if (mg%i_lsf /= -1) mg%box_op_key = mg_lsf_box
-       if (mg%i_eps /= -1) mg%box_op_key = mg_veps_box
+    if (mg%operator_key == af_stencil_none) then
+       mg%operator_key = mg_normal_box
+       if (mg%i_lsf /= -1) mg%operator_key = mg_lsf_box
+       if (mg%i_eps /= -1) mg%operator_key = mg_veps_box
 
        if (mg%i_lsf /= -1 .and. mg%i_eps /= -1) &
             error stop "TODO: implement mixing of dielectrics/electrodes"
+    end if
+
+    if (mg%prolongation_key == af_stencil_none) then
+       select case (mg%operator_key)
+       case (mg_normal_box)
+          mg%prolongation_key = mg_prolong_linear
+       case (mg_lsf_box)
+          mg%prolongation_key = mg_prolong_lsf
+       case (mg_veps_box, mg_ceps_box)
+          mg%prolongation_key = mg_prolong_eps
+       case default
+          error stop "Not implemented yet"
+       end select
     end if
 
     if (mg%i_lsf /= -1) then
@@ -87,8 +92,7 @@ contains
 
   subroutine mg_destroy(mg)
     type(mg_t), intent(inout) :: mg   !< Multigrid options
-
-    if (.not. mg%initialized) stop "check_mg: you haven't called mg_init"
+    call check_mg(mg)
     call coarse_solver_destroy(mg%csolver)
   end subroutine mg_destroy
 
@@ -121,23 +125,27 @@ contains
        call init_phi_rhs(tree, mg)
     end if
 
-    do lvl = 1, tree%highest_lvl
+    ! Handle level 1 grid
+    lvl = 1
+    call af_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
+         mg%i_phi, mg%i_tmp)
+    call mg_fas_vcycle(tree, mg, set_residual .and. &
+         lvl == tree%highest_lvl, lvl, standalone=.false.)
+
+    do lvl = 2, tree%highest_lvl
        ! Store phi_old in tmp
        call af_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, &
             mg%i_phi, mg%i_tmp)
 
-       if (lvl > 1) then
-          ! Correct solution at this lvl using lvl-1 data
-          ! phi = phi + prolong(phi_coarse - phi_old_coarse)
-          call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
+       ! Correct solution at this lvl using lvl-1 data
+       ! phi = phi + prolong(phi_coarse - phi_old_coarse)
+       call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
-          ! Update ghost cells
-          call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
-       end if
+       ! Update ghost cells
+       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
 
-       ! Perform V-cycle, only set residual on last iteration
-       call mg_fas_vcycle(tree, mg, &
-            set_residual .and. lvl == tree%highest_lvl, lvl, standalone=.false.)
+       call mg_fas_vcycle(tree, mg, set_residual .and. &
+            lvl == tree%highest_lvl, lvl, standalone=.false.)
     end do
 
   end subroutine mg_fas_fmg
@@ -763,19 +771,19 @@ contains
     integer, intent(in)        :: redblack_cntr !< Iteration count
     type(mg_t), intent(in)     :: mg            !< Multigrid options
 
-    call af_stencil_gsrb_box(box, mg%box_op_key, redblack_cntr, &
+    call af_stencil_gsrb_box(box, mg%operator_key, redblack_cntr, &
          mg%i_phi, mg%i_rhs)
   end subroutine mg_auto_gsrb
 
-  !> Store stencil for a box
-  subroutine mg_store_stencil(box, mg)
+  !> Store operator stencil for a box
+  subroutine mg_store_operator_stencil(box, mg)
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer                    :: ix
 
-    call af_stencil_prepare_store(box, mg%box_op_key, ix)
+    call af_stencil_prepare_store(box, mg%operator_key, ix)
 
-    select case(mg%box_op_key)
+    select case (mg%operator_key)
     case (mg_normal_box)
        call mg_box_lpl_stencil(box, mg, ix)
     case (mg_lsf_box)
@@ -783,9 +791,45 @@ contains
     case (mg_veps_box, mg_ceps_box)
        call mg_box_lpld_stencil(box, mg, ix)
     case default
-       error stop "mg_store_stencil: unknown stencil"
+       print *, "mg%operator_key: ", mg%operator_key
+       error stop "mg_store_operator_stencil: unknown stencil"
     end select
-  end subroutine mg_store_stencil
+
+    call af_stencil_check_box(box, mg%operator_key, ix)
+  end subroutine mg_store_operator_stencil
+
+  !> Store prolongation stencil for a box
+  subroutine mg_store_prolongation_stencil(tree, id, mg)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id !< Id of box
+    type(mg_t), intent(in)    :: mg
+    integer                   :: ix, p_id
+
+    call af_stencil_prepare_store(tree%boxes(id), mg%prolongation_key, ix)
+
+    p_id = tree%boxes(id)%parent
+    if (p_id <= af_no_box) error stop "Box does not have parent"
+
+    select case (mg%prolongation_key)
+    case (mg_prolong_linear)
+       call mg_box_prolong_linear_stencil(tree%boxes(id), &
+            tree%boxes(p_id), mg, ix)
+    case (mg_prolong_sparse)
+       call mg_box_prolong_sparse_stencil(tree%boxes(id), &
+            tree%boxes(p_id), mg, ix)
+    case (mg_prolong_lsf)
+       call mg_box_prolong_lsf_stencil(tree%boxes(id), &
+            tree%boxes(p_id), mg, ix)
+    case (mg_prolong_eps)
+       call mg_box_prolong_eps_stencil(tree%boxes(id), &
+            tree%boxes(p_id), mg, ix)
+    case default
+       print *, "mg%prolongation_key: ", mg%prolongation_key
+       error stop "mg_store_prolongation_stencil: unknown stencil"
+    end select
+
+    call af_stencil_check_box(tree%boxes(id), mg%prolongation_key, ix)
+  end subroutine mg_store_prolongation_stencil
 
   !> Based on the box type, apply the approriate operator
   subroutine mg_auto_op(box, i_out, mg)
@@ -793,7 +837,7 @@ contains
     integer, intent(in)        :: i_out !< Index of output variable
     type(mg_t), intent(in)     :: mg    !< Multigrid options
 
-    call af_stencil_apply_box(box, mg%box_op_key, mg%i_phi, i_out)
+    call af_stencil_apply_box(box, mg%operator_key, mg%i_phi, i_out)
   end subroutine mg_auto_op
 
   !> Based on the box type, apply the approriate Laplace operator
@@ -837,6 +881,16 @@ contains
     end select
 
   end subroutine mg_auto_rb
+
+  !> Based on the box type, correct the solution of the children
+  subroutine mg_auto_corr_v2(box_p, box_c, mg)
+    type(box_t), intent(inout) :: box_c !< Child box
+    type(box_t), intent(in)    :: box_p !< Parent box
+    type(mg_t), intent(in)     :: mg !< Multigrid options
+
+    call af_stencil_prolong_box(box_p, box_c, mg%prolongation_key, &
+         mg%i_tmp, mg%i_phi, .true.)
+  end subroutine mg_auto_corr_v2
 
   !> Based on the box type, correct the solution of the children
   subroutine mg_auto_corr(box_p, box_c, mg)
@@ -905,19 +959,26 @@ contains
          end if
 
          ! Store required stencils
-         if (mg%box_op_key == af_stencil_none) &
-              error stop "mg%box_op_key not defined"
+         if (mg%operator_key == af_stencil_none) &
+              error stop "mg%operator_key not defined"
 
-         n = af_stencil_index(box, mg%box_op_key)
+         n = af_stencil_index(box, mg%operator_key)
          if (n == af_stencil_none) then
-            call mg_store_stencil(box, mg)
-            n = af_stencil_index(box, mg%box_op_key)
+            call mg_store_operator_stencil(box, mg)
+            n = af_stencil_index(box, mg%operator_key)
          end if
 
          ! Right-hand side correction for internal boundaries
          if (allocated(box%stencils(n)%f)) then
             box%stencils(n)%bc_correction = &
                  box%stencils(n)%f * mg%lsf_boundary_value
+         end if
+
+         if (lvl > 1) then
+            n = af_stencil_index(box, mg%prolongation_key)
+            if (n == af_stencil_none) then
+               call mg_store_prolongation_stencil(tree, id, mg)
+            end if
          end if
        end associate
     end do
@@ -984,6 +1045,236 @@ contains
 
   end subroutine mg_box_lpl_stencil
 
+  !> Store linear prolongation stencil for standard Laplacian
+  subroutine mg_box_prolong_linear_stencil(box, box_p, mg, ix)
+    type(box_t), intent(inout) :: box   !< Current box
+    type(box_t), intent(in)    :: box_p !< Parent box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix    !< Stencil index
+    integer                    :: n_coeff
+
+    box%stencils(ix)%shape    = af_stencil_p248
+    box%stencils(ix)%constant = .true.
+    n_coeff                   = af_stencil_sizes(af_stencil_p248)
+
+    allocate(box%stencils(ix)%c(n_coeff))
+#if NDIM == 1
+    box%stencils(ix)%c(:) = [0.75_dp, 0.25_dp]
+#elif NDIM == 2
+    box%stencils(ix)%c(:) = [9, 3, 3, 1] / 16.0_dp
+#elif NDIM == 3
+    box%stencils(ix)%c(:) = [27, 9, 9, 3, 9, 3, 3, 1] / 64.0_dp
+#endif
+  end subroutine mg_box_prolong_linear_stencil
+
+  !> Store sparse linear prolongation stencil for standard Laplacian
+  subroutine mg_box_prolong_sparse_stencil(box, box_p, mg, ix)
+    type(box_t), intent(inout) :: box   !< Current box
+    type(box_t), intent(in)    :: box_p !< Parent box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix    !< Stencil index
+    integer                    :: n_coeff
+
+    box%stencils(ix)%shape    = af_stencil_p234
+    box%stencils(ix)%constant = .true.
+    n_coeff                   = af_stencil_sizes(af_stencil_p234)
+
+    allocate(box%stencils(ix)%c(n_coeff))
+#if NDIM == 1
+    box%stencils(ix)%c(:) = [0.75_dp, 0.25_dp]
+#elif NDIM == 2
+    box%stencils(ix)%c(:) = [0.5_dp, 0.25_dp, 0.25_dp]
+#elif NDIM == 3
+    box%stencils(ix)%c(:) = [0.25_dp, 0.25_dp, 0.25_dp, 0.25_dp]
+#endif
+  end subroutine mg_box_prolong_sparse_stencil
+
+  !> Store prolongation stencil for standard Laplacian with variable coefficient
+  !> that can jump at cell faces
+  subroutine mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
+    type(box_t), intent(inout) :: box   !< Current box
+    type(box_t), intent(in)    :: box_p !< Parent box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix    !< Stencil index
+    real(dp)                   :: dd(NDIM+1), lsf_a
+    integer                    :: n_coeff, i_lsf, nc
+    logical                    :: has_boundary, success
+    integer                    :: IJK, IJK_(c1)
+    integer                    :: IJK_(c2), ix_offset(NDIM)
+
+    nc                        = box%n_cell
+    box%stencils(ix)%shape    = af_stencil_p234
+    box%stencils(ix)%constant = .false.
+    ix_offset                 = af_get_child_offset(box)
+    n_coeff                   = af_stencil_sizes(af_stencil_p234)
+    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    has_boundary              = .false.
+
+    i_lsf = mg%i_lsf
+
+    associate (v => box%stencils(ix)%v)
+      ! In these loops, we calculate the closest coarse index (_c1), and the
+      ! one-but-closest (_c2). The fine cell lies in between.
+#if NDIM == 1
+      do i = 1, nc
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+         lsf_a = box%cc(i, i_lsf)
+         dd(1) = lsf_dist(lsf_a, box_p%cc(i_c1, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box_p%cc(i_c2, i_lsf))
+         if (any(dd < 1)) has_boundary = .true.
+
+         v(:, IJK) = [3 * dd(2), dd(1)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+      end do
+#elif NDIM == 2
+      do j = 1, nc
+         j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+         j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+         do i = 1, nc
+            i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+            i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+            u0 = box_p%cc(i_c1, j_c1, i_corr)
+            a0 = box_p%cc(i_c1, j_c1, i_eps)
+            u(1) = box_p%cc(i_c2, j_c1, i_corr)
+            u(2) = box_p%cc(i_c1, j_c2, i_corr)
+            a(1) = box_p%cc(i_c2, j_c1, i_eps)
+            a(2) = box_p%cc(i_c1, j_c2, i_eps)
+
+            if (any(dd < 1)) has_boundary = .true.
+
+            v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
+                 dd(1) ** dd(3)]
+            v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         end do
+      end do
+#elif NDIM == 3
+      do k = 1, nc
+         k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+         k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+         do j = 1, nc
+            j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+            j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+            do i = 1, nc
+               i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+               i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+               lsf_a = box%cc(i, j, k, i_lsf)
+               dd(1) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c1, k_c1, i_lsf))
+               dd(2) = lsf_dist(lsf_a, box_p%cc(i_c2, j_c1, k_c1, i_lsf))
+               dd(3) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c2, k_c1, i_lsf))
+               dd(4) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c1, k_c2, i_lsf))
+
+               if (any(dd < 1)) has_boundary = .true.
+
+               v(:, IJK) = [dd(2) * dd(3) * dd(4), &
+                    dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
+                    dd(1) * dd(2) * dd(3)]
+               v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+            end do
+         end do
+      end do
+#endif
+    end associate
+
+    call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
+
+  end subroutine mg_box_prolong_lsf_stencil
+
+  !> Store prolongation stencil for standard Laplacian with level set function
+  !> for internal boundaries
+  subroutine mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
+    type(box_t), intent(inout) :: box   !< Current box
+    type(box_t), intent(in)    :: box_p !< Parent box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix    !< Stencil index
+    real(dp)                   :: dd(NDIM+1), lsf_a
+    integer                    :: n_coeff, i_lsf, nc
+    logical                    :: has_boundary, success
+    integer                    :: IJK, IJK_(c1)
+    integer                    :: IJK_(c2), ix_offset(NDIM)
+
+    nc                        = box%n_cell
+    box%stencils(ix)%shape    = af_stencil_p234
+    box%stencils(ix)%constant = .false.
+    ix_offset                 = af_get_child_offset(box)
+    n_coeff                   = af_stencil_sizes(af_stencil_p234)
+    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    has_boundary              = .false.
+
+    i_lsf = mg%i_lsf
+
+    associate (v => box%stencils(ix)%v)
+      ! In these loops, we calculate the closest coarse index (_c1), and the
+      ! one-but-closest (_c2). The fine cell lies in between.
+#if NDIM == 1
+      do i = 1, nc
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+         lsf_a = box%cc(i, i_lsf)
+         dd(1) = lsf_dist(lsf_a, box_p%cc(i_c1, i_lsf))
+         dd(2) = lsf_dist(lsf_a, box_p%cc(i_c2, i_lsf))
+         if (any(dd < 1)) has_boundary = .true.
+
+         v(:, IJK) = [3 * dd(2), dd(1)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+      end do
+#elif NDIM == 2
+      do j = 1, nc
+         j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+         j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+         do i = 1, nc
+            i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+            i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+            lsf_a = box%cc(i, j, i_lsf)
+            dd(1) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c1, i_lsf))
+            dd(2) = lsf_dist(lsf_a, box_p%cc(i_c2, j_c1, i_lsf))
+            dd(3) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c2, i_lsf))
+
+            if (any(dd < 1)) has_boundary = .true.
+
+            v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
+                 dd(1) ** dd(3)]
+            v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         end do
+      end do
+#elif NDIM == 3
+      do k = 1, nc
+         k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+         k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+         do j = 1, nc
+            j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+            j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+            do i = 1, nc
+               i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+               i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+
+               lsf_a = box%cc(i, j, k, i_lsf)
+               dd(1) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c1, k_c1, i_lsf))
+               dd(2) = lsf_dist(lsf_a, box_p%cc(i_c2, j_c1, k_c1, i_lsf))
+               dd(3) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c2, k_c1, i_lsf))
+               dd(4) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c1, k_c2, i_lsf))
+
+               if (any(dd < 1)) has_boundary = .true.
+
+               v(:, IJK) = [dd(2) * dd(3) * dd(4), &
+                    dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
+                    dd(1) * dd(2) * dd(3)]
+               v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+            end do
+         end do
+      end do
+#endif
+    end associate
+
+    call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
+
+  end subroutine mg_box_prolong_lsf_stencil
+
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
   subroutine mg_box_lpld_stencil(box, mg, ix)
@@ -992,6 +1283,7 @@ contains
     integer, intent(in)        :: ix !< Index of the stencil
     integer                    :: IJK, nc, n_coeff
     real(dp)                   :: idr2(2*NDIM), a0, a(2*NDIM)
+    logical                    :: success
 
     nc               = box%n_cell
     idr2(1:2*NDIM:2) = 1/box%dr**2
@@ -1024,7 +1316,7 @@ contains
       end do; CLOSE_DO
     end associate
 
-    call af_stencil_try_constant(box, ix, epsilon(1.0_dp))
+    call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
 
   end subroutine mg_box_lpld_stencil
 
@@ -1258,7 +1550,7 @@ contains
     integer, intent(in)        :: ix !< Index of stencil
     integer                    :: IJK, n, nc, idim, n_coeff
     real(dp)                   :: lsf_a, dd(2*NDIM), dr2(NDIM)
-    logical                    :: has_boundary
+    logical                    :: has_boundary, success
 #if NDIM == 2
     real(dp)                   :: tmp
 #endif
@@ -1330,13 +1622,11 @@ contains
       end do; CLOSE_DO
     end associate
 
-    ! If no boundary was found, remove stored coefficients and use a standard
-    ! stencil instead
-    if (.not. has_boundary) then
-       deallocate(box%stencils(ix)%v)
+    call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
+
+    if (success) then
        deallocate(box%stencils(ix)%f)
        deallocate(box%stencils(ix)%bc_correction)
-       call mg_box_lpl_stencil(box, mg, ix)
     end if
 
   end subroutine mg_box_lpllsf_stencil

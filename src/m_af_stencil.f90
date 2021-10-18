@@ -7,13 +7,20 @@ module m_af_stencil
   private
 
     !> Number of predefined stencil shapes
-  integer, parameter, private :: num_shapes = 1
+  integer, parameter, private :: num_shapes = 3
 
   !> 3/5/7 point stencil in 1D/2D/3D
   integer, parameter, public :: af_stencil_357 = 1
 
+  !> Prolongation stencil using nearest 2, 3, 4 neighbors in 1D-3D
+  integer, parameter, public :: af_stencil_p234 = 2
+
+  !> Prolongation stencil using nearest 2, 4, 8 neighbors in 1D-3D
+  integer, parameter, public :: af_stencil_p248 = 3
+
   !> Number of coefficients in the stencils
-  integer, parameter, public :: af_stencil_sizes(num_shapes) = [2*NDIM+1]
+  integer, parameter, public :: af_stencil_sizes(num_shapes) = &
+       [2*NDIM+1, NDIM+1, 2**NDIM]
 
   abstract interface
      !> Subroutine for setting a stencil on a box
@@ -27,10 +34,12 @@ module m_af_stencil
   public :: af_stencil_index
   public :: af_stencil_prepare_store
   public :: af_stencil_store_box
+  public :: af_stencil_check_box
   public :: af_stencil_store
   public :: af_stencil_apply
   public :: af_stencil_apply_box
   public :: af_stencil_gsrb_box
+  public :: af_stencil_prolong_box
   public :: af_stencil_get_box
   public :: af_stencil_try_constant
 
@@ -107,6 +116,28 @@ contains
     call af_stencil_prepare_store(box, key, ix)
     call set_stencil(box, box%stencils(ix))
   end subroutine af_stencil_store_box
+
+  !> Check if a stencil was correctly stored for a box
+  subroutine af_stencil_check_box(box, key, ix)
+    type(box_t), intent(in) :: box !< Box
+    integer, intent(in)     :: key !< Stencil key
+    integer, intent(in)     :: ix  !< Stencil index
+
+    if (key == af_stencil_none) &
+         error stop "key == af_stencil_none"
+
+    if (af_stencil_index(box, key) /= ix) &
+         error stop "Stencil with key not found at index"
+
+    associate (stencil => box%stencils(ix))
+      if (stencil%shape < 1 .or. stencil%shape > num_shapes) &
+           error stop "Unknown stencil shape"
+      if (allocated(stencil%c) .eqv. allocated(stencil%v)) &
+           error stop "Either stencil%c or stencil%v should be allocated"
+      if (stencil%constant .neqv. allocated(stencil%c)) &
+           error stop "Wrong stencil allocated (stencil%c vs stencil%v)"
+    end associate
+  end subroutine af_stencil_check_box
 
   subroutine af_stencil_apply(tree, key, iv, i_out)
     type(af_t), intent(inout) :: tree  !< Operate on this box
@@ -332,6 +363,271 @@ contains
   !   end do
   ! end subroutine stencil_correct_bc_357
 
+  subroutine af_stencil_prolong_box(box_p, box_c, key, iv, iv_to, add)
+    type(box_t), intent(in)       :: box_p    !< Parent box
+    type(box_t), intent(inout)    :: box_c !< Child box
+    integer, intent(in)           :: key   !< Stencil key
+    integer, intent(in)           :: iv    !< Input variable
+    integer, intent(in)           :: iv_to !< Destination variable
+    logical, intent(in), optional :: add   !< Add to old values
+    logical                       :: add_to
+    integer                       :: i
+
+    add_to = .false.
+    if (present(add)) add_to = add
+
+    i = af_stencil_index(box_c, key)
+    if (i == af_stencil_none) error stop "Stencil not stored"
+
+    select case (box_c%stencils(i)%shape)
+    case (af_stencil_p234)
+       call stencil_prolong_234(box_p, box_c, box_c%stencils(i), &
+            iv, iv_to, add_to)
+    case (af_stencil_p248)
+       call stencil_prolong_248(box_p, box_c, box_c%stencils(i), &
+            iv, iv_to, add_to)
+    case default
+       print *, "box_c%stencils(i)%shape: ", box_c%stencils(i)%shape
+       error stop "Unknown stencil"
+    end select
+  end subroutine af_stencil_prolong_box
+
+  !> Linear prolongation using nearest NDIM+1 neighbors
+  subroutine stencil_prolong_234(box_p, box_c, stencil, iv, iv_to, add)
+    type(box_t), intent(in)     :: box_p      !< Parent box
+    type(box_t), intent(inout)  :: box_c   !< Child box
+    type(stencil_t), intent(in) :: stencil !< Stencil
+    integer, intent(in)         :: iv      !< Input variable
+    integer, intent(in)         :: iv_to   !< Destination variable
+    logical, intent(in)         :: add     !< Add to old values
+
+    integer  :: nc, ix_offset(NDIM), IJK
+    integer  :: IJK_(c1), IJK_(c2)
+    real(dp) :: c(NDIM+1)
+
+    nc        = box_c%n_cell
+    ix_offset = af_get_child_offset(box_c)
+
+    if (.not. add) box_c%cc(DTIMES(1:nc), iv_to) = 0
+
+    ! In these loops, we calculate the closest coarse index (_c1), and the
+    ! one-but-closest (_c2). The fine cell lies in between.
+#if NDIM == 1
+    if (stencil%constant) then
+       c = stencil%c
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+          box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+               c(1) * box_p%cc(i_c1, iv) + &
+               c(2) * box_p%cc(i_c2, iv)
+       end do
+    else
+       do i = 1, nc
+          c = stencil%v(:, IJK)
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+          box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+               c(1) * box_p%cc(i_c1, iv) + &
+               c(2) * box_p%cc(i_c2, iv)
+       end do
+    end if
+#elif NDIM == 2
+    if (stencil%constant) then
+       c = stencil%c
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+             box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                  c(1) * box_p%cc(i_c1, j_c1, iv) + &
+                  c(2) * box_p%cc(i_c2, j_c1, iv) + &
+                  c(3) * box_p%cc(i_c1, j_c2, iv)
+          end do
+       end do
+    else
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+             c = stencil%v(:, IJK)
+             box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                  c(1) * box_p%cc(i_c1, j_c1, iv) + &
+                  c(2) * box_p%cc(i_c2, j_c1, iv) + &
+                  c(3) * box_p%cc(i_c1, j_c2, iv)
+          end do
+       end do
+    end if
+#elif NDIM == 3
+    if (stencil%constant) then
+       c = stencil%c
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+             do i = 1, nc
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+                box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                     c(1) * box_p%cc(i_c1, j_c1, k_c1, iv) + &
+                     c(2) * box_p%cc(i_c2, j_c1, k_c1, iv) + &
+                     c(3) * box_p%cc(i_c1, j_c2, k_c1, iv) + &
+                     c(4) * box_p%cc(i_c1, j_c1, k_c2, iv)
+             end do
+          end do
+       end do
+    else
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+             do i = 1, nc
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+                c = stencil%v(:, IJK)
+                box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                     c(1) * box_p%cc(i_c1, j_c1, k_c1, iv) + &
+                     c(2) * box_p%cc(i_c2, j_c1, k_c1, iv) + &
+                     c(3) * box_p%cc(i_c1, j_c2, k_c1, iv) + &
+                     c(4) * box_p%cc(i_c1, j_c1, k_c2, iv)
+             end do
+          end do
+       end do
+    end if
+#endif
+  end subroutine stencil_prolong_234
+
+  !> (Bi-/tri-)linear prolongation using nearest 2**NDIM neighbors
+  subroutine stencil_prolong_248(box_p, box_c, stencil, iv, iv_to, add)
+    type(box_t), intent(in)     :: box_p      !< Parent box
+    type(box_t), intent(inout)  :: box_c   !< Child box
+    type(stencil_t), intent(in) :: stencil !< Stencil
+    integer, intent(in)         :: iv      !< Input variable
+    integer, intent(in)         :: iv_to   !< Destination variable
+    logical, intent(in)         :: add     !< Add to old values
+
+    integer  :: nc, ix_offset(NDIM), IJK
+    integer  :: IJK_(c1), IJK_(c2)
+    real(dp) :: c(2**NDIM)
+
+    nc        = box_c%n_cell
+    ix_offset = af_get_child_offset(box_c)
+
+    if (.not. add) box_c%cc(DTIMES(1:nc), iv_to) = 0
+
+    ! In these loops, we calculate the closest coarse index (_c1), and the
+    ! one-but-closest (_c2). The fine cell lies in between.
+#if NDIM == 1
+    if (stencil%constant) then
+       c = stencil%c
+       do i = 1, nc
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+          box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+               c(1) * box_p%cc(i_c1, iv) + &
+               c(2) * box_p%cc(i_c2, iv)
+       end do
+    else
+       do i = 1, nc
+          c = stencil%v(:, IJK)
+          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+          box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+               c(1) * box_p%cc(i_c1, iv) + &
+               c(2) * box_p%cc(i_c2, iv)
+       end do
+    end if
+#elif NDIM == 2
+    if (stencil%constant) then
+       c = stencil%c
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+             box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                  c(1) * box_p%cc(i_c1, j_c1, iv) + &
+                  c(2) * box_p%cc(i_c2, j_c1, iv) + &
+                  c(3) * box_p%cc(i_c1, j_c2, iv) + &
+                  c(4) * box_p%cc(i_c2, j_c2, iv)
+          end do
+       end do
+    else
+       do j = 1, nc
+          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+          do i = 1, nc
+             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+             c = stencil%v(:, IJK)
+             box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                  c(1) * box_p%cc(i_c1, j_c1, iv) + &
+                  c(2) * box_p%cc(i_c2, j_c1, iv) + &
+                  c(3) * box_p%cc(i_c1, j_c2, iv) + &
+                  c(4) * box_p%cc(i_c2, j_c2, iv)
+          end do
+       end do
+    end if
+#elif NDIM == 3
+    if (stencil%constant) then
+       c = stencil%c
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+             do i = 1, nc
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+                box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                     c(1) * box_p%cc(i_c1, j_c1, k_c1, iv) + &
+                     c(2) * box_p%cc(i_c2, j_c1, k_c1, iv) + &
+                     c(3) * box_p%cc(i_c1, j_c2, k_c1, iv) + &
+                     c(4) * box_p%cc(i_c2, j_c2, k_c1, iv) + &
+                     c(5) * box_p%cc(i_c1, j_c1, k_c2, iv) + &
+                     c(6) * box_p%cc(i_c2, j_c1, k_c2, iv) + &
+                     c(7) * box_p%cc(i_c1, j_c2, k_c2, iv) + &
+                     c(8) * box_p%cc(i_c2, j_c2, k_c2, iv)
+             end do
+          end do
+       end do
+    else
+       do k = 1, nc
+          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
+          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
+          do j = 1, nc
+             j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+             j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+             do i = 1, nc
+                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+                i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+                c = stencil%v(:, IJK)
+                box_c%cc(IJK, iv_to) = box_c%cc(IJK, iv_to) + &
+                     c(1) * box_p%cc(i_c1, j_c1, k_c1, iv) + &
+                     c(2) * box_p%cc(i_c2, j_c1, k_c1, iv) + &
+                     c(3) * box_p%cc(i_c1, j_c2, k_c1, iv) + &
+                     c(4) * box_p%cc(i_c2, j_c2, k_c1, iv) + &
+                     c(5) * box_p%cc(i_c1, j_c1, k_c2, iv) + &
+                     c(6) * box_p%cc(i_c2, j_c1, k_c2, iv) + &
+                     c(7) * box_p%cc(i_c1, j_c2, k_c2, iv) + &
+                     c(8) * box_p%cc(i_c2, j_c2, k_c2, iv)
+             end do
+          end do
+       end do
+    end if
+#endif
+  end subroutine stencil_prolong_248
+
   !> Perform Gauss-Seidel red-black on a stencil
   subroutine af_stencil_gsrb_box(box, key, redblack, iv, i_rhs)
     type(box_t), intent(inout) :: box      !< Operate on this box
@@ -515,16 +811,18 @@ contains
   end subroutine stencil_gsrb_357
 
   !> Convert a variable stencil to constant one if possible
-  subroutine af_stencil_try_constant(box, ix, abs_tol)
+  subroutine af_stencil_try_constant(box, ix, abs_tol, success)
     type(box_t), intent(inout) :: box
-    integer, intent(in)        :: ix  !< Stencil index
-    real(dp), intent(in)       :: abs_tol !< Absolute tolerance
+    integer, intent(in)        :: ix       !< Stencil index
+    real(dp), intent(in)       :: abs_tol  !< Absolute tolerance
+    logical                    :: success !< Whether the stencil was converted
     integer                    :: IJK, nc, n_coeff
 
     if (.not. allocated(box%stencils(ix)%v)) &
          error stop "No variable stencil present"
 
     nc = box%n_cell
+    success = .false.
 
     ! Check if all coefficients are the same, otherwise return
     do KJI_DO(1, nc)
@@ -532,12 +830,12 @@ contains
             box%stencils(ix)%v(:, DTIMES(1))) > abs_tol)) return
     end do; CLOSE_DO
 
-    ! print *, "CONSTANT"
     box%stencils(ix)%constant = .true.
     n_coeff = size(box%stencils(ix)%v, 1)
     allocate(box%stencils(ix)%c(n_coeff))
     box%stencils(ix)%c = box%stencils(ix)%v(:, DTIMES(1))
     deallocate(box%stencils(ix)%v)
+    success = .true.
   end subroutine af_stencil_try_constant
 
   !> Get the stencil for a box

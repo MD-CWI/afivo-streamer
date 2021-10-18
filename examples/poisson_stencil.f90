@@ -67,7 +67,7 @@ program poisson_stencil
   mg%i_tmp        = i_tmp       ! Variable for temporary space
   mg%sides_bc     => sides_bc   ! Method for boundary conditions
 
-  mg%box_op_key = mg_normal_box
+  mg%operator_key = mg_normal_box
 
   call mg_init(tree, mg)
 

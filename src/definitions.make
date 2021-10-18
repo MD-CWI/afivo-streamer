@@ -67,7 +67,7 @@ m_af_prolong.o: m_af_types.mod
 m_af_restrict.o: m_af_types.mod
 m_af_stencil.o: m_af_types.mod
 m_af_utils.o: m_af_types.mod
-m_coarse_solver.o: m_af_ghostcell.mod
+m_coarse_solver.o: m_af_stencil.mod
 m_coarse_solver.o: m_af_types.mod
 m_coarse_solver.o: m_mg_types.mod
 m_dielectric.o: m_af_ghostcell.mod

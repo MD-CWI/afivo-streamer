@@ -135,13 +135,13 @@ contains
        id  = tree%lvls(1)%ids(n)
 
        associate (box => tree%boxes(id))
-         call af_stencil_get_box(box, mg%box_op_key, full_coeffs)
+         call af_stencil_get_box(box, mg%operator_key, full_coeffs)
          call stencil_handle_boundaries(box, mg, full_coeffs, &
               mg%csolver%bc_to_rhs(:, :, n))
 
          ! This assumes that correction factors due to a level set function are
          ! stored in the stencil%f array
-         i = af_stencil_index(box, mg%box_op_key)
+         i = af_stencil_index(box, mg%operator_key)
          if (allocated(box%stencils(i)%f)) then
             mg%csolver%lsf_fac(DTIMES(:), n) = box%stencils(i)%f
          end if
