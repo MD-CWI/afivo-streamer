@@ -7,9 +7,9 @@ program poisson_lsf_test
 
   implicit none
 
-  integer, parameter :: box_size         = 8
+  integer            :: box_size         = 8
   integer, parameter :: n_iterations     = 10
-  integer            :: max_refine_level = 3
+  integer            :: max_refine_level = 2
   integer            :: i_phi
   integer            :: i_rhs
   integer            :: i_tmp
@@ -18,13 +18,15 @@ program poisson_lsf_test
   integer            :: i_field
   integer            :: i_field_norm
 
-  ! Which shape to use, 1 = circle, 2 = heart
-  integer, parameter  :: shape             = 1
+  ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
+  integer             :: shape             = 1
 
+  ! Sharpness_triangle, can choose a larger number for more acute angle
+  integer             :: sharpness_t       = 10
   real(dp), parameter :: boundary_value    = 1.0_dp
   real(dp), parameter :: solution_coeff    = 1.0_dp
   real(dp), parameter :: solution_radius   = 0.25_dp
-  real(dp)            :: solution_r0(NDIM) = 0.5_dp
+  real(dp)            :: solution_r0(NDIM) = 0.5_dp ! .51625_dp is a problematic one
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -46,8 +48,10 @@ program poisson_lsf_test
 
   ! If an argument is given, switch to cylindrical coordinates in 2D
   n_args = command_argument_count()
-  if (n_args > 2) &
-       stop "Usage: ./poisson_lsf_test [cyl] [max_refinement_level]"
+  if (n_args > 6) then
+     stop "Usage: ./poisson_lsf_test [cyl] [max_refinement_level] [shape_type] "&
+          "[size of box] [sharpness_triangle]"
+  end if
 
   coord = af_xyz
   do n = 1, n_args
@@ -56,8 +60,16 @@ program poisson_lsf_test
         coord = af_cyl
         ! Place solution on axis
         solution_r0(1) = 0.0_dp
-     else
+     else if (n == 2) then
         read(argv, *) max_refine_level
+     else if (n == 3) then
+        read(argv, *) shape
+     else if (n == 4) then
+        read(argv, *) box_size
+     else if (n == 5) then
+        read(argv, *) sharpness_t
+     else if (n == 6) then
+        read(argv, *) solution_r0(NDIM)
      end if
   end do
 
@@ -82,6 +94,10 @@ program poisson_lsf_test
   mg%sides_bc => bc_solution
   mg%lsf_boundary_value = boundary_value
 
+  mg%lsf_dist => golden_lsf
+
+  mg%lsf_max_gradient = 30.0_dp
+
   call mg_init(tree, mg)
 
   do mg_iter = 1, n_iterations
@@ -95,7 +111,6 @@ program poisson_lsf_test
      call af_tree_maxabs_cc(tree, i_error, max_error)
      call af_tree_maxabs_cc(tree, i_field_norm, max_field)
      write(*, "(I8,3E14.5)") mg_iter, residu, max_error, max_field
-
      write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // "_", mg_iter
      call af_write_silo(tree, trim(fname))
   end do
@@ -143,7 +158,7 @@ contains
 
   real(dp) function solution(r)
     real(dp), intent(in) :: r(NDIM)
-    real(dp) :: distance
+    real(dp) :: distance, lsf
 
     select case (shape)
     case (1)
@@ -160,6 +175,14 @@ contains
        else
           solution = boundary_value + solution_coeff * (1 - 1/distance)
        end if
+    case (4, 5)
+       ! Triangle
+       lsf = get_lsf(r)
+       if (lsf <= 0.0_dp) then
+          solution = boundary_value
+       else
+          solution = boundary_value * exp(-lsf)
+       end if
     case default
        solution = 0.0_dp
     end select
@@ -170,28 +193,62 @@ contains
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
     integer                    :: IJK, nc
-    real(dp)                   :: distance, rr(NDIM)
+    real(dp)                   :: rr(NDIM)
 
     nc = box%n_cell
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
-       select case (shape)
-       case (1)
-          distance = norm2(rr-solution_r0) / solution_radius
-          box%cc(IJK, iv) = distance - 1.0_dp
-#if NDIM > 1
-       case (2)
-          ! Center on r0
-          rr = (rr - solution_r0) * 4.0_dp
-          box%cc(IJK, iv) = (rr(1)**2 + rr(2)**2 - 1)**3 - &
-               rr(1)**2 * rr(2)**3
-#endif
-       case default
-          error stop "Unavailable shape"
-       end select
+       box%cc(IJK, iv) = get_lsf(rr)
     end do; CLOSE_DO
   end subroutine set_lsf
+
+  real(dp) function get_lsf(rr)
+    real(dp), intent(in) :: rr(NDIM)
+    real(dp)             :: distance
+#if NDIM > 1
+    real(dp)             :: qq(NDIM), dist1, dist2
+#endif
+
+    select case (shape)
+    case (1)
+       distance = norm2(rr-solution_r0) / solution_radius
+       get_lsf = distance - 1.0_dp
+#if NDIM > 1
+    case (2)
+       ! Center on r0
+       qq = (rr - solution_r0) * 4.0_dp
+       get_lsf = (qq(1)**2 + qq(2)**2 - 1)**3 - &
+            qq(1)**2 * qq(2)**3
+    case (3)
+       ! Rhombus or astroid
+       qq = (rr-solution_r0)*4.0_dp
+       get_lsf = ((qq(1)**2)**(1.0_dp/3)/0.8) + &
+            ((qq(2)**2)**(1.0_dp/3)/1.5) - 0.8_dp
+    case (4)
+       ! sharpness_t -> for sharpness of the triangle top angle,
+       ! larger sharpness_t equals more acute angle
+       qq = rr-solution_r0
+       get_lsf = sharpness_t * abs(qq(1)) + qq(2)
+    case (5)
+       ! Triangle v2, uses signed distance from the triangle
+       dist1 = GM_dist_line(rr, [solution_r0(1) - solution_r0(2)/sharpness_t, 0.0_dp], &
+            solution_r0, 2)
+       dist2 = GM_dist_line(rr, [solution_r0(1) + solution_r0(2)/sharpness_t, 0.0_dp], &
+            solution_r0, 2)
+
+       ! Determine sign of lsf function
+       qq = rr - solution_r0
+       get_lsf = sharpness_t * abs(qq(1)) + qq(2)
+
+       ! Use sign in front of minimum distance
+       get_lsf = sign(min(dist1, dist2), get_lsf)
+#endif
+    case default
+       error stop "Invalid case"
+    end select
+
+  end function get_lsf
 
   subroutine set_error(box)
     type(box_t), intent(inout) :: box
@@ -222,4 +279,201 @@ contains
     end do
   end subroutine bc_solution
 
-end program
+  !> Compute distance to boundary starting at point a going to point b, in
+  !> the range from [0, 1], with 1 meaning there is no boundary
+  real(dp) function custom_lsf_dist(box_a, IJK_(a), box_b, IJK_(b), mg)
+    type(box_t), intent(in) :: box_a   !< Box a (start point)
+    integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
+    type(box_t), intent(in) :: box_b   ! Box b (end point)
+    integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
+    type(mg_t), intent(in)  :: mg
+
+    integer, parameter :: n_steps = 15
+    integer            :: n
+    real(dp)           :: lsf_a, lsf_b
+    real(dp)           :: r_a(NDIM), r_b(NDIM), rr(NDIM)
+    real(dp)           :: dr(NDIM)
+
+    ! Location of points a and b
+    r_a             = af_r_cc(box_a, [IJK_(a)])
+    r_b             = af_r_cc(box_b, [IJK_(b)])
+    dr              = (r_b - r_a) / n_steps
+    lsf_a           = get_lsf(r_a)
+    custom_lsf_dist = 1.0_dp
+
+    if (abs(lsf_a) <= 0.0_dp) then
+       ! Arbitrary value, each neighbor will have same weight and boundary value
+       custom_lsf_dist = 0.01
+    else
+       ! Scan the interval between a and b
+       do n = 1, n_steps
+          rr = r_a + n * dr
+          lsf_b = get_lsf(rr)
+
+          if (lsf_a * lsf_b <= 0) then
+             ! There is a boundary between the points, the relative distance is
+             ! (n-1)/n_steps plus the distance in the current 'interval'
+             custom_lsf_dist = (n - 1 + lsf_a / (lsf_a - lsf_b))/n_steps
+             exit
+          end if
+       end do
+    end if
+
+  end function custom_lsf_dist
+
+  !> Compute distance vector between point and its projection onto a line
+  !> between r0 and r1
+  subroutine GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
+    integer, intent(in)   :: n_dim
+    real(dp), intent(in)  :: r(n_dim), r0(n_dim), r1(n_dim)
+    real(dp), intent(out) :: dist_vec(n_dim)
+    real(dp), intent(out) :: frac !< Fraction [0,1] along line
+    real(dp)              :: line_len2
+
+    line_len2 = sum((r1 - r0)**2)
+    frac = sum((r - r0) * (r1 - r0))
+
+    if (frac <= 0.0_dp) then
+       frac = 0.0_dp
+       dist_vec = r - r0
+    else if (frac >= line_len2) then
+       frac = 1.0_dp
+       dist_vec = r - r1
+    else
+       dist_vec = r - (r0 + frac/line_len2 * (r1 - r0))
+       frac = sqrt(frac / line_len2)
+    end if
+  end subroutine GM_dist_vec_line
+
+  function GM_dist_line(r, r0, r1, n_dim) result(dist)
+    integer, intent(in)  :: n_dim
+    real(dp), intent(in) :: r(n_dim), r0(n_dim), r1(n_dim)
+    real(dp)             :: dist, dist_vec(n_dim), frac
+    call GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
+    dist = norm2(dist_vec)
+  end function GM_dist_line
+
+  !> Find root of f in the interval [a, b]. If f(a) and f(b) have different
+  !> signs, apply bisection directly. Else, first find the (assumed to be)
+  !> unique local minimum/maximum to determine a bracket. Return relative
+  !> location of root, or 1 if there is no root.
+  real(dp) function golden_lsf(box_a, IJK_(a), box_b, IJK_(b), mg)
+    type(box_t), intent(in) :: box_a   !< Box a (start point)
+    integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
+    type(box_t), intent(in) :: box_b   ! Box b (end point)
+    integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
+    type(mg_t), intent(in)  :: mg
+    real(dp)                :: a(NDIM), b(NDIM), bracket(NDIM, 2)
+    real(dp)                :: r_root(NDIM)
+    real(dp), parameter     :: tol      = 1e-5_dp
+    integer, parameter      :: max_iter = 100
+
+    a = af_r_cc(box_a, [IJK_(a)])
+    b = af_r_cc(box_b, [IJK_(b)])
+
+    golden_lsf = 1.0_dp
+
+    if (get_lsf(a) * get_lsf(b) < 0) then
+       r_root = bisection(get_lsf, a, b, tol, max_iter)
+    else
+       ! Determine bracket by finding local minimum/maximum
+       bracket = gss(get_lsf, a, b, &
+            minimization=(get_lsf(a) >= 0), tol=tol)
+
+       if (get_lsf(bracket(:, 1)) * get_lsf(a) > 0) then
+          return                ! No root
+       else
+          r_root = bisection(get_lsf, a, bracket(:, 1), tol, max_iter)
+       end if
+    end if
+
+    golden_lsf = norm2(r_root - a)/norm2(b-a)
+    ! print *, golden_lsf, custom_lsf_dist(box_a, IJK_(a), box_b, IJK_(b), mg)
+  end function golden_lsf
+
+  !> Simple bisection
+  function bisection(f, in_a, in_b, tol, max_iter) result(c)
+    procedure(mg_func_lsf) :: f
+    real(dp), intent(in)  :: in_a(NDIM), in_b(NDIM), tol
+    integer, intent(in)   :: max_iter
+    real(dp)              :: a(NDIM), b(NDIM), c(NDIM), fc
+
+    a = in_a
+    b = in_b
+
+    do n = 1, max_iter
+       c = 0.5 * (a + b)
+       fc = f(c)
+       if (0.5 * norm2(b-a) < tol .or. abs(fc) <= 0) exit
+
+       if (fc * f(a) >= 0) then
+          a = c
+       else
+          b = c
+       end if
+    end do
+  end function bisection
+
+  !> Golden-section search. Given a function f with a single local minimum in
+  !> the interval [a,b], gss returns a subset interval [c,d] that contains the
+  !> minimum with d-c <= tol. Copied from
+  !> https://en.wikipedia.org/wiki/Golden-section_search
+  function gss(f, in_a, in_b, minimization, tol) result(bracket)
+    procedure(mg_func_lsf) :: f
+    real(dp), intent(in)  :: in_a(NDIM), in_b(NDIM), tol
+    logical, intent(in)   :: minimization
+    real(dp)              :: bracket(NDIM, 2)
+    real(dp)              :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
+    real(dp)              :: h(NDIM), yc, yd
+    real(dp)              :: invphi, invphi2
+    integer               :: n, k
+
+    invphi  = (sqrt(5.0_dp) - 1) / 2 ! 1 / phi
+    invphi2 = (3 - sqrt(5.0_dp)) / 2 ! 1 / phi^2
+
+    a = in_a
+    b = in_b
+    h = b - a
+
+    if (norm2(h) <= tol) then
+       bracket(:, 1) = a
+       bracket(:, 2) = b
+       return
+    end if
+
+    ! Required steps to achieve tolerance
+    n = int(ceiling(log(tol / norm2(h)) / log(invphi)))
+
+    c = a + invphi2 * h
+    d = a + invphi * h
+    yc = f(c)
+    yd = f(d)
+
+    do k = 1, n-1
+       if ((yc < yd) .eqv. minimization) then
+          b = d
+          d = c
+          yd = yc
+          h = invphi * h
+          c = a + invphi2 * h
+          yc = f(c)
+       else
+          a = c
+          c = d
+          yc = yd
+          h = invphi * h
+          d = a + invphi * h
+          yd = f(d)
+       end if
+    end do
+
+    if ((yc < yd) .eqv. minimization) then
+       bracket(:, 1) = a
+       bracket(:, 2) = d
+    else
+       bracket(:, 1) = c
+       bracket(:, 2) = b
+    end if
+  end function gss
+
+end program poisson_lsf_test
