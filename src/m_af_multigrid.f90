@@ -1091,16 +1091,19 @@ contains
 
   !> Store prolongation stencil for standard Laplacian with variable coefficient
   !> that can jump at cell faces
-  subroutine mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
+  subroutine mg_box_prolong_eps_stencil(box, box_p, mg, ix)
     type(box_t), intent(inout) :: box   !< Current box
     type(box_t), intent(in)    :: box_p !< Parent box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
-    real(dp)                   :: dd(NDIM+1), lsf_a
-    integer                    :: n_coeff, i_lsf, nc
-    logical                    :: has_boundary, success
+    real(dp)                   :: a0, a(NDIM)
+    integer                    :: n_coeff, i_eps, nc
+    logical                    :: success
     integer                    :: IJK, IJK_(c1)
     integer                    :: IJK_(c2), ix_offset(NDIM)
+#if NDIM == 3
+    real(dp), parameter        :: third = 1/3.0_dp
+#endif
 
     nc                        = box%n_cell
     box%stencils(ix)%shape    = af_stencil_p234
@@ -1108,9 +1111,8 @@ contains
     ix_offset                 = af_get_child_offset(box)
     n_coeff                   = af_stencil_sizes(af_stencil_p234)
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
-    has_boundary              = .false.
 
-    i_lsf = mg%i_lsf
+    i_eps = mg%i_eps
 
     associate (v => box%stencils(ix)%v)
       ! In these loops, we calculate the closest coarse index (_c1), and the
@@ -1120,13 +1122,11 @@ contains
          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-         lsf_a = box%cc(i, i_lsf)
-         dd(1) = lsf_dist(lsf_a, box_p%cc(i_c1, i_lsf))
-         dd(2) = lsf_dist(lsf_a, box_p%cc(i_c2, i_lsf))
-         if (any(dd < 1)) has_boundary = .true.
+         a0 = box_p%cc(i_c1, i_eps)
+         a(1) = box_p%cc(i_c2, i_eps)
 
-         v(:, IJK) = [3 * dd(2), dd(1)]
-         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         ! Get value of phi at coarse cell faces, and average
+         v(:, IJK) = [a0, a(1)] / (a0 + a(1))
       end do
 #elif NDIM == 2
       do j = 1, nc
@@ -1136,18 +1136,13 @@ contains
             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-            u0 = box_p%cc(i_c1, j_c1, i_corr)
             a0 = box_p%cc(i_c1, j_c1, i_eps)
-            u(1) = box_p%cc(i_c2, j_c1, i_corr)
-            u(2) = box_p%cc(i_c1, j_c2, i_corr)
             a(1) = box_p%cc(i_c2, j_c1, i_eps)
             a(2) = box_p%cc(i_c1, j_c2, i_eps)
 
-            if (any(dd < 1)) has_boundary = .true.
-
-            v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
-                 dd(1) ** dd(3)]
-            v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+            ! Get value of phi at coarse cell faces, and average
+            v(1, IJK) = 0.5_dp * sum(a0 / (a0 + a(:)))
+            v(2:, IJK) = 0.5_dp * a(:) / (a0 + a(:))
          end do
       end do
 #elif NDIM == 3
@@ -1161,18 +1156,14 @@ contains
                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
                i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-               lsf_a = box%cc(i, j, k, i_lsf)
-               dd(1) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c1, k_c1, i_lsf))
-               dd(2) = lsf_dist(lsf_a, box_p%cc(i_c2, j_c1, k_c1, i_lsf))
-               dd(3) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c2, k_c1, i_lsf))
-               dd(4) = lsf_dist(lsf_a, box_p%cc(i_c1, j_c1, k_c2, i_lsf))
+               a0 = box_p%cc(i_c1, j_c1, k_c1, i_eps)
+               a(1) = box_p%cc(i_c2, j_c1, k_c1, i_eps)
+               a(2) = box_p%cc(i_c1, j_c2, k_c1, i_eps)
+               a(3) = box_p%cc(i_c1, j_c1, k_c2, i_eps)
 
-               if (any(dd < 1)) has_boundary = .true.
-
-               v(:, IJK) = [dd(2) * dd(3) * dd(4), &
-                    dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
-                    dd(1) * dd(2) * dd(3)]
-               v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+               ! Get value of phi at coarse cell faces, and average
+               v(1, IJK) = third * sum((a0 - 0.5_dp * a(:))/(a0 + a(:)))
+               v(2:, IJK) = 0.5_dp * a(:) / (a0 + a(:))
             end do
          end do
       end do
@@ -1181,7 +1172,7 @@ contains
 
     call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
 
-  end subroutine mg_box_prolong_lsf_stencil
+  end subroutine mg_box_prolong_eps_stencil
 
   !> Store prolongation stencil for standard Laplacian with level set function
   !> for internal boundaries
