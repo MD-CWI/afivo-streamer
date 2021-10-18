@@ -10,6 +10,7 @@ program stencil_test
   integer, parameter  :: box_size   = 8
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
   integer             :: i_phi
+  integer             :: i_phi_old
   type(af_t)          :: tree
   type(ref_info_t)    :: refine_info
   integer             :: it
@@ -18,7 +19,9 @@ program stencil_test
   integer :: stencil_key = 1
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
+  call af_add_cc_variable(tree, "phi_old", ix=i_phi_old)
   call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero)
+  call af_set_cc_methods(tree, i_phi_old, af_bc_neumann_zero)
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -41,7 +44,8 @@ program stencil_test
      ! Write the cell centered data of tree to a vtk unstructured file fname.
      ! Only the leaves of the tree are used
      call af_write_silo(tree, trim(fname), it)
-     call af_stencil_apply(tree, stencil_key, i_phi, i_phi)
+     call af_tree_copy_cc(tree, i_phi, i_phi_old)
+     call af_stencil_apply(tree, stencil_key, i_phi_old, i_phi)
      call af_gc_tree(tree, [i_phi])
   end do
 
