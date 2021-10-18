@@ -17,7 +17,7 @@ module m_af_types
   integer, parameter :: af_min_lvl = 1
 
   !> Maximum number of variables
-  integer, parameter :: af_max_num_vars = 100
+  integer, parameter :: af_max_num_vars = 1024
 
   !> Value indicating you want to derefine a box
   integer, parameter :: af_rm_ref = -1
@@ -759,6 +759,28 @@ contains
        hi(nb_dim) = nc + n_gc
     end if
   end subroutine af_get_index_bc_outside
+
+  !> Get index range of boundary FACES inside a box facing neighbor nb
+  subroutine af_get_index_bface_inside(nb, nc, n_gc, lo, hi)
+    integer, intent(in)  :: nb !< Neighbor direction
+    integer, intent(in)  :: nc !< box size
+    integer, intent(in)  :: n_gc !< Number of ghost cells
+    integer, intent(out) :: lo(NDIM)
+    integer, intent(out) :: hi(NDIM)
+    integer              :: nb_dim
+
+    ! Determine index range next to boundary
+    nb_dim     = af_neighb_dim(nb)
+    lo(:)      = 1
+    hi(:)      = nc
+    if (af_neighb_low(nb)) then
+       lo(nb_dim) = 1
+       hi(nb_dim) = n_gc
+    else
+       lo(nb_dim) = nc - n_gc + 2
+       hi(nb_dim) = nc + 1
+    end if
+  end subroutine af_get_index_bface_inside
 
   !> Compute the 'child index' for a box with spatial index ix. With 'child
   !> index' we mean the index in the children(:) array of its parent.
