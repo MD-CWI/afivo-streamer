@@ -51,7 +51,7 @@ contains
     if (.not. associated(mg%box_op)) mg%box_op => mg_auto_op
     ! if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
     if (.not. associated(mg%box_gsrb)) mg%box_gsrb => mg_auto_gsrb
-    if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr_v2
+    if (.not. associated(mg%box_corr)) mg%box_corr => mg_auto_corr
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_auto_rb
 
@@ -885,33 +885,13 @@ contains
   end subroutine mg_auto_rb
 
   !> Based on the box type, correct the solution of the children
-  subroutine mg_auto_corr_v2(box_p, box_c, mg)
+  subroutine mg_auto_corr(box_p, box_c, mg)
     type(box_t), intent(inout) :: box_c !< Child box
     type(box_t), intent(in)    :: box_p !< Parent box
     type(mg_t), intent(in)     :: mg !< Multigrid options
 
     call af_stencil_prolong_box(box_p, box_c, mg%prolongation_key, &
          mg%i_tmp, mg%i_phi, .true.)
-  end subroutine mg_auto_corr_v2
-
-  !> Based on the box type, correct the solution of the children
-  subroutine mg_auto_corr(box_p, box_c, mg)
-    type(box_t), intent(inout) :: box_c !< Child box
-    type(box_t), intent(in)    :: box_p !< Parent box
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-
-    select case(box_c%tag)
-    case (mg_normal_box)
-       call mg_box_corr_lpl(box_p, box_c, mg)
-    case (mg_lsf_box)
-       call mg_box_corr_lpllsf(box_p, box_c, mg)
-    case (mg_veps_box, mg_ceps_box)
-       call mg_box_corr_lpld(box_p, box_c, mg)
-    case (af_init_tag)
-       error stop "mg_auto_corr: box_c tag not set"
-    case default
-       error stop "mg_auto_corr: unknown box tag"
-    end select
   end subroutine mg_auto_corr
 
   subroutine mg_set_box_tag(box, mg)
@@ -996,15 +976,6 @@ contains
        call mg_set_box_tag_lvl(tree, mg, lvl)
     end do
   end subroutine mg_set_box_tag_tree
-
-  subroutine mg_box_corr_lpl(box_p, box_c, mg)
-    use m_af_prolong
-    type(box_t), intent(inout) :: box_c !< Child box
-    type(box_t), intent(in)    :: box_p !< Parent box
-    type(mg_t), intent(in)     :: mg !< Multigrid options
-
-    call af_prolong_linear(box_p, box_c, mg%i_tmp, mg%i_phi, add=.true.)
-  end subroutine mg_box_corr_lpl
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg_box_rstr_lpl(box_c, box_p, iv, mg)
@@ -1313,91 +1284,6 @@ contains
 
   end subroutine mg_box_lpld_stencil
 
-  !> Correct fine grid values based on the change in the coarse grid, in the
-  !> case of a jump in epsilon
-  subroutine mg_box_corr_lpld(box_p, box_c, mg)
-    type(box_t), intent(inout)  :: box_c !< Child box
-    type(box_t), intent(in)     :: box_p !< Parent box
-    type(mg_t), intent(in)      :: mg !< Multigrid options
-    integer                      :: ix_offset(NDIM), i_phi, i_corr, i_eps
-    integer                      :: nc, IJK, IJK_(c1), IJK_(c2)
-    real(dp)                     :: u0, u(NDIM), a0, a(NDIM)
-#if NDIM == 3
-    real(dp), parameter          :: third = 1/3.0_dp
-#endif
-
-    nc = box_c%n_cell
-    ix_offset = af_get_child_offset(box_c)
-    i_phi = mg%i_phi
-    i_corr = mg%i_tmp
-    i_eps = mg%i_eps
-
-    ! In these loops, we calculate the closest coarse index (_c1), and the
-    ! one-but-closest (_c2). The fine cell lies in between.
-#if NDIM == 1
-    do i = 1, nc
-       i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-       i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-       u0 = box_p%cc(i_c1, i_corr)
-       a0 = box_p%cc(i_c1, i_eps)
-       u(1) = box_p%cc(i_c2, i_corr)
-       a(1) = box_p%cc(i_c2, i_eps)
-
-       ! Get value of phi at coarse cell faces, and average
-       box_c%cc(i, i_phi) = box_c%cc(i, i_phi) + &
-            sum( (a0*u0 + a(:)*u(:)) / (a0 + a(:)) )
-    end do
-#elif NDIM == 2
-    do j = 1, nc
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-          u0 = box_p%cc(i_c1, j_c1, i_corr)
-          a0 = box_p%cc(i_c1, j_c1, i_eps)
-          u(1) = box_p%cc(i_c2, j_c1, i_corr)
-          u(2) = box_p%cc(i_c1, j_c2, i_corr)
-          a(1) = box_p%cc(i_c2, j_c1, i_eps)
-          a(2) = box_p%cc(i_c1, j_c2, i_eps)
-
-          ! Get value of phi at coarse cell faces, and average
-          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + 0.5_dp * &
-               sum( (a0*u0 + a(:)*u(:)) / (a0 + a(:)) )
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-             u0 = box_p%cc(i_c1, j_c1, k_c1, i_corr)
-             u(1) = box_p%cc(i_c2, j_c1, k_c1, i_corr)
-             u(2) = box_p%cc(i_c1, j_c2, k_c1, i_corr)
-             u(3) = box_p%cc(i_c1, j_c1, k_c2, i_corr)
-             a0 = box_p%cc(i_c1, j_c1, k_c1, i_eps)
-             a(1) = box_p%cc(i_c2, j_c1, k_c1, i_eps)
-             a(2) = box_p%cc(i_c1, j_c2, k_c1, i_eps)
-             a(3) = box_p%cc(i_c1, j_c1, k_c2, i_eps)
-
-             ! Get value of phi at coarse cell faces, and average
-             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + third * &
-                  sum((a0*u0 + a(:) * (1.5_dp * u(:) - 0.5_dp * u0)) / &
-                  (a0 + a(:)))
-          end do
-       end do
-    end do
-#endif
-  end subroutine mg_box_corr_lpld
-
   !> For a point a, compute distance (between 0, 1) of a neighbor b.
   elemental function lsf_dist(lsf_a, lsf_b) result(distance)
     !> Level set function at a
@@ -1440,100 +1326,6 @@ contains
        val  = val_b
     end if
   end subroutine lsf_dist_val
-
-  subroutine mg_box_corr_lpllsf(box_p, box_c, mg)
-    type(box_t), intent(inout) :: box_c !< Child box
-    type(box_t), intent(in)    :: box_p !< Parent box
-    type(mg_t), intent(in)     :: mg    !< Multigrid options
-    integer                    :: i_phi, i_corr, i_lsf, ix_offset(NDIM)
-    integer                    :: nc
-    integer                    :: IJK, IJK_(c1), IJK_(c2)
-    real(dp)                   :: lsf_a, v_b(2)
-    real(dp)                   :: val(NDIM+1), dist(NDIM+1), c(NDIM+1)
-
-    nc        = box_c%n_cell
-    ix_offset = af_get_child_offset(box_c)
-    i_phi     = mg%i_phi
-    i_corr    = mg%i_tmp
-    i_lsf     = mg%i_lsf
-
-    ! In these loops, we calculate the closest coarse index (_c1), and the
-    ! one-but-closest (_c2). The fine cell lies in between.
-#if NDIM == 1
-    do i = 1, nc
-       i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-       i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-       lsf_a = box_c%cc(i, i_lsf)
-       v_b(1:2) = box_p%cc(i_c1, [i_lsf, i_corr])
-       call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(1), val(1))
-       v_b(1:2) = box_p%cc(i_c2, [i_lsf, i_corr])
-       call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(2), val(2))
-
-       ! Interpolate between the two coarse values, but account for distance to
-       ! potential boundary
-       c(1) = 3 * dist(2)
-       c(2) = dist(1)
-       box_c%cc(i, i_phi) = box_c%cc(i, i_phi) + sum(c * val)/sum(c)
-    end do
-#elif NDIM == 2
-    do j = 1, nc
-       j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-       j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-       do i = 1, nc
-          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-          lsf_a = box_c%cc(i, j, i_lsf)
-          v_b(1:2) = box_p%cc(i_c1, j_c1, [i_lsf, i_corr])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(1), val(1))
-          v_b(1:2) = box_p%cc(i_c2, j_c1, [i_lsf, i_corr])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(2), val(2))
-          v_b(1:2) = box_p%cc(i_c1, j_c2, [i_lsf, i_corr])
-          call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(3), val(3))
-
-          ! This expresses general interpolation between 3 points (on the lines
-          ! between the fine and the 3 coarse values).
-          c(1) = 2 * dist(2) * dist(3)
-          c(2) = dist(1) * dist(3)
-          c(3) = dist(1) * dist(2)
-          box_c%cc(i, j, i_phi) = box_c%cc(i, j, i_phi) + sum(c * val)/sum(c)
-       end do
-    end do
-#elif NDIM == 3
-    do k = 1, nc
-       k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
-       k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-       do j = 1, nc
-          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-          do i = 1, nc
-             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
-
-             lsf_a = box_c%cc(i, j, k, i_lsf)
-             v_b(1:2) = box_p%cc(i_c1, j_c1, k_c1, [i_lsf, i_corr])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(1), val(1))
-             v_b(1:2) = box_p%cc(i_c2, j_c1, k_c1, [i_lsf, i_corr])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(2), val(2))
-             v_b(1:2) = box_p%cc(i_c1, j_c2, k_c1, [i_lsf, i_corr])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(3), val(3))
-             v_b(1:2) = box_p%cc(i_c1, j_c1, k_c2, [i_lsf, i_corr])
-             call lsf_dist_val(lsf_a, v_b(1), v_b(2), 0.0_dp, dist(4), val(4))
-
-             ! This expresses general interpolation between 4 points (on the lines
-             ! between the fine and the 4 coarse values).
-             c(1) = dist(2) * dist(3) * dist(4)
-             c(2) = dist(1) * dist(3) * dist(4)
-             c(3) = dist(1) * dist(2) * dist(4)
-             c(4) = dist(1) * dist(2) * dist(3)
-             box_c%cc(i, j, k, i_phi) = box_c%cc(i, j, k, i_phi) + &
-                  sum(c * val)/sum(c)
-          end do
-       end do
-    end do
-#endif
-  end subroutine mg_box_corr_lpllsf
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
