@@ -69,8 +69,8 @@ module m_mg_types
      !> Boundary value for level set function
      real(dp) :: lsf_boundary_value = 0.0_dp
 
-     !> Maximal gradient of the level set function
-     real(dp) :: lsf_max_gradient = 0.0_dp
+     !> Safety factor for gradient of level set function
+     real(dp) :: lsf_gradient_safety_factor = 1.5_dp
 
      !> Level-set function
      procedure(mg_func_lsf), pointer, nopass :: lsf => null()

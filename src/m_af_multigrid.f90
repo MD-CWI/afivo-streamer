@@ -64,8 +64,6 @@ contains
     end if
 
     if (mg%i_lsf /= -1) then
-       if (mg%lsf_max_gradient <= 0.0_dp) &
-            error stop "mg%lsf_max_gradient should be positive"
        call check_coarse_representation_lsf(tree, mg)
        if (.not. associated(mg%lsf_dist)) mg%lsf_dist => lsf_dist_default
     end if
@@ -877,22 +875,40 @@ contains
          mg%i_tmp, mg%i_phi, .true.)
   end subroutine mg_auto_corr
 
-  !> Check whether the level-set function could have a root in or near the box
-  subroutine check_possible_lsf_root(box, mg, root_possible)
-    type(box_t), intent(in) :: box           !< Box to operate on
-    type(mg_t), intent(in)  :: mg            !< Multigrid options
-    logical, intent(out)    :: root_possible !< Whether there is a root
-    real(dp)                :: lsf_threshold
+  !> Check where the level-set function could have a root by computing the
+  !> numerical gradient
+  subroutine get_possible_lsf_root_mask(box, nc, dmax, mg, root_mask)
+    type(box_t), intent(in) :: box  !< Box to operate on
+    real(dp), intent(in)    :: dmax !< Maximal distance to consider
+    integer, intent(in)     :: nc   !< Box size
+    type(mg_t), intent(in)  :: mg   !< Multigrid options
+    !> Whether there could be a root
+    logical, intent(out)    :: root_mask(DTIMES(nc))
+    integer                 :: IJK
+    real(dp)                :: gradnorm, rr(NDIM)
 
-    ! Check for change of sign
-    root_possible = minval(box%cc(DTIMES(:), mg%i_lsf)) * &
-         maxval(box%cc(DTIMES(:), mg%i_lsf)) < 0
+    if (.not. associated(mg%lsf)) error stop "mg%lsf not set"
 
-    ! Check for values close to zero
-    lsf_threshold = mg%lsf_max_gradient * norm2(box%dr)
-    root_possible = root_possible .or. &
-         minval(abs(box%cc(DTIMES(:), mg%i_lsf))) < lsf_threshold
-  end subroutine check_possible_lsf_root
+    ! Compute gradient
+    do KJI_DO(1, nc)
+       rr = af_r_cc(box, [IJK])
+       gradnorm = numerical_gradient_amplitude(mg%lsf, rr)
+       root_mask(IJK) = (abs(box%cc(IJK, mg%i_lsf)) < dmax * gradnorm * &
+            mg%lsf_gradient_safety_factor)
+    end do; CLOSE_DO
+  end subroutine get_possible_lsf_root_mask
+
+  !> Check whether the level-set function could have a root by computing the
+  !> numerical gradient
+  logical function lsf_root_possible(box, dmax, mg)
+    type(box_t), intent(in) :: box  !< Box to operate on
+    real(dp), intent(in)    :: dmax !< Maximal distance to consider
+    type(mg_t), intent(in)  :: mg   !< Multigrid options
+    logical                 :: mask(DTIMES(box%n_cell))
+
+    call get_possible_lsf_root_mask(box, box%n_cell, dmax, mg, mask)
+    lsf_root_possible = any(mask)
+  end function lsf_root_possible
 
   subroutine mg_set_box_tag(box, mg)
     type(box_t), intent(inout) :: box !< Box to operate on
@@ -905,7 +921,7 @@ contains
     is_deps = .false.
 
     if (mg%i_lsf /= -1) then
-       call check_possible_lsf_root(box, mg, is_lsf)
+       is_lsf = lsf_root_possible(box, norm2(box%dr), mg)
     end if
 
     if (mg%i_eps /= -1) then
@@ -1186,7 +1202,8 @@ contains
     type(box_t), intent(in)    :: box_p !< Parent box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
-    real(dp)                   :: dd(NDIM+1), lsf_threshold
+    real(dp)                   :: dd(NDIM+1)
+    logical                    :: root_mask(DTIMES(box%n_cell))
     integer                    :: n_coeff, i_lsf, nc
     logical                    :: has_boundary, success
     integer                    :: IJK, IJK_(c1)
@@ -1200,7 +1217,8 @@ contains
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
     has_boundary              = .false.
 
-    lsf_threshold = mg%lsf_max_gradient * norm2(box%dr)
+    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
+         mg, root_mask)
     i_lsf = mg%i_lsf
 
     associate (v => box%stencils(ix)%v)
@@ -1211,7 +1229,7 @@ contains
          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-         if (abs(box%cc(IJK, mg%i_lsf)) < lsf_threshold) then
+         if (root_mask(IJK)) then
             dd(1) = mg%lsf_dist(box, IJK, box_p, i_c1, mg)
             dd(2) = mg%lsf_dist(box, IJK, box_p, i_c2, mg)
          else
@@ -1229,7 +1247,7 @@ contains
             i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-            if (abs(box%cc(IJK, mg%i_lsf)) < lsf_threshold) then
+            if (root_mask(IJK)) then
                dd(1) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c1, mg)
                dd(2) = mg%lsf_dist(box, IJK, box_p, i_c2, j_c1, mg)
                dd(3) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c2, mg)
@@ -1253,7 +1271,7 @@ contains
                i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
                i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-               if (abs(box%cc(IJK, mg%i_lsf)) < lsf_threshold) then
+               if (root_mask(IJK)) then
                   dd(1) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c1, k_c1, mg)
                   dd(2) = mg%lsf_dist(box, IJK, box_p, i_c2, j_c1, k_c1, mg)
                   dd(3) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c2, k_c1, mg)
@@ -1375,8 +1393,8 @@ contains
     integer, intent(in)        :: ix !< Index of stencil
     integer                    :: IJK, n, nc, idim, n_coeff
     real(dp)                   :: dd(2*NDIM), dr2(NDIM)
-    real(dp)                   :: lsf_threshold
     logical                    :: success
+    logical                    :: root_mask(DTIMES(box%n_cell))
 #if NDIM == 2
     real(dp)                   :: tmp
 #endif
@@ -1394,10 +1412,12 @@ contains
     allocate(box%stencils(ix)%f(DTIMES(nc)))
     allocate(box%stencils(ix)%bc_correction(DTIMES(nc)))
     box%stencils(ix)%f = 0.0_dp
-    lsf_threshold = norm2(box%dr) * mg%lsf_max_gradient
+
+    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
+         mg, root_mask)
 
     do KJI_DO(1, nc)
-       if (abs(box%cc(IJK, mg%i_lsf)) < lsf_threshold) then
+       if (root_mask(IJK)) then
 #if NDIM == 1
           dd(1) = mg%lsf_dist(box, IJK, box, i-1, mg)
           dd(2) = mg%lsf_dist(box, IJK, box, i+1, mg)
@@ -1799,7 +1819,8 @@ contains
 
     do i = 1, size(tree%lvls(1)%ids)
        id = tree%lvls(1)%ids(i)
-       call check_possible_lsf_root(tree%boxes(id), mg, root_possible)
+       root_possible = lsf_root_possible(&
+            tree%boxes(id), norm2(tree%boxes(id)%dr), mg)
        if (root_possible) exit
     end do
 
@@ -1808,5 +1829,36 @@ contains
     end if
 
   end subroutine check_coarse_representation_lsf
+
+  !> Get amplitude of numerical gradient of level set function
+  function numerical_gradient_amplitude(f, r) result(normgrad)
+    procedure(mg_func_lsf) :: f
+    real(dp), intent(in)   :: r(NDIM)
+    real(dp), parameter    :: sqrteps      = sqrt(epsilon(1.0_dp))
+    real(dp), parameter    :: min_stepsize = epsilon(1.0_dp)
+    real(dp)               :: r_eval(NDIM), gradient(NDIM)
+    real(dp)               :: stepsize(NDIM), flo, fhi, normgrad
+    integer                :: idim
+
+    stepsize = max(min_stepsize, sqrteps * abs(r))
+    r_eval = r
+
+    do idim = 1, NDIM
+       ! Sample function at (r - step_idim) and (r + step_idim)
+       r_eval(idim) = r(idim) - stepsize(idim)
+       flo = f(r_eval)
+
+       r_eval(idim) = r(idim) + stepsize(idim)
+       fhi = f(r_eval)
+
+       ! Use central difference scheme
+       gradient(idim) = (fhi - flo)/(2 * stepsize(idim))
+
+       ! Reset to original coordinate
+       r_eval(idim) = r(idim)
+    end do
+
+    normgrad = norm2(gradient)
+  end function numerical_gradient_amplitude
 
 end module m_af_multigrid
