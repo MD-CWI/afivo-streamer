@@ -31,6 +31,7 @@ module m_af_stencil
      end subroutine af_subr_stencil
   end interface
 
+  public :: af_stencil_print_info
   public :: af_stencil_index
   public :: af_stencil_prepare_store
   public :: af_stencil_store_box
@@ -44,6 +45,36 @@ module m_af_stencil
   public :: af_stencil_try_constant
 
 contains
+
+  !> Print statistics about the stencils in the tree
+  subroutine af_stencil_print_info(tree)
+    type(af_t), intent(in) :: tree
+    integer :: id, n_stencils_stored
+    integer :: n_boxes_with_stencils
+    integer :: n_constant_stored, n_stencils
+
+    n_stencils_stored     = 0
+    n_constant_stored     = 0
+    n_boxes_with_stencils = 0
+
+    do id = 1, tree%highest_id
+       if (.not. tree%boxes(id)%in_use) cycle
+
+       n_stencils = tree%boxes(id)%n_stencils
+       n_stencils_stored = n_stencils_stored + n_stencils
+       if (n_stencils > 0) then
+          n_boxes_with_stencils = n_boxes_with_stencils + 1
+          n_constant_stored = n_constant_stored + &
+               count(tree%boxes(id)%stencils(1:n_stencils)%constant)
+       end if
+    end do
+
+    write(*, '(A)')     ''
+    write(*, '(A)')     ' ** Information about stencils **'
+    write(*, '(A, I0)') ' #boxes with stencils: ', n_boxes_with_stencils
+    write(*, '(A, I0)') ' #stencils stored:     ', n_stencils_stored
+    write(*, '(A, I0)') ' #constant stencils:   ', n_constant_stored
+  end subroutine af_stencil_print_info
 
   !> Get index of a stencil, or af_stencil_none is not present
   pure integer function af_stencil_index(box, key)
@@ -102,6 +133,8 @@ contains
        box%n_stencils       = box%n_stencils + 1
        ix                   = box%n_stencils
        box%stencils(ix)%key = key
+    else
+       error stop "Stencil with this key has already been stored"
     end if
   end subroutine af_stencil_prepare_store
 
