@@ -17,6 +17,8 @@ program poisson_lsf_test
   integer            :: i_error
   integer            :: i_field
   integer            :: i_field_norm
+  integer            :: i_normgradlsf
+  integer            :: i_lsfmask
 
   ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
   integer             :: shape             = 1
@@ -25,7 +27,7 @@ program poisson_lsf_test
   integer             :: sharpness_t       = 10
   real(dp), parameter :: boundary_value    = 1.0_dp
   real(dp), parameter :: solution_coeff    = 1.0_dp
-  real(dp), parameter :: solution_radius   = 0.25_dp
+  real(dp), parameter :: solution_radius   = 0.05_dp
   real(dp)            :: solution_r0(NDIM) = 0.5_dp ! .51625_dp is a problematic one
 
   type(af_t)         :: tree
@@ -42,6 +44,8 @@ program poisson_lsf_test
   call af_add_cc_variable(tree, "error", ix=i_error)
   call af_add_cc_variable(tree, "field_norm", ix=i_field_norm)
   call af_add_fc_variable(tree, "field", ix=i_field)
+  call af_add_cc_variable(tree, "normgradlsf", ix=i_normgradlsf)
+  call af_add_cc_variable(tree, "lsfmask", ix=i_lsfmask)
 
   call af_set_cc_methods(tree, i_lsf, funcval=set_lsf)
   call af_set_cc_methods(tree, i_field_norm, af_bc_neumann_zero)
@@ -73,6 +77,15 @@ program poisson_lsf_test
      end if
   end do
 
+  mg%i_phi    = i_phi
+  mg%i_rhs    = i_rhs
+  mg%i_tmp    = i_tmp
+  mg%i_lsf    = i_lsf
+  mg%sides_bc => bc_solution
+  mg%lsf_boundary_value = boundary_value
+  mg%lsf_dist => golden_lsf
+  mg%lsf => get_lsf
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
@@ -86,17 +99,6 @@ program poisson_lsf_test
   end do
 
   call af_print_info(tree)
-
-  mg%i_phi    = i_phi
-  mg%i_rhs    = i_rhs
-  mg%i_tmp    = i_tmp
-  mg%i_lsf    = i_lsf
-  mg%sides_bc => bc_solution
-  mg%lsf_boundary_value = boundary_value
-
-  mg%lsf_dist => golden_lsf
-
-  mg%lsf_max_gradient = 30.0_dp
 
   call mg_init(tree, mg)
 
@@ -114,6 +116,8 @@ program poisson_lsf_test
      write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // "_", mg_iter
      call af_write_silo(tree, trim(fname))
   end do
+
+  call af_stencil_print_info(tree)
 
 contains
 
@@ -193,13 +197,22 @@ contains
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
     integer                    :: IJK, nc
-    real(dp)                   :: rr(NDIM)
+    real(dp)                   :: rr(NDIM), norm_dr
 
     nc = box%n_cell
+    norm_dr = norm2(box%dr)
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, iv) = get_lsf(rr)
+       box%cc(IJK, i_normgradlsf) = numerical_gradient_amplitude(get_lsf, rr)
+
+       if (abs(box%cc(IJK, iv)) < norm_dr * box%cc(IJK, i_normgradlsf) * &
+            mg%lsf_gradient_safety_factor) then
+          box%cc(IJK, i_lsfmask) = 1.0_dp
+       else
+          box%cc(IJK, i_lsfmask) = 0.0_dp
+       end if
     end do; CLOSE_DO
   end subroutine set_lsf
 
@@ -216,7 +229,7 @@ contains
        get_lsf = distance - 1.0_dp
 #if NDIM > 1
     case (2)
-       ! Center on r0
+       ! Heart centered on r0
        qq = (rr - solution_r0) * 4.0_dp
        get_lsf = (qq(1)**2 + qq(2)**2 - 1)**3 - &
             qq(1)**2 * qq(2)**3
@@ -279,48 +292,6 @@ contains
     end do
   end subroutine bc_solution
 
-  !> Compute distance to boundary starting at point a going to point b, in
-  !> the range from [0, 1], with 1 meaning there is no boundary
-  real(dp) function custom_lsf_dist(box_a, IJK_(a), box_b, IJK_(b), mg)
-    type(box_t), intent(in) :: box_a   !< Box a (start point)
-    integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
-    type(box_t), intent(in) :: box_b   ! Box b (end point)
-    integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
-    type(mg_t), intent(in)  :: mg
-
-    integer, parameter :: n_steps = 15
-    integer            :: n
-    real(dp)           :: lsf_a, lsf_b
-    real(dp)           :: r_a(NDIM), r_b(NDIM), rr(NDIM)
-    real(dp)           :: dr(NDIM)
-
-    ! Location of points a and b
-    r_a             = af_r_cc(box_a, [IJK_(a)])
-    r_b             = af_r_cc(box_b, [IJK_(b)])
-    dr              = (r_b - r_a) / n_steps
-    lsf_a           = get_lsf(r_a)
-    custom_lsf_dist = 1.0_dp
-
-    if (abs(lsf_a) <= 0.0_dp) then
-       ! Arbitrary value, each neighbor will have same weight and boundary value
-       custom_lsf_dist = 0.01
-    else
-       ! Scan the interval between a and b
-       do n = 1, n_steps
-          rr = r_a + n * dr
-          lsf_b = get_lsf(rr)
-
-          if (lsf_a * lsf_b <= 0) then
-             ! There is a boundary between the points, the relative distance is
-             ! (n-1)/n_steps plus the distance in the current 'interval'
-             custom_lsf_dist = (n - 1 + lsf_a / (lsf_a - lsf_b))/n_steps
-             exit
-          end if
-       end do
-    end if
-
-  end function custom_lsf_dist
-
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1
   subroutine GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
@@ -352,6 +323,36 @@ contains
     call GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
     dist = norm2(dist_vec)
   end function GM_dist_line
+
+  function numerical_gradient_amplitude(f, r) result(normgrad)
+    procedure(mg_func_lsf) :: f
+    real(dp), intent(in)   :: r(NDIM)
+    real(dp), parameter    :: sqrteps      = sqrt(epsilon(1.0_dp))
+    real(dp), parameter    :: min_stepsize = epsilon(1.0_dp)
+    real(dp)               :: r_eval(NDIM), gradient(NDIM)
+    real(dp)               :: stepsize(NDIM), flo, fhi, normgrad
+    integer                :: idim
+
+    stepsize = max(min_stepsize, sqrteps * abs(r))
+    r_eval = r
+
+    do idim = 1, NDIM
+       ! Sample function at (r - step_idim) and (r + step_idim)
+       r_eval(idim) = r(idim) - stepsize(idim)
+       flo = f(r_eval)
+
+       r_eval(idim) = r(idim) + stepsize(idim)
+       fhi = f(r_eval)
+
+       ! Use central difference scheme
+       gradient(idim) = (fhi - flo)/(2 * stepsize(idim))
+
+       ! Reset to original coordinate
+       r_eval(idim) = r(idim)
+    end do
+
+    normgrad = norm2(gradient)
+  end function numerical_gradient_amplitude
 
   !> Find root of f in the interval [a, b]. If f(a) and f(b) have different
   !> signs, apply bisection directly. Else, first find the (assumed to be)
@@ -388,15 +389,15 @@ contains
     end if
 
     golden_lsf = norm2(r_root - a)/norm2(b-a)
-    ! print *, golden_lsf, custom_lsf_dist(box_a, IJK_(a), box_b, IJK_(b), mg)
   end function golden_lsf
 
   !> Simple bisection
   function bisection(f, in_a, in_b, tol, max_iter) result(c)
     procedure(mg_func_lsf) :: f
-    real(dp), intent(in)  :: in_a(NDIM), in_b(NDIM), tol
-    integer, intent(in)   :: max_iter
-    real(dp)              :: a(NDIM), b(NDIM), c(NDIM), fc
+    real(dp), intent(in)   :: in_a(NDIM), in_b(NDIM), tol
+    integer, intent(in)    :: max_iter
+    real(dp)               :: a(NDIM), b(NDIM), c(NDIM), fc
+    integer                :: n
 
     a = in_a
     b = in_b
