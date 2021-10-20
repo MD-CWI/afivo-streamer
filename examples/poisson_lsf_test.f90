@@ -83,7 +83,7 @@ program poisson_lsf_test
   mg%i_lsf    = i_lsf
   mg%sides_bc => bc_solution
   mg%lsf_boundary_value = boundary_value
-  mg%lsf_dist => golden_lsf
+  mg%lsf_dist => mg_lsf_dist_gss
   mg%lsf => get_lsf
 
   ! Initialize tree
@@ -353,128 +353,5 @@ contains
 
     normgrad = norm2(gradient)
   end function numerical_gradient_amplitude
-
-  !> Find root of f in the interval [a, b]. If f(a) and f(b) have different
-  !> signs, apply bisection directly. Else, first find the (assumed to be)
-  !> unique local minimum/maximum to determine a bracket. Return relative
-  !> location of root, or 1 if there is no root.
-  real(dp) function golden_lsf(box_a, IJK_(a), box_b, IJK_(b), mg)
-    type(box_t), intent(in) :: box_a   !< Box a (start point)
-    integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
-    type(box_t), intent(in) :: box_b   ! Box b (end point)
-    integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
-    type(mg_t), intent(in)  :: mg
-    real(dp)                :: a(NDIM), b(NDIM), bracket(NDIM, 2)
-    real(dp)                :: r_root(NDIM)
-    real(dp), parameter     :: tol      = 1e-8_dp
-    integer, parameter      :: max_iter = 100
-
-    a = af_r_cc(box_a, [IJK_(a)])
-    b = af_r_cc(box_b, [IJK_(b)])
-
-    golden_lsf = 1.0_dp
-
-    if (get_lsf(a) * get_lsf(b) < 0) then
-       r_root = bisection(get_lsf, a, b, tol, max_iter)
-    else
-       ! Determine bracket by finding local minimum/maximum
-       bracket = gss(get_lsf, a, b, &
-            minimization=(get_lsf(a) >= 0), tol=tol)
-
-       if (get_lsf(bracket(:, 1)) * get_lsf(a) > 0) then
-          return                ! No root
-       else
-          r_root = bisection(get_lsf, a, bracket(:, 1), tol, max_iter)
-       end if
-    end if
-
-    golden_lsf = norm2(r_root - a)/norm2(b-a)
-  end function golden_lsf
-
-  !> Simple bisection
-  function bisection(f, in_a, in_b, tol, max_iter) result(c)
-    procedure(mg_func_lsf) :: f
-    real(dp), intent(in)   :: in_a(NDIM), in_b(NDIM), tol
-    integer, intent(in)    :: max_iter
-    real(dp)               :: a(NDIM), b(NDIM), c(NDIM), fc
-    integer                :: n
-
-    a = in_a
-    b = in_b
-
-    do n = 1, max_iter
-       c = 0.5 * (a + b)
-       fc = f(c)
-       if (0.5 * norm2(b-a) < tol .or. abs(fc) <= 0) exit
-
-       if (fc * f(a) >= 0) then
-          a = c
-       else
-          b = c
-       end if
-    end do
-  end function bisection
-
-  !> Golden-section search. Given a function f with a single local minimum in
-  !> the interval [a,b], gss returns a subset interval [c,d] that contains the
-  !> minimum with d-c <= tol. Copied from
-  !> https://en.wikipedia.org/wiki/Golden-section_search
-  function gss(f, in_a, in_b, minimization, tol) result(bracket)
-    procedure(mg_func_lsf) :: f
-    real(dp), intent(in)  :: in_a(NDIM), in_b(NDIM), tol
-    logical, intent(in)   :: minimization
-    real(dp)              :: bracket(NDIM, 2)
-    real(dp)              :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
-    real(dp)              :: h(NDIM), yc, yd
-    real(dp)              :: invphi, invphi2
-    integer               :: n, k
-
-    invphi  = (sqrt(5.0_dp) - 1) / 2 ! 1 / phi
-    invphi2 = (3 - sqrt(5.0_dp)) / 2 ! 1 / phi^2
-
-    a = in_a
-    b = in_b
-    h = b - a
-
-    if (norm2(h) <= tol) then
-       bracket(:, 1) = a
-       bracket(:, 2) = b
-       return
-    end if
-
-    ! Required steps to achieve tolerance
-    n = int(ceiling(log(tol / norm2(h)) / log(invphi)))
-
-    c = a + invphi2 * h
-    d = a + invphi * h
-    yc = f(c)
-    yd = f(d)
-
-    do k = 1, n-1
-       if ((yc < yd) .eqv. minimization) then
-          b = d
-          d = c
-          yd = yc
-          h = invphi * h
-          c = a + invphi2 * h
-          yc = f(c)
-       else
-          a = c
-          c = d
-          yc = yd
-          h = invphi * h
-          d = a + invphi * h
-          yd = f(d)
-       end if
-    end do
-
-    if ((yc < yd) .eqv. minimization) then
-       bracket(:, 1) = a
-       bracket(:, 2) = d
-    else
-       bracket(:, 1) = c
-       bracket(:, 2) = b
-    end if
-  end function gss
 
 end program poisson_lsf_test

@@ -16,6 +16,10 @@ module m_af_multigrid
   public :: mg_fas_fmg
   public :: mg_fas_vcycle
 
+  ! Methods for level set functions
+  public :: mg_lsf_dist_linear
+  public :: mg_lsf_dist_gss
+
   ! Automatic selection of operators
   public :: mg_set_box_tag
 
@@ -64,7 +68,7 @@ contains
     end if
 
     if (mg%i_lsf /= -1 .and. .not. associated(mg%lsf_dist)) then
-       mg%lsf_dist => lsf_dist_default
+       mg%lsf_dist => mg_lsf_dist_linear
     end if
 
     call mg_set_box_tag_lvl(tree, mg, 1)
@@ -1344,23 +1348,151 @@ contains
 
   !> Compute distance to boundary starting at point a going to point b, in
   !> the range from [0, 1], with 1 meaning there is no boundary
-  real(dp) function lsf_dist_default(box_a, IJK_(a), box_b, IJK_(b), mg)
+  function mg_lsf_dist_linear(box_a, IJK_(a), box_b, IJK_(b), mg) result(dist)
     type(box_t), intent(in) :: box_a   !< Box a (start point)
     integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
     type(box_t), intent(in) :: box_b   ! Box b (end point)
     integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
     type(mg_t), intent(in)  :: mg
+    real(dp)                :: dist
 
     associate(lsf_a => box_a%cc(IJK_(a), mg%i_lsf), &
          lsf_b => box_b%cc(IJK_(b), mg%i_lsf))
       if (lsf_a * lsf_b < 0) then
          ! There is a boundary between the points
-         lsf_dist_default = lsf_a / (lsf_a - lsf_b)
+         dist = lsf_a / (lsf_a - lsf_b)
       else
-         lsf_dist_default = 1.0_dp
+         dist = 1.0_dp
       end if
     end associate
-  end function lsf_dist_default
+  end function mg_lsf_dist_linear
+
+  !> Find root of f in the interval [a, b]. If f(a) and f(b) have different
+  !> signs, apply bisection directly. Else, first find the (assumed to be)
+  !> unique local minimum/maximum to determine a bracket. Return relative
+  !> location of root, or 1 if there is no root.
+  !>
+  !> @todo Allow to set tolerance?
+  function mg_lsf_dist_gss(box_a, IJK_(a), box_b, IJK_(b), mg) result(dist)
+    type(box_t), intent(in) :: box_a   !< Box a (start point)
+    integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
+    type(box_t), intent(in) :: box_b   ! Box b (end point)
+    integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
+    type(mg_t), intent(in)  :: mg
+    real(dp)                :: a(NDIM), b(NDIM), bracket(NDIM, 2)
+    real(dp)                :: dist, r_root(NDIM), lsf_a, lsf_b
+    real(dp), parameter     :: tol      = 1e-8_dp
+    integer, parameter      :: max_iter = 100
+
+    a = af_r_cc(box_a, [IJK_(a)])
+    b = af_r_cc(box_b, [IJK_(b)])
+    lsf_a = mg%lsf(a)
+    lsf_b = mg%lsf(b)
+
+    dist = 1.0_dp
+
+    if (lsf_a * lsf_b < 0) then
+       r_root = bisection(mg%lsf, a, b, tol, max_iter)
+    else
+       ! Determine bracket by finding local minimum/maximum
+       bracket = gss(mg%lsf, a, b, &
+            minimization=(lsf_a >= 0), tol=tol)
+
+       if (mg%lsf(bracket(:, 1)) * lsf_a > 0) then
+          return                ! No root
+       else
+          r_root = bisection(mg%lsf, a, bracket(:, 1), tol, max_iter)
+       end if
+    end if
+
+    dist = norm2(r_root - a)/norm2(b-a)
+  end function mg_lsf_dist_gss
+
+  !> Simple bisection
+  function bisection(f, in_a, in_b, tol, max_iter) result(c)
+    procedure(mg_func_lsf) :: f
+    real(dp), intent(in)   :: in_a(NDIM), in_b(NDIM), tol
+    integer, intent(in)    :: max_iter
+    real(dp)               :: a(NDIM), b(NDIM), c(NDIM), fc
+    integer                :: n
+
+    a = in_a
+    b = in_b
+
+    do n = 1, max_iter
+       c = 0.5 * (a + b)
+       fc = f(c)
+       if (0.5 * norm2(b-a) < tol .or. abs(fc) <= 0) exit
+
+       if (fc * f(a) >= 0) then
+          a = c
+       else
+          b = c
+       end if
+    end do
+  end function bisection
+
+  !> Golden-section search. Given a function f with a single local minimum in
+  !> the interval [a,b], gss returns a subset interval [c,d] that contains the
+  !> minimum with d-c <= tol. Copied from
+  !> https://en.wikipedia.org/wiki/Golden-section_search
+  function gss(f, in_a, in_b, minimization, tol) result(bracket)
+    procedure(mg_func_lsf) :: f
+    real(dp), intent(in)  :: in_a(NDIM), in_b(NDIM), tol
+    logical, intent(in)   :: minimization
+    real(dp)              :: bracket(NDIM, 2)
+    real(dp)              :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
+    real(dp)              :: h(NDIM), yc, yd
+    real(dp)              :: invphi, invphi2
+    integer               :: n, k
+
+    invphi  = (sqrt(5.0_dp) - 1) / 2 ! 1 / phi
+    invphi2 = (3 - sqrt(5.0_dp)) / 2 ! 1 / phi^2
+
+    a = in_a
+    b = in_b
+    h = b - a
+
+    if (norm2(h) <= tol) then
+       bracket(:, 1) = a
+       bracket(:, 2) = b
+       return
+    end if
+
+    ! Required steps to achieve tolerance
+    n = int(ceiling(log(tol / norm2(h)) / log(invphi)))
+
+    c = a + invphi2 * h
+    d = a + invphi * h
+    yc = f(c)
+    yd = f(d)
+
+    do k = 1, n-1
+       if ((yc < yd) .eqv. minimization) then
+          b = d
+          d = c
+          yd = yc
+          h = invphi * h
+          c = a + invphi2 * h
+          yc = f(c)
+       else
+          a = c
+          c = d
+          yc = yd
+          h = invphi * h
+          d = a + invphi * h
+          yd = f(d)
+       end if
+    end do
+
+    if ((yc < yd) .eqv. minimization) then
+       bracket(:, 1) = a
+       bracket(:, 2) = d
+    else
+       bracket(:, 1) = c
+       bracket(:, 2) = b
+    end if
+  end function gss
 
   !> For a point a, compute value and distance (between 0, 1) of a neighbor b.
   subroutine lsf_dist_val(lsf_a, lsf_b, val_b, boundary_value, dist, val)
