@@ -366,7 +366,7 @@ contains
     type(mg_t), intent(in)  :: mg
     real(dp)                :: a(NDIM), b(NDIM), bracket(NDIM, 2)
     real(dp)                :: r_root(NDIM)
-    real(dp), parameter     :: tol      = 1e-5_dp
+    real(dp), parameter     :: tol      = 1e-8_dp
     integer, parameter      :: max_iter = 100
 
     a = af_r_cc(box_a, [IJK_(a)])
