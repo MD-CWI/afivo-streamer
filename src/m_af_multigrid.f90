@@ -67,8 +67,13 @@ contains
        mg%prolongation_key = mg_auto_prolongation
     end if
 
-    if (mg%i_lsf /= -1 .and. .not. associated(mg%lsf_dist)) then
-       mg%lsf_dist => mg_lsf_dist_linear
+    if (mg%i_lsf /= -1) then
+       if (.not. associated(mg%lsf_dist)) &
+            mg%lsf_dist => mg_lsf_dist_linear
+       if (associated(mg%lsf_dist, mg_lsf_dist_gss) .and. .not. &
+            associated(mg%lsf)) then
+          error stop "mg_lsf_dist_gss requires mg%lsf to be set"
+       end if
     end if
 
     call mg_set_box_tag_lvl(tree, mg, 1)
@@ -1432,19 +1437,22 @@ contains
     end do
   end function bisection
 
-  !> Golden-section search. Given a function f with a single local minimum in
-  !> the interval [a,b], gss returns a subset interval [c,d] that contains the
-  !> minimum with d-c <= tol. Copied from
-  !> https://en.wikipedia.org/wiki/Golden-section_search
+  !> Golden-section search on a line between a and b. Given a function f with a
+  !> single local minimum/maximum in the interval [a,b], gss returns a subset
+  !> interval [c,d] that contains the minimum/maximum with d-c <= tol. Adapted
+  !> from https://en.wikipedia.org/wiki/Golden-section_search
   function gss(f, in_a, in_b, minimization, tol) result(bracket)
-    procedure(mg_func_lsf) :: f
-    real(dp), intent(in)  :: in_a(NDIM), in_b(NDIM), tol
-    logical, intent(in)   :: minimization
-    real(dp)              :: bracket(NDIM, 2)
-    real(dp)              :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
-    real(dp)              :: h(NDIM), yc, yd
-    real(dp)              :: invphi, invphi2
-    integer               :: n, k
+    procedure(mg_func_lsf) :: f !< Function to minimize/maximize
+    real(dp), intent(in)   :: in_a(NDIM) !< Start coordinate
+    real(dp), intent(in)   :: in_b(NDIM) !< End coordinate
+    !> Whether to perform minimization or maximization
+    logical, intent(in)    :: minimization
+    real(dp), intent(in)   :: tol !< Absolute tolerance
+    real(dp)               :: bracket(NDIM, 2)
+    real(dp)               :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
+    real(dp)               :: h(NDIM), yc, yd
+    real(dp)               :: invphi, invphi2
+    integer                :: n, k
 
     invphi  = (sqrt(5.0_dp) - 1) / 2 ! 1 / phi
     invphi2 = (3 - sqrt(5.0_dp)) / 2 ! 1 / phi^2
