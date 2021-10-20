@@ -638,7 +638,7 @@ contains
   ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
   ! correction later
   subroutine update_coarse(tree, lvl, mg)
-    use m_af_utils, only: af_n_cell, af_box_add_cc, af_box_copy_cc
+    use m_af_utils, only: af_box_add_cc, af_box_copy_cc
     use m_af_ghostcell, only: af_gc_ids
     type(af_t), intent(inout) :: tree !< Tree containing full grid
     integer, intent(in)        :: lvl !< Update coarse values at lvl-1
@@ -647,7 +647,7 @@ contains
     real(dp), allocatable :: tmp(DTIMES(:))
 
     id = tree%lvls(lvl)%ids(1)
-    nc = af_n_cell(tree, lvl)
+    nc = tree%n_cell
     allocate(tmp(DTIMES(1:nc)))
 
     ! Restrict phi and the residual
