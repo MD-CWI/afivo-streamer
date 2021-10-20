@@ -63,13 +63,16 @@ contains
        mg%prolongation_key = mg_auto_prolongation
     end if
 
-    if (mg%i_lsf /= -1) then
-       call check_coarse_representation_lsf(tree, mg)
-       if (.not. associated(mg%lsf_dist)) mg%lsf_dist => lsf_dist_default
+    if (mg%i_lsf /= -1 .and. .not. associated(mg%lsf_dist)) then
+       mg%lsf_dist => lsf_dist_default
     end if
 
     call mg_set_box_tag_lvl(tree, mg, 1)
     call coarse_solver_initialize(tree, mg)
+
+    if (mg%i_lsf /= -1) then
+       call check_coarse_representation_lsf(tree, mg)
+    end if
 
     ! Set the proper methods for the phi variable
     call af_set_cc_methods(tree, mg%i_phi, mg%sides_bc, mg%sides_rb)
@@ -1814,18 +1817,18 @@ contains
   subroutine check_coarse_representation_lsf(tree, mg)
     type(af_t), intent(in) :: tree
     type(mg_t), intent(in) :: mg
-    integer                :: i, id
-    logical                :: root_possible
+    integer                :: i, id, n_stencils
 
     do i = 1, size(tree%lvls(1)%ids)
        id = tree%lvls(1)%ids(i)
-       root_possible = lsf_root_possible(&
-            tree%boxes(id), norm2(tree%boxes(id)%dr), mg)
-       if (root_possible) exit
+       n_stencils = tree%boxes(id)%n_stencils
+       if (.not. all(tree%boxes(id)%stencils(1:n_stencils)%constant)) exit
     end do
 
     if (i == size(tree%lvls(1)%ids)+1) then
-       error stop "lsf function: no potential root found on the coarse grid"
+       print *, "all stencils on coarse grid are constant"
+       print *, "you should probably use a finer coarse grid"
+       error stop "level set function not resolved on coarse grid"
     end if
 
   end subroutine check_coarse_representation_lsf
