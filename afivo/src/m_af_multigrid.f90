@@ -783,9 +783,7 @@ contains
 
     call af_stencil_prepare_store(box, mg%operator_key, ix)
 
-    select case (mg%operator_key)
-    case (mg_auto_operator)
-       call mg_box_auto_stencil(box, mg, ix)
+    select case(box%tag)
     case (mg_normal_box)
        call mg_box_lpl_stencil(box, mg, ix)
     case (mg_lsf_box)
@@ -793,8 +791,7 @@ contains
     case (mg_veps_box, mg_ceps_box)
        call mg_box_lpld_stencil(box, mg, ix)
     case default
-       print *, "mg%operator_key: ", mg%operator_key
-       error stop "mg_store_operator_stencil: unknown stencil"
+       error stop "mg_box_operator_stencil: unknown box tag"
     end select
 
     call af_stencil_check_box(box, mg%operator_key, ix)
@@ -813,24 +810,15 @@ contains
     if (p_id <= af_no_box) error stop "Box does not have parent"
 
     select case (mg%prolongation_key)
-    case (mg_auto_prolongation)
-       call mg_box_prolong_auto_stencil(tree%boxes(id), &
-            tree%boxes(p_id), mg, ix)
     case (mg_prolong_linear)
        call mg_box_prolong_linear_stencil(tree%boxes(id), &
             tree%boxes(p_id), mg, ix)
     case (mg_prolong_sparse)
        call mg_box_prolong_sparse_stencil(tree%boxes(id), &
             tree%boxes(p_id), mg, ix)
-    case (mg_prolong_lsf)
-       call mg_box_prolong_lsf_stencil(tree%boxes(id), &
-            tree%boxes(p_id), mg, ix)
-    case (mg_prolong_eps)
-       call mg_box_prolong_eps_stencil(tree%boxes(id), &
-            tree%boxes(p_id), mg, ix)
     case default
-       print *, "mg%prolongation_key: ", mg%prolongation_key
-       error stop "mg_store_prolongation_stencil: unknown stencil"
+       call mg_box_prolong_auto_stencil(tree%boxes(id), &
+            tree%boxes(p_id), mg, ix)
     end select
 
     call af_stencil_check_box(tree%boxes(id), mg%prolongation_key, ix)
@@ -1078,24 +1066,6 @@ contains
        call af_restrict_box(box_c, box_p, [iv], use_geometry=.true.)
     end if
   end subroutine mg_box_rstr_lpl
-
-  !> Automatically store stencil for a box
-  subroutine mg_box_auto_stencil(box, mg, ix)
-    type(box_t), intent(inout) :: box
-    type(mg_t), intent(in)     :: mg
-    integer, intent(in)        :: ix !< Stencil index
-
-    select case(box%tag)
-    case (mg_normal_box)
-       call mg_box_lpl_stencil(box, mg, ix)
-    case (mg_lsf_box)
-       call mg_box_lsf_stencil(box, mg, ix)
-    case (mg_veps_box, mg_ceps_box)
-       call mg_box_lpld_stencil(box, mg, ix)
-    case default
-       error stop "mg_box_auto_stencil: unknown box tag"
-    end select
-  end subroutine mg_box_auto_stencil
 
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)

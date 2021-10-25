@@ -10,19 +10,20 @@ module m_mg_types
   ! The mg module supports different multigrid operators, and uses these tags to
   ! identify boxes / operators
   integer, parameter :: mg_auto_operator = 1 !< Automatic
-  integer, parameter :: mg_normal_box = 2 !< Normal box
-  integer, parameter :: mg_lsf_box    = 3 !< Box with an internal boundary
-  integer, parameter :: mg_ceps_box   = 4 !< Box with constant eps /= 1
-  integer, parameter :: mg_veps_box   = 5 !< Box with varying eps (on face)
+  integer, parameter :: mg_normal_box    = 2 !< Normal box
+  integer, parameter :: mg_lsf_box       = 3 !< Box with an internal boundary
+  integer, parameter :: mg_ceps_box      = 4 !< Box with constant eps /= 1
+  integer, parameter :: mg_veps_box      = 5 !< Box with varying eps (on face)
 
-  integer, parameter :: mg_auto_prolongation = 32 !< Automatic prolongation
-  integer, parameter :: mg_prolong_linear    = 33 !< Linear prolongation
-  integer, parameter :: mg_prolong_sparse    = 34 !< Sparse linear prolongation
-  integer, parameter :: mg_prolong_eps       = 35 !< Prolongation with variable epsilon
-  integer, parameter :: mg_prolong_lsf       = 36 !< Prolongation with level set function
+  integer, parameter :: mg_auto_prolongation = 17 !< Automatic prolongation
+  integer, parameter :: mg_prolong_linear    = 18 !< Linear prolongation
+  integer, parameter :: mg_prolong_sparse    = 19 !< Sparse linear prolongation
 
   !> Stencil key for level set function distance
-  integer, parameter :: mg_lsf_distance_key = 64
+  integer, parameter :: mg_lsf_distance_key = 31
+
+  !> Start index for user-defined keys
+  integer, parameter :: mg_min_user_key = 32
 
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1
