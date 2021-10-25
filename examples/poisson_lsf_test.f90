@@ -27,7 +27,7 @@ program poisson_lsf_test
   integer             :: sharpness_t       = 10
   real(dp), parameter :: boundary_value    = 1.0_dp
   real(dp), parameter :: solution_coeff    = 1.0_dp
-  real(dp), parameter :: solution_radius   = 0.05_dp
+  real(dp), parameter :: solution_radius   = 0.25_dp
   real(dp)            :: solution_r0(NDIM) = 0.5_dp ! .51625_dp is a problematic one
 
   type(af_t)         :: tree
@@ -90,7 +90,7 @@ program poisson_lsf_test
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(1.0_dp)], &
-       4 * [DTIMES(box_size)], &
+       2 * [DTIMES(box_size)], &
        coord=coord)
 
   do n = 1, 100
