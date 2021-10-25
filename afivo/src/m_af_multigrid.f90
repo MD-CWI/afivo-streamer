@@ -1,5 +1,7 @@
 #include "../src/cpp_macros.h"
 !> This module contains the geometric multigrid routines that come with Afivo
+!>
+!> @todo How to use box tag with different types of operators?
 module m_af_multigrid
   use m_af_types
   use m_af_stencil
@@ -59,12 +61,15 @@ contains
     if (.not. associated(mg%box_rstr)) mg%box_rstr => mg_auto_rstr
     if (.not. associated(mg%sides_rb)) mg%sides_rb => mg_auto_rb
 
+    ! By default, store new operator and prolongation stencils
     if (mg%operator_key == af_stencil_none) then
-       mg%operator_key = mg_auto_operator
+       tree%n_stencil_keys_stored = tree%n_stencil_keys_stored + 1
+       mg%operator_key = tree%n_stencil_keys_stored
     end if
 
     if (mg%prolongation_key == af_stencil_none) then
-       mg%prolongation_key = mg_auto_prolongation
+       tree%n_stencil_keys_stored = tree%n_stencil_keys_stored + 1
+       mg%prolongation_key = tree%n_stencil_keys_stored
     end if
 
     if (mg%i_lsf /= -1) then
@@ -783,15 +788,27 @@ contains
 
     call af_stencil_prepare_store(box, mg%operator_key, ix)
 
-    select case(box%tag)
-    case (mg_normal_box)
+    select case (mg%operator_type)
+    case (mg_normal_operator)
        call mg_box_lpl_stencil(box, mg, ix)
-    case (mg_lsf_box)
+    case (mg_lsf_operator)
        call mg_box_lsf_stencil(box, mg, ix)
-    case (mg_veps_box, mg_ceps_box)
+    case (mg_eps_operator)
        call mg_box_lpld_stencil(box, mg, ix)
+    case (mg_auto_operator)
+       ! Use box tag to set operator
+       select case(box%tag)
+       case (mg_normal_box)
+          call mg_box_lpl_stencil(box, mg, ix)
+       case (mg_lsf_box)
+          call mg_box_lsf_stencil(box, mg, ix)
+       case (mg_veps_box, mg_ceps_box)
+          call mg_box_lpld_stencil(box, mg, ix)
+       case default
+          error stop "mg_store_operator_stencil: unknown box tag"
+       end select
     case default
-       error stop "mg_box_operator_stencil: unknown box tag"
+       error stop "mg_store_operator_stencil: unknown mg%operator_type"
     end select
 
     call af_stencil_check_box(box, mg%operator_key, ix)
@@ -809,16 +826,29 @@ contains
     p_id = tree%boxes(id)%parent
     if (p_id <= af_no_box) error stop "Box does not have parent"
 
-    select case (mg%prolongation_key)
+    select case (mg%prolongation_type)
     case (mg_prolong_linear)
        call mg_box_prolong_linear_stencil(tree%boxes(id), &
             tree%boxes(p_id), mg, ix)
     case (mg_prolong_sparse)
        call mg_box_prolong_sparse_stencil(tree%boxes(id), &
             tree%boxes(p_id), mg, ix)
+    case (mg_auto_prolongation)
+       ! Use box tag
+       associate (box=>tree%boxes(id), box_p=>tree%boxes(p_id))
+         select case (box%tag)
+         case (mg_normal_box)
+            call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
+         case (mg_lsf_box)
+            call mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
+         case (mg_ceps_box, mg_veps_box)
+            call mg_box_prolong_eps_stencil(box, box_p, mg, ix)
+         case default
+            error stop "mg_store_prolongation_stencil: unknown box tag"
+         end select
+       end associate
     case default
-       call mg_box_prolong_auto_stencil(tree%boxes(id), &
-            tree%boxes(p_id), mg, ix)
+       error stop "mg_store_prolongation_stencil: unknown mg%prolongation_type"
     end select
 
     call af_stencil_check_box(tree%boxes(id), mg%prolongation_key, ix)
@@ -1089,25 +1119,6 @@ contains
     box%stencils(ix)%c(1) = -sum(box%stencils(ix)%c(2:)) - mg%helmholtz_lambda
 
   end subroutine mg_box_lpl_stencil
-
-  !> Automatically store prolongation stencil
-  subroutine mg_box_prolong_auto_stencil(box, box_p, mg, ix)
-    type(box_t), intent(inout) :: box   !< Current box
-    type(box_t), intent(in)    :: box_p !< Parent box
-    type(mg_t), intent(in)     :: mg
-    integer, intent(in)        :: ix    !< Stencil index
-
-    select case (box%tag)
-    case (mg_normal_box)
-       call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
-    case (mg_lsf_box)
-       call mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
-    case (mg_ceps_box, mg_veps_box)
-       call mg_box_prolong_eps_stencil(box, box_p, mg, ix)
-    case default
-       error stop "mg_box_prolong_auto_stencil: unknown box tag"
-    end select
-  end subroutine mg_box_prolong_auto_stencil
 
   !> Store linear prolongation stencil for standard Laplacian
   subroutine mg_box_prolong_linear_stencil(box, box_p, mg, ix)
