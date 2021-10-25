@@ -356,6 +356,9 @@ module m_af_types
      !> Methods for cell-centered variables
      type(af_cc_methods) :: cc_methods(af_max_num_vars)
 
+     !> Number of stencil keys that have been stored
+     integer :: n_stencil_keys_stored = 0
+
      !> For which cell-centered variables methods have been set
      logical :: has_cc_method(af_max_num_vars) = .false.
 

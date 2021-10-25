@@ -9,21 +9,22 @@ module m_mg_types
 
   ! The mg module supports different multigrid operators, and uses these tags to
   ! identify boxes / operators
-  integer, parameter :: mg_auto_operator = 1 !< Automatic
-  integer, parameter :: mg_normal_box    = 2 !< Normal box
-  integer, parameter :: mg_lsf_box       = 3 !< Box with an internal boundary
-  integer, parameter :: mg_ceps_box      = 4 !< Box with constant eps /= 1
-  integer, parameter :: mg_veps_box      = 5 !< Box with varying eps (on face)
+  integer, parameter :: mg_normal_operator = 1
+  integer, parameter :: mg_lsf_operator    = 2
+  integer, parameter :: mg_eps_operator    = 3
+  integer, parameter :: mg_auto_operator   = 4
 
-  integer, parameter :: mg_auto_prolongation = 17 !< Automatic prolongation
-  integer, parameter :: mg_prolong_linear    = 18 !< Linear prolongation
-  integer, parameter :: mg_prolong_sparse    = 19 !< Sparse linear prolongation
+  integer, parameter :: mg_normal_box    = 1 !< Normal box
+  integer, parameter :: mg_lsf_box       = 2 !< Box with an internal boundary
+  integer, parameter :: mg_ceps_box      = 3 !< Box with constant eps /= 1
+  integer, parameter :: mg_veps_box      = 4 !< Box with varying eps (on face)
+
+  integer, parameter :: mg_prolong_linear    = 17 !< Linear prolongation
+  integer, parameter :: mg_prolong_sparse    = 18 !< Sparse linear prolongation
+  integer, parameter :: mg_auto_prolongation = 19 !< Automatic prolongation
 
   !> Stencil key for level set function distance
   integer, parameter :: mg_lsf_distance_key = 31
-
-  !> Start index for user-defined keys
-  integer, parameter :: mg_min_user_key = 32
 
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1
@@ -94,8 +95,14 @@ module m_mg_types
      !> Subroutine that performs the (non)linear operator
      procedure(mg_box_op), pointer, nopass   :: box_op => null()
 
+     !> What kind of operator to use
+     integer :: operator_type = mg_auto_operator
+
      !> Key indicating which stencil is to be used for the operator
      integer :: operator_key = af_stencil_none
+
+     !> What kind of prolongation operator to use
+     integer :: prolongation_type = mg_auto_prolongation
 
      !> Key indicating which stencil is to be used for the operator
      integer :: prolongation_key = af_stencil_none
