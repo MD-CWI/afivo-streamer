@@ -126,7 +126,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
     integer                 :: nc
-    integer, parameter      :: refinement_type = 1
+    integer, parameter      :: refinement_type = 2
 
     nc = box%n_cell
 
@@ -292,6 +292,7 @@ contains
     end do
   end subroutine bc_solution
 
+#if NDIM > 1
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1
   subroutine GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
@@ -323,6 +324,7 @@ contains
     call GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
     dist = norm2(dist_vec)
   end function GM_dist_line
+#endif
 
   function numerical_gradient_amplitude(f, r) result(normgrad)
     procedure(mg_func_lsf) :: f
