@@ -6,8 +6,12 @@ module m_af_stencil
   implicit none
   private
 
-    !> Number of predefined stencil shapes
-  integer, parameter, private :: num_shapes = 3
+  integer, parameter, public :: stencil_constant = 1 !< Constant stencil
+  integer, parameter, public :: stencil_variable = 2 !< Variable stencil
+  integer, parameter, public :: stencil_sparse   = 3 !< Sparse stencil
+
+  !> Number of predefined stencil shapes
+  integer, parameter, private :: num_shapes = 4
 
   !> 3/5/7 point stencil in 1D/2D/3D
   integer, parameter, public :: af_stencil_357 = 1
@@ -18,9 +22,12 @@ module m_af_stencil
   !> Prolongation stencil using nearest 2, 4, 8 neighbors in 1D-3D
   integer, parameter, public :: af_stencil_p248 = 3
 
+  !> Stencil for direct neighbors
+  integer, parameter, public :: af_stencil_246 = 4
+
   !> Number of coefficients in the stencils
   integer, parameter, public :: af_stencil_sizes(num_shapes) = &
-       [2*NDIM+1, NDIM+1, 2**NDIM]
+       [2*NDIM+1, NDIM+1, 2**NDIM, 2*NDIM]
 
   abstract interface
      !> Subroutine for setting a stencil on a box
@@ -49,23 +56,35 @@ contains
   !> Print statistics about the stencils in the tree
   subroutine af_stencil_print_info(tree)
     type(af_t), intent(in) :: tree
-    integer :: id, n_stencils_stored
-    integer :: n_boxes_with_stencils
-    integer :: n_constant_stored, n_stencils
+    integer                :: id, n_stencils_stored
+    integer                :: n_boxes_with_stencils
+    integer                :: n_constant_stored, n_variable_stored
+    integer                :: n, n_stencils, n_sparse_stored
 
     n_stencils_stored     = 0
     n_constant_stored     = 0
+    n_variable_stored     = 0
+    n_sparse_stored       = 0
     n_boxes_with_stencils = 0
 
     do id = 1, tree%highest_id
        if (.not. tree%boxes(id)%in_use) cycle
 
        n_stencils = tree%boxes(id)%n_stencils
-       n_stencils_stored = n_stencils_stored + n_stencils
        if (n_stencils > 0) then
           n_boxes_with_stencils = n_boxes_with_stencils + 1
-          n_constant_stored = n_constant_stored + &
-               count(tree%boxes(id)%stencils(1:n_stencils)%constant)
+          n_stencils_stored = n_stencils_stored + n_stencils
+
+          do n = 1, n_stencils
+             select case (tree%boxes(id)%stencils(n)%stype)
+             case (stencil_constant)
+                n_constant_stored = n_constant_stored + 1
+             case (stencil_variable)
+                n_variable_stored = n_variable_stored + 1
+             case (stencil_sparse)
+                n_sparse_stored = n_sparse_stored + 1
+             end select
+          end do
        end if
     end do
 
@@ -74,6 +93,8 @@ contains
     write(*, '(A, I0)') ' #boxes with stencils: ', n_boxes_with_stencils
     write(*, '(A, I0)') ' #stencils stored:     ', n_stencils_stored
     write(*, '(A, I0)') ' #constant stencils:   ', n_constant_stored
+    write(*, '(A, I0)') ' #variable stencils:   ', n_variable_stored
+    write(*, '(A, I0)') ' #sparse stencils:     ', n_sparse_stored
   end subroutine af_stencil_print_info
 
   !> Get index of a stencil, or af_stencil_none is not present
@@ -165,10 +186,21 @@ contains
     associate (stencil => box%stencils(ix))
       if (stencil%shape < 1 .or. stencil%shape > num_shapes) &
            error stop "Unknown stencil shape"
-      if (allocated(stencil%c) .eqv. allocated(stencil%v)) &
-           error stop "Either stencil%c or stencil%v should be allocated"
-      if (stencil%constant .neqv. allocated(stencil%c)) &
-           error stop "Wrong stencil allocated (stencil%c vs stencil%v)"
+      select case (stencil%stype)
+      case (stencil_constant)
+         if (.not. allocated(stencil%c)) &
+              error stop "stencil%c not allocated"
+      case (stencil_variable)
+         if (.not. allocated(stencil%v)) &
+              error stop "stencil%v not allocated"
+      case (stencil_sparse)
+         if (.not. allocated(stencil%sparse_ix)) &
+              error stop "stencil%sparse_ix not allocated"
+         if (.not. allocated(stencil%sparse_v)) &
+              error stop "stencil%sparse_v not allocated"
+      case default
+         error stop "Unknow stencil%stype"
+      end select
     end associate
   end subroutine af_stencil_check_box
 
@@ -224,12 +256,12 @@ contains
 #endif
 
     if (iv == i_out) error stop "Cannot have iv == i_out"
+    if (stencil%stype == stencil_sparse) error stop "sparse not implemented"
 
     associate (cc => box%cc, nc => box%n_cell)
-      if (stencil%constant) c = stencil%c
 
 #if NDIM == 1
-      if (stencil%constant) then
+      if (stencil%stype == stencil_constant) then
          c = stencil%c
          do KJI_DO(1, nc)
             cc(i, i_out) = &
@@ -248,7 +280,7 @@ contains
          ! to a gradient operation
          call af_cyl_flux_factors(box, rfac)
 
-         if (stencil%constant) then
+         if (stencil%stype == stencil_constant) then
             c = stencil%c
 
             ! Pre-compute coefficients for each i-index
@@ -284,7 +316,7 @@ contains
          end if
       else
          ! No cylindrical gradient correction
-         if (stencil%constant) then
+         if (stencil%stype == stencil_constant) then
             c = stencil%c
             do KJI_DO(1, nc)
                cc(i, j, i_out) = &
@@ -307,7 +339,7 @@ contains
          end if
       end if
 #elif NDIM == 3
-      if (stencil%constant) then
+      if (stencil%stype == stencil_constant) then
          c = stencil%c
          do KJI_DO(1, nc)
             cc(i, j, k, i_out) = &
@@ -440,13 +472,13 @@ contains
 
     nc        = box_c%n_cell
     ix_offset = af_get_child_offset(box_c)
-
+    if (stencil%stype == stencil_sparse) error stop "sparse not implemented"
     if (.not. add) box_c%cc(DTIMES(1:nc), iv_to) = 0
 
     ! In these loops, we calculate the closest coarse index (_c1), and the
     ! one-but-closest (_c2). The fine cell lies in between.
 #if NDIM == 1
-    if (stencil%constant) then
+    if (stencil%stype == stencil_constant) then
        c = stencil%c
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
@@ -466,7 +498,7 @@ contains
        end do
     end if
 #elif NDIM == 2
-    if (stencil%constant) then
+    if (stencil%stype == stencil_constant) then
        c = stencil%c
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
@@ -496,7 +528,7 @@ contains
        end do
     end if
 #elif NDIM == 3
-    if (stencil%constant) then
+    if (stencil%stype == stencil_constant) then
        c = stencil%c
        do k = 1, nc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
@@ -553,13 +585,13 @@ contains
 
     nc        = box_c%n_cell
     ix_offset = af_get_child_offset(box_c)
-
+    if (stencil%stype == stencil_sparse) error stop "sparse not implemented"
     if (.not. add) box_c%cc(DTIMES(1:nc), iv_to) = 0
 
     ! In these loops, we calculate the closest coarse index (_c1), and the
     ! one-but-closest (_c2). The fine cell lies in between.
 #if NDIM == 1
-    if (stencil%constant) then
+    if (stencil%stype == stencil_constant) then
        c = stencil%c
        do i = 1, nc
           i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
@@ -579,7 +611,7 @@ contains
        end do
     end if
 #elif NDIM == 2
-    if (stencil%constant) then
+    if (stencil%stype == stencil_constant) then
        c = stencil%c
        do j = 1, nc
           j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
@@ -611,7 +643,7 @@ contains
        end do
     end if
 #elif NDIM == 3
-    if (stencil%constant) then
+    if (stencil%stype == stencil_constant) then
        c = stencil%c
        do k = 1, nc
           k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
@@ -696,6 +728,7 @@ contains
     real(dp) :: cc_cyl(2*NDIM+1, box%n_cell), inv_cc1(box%n_cell)
 #endif
 
+    if (stencil%stype == stencil_sparse) error stop "sparse not implemented"
     nc = box%n_cell
 
     associate (cc => box%cc, nc => box%n_cell)
@@ -706,7 +739,7 @@ contains
 
 #if NDIM == 1
       i0 = 2 - iand(redblack, 1)
-      if (stencil%constant) then
+      if (stencil%stype == stencil_constant) then
          c = stencil%c
          inv_c1 = 1 / c(1)
 
@@ -729,7 +762,7 @@ contains
          ! to a gradient operation
          call af_cyl_flux_factors(box, rfac)
 
-         if (stencil%constant) then
+         if (stencil%stype == stencil_constant) then
             c = stencil%c
 
             ! Pre-compute coefficients for each i-index
@@ -770,7 +803,7 @@ contains
             end do
          end if
       else                      ! No cylindrical gradient correction
-         if (stencil%constant) then
+         if (stencil%stype == stencil_constant) then
             c = stencil%c
             inv_c1 = 1 / c(1)
 
@@ -799,7 +832,7 @@ contains
          end if
       end if
 #elif NDIM == 3
-      if (stencil%constant) then
+      if (stencil%stype == stencil_constant) then
          c = stencil%c
          inv_c1 = 1 / c(1)
 
@@ -851,6 +884,8 @@ contains
     logical                    :: success !< Whether the stencil was converted
     integer                    :: IJK, nc, n_coeff
 
+    if (box%stencils(ix)%stype == stencil_sparse) &
+         error stop "sparse not implemented"
     if (.not. allocated(box%stencils(ix)%v)) &
          error stop "No variable stencil present"
 
@@ -863,7 +898,7 @@ contains
             box%stencils(ix)%v(:, DTIMES(1))) > abs_tol)) return
     end do; CLOSE_DO
 
-    box%stencils(ix)%constant = .true.
+    box%stencils(ix)%stype = stencil_constant
     n_coeff = size(box%stencils(ix)%v, 1)
     allocate(box%stencils(ix)%c(n_coeff))
     box%stencils(ix)%c = box%stencils(ix)%v(:, DTIMES(1))
@@ -906,7 +941,7 @@ contains
     if (size(v, 1) /= af_stencil_sizes(stencil%shape)) &
          error stop "Argument v has wrong size"
 
-    if (stencil%constant) then
+    if (stencil%stype == stencil_constant) then
        do KJI_DO(1, nc)
           v(:, IJK) = stencil%c
        end do; CLOSE_DO

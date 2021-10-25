@@ -922,6 +922,67 @@ contains
     lsf_root_possible = any(mask)
   end function lsf_root_possible
 
+  !> Check if the level set function could have zeros, and store distances for
+  !> the neighboring cells
+  subroutine store_lsf_distance_matrix(box, nc, mg, boundary)
+    type(box_t), intent(inout) :: box      !< Box to operate on
+    integer, intent(in)        :: nc       !< Box size
+    type(mg_t), intent(in)     :: mg       !< Multigrid options
+    logical, intent(out)       :: boundary !< Whether a boundary is found
+    logical                    :: root_mask(DTIMES(nc))
+    real(dp)                   :: dd(2*NDIM)
+    integer                    :: ixs(NDIM, nc**NDIM), IJK, ix, n
+    real(dp)                   :: v(2*NDIM, nc**NDIM)
+
+    n = 0
+    boundary = .false.
+
+    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
+         mg, root_mask)
+    if (.not. any(root_mask)) return
+
+    ! Compute distances
+    do KJI_DO(1, nc)
+       if (root_mask(IJK)) then
+#if NDIM == 1
+          dd(1) = mg%lsf_dist(box, IJK, box, i-1, mg)
+          dd(2) = mg%lsf_dist(box, IJK, box, i+1, mg)
+#elif NDIM == 2
+          dd(1) = mg%lsf_dist(box, IJK, box, i-1, j, mg)
+          dd(2) = mg%lsf_dist(box, IJK, box, i+1, j, mg)
+          dd(3) = mg%lsf_dist(box, IJK, box, i, j-1, mg)
+          dd(4) = mg%lsf_dist(box, IJK, box, i, j+1, mg)
+#elif NDIM == 3
+          dd(1) = mg%lsf_dist(box, IJK, box, i-1, j, k, mg)
+          dd(2) = mg%lsf_dist(box, IJK, box, i+1, j, k, mg)
+          dd(3) = mg%lsf_dist(box, IJK, box, i, j-1, k, mg)
+          dd(4) = mg%lsf_dist(box, IJK, box, i, j+1, k, mg)
+          dd(5) = mg%lsf_dist(box, IJK, box, i, j, k-1, mg)
+          dd(6) = mg%lsf_dist(box, IJK, box, i, j, k+1, mg)
+#endif
+       else
+          dd(:) = 1.0_dp
+       end if
+
+       ! Only store distances for boundaries
+       if (any(dd < 1.0_dp)) then
+          n = n + 1
+          ixs(:, n) = [IJK]
+          v(:, n) = dd
+       end if
+    end do; CLOSE_DO
+
+    if (n > 0) then
+       boundary = .true.
+       call af_stencil_prepare_store(box, mg_lsf_distance_key, ix)
+       box%stencils(ix)%stype = stencil_sparse
+       box%stencils(ix)%shape = af_stencil_246
+       box%stencils(ix)%sparse_ix = ixs(:, 1:n)
+       box%stencils(ix)%sparse_v = v(:, 1:n)
+    end if
+
+  end subroutine store_lsf_distance_matrix
+
   subroutine mg_set_box_tag(box, mg)
     type(box_t), intent(inout) :: box !< Box to operate on
     type(mg_t), intent(in)     :: mg  !< Multigrid options
@@ -933,7 +994,7 @@ contains
     is_deps = .false.
 
     if (mg%i_lsf /= -1) then
-       is_lsf = lsf_root_possible(box, norm2(box%dr), mg)
+       call store_lsf_distance_matrix(box, box%n_cell, mg, is_lsf)
     end if
 
     if (mg%i_eps /= -1) then
@@ -1046,7 +1107,7 @@ contains
     integer                    :: n_coeff, idim
 
     box%stencils(ix)%shape    = af_stencil_357
-    box%stencils(ix)%constant = .true.
+    box%stencils(ix)%stype    = stencil_constant
     box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
     n_coeff                   = af_stencil_sizes(af_stencil_357)
     inv_dr2                   = 1 / box%dr**2
@@ -1086,9 +1147,9 @@ contains
     integer, intent(in)        :: ix    !< Stencil index
     integer                    :: n_coeff
 
-    box%stencils(ix)%shape    = af_stencil_p248
-    box%stencils(ix)%constant = .true.
-    n_coeff                   = af_stencil_sizes(af_stencil_p248)
+    box%stencils(ix)%shape = af_stencil_p248
+    box%stencils(ix)%stype = stencil_constant
+    n_coeff                = af_stencil_sizes(af_stencil_p248)
 
     allocate(box%stencils(ix)%c(n_coeff))
 #if NDIM == 1
@@ -1108,9 +1169,9 @@ contains
     integer, intent(in)        :: ix    !< Stencil index
     integer                    :: n_coeff
 
-    box%stencils(ix)%shape    = af_stencil_p234
-    box%stencils(ix)%constant = .true.
-    n_coeff                   = af_stencil_sizes(af_stencil_p234)
+    box%stencils(ix)%shape = af_stencil_p234
+    box%stencils(ix)%stype = stencil_constant
+    n_coeff                = af_stencil_sizes(af_stencil_p234)
 
     allocate(box%stencils(ix)%c(n_coeff))
 #if NDIM == 1
@@ -1138,11 +1199,11 @@ contains
     real(dp), parameter        :: third = 1/3.0_dp
 #endif
 
-    nc                        = box%n_cell
-    box%stencils(ix)%shape    = af_stencil_p234
-    box%stencils(ix)%constant = .false.
-    ix_offset                 = af_get_child_offset(box)
-    n_coeff                   = af_stencil_sizes(af_stencil_p234)
+    nc                     = box%n_cell
+    box%stencils(ix)%shape = af_stencil_p234
+    box%stencils(ix)%stype = stencil_variable
+    ix_offset              = af_get_child_offset(box)
+    n_coeff                = af_stencil_sizes(af_stencil_p234)
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
 
     i_eps = mg%i_eps
@@ -1217,17 +1278,16 @@ contains
     real(dp)                   :: dd(NDIM+1)
     logical                    :: root_mask(DTIMES(box%n_cell))
     integer                    :: n_coeff, i_lsf, nc
-    logical                    :: has_boundary, success
+    logical                    :: success
     integer                    :: IJK, IJK_(c1)
     integer                    :: IJK_(c2), ix_offset(NDIM)
 
-    nc                        = box%n_cell
-    box%stencils(ix)%shape    = af_stencil_p234
-    box%stencils(ix)%constant = .false.
-    ix_offset                 = af_get_child_offset(box)
-    n_coeff                   = af_stencil_sizes(af_stencil_p234)
+    nc                     = box%n_cell
+    box%stencils(ix)%shape = af_stencil_p234
+    box%stencils(ix)%stype = stencil_variable
+    ix_offset              = af_get_child_offset(box)
+    n_coeff                = af_stencil_sizes(af_stencil_p234)
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
-    has_boundary              = .false.
 
     call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
          mg, root_mask)
@@ -1320,10 +1380,10 @@ contains
     idr2(1:2*NDIM:2) = 1/box%dr**2
     idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
 
-    box%stencils(ix)%shape    = af_stencil_357
-    box%stencils(ix)%constant = .false.
+    box%stencils(ix)%shape = af_stencil_357
+    box%stencils(ix)%stype = stencil_variable
     box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
-    n_coeff                   = af_stencil_sizes(af_stencil_357)
+    n_coeff                = af_stencil_sizes(af_stencil_357)
 
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
 
@@ -1502,32 +1562,6 @@ contains
     end if
   end function gss
 
-  !> For a point a, compute value and distance (between 0, 1) of a neighbor b.
-  subroutine lsf_dist_val(lsf_a, lsf_b, val_b, boundary_value, dist, val)
-    !> Level set function at a
-    real(dp), intent(in)  :: lsf_a
-    !> Level set function at b
-    real(dp), intent(in)  :: lsf_b
-    !> Value at b
-    real(dp), intent(in)  :: val_b
-    !> Boundary value
-    real(dp), intent(in)  :: boundary_value
-    !> Distance to neighbor point (value between 0 and 1)
-    real(dp), intent(out) :: dist
-    !> Value at neighbor point
-    real(dp), intent(out) :: val
-
-    if (lsf_a * lsf_b < 0) then
-       ! There is a boundary between the points
-       dist = lsf_a / (lsf_a - lsf_b)
-       val  = boundary_value
-    else
-       ! Simply use the value at b
-       dist = 1
-       val  = val_b
-    end if
-  end subroutine lsf_dist_val
-
   !> Store the matrix stencil for each cell of the box. The order of the stencil
   !> is (i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1) (e.g., -4, 1, 1, 1, 1)
   subroutine mg_box_lsf_stencil(box, mg, ix)
@@ -1535,9 +1569,9 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Index of stencil
     integer                    :: IJK, n, nc, idim, n_coeff
+    integer                    :: s_ix(NDIM), ix_dist
     real(dp)                   :: dd(2*NDIM), dr2(NDIM)
-    logical                    :: success
-    logical                    :: root_mask(DTIMES(box%n_cell))
+    real(dp), allocatable      :: all_distances(:, DTIMES(:))
 #if NDIM == 2
     real(dp)                   :: tmp
 #endif
@@ -1545,48 +1579,49 @@ contains
     nc = box%n_cell
     dr2 = box%dr**2
 
-    box%stencils(ix)%shape    = af_stencil_357
-    box%stencils(ix)%constant = .false.
+    ix_dist = af_stencil_index(box, mg_lsf_distance_key)
+
+    if (ix_dist == af_stencil_none) then
+       ! No boundaries in this box
+       call mg_box_lpl_stencil(box, mg, ix)
+       return
+    end if
+
+    ! Use stored distances to construct stencil
+    box%stencils(ix)%shape = af_stencil_357
+    box%stencils(ix)%stype = stencil_variable
     ! Perform a custom correction in cylindrical coordinates
     box%stencils(ix)%cylindrical_gradient = .false.
-    n_coeff                   = af_stencil_sizes(af_stencil_357)
+    n_coeff                = af_stencil_sizes(af_stencil_357)
 
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
     allocate(box%stencils(ix)%f(DTIMES(nc)))
     allocate(box%stencils(ix)%bc_correction(DTIMES(nc)))
     box%stencils(ix)%f = 0.0_dp
 
-    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
-         mg, root_mask)
+    allocate(all_distances(2*NDIM, DTIMES(nc)))
+
+    ! Distance 1 indicates no boundary
+    all_distances = 1.0_dp
+
+    ! Use sparse storage of boundary distances to update all_distances
+    do n = 1, size(box%stencils(ix_dist)%sparse_ix, 2)
+       s_ix = box%stencils(ix_dist)%sparse_ix(:, n)
+       all_distances(:, DINDEX(s_ix)) = &
+            box%stencils(ix_dist)%sparse_v(:, n)
+    end do
 
     do KJI_DO(1, nc)
-       if (root_mask(IJK)) then
-#if NDIM == 1
-          dd(1) = mg%lsf_dist(box, IJK, box, i-1, mg)
-          dd(2) = mg%lsf_dist(box, IJK, box, i+1, mg)
-#elif NDIM == 2
-          dd(1) = mg%lsf_dist(box, IJK, box, i-1, j, mg)
-          dd(2) = mg%lsf_dist(box, IJK, box, i+1, j, mg)
-          dd(3) = mg%lsf_dist(box, IJK, box, i, j-1, mg)
-          dd(4) = mg%lsf_dist(box, IJK, box, i, j+1, mg)
-#elif NDIM == 3
-          dd(1) = mg%lsf_dist(box, IJK, box, i-1, j, k, mg)
-          dd(2) = mg%lsf_dist(box, IJK, box, i+1, j, k, mg)
-          dd(3) = mg%lsf_dist(box, IJK, box, i, j-1, k, mg)
-          dd(4) = mg%lsf_dist(box, IJK, box, i, j+1, k, mg)
-          dd(5) = mg%lsf_dist(box, IJK, box, i, j, k-1, mg)
-          dd(6) = mg%lsf_dist(box, IJK, box, i, j, k+1, mg)
-#endif
-       else
-          dd(:) = 1.0_dp
-       end if
+       dd = max(all_distances(:, IJK), mg_lsf_min_rel_distance)
 
        ! Generalized Laplacian for neighbors at distance dd * dx
        do idim = 1, NDIM
-          box%stencils(ix)%v(1+2*idim-1:1+2*idim, IJK) = &
-               [dd(2*idim), dd(2*idim-1)] / &
+          box%stencils(ix)%v(1+2*idim-1, IJK) = 1 / &
                (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
-               dd(2*idim-1) * dd(2*idim))
+               dd(2*idim-1))
+          box%stencils(ix)%v(1+2*idim, IJK) = 1 / &
+               (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
+               dd(2*idim))
        end do
 
 #if NDIM == 2
@@ -1609,13 +1644,6 @@ contains
           end if
        end do
     end do; CLOSE_DO
-
-    call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
-
-    if (success) then
-       deallocate(box%stencils(ix)%f)
-       deallocate(box%stencils(ix)%bc_correction)
-    end if
 
   end subroutine mg_box_lsf_stencil
 
@@ -1818,137 +1846,89 @@ contains
     type(mg_t), intent(in)    :: mg
     integer, intent(in)       :: i_fc !< Face-centered indices
     real(dp), intent(in)      :: fac  !< Multiply with this factor
-    real(dp)                  :: &
-         cc(DTIMES(0:tree%n_cell+1), 2)
-    integer                   :: IJK, nc, i_phi, i_lsf
-    real(dp)                  :: dd, val, v_a(2), v_b(2)
-    integer                   :: grad_sign, nb
-    integer                   :: ilo(NDIM), ihi(NDIM)
-    integer                   :: olo(NDIM), ohi(NDIM)
+    integer                   :: IJK
+    integer                   :: n, nc, i_phi, ix_dist
+    real(dp)                  :: inv_dr(NDIM), dd(2*NDIM)
 
-    associate(box => tree%boxes(id))
+    ! Compute regular values, correct part of them below
+    call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
+
+    ix_dist = af_stencil_index(tree%boxes(id), mg_lsf_distance_key)
+    if (ix_dist == af_stencil_none) &
+         error stop "No distances stored for this box"
+
+    associate(box => tree%boxes(id), cc => tree%boxes(id)%cc)
       nc     = box%n_cell
       i_phi  = mg%i_phi
-      i_lsf  = mg%i_lsf
+      inv_dr = fac / box%dr
 
-      ! Store a copy because we might need to modify phi in ghost cells
-      cc = box%cc(DTIMES(:), [i_lsf, i_phi])
-
-      do nb = 1, af_num_neighbors
-         ! If lsf value changes sign in ghost cell, use boundary value
-         if (af_is_ref_boundary(tree%boxes, id, nb)) then
-            call af_get_index_bc_inside(nb, box%n_cell, 1, ilo, ihi)
-            call af_get_index_bc_outside(nb, box%n_cell, 1, olo, ohi)
-            where (cc(DSLICE(ilo,ihi), 1) * &
-                 cc(DSLICE(olo,ohi), 1) <= 0.0_dp)
-               cc(DSLICE(olo,ohi), 2) = mg%lsf_boundary_value
-            end where
-         end if
-      end do
+      ! Use sparse storage of boundary distances
+      do n = 1, size(box%stencils(ix_dist)%sparse_ix, 2)
+         dd = box%stencils(ix_dist)%sparse_v(:, n)
+         dd = max(dd, mg_lsf_min_rel_distance)
 
 #if NDIM == 1
-      do i = 1, nc+1
-         if (cc(i, 1) > 0) then
-            v_a = cc(i, :)
-            v_b = cc(i-1, :)
-            grad_sign = 1
-         else
-            v_a = cc(i-1, :)
-            v_b = cc(i, :)
-            grad_sign = -1
+         i = box%stencils(ix_dist)%sparse_ix(1, n)
+
+         if (dd(1) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, 1, i_fc) = inv_dr(1) * &
+                 (cc(i, i_phi) - mg%lsf_boundary_value) / dd(1)
          end if
-
-         call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-              mg%lsf_boundary_value, dd, val)
-         box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-              (box%dr(1) * dd)
-      end do
+         if (dd(2) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i+1, 1, i_fc) = inv_dr(1) * &
+                 (mg%lsf_boundary_value - cc(i, i_phi)) / dd(2)
+         end if
 #elif NDIM == 2
-      do j = 1, nc
-         do i = 1, nc+1
-            if (cc(i, j, 1) > 0) then
-               v_a = cc(i, j, :)
-               v_b = cc(i-1, j, :)
-               grad_sign = 1
-            else
-               v_a = cc(i-1, j, :)
-               v_b = cc(i, j, :)
-               grad_sign = -1
-            end if
+         i = box%stencils(ix_dist)%sparse_ix(1, n)
+         j = box%stencils(ix_dist)%sparse_ix(2, n)
 
-            call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                 mg%lsf_boundary_value, dd, val)
-            box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                 (box%dr(1) * dd)
-
-            if (cc(j, i, 1) > 0) then
-               v_a = cc(j, i, :)
-               v_b = cc(j, i-1, :)
-               grad_sign = 1
-            else
-               v_a = cc(j, i-1, :)
-               v_b = cc(j, i, :)
-               grad_sign = -1
-            end if
-
-            call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                 mg%lsf_boundary_value, dd, val)
-            box%fc(j, i, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                 (box%dr(2) * dd)
-         end do
-      end do
+         if (dd(1) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j, 1, i_fc) = inv_dr(1) * &
+                 (cc(i, j, i_phi) - mg%lsf_boundary_value) / dd(1)
+         end if
+         if (dd(2) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i+1, j, 1, i_fc) = inv_dr(1) * &
+                 (mg%lsf_boundary_value - cc(i, j, i_phi)) / dd(2)
+         end if
+         if (dd(3) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j, 2, i_fc) = inv_dr(2) * &
+                 (cc(i, j, i_phi) - mg%lsf_boundary_value) / dd(3)
+         end if
+         if (dd(4) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j+1, 2, i_fc) = inv_dr(2) * &
+                 (mg%lsf_boundary_value - cc(i, j, i_phi)) / dd(4)
+         end if
 #elif NDIM == 3
-      do k = 1, nc
-         do j = 1, nc
-            do i = 1, nc+1
-               if (cc(i, j, k, 1) > 0) then
-                  v_a = cc(i, j, k, :)
-                  v_b = cc(i-1, j, k, :)
-                  grad_sign = 1
-               else
-                  v_a = cc(i-1, j, k, :)
-                  v_b = cc(i, j, k, :)
-                  grad_sign = -1
-               end if
+         i = box%stencils(ix_dist)%sparse_ix(1, n)
+         j = box%stencils(ix_dist)%sparse_ix(2, n)
+         k = box%stencils(ix_dist)%sparse_ix(3, n)
 
-               call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                    mg%lsf_boundary_value, dd, val)
-               box%fc(IJK, 1, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                    (box%dr(1) * dd)
-
-               if (cc(j, i, k, 1) > 0) then
-                  v_a = cc(j, i, k, :)
-                  v_b = cc(j, i-1, k, :)
-                  grad_sign = 1
-               else
-                  v_a = cc(j, i-1, k, :)
-                  v_b = cc(j, i, k, :)
-                  grad_sign = -1
-               end if
-
-               call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                    mg%lsf_boundary_value, dd, val)
-               box%fc(j, i, k, 2, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                    (box%dr(2) * dd)
-
-               if (cc(j, k, i, 1) > 0) then
-                  v_a = cc(j, k, i, :)
-                  v_b = cc(j, k, i-1, :)
-                  grad_sign = 1
-               else
-                  v_a = cc(j, k, i-1, :)
-                  v_b = cc(j, k, i, :)
-                  grad_sign = -1
-               end if
-
-               call lsf_dist_val(v_a(1), v_b(1), v_b(2), &
-                    mg%lsf_boundary_value, dd, val)
-               box%fc(j, k, i, 3, i_fc) = grad_sign * fac * (v_a(2) - val) / &
-                    (box%dr(3) * dd)
-            end do
-         end do
-      end do
+         if (dd(1) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j, k, 1, i_fc) = inv_dr(1) * &
+                 (cc(IJK, i_phi) - mg%lsf_boundary_value) / dd(1)
+         end if
+         if (dd(2) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i+1, j, k, 1, i_fc) = inv_dr(1) * &
+                 (mg%lsf_boundary_value - cc(IJK, i_phi)) / dd(2)
+         end if
+         if (dd(3) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j, k, 2, i_fc) = inv_dr(2) * &
+                 (cc(IJK, i_phi) - mg%lsf_boundary_value) / dd(3)
+         end if
+         if (dd(4) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j+1, k, 2, i_fc) = inv_dr(2) * &
+                 (mg%lsf_boundary_value - cc(IJK, i_phi)) / dd(4)
+         end if
+         if (dd(5) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j, k, 3, i_fc) = inv_dr(3) * &
+                 (cc(IJK, i_phi) - mg%lsf_boundary_value) / dd(5)
+         end if
+         if (dd(6) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
+            box%fc(i, j, k+1, 3, i_fc) = inv_dr(3) * &
+                 (mg%lsf_boundary_value - cc(IJK, i_phi)) / dd(6)
+         end if
 #endif
+      end do
     end associate
   end subroutine mg_box_lpllsf_gradient
 
@@ -1957,16 +1937,16 @@ contains
   subroutine check_coarse_representation_lsf(tree, mg)
     type(af_t), intent(in) :: tree
     type(mg_t), intent(in) :: mg
-    integer                :: i, id, n_stencils
+    integer                :: i, id, ix
 
     do i = 1, size(tree%lvls(1)%ids)
        id = tree%lvls(1)%ids(i)
-       n_stencils = tree%boxes(id)%n_stencils
-       if (.not. all(tree%boxes(id)%stencils(1:n_stencils)%constant)) exit
+       ix = af_stencil_index(tree%boxes(id), mg_lsf_distance_key)
+       if (ix > af_stencil_none) exit
     end do
 
     if (i == size(tree%lvls(1)%ids)+1) then
-       print *, "all stencils on coarse grid are constant"
+       print *, "No roots found for level set function on coarse grid"
        print *, "you should probably use a finer coarse grid"
        error stop "level set function not resolved on coarse grid"
     end if

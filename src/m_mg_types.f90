@@ -15,15 +15,21 @@ module m_mg_types
   integer, parameter :: mg_ceps_box   = 4 !< Box with constant eps /= 1
   integer, parameter :: mg_veps_box   = 5 !< Box with varying eps (on face)
 
-  integer, parameter :: mg_auto_prolongation = 32
-  integer, parameter :: mg_prolong_linear = 33
-  integer, parameter :: mg_prolong_sparse = 34
-  integer, parameter :: mg_prolong_eps = 35
-  integer, parameter :: mg_prolong_lsf = 36
+  integer, parameter :: mg_auto_prolongation = 32 !< Automatic prolongation
+  integer, parameter :: mg_prolong_linear    = 33 !< Linear prolongation
+  integer, parameter :: mg_prolong_sparse    = 34 !< Sparse linear prolongation
+  integer, parameter :: mg_prolong_eps       = 35 !< Prolongation with variable epsilon
+  integer, parameter :: mg_prolong_lsf       = 36 !< Prolongation with level set function
+
+  !> Stencil key for level set function distance
+  integer, parameter :: mg_lsf_distance_key = 64
 
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1
   integer, parameter :: mg_cycle_up   = 3
+
+  !> Minimum relative distance to boundaries (to avoid division by zero)
+  real(dp), parameter :: mg_lsf_min_rel_distance = epsilon(1.0_dp)
 
   !> Generic type for the coarse grid solver
   type coarse_solve_t

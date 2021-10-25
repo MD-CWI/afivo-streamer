@@ -260,8 +260,8 @@ module m_af_types
      integer               :: key = af_stencil_none
      !> Shape of the stencil
      integer               :: shape = af_stencil_none
-     !> Whether the stencil is constant
-     logical               :: constant = .true.
+     !> What kind of stencil is stored (constant, variable, sparse)
+     integer               :: stype = -1
      !> Whether to correct gradients for cylindrical coordinates
      logical               :: cylindrical_gradient = .false.
      !> Stencil coefficients for constant stencil
@@ -273,6 +273,10 @@ module m_af_types
      real(dp), allocatable :: f(DTIMES(:))
      !> Correction for boundary conditions
      real(dp), allocatable :: bc_correction(DTIMES(:))
+     !> Indices of sparse coefficients
+     integer, allocatable  :: sparse_ix(:, :)
+     !> Values of sparse coefficients
+     real(dp), allocatable :: sparse_v(:, :)
   end type stencil_t
 
   !> The basic building block of afivo: a box with cell-centered and face
