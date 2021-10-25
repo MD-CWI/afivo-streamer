@@ -138,6 +138,7 @@ program streamer
   print *, "Simulation output: ", trim(output_name)
   print *, "Number of threads: ", af_get_max_threads()
   call af_print_info(tree)
+  call af_stencil_print_info(tree)
 
   ! Initial wall clock time
   call system_clock(t_start, count_rate)
