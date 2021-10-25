@@ -97,7 +97,7 @@ program poisson_cyl
           maxval(abs(anal_err))
 
      write(fname, "(A,I0)") "output/poisson_cyl_", mg_iter
-     call af_write_vtk(tree, trim(fname))
+     call af_write_silo(tree, trim(fname))
   end do
   call system_clock(t_end, count_rate)
 

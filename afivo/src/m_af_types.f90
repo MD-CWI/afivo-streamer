@@ -251,6 +251,34 @@ module m_af_types
      procedure(af_subr_funcval), pointer, nopass :: funcval => null()
   end type af_cc_methods
 
+  !> Value indicating the absence of a stencil
+  integer, parameter :: af_stencil_none = 0
+
+  !> Type for storing a numerical stencil for a box
+  type stencil_t
+     !> The key identifying the stencil
+     integer               :: key = af_stencil_none
+     !> Shape of the stencil
+     integer               :: shape = af_stencil_none
+     !> What kind of stencil is stored (constant, variable, sparse)
+     integer               :: stype = -1
+     !> Whether to correct gradients for cylindrical coordinates
+     logical               :: cylindrical_gradient = .false.
+     !> Stencil coefficients for constant stencil
+     real(dp), allocatable :: c(:)
+     !> Stencil coefficients for variable stencil
+     real(dp), allocatable :: v(:, DTIMES(:))
+     !> Optional extra scalar, for example to map boundary conditions to
+     !> right-hand side
+     real(dp), allocatable :: f(DTIMES(:))
+     !> Correction for boundary conditions
+     real(dp), allocatable :: bc_correction(DTIMES(:))
+     !> Indices of sparse coefficients
+     integer, allocatable  :: sparse_ix(:, :)
+     !> Values of sparse coefficients
+     real(dp), allocatable :: sparse_v(:, :)
+  end type stencil_t
+
   !> The basic building block of afivo: a box with cell-centered and face
   !> centered data, and information about its position, neighbors, children etc.
   type box_t
@@ -271,6 +299,24 @@ module m_af_types
      integer               :: coord_t   !< Coordinate type (e.g. Cartesian)
      real(dp), allocatable :: cc(DTIMES(:), :) !< cell centered variables
      real(dp), allocatable :: fc(DTIMES(:), :, :) !< face centered variables
+
+     !> Number of physical boundaries
+     integer               :: n_bc = 0
+     !> List of boundary condition directions
+     integer, allocatable  :: bc_index_to_nb(:)
+     !> Direction to boundary condition index
+     integer               :: nb_to_bc_index(af_num_neighbors)
+     !> Boundary condition types
+     integer, allocatable :: bc_type(:, :)
+     !> Stored boundary conditions
+     real(dp), allocatable :: bc_val(:, :, :)
+     !> Coordinates of physical boundaries
+     real(dp), allocatable :: bc_coords(:, :, :)
+
+     !> How many stencils have been stored
+     integer         :: n_stencils = 0
+     !> List of stencils
+     type(stencil_t), allocatable :: stencils(:)
   end type box_t
 
   !> Type which stores all the boxes and levels, as well as some information
@@ -943,5 +989,46 @@ contains
     end do
   end subroutine af_cyl_flux_factors
 #endif
+
+  !> Get coordinates at the faces of a box boundary
+  subroutine af_get_face_coords(box, nb, coords)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    real(dp), intent(out)   :: coords(NDIM, box%n_cell**(NDIM-1))
+    integer                 :: i, nb_dim, bc_dim(NDIM-1)
+    integer, parameter      :: all_dims(NDIM) = [(i, i = 1, NDIM)]
+    real(dp)                :: rmin(NDIM)
+#if NDIM == 3
+    integer                 :: j, ix
+#endif
+
+    nb_dim       = af_neighb_dim(nb)
+    bc_dim       = pack(all_dims, all_dims /= nb_dim)
+    rmin(bc_dim) = box%r_min(bc_dim) + 0.5_dp * box%dr(bc_dim)
+
+    if (af_neighb_low(nb)) then
+       rmin(nb_dim) = box%r_min(nb_dim)
+    else
+       rmin(nb_dim) = box%r_min(nb_dim) + box%n_cell * box%dr(nb_dim)
+    end if
+
+#if NDIM == 1
+    coords(nb_dim, 1) = rmin(nb_dim)
+#elif NDIM == 2
+    do i = 1, box%n_cell
+       coords(bc_dim, i) = rmin(bc_dim) + (i-1) * box%dr(bc_dim)
+       coords(nb_dim, i) = rmin(nb_dim)
+    end do
+#elif NDIM == 3
+    ix = 0
+    do j = 1, box%n_cell
+       do i = 1, box%n_cell
+          ix = ix + 1
+          coords(bc_dim, ix) = rmin(bc_dim) + [i-1, j-1] * box%dr(bc_dim)
+          coords(nb_dim, ix) = rmin(nb_dim)
+       end do
+    end do
+#endif
+  end subroutine af_get_face_coords
 
 end module m_af_types
