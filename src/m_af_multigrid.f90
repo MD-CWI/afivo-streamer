@@ -922,7 +922,7 @@ contains
     ! Compute gradient
     do KJI_DO(1, nc)
        rr = af_r_cc(box, [IJK])
-       gradnorm = numerical_gradient_amplitude(mg%lsf, rr)
+       gradnorm = norm2(numerical_gradient(mg%lsf, rr))
        root_mask(IJK) = (abs(box%cc(IJK, mg%i_lsf)) < dmax * gradnorm * &
             mg%lsf_gradient_safety_factor)
     end do; CLOSE_DO
@@ -948,12 +948,17 @@ contains
     type(mg_t), intent(in)     :: mg       !< Multigrid options
     logical, intent(out)       :: boundary !< Whether a boundary is found
     logical                    :: root_mask(DTIMES(nc))
-    real(dp)                   :: dd(2*NDIM)
+    real(dp)                   :: dd(2*NDIM), a(NDIM), mindr
     integer                    :: ixs(NDIM, nc**NDIM), IJK, ix, n
     real(dp)                   :: v(2*NDIM, nc**NDIM)
+#if NDIM > 1
+    integer                    :: nb, dim
+    real(dp)                   :: dist, gradient(NDIM), dvec(NDIM)
+#endif
 
     n = 0
     boundary = .false.
+    mindr = minval(box%dr)
 
     call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
          mg, root_mask)
@@ -962,21 +967,45 @@ contains
     ! Compute distances
     do KJI_DO(1, nc)
        if (root_mask(IJK)) then
+          a = af_r_cc(box, [IJK])
 #if NDIM == 1
-          dd(1) = mg%lsf_dist(box, IJK, box, i-1, mg)
-          dd(2) = mg%lsf_dist(box, IJK, box, i+1, mg)
+          dd(1) = mg%lsf_dist(a, af_r_cc(box, [i-1]), mg)
+          dd(2) = mg%lsf_dist(a, af_r_cc(box, [i+1]), mg)
 #elif NDIM == 2
-          dd(1) = mg%lsf_dist(box, IJK, box, i-1, j, mg)
-          dd(2) = mg%lsf_dist(box, IJK, box, i+1, j, mg)
-          dd(3) = mg%lsf_dist(box, IJK, box, i, j-1, mg)
-          dd(4) = mg%lsf_dist(box, IJK, box, i, j+1, mg)
+          dd(1) = mg%lsf_dist(a, af_r_cc(box, [i-1, j]), mg)
+          dd(2) = mg%lsf_dist(a, af_r_cc(box, [i+1, j]), mg)
+          dd(3) = mg%lsf_dist(a, af_r_cc(box, [i, j-1]), mg)
+          dd(4) = mg%lsf_dist(a, af_r_cc(box, [i, j+1]), mg)
 #elif NDIM == 3
-          dd(1) = mg%lsf_dist(box, IJK, box, i-1, j, k, mg)
-          dd(2) = mg%lsf_dist(box, IJK, box, i+1, j, k, mg)
-          dd(3) = mg%lsf_dist(box, IJK, box, i, j-1, k, mg)
-          dd(4) = mg%lsf_dist(box, IJK, box, i, j+1, k, mg)
-          dd(5) = mg%lsf_dist(box, IJK, box, i, j, k-1, mg)
-          dd(6) = mg%lsf_dist(box, IJK, box, i, j, k+1, mg)
+          dd(1) = mg%lsf_dist(a, af_r_cc(box, [i-1, j, k]), mg)
+          dd(2) = mg%lsf_dist(a, af_r_cc(box, [i+1, j, k]), mg)
+          dd(3) = mg%lsf_dist(a, af_r_cc(box, [i, j-1, k]), mg)
+          dd(4) = mg%lsf_dist(a, af_r_cc(box, [i, j+1, k]), mg)
+          dd(5) = mg%lsf_dist(a, af_r_cc(box, [i, j, k-1]), mg)
+          dd(6) = mg%lsf_dist(a, af_r_cc(box, [i, j, k+1]), mg)
+#endif
+
+#if NDIM > 1
+          ! If no boundaries are found, search along the gradient of the level
+          ! set function to check if there is a boundary nearby
+          if (mindr > mg%lsf_length_scale .and. all(dd >= 1)) then
+             gradient = numerical_gradient(mg%lsf, a)
+             gradient = gradient/max(norm2(gradient), 1e-50_dp) ! unit vector
+
+             ! Search in direction towards zero. Use min(dr) since we do not yet
+             ! know in which direction to search, and we should not go too far
+             dvec = -gradient * sign(mindr, box%cc(IJK, mg%i_lsf))
+             dist = mg%lsf_dist(a, a + dvec, mg)
+
+             if (dist < 1) then
+                ! Select closest direction
+                dim = maxloc(abs(dvec), dim=1)
+                nb = 2 * dim - 1
+                if (dvec(dim) > 0) nb = nb + 1
+
+                dd(nb) = dist
+             end if
+          end if
 #endif
        else
           dd(:) = 1.0_dp
@@ -1256,7 +1285,7 @@ contains
     type(box_t), intent(in)    :: box_p !< Parent box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
-    real(dp)                   :: dd(NDIM+1)
+    real(dp)                   :: dd(NDIM+1), a(NDIM)
     logical                    :: root_mask(DTIMES(box%n_cell))
     integer                    :: n_coeff, i_lsf, nc
     logical                    :: success
@@ -1283,8 +1312,9 @@ contains
          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
          if (root_mask(IJK)) then
-            dd(1) = mg%lsf_dist(box, IJK, box_p, i_c1, mg)
-            dd(2) = mg%lsf_dist(box, IJK, box_p, i_c2, mg)
+            a = af_r_cc(box, [IJK])
+            dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1]), mg)
+            dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2]), mg)
          else
             dd(:) = 1.0_dp
          end if
@@ -1301,9 +1331,10 @@ contains
             i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
             if (root_mask(IJK)) then
-               dd(1) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c1, mg)
-               dd(2) = mg%lsf_dist(box, IJK, box_p, i_c2, j_c1, mg)
-               dd(3) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c2, mg)
+               a = af_r_cc(box, [IJK])
+               dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1]), mg)
+               dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
+               dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
             else
                dd(:) = 1.0_dp
             end if
@@ -1325,10 +1356,11 @@ contains
                i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
                if (root_mask(IJK)) then
-                  dd(1) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c1, k_c1, mg)
-                  dd(2) = mg%lsf_dist(box, IJK, box_p, i_c2, j_c1, k_c1, mg)
-                  dd(3) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c2, k_c1, mg)
-                  dd(4) = mg%lsf_dist(box, IJK, box_p, i_c1, j_c1, k_c2, mg)
+                  a = af_r_cc(box, [IJK])
+                  dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c1]), mg)
+                  dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1, k_c1]), mg)
+                  dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2, k_c1]), mg)
+                  dd(4) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c2]), mg)
                else
                   dd(:) = 1.0_dp
                end if
@@ -1394,23 +1426,21 @@ contains
 
   !> Compute distance to boundary starting at point a going to point b, in
   !> the range from [0, 1], with 1 meaning there is no boundary
-  function mg_lsf_dist_linear(box_a, IJK_(a), box_b, IJK_(b), mg) result(dist)
-    type(box_t), intent(in) :: box_a   !< Box a (start point)
-    integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
-    type(box_t), intent(in) :: box_b   ! Box b (end point)
-    integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
-    type(mg_t), intent(in)  :: mg
-    real(dp)                :: dist
+  function mg_lsf_dist_linear(a, b, mg) result(dist)
+    real(dp), intent(in)   :: a(NDIM) !< Start point
+    real(dp), intent(in)   :: b(NDIM) !< End point
+    type(mg_t), intent(in) :: mg
+    real(dp)               :: dist, lsf_a, lsf_b
 
-    associate(lsf_a => box_a%cc(IJK_(a), mg%i_lsf), &
-         lsf_b => box_b%cc(IJK_(b), mg%i_lsf))
-      if (lsf_a * lsf_b < 0) then
-         ! There is a boundary between the points
-         dist = lsf_a / (lsf_a - lsf_b)
-      else
-         dist = 1.0_dp
-      end if
-    end associate
+    lsf_a = mg%lsf(a)
+    lsf_b = mg%lsf(b)
+
+    if (lsf_a * lsf_b < 0) then
+       ! There is a boundary between the points
+       dist = lsf_a / (lsf_a - lsf_b)
+    else
+       dist = 1.0_dp
+    end if
   end function mg_lsf_dist_linear
 
   !> Find root of f in the interval [a, b]. If f(a) and f(b) have different
@@ -1419,23 +1449,18 @@ contains
   !> location of root, or 1 if there is no root.
   !>
   !> @todo Allow to set tolerance?
-  function mg_lsf_dist_gss(box_a, IJK_(a), box_b, IJK_(b), mg) result(dist)
-    type(box_t), intent(in) :: box_a   !< Box a (start point)
-    integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
-    type(box_t), intent(in) :: box_b   ! Box b (end point)
-    integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
-    type(mg_t), intent(in)  :: mg
-    real(dp)                :: a(NDIM), b(NDIM), bracket(NDIM, 2)
-    real(dp)                :: dist, r_root(NDIM), lsf_a, lsf_b
-    real(dp), parameter     :: tol      = 1e-8_dp
-    integer, parameter      :: max_iter = 100
+  function mg_lsf_dist_gss(a, b, mg) result(dist)
+    real(dp), intent(in)   :: a(NDIM) !< Start point
+    real(dp), intent(in)   :: b(NDIM) !< End point
+    type(mg_t), intent(in) :: mg
+    real(dp)               :: bracket(NDIM, 2)
+    real(dp)               :: dist, r_root(NDIM), lsf_a, lsf_b
+    real(dp), parameter    :: tol      = 1e-8_dp
+    integer, parameter     :: max_iter = 100
 
-    a = af_r_cc(box_a, [IJK_(a)])
-    b = af_r_cc(box_b, [IJK_(b)])
     lsf_a = mg%lsf(a)
     lsf_b = mg%lsf(b)
-
-    dist = 1.0_dp
+    dist  = 1.0_dp
 
     if (lsf_a * lsf_b < 0) then
        r_root = bisection(mg%lsf, a, b, tol, max_iter)
@@ -1935,13 +1960,13 @@ contains
   end subroutine check_coarse_representation_lsf
 
   !> Get amplitude of numerical gradient of level set function
-  function numerical_gradient_amplitude(f, r) result(normgrad)
+  function numerical_gradient(f, r) result(gradient)
     procedure(mg_func_lsf) :: f
     real(dp), intent(in)   :: r(NDIM)
     real(dp), parameter    :: sqrteps      = sqrt(epsilon(1.0_dp))
     real(dp), parameter    :: min_stepsize = epsilon(1.0_dp)
     real(dp)               :: r_eval(NDIM), gradient(NDIM)
-    real(dp)               :: stepsize(NDIM), flo, fhi, normgrad
+    real(dp)               :: stepsize(NDIM), flo, fhi
     integer                :: idim
 
     stepsize = max(min_stepsize, sqrteps * abs(r))
@@ -1961,8 +1986,6 @@ contains
        ! Reset to original coordinate
        r_eval(idim) = r(idim)
     end do
-
-    normgrad = norm2(gradient)
-  end function numerical_gradient_amplitude
+  end function numerical_gradient
 
 end module m_af_multigrid

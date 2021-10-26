@@ -85,12 +85,13 @@ program poisson_lsf_test
   mg%lsf_boundary_value = boundary_value
   mg%lsf_dist => mg_lsf_dist_gss
   mg%lsf => get_lsf
+  mg%lsf_length_scale = solution_radius
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(1.0_dp)], &
-       2 * [DTIMES(box_size)], &
+       [DTIMES(box_size)], &
        coord=coord)
 
   do n = 1, 100
@@ -126,7 +127,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
     integer                 :: nc
-    integer, parameter      :: refinement_type = 2
+    integer, parameter      :: refinement_type = 1
 
     nc = box%n_cell
 
