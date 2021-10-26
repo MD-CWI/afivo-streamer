@@ -235,6 +235,8 @@ contains
 
     ! This automatically handles cylindrical symmetry
     mg%sides_rb => mg_sides_rb
+    mg%lsf_dist => mg_lsf_dist_gss
+    mg%lsf_length_scale = field_rod_radius
 
     call af_set_cc_methods(tree, i_electric_fld, &
          af_bc_neumann_zero, af_gc_interp)
