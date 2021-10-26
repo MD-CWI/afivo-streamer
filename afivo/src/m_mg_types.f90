@@ -80,6 +80,9 @@ module m_mg_types
      !> Safety factor for gradient of level set function
      real(dp) :: lsf_gradient_safety_factor = 1.5_dp
 
+     !> Minimal length scale to resolve (on coarser grids)
+     real(dp) :: lsf_length_scale = 1e100_dp
+
      !> Level-set function
      procedure(mg_func_lsf), pointer, nopass :: lsf => null()
 
@@ -171,13 +174,11 @@ module m_mg_types
 
      !> Compute distance to boundary starting at point a going to point b, in
      !> the range from [0, 1], with 1 meaning there is no boundary
-     real(dp) function mg_lsf_distf(box_a, IJK_(a), box_b, IJK_(b), mg)
+     real(dp) function mg_lsf_distf(a, b, mg)
        import
-       type(box_t), intent(in) :: box_a   !< Box a (start point)
-       integer, intent(in)     :: IJK_(a) !< Cell-centered index in box a
-       type(box_t), intent(in) :: box_b   !< Box b (end point)
-       integer, intent(in)     :: IJK_(b) !< Cell-centered index in box b
-       type(mg_t), intent(in)  :: mg
+       real(dp), intent(in)   :: a(NDIM)
+       real(dp), intent(in)   :: b(NDIM)
+       type(mg_t), intent(in) :: mg
      end function mg_lsf_distf
   end interface
 
