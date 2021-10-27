@@ -9,6 +9,7 @@ module m_analysis
 
   ! Public methods
   public :: analysis_get_maxima
+  public :: analysis_get_sigma
 #if NDIM == 2
   public :: analysis_get_cross
 #endif
@@ -76,6 +77,53 @@ contains
     !$omp end parallel
 
   end subroutine analysis_get_maxima
+
+  subroutine sigma_calculator(boxes, id, nc)
+    use m_lookup_table
+    use m_units_constants
+    use m_gas
+    use m_transport_data
+    use m_streamer
+    use m_chemistry
+    type(box_t), intent(inout) :: boxes(:)
+    integer, intent(in)        :: id, nc
+
+    real(dp) :: ne_fld(2), mu, Td, N_inv
+    integer  :: IJK
+
+    !> @todo handle variable gas density
+    N_inv = 1.0_dp/gas_number_density
+
+    do KJI_DO(1, nc)
+       ne_fld = boxes(id)%cc(IJK, [i_electron, i_electric_fld])
+       Td     = ne_fld(2) * SI_to_Townsend * N_inv
+       mu     = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+
+       boxes(id)%cc(IJK, i_conductivity) = mu * ne_fld(1) * UC_elem_charge
+    end do; CLOSE_DO
+
+  end subroutine sigma_calculator
+
+  !subroutine for conductivity calculation
+  subroutine analysis_get_sigma(tree)
+    type(af_t), intent(inout) :: tree
+
+    integer     :: lvl, id, i, nc
+
+    nc = tree%n_cell
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+      !$omp do
+      do i = 1, size(tree%lvls(lvl)%leaves)
+        id = tree%lvls(lvl)%leaves(i)
+        call sigma_calculator(tree%boxes, id, nc)
+      end do
+      !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine analysis_get_sigma
+
 
   !> Find minimum and maximum z coordinate where a variable exceeds a threshold
   subroutine analysis_zmin_zmax_threshold(tree, iv, threshold, limits, z_minmax)

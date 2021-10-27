@@ -110,8 +110,8 @@ module m_output
   ! Output the electron energy in eV from the local field approximation
   logical :: output_electron_energy = .false.
 
-  ! Output the conductivity of the plasma
-  logical :: output_conductivity = .false.
+!   ! Output the conductivity of the plasma
+!   logical :: output_conductivity = .false.
 
   ! Table with energy in eV vs electric field
   type(LT_t) :: eV_vs_fld
@@ -253,8 +253,8 @@ contains
 
     call CFG_add_get(cfg, "output%electron_energy", output_electron_energy, &
          "Show the electron energy in eV from the local field approximation")
-    call CFG_add_get(cfg, "output%conductivity", output_conductivity, &
-         "Output the conductivity of the plasma")
+!     call CFG_add_get(cfg, "output%conductivity", output_conductivity, &
+!          "Output the conductivity of the plasma")
 
     if (output_electron_energy) then
        n_extra_vars = n_extra_vars + 1
@@ -270,10 +270,10 @@ contains
        call LT_set_col(eV_vs_fld, 1, x_data, y_data)
     end if
 
-    if (output_conductivity) then
-       n_extra_vars = n_extra_vars + 1
-       output_extra_vars(n_extra_vars) = "sigma"
-    end if
+!     if (output_conductivity) then
+!        n_extra_vars = n_extra_vars + 1
+!        output_extra_vars(n_extra_vars) = "sigma"
+!     end if
 
   end subroutine output_initialize
 
@@ -303,6 +303,8 @@ contains
     end interface
     integer                   :: i
     character(len=string_len) :: fname
+
+    call analysis_get_sigma(tree)
 
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
@@ -489,10 +491,10 @@ contains
        case ("eV")
           ! Add electron energy in eV
           new_vars(DTIMES(:), n) = LT_get_col(eV_vs_fld, 1, Td)
-       case ("sigma")
-          ! Add plasma conductivity (e mu n_e)
-          new_vars(DTIMES(:), n) = LT_get_col(td_tbl, td_mobility, Td) * &
-               N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
+     !   case ("sigma")
+     !      ! Add plasma conductivity (e mu n_e)
+     !      new_vars(DTIMES(:), n) = LT_get_col(td_tbl, td_mobility, Td) * &
+     !           N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
        case default
           error stop "Unknown variable"
        end select
