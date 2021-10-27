@@ -88,8 +88,7 @@ program particles_gravity
 
   do n = 1, 100
      call af_tree_clear_cc(tree, i_rho)
-     call af_particles_to_grid(tree, i_rho, coordinates, weights, &
-          n_particles, 1, ids)
+     call af_particles_to_grid(tree, i_rho, n_particles, get_id, get_rw, 1)
      call af_adjust_refinement(tree, refine_routine, refine_info, 2)
      if (refine_info%n_add == 0) exit
   end do
@@ -110,8 +109,7 @@ program particles_gravity
 
      ! Compute force
      call af_tree_clear_cc(tree, i_rho)
-     call af_particles_to_grid(tree, i_rho, coordinates, weights, &
-          n_particles, 1, ids)
+     call af_particles_to_grid(tree, i_rho, n_particles, get_id, get_rw, 1)
      call af_loop_box(tree, subtract_mean_density)
 
      call mg_fas_vcycle(tree, mg, .false.)
@@ -137,8 +135,7 @@ program particles_gravity
 
      if (n_output * dt_output <= time) then
         call af_tree_clear_cc(tree, i_rho)
-        call af_particles_to_grid(tree, i_rho, coordinates, weights, &
-          n_particles, 1, ids)
+        call af_particles_to_grid(tree, i_rho, n_particles, get_id, get_rw, 1)
         n_output = n_output + 1
         write(fname, "(A,I4.4)") "output/particles_gravity_" // DIMNAME // "_", n_output
         call af_write_silo(tree, fname, n_output, time)
@@ -268,5 +265,22 @@ contains
 
     box%cc(DTIMES(:), i_rho) = box%cc(DTIMES(:), i_rho) - mean_density
   end subroutine subtract_mean_density
+
+  subroutine get_id(n, id)
+    integer, intent(in)  :: n
+    integer, intent(out) :: id
+
+    id = af_get_id_at(tree, coordinates(:, n), guess=ids(n))
+    ids(n) = id
+  end subroutine get_id
+
+  subroutine get_rw(n, r, w)
+    integer, intent(in)   :: n
+    real(dp), intent(out) :: r(NDIM)
+    real(dp), intent(out) :: w
+
+    r = coordinates(:, n)
+    w = weights(n)
+  end subroutine get_rw
 
 end program particles_gravity

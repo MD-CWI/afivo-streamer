@@ -51,6 +51,7 @@ program streamer
   type(af_loc_t)            :: loc_z
   real(dp), dimension (2)   :: rr_val
 #endif
+  real(dp)                  :: breakdown_field_Td
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -75,6 +76,9 @@ program streamer
   call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
   call CFG_write(cfg, trim(output_name) // "_out.cfg", custom_first=.true.)
+
+  call chemistry_get_breakdown_field(breakdown_field_Td, 1.0e3_dp)
+  write(*, '(A,E12.4)') " Estimated breakdown field (Td): ", breakdown_field_Td
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
@@ -185,9 +189,10 @@ program streamer
        call output_write(tree, output_cnt, 0.0_dp, lc_reading, write_sim_data)
     end if
 
-    print *, "Simulation output: ", trim(output_name)
-    print *, "Number of threads: ", af_get_max_threads()
-    call af_print_info(tree)
+  print *, "Simulation output: ", trim(output_name)
+  print *, "Number of threads: ", af_get_max_threads()
+  call af_print_info(tree)
+  call af_stencil_print_info(tree)
 
   ! Initial wall clock time
   call system_clock(t_start, count_rate)

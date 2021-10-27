@@ -9,16 +9,18 @@ include $(AF_DIR)/src/makerules.make
 
 PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
  computational_domain boundary_conditions poisson_neumann particles_to_grid	\
- ghostcell_benchmark poisson_coarse_solver implicit_diffusion	\
- poisson_dielectric poisson_helmholtz reaction_diffusion dielectric_surface	\
- advection_v2 poisson_lsf_test
+ ghostcell_benchmark particles_gravity poisson_coarse_solver implicit_diffusion	\
+ poisson_dielectric poisson_helmholtz reaction_diffusion advection_v2		\
+ electrode_example poisson_lsf_test stencil_test poisson_stencil		\
+ dielectric_surface
 
 PROGS_1D := $(PROGS_XD:%=%_1d)
 
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric		\
 simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl solid_body_rotation	\
-amr_solid_body_rotation euler_gas_dynamics electrode_dielectric			\
-electrode_example
+amr_solid_body_rotation euler_gas_dynamics dielectric_surface			\
+electrode_dielectric electrode_example
+
 
 PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning particles_gravity
 
@@ -29,7 +31,7 @@ all:	$(PROGS)
 clean:
 	$(RM) $(PROGS) *.o *.mod
 
-run:
+run:	$(PROGS)
 	for prog in $(PROGS); do\
 		./$$prog || { echo "$$prog failed" ; exit 1; };\
 	done

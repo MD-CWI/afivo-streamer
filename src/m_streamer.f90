@@ -42,6 +42,9 @@ module m_streamer
   !> Index of deposited power density
   integer, public, protected :: i_power_density = -1
 
+  !> Index of correction factor for source terms
+  integer, public, protected :: i_srcfac = -1
+
   !> Index of electron flux
   integer, public, protected :: flux_elec    = -1
   !> Index of electric field vector
@@ -80,6 +83,9 @@ module m_streamer
   !> Avoid dielectric relaxation time step constraint by limiting flux
   logical, public, protected :: ST_drt_limit_flux = .false.
 
+  !> Ensure that flux limiting does not lead to fields higher than this
+  real(dp), public, protected :: ST_drt_max_field = 1.0e100_dp
+
   !> Limit velocities to this value (m/s)
   real(dp), public, protected :: ST_max_velocity = -1.0_dp
 
@@ -87,10 +93,19 @@ module m_streamer
   real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
 
   !> Use source factor to prevent unphysical effects due to diffusion
-  logical, public, protected :: ST_source_factor = .false.
+  integer, public, protected :: ST_source_factor
+
+  integer, public, parameter :: source_factor_none = 0
+  integer, public, parameter :: source_factor_flux = 1
+  integer, public, parameter :: source_factor_flux_hmean = 2
+  integer, public, parameter :: source_factor_original_cc = 3
+  integer, public, parameter :: source_factor_original_flux = 4
 
   !> Minimal density for including electron sources
   real(dp), public, protected :: ST_source_min_density = -1e10_dp
+
+  !> Correction used for to compute cell-centered fields
+  character(len=name_len), public, protected :: ST_field_correction = "none"
 
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
@@ -157,11 +172,13 @@ contains
     integer, intent(in)        :: ndim !< Number of dimensions
     integer                    :: n, k, n_threads, ix_chemistry
     character(len=name_len)    :: prolong_method, bc_method
+    character(len=name_len)    :: source_factor = "none"
     character(len=string_len)  :: tmp_str
     integer                    :: rng_int4_seed(4) = &
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
     real(dp)                   :: tmp
+    logical                    :: write_source_factor = .false.
 
     ! Set index of electrons
     i_electron = af_find_cc_variable(tree, "e")
@@ -323,16 +340,49 @@ contains
        error stop "Unknown prolong_density method"
     end select
 
-    call CFG_add_get(cfg, "fixes%drt_limit_flux", ST_drt_limit_flux, &
-         "Avoid dielectric relaxation time step constraint by limiting flux")
+    call CFG_add_get(cfg, "fixes%drt_max_field", ST_drt_max_field, &
+         "Enable flux limiting, but prevent field from exceeding this value")
+    if (ST_drt_max_field < 1e100_dp) ST_drt_limit_flux = .true.
+
     call CFG_add_get(cfg, "fixes%max_velocity", ST_max_velocity, &
          "Limit velocities to this value (m/s)")
     call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
          "Disable diffusion parallel to fields above this threshold (V/m)")
-    call CFG_add_get(cfg, "fixes%source_factor", ST_source_factor, &
+    call CFG_add_get(cfg, "fixes%source_factor", source_factor, &
          "Use source factor to prevent unphysical effects due to diffusion")
+    call CFG_add_get(cfg, "fixes%write_source_factor", write_source_factor, &
+         "Whether to write the source factor to the output")
     call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
          "Minimal density for including electron sources")
+    call CFG_add_get(cfg, "fixes%field_correction", ST_field_correction, &
+         "Correction used for computing cell-centered fields " // &
+         "(none, divE, harmonic)")
+
+    select case (source_factor)
+    case ("none")
+       ST_source_factor = source_factor_none
+    case ("flux")
+       ST_source_factor = source_factor_flux
+    case ("flux_hmean")
+       ST_source_factor = source_factor_flux_hmean
+    case ("original_cc")
+       ST_source_factor = source_factor_original_cc
+    case ("original_flux")
+       ST_source_factor = source_factor_original_flux
+       if (.not. write_source_factor) then
+          print *, "source factor scheme original_flux requires ", &
+               "fixes%write_source_factor = T"
+          error stop
+       end if
+    case default
+       print *, "Options fixes%source_factor: none, flux, flux_hmean, ", &
+            "original_cc, original_flux"
+       error stop "Unknown fixes%source_factor"
+    end select
+
+    if (ST_source_factor > 0 .and. write_source_factor) then
+       call af_add_cc_variable(tree, "srcfac", ix=i_srcfac)
+    end if
 
     call CFG_add_get(cfg, "rng_seed", rng_int4_seed, &
          "Seed for random numbers; if all zero, generate randomly")

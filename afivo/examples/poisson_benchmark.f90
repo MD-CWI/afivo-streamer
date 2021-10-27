@@ -14,7 +14,7 @@ program poisson_benchmark
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: mg_iter, n_args
+  integer            :: mg_iter, n_args, coarse_grid_size
   integer            :: n_cell, n_iterations, max_ref_lvl
   real(dp)           :: time, runtime
   character(len=100) :: arg_string !, fname
@@ -32,18 +32,26 @@ program poisson_benchmark
      read(arg_string, *) n_cell
   else
      print *, "No arguments specified, using default values"
-     print *, "Usage: ./poisson_benchmark_" // DIMNAME // " n_cell max_ref_lvl runtime(s)"
+     print *, "Usage: ./poisson_benchmark_" // DIMNAME // &
+          " n_cell coarse_grid_size max_ref_lvl runtime(s)"
      n_cell = 16
   end if
 
   if (n_args >= 2) then
+     call get_command_argument(2, arg_string)
+     read(arg_string, *) coarse_grid_size
+  else
+     coarse_grid_size = 16
+  end if
+
+  if (n_args >= 3) then
      call get_command_argument(2, arg_string)
      read(arg_string, *) max_ref_lvl
   else
      max_ref_lvl = 2
   end if
 
-  if (n_args >= 3) then
+  if (n_args >= 4) then
      call get_command_argument(3, arg_string)
      read(arg_string, *) runtime
      if (runtime < 1e-3_dp) stop "Run time should be > 1e-3 seconds"
@@ -52,6 +60,7 @@ program poisson_benchmark
   end if
 
   print *, "Box size:           ", n_cell
+  print *, "Coarse grid size:   ", coarse_grid_size
   print *, "Max refinement lvl: ", max_ref_lvl
   print *, "Run time (s):       ", runtime
 
@@ -63,7 +72,7 @@ program poisson_benchmark
   call af_init(tree, & ! Tree to initialize
        n_cell, &       ! A box contains box_size**DIM cells
        [DTIMES(1.0_dp)], &
-       [DTIMES(n_cell)])
+       [DTIMES(coarse_grid_size)])
 
   call system_clock(t_start, count_rate)
   do

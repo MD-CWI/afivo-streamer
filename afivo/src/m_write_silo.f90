@@ -16,11 +16,11 @@ module m_write_silo
   public :: SILO_open_file
   public :: SILO_close_file
   public :: SILO_set_time_varying
+  public :: SILO_add_curve
   public :: SILO_add_grid
   public :: SILO_add_var
   public :: SILO_set_mmesh_grid
   public :: SILO_set_mmesh_var
-  public :: SILO_add_curve
 
 contains
 
@@ -99,14 +99,61 @@ contains
     if (ierr /= 0) print *, "Error writing ", trim(name2)
   end subroutine SILO_set_time_varying
 
+  !> Add a curve-object (pairs of x-y values) to the Silo file
+  subroutine SILO_add_curve(dbix, curvename, xvals, yvals)
+    character(len=*), intent(in) :: curvename
+    integer, intent(in)          :: dbix
+    real(dp), intent(in)         :: xvals(:), yvals(:)
+    integer                      :: iostat, ierr, dboptix
+
+    interface
+      integer (c_int) function dbputcurve(dbid, curvename, lcurvename, &
+        xvals, yvals, datatype, npoints, optlist_id, status)
+        use, intrinsic :: iso_c_binding
+        integer(c_int) :: dbid, lcurvename, datatype, npoints, status, optlist_id
+        real(c_double) ::  xvals(*), yvals(*)
+        character(kind=c_char) :: curvename(*)
+      end function dbputcurve
+
+      integer (c_int) function dbaddiopt(optlist_id, option, ivalue)
+        use, intrinsic :: iso_c_binding
+        integer(c_int), intent(in) :: optlist_id, option, ivalue(*)
+      end function dbaddiopt
+    end interface
+
+    if (size(shape(xvals)) /= 1 .or. size(shape(yvals)) /= 1) then
+      print *, "Input is not a one-dimensional array. "
+    end if
+
+    if (size(xvals) /= size(yvals)) then
+      print *, "x and y arrays not of the same dimensions"
+      print *, size(xvals), " and ", size(yvals)
+    end if
+
+    ierr = dbmkoptlist(20, dboptix)
+    if (ierr /= 0) print *, &
+         "Error creating options list in SILO_add_curve ", dboptix
+
+    ierr = dbputcurve(dbix, trim(curvename), len_trim(curvename), &
+              xvals, yvals, DB_DOUBLE, size(xvals), dboptix, iostat)
+
+    if (ierr /= 0) print *, &
+      "ERROR: curve object not added to SILO file"
+
+    ierr = dbfreeoptlist(dboptix)
+    if (ierr /= 0) print *, &
+    "Error dbfreeoptlist in SILO_add_curve", ierr
+  end subroutine SILO_add_curve
+
   subroutine SILO_add_grid(dbix, gridname, n_dim, N_r, r_min, dr, &
-       lo_offset, hi_offset)
+       lo_offset, hi_offset, n_cycle)
     character(len=*), intent(in) :: gridname
     integer, intent(in)          :: dbix, n_dim, N_r(:)
     integer, intent(in)          :: lo_offset(n_dim), hi_offset(n_dim)
     real(dp), intent(in)         :: r_min(:), dr(:)
     real(dp), allocatable        :: x_coords(:), y_coords(:), z_coords(:)
     integer                      :: i, ierr, iostat, dboptix
+    integer, optional, intent(in) :: n_cycle
 
     interface
        function dbputqm(dbid, name, lname, xname, lxname, yname, &
@@ -158,6 +205,11 @@ contains
     if (ierr /= 0) print *, &
          "Error creating options list in SILO_add_grid ", dboptix
 
+    ! Make iteration number explicit
+    ierr = dbaddiopt(dboptix, DBOPT_CYCLE, [n_cycle])
+    if (ierr /= 0) print *, &
+         "Error passing iteration number SILO_add_grid ", dboptix
+
     ! Set integer options
     ierr = dbaddiopt(dboptix, DBOPT_NSPACE, [n_dim])
     if (ierr /= 0) print *, &
@@ -184,13 +236,14 @@ contains
   end subroutine SILO_add_grid
 
   subroutine SILO_add_var(dbix, dataname, gridname, &
-       d_packed, d_shape)
+       d_packed, d_shape, n_cycle)
     character(len=*), intent(in) :: gridname, dataname
     real(dp), intent(in)         :: d_packed(:)
     integer, intent(in)          :: dbix, d_shape(:)
 
     integer                      :: dboptix, ierr, iostat
     real(dp)                     :: dummy(1)
+    integer, optional, intent(in) :: n_cycle
 
     interface
        function dbputqv1(dbid, name, lname, meshname, lmeshname, &
@@ -202,6 +255,11 @@ contains
          real(c_double) :: var(*), mixvar(*)
          character(kind=c_char) :: name(*), meshname(*)
        end function dbputqv1
+
+       integer (c_int) function dbaddiopt(optlist_id, option, ivalue)
+         use, intrinsic :: iso_c_binding
+         integer(c_int), intent(in) :: optlist_id, option, ivalue(*)
+       end function dbaddiopt
     end interface
 
     if (size(d_packed) /= product(d_shape)) then
@@ -217,7 +275,14 @@ contains
        error stop "Error creating options list in SILO_add_var"
     end if
 
-    ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, 1)
+    ! Make iteration number explicit
+    if (present(n_cycle)) then
+      ierr = dbaddiopt(dboptix, DBOPT_CYCLE, [n_cycle])
+      if (ierr /= 0) print *, &
+           "Error passing iteration number SILO_add_var ", dboptix
+    end if
+
+    ierr = dbaddiopt(dboptix, DBOPT_HIDE_FROM_GUI, [1])
 
     ! Write the data to the grid
     ierr = dbputqv1(dbix, trim(dataname), len_trim(dataname), &
@@ -363,46 +428,46 @@ contains
     length = dbset2dstrlen(old_str_len)
   end subroutine SILO_set_mmesh_var
 
-  !> Add a curve-object (pairs of x-y values) to the Silo file
-  subroutine SILO_add_curve(dbix, curvename, xvals, yvals, xname, yname)
-    character(len=*), intent(in) :: curvename
-    integer, intent(in)          :: dbix
-    real(dp), intent(in)         :: xvals(:), yvals(:)
-    character(len=*), intent(in) :: xname, yname
-    integer                      :: iostat, ierr, dboptix
-
-    interface
-       integer (c_int) function dbputcurve(dbid, curvename, lcurvename, &
-            xvals, yvals, datatype, npoints, optlist_id, status)
-         use, intrinsic :: iso_c_binding
-         integer(c_int) :: dbid, lcurvename, datatype, npoints, status, optlist_id
-         real(c_double) ::  xvals(*), yvals(*)
-         character(kind=c_char) :: curvename(*)
-       end function dbputcurve
-
-       integer (c_int) function dbaddiopt(optlist_id, option, ivalue)
-         use, intrinsic :: iso_c_binding
-         integer(c_int), intent(in) :: optlist_id, option, ivalue(*)
-       end function dbaddiopt
-    end interface
-
-    if (size(xvals) /= size(yvals)) &
-       error stop "SILO_add_curve: x and y arrays unequal size"
-
-    ierr = dbmkoptlist(20, dboptix)
-    if (ierr /= 0) error stop "creating options list in SILO_add_curve "
-
-    ierr = dbaddcopt(dboptix, DBOPT_XLABEL, trim(xname), len_trim(xname))
-    if (ierr /= 0) error stop "adding option in SILO_add_curve"
-    ierr = dbaddcopt(dboptix, DBOPT_YLABEL, trim(yname), len_trim(yname))
-    if (ierr /= 0) error stop "adding option in SILO_add_curve"
-
-    ierr = dbputcurve(dbix, trim(curvename), len_trim(curvename), &
-         xvals, yvals, DB_DOUBLE, size(xvals), dboptix, iostat)
-    if (ierr /= 0) error stop "curve object not added to SILO file"
-
-    ierr = dbfreeoptlist(dboptix)
-    if (ierr /= 0) error stop "dbfreeoptlist in SILO_add_curve"
-  end subroutine SILO_add_curve
+  ! !> Add a curve-object (pairs of x-y values) to the Silo file
+  ! subroutine SILO_add_curve(dbix, curvename, xvals, yvals, xname, yname)
+  !   character(len=*), intent(in) :: curvename
+  !   integer, intent(in)          :: dbix
+  !   real(dp), intent(in)         :: xvals(:), yvals(:)
+  !   character(len=*), intent(in) :: xname, yname
+  !   integer                      :: iostat, ierr, dboptix
+  !
+  !   interface
+  !      integer (c_int) function dbputcurve(dbid, curvename, lcurvename, &
+  !           xvals, yvals, datatype, npoints, optlist_id, status)
+  !        use, intrinsic :: iso_c_binding
+  !        integer(c_int) :: dbid, lcurvename, datatype, npoints, status, optlist_id
+  !        real(c_double) ::  xvals(*), yvals(*)
+  !        character(kind=c_char) :: curvename(*)
+  !      end function dbputcurve
+  !
+  !      integer (c_int) function dbaddiopt(optlist_id, option, ivalue)
+  !        use, intrinsic :: iso_c_binding
+  !        integer(c_int), intent(in) :: optlist_id, option, ivalue(*)
+  !      end function dbaddiopt
+  !   end interface
+  !
+  !   if (size(xvals) /= size(yvals)) &
+  !      error stop "SILO_add_curve: x and y arrays unequal size"
+  !
+  !   ierr = dbmkoptlist(20, dboptix)
+  !   if (ierr /= 0) error stop "creating options list in SILO_add_curve "
+  !
+  !   ierr = dbaddcopt(dboptix, DBOPT_XLABEL, trim(xname), len_trim(xname))
+  !   if (ierr /= 0) error stop "adding option in SILO_add_curve"
+  !   ierr = dbaddcopt(dboptix, DBOPT_YLABEL, trim(yname), len_trim(yname))
+  !   if (ierr /= 0) error stop "adding option in SILO_add_curve"
+  !
+  !   ierr = dbputcurve(dbix, trim(curvename), len_trim(curvename), &
+  !        xvals, yvals, DB_DOUBLE, size(xvals), dboptix, iostat)
+  !   if (ierr /= 0) error stop "curve object not added to SILO file"
+  !
+  !   ierr = dbfreeoptlist(dboptix)
+  !   if (ierr /= 0) error stop "dbfreeoptlist in SILO_add_curve"
+  ! end subroutine SILO_add_curve
 
 end module m_write_silo

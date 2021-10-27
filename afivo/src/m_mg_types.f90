@@ -9,14 +9,29 @@ module m_mg_types
 
   ! The mg module supports different multigrid operators, and uses these tags to
   ! identify boxes / operators
-  integer, parameter :: mg_normal_box = 1 !< Normal box
-  integer, parameter :: mg_lsf_box    = 2 !< Box with an internal boundary
-  integer, parameter :: mg_ceps_box   = 3 !< Box with constant eps /= 1
-  integer, parameter :: mg_veps_box   = 4 !< Box with varying eps (on face)
+  integer, parameter :: mg_normal_operator = 1
+  integer, parameter :: mg_lsf_operator    = 2
+  integer, parameter :: mg_eps_operator    = 3
+  integer, parameter :: mg_auto_operator   = 4
+
+  integer, parameter :: mg_normal_box    = 1 !< Normal box
+  integer, parameter :: mg_lsf_box       = 2 !< Box with an internal boundary
+  integer, parameter :: mg_ceps_box      = 3 !< Box with constant eps /= 1
+  integer, parameter :: mg_veps_box      = 4 !< Box with varying eps (on face)
+
+  integer, parameter :: mg_prolong_linear    = 17 !< Linear prolongation
+  integer, parameter :: mg_prolong_sparse    = 18 !< Sparse linear prolongation
+  integer, parameter :: mg_auto_prolongation = 19 !< Automatic prolongation
+
+  !> Stencil key for level set function distance
+  integer, parameter :: mg_lsf_distance_key = 31
 
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1
   integer, parameter :: mg_cycle_up   = 3
+
+  !> Minimum relative distance to boundaries (to avoid division by zero)
+  real(dp), parameter :: mg_lsf_min_rel_distance = epsilon(1.0_dp)
 
   !> Generic type for the coarse grid solver
   type coarse_solve_t
@@ -62,6 +77,18 @@ module m_mg_types
      !> Boundary value for level set function
      real(dp) :: lsf_boundary_value = 0.0_dp
 
+     !> Safety factor for gradient of level set function
+     real(dp) :: lsf_gradient_safety_factor = 1.5_dp
+
+     !> Minimal length scale to resolve (on coarser grids)
+     real(dp) :: lsf_length_scale = 1e100_dp
+
+     !> Level-set function
+     procedure(mg_func_lsf), pointer, nopass :: lsf => null()
+
+     !> Routine to determine distance from level-set function
+     procedure(mg_lsf_distf), pointer, nopass :: lsf_dist => null()
+
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(af_subr_bc), pointer, nopass   :: sides_bc => null()
 
@@ -70,6 +97,18 @@ module m_mg_types
 
      !> Subroutine that performs the (non)linear operator
      procedure(mg_box_op), pointer, nopass   :: box_op => null()
+
+     !> What kind of operator to use
+     integer :: operator_type = mg_auto_operator
+
+     !> Key indicating which stencil is to be used for the operator
+     integer :: operator_key = af_stencil_none
+
+     !> What kind of prolongation operator to use
+     integer :: prolongation_type = mg_auto_prolongation
+
+     !> Key indicating which stencil is to be used for the operator
+     integer :: prolongation_key = af_stencil_none
 
      !> Subroutine that performs Gauss-Seidel relaxation on a box
      procedure(mg_box_gsrb), pointer, nopass :: box_gsrb => null()
@@ -126,6 +165,21 @@ module m_mg_types
        real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
        real(dp), intent(inout) :: lsf_fac(DTIMES(box%n_cell))
      end subroutine mg_box_stencil
+
+     !> Level set function
+     real(dp) function mg_func_lsf(rr)
+       import
+       real(dp), intent(in) :: rr(NDIM) !< Coordinates
+     end function mg_func_lsf
+
+     !> Compute distance to boundary starting at point a going to point b, in
+     !> the range from [0, 1], with 1 meaning there is no boundary
+     real(dp) function mg_lsf_distf(a, b, mg)
+       import
+       real(dp), intent(in)   :: a(NDIM)
+       real(dp), intent(in)   :: b(NDIM)
+       type(mg_t), intent(in) :: mg
+     end function mg_lsf_distf
   end interface
 
 end module m_mg_types

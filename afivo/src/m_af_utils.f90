@@ -47,7 +47,6 @@ module m_af_utils
   public :: af_get_loc
   public :: af_r_loc
   public :: af_r_inside
-  public :: af_n_cell
 
 contains
 
@@ -1027,20 +1026,5 @@ contains
        call af_boxes_copy_fc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine af_tree_copy_fc
-
-  !> Return n_cell at lvl. For all lvls >= 1, n_cell has the same value, but
-  !> for lvls <= 0, n_cell changes.
-  !> @todo remove this in future
-  pure function af_n_cell(tree, lvl) result(n_cell)
-    type(af_t), intent(in) :: tree !< Full grid
-    integer, intent(in)    :: lvl !< Refinement level
-    integer                :: n_cell !< Output: n_cell at lvl
-
-    if (lvl >= 1) then
-       n_cell = tree%n_cell
-    else
-       n_cell = tree%n_cell / (2**(1-lvl))
-    end if
-  end function af_n_cell
 
 end module m_af_utils

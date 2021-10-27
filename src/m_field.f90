@@ -76,6 +76,12 @@ module m_field
   real(dp) :: field_point_charge = 0.0_dp
   real(dp) :: field_point_r0(NDIM) = 0.0_dp
 
+  ! Parameters that are pre-computed for conical rods
+  ! @todo Add explanations/documentation for conical rods
+  real(dp) :: conical_rod_R_o
+  real(dp) :: conical_rod_y_o
+  real(dp) :: conical_rod_ro(NDIM)
+
   character(string_len) :: field_bc_type = "homogeneous"
 
   public :: field_initialize
@@ -99,6 +105,8 @@ contains
     type(CFG_t), intent(inout) :: cfg !< Settings
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
     character(len=string_len)  :: field_table, electrode_type
+    real(dp)                   :: R_rod, R_tip, y_tip, alpha
+    real(dp)                   :: r0(NDIM), r1(NDIM), r2(NDIM)
 
     field_table = undefined_str
     call CFG_add_get(cfg, "field_table", field_table, &
@@ -198,13 +206,27 @@ contains
 
        select case (electrode_type)
        case ("rod")
-          call af_set_cc_methods(tree, i_lsf, funcval=field_rod_lsf)
+          call af_set_cc_methods(tree, i_lsf, funcval=set_field_rod_lsf)
+          mg%lsf => field_rod_lsf
        case ("rod_cone_top")
           if (any(field_rod_r2 < field_rod_r1)) &
                error stop "Should have field_rod_r2 >= field_rod_r1"
           if (field_tip_radius <= 0) &
-            error stop "field_tip_radius not set correctly"
-          call af_set_cc_methods(tree, i_lsf, funcval=field_conical_rod_top_lsf)
+               error stop "field_tip_radius not set correctly"
+          call af_set_cc_methods(tree, i_lsf, funcval=set_field_conical_rod_top_lsf)
+          mg%lsf => field_conical_rod_top_lsf
+
+          r0    = field_rod_r0 * ST_domain_len
+          r1    = field_rod_r1 * ST_domain_len
+          r2    = field_rod_r2 * ST_domain_len
+          R_rod = field_rod_radius
+          R_tip = field_tip_radius
+          y_tip = (r0(NDIM)*R_rod-r1(NDIM)*R_tip)/(R_rod-R_tip)
+          alpha = atan(R_rod/(r1(NDIM)-y_tip))
+
+          conical_rod_R_o = R_tip/cos(alpha)
+          conical_rod_y_o = r0(NDIM) + R_tip * tan(alpha)
+          conical_rod_ro = [r0(1:NDIM-1), conical_rod_y_o]
        case default
           error stop "Invalid electrode type (option: rod, rod_cone_top)"
        end select
@@ -213,11 +235,9 @@ contains
     end if
 
     ! This automatically handles cylindrical symmetry
-    mg%box_op => mg_auto_op
-    mg%box_gsrb => mg_auto_gsrb
-    mg%box_corr => mg_auto_corr
-    mg%box_stencil => mg_auto_stencil
     mg%sides_rb => mg_sides_rb
+    mg%lsf_dist => mg_lsf_dist_gss
+    mg%lsf_length_scale = field_rod_radius
 
     call af_set_cc_methods(tree, i_electric_fld, &
          af_bc_neumann_zero, af_gc_interp)
@@ -356,6 +376,17 @@ contains
        call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
     end if
 
+    select case (ST_field_correction)
+    case ("divE")
+       call af_loop_box(tree, correct_field_divE_box)
+    case ("harmonic")
+       call af_loop_box(tree, correct_field_harmonic_box)
+    case ("none")
+       continue
+    case default
+       error stop "Unknown fixes%field_correction"
+    end select
+
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute
@@ -444,6 +475,79 @@ contains
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute_rhs
+  subroutine correct_field_divE_box(box)
+    type(box_t), intent(inout) :: box
+    integer                    :: IJK
+    real(dp)                   :: tmp, Elo(NDIM), Ehi(NDIM)
+    real(dp)                   :: Emin(NDIM), dE(NDIM)
+    real(dp)                   :: eps = 1e-10_dp
+    integer                    :: nc
+
+    nc = box%n_cell
+
+    do KJI_DO(1, nc)
+       ! Compute f = 1 - |div(E)| / (|d/dx Ex| + |d/dy Ey|)
+       ! Then take min(E) + f * delta_E (component wise)
+       ! Todo: think about unequal mesh spacing
+
+#if NDIM == 2
+       ! Fields on lower and upper cell faces
+       Elo = box%fc(IJK, 1:NDIM, electric_fld)
+       Ehi = [box%fc(i+1, j, 1, electric_fld), &
+            box%fc(i, j+1, 2, electric_fld)]
+#endif
+
+       ! Emin contains the field components of smallest amplitude
+       where (abs(Elo) < abs(Ehi))
+          Emin = Elo
+          dE = Ehi - Elo
+       elsewhere
+          Emin = Ehi
+          dE = Elo - Ehi
+       end where
+
+       tmp = 1 - abs(sum(Ehi-Elo)) / (eps + sum(abs(dE)))
+       box%cc(IJK, i_electric_fld) = norm2(Emin + 0.5_dp * tmp * dE)
+    end do; CLOSE_DO
+  end subroutine correct_field_divE_box
+
+  subroutine correct_field_harmonic_box(box)
+    type(box_t), intent(inout) :: box
+    integer                    :: IJK
+    real(dp)                   :: f(2*NDIM), hmean
+    real(dp)                   :: eps = 1e-10_dp
+    integer                    :: nc
+
+    nc = box%n_cell
+
+    do KJI_DO(1, nc)
+#if NDIM == 1
+       f = abs([box%fc(i, 1, electric_fld), &
+            box%fc(i+1, 1, electric_fld)])
+       hmean = 2*f(1)*f(2)/(f(1)+f(2)+eps)
+#elif NDIM == 2
+       f = abs([box%fc(i, j, 1, electric_fld), &
+            box%fc(i+1, j, 1, electric_fld), &
+            box%fc(i, j, 2, electric_fld), &
+            box%fc(i, j+1, 2, electric_fld)])
+       hmean = norm2([2*f(1)*f(2)/(f(1)+f(2)+eps), &
+            2*f(3)*f(4)/(f(3)+f(4)+eps)])
+#elif NDIM == 3
+       f = abs([&
+            box%fc(i, j, k, 1, electric_fld), &
+            box%fc(i+1, j, k, 1, electric_fld), &
+            box%fc(i, j, k, 2, electric_fld), &
+            box%fc(i, j+1, k, 2, electric_fld), &
+            box%fc(i, j, k, 3, electric_fld), &
+            box%fc(i, j, k+1, 3, electric_fld)])
+       hmean = norm2([&
+            2*f(1)*f(2)/(f(1)+f(2)+eps), &
+            2*f(3)*f(4)/(f(3)+f(4)+eps), &
+            2*f(5)*f(6)/(f(5)+f(6)+eps)])
+#endif
+       box%cc(IJK, i_electric_fld) = hmean
+    end do; CLOSE_DO
+  end subroutine correct_field_harmonic_box
 
   !> Compute the electric field at a given time
   function field_get_amplitude(tree, time) result(electric_fld)
@@ -579,8 +683,7 @@ contains
   end subroutine field_bc_point_charge
 
   ! This routine sets the level set function for a simple rod
-  subroutine field_rod_lsf(box, iv)
-    use m_geometry
+  subroutine set_field_rod_lsf(box, iv)
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
     integer                    :: IJK, nc
@@ -590,48 +693,55 @@ contains
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
-       box%cc(IJK, iv) = GM_dist_line(rr, field_rod_r0 * ST_domain_len, &
-            field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
+       box%cc(IJK, iv) = field_rod_lsf(rr)
     end do; CLOSE_DO
 
-  end subroutine field_rod_lsf
+  end subroutine set_field_rod_lsf
+
+  real(dp) function field_rod_lsf(r)
+    use m_geometry
+    real(dp), intent(in)    :: r(NDIM)
+    field_rod_lsf = GM_dist_line(r, field_rod_r0 * ST_domain_len, &
+         field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
+  end function field_rod_lsf
 
   ! This routine sets the level set function for a simple rod
-  subroutine field_conical_rod_top_lsf(box, iv)
-    use m_geometry
+  subroutine set_field_conical_rod_top_lsf(box, iv)
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
     integer                    :: IJK, nc
-    real(dp)                   :: rr(NDIM), r0(NDIM), r1(NDIM), r2(NDIM), ro(NDIM)
-    real(dp)                   :: radius_at_height
-    real(dp)                   :: R_rod, R_tip, y_tip, alpha, R_o, y_o
+    real(dp)                   :: rr(NDIM)
 
     nc = box%n_cell
-    r0 = field_rod_r0 * ST_domain_len
-    r1 = field_rod_r1 * ST_domain_len
-    r2 = field_rod_r2 * ST_domain_len
-    R_rod = field_rod_radius
-    R_tip = field_tip_radius
-    y_tip = (r0(NDIM)*R_rod-r1(NDIM)*R_tip)/(R_rod-R_tip)
-    alpha = atan(R_rod/(r1(NDIM)-y_tip))
-    R_o = R_tip/cos(alpha)
-    y_o = r0(NDIM) + R_tip * tan(alpha)
-    ro = [r0(1:NDIM-1), y_o]
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
-
-       if (rr(NDIM) > r1(NDIM)) then
-          box%cc(IJK, iv) = GM_dist_line(rr, r1, r2, NDIM) - field_rod_radius
-       else if (rr(NDIM) > r0(NDIM)) then
-          radius_at_height = field_tip_radius + (rr(NDIM) - r0(NDIM)) / &
-               (r1(NDIM) - r0(NDIM)) * (field_rod_radius - field_tip_radius)
-          box%cc(IJK, iv) = GM_dist_line(rr, r0, r1, NDIM) - radius_at_height
-       else
-          box%cc(IJK, iv) = GM_dist_line(rr, ro, ro, NDIM) - R_o
-       end if
+       box%cc(IJK, iv) = field_conical_rod_top_lsf(rr)
     end do; CLOSE_DO
 
-  end subroutine field_conical_rod_top_lsf
+  end subroutine set_field_conical_rod_top_lsf
+
+  function field_conical_rod_top_lsf(r) result(lsf)
+    use m_geometry
+    real(dp), intent(in)    :: r(NDIM)
+    real(dp)                :: lsf
+    real(dp)                :: r0(NDIM), r1(NDIM), r2(NDIM)
+    real(dp)                :: radius_at_height
+
+    r0 = field_rod_r0 * ST_domain_len
+    r1 = field_rod_r1 * ST_domain_len
+    r2 = field_rod_r2 * ST_domain_len
+
+    if (r(NDIM) > r1(NDIM)) then
+       lsf = GM_dist_line(r, r1, r2, NDIM) - field_rod_radius
+    else if (r(NDIM) > r0(NDIM)) then
+       radius_at_height = field_tip_radius + (r(NDIM) - r0(NDIM)) / &
+            (r1(NDIM) - r0(NDIM)) * (field_rod_radius - field_tip_radius)
+       lsf = GM_dist_line(r, r0, r1, NDIM) - radius_at_height
+    else
+       lsf = GM_dist_line(r, conical_rod_ro, conical_rod_ro, NDIM) - &
+            conical_rod_R_o
+    end if
+  end function field_conical_rod_top_lsf
 
 end module m_field
