@@ -8,7 +8,8 @@ from sklearn.linear_model import LinearRegression, Lasso, HuberRegressor
 
 
 def get_args():
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('first_file', type=str,
                    help='First input file, e.g. path/sim_Emax_000001.txt')
     p.add_argument('-n', type=int, default=1000,
@@ -371,8 +372,8 @@ if args.show_plot:
     import matplotlib.pyplot as plt
 
     fig = plt.figure()
-    ax = fig.gca(projection='3d')
-    ax.set_aspect('equal')
+    ax = fig.add_subplot(projection='3d')
+
     for pt in paths:
         ax.plot(pt['points'][:, 0], pt['points'][:, 1], pt['points'][:, 2],
                 '.', label='{},{},{},{}'.format(pt['ix'], pt['parent'],
@@ -380,6 +381,10 @@ if args.show_plot:
         line = pt['x0'] + np.outer(pt['times'], pt['v']) + \
             0.5 * np.outer(pt['times']**2, pt['a'])
         ax.plot(line[:, 0], line[:, 1], line[:, 2], '-')
+
+    # This requires a recent version of matplotlib
+    ax.set_box_aspect([ub - lb for lb, ub in
+                       (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
 
     ax.legend()
     plt.show()
