@@ -83,6 +83,9 @@ module m_mg_types
      !> Minimal length scale to resolve (on coarser grids)
      real(dp) :: lsf_length_scale = 1e100_dp
 
+     !> Tolerance for line search algorithm
+     real(dp) :: lsf_tol = 1e-8_dp
+
      !> Level-set function
      procedure(mg_func_lsf), pointer, nopass :: lsf => null()
 

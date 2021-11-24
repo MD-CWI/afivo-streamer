@@ -1447,8 +1447,6 @@ contains
   !> signs, apply bisection directly. Else, first find the (assumed to be)
   !> unique local minimum/maximum to determine a bracket. Return relative
   !> location of root, or 1 if there is no root.
-  !>
-  !> @todo Allow to set tolerance?
   function mg_lsf_dist_gss(a, b, mg) result(dist)
     real(dp), intent(in)   :: a(NDIM) !< Start point
     real(dp), intent(in)   :: b(NDIM) !< End point
@@ -1463,16 +1461,16 @@ contains
     dist  = 1.0_dp
 
     if (lsf_a * lsf_b < 0) then
-       r_root = bisection(mg%lsf, a, b, tol, max_iter)
+       r_root = bisection(mg%lsf, a, b, mg%lsf_tol, max_iter)
     else
        ! Determine bracket by finding local minimum/maximum
        bracket = gss(mg%lsf, a, b, &
-            minimization=(lsf_a >= 0), tol=tol)
+            minimization=(lsf_a >= 0), tol=mg%lsf_tol)
 
        if (mg%lsf(bracket(:, 1)) * lsf_a > 0) then
           return                ! No root
        else
-          r_root = bisection(mg%lsf, a, bracket(:, 1), tol, max_iter)
+          r_root = bisection(mg%lsf, a, bracket(:, 1), mg%lsf_tol, max_iter)
        end if
     end if
 
