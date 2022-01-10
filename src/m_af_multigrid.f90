@@ -22,8 +22,10 @@ module m_af_multigrid
   public :: mg_lsf_dist_linear
   public :: mg_lsf_dist_gss
 
-  ! Automatic selection of operators
+  ! Set tag for each box, depending on operator
   public :: mg_set_box_tag
+  public :: mg_set_box_tag_lvl
+  public :: mg_set_box_tag_tree
 
   ! Methods for normal Laplacian
   public :: mg_box_lpl_gradient
@@ -1071,13 +1073,27 @@ contains
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer, intent(in)       :: lvl
-    integer                   :: i, id, n
+    integer                   :: i, id, n, p_id, p_tag
 
     !$omp parallel do private(i, id, n)
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
        associate (box => tree%boxes(id))
-         if (box%tag == af_init_tag) then
+         !> @todo Allow to set box tag again (e.g., for new operator)
+         if (box%tag /= af_init_tag) cycle
+
+         ! Check tag of parent box
+         p_id = box%parent
+         if (p_id /= af_no_box) then
+            p_tag = tree%boxes(p_id)%tag
+         else
+            p_tag = af_init_tag
+         end if
+
+         if (p_tag == mg_normal_box) then
+            ! The child of a normal box is also a normal box
+            box%tag = mg_normal_box
+         else
             call mg_set_box_tag(box, mg)
          end if
 
