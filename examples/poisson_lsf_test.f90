@@ -36,6 +36,8 @@ program poisson_lsf_test
   real(dp)           :: residu, max_error, max_field
   character(len=100) :: fname, argv
   type(mg_t)         :: mg
+  real(dp)           :: error_squared, rmse
+  logical            :: write_output = .true.
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -64,6 +66,8 @@ program poisson_lsf_test
         coord = af_cyl
         ! Place solution on axis
         solution_r0(1) = 0.0_dp
+     else if (argv == 'no_output') then
+        write_output = .false.
      else if (n == 2) then
         read(argv, *) max_refine_level
      else if (n == 3) then
@@ -103,6 +107,8 @@ program poisson_lsf_test
 
   call mg_init(tree, mg)
 
+  write(*, "(A,A4,4A14)") "# ", "iter", "residu", "max_error", "rmse", "max_field"
+
   do mg_iter = 1, n_iterations
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      call mg_compute_phi_gradient(tree, mg, i_field, 1.0_dp, i_field_norm)
@@ -113,9 +119,14 @@ program poisson_lsf_test
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      call af_tree_maxabs_cc(tree, i_error, max_error)
      call af_tree_maxabs_cc(tree, i_field_norm, max_field)
-     write(*, "(I8,3E14.5)") mg_iter, residu, max_error, max_field
-     write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // "_", mg_iter
-     call af_write_silo(tree, trim(fname))
+     call af_tree_sum_cc(tree, i_error, error_squared, 2)
+     rmse = sqrt(error_squared/af_total_volume(tree))
+     write(*, "(A,i4,4E14.5)") "# ", mg_iter, residu, max_error, rmse, max_field
+
+     if (write_output) then
+        write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // "_", mg_iter
+        call af_write_silo(tree, trim(fname))
+     end if
   end do
 
   call af_stencil_print_info(tree)
@@ -257,6 +268,10 @@ contains
 
        ! Use sign in front of minimum distance
        get_lsf = sign(min(dist1, dist2), get_lsf)
+    case (6)
+       ! Heart v2
+       qq = (rr - solution_r0) * 4.0_dp
+       get_lsf = qq(1)**2 + (qq(2) - abs(qq(1))**(2/3.0_dp))**2 - 1
 #endif
     case default
        error stop "Invalid case"
