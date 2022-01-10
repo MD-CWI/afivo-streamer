@@ -4,6 +4,7 @@
 !> Test of the level-set functionality of the Poisson solver
 program poisson_lsf_test
   use m_af_all
+  use m_config
 
   implicit none
 
@@ -20,6 +21,8 @@ program poisson_lsf_test
   integer            :: i_normgradlsf
   integer            :: i_lsfmask
 
+  logical :: cylindrical = .false.
+
   ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
   integer             :: shape             = 1
 
@@ -32,10 +35,11 @@ program poisson_lsf_test
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
-  integer            :: n, mg_iter, coord, n_args
+  integer            :: n, mg_iter, coord
   real(dp)           :: residu, max_error, max_field
-  character(len=100) :: fname, argv
+  character(len=100) :: fname
   type(mg_t)         :: mg
+  type(CFG_t)        :: cfg
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -50,32 +54,31 @@ program poisson_lsf_test
   call af_set_cc_methods(tree, i_lsf, funcval=set_lsf)
   call af_set_cc_methods(tree, i_field_norm, af_bc_neumann_zero)
 
-  ! If an argument is given, switch to cylindrical coordinates in 2D
-  n_args = command_argument_count()
-  if (n_args > 6) then
-     stop "Usage: ./poisson_lsf_test [cyl] [max_refinement_level] [shape_type] "&
-          "[size of box] [sharpness_triangle]"
-  end if
+  call CFG_update_from_arguments(cfg)
 
-  coord = af_xyz
-  do n = 1, n_args
-     call get_command_argument(n, argv)
-     if (argv == 'cyl') then
-        coord = af_cyl
-        ! Place solution on axis
-        solution_r0(1) = 0.0_dp
-     else if (n == 2) then
-        read(argv, *) max_refine_level
-     else if (n == 3) then
-        read(argv, *) shape
-     else if (n == 4) then
-        read(argv, *) box_size
-     else if (n == 5) then
-        read(argv, *) sharpness_t
-     else if (n == 6) then
-        read(argv, *) solution_r0(NDIM)
-     end if
-  end do
+  call CFG_add_get(cfg, "cylindrical", cylindrical, &
+       "Whether to use cylindrical coordinates")
+  call CFG_add_get(cfg, "max_refine_level", max_refine_level, &
+       "Maximum refinement level")
+  call CFG_add_get(cfg, "shape", shape, &
+       "Index of the shape used")
+  call CFG_add_get(cfg, "box_size", box_size, &
+       "Size of grid boxes")
+  call CFG_add_get(cfg, "triangle_sharpness", sharpness_t, &
+       "Triangle sharpness")
+  call CFG_add_get(cfg, "solution_r0", solution_r0, &
+       "Origin of solution")
+
+  call CFG_check(cfg)
+  call CFG_write(cfg, "stdout")
+
+  if (cylindrical) then
+     coord = af_cyl
+     ! Place solution on axis
+     solution_r0(1) = 0.0_dp
+  else
+     coord = af_xyz
+  end if
 
   mg%i_phi    = i_phi
   mg%i_rhs    = i_rhs

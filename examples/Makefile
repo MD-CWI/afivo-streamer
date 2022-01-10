@@ -76,8 +76,6 @@ $(PROGS_3D): FFLAGS += -DNDIM=3
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
 	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 
-# Poisson programs and objects depend on m_gaussians
+# Some Poisson programs and objects depend on m_gaussians and m_config
 PROGS_POIS	:= $(filter poisson_%, $(PROGS))
-OBJS_POIS	:= $(PROGS_POIS:%=%.o)
-$(PROGS_POIS): 	m_gaussians.o
-$(OBJS_POIS):	m_gaussians.o
+$(PROGS_POIS): 	m_gaussians.o m_config.o
