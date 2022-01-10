@@ -22,16 +22,17 @@ program poisson_lsf_test
   integer            :: i_lsfmask
 
   logical :: cylindrical = .false.
+  integer :: refinement_type = 1
 
   ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
   integer             :: shape             = 1
 
-  ! Sharpness_triangle, can choose a larger number for more acute angle
-  integer             :: sharpness_t       = 10
-  real(dp), parameter :: boundary_value    = 1.0_dp
-  real(dp), parameter :: solution_coeff    = 1.0_dp
-  real(dp), parameter :: solution_radius   = 0.25_dp
-  real(dp)            :: solution_r0(NDIM) = 0.5_dp ! .51625_dp is a problematic one
+  integer  :: sharpness_t             = 10
+  real(dp) :: boundary_value          = 1.0_dp
+  real(dp) :: solution_coeff          = 1.0_dp
+  real(dp) :: solution_radius         = 0.25_dp
+  real(dp) :: solution_r0(NDIM)       = 0.5_dp
+  real(dp) :: solution_smallest_width = 1e-3_dp
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -64,14 +65,24 @@ program poisson_lsf_test
        "Whether to write Silo output")
   call CFG_add_get(cfg, "max_refine_level", max_refine_level, &
        "Maximum refinement level")
+  call CFG_add_get(cfg, "refinement_type", refinement_type, &
+       "Type of refinement (1: uniform, 2: only boundary)")
   call CFG_add_get(cfg, "shape", shape, &
        "Index of the shape used")
   call CFG_add_get(cfg, "box_size", box_size, &
        "Size of grid boxes")
   call CFG_add_get(cfg, "triangle_sharpness", sharpness_t, &
        "Triangle sharpness")
-  call CFG_add_get(cfg, "solution_r0", solution_r0, &
+  call CFG_add_get(cfg, "solution%r0", solution_r0, &
        "Origin of solution")
+  call CFG_add_get(cfg, "solution%radius", solution_radius, &
+       "Solution radius")
+  call CFG_add_get(cfg, "solution%coeff", solution_coeff, &
+       "Linear coefficient for solution")
+  call CFG_add_get(cfg, "solution%smallest_width", solution_smallest_width, &
+       "Smallest width to resolve in the solution")
+  call CFG_add_get(cfg, "boundary_value", boundary_value, &
+       "Value for Dirichlet boundary condition")
 
   call CFG_check(cfg)
   call CFG_write(cfg, "stdout")
@@ -92,7 +103,7 @@ program poisson_lsf_test
   mg%lsf_boundary_value = boundary_value
   mg%lsf_dist => mg_lsf_dist_gss
   mg%lsf => get_lsf
-  mg%lsf_length_scale = solution_radius
+  mg%lsf_length_scale = solution_smallest_width
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -101,14 +112,15 @@ program poisson_lsf_test
        [DTIMES(box_size)], &
        coord=coord)
 
+  call mg_init(tree, mg)
+
   do n = 1, 100
      call af_adjust_refinement(tree, ref_routine, ref_info)
+     call mg_set_box_tag_tree(tree, mg)
      if (ref_info%n_add == 0) exit
   end do
 
   call af_print_info(tree)
-
-  call mg_init(tree, mg)
 
   write(*, "(A,A4,4A14)") "# ", "iter", "residu", "max_error", "rmse", "max_field"
 
@@ -141,27 +153,21 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
     integer                 :: nc
-    integer, parameter      :: refinement_type = 1
 
     nc = box%n_cell
+    cell_flags(DTIMES(:)) = af_keep_ref
 
     select case (refinement_type)
     case (1)
        ! Uniform refinement
        if (box%lvl < max_refine_level) then
           cell_flags(DTIMES(:)) = af_do_ref
-       else
-          cell_flags(DTIMES(:)) = af_keep_ref
        end if
 
     case (2)
        ! Only refine at boundary
-       if (box%lvl < max_refine_level .and. &
-            minval(box%cc(DTIMES(:), i_lsf)) * &
-            maxval(box%cc(DTIMES(:), i_lsf)) <= 0) then
+       if (box%lvl < max_refine_level .and. box%tag == mg_lsf_box) then
           cell_flags(DTIMES(:)) = af_do_ref
-       else
-          cell_flags(DTIMES(:)) = af_keep_ref
        end if
 
     case (3)
@@ -169,8 +175,6 @@ contains
        if (norm2(box%r_min - solution_r0) < solution_radius .and. &
             box%lvl < max_refine_level) then
           cell_flags(DTIMES(:)) = af_do_ref
-       else
-          cell_flags(DTIMES(:)) = af_keep_ref
        end if
     end select
   end subroutine ref_routine
@@ -233,30 +237,33 @@ contains
 
   real(dp) function get_lsf(rr)
     real(dp), intent(in) :: rr(NDIM)
-    real(dp)             :: distance
+    real(dp)             :: qq(NDIM)
 #if NDIM > 1
-    real(dp)             :: qq(NDIM), dist1, dist2
+    real(dp)             :: dist1, dist2
+#endif
+
+    qq = (rr - solution_r0)/solution_radius
+
+#if NDIM == 3
+    qq(1) = norm2(qq([1, 2]))
+    qq(2) = qq(3)
 #endif
 
     select case (shape)
     case (1)
-       distance = norm2(rr-solution_r0) / solution_radius
-       get_lsf = distance - 1.0_dp
+       get_lsf = norm2(qq) - 1.0_dp
 #if NDIM > 1
     case (2)
        ! Heart centered on r0
-       qq = (rr - solution_r0) * 4.0_dp
        get_lsf = (qq(1)**2 + qq(2)**2 - 1)**3 - &
             qq(1)**2 * qq(2)**3
     case (3)
        ! Rhombus or astroid
-       qq = (rr-solution_r0)*4.0_dp
        get_lsf = ((qq(1)**2)**(1.0_dp/3)/0.8) + &
             ((qq(2)**2)**(1.0_dp/3)/1.5) - 0.8_dp
     case (4)
        ! sharpness_t -> for sharpness of the triangle top angle,
        ! larger sharpness_t equals more acute angle
-       qq = rr-solution_r0
        get_lsf = sharpness_t * abs(qq(1)) + qq(2)
     case (5)
        ! Triangle v2, uses signed distance from the triangle
@@ -273,7 +280,6 @@ contains
        get_lsf = sign(min(dist1, dist2), get_lsf)
     case (6)
        ! Heart v2
-       qq = (rr - solution_r0) * 4.0_dp
        get_lsf = qq(1)**2 + (qq(2) - abs(qq(1))**(2/3.0_dp))**2 - 1
 #endif
     case default
