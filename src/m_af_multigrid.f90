@@ -938,6 +938,7 @@ contains
     logical                    :: root_mask(DTIMES(nc))
     real(dp)                   :: dd(2*NDIM), a(NDIM), mindr
     integer                    :: ixs(NDIM, nc**NDIM), IJK, ix, n
+    integer                    :: n_mask, m
     real(dp)                   :: v(2*NDIM, nc**NDIM)
 #if NDIM > 1
     integer                    :: nb, dim
@@ -948,9 +949,26 @@ contains
     boundary = .false.
     mindr = minval(box%dr)
 
-    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
-         mg, root_mask)
-    if (.not. any(root_mask)) return
+    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), mg, root_mask)
+    n_mask = count(root_mask)
+
+    if (n_mask > 0) then
+       ! Store mask of where potential roots are
+       call af_stencil_prepare_store(box, mg_lsf_mask_key, ix)
+       box%stencils(ix)%stype = stencil_sparse
+       box%stencils(ix)%shape = af_stencil_mask
+       allocate(box%stencils(ix)%sparse_ix(NDIM, n_mask))
+
+       m = 0
+       do KJI_DO(1, nc)
+          if (root_mask(IJK)) then
+             m = m + 1
+             box%stencils(ix)%sparse_ix(:, m) = [IJK]
+          end if
+       end do; CLOSE_DO
+    else
+       return
+    end if
 
     ! Compute distances
     do KJI_DO(1, nc)
@@ -1274,10 +1292,9 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
     real(dp)                   :: dd(NDIM+1), a(NDIM)
-    logical                    :: root_mask(DTIMES(box%n_cell))
-    integer                    :: n_coeff, i_lsf, nc
+    integer                    :: n_coeff, i_lsf, nc, ix_mask
     logical                    :: success
-    integer                    :: IJK, IJK_(c1)
+    integer                    :: IJK, IJK_(c1), n, n_mask
     integer                    :: IJK_(c2), ix_offset(NDIM)
 
     nc                     = box%n_cell
@@ -1285,80 +1302,80 @@ contains
     box%stencils(ix)%stype = stencil_variable
     ix_offset              = af_get_child_offset(box)
     n_coeff                = af_stencil_sizes(af_stencil_p234)
+    i_lsf                  = mg%i_lsf
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
 
-    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
-         mg, root_mask)
-    i_lsf = mg%i_lsf
+    ix_mask = af_stencil_index(box, mg_lsf_mask_key)
+    if (ix_mask == af_stencil_none) error stop "No LSF root mask stored"
+    n_mask = size(box%stencils(ix_mask)%sparse_ix, 2)
 
     associate (v => box%stencils(ix)%v)
       ! In these loops, we calculate the closest coarse index (_c1), and the
       ! one-but-closest (_c2). The fine cell lies in between.
 #if NDIM == 1
-      do i = 1, nc
+      v(1, :) = 0.75_dp
+      v(2, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-         if (root_mask(IJK)) then
-            a = af_r_cc(box, [IJK])
-            dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1]), mg)
-            dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2]), mg)
-         else
-            dd(:) = 1.0_dp
-         end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2]), mg)
 
          v(:, IJK) = [3 * dd(2), dd(1)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #elif NDIM == 2
-      do j = 1, nc
+      v(1, :, :) = 0.5_dp
+      v(2, :, :) = 0.25_dp
+      v(3, :, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
+         j = box%stencils(ix_mask)%sparse_ix(2, n)
+
          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-         do i = 1, nc
-            i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-            i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-            if (root_mask(IJK)) then
-               a = af_r_cc(box, [IJK])
-               dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1]), mg)
-               dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
-               dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
-            else
-               dd(:) = 1.0_dp
-            end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
+         dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
 
-            v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
-                 dd(1) ** dd(3)]
-            v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
-         end do
+         v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
+              dd(1) ** dd(3)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #elif NDIM == 3
-      do k = 1, nc
+      v(:, :, :, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
+         j = box%stencils(ix_mask)%sparse_ix(2, n)
+         k = box%stencils(ix_mask)%sparse_ix(3, n)
+
          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-         do j = 1, nc
-            j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-            j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-            do i = 1, nc
-               i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-               i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+         j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+         j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-               if (root_mask(IJK)) then
-                  a = af_r_cc(box, [IJK])
-                  dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c1]), mg)
-                  dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1, k_c1]), mg)
-                  dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2, k_c1]), mg)
-                  dd(4) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c2]), mg)
-               else
-                  dd(:) = 1.0_dp
-               end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1, k_c1]), mg)
+         dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2, k_c1]), mg)
+         dd(4) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c2]), mg)
 
-               v(:, IJK) = [dd(2) * dd(3) * dd(4), &
-                    dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
-                    dd(1) * dd(2) * dd(3)]
-               v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
-            end do
-         end do
+         v(:, IJK) = [dd(2) * dd(3) * dd(4), &
+              dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
+              dd(1) * dd(2) * dd(3)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #endif
     end associate
