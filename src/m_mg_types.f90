@@ -25,6 +25,8 @@ module m_mg_types
 
   !> Stencil key for level set function distance
   integer, parameter :: mg_lsf_distance_key = 31
+  !> Stencil key for level set function mask
+  integer, parameter :: mg_lsf_mask_key = 32
 
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1

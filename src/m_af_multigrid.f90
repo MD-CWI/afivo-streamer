@@ -928,18 +928,6 @@ contains
     end do; CLOSE_DO
   end subroutine get_possible_lsf_root_mask
 
-  !> Check whether the level-set function could have a root by computing the
-  !> numerical gradient
-  logical function lsf_root_possible(box, dmax, mg)
-    type(box_t), intent(in) :: box  !< Box to operate on
-    real(dp), intent(in)    :: dmax !< Maximal distance to consider
-    type(mg_t), intent(in)  :: mg   !< Multigrid options
-    logical                 :: mask(DTIMES(box%n_cell))
-
-    call get_possible_lsf_root_mask(box, box%n_cell, dmax, mg, mask)
-    lsf_root_possible = any(mask)
-  end function lsf_root_possible
-
   !> Check if the level set function could have zeros, and store distances for
   !> the neighboring cells
   subroutine store_lsf_distance_matrix(box, nc, mg, boundary)
@@ -950,6 +938,7 @@ contains
     logical                    :: root_mask(DTIMES(nc))
     real(dp)                   :: dd(2*NDIM), a(NDIM), mindr
     integer                    :: ixs(NDIM, nc**NDIM), IJK, ix, n
+    integer                    :: n_mask, m
     real(dp)                   :: v(2*NDIM, nc**NDIM)
 #if NDIM > 1
     integer                    :: nb, dim
@@ -960,9 +949,26 @@ contains
     boundary = .false.
     mindr = minval(box%dr)
 
-    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
-         mg, root_mask)
-    if (.not. any(root_mask)) return
+    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), mg, root_mask)
+    n_mask = count(root_mask)
+
+    if (n_mask > 0) then
+       ! Store mask of where potential roots are
+       call af_stencil_prepare_store(box, mg_lsf_mask_key, ix)
+       box%stencils(ix)%stype = stencil_sparse
+       box%stencils(ix)%shape = af_stencil_mask
+       allocate(box%stencils(ix)%sparse_ix(NDIM, n_mask))
+
+       m = 0
+       do KJI_DO(1, nc)
+          if (root_mask(IJK)) then
+             m = m + 1
+             box%stencils(ix)%sparse_ix(:, m) = [IJK]
+          end if
+       end do; CLOSE_DO
+    else
+       return
+    end if
 
     ! Compute distances
     do KJI_DO(1, nc)
@@ -1286,10 +1292,9 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
     real(dp)                   :: dd(NDIM+1), a(NDIM)
-    logical                    :: root_mask(DTIMES(box%n_cell))
-    integer                    :: n_coeff, i_lsf, nc
+    integer                    :: n_coeff, i_lsf, nc, ix_mask
     logical                    :: success
-    integer                    :: IJK, IJK_(c1)
+    integer                    :: IJK, IJK_(c1), n, n_mask
     integer                    :: IJK_(c2), ix_offset(NDIM)
 
     nc                     = box%n_cell
@@ -1297,80 +1302,80 @@ contains
     box%stencils(ix)%stype = stencil_variable
     ix_offset              = af_get_child_offset(box)
     n_coeff                = af_stencil_sizes(af_stencil_p234)
+    i_lsf                  = mg%i_lsf
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
 
-    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
-         mg, root_mask)
-    i_lsf = mg%i_lsf
+    ix_mask = af_stencil_index(box, mg_lsf_mask_key)
+    if (ix_mask == af_stencil_none) error stop "No LSF root mask stored"
+    n_mask = size(box%stencils(ix_mask)%sparse_ix, 2)
 
     associate (v => box%stencils(ix)%v)
       ! In these loops, we calculate the closest coarse index (_c1), and the
       ! one-but-closest (_c2). The fine cell lies in between.
 #if NDIM == 1
-      do i = 1, nc
+      v(1, :) = 0.75_dp
+      v(2, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-         if (root_mask(IJK)) then
-            a = af_r_cc(box, [IJK])
-            dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1]), mg)
-            dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2]), mg)
-         else
-            dd(:) = 1.0_dp
-         end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2]), mg)
 
          v(:, IJK) = [3 * dd(2), dd(1)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #elif NDIM == 2
-      do j = 1, nc
+      v(1, :, :) = 0.5_dp
+      v(2, :, :) = 0.25_dp
+      v(3, :, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
+         j = box%stencils(ix_mask)%sparse_ix(2, n)
+
          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-         do i = 1, nc
-            i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-            i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-            if (root_mask(IJK)) then
-               a = af_r_cc(box, [IJK])
-               dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1]), mg)
-               dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
-               dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
-            else
-               dd(:) = 1.0_dp
-            end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
+         dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
 
-            v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
-                 dd(1) ** dd(3)]
-            v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
-         end do
+         v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
+              dd(1) ** dd(3)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #elif NDIM == 3
-      do k = 1, nc
+      v(:, :, :, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
+         j = box%stencils(ix_mask)%sparse_ix(2, n)
+         k = box%stencils(ix_mask)%sparse_ix(3, n)
+
          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-         do j = 1, nc
-            j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-            j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-            do i = 1, nc
-               i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-               i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+         j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+         j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-               if (root_mask(IJK)) then
-                  a = af_r_cc(box, [IJK])
-                  dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c1]), mg)
-                  dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1, k_c1]), mg)
-                  dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2, k_c1]), mg)
-                  dd(4) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c2]), mg)
-               else
-                  dd(:) = 1.0_dp
-               end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1, k_c1]), mg)
+         dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2, k_c1]), mg)
+         dd(4) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c2]), mg)
 
-               v(:, IJK) = [dd(2) * dd(3) * dd(4), &
-                    dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
-                    dd(1) * dd(2) * dd(3)]
-               v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
-            end do
-         end do
+         v(:, IJK) = [dd(2) * dd(3) * dd(4), &
+              dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
+              dd(1) * dd(2) * dd(3)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #endif
     end associate
@@ -1451,7 +1456,7 @@ contains
     real(dp), intent(in)   :: a(NDIM) !< Start point
     real(dp), intent(in)   :: b(NDIM) !< End point
     type(mg_t), intent(in) :: mg
-    real(dp)               :: bracket(NDIM, 2)
+    real(dp)               :: bracket(NDIM, 2), center(NDIM)
     real(dp)               :: dist, r_root(NDIM), lsf_a, lsf_b
     integer, parameter     :: max_iter = 100
 
@@ -1462,14 +1467,15 @@ contains
     if (lsf_a * lsf_b < 0) then
        r_root = bisection(mg%lsf, a, b, mg%lsf_tol, max_iter)
     else
-       ! Determine bracket by finding local minimum/maximum
-       bracket = gss(mg%lsf, a, b, &
-            minimization=(lsf_a >= 0), tol=mg%lsf_tol)
+       ! Determine bracket using Golden section search
+       bracket = gss(mg%lsf, a, b, minimization=(lsf_a >= 0), &
+            tol=mg%lsf_tol, find_bracket=.true.)
+       center = 0.5_dp * (bracket(:, 1) + bracket(:, 2))
 
-       if (mg%lsf(bracket(:, 1)) * lsf_a > 0) then
+       if (mg%lsf(center) * lsf_a > 0) then
           return                ! No root
        else
-          r_root = bisection(mg%lsf, a, bracket(:, 1), mg%lsf_tol, max_iter)
+          r_root = bisection(mg%lsf, a, center, mg%lsf_tol, max_iter)
        end if
     end if
 
@@ -1504,16 +1510,17 @@ contains
   !> single local minimum/maximum in the interval [a,b], gss returns a subset
   !> interval [c,d] that contains the minimum/maximum with d-c <= tol. Adapted
   !> from https://en.wikipedia.org/wiki/Golden-section_search
-  function gss(f, in_a, in_b, minimization, tol) result(bracket)
+  function gss(f, in_a, in_b, minimization, tol, find_bracket) result(bracket)
     procedure(mg_func_lsf) :: f !< Function to minimize/maximize
     real(dp), intent(in)   :: in_a(NDIM) !< Start coordinate
     real(dp), intent(in)   :: in_b(NDIM) !< End coordinate
     !> Whether to perform minimization or maximization
     logical, intent(in)    :: minimization
     real(dp), intent(in)   :: tol !< Absolute tolerance
+    logical, intent(in) :: find_bracket !< Whether to search for a bracket
     real(dp)               :: bracket(NDIM, 2)
     real(dp)               :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
-    real(dp)               :: h(NDIM), yc, yd
+    real(dp)               :: h(NDIM), yc, yd, ya
     real(dp)               :: invphi, invphi2
     integer                :: n, k
 
@@ -1535,6 +1542,7 @@ contains
 
     c = a + invphi2 * h
     d = a + invphi * h
+    ya = f(a)                   ! To search for bracket
     yc = f(c)
     yd = f(d)
 
@@ -1554,6 +1562,9 @@ contains
           d = a + invphi * h
           yd = f(d)
        end if
+
+       ! Exit early if we are only searching for a bracket
+       if (find_bracket .and. ya * yc <= 0 .and. ya * yd <= 0) exit
     end do
 
     if ((yc < yd) .eqv. minimization) then

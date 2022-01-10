@@ -11,7 +11,7 @@ module m_af_stencil
   integer, parameter, public :: stencil_sparse   = 3 !< Sparse stencil
 
   !> Number of predefined stencil shapes
-  integer, parameter, private :: num_shapes = 4
+  integer, parameter, private :: num_shapes = 5
 
   !> 3/5/7 point stencil in 1D/2D/3D
   integer, parameter, public :: af_stencil_357 = 1
@@ -25,9 +25,12 @@ module m_af_stencil
   !> Stencil for direct neighbors
   integer, parameter, public :: af_stencil_246 = 4
 
+  !> Stencil for masking
+  integer, parameter, public :: af_stencil_mask = 5
+
   !> Number of coefficients in the stencils
   integer, parameter, public :: af_stencil_sizes(num_shapes) = &
-       [2*NDIM+1, NDIM+1, 2**NDIM, 2*NDIM]
+       [2*NDIM+1, NDIM+1, 2**NDIM, 2*NDIM, 1]
 
   abstract interface
      !> Subroutine for setting a stencil on a box
