@@ -943,8 +943,9 @@ contains
     integer                    :: n_mask, m
     real(dp)                   :: v(2*NDIM, nc**NDIM)
 #if NDIM > 1
-    integer                    :: nb, dim
+    integer                    :: nb, dim, i_step, n_steps
     real(dp)                   :: dist, gradient(NDIM), dvec(NDIM)
+    real(dp)                   :: x(NDIM), step_size(NDIM)
 #endif
 
     n = 0
@@ -997,15 +998,24 @@ contains
           ! If no boundaries are found, search along the gradient of the level
           ! set function to check if there is a boundary nearby
           if (mindr > mg%lsf_length_scale .and. all(dd >= 1)) then
-             gradient = numerical_gradient(mg%lsf, a)
-             gradient = gradient/max(norm2(gradient), 1e-50_dp) ! unit vector
+             n_steps = ceiling(mindr/mg%lsf_length_scale)
+             step_size = sign(mg%lsf_length_scale, box%cc(IJK, mg%i_lsf))
+             x = a
 
-             ! Search in direction towards zero. Use min(dr) since we do not yet
-             ! know in which direction to search, and we should not go too far
-             dvec = -gradient * sign(mindr, box%cc(IJK, mg%i_lsf))
-             dist = mg%lsf_dist(a, a + dvec, mg)
+             do i_step = 1, n_steps
+                gradient = numerical_gradient(mg%lsf, x)
+                gradient = gradient/max(norm2(gradient), 1e-50_dp) ! unit vector
+
+                ! Search in direction towards zero
+                x = x - gradient * step_size
+                if (mg%lsf(x) * box%cc(IJK, mg%i_lsf) <= 0) exit
+             end do
+
+             dist = mg%lsf_dist(a, x, mg)
 
              if (dist < 1) then
+                dvec = x - a
+
                 ! Select closest direction
                 dim = maxloc(abs(dvec), dim=1)
                 nb = 2 * dim - 1
