@@ -938,19 +938,20 @@ contains
     type(mg_t), intent(in)     :: mg       !< Multigrid options
     logical, intent(out)       :: boundary !< Whether a boundary is found
     logical                    :: root_mask(DTIMES(nc))
-    real(dp)                   :: dd(2*NDIM), a(NDIM), mindr
+    real(dp)                   :: dd(2*NDIM), a(NDIM)
     integer                    :: ixs(NDIM, nc**NDIM), IJK, ix, n
     integer                    :: n_mask, m
     real(dp)                   :: v(2*NDIM, nc**NDIM)
 #if NDIM > 1
     integer                    :: nb, dim, i_step, n_steps
     real(dp)                   :: dist, gradient(NDIM), dvec(NDIM)
-    real(dp)                   :: x(NDIM), step_size(NDIM)
+    real(dp)                   :: x(NDIM), step_size(NDIM), min_dr
+
+    min_dr = minval(box%dr)
 #endif
 
     n = 0
     boundary = .false.
-    mindr = minval(box%dr)
 
     call get_possible_lsf_root_mask(box, nc, norm2(box%dr), mg, root_mask)
     n_mask = count(root_mask)
@@ -997,8 +998,8 @@ contains
 #if NDIM > 1
           ! If no boundaries are found, search along the gradient of the level
           ! set function to check if there is a boundary nearby
-          if (mindr > mg%lsf_length_scale .and. all(dd >= 1)) then
-             n_steps = ceiling(mindr/mg%lsf_length_scale)
+          if (min_dr > mg%lsf_length_scale .and. all(dd >= 1)) then
+             n_steps = ceiling(min_dr/mg%lsf_length_scale)
              step_size = sign(mg%lsf_length_scale, box%cc(IJK, mg%i_lsf))
              x = a
 
@@ -1014,6 +1015,8 @@ contains
              dist = mg%lsf_dist(a, x, mg)
 
              if (dist < 1) then
+                ! Rescale
+                dist = dist * norm2(x - a)/min_dr
                 dvec = x - a
 
                 ! Select closest direction
@@ -1083,7 +1086,7 @@ contains
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer, intent(in)       :: lvl
-    integer                   :: i, id, n, p_id, p_tag
+    integer                   :: i, id, n
 
     !$omp parallel do private(i, id, n)
     do i = 1, size(tree%lvls(lvl)%ids)
@@ -1092,20 +1095,9 @@ contains
          !> @todo Allow to set box tag again (e.g., for new operator)
          if (box%tag /= af_init_tag) cycle
 
-         ! Check tag of parent box
-         p_id = box%parent
-         if (p_id /= af_no_box) then
-            p_tag = tree%boxes(p_id)%tag
-         else
-            p_tag = af_init_tag
-         end if
-
-         if (p_tag == mg_normal_box) then
-            ! The child of a normal box is also a normal box
-            box%tag = mg_normal_box
-         else
-            call mg_set_box_tag(box, mg)
-         end if
+         ! We could use the tag of the parent box, but sometimes a part of a
+         ! sharp feature can only be detected in the children
+         call mg_set_box_tag(box, mg)
 
          n = af_stencil_index(box, mg%operator_key)
          if (n == af_stencil_none) then

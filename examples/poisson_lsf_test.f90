@@ -10,7 +10,8 @@ program poisson_lsf_test
 
   integer            :: box_size         = 8
   integer, parameter :: n_iterations     = 10
-  integer            :: max_refine_level = 2
+  integer            :: max_refine_level = 4
+  integer            :: min_refine_level = 2
   integer            :: i_phi
   integer            :: i_rhs
   integer            :: i_tmp
@@ -65,6 +66,8 @@ program poisson_lsf_test
        "Whether to write Silo output")
   call CFG_add_get(cfg, "max_refine_level", max_refine_level, &
        "Maximum refinement level")
+  call CFG_add_get(cfg, "min_refine_level", min_refine_level, &
+       "Minimum refinement level")
   call CFG_add_get(cfg, "refinement_type", refinement_type, &
        "Type of refinement (1: uniform, 2: only boundary)")
   call CFG_add_get(cfg, "shape", shape, &
@@ -85,7 +88,7 @@ program poisson_lsf_test
        "Value for Dirichlet boundary condition")
 
   call CFG_check(cfg)
-  call CFG_write(cfg, "stdout")
+  ! call CFG_write(cfg, "stdout")
 
   if (cylindrical) then
      coord = af_cyl
@@ -112,11 +115,12 @@ program poisson_lsf_test
        [DTIMES(box_size)], &
        coord=coord)
 
+  call af_refine_up_to_lvl(tree, min_refine_level)
   call mg_init(tree, mg)
 
   do n = 1, 100
-     call af_adjust_refinement(tree, ref_routine, ref_info)
      call mg_set_box_tag_tree(tree, mg)
+     call af_adjust_refinement(tree, ref_routine, ref_info)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -176,6 +180,8 @@ contains
             box%lvl < max_refine_level) then
           cell_flags(DTIMES(:)) = af_do_ref
        end if
+    case default
+       error stop "Invalid refinement_type"
     end select
   end subroutine ref_routine
 
@@ -245,8 +251,10 @@ contains
     qq = (rr - solution_r0)/solution_radius
 
 #if NDIM == 3
+    ! Generalize shapes to 3D
     qq(1) = norm2(qq([1, 2]))
     qq(2) = qq(3)
+    qq(3) = 0.0_dp
 #endif
 
     select case (shape)
@@ -283,7 +291,7 @@ contains
        get_lsf = qq(1)**2 + (qq(2) - abs(qq(1))**(2/3.0_dp))**2 - 1
 #endif
     case default
-       error stop "Invalid case"
+       error stop "Invalid shape"
     end select
 
   end function get_lsf
