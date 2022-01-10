@@ -928,18 +928,6 @@ contains
     end do; CLOSE_DO
   end subroutine get_possible_lsf_root_mask
 
-  !> Check whether the level-set function could have a root by computing the
-  !> numerical gradient
-  logical function lsf_root_possible(box, dmax, mg)
-    type(box_t), intent(in) :: box  !< Box to operate on
-    real(dp), intent(in)    :: dmax !< Maximal distance to consider
-    type(mg_t), intent(in)  :: mg   !< Multigrid options
-    logical                 :: mask(DTIMES(box%n_cell))
-
-    call get_possible_lsf_root_mask(box, box%n_cell, dmax, mg, mask)
-    lsf_root_possible = any(mask)
-  end function lsf_root_possible
-
   !> Check if the level set function could have zeros, and store distances for
   !> the neighboring cells
   subroutine store_lsf_distance_matrix(box, nc, mg, boundary)
@@ -1451,7 +1439,7 @@ contains
     real(dp), intent(in)   :: a(NDIM) !< Start point
     real(dp), intent(in)   :: b(NDIM) !< End point
     type(mg_t), intent(in) :: mg
-    real(dp)               :: bracket(NDIM, 2)
+    real(dp)               :: bracket(NDIM, 2), center(NDIM)
     real(dp)               :: dist, r_root(NDIM), lsf_a, lsf_b
     integer, parameter     :: max_iter = 100
 
@@ -1462,14 +1450,15 @@ contains
     if (lsf_a * lsf_b < 0) then
        r_root = bisection(mg%lsf, a, b, mg%lsf_tol, max_iter)
     else
-       ! Determine bracket by finding local minimum/maximum
-       bracket = gss(mg%lsf, a, b, &
-            minimization=(lsf_a >= 0), tol=mg%lsf_tol)
+       ! Determine bracket using Golden section search
+       bracket = gss(mg%lsf, a, b, minimization=(lsf_a >= 0), &
+            tol=mg%lsf_tol, find_bracket=.true.)
+       center = 0.5_dp * (bracket(:, 1) + bracket(:, 2))
 
-       if (mg%lsf(bracket(:, 1)) * lsf_a > 0) then
+       if (mg%lsf(center) * lsf_a > 0) then
           return                ! No root
        else
-          r_root = bisection(mg%lsf, a, bracket(:, 1), mg%lsf_tol, max_iter)
+          r_root = bisection(mg%lsf, a, center, mg%lsf_tol, max_iter)
        end if
     end if
 
@@ -1504,16 +1493,17 @@ contains
   !> single local minimum/maximum in the interval [a,b], gss returns a subset
   !> interval [c,d] that contains the minimum/maximum with d-c <= tol. Adapted
   !> from https://en.wikipedia.org/wiki/Golden-section_search
-  function gss(f, in_a, in_b, minimization, tol) result(bracket)
+  function gss(f, in_a, in_b, minimization, tol, find_bracket) result(bracket)
     procedure(mg_func_lsf) :: f !< Function to minimize/maximize
     real(dp), intent(in)   :: in_a(NDIM) !< Start coordinate
     real(dp), intent(in)   :: in_b(NDIM) !< End coordinate
     !> Whether to perform minimization or maximization
     logical, intent(in)    :: minimization
     real(dp), intent(in)   :: tol !< Absolute tolerance
+    logical, intent(in) :: find_bracket !< Whether to search for a bracket
     real(dp)               :: bracket(NDIM, 2)
     real(dp)               :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
-    real(dp)               :: h(NDIM), yc, yd
+    real(dp)               :: h(NDIM), yc, yd, ya
     real(dp)               :: invphi, invphi2
     integer                :: n, k
 
@@ -1535,6 +1525,7 @@ contains
 
     c = a + invphi2 * h
     d = a + invphi * h
+    ya = f(a)                   ! To search for bracket
     yc = f(c)
     yd = f(d)
 
@@ -1554,6 +1545,9 @@ contains
           d = a + invphi * h
           yd = f(d)
        end if
+
+       ! Exit early if we are only searching for a bracket
+       if (find_bracket .and. ya * yc <= 0 .and. ya * yd <= 0) exit
     end do
 
     if ((yc < yd) .eqv. minimization) then
