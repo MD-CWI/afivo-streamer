@@ -1,0 +1,14 @@
+STEP 1: get the arbitrary and origin point for slice (here I just used the middle point of each segment)
+./streamer_paths.py ./results/branch19_3d1_Emax_000000.txt -n 2500 -show_plot -Emin 2e6 -dt 1e-10 -lmin 1e-2 -dmax 1e-2 -branch_dmax 2e-3
+then I can get 2 output .csv files. Here "slice.csv" contains arbitrary and origin points, "info.csv" contains index,branching point, angle
+
+STEP 2: use arbitrary and origin points in "slice.csv" file to generate cross sections
+visit -nowin -cli -s visit_get_cross.py ./results/branch19_3d1_001600.silo testwrite.txt
+It takes time for me to learn how to read data from csv file, so I manually write some similar .txt file instead.
+Then we can get several .vtk file, but some of them contains more than one cross section
+
+STEP 3: manually cut those cross section, make sure there is only one cross section
+
+STEP 4: compute the effective radius
+visit -nowin -cli -s visit_get_radius_cross.py vtk_file.vtk
+the results are printed on the screen, I can also right a cycle to compute all segments from one streamer.
