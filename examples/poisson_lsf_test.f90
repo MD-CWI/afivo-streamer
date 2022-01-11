@@ -156,7 +156,8 @@ contains
   subroutine ref_routine(box, cell_flags)
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
-    integer                 :: nc
+    real(dp)                :: tmp(DTIMES(box%n_cell)), dr_min
+    integer                 :: nc, IJK
 
     nc = box%n_cell
     cell_flags(DTIMES(:)) = af_keep_ref
@@ -178,6 +179,18 @@ contains
        ! 'Bad' refinement to test the method
        if (norm2(box%r_min - solution_r0) < solution_radius .and. &
             box%lvl < max_refine_level) then
+          cell_flags(DTIMES(:)) = af_do_ref
+       end if
+    case (4)
+       ! Let refinement depend on radius
+       dr_min = minval(af_lvl_dr(tree, max_refine_level))
+
+       do KJI_DO(1, nc)
+          tmp(IJK) = max(1.0_dp, norm2(af_r_cc(box, [IJK]) - solution_r0) &
+               / solution_radius)
+       end do; CLOSE_DO
+
+       if (minval(box%dr) > minval(tmp) * dr_min .and. box%lvl < max_refine_level) then
           cell_flags(DTIMES(:)) = af_do_ref
        end if
     case default
