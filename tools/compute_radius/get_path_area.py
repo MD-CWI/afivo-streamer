@@ -43,6 +43,9 @@ for i, path in enumerate(paths):
         ['-origin'] + [f' {str(x)}' for x in origin] + \
         ['-normal'] + [f' {str(x)}' for x in normal]
 
+    # Add this to save figure output
+    # + ['-save_fig', 'test.png']
+
     output = run([args.visit] + visit_args, capture_output=True, text=True)
 
     # First line of output contains area
