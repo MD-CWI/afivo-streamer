@@ -3,9 +3,9 @@
 import argparse
 import sys
 import numpy as np
-import csv
+import pickle
 from pathlib import Path
-from sklearn.linear_model import LinearRegression, Lasso, HuberRegressor
+from sklearn.linear_model import LinearRegression
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 
 
@@ -35,10 +35,10 @@ def get_args():
                    help='Maximal distance between branches')
     p.add_argument('-show_plot', action='store_true',
                    help='Show plot of the data')
-    p.add_argument('-slice_csv', type=str, default='./slice.csv',
-                   help='CSV file to store determined arbitrary and origin point')
-    p.add_argument('-info_csv', type=str, default='./info.csv',
-                   help='CSV file to store branching information (e.g. position, angle)')
+    p.add_argument('-path_file', type=str, default='paths.pkl',
+                   help='File to store determined arbitrary and origin point')
+    p.add_argument('-branch_file', type=str, default='branches.pkl',
+                   help='File to store branching information (e.g. position, angle)')
     return p.parse_args()
 
 
@@ -126,7 +126,7 @@ def get_paths():
         paths[i]['ix'] = i
         paths[i]['n_points'] = ixs.size
         paths[i]['points'] = points[ixs, :]
-        paths[i]['E0'] = points[ixs, 3].mean()
+        paths[i]['E_mean'] = points[ixs, 3].mean()
         paths[i]['t0'] = times[ixs[0]]
         paths[i]['t1'] = times[ixs[-1]]
         paths[i]['times'] = times[ixs]
@@ -209,13 +209,6 @@ t_i0 = np.zeros((args.n), dtype=int)
 t_num = np.zeros((args.n), dtype=int)
 n_points = 0
 
-
-f1 = open(args.info_csv,"w")
-writer = csv.writer(f1, delimiter = " ")
-writer.writerow(["index_i","index_j","branching_point","branching_angle"])
-f1.close
-
-
 # Load all the data into the arrays
 for i in range(start_index, args.n):
     fname = "{}{:06d}.txt".format(base_name, i)
@@ -236,9 +229,9 @@ for i in range(start_index, args.n):
         d = d[np.newaxis, :]                                                        #d is gradually increasing turn by turn
 
     # Filter out points with a too low field
-    d = d[d[:, 3] > args.Emin, :]                       
+    d = d[d[:, 3] > args.Emin, :]
 
-    
+
     # Store points
     t_i0[i] = t_i0[i-1] + t_num[i-1]                                                #t_i0 gives the serial number of i_st .txt file's first point in the total list
     t_num[i] = d.shape[0]                                                           #t_num gives how many points i_st .txt contains
@@ -313,21 +306,8 @@ for path in paths:
 renumber_paths()
 paths = get_paths()
 
-f2 = open(args.slice_csv,"w")
-writer = csv.writer(f2, delimiter = " ")
-writer.writerow(['index','mean_point','mean_velocity',])
-f2.close
-
-for path in paths:
-    tmean = 0.5 * (path['t0'] + path['t1'])
-    xmean = get_path_x(path, tmean)
-    vmean = get_path_v(path, tmean)
-    i=path['ix']
-    f2 = open(args.slice_csv,"a")
-    
-    writer = csv.writer(f2, delimiter = " ")
-    writer.writerow([i, xmean, vmean])
-    f2.close
+with open(args.path_file, 'wb') as f:
+    pickle.dump(paths, f)
 
 # TODO: compute temporal overlap (in symmetric way) between branches?
 
@@ -370,14 +350,6 @@ for j in range(len(paths)):
             xmean = 0.5 * (x1 + x2)
             branch_angle=get_angle(va,vb)/np.pi*180
 
-            f1 = open(args.info_csv,"a")
-            writer = csv.writer(f1, delimiter = " ")
-            writer.writerow([i,j,xmean[2],branch_angle])
-            f1.close
-            
-
-
- 
             # Merge with existing branching event?
             merged = False
             for b in branchings:
@@ -405,12 +377,11 @@ for j in range(len(paths)):
                      'x': [x1, x2]}
                 branchings.append(b)
 
+with open(args.branch_file, 'wb') as f:
+    pickle.dump(branchings, f)
+
 for b in branchings:
     print(b['ixs'], b['x'], b['v'], b['t'])
-    
-
-#print(paths)
-    
 
 if args.show_plot:
     from mpl_toolkits.mplot3d import Axes3D
@@ -418,20 +389,19 @@ if args.show_plot:
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    
-    
+
     ax.set_xlim(0,0.2)
     ax.set_ylim(0,0.2)
     ax.set_zlim(0,0.1)
-    
+
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    
+
     ax.w_xaxis.set_pane_color((1.0,1.0,1.0,1.0))
     ax.w_yaxis.set_pane_color((1.0,1.0,1.0,1.0))
     ax.w_zaxis.set_pane_color((1.0,1.0,1.0,1.0))
-    
+
     x_major_locator=MultipleLocator(0.02)
     ax.xaxis.set_major_locator(x_major_locator)
     y_major_locator=MultipleLocator(0.02)
@@ -439,11 +409,9 @@ if args.show_plot:
     z_major_locator=MultipleLocator(0.02)
     ax.zaxis.set_major_locator(z_major_locator)
 
-
-
     ax.view_init(elev=0., azim=90)
     #ax.set_aspect('equal')
-    
+
     for pt in paths:
         ax.plot(pt['points'][:, 0], pt['points'][:, 1], pt['points'][:, 2],
                 '.', label='{},{},{},{}'.format(pt['ix'], pt['parent'],
@@ -451,9 +419,9 @@ if args.show_plot:
         line = pt['x0'] + np.outer(pt['times'], pt['v']) + \
             0.5 * np.outer(pt['times']**2, pt['a'])
         ax.plot(line[:, 0], line[:, 1], line[:, 2], '-')
-    
+
     ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1.5, 1.5, 1, 1]))
-    
+
 
     ax.legend()
     plt.show()
