@@ -23,6 +23,7 @@ program poisson_lsf_test
   integer            :: i_lsfmask
 
   logical :: cylindrical = .false.
+  logical :: write_numpy = .false.
   integer :: refinement_type = 1
 
   ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
@@ -39,7 +40,8 @@ program poisson_lsf_test
   type(ref_info_t)   :: ref_info
   integer            :: n, mg_iter, coord
   real(dp)           :: residu, max_error, max_field
-  character(len=100) :: fname
+  character(len=150) :: fname
+  character(len=20)  :: output_suffix = ""
   type(mg_t)         :: mg
   type(CFG_t)        :: cfg
   real(dp)           :: error_squared, rmse
@@ -64,6 +66,10 @@ program poisson_lsf_test
        "Whether to use cylindrical coordinates")
   call CFG_add_get(cfg, "write_output", write_output, &
        "Whether to write Silo output")
+  call CFG_add_get(cfg, "write_numpy", write_numpy, &
+       "Whether to write Numpy output")
+  call CFG_add_get(cfg, "output_suffix", output_suffix, &
+       "Suffix to add to output")
   call CFG_add_get(cfg, "max_refine_level", max_refine_level, &
        "Maximum refinement level")
   call CFG_add_get(cfg, "min_refine_level", min_refine_level, &
@@ -142,9 +148,14 @@ program poisson_lsf_test
      rmse = sqrt(error_squared/af_total_volume(tree))
      write(*, "(A,i4,4E14.5)") "# ", mg_iter, residu, max_error, rmse, max_field
 
+     write(fname, "(A,I0,A)") "output/poisson_lsf_test_" // DIMNAME // &
+          "_", mg_iter, "_" // trim(output_suffix)
      if (write_output) then
-        write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // "_", mg_iter
         call af_write_silo(tree, trim(fname))
+     end if
+
+     if (write_numpy) then
+        call af_write_numpy(tree, trim(fname)//".npz", ixs_cc=[i_phi])
      end if
   end do
 
