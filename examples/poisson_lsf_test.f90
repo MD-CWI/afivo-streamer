@@ -125,7 +125,7 @@ program poisson_lsf_test
 
   do n = 1, 100
      call mg_set_box_tag_tree(tree, mg)
-     call af_adjust_refinement(tree, ref_routine, ref_info)
+     call af_adjust_refinement(tree, ref_routine, ref_info, ref_buffer=1)
      if (ref_info%n_add == 0) exit
   end do
 
@@ -172,7 +172,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
     real(dp)                :: tmp(DTIMES(box%n_cell)), dr_min
-    integer                 :: nc, IJK
+    integer                 :: nc, IJK, ix_mask, n, cix(NDIM)
 
     nc = box%n_cell
     cell_flags(DTIMES(:)) = af_keep_ref
@@ -186,8 +186,12 @@ contains
 
     case (2)
        ! Only refine at boundary
-       if (box%lvl < max_refine_level .and. box%tag == mg_lsf_box) then
-          cell_flags(DTIMES(:)) = af_do_ref
+       ix_mask = af_stencil_index(box, mg_lsf_mask_key)
+       if (ix_mask /= af_stencil_none .and. box%lvl < max_refine_level) then
+          do n = 1, size(box%stencils(ix_mask)%sparse_ix, 2)
+             cix = box%stencils(ix_mask)%sparse_ix(:, n)
+             cell_flags(DINDEX(cix)) = af_do_ref
+          end do
        end if
 
     case (3)
