@@ -16,11 +16,10 @@ program poisson_lsf_test
   integer            :: i_rhs
   integer            :: i_tmp
   integer            :: i_lsf
+  integer            :: i_lsf_mask
   integer            :: i_error
   integer            :: i_field
   integer            :: i_field_norm
-  integer            :: i_normgradlsf
-  integer            :: i_lsfmask
 
   logical :: cylindrical = .false.
   logical :: write_numpy = .false.
@@ -29,7 +28,7 @@ program poisson_lsf_test
   ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
   integer             :: shape             = 1
 
-  integer  :: sharpness_t             = 10
+  real(dp) :: sharpness_t             = 4.0_dp
   real(dp) :: boundary_value          = 1.0_dp
   real(dp) :: solution_coeff          = 1.0_dp
   real(dp) :: solution_radius         = 0.25_dp
@@ -51,13 +50,13 @@ program poisson_lsf_test
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
   call af_add_cc_variable(tree, "lsf", ix=i_lsf)
+  call af_add_cc_variable(tree, "lsf_mask", ix=i_lsf_mask)
   call af_add_cc_variable(tree, "error", ix=i_error)
   call af_add_cc_variable(tree, "field_norm", ix=i_field_norm)
   call af_add_fc_variable(tree, "field", ix=i_field)
-  call af_add_cc_variable(tree, "normgradlsf", ix=i_normgradlsf)
-  call af_add_cc_variable(tree, "lsfmask", ix=i_lsfmask)
 
   call af_set_cc_methods(tree, i_lsf, funcval=set_lsf)
+  call af_set_cc_methods(tree, i_lsf_mask, af_bc_neumann_zero)
   call af_set_cc_methods(tree, i_field_norm, af_bc_neumann_zero)
 
   call CFG_update_from_arguments(cfg)
@@ -80,8 +79,8 @@ program poisson_lsf_test
        "Index of the shape used")
   call CFG_add_get(cfg, "box_size", box_size, &
        "Size of grid boxes")
-  call CFG_add_get(cfg, "triangle_sharpness", sharpness_t, &
-       "Triangle sharpness")
+  call CFG_add_get(cfg, "solution%sharpness", sharpness_t, &
+       "Sharpness of solution (for some cases)")
   call CFG_add_get(cfg, "solution%r0", solution_r0, &
        "Origin of solution")
   call CFG_add_get(cfg, "solution%radius", solution_radius, &
@@ -140,6 +139,10 @@ program poisson_lsf_test
      call af_gc_tree(tree, [i_field_norm])
      call af_loop_box(tree, set_error)
 
+     ! Set mask where lsf changes sign
+     call af_loop_box(tree, set_lsf_mask)
+     call af_gc_tree(tree, [i_lsf_mask])
+
      ! Determine the minimum and maximum residual and error
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      call af_tree_maxabs_cc(tree, i_error, max_error)
@@ -149,13 +152,14 @@ program poisson_lsf_test
      write(*, "(A,i4,4E14.5)") "# ", mg_iter, residu, max_error, rmse, max_field
 
      write(fname, "(A,I0,A)") "output/poisson_lsf_test_" // DIMNAME // &
-          "_", mg_iter, "_" // trim(output_suffix)
+          "_", mg_iter, trim(output_suffix)
      if (write_output) then
         call af_write_silo(tree, trim(fname))
      end if
 
      if (write_numpy) then
-        call af_write_numpy(tree, trim(fname)//".npz", ixs_cc=[i_phi])
+        call af_write_numpy(tree, trim(fname)//".npz", &
+             ixs_cc=[i_phi, i_lsf_mask])
      end if
   end do
 
@@ -228,7 +232,7 @@ contains
        else
           solution = boundary_value + solution_coeff * (1 - 1/distance)
        end if
-    case (4, 5)
+    case (5)
        ! Triangle
        lsf = get_lsf(r)
        if (lsf <= 0.0_dp) then
@@ -254,14 +258,6 @@ contains
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, iv) = get_lsf(rr)
-       box%cc(IJK, i_normgradlsf) = numerical_gradient_amplitude(get_lsf, rr)
-
-       if (abs(box%cc(IJK, iv)) < norm_dr * box%cc(IJK, i_normgradlsf) * &
-            mg%lsf_gradient_safety_factor) then
-          box%cc(IJK, i_lsfmask) = 1.0_dp
-       else
-          box%cc(IJK, i_lsfmask) = 0.0_dp
-       end if
     end do; CLOSE_DO
   end subroutine set_lsf
 
@@ -290,15 +286,16 @@ contains
        get_lsf = (qq(1)**2 + qq(2)**2 - 1)**3 - &
             qq(1)**2 * qq(2)**3
     case (3)
-       ! Rhombus or astroid
-       get_lsf = ((qq(1)**2)**(1.0_dp/3)/0.8) + &
-            ((qq(2)**2)**(1.0_dp/3)/1.5) - 0.8_dp
+       ! Astroid
+       get_lsf = abs(qq(1))**(2.0_dp/3) / 0.8_dp + &
+            abs(qq(2))**(2.0_dp/3) / 1.5_dp - 0.8_dp
     case (4)
-       ! sharpness_t -> for sharpness of the triangle top angle,
+       ! Rhombus
+       ! sharpness_t -> for sharpness of the top angle,
        ! larger sharpness_t equals more acute angle
-       get_lsf = sharpness_t * abs(qq(1)) + qq(2)
+       get_lsf = sharpness_t * abs(qq(1)) + abs(qq(2)) - 1.5_dp
     case (5)
-       ! Triangle v2, uses signed distance from the triangle
+       ! Triangle, uses signed distance from the triangle
        dist1 = GM_dist_line(rr, [solution_r0(1) - solution_r0(2)/sharpness_t, 0.0_dp], &
             solution_r0, 2)
        dist2 = GM_dist_line(rr, [solution_r0(1) + solution_r0(2)/sharpness_t, 0.0_dp], &
@@ -313,6 +310,9 @@ contains
     case (6)
        ! Heart v2
        get_lsf = qq(1)**2 + (qq(2) - abs(qq(1))**(2/3.0_dp))**2 - 1
+    case (7)
+       ! Spheroid
+       get_lsf = sqrt(sharpness_t * qq(1)**2 + qq(2)**2) - 1.0_dp
 #endif
     case default
        error stop "Invalid shape"
@@ -331,6 +331,33 @@ contains
        box%cc(IJK, i_error) = box%cc(IJK, i_phi) - solution(rr)
     end do; CLOSE_DO
   end subroutine set_error
+
+  subroutine set_lsf_mask(box)
+    type(box_t), intent(inout) :: box
+    integer                    :: nc, ix
+
+    nc = box%n_cell
+    box%cc(DTIMES(:), i_lsf_mask) = 0
+
+    ix = af_stencil_index(box, mg%operator_key)
+
+    if (ix == af_stencil_none) error stop "No stencil stored"
+
+    if (allocated(box%stencils(ix)%f)) then
+       where (abs(box%stencils(ix)%f) > 0)
+          box%cc(DTIMES(1:nc), i_lsf_mask) = 1
+       end where
+    end if
+
+    ! This code can get the lsf mask that is used to check for roots
+    ! ix_mask = af_stencil_index(box, mg_lsf_mask_key)
+    ! if (ix_mask /= af_stencil_none) then
+    !    do n = 1, size(box%stencils(ix_mask)%sparse_ix, 2)
+    !       ix = box%stencils(ix_mask)%sparse_ix(:, n)
+    !       box%cc(DINDEX(ix), i_lsf_mask) = 1
+    !    end do
+    ! end if
+  end subroutine set_lsf_mask
 
   ! This routine sets boundary conditions for a box
   subroutine bc_solution(box, nb, iv, coords, bc_val, bc_type)
@@ -382,35 +409,5 @@ contains
     dist = norm2(dist_vec)
   end function GM_dist_line
 #endif
-
-  function numerical_gradient_amplitude(f, r) result(normgrad)
-    procedure(mg_func_lsf) :: f
-    real(dp), intent(in)   :: r(NDIM)
-    real(dp), parameter    :: sqrteps      = sqrt(epsilon(1.0_dp))
-    real(dp), parameter    :: min_stepsize = epsilon(1.0_dp)
-    real(dp)               :: r_eval(NDIM), gradient(NDIM)
-    real(dp)               :: stepsize(NDIM), flo, fhi, normgrad
-    integer                :: idim
-
-    stepsize = max(min_stepsize, sqrteps * abs(r))
-    r_eval = r
-
-    do idim = 1, NDIM
-       ! Sample function at (r - step_idim) and (r + step_idim)
-       r_eval(idim) = r(idim) - stepsize(idim)
-       flo = f(r_eval)
-
-       r_eval(idim) = r(idim) + stepsize(idim)
-       fhi = f(r_eval)
-
-       ! Use central difference scheme
-       gradient(idim) = (fhi - flo)/(2 * stepsize(idim))
-
-       ! Reset to original coordinate
-       r_eval(idim) = r(idim)
-    end do
-
-    normgrad = norm2(gradient)
-  end function numerical_gradient_amplitude
 
 end program poisson_lsf_test
