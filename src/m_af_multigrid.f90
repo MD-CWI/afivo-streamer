@@ -1474,7 +1474,7 @@ contains
     real(dp), intent(in)   :: a(NDIM) !< Start point
     real(dp), intent(in)   :: b(NDIM) !< End point
     type(mg_t), intent(in) :: mg
-    real(dp)               :: bracket(NDIM, 2), center(NDIM)
+    real(dp)               :: bracket(NDIM, 2), b_new(NDIM)
     real(dp)               :: dist, r_root(NDIM), lsf_a, lsf_b
     integer, parameter     :: max_iter = 100
 
@@ -1482,18 +1482,24 @@ contains
     lsf_b = mg%lsf(b)
     dist  = 1.0_dp
 
-    if (lsf_a * lsf_b < 0) then
+    if (lsf_a * lsf_b <= 0) then
        r_root = bisection(mg%lsf, a, b, mg%lsf_tol, max_iter)
     else
        ! Determine bracket using Golden section search
        bracket = gss(mg%lsf, a, b, minimization=(lsf_a >= 0), &
             tol=mg%lsf_tol, find_bracket=.true.)
-       center = 0.5_dp * (bracket(:, 1) + bracket(:, 2))
 
-       if (mg%lsf(center) * lsf_a > 0) then
+       ! Take one of the endpoints of the bracket
+       if (mg%lsf(bracket(:, 1)) * lsf_a <= 0) then
+          b_new = bracket(:, 1)
+       else
+          b_new = bracket(:, 2)
+       end if
+
+       if (mg%lsf(b_new) * lsf_a > 0) then
           return                ! No root
        else
-          r_root = bisection(mg%lsf, a, center, mg%lsf_tol, max_iter)
+          r_root = bisection(mg%lsf, a, b_new, mg%lsf_tol, max_iter)
        end if
     end if
 
