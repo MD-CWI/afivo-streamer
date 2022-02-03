@@ -33,7 +33,7 @@ module m_mg_types
   integer, parameter :: mg_cycle_up   = 3
 
   !> Minimum relative distance to boundaries (to avoid division by zero)
-  real(dp), parameter :: mg_lsf_min_rel_distance = epsilon(1.0_dp)
+  real(dp), parameter :: mg_lsf_min_rel_distance = 1e-4_dp
 
   !> Generic type for the coarse grid solver
   type coarse_solve_t

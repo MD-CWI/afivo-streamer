@@ -1461,6 +1461,7 @@ contains
     if (lsf_a * lsf_b < 0) then
        ! There is a boundary between the points
        dist = lsf_a / (lsf_a - lsf_b)
+       dist = max(dist, mg_lsf_min_rel_distance)
     else
        dist = 1.0_dp
     end if
@@ -1504,6 +1505,7 @@ contains
     end if
 
     dist = norm2(r_root - a)/norm2(b-a)
+    dist = max(dist, mg_lsf_min_rel_distance)
   end function mg_lsf_dist_gss
 
   !> Simple bisection
@@ -1650,7 +1652,7 @@ contains
     end do
 
     do KJI_DO(1, nc)
-       dd = max(all_distances(:, IJK), mg_lsf_min_rel_distance)
+       dd = all_distances(:, IJK)
 
        ! Generalized Laplacian for neighbors at distance dd * dx
        do idim = 1, NDIM
@@ -1903,7 +1905,6 @@ contains
       ! Use sparse storage of boundary distances
       do n = 1, size(box%stencils(ix_dist)%sparse_ix, 2)
          dd = box%stencils(ix_dist)%sparse_v(:, n)
-         dd = max(dd, mg_lsf_min_rel_distance)
 
 #if NDIM == 1
          i = box%stencils(ix_dist)%sparse_ix(1, n)
