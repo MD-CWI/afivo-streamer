@@ -1366,7 +1366,7 @@ contains
          dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
 
          v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
-              dd(1) ** dd(3)]
+              dd(1) * dd(3)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #elif NDIM == 3
