@@ -10,6 +10,46 @@ from struct import unpack, calcsize
 from scipy.interpolate import RegularGridInterpolator
 
 
+def read_single_grid(f):
+    """Read single grid from binary file"""
+    n_dims = unpack('=i', f.read(calcsize('=i')))[0]
+
+    fmt = '=' + str(n_dims) + 'i'
+    dims = np.array(unpack(fmt, f.read(calcsize(fmt))))
+
+    # lo and hi index range of non-phony data
+    ilo = np.array(unpack(fmt, f.read(calcsize(fmt))))
+    ihi = np.array(unpack(fmt, f.read(calcsize(fmt))))
+
+    # Mesh coordinates
+    coords = []
+    coords_cc = []
+    for d in dims:
+        fmt = '=' + str(d) + 'd'
+        tmp = np.array(unpack(fmt, f.read(calcsize(fmt))))
+        coords.append(tmp)
+        # Cell-centered coordinates
+        coords_cc.append(0.5 * (tmp[1:] + tmp[:-1]))
+
+    # Number of cell centers is one less than number of faces
+    n_cells = dims-1
+    fmt = '=' + str(np.product(n_cells)) + 'd'
+    tmp = unpack(fmt, f.read(calcsize(fmt)))
+    vals = np.array(tmp).reshape(n_cells, order='F')
+
+    grid = {
+        'n_dims': n_dims,
+        'dims': dims,
+        'ilo': ilo,
+        'ihi': ihi,
+        'coords': coords,
+        'coords_cc': coords_cc,
+        'values': vals
+    }
+
+    return grid
+
+
 def get_raw_data(fname, project_dims=None):
     """Read raw data extracted from a Silo file
 
@@ -23,40 +63,7 @@ def get_raw_data(fname, project_dims=None):
         n_grids = unpack('=i', f.read(calcsize('=i')))[0]
 
         for i in range(n_grids):
-            n_dims = unpack('=i', f.read(calcsize('=i')))[0]
-
-            fmt = '=' + str(n_dims) + 'i'
-            dims = np.array(unpack(fmt, f.read(calcsize(fmt))))
-
-            # lo and hi index range of non-phony data
-            ilo = np.array(unpack(fmt, f.read(calcsize(fmt))))
-            ihi = np.array(unpack(fmt, f.read(calcsize(fmt))))
-
-            # Mesh coordinates
-            coords = []
-            coords_cc = []
-            for d in dims:
-                fmt = '=' + str(d) + 'd'
-                tmp = np.array(unpack(fmt, f.read(calcsize(fmt))))
-                coords.append(tmp)
-                # Cell-centered coordinates
-                coords_cc.append(0.5 * (tmp[1:] + tmp[:-1]))
-
-            # Number of cell centers is one less than number of faces
-            n_cells = dims-1
-            fmt = '=' + str(np.product(n_cells)) + 'd'
-            tmp = unpack(fmt, f.read(calcsize(fmt)))
-            vals = np.array(tmp).reshape(n_cells, order='F')
-
-            grid = {
-                'n_dims': n_dims,
-                'dims': dims,
-                'ilo': ilo,
-                'ihi': ihi,
-                'coords': coords,
-                'coords_cc': coords_cc,
-                'values': vals
-            }
+            grid = read_single_grid(f)
 
             # Add properties
             props = get_grid_properties(grid)
