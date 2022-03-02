@@ -119,7 +119,6 @@ def grid_project(in_grid, project_dims):
     g = copy.deepcopy(in_grid)
 
     pdims = np.sort(project_dims)
-    fac = np.product(g['dr'][pdims])
 
     # Index range to use for values below. Along the projected dimensions,
     # exclude ghost cells.
@@ -127,6 +126,11 @@ def grid_project(in_grid, project_dims):
     ihi = 1 * g['dims']
     ilo[pdims] = g['ilo'][pdims]
     ihi[pdims] = g['ihi'][pdims]
+
+    # Get index range corresponding to non-ghost grid cells
+    valid_ix = tuple([np.s_[i:j] for (i, j) in zip(ilo, ihi)])
+    fac = np.product(g['dr'][pdims])
+    g['values'] = g['values'][valid_ix].sum(axis=tuple(pdims)) * fac
 
     g['n_dims'] -= len(project_dims)
     g['dims'] = np.delete(g['dims'], pdims)
@@ -139,10 +143,6 @@ def grid_project(in_grid, project_dims):
     for d in pdims[::-1]:       # Reverse order
         del g['coords'][d]
         del g['coords_cc'][d]
-
-    # Get index range corresponding to non-ghost grid cells
-    valid_ix = tuple([np.s_[i:j] for (i, j) in zip(ilo, ihi)])
-    g['values'] = g['values'][valid_ix].sum(axis=tuple(pdims)) * fac
 
     return g
 
