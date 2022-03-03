@@ -191,7 +191,7 @@ contains
     mg%i_tmp = i_tmp
     mg%i_rhs = i_rhs
 
-    if (ST_use_dielectric) mg%i_eps = i_eps
+    if (ST_use_dielectric) tree%mg_i_eps = i_eps
 
     if (ST_use_electrode) then
        if (any(field_rod_r0 <= -1.0_dp)) &
@@ -230,11 +230,9 @@ contains
           error stop "Invalid electrode type (option: rod, rod_cone_top)"
        end select
 
-       mg%i_lsf = i_lsf
+       tree%mg_i_lsf = i_lsf
     end if
 
-    ! This automatically handles cylindrical symmetry
-    mg%sides_rb => mg_sides_rb
     mg%lsf_dist => mg_lsf_dist_gss
     mg%lsf_length_scale = field_rod_radius
 
