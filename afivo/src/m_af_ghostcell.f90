@@ -502,11 +502,12 @@ contains
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries. The ghost values are less than twice the coarse
   !> values.
-  subroutine af_gc_interp_lim(boxes, id, nb, iv)
+  subroutine af_gc_interp_lim(boxes, id, nb, iv, op_mask)
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)        :: id       !< Id of box
     integer, intent(in)        :: nb       !< Ghost cell direction
     integer, intent(in)        :: iv       !< Ghost cell variable
+    integer, intent(in)        :: op_mask  !< Multigrid operator mask
     integer                    :: nc, ix, ix_c, ix_f
     integer                    :: p_id, ix_offset(NDIM), p_nb_id
     real(dp)                   :: c(NDIM)
