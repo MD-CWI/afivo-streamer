@@ -97,7 +97,8 @@ contains
           ! Refinement boundary
           do i = 1, size(ivs)
              iv = ivs(i)
-             call tree%cc_methods(iv)%rb(tree%boxes, id, nb, iv)
+             call tree%cc_methods(iv)%rb(tree%boxes, id, nb, iv, &
+                  tree%mg_current_operator_mask)
           end do
        else
           do i = 1, size(ivs)
@@ -376,13 +377,14 @@ contains
   end subroutine bc_to_gc2
 
   !> Partial prolongation to the ghost cells of box id from parent
-  subroutine af_gc_prolong_copy(boxes, id, nb, iv)
+  subroutine af_gc_prolong_copy(boxes, id, nb, iv, op_mask)
     use m_af_prolong, only: af_prolong_copy
-    type(box_t), intent(inout)  :: boxes(:) !< List of all boxes
-    integer, intent(in)           :: id       !< Id of child
-    integer, intent(in)           :: iv       !< Variable to fill
-    integer, intent(in)           :: nb       !< Neighbor to get data from
-    integer                       :: p_id, lo(NDIM), hi(NDIM)
+    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
+    integer, intent(in)        :: id       !< Id of child
+    integer, intent(in)        :: iv       !< Variable to fill
+    integer, intent(in)        :: nb       !< Neighbor to get data from
+    integer, intent(in)        :: op_mask  !< Multigrid operator mask
+    integer                    :: p_id, lo(NDIM), hi(NDIM)
 
     p_id = boxes(id)%parent
     call af_get_index_bc_outside(nb, boxes(id)%n_cell, 1, lo, hi)
@@ -391,21 +393,22 @@ contains
 
   !> Interpolate between fine points and coarse neighbors to fill ghost cells
   !> near refinement boundaries
-  subroutine af_gc_interp(boxes, id, nb, iv)
+  subroutine af_gc_interp(boxes, id, nb, iv, op_mask)
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)         :: id        !< Id of box
-    integer, intent(in)         :: nb        !< Ghost cell direction
-    integer, intent(in)         :: iv        !< Ghost cell variable
-    integer                     :: nc, ix, ix_c, ix_f
-    integer                     :: p_nb_id
-    integer                     :: p_id, ix_offset(NDIM)
-    real(dp), parameter         :: third=1/3.0_dp
+    integer, intent(in)        :: id       !< Id of box
+    integer, intent(in)        :: nb       !< Ghost cell direction
+    integer, intent(in)        :: iv       !< Ghost cell variable
+    integer, intent(in)        :: op_mask  !< Multigrid operator mask
+    integer                    :: nc, ix, ix_c, ix_f
+    integer                    :: p_nb_id
+    integer                    :: p_id, ix_offset(NDIM)
+    real(dp), parameter        :: third = 1/3.0_dp
 #if NDIM > 1
-    real(dp), parameter         :: sixth=1/6.0_dp
-    integer                     :: i_c1, i_c2, j_c1, j_c2, i, j
+    real(dp), parameter        :: sixth = 1/6.0_dp
+    integer                    :: i_c1, i_c2, j_c1, j_c2, i, j
 #endif
 #if NDIM > 2
-    integer                     :: k_c1, k_c2, k
+    integer                    :: k_c1, k_c2, k
 #endif
 
     nc        = boxes(id)%n_cell

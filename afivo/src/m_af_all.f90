@@ -16,7 +16,6 @@ module m_af_all
   use m_af_stencil
   use m_af_surface
   use m_coarse_solver
-  use m_mg_types
 
   implicit none
   public

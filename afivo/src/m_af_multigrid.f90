@@ -5,7 +5,6 @@
 module m_af_multigrid
   use m_af_types
   use m_af_stencil
-  use m_mg_types
   use m_coarse_solver
 
   implicit none
@@ -22,8 +21,10 @@ module m_af_multigrid
   public :: mg_lsf_dist_linear
   public :: mg_lsf_dist_gss
 
-  ! Automatic selection of operators
+  ! Set tag for each box, depending on operator
   public :: mg_set_box_tag
+  public :: mg_set_operators_lvl
+  public :: mg_set_operators_tree
 
   ! Methods for normal Laplacian
   public :: mg_box_lpl_gradient
@@ -49,10 +50,6 @@ contains
     if (.not. associated(mg%sides_bc)) stop "mg_init: sides_bc not set"
     if (.not. tree%ready) error stop "mg_init: tree not initialized"
 
-    ! Check whether these are set, otherwise use default
-    if (mg%n_cycle_down < 0) mg%n_cycle_down = 2
-    if (mg%n_cycle_up < 0) mg%n_cycle_up = 2
-
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%box_op)) mg%box_op => mg_auto_op
     ! if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
@@ -73,6 +70,18 @@ contains
     end if
 
     if (mg%i_lsf /= -1) then
+       error stop "Set tree%mg_i_lsf instead of mg%i_lsf"
+    else if (iand(mg%operator_mask, mg_lsf_box) > 0) then
+       mg%i_lsf = tree%mg_i_lsf
+    end if
+
+    if (mg%i_eps /= -1) then
+       error stop "Set tree%mg_i_eps instead of mg%i_eps"
+    else if (iand(mg%operator_mask, mg_veps_box+mg_ceps_box) > 0) then
+       mg%i_eps = tree%mg_i_eps
+    end if
+
+    if (mg%i_lsf /= -1) then
        if (.not. associated(mg%lsf_dist)) &
             mg%lsf_dist => mg_lsf_dist_linear
        if (associated(mg%lsf_dist, mg_lsf_dist_gss) .and. .not. &
@@ -81,7 +90,7 @@ contains
        end if
     end if
 
-    call mg_set_box_tag_lvl(tree, mg, 1)
+    call mg_set_operators_lvl(tree, mg, 1)
     call coarse_solver_initialize(tree, mg)
 
     if (mg%i_lsf /= -1) then
@@ -97,14 +106,25 @@ contains
 
   subroutine mg_destroy(mg)
     type(mg_t), intent(inout) :: mg   !< Multigrid options
-    call check_mg(mg)
+    if (.not. mg%initialized) error stop "mg%initialized is false"
     call coarse_solver_destroy(mg%csolver)
   end subroutine mg_destroy
 
-  subroutine check_mg(mg)
-    type(mg_t), intent(in) :: mg           !< Multigrid options
-    if (.not. mg%initialized) stop "check_mg: you haven't called mg_init"
-  end subroutine check_mg
+  subroutine use_mg(tree, mg)
+    type(af_t), intent(inout)      :: tree
+    type(mg_t), intent(in), target :: mg !< Multigrid options
+
+    if (.not. mg%initialized) error stop "mg%initialized is false"
+    tree%mg_current_operator_mask = mg%operator_mask
+
+    ! Make sure box tags and operators are set
+    call mg_set_operators_tree(tree, mg)
+  end subroutine use_mg
+
+  subroutine done_with_mg(tree)
+    type(af_t), intent(inout)      :: tree
+    tree%mg_current_operator_mask = -1
+  end subroutine done_with_mg
 
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
@@ -118,8 +138,7 @@ contains
     logical, intent(in)             :: have_guess   !< If false, start from phi = 0
     integer                         :: lvl
 
-    call check_mg(mg)           ! Check whether mg options are set
-    call mg_set_box_tag_tree(tree, mg) ! Make sure box tags are set
+    call use_mg(tree, mg)
 
     if (have_guess) then
        do lvl = tree%highest_lvl,  2, -1
@@ -153,6 +172,7 @@ contains
             lvl == tree%highest_lvl, lvl, standalone=.false.)
     end do
 
+    call done_with_mg(tree)
   end subroutine mg_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
@@ -173,8 +193,7 @@ contains
     by_itself = .true.; if (present(standalone)) by_itself = standalone
 
     if (by_itself) then
-       call check_mg(mg)        ! Check whether mg options are set
-       call mg_set_box_tag_tree(tree, mg)
+       call use_mg(tree, mg)
     end if
 
     max_lvl = tree%highest_lvl
@@ -233,6 +252,10 @@ contains
           !$omp end do nowait
        end do
        !$omp end parallel
+    end if
+
+    if (by_itself) then
+       call done_with_mg(tree)
     end if
 
   end subroutine mg_fas_vcycle
@@ -450,7 +473,7 @@ contains
        dix = -1
     end if
 
-    call af_gc_prolong_copy(boxes, id, nb, iv)
+    call af_gc_prolong_copy(boxes, id, nb, iv, 0)
 
     select case (af_neighb_dim(nb))
 #if NDIM == 1
@@ -797,7 +820,7 @@ contains
        call mg_box_lpld_stencil(box, mg, ix)
     case (mg_auto_operator)
        ! Use box tag to set operator
-       select case(box%tag)
+       select case (iand(box%tag, mg%operator_mask))
        case (mg_normal_box)
           call mg_box_lpl_stencil(box, mg, ix)
        case (mg_lsf_box)
@@ -836,7 +859,7 @@ contains
     case (mg_auto_prolongation)
        ! Use box tag
        associate (box=>tree%boxes(id), box_p=>tree%boxes(p_id))
-         select case (box%tag)
+         select case (iand(box%tag, mg%operator_mask))
          case (mg_normal_box)
             call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
          case (mg_lsf_box)
@@ -875,24 +898,20 @@ contains
   end subroutine mg_auto_rstr
 
   !> Set ghost cells near refinement boundaries
-  subroutine mg_auto_rb(boxes, id, nb, iv)
+  subroutine mg_auto_rb(boxes, id, nb, iv, op_mask)
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)        :: id     !< Id of box
-    integer, intent(in)        :: nb     !< Ghost cell direction
-    integer, intent(in)        :: iv     !< Ghost cell variable
+    integer, intent(in)        :: id       !< Id of box
+    integer, intent(in)        :: nb       !< Ghost cell direction
+    integer, intent(in)        :: iv       !< Ghost cell variable
+    integer, intent(in)        :: op_mask  !< Operator mask
 
-    select case(boxes(id)%tag)
-    case (mg_normal_box, mg_lsf_box, af_init_tag)
-       ! Use default method; this is also useful for initial refinement when box
-       ! tags are not yet set
-       call mg_sides_rb(boxes, id, nb, iv)
-    case (mg_veps_box, mg_ceps_box)
-       ! With a dielectric, use local extrapolation for ghost cells
+    select case (iand(boxes(id)%tag, op_mask))
+    case (mg_veps_box)
+       ! With a variable coefficients, use local extrapolation for ghost cells
        call mg_sides_rb_extrap(boxes, id, nb, iv)
     case default
-       error stop "mg_auto_rb: unknown box tag"
+       call mg_sides_rb(boxes, id, nb, iv)
     end select
-
   end subroutine mg_auto_rb
 
   !> Based on the box type, correct the solution of the children
@@ -928,18 +947,6 @@ contains
     end do; CLOSE_DO
   end subroutine get_possible_lsf_root_mask
 
-  !> Check whether the level-set function could have a root by computing the
-  !> numerical gradient
-  logical function lsf_root_possible(box, dmax, mg)
-    type(box_t), intent(in) :: box  !< Box to operate on
-    real(dp), intent(in)    :: dmax !< Maximal distance to consider
-    type(mg_t), intent(in)  :: mg   !< Multigrid options
-    logical                 :: mask(DTIMES(box%n_cell))
-
-    call get_possible_lsf_root_mask(box, box%n_cell, dmax, mg, mask)
-    lsf_root_possible = any(mask)
-  end function lsf_root_possible
-
   !> Check if the level set function could have zeros, and store distances for
   !> the neighboring cells
   subroutine store_lsf_distance_matrix(box, nc, mg, boundary)
@@ -948,21 +955,41 @@ contains
     type(mg_t), intent(in)     :: mg       !< Multigrid options
     logical, intent(out)       :: boundary !< Whether a boundary is found
     logical                    :: root_mask(DTIMES(nc))
-    real(dp)                   :: dd(2*NDIM), a(NDIM), mindr
+    real(dp)                   :: dd(2*NDIM), a(NDIM)
     integer                    :: ixs(NDIM, nc**NDIM), IJK, ix, n
+    integer                    :: n_mask, m
     real(dp)                   :: v(2*NDIM, nc**NDIM)
 #if NDIM > 1
-    integer                    :: nb, dim
+    integer                    :: nb, dim, i_step, n_steps
     real(dp)                   :: dist, gradient(NDIM), dvec(NDIM)
+    real(dp)                   :: x(NDIM), step_size(NDIM), min_dr
+
+    min_dr = minval(box%dr)
 #endif
 
     n = 0
     boundary = .false.
-    mindr = minval(box%dr)
 
-    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
-         mg, root_mask)
-    if (.not. any(root_mask)) return
+    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), mg, root_mask)
+    n_mask = count(root_mask)
+
+    if (n_mask > 0) then
+       ! Store mask of where potential roots are
+       call af_stencil_prepare_store(box, mg_lsf_mask_key, ix)
+       box%stencils(ix)%stype = stencil_sparse
+       box%stencils(ix)%shape = af_stencil_mask
+       allocate(box%stencils(ix)%sparse_ix(NDIM, n_mask))
+
+       m = 0
+       do KJI_DO(1, nc)
+          if (root_mask(IJK)) then
+             m = m + 1
+             box%stencils(ix)%sparse_ix(:, m) = [IJK]
+          end if
+       end do; CLOSE_DO
+    else
+       return
+    end if
 
     ! Compute distances
     do KJI_DO(1, nc)
@@ -988,16 +1015,27 @@ contains
 #if NDIM > 1
           ! If no boundaries are found, search along the gradient of the level
           ! set function to check if there is a boundary nearby
-          if (mindr > mg%lsf_length_scale .and. all(dd >= 1)) then
-             gradient = numerical_gradient(mg%lsf, a)
-             gradient = gradient/max(norm2(gradient), 1e-50_dp) ! unit vector
+          if (min_dr > mg%lsf_length_scale .and. all(dd >= 1)) then
+             n_steps = ceiling(min_dr/mg%lsf_length_scale)
+             step_size = sign(mg%lsf_length_scale, box%cc(IJK, mg%i_lsf))
+             x = a
 
-             ! Search in direction towards zero. Use min(dr) since we do not yet
-             ! know in which direction to search, and we should not go too far
-             dvec = -gradient * sign(mindr, box%cc(IJK, mg%i_lsf))
-             dist = mg%lsf_dist(a, a + dvec, mg)
+             do i_step = 1, n_steps
+                gradient = numerical_gradient(mg%lsf, x)
+                gradient = gradient/max(norm2(gradient), 1e-50_dp) ! unit vector
+
+                ! Search in direction towards zero
+                x = x - gradient * step_size
+                if (mg%lsf(x) * box%cc(IJK, mg%i_lsf) <= 0) exit
+             end do
+
+             dist = mg%lsf_dist(a, x, mg)
 
              if (dist < 1) then
+                ! Rescale
+                dist = dist * norm2(x - a)/min_dr
+                dvec = x - a
+
                 ! Select closest direction
                 dim = maxloc(abs(dvec), dim=1)
                 nb = 2 * dim - 1
@@ -1030,38 +1068,41 @@ contains
 
   end subroutine store_lsf_distance_matrix
 
-  subroutine mg_set_box_tag(box, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    type(mg_t), intent(in)     :: mg  !< Multigrid options
-    real(dp)                   :: a, b
-    logical                    :: is_lsf, is_deps, is_eps
+  !> Set tag (box type) for a box in the tree
+  subroutine mg_set_box_tag(tree, id, mg)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id
+    type(mg_t), intent(in)    :: mg
+    logical                   :: has_lsf
+    real(dp)                  :: a, b
 
-    is_lsf = .false.
-    is_eps = .false.
-    is_deps = .false.
+    associate (box => tree%boxes(id))
+      box%tag = mg_normal_box
+      if (tree%mg_i_lsf /= -1) then
+         call store_lsf_distance_matrix(box, box%n_cell, mg, has_lsf)
+         if (has_lsf) then
+            ! Add bits indicating a level set function
+            box%tag = box%tag + mg_lsf_box
+         end if
+      end if
 
-    if (mg%i_lsf /= -1) then
-       call store_lsf_distance_matrix(box, box%n_cell, mg, is_lsf)
-    end if
+      if (tree%mg_i_eps /= -1) then
+         a = minval(box%cc(DTIMES(:), tree%mg_i_eps))
+         b = maxval(box%cc(DTIMES(:), tree%mg_i_eps))
 
-    if (mg%i_eps /= -1) then
-       a = minval(box%cc(DTIMES(:), mg%i_eps))
-       b = maxval(box%cc(DTIMES(:), mg%i_eps))
-       is_deps = (b > a)
-       if (.not. is_deps) is_eps = (a < 1 .or. a > 1)
-    end if
-
-    if (count([is_lsf, is_eps, is_deps]) > 1) &
-         stop "mg_set_box_tag: Cannot set lsf and eps tag for same box"
-
-    box%tag = mg_normal_box
-    if (is_lsf) box%tag = mg_lsf_box
-    if (is_eps) box%tag = mg_ceps_box
-    if (is_deps) box%tag = mg_veps_box
+         if (b > a) then
+            ! Variable coefficient
+            box%tag = box%tag + mg_veps_box
+         else if (maxval(abs([a, b] - 1)) > 1e-8_dp) then
+            ! Constant coefficient (but not equal to one)
+            box%tag = box%tag + mg_ceps_box
+         end if
+      end if
+    end associate
 
   end subroutine mg_set_box_tag
 
-  subroutine mg_set_box_tag_lvl(tree, mg, lvl)
+  subroutine mg_set_operators_lvl(tree, mg, lvl)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer, intent(in)       :: lvl
@@ -1071,10 +1112,14 @@ contains
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
        associate (box => tree%boxes(id))
+
          if (box%tag == af_init_tag) then
-            call mg_set_box_tag(box, mg)
+            ! We could use the tag of the parent box, but sometimes a part of a
+            ! sharp feature can only be detected in the children
+            call mg_set_box_tag(tree, id, mg)
          end if
 
+         ! Check if stencils are available
          n = af_stencil_index(box, mg%operator_key)
          if (n == af_stencil_none) then
             call mg_store_operator_stencil(box, mg)
@@ -1096,17 +1141,17 @@ contains
        end associate
     end do
     !$omp end parallel do
-  end subroutine mg_set_box_tag_lvl
+  end subroutine mg_set_operators_lvl
 
-  subroutine mg_set_box_tag_tree(tree, mg)
+  subroutine mg_set_operators_tree(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer                   :: lvl
 
     do lvl = 1, tree%highest_lvl
-       call mg_set_box_tag_lvl(tree, mg, lvl)
+       call mg_set_operators_lvl(tree, mg, lvl)
     end do
-  end subroutine mg_set_box_tag_tree
+  end subroutine mg_set_operators_tree
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg_box_rstr_lpl(box_c, box_p, iv, mg)
@@ -1286,10 +1331,9 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
     real(dp)                   :: dd(NDIM+1), a(NDIM)
-    logical                    :: root_mask(DTIMES(box%n_cell))
-    integer                    :: n_coeff, i_lsf, nc
+    integer                    :: n_coeff, i_lsf, nc, ix_mask
     logical                    :: success
-    integer                    :: IJK, IJK_(c1)
+    integer                    :: IJK, IJK_(c1), n, n_mask
     integer                    :: IJK_(c2), ix_offset(NDIM)
 
     nc                     = box%n_cell
@@ -1297,80 +1341,80 @@ contains
     box%stencils(ix)%stype = stencil_variable
     ix_offset              = af_get_child_offset(box)
     n_coeff                = af_stencil_sizes(af_stencil_p234)
+    i_lsf                  = mg%i_lsf
     allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
 
-    call get_possible_lsf_root_mask(box, nc, norm2(box%dr), &
-         mg, root_mask)
-    i_lsf = mg%i_lsf
+    ix_mask = af_stencil_index(box, mg_lsf_mask_key)
+    if (ix_mask == af_stencil_none) error stop "No LSF root mask stored"
+    n_mask = size(box%stencils(ix_mask)%sparse_ix, 2)
 
     associate (v => box%stencils(ix)%v)
       ! In these loops, we calculate the closest coarse index (_c1), and the
       ! one-but-closest (_c2). The fine cell lies in between.
 #if NDIM == 1
-      do i = 1, nc
+      v(1, :) = 0.75_dp
+      v(2, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
          i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
          i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-         if (root_mask(IJK)) then
-            a = af_r_cc(box, [IJK])
-            dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1]), mg)
-            dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2]), mg)
-         else
-            dd(:) = 1.0_dp
-         end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2]), mg)
 
          v(:, IJK) = [3 * dd(2), dd(1)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #elif NDIM == 2
-      do j = 1, nc
+      v(1, :, :) = 0.5_dp
+      v(2, :, :) = 0.25_dp
+      v(3, :, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
+         j = box%stencils(ix_mask)%sparse_ix(2, n)
+
          j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
          j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-         do i = 1, nc
-            i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-            i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-            if (root_mask(IJK)) then
-               a = af_r_cc(box, [IJK])
-               dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1]), mg)
-               dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
-               dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
-            else
-               dd(:) = 1.0_dp
-            end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
+         dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
 
-            v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
-                 dd(1) ** dd(3)]
-            v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
-         end do
+         v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
+              dd(1) * dd(3)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #elif NDIM == 3
-      do k = 1, nc
+      v(:, :, :, :) = 0.25_dp
+
+      do n = 1, n_mask
+         i = box%stencils(ix_mask)%sparse_ix(1, n)
+         j = box%stencils(ix_mask)%sparse_ix(2, n)
+         k = box%stencils(ix_mask)%sparse_ix(3, n)
+
          k_c1 = ix_offset(3) + ishft(k+1, -1) ! (k+1)/2
          k_c2 = k_c1 + 1 - 2 * iand(k, 1)     ! even: +1, odd: -1
-         do j = 1, nc
-            j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
-            j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
-            do i = 1, nc
-               i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
-               i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
+         j_c1 = ix_offset(2) + ishft(j+1, -1) ! (j+1)/2
+         j_c2 = j_c1 + 1 - 2 * iand(j, 1)     ! even: +1, odd: -1
+         i_c1 = ix_offset(1) + ishft(i+1, -1) ! (i+1)/2
+         i_c2 = i_c1 + 1 - 2 * iand(i, 1)     ! even: +1, odd: -1
 
-               if (root_mask(IJK)) then
-                  a = af_r_cc(box, [IJK])
-                  dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c1]), mg)
-                  dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1, k_c1]), mg)
-                  dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2, k_c1]), mg)
-                  dd(4) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c2]), mg)
-               else
-                  dd(:) = 1.0_dp
-               end if
+         a = af_r_cc(box, [IJK])
+         dd(1) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c1]), mg)
+         dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1, k_c1]), mg)
+         dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2, k_c1]), mg)
+         dd(4) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c1, k_c2]), mg)
 
-               v(:, IJK) = [dd(2) * dd(3) * dd(4), &
-                    dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
-                    dd(1) * dd(2) * dd(3)]
-               v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
-            end do
-         end do
+         v(:, IJK) = [dd(2) * dd(3) * dd(4), &
+              dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
+              dd(1) * dd(2) * dd(3)]
+         v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
       end do
 #endif
     end associate
@@ -1438,6 +1482,7 @@ contains
     if (lsf_a * lsf_b < 0) then
        ! There is a boundary between the points
        dist = lsf_a / (lsf_a - lsf_b)
+       dist = max(dist, mg_lsf_min_rel_distance)
     else
        dist = 1.0_dp
     end if
@@ -1447,36 +1492,41 @@ contains
   !> signs, apply bisection directly. Else, first find the (assumed to be)
   !> unique local minimum/maximum to determine a bracket. Return relative
   !> location of root, or 1 if there is no root.
-  !>
-  !> @todo Allow to set tolerance?
   function mg_lsf_dist_gss(a, b, mg) result(dist)
     real(dp), intent(in)   :: a(NDIM) !< Start point
     real(dp), intent(in)   :: b(NDIM) !< End point
     type(mg_t), intent(in) :: mg
-    real(dp)               :: bracket(NDIM, 2)
+    real(dp)               :: bracket(NDIM, 2), b_new(NDIM)
     real(dp)               :: dist, r_root(NDIM), lsf_a, lsf_b
-    real(dp), parameter    :: tol      = 1e-8_dp
     integer, parameter     :: max_iter = 100
 
     lsf_a = mg%lsf(a)
     lsf_b = mg%lsf(b)
     dist  = 1.0_dp
 
-    if (lsf_a * lsf_b < 0) then
-       r_root = bisection(mg%lsf, a, b, tol, max_iter)
+    if (lsf_a * lsf_b <= 0) then
+       r_root = bisection(mg%lsf, a, b, mg%lsf_tol, max_iter)
     else
-       ! Determine bracket by finding local minimum/maximum
-       bracket = gss(mg%lsf, a, b, &
-            minimization=(lsf_a >= 0), tol=tol)
+       ! Determine bracket using Golden section search
+       bracket = gss(mg%lsf, a, b, minimization=(lsf_a >= 0), &
+            tol=mg%lsf_tol, find_bracket=.true.)
 
-       if (mg%lsf(bracket(:, 1)) * lsf_a > 0) then
+       ! Take one of the endpoints of the bracket
+       if (mg%lsf(bracket(:, 1)) * lsf_a <= 0) then
+          b_new = bracket(:, 1)
+       else
+          b_new = bracket(:, 2)
+       end if
+
+       if (mg%lsf(b_new) * lsf_a > 0) then
           return                ! No root
        else
-          r_root = bisection(mg%lsf, a, bracket(:, 1), tol, max_iter)
+          r_root = bisection(mg%lsf, a, b_new, mg%lsf_tol, max_iter)
        end if
     end if
 
     dist = norm2(r_root - a)/norm2(b-a)
+    dist = max(dist, mg_lsf_min_rel_distance)
   end function mg_lsf_dist_gss
 
   !> Simple bisection
@@ -1507,16 +1557,17 @@ contains
   !> single local minimum/maximum in the interval [a,b], gss returns a subset
   !> interval [c,d] that contains the minimum/maximum with d-c <= tol. Adapted
   !> from https://en.wikipedia.org/wiki/Golden-section_search
-  function gss(f, in_a, in_b, minimization, tol) result(bracket)
+  function gss(f, in_a, in_b, minimization, tol, find_bracket) result(bracket)
     procedure(mg_func_lsf) :: f !< Function to minimize/maximize
     real(dp), intent(in)   :: in_a(NDIM) !< Start coordinate
     real(dp), intent(in)   :: in_b(NDIM) !< End coordinate
     !> Whether to perform minimization or maximization
     logical, intent(in)    :: minimization
     real(dp), intent(in)   :: tol !< Absolute tolerance
+    logical, intent(in) :: find_bracket !< Whether to search for a bracket
     real(dp)               :: bracket(NDIM, 2)
     real(dp)               :: a(NDIM), b(NDIM), c(NDIM), d(NDIM)
-    real(dp)               :: h(NDIM), yc, yd
+    real(dp)               :: h(NDIM), yc, yd, ya
     real(dp)               :: invphi, invphi2
     integer                :: n, k
 
@@ -1538,6 +1589,7 @@ contains
 
     c = a + invphi2 * h
     d = a + invphi * h
+    ya = f(a)                   ! To search for bracket
     yc = f(c)
     yd = f(d)
 
@@ -1557,6 +1609,9 @@ contains
           d = a + invphi * h
           yd = f(d)
        end if
+
+       ! Exit early if we are only searching for a bracket
+       if (find_bracket .and. ya * yc <= 0 .and. ya * yd <= 0) exit
     end do
 
     if ((yc < yd) .eqv. minimization) then
@@ -1618,7 +1673,7 @@ contains
     end do
 
     do KJI_DO(1, nc)
-       dd = max(all_distances(:, IJK), mg_lsf_min_rel_distance)
+       dd = all_distances(:, IJK)
 
        ! Generalized Laplacian for neighbors at distance dd * dx
        do idim = 1, NDIM
@@ -1668,7 +1723,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          select case(tree%boxes(id)%tag)
+          select case (iand(tree%boxes(id)%tag, mg%operator_mask))
           case (mg_normal_box, mg_ceps_box)
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
           case (mg_lsf_box)
@@ -1732,7 +1787,7 @@ contains
            cc(1:nc, 1:nc, 0:nc, i_phi))
 #endif
 
-      if (box%tag == mg_veps_box) then
+      if (iand(box%tag, mg%operator_mask) == mg_veps_box) then
          ! Compute fields at the boundaries of the box, where eps can change
          i_eps = mg%i_eps
 
@@ -1871,7 +1926,6 @@ contains
       ! Use sparse storage of boundary distances
       do n = 1, size(box%stencils(ix_dist)%sparse_ix, 2)
          dd = box%stencils(ix_dist)%sparse_v(:, n)
-         dd = max(dd, mg_lsf_min_rel_distance)
 
 #if NDIM == 1
          i = box%stencils(ix_dist)%sparse_ix(1, n)

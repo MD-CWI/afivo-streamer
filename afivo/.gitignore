@@ -58,3 +58,12 @@ tests/results/*
 /examples/electrode_example_?d
 /examples/poisson_lsf_test_?d
 /examples/electrode_dielectric_?d
+/examples/dielectric_surface
+/examples/electrode_dielectric
+/examples/electrode_example
+/examples/poisson_stencil_?d
+/examples/stencil_test_?d
+/examples/particles_gravity
+/tools/silo_to_raw
+/tools/__pycache__/
+/examples/gmon.out
