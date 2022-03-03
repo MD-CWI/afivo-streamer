@@ -53,10 +53,10 @@ program dielectric_surface
      if (ref_info%n_add == 0) exit
   end do
 
-  mg%i_phi    = i_phi
-  mg%i_rhs    = i_rhs
-  mg%i_tmp    = i_tmp
-  mg%i_lsf    = i_lsf
+  tree%mg_i_lsf = i_lsf
+  mg%i_phi = i_phi
+  mg%i_rhs = i_rhs
+  mg%i_tmp = i_tmp
   mg%sides_bc => af_bc_dirichlet_zero
   mg%lsf_boundary_value = 1.0_dp
   mg%lsf => get_lsf

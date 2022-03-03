@@ -82,6 +82,7 @@ contains
     type(stencil_t), intent(inout) :: stencil
 
     stencil%shape = af_stencil_357
+    stencil%stype = stencil_constant
     allocate(stencil%c(2*NDIM+1))
 
     stencil%c(1)  = 0.0_dp

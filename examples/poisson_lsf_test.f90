@@ -103,10 +103,10 @@ program poisson_lsf_test
      coord = af_xyz
   end if
 
-  mg%i_phi    = i_phi
-  mg%i_rhs    = i_rhs
-  mg%i_tmp    = i_tmp
-  mg%i_lsf    = i_lsf
+  tree%mg_i_lsf = i_lsf
+  mg%i_phi = i_phi
+  mg%i_rhs = i_rhs
+  mg%i_tmp = i_tmp
   mg%sides_bc => bc_solution
   mg%lsf_boundary_value = boundary_value
   mg%lsf_dist => mg_lsf_dist_gss
@@ -124,7 +124,7 @@ program poisson_lsf_test
   call mg_init(tree, mg)
 
   do n = 1, 100
-     call mg_set_box_tag_tree(tree, mg)
+     call mg_set_operators_tree(tree, mg)
      call af_adjust_refinement(tree, ref_routine, ref_info, ref_buffer=1)
      if (ref_info%n_add == 0) exit
   end do

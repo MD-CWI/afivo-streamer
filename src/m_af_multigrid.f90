@@ -23,8 +23,8 @@ module m_af_multigrid
 
   ! Set tag for each box, depending on operator
   public :: mg_set_box_tag
-  public :: mg_set_box_tag_lvl
-  public :: mg_set_box_tag_tree
+  public :: mg_set_operators_lvl
+  public :: mg_set_operators_tree
 
   ! Methods for normal Laplacian
   public :: mg_box_lpl_gradient
@@ -50,10 +50,6 @@ contains
     if (.not. associated(mg%sides_bc)) stop "mg_init: sides_bc not set"
     if (.not. tree%ready) error stop "mg_init: tree not initialized"
 
-    ! Check whether these are set, otherwise use default
-    if (mg%n_cycle_down < 0) mg%n_cycle_down = 2
-    if (mg%n_cycle_up < 0) mg%n_cycle_up = 2
-
     ! Check whether methods are set, otherwise use default (for laplacian)
     if (.not. associated(mg%box_op)) mg%box_op => mg_auto_op
     ! if (.not. associated(mg%box_stencil)) mg%box_stencil => mg_auto_stencil
@@ -74,6 +70,18 @@ contains
     end if
 
     if (mg%i_lsf /= -1) then
+       error stop "Set tree%mg_i_lsf instead of mg%i_lsf"
+    else if (iand(mg%operator_mask, mg_lsf_box) > 0) then
+       mg%i_lsf = tree%mg_i_lsf
+    end if
+
+    if (mg%i_eps /= -1) then
+       error stop "Set tree%mg_i_eps instead of mg%i_eps"
+    else if (iand(mg%operator_mask, mg_veps_box+mg_ceps_box) > 0) then
+       mg%i_eps = tree%mg_i_eps
+    end if
+
+    if (mg%i_lsf /= -1) then
        if (.not. associated(mg%lsf_dist)) &
             mg%lsf_dist => mg_lsf_dist_linear
        if (associated(mg%lsf_dist, mg_lsf_dist_gss) .and. .not. &
@@ -82,7 +90,7 @@ contains
        end if
     end if
 
-    call mg_set_box_tag_lvl(tree, mg, 1)
+    call mg_set_operators_lvl(tree, mg, 1)
     call coarse_solver_initialize(tree, mg)
 
     if (mg%i_lsf /= -1) then
@@ -98,14 +106,25 @@ contains
 
   subroutine mg_destroy(mg)
     type(mg_t), intent(inout) :: mg   !< Multigrid options
-    call check_mg(mg)
+    if (.not. mg%initialized) error stop "mg%initialized is false"
     call coarse_solver_destroy(mg%csolver)
   end subroutine mg_destroy
 
-  subroutine check_mg(mg)
-    type(mg_t), intent(in) :: mg           !< Multigrid options
-    if (.not. mg%initialized) stop "check_mg: you haven't called mg_init"
-  end subroutine check_mg
+  subroutine use_mg(tree, mg)
+    type(af_t), intent(inout)      :: tree
+    type(mg_t), intent(in), target :: mg !< Multigrid options
+
+    if (.not. mg%initialized) error stop "mg%initialized is false"
+    tree%mg_current_operator_mask = mg%operator_mask
+
+    ! Make sure box tags and operators are set
+    call mg_set_operators_tree(tree, mg)
+  end subroutine use_mg
+
+  subroutine done_with_mg(tree)
+    type(af_t), intent(inout)      :: tree
+    tree%mg_current_operator_mask = -1
+  end subroutine done_with_mg
 
   !> Perform FAS-FMG cycle (full approximation scheme, full multigrid). Note
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
@@ -119,8 +138,7 @@ contains
     logical, intent(in)             :: have_guess   !< If false, start from phi = 0
     integer                         :: lvl
 
-    call check_mg(mg)           ! Check whether mg options are set
-    call mg_set_box_tag_tree(tree, mg) ! Make sure box tags are set
+    call use_mg(tree, mg)
 
     if (have_guess) then
        do lvl = tree%highest_lvl,  2, -1
@@ -154,6 +172,7 @@ contains
             lvl == tree%highest_lvl, lvl, standalone=.false.)
     end do
 
+    call done_with_mg(tree)
   end subroutine mg_fas_fmg
 
   !> Perform FAS V-cycle (full approximation scheme). Note that this routine
@@ -174,8 +193,7 @@ contains
     by_itself = .true.; if (present(standalone)) by_itself = standalone
 
     if (by_itself) then
-       call check_mg(mg)        ! Check whether mg options are set
-       call mg_set_box_tag_tree(tree, mg)
+       call use_mg(tree, mg)
     end if
 
     max_lvl = tree%highest_lvl
@@ -234,6 +252,10 @@ contains
           !$omp end do nowait
        end do
        !$omp end parallel
+    end if
+
+    if (by_itself) then
+       call done_with_mg(tree)
     end if
 
   end subroutine mg_fas_vcycle
@@ -451,7 +473,7 @@ contains
        dix = -1
     end if
 
-    call af_gc_prolong_copy(boxes, id, nb, iv)
+    call af_gc_prolong_copy(boxes, id, nb, iv, 0)
 
     select case (af_neighb_dim(nb))
 #if NDIM == 1
@@ -798,7 +820,7 @@ contains
        call mg_box_lpld_stencil(box, mg, ix)
     case (mg_auto_operator)
        ! Use box tag to set operator
-       select case(box%tag)
+       select case (iand(box%tag, mg%operator_mask))
        case (mg_normal_box)
           call mg_box_lpl_stencil(box, mg, ix)
        case (mg_lsf_box)
@@ -837,7 +859,7 @@ contains
     case (mg_auto_prolongation)
        ! Use box tag
        associate (box=>tree%boxes(id), box_p=>tree%boxes(p_id))
-         select case (box%tag)
+         select case (iand(box%tag, mg%operator_mask))
          case (mg_normal_box)
             call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
          case (mg_lsf_box)
@@ -876,24 +898,20 @@ contains
   end subroutine mg_auto_rstr
 
   !> Set ghost cells near refinement boundaries
-  subroutine mg_auto_rb(boxes, id, nb, iv)
+  subroutine mg_auto_rb(boxes, id, nb, iv, op_mask)
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
-    integer, intent(in)        :: id     !< Id of box
-    integer, intent(in)        :: nb     !< Ghost cell direction
-    integer, intent(in)        :: iv     !< Ghost cell variable
+    integer, intent(in)        :: id       !< Id of box
+    integer, intent(in)        :: nb       !< Ghost cell direction
+    integer, intent(in)        :: iv       !< Ghost cell variable
+    integer, intent(in)        :: op_mask  !< Operator mask
 
-    select case(boxes(id)%tag)
-    case (mg_normal_box, mg_lsf_box, af_init_tag)
-       ! Use default method; this is also useful for initial refinement when box
-       ! tags are not yet set
-       call mg_sides_rb(boxes, id, nb, iv)
-    case (mg_veps_box, mg_ceps_box)
-       ! With a dielectric, use local extrapolation for ghost cells
+    select case (iand(boxes(id)%tag, op_mask))
+    case (mg_veps_box)
+       ! With a variable coefficients, use local extrapolation for ghost cells
        call mg_sides_rb_extrap(boxes, id, nb, iv)
     case default
-       error stop "mg_auto_rb: unknown box tag"
+       call mg_sides_rb(boxes, id, nb, iv)
     end select
-
   end subroutine mg_auto_rb
 
   !> Based on the box type, correct the solution of the children
@@ -1050,38 +1068,41 @@ contains
 
   end subroutine store_lsf_distance_matrix
 
-  subroutine mg_set_box_tag(box, mg)
-    type(box_t), intent(inout) :: box !< Box to operate on
-    type(mg_t), intent(in)     :: mg  !< Multigrid options
-    real(dp)                   :: a, b
-    logical                    :: is_lsf, is_deps, is_eps
+  !> Set tag (box type) for a box in the tree
+  subroutine mg_set_box_tag(tree, id, mg)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: id
+    type(mg_t), intent(in)    :: mg
+    logical                   :: has_lsf
+    real(dp)                  :: a, b
 
-    is_lsf = .false.
-    is_eps = .false.
-    is_deps = .false.
+    associate (box => tree%boxes(id))
+      box%tag = mg_normal_box
+      if (tree%mg_i_lsf /= -1) then
+         call store_lsf_distance_matrix(box, box%n_cell, mg, has_lsf)
+         if (has_lsf) then
+            ! Add bits indicating a level set function
+            box%tag = box%tag + mg_lsf_box
+         end if
+      end if
 
-    if (mg%i_lsf /= -1) then
-       call store_lsf_distance_matrix(box, box%n_cell, mg, is_lsf)
-    end if
+      if (tree%mg_i_eps /= -1) then
+         a = minval(box%cc(DTIMES(:), tree%mg_i_eps))
+         b = maxval(box%cc(DTIMES(:), tree%mg_i_eps))
 
-    if (mg%i_eps /= -1) then
-       a = minval(box%cc(DTIMES(:), mg%i_eps))
-       b = maxval(box%cc(DTIMES(:), mg%i_eps))
-       is_deps = (b > a)
-       if (.not. is_deps) is_eps = (a < 1 .or. a > 1)
-    end if
-
-    if (count([is_lsf, is_eps, is_deps]) > 1) &
-         stop "mg_set_box_tag: Cannot set lsf and eps tag for same box"
-
-    box%tag = mg_normal_box
-    if (is_lsf) box%tag = mg_lsf_box
-    if (is_eps) box%tag = mg_ceps_box
-    if (is_deps) box%tag = mg_veps_box
+         if (b > a) then
+            ! Variable coefficient
+            box%tag = box%tag + mg_veps_box
+         else if (maxval(abs([a, b] - 1)) > 1e-8_dp) then
+            ! Constant coefficient (but not equal to one)
+            box%tag = box%tag + mg_ceps_box
+         end if
+      end if
+    end associate
 
   end subroutine mg_set_box_tag
 
-  subroutine mg_set_box_tag_lvl(tree, mg, lvl)
+  subroutine mg_set_operators_lvl(tree, mg, lvl)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer, intent(in)       :: lvl
@@ -1091,13 +1112,14 @@ contains
     do i = 1, size(tree%lvls(lvl)%ids)
        id = tree%lvls(lvl)%ids(i)
        associate (box => tree%boxes(id))
-         !> @todo Allow to set box tag again (e.g., for new operator)
-         if (box%tag /= af_init_tag) cycle
 
-         ! We could use the tag of the parent box, but sometimes a part of a
-         ! sharp feature can only be detected in the children
-         call mg_set_box_tag(box, mg)
+         if (box%tag == af_init_tag) then
+            ! We could use the tag of the parent box, but sometimes a part of a
+            ! sharp feature can only be detected in the children
+            call mg_set_box_tag(tree, id, mg)
+         end if
 
+         ! Check if stencils are available
          n = af_stencil_index(box, mg%operator_key)
          if (n == af_stencil_none) then
             call mg_store_operator_stencil(box, mg)
@@ -1119,17 +1141,17 @@ contains
        end associate
     end do
     !$omp end parallel do
-  end subroutine mg_set_box_tag_lvl
+  end subroutine mg_set_operators_lvl
 
-  subroutine mg_set_box_tag_tree(tree, mg)
+  subroutine mg_set_operators_tree(tree, mg)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(in)    :: mg
     integer                   :: lvl
 
     do lvl = 1, tree%highest_lvl
-       call mg_set_box_tag_lvl(tree, mg, lvl)
+       call mg_set_operators_lvl(tree, mg, lvl)
     end do
-  end subroutine mg_set_box_tag_tree
+  end subroutine mg_set_operators_tree
 
   !> Restriction of child box (box_c) to its parent (box_p)
   subroutine mg_box_rstr_lpl(box_c, box_p, iv, mg)
@@ -1701,7 +1723,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%ids)
           id = tree%lvls(lvl)%ids(i)
-          select case(tree%boxes(id)%tag)
+          select case (iand(tree%boxes(id)%tag, mg%operator_mask))
           case (mg_normal_box, mg_ceps_box)
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
           case (mg_lsf_box)
@@ -1765,7 +1787,7 @@ contains
            cc(1:nc, 1:nc, 0:nc, i_phi))
 #endif
 
-      if (box%tag == mg_veps_box) then
+      if (iand(box%tag, mg%operator_mask) == mg_veps_box) then
          ! Compute fields at the boundaries of the box, where eps can change
          i_eps = mg%i_eps
 

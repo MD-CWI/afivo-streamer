@@ -379,6 +379,15 @@ module m_af_types
 
      !> Number of removed boxes
      integer :: n_removed_ids = 0
+
+     !> Multigrid: index of variable coefficient
+     integer :: mg_i_eps = -1
+
+     !> Multigrid: index of variable for level set function
+     integer :: mg_i_lsf = -1
+
+     !> Current multigrid operator mask
+     integer :: mg_current_operator_mask = -1
   end type af_t
 
   !> Type specifying the location of a cell
@@ -440,12 +449,13 @@ module m_af_types
      end subroutine af_subr_tree_arg
 
      !> To fill ghost cells near refinement boundaries.
-     subroutine af_subr_rb(boxes, id, nb, iv)
+     subroutine af_subr_rb(boxes, id, nb, iv, op_mask)
        import
        type(box_t), intent(inout) :: boxes(:) !< Array with all boxes
-       integer, intent(in)         :: id       !< Id of the box that needs to have ghost cells filled
-       integer, intent(in)         :: nb       !< Neighbor direction in which ghost cells need to be filled
-       integer, intent(in)         :: iv       !< Variable for which ghost cells are filled
+       integer, intent(in)        :: id       !< Id of the box that needs to have ghost cells filled
+       integer, intent(in)        :: nb       !< Neighbor direction in which ghost cells need to be filled
+       integer, intent(in)        :: iv       !< Variable for which ghost cells are filled
+       integer, intent(in)        :: op_mask  !< Mask for multigrid operators
      end subroutine af_subr_rb
 
      !> To fill ghost cells near physical boundaries
@@ -512,10 +522,10 @@ module m_af_types
   integer, parameter :: mg_eps_operator    = 3
   integer, parameter :: mg_auto_operator   = 4
 
-  integer, parameter :: mg_normal_box    = 1 !< Normal box
-  integer, parameter :: mg_lsf_box       = 2 !< Box with an internal boundary
-  integer, parameter :: mg_ceps_box      = 3 !< Box with constant eps /= 1
-  integer, parameter :: mg_veps_box      = 4 !< Box with varying eps (on face)
+  integer, parameter :: mg_normal_box = 0 !< Normal box (no eps/lsf)
+  integer, parameter :: mg_lsf_box    = 1 !< Box has level set function
+  integer, parameter :: mg_veps_box   = 2 !< Box has variable coefficient
+  integer, parameter :: mg_ceps_box   = 4 !< Box has constant coefficient /= 1
 
   integer, parameter :: mg_prolong_linear    = 17 !< Linear prolongation
   integer, parameter :: mg_prolong_sparse    = 18 !< Sparse linear prolongation
@@ -557,19 +567,31 @@ module m_af_types
 
   !> Type to store multigrid options in
   type :: mg_t
-     integer :: i_phi        = -1 !< Variable holding solution
-     integer :: i_rhs        = -1 !< Variable holding right-hand side
-     integer :: i_tmp        = -1 !< Internal variable (holding prev. solution)
+     !> Variable holding solution
+     integer :: i_phi        = -1
+     !> Variable holding right-hand side
+     integer :: i_rhs        = -1
+     !> Internal variable (holding prev. solution)
+     integer :: i_tmp        = -1
 
-     integer :: i_eps        = -1 !< Optional variable (diel. permittivity)
-     integer :: i_lsf        = -1 !< Optional variable for level set function
+     !> Mask to determine box types
+     integer :: operator_mask = -1
+     !> Index of variable coefficient, automatically set
+     integer :: i_eps = -1
+     !> Optional variable for level set function, automatically set
+     integer :: i_lsf = -1
 
-     integer :: n_cycle_down = -1 !< Number of relaxation cycles in downward sweep
-     integer :: n_cycle_up   = -1 !< Number of relaxation cycles in upward sweep
+     !> Number of relaxation cycles in downward sweep
+     integer :: n_cycle_down = 2
+     !> Number of relaxation cycles in upward sweep
+     integer :: n_cycle_up   = 2
 
-     logical :: initialized = .false. !< Whether the structure has been initialized
-     logical :: use_corners = .false. !< Does the smoother use corner ghost cells
-     logical :: subtract_mean = .false. !< Whether to subtract mean from solution
+     !> Whether the structure has been initialized
+     logical :: initialized = .false.
+     !> Does the smoother use corner ghost cells
+     logical :: use_corners = .false.
+     !> Whether to subtract mean from solution
+     logical :: subtract_mean = .false.
 
      !> Store lambda^2 for Helmholtz equations (L phi - lamda phi = f)
      real(dp) :: helmholtz_lambda = 0.0_dp
@@ -625,6 +647,7 @@ module m_af_types
      !> Subroutine for getting the stencil
      procedure(mg_box_stencil), pointer, nopass :: box_stencil => null()
 
+     !> Structure holding data for the coarse grid solver
      type(coarse_solve_t) :: csolver
   end type mg_t
 
