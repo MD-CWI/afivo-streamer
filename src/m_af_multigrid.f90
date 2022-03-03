@@ -5,7 +5,6 @@
 module m_af_multigrid
   use m_af_types
   use m_af_stencil
-  use m_mg_types
   use m_coarse_solver
 
   implicit none
