@@ -675,7 +675,7 @@ contains
 
     ! TODO clean this up in the future (when we set electrode Neumann boundary
     ! conditions in actual flux computation)
-    if (box%tag == mg_lsf_box) then
+    if (iand(box%tag, mg_lsf_box) > 0) then
        ix = 0
        do KJI_DO(1,nc)
           ix = ix + 1

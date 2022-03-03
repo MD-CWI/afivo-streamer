@@ -224,7 +224,8 @@ contains
        end if
 
        ! Refine around electrode
-       if (box%tag == mg_lsf_box .and. max_dx > refine_electrode_dx) then
+       if (iand(box%tag, mg_lsf_box) > 0 .and. &
+            max_dx > refine_electrode_dx) then
           cell_flags(IJK) = af_do_ref
        end if
     end do; CLOSE_DO
