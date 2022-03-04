@@ -5,6 +5,7 @@
 program poisson_lsf_test
   use m_af_all
   use m_config
+  use omp_lib
 
   implicit none
 
@@ -25,8 +26,8 @@ program poisson_lsf_test
   logical :: write_numpy = .false.
   integer :: refinement_type = 1
 
-  ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
-  integer             :: shape             = 1
+  ! Which shape to use
+  integer             :: shape = 1
 
   real(dp) :: sharpness_t             = 4.0_dp
   real(dp) :: boundary_value          = 1.0_dp
@@ -44,6 +45,8 @@ program poisson_lsf_test
   type(mg_t)         :: mg
   type(CFG_t)        :: cfg
   real(dp)           :: error_squared, rmse
+  real(dp)           :: mem_limit_gb = 8.0_dp
+  real(dp)           :: t0, t_sum
   logical            :: write_output = .true.
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
@@ -91,6 +94,8 @@ program poisson_lsf_test
        "Smallest width to resolve in the solution")
   call CFG_add_get(cfg, "boundary_value", boundary_value, &
        "Value for Dirichlet boundary condition")
+  call CFG_add_get(cfg, "mem_limit_gb", mem_limit_gb, &
+       "Memory limit (GByte)")
 
   call CFG_check(cfg)
   ! call CFG_write(cfg, "stdout")
@@ -118,7 +123,8 @@ program poisson_lsf_test
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(1.0_dp)], &
        [DTIMES(box_size)], &
-       coord=coord)
+       coord=coord, &
+       mem_limit_gb=mem_limit_gb)
 
   call af_refine_up_to_lvl(tree, min_refine_level)
   call mg_init(tree, mg)
@@ -131,10 +137,14 @@ program poisson_lsf_test
 
   call af_print_info(tree)
 
+  t_sum = 0
   write(*, "(A,A4,4A14)") "# ", "iter", "residu", "max_error", "rmse", "max_field"
 
   do mg_iter = 1, n_iterations
+     t0 = omp_get_wtime()
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
+     t_sum = t_sum + omp_get_wtime() - t0
+
      call mg_compute_phi_gradient(tree, mg, i_field, 1.0_dp, i_field_norm)
      call af_gc_tree(tree, [i_field_norm])
      call af_loop_box(tree, set_error)
@@ -162,6 +172,8 @@ program poisson_lsf_test
              ixs_cc=[i_phi, i_lsf_mask])
      end if
   end do
+
+  write(*, "(A,E14.5)") " seconds_per_FMG_cycle", t_sum/n_iterations
 
   call af_stencil_print_info(tree)
 
