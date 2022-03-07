@@ -8,7 +8,7 @@ module m_af_ghostcell
   private
 
   public :: af_gc_tree
-  public :: af_gc_ids
+  public :: af_gc_lvl
   public :: af_gc_box
   public :: af_bc_dirichlet_zero
   public :: af_bc_neumann_zero
@@ -36,31 +36,29 @@ contains
 
     if (all_ids) then
        do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%ids, ivs, corners)
+          call af_gc_lvl(tree, lvl, ivs, corners)
        end do
     else
        do lvl = 1, tree%highest_lvl
-          call af_gc_ids(tree, tree%lvls(lvl)%leaves, ivs, corners)
+          call af_gc_lvl(tree, lvl, ivs, corners)
        end do
     end if
   end subroutine af_gc_tree
 
-  !> Fill ghost cells for variables ivs on the sides of all boxes, using subr_rb
-  !> on refinement boundaries and subr_bc on physical boundaries. This routine
-  !> assumes that ghost cells on other ids have been set already.
-  subroutine af_gc_ids(tree, ids, ivs, corners)
-    type(af_t), intent(inout)       :: tree    !< Tree to fill ghost cells on
-    integer, intent(in)              :: ids(:)  !< Ids of boxes for which we set ghost cells
-    integer, intent(in)              :: ivs(:)  !< Variables for which ghost cells are set
-    logical, intent(in), optional    :: corners !< Fill corner ghost cells (default: yes)
-    integer                          :: i
+  !> Fill ghost cells for variables ivs on the sides of all boxes
+  subroutine af_gc_lvl(tree, lvl, ivs, corners)
+    type(af_t), intent(inout)     :: tree    !< Tree to fill ghost cells on
+    integer, intent(in)           :: lvl     !< Fill on this refinement level
+    integer, intent(in)           :: ivs(:)  !< Variables for which ghost cells are set
+    logical, intent(in), optional :: corners !< Fill corner ghost cells (default: yes)
+    integer                       :: i
 
     !$omp parallel do
-    do i = 1, size(ids)
-       call af_gc_box(tree, ids(i), ivs, corners)
+    do i = 1, size(tree%lvls(lvl)%ids)
+       call af_gc_box(tree, tree%lvls(lvl)%ids(i), ivs, corners)
     end do
     !$omp end parallel do
-  end subroutine af_gc_ids
+  end subroutine af_gc_lvl
 
   !> Fill ghost cells for variables ivs
   subroutine af_gc_box(tree, id, ivs, corners)

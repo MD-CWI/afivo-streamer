@@ -5,6 +5,7 @@
 module m_af_multigrid
   use m_af_types
   use m_af_stencil
+  use m_af_ghostcell
   use m_coarse_solver
 
   implicit none
@@ -130,7 +131,6 @@ contains
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
   subroutine mg_fas_fmg(tree, mg, set_residual, have_guess)
-    use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_boxes_copy_cc
     type(af_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout)         :: mg   !< Multigrid options
@@ -166,7 +166,7 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Update ghost cells
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
+       call af_gc_lvl(tree, lvl, [mg%i_phi])
 
        call mg_fas_vcycle(tree, mg, set_residual .and. &
             lvl == tree%highest_lvl, lvl, standalone=.false.)
@@ -179,7 +179,6 @@ contains
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
   subroutine mg_fas_vcycle(tree, mg, set_residual, highest_lvl, standalone)
-    use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_tree_sum_cc
     type(af_t), intent(inout)     :: tree         !< Tree to do multigrid on
     type(mg_t), intent(in)        :: mg           !< Multigrid options
@@ -201,7 +200,7 @@ contains
 
     do lvl = max_lvl, 2, -1
        ! Downwards relaxation
-       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_down)
+       call gsrb_boxes(tree, lvl, mg, mg_cycle_down)
 
        ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
        ! correction later
@@ -217,10 +216,10 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells after correction
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
+       call af_gc_lvl(tree, lvl, [mg%i_phi])
 
        ! Upwards relaxation
-       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_up)
+       call gsrb_boxes(tree, lvl, mg, mg_cycle_up)
     end do
 
     if (set_residual) then
@@ -261,7 +260,6 @@ contains
   end subroutine mg_fas_vcycle
 
   subroutine solve_coarse_grid(tree, mg)
-    use m_af_ghostcell, only: af_gc_ids
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(in)    :: mg   !< Multigrid options
 
@@ -270,12 +268,11 @@ contains
     call coarse_solver_get_phi(tree, mg)
 
     ! Set ghost cells for the new coarse grid solution
-    call af_gc_ids(tree, tree%lvls(1)%ids, [mg%i_phi])
+    call af_gc_lvl(tree, 1, [mg%i_phi])
   end subroutine solve_coarse_grid
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
   subroutine mg_sides_rb(boxes, id, nb, iv)
-    use m_af_ghostcell, only: af_gc_prolong_copy
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)          :: id       !< Id of box
     integer, intent(in)          :: nb       !< Ghost cell direction
@@ -450,7 +447,6 @@ contains
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
   subroutine mg_sides_rb_extrap(boxes, id, nb, iv)
-    use m_af_ghostcell, only: af_gc_prolong_copy
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -630,14 +626,13 @@ contains
     !$omp end parallel do
   end subroutine correct_children
 
-  subroutine gsrb_boxes(tree, ids, mg, type_cycle)
-    use m_af_ghostcell, only: af_gc_box
+  subroutine gsrb_boxes(tree, lvl, mg, type_cycle)
     type(af_t), intent(inout) :: tree       !< Tree containing full grid
-    type(mg_t), intent(in)   :: mg         !< Multigrid options
-    integer, intent(in)        :: ids(:)     !< Operate on these boxes
-    integer, intent(in)        :: type_cycle !< Type of cycle to perform
-    integer                    :: n, i, n_cycle
-    logical                    :: use_corners
+    type(mg_t), intent(in)    :: mg         !< Multigrid options
+    integer, intent(in)       :: lvl        !< Operate on this refinement level
+    integer, intent(in)       :: type_cycle !< Type of cycle to perform
+    integer                   :: n, i, n_cycle
+    logical                   :: use_corners
 
     select case (type_cycle)
     case (mg_cycle_down)
@@ -648,31 +643,32 @@ contains
        error stop "gsrb_boxes: invalid cycle type"
     end select
 
-    !$omp parallel private(n, i)
-    do n = 1, 2 * n_cycle
-       !$omp do
-       do i = 1, size(ids)
-          call mg%box_gsrb(tree%boxes(ids(i)), n, mg)
-       end do
-       !$omp end do
+    associate (ids => tree%lvls(lvl)%ids)
+      !$omp parallel private(n, i)
+      do n = 1, 2 * n_cycle
+         !$omp do
+         do i = 1, size(ids)
+            call mg%box_gsrb(tree%boxes(ids(i)), n, mg)
+         end do
+         !$omp end do
 
-       use_corners = mg%use_corners .or. &
-            (type_cycle /= mg_cycle_down .and. n == 2 * n_cycle)
+         use_corners = mg%use_corners .or. &
+              (type_cycle /= mg_cycle_down .and. n == 2 * n_cycle)
 
-       !$omp do
-       do i = 1, size(ids)
-          call af_gc_box(tree, ids(i), [mg%i_phi], use_corners)
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
+         !$omp do
+         do i = 1, size(ids)
+            call af_gc_box(tree, ids(i), [mg%i_phi], use_corners)
+         end do
+         !$omp end do
+      end do
+      !$omp end parallel
+    end associate
   end subroutine gsrb_boxes
 
   ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
   ! correction later
   subroutine update_coarse(tree, lvl, mg)
     use m_af_utils, only: af_box_add_cc, af_box_copy_cc
-    use m_af_ghostcell, only: af_gc_ids
     type(af_t), intent(inout) :: tree !< Tree containing full grid
     integer, intent(in)        :: lvl !< Update coarse values at lvl-1
     type(mg_t), intent(in)   :: mg !< Multigrid options
@@ -699,7 +695,7 @@ contains
     end do
     !$omp end parallel do
 
-    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, [mg%i_phi])
+    call af_gc_lvl(tree, lvl-1, [mg%i_phi])
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
     ! store current coarse phi in tmp.
@@ -723,7 +719,6 @@ contains
   !> This routine performs the same as update_coarse, but it ignores the tmp
   !> variable
   subroutine set_coarse_phi_rhs(tree, lvl, mg)
-    use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_box_add_cc
     type(af_t), intent(inout) :: tree !< Tree containing full grid
     integer, intent(in)        :: lvl !< Update coarse values at lvl-1
@@ -732,7 +727,7 @@ contains
 
     ! Fill ghost cells here to be sure
     if (lvl == tree%highest_lvl) then
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
+       call af_gc_lvl(tree, lvl, [mg%i_phi])
     end if
 
     !$omp parallel do private(id, p_id)
@@ -746,7 +741,7 @@ contains
     end do
     !$omp end parallel do
 
-    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, [mg%i_phi])
+    call af_gc_lvl(tree, lvl-1, [mg%i_phi])
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
 
