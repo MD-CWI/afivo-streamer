@@ -3,7 +3,6 @@
 !> interface to Hypre, assuming Hypre is compiled with OpenMP and without MPI
 module m_coarse_solver
   use m_af_types
-  use m_mg_types
   use m_af_stencil
 
   implicit none

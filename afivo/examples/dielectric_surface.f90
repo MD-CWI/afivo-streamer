@@ -80,11 +80,11 @@ program dielectric_surface
 
   call surface_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, fac)
 
-  mg%i_phi        = i_phi
-  mg%i_rhs        = i_rhs
-  mg%i_tmp        = i_tmp
-  mg%i_eps        = i_eps
-  mg%sides_bc     => bc_phi
+  tree%mg_i_eps = i_eps
+  mg%i_phi = i_phi
+  mg%i_rhs = i_rhs
+  mg%i_tmp = i_tmp
+  mg%sides_bc => bc_phi
 
   call mg_init(tree, mg)
 

@@ -1215,6 +1215,7 @@ contains
 #elif NDIM == 3
           allocate(box_list(1,1,1))
           box_list(1,1,1) = id
+          box_done(id) = .true.
           nx = 1
           ny = 1
           nz = 1

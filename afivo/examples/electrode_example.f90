@@ -53,12 +53,13 @@ program dielectric_surface
      if (ref_info%n_add == 0) exit
   end do
 
-  mg%i_phi    = i_phi
-  mg%i_rhs    = i_rhs
-  mg%i_tmp    = i_tmp
-  mg%i_lsf    = i_lsf
+  tree%mg_i_lsf = i_lsf
+  mg%i_phi = i_phi
+  mg%i_rhs = i_rhs
+  mg%i_tmp = i_tmp
   mg%sides_bc => af_bc_dirichlet_zero
   mg%lsf_boundary_value = 1.0_dp
+  mg%lsf => get_lsf
 
   call mg_init(tree, mg)
 
@@ -93,22 +94,29 @@ contains
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
     integer                    :: IJK, nc
-    real(dp)                   :: rr(NDIM), r0(NDIM), r1(NDIM)
-    real(dp)                   :: radius
+    real(dp)                   :: rr(NDIM)
 
     nc = box%n_cell
+
+    do KJI_DO(0,nc+1)
+       rr = af_r_cc(box, [IJK])
+       box%cc(IJK, iv) = get_lsf(rr)
+    end do; CLOSE_DO
+
+  end subroutine set_lsf
+
+  real(dp) function get_lsf(r)
+    real(dp), intent(in) :: r(NDIM)
+    real(dp)             :: r0(NDIM), r1(NDIM)
+    real(dp)             :: radius
 
     ! Start and end point of line
     r0(:) = 0.4_dp
     r1(:) = 0.6_dp
     radius = 0.02_dp
 
-    do KJI_DO(0,nc+1)
-       rr = af_r_cc(box, [IJK])
-       box%cc(IJK, iv) = dist_vec_line(rr, r0, r1, NDIM) - radius
-    end do; CLOSE_DO
-
-  end subroutine set_lsf
+    get_lsf = dist_vec_line(r, r0, r1, NDIM) - radius
+  end function get_lsf
 
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1

@@ -427,7 +427,7 @@ contains
     real(dp)                   :: lsf_nb(2*NDIM), dens_nb(2*NDIM)
     integer                    :: nc, IJK
 
-    if (box%tag /= mg_lsf_box) return
+    if (iand(box%tag, mg_lsf_box) == 0) return
 
     nc = box%n_cell
     do KJI_DO(1, nc)

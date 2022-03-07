@@ -9,7 +9,7 @@ program particles_to_grid
 
   integer, parameter    :: box_size    = 8
   integer               :: i_phi, i_tmp
-  integer, parameter    :: n_particles = 20*1000*1000
+  integer, parameter    :: n_particles = 1000*1000
   real(dp), parameter   :: r_max(NDIM) = 1.0_dp
   real(dp), allocatable :: coordinates(:, :), weights(:)
   integer               :: coordinate_system = af_xyz
