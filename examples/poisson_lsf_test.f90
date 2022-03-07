@@ -10,7 +10,7 @@ program poisson_lsf_test
   implicit none
 
   integer            :: box_size         = 8
-  integer, parameter :: n_iterations     = 10
+  integer            :: n_iterations     = 10
   integer            :: max_refine_level = 4
   integer            :: min_refine_level = 2
   integer            :: i_phi
@@ -82,6 +82,8 @@ program poisson_lsf_test
        "Index of the shape used")
   call CFG_add_get(cfg, "box_size", box_size, &
        "Size of grid boxes")
+  call CFG_add_get(cfg, "n_iterations", n_iterations, &
+       "Number of multigrid iterations")
   call CFG_add_get(cfg, "solution%sharpness", sharpness_t, &
        "Sharpness of solution (for some cases)")
   call CFG_add_get(cfg, "solution%r0", solution_r0, &
@@ -135,6 +137,10 @@ program poisson_lsf_test
      if (ref_info%n_add == 0) exit
   end do
 
+  ! Set mask where lsf changes sign
+  call af_loop_box(tree, set_lsf_mask)
+  call af_gc_tree(tree, [i_lsf_mask])
+
   call af_print_info(tree)
 
   t_sum = 0
@@ -148,10 +154,6 @@ program poisson_lsf_test
      call mg_compute_phi_gradient(tree, mg, i_field, 1.0_dp, i_field_norm)
      call af_gc_tree(tree, [i_field_norm])
      call af_loop_box(tree, set_error)
-
-     ! Set mask where lsf changes sign
-     call af_loop_box(tree, set_lsf_mask)
-     call af_gc_tree(tree, [i_lsf_mask])
 
      ! Determine the minimum and maximum residual and error
      call af_tree_maxabs_cc(tree, i_tmp, residu)
