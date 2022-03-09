@@ -652,6 +652,8 @@ contains
          end do
          !$omp end do
 
+         ! If corner ghost cells are not required, only store them during the
+         ! final upward cycle
          use_corners = mg%use_corners .or. &
               (type_cycle /= mg_cycle_down .and. n == 2 * n_cycle)
 
