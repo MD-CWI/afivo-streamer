@@ -35,6 +35,9 @@ module m_output
   ! Write output along a line
   logical, public, protected :: lineout_write = .false.
 
+  ! Write numpy npz output
+  logical, public, protected :: npzfile_write = .false.
+
   ! Write Silo output
   logical, public, protected :: silo_write = .true.
 
@@ -185,6 +188,9 @@ contains
     call CFG_add_get(cfg, "datfile%per_outputs", datfile_per_outputs, &
          "Write binary output files every N outputs")
 
+    call CFG_add_get(cfg, "npzfile%write", npzfile_write, &
+         "Write numpy npz output")
+
     call CFG_add_get(cfg, "lineout%write", lineout_write, &
          "Write output along a line")
     if (lineout_write) then
@@ -296,6 +302,9 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
+    ! Construct base filename for output
+    write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
+
     if (compute_power_density) then
        call af_loop_box(tree, set_power_density_box)
     end if
@@ -318,13 +327,17 @@ contains
           end if
        end do
 
-       write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
        if (n_extra_vars > 0) then
           call af_write_silo(tree, fname, output_cnt, global_time, &
                add_vars=add_variables, &
                add_names=output_extra_vars(1:n_extra_vars))
        else
           call af_write_silo(tree, fname, output_cnt, global_time)
+       end if
+
+       if (npzfile_write) then
+          call af_write_numpy(tree, trim(fname) // '.npz', &
+               n_cycle=output_cnt, time=global_time)
        end if
     end if
 
@@ -333,15 +346,14 @@ contains
        call af_write_tree(tree, fname, write_sim_data)
     end if
 
-    write(fname, "(A,I6.6)") trim(output_name) // "_log.txt"
     if (associated(user_write_log)) then
-       call user_write_log(tree, fname, output_cnt)
+       call user_write_log(tree, trim(output_name)//"_log.txt", output_cnt)
     else
-       call output_log(tree, fname, output_cnt, wc_time)
+       call output_log(tree, trim(output_name)//"_log.txt", output_cnt, wc_time)
     end if
 
     if (output_regression_test) then
-       write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
+       write(fname, "(A,I6.6)") trim(output_name)//"_rtest.log"
        call output_regression_log(tree, fname, output_cnt, wc_time)
     end if
 
@@ -373,11 +385,11 @@ contains
 
 #if NDIM == 2
     if (ST_cylindrical) then
-      if(cross_write) then
-       write(fname, "(A,I6.6)") trim(output_name) // &
-            "_cross_", output_cnt
-       call output_cross(tree, fname)
-      end if
+       if(cross_write) then
+          write(fname, "(A,I6.6)") trim(output_name) // &
+               "_cross_", output_cnt
+          call output_cross(tree, fname)
+       end if
     end if
 #endif
 
