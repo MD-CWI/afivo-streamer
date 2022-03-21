@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar 18 12:27:18 2022
+
+@author: xiaoran
+"""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,8 +25,8 @@ import joblib
 p = argparse.ArgumentParser()
 p.add_argument('-dataset', type=str, default='dataset.npz',
                help='Dataset filename')
-p.add_argument('-N', type=int, default=10,
-               help='N times low resolution')
+p.add_argument('-model', type=str, default='model_dataset',
+               help='Model filename')
 p.add_argument('-ix', type=int, default=2,
                help='Which to reconstruct, 0 e, 1 field, 2 rhs')
 args = p.parse_args()
@@ -28,52 +34,8 @@ args = p.parse_args()
 f = np.load(args.dataset)
 all_data = f['X']
 ix = args.ix
-# Input features
-X = np.column_stack([all_data[:, 1, 0],
-                     all_data[:, 1, -1]
-                    ])#, all_data[:, 0, 0]
 
-# Target
-y = all_data[:,ix,:]
-
-#pca = PCA(n_components=5).fit(y)
-#y = pca.transform(y)
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=True, random_state=1)
-
-#model = RandomForestRegressor()
-model = LinearRegression()
-# model = MultiOutputRegressor(GradientBoostingRegressor())
-# model = make_pipeline(StandardScaler(), MLPRegressor())
-
-model.fit(X_train, y_train)
-y_pred = model.predict(X)
-#y_pred = cross_val_predict(model, X, y)
-
-#y_pred = pca.inverse_transform(y_pred)
-#y = pca.inverse_transform(y)
-
-fig, ax = plt.subplots(4, sharex=True)
-
-#model.fit(X, y)
-
-for y, y_pred in zip(y, y_pred):
-    ax[0].plot(y)
-    ax[0].set_title('Data')
-    ax[1].plot(y_pred)
-    ax[1].set_title('Predictions')
-    ax[2].plot(y_pred-y)
-    ax[2].set_title('Error')
-'''
-ax[3].plot(model.coef_ / model.coef_.max(), label='coef')
-ax[3].plot(model.intercept_ / model.intercept_.max(), label='intercept')
-ax[3].set_title('Shape function (normalized)')
-ax[3].legend()
-'''
-
-model_name = 'model_ix'+str(ix)+'_'+args.dataset[:-4]
-joblib.dump(model,model_name)
-print('Save model:', model_name)
+model = joblib.load(args.model)
 
 n_t = all_data.shape[0]
 n_shift_max = 300
@@ -90,7 +52,7 @@ for x in data_new[:,2,:]:
 print('Plot data_new rhs')
 
 # Get a low resolution matrix
-N = args.N
+N = 10
 data_small = np.zeros((data_new.shape[0], data_new.shape[1], int(data_new.shape[2]/N)))
 for i in range(int(data_new.shape[2]/N)):
     data_small[:,:,i] = np.average(data_new[:,:,N*i:N*i+N],axis=2)

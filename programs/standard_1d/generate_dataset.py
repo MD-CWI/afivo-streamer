@@ -18,7 +18,7 @@ args = p.parse_args()
 files = sorted(args.files)
 
 variables = ['e', 'electric_fld', 'rhs']
-X = np.zeros((len(files), len(variables), args.w))
+X = np.zeros((len(files), len(variables)+1, args.w))
 dx_list = np.zeros(len(files))
 ix_list = np.zeros(len(files), dtype=int)
 n_samples = 0
@@ -33,6 +33,7 @@ for fname in files:
     if f['rhs'][i_origin] < args.min_rhs:
         continue
 
+    dx = f['dr'][0]
     dx_list[n_samples] = f['dr'][0]
     ix_list[n_samples] = int(fname[-10:-4])
 
@@ -41,6 +42,8 @@ for fname in files:
 
     for n, name in enumerate(variables):
         X[n_samples, n, :] = f[name][i0:i1]
+
+    X[n_samples, len(variables), :] = np.arange(i0, i1, 1)*dx-dx/2
     n_samples += 1
 
 np.savez(args.output,
