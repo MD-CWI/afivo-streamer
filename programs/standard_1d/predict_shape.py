@@ -5,15 +5,7 @@ import matplotlib.pyplot as plt
 import argparse
 from scipy import interpolate
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import cross_val_predict
-from sklearn.pipeline import make_pipeline
-from sklearn.decomposition import PCA
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.multioutput import MultiOutputRegressor
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
 import joblib
 
 p = argparse.ArgumentParser()
@@ -28,34 +20,24 @@ args = p.parse_args()
 f = np.load(args.dataset)
 all_data = f['X']
 ix = args.ix
+
 # Input features
 X = np.column_stack([all_data[:, 1, 0],
                      all_data[:, 1, -1]
-                    ])#, all_data[:, 0, 0]
+                    ])          #, all_data[:, 0, 0]
 
 # Target
-y = all_data[:,ix,:]
+y = all_data[:, ix, :]
 
-#pca = PCA(n_components=5).fit(y)
-#y = pca.transform(y)
+X_train, X_test, y_train, y_test = \
+    train_test_split(X, y, shuffle=True, random_state=1)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=True, random_state=1)
-
-#model = RandomForestRegressor()
 model = LinearRegression()
-# model = MultiOutputRegressor(GradientBoostingRegressor())
-# model = make_pipeline(StandardScaler(), MLPRegressor())
 
 model.fit(X_train, y_train)
 y_pred = model.predict(X)
-#y_pred = cross_val_predict(model, X, y)
-
-#y_pred = pca.inverse_transform(y_pred)
-#y = pca.inverse_transform(y)
 
 fig, ax = plt.subplots(4, sharex=True)
-
-#model.fit(X, y)
 
 for y, y_pred in zip(y, y_pred):
     ax[0].plot(y)
@@ -64,27 +46,26 @@ for y, y_pred in zip(y, y_pred):
     ax[1].set_title('Predictions')
     ax[2].plot(y_pred-y)
     ax[2].set_title('Error')
-'''
+
 ax[3].plot(model.coef_ / model.coef_.max(), label='coef')
 ax[3].plot(model.intercept_ / model.intercept_.max(), label='intercept')
 ax[3].set_title('Shape function (normalized)')
 ax[3].legend()
-'''
 
 model_name = 'model_ix'+str(ix)+'_'+args.dataset[:-4]
 joblib.dump(model,model_name)
 print('Save model:', model_name)
 
 n_t = all_data.shape[0]
-n_shift_max = 300
-new_n_x = all_data.shape[2]-n_shift_max-50
+n_shift_max = all_data.shape[2]//4
+new_n_x = 3*all_data.shape[2]//4 - 10
 data_new = np.zeros((n_t, all_data.shape[1], new_n_x))
 
 ix_start = np.random.random_integers(0, n_shift_max, n_t)
 for i in range(n_t):
     data_new[i,:,:] = all_data[i,:,ix_start[i]:ix_start[i]+new_n_x]
 
-fig, ax = plt.subplots(2)
+fig, ax = plt.subplots(3)
 for x in data_new[:,2,:]:
     ax[0].plot(x)
 print('Plot data_new rhs')
@@ -122,15 +103,20 @@ print('done')
 '''
 
 loc_pred = np.argmax(y_small, axis=1)
-loc_orig = np.zeros(data_small.shape[0])
+loc_orig = np.zeros(data_small.shape[0], dtype=int)
+
 # find the location of the peak value from low resolution data
 for i in range(data_small.shape[0]):
-    #f = interpolate.interp1d(data_small[i, 3, :],data_small[i, 2, :], kind='quadratic',bounds_error=False)
-    f = interpolate.Rbf(data_small[i, 3, :],data_small[i, 2, :],bounds_error=False)
+    # f = interpolate.interp1d(data_small[i, 3, :], data_small[i, 2, :],
+                             # kind='quadratic', bounds_error=False)
+    f = interpolate.Rbf(data_small[i, 3, :], data_small[i, 2, :],
+                        bounds_error=False)
+    ax[2].plot(f(data_new[i, 3, :]))
     loc_orig[i] = np.nanargmax(f(data_new[i, 3, :]))
-loc_shift = all_data.shape[2]/2 - loc_orig
-loc_shift = loc_shift.astype(int)
+loc_shift = all_data.shape[2]//2 - loc_orig
 
+print('Mean shift error: ', (loc_shift-ix_start).mean())
+print('Mean absolute shift error: ', np.abs(loc_shift-ix_start).mean())
 
 fig, ax = plt.subplots(4)
 for y, loc, loc2, y2 in zip(y_small, loc_shift, ix_start, data_new[:,ix,:]):#, data_new[:,3,:], ix_start
@@ -143,3 +129,5 @@ for y, loc, loc2, y2 in zip(y_small, loc_shift, ix_start, data_new[:,ix,:]):#, d
     ax[3].plot(y2-y[loc2:loc2+new_n_x])
     ax[3].set_title('Error_with_original_loction')
 print('done')
+
+plt.show()
