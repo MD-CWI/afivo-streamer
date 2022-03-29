@@ -1,12 +1,12 @@
 / Bolsigminus script
 
 READCOLLISIONS
-cross_section_air_IST_Lisbon.txt	/File
+cross_section_N2_C3.txt	/File
 N2 				/Species
 0				/Extrapolate: 0= No 1= Yes
 
 READCOLLISIONS
-cross_section_air_IST_Lisbon.txt /File
+cross_section_N2_C3.txt                 /File
 O2 				/Species
 0 				/Extrapolate: 0= No 1= Yes
 
@@ -48,7 +48,7 @@ RUNSERIES
 /SAVERESULTS can be called multiple times to write in different formats
 
 SAVERESULTS
-td_bolsigmin_air_IST_Lisbon_1000points.txt        / File
+td_bolsigmin_air_phelps_N2_C3.txt        / File
 2        / Format: 1=Run by run; 2=Combined; 3=E/N; 4=Energy; 5=SIGLO; 6=PLASIMO
 0        / Conditions: 0=No; 1=Yes
 1        / Transport coefficients: 0=No; 1=Yes

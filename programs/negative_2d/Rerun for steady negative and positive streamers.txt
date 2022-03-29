@@ -1,0 +1,56 @@
+# the steady negative streamer, EL=24mm
+
+[cross]
+    # Use this many points for cross-section data:
+    npoints = 10000
+
+    # Integrate up to this r value:
+    rmax =  21.0000E-03
+
+    # Write integral over cross-section data output:
+    write = T
+
+[plane]
+    # Use this many pixels for plane data:
+    npixels = 700 10000
+
+    # Relative position of plane maximum coordinate:
+    rmax =  0.0700E+00  1.0000E+00
+
+    # Relative position of plane minimum coordinate:
+    rmin =  0.0000E+00  0.0000E+00
+
+    # Names of variable to write in a plane:
+    varname = 'N2_C3 electric_fld e rhs'
+
+    # Write uniform output in a plane:
+    write = T
+
+
+# the steady positive streamer, v=12e4m/s
+
+[cross]
+    # Use this many points for cross-section data:
+    npoints = 4000
+
+    # Integrate up to this r value:
+    rmax =  1.0000E-03
+
+    # Write integral over cross-section data output:
+    write = T
+
+[plane]
+    # Use this many pixels for plane data:
+    npixels = 500 4000
+
+    # Relative position of plane maximum coordinate:
+    rmax =  0.0500E+00  1.0000E+00
+
+    # Relative position of plane minimum coordinate:
+    rmin =  0.0000E+00  0.0000E+00
+
+    # Names of variable to write in a plane:
+    varname = 'electric_fld e rhs'
+
+    # Write uniform output in a plane:
+    write = T

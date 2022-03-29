@@ -1,0 +1,19 @@
+#!/bin/bash
+
+
+# air, positive, velocity_control, background density=1e11, electrode length=2e-3, electode radius=0.2e-3, output%dt=2e-9, derefine_dx=5e-5, refine_min_dx=1e-7, refine_adx=0.3, refine_adx_fac=1.25
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -velocity_control%goal_velocity=1.14e5 -velocity_control%control_factor=-1e14 -velocity_control%delay_time=10e-9 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-1e14_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -velocity_control%goal_velocity=8.5e4 -velocity_control%control_factor=-5.5e13 -velocity_control%delay_time=10e-9 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_8.5e4_-5.5e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -velocity_control%goal_velocity=8e4 -velocity_control%control_factor=-6.5e13 -velocity_control%delay_time=10e-9 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_8e4_-6.5e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -velocity_control%goal_velocity=7.5e4 -velocity_control%control_factor=-6e13 -velocity_control%delay_time=10e-9 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_7.5e4_-6e13_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -velocity_control%goal_velocity=7e4 -velocity_control%control_factor=-7e13 -velocity_control%delay_time=10e-9 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_7e4_-7e13_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -velocity_control%goal_velocity=6.5e4 -velocity_control%control_factor=-7e13 -velocity_control%delay_time=10e-9 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_6.5e4_-7e13_10e-9_simple
+
+

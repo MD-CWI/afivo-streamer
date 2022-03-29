@@ -1,0 +1,34 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=9e-3, electode radius=0.9e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=10.08e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_126kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=10.24e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_128kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=10.4e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_130kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=10.56e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_132kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=10.72e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_134kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=10.88e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_136kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=11.04e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_138kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=11.2e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_140kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=11.36e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_142kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=11.52e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_144kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=11.688e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_146.1kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=12.96e5 -cross%write=T -plane%write=T -output%name+=neg_EL9mm_decay/neg_EL9mm_162kV
+
+
+
+

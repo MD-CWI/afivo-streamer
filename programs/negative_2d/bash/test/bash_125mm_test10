@@ -1,0 +1,111 @@
+#!/bin/bash
+
+
+cd ../
+
+# air, background density=1e11, electrode length=9e-3, electode radius=0.9e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+# positive streamers propagation under constant electric field
+
+
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.75846908224e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_full.txt -output%name+=negative_exponentially_decay_stable/neg_EL2mm_ER0.2mm_1.7899726e6_full
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.574939172e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_full.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_1.617645e6_full
+
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.75846908224e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL2mm_ER0.2mm_1.7899726e6_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_amplitude=1.574939172e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_1.617645e6_smallv0
+
+
+
+
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.20473264e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.2374e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.217e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.250e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.221868e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.255e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.226736e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.260e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.231604e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.265e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.236472e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.270e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.24134e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.275e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.246208e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.280e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.251076e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.285e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.202396e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.235e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.207264e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.240e6_5e-3_115.1e-3_smallv0
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.212132e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.245e6_5e-3_115.1e-3_smallv0
+
+
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=1e-3 -field_decay%min_field=1.20473264e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.2374e6_1e-3_115.1e-3
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=1e-3 -field_decay%min_field=1.2092112e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.242e6_1e-3_115.1e-3
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=3e-3 -field_decay%min_field=1.20473264e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.2374e6_3e-3_115.1e-3
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=3e-3 -field_decay%min_field=1.207264e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.240e6_3e-3_115.1e-3
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=7e-3 -field_decay%min_field=1.20473264e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.2374e6_7e-3_115.1e-3
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=7e-3 -field_decay%min_field=1.2014224e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.234e6_7e-3_115.1e-3
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=9e-3 -field_decay%min_field=1.20473264e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.2374e6_9e-3_115.1e-3
+
+#./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%decay_distance=9e-3 -field_decay%min_field=1.1994752e6 -output%name+=negative_exponentially_decay_stable/neg_EL3mm_ER0.3mm_2.0e6_1.232e6_9e-3_115.1e-3
+
+
+
+
+
+
+
+cd ../
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.9767" -field_rod_radius=0.7e-3 -field_amplitude=12.505033333e5 -cross%write=T -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL7mm_375.151kV_r067
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="240 240" -field_rod_r0="0 0.97667" -field_rod_radius=0.7e-3 -field_amplitude=12.505033333e5 -cross%write=T -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL7mm_375.151kV_r0667_cgs240
+
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.986667" -field_rod_radius=0.4e-3 -field_amplitude=14.5578773333e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL4mm_436.73632kV
+
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.97" -field_rod_radius=0.9e-3 -field_amplitude=11.6943333e5 -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL9mm_350.83kV_cgs512
+
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="200 200" -field_rod_r0="0 0.96" -field_rod_radius=1.2e-3 -field_amplitude=10.9503333e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL12mm_328.51kV_cgs200
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="200 200" -field_rod_r0="0 0.96" -field_rod_radius=1.2e-3 -field_amplitude=10.9506667e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL12mm_328.52kV_cgs200
+
+
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="160 160" -field_rod_r0="0 0.93" -field_rod_radius=2.1e-3 -field_amplitude=9.4643333e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL21mm_283.93kV_cgs160
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="160 160" -field_rod_r0="0 0.93" -field_rod_radius=2.1e-3 -field_amplitude=9.464e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL21mm_283.92kV_cgs160
+
+
+
+
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="120 120" -field_rod_r0="0 0.93" -field_rod_radius=2.1e-3 -field_amplitude=9.6e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL21mm_288.0kV_cgs120
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="120 120" -field_rod_r0="0 0.93" -field_rod_radius=2.1e-3 -field_amplitude=9.603333e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL21mm_288.1kV_cgs120
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="120 120" -field_rod_r0="0 0.93" -field_rod_radius=2.1e-3 -field_amplitude=9.606667e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL21mm_288.2kV_cgs120
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="120 120" -field_rod_r0="0 0.93" -field_rod_radius=2.1e-3 -field_amplitude=9.61e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL21mm_288.3kV_cgs120
+
+
+
+#./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="400 400" -field_rod_r0="0 0.976667" -field_rod_radius=0.7e-3 -field_amplitude=12.52993333e5 -plane%write=T -output%name=/export/scratch2/md/baohong/no_electrode/neg_EL7mm_375.898kV_cgs400
+

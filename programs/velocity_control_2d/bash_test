@@ -1,0 +1,295 @@
+#!/bin/bash
+
+
+# air, background density=1e11, electrode length=9e-3, electode radius=0.9e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+# positive streamers propagation under constant electric field
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-1.0000E+13 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-1e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-2.0000E+13 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-2e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-3.0000E+13 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-3e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-4.0000E+13 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-4e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-5.0000E+13 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-5e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-6.0000E+13 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-6e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-8.0000E+13 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-8e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-1.0000E+14 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-1e14
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-1.2000E+14 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-1.2e14
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-1.4000E+14 -my%goal_velocity=1e5 -end_time=450e-9 -output%name+=positive_electro9mm_velocity_control/pos_1.0e6_1e5_-1.4e14
+
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-3e12 -my%goal_velocity=8e4 -end_time=300e-9 -output%name+=pos_0.8e6_8e4_-3e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-4e12 -my%goal_velocity=8e4 -end_time=300e-9 -output%name+=pos_0.8e6_8e4_-4e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-5e12 -my%goal_velocity=8e4 -end_time=300e-9 -output%name+=pos_0.8e6_8e4_-5e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-6e12 -my%goal_velocity=8e4 -end_time=300e-9 -output%name+=pos_0.8e6_8e4_-6e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-7e12 -my%goal_velocity=8e4 -end_time=300e-9 -output%name+=pos_0.8e6_8e4_-7e12
+
+
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-2e12 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-2e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-4e12 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-4e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-6e12 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-6e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-8e12 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-8e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-10e12 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-10e12
+
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-2e11 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-2e11
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-4e11 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-4e11
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-6e11 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-6e11
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-8e11 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-8e11
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-10e11 -my%goal_velocity=7e4 -end_time=300e-9 -output%name+=pos_0.8e6_7e4_-10e11
+
+
+
+
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-1e13 -my%goal_velocity=1e5 -output%name+=positive_electro9mm_velocity_control/pos_0.8e6_1e5_-1e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-2e13 -my%goal_velocity=1e5 -output%name+=positive_electro9mm_velocity_control/pos_0.8e6_1e5_-3e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-3e13 -my%goal_velocity=1e5 -output%name+=positive_electro9mm_velocity_control/pos_0.8e6_1e5_-5e13
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-5e12 -my%goal_velocity=1e5 -output%name+=positive_electro9mm_velocity_control/pos_0.8e6_1e5_-5e12
+
+./streamer air_positive_125mm_chem_electro9mm.cfg -my%control_factor=-1e14 -my%goal_velocity=1e5 -output%name=/export/scratch2/md/baohong/positive_electro9mm_velocity_control/pos_0.8e6_1e5_-1e14
+
+
+
+./streamer EL2mm_cone.cfg -my%control_factor=-5e13 -my%goal_velocity=5e4 -derefine_dx=5e-5 -output%name=output/control_1.1e6_v5e4_bgdata_dr5e-5
+
+
+./streamer EL2mm_cone.cfg -my%control_factor=-5e13 -my%goal_velocity=5e4 -derefine_dx=1e-5 -output%name=output/control_1.1e6_v5e4_bgdata_dr1e-5
+
+
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -output%name+=pos_EL3mm/pos_1.0e6_hani
+
+
+
+
+
+
+
+./streamer EL2mm_cone.cfg -refine_adx=0.2 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name=output/control_v5e4_bg_adx0.2
+
+./streamer EL2mm_cone.cfg -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name=output/control_v5e4_bg_adx0.3
+
+./streamer EL2mm_cone.cfg -refine_adx=0.3 -output%name=output/control_v5e4_smallv0_adx0.3
+
+
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-1e13 -my%goal_velocity=8e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_8e4_-1e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-3e13 -my%goal_velocity=8e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_8e4_-3e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-5e13 -my%goal_velocity=8e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_8e4_-5e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-5e13 -my%goal_velocity=6e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_6e4_-5e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-5e13 -my%goal_velocity=1e5 -derefine_dx=5e-5 -output%name=/export/scratch2/md/baohong/pos_EL3mm/pos_1.0e6_1e5_-5e13_hani_dr5e-5
+
+
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-7e13 -my%goal_velocity=6e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_6e4_-7e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-5e13 -my%goal_velocity=5e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_5e4_-5e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-5e13 -my%goal_velocity=7e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_7e4_-5e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-5e13 -my%goal_velocity=6e4 -derefine_dx=5e-5 -output%name+=pos_EL3mm/pos_1.0e6_6e4_-5e13_hani_dr5e-5
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-3e13 -my%goal_velocity=6e4 -derefine_dx=5e-5 -output%name=/export/scratch2/md/baohong/pos_EL3mm/pos_1.0e6_6e4_-3e13_hani_dr5e-5
+
+
+
+
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-3e13 -my%goal_velocity=6e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_EL3mm/pos_1.1e6_6e4_-3e13_smallv0_adx0.3
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-3e13 -my%goal_velocity=7e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_EL3mm/pos_1.1e6_7e4_-3e13_smallv0_adx0.3
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-3e13 -my%goal_velocity=8e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_EL3mm/pos_1.1e6_8e4_-3e13_smallv0_adx0.3
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-3e13 -my%goal_velocity=9e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_EL3mm/pos_1.1e6_9e4_-3e13_bg_adx0.3
+
+./streamer air_positive_50mm_chem_electro3mm.cfg -my%control_factor=-3e13 -my%goal_velocity=10e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name=/export/scratch2/md/baohong/pos_EL3mm/pos_1.1e6_10e4_-3e13_bg_adx0.3
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -my%control_factor=-5e13 -my%goal_velocity=6e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_EL3mm/pos_EL2mm_1.1e6_6e4_-5e13_smallv0_adx0.3
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -my%control_factor=-5e13 -my%goal_velocity=8e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_EL3mm/pos_EL2mm_1.1e6_8e4_-5e13_smallv0_adx0.3
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -my%control_factor=-5e13 -my%goal_velocity=10e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_EL3mm/pos_EL2mm_1.1e6_10e4_-5e13_smallv0_adx0.3
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -my%control_factor=-5e13 -my%delay_time=20e-9 -my%goal_velocity=5e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_EL3mm/pos_EL2mm_1.1e6_5e4_-5e13_bg_adx0.3
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -my%control_factor=-3e13 -my%delay_time=20e-9 -my%goal_velocity=5e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_EL3mm/pos_EL2mm_1.1e6_5e4_-3e13_bg_adx0.3
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -my%control_factor=-7e13 -my%delay_time=20e-9 -my%goal_velocity=5e4 -refine_adx=0.3 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_EL3mm/pos_EL2mm_1.1e6_5e4_-7e13_bg_adx0.3
+
+
+
+
+
+
+
+
+
+
+
+
+
+./streamer EL2mm_cone.cfg -refine_adx=0.3 -output%name=/export/scratch2/md/baohong/pos_EL3mm/control_v5e4_bg_adx0.3_bd1e11
+./streamer EL2mm_rod.cfg -refine_adx=0.3 -output%name+=control_v5e4_bg_adx0.3_seed
+./streamer EL2mm_cone_1.cfg -refine_adx=0.3 -output%name+=control_v5e4_bg_adx0.3_rod_bd1e11
+./streamer EL2mm_rod_1.cfg -refine_adx=0.3 -refine_adx_fac=1.25 -output%name+=control_v5e4_bg_adx0.3_fac1.25_rod_bd1e11
+./streamer EL2mm_rod_1.cfg -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-6 -output%name=/export/scratch2/md/baohong/pos_EL3mm/control_v5e4_bg_adx0.3_fac1.25_mindx1e-6_rod_bd1e11
+./streamer EL2mm_rod_1.cfg -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-6 -refine_electrode_dx=2e-5 -output%name+=control_v5e4_bg_adx0.3_fac1.25_mindx1e-6_red2e-5_rod_bd1e11
+
+./streamer EL2mm_rod_1.cfg -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=control_v5e4_bg_adx0.3_fac1.25_mindx1e-7_rod_bd1e11
+./streamer EL2mm_rod_1.cfg -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -refine_electrode_dx=2e-5 -output%name+=control_v5e4_bg_adx0.3_fac1.25_mindx1e-7_red2e-5_rod_bd1e11
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0516e6 -my%control_factor=-5e13 -my%delay_time=20e-9 -my%goal_velocity=5e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=pos_control_EL2mm/control_EL2mm_1.1e6_5e4_-5e13_dt20e-9_bg_adx0.3_fac1.25_mindx1e-7
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-5e13 -my%delay_time=6e-9 -my%goal_velocity=5e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name=/export/scratch2/md/baohong/pos_EL3mm/control_EL2mm_1.15e6_5e4_-5e13_dt6e-9_bg_adx0.3_fac1.25_mindx1e-7
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=6e-9 -my%goal_velocity=5e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=pos_control_EL2mm/control_EL2mm_1.15e6_5e4_-7e13_dt6e-9_bg_adx0.3_fac1.25_mindx1e-7
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-5e13 -my%delay_time=10e-9 -my%goal_velocity=6e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_6e4_-5e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=10e-9 -my%goal_velocity=6e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_6e4_-7e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-5e13 -my%delay_time=10e-9 -my%goal_velocity=7e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_7e4_-5e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=10e-9 -my%goal_velocity=7e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_7e4_-7e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-5e13 -my%delay_time=10e-9 -my%goal_velocity=8e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_8e4_-5e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=10e-9 -my%goal_velocity=8e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -output%name=/export/scratch2/md/baohong/pos_control_EL2mm/pos_control_EL2mm_1.15e6_8e4_-7e13_10e-9_bg
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=10e-9 -my%goal_velocity=11e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_11e4_-7e13_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7.5e13 -my%delay_time=10e-9 -my%goal_velocity=11e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_11e4_-7.5e13_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-8e13 -my%delay_time=10e-9 -my%goal_velocity=11e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_11e4_-8e13_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-8.5e13 -my%delay_time=10e-9 -my%goal_velocity=11e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_11e4_-8.5e13_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-9e13 -my%delay_time=10e-9 -my%goal_velocity=11e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_11e4_-9e13_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=11e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_11e4_-1e14_10e-9_smallv0
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.14e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-1e14_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1.5e14 -my%delay_time=10e-9 -my%goal_velocity=1.14e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-1.5e14_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-2e14 -my%delay_time=10e-9 -my%goal_velocity=1.14e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-2e14_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.15e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.15e5_-2e14_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.16e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name=/export/scratch2/md/baohong/pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.16e5_-2e14_10e-9_smallv0
+
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.14e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-1e14_10e-9_smallv0
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.0e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.0e5_-1e14_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=9e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_9e4_-1e14_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=8e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_8e4_-1e14_10e-9_bg
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=9e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_9e4_-1e14_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=8e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_8e4_-1e14_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=7e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name=/export/scratch2/md/baohong/pos_control_EL2mm/pos_control_EL2mm_1.15e6_7e4_-1e14_10e-9_simple
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=10e-9 -my%goal_velocity=9e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_9e4_-7e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-8e13 -my%delay_time=10e-9 -my%goal_velocity=9e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_9e4_-8e13_10e-9_bg
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.14e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-1e14_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.13e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.13e5_-1e14_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.12e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.12e5_-1e14_10e-9_bg
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.14e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-1e14_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.12e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name=/export/scratch2/md/baohong/pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.12e5_-1e14_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.10e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.10e5_-1e14_10e-9_simple
+
+
+
+
+./streamer air_positive_50mm_chem_electro9mm.cfg -field_amplitude=-0.7218e6 -my%control_factor=-5e13 -my%delay_time=8e-9 -my%goal_velocity=7e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL9mm/pos_control_EL9mm_0.9e6_7e4_-5e13_8e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro9mm.cfg -field_amplitude=-0.7218e6 -my%control_factor=-7e13 -my%delay_time=8e-9 -my%goal_velocity=7e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL9mm/pos_control_EL9mm_0.9e6_7e4_-7e13_8e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro9mm.cfg -field_amplitude=-0.7218e6 -my%control_factor=-1e14 -my%delay_time=8e-9 -my%goal_velocity=10e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name=/export/scratch2/md/baohong/pos_control_EL9mm/pos_control_EL9mm_0.9e6_10e4_-1e14_8e-9_smallv0
+
+
+
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-1e14 -my%delay_time=10e-9 -my%goal_velocity=1.14e5 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_1.14e5_-1e14_10e-9_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-5.5e13 -my%delay_time=10e-9 -my%goal_velocity=8.5e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_8.5e4_-5.5e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-6.5e13 -my%delay_time=10e-9 -my%goal_velocity=8e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_8e4_-6.5e13_10e-9_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-6e13 -my%delay_time=10e-9 -my%goal_velocity=7.5e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_7.5e4_-6e13_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=10e-9 -my%goal_velocity=7e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_7e4_-7e13_10e-9_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -field_amplitude=-1.0994e6 -my%control_factor=-7e13 -my%delay_time=10e-9 -my%goal_velocity=6.5e4 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=pos_control_EL2mm/pos_control_EL2mm_1.15e6_6.5e4_-7e13_10e-9_simple

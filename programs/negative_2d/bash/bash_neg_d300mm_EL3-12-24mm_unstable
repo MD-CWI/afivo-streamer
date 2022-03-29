@@ -1,0 +1,32 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=3e-3, electode radius=0.3e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+#-1kV
+./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.99" -field_rod_radius=0.3e-3 -field_amplitude=15.71795743333e5 -cross%write=T -plane%write=T -output%name+=neg_d300mm_EL3-12-24mm_unstable/neg_EL3mm_471.538723kV
+
+#+1kV
+./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.99" -field_rod_radius=0.3e-3 -field_amplitude=15.7846241e5 -cross%write=T -plane%write=T -output%name+=neg_d300mm_EL3-12-24mm_unstable/neg_EL3mm_473.538723kV
+
+
+
+# air, background density=1e11, electrode length=12e-3, electode radius=1.2e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+#-1kV
+./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="360 360" -field_rod_r0="0 0.96" -field_rod_radius=1.2e-3 -field_amplitude=10.8403333e5 -cross%write=T -plane%write=T -output%name+=neg_d300mm_EL3-12-24mm_unstable/neg_EL12mm_325.21kV
+
+#+1kV
+./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="360 360" -field_rod_r0="0 0.96" -field_rod_radius=1.2e-3 -field_amplitude=10.907e5 -cross%write=T -plane%write=T -output%name+=neg_d300mm_EL3-12-24mm_unstable/neg_EL12mm_327.21kV
+
+
+
+# air, background density=1e11, electrode length=24e-3, electode radius=2.4e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+#-1kV
+./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.92" -field_rod_radius=2.4e-3 -field_amplitude=9.16e5 -cross%write=T -plane%write=T -output%name+=neg_d300mm_EL3-12-24mm_unstable/neg_EL24mm_274.8kV
+
+#+1kV
+./streamer air_negative_300mm_chem_electro3mm.cfg -coarse_grid_size="64 64" -field_rod_r0="0 0.92" -field_rod_radius=2.4e-3 -field_amplitude=9.226667e5 -cross%write=T -plane%write=T -output%name+=neg_d300mm_EL3-12-24mm_unstable/neg_EL24mm_276.8kV
+

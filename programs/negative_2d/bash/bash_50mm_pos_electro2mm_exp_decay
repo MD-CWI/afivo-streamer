@@ -1,0 +1,102 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=2e-3, electode radius=0.2e-3, output%dt=1e-9, derefine_dx=5e-5, refine_min_dx=1e-7, refine_adx=0.3, refine_adx_fac=1.25
+
+
+
+# smallv0 transport data (air_phelps_chemistry_small_v0.txt): v1.14e5
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.4041968e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4228e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.4041012e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4227e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.40391e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4225e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.4038144e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4224e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.4037188e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4223e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.4036232e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4222e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.403432e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4220e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.4032408e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4218e6_1.2e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.4041012e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name=/export/scratch2/md/baohong/positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4227e6_1.1e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.4038144e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name=/export/scratch2/md/baohong/positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4224e6_1.1e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.4036232e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name=/export/scratch2/md/baohong/positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4222e6_1.1e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.404388e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name=/export/scratch2/md/baohong/positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4230e6_1.1e-3_46.6e-3_smallv0
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.4042924e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name=/export/scratch2/md/baohong/positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4229e6_1.1e-3_46.6e-3_smallv0
+
+
+
+# my transport data (air_phelps_chemistry_small_v0_1000points.txt): v8e4
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2846968e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2978e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2845056e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2976e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.28441e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2975e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2841232e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2972e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.283932e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2970e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2832628e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2963e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2830716e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2961e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.281064e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2940e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.280586e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2935e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=600e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2804904e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2934e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2803948e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2933e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2802992e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt  -output%name=/export/scratch2/md/baohong/positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2932e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2802036e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2931e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.280108e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2930e6_1.1e-3_46.6e-3_bg
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2800124e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2929e6_1.1e-3_46.6e-3_bg
+
+
+
+# simple transport data (air_phelps_chemistry_small_v0_simple.txt): v7.5e4
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2765708e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2893e6_1.1e-3_46.6e-3_simple
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.276284e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2890e6_1.1e-3_46.6e-3_simple
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2759972e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2887e6_1.1e-3_46.6e-3_simple
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2760928e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2888e6_1.1e-3_46.6e-3_simple
+
+#./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2761884e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2889e6_1.1e-3_46.6e-3_simple
+
+
+
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2802992e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -cross%write=T -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2932e6_1.1e-3_46.6e-3_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.404388e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -cross%write=T -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4230e6_1.1e-3_46.6e-3_smallv0
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2760928e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -cross%write=T -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2888e6_1.1e-3_46.6e-3_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.2e-3 -field_decay%min_field=-0.4037188e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -cross%write=T -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4223e6_1.2e-3_46.6e-3_smallv0
+
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.404388e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -cross%write=T -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4230e6_1.1e-3_46.6e-3_bg
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2802992e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -cross%write=T -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2932e6_1.1e-3_46.6e-3_simple
+
+./streamer air_positive_50mm_chem_electro2mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=550e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.404388e6 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -cross%write=T -output%name+=positive_electro2mm_exponentially_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4230e6_1.1e-3_46.6e-3_simple

@@ -30,6 +30,8 @@ cd ../
 
 ./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.219434e6 -cross%write=T -output%name+=negative_electro3mm_exponentially_decay/neg_EL3mm_ER0.3mm_2.0e6_1.2525e6_5e-3_115.1e-3
 
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.36304e6 -cross%write=T -output%name+=negative_electro3mm_exponentially_decay/neg_EL3mm_ER0.3mm_2.0e6_1.4e6_5e-3_115.1e-3
+
 ./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.55776e6 -cross%write=T -output%name+=negative_electro3mm_exponentially_decay/neg_EL3mm_ER0.3mm_2.0e6_1.6e6_5e-3_115.1e-3
 
 ./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="256 256" -field_rod_r0="0 0.976" -field_rod_radius=0.3e-3 -end_streamer_length=105e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%initial_field=1.9472e6 -field_decay%min_field=1.9472e6 -cross%write=T -output%name+=negative_electro3mm_exponentially_decay/neg_EL3mm_ER0.3mm_2.0e6_2.0e6_5e-3_115.1e-3

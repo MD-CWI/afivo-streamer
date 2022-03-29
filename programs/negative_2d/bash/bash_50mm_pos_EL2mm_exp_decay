@@ -1,0 +1,15 @@
+#!/bin/bash
+
+cd ../
+
+# air, positive, background density=1e11, electrode length=2e-3, electode radius=0.2e-3, output%dt=0.5e-9, derefine_dx=6e-6, refine_min_dx=1e-7, refine_adx=0.3, refine_adx_fac=1.25
+
+
+./streamer air_positive_50mm_EL2mm_exp_decay.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=600e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2646208e6 -derefine_dx=6e-6 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_1000points.txt -cross%write=T -output%name+=pos_EL2mm_stable_exp_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2768e6_1.1e-3_46.6e-3_bg
+
+
+./streamer air_positive_50mm_EL2mm_exp_decay.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=600e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.39913e6 -derefine_dx=6e-6 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -cross%write=T -output%name+=pos_EL2mm_stable_exp_decay/pos_EL2mm_ER0.2mm_1.15e6_0.4175e6_1.1e-3_46.6e-3_smallv0
+
+
+./streamer air_positive_50mm_EL2mm_exp_decay.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.96" -field_rod_radius=0.2e-3 -end_streamer_length=40e-3 -end_time=600e-9 -field_decay%enabled=T -field_decay%initial_field=-1.0994e6 -field_decay%decay_distance=1.1e-3 -field_decay%min_field=-0.2637604e6 -derefine_dx=6e-6 -refine_adx=0.3 -refine_adx_fac=1.25 -refine_min_dx=1e-7 -input_data%file=../../transport_data/air_phelps_chemistry_small_v0_simple.txt -cross%write=T -output%name+=pos_EL2mm_stable_exp_decay/pos_EL2mm_ER0.2mm_1.15e6_0.2759e6_1.1e-3_46.6e-3_simple
+

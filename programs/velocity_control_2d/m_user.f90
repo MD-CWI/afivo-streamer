@@ -10,11 +10,15 @@ module m_user
   ! Public methods
   public :: user_initialize
 
+  ! Whether veolocity control is enabled
+  logical, protected, public :: velocity_control_enabled = .false.
+
   integer, parameter :: buffer_size = 5
   integer :: buffer_index = 0
   real(dp) :: vring(buffer_size) = 0
-  real(dp) :: goal_velocity = 3.0e5_dp
-  real(dp), parameter :: dfieldt = -2e14_dp
+  real(dp) :: goal_velocity = 5.0e5_dp
+  real(dp) :: delay_time = 5.0e-9_dp
+  real(dp) :: dfieldt = -5e13_dp
 
 contains
 
@@ -22,8 +26,20 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout) :: tree
 
-    user_generic_method => my_velocity
-    user_field_amplitude => my_field_amplitude
+   call CFG_add_get(cfg, "velocity_control%enabled", velocity_control_enabled, &
+         "Whether veolocity control is enabled")
+    call CFG_add_get(cfg, "velocity_control%goal_velocity", goal_velocity, &
+         "Goal velocity (m/s)")
+    call CFG_add_get(cfg, "velocity_control%control_factor", dfieldt, &
+         "Control factor")
+    call CFG_add_get(cfg, "velocity_control%delay_time", delay_time, &
+         "Delay time")
+
+    if (velocity_control_enabled) then
+      user_generic_method => my_velocity
+      user_field_amplitude => my_field_amplitude
+    end if
+
   end subroutine user_initialize
 
   real(dp) function my_field_amplitude(tree, time)
@@ -35,7 +51,7 @@ contains
 
     v = sum(vring)/buffer_size
 
-    if (time < 1e-9_dp) then
+    if (time < delay_time) then
        my_field_amplitude = field_amplitude
        prev_field         = field_amplitude
        prev_time          = time
@@ -45,7 +61,7 @@ contains
        my_field_amplitude = prev_field + diff_amplitude
        prev_time          = time
        prev_field         = my_field_amplitude
-       print *, time, my_field_amplitude, (goal_velocity - v)/goal_velocity
+       !print *, time, my_field_amplitude, (goal_velocity - v)/goal_velocity
     end if
 
   end function my_field_amplitude

@@ -1,0 +1,96 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=9e-3, electode radius=0.9e-3, output%dt=1e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0.txt (add positive ion conversion and electron recombination)
+
+
+# negative streamers propagation under constant electric field
+
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.19704e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_1.3e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.28912e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_1.4e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.3812e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_1.5e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.47328e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_1.6e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.56536e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_1.7e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.65744e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_1.8e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.74952e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_1.9e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.8416e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.0e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=1.93368e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.1e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=2.02576e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.2e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=2.11784e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.3e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=2.20992e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.4e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=2.302e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.5e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=2.39408e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.6e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=2.48616e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/neg_EL9mm_ER0.9mm_2.7e6_dt1e-10_ER
+
+
+# positive streamers propagation under constant electric field
+
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-0.699808e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_0.76e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-0.709016e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_0.77e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-0.718224e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_0.78e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-0.727432e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_0.79e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-0.73664e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_0.8e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-0.82872e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_0.9e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-0.9208e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.0e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.01288e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.1e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.10496e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.2e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.19704e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.3e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.28912e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.4e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.3812e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.5e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.47328e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.6e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.56536e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.7e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.65744e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.8e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.74952e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_1.9e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.8416e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.0e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-1.93368e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.1e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-2.02576e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.2e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-2.11784e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.3e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-2.20992e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.4e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-2.302e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.5e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-2.39408e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.6e6_dt1e-10_ER
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -output%dt=1e-10 -field_amplitude=-2.48616e6 -cross%write=T -input_data%file=../../transport_data/air_phelps_chemistry_small_v0.txt -output%name+=negative_electro9mm_accelerating_dt1e-10_ER/pos_EL9mm_ER0.9mm_2.7e6_dt1e-10_ER
+
+
+
+
+

@@ -35,10 +35,17 @@ cd ../
 #1.020 Estable
 ./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_amplitude=1.1924286336e6 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.294992e6
 
+#Estable_step(z=60mm)_0.99Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%decay_profile='step' -field_decay%initial_field=1.16904768e6 -field_decay%min_field=1.1573572032e6 -field_decay%decay_start_z=60e-3 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.2696e6_step_1.256904e6
 
+#Estable_step(z=60mm)_1.01Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%decay_profile='step' -field_decay%initial_field=1.16904768e6 -field_decay%min_field=1.1807381568e6 -field_decay%decay_start_z=60e-3 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.2696e6_step_1.282296e6
 
+#Estable_step(z=70mm)_0.98Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%decay_profile='step' -field_decay%initial_field=1.16904768e6 -field_decay%min_field=1.1456667264e6 -field_decay%decay_start_z=70e-3 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.2696e6_step_1.244208e6_z70e-3
 
-
+#Estable_step(z=70mm)_1.02Estable
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.928" -field_rod_radius=0.9e-3 -end_streamer_length=100e-3 -end_time=200e-9 -field_decay%enabled=T -field_decay%decay_profile='step' -field_decay%initial_field=1.16904768e6 -field_decay%min_field=1.1924286336e6 -field_decay%decay_start_z=70e-3 -cross%write=T -output%name+=negative_stable_electro9mm_unstable/neg_EL9mm_ER0.9mm_1.2696e6_step_1.294992e6_z70e-3
 
 
 

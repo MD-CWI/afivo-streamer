@@ -1,0 +1,32 @@
+#!/bin/bash
+
+cd ../
+
+# air, background density=1e11, electrode length=2e-3, electode radius=0.2e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+#-1kV
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=100e-3 -field_amplitude=17.504688e5 -cross%write=T -plane%write=T -output%name+=neg_EL2-9-21mm_unstable/neg_EL2mm_218.8086kV
+
+#+1kV
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="512 512" -field_rod_r0="0 0.984" -field_rod_radius=0.2e-3 -end_streamer_length=100e-3 -field_amplitude=17.664688e5 -cross%write=T -plane%write=T -output%name+=neg_EL2-9-21mm_unstable/neg_EL2mm_220.8086kV
+
+
+
+# air, background density=1e11, electrode length=9e-3, electode radius=0.9e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+#-1kV
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=11.608e5 -cross%write=T -plane%write=T -output%name+=neg_EL2-9-21mm_unstable/neg_EL9mm_145.1kV
+
+#+1kV
+./streamer air_negative_125mm_chem_electro9mm.cfg -field_amplitude=11.768e5 -cross%write=T -plane%write=T -output%name+=neg_EL2-9-21mm_unstable/neg_EL9mm_147.1kV
+
+
+
+# air, background density=1e11, electrode length=21e-3, electode radius=2.1e-3, output%dt=5e-10, refine_min_dx=1e-6, refine_adx=0.8, refine_adx_fac=1.25, air_phelps_chemistry_small_v0_1000points.txt
+
+#-1kV
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="32 32" -field_rod_r0="0 0.832" -field_rod_radius=2.1e-3 -end_streamer_length=80e-3 -field_amplitude=9.152e5 -cross%write=T -plane%write=T -output%name+=neg_EL2-9-21mm_unstable/neg_EL21mm_114.4kV
+
+#+1kV
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="32 32" -field_rod_r0="0 0.832" -field_rod_radius=2.1e-3 -end_streamer_length=80e-3 -field_amplitude=9.312e5 -cross%write=T -plane%write=T -output%name+=neg_EL2-9-21mm_unstable/neg_EL21mm_116.4kV
+
