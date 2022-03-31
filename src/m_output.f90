@@ -799,16 +799,16 @@ contains
 #if NDIM == 2
     integer  :: my_unit
     integer  :: i 
-    real(dp) :: z, elec_dens, charge_dens, current_dens
+    real(dp) :: z, elec_dens, charge_dens, current_dens, r_maxEr
 
     open(newunit=my_unit, file=trim(filename)//".txt", action="write")
-    write(my_unit, '(A)') "z elec_dens charge_dens current_dens"
+    write(my_unit, '(A)') "z elec_dens charge_dens current_dens r(max_Er)"
 
     do i = 1, cross_npoints
        z = i * ST_domain_len(2) / (cross_npoints + 1)
        call analysis_get_cross(tree, cross_rmax, z, elec_dens, &
-            charge_dens, current_dens)
-       write(my_unit, *) z, elec_dens, charge_dens, current_dens
+            charge_dens, current_dens, r_maxEr)
+       write(my_unit, *) z, elec_dens, charge_dens, current_dens, r_maxEr
     end do
 
     close(my_unit)

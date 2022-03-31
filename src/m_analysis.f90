@@ -265,7 +265,7 @@ contains
 
 #if NDIM == 2
   !> Get integrated quantities of an axisymmetric streamer at a z-coordinate
-  subroutine analysis_get_cross(tree, rmax, z, elec_dens, charge_dens, current_dens)
+  subroutine analysis_get_cross(tree, rmax, z, elec_dens, charge_dens, current_dens, r_maxEr)
     use m_lookup_table
     use m_transport_data
     use m_gas
@@ -278,8 +278,9 @@ contains
     real(dp), intent(out)  :: elec_dens    !< electron density
     real(dp), intent(out)  :: charge_dens  !< charge density
     real(dp), intent(out)  :: current_dens !< current density
+    real(dp), intent(out)  :: r_maxEr      !< r-coordinate of max(E_r)
 
-    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv
+    real(dp) :: ne_fld_rhs(3), mu, Td, r, dr, N_inv, Er
     real(dp) :: ne, fld, Ez, rhs, fld_vec(NDIM)
     real(dp) :: d_elec_dens, d_charge_dens, d_current_dens
     logical  :: success
@@ -294,6 +295,8 @@ contains
     elec_dens    = 0.0_dp
     charge_dens  = 0.0_dp
     current_dens = 0.0_dp
+    Er =  0.0_dp
+
     N_inv        = 1.0_dp/gas_number_density
     dr           = af_min_dr(tree)
     m            = int(rmax/dr) + 1
@@ -313,6 +316,11 @@ contains
        fld = ne_fld_rhs(2)
        rhs = ne_fld_rhs(3)
        Ez = fld_vec(2)
+       if (abs(fld_vec(1)) > abs(Er)) then
+            Er = fld_vec(1)
+            r_maxEr = r
+       end if
+
 
        Td = fld * SI_to_Townsend * N_inv
        mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
