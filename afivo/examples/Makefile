@@ -21,8 +21,7 @@ simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl solid_body_rotation	\
 amr_solid_body_rotation euler_gas_dynamics dielectric_surface			\
 electrode_dielectric electrode_example
 
-
-PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning particles_gravity
+PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning
 
 PROGS := $(PROGS_1D) $(PROGS_2D) $(PROGS_3D)
 
@@ -33,16 +32,19 @@ clean:
 
 run:	$(PROGS)
 	for prog in $(PROGS); do\
+		echo "Running $$prog";\
 		./$$prog || { echo "$$prog failed" ; exit 1; };\
 	done
 
 run_2d:
 	for prog in $(PROGS_2D); do\
+		echo "Running $$prog";\
 		./$$prog || { echo "$$prog failed" ; exit 1; };\
 	done
 
 run_3d:
 	for prog in $(PROGS_3D); do\
+		echo "Running $$prog";\
 		./$$prog || { echo "$$prog failed" ; exit 1; };\
 	done
 
@@ -76,8 +78,6 @@ $(PROGS_3D): FFLAGS += -DNDIM=3
 	$(FC) -o $@ $^ $(FFLAGS) $(addprefix -I,$(INCDIRS)) \
 	$(addprefix -L,$(LIBDIRS)) $(addprefix -l,$(LIBS))
 
-# Poisson programs and objects depend on m_gaussians
+# Some Poisson programs and objects depend on m_gaussians and m_config
 PROGS_POIS	:= $(filter poisson_%, $(PROGS))
-OBJS_POIS	:= $(PROGS_POIS:%=%.o)
-$(PROGS_POIS): 	m_gaussians.o
-$(OBJS_POIS):	m_gaussians.o
+$(PROGS_POIS): 	m_gaussians.o m_config.o
