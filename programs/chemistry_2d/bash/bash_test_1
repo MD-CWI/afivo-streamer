@@ -1,0 +1,11 @@
+#!/bin/bash
+
+cd ../
+
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -field_rise_time=1e-9 -output%name+=test/pos_EL6mm_2.0e6_1ns
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -field_rise_time=2e-9 -output%name+=test/pos_EL6mm_2.0e6_2ns
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -field_rise_time=5e-9 -output%name+=test/pos_EL6mm_2.0e6_5ns
+

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+cd ../
+
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=10e-9 -output%name+=test/neg_EL6mm_2.0e6_10ns
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=15e-9 -output%name+=test/neg_EL6mm_2.0e6_15ns
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=20e-9 -output%name+=test/neg_EL6mm_2.0e6_20ns
