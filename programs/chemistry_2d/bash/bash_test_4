@@ -3,27 +3,54 @@
 cd ../
 
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=1e-9 -output%name+=test/neg_EL6mm_2.0e6_1ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=1e-9 -output%name+=test/neg_EL6mm_2.0e6_1ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=2e-9 -output%name+=test/neg_EL6mm_2.0e6_2ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=2e-9 -output%name+=test/neg_EL6mm_2.0e6_2ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=3e-9 -output%name+=test/neg_EL6mm_2.0e6_3ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=3e-9 -output%name+=test/neg_EL6mm_2.0e6_3ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=4e-9 -output%name+=test/neg_EL6mm_2.0e6_4ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=5e-9 -output%name+=test/neg_EL6mm_2.0e6_5ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=5e-9 -output%name+=test/neg_EL6mm_2.0e6_5ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=10e-9 -output%name+=test/neg_EL6mm_2.0e6_10ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=10e-9 -output%name+=test/neg_EL6mm_2.0e6_10ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=20e-9 -output%name+=test/neg_EL6mm_2.0e6_20ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=20e-9 -output%name+=test/neg_EL6mm_2.0e6_20ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=30e-9 -output%name+=test/neg_EL6mm_2.0e6_30ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=25e-9 -output%name+=test/neg_EL6mm_2.0e6_25ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=40e-9 -output%name+=test/neg_EL6mm_2.0e6_40ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=30e-9 -output%name+=test/neg_EL6mm_2.0e6_30ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=50e-9 -output%name+=test/neg_EL6mm_2.0e6_50ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=40e-9 -output%name+=test/neg_EL6mm_2.0e6_40ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=58e-9 -output%name+=test/neg_EL6mm_2.0e6_58ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=50e-9 -output%name+=test/neg_EL6mm_2.0e6_50ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=59e-9 -output%name+=test/neg_EL6mm_2.0e6_59ns
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=100e-9 -output%name+=test/neg_EL6mm_2.0e6_100ns
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=60e-9 -output%name+=test/neg_EL6mm_2.0e6_60ns
+
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=2.0e6 -field_rise_time=100e-9 -output%name+=test/neg_EL6mm_2.0e6_100ns
+
+
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -output%name+=test/seed_neg_EL6mm_2.0e6
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=5e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_5ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=10e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_10ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=20e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_20ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=30e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_30ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=40e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_40ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=50e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_50ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=54e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_54ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=55e-9 -end_time=250e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_55ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=60e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_60ns
+
+#./streamer pos_d100mm_chemistry_seed.cfg -field_amplitude=2.0e6 -field_rise_time=100e-9 -output%name+=test/seed_neg_EL6mm_2.0e6_100ns
+
 

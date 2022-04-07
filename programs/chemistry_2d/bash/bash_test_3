@@ -3,12 +3,19 @@
 cd ../
 
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-1.2e6 -output%name+=test/pos_EL6mm_1.2e6
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=-1.2e6 -output%name+=test/pos_EL6mm_1.2e6
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-1.6e6 -output%name+=test/pos_EL6mm_1.6e6
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=-1.6e6 -output%name+=test/pos_EL6mm_1.6e6
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -output%name+=test/pos_EL6mm_2.0e6
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -output%name+=test/pos_EL6mm_2.0e6
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.4e6 -output%name+=test/pos_EL6mm_2.4e6
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.4e6 -output%name+=test/pos_EL6mm_2.4e6
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -output%name+=test/pos_EL6mm_2.8e6
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -output%name+=test/pos_EL6mm_2.8e6
+
+
+
+
+
+
+
