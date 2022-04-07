@@ -3,8 +3,12 @@
 cd ../
 
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -field_rise_time=10e-9 -output%name+=test/pos_EL6mm_2.0e6_10ns
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6  -field_rod_r0="0 0.982" -field_rod_radius=0.2e-3 -output%name+=test/pos_EL2mm_2.0e6
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -field_rise_time=15e-9 -output%name+=test/pos_EL6mm_2.0e6_15ns
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6  -field_rod_r0="0 0.964" -field_rod_radius=0.4e-3 -output%name+=test/pos_EL4mm_2.0e6
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6 -field_rise_time=20e-9 -output%name+=test/pos_EL6mm_2.0e6_20ns
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6  -field_rod_r0="0 0.946" -field_rod_radius=0.6e-3 -output%name+=test/pos_EL6mm_2.0e6
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6  -field_rod_r0="0 0.928" -field_rod_radius=0.8e-3 -output%name+=test/pos_EL8mm_2.0e6
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.0e6  -field_rod_r0="0 0.91" -field_rod_radius=1.0e-3 -output%name+=test/pos_EL10mm_2.0e6
