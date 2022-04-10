@@ -13,9 +13,3 @@ cd ../
 
 #./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -output%name+=test/pos_EL6mm_2.8e6
 
-
-
-
-
-
-
