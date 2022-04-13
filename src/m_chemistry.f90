@@ -537,31 +537,33 @@ contains
 
   !> Compute derivatives due to chemical reactions
   subroutine get_derivatives(dens, rates, derivs, n_cells)
-    integer, intent(in)   :: n_cells
-    real(dp), intent(in)  :: dens(n_cells, n_species)
-    real(dp), intent(in)  :: rates(n_cells, n_reactions)
-    real(dp), intent(out) :: derivs(n_cells, n_species)
-    real(dp)              :: prate(n_cells, n_reactions)
-    integer               :: n, i, ix
+    integer, intent(in)     :: n_cells
+    !> Species densities
+    real(dp), intent(in)    :: dens(n_cells, n_species)
+    !> On input, reaction rate coefficients. On output, actual reaction rates.
+    real(dp), intent(inout) :: rates(n_cells, n_reactions)
+    !> Derivatives of the chemical species
+    real(dp), intent(out)   :: derivs(n_cells, n_species)
+    integer                 :: n, i, ix
 
     derivs(:, :) = 0.0_dp
 
     ! Loop over reactions and add to derivative
     do n = 1, n_reactions
        ! Determine production rate of 'full' reaction
-       prate(:, n) = rates(:, n) * &
+       rates(:, n) = rates(:, n) * &
             product(dens(:, tiny_react(n)%ix_in), dim=2)
 
        ! Input species are removed
        do i = 1, size(tiny_react(n)%ix_in)
           ix = tiny_react(n)%ix_in(i)
-          derivs(:, ix) = derivs(:, ix) - prate(:, n)
+          derivs(:, ix) = derivs(:, ix) - rates(:, n)
        end do
 
        ! Output species are created
        do i = 1, size(tiny_react(n)%ix_out)
           ix = tiny_react(n)%ix_out(i)
-          derivs(:, ix) = derivs(:, ix) + prate(:, n) * &
+          derivs(:, ix) = derivs(:, ix) + rates(:, n) * &
                tiny_react(n)%multiplicity_out(i)
        end do
     end do

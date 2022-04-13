@@ -340,6 +340,8 @@ contains
        call output_log(tree, fname, output_cnt, wc_time)
     end if
 
+    call output_chemical_rates(trim(fname)//"_rates.txt")
+
     if (output_regression_test) then
        write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
        call output_regression_log(tree, fname, output_cnt, wc_time)
@@ -576,6 +578,16 @@ contains
     close(my_unit)
 
   end subroutine output_log
+
+  subroutine output_chemical_rates(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    write(my_unit, *) sum(ST_global_rates(1:n_reactions, :), dim=2)
+    close(my_unit)
+  end subroutine output_chemical_rates
 
   !> Write statistics to a file that can be used for regression testing
   subroutine output_regression_log(tree, filename, out_cnt, wc_time)
