@@ -1,0 +1,65 @@
+BOLSIG+ script file: cross_to_coefficients.txt
+READCOLLISIONS
+N2
+NO.txt
+C1    N2    Elastic                                             
+C2    N2    Elastic                                             
+C3    N2    Elastic                                             
+C4    N2    Ionization    15.58 eV                              
+C5    N2    Ionization    30.00 eV                              
+C6    N2    Ionization    70.00 eV                              
+READCOLLISIONS
+O2
+NO.txt
+C7    O2    Attachment                                          
+C8    O2    Elastic                                             
+C9    O2    Elastic                                             
+C10   O2    Elastic                                             
+C11   O2    Ionization    12.06 eV                              
+C12   O2    Ionization    23.00 eV                              
+C13   O2    Ionization    73.00 eV                              
+READCOLLISIONS
+NO
+NO.txt
+C14   NO    Attachment                                          
+C15   NO    Ionization    9.26 eV                               
+C16   NO    Ionization    20.10 eV                              
+C17   NO    Ionization    21.60 eV                              
+C18   NO    Ionization    40.00 eV                              
+RUN
+R1    1200. Td    16.0 eV                                       
+CLEARRUNS
+RUNSERIES
+R1    1.00 Td    0.404 eV                                       
+R2    1.28 Td    0.492 eV                                       
+R3    1.63 Td    0.599 eV                                       
+R4    2.08 Td    0.722 eV                                       
+R5    2.66 Td    0.851 eV                                       
+R6    3.40 Td    0.982 eV                                       
+R7    4.34 Td    1.13 eV                                        
+R8    5.54 Td    1.33 eV                                        
+R9    7.07 Td    1.65 eV                                        
+R10   9.03 Td    2.13 eV                                        
+R11   11.5 Td    2.81 eV                                        
+R12   14.7 Td    3.71 eV                                        
+R13   18.8 Td    4.51 eV                                        
+R14   24.0 Td    5.00 eV                                        
+R15   30.7 Td    5.32 eV                                        
+R16   39.1 Td    5.58 eV                                        
+R17   50.0 Td    5.83 eV                                        
+R18   63.8 Td    6.09 eV                                        
+R19   81.5 Td    6.38 eV                                        
+R20   104. Td    6.71 eV                                        
+R21   133. Td    7.10 eV                                        
+R22   170. Td    7.54 eV                                        
+R23   217. Td    8.06 eV                                        
+R24   277. Td    8.67 eV                                        
+R25   353. Td    9.40 eV                                        
+R26   451. Td    10.3 eV                                        
+R27   576. Td    11.3 eV                                        
+R28   736. Td    12.6 eV                                        
+R29   940. Td    14.1 eV                                        
+R30   1200. Td    16.0 eV                                       
+SAVERESULTS
+output_NO.txt
+FINISHED

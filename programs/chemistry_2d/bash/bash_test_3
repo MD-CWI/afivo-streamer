@@ -13,3 +13,5 @@ cd ../
 
 #./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -output%name+=test/pos_EL6mm_2.8e6
 
+
+./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -field_rod_r0="0 0.973" -domain_len="0.1 0.2" -end_streamer_length=0.18 -output%name+=test/pos_EL6mm_2.8e6_d200mm
