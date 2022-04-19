@@ -30,7 +30,7 @@ s@k9_func@c1*exp(-c2*Tg)@g;
 s@k10_func@10**(c1+c2*(Tg-300))@g;
 s@k11_func@c1*(300/Tg)**c2*exp(-c3/Tg)@g;
 s@k12_func@c1*Tg**c2*exp(-c3/Tg)@g;
-s@k13_func@c1*exp(-(c2/(c3+EN))**c4)@g;
-s@k14_func@c1*exp(-(EN/c2)**c3)@g;
-s@k15_func@c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4)@g;
+s@k13_func@c1*exp(-(c2/(c3+Td))**c4)@g;
+s@k14_func@c1*exp(-(Td/c2)**c3)@g;
+s@k15_func@c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4)@g;
 ' "$1"

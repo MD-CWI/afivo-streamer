@@ -101,13 +101,13 @@ module m_chemistry
   !> Reaction of the form c1 * Tg**c2 * exp(-c3 / Tg)
   integer, parameter :: rate_analytic_k12 = 17
 
-  !> Reaction of the form c1 * exp(-(c2 / (c3 + EN))**c4)
+  !> Reaction of the form c1 * exp(-(c2 / (c3 + Td))**c4)
   integer, parameter :: rate_analytic_k13 = 18
 
-  !> Reaction of the form c1 * exp(-(EN / c2)**c3)
+  !> Reaction of the form c1 * exp(-(Td / c2)**c3)
   integer, parameter :: rate_analytic_k14 = 19
 
-  !> Reaction of the form c1 * exp(-(c2 /(kb * (Tg + EN/c3)))**c4)
+  !> Reaction of the form c1 * exp(-(c2 /(kb * (Tg + Td/c3)))**c4)
   integer, parameter :: rate_analytic_k15 = 20
 
   !> Maximum number of species
@@ -792,15 +792,15 @@ contains
           new_reaction%rate_type = rate_analytic_k12
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-(c2/(c3+EN))**c4)")
+       case ("c1*exp(-(c2/(c3+Td))**c4)")
           new_reaction%rate_type = rate_analytic_k13
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)
-       case ("c1*exp(-(EN/c2)**c3)")
+       case ("c1*exp(-(Td/c2)**c3)")
           new_reaction%rate_type = rate_analytic_k14
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4)")
+       case ("c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4)")
           new_reaction%rate_type = rate_analytic_k15
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)

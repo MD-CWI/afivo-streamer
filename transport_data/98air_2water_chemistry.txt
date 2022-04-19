@@ -103,16 +103,16 @@ e + H2O -> OH + H-,field_table,C48 H2O Attachment
 # Negative ion conversion (Gallimberti 1979)
 O2- +  H2O + O2 -> H2O3- + O2,c1,2.2e-40
 O2- +  H2O + N2 -> H2O3- + N2,c1,2.2e-40
-H2O3- + O2   ->  O2- + H2O + O2,c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4),5.91e-15 1.28e-19 0.18 1
-H2O3- + N2   ->  O2- + H2O + N2,c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4),5.91e-15 1.28e-19 0.18 1
+H2O3- + O2   ->  O2- + H2O + O2,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),5.91e-15 1.28e-19 0.18 1
+H2O3- + N2   ->  O2- + H2O + N2,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),5.91e-15 1.28e-19 0.18 1
 H2O3- + H2O + O2 -> H4O2- + O2,c1,5.0e-40
 H2O3- + H2O + N2 -> H4O4- + N2,c1,5.0e-40
-H4O4- + O2 -> H2O3- + H2O + O2,c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4),1.34e-14 5.8e-20 0.18 1
-H4O4- + N2 -> H2O3- + H2O + N2,c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4),1.34e-14 5.8e-20 0.18 1
+H4O4- + O2 -> H2O3- + H2O + O2,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-14 5.8e-20 0.18 1
+H4O4- + N2 -> H2O3- + H2O + N2,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-14 5.8e-20 0.18 1
 H4O4- + H2O + O2 -> H6O5- + O2,c1,5e-41
 H4O4- + H2O + N2 -> H6O5- + N2,c1,5e-41
-H6O5- + N2 -> H4O4- + H2O + N2,c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4),1.34e-15 4.49e-20 0.18 1
-H6O5- + O2 -> H4O4- + H2O + O2,c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4),1.34e-15 4.49e-20 0.18 1
+H6O5- + N2 -> H4O4- + H2O + N2,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-15 4.49e-20 0.18 1
+H6O5- + O2 -> H4O4- + H2O + O2,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-15 4.49e-20 0.18 1
 # These rates are c1:
 O2+   + H2O + O2 -> H2O3+ + O2,c1,2.6e-40
 O2+   + H2O + N2 -> H2O3+ + N2,c1,2.6e-40
