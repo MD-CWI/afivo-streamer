@@ -42,7 +42,18 @@ where:
   rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s`
   respectively. The time unit is always a second.
 
-# Reaction format syntax
+# Syntax
+
+# Reaction syntax
+
+* `M` denotes 'any' gas molecule
+* `X+` means a positively charged species `X`
+* `X-` means a negatively charged species `X`
+* `2X` means `X + X` (same for `3X` etc.)
+
+Note that in the output, special characters such as `+` and `^` are converted, because such symbols are not currently in Silo variable names.
+
+# Rate function syntax
 
 The following symbols can be used:
 
@@ -60,12 +71,12 @@ There should be no spaces in the reaction string.
 
 # Supported reaction rate formats
 
-Special formats:
+## `field_table`
 
-* `field_table`: For a table of the reaction rate versus the reduced electric
+For a table of the reaction rate versus the reduced electric
 field (E/N) in Townsend. Value: the name of the table in `input_data%file`
 
-Expressions:
+## Function expressions
 
 * `c1`
 * `c1*(Td-c2)`
@@ -81,3 +92,9 @@ Expressions:
 * `10**(c1+c2*(Tg-300))`
 * `c1*(300/Tg)**c2*exp(-c3/Tg)`
 * `c1*Tg**c2*exp(-c3/Tg)`
+
+For these expressions, the values specified should be `c1`, `c2`, etc. So for example
+
+    O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
+
+means that the reaction rate is given by `1.1e-42 * exp(-(Td/65.0)**2)`.
