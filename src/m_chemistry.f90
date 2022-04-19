@@ -53,61 +53,61 @@ module m_chemistry
      integer, allocatable  :: multiplicity_out(:)
   end type tiny_react_t
 
-  !> Indicates a reaction with a field-dependent reaction rate
+  !> Reaction with a field-dependent reaction rate
   integer, parameter :: rate_tabulated_field = 1
 
-  !> Indicates a reaction of the form c1
+  !> Reaction of the form c1
   integer, parameter :: rate_analytic_constant = 2
 
-  !> Indicates a reaction of the form c1 * (Td - c2)
+  !> Reaction of the form c1 * (Td - c2)
   integer, parameter :: rate_analytic_linear = 3
 
-  !> Indicates a reaction of the form c1 * exp(-(c2/(c3 + Td))**2)
+  !> Reaction of the form c1 * exp(-(c2/(c3 + Td))**2)
   integer, parameter :: rate_analytic_exp_v1 = 4
 
-  !> Indicates a reaction of the form c1 * exp(-(Td/c2)**2)
+  !> Reaction of the form c1 * exp(-(Td/c2)**2)
   integer, parameter :: rate_analytic_exp_v2 = 5
 
-  !> Indicates a reaction of the form c1 * (300 / Te)**c2
+  !> Reaction of the form c1 * (300 / Te)**c2
   integer, parameter :: rate_analytic_k1 = 6
 
-  !> Indicates a reaction of the form (c1 * (kB * Te + c2)**2 - c3) * c4
+  !> Reaction of the form (c1 * (kB_eV * Te + c2)**2 - c3) * c4
   integer, parameter :: rate_analytic_k3 = 8
 
-  !> Indicates a reaction of the form c1 * (T / 300)**c2 * exp(-c3 / T)
+  !> Reaction of the form c1 * (T / 300)**c2 * exp(-c3 / T)
   integer, parameter :: rate_analytic_k4 = 9
 
-  !> Indicates a reaction of the form c1 * exp(-c2 / T)
+  !> Reaction of the form c1 * exp(-c2 / T)
   integer, parameter :: rate_analytic_k5 = 10
 
-  !> Indicates a reaction of the form c1 * T**c2
+  !> Reaction of the form c1 * T**c2
   integer, parameter :: rate_analytic_k6 = 11
 
-  !> Indicates a reaction of the form c1 * (T / c2)**c3
+  !> Reaction of the form c1 * (T / c2)**c3
   integer, parameter :: rate_analytic_k7 = 12
 
-  !> Indicates a reaction of the form c1 * (300 / T)**c2
+  !> Reaction of the form c1 * (300 / T)**c2
   integer, parameter :: rate_analytic_k8 = 13
 
-  !> Indicates a reaction of the form c1 * exp(-c2 * T)
+  !> Reaction of the form c1 * exp(-c2 * T)
   integer, parameter :: rate_analytic_k9 = 14
 
-  !> Indicates a reaction of the form 10**(c1 + c2 * (T - 300))
+  !> Reaction of the form 10**(c1 + c2 * (T - 300))
   integer, parameter :: rate_analytic_k10 = 15
 
-  !> Indicates a reaction of the form c1 * (300 / T)**c2 * exp(-c3 / T)
+  !> Reaction of the form c1 * (300 / T)**c2 * exp(-c3 / T)
   integer, parameter :: rate_analytic_k11 = 16
 
-  !> Indicates a reaction of the form c1 * T**c2 * exp(-c3 / T)
+  !> Reaction of the form c1 * T**c2 * exp(-c3 / T)
   integer, parameter :: rate_analytic_k12 = 17
 
-  !> Indicates a reaction of the form c1 * exp(-(c2 / (c3 + EN))**c4)
+  !> Reaction of the form c1 * exp(-(c2 / (c3 + EN))**c4)
   integer, parameter :: rate_analytic_k13 = 18
 
-  !> Indicates a reaction of the form c1 * exp(-(EN / c2)**c3)
+  !> Reaction of the form c1 * exp(-(EN / c2)**c3)
   integer, parameter :: rate_analytic_k14 = 19
 
-  !> Indicates a reaction of the form c1 * exp(-(c2 /(kb * (T + EN/c3)))**c4)
+  !> Reaction of the form c1 * exp(-(c2 /(kb * (T + EN/c3)))**c4)
   integer, parameter :: rate_analytic_k15 = 20
 
   !> Maximum number of species
@@ -732,77 +732,75 @@ contains
           ! Reaction data should be present in the same file
           call read_reaction_table(filename, &
                trim(data_value(n)), new_reaction)
-       case ("c1", "constant", "k2_func")
+       case ("c1")
           new_reaction%rate_type = rate_analytic_constant
           new_reaction%n_coeff = 1
           read(data_value(n), *) new_reaction%rate_data(1)
-       case ("c1*(Td-c2)", "linear")
+       case ("c1*(Td-c2)")
           new_reaction%rate_type = rate_analytic_linear
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*exp(-(c2/(c3+Td))**2)", "exp_v1")
+       case ("c1*exp(-(c2/(c3+Td))**2)")
           new_reaction%rate_type = rate_analytic_exp_v1
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-(Td/c2)**2)", "exp_v2")
+       case ("c1*exp(-(Td/c2)**2)")
           new_reaction%rate_type = rate_analytic_exp_v2
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*(300/Te)**c2", "k1_func")
+       case ("c1*(300/Te)**c2")
           new_reaction%rate_type = rate_analytic_k1
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("(c1*(kB*Te+c2)**2-c3)*c4", "k3_func")
-          ! TODO: it seems that kB*Te is converted to eV? We should change the
-          ! format to reflect that
+       case ("(c1*(kB_eV*Te+c2)**2-c3)*c4")
           new_reaction%rate_type = rate_analytic_k3
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)
-       case ("c1*(T/300)**c2*exp(-c3/T)", "k4_func")
+       case ("c1*(T/300)**c2*exp(-c3/T)")
           new_reaction%rate_type = rate_analytic_k4
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-c2/T)", "k5_func")
+       case ("c1*exp(-c2/T)")
           new_reaction%rate_type = rate_analytic_k5
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*T**c2", "k6_func")
+       case ("c1*T**c2")
           new_reaction%rate_type = rate_analytic_k6
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*(T/c2)**c3", "k7_func")
+       case ("c1*(T/c2)**c3")
           new_reaction%rate_type = rate_analytic_k7
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*(300/T)**c2", "k8_func")
+       case ("c1*(300/T)**c2")
           new_reaction%rate_type = rate_analytic_k8
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*exp(-c2*T)", "k9_func")
+       case ("c1*exp(-c2*T)")
           new_reaction%rate_type = rate_analytic_k9
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("10**(c1+c2*(T-300))", "k10_func")
+       case ("10**(c1+c2*(T-300))")
           new_reaction%rate_type = rate_analytic_k10
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*(300/T)**c2*exp(-c3/T)", "k11_func")
+       case ("c1*(300/T)**c2*exp(-c3/T)")
           new_reaction%rate_type = rate_analytic_k11
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*T**c2*exp(-c3/T)", "k12_func")
+       case ("c1*T**c2*exp(-c3/T)")
           new_reaction%rate_type = rate_analytic_k12
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-(c2/(c3+EN))**c4)", "k13_func")
+       case ("c1*exp(-(c2/(c3+EN))**c4)")
           new_reaction%rate_type = rate_analytic_k13
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)
-       case ("c1*exp(-(EN/c2)**c3)", "k14_func")
+       case ("c1*exp(-(EN/c2)**c3)")
           new_reaction%rate_type = rate_analytic_k14
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-(c2/(kb*(T+EN/c3)))**c4)", "k15_func")
+       case ("c1*exp(-(c2/(kb*(T+EN/c3)))**c4)")
           new_reaction%rate_type = rate_analytic_k15
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)
@@ -810,6 +808,7 @@ contains
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
+          print *, "Try to use tools/chemistry_update_reactions.sh"
           error stop
        end select
 
