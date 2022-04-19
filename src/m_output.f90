@@ -340,7 +340,7 @@ contains
        call output_log(tree, fname, output_cnt, wc_time)
     end if
 
-    call output_chemical_rates(trim(fname)//"_rates.txt")
+    call output_chemical_rates(trim(output_name)//"_rates.txt")
 
     if (output_regression_test) then
        write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
@@ -583,9 +583,24 @@ contains
     use m_chemistry
     character(len=*), intent(in) :: filename
     integer                      :: my_unit
+    character(len=50), save      :: fmt
+    integer                      :: i
+    logical, save                :: first_time = .true.
 
-    open(newunit=my_unit, file=trim(filename), action="write")
-    write(my_unit, *) sum(ST_global_rates(1:n_reactions, :), dim=2)
+    if (first_time) then
+      first_time = .false.
+      open(newunit=my_unit, file=trim(filename), action="write")
+      write(my_unit, "(A)", advance="no") "#time,"
+      do i = 1, n_reactions
+          write(my_unit, "(A)", advance="no") " "//trim(reactions(i)%description)//","
+      end do
+      write(my_unit, *) ""
+      close(my_unit)
+    end if
+    write(fmt, "(A, I0, A)") "(", n_reactions+1, "E16.8)"
+    open(newunit=my_unit, file=trim(filename), action="write", &
+          position = "append")
+    write(my_unit, fmt) global_time, sum(ST_global_rates(1:n_reactions, :), dim=2)
     close(my_unit)
   end subroutine output_chemical_rates
 
