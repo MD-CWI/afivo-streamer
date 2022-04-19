@@ -69,7 +69,7 @@ When ignored species occur on the right-hand side of a reaction, their productio
 * `X-` means a negatively charged species `X`
 * `2X` means `X + X` (same for `3X` etc.)
 
-Note that in the output, special characters such as `+` and `^` are converted, because such symbols are not currently in Silo variable names.
+Note that in the output, special characters such as `+` and `-` are converted, because only alphanumeric symbols and `_` can be include in Silo variable names.
 
 ## Reaction groups {#chem-syntax-groups}
 
@@ -115,6 +115,7 @@ field (E/N) in Townsend. Value: the name of the table in `input_data%file`
 * `c1`
 * `c1*(Td-c2)`
 * `c1*exp(-(c2/(c3+Td))**2)`
+* `c1*exp(-(Td/c2)**2)`
 * `c1*(300/Te)**c2`
 * `(c1*(kB_eV*Te+c2)**2-c3)*c4`
 * `c1*(Tg/300)**c2*exp(-c3/Tg)`
@@ -126,6 +127,9 @@ field (E/N) in Townsend. Value: the name of the table in `input_data%file`
 * `10**(c1+c2*(Tg-300))`
 * `c1*(300/Tg)**c2*exp(-c3/Tg)`
 * `c1*Tg**c2*exp(-c3/Tg)`
+* `c1*exp(-(c2/(c3+Td))**c4)`
+* `c1*exp(-(Td/c2)**c3)`
+* `c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4)`
 
 For these expressions, the values specified should be `c1`, `c2`, etc. So for example
 
