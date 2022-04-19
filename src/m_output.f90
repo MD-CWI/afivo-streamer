@@ -501,6 +501,8 @@ contains
     if (first_time) then
        first_time = .false.
 
+       call output_reaction_matrix(trim(output_name)//"_rate_matrix.txt")
+       call output_chemistry_details(trim(output_name)//"_chemistry_details.txt")
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
@@ -578,6 +580,45 @@ contains
     close(my_unit)
 
   end subroutine output_log
+
+  subroutine output_reaction_matrix(filename)
+     use m_chemistry
+     character(len=*), intent(in) :: filename
+     integer                      :: my_unit, m, n
+     allocate(con_mat(n_reactions, n_species))
+     con_mat(:,:) = 0
+     do m = 1,n_reactions
+          con_mat(m, reactions(m)%ix_in) = -1
+          con_mat(m, reactions(m)%ix_out) = reactions(m)%multiplicity_out
+     end do
+     open(newunit=my_unit, file=trim(filename), action="write")
+     do m = 1, n_reactions
+          write(my_unit, *) con_mat(m,:) 
+     end do
+     write(my_unit, *) ""
+     close(my_unit)
+  end subroutine output_reaction_matrix
+  
+  subroutine output_chemistry_details(filename)
+     use m_chemistry
+     character(len=*), intent(in) :: filename
+     integer                      :: my_unit, i
+     open(newunit=my_unit, file=trim(filename), action="write")
+     write(my_unit, "(A)") "Specie list"
+     do i= 1, n_species
+          write(my_unit, "(A)") species_list(i)
+     end do
+     write(my_unit, "(A)") "Reaction list"
+     write(my_unit, "(A)") "-------------"
+     do i=1, n_reactions
+          write(my_unit, "(A)") reactions(i)%description
+     end do
+     write(my_unit, *) ""
+     close(my_unit)
+
+  end subroutine output_chemistry_details
+
+
 
   subroutine output_chemical_rates(filename)
     use m_chemistry
