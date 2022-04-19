@@ -15,31 +15,31 @@ e + O2 -> e + e + O2+,field_table,C43 O2 Ionization 12.06 eV
 e + O2 + O2 -> O2-,field_table,C27 O2 Attachment
 e + O2 -> O-,field_table,C28 O2 Attachment
 # Detachment (Panchesnyi 2013)
-O2- + M -> e,exp_v1,1.24e-17 179.0 8.8
-O- + N2 -> e,exp_v1,1.16e-18 48.9 11.0
+O2- + M -> e,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
+O- + N2 -> e,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
 # Negative ion conversion (Panchesnyi 2013)
-O- + O2 -> O2-,exp_v1,6.96e-17 198.0 5.6
-O- + O2 + M -> O3-,exp_v2,1.1e-42 65.0
+O- + O2 -> O2-,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
+O- + O2 + M -> O3-,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 # Positive ion conversion (Aleksandrov and Bazelyan 1999)
 # These rates depends on the temperature. For T=300K:
-N2+ + N2 + M -> N4+,constant,5.0e-41
-N4+ + O2 -> O2+,constant,2.5e-16
-O2+ + O2 + M -> O4+,constant,2.4e-42
+N2+ + N2 + M -> N4+,c1,5.0e-41
+N4+ + O2 -> O2+,c1,2.5e-16
+O2+ + O2 + M -> O4+,c1,2.4e-42
 # Electron recombination (Kossyi et. al. 1992)
 e + O4+ ->,field_table,C01 O4+ Electron recombination
 # Recombination (Kossyi et. al. 1992)
-N2+ + O- ->,constant,1e-13
-N2+ + O3- ->,constant,1e-13
-N2+ + O2- ->,constant,1e-13
-O2+ + O- ->,constant,1e-13
-O2+ + O3- ->,constant,1e-13
-O2+ + O2- ->,constant,1e-13
-O4+ + O- ->,constant,1e-13
-O4+ + O2- ->,constant,1e-13
-O4+ + O3- ->,constant,1e-13
-N4+ + O- ->,constant,1e-13
-N4+ + O2- ->,constant,1e-13
-N4+ + O3- ->,constant,1e-13
+N2+ + O- ->,c1,1e-13
+N2+ + O3- ->,c1,1e-13
+N2+ + O2- ->,c1,1e-13
+O2+ + O- ->,c1,1e-13
+O2+ + O3- ->,c1,1e-13
+O2+ + O2- ->,c1,1e-13
+O4+ + O- ->,c1,1e-13
+O4+ + O2- ->,c1,1e-13
+O4+ + O3- ->,c1,1e-13
+N4+ + O- ->,c1,1e-13
+N4+ + O2- ->,c1,1e-13
+N4+ + O3- ->,c1,1e-13
 -----------------------
 
 Mean energy (eV)

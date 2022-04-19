@@ -13,17 +13,17 @@ Chemical reactions can be defined in the `input_data%file`, as in the following 
     e + O2 + O2 -> O2-,field_table,C27 O2 Attachment
     e + O2 -> O- + O,field_table,C28 O2 Attachment
     # Detachment
-    O2- + M -> e + O2 + M,exp_v1,1.24e-17 179.0 8.8
-    O- + N2 -> e + N2O,exp_v1,1.16e-18 48.9 11.0
+    O2- + M -> e + O2 + M,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
+    O- + N2 -> e + N2O,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
     # Negative ion conversion
-    O- + O2 -> O2- + O,exp_v1,6.96e-17 198.0 5.6
-    O- + O2 + M -> O3- + M,exp_v2,1.1e-42 65.0
-    O3- + O -> O2- + O2,constant,3.2e-16
+    O- + O2 -> O2- + O,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
+    O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
+    O3- + O -> O2- + O2,c1,3.2e-16
     # Positive ion conversion
-    # We can assume this rates are constant
-    N2+ + N2 + M -> N4+ + M,constant,5.0e-41
-    N4+ + O2 -> N2 + N2 + O2+,constant,2.5e-16
-    O2+ + O2 + M -> O4+ + M,constant,2.4e-42
+    # We can assume this rates are c1
+    N2+ + N2 + M -> N4+ + M,c1,5.0e-41
+    N4+ + O2 -> N2 + N2 + O2+,c1,2.5e-16
+    O2+ + O2 + M -> O4+ + M,c1,2.4e-42
     -----------------------
 
 The format of these reactions is
@@ -34,76 +34,50 @@ where:
 
 * `reaction` is the reaction text, as in the example above
 * `rate_type` denotes the method used to obtain the reaction rate. Several
-  options are described below. For a list of all supported rate types, see @ref
-  m_chemistry::get_rates()
+  options are described below.
 * `value(s)` are one or more values needed to obtain the reaction rate, for
   example the name of a table or the coefficients of a function
 * `length unit` optionally denotes the length unit used in the reaction rate. It
   can be `m` (the default) or `cm`. This setting can be used to convert reaction
-  rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s` respectively.
+  rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s`
+  respectively. The time unit is always a second.
 
-## field_table
+# Reaction format syntax
 
-For a table of the reaction rate versus the reduced electric field (E/N) in
-Townsend. Value: the name of the table in `input_data%file`
+The following symbols can be used:
 
-## constant
+symbol | meaning | unit
+---|---|---
+c1, c2, ... | Constants that will be specified | -
+Td | The reduced electric field E/N | Townsend
+Te | Electron 'temperature' (given by 2*energy/(3*kB))| K
+Ti | Ion temperature | K
+Tg | Gas temperature | K
+kB | Boltzmann constant | J/K
+kB_eV | Boltzmann constant | eV/K
 
-For a constant reaction rate. Value: the reaction rate.
+There should be no spaces in the reaction string.
 
-## `linear`
+# Supported reaction rate formats
 
-For a reaction rate linear in E/N. Values: c1, c2. The rate is given by
-`c1 * (Td - c2)` where `Td` is the field in Townsend
+Special formats:
 
-## exp_v1
+* `field_table`: For a table of the reaction rate versus the reduced electric
+field (E/N) in Townsend. Value: the name of the table in `input_data%file`
 
-For an exponential dependence on E/N. Values: c1, c2, c3. The rate is given by `c(1) * exp(-(c(2) / (c(3) + fields))**2)`
+Expressions:
 
-## k1_func
-
-Values: c1. The rate is given by `c(1) * (300 / Te)**2`, with `Te` the electron temperature.
-
-## k2_func
-
-For a constant reaction rate. Is the same as `constant`, but was implemented seperately by the chemistry data repo. Values: c1. The rate is given by `c(1)`
-
-## k3_func
-
-Values: c1, c2, c3, c4. The rate is given by `(c(1) * (kB * Te + c(2))**2 - c(3)) * c(4)`, with `kB` the Boltzmann constant and `Te` the electron temperature.
-
-## k4_func
-
-Values: c1, c2, c3. The rate is given by `c(1) * (T / 300)**c(2) * exp(-c(3) / T)`, with `T` the gas temperature.
-
-## k5_func
-
-Values: c1, c2. The rate is given by `c(1) * exp(-c(2) / T)`, with `T` the gas temperature.
-
-## k6_func
-
-Values: c1, c2. The rate is given by `c(1) * T**c(2)`, with `T` the gas temperature.
-
-## k7_func
-
-Values: c1, c2, c3. The rate is given by `c(1) * (T / c(2))**c(3)`, with `T` the gas temperature.
-
-## k8_func
-
-Values: c1, c2. The rate is given by `c(1) * (300 / T)**c(2)`, with `T` the gas temperature.
-
-## k9_func
-
-Values: c1, c2. The rate is given by `c(1) * exp(-c(2) * T)`, with `T` the gas temperature.
-
-## k10_func
-
-Values: c1, c2. The rate is given by `10**(c(1) + c(2) * (T - 300))`, with `T` the gas temperature.
-
-## k11_func
-
-Values: c1, c2, c3. The rate is given by `c(1) * (300 / T)**c(2) * exp(-c(3) / T)`, with `T` the gas temperature.
-
-## k12_func
-
-Values: c1, c2, c3. The rate is given by `c(1) * T**c(2) * exp(-c(3) / T)`, with `T` the gas temperature.
+* `c1`
+* `c1*(Td-c2)`
+* `c1*exp(-(c2/(c3+Td))**2)`
+* `c1*(300/Te)**c2`
+* `(c1*(kB_eV*Te+c2)**2-c3)*c4`
+* `c1*(Tg/300)**c2*exp(-c3/Tg)`
+* `c1*exp(-c2/Tg)`
+* `c1*Tg**c2`
+* `c1*(Tg/c2)**c3`
+* `c1*(300/Tg)**c2`
+* `c1*exp(-c2*Tg)`
+* `10**(c1+c2*(Tg-300))`
+* `c1*(300/Tg)**c2*exp(-c3/Tg)`
+* `c1*Tg**c2*exp(-c3/Tg)`

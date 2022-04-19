@@ -15,11 +15,11 @@ e + N2 -> e + e + e + N + N++,field_table,C33 N2 Ionization 70.00 eV
 e + O2 + O2 -> O2 + O2-,field_table,C16 O2 Attachment
 e + O2 -> O + O-,field_table,C1 O2 Attachment
 #### Detachment ####
-O- + O -> O2 + e,k2_func,5e-10,cm
-O- + O2 -> O3 + e,k2_func,5e-15,cm
-O2- + N2 -> O2 + N2 + e,k4_func,1.9e-12 0.5 4990,cm
-O2- + O2 -> O2 + O2 + e,k4_func,2.7e-10 0.5 5590,cm
-O2- + O -> O3 + e,k2_func,1.5e-10,cm
+O- + O -> O2 + e,c1,5e-10,cm
+O- + O2 -> O3 + e,c1,5e-15,cm
+O2- + N2 -> O2 + N2 + e,c1*(Tg/300)**c2*exp(-c3/Tg),1.9e-12 0.5 4990,cm
+O2- + O2 -> O2 + O2 + e,c1*(Tg/300)**c2*exp(-c3/Tg),2.7e-10 0.5 5590,cm
+O2- + O -> O3 + e,c1,1.5e-10,cm
 #### Dissociation ####
 e + O2 -> e + O + O,field_table,C12 O2 Excitation 5.10 eV
 e + N2 -> e + N + N,field_table,C30 N2 Excitation 9.75 eV
