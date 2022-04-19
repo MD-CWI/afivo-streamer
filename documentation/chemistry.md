@@ -53,6 +53,22 @@ where:
 
 Note that in the output, special characters such as `+` and `^` are converted, because such symbols are not currently in Silo variable names.
 
+## Reaction groups
+
+Sometimes, there are many similar reactions. To write these more compactly, the following syntax is available, somewhat similar to ZDPlaskin:
+
+    e + @x -> e + e + @x+,field_table,@source
+    @x = N2,N2,O2
+    @source = C25 N2,C26 N2,C43 O2
+
+The symbols with an `@` will be replaced by the respective values specified in the lines below. So for this example, the reaction set would become:
+
+    e + N2 -> e + e + N2+,field_table,C25 N2
+    e + N2 -> e + e + N2+,field_table,C26 N2
+    e + O2 -> e + e + O2+,field_table,C43 O2
+
+The number of such replacement groups is flexible.
+
 # Rate function syntax
 
 The following symbols can be used:
