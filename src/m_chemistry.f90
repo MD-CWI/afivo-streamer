@@ -579,6 +579,56 @@ contains
     end do
   end subroutine get_derivatives
 
+  !> Try to read a list species whose production will be ignored
+  subroutine read_ignored_species(filename, ignored_species)
+    character(len=*), intent(in) :: filename
+    character(len=comp_len), allocatable, intent(inout) :: &
+         ignored_species(:)
+    character(len=comp_len)      :: tmp(max_num_species)
+    character(len=string_len)    :: line
+    integer                      :: my_unit, n_ignored
+
+    n_ignored = 0
+
+    open(newunit=my_unit, file=filename, action="read")
+
+    ! Find list of reactions
+    do
+       read(my_unit, "(A)", end=998) line
+       line = adjustl(line)
+
+       if (line == "ignored_species") then
+          ! Read next line starting with at least 5 dashes
+          read(my_unit, "(A)") line
+          if (line(1:5) /= "-----") &
+               error stop "ignored_species not followed by -----"
+          exit
+       end if
+    end do
+
+    ! Read ignored species, one per line
+    do
+       read(my_unit, "(A)", end=999) line
+       line = adjustl(line)
+
+       ! Ignore comments
+       if (line(1:1) == "#") cycle
+
+       ! Exit when we read a line of dashes
+       if (line(1:5) == "-----") exit
+
+       n_ignored = n_ignored + 1
+       read(line, *) tmp(n_ignored)
+    end do
+
+998 close(my_unit)
+    ignored_species = tmp(1:n_ignored)
+    return
+
+    ! Error messages
+999 error stop "read_ignored_species: no closing dashes"
+  end subroutine read_ignored_species
+
   !> Read reactions from a file
   subroutine read_reactions(filename, read_success)
     character(len=*), intent(in) :: filename
@@ -591,9 +641,13 @@ contains
     character(len=10)            :: length_unit(max_num_reactions)
     type(reaction_t)             :: new_reaction
     integer                      :: my_unit
+    integer                      :: n_reactions_found
     integer, parameter           :: n_fields_max = 40
     integer                      :: i0(n_fields_max), i1(n_fields_max)
     integer                      :: n, i, k, n_found, lo, hi
+    logical                      :: keep_reaction
+
+    character(len=comp_len), allocatable :: ignored_species(:)
 
     type group
        character(len=name_len)               :: name
@@ -604,12 +658,14 @@ contains
     integer            :: i_group, group_size
     type(group)        :: groups(max_groups)
 
+    call read_ignored_species(filename, ignored_species)
+
     open(newunit=my_unit, file=filename, action="read")
 
-    n_reactions  = 0
-    i_group      = 0
-    group_size   = 0
-    read_success = .false.
+    n_reactions_found = 0
+    i_group           = 0
+    group_size        = 0
+    read_success      = .false.
 
     ! Find list of reactions
     do
@@ -661,13 +717,13 @@ contains
 
        if (i_group > 0) then
           ! Handle groups
-          lo                   = n_reactions
-          hi                   = n_reactions+group_size-1
+          lo                   = n_reactions_found
+          hi                   = n_reactions_found+group_size-1
           reaction(lo+1:hi)    = reaction(lo)
           how_to_get(lo+1:hi)  = how_to_get(lo)
           data_value(lo+1:hi)  = data_value(lo)
           length_unit(lo+1:hi) = length_unit(lo)
-          n_reactions          = hi
+          n_reactions_found    = hi
 
           do k = 1, group_size
              do i = 1, i_group
@@ -703,28 +759,40 @@ contains
           error stop "Invalid chemistry syntax"
        end if
 
-       if (n_reactions >= max_num_reactions) &
+       if (n_reactions_found >= max_num_reactions) &
             error stop "Too many reactions, increase max_num_reactions"
 
-       n_reactions             = n_reactions + 1
-       reaction(n_reactions)   = line(i0(1):i1(1))
-       how_to_get(n_reactions) = line(i0(2):i1(2))
-       data_value(n_reactions) = line(i0(3):i1(3))
+       n_reactions_found             = n_reactions_found + 1
+       reaction(n_reactions_found)   = line(i0(1):i1(1))
+       how_to_get(n_reactions_found) = line(i0(2):i1(2))
+       data_value(n_reactions_found) = line(i0(3):i1(3))
 
        ! Fourth entry can hold a custom length unit, default is meter
        if (n_found > 3) then
-          length_unit(n_reactions) = line(i0(4):i1(4))
+          length_unit(n_reactions_found) = line(i0(4):i1(4))
        else
-          length_unit(n_reactions) = "m"
+          length_unit(n_reactions_found) = "m"
        end if
     end do
+
+998 continue
 
     ! Close the file (so that we can re-open it for reading data)
     close(my_unit)
 
+    n_reactions = 0
+
     ! Now parse the reactions
-    do n = 1, n_reactions
-       call parse_reaction(trim(reaction(n)), new_reaction)
+    do n = 1, n_reactions_found
+       call parse_reaction(trim(reaction(n)), new_reaction, &
+            ignored_species, keep_reaction)
+
+       if (keep_reaction) then
+          n_reactions = n_reactions + 1
+       else
+          cycle
+       end if
+
        new_reaction%description = trim(reaction(n))
 
        select case (how_to_get(n))
@@ -732,6 +800,7 @@ contains
           ! Reaction data should be present in the same file
           call read_reaction_table(filename, &
                trim(data_value(n)), new_reaction)
+          new_reaction%n_coeff = 0
        case ("c1")
           new_reaction%rate_type = rate_analytic_constant
           new_reaction%n_coeff = 1
@@ -831,12 +900,13 @@ contains
           error stop
        end select
 
-       reactions(n) = new_reaction
+       reactions(n_reactions) = new_reaction
     end do
 
     if (n_reactions > 0) read_success = .true.
-998 return
+    return
 
+    ! Error messages
 999 error stop "read_reactions: no closing dashes for reaction list"
   end subroutine read_reactions
 
@@ -852,10 +922,13 @@ contains
   end subroutine read_reaction_table
 
   !> Parse a reaction and store it
-  subroutine parse_reaction(reaction_text, reaction)
+  subroutine parse_reaction(reaction_text, reaction, ignored_species, &
+       keep_reaction)
     use m_gas
     character(len=*), intent(in)  :: reaction_text
     type(reaction_t), intent(out) :: reaction
+    character(len=comp_len), intent(in) :: ignored_species(:)
+    logical, intent(out)          :: keep_reaction
     integer, parameter            :: max_components = 100
     character(len=comp_len)       :: component
     integer                       :: i, ix, n, n_found, multiplicity
@@ -865,15 +938,16 @@ contains
     integer                       :: ix_in(max_components)
     integer                       :: ix_out(max_components)
     integer                       :: multiplicity_out(max_components)
-    logical                       :: left_side
+    logical                       :: left_side, is_gas_species
     real(dp)                      :: rfactor
 
     call get_fields_string(reaction_text, " ", max_components, n_found, i0, i1)
 
-    left_side = .true.
-    n_in      = 0
-    n_out     = 0
-    rfactor   = 1.0_dp
+    left_side             = .true.
+    keep_reaction         = .true.
+    n_in                  = 0
+    n_out                 = 0
+    rfactor               = 1.0_dp
     reaction%n_species_in = 0
 
     do n = 1, n_found
@@ -898,6 +972,7 @@ contains
           reaction%n_species_in = reaction%n_species_in + multiplicity
        end if
 
+       ! If the gas density is constant, remove gas species from the reaction
        if (gas_constant_density) then
           ix = gas_index(component)
           if (ix /= -1) then
@@ -909,6 +984,21 @@ contains
           if (component == "M") then
              ! Assume this stands for 'any molecule'
              if (left_side) rfactor = rfactor * gas_number_density
+             cycle
+          end if
+       end if
+
+       ! Handle ignored species
+       if (findloc(ignored_species, component, dim=1) > 0) then
+          is_gas_species = (gas_index(component) > 0 .or. component == "M")
+
+          if (left_side .and. .not. is_gas_species) then
+             ! Ignore the whole reaction, since this species will not be
+             ! produced (and will thus have zero density)
+             keep_reaction = .false.
+             return
+          else
+             ! Ignore the production of this species, but keep the reaction
              cycle
           end if
        end if
@@ -948,6 +1038,12 @@ contains
     reaction%ix_out           = ix_out(1:n_out)
     reaction%multiplicity_out = multiplicity_out(1:n_out)
     reaction%rate_factor      = rfactor
+
+    if (n_in == 0) then
+       print *, "Error in the following reaction:"
+       print *, trim(reaction_text)
+       error stop "No input species"
+    end if
   end subroutine parse_reaction
 
   !> Find index of a species, return -1 if not found
