@@ -1,6 +1,8 @@
-# Chemistry
+# Chemistry {#chem-head}
 
-# Including chemical reactions
+[TOC]
+
+# Including chemical reactions {#chem-intro}
 
 Chemical reactions can be defined in the `input_data%file`, as in the following example:
 
@@ -20,7 +22,7 @@ Chemical reactions can be defined in the `input_data%file`, as in the following 
     O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
     O3- + O -> O2- + O2,c1,3.2e-16
     # Positive ion conversion
-    # We can assume this rates are c1
+    # We can assume this rates are constant
     N2+ + N2 + M -> N4+ + M,c1,5.0e-41
     N4+ + O2 -> N2 + N2 + O2+,c1,2.5e-16
     O2+ + O2 + M -> O4+ + M,c1,2.4e-42
@@ -42,9 +44,25 @@ where:
   rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s`
   respectively. The time unit is always a second.
 
-# Syntax
+## Ignoring the production of certain species {#chem-ignored}
 
-# Reaction syntax
+To simplify a reaction set, it is possible to ignore the production of certain species. This can be done by adding a table of the following form:
+
+    ignored_species
+    -----------------------
+    NO2
+    NO
+    O
+    N
+    -----------------------
+
+When ignored species occur on the left-hand side of a reaction, and if they do not correspond to the background gas that is initially present, the reaction will be ignored.
+
+When ignored species occur on the right-hand side of a reaction, their production will be ignored, but the reaction will still be included.
+
+# Chemistry syntax {#chem-syntax}
+
+## Reaction syntax {#chem-syntax-reactions}
 
 * `M` denotes 'any' gas molecule
 * `X+` means a positively charged species `X`
@@ -53,7 +71,7 @@ where:
 
 Note that in the output, special characters such as `+` and `^` are converted, because such symbols are not currently in Silo variable names.
 
-## Reaction groups
+## Reaction groups {#chem-syntax-groups}
 
 Sometimes, there are many similar reactions. To write these more compactly, the following syntax is available, somewhat similar to ZDPlaskin:
 
@@ -69,7 +87,7 @@ The symbols with an `@` will be replaced by the respective values specified in t
 
 The number of such replacement groups is flexible.
 
-# Rate function syntax
+## Rate function syntax {#chem-syntax-rate-function}
 
 The following symbols can be used:
 
@@ -85,14 +103,14 @@ kB_eV | Boltzmann constant | eV/K
 
 There should be no spaces in the reaction string.
 
-# Supported reaction rate formats
+## Supported reaction rate formats {#chem-syntax-rate-formats}
 
-## `field_table`
+* `field_table`
 
 For a table of the reaction rate versus the reduced electric
 field (E/N) in Townsend. Value: the name of the table in `input_data%file`
 
-## Function expressions
+**Functional expressions**
 
 * `c1`
 * `c1*(Td-c2)`
