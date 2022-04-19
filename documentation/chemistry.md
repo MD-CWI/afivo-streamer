@@ -34,13 +34,13 @@ where:
 
 * `reaction` is the reaction text, as in the example above
 * `rate_type` denotes the method used to obtain the reaction rate. Several
-  options are described below. For a list of all supported rate types, see @ref
-  m_chemistry::get_rates()
+  options are described below.
 * `value(s)` are one or more values needed to obtain the reaction rate, for
   example the name of a table or the coefficients of a function
 * `length unit` optionally denotes the length unit used in the reaction rate. It
   can be `m` (the default) or `cm`. This setting can be used to convert reaction
-  rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s` respectively.
+  rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s`
+  respectively. The time unit is always a second.
 
 ## field_table
 

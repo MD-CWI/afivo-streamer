@@ -74,31 +74,31 @@ module m_chemistry
   !> Reaction of the form (c1 * (kB_eV * Te + c2)**2 - c3) * c4
   integer, parameter :: rate_analytic_k3 = 8
 
-  !> Reaction of the form c1 * (T / 300)**c2 * exp(-c3 / T)
+  !> Reaction of the form c1 * (Tg / 300)**c2 * exp(-c3 / Tg)
   integer, parameter :: rate_analytic_k4 = 9
 
-  !> Reaction of the form c1 * exp(-c2 / T)
+  !> Reaction of the form c1 * exp(-c2 / Tg)
   integer, parameter :: rate_analytic_k5 = 10
 
-  !> Reaction of the form c1 * T**c2
+  !> Reaction of the form c1 * Tg**c2
   integer, parameter :: rate_analytic_k6 = 11
 
-  !> Reaction of the form c1 * (T / c2)**c3
+  !> Reaction of the form c1 * (Tg / c2)**c3
   integer, parameter :: rate_analytic_k7 = 12
 
-  !> Reaction of the form c1 * (300 / T)**c2
+  !> Reaction of the form c1 * (300 / Tg)**c2
   integer, parameter :: rate_analytic_k8 = 13
 
-  !> Reaction of the form c1 * exp(-c2 * T)
+  !> Reaction of the form c1 * exp(-c2 * Tg)
   integer, parameter :: rate_analytic_k9 = 14
 
-  !> Reaction of the form 10**(c1 + c2 * (T - 300))
+  !> Reaction of the form 10**(c1 + c2 * (Tg - 300))
   integer, parameter :: rate_analytic_k10 = 15
 
-  !> Reaction of the form c1 * (300 / T)**c2 * exp(-c3 / T)
+  !> Reaction of the form c1 * (300 / Tg)**c2 * exp(-c3 / Tg)
   integer, parameter :: rate_analytic_k11 = 16
 
-  !> Reaction of the form c1 * T**c2 * exp(-c3 / T)
+  !> Reaction of the form c1 * Tg**c2 * exp(-c3 / Tg)
   integer, parameter :: rate_analytic_k12 = 17
 
   !> Reaction of the form c1 * exp(-(c2 / (c3 + EN))**c4)
@@ -107,7 +107,7 @@ module m_chemistry
   !> Reaction of the form c1 * exp(-(EN / c2)**c3)
   integer, parameter :: rate_analytic_k14 = 19
 
-  !> Reaction of the form c1 * exp(-(c2 /(kb * (T + EN/c3)))**c4)
+  !> Reaction of the form c1 * exp(-(c2 /(kb * (Tg + EN/c3)))**c4)
   integer, parameter :: rate_analytic_k15 = 20
 
   !> Maximum number of species
@@ -756,39 +756,39 @@ contains
           new_reaction%rate_type = rate_analytic_k3
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)
-       case ("c1*(T/300)**c2*exp(-c3/T)")
+       case ("c1*(Tg/300)**c2*exp(-c3/Tg)")
           new_reaction%rate_type = rate_analytic_k4
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-c2/T)")
+       case ("c1*exp(-c2/Tg)")
           new_reaction%rate_type = rate_analytic_k5
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*T**c2")
+       case ("c1*Tg**c2")
           new_reaction%rate_type = rate_analytic_k6
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*(T/c2)**c3")
+       case ("c1*(Tg/c2)**c3")
           new_reaction%rate_type = rate_analytic_k7
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*(300/T)**c2")
+       case ("c1*(300/Tg)**c2")
           new_reaction%rate_type = rate_analytic_k8
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*exp(-c2*T)")
+       case ("c1*exp(-c2*Tg)")
           new_reaction%rate_type = rate_analytic_k9
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("10**(c1+c2*(T-300))")
+       case ("10**(c1+c2*(Tg-300))")
           new_reaction%rate_type = rate_analytic_k10
           new_reaction%n_coeff = 2
           read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("c1*(300/T)**c2*exp(-c3/T)")
+       case ("c1*(300/Tg)**c2*exp(-c3/Tg)")
           new_reaction%rate_type = rate_analytic_k11
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*T**c2*exp(-c3/T)")
+       case ("c1*Tg**c2*exp(-c3/Tg)")
           new_reaction%rate_type = rate_analytic_k12
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
@@ -800,7 +800,7 @@ contains
           new_reaction%rate_type = rate_analytic_k14
           new_reaction%n_coeff = 3
           read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("c1*exp(-(c2/(kb*(T+EN/c3)))**c4)")
+       case ("c1*exp(-(c2/(kb*(Tg+EN/c3)))**c4)")
           new_reaction%rate_type = rate_analytic_k15
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)
