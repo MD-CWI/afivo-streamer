@@ -136,3 +136,16 @@ For these expressions, the values specified should be `c1`, `c2`, etc. So for ex
     O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 
 means that the reaction rate is given by `1.1e-42 * exp(-(Td/65.0)**2)`.
+
+# Adding new types of reactions {#chem-new-reactions}
+
+First check if the new format can be computed according to one of the existing
+expressions, for example with different parameters (e.g., you could one
+parameter less, or allow for a minus sign). If this is the case, you only have
+to make modifications in `m_chemistry::read_reactions()`.
+
+1. Add a new `case` statement with the new reaction format
+2. Determine which of the existing rate functions you can re-use
+3. Modify the coefficients according to the new format
+
+If instead you have to add a completely new rate function, this can be done as follows: TODO

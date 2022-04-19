@@ -162,6 +162,8 @@ module m_chemistry
   public :: get_derivatives
   public :: species_index
 
+  public :: read_reactions
+
 contains
 
   !> Initialize module and load chemical reactions
