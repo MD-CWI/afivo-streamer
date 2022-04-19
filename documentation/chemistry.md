@@ -69,7 +69,7 @@ When ignored species occur on the right-hand side of a reaction, their productio
 * `X-` means a negatively charged species `X`
 * `2X` means `X + X` (same for `3X` etc.)
 
-Note that in the output, special characters such as `+` and `^` are converted, because such symbols are not currently in Silo variable names.
+Note that in the output, special characters such as `+` and `-` are converted, because only alphanumeric symbols and `_` can be include in Silo variable names.
 
 ## Reaction groups {#chem-syntax-groups}
 
@@ -115,6 +115,7 @@ field (E/N) in Townsend. Value: the name of the table in `input_data%file`
 * `c1`
 * `c1*(Td-c2)`
 * `c1*exp(-(c2/(c3+Td))**2)`
+* `c1*exp(-(Td/c2)**2)`
 * `c1*(300/Te)**c2`
 * `(c1*(kB_eV*Te+c2)**2-c3)*c4`
 * `c1*(Tg/300)**c2*exp(-c3/Tg)`
@@ -126,9 +127,25 @@ field (E/N) in Townsend. Value: the name of the table in `input_data%file`
 * `10**(c1+c2*(Tg-300))`
 * `c1*(300/Tg)**c2*exp(-c3/Tg)`
 * `c1*Tg**c2*exp(-c3/Tg)`
+* `c1*exp(-(c2/(c3+Td))**c4)`
+* `c1*exp(-(Td/c2)**c3)`
+* `c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4)`
 
 For these expressions, the values specified should be `c1`, `c2`, etc. So for example
 
     O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 
 means that the reaction rate is given by `1.1e-42 * exp(-(Td/65.0)**2)`.
+
+# Adding new types of reactions {#chem-new-reactions}
+
+First check if the new format can be computed according to one of the existing
+expressions, for example with different parameters (e.g., you could one
+parameter less, or allow for a minus sign). If this is the case, you only have
+to make modifications in `m_chemistry::read_reactions()`.
+
+1. Add a new `case` statement with the new reaction format
+2. Determine which of the existing rate functions you can re-use
+3. Modify the coefficients according to the new format
+
+If instead you have to add a completely new rate function, this can be done as follows: TODO
