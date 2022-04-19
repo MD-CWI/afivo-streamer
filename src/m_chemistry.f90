@@ -808,8 +808,13 @@ contains
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
-          print *, "Try to use tools/chemistry_update_reactions.sh"
-          error stop
+          if (how_to_get(n) /= "field_table" .and. &
+               index(how_to_get(n), "c1") == 0) then
+             print *, "You probably use the old reaction format"
+             print *, "Try to use tools/chemistry_update_reactions.sh"
+             print *, "See also the chemistry documentation"
+          end if
+          error stop "Unknown chemical reaction"
        end select
 
        ! Correct for length unit in the rate function (e.g. [k] = cm3/s)
