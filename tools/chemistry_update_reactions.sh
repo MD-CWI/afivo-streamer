@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # This script can be used to convert old chemical reactions to the new format
+# A backup of the file with a .bak extension will be created
 
 if (($# != 1)); then
    echo "Usage: $0 input_file.txt"
 fi
 
-sed -e '
+sed -i'.bak' -e  '
 s@constant@c1@g;
 s@k2_func@c1@g;
 s@linear@c1*(Td-c2)@g;
