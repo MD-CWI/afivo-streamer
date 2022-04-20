@@ -4,38 +4,19 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import re
+import argparse
 
-#TODO: Add an argparse framework to read the filename, specie/reaction of interest
+p = argparse.ArgumentParser()
+p.add_argument('base_name', type=str, help='Base of input filename')
+args = p.parse_args()
 
+rmfile = args.base_name + "_rate_matrix.txt"
+rates = args.base_name + "_rates.txt"
 
-
-fname = "./output/streamer_cyl_electrode_"
-suff = ".txt"
-rmfile = fname+"rate_matrix"+suff
-chem_deetsfile = fname+"chemistry_details"+suff
-rates = fname+"rates"+suff
-
-
-#Making a list of species and reactions
-species_list = list()
-reactions_list = list()
-with open(chem_deetsfile, "r") as f:
-    fr = f.read()
-
-fr = re.sub(r'\r\n', '\n', fr)  # Fix newlines
-lines = fr.splitlines()
-for il, line in enumerate(lines[2:]):
-    if line == "":
-        break
-    species_list.append(line.strip())
-print(species_list, len(species_list))
-for line in lines[il+5:]:
-    if line == " ":
-        break
-    reactions_list.append(line.strip())
-print(reactions_list, len(reactions_list))
-
+with open(args.base_name + "_species.txt", 'r') as f:
+    species_list = [x.strip() for x in f.readlines()]
+with open(args.base_name + "_reactions.txt", 'r') as f:
+    reactions_list = [x.strip() for x in f.readlines()]
 
 #Reading the matrix
 # dim 0 -- reactions

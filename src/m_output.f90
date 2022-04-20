@@ -375,11 +375,11 @@ contains
 
 #if NDIM == 2
     if (ST_cylindrical) then
-      if(cross_write) then
-       write(fname, "(A,I6.6)") trim(output_name) // &
-            "_cross_", output_cnt
-       call output_cross(tree, fname)
-      end if
+       if(cross_write) then
+          write(fname, "(A,I6.6)") trim(output_name) // &
+               "_cross_", output_cnt
+          call output_cross(tree, fname)
+       end if
     end if
 #endif
 
@@ -502,7 +502,8 @@ contains
        first_time = .false.
 
        call output_reaction_matrix(trim(output_name)//"_rate_matrix.txt")
-       call output_chemistry_details(trim(output_name)//"_chemistry_details.txt")
+       call output_chemical_species(trim(output_name)//"_species.txt")
+       call output_chemical_reactions(trim(output_name)//"_reactions.txt")
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
@@ -581,47 +582,67 @@ contains
 
   end subroutine output_log
 
+  !> Write a reaction connectivity matrix to a file
   subroutine output_reaction_matrix(filename)
-     use m_chemistry
-     character(len=*), intent(in) :: filename
-     integer                      :: my_unit, m, n
-     allocate(con_mat(n_reactions, n_species))
-     con_mat(:,:) = 0
-     do m = 1,n_reactions
-          con_mat(m, reactions(m)%ix_in) = -1
-          con_mat(m, reactions(m)%ix_out) = reactions(m)%multiplicity_out
-     end do
-     open(newunit=my_unit, file=trim(filename), action="write")
-     do m = 1, n_reactions
-          write(my_unit, *) con_mat(m,:) 
-     end do
-     write(my_unit, *) ""
-     close(my_unit)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, m, i, ix
+
+    allocate(con_mat(n_reactions, n_species))
+    con_mat(:,:) = 0
+
+    do m = 1, n_reactions
+       ! Subtract consumed species
+       do i = 1, size(reactions(m)%ix_in)
+          ix = reactions(m)%ix_in(i)
+          con_mat(m, ix) = con_mat(m, ix) - 1
+       end do
+
+       ! Add produced species
+       do i = 1, size(reactions(m)%ix_out)
+          ix = reactions(m)%ix_out(i)
+          con_mat(m, ix) = con_mat(m, ix) + &
+               reactions(m)%multiplicity_out(i)
+       end do
+    end do
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do m = 1, n_reactions
+       write(my_unit, *) con_mat(m, :)
+    end do
+    write(my_unit, *) ""
+    close(my_unit)
   end subroutine output_reaction_matrix
-  
-  subroutine output_chemistry_details(filename)
-     use m_chemistry
-     character(len=*), intent(in) :: filename
-     integer                      :: my_unit, i
-     open(newunit=my_unit, file=trim(filename), action="write")
-     write(my_unit, "(A)") "Specie list"
-     write(my_unit, "(A)") "-------------"
-     do i= 1, n_species
-          write(my_unit, "(A)") species_list(i)
-     end do
-     write(my_unit, "(A)") ""
-     write(my_unit, "(A)") "Reaction list"
-     write(my_unit, "(A)") "-------------"
-     do i=1, n_reactions
-          write(my_unit, "(A)") reactions(i)%description
-     end do
-     write(my_unit, *) ""
-     close(my_unit)
 
-  end subroutine output_chemistry_details
+  !> Write a list of chemical species
+  subroutine output_chemical_species(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, i
 
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_species
+       write(my_unit, "(A)") species_list(i)
+    end do
+    write(my_unit, "(A)") ""
+    close(my_unit)
+  end subroutine output_chemical_species
 
+  !> Write a list of chemical reactions
+  subroutine output_chemical_reactions(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, i
 
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_reactions
+       write(my_unit, "(A)") reactions(i)%description
+    end do
+    write(my_unit, "(A)") ""
+    close(my_unit)
+  end subroutine output_chemical_reactions
+
+  !> Write space-integrated and time-integrated reaction rates
   subroutine output_chemical_rates(filename)
     use m_chemistry
     character(len=*), intent(in) :: filename
@@ -631,18 +652,19 @@ contains
     logical, save                :: first_time = .true.
 
     if (first_time) then
-      first_time = .false.
-      open(newunit=my_unit, file=trim(filename), action="write")
-      write(my_unit, "(A)", advance="no") "#time,"
-      do i = 1, n_reactions
+       first_time = .false.
+       open(newunit=my_unit, file=trim(filename), action="write")
+       write(my_unit, "(A)", advance="no") "#time,"
+       do i = 1, n_reactions
           write(my_unit, "(A)", advance="no") " "//trim(reactions(i)%description)//","
-      end do
-      write(my_unit, *) ""
-      close(my_unit)
+       end do
+       write(my_unit, *) ""
+       close(my_unit)
     end if
+
     write(fmt, "(A, I0, A)") "(", n_reactions+1, "E16.8)"
     open(newunit=my_unit, file=trim(filename), action="write", &
-          position = "append")
+         position = "append")
     write(my_unit, fmt) global_time, sum(ST_global_rates(1:n_reactions, :), dim=2)
     close(my_unit)
   end subroutine output_chemical_rates
@@ -840,10 +862,10 @@ contains
 
        ! Compute the pressure
        box%cc(IJK, gas_prim_vars(i_e)) = (gas_euler_gamma-1.0_dp) * (box%cc(IJK,gas_vars( i_e)) - &
-         0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
+            0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
        ! Compute the temperature (T = P/(n*kB), n=gas number density)
        box%cc(IJK, gas_prim_vars(i_e+1)) = box%cc(IJK, gas_prim_vars(i_e))/ &
-                                          (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
+            (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
 
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
@@ -862,7 +884,6 @@ contains
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, i_surf))
 #elif NDIM == 3
-!FLAG
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, :, i_surf))
 #endif

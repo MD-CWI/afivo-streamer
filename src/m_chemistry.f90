@@ -550,7 +550,8 @@ contains
     end do
   end subroutine get_rates
 
-  !> Compute derivatives due to chemical reactions
+  !> Compute derivatives due to chemical reactions. Note that the 'rates'
+  !> argument is modified.
   subroutine get_derivatives(dens, rates, derivs, n_cells)
     integer, intent(in)     :: n_cells
     !> Species densities
