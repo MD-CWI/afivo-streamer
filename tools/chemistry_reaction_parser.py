@@ -11,6 +11,8 @@ p.add_argument('-convert_tex', action='store_true',
                help='Try to convert LaTeX reaction equations')
 p.add_argument('-default_length_unit', type=str, default='cm',
                help='Length unit to use for reactions')
+p.add_argument('-comment', action='store_true',
+               help='Include comments')
 args = p.parse_args()
 
 # re for a floating point number. The (?:  ) is a non-capturing group
@@ -23,24 +25,37 @@ s_number = number + r'(?:[eEdD]' + number + ')?'
 def reaction_to_regex(text):
     """Convert reaction text to a regular expression"""
 
+    r = text
+
+    # Check that coefficients are c1, c2, ..., cN
+    c = ''.join(re.findall(r'[+-]?c([0-9])', r))
+    if c not in '123456789':
+        raise ValueError('Coefficients should appear in order c1, c2, ...')
+
+    # Find +- signs in front of coefficients
+    signs = re.findall(r'([+-]?)c[0-9]', r)
+    c_signs = [int(s+'1') for s in signs]
+
+    # Remove +- signs from coefficients
+    r = re.sub(r'[+-](c[0-9])', r' \1', r)
+
     # Protect special symbols with []
-    r = re.sub(r'\*', '[*]', text)
+    r = re.sub(r'\*', '[*]', r)
     r = re.sub(r'\+', '[+]', r)
     r = re.sub(r'\(', r'[(]', r)
     r = re.sub(r'\)', r'[)]', r)
 
-    # Remove spaces in original description
-    r = re.sub(r' ', r'', r)
-
-    # Replace word boundaries by one or more spaces
+    # Replace word boundaries and spaces by one or more spaces
+    r = re.sub(r' ', r' *', r)
     r = re.sub(r'\b', r' *', r)
 
     # Convert c0, c1, ... to capture groups
-    r, count = re.subn(r'c[0-9]+', '(' + s_number + ')', r)
+    r = re.sub(r'c[0-9]', '(' + s_number + ')', r)
 
     # Allow for whitespace at beginning or end
     r = r'^\s*' + r + r'\s*$'
-    return r
+
+    return r, c_signs
 
 
 formats = [
@@ -48,7 +63,7 @@ formats = [
     r'c1*(Td-c2)',
     r'c1*exp(-(c2/(c3+Td))**2)',
     r'c1*exp(-(Td/c2)**2)',
-    r'c1 * (300/Te)**c2',
+    r'c1*(300/Te)**c2',
     r'(c1*(kB_eV*Te+c2)**2-c3)*c4',
     r'c1*(Tg/300)**c2*exp(-c3/Tg)',
     r'c1*exp(-c2/Tg)',
@@ -62,14 +77,12 @@ formats = [
     r'c1*exp(-(c2/(c3+Td))**c4)',
     r'c1*exp(-(Td/c2)**c3)',
     r'c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4)',
-    # New reactions
-    r'c1 * exp(c2 / Tg)',
 ]
 
 rate_funcs = [
     {'text': x,
      'name': x.replace(' ', ''),
-     'regex': reaction_to_regex(x)
+     'regex_signs': reaction_to_regex(x)
      } for x in formats]
 
 tex_replacements = [
@@ -113,11 +126,14 @@ for index, row in reactions.iterrows():
     found_match = False
 
     for k in rate_funcs:
-        m = re.match(k['regex'], f.strip())
+        m = re.match(k['regex_signs'][0], f.strip())
         if m:
-            coeffs = ' '.join(m.groups())
+            # Correct signs of coefficients
+            signs = k['regex_signs'][1]
+            coeffs = [float(x)*s for x, s in zip(m.groups(), signs)]
+            coeffs = ' '.join([str(x) for x in coeffs])
 
-            if 'comment' in row:
+            if args.comment and 'comment' in row:
                 print('# ' + row['comment'].strip())
 
             print(f'{r.strip()},{k["name"]},{coeffs},{length_unit}')
