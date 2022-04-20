@@ -278,6 +278,10 @@ contains
 
     fname = trim(output_name) // "_summary.txt"
     call chemistry_write_summary(trim(fname))
+    call output_reaction_matrix(trim(output_name)//"_rate_matrix.txt")
+    call output_chemical_species(trim(output_name)//"_species.txt")
+    call output_chemical_reactions(trim(output_name)//"_reactions.txt")
+    call output_chemical_rates(trim(output_name)//"_rates.txt", .true.)
   end subroutine output_initial_summary
 
   subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
@@ -340,7 +344,7 @@ contains
        call output_log(tree, fname, output_cnt, wc_time)
     end if
 
-    call output_chemical_rates(trim(output_name)//"_rates.txt")
+    call output_chemical_rates(trim(output_name)//"_rates.txt", .false.)
 
     if (output_regression_test) then
        write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
@@ -500,10 +504,6 @@ contains
 
     if (first_time) then
        first_time = .false.
-
-       call output_reaction_matrix(trim(output_name)//"_rate_matrix.txt")
-       call output_chemical_species(trim(output_name)//"_species.txt")
-       call output_chemical_reactions(trim(output_name)//"_reactions.txt")
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
@@ -643,30 +643,24 @@ contains
   end subroutine output_chemical_reactions
 
   !> Write space-integrated and time-integrated reaction rates
-  subroutine output_chemical_rates(filename)
+  subroutine output_chemical_rates(filename, first_time)
     use m_chemistry
     character(len=*), intent(in) :: filename
+    logical, intent(in)          :: first_time
     integer                      :: my_unit
-    character(len=50), save      :: fmt
-    integer                      :: i
-    logical, save                :: first_time = .true.
 
     if (first_time) then
-       first_time = .false.
        open(newunit=my_unit, file=trim(filename), action="write")
-       write(my_unit, "(A)", advance="no") "#time,"
-       do i = 1, n_reactions
-          write(my_unit, "(A)", advance="no") " "//trim(reactions(i)%description)//","
-       end do
-       write(my_unit, *) ""
+       ! Clear file
+       write(my_unit, "(A)", advance="no") ""
+       close(my_unit)
+    else
+       open(newunit=my_unit, file=trim(filename), action="write", &
+            position="append")
+       write(my_unit, "(*(E16.8))") global_time, &
+            sum(ST_global_rates(1:n_reactions, :), dim=2)
        close(my_unit)
     end if
-
-    write(fmt, "(A, I0, A)") "(", n_reactions+1, "E16.8)"
-    open(newunit=my_unit, file=trim(filename), action="write", &
-         position = "append")
-    write(my_unit, fmt) global_time, sum(ST_global_rates(1:n_reactions, :), dim=2)
-    close(my_unit)
   end subroutine output_chemical_rates
 
   !> Write statistics to a file that can be used for regression testing

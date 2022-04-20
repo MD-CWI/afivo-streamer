@@ -6,51 +6,72 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 
-p = argparse.ArgumentParser()
-p.add_argument('base_name', type=str, help='Base of input filename')
+p = argparse.ArgumentParser(
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+p.add_argument('rates_file', type=str, help='File with reaction rates')
+p.add_argument('-soi', type=str, help='Species of interest')
+p.add_argument('-list_species', action='store_true', help='List species')
+p.add_argument('-list_reactions', action='store_true', help='List reactions')
+p.add_argument('-plot_all', action='store_true',
+               help='Plot all reaction rates together')
 args = p.parse_args()
 
-rmfile = args.base_name + "_rate_matrix.txt"
-rates = args.base_name + "_rates.txt"
+# Assume the other files are in the same folder
+base_name = args.rates_file.replace('_rates.txt', '')
 
-with open(args.base_name + "_species.txt", 'r') as f:
-    species_list = [x.strip() for x in f.readlines()]
-with open(args.base_name + "_reactions.txt", 'r') as f:
-    reactions_list = [x.strip() for x in f.readlines()]
+with open(base_name + '_species.txt', 'r') as f:
+    species_list = [x.strip() for x in f.readlines() if x.strip()]
+with open(base_name + '_reactions.txt', 'r') as f:
+    reactions_list = [x.strip() for x in f.readlines() if x.strip()]
 
-#Reading the matrix
-# dim 0 -- reactions
-# dim 1 -- species
-rate_matrix = np.loadtxt(rmfile)
-#Readting the rates
-rate_data = np.loadtxt(rates)
-time = rate_data[:,0]
+rate_matrix = np.loadtxt(base_name + '_rate_matrix.txt')
+n_reactions, n_species = rate_matrix.shape
 
+tmp = np.loadtxt(base_name + '_rates.txt')
+time = tmp[:, 0]
+rates = tmp[:, 1:]
 
-#Visualizing all the rates vs. time
-plt.figure(1)
-for i,rxn in enumerate(reactions_list):
-        plt.plot(time, rate_data[:,i],label=rxn)
-plt.legend()
-#Visualizing the source and sink reaction rates for a given specie
-soi = "O4_plus" #Taking the electron as an examplee
-sidx = species_list.index(soi)
-fig, ax = plt.subplots(2, sharex = True)
-specie_reaction_idx = np.nonzero(rate_matrix[:,sidx])[0] + 1
-print(specie_reaction_idx)
-for idx in specie_reaction_idx:
-    multiplicity = rate_matrix[idx-1, sidx]
-    print(multiplicity)
-    if multiplicity < 0: #Loss reactions
-        ax[0].plot(time, multiplicity*rate_data[:,idx], label=reactions_list[idx-1])
-    elif multiplicity > 0: #Source reactions
-        ax[1].plot(time, multiplicity*rate_data[:,idx], label=reactions_list[idx-1])
-    else:
-        continue
-fig.suptitle(str(len(specie_reaction_idx))+" of "+ str(len(reactions_list))+" influence " + soi)
-ax[0].title.set_text("Sink reactions")
-ax[1].title.set_text("Source reactions")
-ax[0].legend()
-ax[1].legend()
-plt.show()
+if args.list_species:
+    for i, name in enumerate(species_list):
+        print(f'{i:4} {name}')
 
+if args.list_reactions:
+    for i, name in enumerate(reactions_list):
+        print(f'{i:4} {name}')
+
+if args.plot_all:
+    # Visualize all the rates vs. time
+    plt.figure()
+    for i, rxn in enumerate(reactions_list):
+        plt.plot(time, rates[:, i], label=rxn)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+if args.soi:
+    # Visualizing the source and sink reaction rates for a given specie
+    sidx = species_list.index(args.soi)
+    fig, ax = plt.subplots(2, figsize=(8, 8), sharex=True)
+
+    srce_idx = np.where(rate_matrix[:, sidx] > 0)[0]
+    sink_idx = np.where(rate_matrix[:, sidx] < 0)[0]
+    titles = ['Source', 'Sink']
+
+    for i, (ix, text) in enumerate(zip([srce_idx, sink_idx], titles)):
+        amount = rate_matrix[ix, sidx] * rates[:, ix]
+        frac = amount[-1]/amount[-1].sum()
+
+        for j, idx in enumerate(ix):
+            ax[i].plot(time, amount[:, j], label=reactions_list[idx] +
+                       f' ({100*frac[j]:.2f}%)')
+
+        ax[i].set_title(text + ' reactions')
+        ax[i].set_xlabel('Time (s)')
+        ax[i].set_ylabel('Production (#)')
+        ax[i].legend()
+
+    fig.suptitle(f'{len(srce_idx)+len(sink_idx)} of {n_reactions}'
+                 f' influence {args.soi}')
+
+    plt.tight_layout()
+    plt.show()
