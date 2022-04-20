@@ -605,9 +605,11 @@ contains
      integer                      :: my_unit, i
      open(newunit=my_unit, file=trim(filename), action="write")
      write(my_unit, "(A)") "Specie list"
+     write(my_unit, "(A)") "-------------"
      do i= 1, n_species
           write(my_unit, "(A)") species_list(i)
      end do
+     write(my_unit, "(A)") ""
      write(my_unit, "(A)") "Reaction list"
      write(my_unit, "(A)") "-------------"
      do i=1, n_reactions
