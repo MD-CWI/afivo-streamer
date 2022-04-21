@@ -7,8 +7,8 @@ import argparse
 
 p = argparse.ArgumentParser()
 p.add_argument('csv_file', type=str, help='Input csv file')
-p.add_argument('-convert_tex', action='store_true',
-               help='Try to convert LaTeX reaction equations')
+p.add_argument('-convert_tex', type=str,
+               help='Convert some LaTeX and save in new csv file')
 p.add_argument('-default_length_unit', type=str, default='cm',
                help='Length unit to use for reactions')
 p.add_argument('-comment', action='store_true',
@@ -107,36 +107,43 @@ tex_replacements = [
     [r'\\to', r'->'],
 ]
 
+
+def replace_tex(text):
+    for old, new in tex_replacements:
+        text = re.sub(old, new, text)
+    return text
+
+
 reactions = pd.read_csv(args.csv_file, comment='#')
 
-for index, row in reactions.iterrows():
-    r = row['reaction']
-    f = row['rate']
+if args.convert_tex:
+    reactions['reaction'] = [replace_tex(t) for t in reactions['reaction']]
+    reactions['rate'] = [replace_tex(t) for t in reactions['rate']]
+    reactions.to_csv(args.convert_tex, index=False)
+else:
+    for index, row in reactions.iterrows():
+        r = row['reaction']
+        f = row['rate']
 
-    if 'length_unit' in row:
-        length_unit = row['length_unit']
-    else:
-        length_unit = args.default_length_unit
+        if 'length_unit' in row:
+            length_unit = row['length_unit']
+        else:
+            length_unit = args.default_length_unit
 
-    if args.convert_tex:
-        for old, new in tex_replacements:
-            f = re.sub(old, new, f)
-            r = re.sub(old, new, r)
+        found_match = False
 
-    found_match = False
+        for k in rate_funcs:
+            m = re.match(k['regex_signs'][0], f.strip())
+            if m:
+                # Correct signs of coefficients
+                signs = k['regex_signs'][1]
+                coeffs = [float(x)*s for x, s in zip(m.groups(), signs)]
+                coeffs = ' '.join([str(x) for x in coeffs])
 
-    for k in rate_funcs:
-        m = re.match(k['regex_signs'][0], f.strip())
-        if m:
-            # Correct signs of coefficients
-            signs = k['regex_signs'][1]
-            coeffs = [float(x)*s for x, s in zip(m.groups(), signs)]
-            coeffs = ' '.join([str(x) for x in coeffs])
+                if args.comment and 'comment' in row:
+                    print('# ' + row['comment'].strip())
 
-            if args.comment and 'comment' in row:
-                print('# ' + row['comment'].strip())
-
-            print(f'{r.strip()},{k["name"]},{coeffs},{length_unit}')
-            found_match = True
-    if not found_match:
-        print(f'** No match for {f.strip()}')
+                print(f'{r.strip()},{k["name"]},{coeffs},{length_unit}')
+                found_match = True
+        if not found_match:
+            print(f'** No match for {f.strip()}')
