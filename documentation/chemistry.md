@@ -93,7 +93,7 @@ The following symbols can be used:
 
 symbol | meaning | unit
 ---|---|---
-c1, c2, ... | Constants that will be specified | -
+c1, c2, ..., c9 | Constants that will be specified | -
 Td | The reduced electric field E/N | Townsend
 Te | Electron 'temperature' (given by 2*energy/(3*kB))| K
 Ti | Ion temperature | K
@@ -148,4 +148,10 @@ to make modifications in `m_chemistry::read_reactions()`.
 2. Determine which of the existing rate functions you can re-use
 3. Modify the coefficients according to the new format
 
-If instead you have to add a completely new rate function, this can be done as follows: TODO
+If instead you have to add a completely new rate function, this can be done as
+follows:
+
+1. Define a new parameter, e.g. `integer, parameter :: rate_analytic_kN = ...` in `m_chemistry`
+2. Add a new `case` statement with the new reaction format in `m_chemistry::read_reactions()`
+3. Implement the new reaction with a new case in `m_chemistry::get_rates()`
+

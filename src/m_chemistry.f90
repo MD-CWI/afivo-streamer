@@ -25,7 +25,7 @@ module m_chemistry
        "detachment", "general"]
 
   !> Maximum number of coefficients for a reaction rate function
-  integer, parameter :: rate_max_num_coeff = 4
+  integer, parameter :: rate_max_num_coeff = 9
 
   !> Basic chemical reaction type
   type reaction_t
@@ -883,6 +883,7 @@ contains
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
           print *, "In file:           ", trim(filename)
+          print *, "See documentation/chemistry.md"
           if (how_to_get(n) /= "field_table" .and. &
                index(how_to_get(n), "c1") == 0) then
              print *, "You probably use the old reaction format"
