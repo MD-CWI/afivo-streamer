@@ -9,7 +9,8 @@ import argparse
 p = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 p.add_argument('rates_file', type=str, help='File with reaction rates')
-p.add_argument('-soi', type=str, help='Species of interest')
+p.add_argument('-soi', type=str, default=[], nargs='+',
+               help='Species of interest')
 p.add_argument('-list_species', action='store_true', help='List species')
 p.add_argument('-list_reactions', action='store_true', help='List reactions')
 p.add_argument('-plot_all', action='store_true',
@@ -41,16 +42,19 @@ if args.list_reactions:
 
 if args.plot_all:
     # Visualize all the rates vs. time
-    plt.figure()
-    for i, rxn in enumerate(reactions_list):
-        plt.plot(time, rates[:, i], label=rxn)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    plt.figure(figsize=(8, 8))
 
-if args.soi:
-    # Visualizing the source and sink reaction rates for a given specie
-    sidx = species_list.index(args.soi)
+    ix = np.argsort(rates[-1, :])[::-1]
+    sum_of_rates = rates[-1, :].sum()
+
+    for i in ix:
+        plt.plot(time, rates[:, i], label=reactions_list[i] +
+                 f' ({100*rates[-1, i]/sum_of_rates:.2f}%)')
+    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+
+for soi in args.soi:
+    # Visualize the source and sink reactions for a given specie
+    sidx = species_list.index(soi)
     fig, ax = plt.subplots(2, figsize=(8, 8), sharex=True)
 
     srce_idx = np.where(rate_matrix[:, sidx] > 0)[0]
@@ -71,7 +75,8 @@ if args.soi:
         ax[i].legend()
 
     fig.suptitle(f'{len(srce_idx)+len(sink_idx)} of {n_reactions}'
-                 f' influence {args.soi}')
+                 f' influence {soi}')
 
+if plt.get_fignums():
     plt.tight_layout()
     plt.show()
