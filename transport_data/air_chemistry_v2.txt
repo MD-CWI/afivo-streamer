@@ -32,24 +32,25 @@ O2+ + O2 + M -> O4+ + M,c1,2.4e-42
 # Electron recombination (Kossyi et. al. 1992)
 e + O4+ -> O2 + O2,field_table,C01 O4+ Electron recombination
 # Recombination (Kossyi et. al. 1992)
-N2+ + O- -> N + N + O,constant,1e-13
-N2+ + O3- -> N + N + O3,constant,1e-13
-N2+ + O2- -> N + N + O2,constant,1e-13
-O2+ + O- -> O + O + O,constant,1e-13
-O2+ + O3- -> O + O + O3,constant,1e-13
-O2+ + O2- -> O + O + O2,constant,1e-13
-O4+ + O- -> O2 + O2 + O,constant,1e-13
-O4+ + O2- -> O2 + O2 + O2,constant,1e-13
-O4+ + O3- -> O2 + O2 + O3,constant,1e-13
-N4+ + O- -> N2 + N2 + O,constant,1e-13
-N4+ + O2- -> N2 + N2 + O2,constant,1e-13
-N4+ + O3- -> N2 + N2 + O3,constant,1e-13
+N2+ + O- -> N + N + O,c1,1e-13
+N2+ + O3- -> N + N + O3,c1,1e-13
+N2+ + O2- -> N + N + O2,c1,1e-13
+O2+ + O- -> O + O + O,c1,1e-13
+O2+ + O3- -> O + O + O3,c1,1e-13
+O2+ + O2- -> O + O + O2,c1,1e-13
+O4+ + O- -> O2 + O2 + O,c1,1e-13
+O4+ + O2- -> O2 + O2 + O2,c1,1e-13
+O4+ + O3- -> O2 + O2 + O3,c1,1e-13
+N4+ + O- -> N2 + N2 + O,c1,1e-13
+N4+ + O2- -> N2 + N2 + O2,c1,1e-13
+N4+ + O3- -> N2 + N2 + O3,c1,1e-13
 -----------------------
 
 ignored_species
 -----------------------
 N
 O
+N2O
 -----------------------
 
 
