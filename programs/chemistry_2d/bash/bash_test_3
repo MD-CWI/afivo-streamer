@@ -14,4 +14,26 @@ cd ../
 #./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -output%name+=test/pos_EL6mm_2.8e6
 
 
-./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -field_rod_r0="0 0.973" -domain_len="0.1 0.2" -end_streamer_length=0.18 -output%name+=test/pos_EL6mm_2.8e6_d200mm
+
+#./streamer pos_d100mm_chemistry.cfg -field_amplitude=-2.8e6 -field_rod_r0="0 0.973" -domain_len="0.1 0.2" -end_streamer_length=0.18 -output%name+=test/pos_EL6mm_2.8e6_d200mm
+
+
+
+#./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-1.2e6 -output%name+=test_andy_data/andy_pos_EL6mm_1.2e6
+
+#./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-1.6e6 -output%name+=test_andy_data/andy_pos_EL6mm_1.6e6
+
+#./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-2.0e6 -output%name+=test_andy_data/andy_pos_EL6mm_2.0e6
+
+#./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-2.4e6 -output%name+=test_andy_data/andy_pos_EL6mm_2.4e6
+
+#./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-2.8e6 -output%name+=test_andy_data/andy_pos_EL6mm_2.8e6
+
+
+
+./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-2.0e6 -input_data%file=N2_O2_Itikawa.txt -output%name+=test_andy_data/andy_pos_EL6mm_2.0e6_Itikawa
+
+./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-2.0e6 -input_data%file=N2_O2_Phelps.txt -output%name+=test_andy_data/andy_pos_EL6mm_2.0e6_Phelps
+
+./streamer pos_d100mm_chemical_species.cfg -field_amplitude=-2.0e6 -input_data%file=Air_Kawa_Itikawa_Kossyi -output%name+=test_andy_data/andy_pos_EL6mm_2.0e6_Kawa
+
