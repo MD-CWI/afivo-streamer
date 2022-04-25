@@ -17,9 +17,15 @@ numbered_files = [f'{i}: {f}' for i, f in enumerate(args.log_file)]
 fig, axes = plt.subplots(2, 2, constrained_layout=True)
 fig.suptitle('\n'.join(numbered_files))
 
+coord = 'x'
+if 'y' in logs[0].columns:
+    coord = 'y'
+if 'z' in logs[0].columns:
+    coord = 'z'
+
 for i, log in enumerate(logs):
     # Compute smoothed velocity
-    log['velocity'] = np.gradient(log['y'], log['time'])
+    log['velocity'] = np.gradient(log[coord], log['time'])
 
     # Remove outliers in velocity
     v_low = log["velocity"].abs().quantile(0.1)
@@ -35,7 +41,7 @@ for i, log in enumerate(logs):
                          log['x.2'].abs() > 2 * v_hi)
     log['x.2'].mask(mask, np.nan, inplace=True)
 
-    log.plot('time', 'y', ax=axes[0, 0], label=f'y-{i}')
+    log.plot('time', coord, ax=axes[0, 0], label=f'y-{i}')
     log.plot('time', 'velocity', ax=axes[0, 1], label=f'velocity-{i}')
     log.plot('time', 'max(E)', ax=axes[1, 0], label=f'max(E)-{i}')
     log.plot('time', 'x.2', ax=axes[1, 1], label=f'radius-{i}')
