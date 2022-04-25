@@ -18,18 +18,18 @@ e + O2 -> e + e + O2+,field_table,C45 O2 Ionization 12.06 eV
 e + O2 + O2 -> O2-,field_table,C29 O2 Attachment
 e + O2 -> O-,field_table,C30 O2 Attachment
 # Detachment (Panchesnyi 2013)
-O2- + M -> e,exp_v1,1.24e-17 179.0 8.8
-O- + N2 -> e,exp_v1,1.16e-18 48.9 11.0
+O2- + M -> e,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
+O- + N2 -> e,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
 # Negative ion conversion (Panchesnyi 2013)
-O- + O2 -> O2-,exp_v1,6.96e-17 198.0 5.6
-O- + O2 + M -> O3-,exp_v2,1.1e-42 65.0
+O- + O2 -> O2-,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
+O- + O2 + M -> O3-,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 # Generation of N2(C3)
 e + N2 -> e + N2_C3,field_table,C10 N2 Excitation 11.03 eV
 # Quenching by N2 and O2 collisions (rates from Panchesnyi PR-E 2005)
-N2_C3 + N2 -> N2 + N2,constant,0.13e-16
-N2_C3 + O2 -> N2 + O2,constant,3.0e-16
+N2_C3 + N2 -> N2 + N2,c1,0.13e-16
+N2_C3 + O2 -> N2 + O2,c1,3.0e-16
 # Radiative lifetime is 42 ns
-N2_C3 -> N2_B3,constant,2.381e7
+N2_C3 -> N2_B3,c1,2.381e7
 -----------------------
 
 Mean energy (eV)

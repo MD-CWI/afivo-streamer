@@ -1,0 +1,15 @@
+#!/bin/bash
+
+cd ../
+
+#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.6e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -end_time=5e-7 -use_electrode_voltage=T -electrode_voltage_t_risefall=2e-9 -electrode_voltage_t_pulse=5e-8 -electrode_voltage=9e4 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL1mm_1.6e6_stop
+
+
+
+./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.6e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -field_rise_time=2e-9 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL1mm_1.6e6_2ns
+
+./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.6e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -field_rise_time=5e-9 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL1mm_1.6e6_5ns
+
+./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.6e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -field_rise_time=10e-9 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL1mm_1.6e6_10ns
+
+./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.6e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -field_rise_time=20e-9 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL1mm_1.6e6_20ns
