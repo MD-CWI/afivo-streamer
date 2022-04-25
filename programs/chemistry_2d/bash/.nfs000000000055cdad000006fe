@@ -1,0 +1,28 @@
+#!/bin/bash
+
+cd ../
+
+#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.55e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -output%name+=EL1mm_1.55e6
+
+#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.5e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -output%name+=EL1mm_1.5e6
+
+#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.48e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -output%name+=EL1mm_1.48e6
+
+#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.46e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -output%name+=EL1mm_1.46e6
+
+#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.44e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -output%name+=EL1mm_1.44e6
+
+#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.42e6  -field_rod_r0="0 0.982" -field_rod_radius=0.1e-3 -output%name+=EL1mm_1.42e6
+
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6  -field_rod_r0="0 0.955" -field_rod_radius=0.1e-3 -output%name+=d20mm_EL1mm_1.5e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.45e6  -field_rod_r0="0 0.955" -field_rod_radius=0.1e-3 -output%name+=d20mm_EL1mm_1.45e6
+
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.42e6  -field_rod_r0="0 0.955" -field_rod_radius=0.1e-3 -output%name+=d20mm_EL1mm_1.42e6
+
+
+
+
+
+
