@@ -61,8 +61,8 @@ def reaction_to_regex(text):
 formats = [
     r'c1',
     r'c1*(Td-c2)',
-    r'c1*exp(-(c2/(c3+Td))**2)',
-    r'c1*exp(-(Td/c2)**2)',
+    #r'c1*exp(-(c2/(c3+Td))**2)',
+    #r'c1*exp(-(Td/c2)**2)',
     r'c1*(300/Te)**c2',
     r'(c1*(kB_eV*Te+c2)**2-c3)*c4',
     r'c1*(Tg/300)**c2*exp(-c3/Tg)',
@@ -101,6 +101,7 @@ tex_replacements = [
     # \exp -> exp
     [r'\\exp', r'exp'],
     # T_e -> Te
+    [r'T_d', r'Td'],
     [r'T_e', r'Te'],
     [r'T_g', r'Tg'],
     # \to -> '->'
