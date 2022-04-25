@@ -16,7 +16,7 @@ cd ../
 
 #./streamer air_d20mm_chemistry.cfg -field_amplitude=-0.9e6  -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -output%name+=d20mm_EL4mm_0.9e6
 
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-0.85e6  -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -output%name+=d20mm_EL4mm_0.85e6
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-0.89e6  -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -output%name+=d20mm_EL4mm_0.89e6
 
 
 

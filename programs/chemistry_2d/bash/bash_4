@@ -16,7 +16,10 @@ cd ../
 
 #./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.2e6  -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -output%name+=d20mm_EL2mm_1.2e6
 
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.15e6  -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -output%name+=d20mm_EL2mm_1.15e6
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.15e6  -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -output%name+=d20mm_EL2mm_1.15e6
+
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.12e6  -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -output%name+=d20mm_EL2mm_1.12e6
+
 
 
 
