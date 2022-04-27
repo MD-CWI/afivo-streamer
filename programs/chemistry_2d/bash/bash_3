@@ -3,20 +3,16 @@
 cd ../
 
 
-#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.0e6  -field_rod_r0="0 0.91" -field_rod_radius=0.5e-3 -output%name+=EL5mm_1.0e6
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-0.97e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -output%name+=EL3mm_0.97e6
 
-#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.4e6  -field_rod_r0="0 0.91" -field_rod_radius=0.5e-3 -output%name+=EL5mm_1.4e6
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.0e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -output%name+=EL3mm_1.0e6
 
-#./streamer air_d50mm_chemistry.cfg -field_amplitude=-1.8e6  -field_rod_r0="0 0.91" -field_rod_radius=0.5e-3 -output%name+=EL5mm_1.8e6
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.2e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -output%name+=EL3mm_1.2e6
 
-#./streamer air_d50mm_chemistry.cfg -field_amplitude=-2.2e6  -field_rod_r0="0 0.91" -field_rod_radius=0.5e-3 -output%name+=EL5mm_2.2e6
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -output%name+=EL3mm_1.5e6
 
-#./streamer air_d50mm_chemistry.cfg -field_amplitude=-2.6e6  -field_rod_r0="0 0.91" -field_rod_radius=0.5e-3 -output%name+=EL5mm_2.6e6
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.8e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -output%name+=EL3mm_1.8e6
 
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-2.2e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -output%name+=EL3mm_2.2e6
 
-#./streamer air_d20mm_chemistry.cfg -field_amplitude=-0.9e6  -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -output%name+=d20mm_EL4mm_0.9e6
-
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-0.89e6  -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -output%name+=d20mm_EL4mm_0.89e6
-
-
-
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-2.6e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -output%name+=EL3mm_2.6e6
