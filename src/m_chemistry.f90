@@ -801,6 +801,8 @@ contains
 
        new_reaction%description = trim(reaction(n))
 
+       ! IMPORTANT: If you change the reactions below, do not forget to update
+       ! documentation/chemistry.md accordingly!
        select case (how_to_get(n))
        case ("field_table")
           ! Reaction data should be present in the same file
