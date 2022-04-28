@@ -62,7 +62,7 @@ N2*(a) + N2*(a) -> e + N4+,c1,2e-10,cm
 N(^2D) + O(^3P) -> e + NO+,c1,1e-12,cm
 # Attachment
 e + O2 + O2 -> O2- + O2,field_table,C27 O2 Attachment
-e + O2 -> O- + O,field_table,C28 O2 Attachment
+e + O2 -> O- + O(^3P),field_table,C28 O2 Attachment
 e + O(^3P) + O2 -> O2- + O(^3P),c1,1e-31,cm
 e + O(^3P) + O2 -> O- + O2,c1,1e-31,cm
 e + O3 -> O2- + O(^3P),c1,1e-09,cm
