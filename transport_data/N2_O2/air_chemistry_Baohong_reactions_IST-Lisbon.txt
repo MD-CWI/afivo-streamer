@@ -51,7 +51,7 @@ e + O2 -> e + O(^3P) + O(^1S),field_table,C43 O2 Excitation 9.97 eV
 # Ionization
 e + N2 -> e + e + N2+,field_table,C1 N2 Ionization 15.60 eV
 e + N2 -> e + e + N2+,field_table,C2 N2 Ionization 18.80 eV
-e + O2 -> e + e + O2+,field_table,C27 O2 Ionization 12.06 eV
+e + O2 -> e + e + O2+,field_table,C27 O2 Ionization 12.10 eV
 e + O3 -> e + e + O3+,field_table,C45 O3 Ionization 12.43 eV
 e + O(^3P) -> e + e + O+,field_table,C47 O Ionization 13.60 eV
 e + N(^4S) -> e + e + N+,field_table,C49 N Ionization 14.54 eV

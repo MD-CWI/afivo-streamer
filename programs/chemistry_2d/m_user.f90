@@ -11,17 +11,16 @@ module m_user
   ! Public methods
   public :: user_initialize
 
-  ! Whether field_decay versus length is enabled
-  logical, protected, public :: field_decay_enabled = .false.
+  ! Whether pulse field versus time is enabled
+  logical, protected, public :: pulse_field_enabled = .false.
 
-  ! Decay parameters of the applied electric field
-  character(len=32) :: decay_profile = "exponential" ! (constant, exponential, linear_across_zero, linear_over_zero, step)
-  real(dp) :: initial_field = 2.5e6_dp
-  real(dp) :: min_field =0.8e6_dp
-  real(dp) :: decay_distance = 10e-3_dp
-  real(dp) :: decay_slope = -0.4e8_dp
-  real(dp) :: decay_start_z = 60e-3_dp
-  real(dp) :: detection_density = 1e16_dp
+  real(dp) :: start_time = 0.0e-9_dp
+  real(dp) :: rise_time = 5.0e-9_dp
+  real(dp) :: pulse_time = 30.0e-9_dp
+  real(dp) :: fall_time = 5.0e-9_dp
+  real(dp) :: start_field = -0.0e6_dp
+  real(dp) :: pulse_field = -1.5e6_dp
+  real(dp) :: post_field = -0.0e6_dp
 
 contains
 
@@ -29,95 +28,47 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout) :: tree
 
-   call CFG_add_get(cfg, "field_decay%enabled", field_decay_enabled, &
-         "Whether field decay versus length is enabled")
-   call CFG_add_get(cfg, "field_decay%decay_profile", decay_profile, &
-         "Decay type for applied electric field (constant, exponential, linear_across_zero, linear_over_zero, step)")
-    call CFG_add_get(cfg, "field_decay%initial_field", initial_field, &
-         "Initial electric field before any decay (V/m)")
-    call CFG_add_get(cfg, "field_decay%min_field", min_field, &
-         "Minimal electric field (V/m)")
-    call CFG_add_get(cfg, "field_decay%decay_distance", decay_distance, &
-         "Decay distance (m)")
-    call CFG_add_get(cfg, "field_decay%decay_slope", decay_slope, &
-         "Decay slope (V/m2)")
-    call CFG_add_get(cfg, "field_decay%decay_start_z", decay_start_z, &
-         "Decay starts from this z-coordinate (m)")
-    call CFG_add_get(cfg, "field_decay%detection_density", detection_density, &
-         "Detection density (1/m3)")
+    call CFG_add_get(cfg, "field_waveform%enabled", pulse_field_enabled, &
+          "Whether pulse field versus time is enabled")
+    call CFG_add_get(cfg, "field_waveform%start_time", start_time, &
+          "Start time of field (s)")
+    call CFG_add_get(cfg, "field_waveform%rise_time", rise_time, &
+          "Linear rise time of field (s)")
+    call CFG_add_get(cfg, "field_waveform%pulse_time", pulse_time, &
+          "Pulse time of field (s)")
+    call CFG_add_get(cfg, "field_waveform%fall_time", fall_time, &
+          "Linear fall time of field (s)")
+    call CFG_add_get(cfg, "field_waveform%start_field", start_field, &
+          "Start field (V/m)")
+    call CFG_add_get(cfg, "field_waveform%pulse_field", pulse_field, &
+          "Pulse field (V/m)")
+    call CFG_add_get(cfg, "field_waveform%post_field", post_field, &
+          "Post field (V/m)")
 
-    if (field_decay_enabled) then
+    if (pulse_field_enabled) then
       user_field_amplitude => my_field_amplitude
     end if
 
   end subroutine user_initialize
 
-
-  ! Get the electric field amplitude
+  ! Set electric field amplitude
   function my_field_amplitude(tree, time) result(amplitude)
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
-    real(dp)               :: amplitude, zmin, dist
-
-    ! Get lowest z-coordinate of a streamer
-    call af_reduction(tree, streamer_min_z, reduce_min, 1e100_dp, zmin)
-
-    dist = max(decay_start_z - zmin, 0.0_dp)
-
-  ! Electric field proflie
-  select case (decay_profile)
-  case ("constant")  ! constant electric field versus length
-    amplitude = initial_field
-  case ("exponential")  ! exponential decay electric field versus length
-    amplitude = min_field + (initial_field - min_field) * exp(-dist / decay_distance)
-  case ("linear_across_zero")  ! linear decay electric field versus length (across zero)
-    amplitude = initial_field+decay_slope * dist
-    if (amplitude<=-initial_field) then
-       amplitude = -initial_field
+    real(dp)               :: amplitude
+  
+    if (time <= start_time) then
+      amplitude = start_field
+    else if (time <= (start_time + rise_time)) then
+      amplitude = start_field + (pulse_field - start_field)/rise_time * (time - start_time) 
+    else if (time <= (start_time + rise_time + pulse_time)) then
+      amplitude = pulse_field
+    else if (time <= (start_time + rise_time + pulse_time + fall_time)) then
+      amplitude = pulse_field + (post_field - pulse_field)/fall_time * (time - start_time - rise_time - pulse_time) 
+    else 
+      amplitude = post_field
     end if
-  case ("linear_over_zero")  ! linear decay electric field versus length (over zero)
-    amplitude = initial_field+decay_slope * dist
-    if (amplitude<=0) then
-       amplitude = 0
-    end if
-  case ("step")  ! step decay electric field versus length
-    if (dist == 0) then
-       amplitude = initial_field
-    else
-       amplitude = min_field
-    end if
-   end select
 
   end function my_field_amplitude
-
-  ! Find cell with smallest z coordinate that has a density exceeding
-  ! detection_density
-  real(dp) function streamer_min_z(box)
-    type(box_t), intent(in) :: box
-    integer                 :: i, n, nc
-    real(dp)                :: r(NDIM)
-
-    nc = box%n_cell
-    i = -1
-
-    do n = 1, nc
-       if (maxval(box%cc(1:nc, n, i_electron)) > detection_density) then
-          i = n
-          exit
-       end if
-    end do
-
-    if (i /= -1) then
-       r = af_r_cc(box, [1, i])
-       streamer_min_z = r(NDIM)
-    else
-       streamer_min_z = 1e100_dp
-    end if
-  end function streamer_min_z
-
-  real(dp) function reduce_min(a, b)
-    real(dp), intent(in) :: a, b
-    reduce_min = min(a, b)
-  end function reduce_min
 
 end module m_user
