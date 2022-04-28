@@ -272,16 +272,18 @@ contains
   end subroutine output_initialize
 
   !> Write a summary of the model and parameters used
-  subroutine output_initial_summary()
+  subroutine output_initial_summary(tree)
     use m_chemistry
+    type(af_t), intent(in) :: tree
     character(len=string_len) :: fname
 
     fname = trim(output_name) // "_summary.txt"
     call chemistry_write_summary(trim(fname))
-    call output_reaction_matrix(trim(output_name)//"_rate_matrix.txt")
+    call output_stoichiometric_matrix(trim(output_name)//"_stoich_matrix.txt")
     call output_chemical_species(trim(output_name)//"_species.txt")
     call output_chemical_reactions(trim(output_name)//"_reactions.txt")
     call output_chemical_rates(trim(output_name)//"_rates.txt", .true.)
+    call output_chemical_amounts(tree, trim(output_name)//"_amounts.txt", .true.)
   end subroutine output_initial_summary
 
   subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
@@ -345,6 +347,7 @@ contains
     end if
 
     call output_chemical_rates(trim(output_name)//"_rates.txt", .false.)
+    call output_chemical_amounts(tree, trim(output_name)//"_amounts.txt", .false.)
 
     if (output_regression_test) then
        write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
@@ -582,37 +585,38 @@ contains
 
   end subroutine output_log
 
-  !> Write a reaction connectivity matrix to a file
-  subroutine output_reaction_matrix(filename)
+  !> Write a net stoichiometric matrix to a file
+  subroutine output_stoichiometric_matrix(filename)
     use m_chemistry
     character(len=*), intent(in) :: filename
     integer                      :: my_unit, m, i, ix
+    integer, allocatable         :: stoich(:,:)
 
-    allocate(con_mat(n_reactions, n_species))
-    con_mat(:,:) = 0
+    allocate(stoich(n_reactions, n_species))
+    stoich(:, :) = 0
 
     do m = 1, n_reactions
        ! Subtract consumed species
        do i = 1, size(reactions(m)%ix_in)
           ix = reactions(m)%ix_in(i)
-          con_mat(m, ix) = con_mat(m, ix) - 1
+          stoich(m, ix) = stoich(m, ix) - 1
        end do
 
        ! Add produced species
        do i = 1, size(reactions(m)%ix_out)
           ix = reactions(m)%ix_out(i)
-          con_mat(m, ix) = con_mat(m, ix) + &
+          stoich(m, ix) = stoich(m, ix) + &
                reactions(m)%multiplicity_out(i)
        end do
     end do
 
     open(newunit=my_unit, file=trim(filename), action="write")
-    do m = 1, n_reactions
-       write(my_unit, *) con_mat(m, :)
+    do i = 1, n_species
+       write(my_unit, *) stoich(:, i)
     end do
     write(my_unit, *) ""
     close(my_unit)
-  end subroutine output_reaction_matrix
+  end subroutine output_stoichiometric_matrix
 
   !> Write a list of chemical species
   subroutine output_chemical_species(filename)
@@ -647,13 +651,12 @@ contains
     use m_chemistry
     character(len=*), intent(in) :: filename
     logical, intent(in)          :: first_time
-    integer                      :: my_unit
+    integer                      :: my_unit, iostate
 
     if (first_time) then
-       open(newunit=my_unit, file=trim(filename), action="write")
-       ! Clear file
-       write(my_unit, "(A)", advance="no") ""
-       close(my_unit)
+       ! Clear the file
+       open(newunit=my_unit, file=trim(filename), iostat=iostate)
+       if (iostate == 0) close(my_unit, status='delete')
     else
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
@@ -662,6 +665,32 @@ contains
        close(my_unit)
     end if
   end subroutine output_chemical_rates
+
+  !> Write space-integrated species densities
+  subroutine output_chemical_amounts(tree, filename, first_time)
+    use m_chemistry
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: filename
+    logical, intent(in)          :: first_time
+    integer                      :: my_unit, n, iostate
+    real(dp)                     :: sum_dens(n_species)
+
+    if (first_time) then
+       ! Clear the file
+       open(newunit=my_unit, file=trim(filename), iostat=iostate)
+       if (iostate == 0) close(my_unit, status='delete')
+    else
+       do n = 1, n_species
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+       end do
+
+       open(newunit=my_unit, file=trim(filename), action="write", &
+            position="append")
+       write(my_unit, "(*(E16.8))") global_time, sum_dens
+       close(my_unit)
+    end if
+
+  end subroutine output_chemical_amounts
 
   !> Write statistics to a file that can be used for regression testing
   subroutine output_regression_log(tree, filename, out_cnt, wc_time)

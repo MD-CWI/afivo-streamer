@@ -128,9 +128,6 @@ module m_chemistry
   !> Number of reactions present
   integer, public, protected :: n_reactions = 0
 
-  !> Connectivity matrix of the reaction set (come up with a better name)
-  integer, public, allocatable :: con_mat(:,:)
-
   !> List of the species
   character(len=comp_len), public, protected :: species_list(max_num_species)
 
@@ -801,6 +798,8 @@ contains
 
        new_reaction%description = trim(reaction(n))
 
+       ! IMPORTANT: If you change the reactions below, do not forget to update
+       ! documentation/chemistry.md accordingly!
        select case (how_to_get(n))
        case ("field_table")
           ! Reaction data should be present in the same file

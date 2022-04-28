@@ -25,8 +25,8 @@ with open(base_name + '_species.txt', 'r') as f:
 with open(base_name + '_reactions.txt', 'r') as f:
     reactions_list = [x.strip() for x in f.readlines() if x.strip()]
 
-rate_matrix = np.loadtxt(base_name + '_rate_matrix.txt')
-n_reactions, n_species = rate_matrix.shape
+stoich_matrix = np.loadtxt(base_name + '_stoich_matrix.txt')
+n_species, n_reactions = stoich_matrix.shape
 
 tmp = np.loadtxt(base_name + '_rates.txt')
 time = tmp[:, 0]
@@ -57,12 +57,12 @@ for soi in args.soi:
     sidx = species_list.index(soi)
     fig, ax = plt.subplots(2, figsize=(8, 8), sharex=True)
 
-    srce_idx = np.where(rate_matrix[:, sidx] > 0)[0]
-    sink_idx = np.where(rate_matrix[:, sidx] < 0)[0]
+    srce_idx = np.where(stoich_matrix[sidx, :] > 0)[0]
+    sink_idx = np.where(stoich_matrix[sidx, :] < 0)[0]
     titles = ['Source', 'Sink']
 
     for i, (ix, text) in enumerate(zip([srce_idx, sink_idx], titles)):
-        amount = rate_matrix[ix, sidx] * rates[:, ix]
+        amount = stoich_matrix[sidx, ix] * rates[:, ix]
         frac = amount[-1]/amount[-1].sum()
 
         for j, idx in enumerate(ix):

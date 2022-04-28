@@ -146,5 +146,6 @@ else:
 
                 print(f'{r.strip()},{k["name"]},{coeffs},{length_unit}')
                 found_match = True
+                break
         if not found_match:
             print(f'** No match for {f.strip()}')
