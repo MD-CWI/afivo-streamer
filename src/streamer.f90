@@ -317,7 +317,7 @@ contains
     call output_initialize(tree, cfg)
     call dielectric_initialize(tree, cfg)
 
-    call output_initial_summary()
+    call output_initial_summary(tree)
 
   end subroutine initialize_modules
 
