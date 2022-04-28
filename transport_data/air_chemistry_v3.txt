@@ -9,7 +9,7 @@
 # 21 Apr 2022 (Jannis): included the right-hand side of reactions and added
 # ignored_species
 #
-# 24 Apr 2022 (Baohong): added reactions for positive ion conversion, electron recombination and recombination
+# 24 Apr 2022 (Baohong): added some important reactions for positive ion conversion, electron recombination and recombination
 
 reaction_list
 -----------------------
@@ -27,32 +27,35 @@ O- + N2 -> e + N2O,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
 O- + O2 -> O2- + O,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
 O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 # Positive ion conversion (Kossyi et. al. 1992)
+# Included N2+ + O2 conversion (Kossyi et. al. 1992)
 N2+ + O2 -> O2+ + N2,c1*(300/Tg)**c2,6e-17 0.5
 N2+ + N2 + M -> N4+ + M,c1*(300/Tg)**c2,5.0e-41 2.2
 N4+ + O2 -> O2+ + 2N2,c1,2.5e-16
 O2+ + O2 + M -> O4+ + M,c1*(300/Tg)**c2,2.4e-42 3.2
 # Electron recombination (Kossyi et. al. 1992)
+# Included electron reombination with N4+ (Kossyi et. al. 1992)
 e + N4+ -> 2N2,c1*(300/Te)**c2,2e-12 0.5
 e + O4+ -> 2O2,c1*(300/Te)**c2,1.4e-12 0.5
 # Recombination (Kossyi et. al. 1992)
 N2+ + O- -> N + N + O,c1,1e-13
 N2+ + O2- -> N + N + O2,c1,1e-13
 N2+ + O3- -> N + N + O3,c1,1e-13
-N2+ + O- -> N2 + O,c1*(300/Tg)**c2,2e-13 0.5
-N2+ + O2- -> N2 + O2,c1*(300/Tg)**c2,2e-13 0.5
-N2+ + O3- -> N2 + O3,c1*(300/Tg)**c2,2e-13 0.5
 O2+ + O- -> O + O + O,c1,1e-13
 O2+ + O2- -> O + O + O2,c1,1e-13
 O2+ + O3- -> O + O + O3,c1,1e-13
-O2+ + O- -> O2 + O,c1*(300/Tg)**c2,2e-13 0.5
-O2+ + O2- -> O2 + O2,c1*(300/Tg)**c2,2e-13 0.5
-O2+ + O3- -> O2 + O3,c1*(300/Tg)**c2,2e-13 0.5
 O4+ + O- -> O2 + O2 + O,c1,1e-13
 O4+ + O2- -> O2 + O2 + O2,c1,1e-13
 O4+ + O3- -> O2 + O2 + O3,c1,1e-13
 N4+ + O- -> N2 + N2 + O,c1,1e-13
 N4+ + O2- -> N2 + N2 + O2,c1,1e-13
 N4+ + O3- -> N2 + N2 + O3,c1,1e-13
+# Included the following recombination (Kossyi et. al. 1992)
+N2+ + O- -> N2 + O,c1*(300/Tg)**c2,2e-13 0.5
+N2+ + O2- -> N2 + O2,c1*(300/Tg)**c2,2e-13 0.5
+N2+ + O3- -> N2 + O3,c1*(300/Tg)**c2,2e-13 0.5
+O2+ + O- -> O2 + O,c1*(300/Tg)**c2,2e-13 0.5
+O2+ + O2- -> O2 + O2,c1*(300/Tg)**c2,2e-13 0.5
+O2+ + O3- -> O2 + O3,c1*(300/Tg)**c2,2e-13 0.5
 -----------------------
 
 ignored_species
