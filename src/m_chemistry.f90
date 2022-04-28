@@ -128,9 +128,6 @@ module m_chemistry
   !> Number of reactions present
   integer, public, protected :: n_reactions = 0
 
-  !> Connectivity matrix of the reaction set (come up with a better name)
-  integer, public, allocatable :: con_mat(:,:)
-
   !> List of the species
   character(len=comp_len), public, protected :: species_list(max_num_species)
 

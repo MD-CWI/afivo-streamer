@@ -279,7 +279,7 @@ contains
 
     fname = trim(output_name) // "_summary.txt"
     call chemistry_write_summary(trim(fname))
-    call output_reaction_matrix(trim(output_name)//"_rate_matrix.txt")
+    call output_stoichiometric_matrix(trim(output_name)//"_stoich_matrix.txt")
     call output_chemical_species(trim(output_name)//"_species.txt")
     call output_chemical_reactions(trim(output_name)//"_reactions.txt")
     call output_chemical_rates(trim(output_name)//"_rates.txt", .true.)
@@ -585,37 +585,38 @@ contains
 
   end subroutine output_log
 
-  !> Write a reaction connectivity matrix to a file
-  subroutine output_reaction_matrix(filename)
+  !> Write a net stoichiometric matrix to a file
+  subroutine output_stoichiometric_matrix(filename)
     use m_chemistry
     character(len=*), intent(in) :: filename
     integer                      :: my_unit, m, i, ix
+    integer, allocatable         :: stoich(:,:)
 
-    allocate(con_mat(n_reactions, n_species))
-    con_mat(:,:) = 0
+    allocate(stoich(n_reactions, n_species))
+    stoich(:, :) = 0
 
     do m = 1, n_reactions
        ! Subtract consumed species
        do i = 1, size(reactions(m)%ix_in)
           ix = reactions(m)%ix_in(i)
-          con_mat(m, ix) = con_mat(m, ix) - 1
+          stoich(m, ix) = stoich(m, ix) - 1
        end do
 
        ! Add produced species
        do i = 1, size(reactions(m)%ix_out)
           ix = reactions(m)%ix_out(i)
-          con_mat(m, ix) = con_mat(m, ix) + &
+          stoich(m, ix) = stoich(m, ix) + &
                reactions(m)%multiplicity_out(i)
        end do
     end do
 
     open(newunit=my_unit, file=trim(filename), action="write")
-    do m = 1, n_reactions
-       write(my_unit, *) con_mat(m, :)
+    do i = 1, n_species
+       write(my_unit, *) stoich(:, i)
     end do
     write(my_unit, *) ""
     close(my_unit)
-  end subroutine output_reaction_matrix
+  end subroutine output_stoichiometric_matrix
 
   !> Write a list of chemical species
   subroutine output_chemical_species(filename)
