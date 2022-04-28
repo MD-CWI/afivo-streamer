@@ -11,15 +11,9 @@ cd ../
 
 ./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.8e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.8e6
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.2e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.2e6
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.6e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.6e6
 
 ./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.0e6 -end_time=1.5e-7 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.0e6
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.0e6 -input_data%ion_mobiliities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -end_time=1.5e-7 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.0e6_ion_motion
-
-
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.6e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.6e6
-
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.4e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.4e6
-
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.0e6 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -end_time=1.5e-7 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.0e6_ion_motion
 

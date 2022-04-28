@@ -53,7 +53,7 @@ e + N2 -> e + e + N2+,field_table,C26 N2 Ionization 18.80 eV
 e + O2 -> e + e + O2+,field_table,C43 O2 Ionization 12.06 eV
 # Attachment
 e + O2 + O2 -> O2- + O2,field_table,C27 O2 Attachment
-e + O2 -> O- + O,field_table,C28 O2 Attachment
+e + O2 -> O- + O(^3P),field_table,C28 O2 Attachment
 # Detachment
 O2- + O2 -> 2O2 + e,c1*(Tg/300)**c2*exp(-c3/Tg),2.7e-10 0.5 5590.0,cm
 O2- + N2 -> O2 + N2 + e,c1*(Tg/300)**c2*exp(-c3/Tg),1.9e-12 0.5 4990.0,cm
