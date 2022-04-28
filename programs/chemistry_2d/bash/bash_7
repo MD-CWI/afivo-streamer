@@ -3,13 +3,9 @@
 cd ../
 
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-1.4e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_1.4e6
-
 ./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-1.2e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_1.2e6
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-1.0e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_1.0e6
-
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.8e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.8e6
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.9e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.9e6
 
 ./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%post_field=-0.6e6 -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_0.6e6
 

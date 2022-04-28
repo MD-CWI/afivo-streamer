@@ -3,15 +3,15 @@
 cd ../
 
 
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Phelps
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Phelps
 
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_IST-Lisbon.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_IST-Lisbon
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps+IST-Lisbon.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_IST-Lisbon
 
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Itikawa.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Itikawa
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps+Itikawa.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Itikawa
 
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Kawaguchi_Itikawa.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Kawaguchi_Itikawa
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps+Kawaguchi_Itikawa.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Kawaguchi_Itikawa
 
-./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Komuro_reactions.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Komuro
+./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Komuro_reactions_Phelps.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_Komuro
 
 ./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_v3.txt -output%name=/export/scratch2/md/baohong/chemistry/Baohong_reactions/EL2mm_1.5e6_v3
 
