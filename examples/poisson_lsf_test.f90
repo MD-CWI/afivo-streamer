@@ -42,6 +42,7 @@ program poisson_lsf_test
   real(dp)           :: residu, max_error, max_field
   character(len=150) :: fname
   character(len=20)  :: output_suffix = ""
+  character(len=20)  :: prolongation = "auto"
   type(mg_t)         :: mg
   type(CFG_t)        :: cfg
   real(dp)           :: error_squared, rmse
@@ -84,6 +85,10 @@ program poisson_lsf_test
        "Size of grid boxes")
   call CFG_add_get(cfg, "n_iterations", n_iterations, &
        "Number of multigrid iterations")
+  call CFG_add_get(cfg, "n_cycle_up", mg%n_cycle_up, &
+       "Number of relaxation steps going up")
+  call CFG_add_get(cfg, "n_cycle_down", mg%n_cycle_down, &
+       "Number of relaxation steps going down")
   call CFG_add_get(cfg, "solution%sharpness", sharpness_t, &
        "Sharpness of solution (for some cases)")
   call CFG_add_get(cfg, "solution%r0", solution_r0, &
@@ -98,6 +103,8 @@ program poisson_lsf_test
        "Value for Dirichlet boundary condition")
   call CFG_add_get(cfg, "mem_limit_gb", mem_limit_gb, &
        "Memory limit (GByte)")
+  call CFG_add_get(cfg, "prolongation", prolongation, &
+       "Prolongation method (linear, sparse, auto)")
 
   call CFG_check(cfg)
   ! call CFG_write(cfg, "stdout")
@@ -119,6 +126,17 @@ program poisson_lsf_test
   mg%lsf_dist => mg_lsf_dist_gss
   mg%lsf => get_lsf
   mg%lsf_length_scale = solution_smallest_width
+
+  select case (prolongation)
+  case ("linear")
+     mg%prolongation_type = mg_prolong_linear
+  case ("sparse")
+     mg%prolongation_type = mg_prolong_sparse
+  case ("auto")
+     mg%prolongation_type = mg_prolong_auto
+  case default
+     error stop "Unknown prolongation method"
+  end select
 
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
@@ -163,8 +181,8 @@ program poisson_lsf_test
      rmse = sqrt(error_squared/af_total_volume(tree))
      write(*, "(A,i4,4E14.5)") "# ", mg_iter, residu, max_error, rmse, max_field
 
-     write(fname, "(A,I0,A)") "output/poisson_lsf_test_" // DIMNAME // &
-          "_", mg_iter, trim(output_suffix)
+     write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // &
+          trim(output_suffix) // "_", mg_iter
      if (write_output) then
         call af_write_silo(tree, trim(fname))
      end if
