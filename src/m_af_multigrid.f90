@@ -853,7 +853,7 @@ contains
     case (mg_prolong_sparse)
        call mg_box_prolong_sparse_stencil(tree%boxes(id), &
             tree%boxes(p_id), mg, ix)
-    case (mg_auto_prolongation)
+    case (mg_prolong_auto)
        ! Use box tag
        associate (box=>tree%boxes(id), box_p=>tree%boxes(p_id))
          select case (iand(box%tag, mg%operator_mask))
@@ -1479,7 +1479,7 @@ contains
     if (lsf_a * lsf_b < 0) then
        ! There is a boundary between the points
        dist = lsf_a / (lsf_a - lsf_b)
-       dist = max(dist, mg_lsf_min_rel_distance)
+       dist = max(dist, mg%lsf_min_rel_distance)
     else
        dist = 1.0_dp
     end if
@@ -1523,7 +1523,7 @@ contains
     end if
 
     dist = norm2(r_root - a)/norm2(b-a)
-    dist = max(dist, mg_lsf_min_rel_distance)
+    dist = max(dist, mg%lsf_min_rel_distance)
   end function mg_lsf_dist_gss
 
   !> Simple bisection

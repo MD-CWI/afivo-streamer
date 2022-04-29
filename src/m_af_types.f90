@@ -527,9 +527,9 @@ module m_af_types
   integer, parameter :: mg_veps_box   = 2 !< Box has variable coefficient
   integer, parameter :: mg_ceps_box   = 4 !< Box has constant coefficient /= 1
 
-  integer, parameter :: mg_prolong_linear    = 17 !< Linear prolongation
-  integer, parameter :: mg_prolong_sparse    = 18 !< Sparse linear prolongation
-  integer, parameter :: mg_auto_prolongation = 19 !< Automatic prolongation
+  integer, parameter :: mg_prolong_linear = 17 !< Linear prolongation
+  integer, parameter :: mg_prolong_sparse = 18 !< Sparse linear prolongation
+  integer, parameter :: mg_prolong_auto   = 19 !< Automatic prolongation
 
   !> Stencil key for level set function distance
   integer, parameter :: mg_lsf_distance_key = 31
@@ -539,9 +539,6 @@ module m_af_types
   ! Labels for the different steps of a multigrid cycle
   integer, parameter :: mg_cycle_down = 1
   integer, parameter :: mg_cycle_up   = 3
-
-  !> Minimum relative distance to boundaries (to avoid division by zero)
-  real(dp), parameter :: mg_lsf_min_rel_distance = 1e-4_dp
 
   !> Generic type for the coarse grid solver
   type coarse_solve_t
@@ -608,6 +605,9 @@ module m_af_types
      !> Tolerance for line search algorithm
      real(dp) :: lsf_tol = 1e-8_dp
 
+     !> Minimum relative distance to boundaries (to avoid division by zero)
+     real(dp) :: lsf_min_rel_distance = 1e-4_dp
+
      !> Level-set function
      procedure(mg_func_lsf), pointer, nopass :: lsf => null()
 
@@ -630,7 +630,7 @@ module m_af_types
      integer :: operator_key = af_stencil_none
 
      !> What kind of prolongation operator to use
-     integer :: prolongation_type = mg_auto_prolongation
+     integer :: prolongation_type = mg_prolong_auto
 
      !> Key indicating which stencil is to be used for the operator
      integer :: prolongation_key = af_stencil_none
