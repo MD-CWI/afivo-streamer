@@ -198,7 +198,6 @@ contains
 
   !> Set values on a dielectric with a user-defined function
   subroutine surface_set_values(tree, diel, iv, user_func)
-    use m_af_ghostcell, only: af_gc_get_boundary_coords
     type(af_t), intent(in)            :: tree
     type(surfaces_t), intent(inout) :: diel
     integer, intent(in)               :: iv        !< Surface variable
@@ -218,7 +217,7 @@ contains
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
           id_out = diel%surfaces(ix)%id_out
-          call af_gc_get_boundary_coords(tree%boxes(id_out), &
+          call af_get_face_coords(tree%boxes(id_out), &
                diel%surfaces(ix)%direction, coords)
 #if NDIM == 1
           diel%surfaces(ix)%sd(iv) = user_func(coords(1, 1))

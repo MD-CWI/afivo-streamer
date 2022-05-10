@@ -55,6 +55,8 @@ module m_af_flux_schemes
   public :: flux_kurganovTadmor_1d, reconstruct_lr_1d
   public :: flux_generic_box, flux_generic_tree
   public :: flux_update_densities
+  public :: flux_dummy_conversion
+  public :: flux_dummy_source
 
 contains
 
@@ -240,7 +242,7 @@ contains
     integer, intent(in)       :: s_prev         !< Previous time state
     integer, intent(in)       :: s_out          !< Output time state
     !> Method to include source terms
-    procedure(subr_source), optional :: add_source_box
+    procedure(subr_source)    :: add_source_box
     integer                   :: lvl, n, id, IJK, nc
     real(dp)                  :: dt_dr(NDIM)
     real(dp)                  :: rfac(2, tree%n_cell)
@@ -258,10 +260,7 @@ contains
           tree%boxes(id)%cc(DTIMES(1:nc), i_cc+s_out) = &
                tree%boxes(id)%cc(DTIMES(1:nc), i_cc+s_prev)
 
-          if (present(add_source_box)) then
-             call add_source_box(tree%boxes(id), dt, &
-                  n_vars, i_cc, s_deriv, s_out)
-          end if
+          call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, s_out)
 
           associate(cc => tree%boxes(id)%cc, fc => tree%boxes(id)%fc)
 #if NDIM == 1
@@ -322,9 +321,9 @@ contains
     !> Compute the flux from primitive variables
     procedure(subr_flux_from_prim) :: flux_from_primitives
     !> Convert conservative variables to primitive ones
-    procedure(subr_prim_cons), optional :: to_primitive
+    procedure(subr_prim_cons)      :: to_primitive
     !> Convert primitive variables to conservative ones
-    procedure(subr_prim_cons), optional :: to_conservative
+    procedure(subr_prim_cons)      :: to_conservative
 
     integer :: lvl, i
 
@@ -367,9 +366,9 @@ contains
     !> Compute the flux from primitive variables
     procedure(subr_flux_from_prim) :: flux_from_primitives
     !> Convert conservative variables to primitive ones
-    procedure(subr_prim_cons), optional :: to_primitive
+    procedure(subr_prim_cons) :: to_primitive
     !> Convert primitive variables to conservative ones
-    procedure(subr_prim_cons), optional :: to_conservative
+    procedure(subr_prim_cons) :: to_conservative
 
 
     real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
@@ -426,9 +425,7 @@ contains
              line_ix = [i, j]
 #endif
 
-             if (present(to_primitive)) then
-                call to_primitive(nc+4, n_vars, cc_line)
-             end if
+             call to_primitive(nc+4, n_vars, cc_line)
 
              ! Reconstruct to cell faces
              call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r)
@@ -440,10 +437,8 @@ contains
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r, &
                   tree%boxes(id), line_ix)
 
-             if (present(to_conservative)) then
-                call to_conservative(nc+1, n_vars, u_l)
-                call to_conservative(nc+1, n_vars, u_r)
-             end if
+             call to_conservative(nc+1, n_vars, u_l)
+             call to_conservative(nc+1, n_vars, u_r)
 
              w_l = max(w_l, w_r) ! Get maximum of left/right wave speed
              call flux_kurganovTadmor_1d(nc+1, n_vars, flux_l, flux_r, &
@@ -641,5 +636,20 @@ contains
        end do
     end do
   end subroutine flux_upwind_3d
+
+  !> Dummy conversion between primitive and conservative variables
+  subroutine flux_dummy_conversion(n_values, n_vars, u)
+    integer, intent(in)     :: n_values, n_vars
+    real(dp), intent(inout) :: u(n_values, n_vars)
+  end subroutine flux_dummy_conversion
+
+  subroutine flux_dummy_source(box, dt, n_vars, i_cc, s_deriv, s_out)
+    type(box_t), intent(inout) :: box
+    real(dp), intent(in)       :: dt
+    integer, intent(in)        :: n_vars
+    integer, intent(in)        :: i_cc(n_vars)
+    integer, intent(in)        :: s_deriv
+    integer, intent(in)        :: s_out
+  end subroutine flux_dummy_source
 
 end module m_af_flux_schemes

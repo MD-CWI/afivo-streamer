@@ -3,7 +3,7 @@
 !> interface to Hypre, assuming Hypre is compiled with OpenMP and without MPI
 module m_coarse_solver
   use m_af_types
-  use m_mg_types
+  use m_af_stencil
 
   implicit none
   private
@@ -20,7 +20,7 @@ module m_coarse_solver
   ! PCG solver (slow)
   integer, parameter, public :: coarse_solver_hypre_pcg = 3
 
-    ! Size of the stencil (only direct neighbors)
+  ! Size of the stencil (only direct neighbors)
   integer, parameter :: max_stencil_size = 2*NDIM + 1
 
   ! Offsets for the stencil elements
@@ -65,7 +65,7 @@ contains
 
   !> Initialize the coarse grid solver
   subroutine coarse_solver_initialize(tree, mg)
-    type(af_t), intent(in)    :: tree !< Tree to do multigrid on
+    type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg
     integer                   :: n, n_boxes, nc, id, IJK
     integer                   :: cnt, stencil_size, ierr
@@ -76,8 +76,6 @@ contains
     integer, parameter        :: zero_to_n(max_stencil_size) = [(i, i=0, max_stencil_size-1)]
 
     if (.not. tree%ready) error stop "coarse_solver_initialize: tree not ready"
-    if (.not. associated(mg%box_stencil)) &
-         error stop "coarse_solver_initialize: mg%box_stencil not set"
 
     nc                   = tree%n_cell
     nx                   = tree%coarse_grid_size(1:NDIM)
@@ -128,14 +126,25 @@ contains
     allocate(mg%csolver%lsf_fac(DTIMES(nc), n_boxes))
     allocate(coeffs(stencil_size, tree%n_cell**NDIM))
 
-    mg%csolver%bc_to_rhs    = 0.0_dp
-    mg%csolver%lsf_fac = 0.0_dp
-    coeffs                  = 0.0_dp
+    mg%csolver%bc_to_rhs = 0.0_dp
+    mg%csolver%lsf_fac   = 0.0_dp
+    coeffs               = 0.0_dp
 
     do n = 1, size(tree%lvls(1)%ids)
        id  = tree%lvls(1)%ids(n)
-       call mg%box_stencil(tree%boxes(id), mg, full_coeffs, &
-            mg%csolver%bc_to_rhs(:, :, n), mg%csolver%lsf_fac(DTIMES(:), n))
+
+       associate (box => tree%boxes(id))
+         call af_stencil_get_box(box, mg%operator_key, full_coeffs)
+         call stencil_handle_boundaries(box, mg, full_coeffs, &
+              mg%csolver%bc_to_rhs(:, :, n))
+
+         ! This assumes that correction factors due to a level set function are
+         ! stored in the stencil%f array
+         i = af_stencil_index(box, mg%operator_key)
+         if (allocated(box%stencils(i)%f)) then
+            mg%csolver%lsf_fac(DTIMES(:), n) = box%stencils(i)%f
+         end if
+       end associate
 
        cnt = 0
        do KJI_DO(1, nc)
@@ -235,13 +244,11 @@ contains
   !> Set the right-hand side and copy phi from the tree. Also move the boundary
   !> conditions for phi to the rhs.
   subroutine coarse_solver_set_rhs_phi(tree, mg)
-    use m_af_ghostcell, only: af_gc_get_boundary_coords
-    type(af_t), intent(in) :: tree
+    type(af_t), intent(inout) :: tree
     type(mg_t), intent(in) :: mg
     integer                :: n, nb, nc, id, bc_type, ierr
-    integer                :: ilo(NDIM), ihi(NDIM)
+    integer                :: ilo(NDIM), ihi(NDIM), ix
     real(dp)               :: tmp(DTIMES(tree%n_cell))
-    real(dp)               :: coords(NDIM, tree%n_cell**(NDIM-1))
     real(dp)               :: bc_val(tree%n_cell**(NDIM-1))
 
     nc = tree%n_cell
@@ -254,9 +261,12 @@ contains
        ! Add contribution of boundary conditions to rhs
        do nb = 1, af_num_neighbors
           if (tree%boxes(id)%neighbors(nb) < af_no_box) then
-             ! Put the boundary condition into the ghost cells of mg%i_phi
-             call af_gc_get_boundary_coords(tree%boxes(id), nb, coords)
-             call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, coords, bc_val, bc_type)
+             ix = tree%boxes(id)%nb_to_bc_index(nb)
+             call mg%sides_bc(tree%boxes(id), nb, mg%i_phi, &
+                  tree%boxes(id)%bc_coords(:, :, ix), &
+                  bc_val, bc_type)
+             tree%boxes(id)%bc_val(:, mg%i_phi, ix) = bc_val
+             tree%boxes(id)%bc_type(mg%i_phi, ix) = bc_type
 
              ! Get index range near neighbor
              call af_get_index_bc_inside(nb, nc, 1, ilo, ihi)
@@ -382,5 +392,57 @@ contains
        error stop "coarse_solver: unknown solver type"
     end select
   end subroutine coarse_solver
+
+  !> Incorporate boundary conditions into stencil
+  subroutine stencil_handle_boundaries(box, mg, stencil, bc_to_rhs)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp), intent(inout) :: stencil(2*NDIM+1, DTIMES(box%n_cell))
+    real(dp), intent(inout) :: bc_to_rhs(box%n_cell**(NDIM-1), af_num_neighbors)
+    integer                 :: nb, nc, lo(NDIM), hi(NDIM)
+    integer                 :: nb_id, nb_dim, bc_type
+    real(dp)                :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp)                :: bc_val(box%n_cell**(NDIM-1))
+
+    bc_to_rhs = 0.0_dp
+    nc        = box%n_cell
+
+    do nb = 1, af_num_neighbors
+       nb_id = box%neighbors(nb)
+
+       if (nb_id < af_no_box) then
+          nb_dim = af_neighb_dim(nb)
+          call af_get_face_coords(box, nb, coords)
+          call mg%sides_bc(box, nb, mg%i_phi, coords, bc_val, bc_type)
+
+          ! Determine index range next to boundary
+          call af_get_index_bc_inside(nb, nc, 1, lo, hi)
+
+          select case (bc_type)
+          case (af_bc_dirichlet)
+             ! Dirichlet value at cell face, so compute gradient over h/2
+             ! E.g. 1 -2 1 becomes 0 -3 1 for a 1D Laplacian
+             ! The boundary condition is incorporated in the right-hand side
+             stencil(1, DSLICE(lo, hi)) = &
+                  stencil(1, DSLICE(lo, hi)) - &
+                  stencil(nb+1, DSLICE(lo, hi))
+             bc_to_rhs(:, nb) = pack(-2 * stencil(nb+1, DSLICE(lo, hi)), .true.)
+             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
+          case (af_bc_neumann)
+             ! E.g. 1 -2 1 becomes 0 -1 1 for a 1D Laplacian
+             stencil(1, DSLICE(lo, hi)) = &
+                  stencil(1, DSLICE(lo, hi)) + &
+                  stencil(nb+1, DSLICE(lo, hi))
+             bc_to_rhs(:, nb) = &
+                  -pack(stencil(nb+1, DSLICE(lo, hi)) * &
+                  box%dr(nb_dim), .true.) * af_neighb_high_pm(nb)
+             stencil(nb+1, DSLICE(lo, hi)) = 0.0_dp
+          case default
+             error stop "mg_box_lpl_stencil: unsupported boundary condition"
+          end select
+       end if
+    end do
+
+  end subroutine stencil_handle_boundaries
 
 end module m_coarse_solver

@@ -162,6 +162,9 @@ module m_streamer
   !> Global time step
   real(dp), public :: global_dt = 0.0_dp
 
+  !> Global sum of rates
+  real(dp), public, allocatable :: ST_global_rates(:, :)
+
   !> Method used to prolong (interpolate) densities
   procedure(af_subr_prolong), pointer, public, protected :: &
        ST_prolongation_method => null()
@@ -425,6 +428,11 @@ contains
     call ST_rng%set_seed(rng_int8_seed)
     n_threads = af_get_max_threads()
     call ST_prng%init_parallel(n_threads, ST_rng)
+
+    ! Initialize global storage of reaction rates, +32 to avoid threads writing
+    ! to nearby memory
+    allocate(ST_global_rates(n_reactions+32, n_threads))
+    ST_global_rates = 0
 
   end subroutine ST_initialize
 

@@ -282,12 +282,18 @@ contains
   end subroutine output_initialize
 
   !> Write a summary of the model and parameters used
-  subroutine output_initial_summary()
+  subroutine output_initial_summary(tree)
     use m_chemistry
+    type(af_t), intent(in) :: tree
     character(len=string_len) :: fname
 
     fname = trim(output_name) // "_summary.txt"
     call chemistry_write_summary(trim(fname))
+    call output_stoichiometric_matrix(trim(output_name)//"_stoich_matrix.txt")
+    call output_chemical_species(trim(output_name)//"_species.txt")
+    call output_chemical_reactions(trim(output_name)//"_reactions.txt")
+    call output_chemical_rates(trim(output_name)//"_rates.txt", .true.)
+    call output_chemical_amounts(tree, trim(output_name)//"_amounts.txt", .true.)
   end subroutine output_initial_summary
 
   subroutine output_write(tree, output_cnt, wc_time, write_sim_data)
@@ -352,6 +358,9 @@ contains
        call output_log(tree, fname, output_cnt, wc_time)
     end if
 
+    call output_chemical_rates(trim(output_name)//"_rates.txt", .false.)
+    call output_chemical_amounts(tree, trim(output_name)//"_amounts.txt", .false.)
+
     if (output_regression_test) then
        write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
        call output_regression_log(tree, fname, output_cnt, wc_time)
@@ -385,11 +394,11 @@ contains
 
 #if NDIM == 2
     if (ST_cylindrical) then
-      if(cross_write) then
-       write(fname, "(A,I6.6)") trim(output_name) // &
-            "_cross_", output_cnt
-       call output_cross(tree, fname)
-      end if
+       if(cross_write) then
+          write(fname, "(A,I6.6)") trim(output_name) // &
+               "_cross_", output_cnt
+          call output_cross(tree, fname)
+       end if
     end if
 #endif
 
@@ -522,7 +531,6 @@ contains
 
     if (first_time) then
        first_time = .false.
-
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
@@ -600,6 +608,113 @@ contains
     close(my_unit)
 
   end subroutine output_log
+
+  !> Write a net stoichiometric matrix to a file
+  subroutine output_stoichiometric_matrix(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, m, i, ix
+    integer, allocatable         :: stoich(:,:)
+
+    allocate(stoich(n_reactions, n_species))
+    stoich(:, :) = 0
+
+    do m = 1, n_reactions
+       ! Subtract consumed species
+       do i = 1, size(reactions(m)%ix_in)
+          ix = reactions(m)%ix_in(i)
+          stoich(m, ix) = stoich(m, ix) - 1
+       end do
+
+       ! Add produced species
+       do i = 1, size(reactions(m)%ix_out)
+          ix = reactions(m)%ix_out(i)
+          stoich(m, ix) = stoich(m, ix) + &
+               reactions(m)%multiplicity_out(i)
+       end do
+    end do
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_species
+       write(my_unit, *) stoich(:, i)
+    end do
+    write(my_unit, *) ""
+    close(my_unit)
+  end subroutine output_stoichiometric_matrix
+
+  !> Write a list of chemical species
+  subroutine output_chemical_species(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, i
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_species
+       write(my_unit, "(A)") species_list(i)
+    end do
+    write(my_unit, "(A)") ""
+    close(my_unit)
+  end subroutine output_chemical_species
+
+  !> Write a list of chemical reactions
+  subroutine output_chemical_reactions(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, i
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_reactions
+       write(my_unit, "(A)") reactions(i)%description
+    end do
+    write(my_unit, "(A)") ""
+    close(my_unit)
+  end subroutine output_chemical_reactions
+
+  !> Write space-integrated and time-integrated reaction rates
+  subroutine output_chemical_rates(filename, first_time)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    logical, intent(in)          :: first_time
+    integer                      :: my_unit, iostate
+
+    if (first_time) then
+       ! Clear the file
+       open(newunit=my_unit, file=trim(filename), iostat=iostate)
+       if (iostate == 0) close(my_unit, status='delete')
+    else
+       open(newunit=my_unit, file=trim(filename), action="write", &
+            position="append")
+       write(my_unit, "(*(E16.8))") global_time, &
+            sum(ST_global_rates(1:n_reactions, :), dim=2)
+       close(my_unit)
+    end if
+  end subroutine output_chemical_rates
+
+  !> Write space-integrated species densities
+  subroutine output_chemical_amounts(tree, filename, first_time)
+    use m_chemistry
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: filename
+    logical, intent(in)          :: first_time
+    integer                      :: my_unit, n, iostate
+    real(dp)                     :: sum_dens(n_species)
+
+    if (first_time) then
+       ! Clear the file
+       open(newunit=my_unit, file=trim(filename), iostat=iostate)
+       if (iostate == 0) close(my_unit, status='delete')
+    else
+       do n = 1, n_species
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+       end do
+
+       open(newunit=my_unit, file=trim(filename), action="write", &
+            position="append")
+       write(my_unit, "(*(E16.8))") global_time, sum_dens
+       close(my_unit)
+    end if
+
+  end subroutine output_chemical_amounts
 
   !> Write statistics to a file that can be used for regression testing
   subroutine output_regression_log(tree, filename, out_cnt, wc_time)
@@ -794,10 +909,10 @@ contains
 
        ! Compute the pressure
        box%cc(IJK, gas_prim_vars(i_e)) = (gas_euler_gamma-1.0_dp) * (box%cc(IJK,gas_vars( i_e)) - &
-         0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
+            0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
        ! Compute the temperature (T = P/(n*kB), n=gas number density)
        box%cc(IJK, gas_prim_vars(i_e+1)) = box%cc(IJK, gas_prim_vars(i_e))/ &
-                                          (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
+            (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
 
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
@@ -844,7 +959,6 @@ contains
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, i_surf))
 #elif NDIM == 3
-!FLAG
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, :, i_surf))
 #endif

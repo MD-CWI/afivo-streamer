@@ -66,11 +66,11 @@ program poisson_cyl_dielectric
   call af_print_info(tree)
 
   ! Set the multigrid options.
-  mg%i_phi        = i_phi       ! Solution variable
-  mg%i_rhs        = i_rhs       ! Right-hand side variable
-  mg%i_tmp        = i_tmp       ! Variable for temporary space
-  mg%i_eps        = i_eps       ! Variable for epsilon coefficient
-  mg%sides_bc     => sides_bc   ! Method for boundary conditions Because we use
+  tree%mg_i_eps = i_eps
+  mg%i_phi = i_phi ! Solution variable
+  mg%i_rhs = i_rhs ! Right-hand side variable
+  mg%i_tmp = i_tmp ! Variable for temporary space
+  mg%sides_bc => sides_bc ! Method for boundary conditions Because we use
 
   ! Initialize the multigrid options. This performs some basics checks and sets
   ! default values where necessary.

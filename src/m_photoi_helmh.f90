@@ -153,22 +153,8 @@ contains
        mg_helm(n)%i_tmp = i_tmp
        mg_helm(n)%sides_bc => photoi_helmh_bc
        mg_helm(n)%helmholtz_lambda = lambdas(n)**2
-
-       if (ST_cylindrical) then
-#if NDIM == 2
-          mg_helm(n)%box_op => mg_box_clpl
-          mg_helm(n)%box_gsrb => mg_box_gsrb_clpl
-          mg_helm(n)%box_stencil => mg_box_clpl_stencil
-          mg_helm(n)%box_corr => mg_box_corr_lpl
-          mg_helm(n)%box_rstr => mg_box_rstr_lpl
-#endif
-       else
-          mg_helm(n)%box_op => mg_box_lpl
-          mg_helm(n)%box_gsrb => mg_box_gsrb_lpl
-          mg_helm(n)%box_stencil => mg_box_lpl_stencil
-          mg_helm(n)%box_corr => mg_box_corr_lpl
-          mg_helm(n)%box_rstr => mg_box_rstr_lpl
-       end if
+       mg_helm(n)%operator_type = mg_normal_operator
+       mg_helm(n)%prolongation_type = mg_prolong_linear
     end do
   end subroutine photoi_helmh_initialize
 
@@ -186,6 +172,11 @@ contains
 
     do n = 1, n_modes
        if (.not. mg_helm(n)%initialized) then
+          if (n > 1) then
+             ! Re-use prolongation stencil
+             mg_helm(n)%prolongation_key = mg_helm(1)%prolongation_key
+          end if
+
           call mg_init(tree, mg_helm(n))
        end if
 

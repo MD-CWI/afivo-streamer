@@ -177,6 +177,7 @@ program streamer
   print *, "Simulation output: ", trim(output_name)
   print *, "Number of threads: ", af_get_max_threads()
   call af_print_info(tree)
+  call af_stencil_print_info(tree)
 
   ! Initial wall clock time
   call system_clock(t_start, count_rate)
@@ -390,7 +391,7 @@ contains
     call output_initialize(tree, cfg)
     call dielectric_initialize(tree, cfg)
 
-    call output_initial_summary()
+    call output_initial_summary(tree)
 
   end subroutine initialize_modules
 
@@ -1023,7 +1024,7 @@ subroutine outflow_custom(box, nb, iv, n_gc, cc)
     real(dp)                   :: lsf_nb(2*NDIM), dens_nb(2*NDIM)
     integer                    :: nc, IJK
 
-    if (box%tag /= mg_lsf_box) return
+    if (iand(box%tag, mg_lsf_box) == 0) return
 
     nc = box%n_cell
     do KJI_DO(1, nc)

@@ -18,73 +18,73 @@ e + N2 -> e + N_2D,field_table,C1 N2 Excitation 9.75 eV
 e + O2 + O2 -> O2- + O2,field_table,C29 O2 Attachment
 e + O2 -> O + O-,field_table,C30 O2 Attachment
 # Detachment from O2- and O- (Panchesnyi 2013)
-O2 + O2- -> e + O2 + O2,exp_v1,1.24e-17 179.0 8.8
-N2 + O2- -> e + O2 + N2,exp_v1,1.24e-17 179.0 8.8
-N2 + O-  -> e + N2O,exp_v1,1.16e-18 48.9 11.0
+O2 + O2- -> e + O2 + O2,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
+N2 + O2- -> e + O2 + N2,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
+N2 + O-  -> e + N2O,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
 # Negative ion conversion (Panchesnyi 2013)
-O2 + O- -> O2- + O,exp_v1,6.96e-17 198.0 5.6
-O2 + O- + O2 -> O3- + O2,exp_v2,1.1e-42 65.0
-O2 + O- + N2 -> O3- + N2,exp_v2,1.1e-42 65.0
+O2 + O- -> O2- + O,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
+O2 + O- + O2 -> O3- + O2,c1*exp(-(Td/c2)**2),1.1e-42 65.0
+O2 + O- + N2 -> O3- + N2,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 # Positive ion conversion (Aleksandrov and Bazelyan 1999)
 # These rates depends on the gas temperature. For T=300K:
-N2+ + N2 + O2 -> N4+ + O2,constant,5.0e-41
-N2+ + N2 + N2 -> N4+ + N2,constant,5.0e-41
-N4+ + O2 -> N2 + N2 + O2+,constant,2.5e-16
-O2+ + O2 + O2 -> O4+ + O2,constant,2.4e-42
-O2+ + O2 + N2 -> O4+ + N2,constant,2.4e-42
+N2+ + N2 + O2 -> N4+ + O2,c1,5.0e-41
+N2+ + N2 + N2 -> N4+ + N2,c1,5.0e-41
+N4+ + O2 -> N2 + N2 + O2+,c1,2.5e-16
+O2+ + O2 + O2 -> O4+ + O2,c1,2.4e-42
+O2+ + O2 + N2 -> O4+ + N2,c1,2.4e-42
 # Hani does not include these rates (rates from Pancheshnyi PRE 2005)
-O2+ + N2 + N2 -> N2O2+ + N2,constant,9.0e-43
-N2O2+ + N2 -> O2+ + N2 + N2,constant,4.3e-16
-N2O2+ + O2 -> O4+ + N2,constant,1.0e-15
+O2+ + N2 + N2 -> N2O2+ + N2,c1,9.0e-43
+N2O2+ + N2 -> O2+ + N2 + N2,c1,4.3e-16
+N2O2+ + O2 -> O4+ + N2,c1,1.0e-15
 # Electron impact dissociation (rates from Pancheshnyi PRE 2005)
 e + O2+ -> O + O,field_table,C01 O2+ Electron Recombination 
 # Electron recombination (Kossyi et. al. 1992 cites Smirnov 1983 [in Russian])
 # Electron temperature dependent - using mean energy of electron from boslig
 e + O4+ -> O2 + O2,field_table,C00 O4+ Electron Recombination
 # Positive and Negative Ion Recombination (Kossyi et. al. 1992)
-# N2+ + O- ->,constant,1e-13
-# N2+ + O3- ->,constant,1e-13
-# N2+ + O2- ->,constant,1e-13
-# O2+ + O- ->,constant,1e-13
-# O2+ + O3- ->,constant,1e-13
-# O2+ + O2- ->,constant,1e-13
-# O4+ + O- ->,constant,1e-13
-# O4+ + O2- ->,constant,1e-13
-# O4+ + O3- ->,constant,1e-13
-# N4+ + O- ->,constant,1e-13
-# N4+ + O2- ->,constant,1e-13
-# N4+ + O3- ->,constant,1e-13
+# N2+ + O- ->,c1,1e-13
+# N2+ + O3- ->,c1,1e-13
+# N2+ + O2- ->,c1,1e-13
+# O2+ + O- ->,c1,1e-13
+# O2+ + O3- ->,c1,1e-13
+# O2+ + O2- ->,c1,1e-13
+# O4+ + O- ->,c1,1e-13
+# O4+ + O2- ->,c1,1e-13
+# O4+ + O3- ->,c1,1e-13
+# N4+ + O- ->,c1,1e-13
+# N4+ + O2- ->,c1,1e-13
+# N4+ + O3- ->,c1,1e-13
 # Generation of N2(C3) bolsig Phelps
 e + N2 -> e + N2_C3,field_table,C22 N2 Excitation 11.03 eV
 # Quenching by N2 and O2 collisions (rates from Pancheshnyi PR-E 2005)
 # One of the product of this reaction is N2_A' but I am not interesed in keeping it
-N2_C3 + N2 -> N2,constant,0.13e-16
+N2_C3 + N2 -> N2,c1,0.13e-16
 # One of the product of this reaction is O_S but I am not interested in keeping it
-N2_C3 + O2 -> N2 + O,constant,3.0e-16
+N2_C3 + O2 -> N2 + O,c1,3.0e-16
 # Radiative lifetime is 42 ns
-N2_C3 -> N2_B3,constant,2.381e7
+N2_C3 -> N2_B3,c1,2.381e7
 # Generation of N2(B3) bolsig Phelps (Reaction 2 in Kossyi et al. 1992)
 e + N2 -> e + N2_B3,field_table,C15 N2 Excitation 7.35 eV
 # Quenching of N2_B3 is important for generation of O3 in a later reaction, (reaction 113 in Kossyi et al. 1992)
-N2_B3 + O2 -> N2 + O + O,constant,3e-16
+N2_B3 + O2 -> N2 + O + O,c1,3e-16
 # Another product is N2_A but we are not insterested in it 
-N2_B3 + N2 -> N2,constant,5e-17
+N2_B3 + N2 -> N2,c1,5e-17
 # Radiative lifetime of N2_B3 - the product is N2_A but we are not interested in it
-N2_B3 ->,constant,1.5e5
+N2_B3 ->,c1,1.5e5
 #Generation of O3 (Depends on gas temperature, for T=300 K, reactions 94 and 95 in Kossyi et al. 1992)
 #The rates are very small but we see
-O + O2 + O2 -> O3 + O2,constant,6.2e-46 
-O + O2 + N2 -> O3 + N2,constant,6.9e-46 
+O + O2 + O2 -> O3 + O2,c1,6.2e-46 
+O + O2 + N2 -> O3 + N2,c1,6.9e-46 
 #Reactions that generate NO, the product O is in excites state not interesed in
 #Gas temperature dependent
-N_2D + O2 -> NO,constant,6.0e-18
+N_2D + O2 -> NO,c1,6.0e-18
 #Reaction with O- and O2-
-#O2- + O -> O3 + e,constant,1.5e-16
-#O2- + N -> NO2 + e,constant,5.0e-16
-#O- + O -> O2 + e,constant,5.0e-16
-#O- + N -> NO + e,constant,2.6e-16
-#O3- + O -> O2 + O2 + e,constant,3.0e-16
-#O- + O2 -> O3 + e,constant,5.0e-21
+#O2- + O -> O3 + e,c1,1.5e-16
+#O2- + N -> NO2 + e,c1,5.0e-16
+#O- + O -> O2 + e,c1,5.0e-16
+#O- + N -> NO + e,c1,2.6e-16
+#O3- + O -> O2 + O2 + e,c1,3.0e-16
+#O- + O2 -> O3 + e,c1,5.0e-21
 ---------------------------
 
 Mean energy (eV)

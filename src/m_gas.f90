@@ -271,7 +271,7 @@ contains
             s_deriv, s_prev, s_out, add_geometric_source)
     else
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-            s_deriv, s_prev, s_out)
+            s_deriv, s_prev, s_out, flux_dummy_source)
     end if
 
     ! Compute new time step

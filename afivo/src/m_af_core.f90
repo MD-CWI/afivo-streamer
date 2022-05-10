@@ -262,8 +262,7 @@ contains
        end do
        tree%boxes(id)%neighbor_mat = id_array(i-1:i+1)
 
-       call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
-            tree%n_var_cell, tree%n_var_face)
+       call af_init_box(tree, id)
     end do
 #elif NDIM == 2
     do j = 1, nx(2)
@@ -287,8 +286,7 @@ contains
           end do
           tree%boxes(id)%neighbor_mat = id_array(i-1:i+1, j-1:j+1)
 
-          call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
-               tree%n_var_cell, tree%n_var_face)
+          call af_init_box(tree, id)
        end do
     end do
 #elif NDIM == 3
@@ -314,8 +312,7 @@ contains
              end do
              tree%boxes(id)%neighbor_mat = id_array(i-1:i+1, j-1:j+1, k-1:k+1)
 
-             call af_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
-                  tree%n_var_cell, tree%n_var_face)
+             call af_init_box(tree, id)
           end do
        end do
     end do
@@ -537,32 +534,60 @@ contains
 
   !> Mark box as active and allocate data storage for a box, for its cell- and
   !> face-centered data
-  subroutine af_init_box(box, n_cell, n_cc, n_fc)
-    type(box_t), intent(inout) :: box !< Box for which we allocate memory
-    integer, intent(in)         :: n_cell !< Number of cells per dimension in the box
-    integer, intent(in)         :: n_cc   !< Number of cell-centered variables
-    integer, intent(in)         :: n_fc   !< Number of face-centered variables
+  subroutine af_init_box(tree, id)
+    type(af_t), intent(inout) :: tree !< Tree
+    integer, intent(in)       :: id   !< Box id
+    integer                   :: nc, ix, nb
+    logical                   :: new_box
 
-    box%in_use = .true.
+    associate (box => tree%boxes(id))
+      nc         = tree%n_cell
+      box%in_use = .true.
+      new_box    = .not. allocated(box%cc)
 
-    ! Sometimes we re-use a removed box, then we don't have to re-allocate
-    if (.not. allocated(box%cc)) then
-#if NDIM == 1
-       allocate(box%cc(0:n_cell+1, n_cc))
-       allocate(box%fc(n_cell+1,   NDIM, n_fc))
-#elif NDIM == 2
-       allocate(box%cc(0:n_cell+1, 0:n_cell+1, n_cc))
-       allocate(box%fc(n_cell+1,   n_cell+1, NDIM, n_fc))
-#elif NDIM == 3
-       allocate(box%cc(0:n_cell+1, 0:n_cell+1, 0:n_cell+1, n_cc))
-       allocate(box%fc(n_cell+1,   n_cell+1,   n_cell+1, NDIM, n_fc))
-#endif
-    end if
+      if (new_box) then
+         allocate(box%cc(DTIMES(0:nc+1), tree%n_var_cell))
+         allocate(box%fc(DTIMES(nc+1), NDIM, tree%n_var_face))
+      end if
 
-    ! Initialize to zero
-    box%cc = 0
-    box%fc = 0
+      ! Initialize to zero
+      box%cc = 0
+      box%fc = 0
+
+      ! Allocate storage for boundary conditions
+      box%n_bc = count(box%neighbors < af_no_box)
+      allocate(box%bc_index_to_nb(box%n_bc))
+      allocate(box%bc_coords(NDIM, nc**(NDIM-1), box%n_bc))
+      allocate(box%bc_val(nc**(NDIM-1), tree%n_var_cell, box%n_bc))
+      allocate(box%bc_type(tree%n_var_cell, box%n_bc))
+      box%bc_val = 0
+      box%bc_type = 0
+
+      ! Set face coordinates
+      ix = 0
+      do nb = 1, af_num_neighbors
+         if (box%neighbors(nb) < af_no_box) then
+            ix = ix + 1
+            box%bc_index_to_nb(ix) = nb
+            box%nb_to_bc_index(nb) = ix
+            call af_get_face_coords(box, nb, box%bc_coords(:, :, ix))
+         end if
+      end do
+    end associate
   end subroutine af_init_box
+
+  !> Mark box as inactive, but keep storage for cell- and face-centered data to
+  !> avoid reallocating this
+  subroutine af_deactivate_box(box)
+    type(box_t), intent(inout) :: box
+
+    box%in_use     = .false.
+    box%tag        = af_init_tag
+    box%n_stencils = 0
+    if (allocated(box%stencils)) deallocate(box%stencils)
+    deallocate(box%bc_index_to_nb, box%bc_coords, &
+            box%bc_val, box%bc_type)
+  end subroutine af_deactivate_box
 
   ! Set the neighbors of id (using their parent)
   subroutine set_neighbs(boxes, id)
@@ -730,8 +755,7 @@ contains
           else if (ref_flags(id) == af_refine) then
              ! Add children. First need to get num_children free id's
              call get_free_ids(tree, c_ids)
-             call add_children(tree%boxes, id, c_ids, &
-                  tree%n_var_cell, tree%n_var_face)
+             call add_children(tree, id, c_ids)
              ref_info%lvls(lvl+1)%add(i_add+1:i_add+n_ch) = &
                   tree%boxes(id)%children
              i_add = i_add + n_ch
@@ -1152,54 +1176,58 @@ contains
           end if
        end do; CLOSE_DO
 
-       tree%boxes(c_id)%in_use = .false.
+       call af_deactivate_box(tree%boxes(c_id))
     end do
 
     tree%boxes(id)%children = af_no_box
   end subroutine remove_children
 
   !> Add children to box id, using the indices in c_ids
-  subroutine add_children(boxes, id, c_ids, n_cc, n_fc)
-    type(box_t), intent(inout) :: boxes(:) !< List of all boxes
+  subroutine add_children(tree, id, c_ids)
+    type(af_t), intent(inout)   :: tree !< Tree
     integer, intent(in)         :: id       !< Id of box that gets children
     integer, intent(in)         :: c_ids(af_num_children) !< Free ids for the children
-    integer, intent(in)         :: n_cc                   !< Number of cell-centered variables
-    integer, intent(in)         :: n_fc                   !< Number of face-centered variables
     integer                     :: i, nb, child_nb(2**(NDIM-1))
     integer                     :: c_id, c_ix_base(NDIM), dix(NDIM)
 
-    boxes(id)%children = c_ids
-    c_ix_base          = 2 * boxes(id)%ix - 1
+    associate (boxes => tree%boxes)
+      boxes(id)%children = c_ids
+      c_ix_base          = 2 * boxes(id)%ix - 1
 
+      do i = 1, af_num_children
+         c_id                  = c_ids(i)
+         boxes(c_id)%ix        = c_ix_base + af_child_dix(:,i)
+         boxes(c_id)%lvl       = boxes(id)%lvl+1
+         boxes(c_id)%parent    = id
+         boxes(c_id)%tag       = af_init_tag
+         boxes(c_id)%children  = af_no_box
+         boxes(c_id)%neighbors = af_no_box
+         boxes(c_id)%neighbor_mat = af_no_box
+         boxes(c_id)%neighbor_mat(DTIMES(0)) = c_id
+         boxes(c_id)%n_cell    = boxes(id)%n_cell
+         boxes(c_id)%coord_t   = boxes(id)%coord_t
+         boxes(c_id)%dr        = 0.5_dp * boxes(id)%dr
+         boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
+              af_child_dix(:,i) * boxes(id)%n_cell
+      end do
+
+      ! Set boundary conditions at children
+      do nb = 1, af_num_neighbors
+         if (boxes(id)%neighbors(nb) < af_no_box) then
+            child_nb = c_ids(af_child_adj_nb(:, nb)) ! Neighboring children
+            boxes(child_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
+            dix = af_neighb_dix(:, nb)
+            boxes(child_nb)%neighbor_mat(DINDEX(dix)) = &
+                 boxes(id)%neighbors(nb)
+         end if
+      end do
+    end associate
+
+    ! Have to call this after setting boundary conditions
     do i = 1, af_num_children
-       c_id                  = c_ids(i)
-       boxes(c_id)%ix        = c_ix_base + af_child_dix(:,i)
-       boxes(c_id)%lvl       = boxes(id)%lvl+1
-       boxes(c_id)%parent    = id
-       boxes(c_id)%tag       = af_init_tag
-       boxes(c_id)%children  = af_no_box
-       boxes(c_id)%neighbors = af_no_box
-       boxes(c_id)%neighbor_mat = af_no_box
-       boxes(c_id)%neighbor_mat(DTIMES(0)) = c_id
-       boxes(c_id)%n_cell    = boxes(id)%n_cell
-       boxes(c_id)%coord_t   = boxes(id)%coord_t
-       boxes(c_id)%dr        = 0.5_dp * boxes(id)%dr
-       boxes(c_id)%r_min     = boxes(id)%r_min + 0.5_dp * boxes(id)%dr * &
-            af_child_dix(:,i) * boxes(id)%n_cell
-
-       call af_init_box(boxes(c_id), boxes(id)%n_cell, n_cc, n_fc)
+       call af_init_box(tree, c_ids(i))
     end do
 
-    ! Set boundary conditions at children
-    do nb = 1, af_num_neighbors
-       if (boxes(id)%neighbors(nb) < af_no_box) then
-          child_nb = c_ids(af_child_adj_nb(:, nb)) ! Neighboring children
-          boxes(child_nb)%neighbors(nb) = boxes(id)%neighbors(nb)
-          dix = af_neighb_dix(:, nb)
-          boxes(child_nb)%neighbor_mat(DINDEX(dix)) = &
-               boxes(id)%neighbors(nb)
-       end if
-    end do
   end subroutine add_children
 
   !> Create a list c_ids(:) of all the children of p_ids(:). This is used after

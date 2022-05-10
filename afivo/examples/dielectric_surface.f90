@@ -14,7 +14,6 @@ program dielectric_surface
   integer            :: i_tmp
   integer            :: i_eps
   integer            :: i_fld_norm_fc
-  integer            :: i_fld_norm_cc
   integer            :: i_fld_cc(NDIM)
   integer            :: i_fld_fc
   real(dp)           :: fac = 1.0_dp
@@ -25,7 +24,7 @@ program dielectric_surface
   ! Where the interface is located
   real(dp), parameter :: interface_location = 0.25_dp
   ! Along which dimension the interface occurs
-  integer, parameter :: interface_dimension = NDIM
+  integer, parameter :: interface_dimension = 1
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -49,7 +48,6 @@ program dielectric_surface
 #if NDIM == 3
   call af_add_cc_variable(tree, "fld_cc_z", ix=i_fld_cc(3))
 #endif
-  call af_add_cc_variable(tree, "fld_norm_cc", ix=i_fld_norm_cc)
   call af_add_cc_variable(tree, "fld_norm_fc", ix=i_fld_norm_fc)
   call af_add_fc_variable(tree, "fld_fc", i_fld_fc)
 
@@ -82,11 +80,11 @@ program dielectric_surface
 
   call surface_surface_charge_to_rhs(tree, dielectric, 1, i_rhs, fac)
 
-  mg%i_phi        = i_phi
-  mg%i_rhs        = i_rhs
-  mg%i_tmp        = i_tmp
-  mg%i_eps        = i_eps
-  mg%sides_bc     => bc_phi
+  tree%mg_i_eps = i_eps
+  mg%i_phi = i_phi
+  mg%i_rhs = i_rhs
+  mg%i_tmp = i_tmp
+  mg%sides_bc => bc_phi
 
   call mg_init(tree, mg)
 
@@ -94,7 +92,6 @@ program dielectric_surface
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      call af_loop_box(tree, compute_fields)
      call surface_correct_field_fc(tree, dielectric, 1, i_fld_fc, i_phi, -fac)
-     ! call surface_correct_field_cc(tree, dielectric, 1, i_fld_cc, i_phi, -fac)
      call af_loop_box(tree, compute_field_norms)
 
      ! Determine the minimum and maximum residual and error
@@ -246,14 +243,7 @@ contains
          box%fc(2:nc+1, 1:nc, 1, i_fld_fc))**2 + &
          (box%fc(1:nc, 1:nc, 2, i_fld_fc) + &
          box%fc(1:nc, 2:nc+1, 2, i_fld_fc))**2)
-    box%cc(1:nc, 1:nc, i_fld_norm_cc) = sqrt(&
-         box%cc(1:nc, 1:nc, i_fld_cc(1))**2 + &
-         box%cc(1:nc, 1:nc, i_fld_cc(2))**2)
 #elif NDIM == 3
-    box%cc(1:nc, 1:nc, 1:nc, i_fld_norm_cc) = sqrt(&
-         box%cc(1:nc, 1:nc, 1:nc, i_fld_cc(1))**2 + &
-         box%cc(1:nc, 1:nc, 1:nc, i_fld_cc(2))**2 + &
-         box%cc(1:nc, 1:nc, 1:nc, i_fld_cc(3))**2)
     box%cc(1:nc, 1:nc, 1:nc, i_fld_norm_fc) = 0.5_dp * sqrt(&
              (box%fc(1:nc, 1:nc, 1:nc, 1, i_fld_fc) + &
               box%fc(2:nc+1, 1:nc, 1:nc, 1, i_fld_fc))**2 + &

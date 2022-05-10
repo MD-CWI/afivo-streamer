@@ -38,7 +38,7 @@ program poisson_basic
   ! Sigmas    :  [0.04_dp, 0.04_dp]
   ! Locations :  x, y, z = 0.25 or x, y, z = 0.75
   call gauss_init(gs, [1.0_dp, 1.0_dp], [0.04_dp, 0.04_dp], &
-       reshape([DTIMES(0.25_dp), &
+       reshape([DTIMES(0.1_dp), &
        DTIMES(0.75_dp)], [NDIM,2]))
   !> [Gauss_init]
 

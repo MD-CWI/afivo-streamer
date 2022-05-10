@@ -57,12 +57,13 @@ program electrode_dielectric
      if (ref_info%n_add == 0) exit
   end do
 
-  mg%i_phi    = i_phi
-  mg%i_rhs    = i_rhs
-  mg%i_tmp    = i_tmp
-  mg%i_lsf    = i_lsf
-  mg%i_eps    = i_eps
+  tree%mg_i_lsf = i_lsf
+  tree%mg_i_eps = i_eps
+  mg%i_phi = i_phi
+  mg%i_rhs = i_rhs
+  mg%i_tmp = i_tmp
   mg%sides_bc => af_bc_dirichlet_zero
+  mg%lsf => get_lsf
   mg%lsf_boundary_value = 1.0_dp
 
   call mg_init(tree, mg)
@@ -98,28 +99,33 @@ contains
   subroutine set_lsf(box, iv)
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
+    real(dp)                   :: rr(NDIM)
     integer                    :: IJK, nc
-    real(dp)                   :: rr(NDIM), r0(NDIM), r1(NDIM)
-    real(dp)                   :: radius
 
     nc = box%n_cell
 
-    ! Start and end point of line
-    r0(:) = 0.3_dp
-    r1(:) = 0.5_dp
-    radius = 0.02_dp
-
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
-       box%cc(IJK, iv) = dist_vec_line(rr, r0, r1, NDIM) - radius
+       box%cc(IJK, iv) = get_lsf(rr)
        if (rr(1) < 0.125_dp) then
           box%cc(IJK, i_eps) = 20.0_dp
        else
           box%cc(IJK, i_eps) = 1.0_dp
        end if
     end do; CLOSE_DO
-
   end subroutine set_lsf
+
+  real(dp) function get_lsf(r)
+    real(dp), intent(in) :: r(NDIM)
+    real(dp)             :: r0(NDIM), r1(NDIM)
+    real(dp)             :: radius
+
+    ! Start and end point of line
+    r0(:)   = 0.3_dp
+    r1(:)   = 0.5_dp
+    radius  = 0.02_dp
+    get_lsf = dist_vec_line(r, r0, r1, NDIM) - radius
+  end function get_lsf
 
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1

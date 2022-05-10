@@ -602,7 +602,7 @@ contains
     real(dp)                   :: rates(nc**NDIM, n_reactions)
     real(dp)                   :: derivs(nc**NDIM, n_species)
     real(dp)                   :: dens(nc**NDIM, n_species)
-    real(dp)                   :: fields(nc**NDIM)
+    real(dp)                   :: fields(nc**NDIM), box_rates(n_reactions)
     real(dp)                   :: source_factor(nc**NDIM)
     real(dp)                   :: coords(nc, NDIM), r(NDIM)
 #if NDIM == 2
@@ -679,7 +679,7 @@ contains
 
     ! TODO clean this up in the future (when we set electrode Neumann boundary
     ! conditions in actual flux computation)
-    if (box%tag == mg_lsf_box) then
+    if (iand(box%tag, mg_lsf_box) > 0) then
        ix = 0
        do KJI_DO(1,nc)
           ix = ix + 1
@@ -693,6 +693,11 @@ contains
        tid = omp_get_thread_num() + 1
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
             minval((abs(dens) + dt_chemistry_nmin) / max(abs(derivs), eps)))
+
+       ! Keep track of chemical production at last time integration step (at
+       ! which set_dt is true)
+       call chemical_rates_box(box, nc, rates, box_rates)
+       call sum_global_chemical_rates(box_rates, dt)
     end if
 
 #if NDIM == 2
@@ -1014,5 +1019,55 @@ contains
     end do
 
   end subroutine handle_ion_se_flux
+
+  !> Volume integrate chemical reaction rates
+  subroutine chemical_rates_box(box, nc, rates, box_rates)
+    use m_chemistry
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nc
+    real(dp), intent(in)    :: rates(nc**NDIM, n_reactions)
+    real(dp), intent(out)   :: box_rates(n_reactions)
+#if NDIM == 2
+    integer                 :: i, n
+    real(dp)                :: w(nc), tmp(nc, nc)
+#endif
+
+    if (box%coord_t == af_xyz) then
+       box_rates = sum(rates, dim=1) * product(box%dr)
+#if NDIM == 2
+    else if (box%coord_t == af_cyl) then
+       box_rates(:) = 0
+
+       ! Get volume versus radius
+       do i = 1, nc
+          w(i) = af_cyl_volume_cc(box, i)
+       end do
+
+       do n = 1, n_reactions
+          tmp = reshape(rates(:, n), [nc, nc])
+          do i = 1, nc
+             tmp(i, :) = w(i) * tmp(i, :)
+          end do
+          box_rates(n) = box_rates(n) + sum(tmp)
+       end do
+#endif
+    else
+       error stop "Unknown box coordinates"
+    end if
+  end subroutine chemical_rates_box
+
+  !> Sum rates into global (0D) storage
+  subroutine sum_global_chemical_rates(box_rates, dt)
+    use m_chemistry
+    use m_streamer
+    use omp_lib
+    real(dp), intent(out) :: box_rates(n_reactions)
+    real(dp), intent(in)  :: dt !< Time step
+    integer               :: tid
+
+    tid = omp_get_thread_num() + 1
+    ST_global_rates(1:n_reactions, tid) = &
+         ST_global_rates(1:n_reactions, tid) + box_rates * dt
+  end subroutine sum_global_chemical_rates
 
 end module m_fluid_lfa

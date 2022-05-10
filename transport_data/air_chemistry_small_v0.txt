@@ -18,8 +18,8 @@ e + O2 -> e + e + O2+,field_table,C43 O2 Ionization 12.06 eV
 e + O2 + O2 -> O2-,field_table,C27 O2 Attachment
 e + O2 -> O-,field_table,C28 O2 Attachment
 # Detachment (Panchesnyi 2013)
-O2- + M -> e,exp_v1,1.24e-17 179.0 8.8
-O- + N2 -> e,exp_v1,1.16e-18 48.9 11.0
+O2- + M -> e,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
+O- + N2 -> e,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
 -----------------------
 
 Mean energy (eV)
