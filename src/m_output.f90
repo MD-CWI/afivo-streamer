@@ -660,7 +660,7 @@ contains
     else
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
-       write(my_unit, "(*(E16.8))") global_time, &
+       write(my_unit, "(*(E20.8))") global_time, &
             sum(ST_global_rates(1:n_reactions, :), dim=2)
        close(my_unit)
     end if
@@ -686,7 +686,7 @@ contains
 
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
-       write(my_unit, "(*(E16.8))") global_time, sum_dens
+       write(my_unit, "(*(E20.8))") global_time, sum_dens
        close(my_unit)
     end if
 
