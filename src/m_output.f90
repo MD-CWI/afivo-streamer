@@ -256,12 +256,12 @@ contains
 
        ! Create a lookup table for the model coefficients
        eV_vs_fld = LT_create(table_min_townsend, table_max_townsend, &
-            table_size, 1)
+            table_size, 1, table_xspacing)
        call CFG_get(cfg, "input_data%file", td_file)
 
        ! Read table with E/N vs electron energy (eV)
        call table_from_file(td_file, "Mean energy (eV)", x_data, y_data)
-       call LT_set_col(eV_vs_fld, 1, x_data, y_data)
+       call table_set_column(eV_vs_fld, 1, x_data, y_data)
     end if
 
     if (output_conductivity) then

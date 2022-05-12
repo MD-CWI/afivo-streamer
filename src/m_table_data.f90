@@ -1,6 +1,7 @@
 !> Module with settings and routines for tabulated data
 module m_table_data
   use m_types
+  use m_lookup_table
 
   implicit none
   private
@@ -23,7 +24,10 @@ module m_table_data
   integer, parameter :: interp_linear = 1
   integer, parameter :: interp_cubic_spline = 2
 
-  integer :: input_interpolation = interp_linear
+  integer :: input_interpolation = -1
+
+  !> X-spacing for lookup table
+  integer, public, protected :: table_xspacing = -1
 
   ! Public methods
   public :: table_data_initialize
@@ -57,6 +61,18 @@ contains
        error stop "invalid input_interpolation method"
     end select
 
+    method = "linear"
+    call CFG_add_get(cfg, "table_data%xspacing", method, &
+         "x-spacing for lookup table (linear, quadratic)")
+    select case (method)
+    case ("linear")
+       table_xspacing = LT_xspacing_linear
+    case ("quadratic")
+       table_xspacing = LT_xspacing_quadratic
+    case default
+       error stop "invalid table_data%xspacing (linear, quadratic)"
+    end select
+
   end subroutine table_data_initialize
 
   !> Interpolate data and store in lookup table
@@ -67,7 +83,7 @@ contains
     integer, intent(in)       :: i_col !< Index of column
     real(dp), intent(in)      :: x(:)
     real(dp), intent(in)      :: y(:)
-    real(dp), allocatable     :: x_table(:), y_table(:)
+    real(dp), allocatable     :: y_table(:)
     type(spline_t)            :: spl
 
     if (size(x) /= size(y)) error stop "size(x) /= size(y)"
@@ -78,9 +94,8 @@ contains
     case (interp_cubic_spline)
        ! Perform cubic spline interpolation
        call spline_set_coeffs(x, y, size(x), spl)
-       x_table = LT_get_xdata(tbl)
-       y_table = spline_evaluate(x_table, spl)
-       call LT_set_col(tbl, i_col, y=y_table)
+       y_table = spline_evaluate(tbl%x, spl)
+       call LT_set_col_data(tbl, i_col, y_table)
     case default
        error stop "invalid input_interpolation"
     end select
