@@ -510,16 +510,16 @@ contains
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
+            &sum(charge) sum(J.E) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
             &max(Etip) x wc_time n_cells min(dx) &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
+            &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
             &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x y z max(n_e) x y z voltage &
+            &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
             &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
@@ -535,11 +535,11 @@ contains
     end if
 
 #if NDIM == 1
-    n_reals = 16
+    n_reals = 17
 #elif NDIM == 2
-    n_reals = 23
+    n_reals = 24
 #elif NDIM == 3
-    n_reals = 22
+    n_reals = 23
 #endif
 
     if (associated(user_log_variables)) then
@@ -556,7 +556,7 @@ contains
          position="append")
 #if NDIM == 1
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
          max_field_tip, af_r_loc(tree, loc_tip), &
@@ -565,7 +565,7 @@ contains
          var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          field_voltage, ne_zminmax, max_field_tip, af_r_loc(tree, loc_tip), &
@@ -573,7 +573,7 @@ contains
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
          max_field_tip, af_r_loc(tree, loc_tip), &

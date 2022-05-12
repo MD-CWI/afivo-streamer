@@ -693,7 +693,13 @@ contains
        ! Keep track of chemical production at last time integration step (at
        ! which set_dt is true)
        call chemical_rates_box(box, nc, rates, box_rates)
-       call sum_global_chemical_rates(box_rates, dt)
+
+       !> Integrate rates over space and time into global storage
+       ST_global_rates(1:n_reactions, tid) = &
+         ST_global_rates(1:n_reactions, tid) + box_rates * dt
+
+       ! Keep track of J.E
+       call sum_global_JdotE(box, dt, tid)
     end if
 
 #if NDIM == 2
@@ -1036,18 +1042,52 @@ contains
     end if
   end subroutine chemical_rates_box
 
-  !> Sum rates into global (0D) storage
-  subroutine sum_global_chemical_rates(box_rates, dt)
-    use m_chemistry
+  !> Integrate J.E over space and time into global storage
+  subroutine sum_global_JdotE(box, dt, tid)
     use m_streamer
-    use omp_lib
-    real(dp), intent(out) :: box_rates(n_reactions)
-    real(dp), intent(in)  :: dt !< Time step
-    integer               :: tid
+    use m_units_constants
+    type(box_t), intent(in) :: box
+    real(dp), intent(in)    :: dt  !< Time step
+    integer, intent(in)     :: tid !< Thread id
+    integer                 :: IJK, nc
+    real(dp)                :: JdotE, tmp
+    real(dp)                :: volume(box%n_cell)
 
-    tid = omp_get_thread_num() + 1
-    ST_global_rates(1:n_reactions, tid) = &
-         ST_global_rates(1:n_reactions, tid) + box_rates * dt
-  end subroutine sum_global_chemical_rates
+    JdotE = 0.0_dp
+
+    volume = product(box%dr)
+
+#if NDIM == 2
+    if (box%coord_t == af_cyl) then
+       ! Cylindrical case
+       do i = 1, box%n_cell
+          volume(i) = af_cyl_volume_cc(box, i)
+       end do
+    end if
+#endif
+
+    nc = box%n_cell
+    do KJI_DO(1, nc)
+       ! Compute inner product flux * field over the cell faces
+       tmp = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
+#if NDIM == 1
+       tmp = tmp + 0.5_dp * (&
+            box%fc(i+1, 1, flux_elec) * box%fc(i+1, 1, electric_fld))
+#elif NDIM == 2
+       tmp = tmp + 0.5_dp * (&
+            box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
+            box%fc(i, j+1, 2, flux_elec) * box%fc(i, j+1, 2, electric_fld))
+#elif NDIM == 3
+       tmp = tmp + 0.5_dp * (&
+            box%fc(i+1, j, k, 1, flux_elec) * box%fc(i+1, j, k, 1, electric_fld) + &
+            box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
+            box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
+#endif
+       JdotE = JdotE + tmp * volume(i)
+    end do; CLOSE_DO
+
+    ST_global_JdotE(1, tid) = ST_global_JdotE(1, tid) + &
+         JdotE * UC_elec_charge * dt
+  end subroutine sum_global_JdotE
 
 end module m_fluid_lfa
