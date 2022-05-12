@@ -21,8 +21,21 @@ cd ../
 
 
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.97e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_0.97e6_new
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.97e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_0.97e6_new
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.0e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_1.0e6_new
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.0e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_1.0e6_new
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_1.2e6_new
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_1.2e6_new
+
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps.txt -table_data%input_interpolation='linear'  -table_data%size=50000 -output%name=/export/scratch3/baohong/chemistry/two_pulse_new/EL2mm_2.2e6_0.01td_size50000
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.7e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_1.7e6_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.8e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_1.8e6_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.9e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_1.9e6_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.0e6 -field_rod_r0="0 0.865" -field_rod_radius=0.3e-3 -end_time=5e-7 -output%name+=EL3mm_2.0e6_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.4e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name=/export/scratch3/baohong/chemistry/two_pulse_new/EL2mm_2.4e6_new

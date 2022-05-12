@@ -39,8 +39,17 @@ cd ../
 
 
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.12e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.12e6_new
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.12e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.12e6_new
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.2e6_new
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.2e6_new
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.5e6_new
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.5e6_new
+
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.1e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_2.1e6_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_2.2e6_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.3e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_2.3e6_new
+
+
