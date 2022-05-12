@@ -62,12 +62,12 @@ RUNSERIES
 1          / Variable: 1=E/N; 2=Mean energy; 3=Maxwellian energy
 0.01  1000.   / Min Max
 1000        / Number
-3          / Type: 1=Linear; 2=Quadratic; 3=Exponential
+2          / Type: 1=Linear; 2=Quadratic; 3=Exponential
 
 /SAVERESULTS can be called multiple times to write in different formats
 
 SAVERESULTS
-convert_Baohong_phelps.txt        / File
+convert_Baohong_phelps_0.01td.txt        / File
 2        / Format: 1=Run by run; 2=Combined; 3=E/N; 4=Energy; 5=SIGLO; 6=PLASIMO
 1        / Conditions: 0=No; 1=Yes
 1        / Transport coefficients: 0=No; 1=Yes

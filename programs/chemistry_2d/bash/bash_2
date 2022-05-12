@@ -30,4 +30,49 @@ cd ../
 #./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL2mm_2.6e6_im
 
 
-./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_2.6e6_conductivity
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_2.6e6_conductivity
+
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/Air_Kawa_Itikawa_Kossy_modified.txt -output%name=/export/scratch2/md/baohong/chemistry/two_pulse_new/EL2mm_1.5e6_Andy_300ns
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions.txt -output%name+=EL2mm_2.2e6_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.9e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions.txt -output%name+=EL4mm_0.9e6_conductivity_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions.txt -output%name+=EL4mm_1.5e6_conductivity_new
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions.txt -output%name+=EL4mm_2.6e6_conductivity_new
+
+
+./streamer air_d20mm_chemistry_conductivity.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.9e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_0.9e6_conductivity_new
+
+./streamer air_d20mm_chemistry_conductivity.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_1.5e6_conductivity_new
+
+./streamer air_d20mm_chemistry_conductivity.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_2.6e6_conductivity_new
+
+
+
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps.txt -table_data%input_interpolation='cubic_spline' -output%name+=EL2mm_2.2e6_cubic
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps_0.1td.txt -table_data%input_interpolation='linear' -output%name+=EL2mm_2.2e6_0.1td_linear
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps_0.1td.txt -table_data%input_interpolation='cubic_spline' -output%name+=EL2mm_2.2e6_0.1td_cubic
+
+
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps.txt -table_data%input_interpolation='linear'  -table_data%size=50000 -output%name+=EL2mm_2.2e6_size50000
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps.txt -table_data%input_interpolation='linear'  -table_data%size=10000 -output%name+=EL2mm_2.2e6_size10000
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps.txt -table_data%input_interpolation='linear'  -table_data%size=100000 -output%name+=EL2mm_2.2e6_size100000
+
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps_0.1td.txt -table_data%input_interpolation='linear'  -table_data%size=10000 -output%name+=EL2mm_2.2e6_0.1td_size10000
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps_0.05td.txt -table_data%input_interpolation='linear'  -table_data%size=10000 -output%name+=EL2mm_2.2e6_0.05td_size10000
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps_0.05td.txt -table_data%input_interpolation='linear'  -table_data%size=1000 -output%name+=EL2mm_2.2e6_0.05td_size1000
+
+
+./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -input_data%file=../../transport_data/N2_O2/air_chemistry_Baohong_reactions_Phelps_0.01td.txt -table_data%input_interpolation='linear'  -table_data%size=10000 -output%name+=EL2mm_2.2e6_0.01td_size10000
