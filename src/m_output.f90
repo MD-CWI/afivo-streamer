@@ -256,12 +256,12 @@ contains
 
        ! Create a lookup table for the model coefficients
        eV_vs_fld = LT_create(table_min_townsend, table_max_townsend, &
-            table_size, 1)
+            table_size, 1, table_xspacing)
        call CFG_get(cfg, "input_data%file", td_file)
 
        ! Read table with E/N vs electron energy (eV)
        call table_from_file(td_file, "Mean energy (eV)", x_data, y_data)
-       call LT_set_col(eV_vs_fld, 1, x_data, y_data)
+       call table_set_column(eV_vs_fld, 1, x_data, y_data)
     end if
 
     if (output_conductivity) then
@@ -510,16 +510,16 @@ contains
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
+            &sum(charge) sum(J.E) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
             &max(Etip) x wc_time n_cells min(dx) &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
+            &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
             &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x y z max(n_e) x y z voltage &
+            &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
             &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
@@ -535,18 +535,18 @@ contains
     end if
 
 #if NDIM == 1
-    n_reals = 16
+    n_reals = 17
 #elif NDIM == 2
-    n_reals = 23
+    n_reals = 24
 #elif NDIM == 3
-    n_reals = 22
+    n_reals = 23
 #endif
 
     if (associated(user_log_variables)) then
-       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E16.8,I12,1E16.8,I3,", &
-            n_user_vars, "E16.8)"
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3,", &
+            n_user_vars, "E20.8)"
     else
-       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E16.8,I12,1E16.8,I3)"
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3)"
     end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -556,7 +556,7 @@ contains
          position="append")
 #if NDIM == 1
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
          max_field_tip, af_r_loc(tree, loc_tip), &
@@ -565,7 +565,7 @@ contains
          var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          field_voltage, ne_zminmax, max_field_tip, af_r_loc(tree, loc_tip), &
@@ -573,7 +573,7 @@ contains
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
          max_field_tip, af_r_loc(tree, loc_tip), &
@@ -660,7 +660,7 @@ contains
     else
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
-       write(my_unit, "(*(E16.8))") global_time, &
+       write(my_unit, "(*(E20.8))") global_time, &
             sum(ST_global_rates(1:n_reactions, :), dim=2)
        close(my_unit)
     end if
@@ -686,7 +686,7 @@ contains
 
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
-       write(my_unit, "(*(E16.8))") global_time, sum_dens
+       write(my_unit, "(*(E20.8))") global_time, sum_dens
        close(my_unit)
     end if
 
@@ -732,7 +732,7 @@ contains
        close(my_unit)
     end if
 
-    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E16.8)"
+    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E20.8)"
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")

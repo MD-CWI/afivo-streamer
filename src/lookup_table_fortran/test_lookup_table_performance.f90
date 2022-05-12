@@ -2,19 +2,25 @@ program test
   use m_lookup_table
   implicit none
 
-  integer, parameter   :: dp             = kind(0.0d0)
-  integer, parameter   :: test_size      = 1000*1000
-  integer, parameter   :: min_table_size = 10
+  integer, parameter :: dp             = kind(0.0d0)
+  integer, parameter :: test_size      = 1000*1000
+  integer, parameter :: min_table_size = 10
+  integer, parameter :: spacing        = LT_xspacing_linear
 
   integer    :: i, cntr, table_size
   type(LT_t) :: lkp_tbl
-  real(dp)   :: x_values(test_size)
-  real(dp)   :: y_values(test_size)
-  real(dp)   :: y2_values(2, test_size)
-  real(dp)   :: lkp_results(test_size)
-  real(dp)   :: lkp2_results(2, test_size)
+
+  real(dp), allocatable :: x_values(:), y_values(:)
+  real(dp), allocatable :: y2_values(:, :), lkp_results(:)
+  real(dp), allocatable :: lkp2_results(:, :)
   real(dp)   :: max_diff
   real(dp)   :: total_time, time_t1, time_t2
+
+  allocate(x_values(test_size))
+  allocate(y_values(test_size))
+  allocate(y2_values(2, test_size))
+  allocate(lkp_results(test_size))
+  allocate(lkp2_results(2, test_size))
 
   print *, 'start test_lookup_table'
 
@@ -41,7 +47,8 @@ program test
 
      ! Create a lookup table between x_values(1) and x_values(test_size), using
      ! table_size rows and one column
-     lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 1)
+     lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 1, &
+          spacing)
 
      ! Add the data to the table
      call LT_set_col(lkp_tbl, 1, x_values, y_values)
@@ -79,7 +86,8 @@ program test
 
      ! Create a lookup table between x_values(1) and x_values(test_size), using
      ! table_size rows and one column
-     lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 2)
+     lkp_tbl = LT_create(x_values(1), x_values(test_size), table_size, 2, &
+          spacing)
 
      ! Add the data to the table
      call LT_set_col(lkp_tbl, 1, x_values, y2_values(1, :))

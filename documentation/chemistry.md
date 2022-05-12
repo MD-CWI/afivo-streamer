@@ -154,4 +154,18 @@ follows:
 1. Define a new parameter, e.g. `integer, parameter :: rate_analytic_kN = ...` in `m_chemistry`
 2. Add a new `case` statement with the new reaction format in `m_chemistry::read_reactions()`
 3. Implement the new reaction with a new case in `m_chemistry::get_rates()`
+# Visualization {#chem-vis}
 
+Each simulation produces the following files:
+1. <base_name>\_rates.txt :- Contains reaction rates of all reaction, for each timestep.
+2. <base_name>\_amounts.txt :- Contains the amount of each specie produced, integrated over the whole simulation domain, for each timestep.
+3. <base_name>\_reactions.txt :- Contains the list of all the reactions used in the simulation. This file is needed by the 'visualization script'.
+4. <base_name>\_reactions.txt :- Contains the list of all the species used in the simulation. This file is needed by the 'visualization script'.
+4. <base_name>\_stoich\_matrix.txt :- This file contains the [stoichiometric matrix](https://en.wikipedia.org/wiki/Stoichiometry#Stoichiometry_matrix) of the reaction set used in the simulation.
+
+The data in the above files can be visualized using the `chemistry_visualize_rates.py` script in the `/tools` directory. The syntax to use this script is as follows:
+`./chemistry_visualize_rates.py <base_name>\_rates.txt -soi <specie_name> -list_species -list_reactions -plot_all`
+
+The above command produces 2 figures. Figure 1 is a plot of the time, and volume averaged reaction rates vs. time for all the reactions. Figure 2 has 2 subplots, the first subplot shows the reactions contributing to the generation of the 'soi', and the second subplot shows the reactions consuming the 'soi'.
+
+The documentation for each of the arguments can be found by typing `python chemistry_visualize_rates.py -h`.

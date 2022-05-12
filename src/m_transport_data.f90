@@ -84,7 +84,8 @@ contains
             error stop "Old style bulk data requires bulk_scale_reactions = T"
 
        ! Create a lookup table for the model coefficients
-       td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 4)
+       td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, &
+            4, table_xspacing)
 
        if (td_bulk_transport) then
           call table_from_file(td_file, "efield[V/m]_vs_mu_bulk[m2/Vs]", x_data, y_data)
@@ -120,7 +121,8 @@ contains
     else
        ! Create a lookup table for the model coefficients
        if (td_bulk_scale_reactions) then
-          td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 6)
+          td_tbl = LT_create(table_min_townsend, table_max_townsend, &
+               table_size, 6, table_xspacing)
 
           ! Store scale factor for reactions
           td_bulk_scaling = 6
@@ -130,7 +132,8 @@ contains
                error stop "Mobility and Bulk mobility not given at same E/N"
           call table_set_column(td_tbl, td_bulk_scaling, x_data, y_data/y_data2)
        else
-          td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, 5)
+          td_tbl = LT_create(table_min_townsend, table_max_townsend, &
+               table_size, 5, table_xspacing)
        end if
 
        if (td_bulk_transport) then
