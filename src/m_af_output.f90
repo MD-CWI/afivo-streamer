@@ -390,7 +390,7 @@ contains
     !$omp end parallel do
 
     ! Construct format string. Write one row at a time
-    write(fmt_string, '(A,I0,A)') '(', n_pixels(1), 'E16.8)'
+    write(fmt_string, '(A,I0,A)') '(', n_pixels(1), 'E20.8)'
 
     ! Construct file name
     fname = trim(filename) // ".vtk"
@@ -402,12 +402,12 @@ contains
     write(my_unit, '(A)') "DATASET STRUCTURED_POINTS"
     write(my_unit, '(A,3I10)') "DIMENSIONS ", n_points
 #if NDIM == 2
-    write(my_unit, '(A,3E16.8)') "ORIGIN ", [r_min(1), r_min(2), 0.0_dp]
-    write(my_unit, '(A,3E16.8)') "SPACING ", &
+    write(my_unit, '(A,3E20.8)') "ORIGIN ", [r_min(1), r_min(2), 0.0_dp]
+    write(my_unit, '(A,3E20.8)') "SPACING ", &
          [v1(1) + v2(1), v1(2) + v2(2), 0.0_dp]
 #elif NDIM == 3
-    write(my_unit, '(A,3E16.8)') "ORIGIN ", r_min
-    write(my_unit, '(A,3E16.8)') "SPACING ", v1 + v2
+    write(my_unit, '(A,3E20.8)') "ORIGIN ", r_min
+    write(my_unit, '(A,3E20.8)') "SPACING ", v1 + v2
 #endif
     write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
     do i = 1, n_cc
