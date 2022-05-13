@@ -15,7 +15,8 @@ program usage_example
   print *, "   x_max    = ", x_data(4)
   print *, "   n_points = ", 20
   print *, "   n_cols   = ", 2
-  my_lt = LT_create(x_data(1), x_data(4), n_points=20, n_cols=2)
+  my_lt = LT_create(x_data(1), x_data(4), n_points=20, n_cols=2, &
+       xspacing=LT_xspacing_linear)
 
   print *, "The table input is unevenly spaced, using these x-values:"
   write(*, "(4e12.4)") x_data

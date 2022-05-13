@@ -209,7 +209,7 @@ contains
           reactions(1)%n_species_in = 2
           reactions(1)%rate_type = rate_tabulated_field
           reactions(1)%rate_factor = 1.0_dp
-          reactions(1)%x_data = LT_get_xdata(td_tbl)
+          reactions(1)%x_data = td_tbl%x
           reactions(1)%y_data = td_tbl%rows_cols(:, td_alpha) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(1)%x_data * &
                Townsend_to_SI * gas_number_density
@@ -222,7 +222,7 @@ contains
           reactions(2)%n_species_in = 2
           reactions(2)%rate_type = rate_tabulated_field
           reactions(2)%rate_factor = 1.0_dp
-          reactions(2)%x_data = LT_get_xdata(td_tbl)
+          reactions(2)%x_data = td_tbl%x
           reactions(2)%y_data = td_tbl%rows_cols(:, td_eta) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(2)%x_data * &
                Townsend_to_SI * gas_number_density
@@ -241,7 +241,8 @@ contains
 
     ! Store reactions of the tabulated field type
     i = count(reactions(1:n_reactions)%rate_type == rate_tabulated_field)
-    chemtbl = LT_create(table_min_townsend, table_max_townsend, table_size, i)
+    chemtbl = LT_create(table_min_townsend, table_max_townsend, &
+         table_size, i, table_xspacing)
 
     i = 0
     do n = 1, n_reactions
@@ -357,7 +358,7 @@ contains
        n_fields = td_tbl%n_points
 
        allocate(fields(n_fields))
-       fields = LT_get_xdata(td_tbl)
+       fields = td_tbl%x
 
        allocate(rates(n_fields, n_reactions))
        allocate(eta(n_fields), alpha(n_fields), src(n_fields), loss(n_fields))
@@ -438,7 +439,7 @@ contains
 
     n_fields = td_tbl%n_points
     allocate(fields(n_fields))
-    fields = LT_get_xdata(td_tbl)
+    fields = td_tbl%x
 
     allocate(rates(n_fields, n_reactions))
     allocate(src(n_fields), loss(n_fields))

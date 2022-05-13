@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-#Author: Hemaditya Malla
+# Authors: Hemaditya Malla, Jannis Teunissen
 
 import numpy as np
 import matplotlib.pyplot as plt
