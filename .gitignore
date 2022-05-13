@@ -36,3 +36,7 @@ documentation/html/*
 **/tests/output/*
 **/run.log
 programs/standard_2d/configFiles/*
+/programs/*/*.log
+/programs/*/*.txt
+/programs/standard_2d/fld_tbl/*
+/transport_data/*
