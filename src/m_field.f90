@@ -38,6 +38,9 @@ module m_field
   !> Linear rise time of field (s)
   real(dp) :: field_rise_time = 0.0_dp
 
+  !> When the drop of the voltage pulse happens (s)
+  real(dp) :: field_pulse_time = huge(1.0_dp)
+
   !> The (initial) vertical applied electric field
   real(dp), public, protected :: field_amplitude = 1.0e6_dp
 
@@ -132,6 +135,11 @@ contains
          "Decay time of field (s)")
     call CFG_add_get(cfg, "field_rise_time", field_rise_time, &
          "Linear rise time of field (s)")
+    call CFG_add_get(cfg, "field_pulse_time", field_pulse_time, &
+         "When the drop of the voltage pulse happens (s)")
+    if (field_pulse_time < huge(1.0_dp) .and. field_rise_time <= 0) &
+         error stop "Set field_rise_time when using field_pulse_time"
+
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
          "The (initial) vertical applied electric field (V/m)")
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
@@ -481,17 +489,20 @@ contains
 
        if (time < field_rise_time) then
           electric_fld = electric_fld * (time/field_rise_time)
-       end if
+       else if (time > field_pulse_time) then
+          electric_fld = electric_fld * max(0.0_dp, &
+               (1 - (time - field_pulse_time)/field_rise_time))
+       else
+          ! TODO: simplify stuff below
+          t_rel = time - field_mod_t0
+          t_rel = min(t_rel, field_mod_t1-field_mod_t0)
 
-       ! TODO: simplify stuff below
-       t_rel = time - field_mod_t0
-       t_rel = min(t_rel, field_mod_t1-field_mod_t0)
-
-       if (t_rel > 0) then
-          electric_fld = electric_fld * exp(-t_rel/field_decay_time) + &
-               t_rel * field_lin_deriv + &
-               field_sin_amplitude * &
-               sin(t_rel * field_sin_freq * 2 * UC_pi)
+          if (t_rel > 0) then
+             electric_fld = electric_fld * exp(-t_rel/field_decay_time) + &
+                  t_rel * field_lin_deriv + &
+                  field_sin_amplitude * &
+                  sin(t_rel * field_sin_freq * 2 * UC_pi)
+          end if
        end if
     end if
 
