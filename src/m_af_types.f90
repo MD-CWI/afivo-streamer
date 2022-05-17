@@ -608,6 +608,9 @@ module m_af_types
      !> Minimum relative distance to boundaries (to avoid division by zero)
      real(dp) :: lsf_min_rel_distance = 1e-4_dp
 
+     !> Whether to use a custom prolongation stencil
+     logical :: lsf_use_custom_prolongation = .false.
+
      !> Level-set function
      procedure(mg_func_lsf), pointer, nopass :: lsf => null()
 
