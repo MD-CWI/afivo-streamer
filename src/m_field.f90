@@ -8,76 +8,58 @@ module m_field
   implicit none
   private
 
-  !> Use a table with fields versus time
-  logical :: field_table_use
+  integer, parameter :: scalar_voltage = 1
+  integer, parameter :: tabulated_voltage = 2
+
+  !> How the electric field or voltage is specified
+  integer :: field_given_by = -1
 
   !> List of times
   real(dp), allocatable :: field_table_times(:)
 
-  !> List of fields
-  real(dp), allocatable :: field_table_fields(:)
-
-  !> Start modifying the vertical background field after this time
-  real(dp) :: field_mod_t0 = 1e99_dp
-
-  !> Stop modifying the vertical background field after this time
-  real(dp) :: field_mod_t1 = 1e99_dp
-
-  !> Amplitude of sinusoidal modification
-  real(dp) :: field_sin_amplitude = 0.0_dp
-
-  !> Frequency (Hz) of sinusoidal modification
-  real(dp) :: field_sin_freq = 0.0_dp
-
-  !> Linear derivative of background field
-  real(dp) :: field_lin_deriv = 0.0_dp
-
-  !> Decay time of background field
-  real(dp) :: field_decay_time = huge(1.0_dp)
+  !> List of voltages
+  real(dp), allocatable :: field_table_values(:)
 
   !> Linear rise time of field (s)
   real(dp) :: field_rise_time = 0.0_dp
 
-  !> When the drop of the voltage pulse happens (s)
-  real(dp) :: field_pulse_time = huge(1.0_dp)
+  !> Pulse width excluding rise and fall time
+  real(dp) :: field_pulse_width = huge(1.0_dp)
+
+  !> Number of voltage pulses
+  integer :: field_num_pulses = 1
+
+  !> Time of one complete voltage pulse
+  real(dp) :: field_pulse_period = huge(1.0_dp)
 
   !> The (initial) vertical applied electric field
-  real(dp), public, protected :: field_amplitude = 1.0e6_dp
-
-  !> The current vertical applied electric field
-  real(dp), public, protected :: current_field_amplitude
+  real(dp) :: field_amplitude = undefined_real
 
   !> The applied voltage (vertical direction)
-  real(dp), public, protected :: field_voltage
-
-  !> Whether the voltage has been set externally
-  logical :: voltage_set_externally = .false.
+  real(dp) :: field_voltage = undefined_real
 
   !> Whether the electrode is grounded or at the applied voltage
-  logical, public, protected :: field_electrode_grounded = .false.
+  logical :: field_electrode_grounded = .false.
 
   !> First electrode position
-  real(dp), public, protected :: field_rod_r0(NDIM) = -1.0_dp
+  real(dp) :: field_rod_r0(NDIM) = -1.0_dp
 
   !> Second electrode position
-  real(dp), public, protected :: field_rod_r1(NDIM) = -1.0_dp
+  real(dp) :: field_rod_r1(NDIM) = -1.0_dp
 
   !> Third electrode position
-  real(dp), public, protected :: field_rod_r2(NDIM) = -1.0_dp
+  real(dp) :: field_rod_r2(NDIM) = -1.0_dp
 
   !> Electrode radius (in m, for standard rod electrode)
-  real(dp), public, protected :: field_rod_radius = -1.0_dp
+  real(dp) :: field_rod_radius = -1.0_dp
 
   !> Electrode tip radius (for conical electrode)
-  real(dp), public, protected :: field_tip_radius = -1.0_dp
+  real(dp) :: field_tip_radius = -1.0_dp
 
-  logical  :: field_stability_search    = .false.
-  real(dp) :: field_stability_zmin      = 0.2_dp
-  real(dp) :: field_stability_zmax      = 1.0_dp
-  real(dp) :: field_stability_threshold = 3e6_dp
+  ! Internal variables
 
-  real(dp) :: field_point_charge = 0.0_dp
-  real(dp) :: field_point_r0(NDIM) = 0.0_dp
+  !> The current applied voltage
+  real(dp), public, protected :: current_voltage
 
   ! Parameters that are pre-computed for conical rods
   ! @todo Add explanations/documentation for conical rods
@@ -90,9 +72,7 @@ module m_field
   public :: field_initialize
   public :: field_compute
   public :: field_set_rhs
-  public :: field_get_amplitude
   public :: field_set_voltage
-  public :: field_set_voltage_externally
 
   public :: field_bc_homogeneous
 
@@ -106,60 +86,86 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg !< Settings
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
-    character(len=string_len)  :: field_table, electrode_type
+    character(len=string_len)  :: given_by, user_value
+    character(len=string_len)  :: electrode_type
+    integer                    :: first_blank
     real(dp)                   :: R_rod, R_tip, y_tip, alpha
     real(dp)                   :: r0(NDIM), r1(NDIM), r2(NDIM)
 
-    field_table = undefined_str
-    call CFG_add_get(cfg, "field_table", field_table, &
-         "File containing applied electric field (V/m) versus time")
-    if (field_table /= undefined_str) then
-       field_table_use = .true.
-       call table_from_file(field_table, "field_vs_time", &
-            field_table_times, field_table_fields)
-    else
-       field_table_use = .false.
-    end if
-
-    call CFG_add_get(cfg, "field_mod_t0", field_mod_t0, &
-         "Modify electric field after this time (s)")
-    call CFG_add_get(cfg, "field_mod_t1", field_mod_t1, &
-         "Modify electric field up to this time (s)")
-    call CFG_add_get(cfg, "field_sin_amplitude", field_sin_amplitude, &
-         "Amplitude of sinusoidal modification (V/m)")
-    call CFG_add_get(cfg, "field_sin_freq", field_sin_freq, &
-         "Frequency of sinusoidal modification (Hz)")
-    call CFG_add_get(cfg, "field_lin_deriv", field_lin_deriv, &
-         "Linear derivative of field [V/(ms)]")
-    call CFG_add_get(cfg, "field_decay_time", field_decay_time, &
-         "Decay time of field (s)")
-    call CFG_add_get(cfg, "field_rise_time", field_rise_time, &
-         "Linear rise time of field (s)")
-    call CFG_add_get(cfg, "field_pulse_time", field_pulse_time, &
-         "When the drop of the voltage pulse happens (s)")
-    if (field_pulse_time < huge(1.0_dp) .and. field_rise_time <= 0) &
-         error stop "Set field_rise_time when using field_pulse_time"
-
+    ! This is for backward compatibility
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
          "The (initial) vertical applied electric field (V/m)")
+
+    given_by = undefined_str
+    call CFG_add_get(cfg, "field_given_by", given_by, &
+         "How the electric field or voltage is specified")
+
+    ! Split given_by string
+    given_by = adjustl(given_by)
+    first_blank = index(given_by, " ")
+    user_value = adjustl(given_by(first_blank:))
+    given_by = given_by(1:first_blank-1)
+
+    select case (given_by)
+    case ("voltage")
+       field_given_by = scalar_voltage
+       read(user_value, *) field_voltage
+    case ("field")
+       field_given_by = scalar_voltage
+       read(user_value, *) field_voltage
+       ! Convert to a voltage
+       field_voltage = -ST_domain_len(NDIM) * field_voltage
+    case ("voltage_table")
+       field_given_by = tabulated_voltage
+
+       ! Read in the table
+       call table_from_file(trim(user_value), "voltage_vs_time", &
+            field_table_times, field_table_values)
+    case ("field_table")
+       field_given_by = tabulated_voltage
+
+       ! Read in the table
+       call table_from_file(trim(user_value), "field_vs_time", &
+            field_table_times, field_table_values)
+       ! Convert to a voltage
+       field_table_values = -ST_domain_len(NDIM) * field_table_values
+    case (undefined_str)
+       if (field_amplitude <= undefined_real) then
+          error stop "field_amplitude not specified"
+       else
+          print *, "Warning: field_amplitude is deprecated, use field_given_by"
+          field_given_by = scalar_voltage
+          field_voltage = -ST_domain_len(NDIM) * field_amplitude
+       end if
+    case default
+       print *, "field_given_by value: ", trim(given_by)
+       print *, "Options are: voltage, field, voltage_table, field_table"
+       error stop "Unknown field_given_by value"
+    end select
+
+    call CFG_add_get(cfg, "field_rise_time", field_rise_time, &
+         "Linear rise time of field (s)")
+    call CFG_add_get(cfg, "field_pulse_width", field_pulse_width, &
+         "Pulse width excluding rise and fall time (s)")
+    call CFG_add_get(cfg, "field_num_pulses", field_num_pulses, &
+         "Number of voltage pulses (default: 1)")
+    call CFG_add_get(cfg, "field_pulse_period", field_pulse_period, &
+         "Time of one complete voltage pulse (s)")
+
+    if (field_pulse_width < huge(1.0_dp) .and. field_rise_time <= 0) &
+         error stop "Set field_rise_time when using field_pulse_width"
+
+    if (field_num_pulses > 1) then
+       if (field_pulse_period >= huge(1.0_dp)) &
+            error stop "field_num_pulses > 1 requires field_pulse_period"
+       if (field_pulse_width >= huge(1.0_dp)) &
+            error stop "field_num_pulses > 1 requires field_pulse_width"
+       if (field_pulse_width + 2 * field_rise_time > field_pulse_period) &
+            error stop "field_pulse_period shorter than one full pulse"
+    end if
+
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
          "Type of boundary condition to use (homogeneous, ...)")
-
-    call CFG_add_get(cfg, "field_stability_search", field_stability_search, &
-         "If true, enable mode to search stability field")
-    call CFG_add_get(cfg, "field_stability_zmin", field_stability_zmin, &
-         "Start lowering background field above this relative position")
-    call CFG_add_get(cfg, "field_stability_zmax", field_stability_zmax, &
-         "At this relative position the background field will be zero")
-    call CFG_add_get(cfg, "field_stability_threshold", field_stability_threshold, &
-         "Use location of maximal field if above this threshold (V/m)")
-
-    call CFG_add_get(cfg, "field_point_charge", field_point_charge, &
-         "Charge (in C) of point charge")
-    field_point_r0(:) = 0.0_dp
-    field_point_r0(NDIM) = -1.0_dp
-    call CFG_add_get(cfg, "field_point_r0", field_point_r0, &
-         "Relative position of point charge (outside domain)")
 
     call CFG_add_get(cfg, "field_electrode_grounded", field_electrode_grounded, &
          "Whether the electrode is grounded or at the applied voltage")
@@ -187,8 +193,6 @@ contains
           mg%sides_bc => field_bc_homogeneous
        case ("neumann")
           mg%sides_bc => field_bc_neumann
-       case ("point_charge")
-          mg%sides_bc => field_bc_point_charge
        case default
           error stop "field_bc_select error: invalid condition"
        end select
@@ -303,7 +307,7 @@ contains
     integer                   :: i
     real(dp)                  :: max_rhs, residual_threshold, conv_fac
     real(dp)                  :: residual_ratio
-    integer, parameter        :: max_initial_iterations = 30
+    integer, parameter        :: max_initial_iterations = 100
     real(dp), parameter       :: max_residual = 1e8_dp
     real(dp), parameter       :: min_residual = 1e-6_dp
     real(dp)                  :: residuals(max_initial_iterations)
@@ -322,16 +326,16 @@ contains
 
     ! Set threshold based on rhs and on estimate of round-off error, given by
     ! delta phi / dx^2 = (phi/L * dx)/dx^2
-    ! Note that we use min_residual in case max_rhs and field_voltage are zero
+    ! Note that we use min_residual in case max_rhs and current_voltage are zero
     residual_threshold = max(min_residual, &
          max_rhs * ST_multigrid_max_rel_residual, &
-         conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
+         conv_fac * abs(current_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
 
     if (ST_use_electrode) then
        if (field_electrode_grounded) then
           mg%lsf_boundary_value = 0.0_dp
        else
-          mg%lsf_boundary_value = field_voltage
+          mg%lsf_boundary_value = current_voltage
        end if
     end if
 
@@ -470,62 +474,43 @@ contains
     end do; CLOSE_DO
   end subroutine correct_field_harmonic_box
 
-  !> Compute the electric field at a given time
-  function field_get_amplitude(tree, time) result(electric_fld)
+  !> Set the current voltage
+  subroutine field_set_voltage(tree, time)
     use m_units_constants
     use m_lookup_table
     use m_user_methods
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
-    real(dp)               :: electric_fld, t_rel
+    real(dp)               :: electric_fld, t, tmp
 
     if (associated(user_field_amplitude)) then
        electric_fld = user_field_amplitude(tree, time)
-    else if (field_table_use) then
-       call LT_lin_interp_list(field_table_times, field_table_fields, &
-            time, electric_fld)
-    else
-       electric_fld = field_amplitude
+       current_voltage = -ST_domain_len(NDIM) * electric_fld
+       return
+    end if
 
-       if (time < field_rise_time) then
-          electric_fld = electric_fld * (time/field_rise_time)
-       else if (time > field_pulse_time) then
-          electric_fld = electric_fld * max(0.0_dp, &
-               (1 - (time - field_pulse_time)/field_rise_time))
-       else
-          ! TODO: simplify stuff below
-          t_rel = time - field_mod_t0
-          t_rel = min(t_rel, field_mod_t1-field_mod_t0)
+    select case (field_given_by)
+    case (scalar_voltage)
+       current_voltage = 0.0_dp
 
-          if (t_rel > 0) then
-             electric_fld = electric_fld * exp(-t_rel/field_decay_time) + &
-                  t_rel * field_lin_deriv + &
-                  field_sin_amplitude * &
-                  sin(t_rel * field_sin_freq * 2 * UC_pi)
+       if (time < field_pulse_period * field_num_pulses) then
+          t = modulo(time, field_pulse_period)
+
+          if (t < field_rise_time) then
+             current_voltage = field_voltage * (t/field_rise_time)
+          else if (t < field_pulse_width + field_rise_time) then
+             current_voltage = field_voltage
+          else
+             tmp = t - (field_pulse_width + field_rise_time)
+             current_voltage = field_voltage * max(0.0_dp, &
+                  (1 - tmp/field_rise_time))
           end if
        end if
-    end if
-
-  end function field_get_amplitude
-
-  !> Compute the voltage at a given time
-  subroutine field_set_voltage(tree, time)
-    type(af_t), intent(in) :: tree
-    real(dp), intent(in)   :: time
-
-    if (.not. voltage_set_externally) then
-       current_field_amplitude = field_get_amplitude(tree, time)
-       field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
-    end if
+    case (tabulated_voltage)
+       call LT_lin_interp_list(field_table_times, field_table_values, &
+            time, current_voltage)
+    end select
   end subroutine field_set_voltage
-
-  !> Set the voltage
-  subroutine field_set_voltage_externally(voltage)
-    real(dp), intent(in) :: voltage
-    voltage_set_externally = .true.
-    field_voltage = voltage
-    current_field_amplitude = -voltage/ST_domain_len(NDIM)
-  end subroutine field_set_voltage_externally
 
   !> Dirichlet boundary conditions for the potential in the last dimension,
   !> Neumann zero boundary conditions in the other directions
@@ -543,7 +528,7 @@ contains
           bc_val = 0.0_dp
        else
           bc_type = af_bc_dirichlet
-          bc_val  = field_voltage
+          bc_val  = current_voltage
        end if
     else
        bc_type = af_bc_neumann
@@ -568,43 +553,13 @@ contains
           bc_val = 0.0_dp
        else
           bc_type = af_bc_neumann
-          bc_val  = -current_field_amplitude
+          bc_val  = current_voltage/ST_domain_len(NDIM)
        end if
     else
        bc_type = af_bc_neumann
        bc_val = 0.0_dp
     end if
   end subroutine field_bc_neumann
-
-  !> Create a field of the form E = E_0 - c / r^2
-  subroutine field_bc_point_charge(box, nb, iv, coords, bc_val, bc_type)
-    use m_units_constants
-    type(box_t), intent(in) :: box
-    integer, intent(in)     :: nb
-    integer, intent(in)     :: iv
-    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
-    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
-    integer, intent(out)    :: bc_type
-    integer                 :: n
-    real(dp)                :: r0(NDIM), r1(NDIM), q
-
-    bc_type  = af_bc_dirichlet
-    q        = field_point_charge / (4 * UC_pi * UC_eps0)
-    r0       = field_point_r0 * ST_domain_len
-    r1       = r0
-    r1(NDIM) = -r0(NDIM)
-
-    if (ST_cylindrical .and. nb == af_neighb_lowx) then
-       bc_type = af_bc_neumann
-       bc_val = 0.0_dp
-    else
-       bc_type = af_bc_dirichlet
-       do n = 1, box%n_cell**(NDIM-1)
-          bc_val(n) = q/norm2(coords(:, n) - r0) - &
-               q/norm2(coords(:, n) - r1)
-       end do
-    end if
-  end subroutine field_bc_point_charge
 
   ! This routine sets the level set function for a simple rod
   subroutine set_field_rod_lsf(box, iv)
