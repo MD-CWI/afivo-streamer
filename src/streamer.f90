@@ -17,7 +17,6 @@ program streamer
   use m_types
   use m_user_methods
   use m_output
-  use m_circuit
   use m_dielectric
 
   implicit none
@@ -215,7 +214,6 @@ program streamer
         call field_compute(tree, mg, 0, time, .true.)
 
         if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
-        if (circuit_used) call circuit_update(tree, dt)
      else
         dt_lim = dt_max
      end if
@@ -312,7 +310,6 @@ contains
     call photoi_initialize(tree, cfg)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
-    call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
     call dielectric_initialize(tree, cfg)

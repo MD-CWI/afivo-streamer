@@ -426,7 +426,7 @@ contains
   end subroutine add_variables
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
-    use m_field, only: field_voltage
+    use m_field, only: current_voltage
     use m_user_methods
     use m_chemistry
     use m_analysis
@@ -558,7 +558,7 @@ contains
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
+         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, af_r_loc(tree, loc_tip), &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl, &
@@ -568,14 +568,14 @@ contains
          sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         field_voltage, ne_zminmax, max_field_tip, af_r_loc(tree, loc_tip), &
+         current_voltage, ne_zminmax, max_field_tip, af_r_loc(tree, loc_tip), &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
+         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, af_r_loc(tree, loc_tip), &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl, &
