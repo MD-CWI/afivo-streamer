@@ -46,10 +46,13 @@ if args.plot_all:
 
     ix = np.argsort(rates[-1, :])[::-1]
     sum_of_rates = rates[-1, :].sum()
+    #Adding a colormap to avoid repetition of plot colors
+    cmap = plt.cm.get_cmap("plasma")
+    linecolor = cmap(ix)
 
     for i in ix:
         plt.plot(time, rates[:, i], label=reactions_list[i] +
-                 f' ({100*rates[-1, i]/sum_of_rates:.2f}%)')
+                 f' ({100*rates[-1, i]/sum_of_rates:.2f}%)', c=linecolor[i])
     plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
 
 for soi in args.soi:
