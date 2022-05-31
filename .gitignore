@@ -40,3 +40,5 @@ programs/standard_2d/configFiles/*
 /programs/*/*.txt
 /programs/standard_2d/fld_tbl/*
 /transport_data/*
+/programs/velocity_control_2d/ctrl_vel/*
+/programs/velocity_control_2d/*.cfg
