@@ -495,7 +495,9 @@ contains
     do ix = 1, transport_data_ions%n_mobile_ions
        i_ion  = flux_species(ix+1)
        i_flux = flux_variables(ix+1)
-       mu     = transport_data_ions%mobilities(ix)
+       ! Account for ion charge in mobility
+       mu     = transport_data_ions%mobilities(ix) * &
+            flux_species_charge(1+n)
 
 #if NDIM == 1
        do n = 1, nc+1
