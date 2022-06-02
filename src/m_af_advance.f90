@@ -28,22 +28,25 @@ module m_af_advance
      !> integration schemes can be constructed.
      !>
      !> The meaning of the temporal states is as follows. For an equation y' =
-     !> f(y), the method should perform: y_out = y_prev + dt * f(y_deriv).
+     !> f(y), the method should perform:
+     !> y_out = sum(w_prev * y_prev) + dt * f(y_deriv).
      !>
      !> If the index of the variable `y` is `i`, then the index of `y_out` is
-     !> `i+s_out`, the index of `y_prev` is `i+s_prev` etc.
-     subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
-          i_step, n_steps)
+     !> `i+s_out`, etc.
+     subroutine subr_feuler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+          w_prev, s_out, i_step, n_steps)
        import
        type(af_t), intent(inout) :: tree
-       real(dp), intent(in)      :: dt      !< Time step
-       real(dp), intent(inout)   :: dt_lim  !< Computed time step limit
-       real(dp), intent(in)      :: time    !< Current time
-       integer, intent(in)       :: s_deriv !< State to compute derivatives from
-       integer, intent(in)       :: s_prev  !< Previous state
-       integer, intent(in)       :: s_out   !< Output state
-       integer, intent(in)       :: i_step   !< Step of the integrator
-       integer, intent(in)       :: n_steps   !< Total number of steps
+       real(dp), intent(in)      :: dt             !< Time step
+       real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
+       real(dp), intent(in)      :: time           !< Current time
+       integer, intent(in)       :: s_deriv        !< State to compute derivatives from
+       integer, intent(in)       :: n_prev         !< Number of previous states
+       integer, intent(in)       :: s_prev(n_prev) !< Previous states
+       real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
+       integer, intent(in)       :: s_out          !< Output state
+       integer, intent(in)       :: i_step         !< Step of the integrator
+       integer, intent(in)       :: n_steps        !< Total number of steps
      end subroutine subr_feuler
 
      !> Procedure to apply time stepping to variables that are not cell
@@ -94,16 +97,21 @@ contains
 
     select case (time_integrator)
     case (af_forward_euler)
-       call forward_euler(tree, dt, dt_lim, time, 0, 0, 0, 1, n_steps)
+       call forward_euler(tree, dt, dt_lim, time, 0, &
+            1, [0], [1.0_dp], 0, 1, n_steps)
        time = time + dt
     case (af_midpoint_method)
-       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 0, 0, 1, 1, n_steps)
-       call forward_euler(tree, dt, dt_lim, time, 1, 0, 0, 2, n_steps)
+       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 0, &
+            1, [0], [1.0_dp], 1, 1, n_steps)
+       call forward_euler(tree, dt, dt_lim, time, 1, &
+            1, [0], [1.0_dp], 0, 2, n_steps)
        time = time + dt
     case (af_heuns_method)
-       call forward_euler(tree, dt, dt_lim, time, 0, 0, 1, 1, n_steps)
+       call forward_euler(tree, dt, dt_lim, time, 0, &
+            1, [0], [1.0_dp], 1, 1, n_steps)
        time = time + dt
-       call forward_euler(tree, dt, dt_lim, time, 1, 1, 1, 2, n_steps)
+       call forward_euler(tree, dt, dt_lim, time, 1, &
+            1, [1], [1.0_dp], 1, 2, n_steps)
        call combine_steps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
        if (present(user_combine_steps)) then
           call user_combine_steps(tree, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
