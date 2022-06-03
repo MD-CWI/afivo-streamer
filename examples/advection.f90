@@ -28,12 +28,15 @@ program advection
   character(len=100) :: fname
   integer            :: count_rate, t_start, t_end
 
+  integer, parameter :: integrator = af_heuns_method
+  integer, parameter :: n_copies = af_advance_num_steps(integrator)
+
   print *, "Running advection_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
   ! Add variables to the mesh. This is a scalar advection example with second
   ! order time stepping, which is why there are two copies of phi.
-  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
+  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=n_copies)
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
@@ -127,7 +130,7 @@ program advection
      if (time > end_time) exit
 
      do n = 1, n_steps
-        call af_advance(tree, dt, dt_lim, time, [i_phi], af_heuns_method, &
+        call af_advance(tree, dt, dt_lim, time, [i_phi], integrator, &
              forward_euler)
      end do
 

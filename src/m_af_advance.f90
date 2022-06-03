@@ -6,14 +6,15 @@ module m_af_advance
   implicit none
   private
 
-  integer, parameter         :: n_integrators      = 3
+  integer, parameter         :: n_integrators      = 4
   integer, parameter, public :: af_forward_euler   = 1
   integer, parameter, public :: af_heuns_method    = 2
   integer, parameter, public :: af_midpoint_method = 3
+  integer, parameter, public :: af_ssprk3_method   = 4
 
   !> How many steps the time integrators take
   integer, parameter, public :: &
-       af_advance_num_steps(n_integrators) = [1, 2, 2]
+       af_advance_num_steps(n_integrators) = [1, 2, 2, 3]
 
   !> How many variable copies are required for the time integrators
   integer, parameter :: req_copies(n_integrators) = af_advance_num_steps
@@ -86,6 +87,8 @@ contains
     procedure(subr_feuler)    :: forward_euler
     integer                   :: n_steps
 
+    real(dp), parameter :: third = 1/3.0_dp
+
     if (time_integrator < 1 .or. time_integrator > n_integrators) &
          error stop "Invalid time integrator"
 
@@ -109,47 +112,25 @@ contains
     case (af_heuns_method)
        call forward_euler(tree, dt, dt_lim, time, 0, &
             1, [0], [1.0_dp], 1, 1, n_steps)
+       call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 1, &
+            2, [0, 1], [0.5_dp, 0.5_dp], 0, 2, n_steps)
        time = time + dt
-       call forward_euler(tree, dt, dt_lim, time, 1, &
-            1, [1], [1.0_dp], 1, 2, n_steps)
-       call combine_steps(tree, i_cc, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
+
        if (present(user_combine_steps)) then
           call user_combine_steps(tree, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
        end if
+    case (af_ssprk3_method)
+       call forward_euler(tree, dt, dt_lim, time, 0, &
+            1, [0], [1.0_dp], 1, 1, n_steps)
+       call forward_euler(tree, 0.25_dp * dt, dt_lim, time, 1, &
+            2, [0, 1], [0.75_dp, 0.25_dp], 2, 2, n_steps)
+       call forward_euler(tree, 2*third * dt, dt_lim, time, 2, &
+            2, [0, 2], [third, 2*third], 0, 3, n_steps)
+       time = time + dt
+    case default
+       error stop "Unknown time integrator"
     end select
 
   end subroutine af_advance
-
-  subroutine combine_steps(tree, ivs, n_in, s_in, coeffs, s_out)
-    type(af_t), intent(inout) :: tree
-    integer, intent(in)       :: ivs(:)
-    integer, intent(in)       :: n_in
-    integer, intent(in)       :: s_in(n_in)
-    real(dp), intent(in)      :: coeffs(n_in)
-    integer, intent(in)       :: s_out
-    integer                   :: lvl, i, id, n, nc
-    real(dp), allocatable     :: tmp(DTIMES(:), :)
-
-    nc = tree%n_cell
-
-    !$omp parallel private(lvl, i, id, tmp, n)
-    allocate(tmp(DTIMES(0:nc+1), size(ivs)))
-
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-
-          tmp = 0.0_dp
-          do n = 1, n_in
-             tmp = tmp + coeffs(n) * &
-                  tree%boxes(id)%cc(DTIMES(:), ivs+s_in(n))
-          end do
-          tree%boxes(id)%cc(DTIMES(:), ivs+s_out) = tmp
-       end do
-       !$omp end do nowait
-    end do
-    !$omp end parallel
-  end subroutine combine_steps
 
 end module m_af_advance
