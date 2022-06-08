@@ -1,0 +1,161 @@
+#!/bin/bash
+
+cd ../
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.89e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_0.89e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.0e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_1.0e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_1.2e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_1.5e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.8e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_1.8e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_2.2e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_2.6e6
+
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.89e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL4mm_0.89e6_im
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.0e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL4mm_1.0e6_im
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL4mm_1.2e6_im
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL4mm_1.5e6_im
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.8e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL4mm_1.8e6_im
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL4mm_2.2e6_im
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -input_data%ion_mobilities="2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4 -2.2e-4" -input_data%mobile_ions="N_plus N2_plus N3_plus N4_plus O_plus O2_plus O3_plus O4_plus NO_plus N2O2_plus O_min O2_min O3_min O4_min" -output%name+=EL4mm_2.6e6_im
+
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_2.2e6_conductivity
+
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.12e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.12e6_new
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.2e6_new
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_1.5e6_new
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.1e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_2.1e6_new
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_2.2e6_new
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.3e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_2.3e6_new
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.4e6 -field_rod_r0="0 0.91" -field_rod_radius=0.2e-3 -end_time=5e-7 -output%name+=EL2mm_2.4e6_new
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_1.2e6_qua
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.8e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.5e-2 -output%name+=EL4mm_1.8e6_qua
+
+
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-0.9e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_0.9e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.0e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_1.0e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.1e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_1.1e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_1.2e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.3e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_1.3e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.4e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_1.4e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.5e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_1.5e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-1.8e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_1.8e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-2.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_2.2e6
+
+#./streamer air_d20mm_chemistry.cfg -field_amplitude=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=EL4mm_2.6e6
+
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.9e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_0.9e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.0e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.0e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.1e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.1e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.2e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.3e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.3e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.4e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.4e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.5e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.8e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.8e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_2.2e6
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_2.6e6
+
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.9e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_0.9e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.0e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.0e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.1e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.1e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.2e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.2e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.3e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.3e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.4e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.4e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.5e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.5e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.8e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_1.8e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.2e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_2.2e6_z6e-3
+
+#./streamer air_d20mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=6e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.4e-3 -end_streamer_length=1.4e-2 -output%name+=dp_EL4mm_2.6e6_z6e-3
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -output%name=/export/scratch3/baohong/chemistry/two_pulse_new/d40mm_EL4mm_2.6e6_z10e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=9e-3 -field_rod_r0="0 0.865" -field_rod_radius=0.6e-3 -end_streamer_length=3.4e-2 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL6mm_2.6e6_z9e-3
+
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.15e6 -field_waveform%turn_off_z=18e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.8e-2 -end_time=5e-7 -dt_min=1e-16 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL2mm_1.15e6_z18e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=18e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.8e-2 -end_time=5e-7 -dt_min=1e-16 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL2mm_2.6e6_z18e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.92e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL4mm_0.92e6_z10e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.94e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL4mm_0.94e6_z10e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.96e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL4mm_0.96e6_z10e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.98e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL4mm_0.98e6_z10e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-1.0e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -output%name=/export/scratch2/md/baohong/chemistry/two_pulse_new/d40mm_EL4mm_1.0e6_z10e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL4mm_2.6e6_z10e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=16e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -dt_min=1e-16 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL4mm_2.6e6_z16e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=22e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.6e-2 -end_time=5e-7 -dt_min=1e-16 -output%name=/export/scratch3/baohong/chemistry/two_pulse_new/d40mm_EL4mm_2.6e6_z22e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.9e6 -field_waveform%turn_off_z=14e-3 -field_rod_r0="0 0.865" -field_rod_radius=0.6e-3 -end_streamer_length=3.4e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL6mm_0.9e6_z14e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=14e-3 -field_rod_r0="0 0.865" -field_rod_radius=0.6e-3 -end_streamer_length=3.4e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL6mm_2.6e6_z14e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-0.75e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.8e-3 -end_streamer_length=3.2e-2 -end_time=5e-7 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL8mm_0.75e6_z12e-3
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%enabled=T -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=10e-3 -field_rod_r0="0 0.82" -field_rod_radius=0.8e-3 -end_streamer_length=3.2e-2 -end_time=5e-7 -dt_min=1e-16 -output%name=/export/scratch2/baohong/chemistry/two_pulse_new/d40mm_EL8mm_2.6e6_z12e-3
+

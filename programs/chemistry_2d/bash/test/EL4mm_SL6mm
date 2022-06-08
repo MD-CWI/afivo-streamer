@@ -1,0 +1,28 @@
+#!/bin/bash
+
+cd ../
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.0e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.0e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.1e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.1e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.2e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.2e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.3e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.3e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.4e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.4e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.5e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.5e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.6e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.6e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.8e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_1.8e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.0e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_2.0e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.2e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_2.2e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.4e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_2.4e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=30e-3 -field_rod_r0="0 0.91" -field_rod_radius=0.4e-3 -end_streamer_length=3.5e-2 -output%name+=EL4mm_SL6mm_2.6e6
+
