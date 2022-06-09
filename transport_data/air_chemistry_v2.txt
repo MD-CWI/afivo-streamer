@@ -30,7 +30,7 @@ N2+ + N2 + M -> N4+ + M,c1,5.0e-41
 N4+ + O2 -> O2+ + N2 + N2,c1,2.5e-16
 O2+ + O2 + M -> O4+ + M,c1,2.4e-42
 # Electron recombination (Kossyi et. al. 1992)
-e + O4+ -> O2 + O2,field_table,C01 O4+ Electron recombination
+e + O4+ -> O2 + O2,c1*(300/Te)**c2, 1.4e-12 0.5
 # Recombination (Kossyi et. al. 1992)
 N2+ + O- -> N + N + O,c1,1e-13
 N2+ + O3- -> N + N + O3,c1,1e-13
