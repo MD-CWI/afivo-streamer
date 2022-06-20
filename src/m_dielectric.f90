@@ -45,7 +45,6 @@ module m_dielectric
   public :: dielectric_initialize
   public :: dielectric_update_surface_charge
   public :: dielectric_photon_emission
-  public :: dielectric_combine_substeps
   public :: dielectric_photon_absorption
   public :: dielectric_reset_photons
 
@@ -219,44 +218,6 @@ contains
     end select
 
   end subroutine dielectric_photon_emission
-
-  subroutine dielectric_combine_substeps(tree, n_in, s_in, coeffs, s_out)
-    type(af_t), intent(inout) :: tree
-    integer, intent(in)       :: n_in         !< Number of steps
-    integer, intent(in)       :: s_in(n_in)   !< States for the steps
-    real(dp), intent(in)      :: coeffs(n_in) !< Coefficients
-    integer, intent(in)       :: s_out        !< Output state
-    integer                   :: n, k
-#if NDIM == 1
-    real(dp)                  :: tmp
-#elif NDIM == 2
-    real(dp)                  :: tmp(tree%n_cell)
-#elif NDIM == 3
-    real(dp)                  :: tmp(tree%n_cell, tree%n_cell)
-#endif
-
-    do n = 1, diel%max_ix
-       if (.not. diel%surfaces(n)%in_use) cycle
-
-       tmp = 0.0_dp
-       do k = 1, n_in
-#if NDIM == 1
-          tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(i_surf_dens+s_in(k))
-#elif NDIM == 2
-          tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(:, i_surf_dens+s_in(k))
-#elif NDIM == 3
-          tmp = tmp + coeffs(k) * diel%surfaces(n)%sd(:, :, i_surf_dens+s_in(k))
-#endif
-       end do
-#if NDIM == 1
-       diel%surfaces(n)%sd(i_surf_dens+s_out) = tmp
-#elif NDIM == 2
-       diel%surfaces(n)%sd(:, i_surf_dens+s_out) = tmp
-#elif NDIM == 3
-       diel%surfaces(n)%sd(:, :, i_surf_dens+s_out) = tmp
-#endif
-    end do
-  end subroutine dielectric_combine_substeps
 
   !> Determine whether and where photons hit a dielectric, and change their
   !> absorption location to the first cell inside the surface. If

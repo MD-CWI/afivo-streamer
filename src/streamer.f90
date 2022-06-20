@@ -199,16 +199,9 @@ program streamer
            call set_electrode_densities(tree)
         end if
 
-        if (ST_use_dielectric) then
-           call af_advance(tree, dt, dt_lim, time, &
+        call af_advance(tree, dt, dt_lim, time, &
                 species_itree(n_gas_species+1:n_species), &
-                time_integrator, forward_euler, &
-                dielectric_combine_substeps)
-        else
-           call af_advance(tree, dt, dt_lim, time, &
-                species_itree(n_gas_species+1:n_species), &
-             time_integrator, forward_euler)
-        end if
+                time_integrator, forward_euler)
 
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)

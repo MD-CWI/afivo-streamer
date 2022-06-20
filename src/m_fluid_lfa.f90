@@ -16,8 +16,8 @@ contains
   !> Advance fluid model using forward Euler step. If the equation is written as
   !> y' = f(y), the result is: y(s_out) = y(s_prev) + f(y(s_dt)), where the
   !> s_... refer to temporal states.
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
-       i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+       w_prev, s_out, i_step, n_steps)
     use m_chemistry
     use m_streamer
     use m_field
@@ -25,16 +25,16 @@ contains
     use m_transport_data
     use m_dielectric
     type(af_t), intent(inout) :: tree
-    real(dp), intent(in)      :: dt     !< Time step
-    real(dp), intent(inout)   :: dt_lim !< Time step limitation
-    real(dp), intent(in)      :: time
-    !> Time state to compute derivatives from
-    integer, intent(in)       :: s_deriv
-    !> Time state to add derivatives to
-    integer, intent(in)       :: s_prev
-    !< Time state to store result in
-    integer, intent(in)       :: s_out
-    integer, intent(in)       :: i_step, n_steps
+    real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
+    real(dp), intent(in)      :: time           !< Current time
+    integer, intent(in)       :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)       :: s_out          !< Output state
+    integer, intent(in)       :: i_step         !< Step of the integrator
+    integer, intent(in)       :: n_steps        !< Total number of steps
     integer                   :: lvl, i, id, p_id, nc, ix, id_out
     logical                   :: set_dt
 
@@ -83,7 +83,7 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           call update_solution(tree%boxes(id), nc, dt, s_deriv, &
-               s_prev, s_out, set_dt)
+               n_prev, s_prev, w_prev, s_out, set_dt)
 
        end do
        !$omp end do
@@ -497,7 +497,7 @@ contains
        i_flux = flux_variables(ix+1)
        ! Account for ion charge in mobility
        mu     = transport_data_ions%mobilities(ix) * &
-            flux_species_charge(1+n)
+            flux_species_charge(ix+1)
 
 #if NDIM == 1
        do n = 1, nc+1
@@ -582,7 +582,8 @@ contains
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
-  subroutine update_solution(box, nc, dt, s_dt, s_prev, s_out, set_dt)
+  subroutine update_solution(box, nc, dt, s_dt, n_prev, s_prev, w_prev, &
+       s_out, set_dt)
     use omp_lib
     use m_units_constants
     use m_gas
@@ -593,12 +594,14 @@ contains
     use m_lookup_table
     use m_transport_data
     type(box_t), intent(inout) :: box
-    integer, intent(in)        :: nc     !< Box size
-    real(dp), intent(in)       :: dt     !< Time step
-    integer, intent(in)        :: s_dt   !< Time state to compute derivatives from
-    integer, intent(in)        :: s_prev !< Time state to add derivatives to
-    integer, intent(in)        :: s_out  !< Output time state
-    logical, intent(in)        :: set_dt !< Whether to set new time step
+    integer, intent(in)        :: nc             !< Box size
+    real(dp), intent(in)       :: dt             !< Time step
+    integer, intent(in)        :: s_dt           !< Time state to compute derivatives from
+    integer, intent(in)        :: n_prev         !< Number of previous states
+    integer, intent(in)        :: s_prev(n_prev) !< Time state to add derivatives to
+    real(dp), intent(in)       :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)        :: s_out          !< Output time state
+    logical, intent(in)        :: set_dt         !< Whether to set new time step
     real(dp)                   :: inv_dr(NDIM)
     real(dp)                   :: tmp
     real(dp)                   :: rates(nc**NDIM, n_reactions)
@@ -752,7 +755,8 @@ contains
 
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
-          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_prev) + dt * derivs(ix, n)
+          box%cc(IJK, iv+s_out) = sum(w_prev * box%cc(IJK, iv+s_prev)) + &
+               dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
 
