@@ -408,8 +408,6 @@ contains
   !> just let a tree get out of scope
   subroutine af_destroy(tree)
     type(af_t), intent(out) :: tree
-    type(af_t)              :: tmp
-    tree = tmp                  ! Ensure the tree is reset
   end subroutine af_destroy
 
   !> Create an array for easy lookup of indices
