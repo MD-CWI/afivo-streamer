@@ -7,14 +7,23 @@ program time_integration
 
   implicit none
 
-  integer    :: i_phi, i_err
-  integer    :: n, n_steps, integrator
-  real(dp)   :: dt, time, end_time
-  real(dp)   :: max_error
-  type(af_t) :: tree
+  integer             :: i_phi, i_err
+  integer             :: n, n_steps, integrator
+  real(dp), parameter :: initial_value = exp(1.0_dp)
+  real(dp)            :: dt, time, end_time
+  real(dp)            :: max_error
+  character(len=100)  :: argument
+  type(af_t)          :: tree
 
   end_time = 1.0_dp
   dt       = 0.1_dp
+
+  ! Read dt from command line if given
+  if (command_argument_count() > 0) then
+     call get_command_argument(1, argument)
+     read(argument, *) dt
+  end if
+
   n_steps  = nint(end_time/dt)
   dt       = end_time / n_steps
 
@@ -33,7 +42,7 @@ contains
 
   subroutine set_initial_condition(box)
     type(box_t), intent(inout) :: box
-    box%cc(DTIMES(:), i_phi) = 1.0_dp
+    box%cc(DTIMES(:), i_phi) = initial_value
   end subroutine set_initial_condition
 
   elemental real(dp) function derivative(phi)
@@ -43,7 +52,7 @@ contains
 
   elemental real(dp) function solution(t)
     real(dp), intent(in) :: t
-    solution = exp(-t)
+    solution = initial_value * exp(-t)
   end function solution
 
   subroutine set_error(box, time)
