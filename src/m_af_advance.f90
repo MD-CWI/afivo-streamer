@@ -53,17 +53,6 @@ module m_af_advance
        integer, intent(in)       :: i_step         !< Step of the integrator
        integer, intent(in)       :: n_steps        !< Total number of steps
      end subroutine subr_feuler
-
-     !> Procedure to apply time stepping to variables that are not cell
-     !> centered, for example a scalar quantity or a face-centered variable.
-     subroutine subr_combine_steps(tree, n_in, s_in, coeffs, s_out)
-       import
-       type(af_t), intent(inout) :: tree
-       integer, intent(in)       :: n_in         !< Number of steps
-       integer, intent(in)       :: s_in(n_in)   !< States for the steps
-       real(dp), intent(in)      :: coeffs(n_in) !< Coefficients
-       integer, intent(in)       :: s_out        !< Output state
-     end subroutine subr_combine_steps
   end interface
 
   public :: af_advance
@@ -77,7 +66,7 @@ contains
   !> also be provided, so that higher-order schemes can be constructed
   !> automatically from the forward Euler method.
   subroutine af_advance(tree, dt, dt_lim, time, i_cc, time_integrator, &
-       forward_euler, user_combine_steps)
+       forward_euler)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt      !< Current time step
     real(dp), intent(out)     :: dt_lim  !< Time step limit
@@ -85,8 +74,6 @@ contains
     integer, intent(in)       :: i_cc(:) !< Index of cell-centered variables
     !> One of the pre-defined time integrators (e.g. af_heuns_method)
     integer, intent(in)       :: time_integrator
-    !> Procedure to apply time stepping to variables that are not cell centered
-    procedure(subr_combine_steps), optional :: user_combine_steps
     !> Forward Euler method provided by the user
     procedure(subr_feuler)    :: forward_euler
     integer                   :: n_steps
@@ -119,10 +106,6 @@ contains
        call forward_euler(tree, 0.5_dp * dt, dt_lim, time, 1, &
             2, [0, 1], [0.5_dp, 0.5_dp], 0, 2, n_steps)
        time = time + dt
-
-       if (present(user_combine_steps)) then
-          call user_combine_steps(tree, 2, [0, 1], [0.5_dp, 0.5_dp], 0)
-       end if
     case (af_ssprk3_method)
        call forward_euler(tree, dt, dt_lim, time, 0, &
             1, [0], [1.0_dp], 1, 1, n_steps)
