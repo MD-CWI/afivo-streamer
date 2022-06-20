@@ -860,7 +860,11 @@ contains
          case (mg_normal_box)
             call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
          case (mg_lsf_box)
-            call mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
+            if (mg%lsf_use_custom_prolongation) then
+               call mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
+            else
+               call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
+            end if
          case (mg_ceps_box, mg_veps_box)
             call mg_box_prolong_eps_stencil(box, box_p, mg, ix)
          case default
@@ -1363,6 +1367,7 @@ contains
 
          v(:, IJK) = [3 * dd(2), dd(1)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         where (dd < 1) v(:, IJK) = 0
       end do
 #elif NDIM == 2
       v(1, :, :) = 0.5_dp
@@ -1383,9 +1388,9 @@ contains
          dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
          dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
 
-         v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
-              dd(1) * dd(3)]
+         v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(3), dd(1) * dd(2)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         where (dd < 1) v(:, IJK) = 0
       end do
 #elif NDIM == 3
       v(:, :, :, :) = 0.25_dp
@@ -1412,6 +1417,7 @@ contains
               dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
               dd(1) * dd(2) * dd(3)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         where (dd < 1) v(:, IJK) = 0
       end do
 #endif
     end associate

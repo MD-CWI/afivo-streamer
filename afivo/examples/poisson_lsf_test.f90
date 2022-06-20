@@ -104,7 +104,7 @@ program poisson_lsf_test
   call CFG_add_get(cfg, "mem_limit_gb", mem_limit_gb, &
        "Memory limit (GByte)")
   call CFG_add_get(cfg, "prolongation", prolongation, &
-       "Prolongation method (linear, sparse, auto)")
+       "Prolongation method (linear, sparse, auto, custom)")
 
   call CFG_check(cfg)
   ! call CFG_write(cfg, "stdout")
@@ -134,6 +134,8 @@ program poisson_lsf_test
      mg%prolongation_type = mg_prolong_sparse
   case ("auto")
      mg%prolongation_type = mg_prolong_auto
+  case ("custom")
+     mg%lsf_use_custom_prolongation = .true.
   case default
      error stop "Unknown prolongation method"
   end select

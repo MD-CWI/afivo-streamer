@@ -67,3 +67,4 @@ tests/results/*
 /tools/silo_to_raw
 /tools/__pycache__/
 /examples/gmon.out
+/examples/time_integration_?d

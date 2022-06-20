@@ -10,7 +10,6 @@ program advection
 
   integer, parameter  :: box_size   = 8
   integer             :: i_phi
-  integer             :: i_phi_old
   integer             :: i_err
   integer             :: i_flux
   integer, parameter  :: sol_type   = 2
@@ -21,21 +20,23 @@ program advection
   type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
   integer            :: refine_steps, time_steps, output_cnt
-  integer            :: i, n, n_steps
+  integer            :: n, n_steps
   real(dp)           :: dt, time, end_time, err, sum_err2
   real(dp)           :: sum_phi, sum_phi_t0
-  real(dp)           :: dt_adapt, dt_output
+  real(dp)           :: dt_adapt, dt_output, dt_lim
   real(dp)           :: velocity(NDIM), dr_min(NDIM)
   character(len=100) :: fname
   integer            :: count_rate, t_start, t_end
+
+  integer, parameter :: integrator = af_heuns_method
+  integer, parameter :: n_copies = af_advance_num_steps(integrator)
 
   print *, "Running advection_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
   ! Add variables to the mesh. This is a scalar advection example with second
   ! order time stepping, which is why there are two copies of phi.
-  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
-  i_phi_old = i_phi + 1
+  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=n_copies)
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
@@ -129,31 +130,12 @@ program advection
      if (time > end_time) exit
 
      do n = 1, n_steps
-        ! Copy previous solution
-        call af_tree_copy_cc(tree, i_phi, i_phi_old)
-
-        ! Two forward Euler steps over dt
-        do i = 1, 2
-           ! Call procedure fluxes_koren for each id in tree, giving the list of
-           ! boxes
-           call af_loop_tree(tree, fluxes_koren, .true.)
-
-           ! Restrict fluxes from children to parents on refinement boundaries.
-           call af_consistent_fluxes(tree, [i_phi])
-
-           ! Call procedure update_solution (see below) for each box in tree, with argument dt
-           call af_loop_box_arg(tree, update_solution, [dt])
-
-           ! Restrict variables i_phi to all parent boxes
-           call af_restrict_tree(tree, [i_phi])
-        end do
-
-        ! Take average of phi_old and phi
-        call af_loop_box(tree, average_phi)
-        time = time + dt
+        call af_advance(tree, dt, dt_lim, time, [i_phi], integrator, &
+             forward_euler)
      end do
 
      ! Fill ghost cells for variable i_phi
+     call af_restrict_tree(tree, [i_phi])
      call af_gc_tree(tree, [i_phi])
 
      !> [adjust_refinement]
@@ -216,6 +198,45 @@ contains
   end subroutine refine_routine
   !> [refine_routine]
 
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+       w_prev, s_out, i_step, n_steps)
+    type(af_t), intent(inout) :: tree
+    real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
+    real(dp), intent(in)      :: time           !< Current time
+    integer, intent(in)       :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)       :: s_out          !< Output state
+    integer, intent(in)       :: i_step         !< Step of the integrator
+    integer, intent(in)       :: n_steps        !< Total number of steps
+
+    integer :: lvl, i, id
+
+    ! Ensure ghost cells near refinement boundaries can be properly filled
+    call af_restrict_ref_boundary(tree, [i_phi+s_deriv])
+
+    ! Compute fluxes
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(i)
+          call fluxes_koren(tree, id, s_deriv)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    ! Restrict fluxes from children to parents on refinement boundaries.
+    call af_consistent_fluxes(tree, [i_flux])
+
+    call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
+         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
+
+  end subroutine forward_euler
+
   !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
     type(box_t), intent(inout) :: box
@@ -270,11 +291,12 @@ contains
 
   !> This routine computes the x-fluxes and y-fluxes interior (advective part)
   !> with the Koren limiter
-  subroutine fluxes_koren(tree, id)
+  subroutine fluxes_koren(tree, id, s_deriv)
     use m_af_flux_schemes
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: id
-    integer                   :: nc
+    integer, intent(in)       :: s_deriv
+    integer                   :: nc, idim
     real(dp), allocatable     :: cc(DTIMES(:), :)
     real(dp), allocatable     :: v(DTIMES(:), :)
 
@@ -282,90 +304,22 @@ contains
     allocate(cc(DTIMES(-1:nc+2), 1))
     allocate(v(DTIMES(1:nc+1), NDIM))
 
-    call af_gc2_box(tree, id, [i_phi], cc)
+    call af_gc2_box(tree, id, [i_phi+s_deriv], cc)
+
+    do idim = 1, NDIM
+       v(DTIMES(:), idim) = velocity(idim)
+    end do
 
 #if NDIM == 1
-    v(:, 1) = velocity(1)
     call flux_koren_1d(cc(DTIMES(:), 1), v, nc, 2)
-    tree%boxes(id)%fc(:, :, i_phi) = v
 #elif NDIM == 2
-    v(:, :, 1) = velocity(1)
-    v(:, :, 2) = velocity(2)
-
     call flux_koren_2d(cc(DTIMES(:), 1), v, nc, 2)
-    tree%boxes(id)%fc(:, :, :, i_phi) = v
 #elif NDIM == 3
-    v(:, :, :, 1) = velocity(1)
-    v(:, :, :, 2) = velocity(2)
-    v(:, :, :, 3) = velocity(3)
-
     call flux_koren_3d(cc(DTIMES(:), 1), v, nc, 2)
-    tree%boxes(id)%fc(:, :, :, :, i_phi) = v
 #endif
+
+    tree%boxes(id)%fc(DTIMES(:), :, i_flux) = v
 
   end subroutine fluxes_koren
 
-  !> This routine computes the update of the solution per box
-  subroutine update_solution(box, dt)
-    type(box_t), intent(inout) :: box
-    real(dp), intent(in)         :: dt(:)
-    real(dp)                     :: inv_dr(NDIM)
-    integer                      :: IJK, nc
-#if NDIM == 2
-    real(dp)                     :: rfac(2, box%n_cell)
-#endif
-
-    nc     = box%n_cell
-    inv_dr = 1/box%dr
-
-#if NDIM == 1
-    forall (i = 1:nc)
-       box%cc(i, i_phi) = box%cc(i, i_phi) + dt(1) * ( &
-            inv_dr(1) * &
-            (box%fc(i, 1, i_phi) - box%fc(i+1, 1, i_phi)))
-    end forall
-#elif NDIM == 2
-    if (coord_type == af_cyl) then
-       call af_cyl_flux_factors(box, rfac)
-       do j = 1, nc
-          do i = 1, nc
-             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + dt(1) * ( &
-                  inv_dr(1) * (rfac(1, i) * box%fc(i, j, 1, i_phi) - &
-                  rfac(2, i) * box%fc(i+1, j, 1, i_phi)) &
-                  + inv_dr(2) * &
-                  (box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi)))
-          end do
-       end do
-    else
-       do j = 1, nc
-          do i = 1, nc
-             box%cc(i, j, i_phi) = box%cc(i, j, i_phi) + dt(1) * ( &
-                  inv_dr(1) * &
-                  (box%fc(i, j, 1, i_phi) - box%fc(i+1, j, 1, i_phi)) &
-                  + inv_dr(2) * &
-                  (box%fc(i, j, 2, i_phi) - box%fc(i, j+1, 2, i_phi)))
-          end do
-       end do
-    end if
-#elif NDIM == 3
-    forall (i = 1:nc, j = 1:nc, k = 1:nc)
-       box%cc(i, j, k, i_phi) = box%cc(i, j, k, i_phi) + dt(1) * ( &
-            inv_dr(1) * &
-            (box%fc(i, j, k, 1, i_phi) - box%fc(i+1, j, k, 1, i_phi)) + &
-            inv_dr(2) * &
-            (box%fc(i, j, k, 2, i_phi) - box%fc(i, j+1, k, 2, i_phi)) + &
-            inv_dr(3) * &
-            (box%fc(i, j, k, 3, i_phi) - box%fc(i, j, k+1, 3, i_phi)))
-    end forall
-#endif
-  end subroutine update_solution
-
-  !> This routine computes the update of the solution per box
-  subroutine average_phi(box)
-    type(box_t), intent(inout) :: box
-
-    box%cc(DTIMES(:), i_phi) = 0.5_dp * (box%cc(DTIMES(:), i_phi) + &
-         box%cc(DTIMES(:), i_phi_old))
-  end subroutine average_phi
-
-end program advection
+end program
