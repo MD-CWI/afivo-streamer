@@ -372,8 +372,8 @@ contains
           dt_dif = minval(tree%boxes(id)%dr)**2 / &
                max(2 * NDIM * maxval(dc(IJK, :)), eps)
 
-          ! Take the combined CFL-diffusion condition with Courant number 0.5
-          dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
+          ! Take combined CFL-diffusion condition
+          dt_cfl = dt_cfl_number/(1/dt_cfl + 1/dt_dif)
 
           if (gas_constant_density) then
              N_inv = 1 / gas_number_density
