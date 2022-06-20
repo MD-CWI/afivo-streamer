@@ -6,18 +6,22 @@ module m_af_advance
   implicit none
   private
 
-  integer, parameter         :: n_integrators      = 4
+  integer, parameter, public :: af_num_integrators = 4
   integer, parameter, public :: af_forward_euler   = 1
   integer, parameter, public :: af_heuns_method    = 2
   integer, parameter, public :: af_midpoint_method = 3
   integer, parameter, public :: af_ssprk3_method   = 4
 
+  character(len=af_nlen), public :: af_integrator_names(af_num_integrators) = &
+       [character(len=af_nlen) :: "forward_euler", "heuns_method", &
+       "midpoint_method", "ssprk3"]
+
   !> How many steps the time integrators take
   integer, parameter, public :: &
-       af_advance_num_steps(n_integrators) = [1, 2, 2, 3]
+       af_advance_num_steps(af_num_integrators) = [1, 2, 2, 3]
 
   !> How many variable copies are required for the time integrators
-  integer, parameter :: req_copies(n_integrators) = af_advance_num_steps
+  integer, parameter :: req_copies(af_num_integrators) = af_advance_num_steps
 
   interface
      !> Interface for a generic forward Euler scheme for time integration
@@ -89,7 +93,7 @@ contains
 
     real(dp), parameter :: third = 1/3.0_dp
 
-    if (time_integrator < 1 .or. time_integrator > n_integrators) &
+    if (time_integrator < 1 .or. time_integrator > af_num_integrators) &
          error stop "Invalid time integrator"
 
     if (any(tree%cc_num_copies(i_cc) < req_copies(time_integrator))) &
