@@ -6,9 +6,12 @@ Time integration is performed explicitly, using the Afivo time integration
 module, which is described in the [Afivo online
 documentation](https://teunissen.net/afivo/md_documentation_time_integration.html).
 
-Several time integrators can be used, which can be set using the `time_integrator` variable, which supports the following integrators:
+Several time integrators can be used, which can be set using the `time_integrator` variable. The following options are currently supported:
 
-\snippet src/m_dt.f90 integrators
+* `forward_euler` (first order)
+* `heuns_method` (second order, SSP)
+* `midpoint_method` (second order)
+* `ssprk3` (third order, SSP)
 
 ## Time step restrictions
 

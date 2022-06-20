@@ -70,20 +70,19 @@ contains
 
     integrator = "heuns_method"
     call CFG_add_get(cfg, "time_integrator", integrator, &
-         "Time integrator (forward_euler, heuns_method, midpoint)")
-    !> [integrators]
-    select case (integrator)
-    case ("forward_euler")
-       time_integrator = af_forward_euler
-    case ("midpoint")
-       time_integrator = af_midpoint_method
-    case ("heuns_method")
-       time_integrator = af_heuns_method
-    case default
-       print *, "Time integrator: ", trim(integrator)
-       error stop "Invalid time integrator"
-    end select
-    !> [integrators]
+         "Time integrator (use arbitrary value to see options)")
+
+    do time_integrator = 1, af_num_integrators
+       if (integrator == af_integrator_names(time_integrator)) exit
+    end do
+
+    if (time_integrator == af_num_integrators+1) then
+       print *, "Use one of the following time integrators:"
+       do time_integrator = 1, af_num_integrators
+          print *, trim(af_integrator_names(time_integrator))
+       end do
+       error stop "Unknown time integrator"
+    end if
 
     ! Set CFL number automatically if not set
     if (dt_cfl_number <= undefined_real) dt_cfl_number = default_cfl_number
