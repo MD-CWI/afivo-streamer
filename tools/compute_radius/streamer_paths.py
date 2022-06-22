@@ -340,6 +340,11 @@ for j in range(len(paths)):
         va = get_path_v(paths[i], t0)
         xb = get_path_x(paths[j], t0)
         vb = get_path_v(paths[j], t0)
+        #parent_a=paths[i]['parent']
+        #print(parent_a)
+        #parent_b=paths[j]['parent']
+        #print(parent_b)
+        #vp = get_path_v(parent_a, 1600)
 
         t, d = find_closest_point(xa, va, xb, vb)
         t += t0
@@ -349,7 +354,12 @@ for j in range(len(paths)):
             x2 = get_path_x(paths[j], t)
             xmean = 0.5 * (x1 + x2)
             branch_angle=get_angle(va,vb)/np.pi*180
-
+            
+            parent = paths[i]['parent']
+            vp = -get_path_v(paths[parent],t)
+            branch_gamma = get_angle(va,vp)/np.pi*180
+            branch_phi = get_angle(vb,vp)/np.pi*180
+            
             # Merge with existing branching event?
             merged = False
             for b in branchings:
@@ -366,6 +376,10 @@ for j in range(len(paths)):
                         b['x'] += [x2]
                     b['t'] = (b['n'] * b['t'] + t) / (b['n'] + 1)
                     b['n'] += 1
+                    b['theta'] = branch_angle
+                    b['parent'] = parent
+                    b['gamma'] = branch_gamma
+                    b['phi'] = branch_phi
                     merged = True
                     break
 
@@ -374,20 +388,25 @@ for j in range(len(paths)):
                      'n': 1,
                      'ixs': [i, j],
                      'v': [va, vb],
-                     'x': [x1, x2]}
+                     'x': [x1, x2],
+                     'theta': branch_angle,
+                     'parent':parent,
+                     'gamma': branch_gamma,
+                     'phi': branch_phi}
+                
                 branchings.append(b)
 
 with open(args.branch_file, 'wb') as f:
     pickle.dump(branchings, f)
 
 for b in branchings:
-    print(b['ixs'], b['x'], b['v'], b['t'])
+    print(b['ixs'], b['x'], b['v'], b['t'],b['theta'],b['parent'],b['gamma'],b['phi'])
 
 if args.show_plot:
     from mpl_toolkits.mplot3d import Axes3D
     import matplotlib.pyplot as plt
 
-    fig = plt.figure()
+    fig = plt.figure(dpi=200)
     ax = fig.gca(projection='3d')
 
     ax.set_xlim(0,0.2)
@@ -419,9 +438,15 @@ if args.show_plot:
         line = pt['x0'] + np.outer(pt['times'], pt['v']) + \
             0.5 * np.outer(pt['times']**2, pt['a'])
         ax.plot(line[:, 0], line[:, 1], line[:, 2], '-')
+        ax.grid(False)
 
     ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1.5, 1.5, 1, 1]))
 
 
+
     ax.legend()
     plt.show()
+    print("aaaa")
+    
+    plt.savfig("abc.cfg", dpi=200)
+    print("aaaa")

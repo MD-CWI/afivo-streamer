@@ -383,8 +383,8 @@ if args.show_plot:
         ax.plot(line[:, 0], line[:, 1], line[:, 2], '-')
 
     # This requires a recent version of matplotlib
-    ax.set_box_aspect([ub - lb for lb, ub in
-                       (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
+    #ax.set_box_aspect([ub - lb for lb, ub in
+    #                   (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
 
     ax.legend()
     plt.show()

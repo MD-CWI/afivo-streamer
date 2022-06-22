@@ -34,23 +34,41 @@ with open(args.paths, 'rb') as f:
 for i, path in enumerate(paths):
     # Define some location along the path
     t = 0.5 * (path['t0'] + path['t1'])
-    origin = get_path_x(path, t)
-    normal = get_path_v(path, t)
+    num= int((path['t1']-path['t0'])/200)
+    #print(num)
+    radius = 0
+    velocity = 0
+    
+    for j in range (path['t0'], path['t1'],200):
+        
+        origin = get_path_x(path, j)
+        normal = get_path_v(path, j)
 
-    # Use ' number' to allow for negative numbers as options
-    visit_args = ['-nowin', '-cli', '-s', 'visit_get_cross.py'] + \
-        [args.silo_file] + \
-        ['-origin'] + [f' {str(x)}' for x in origin] + \
-        ['-normal'] + [f' {str(x)}' for x in normal]
-
-    # Add this to save figure output
-    # + ['-save_fig', 'test.png']
-
-    output = run([args.visit] + visit_args, capture_output=True, text=True)
-
-    # First line of output contains area
-    area = float(output.stdout.splitlines()[0])
-
-    print(i, area)
+        # Use ' number' to allow for negative numbers as options
+        visit_args = ['-nowin', '-cli', '-s', 'visit_get_cross.py'] + \
+            [args.silo_file] + \
+            ['-origin'] + [f' {str(x)}' for x in origin] + \
+            ['-normal'] + [f' {str(x)}' for x in normal]
+            
+            # Add this to save figure output
+            # + ['-save_fig', 'test.png']
+            
+        output = run([args.visit] + visit_args, capture_output=True, text=True)
+            
+        # First line of output contains area
+        area = float(output.stdout.splitlines()[0])
+        radius_comp = np.sqrt(area/(2*np.pi))
+        velocity_comp = np.linalg.norm(normal)
+        #print(j,radius_comp,radius_comp)
+            
+        radius += radius_comp
+        velocity += velocity_comp
+        j+=200
+    
+    radius = radius/num
+    velocity = velocity/num
+        
+        
+    print(i,velocity,radius)
 
 
