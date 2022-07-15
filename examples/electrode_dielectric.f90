@@ -107,7 +107,7 @@ contains
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
        box%cc(IJK, iv) = get_lsf(rr)
-       if (rr(1) < 0.125_dp) then
+       if (rr(1) < 0.5_dp) then
           box%cc(IJK, i_eps) = 20.0_dp
        else
           box%cc(IJK, i_eps) = 1.0_dp
