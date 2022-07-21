@@ -108,9 +108,6 @@ module m_streamer
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
-  !> If we are using ST_end_time
-  logical, public, protected :: ST_use_end_time = .true.
-
   !> Whether streamer length is used as a simulation stopping
   logical, public, protected :: ST_use_end_streamer_length = .false.
 
@@ -282,8 +279,6 @@ contains
        call af_add_cc_variable(tree, "power_density", ix = i_power_density)
     end if
 
-    call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
-         "Whether end_time is used to end the simulation")
     call CFG_add_get(cfg, "use_end_streamer_length", ST_use_end_streamer_length, &
          "Whether the length of the streamer is used to end the simulation")
     call CFG_add_get(cfg, "end_streamer_length", ST_end_streamer_length, &

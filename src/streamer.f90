@@ -81,6 +81,14 @@ program streamer
      end if
   end do
 
+  ! These values are overwritten when restarting
+  it               = 0
+  time             = 0.0_dp ! Simulation time (all times are in s)
+  global_time      = time
+  photoi_prev_time = time   ! Time of last photoionization computation
+  dt               = global_dt
+  initial_streamer_pos = 0.0_dp ! Initial streamer position
+
   ! Initialize the tree (which contains all the mesh information)
   if (restart_from_file /= undefined_str) then
      tree_copy = tree           ! Store the settings
@@ -110,12 +118,6 @@ program streamer
      ! This routine always needs to be called when using multigrid
      call mg_init(tree, mg)
   else
-     time             = 0.0_dp ! Simulation time (all times are in s)
-     global_time      = time
-     photoi_prev_time = time   ! Time of last photoionization computation
-     dt               = global_dt
-     initial_streamer_pos = 0.0_dp ! Initial streamer position
-
      if (ST_cylindrical) then
         coord_type = af_cyl
      else
@@ -145,8 +147,9 @@ program streamer
   time_last_print  = -1e10_dp
   time_last_output = time
 
-  do it = 1, huge(1)-1
-     if (ST_use_end_time .and. time >= ST_end_time) exit
+  do
+     it = it + 1
+     if (time >= ST_end_time) exit
 
      if (associated(user_generic_method)) then
         call user_generic_method(tree, time)
@@ -361,6 +364,7 @@ contains
   subroutine write_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    write(my_unit) it
     write(my_unit) output_cnt
     write(my_unit) time
     write(my_unit) global_time
@@ -374,6 +378,7 @@ contains
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    read(my_unit) it
     read(my_unit) output_cnt
     read(my_unit) time
     read(my_unit) global_time
