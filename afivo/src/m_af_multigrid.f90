@@ -824,6 +824,8 @@ contains
           call mg_box_lsf_stencil(box, mg, ix)
        case (mg_veps_box, mg_ceps_box)
           call mg_box_lpld_stencil(box, mg, ix)
+       case (mg_veps_box+mg_lsf_box, mg_ceps_box+mg_lsf_box)
+          call mg_box_lpld_lsf_stencil(box, mg, ix)
        case default
           error stop "mg_store_operator_stencil: unknown box tag"
        end select
@@ -857,15 +859,15 @@ contains
        ! Use box tag
        associate (box=>tree%boxes(id), box_p=>tree%boxes(p_id))
          select case (iand(box%tag, mg%operator_mask))
-         case (mg_normal_box)
+         case (mg_normal_box, mg_ceps_box)
             call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
-         case (mg_lsf_box)
+         case (mg_lsf_box, mg_ceps_box+mg_lsf_box)
             if (mg%lsf_use_custom_prolongation) then
                call mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
             else
                call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
             end if
-         case (mg_ceps_box, mg_veps_box)
+         case (mg_veps_box, mg_veps_box + mg_lsf_box)
             call mg_box_prolong_eps_stencil(box, box_p, mg, ix)
          case default
             error stop "mg_store_prolongation_stencil: unknown box tag"
@@ -1471,6 +1473,100 @@ contains
 
   end subroutine mg_box_lpld_stencil
 
+  !> Store stencil for a box with variable coefficient and level set function
+  subroutine mg_box_lpld_lsf_stencil(box, mg, ix)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix !< Index of the stencil
+    integer                    :: IJK, nc, n_coeff
+    real(dp)                   :: idr2(2*NDIM), a0, a(2*NDIM), dr2(NDIM)
+    integer                    :: n, m, idim, s_ix(NDIM), ix_dist
+    real(dp)                   :: dd(2*NDIM)
+    real(dp), allocatable      :: all_distances(:, DTIMES(:))
+    logical                    :: success
+
+    nc               = box%n_cell
+    idr2(1:2*NDIM:2) = 1/box%dr**2
+    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
+    dr2              = box%dr**2
+
+    box%stencils(ix)%shape = af_stencil_357
+    box%stencils(ix)%stype = stencil_variable
+    ! A custom correction for cylindrical geometry could be more accurate. This
+    ! would require the derivation of a discretization for cells in which both
+    ! epsilon changes and a boundary is present.
+    box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
+    n_coeff                = af_stencil_sizes(af_stencil_357)
+
+    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    allocate(box%stencils(ix)%f(DTIMES(nc)))
+    allocate(box%stencils(ix)%bc_correction(DTIMES(nc)))
+    allocate(all_distances(2*NDIM, DTIMES(nc)))
+
+    box%stencils(ix)%f = 0.0_dp
+    ! Distance 1 indicates no boundary
+    all_distances = 1.0_dp
+
+    ix_dist = af_stencil_index(box, mg_lsf_distance_key)
+    if (ix_dist == af_stencil_none) error stop "No distances stored"
+
+    ! Use sparse storage of boundary distances to update all_distances
+    do n = 1, size(box%stencils(ix_dist)%sparse_ix, 2)
+       s_ix = box%stencils(ix_dist)%sparse_ix(:, n)
+       all_distances(:, DINDEX(s_ix)) = &
+            box%stencils(ix_dist)%sparse_v(:, n)
+    end do
+
+    associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
+      do KJI_DO(1, nc)
+         dd = all_distances(:, IJK)
+
+#if NDIM == 1
+         a0 = box%cc(i, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, i_eps)
+#elif NDIM == 2
+         a0 = box%cc(i, j, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+         a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+#elif NDIM == 3
+         a0 = box%cc(i, j, k, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, j, k, i_eps)
+         a(3:4) = box%cc(i, j-1:j+1:2, k, i_eps)
+         a(5:6) = box%cc(i, j, k-1:k+1:2, i_eps)
+#endif
+         ! Generalized Laplacian for neighbors at distance dd * dx
+         do idim = 1, NDIM
+            box%stencils(ix)%v(1+2*idim-1, IJK) = 1 / &
+                 (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
+                 dd(2*idim-1))
+            box%stencils(ix)%v(1+2*idim, IJK) = 1 / &
+                 (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
+                 dd(2*idim))
+         end do
+
+         ! Account for permittivity
+         !> @todo This is not fully accurate when there is both a change in
+         !> epsilon and a boundary for the same cell
+         box%stencils(ix)%v(2:, IJK) = box%stencils(ix)%v(2:, IJK) * &
+              2 * a0*a(:)/(a0 + a(:))
+
+         box%stencils(ix)%v(1, IJK) = -sum(box%stencils(ix)%v(2:, IJK))
+
+         ! Move internal boundaries to right-hand side
+         do m = 1, 2 * NDIM
+            if (dd(m) < 1.0_dp) then
+               box%stencils(ix)%f(IJK) = box%stencils(ix)%f(IJK) - &
+                    box%stencils(ix)%v(m+1, IJK)
+               box%stencils(ix)%v(m+1, IJK) = 0.0_dp
+            end if
+         end do
+      end do; CLOSE_DO
+    end associate
+
+    call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
+
+  end subroutine mg_box_lpld_lsf_stencil
+
   !> Compute distance to boundary starting at point a going to point b, in
   !> the range from [0, 1], with 1 meaning there is no boundary
   function mg_lsf_dist_linear(a, b, mg) result(dist)
@@ -1644,12 +1740,7 @@ contains
     dr2 = box%dr**2
 
     ix_dist = af_stencil_index(box, mg_lsf_distance_key)
-
-    if (ix_dist == af_stencil_none) then
-       ! No boundaries in this box
-       call mg_box_lpl_stencil(box, mg, ix)
-       return
-    end if
+    if (ix_dist == af_stencil_none) error stop "No distances stored"
 
     ! Use stored distances to construct stencil
     box%stencils(ix)%shape = af_stencil_357
@@ -1729,7 +1820,8 @@ contains
           select case (iand(tree%boxes(id)%tag, mg%operator_mask))
           case (mg_normal_box, mg_ceps_box)
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
-          case (mg_lsf_box)
+          case (mg_lsf_box, mg_ceps_box+mg_lsf_box, mg_veps_box+mg_lsf_box)
+             ! @todo is this okay for the case mg_veps_box+mg_lsf_box?
              if (af_has_children(tree%boxes(id))) then
                 !> @todo Solution on coarse grid can lead to large gradient due
                 !> to inconsistencies with level set function
@@ -1738,12 +1830,12 @@ contains
                 call mg_box_lpllsf_gradient(tree, id, mg, i_fc, fac)
              end if
           case (mg_veps_box)
-             ! Should call dielectric_correct_field_fc afterwards
+             ! Should call surface_correct_field_fc afterwards
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
           case (af_init_tag)
-             error stop "mg_auto_op: box tag not set"
+             error stop "box tag not set"
           case default
-             error stop "mg_auto_op: unknown box tag"
+             error stop "unknown box tag"
           end select
 
           if (present(i_norm)) then
@@ -1918,8 +2010,7 @@ contains
     call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
 
     ix_dist = af_stencil_index(tree%boxes(id), mg_lsf_distance_key)
-    if (ix_dist == af_stencil_none) &
-         error stop "No distances stored for this box"
+    if (ix_dist == af_stencil_none) error stop "No distances stored"
 
     associate(box => tree%boxes(id), cc => tree%boxes(id)%cc)
       nc     = box%n_cell
