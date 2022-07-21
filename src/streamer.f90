@@ -379,6 +379,9 @@ contains
     write(my_unit) global_time
     write(my_unit) photoi_prev_time
     write(my_unit) global_dt
+
+    write(my_unit) sum(ST_global_rates(1:n_reactions, :), dim=2)
+    write(my_unit) sum(ST_global_JdotE(1, :))
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
@@ -389,6 +392,10 @@ contains
     read(my_unit) global_time
     read(my_unit) photoi_prev_time
     read(my_unit) global_dt
+
+    ! Data is stored in location of first thread
+    read(my_unit) ST_global_rates(1:n_reactions, 1)
+    read(my_unit) ST_global_JdotE(1, 1)
 
     dt = global_dt
   end subroutine read_sim_data
