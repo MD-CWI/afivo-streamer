@@ -27,7 +27,7 @@ program streamer
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
   integer, allocatable      :: ref_links(:, :)
-  logical                   :: write_out, evolve_electrons
+  logical                   :: write_out
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
@@ -185,33 +185,25 @@ program streamer
         write_out = .false.
      end if
 
-     evolve_electrons = .true.
-     if (associated(user_evolve_electrons)) &
-          evolve_electrons = user_evolve_electrons(tree, time)
-
-     if (evolve_electrons) then
-        if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-           call photoi_set_src(tree, time - photoi_prev_time)
-           photoi_prev_time = time
-        end if
-
-        if (ST_use_electrode) then
-           call set_electrode_densities(tree)
-        end if
-
-        call af_advance(tree, dt, dt_lim, time, &
-                species_itree(n_gas_species+1:n_species), &
-                time_integrator, forward_euler)
-
-        ! Make sure field is available for latest time state
-        call field_compute(tree, mg, 0, time, .true.)
-
-        if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
-     else
-        dt_lim = dt_max
+     if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+        call photoi_set_src(tree, time - photoi_prev_time)
+        photoi_prev_time = time
      end if
 
+     if (ST_use_electrode) then
+        call set_electrode_densities(tree)
+     end if
+
+     call af_advance(tree, dt, dt_lim, time, &
+          species_itree(n_gas_species+1:n_species), &
+          time_integrator, forward_euler)
+
+     ! Make sure field is available for latest time state
+     call field_compute(tree, mg, 0, time, .true.)
+
      if (gas_dynamics) then
+        call coupling_add_fluid_source(tree, dt)
+
         ! Go back to time at beginning of step
         time = global_time
 
@@ -222,14 +214,9 @@ program streamer
         dt_gas_lim = dt_max
      end if
 
-     ! If neither electrons or the gas is evolved, make sure time is increased
-     if (.not. (evolve_electrons .or. gas_dynamics)) then
-        time = time + dt
-     end if
-
      ! dt is modified when writing output, global_dt not
      dt          = min(dt_lim, dt_gas_lim)
-     global_dt   = dt_lim
+     global_dt   = dt
      global_time = time
 
      if (global_dt < dt_min) then
@@ -263,7 +250,7 @@ program streamer
            ! Make sure there are no refinement jumps across the dielectric
            call surface_get_refinement_links(diel, ref_links)
            call af_adjust_refinement(tree, refine_routine, ref_info, &
-             refine_buffer_width, ref_links)
+                refine_buffer_width, ref_links)
            call surface_update_after_refinement(tree, diel, ref_info)
         else
            call af_adjust_refinement(tree, refine_routine, ref_info, &
@@ -450,7 +437,7 @@ contains
 #endif
 
           if (any(lsf_nb > 0) .and. &
-            associated(bc_species, af_bc_neumann_zero)) then
+               associated(bc_species, af_bc_neumann_zero)) then
              ! At the boundary of the electrode
 #if NDIM == 1
              dens_nb = [box%cc(i-1, i_electron), &
