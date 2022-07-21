@@ -8,7 +8,7 @@ module m_af_output
   implicit none
   private
 
-  integer, parameter :: af_dat_file_version = 2
+  integer, parameter :: af_dat_file_version = 3
 
   abstract interface
      subroutine subr_add_vars(box, new_vars, n_var)
@@ -89,32 +89,99 @@ contains
     end do
 
     do id = 1, tree%highest_id
-       write(my_unit) tree%boxes(id)%in_use  !< is the box in use?
-       if (.not. tree%boxes(id)%in_use) cycle
+       associate (box => tree%boxes(id))
+         write(my_unit) box%in_use  !< is the box in use?
+         if (.not. box%in_use) cycle
 
-       write(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
-       write(my_unit) tree%boxes(id)%lvl     !< level of the box
-       write(my_unit) tree%boxes(id)%tag     !< for the user
-       write(my_unit) tree%boxes(id)%ix      !< index in the domain
-       write(my_unit) tree%boxes(id)%parent  !< index of parent in box list
-       write(my_unit) tree%boxes(id)%children
-       write(my_unit) tree%boxes(id)%neighbors
-       write(my_unit) tree%boxes(id)%neighbor_mat
-       write(my_unit) tree%boxes(id)%dr      !< width/height of a cell
-       write(my_unit) tree%boxes(id)%r_min   !< min coords. of box
-       write(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
+         write(my_unit) box%n_cell  !< number of cells per dimension
+         write(my_unit) box%n_bc    !< Number of boundary conditions
+         write(my_unit) box%n_stencils !< Number of stencils
+         write(my_unit) box%lvl     !< level of the box
+         write(my_unit) box%tag     !< for the user
+         write(my_unit) box%ix      !< index in the domain
+         write(my_unit) box%parent  !< index of parent in box list
+         write(my_unit) box%children
+         write(my_unit) box%neighbors
+         write(my_unit) box%neighbor_mat
+         write(my_unit) box%dr      !< width/height of a cell
+         write(my_unit) box%r_min   !< min coords. of box
+         write(my_unit) box%coord_t !< Coordinate type (e.g. Cartesian)
 
-       do n = 1, tree%n_var_cell
-          if (tree%cc_write_binary(n)) then
-             write(my_unit) tree%boxes(id)%cc(DTIMES(:), n)
-          end if
-       end do
+         do n = 1, tree%n_var_cell
+            if (tree%cc_write_binary(n)) then
+               write(my_unit) box%cc(DTIMES(:), n)
+            end if
+         end do
 
-       do n = 1, tree%n_var_face
-          if (tree%fc_write_binary(n)) then
-             write(my_unit) tree%boxes(id)%fc(DTIMES(:), :, n)
-          end if
-       end do
+         do n = 1, tree%n_var_face
+            if (tree%fc_write_binary(n)) then
+               write(my_unit) box%fc(DTIMES(:), :, n)
+            end if
+         end do
+
+         ! Write boundary conditions
+         if (box%n_bc > 0) then
+            write(my_unit) box%bc_index_to_nb
+            write(my_unit) box%nb_to_bc_index
+            write(my_unit) box%bc_type
+            write(my_unit) box%bc_val
+            write(my_unit) box%bc_coords
+         end if
+
+         ! Write stencils
+         if (box%n_stencils > 0) then
+            do n = 1, box%n_stencils
+               associate (stncl => box%stencils(n))
+                 write(my_unit) stncl%key
+                 write(my_unit) stncl%shape
+                 write(my_unit) stncl%stype
+                 write(my_unit) stncl%cylindrical_gradient
+
+                 if (allocated(stncl%c)) then
+                    write(my_unit) size(stncl%c)
+                    write(my_unit) stncl%c
+                 else
+                    write(my_unit) 0
+                 end if
+
+                 if (allocated(stncl%v)) then
+                    write(my_unit) size(stncl%v, 1)
+                    write(my_unit) stncl%v
+                 else
+                    write(my_unit) 0
+                 end if
+
+                 if (allocated(stncl%f)) then
+                    write(my_unit) 1
+                    write(my_unit) stncl%f
+                 else
+                    write(my_unit) 0
+                 end if
+
+                 if (allocated(stncl%bc_correction)) then
+                    write(my_unit) 1
+                    write(my_unit) stncl%bc_correction
+                 else
+                    write(my_unit) 0
+                 end if
+
+                 if (allocated(stncl%sparse_ix)) then
+                    write(my_unit) size(stncl%sparse_ix, 2)
+                    write(my_unit) stncl%sparse_ix
+                 else
+                    write(my_unit) 0
+                 end if
+
+                 if (allocated(stncl%sparse_v)) then
+                    write(my_unit) size(stncl%sparse_v, 1)
+                    write(my_unit) stncl%sparse_v
+                 else
+                    write(my_unit) 0
+                 end if
+               end associate
+            end do
+         end if
+       end associate
     end do
 
     write(my_unit) present(write_other_data)
@@ -133,7 +200,7 @@ contains
     type(af_t), intent(inout)    :: tree     !< Tree to read in
     character(len=*), intent(in) :: filename !< Filename for the input
     procedure(subr_other_data), optional :: read_other_data
-    integer                      :: my_unit, lvl, n, id, version
+    integer                      :: my_unit, lvl, n, id, version, k, m, nc
     logical                      :: other_data_present
 
     open(newunit=my_unit, file=trim(filename), form='unformatted', &
@@ -158,6 +225,8 @@ contains
     read(my_unit) tree%periodic
     read(my_unit) tree%r_base
     read(my_unit) tree%dr_base
+
+    nc = tree%n_cell
 
     ! Skip methods (these have to be set again)
     if (.not. allocated(tree%cc_auto_vars)) &
@@ -199,34 +268,97 @@ contains
     allocate(tree%boxes(tree%box_limit))
 
     do id = 1, tree%highest_id
-       read(my_unit) tree%boxes(id)%in_use  !< is the box in use?
-       if (.not. tree%boxes(id)%in_use) cycle
+       associate (box => tree%boxes(id))
+         read(my_unit) box%in_use  !< is the box in use?
+         if (.not. box%in_use) cycle
 
-       read(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
-       call af_init_box(tree, id)
+         read(my_unit) box%n_cell  !< number of cells per dimension
+         read(my_unit) box%n_bc    !< Number of boundary conditions
+         read(my_unit) box%n_stencils !< Number of stencils
+         read(my_unit) box%lvl     !< level of the box
+         read(my_unit) box%tag     !< for the user
+         read(my_unit) box%ix      !< index in the domain
+         read(my_unit) box%parent  !< index of parent in box list
+         read(my_unit) box%children
+         read(my_unit) box%neighbors
+         read(my_unit) box%neighbor_mat
+         read(my_unit) box%dr      !< width/height of a cell
+         read(my_unit) box%r_min   !< min coords. of box
+         read(my_unit) box%coord_t !< Coordinate type (e.g. Cartesian)
 
-       read(my_unit) tree%boxes(id)%lvl     !< level of the box
-       read(my_unit) tree%boxes(id)%tag     !< for the user
-       read(my_unit) tree%boxes(id)%ix      !< index in the domain
-       read(my_unit) tree%boxes(id)%parent  !< index of parent in box list
-       read(my_unit) tree%boxes(id)%children
-       read(my_unit) tree%boxes(id)%neighbors
-       read(my_unit) tree%boxes(id)%neighbor_mat
-       read(my_unit) tree%boxes(id)%dr      !< width/height of a cell
-       read(my_unit) tree%boxes(id)%r_min   !< min coords. of box
-       read(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
+         call af_init_box(tree, id)
 
-       do n = 1, tree%n_var_cell
-          if (tree%cc_write_binary(n)) then
-             read(my_unit) tree%boxes(id)%cc(DTIMES(:), n)
-          end if
-       end do
+         do n = 1, tree%n_var_cell
+            if (tree%cc_write_binary(n)) then
+               read(my_unit) box%cc(DTIMES(:), n)
+            end if
+         end do
 
-       do n = 1, tree%n_var_face
-          if (tree%fc_write_binary(n)) then
-             read(my_unit) tree%boxes(id)%fc(DTIMES(:), :, n)
-          end if
-       end do
+         do n = 1, tree%n_var_face
+            if (tree%fc_write_binary(n)) then
+               read(my_unit) box%fc(DTIMES(:), :, n)
+            end if
+         end do
+
+         ! Read boundary conditions
+         if (box%n_bc > 0) then
+            read(my_unit) box%bc_index_to_nb
+            read(my_unit) box%nb_to_bc_index
+            read(my_unit) box%bc_type
+            read(my_unit) box%bc_val
+            read(my_unit) box%bc_coords
+         end if
+
+         ! Read stencils
+         if (box%n_stencils > 0) then
+            allocate(box%stencils(box%n_stencils))
+
+            do n = 1, box%n_stencils
+               associate (stncl => box%stencils(n))
+                 read(my_unit) stncl%key
+                 read(my_unit) stncl%shape
+                 read(my_unit) stncl%stype
+                 read(my_unit) stncl%cylindrical_gradient
+
+                 read(my_unit) k
+                 if (k > 0) then
+                    allocate(stncl%c(k))
+                    read(my_unit) stncl%c
+                 end if
+
+                 read(my_unit) k
+                 if (k > 0) then
+                    allocate(stncl%v(k, DTIMES(nc)))
+                    read(my_unit) stncl%v
+                 end if
+
+                 read(my_unit) k
+                 if (k > 0) then
+                    allocate(stncl%f(DTIMES(nc)))
+                    read(my_unit) stncl%f
+                 end if
+
+                 read(my_unit) k
+                 if (k > 0) then
+                    allocate(stncl%bc_correction(DTIMES(nc)))
+                    read(my_unit) stncl%bc_correction
+                 end if
+
+                 read(my_unit) k
+                 if (k > 0) then
+                    allocate(stncl%sparse_ix(NDIM, k))
+                    read(my_unit) stncl%sparse_ix
+                 end if
+
+                 read(my_unit) m
+                 if (k > 0 .and. m > 0) then
+                    allocate(stncl%sparse_v(m, k))
+                    read(my_unit) stncl%sparse_v
+                 end if
+               end associate
+            end do
+         end if
+       end associate
     end do
 
     read(my_unit) other_data_present
