@@ -84,12 +84,6 @@ module m_streamer
   !> Ensure that flux limiting does not lead to fields higher than this
   real(dp), public, protected :: ST_drt_max_field = 1.0e100_dp
 
-  !> Limit velocities to this value (m/s)
-  real(dp), public, protected :: ST_max_velocity = -1.0_dp
-
-  !> Disable diffusion parallel to fields above this threshold (V/m)
-  real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
-
   !> Use source factor to prevent unphysical effects due to diffusion
   integer, public, protected :: ST_source_factor
 
@@ -342,10 +336,6 @@ contains
          "Enable flux limiting, but prevent field from exceeding this value")
     if (ST_drt_max_field < 1e100_dp) ST_drt_limit_flux = .true.
 
-    call CFG_add_get(cfg, "fixes%max_velocity", ST_max_velocity, &
-         "Limit velocities to this value (m/s)")
-    call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
-         "Disable diffusion parallel to fields above this threshold (V/m)")
     call CFG_add_get(cfg, "fixes%source_factor", source_factor, &
          "Use source factor to prevent unphysical effects due to diffusion")
     call CFG_add_get(cfg, "fixes%write_source_factor", write_source_factor, &
