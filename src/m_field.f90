@@ -59,7 +59,7 @@ module m_field
   ! Internal variables
 
   !> The current applied voltage
-  real(dp), public, protected :: current_voltage
+  real(dp), public, protected :: current_voltage = 0.0_dp
 
   ! Parameters that are pre-computed for conical rods
   ! @todo Add explanations/documentation for conical rods
