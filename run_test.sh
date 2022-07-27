@@ -46,7 +46,8 @@ if (( "$#" == 1 )); then
 else
     # Run all tests
     declare -a test_dirs=("programs/standard_1d/tests"
-                          "programs/standard_2d/tests")
+                          "programs/standard_2d/tests"
+                          "programs/standard_3d/tests")
 
     for dir in "${test_dirs[@]}"; do
         # Compile in parent folder and make sure 'output' exists
