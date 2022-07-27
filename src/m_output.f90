@@ -687,7 +687,11 @@ contains
        if (iostate == 0) close(my_unit, status='delete')
     else
        do n = 1, n_species
-          call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          if (species_itree(n) > 0) then
+             call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          else
+             sum_dens(n) = 0.0_dp ! A neutral gas specie
+          end if
        end do
 
        open(newunit=my_unit, file=trim(filename), action="write", &
@@ -714,9 +718,16 @@ contains
 
     vol = af_total_volume(tree)
     do n = 1, n_species
-       call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
-       call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
-       call af_tree_max_cc(tree, species_itree(n), max_dens(n))
+       if (species_itree(n) > 0) then
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
+          call af_tree_max_cc(tree, species_itree(n), max_dens(n))
+       else
+          ! A neutral gas specie
+          sum_dens(n) = 0.0_dp
+          sum_dens_sq(n) = 0.0_dp
+          max_dens(n) = 0.0_dp
+       end if
     end do
 
     if (out_cnt == 0) then
