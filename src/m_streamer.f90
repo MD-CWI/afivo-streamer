@@ -96,9 +96,6 @@ module m_streamer
   !> Minimal density for including electron sources
   real(dp), public, protected :: ST_source_min_density = -1e10_dp
 
-  !> Correction used for to compute cell-centered fields
-  character(len=name_len), public, protected :: ST_field_correction = "none"
-
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
@@ -358,9 +355,6 @@ contains
          "Whether to write the source factor to the output")
     call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
          "Minimal density for including electron sources")
-    call CFG_add_get(cfg, "fixes%field_correction", ST_field_correction, &
-         "Correction used for computing cell-centered fields " // &
-         "(none, divE, harmonic)")
 
     select case (source_factor)
     case ("none")

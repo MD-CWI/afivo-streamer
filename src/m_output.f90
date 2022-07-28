@@ -443,7 +443,7 @@ contains
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
     real(dp)                     :: sum_elem_charge, tmp, ne_zminmax(2)
     real(dp)                     :: elecdens_threshold, max_field_tip
-    real(dp)                     :: r0(NDIM), r1(NDIM)
+    real(dp)                     :: r0(NDIM), r1(NDIM), r_tip(NDIM)
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er, loc_tip
     integer                      :: i, n_reals, n_user_vars
     character(len=name_len)      :: var_names(user_max_log_vars)
@@ -489,6 +489,12 @@ contains
 
     call analysis_max_var_region(tree, i_electric_fld, r0, r1, &
          max_field_tip, loc_tip)
+
+    if (loc_tip%id > 0) then
+       r_tip = af_r_loc(tree, loc_tip)
+    else
+       r_tip = 0.0_dp
+    end if
 
     sum_elem_charge = 0
     do n = n_gas_species+1, n_species
@@ -559,7 +565,7 @@ contains
          sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
-         max_field_tip, af_r_loc(tree, loc_tip), &
+         max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
@@ -568,7 +574,7 @@ contains
          sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         current_voltage, ne_zminmax, max_field_tip, af_r_loc(tree, loc_tip), &
+         current_voltage, ne_zminmax, max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 3
@@ -576,7 +582,7 @@ contains
          sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
-         max_field_tip, af_r_loc(tree, loc_tip), &
+         max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
@@ -681,7 +687,11 @@ contains
        if (iostate == 0) close(my_unit, status='delete')
     else
        do n = 1, n_species
-          call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          if (species_itree(n) > 0) then
+             call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          else
+             sum_dens(n) = 0.0_dp ! A neutral gas specie
+          end if
        end do
 
        open(newunit=my_unit, file=trim(filename), action="write", &
@@ -708,9 +718,16 @@ contains
 
     vol = af_total_volume(tree)
     do n = 1, n_species
-       call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
-       call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
-       call af_tree_max_cc(tree, species_itree(n), max_dens(n))
+       if (species_itree(n) > 0) then
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
+          call af_tree_max_cc(tree, species_itree(n), max_dens(n))
+       else
+          ! A neutral gas specie
+          sum_dens(n) = 0.0_dp
+          sum_dens_sq(n) = 0.0_dp
+          max_dens(n) = 0.0_dp
+       end if
     end do
 
     if (out_cnt == 0) then

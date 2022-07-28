@@ -385,94 +385,9 @@ contains
        call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp, i_electric_fld)
     end if
 
-    select case (ST_field_correction)
-    case ("divE")
-       call af_loop_box(tree, correct_field_divE_box)
-    case ("harmonic")
-       call af_loop_box(tree, correct_field_harmonic_box)
-    case ("none")
-       continue
-    case default
-       error stop "Unknown fixes%field_correction"
-    end select
-
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
   end subroutine field_compute
-
-  subroutine correct_field_divE_box(box)
-    type(box_t), intent(inout) :: box
-    integer                    :: IJK
-    real(dp)                   :: tmp, Elo(NDIM), Ehi(NDIM)
-    real(dp)                   :: Emin(NDIM), dE(NDIM)
-    real(dp)                   :: eps = 1e-10_dp
-    integer                    :: nc
-
-    nc = box%n_cell
-
-    do KJI_DO(1, nc)
-       ! Compute f = 1 - |div(E)| / (|d/dx Ex| + |d/dy Ey|)
-       ! Then take min(E) + f * delta_E (component wise)
-       ! Todo: think about unequal mesh spacing
-
-#if NDIM == 2
-       ! Fields on lower and upper cell faces
-       Elo = box%fc(IJK, 1:NDIM, electric_fld)
-       Ehi = [box%fc(i+1, j, 1, electric_fld), &
-            box%fc(i, j+1, 2, electric_fld)]
-#endif
-
-       ! Emin contains the field components of smallest amplitude
-       where (abs(Elo) < abs(Ehi))
-          Emin = Elo
-          dE = Ehi - Elo
-       elsewhere
-          Emin = Ehi
-          dE = Elo - Ehi
-       end where
-
-       tmp = 1 - abs(sum(Ehi-Elo)) / (eps + sum(abs(dE)))
-       box%cc(IJK, i_electric_fld) = norm2(Emin + 0.5_dp * tmp * dE)
-    end do; CLOSE_DO
-  end subroutine correct_field_divE_box
-
-  subroutine correct_field_harmonic_box(box)
-    type(box_t), intent(inout) :: box
-    integer                    :: IJK
-    real(dp)                   :: f(2*NDIM), hmean
-    real(dp)                   :: eps = 1e-10_dp
-    integer                    :: nc
-
-    nc = box%n_cell
-
-    do KJI_DO(1, nc)
-#if NDIM == 1
-       f = abs([box%fc(i, 1, electric_fld), &
-            box%fc(i+1, 1, electric_fld)])
-       hmean = 2*f(1)*f(2)/(f(1)+f(2)+eps)
-#elif NDIM == 2
-       f = abs([box%fc(i, j, 1, electric_fld), &
-            box%fc(i+1, j, 1, electric_fld), &
-            box%fc(i, j, 2, electric_fld), &
-            box%fc(i, j+1, 2, electric_fld)])
-       hmean = norm2([2*f(1)*f(2)/(f(1)+f(2)+eps), &
-            2*f(3)*f(4)/(f(3)+f(4)+eps)])
-#elif NDIM == 3
-       f = abs([&
-            box%fc(i, j, k, 1, electric_fld), &
-            box%fc(i+1, j, k, 1, electric_fld), &
-            box%fc(i, j, k, 2, electric_fld), &
-            box%fc(i, j+1, k, 2, electric_fld), &
-            box%fc(i, j, k, 3, electric_fld), &
-            box%fc(i, j, k+1, 3, electric_fld)])
-       hmean = norm2([&
-            2*f(1)*f(2)/(f(1)+f(2)+eps), &
-            2*f(3)*f(4)/(f(3)+f(4)+eps), &
-            2*f(5)*f(6)/(f(5)+f(6)+eps)])
-#endif
-       box%cc(IJK, i_electric_fld) = hmean
-    end do; CLOSE_DO
-  end subroutine correct_field_harmonic_box
 
   !> Set the current voltage
   subroutine field_set_voltage(tree, time)
