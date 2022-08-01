@@ -27,7 +27,6 @@ contains
 
     user_initial_conditions => my_init_cond
     user_gas_density => gas_density
-    user_potential_bc => potential_bc
 
   end subroutine user_initialize
 
@@ -39,30 +38,6 @@ contains
     rr = af_r_cc(box, [IJK])
     gas_density = 2.5e25 * exp(-rr(NDIM) / scale_height)
   end function gas_density
-
-  !> This fills ghost cells near physical boundaries for the potential
-  subroutine potential_bc(box, nb, iv, coords, bc_val, bc_type)
-    use m_field, only: field_voltage
-    type(box_t), intent(in) :: box
-    integer, intent(in)     :: nb
-    integer, intent(in)     :: iv
-    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
-    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
-    integer, intent(out)    :: bc_type
-
-    if (af_neighb_dim(nb) == NDIM) then
-       if (af_neighb_low(nb)) then
-          bc_type = af_bc_dirichlet
-          bc_val = -field_voltage
-       else
-          bc_type = af_bc_dirichlet
-          bc_val  = 0.0_dp
-       end if
-    else
-       bc_type = af_bc_neumann
-       bc_val = 0.0_dp
-    end if
-  end subroutine potential_bc
 
   subroutine my_init_cond(box)
     use m_init_cond

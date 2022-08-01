@@ -172,17 +172,20 @@ contains
   end subroutine gas_initialize
 
   !> A forward-Euler method for the Euler equations
-  subroutine gas_forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
-       i_step, n_steps)
+  subroutine gas_forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, &
+       s_prev, w_prev, s_out, i_step, n_steps)
     use m_af_flux_schemes
     type(af_t), intent(inout) :: tree
-    real(dp), intent(in)      :: dt
-    real(dp), intent(inout)   :: dt_lim
-    real(dp), intent(in)      :: time
-    integer, intent(in)       :: s_deriv
-    integer, intent(in)       :: s_prev
-    integer, intent(in)       :: s_out
-    integer, intent(in)       :: i_step, n_steps
+    real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
+    real(dp), intent(in)      :: time           !< Current time
+    integer, intent(in)       :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)       :: s_out          !< Output state
+    integer, intent(in)       :: i_step         !< Step of the integrator
+    integer, intent(in)       :: n_steps        !< Total number of steps
     real(dp)                  :: wmax(NDIM)
 
     call flux_generic_tree(tree, n_vars_euler, gas_vars+s_deriv, &
@@ -190,10 +193,10 @@ contains
          to_primitive, to_conservative)
     if (tree%coord_t == af_cyl) then
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-            s_deriv, s_prev, s_out, add_geometric_source)
+            s_deriv, n_prev, s_prev, w_prev, s_out, add_geometric_source)
     else
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-            s_deriv, s_prev, s_out, flux_dummy_source)
+            s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
     end if
 
     ! Compute new time step
@@ -227,6 +230,7 @@ contains
 #endif
   end subroutine add_geometric_source
 
+#if NDIM == 2
   pure function get_pressure(box, s_in) result(pressure)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: s_in
@@ -239,6 +243,7 @@ contains
          sum(box%cc(DTIMES(1:nc), gas_vars(i_mom)+s_in)**2, dim=NDIM+1) / &
          box%cc(DTIMES(1:nc), gas_vars(i_rho)+s_in))
   end function get_pressure
+#endif
 
   !> Find index of a gas component, return -1 if not found
   elemental integer function gas_index(name)

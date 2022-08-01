@@ -213,14 +213,16 @@ contains
     end select
   end function solution
 
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
-       i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+       w_prev, s_out, i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
     real(dp), intent(in)      :: time
     real(dp), intent(inout)   :: dt_lim
     integer, intent(in)       :: s_deriv
-    integer, intent(in)       :: s_prev
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
     real(dp)                  :: wmax(NDIM)
@@ -228,7 +230,7 @@ contains
     call flux_generic_tree(tree, 1, [i_phi+s_deriv], [i_flux], wmax, &
          max_wavespeed, get_flux, flux_dummy_conversion, flux_dummy_conversion)
     call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
-         s_deriv, s_prev, s_out, flux_dummy_source)
+         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
 
     ! Compute maximal time step
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))

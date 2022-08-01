@@ -163,14 +163,16 @@ program KT_euler
 contains
 
   !> [forward_euler_gasd]
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
-       i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+       w_prev, s_out, i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
     real(dp), intent(inout)   :: dt_lim
     real(dp), intent(in)      :: time
     integer, intent(in)       :: s_deriv
-    integer, intent(in)       :: s_prev
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
     real(dp)                  :: wmax(NDIM)
@@ -178,7 +180,7 @@ contains
     call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, wmax, &
          max_wavespeed, get_fluxes, to_primitive, to_conservative)
     call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
-         s_deriv, s_prev, s_out, flux_dummy_source)
+         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
 
     ! Compute new time step
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))

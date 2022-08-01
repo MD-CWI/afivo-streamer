@@ -1,0 +1,182 @@
+reaction,rate,unit,reference,DOI,comment
+# These are the reactions for dry air (N2:O2=4:1) from:
+# Ono and Komuro 2020 (https://doi.org/10.1088/1361-6463/ab4e65)
+# Panchesnyi 2013 (https://doi.org/10.1088/0022-3727/46/15/155201)
+# Kossyi 1992 (https://doi.org/10.1088/0963-0252/1/3/011)
+#
+# Charged particle reactions
+# Ionization
+N2(B) + N2(B) \to e + N4+, 2.00\times10^{-10}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(a) + N2(A1) \to e + N4+, 5.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(a) + N2(A2) \to e + N4+, 5.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(a) + N2(a) \to e + N4+, 2.00\times10^{-10}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N(^2D) + O(^3P) \to e + NO+, 1.00\times10^{-12}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+# Attachment
+e + O(^3P) + O2 \to O2- + O(^3P), 1.00\times10^{-31}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + O(^3P) + O2 \to O- + O2, 1.00\times10^{-31}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + O3 \to O2- + O(^3P), 1.00\times10^{-9}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + O3 \to O- + O2, 1.00\times10^{-11}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+# Detachment
+O2- + M \to e + O2 + M, 1.24\times10^{-11}\exp(-(179/(8.8+T_d))**2), cm, \cite{Pancheshnyi:2013}, https://doi.org/10.1088/0022-3727/46/15/155201
+O- + N2 \to e + N2O, 1.16\times10^{-12}\exp(-(48.9/(11+T_d))**2), cm, \cite{Pancheshnyi:2013}, https://doi.org/10.1088/0022-3727/46/15/155201
+O- + O2 \to e + O3, 5.00\times10^{-15}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O- + O2(a) \to e + O3, 3.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O- + O2(b) \to e + O2 + O(^3P), 6.90\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O- + N2(A1) \to e + N2 + O(^3P), 2.20\times10^{-9}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O- + N2(B) \to e + N2 + O(^3P), 1.90\times10^{-9}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O- + O(^3P) \to e + O2, 5.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O- + N(^4S) \to e + NO, 2.60\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + O2(a) \to e + 2O2, 2.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + O2(b) \to e + 2O2, 3.60\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + N2(A1) \to e + O2 + N2, 2.10\times10^{-9}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + N2(B) \to e + O2 + N2, 2.50\times10^{-9}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + O(^3P) \to e + O3, 1.50\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + N(^4S) \to e + NO2, 5.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O3- + O(^3P) \to e + 2O2, 3.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+# Negative ion conversion
+O- + O2 \to O2- + O(^3P), 6.96\times10^{-11}\exp(-(198/(5.6+T_d))**2), cm, \cite{Pancheshnyi:2013}, https://doi.org/10.1088/0022-3727/46/15/155201
+O- + O2 + M \to O3- + M, 1.10\times10^{-30}\exp(-(T_d/65)**2), cm, \cite{Pancheshnyi:2013}, https://doi.org/10.1088/0022-3727/46/15/155201
+O- + O3 \to O3- + O(^3P), 5.30\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + O2 + M \to O4- + M, 3.50\times10^{-31}(\frac{300}{T_g})^{1}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + O3 \to O3- + O2, 4.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2- + O(^3P) \to O- + O2, 3.30\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O3- + O(^3P) \to O2- + O2, 3.20\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+# Positive ion conversion
+N2+ + O2 \to O2+ + N2, 6.00\times10^{-11}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O3 \to O2+ + N2 + O(^3P), 1.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + N2 + M \to N4+ + M, 5.20\times10^{-29}(\frac{300}{T_g})^{2.2}, cm, \cite{Guthrie:1991}, https://doi.org/10.1063/1.461101
+N2+ + N2(A1) \to N3+ + N(^4S), 3.00\times10^{-10}, cm, \cite{Guthrie:1991}, https://doi.org/10.1063/1.461101
+N2+ + O(^3P) \to O+ + N2, 1.00\times10^{-11}(\frac{300}{T_g})^{0.2}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O(^3P) \to NO+ + N(^4S), 1.30\times10^{-10}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + N(^4S) + M \to N3+ + M, 9.00\times10^{-30}\exp(\frac{400}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + N(^4S) \to N+ + N2, 2.40\times10^{-15}*T_g^{1}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N4+ + O2 \to O2+ + 2N2, 2.50\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N4+ + N2 \to N2+ + 2N2, 10**(-14.6+0.0036*(T_g-300)), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N4+ + O(^3P) \to O+ + 2N2, 2.50\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N4+ + N(^4S) \to N+ + 2N2, 1.00\times10^{-11}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O2 + M \to O4+ + M, 2.40\times10^{-30}(\frac{300}{T_g})^{3.2}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + N2 + N2 \to N2O2+ + N2, 9.00\times10^{-31}(\frac{300}{T_g})^{2.0}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + N2 \to NO+ + NO, 1.00\times10^{-17}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + N(^4S) \to NO+ + O(^3P), 1.20\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + O2 \to O2+ + 2O2, 3.30\times10^{-6}(\frac{300}{T_g})^{4}\exp(\frac{-5030}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + O2(a) \to O2+ + 2O2, 1.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + O2(b) \to O2+ + 2O2, 1.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + N2 \to N2O2+ + O2, 4.61\times10^{-12}(\frac{T_g}{300})^{2.5}\exp(\frac{-2650}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + O(^3P) \to O2+ + O3, 3.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2O2+ + O2 \to O4+ + N2, 1.00\times10^{-9}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2O2+ + N2 \to O2+ + 2N2, 1.10\times10^{-6}(\frac{300}{T_g})^{5.3}\exp(\frac{-2357}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+# Electron recombination
+e + e + N2+ \to e + N2, 1.00\times10^{-19}(\frac{300}{T_e})^{4.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + N2+ + M \to N2 + M, 6.00\times10^{-27}(\frac{300}{T_e})^{1.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + N2+ \to N(^4S) + N(^4S), 2.80\times10^{-7}(\frac{300}{T_e})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + N2+ \to N(^4S) + N(^2D), 2.00\times10^{-7}(\frac{300}{T_e})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + N4+ \to N2 + N2(C), 2.00\times10^{-6}(\frac{300}{T_e})^{0.5}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+e + e + O2+ \to e + O2, 1.00\times10^{-19}(\frac{300}{T_e})^{4.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + O2+ + M \to O2 + M, 6.00\times10^{-27}(\frac{300}{T_e})^{1.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + O2+ \to O(^3P) + O(^3P), 2.40\times10^{-7}(\frac{300}{T_e})^{0.7}, cm, \cite{Peverall:2001}, https://doi.org/10.1063/1.1349079
+e + O2+ \to O(^3P) + O(^1D), 1.95\times10^{-7}(\frac{300}{T_e})^{0.7}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+e + O4+ \to 2O2, 1.40\times10^{-6}(\frac{300}{T_e})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+e + O4+ \to O2 + 2O(^3P), 4.20\times10^{-6}(\frac{300}{T_e})^{0.48}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+e + O4+ \to O2 + O(^3P) + O(^1D), 4.20\times10^{-6}(\frac{300}{T_e})^{0.48}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+e + N2O2+ \to N2 + O2, 1.30\times10^{-6}(\frac{300}{T_e})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+# Ion recombination
+N2+ + O- + M \to N2O + M, 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O- + M \to N2 + O(^3P) + M, 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O- \to N2 + O(^3P), 2.00\times10^{-7}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O- \to 2N(^4S) + O(^3P), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O2- + M \to N2 + O2 + M, 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O2- \to N2 + O2, 2.00\times10^{-7}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O2- \to O2 + 2N(^4S), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O3- \to N2 + O3, 2.00\times10^{-7}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2+ + O3- \to O3 + 2N(^4S), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N4+ + O- \to 2N2 + O(^3P), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N4+ + O2- \to 2N2 + O2, 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N4+ + O3- \to 2N2 + O3, 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O- + M \to O3 + M, 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O- + M \to O2 + O(^3P) + M, 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O- \to O2 + O(^3P), 2.00\times10^{-7}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O- \to 3O(^3P), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O2- + M \to 2O2 + M, 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O2- + O2 \to 2O2 + 2O(^3P), 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+O2+ + O2- \to 2O2, 2.00\times10^{-7}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O2- \to O2 + 2O(^3P), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O3- \to O2 + O3, 2.00\times10^{-7}(\frac{300}{T_g})^{0.5}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2+ + O3- \to O3 + 2O(^3P), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + O- \to 2O2 + O(^3P), 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + O2- + O2 \to 3O2 + 2O(^3P), 2.00\times10^{-25}(\frac{300}{T_g})^{2.5}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+O4+ + O2- \to 3O2, 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O4+ + O3- \to 2O2 + O3, 1.00\times10^{-7}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+# Neutral particle reactions
+N2(A1) + O2 \to N2 + O2(b), 7.50\times10^{-13}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(A1) + O2 \to N2 + 2O(^3P), 1.70 \times 10^{-12}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(A1) + O2 \to N2O + O(^3P), 7.80\times10^{-14}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2(A1) + N2 \to 2N2, 3.00\times10^{-16}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(A1) + N2(A1) \to N2 + N2(B), 7.70\times10^{-11}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(A1) + N2(A1) \to N2 + N2(C), 1.60\times10^{-10}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(A1) + N2(A1) \to N2 + N2(E), 1.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(A1) + O(^3P) \to N2 + O(^3P), 2.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(A1) + O(^3P) \to N2 + O(^1S), 3.00\times10^{-11}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(A1) + O(^3P) \to NO + N(^2D), 7.00\times10^{-12}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(A1) + N(^4S) \to N2 + N(^2P), 5.00\times10^{-11}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2(A2) + N2 \to 2N2, 3.00\times10^{-16}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(A2) + N2 \to N2 + N2(A1), 1.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(A2) + O(^3P) \to N2 + O(^3P), 2.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(A2) + O(^3P) \to NO + N(^4S), 7.00\times10^{-12}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(B) + O2 \to N2 + 2O(^3P), 3.00\times10^{-10}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(B) + N2 \to N2 + N2(A1), 1.00\times10^{-11}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(B) \to N2(A1) + h_nu, 1.10\times10^{5}, s, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(a) + O2 \to N2 + O(^3P) + O(^1D), 2.80\times10^{-11}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(a) + N2 \to N2 + N2(B), 2.40\times10^{-13}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(C) + O2 \to N2 + 2O(^3P), 2.50\times10^{-10}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(C) + O2 \to N2 + O(^3P) + O(^1S), 3.00\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N2(C) + N2 \to N2 + N2(B), 1.00\times10^{-11}, cm, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(C) + N2 \to N2 + N2(a), 1.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N2(C) \to N2(B) + h_nu, 2.40\times10^{7}, s, \cite{Popov:2011}, https://doi.org/10.1088/0022-3727/44/28/285201
+N2(E) + N2 \to N2 + N2(C), 1.00\times10^{-11}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N(^4S) + O2 \to NO + O(^3P), 9.70\times10^{-15}*T_g^{1.01}\exp(\frac{-3120}{T_g}), cm, \cite{Baulch:2005}, https://doi.org/10.1063/1.1748524
+N(^4S) + O3 \to NO + O2, 2.00\times10^{-16}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N(^4S) + O(^3P) + M \to NO + M, 1.76\times10^{-31}*T_g^{-0.5}, cm, \cite{Campbell:1973}, https://doi.org/10.1016/0009-2614(73)80479-8
+N(^4S) + N(^4S) + N2 \to N2 + N2(A1), 1.38\times10^{-34}\exp(\frac{-500}{T_g}), cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N(^4S) + N(^4S) + N2 \to N2 + N2(A2), 1.38\times10^{-34}\exp(\frac{-500}{T_g}), cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N(^4S) + N(^4S) + N2 \to N2 + N2(B), 2.40\times10^{-33}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+N(^4S) + N(^4S) + M \to N2 + M, 8.27\times10^{-34}\exp(\frac{500}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N(^4S) + N(^2P) \to N(^4S) + N(^2D), 1.80\times10^{-12}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N(^2D) + O2 \to NO + O(^3P), 2.52\times10^{-12}\exp(\frac{-185}{T_g}), cm, \cite{Herron:1999}, https://doi.org/10.1063/1.556043
+N(^2D) + O2 \to NO + O(^1D), 7.37\times10^{-12}\exp(\frac{-185}{T_g}), cm, \cite{Herron:1999}, https://doi.org/10.1063/1.556043
+N(^2D) + N2 \to N2 + N(^4S), 1.70\times10^{-14}, cm, \cite{Herron:1999}, https://doi.org/10.1063/1.556043
+N(^2D) + O(^3P) \to N(^4S) + O(^3P), 3.30\times10^{-12}\exp(\frac{-260}{T_g}), cm, \cite{Herron:1999}, https://doi.org/10.1063/1.556043
+N(^2P) + O2 \to NO + O(^3P), 2.60\times10^{-12}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+N(^2P) + N2 \to N2 + N(^2D), 2.00\times10^{-18}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + O2 \to 2O2, 2.20\times10^{-18}(\frac{T_g}{300})^{0.8}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + O3 \to 2O2 + O(^3P), 9.70\times10^{-13}\exp(\frac{-1564}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + N2 \to O2 + N2, 3.00\times10^{-21}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + O(^3P) \to O2 + O(^3P), 7.00\times10^{-16}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + O(^1S) \to 3O(^3P), 3.40\times10^{-11}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + O(^1S) \to O2(b) + O(^1D), 3.60\times10^{-11}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + O(^1S) \to O2(A) + O(^3P), 1.30\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(a) + N(^4S) \to NO + O(^3P), 2.00\times10^{-14}\exp(\frac{-600}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(b) + O2 \to O2 + O2(a), 4.30\times10^{-22}*T_g^{2.4}\exp(\frac{-241}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(b) + O3 \to 2O2 + O(^3P), 1.80\times10^{-11}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(b) + N2 \to N2 + O2(a), 2.10\times10^{-15}, cm, \cite{Atkinson:2004}, https://doi.org/10.5194/acp-4-1461-2004
+O2(b) + O(^3P) \to O2(a) + O(^3P), 8.00\times10^{-14}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(b) + O(^3P) \to O2 + O(^1D), 3.39\times10^{-11}(\frac{300}{T_g})^{0.1}\exp(\frac{-4201}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(A) + O2 \to 2O2(b), 2.90\times10^{-13}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(A) + N2 \to N2 + O2(b), 3.00\times10^{-13}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O2(A) + O(^3P) \to O2(b) + O(^1D), 9.00\times10^{-12}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^3P) + O2 + O2 \to O3 + O2, 6.00\times10^{-34}(\frac{300}{T_g})^{2.6}, cm, \cite{Atkinson:2004}, https://doi.org/10.5194/acp-4-1461-2004
+O(^3P) + O2 + N2 \to O3 + N2, 5.60\times10^{-34}(\frac{300}{T_g})^{2.6}, cm, \cite{Atkinson:2004}, https://doi.org/10.5194/acp-4-1461-2004
+O(^3P) + O3 \to 2O2, 8.00\times10^{-12}\exp(\frac{-2060}{T_g}), cm, \cite{Atkinson:2004}, https://doi.org/10.5194/acp-4-1461-2004
+O(^3P) + O(^3P) + O2 \to 2O2, 2.45\times10^{-31}*T_g^{-0.63}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^3P) + O(^3P) + N2 \to O2 + N2, 2.76\times10^{-34}\exp(\frac{720}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^3P) + O(^1D) + N2 \to O2 + N2, 9.90\times10^{-33}, cm, \cite{Fresnet:2002}, https://doi.org/10.1088/0963-0252/11/2/305
+O(^3P) + O(^1S) \to O(^3P) + O(^1D), 5.00\times10^{-11}\exp(\frac{-301}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^1D) + O2 \to O2 + O(^3P), 3.12\times10^{-11}\exp(\frac{70}{T_g}), cm, \cite{Dunlea:2004}, https://doi.org/10.1039/b400247d
+O(^1D) + O2 \to O2(b) + O(^3P), 2.56\times10^{-11}\exp(\frac{67}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^1D) + O3 \to 2O2, 2.37\times10^{-10}\exp(\frac{6}{T_g}), cm, \cite{Dunlea:2004}, https://doi.org/10.1039/b400247d
+O(^1D) + O3  \to O2 + 2O(^3P), 2.37\times10^{-10}\exp(\frac{6}{T_g}), cm, \cite{Dunlea:2004}, https://doi.org/10.1039/b400247d
+O(^1D) + N2 \to N2 + O(^3P), 2.10\times10^{-11}\exp(\frac{115}{T_g}), cm, \cite{Dunlea:2004}, https://doi.org/10.1039/b400247d
+O(^1S) + O2 \to O2 + O(^1D), 1.33\times10^{-12}\exp(\frac{-850}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^1S) + O2 \to O2(A) + O(^3P), 2.97\times10^{-12}\exp(\frac{-850}{T_g}), cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^1S) + O3 \to 2O2, 2.90\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O(^1S) + O3 \to O2 + O(^3P) + O(^1D), 2.90\times10^{-10}, cm, \cite{Kossyi:1992}, https://doi.org/10.1088/0963-0252/1/3/011
+O3 + O3 \to O2 + O3 + O(^3P), 7.16\times10^{-10}\exp(\frac{-11200}{T_g}), cm, \cite{Heimerl:1979}, https://doi.org/10.1016/0010-2180(79)90015-4

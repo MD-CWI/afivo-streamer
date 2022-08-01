@@ -54,26 +54,26 @@ contains
   !> Dirichlet boundary conditions for the potential in the last dimension,
   !> Neumann zero boundary conditions in the other directions
   subroutine potential_bc(box, nb, iv, coords, bc_val, bc_type)
+    use m_field, only: current_voltage
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
     integer, intent(in)     :: iv
     real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
     real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
     integer, intent(out)    :: bc_type
-    real(dp)                :: l_electrode = 0.0375
     integer                 :: n
 
     if (af_neighb_dim(nb) == NDIM) then
        if (af_neighb_low(nb)) then
           bc_type = af_bc_dirichlet
           do n = 1, box%n_cell**(NDIM-1)
-             bc_val(n) = field_voltage * &
+             bc_val(n) = current_voltage * &
                   LT_get_col(potential_table, lower_electrode, coords(1, n));
           end do
        else
           bc_type = af_bc_dirichlet
           do n = 1, box%n_cell**(NDIM-1)
-             bc_val(n) = field_voltage * &
+             bc_val(n) = current_voltage * &
                   LT_get_col(potential_table, upper_electrode, coords(1, n));
           end do
        end if

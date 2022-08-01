@@ -35,365 +35,365 @@ e + N2O -> N2 + O-,field_table,C49 N2O Attachment
 e + O2 -> e + O + O,field_table,C12 O2 Excitation 5.10 eV
 e + N2 -> e + N + N,field_table,C30 N2 Excitation 9.75 eV
 #### Attachment ####
-e + N2O + N2 -> N2O- + N2,k3_func,4.72 0.412 1.268 1e-31,cm
-e + NO2 -> NO2-,k2_func,3e-11,cm
-e + NO2 -> O- + NO,k2_func,1e-11,cm
-e + NO + N2 -> NO- + N2,k2_func,1e-30,cm
-e + NO + O2 -> NO- + O2,k2_func,1e-30,cm
-e + O3 -> O- + O2,k2_func,1e-11,cm
-e + O3 -> O2- + O,k2_func,1e-09,cm
-e + O + O2 -> O- + O2,k2_func,1e-31,cm
-e + O + O2 -> O + O2-,k2_func,1e-31,cm
+e + N2O + N2 -> N2O- + N2,(c1*(kB_eV*Te+c2)**2-c3)*c4,4.72 0.412 1.268 1e-31,cm
+e + NO2 -> NO2-,c1,3e-11,cm
+e + NO2 -> O- + NO,c1,1e-11,cm
+e + NO + N2 -> NO- + N2,c1,1e-30,cm
+e + NO + O2 -> NO- + O2,c1,1e-30,cm
+e + O3 -> O- + O2,c1,1e-11,cm
+e + O3 -> O2- + O,c1,1e-09,cm
+e + O + O2 -> O- + O2,c1,1e-31,cm
+e + O + O2 -> O + O2-,c1,1e-31,cm
 #### Detachment ####
-NO2- + O -> NO3 + e,k2_func,1e-12,cm
-O- + NO -> NO2 + e,k2_func,2.6e-10,cm
-O- + N -> NO + e,k2_func,2.6e-10,cm
-O- + O2 -> O3 + e,k2_func,5e-15,cm
-O- + O -> O2 + e,k2_func,5e-10,cm
-O2- + N2 -> O2 + N2 + e,k4_func,1.9e-12 0.5 4990.0,cm
-O2- + N -> NO2 + e,k2_func,5e-10,cm
-O2- + O2 -> O2 + O2 + e,k4_func,2.7e-10 0.5 5590.0,cm
-O2- + O -> O3 + e,k2_func,1.5e-10,cm
-O3- + O -> O2 + O2 + e,k2_func,3e-10,cm
+NO2- + O -> NO3 + e,c1,1e-12,cm
+O- + NO -> NO2 + e,c1,2.6e-10,cm
+O- + N -> NO + e,c1,2.6e-10,cm
+O- + O2 -> O3 + e,c1,5e-15,cm
+O- + O -> O2 + e,c1,5e-10,cm
+O2- + N2 -> O2 + N2 + e,c1*(Tg/300)**c2*exp(-c3/Tg),1.9e-12 0.5 4990.0,cm
+O2- + N -> NO2 + e,c1,5e-10,cm
+O2- + O2 -> O2 + O2 + e,c1*(Tg/300)**c2*exp(-c3/Tg),2.7e-10 0.5 5590.0,cm
+O2- + O -> O3 + e,c1,1.5e-10,cm
+O3- + O -> O2 + O2 + e,c1,3e-10,cm
 #### Electron Ion Recombination ####
-e + N+ + N2 -> N + N2,k1_func,6e-27 1.5,cm
-e + N+ + O2 -> N + O2,k1_func,6e-27 1.5,cm
-e + N2+ -> N + N,k1_func,2.8e-07 0.5,cm
-e + N2+ + N2 -> N2 + N2,k1_func,6e-27 1.5,cm
-e + N2+ + O2 -> N2 + O2,k1_func,6e-27 1.5,cm
-e + N2O+ -> N2 + O,k1_func,2e-07 0.5,cm
-e + N3+ -> N2 + N,k1_func,2e-07 0.5,cm
-e + N4+ -> N2 + N2,k1_func,2e-06 0.5,cm
-e + NO+N2 -> NO + N2,k1_func,1.3e-06 0.5,cm
-e + NO+NO -> NO + NO,k1_func,1.3e-06 0.5,cm
-e + NO+O2 -> NO + O2,k1_func,1.3e-06 0.5,cm
-e + NO+ -> N + O,k1_func,4e-07 0.5,cm
-e + NO+ + N2 -> NO + N2,k1_func,6e-27 1.5,cm
-e + NO+ + O2 -> NO + O2,k1_func,6e-27 1.5,cm
-e + NO2+ -> NO + O,k1_func,2e-07 0.5,cm
-e + O+ + N2 -> O + N2,k1_func,6e-27 1.5,cm
-e + O+ + O2 -> O + O2,k1_func,6e-27 1.5,cm
-e + O2+N2 -> O2 + N2,k1_func,1.3e-06 0.5,cm
-e + O2+ -> O + O,k1_func,2e-07 0.5,cm
-e + O2+ + N2 -> O2 + N2,k1_func,6e-27 1.5,cm
-e + O2+ + O2 -> O2 + O2,k1_func,6e-27 1.5,cm
-e + O4+ -> O2 + O2,k1_func,1.4e-06 0.5,cm
-e + e + N+ -> e + N,k1_func,1e-19 4.5,cm
-e + e + N2+ -> e + N2,k1_func,1e-19 4.5,cm
-e + e + NO+ -> e + NO,k1_func,1e-19 4.5,cm
-e + e + O+ -> e + O,k1_func,1e-19 4.5,cm
-e + e + O2+ -> e + O2,k1_func,1e-19 4.5,cm
+e + N+ + N2 -> N + N2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + N+ + O2 -> N + O2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + N2+ -> N + N,c1*(300/Te)**c2,2.8e-07 0.5,cm
+e + N2+ + N2 -> N2 + N2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + N2+ + O2 -> N2 + O2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + N2O+ -> N2 + O,c1*(300/Te)**c2,2e-07 0.5,cm
+e + N3+ -> N2 + N,c1*(300/Te)**c2,2e-07 0.5,cm
+e + N4+ -> N2 + N2,c1*(300/Te)**c2,2e-06 0.5,cm
+e + NO+N2 -> NO + N2,c1*(300/Te)**c2,1.3e-06 0.5,cm
+e + NO+NO -> NO + NO,c1*(300/Te)**c2,1.3e-06 0.5,cm
+e + NO+O2 -> NO + O2,c1*(300/Te)**c2,1.3e-06 0.5,cm
+e + NO+ -> N + O,c1*(300/Te)**c2,4e-07 0.5,cm
+e + NO+ + N2 -> NO + N2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + NO+ + O2 -> NO + O2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + NO2+ -> NO + O,c1*(300/Te)**c2,2e-07 0.5,cm
+e + O+ + N2 -> O + N2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + O+ + O2 -> O + O2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + O2+N2 -> O2 + N2,c1*(300/Te)**c2,1.3e-06 0.5,cm
+e + O2+ -> O + O,c1*(300/Te)**c2,2e-07 0.5,cm
+e + O2+ + N2 -> O2 + N2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + O2+ + O2 -> O2 + O2,c1*(300/Te)**c2,6e-27 1.5,cm
+e + O4+ -> O2 + O2,c1*(300/Te)**c2,1.4e-06 0.5,cm
+e + e + N+ -> e + N,c1*(300/Te)**c2,1e-19 4.5,cm
+e + e + N2+ -> e + N2,c1*(300/Te)**c2,1e-19 4.5,cm
+e + e + NO+ -> e + NO,c1*(300/Te)**c2,1e-19 4.5,cm
+e + e + O+ -> e + O,c1*(300/Te)**c2,1e-19 4.5,cm
+e + e + O2+ -> e + O2,c1*(300/Te)**c2,1e-19 4.5,cm
 #### Negative Ion Conversion ####
-NO- + N2O -> NO2- + N2,k2_func,2.8e-14,cm
-NO- + NO2 -> NO2- + NO,k2_func,7.4e-16,cm
-NO- + O2 -> O2- + NO,k2_func,5e-10,cm
-NO2- + N2O5 -> NO3- + NO3 + NO,k2_func,7e-10,cm
-NO2- + NO2 -> NO3- + NO,k2_func,4e-12,cm
-NO2- + NO3 -> NO2 + NO3-,k2_func,5e-10,cm
-NO2- + O3 -> NO3- + O2,k2_func,1.8e-11,cm
-NO3- + NO -> NO2- + NO2,k2_func,3e-15,cm
-O- + N2O -> N2O- + O,k2_func,2e-12,cm
-O- + N2O -> NO- + NO,k2_func,2e-10,cm
-O- + NO2 -> NO2- + O,k2_func,1.2e-09,cm
-O- + NO + N2 -> NO2- + N2,k2_func,1e-29,cm
-O- + NO + O2 -> NO2- + O2,k2_func,1e-29,cm
-O- + O2 + N2 -> O3- + N2,k8_func,1.1e-30 1.0,cm
-O- + O2 + O2 -> O3- + O2,k8_func,1.1e-30 1.0,cm
-O- + O3 -> O + O3-,k2_func,5.3e-10,cm
-O2- + N2O -> O3- + N2,k2_func,1e-12,cm
-O2- + NO2 -> NO2- + O2,k2_func,8e-10,cm
-O2- + NO3 -> O2 + NO3-,k2_func,5e-10,cm
-O2- + O2 + N2 -> O4- + N2,k8_func,3.5e-31 1.0,cm
-O2- + O2 + O2 -> O4- + O2,k8_func,3.5e-31 1.0,cm
-O2- + O3 -> O2 + O3-,k2_func,4e-10,cm
-O2- + O -> O2 + O-,k2_func,3.3e-10,cm
-O3- + NO2 -> O2 + NO3-,k2_func,2e-11,cm
-O3- + NO2 -> O3 + NO2-,k2_func,7e-10,cm
-O3- + NO3 -> O3 + NO3-,k2_func,5e-10,cm
-O3- + NO -> NO2- + O2,k2_func,2.6e-12,cm
-O3- + NO -> NO3- + O,k2_func,1e-11,cm
-O3- + O -> O2- + O2,k2_func,3.2e-10,cm
-O4- + N2 -> O2- + O2 + N2,k5_func,1e-10 1044.0,cm
-O4- + O2 -> O2- + O2 + O2,k5_func,1e-10 1044.0,cm
-O4- + O -> O- + O2 + O2,k2_func,3e-10,cm
-O4- + O -> O3- + O2,k2_func,4e-10,cm
+NO- + N2O -> NO2- + N2,c1,2.8e-14,cm
+NO- + NO2 -> NO2- + NO,c1,7.4e-16,cm
+NO- + O2 -> O2- + NO,c1,5e-10,cm
+NO2- + N2O5 -> NO3- + NO3 + NO,c1,7e-10,cm
+NO2- + NO2 -> NO3- + NO,c1,4e-12,cm
+NO2- + NO3 -> NO2 + NO3-,c1,5e-10,cm
+NO2- + O3 -> NO3- + O2,c1,1.8e-11,cm
+NO3- + NO -> NO2- + NO2,c1,3e-15,cm
+O- + N2O -> N2O- + O,c1,2e-12,cm
+O- + N2O -> NO- + NO,c1,2e-10,cm
+O- + NO2 -> NO2- + O,c1,1.2e-09,cm
+O- + NO + N2 -> NO2- + N2,c1,1e-29,cm
+O- + NO + O2 -> NO2- + O2,c1,1e-29,cm
+O- + O2 + N2 -> O3- + N2,c1*(300/Tg)**c2,1.1e-30 1.0,cm
+O- + O2 + O2 -> O3- + O2,c1*(300/Tg)**c2,1.1e-30 1.0,cm
+O- + O3 -> O + O3-,c1,5.3e-10,cm
+O2- + N2O -> O3- + N2,c1,1e-12,cm
+O2- + NO2 -> NO2- + O2,c1,8e-10,cm
+O2- + NO3 -> O2 + NO3-,c1,5e-10,cm
+O2- + O2 + N2 -> O4- + N2,c1*(300/Tg)**c2,3.5e-31 1.0,cm
+O2- + O2 + O2 -> O4- + O2,c1*(300/Tg)**c2,3.5e-31 1.0,cm
+O2- + O3 -> O2 + O3-,c1,4e-10,cm
+O2- + O -> O2 + O-,c1,3.3e-10,cm
+O3- + NO2 -> O2 + NO3-,c1,2e-11,cm
+O3- + NO2 -> O3 + NO2-,c1,7e-10,cm
+O3- + NO3 -> O3 + NO3-,c1,5e-10,cm
+O3- + NO -> NO2- + O2,c1,2.6e-12,cm
+O3- + NO -> NO3- + O,c1,1e-11,cm
+O3- + O -> O2- + O2,c1,3.2e-10,cm
+O4- + N2 -> O2- + O2 + N2,c1*exp(-c2/Tg),1e-10 1044.0,cm
+O4- + O2 -> O2- + O2 + O2,c1*exp(-c2/Tg),1e-10 1044.0,cm
+O4- + O -> O- + O2 + O2,c1,3e-10,cm
+O4- + O -> O3- + O2,c1,4e-10,cm
 #### Positive Ion Conversion ####
-N+ + N2O -> NO+ + N2,k2_func,5.5e-10,cm
-N+ + N2 + N2 -> N3+ + N2,k5_func,9e-30 -400.0,cm
-N+ + NO -> N2+ + O,k2_func,3e-12,cm
-N+ + NO -> N + NO+,k2_func,8e-10,cm
-N+ + NO -> O+ + N2,k2_func,1e-12,cm
-N+ + N + N2 -> N2+ + N2,k2_func,1e-29,cm
-N+ + N + O2 -> N2+ + O2,k2_func,1e-29,cm
-N+ + O2 -> NO+ + O,k2_func,2.5e-10,cm
-N+ + O2 -> O+ + NO,k2_func,2.8e-11,cm
-N+ + O2 -> O2+ + N,k2_func,2.8e-10,cm
-N+ + O3 -> NO+ + O2,k2_func,5e-10,cm
-N+ + O -> N + O+,k2_func,1e-12,cm
-N+ + O + N2 -> NO+ + N2,k2_func,1e-29,cm
-N+ + O + O2 -> NO+ + O2,k2_func,1e-29,cm
-N2+ + N2O -> N2O+ + N2,k2_func,5e-10,cm
-N2+ + N2O -> NO+ + N2 + N,k2_func,4e-10,cm
-N2+ + N2 + N2 -> N4+ + N2,k2_func,5e-29,cm
-N2+ + NO -> NO+ + N2,k2_func,3.3e-10,cm
-N2+ + N -> N+ + N2,k6_func,2.4e-15 1.0,cm
-N2+ + N + N2 -> N3+ + N2,k5_func,9e-30 -400.0,cm
-N2+ + O2 -> O2+ + N2,k8_func,6e-11 0.5,cm
-N2+ + O3 -> O2+ + O + N2,k2_func,1e-10,cm
-N2+ + O -> NO+ + N,k8_func,1.3e-10 0.5,cm
-N2+ + O -> O+ + N2,k8_func,1e-11 0.2,cm
-N2O+ + NO -> NO+ + N2O,k2_func,2.9e-10,cm
-N3+ + NO -> N2O+ + N2,k2_func,7e-11,cm
-N3+ + NO -> NO+ + N + N2,k2_func,7e-11,cm
-N3+ + N -> N2+ + N2,k2_func,6.6e-11,cm
-N3+ + O2 -> NO2+ + N2,k2_func,4.4e-11,cm
-N3+ + O2 -> O2+ + N + N2,k2_func,2.3e-11,cm
-N4+ + N2 -> N2+ + N2 + N2,k10_func,-14.6 0.0036,cm
-N4+ + NO -> NO+ + N2 + N2,k2_func,4e-10,cm
-N4+ + N -> N+ + N2 + N2,k2_func,1e-11,cm
-N4+ + O2 -> O2+ + N2 + N2,k2_func,2.5e-10,cm
-N4+ + O -> O+ + N2 + N2,k2_func,2.5e-10,cm
-NO+N2 + N2 -> NO+ + N2 + N2,k12_func,1500000.0 -5.4 2450.0,cm
-NO+ + N2O5 -> NO2+ + NO2 + NO2,k2_func,5.9e-10,cm
-NO+ + N2 + N2 -> NO+N2 + N2,k8_func,2e-31 4.4,cm
-NO+ + O2 + N2 -> NO+O2 + N2,k2_func,3e-31,cm
-NO+ + O2 + O2 -> NO+O2 + O2,k2_func,9e-32,cm
-NO+ + O3 -> NO2+ + O2,k2_func,1e-15,cm
-NO2+ + NO -> NO+ + NO2,k2_func,2.9e-10,cm
-O+ + N2O -> N2O+ + O,k2_func,4e-10,cm
-O+ + N2O -> NO+ + NO,k2_func,2.3e-10,cm
-O+ + N2O -> O2+ + N2,k2_func,2e-11,cm
-O+ + N2 -> NO+ + N,k9_func,3e-12 0.00311,cm
-O+ + N2 + N2 -> NO+ + N + N2,k8_func,6e-29 2.0,cm
-O+ + N2 + O2 -> NO+ + N + O2,k8_func,6e-29 2.0,cm
-O+ + NO2 -> NO2+ + O,k2_func,1.6e-09,cm
-O+ + NO -> NO+ + O,k2_func,2.4e-11,cm
-O+ + NO -> O2+ + N,k2_func,3e-12,cm
-O+ + N + N2 -> NO+ + N2,k2_func,1e-29,cm
-O+ + N + O2 -> NO+ + O2,k2_func,1e-29,cm
-O+ + O2 -> O2+ + O,k9_func,3.3e-11 0.00169,cm
-O+ + O3 -> O2+ + O2,k2_func,1e-10,cm
-O+ + O + N2 -> O2+ + N2,k2_func,1e-29,cm
-O+ + O + O2 -> O2+ + O2,k2_func,1e-29,cm
-O2+N2 + N2 -> O2+ + N2 + N2,k11_func,1.1e-06 5.3 2357.0,cm
-O2+N2 + O2 -> O4+ + N2,k2_func,1e-09,cm
-O2+ + N2O5 -> NO2+ + NO3 + O2,k2_func,8.8e-10,cm
-O2+ + N2 -> NO+ + NO,k2_func,1e-17,cm
-O2+ + N2 + N2 -> O2+N2 + N2,k8_func,9e-31 2.0,cm
-O2+ + NO2 -> NO+ + O3,k2_func,1e-11,cm
-O2+ + NO2 -> NO2+ + O2,k2_func,6.6e-10,cm
-O2+ + NO -> NO+ + O2,k2_func,4.4e-10,cm
-O2+ + N -> NO+ + O,k2_func,1.2e-10,cm
-O2+ + O2 + O2 -> O4+ + O2,k8_func,2.4e-30 3.2,cm
-O4+ + N2 -> O2+N2 + O2,k4_func,4.61e-12 2.5 2650.0,cm
-O4+ + NO -> NO+ + O2 + O2,k2_func,1e-10,cm
-O4+ + O2 -> O2+ + O2 + O2,k11_func,3.3e-06 4.0 5030.0,cm
-O4+ + O -> O2+ + O3,k2_func,3e-10,cm
+N+ + N2O -> NO+ + N2,c1,5.5e-10,cm
+N+ + N2 + N2 -> N3+ + N2,c1*exp(-c2/Tg),9e-30 -400.0,cm
+N+ + NO -> N2+ + O,c1,3e-12,cm
+N+ + NO -> N + NO+,c1,8e-10,cm
+N+ + NO -> O+ + N2,c1,1e-12,cm
+N+ + N + N2 -> N2+ + N2,c1,1e-29,cm
+N+ + N + O2 -> N2+ + O2,c1,1e-29,cm
+N+ + O2 -> NO+ + O,c1,2.5e-10,cm
+N+ + O2 -> O+ + NO,c1,2.8e-11,cm
+N+ + O2 -> O2+ + N,c1,2.8e-10,cm
+N+ + O3 -> NO+ + O2,c1,5e-10,cm
+N+ + O -> N + O+,c1,1e-12,cm
+N+ + O + N2 -> NO+ + N2,c1,1e-29,cm
+N+ + O + O2 -> NO+ + O2,c1,1e-29,cm
+N2+ + N2O -> N2O+ + N2,c1,5e-10,cm
+N2+ + N2O -> NO+ + N2 + N,c1,4e-10,cm
+N2+ + N2 + N2 -> N4+ + N2,c1,5e-29,cm
+N2+ + NO -> NO+ + N2,c1,3.3e-10,cm
+N2+ + N -> N+ + N2,c1*Tg**c2,2.4e-15 1.0,cm
+N2+ + N + N2 -> N3+ + N2,c1*exp(-c2/Tg),9e-30 -400.0,cm
+N2+ + O2 -> O2+ + N2,c1*(300/Tg)**c2,6e-11 0.5,cm
+N2+ + O3 -> O2+ + O + N2,c1,1e-10,cm
+N2+ + O -> NO+ + N,c1*(300/Tg)**c2,1.3e-10 0.5,cm
+N2+ + O -> O+ + N2,c1*(300/Tg)**c2,1e-11 0.2,cm
+N2O+ + NO -> NO+ + N2O,c1,2.9e-10,cm
+N3+ + NO -> N2O+ + N2,c1,7e-11,cm
+N3+ + NO -> NO+ + N + N2,c1,7e-11,cm
+N3+ + N -> N2+ + N2,c1,6.6e-11,cm
+N3+ + O2 -> NO2+ + N2,c1,4.4e-11,cm
+N3+ + O2 -> O2+ + N + N2,c1,2.3e-11,cm
+N4+ + N2 -> N2+ + N2 + N2,10**(c1+c2*(Tg-300)),-14.6 0.0036,cm
+N4+ + NO -> NO+ + N2 + N2,c1,4e-10,cm
+N4+ + N -> N+ + N2 + N2,c1,1e-11,cm
+N4+ + O2 -> O2+ + N2 + N2,c1,2.5e-10,cm
+N4+ + O -> O+ + N2 + N2,c1,2.5e-10,cm
+NO+N2 + N2 -> NO+ + N2 + N2,c1*Tg**c2*exp(-c3/Tg),1500000.0 -5.4 2450.0,cm
+NO+ + N2O5 -> NO2+ + NO2 + NO2,c1,5.9e-10,cm
+NO+ + N2 + N2 -> NO+N2 + N2,c1*(300/Tg)**c2,2e-31 4.4,cm
+NO+ + O2 + N2 -> NO+O2 + N2,c1,3e-31,cm
+NO+ + O2 + O2 -> NO+O2 + O2,c1,9e-32,cm
+NO+ + O3 -> NO2+ + O2,c1,1e-15,cm
+NO2+ + NO -> NO+ + NO2,c1,2.9e-10,cm
+O+ + N2O -> N2O+ + O,c1,4e-10,cm
+O+ + N2O -> NO+ + NO,c1,2.3e-10,cm
+O+ + N2O -> O2+ + N2,c1,2e-11,cm
+O+ + N2 -> NO+ + N,c1*exp(-c2*Tg),3e-12 0.00311,cm
+O+ + N2 + N2 -> NO+ + N + N2,c1*(300/Tg)**c2,6e-29 2.0,cm
+O+ + N2 + O2 -> NO+ + N + O2,c1*(300/Tg)**c2,6e-29 2.0,cm
+O+ + NO2 -> NO2+ + O,c1,1.6e-09,cm
+O+ + NO -> NO+ + O,c1,2.4e-11,cm
+O+ + NO -> O2+ + N,c1,3e-12,cm
+O+ + N + N2 -> NO+ + N2,c1,1e-29,cm
+O+ + N + O2 -> NO+ + O2,c1,1e-29,cm
+O+ + O2 -> O2+ + O,c1*exp(-c2*Tg),3.3e-11 0.00169,cm
+O+ + O3 -> O2+ + O2,c1,1e-10,cm
+O+ + O + N2 -> O2+ + N2,c1,1e-29,cm
+O+ + O + O2 -> O2+ + O2,c1,1e-29,cm
+O2+N2 + N2 -> O2+ + N2 + N2,c1*(300/Tg)**c2*exp(-c3/Tg),1.1e-06 5.3 2357.0,cm
+O2+N2 + O2 -> O4+ + N2,c1,1e-09,cm
+O2+ + N2O5 -> NO2+ + NO3 + O2,c1,8.8e-10,cm
+O2+ + N2 -> NO+ + NO,c1,1e-17,cm
+O2+ + N2 + N2 -> O2+N2 + N2,c1*(300/Tg)**c2,9e-31 2.0,cm
+O2+ + NO2 -> NO+ + O3,c1,1e-11,cm
+O2+ + NO2 -> NO2+ + O2,c1,6.6e-10,cm
+O2+ + NO -> NO+ + O2,c1,4.4e-10,cm
+O2+ + N -> NO+ + O,c1,1.2e-10,cm
+O2+ + O2 + O2 -> O4+ + O2,c1*(300/Tg)**c2,2.4e-30 3.2,cm
+O4+ + N2 -> O2+N2 + O2,c1*(Tg/300)**c2*exp(-c3/Tg),4.61e-12 2.5 2650.0,cm
+O4+ + NO -> NO+ + O2 + O2,c1,1e-10,cm
+O4+ + O2 -> O2+ + O2 + O2,c1*(300/Tg)**c2*exp(-c3/Tg),3.3e-06 4.0 5030.0,cm
+O4+ + O -> O2+ + O3,c1,3e-10,cm
 #### Positive Negative Ion Recombination ####
-N2O- + N+ -> N2O + N,k8_func,2e-07 0.5,cm
-N2O- + N2+ -> N2O + N2,k8_func,2e-07 0.5,cm
-N2O- + N2+ -> N2O + N + N,k2_func,1e-07,cm
-N2O- + N2O+ -> N2O + N2O,k8_func,2e-07 0.5,cm
-N2O- + N2O+ -> N2O + N2 + O,k2_func,1e-07,cm
-N2O- + N3+ -> N2O + N2 + N,k2_func,1e-07,cm
-N2O- + N4+ -> N2O + N2 + N2,k2_func,1e-07,cm
-N2O- + NO+N2 -> N2O + NO + N2,k2_func,1e-07,cm
-N2O- + NO+NO -> N2O + NO + NO,k2_func,1e-07,cm
-N2O- + NO+O2 -> N2O + NO + O2,k2_func,1e-07,cm
-N2O- + NO+ -> N2O + NO,k8_func,2e-07 0.5,cm
-N2O- + NO+ -> N2O + N + O,k2_func,1e-07,cm
-N2O- + NO2+ -> N2O + NO2,k8_func,2e-07 0.5,cm
-N2O- + NO2+ -> N2O + N + O2,k2_func,1e-07,cm
-N2O- + O+ -> N2O + O,k8_func,2e-07 0.5,cm
-N2O- + O2+N2 -> N2O + O2 + N2,k2_func,1e-07,cm
-N2O- + O2+ -> N2O + O2,k8_func,2e-07 0.5,cm
-N2O- + O2+ -> N2O + O + O,k2_func,1e-07,cm
-N2O- + O4+ -> N2O + O2 + O2,k2_func,1e-07,cm
-NO- + N+ -> NO + N,k8_func,2e-07 0.5,cm
-NO- + N2+ -> NO + N2,k8_func,2e-07 0.5,cm
-NO- + N2+ -> NO + N + N,k2_func,1e-07,cm
-NO- + N2O+ -> NO + N2O,k8_func,2e-07 0.5,cm
-NO- + N2O+ -> NO + N2 + O,k2_func,1e-07,cm
-NO- + N3+ -> NO + N2 + N,k2_func,1e-07,cm
-NO- + N4+ -> NO + N2 + N2,k2_func,1e-07,cm
-NO- + NO+N2 -> NO + NO + N2,k2_func,1e-07,cm
-NO- + NO+NO -> NO + NO + NO,k2_func,1e-07,cm
-NO- + NO+O2 -> NO + NO + O2,k2_func,1e-07,cm
-NO- + NO+ -> NO + NO,k8_func,2e-07 0.5,cm
-NO- + NO+ -> NO + N + O,k2_func,1e-07,cm
-NO- + NO2+ -> NO + NO2,k8_func,2e-07 0.5,cm
-NO- + NO2+ -> NO + N + O2,k2_func,1e-07,cm
-NO- + O+ -> NO + O,k8_func,2e-07 0.5,cm
-NO- + O2+N2 -> NO + O2 + N2,k2_func,1e-07,cm
-NO- + O2+ -> NO + O2,k8_func,2e-07 0.5,cm
-NO- + O2+ -> NO + O + O,k2_func,1e-07,cm
-NO- + O4+ -> NO + O2 + O2,k2_func,1e-07,cm
-NO2- + N+ -> NO2 + N,k8_func,2e-07 0.5,cm
-NO2- + N2+ -> NO2 + N2,k8_func,2e-07 0.5,cm
-NO2- + N2+ -> NO2 + N + N,k2_func,1e-07,cm
-NO2- + N2O+ -> NO2 + N2O,k8_func,2e-07 0.5,cm
-NO2- + N2O+ -> NO2 + N2 + O,k2_func,1e-07,cm
-NO2- + N3+ -> NO2 + N2 + N,k2_func,1e-07,cm
-NO2- + N4+ -> NO2 + N2 + N2,k2_func,1e-07,cm
-NO2- + NO+N2 -> NO2 + NO + N2,k2_func,1e-07,cm
-NO2- + NO+NO -> NO2 + NO + NO,k2_func,1e-07,cm
-NO2- + NO+O2 -> NO2 + NO + O2,k2_func,1e-07,cm
-NO2- + NO+ -> NO2 + NO,k8_func,2e-07 0.5,cm
-NO2- + NO+ -> NO2 + N + O,k2_func,1e-07,cm
-NO2- + NO2+ -> NO2 + NO2,k8_func,2e-07 0.5,cm
-NO2- + NO2+ -> NO2 + N + O2,k2_func,1e-07,cm
-NO2- + O+ -> NO2 + O,k8_func,2e-07 0.5,cm
-NO2- + O2+N2 -> NO2 + O2 + N2,k2_func,1e-07,cm
-NO2- + O2+ -> NO2 + O2,k8_func,2e-07 0.5,cm
-NO2- + O2+ -> NO2 + O + O,k2_func,1e-07,cm
-NO2- + O4+ -> NO2 + O2 + O2,k2_func,1e-07,cm
-NO3- + N+ -> NO3 + N,k8_func,2e-07 0.5,cm
-NO3- + N2+ -> NO3 + N2,k8_func,2e-07 0.5,cm
-NO3- + N2+ -> NO3 + N + N,k2_func,1e-07,cm
-NO3- + N2O+ -> NO3 + N2O,k8_func,2e-07 0.5,cm
-NO3- + N2O+ -> NO3 + N2 + O,k2_func,1e-07,cm
-NO3- + N3+ -> NO3 + N + N2,k2_func,1e-07,cm
-NO3- + N4+ -> NO3 + N2 + N2,k2_func,1e-07,cm
-NO3- + NO+N2 -> NO3 + NO + N2,k2_func,1e-07,cm
-NO3- + NO+NO -> NO3 + NO + NO,k2_func,1e-07,cm
-NO3- + NO+O2 -> NO3 + NO + O2,k2_func,1e-07,cm
-NO3- + NO+ -> NO3 + NO,k8_func,2e-07 0.5,cm
-NO3- + NO+ -> NO3 + N + O,k2_func,1e-07,cm
-NO3- + NO2+ -> NO3 + NO2,k8_func,2e-07 0.5,cm
-NO3- + NO2+ -> NO3 + N + O2,k2_func,1e-07,cm
-NO3- + O+ -> NO3 + O,k8_func,2e-07 0.5,cm
-NO3- + O2+N2 -> NO3 + O2 + N2,k2_func,1e-07,cm
-NO3- + O2+ -> NO3 + O2,k8_func,2e-07 0.5,cm
-NO3- + O2+ -> NO3 + O + O,k2_func,1e-07,cm
-NO3- + O4+ -> NO3 + O2 + O2,k2_func,1e-07,cm
-O- + N+ -> O + N,k8_func,2e-07 0.5,cm
-O- + N+ + N2 -> NO + N2,k8_func,2e-25 2.5,cm
-O- + N+ + N2 -> O + N + N2,k8_func,2e-25 2.5,cm
-O- + N+ + O2 -> NO + O2,k8_func,2e-25 2.5,cm
-O- + N+ + O2 -> O + N + O2,k8_func,2e-25 2.5,cm
-O- + N2+ -> O + N2,k8_func,2e-07 0.5,cm
-O- + N2+ -> O + N + N,k2_func,1e-07,cm
-O- + N2+ + N2 -> N2O + N2,k8_func,2e-25 2.5,cm
-O- + N2+ + N2 -> O + N2 + N2,k8_func,2e-25 2.5,cm
-O- + N2+ + O2 -> N2O + O2,k8_func,2e-25 2.5,cm
-O- + N2+ + O2 -> O + N2 + O2,k8_func,2e-25 2.5,cm
-O- + N2O+ -> O + N2O,k8_func,2e-07 0.5,cm
-O- + N2O+ -> O + N2 + O,k2_func,1e-07,cm
-O- + N3+ -> O + N2 + N,k2_func,1e-07,cm
-O- + N4+ -> O + N2 + N2,k2_func,1e-07,cm
-O- + NO+N2 -> O + NO + N2,k2_func,1e-07,cm
-O- + NO+NO -> O + NO + NO,k2_func,1e-07,cm
-O- + NO+O2 -> O + NO + O2,k2_func,1e-07,cm
-O- + NO+ -> O + NO,k8_func,2e-07 0.5,cm
-O- + NO+ -> O + N + O,k2_func,1e-07,cm
-O- + NO+ + N2 -> NO2 + N2,k8_func,2e-25 2.5,cm
-O- + NO+ + N2 -> O + NO + N2,k8_func,2e-25 2.5,cm
-O- + NO+ + O2 -> NO2 + O2,k8_func,2e-25 2.5,cm
-O- + NO+ + O2 -> O + NO + O2,k8_func,2e-25 2.5,cm
-O- + NO2+ -> O + NO2,k8_func,2e-07 0.5,cm
-O- + NO2+ -> O + N + O2,k2_func,1e-07,cm
-O- + O+ -> O + O,k8_func,2e-07 0.5,cm
-O- + O+ + N2 -> O2 + N2,k8_func,2e-25 2.5,cm
-O- + O+ + N2 -> O + O + N2,k8_func,2e-25 2.5,cm
-O- + O+ + O2 -> O2 + O2,k8_func,2e-25 2.5,cm
-O- + O+ + O2 -> O + O + O2,k8_func,2e-25 2.5,cm
-O- + O2+N2 -> O + O2 + N2,k2_func,1e-07,cm
-O- + O2+ -> O + O2,k8_func,2e-07 0.5,cm
-O- + O2+ -> O + O + O,k2_func,1e-07,cm
-O- + O2+ + N2 -> O3 + N2,k8_func,2e-25 2.5,cm
-O- + O2+ + N2 -> O + O2 + N2,k8_func,2e-25 2.5,cm
-O- + O2+ + O2 -> O3 + O2,k8_func,2e-25 2.5,cm
-O- + O2+ + O2 -> O + O2 + O2,k8_func,2e-25 2.5,cm
-O- + O4+ -> O + O2 + O2,k2_func,1e-07,cm
-O2- + N+ -> O2 + N,k8_func,2e-07 0.5,cm
-O2- + N+ + N2 -> NO2 + N2,k8_func,2e-25 2.5,cm
-O2- + N+ + N2 -> O2 + N + N2,k8_func,2e-25 2.5,cm
-O2- + N+ + O2 -> NO2 + O2,k8_func,2e-25 2.5,cm
-O2- + N+ + O2 -> O2 + N + O2,k8_func,2e-25 2.5,cm
-O2- + N2+ -> O2 + N2,k8_func,2e-07 0.5,cm
-O2- + N2+ -> O2 + N + N,k2_func,1e-07,cm
-O2- + N2+ + N2 -> O2 + N2 + N2,k8_func,2e-25 2.5,cm
-O2- + N2+ + O2 -> O2 + N2 + O2,k8_func,2e-25 2.5,cm
-O2- + N2O+ -> O2 + N2O,k8_func,2e-07 0.5,cm
-O2- + N2O+ -> O2 + N2 + O,k2_func,1e-07,cm
-O2- + N3+ -> O2 + N2 + N,k2_func,1e-07,cm
-O2- + N4+ -> O2 + N2 + N2,k2_func,1e-07,cm
-O2- + NO+N2 -> O2 + NO + N2,k2_func,1e-07,cm
-O2- + NO+NO -> O2 + NO + NO,k2_func,1e-07,cm
-O2- + NO+O2 -> O2 + NO + O2,k2_func,1e-07,cm
-O2- + NO+ -> O2 + NO,k8_func,2e-07 0.5,cm
-O2- + NO+ -> O2 + N + O,k2_func,1e-07,cm
-O2- + NO+ + N2 -> NO3 + N2,k8_func,2e-25 2.5,cm
-O2- + NO+ + N2 -> O2 + NO + N2,k8_func,2e-25 2.5,cm
-O2- + NO+ + O2 -> NO3 + O2,k8_func,2e-25 2.5,cm
-O2- + NO+ + O2 -> O2 + NO + O2,k8_func,2e-25 2.5,cm
-O2- + NO2+ -> O2 + NO2,k8_func,2e-07 0.5,cm
-O2- + NO2+ -> O2 + N + O2,k2_func,1e-07,cm
-O2- + O+ -> O2 + O,k8_func,2e-07 0.5,cm
-O2- + O+ + N2 -> O2 + O + N2,k8_func,2e-25 2.5,cm
-O2- + O+ + N2 -> O3 + N2,k8_func,2e-25 2.5,cm
-O2- + O+ + O2 -> O2 + O + O2,k8_func,2e-25 2.5,cm
-O2- + O+ + O2 -> O3 + O2,k8_func,2e-25 2.5,cm
-O2- + O2+N2 -> O2 + O2 + N2,k2_func,1e-07,cm
-O2- + O2+ -> O2 + O2,k8_func,2e-07 0.5,cm
-O2- + O2+ -> O2 + O + O,k2_func,1e-07,cm
-O2- + O2+ + N2 -> O2 + O2 + N2,k8_func,2e-25 2.5,cm
-O2- + O2+ + O2 -> O2 + O2 + O2,k8_func,2e-25 2.5,cm
-O2- + O4+ -> O2 + O2 + O2,k2_func,1e-07,cm
-O3- + N+ -> O3 + N,k8_func,2e-07 0.5,cm
-O3- + N2+ -> O3 + N2,k8_func,2e-07 0.5,cm
-O3- + N2+ -> O3 + N + N,k2_func,1e-07,cm
-O3- + N2O+ -> O3 + N2O,k8_func,2e-07 0.5,cm
-O3- + N2O+ -> O3 + N2 + O,k2_func,1e-07,cm
-O3- + N3+ -> O3 + N2 + N,k2_func,1e-07,cm
-O3- + N4+ -> O3 + N2 + N2,k2_func,1e-07,cm
-O3- + NO+N2 -> O3 + NO + N2,k2_func,1e-07,cm
-O3- + NO+NO -> O3 + NO + NO,k2_func,1e-07,cm
-O3- + NO+O2 -> O3 + NO + O2,k2_func,1e-07,cm
-O3- + NO+ -> O3 + NO,k8_func,2e-07 0.5,cm
-O3- + NO+ -> O3 + N + O,k2_func,1e-07,cm
-O3- + NO2+ -> O3 + NO2,k8_func,2e-07 0.5,cm
-O3- + NO2+ -> O3 + N + O2,k2_func,1e-07,cm
-O3- + O+ -> O3 + O,k8_func,2e-07 0.5,cm
-O3- + O2+N2 -> O3 + O2 + N2,k2_func,1e-07,cm
-O3- + O2+ -> O3 + O2,k8_func,2e-07 0.5,cm
-O3- + O2+ -> O3 + O + O,k2_func,1e-07,cm
-O3- + O4+ -> O3 + O2 + O2,k2_func,1e-07,cm
-O4- + N+ -> O2 + O2 + N,k2_func,1e-07,cm
-O4- + N2+ -> O2 + O2 + N2,k2_func,1e-07,cm
-O4- + N2O+ -> O2 + O2 + N2O,k2_func,1e-07,cm
-O4- + N2O2+ -> O2 + O2 + N2 + O2,k2_func,1e-07,cm
-O4- + N2O2+ -> O2 + O2 + NO + NO,k2_func,1e-07,cm
-O4- + N3+ -> O2 + O2 + N + N2,k2_func,1e-07,cm
-O4- + N3O+ -> O2 + O2 + NO + N2,k2_func,1e-07,cm
-O4- + N4+ -> O2 + O2 + N2 + N2,k2_func,1e-07,cm
-O4- + NO+ -> O2 + O2 + NO,k2_func,1e-07,cm
-O4- + NO2+ -> O2 + O2 + NO2,k2_func,1e-07,cm
-O4- + NO3+ -> O2 + O2 + NO + O2,k2_func,1e-07,cm
-O4- + NON2+ -> O2 + O2 + NO + N2,k2_func,1e-07,cm
-O4- + O+ -> O2 + O2 + O,k2_func,1e-07,cm
-O4- + O2+ -> O2 + O2 + O2,k2_func,1e-07,cm
-O4- + O4+ -> O2 + O2 + O2 + O2,k2_func,1e-07,cm
+N2O- + N+ -> N2O + N,c1*(300/Tg)**c2,2e-07 0.5,cm
+N2O- + N2+ -> N2O + N2,c1*(300/Tg)**c2,2e-07 0.5,cm
+N2O- + N2+ -> N2O + N + N,c1,1e-07,cm
+N2O- + N2O+ -> N2O + N2O,c1*(300/Tg)**c2,2e-07 0.5,cm
+N2O- + N2O+ -> N2O + N2 + O,c1,1e-07,cm
+N2O- + N3+ -> N2O + N2 + N,c1,1e-07,cm
+N2O- + N4+ -> N2O + N2 + N2,c1,1e-07,cm
+N2O- + NO+N2 -> N2O + NO + N2,c1,1e-07,cm
+N2O- + NO+NO -> N2O + NO + NO,c1,1e-07,cm
+N2O- + NO+O2 -> N2O + NO + O2,c1,1e-07,cm
+N2O- + NO+ -> N2O + NO,c1*(300/Tg)**c2,2e-07 0.5,cm
+N2O- + NO+ -> N2O + N + O,c1,1e-07,cm
+N2O- + NO2+ -> N2O + NO2,c1*(300/Tg)**c2,2e-07 0.5,cm
+N2O- + NO2+ -> N2O + N + O2,c1,1e-07,cm
+N2O- + O+ -> N2O + O,c1*(300/Tg)**c2,2e-07 0.5,cm
+N2O- + O2+N2 -> N2O + O2 + N2,c1,1e-07,cm
+N2O- + O2+ -> N2O + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
+N2O- + O2+ -> N2O + O + O,c1,1e-07,cm
+N2O- + O4+ -> N2O + O2 + O2,c1,1e-07,cm
+NO- + N+ -> NO + N,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO- + N2+ -> NO + N2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO- + N2+ -> NO + N + N,c1,1e-07,cm
+NO- + N2O+ -> NO + N2O,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO- + N2O+ -> NO + N2 + O,c1,1e-07,cm
+NO- + N3+ -> NO + N2 + N,c1,1e-07,cm
+NO- + N4+ -> NO + N2 + N2,c1,1e-07,cm
+NO- + NO+N2 -> NO + NO + N2,c1,1e-07,cm
+NO- + NO+NO -> NO + NO + NO,c1,1e-07,cm
+NO- + NO+O2 -> NO + NO + O2,c1,1e-07,cm
+NO- + NO+ -> NO + NO,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO- + NO+ -> NO + N + O,c1,1e-07,cm
+NO- + NO2+ -> NO + NO2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO- + NO2+ -> NO + N + O2,c1,1e-07,cm
+NO- + O+ -> NO + O,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO- + O2+N2 -> NO + O2 + N2,c1,1e-07,cm
+NO- + O2+ -> NO + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO- + O2+ -> NO + O + O,c1,1e-07,cm
+NO- + O4+ -> NO + O2 + O2,c1,1e-07,cm
+NO2- + N+ -> NO2 + N,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO2- + N2+ -> NO2 + N2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO2- + N2+ -> NO2 + N + N,c1,1e-07,cm
+NO2- + N2O+ -> NO2 + N2O,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO2- + N2O+ -> NO2 + N2 + O,c1,1e-07,cm
+NO2- + N3+ -> NO2 + N2 + N,c1,1e-07,cm
+NO2- + N4+ -> NO2 + N2 + N2,c1,1e-07,cm
+NO2- + NO+N2 -> NO2 + NO + N2,c1,1e-07,cm
+NO2- + NO+NO -> NO2 + NO + NO,c1,1e-07,cm
+NO2- + NO+O2 -> NO2 + NO + O2,c1,1e-07,cm
+NO2- + NO+ -> NO2 + NO,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO2- + NO+ -> NO2 + N + O,c1,1e-07,cm
+NO2- + NO2+ -> NO2 + NO2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO2- + NO2+ -> NO2 + N + O2,c1,1e-07,cm
+NO2- + O+ -> NO2 + O,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO2- + O2+N2 -> NO2 + O2 + N2,c1,1e-07,cm
+NO2- + O2+ -> NO2 + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO2- + O2+ -> NO2 + O + O,c1,1e-07,cm
+NO2- + O4+ -> NO2 + O2 + O2,c1,1e-07,cm
+NO3- + N+ -> NO3 + N,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO3- + N2+ -> NO3 + N2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO3- + N2+ -> NO3 + N + N,c1,1e-07,cm
+NO3- + N2O+ -> NO3 + N2O,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO3- + N2O+ -> NO3 + N2 + O,c1,1e-07,cm
+NO3- + N3+ -> NO3 + N + N2,c1,1e-07,cm
+NO3- + N4+ -> NO3 + N2 + N2,c1,1e-07,cm
+NO3- + NO+N2 -> NO3 + NO + N2,c1,1e-07,cm
+NO3- + NO+NO -> NO3 + NO + NO,c1,1e-07,cm
+NO3- + NO+O2 -> NO3 + NO + O2,c1,1e-07,cm
+NO3- + NO+ -> NO3 + NO,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO3- + NO+ -> NO3 + N + O,c1,1e-07,cm
+NO3- + NO2+ -> NO3 + NO2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO3- + NO2+ -> NO3 + N + O2,c1,1e-07,cm
+NO3- + O+ -> NO3 + O,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO3- + O2+N2 -> NO3 + O2 + N2,c1,1e-07,cm
+NO3- + O2+ -> NO3 + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
+NO3- + O2+ -> NO3 + O + O,c1,1e-07,cm
+NO3- + O4+ -> NO3 + O2 + O2,c1,1e-07,cm
+O- + N+ -> O + N,c1*(300/Tg)**c2,2e-07 0.5,cm
+O- + N+ + N2 -> NO + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N+ + N2 -> O + N + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N+ + O2 -> NO + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N+ + O2 -> O + N + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N2+ -> O + N2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O- + N2+ -> O + N + N,c1,1e-07,cm
+O- + N2+ + N2 -> N2O + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N2+ + N2 -> O + N2 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N2+ + O2 -> N2O + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N2+ + O2 -> O + N2 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + N2O+ -> O + N2O,c1*(300/Tg)**c2,2e-07 0.5,cm
+O- + N2O+ -> O + N2 + O,c1,1e-07,cm
+O- + N3+ -> O + N2 + N,c1,1e-07,cm
+O- + N4+ -> O + N2 + N2,c1,1e-07,cm
+O- + NO+N2 -> O + NO + N2,c1,1e-07,cm
+O- + NO+NO -> O + NO + NO,c1,1e-07,cm
+O- + NO+O2 -> O + NO + O2,c1,1e-07,cm
+O- + NO+ -> O + NO,c1*(300/Tg)**c2,2e-07 0.5,cm
+O- + NO+ -> O + N + O,c1,1e-07,cm
+O- + NO+ + N2 -> NO2 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + NO+ + N2 -> O + NO + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + NO+ + O2 -> NO2 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + NO+ + O2 -> O + NO + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + NO2+ -> O + NO2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O- + NO2+ -> O + N + O2,c1,1e-07,cm
+O- + O+ -> O + O,c1*(300/Tg)**c2,2e-07 0.5,cm
+O- + O+ + N2 -> O2 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O+ + N2 -> O + O + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O+ + O2 -> O2 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O+ + O2 -> O + O + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O2+N2 -> O + O2 + N2,c1,1e-07,cm
+O- + O2+ -> O + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O- + O2+ -> O + O + O,c1,1e-07,cm
+O- + O2+ + N2 -> O3 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O2+ + N2 -> O + O2 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O2+ + O2 -> O3 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O2+ + O2 -> O + O2 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O- + O4+ -> O + O2 + O2,c1,1e-07,cm
+O2- + N+ -> O2 + N,c1*(300/Tg)**c2,2e-07 0.5,cm
+O2- + N+ + N2 -> NO2 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + N+ + N2 -> O2 + N + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + N+ + O2 -> NO2 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + N+ + O2 -> O2 + N + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + N2+ -> O2 + N2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O2- + N2+ -> O2 + N + N,c1,1e-07,cm
+O2- + N2+ + N2 -> O2 + N2 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + N2+ + O2 -> O2 + N2 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + N2O+ -> O2 + N2O,c1*(300/Tg)**c2,2e-07 0.5,cm
+O2- + N2O+ -> O2 + N2 + O,c1,1e-07,cm
+O2- + N3+ -> O2 + N2 + N,c1,1e-07,cm
+O2- + N4+ -> O2 + N2 + N2,c1,1e-07,cm
+O2- + NO+N2 -> O2 + NO + N2,c1,1e-07,cm
+O2- + NO+NO -> O2 + NO + NO,c1,1e-07,cm
+O2- + NO+O2 -> O2 + NO + O2,c1,1e-07,cm
+O2- + NO+ -> O2 + NO,c1*(300/Tg)**c2,2e-07 0.5,cm
+O2- + NO+ -> O2 + N + O,c1,1e-07,cm
+O2- + NO+ + N2 -> NO3 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + NO+ + N2 -> O2 + NO + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + NO+ + O2 -> NO3 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + NO+ + O2 -> O2 + NO + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + NO2+ -> O2 + NO2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O2- + NO2+ -> O2 + N + O2,c1,1e-07,cm
+O2- + O+ -> O2 + O,c1*(300/Tg)**c2,2e-07 0.5,cm
+O2- + O+ + N2 -> O2 + O + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + O+ + N2 -> O3 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + O+ + O2 -> O2 + O + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + O+ + O2 -> O3 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + O2+N2 -> O2 + O2 + N2,c1,1e-07,cm
+O2- + O2+ -> O2 + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O2- + O2+ -> O2 + O + O,c1,1e-07,cm
+O2- + O2+ + N2 -> O2 + O2 + N2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + O2+ + O2 -> O2 + O2 + O2,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + O4+ -> O2 + O2 + O2,c1,1e-07,cm
+O3- + N+ -> O3 + N,c1*(300/Tg)**c2,2e-07 0.5,cm
+O3- + N2+ -> O3 + N2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O3- + N2+ -> O3 + N + N,c1,1e-07,cm
+O3- + N2O+ -> O3 + N2O,c1*(300/Tg)**c2,2e-07 0.5,cm
+O3- + N2O+ -> O3 + N2 + O,c1,1e-07,cm
+O3- + N3+ -> O3 + N2 + N,c1,1e-07,cm
+O3- + N4+ -> O3 + N2 + N2,c1,1e-07,cm
+O3- + NO+N2 -> O3 + NO + N2,c1,1e-07,cm
+O3- + NO+NO -> O3 + NO + NO,c1,1e-07,cm
+O3- + NO+O2 -> O3 + NO + O2,c1,1e-07,cm
+O3- + NO+ -> O3 + NO,c1*(300/Tg)**c2,2e-07 0.5,cm
+O3- + NO+ -> O3 + N + O,c1,1e-07,cm
+O3- + NO2+ -> O3 + NO2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O3- + NO2+ -> O3 + N + O2,c1,1e-07,cm
+O3- + O+ -> O3 + O,c1*(300/Tg)**c2,2e-07 0.5,cm
+O3- + O2+N2 -> O3 + O2 + N2,c1,1e-07,cm
+O3- + O2+ -> O3 + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
+O3- + O2+ -> O3 + O + O,c1,1e-07,cm
+O3- + O4+ -> O3 + O2 + O2,c1,1e-07,cm
+O4- + N+ -> O2 + O2 + N,c1,1e-07,cm
+O4- + N2+ -> O2 + O2 + N2,c1,1e-07,cm
+O4- + N2O+ -> O2 + O2 + N2O,c1,1e-07,cm
+O4- + N2O2+ -> O2 + O2 + N2 + O2,c1,1e-07,cm
+O4- + N2O2+ -> O2 + O2 + NO + NO,c1,1e-07,cm
+O4- + N3+ -> O2 + O2 + N + N2,c1,1e-07,cm
+O4- + N3O+ -> O2 + O2 + NO + N2,c1,1e-07,cm
+O4- + N4+ -> O2 + O2 + N2 + N2,c1,1e-07,cm
+O4- + NO+ -> O2 + O2 + NO,c1,1e-07,cm
+O4- + NO2+ -> O2 + O2 + NO2,c1,1e-07,cm
+O4- + NO3+ -> O2 + O2 + NO + O2,c1,1e-07,cm
+O4- + NON2+ -> O2 + O2 + NO + N2,c1,1e-07,cm
+O4- + O+ -> O2 + O2 + O,c1,1e-07,cm
+O4- + O2+ -> O2 + O2 + O2,c1,1e-07,cm
+O4- + O4+ -> O2 + O2 + O2 + O2,c1,1e-07,cm
 #### Chemical Transformation Neutrals ####
-NO2 + NO3 -> NO + NO2 + O2,k5_func,2.3e-13 1600.0,cm
-NO2 + O3 -> O2 + NO3,k5_func,1.2e-13 2450.0,cm
-NO3 + NO3 -> O2 + NO2 + NO2,k5_func,5e-12 3000.0,cm
-NO + NO3 -> NO2 + NO2,k2_func,1.7e-11,cm
-NO + O3 -> O2 + NO2,k5_func,4.3e-12 1560.0,cm
-N + NO2 -> N2O + O,k2_func,3e-12,cm
-N + NO2 -> N2 + O2,k2_func,7e-13,cm
-N + NO2 -> N2 + O + O,k2_func,9.1e-13,cm
-N + NO2 -> NO + NO,k2_func,2.3e-12,cm
-N + NO -> N2 + O,k6_func,1.05e-12 0.5,cm
-N + O2 -> NO + O,k5_func,4.5e-12 3220.0,cm
-N + O3 -> NO + O2,k2_func,2e-16,cm
-N + O + N2 -> NO + N2,k6_func,1.76e-31 -0.5,cm
-N + O + O2 -> NO + O2,k6_func,1.76e-31 -0.5,cm
-O + NO2 -> NO + O2,k7_func,1.13e-11 1000.0 0.18,cm
-O + NO3 -> O2 + NO2,k2_func,1e-11,cm
-O + O2 + N2 -> O3 + N2,k8_func,6.2e-34 2.0,cm
-O + O2 + O2 -> O3 + O2,k8_func,6.9e-34 1.25,cm
-O + O3 -> O2 + O2,k5_func,2e-11 2300.0,cm
+NO2 + NO3 -> NO + NO2 + O2,c1*exp(-c2/Tg),2.3e-13 1600.0,cm
+NO2 + O3 -> O2 + NO3,c1*exp(-c2/Tg),1.2e-13 2450.0,cm
+NO3 + NO3 -> O2 + NO2 + NO2,c1*exp(-c2/Tg),5e-12 3000.0,cm
+NO + NO3 -> NO2 + NO2,c1,1.7e-11,cm
+NO + O3 -> O2 + NO2,c1*exp(-c2/Tg),4.3e-12 1560.0,cm
+N + NO2 -> N2O + O,c1,3e-12,cm
+N + NO2 -> N2 + O2,c1,7e-13,cm
+N + NO2 -> N2 + O + O,c1,9.1e-13,cm
+N + NO2 -> NO + NO,c1,2.3e-12,cm
+N + NO -> N2 + O,c1*Tg**c2,1.05e-12 0.5,cm
+N + O2 -> NO + O,c1*exp(-c2/Tg),4.5e-12 3220.0,cm
+N + O3 -> NO + O2,c1,2e-16,cm
+N + O + N2 -> NO + N2,c1*Tg**c2,1.76e-31 -0.5,cm
+N + O + O2 -> NO + O2,c1*Tg**c2,1.76e-31 -0.5,cm
+O + NO2 -> NO + O2,c1*(Tg/c2)**c3,1.13e-11 1000.0 0.18,cm
+O + NO3 -> O2 + NO2,c1,1e-11,cm
+O + O2 + N2 -> O3 + N2,c1*(300/Tg)**c2,6.2e-34 2.0,cm
+O + O2 + O2 -> O3 + O2,c1*(300/Tg)**c2,6.9e-34 1.25,cm
+O + O3 -> O2 + O2,c1*exp(-c2/Tg),2e-11 2300.0,cm
 -----------------------
 
 

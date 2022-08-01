@@ -31,9 +31,6 @@ module m_user_methods
   !> To add entries to the log file
   procedure(log_vars), pointer :: user_log_variables => null()
 
-  !> Whether to simulate the plasma fluid equations for the electrons
-  procedure(bool_subr), pointer :: user_evolve_electrons => null()
-
   integer, parameter :: user_max_log_vars = 20
 
   interface

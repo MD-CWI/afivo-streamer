@@ -262,12 +262,12 @@ contains
 
        ! Create a lookup table for the model coefficients
        eV_vs_fld = LT_create(table_min_townsend, table_max_townsend, &
-            table_size, 1)
+            table_size, 1, table_xspacing)
        call CFG_get(cfg, "input_data%file", td_file)
 
        ! Read table with E/N vs electron energy (eV)
        call table_from_file(td_file, "Mean energy (eV)", x_data, y_data)
-       call LT_set_col(eV_vs_fld, 1, x_data, y_data)
+       call table_set_column(eV_vs_fld, 1, x_data, y_data)
     end if
 
 !     if (output_conductivity) then
@@ -278,12 +278,18 @@ contains
   end subroutine output_initialize
 
   !> Write a summary of the model and parameters used
-  subroutine output_initial_summary()
+  subroutine output_initial_summary(tree)
     use m_chemistry
+    type(af_t), intent(in) :: tree
     character(len=string_len) :: fname
 
     fname = trim(output_name) // "_summary.txt"
     call chemistry_write_summary(trim(fname))
+    call output_stoichiometric_matrix(trim(output_name)//"_stoich_matrix.txt")
+    call output_chemical_species(trim(output_name)//"_species.txt")
+    call output_chemical_reactions(trim(output_name)//"_reactions.txt")
+    call output_chemical_rates(trim(output_name)//"_rates.txt", .true.)
+    call output_chemical_amounts(tree, trim(output_name)//"_amounts.txt", .true.)
   end subroutine output_initial_summary
 
   subroutine output_write(tree, output_cnt, wc_time, lc_reading, write_sim_data)
@@ -352,6 +358,9 @@ contains
        call output_log(tree, fname, output_cnt, wc_time)
     end if
 
+    call output_chemical_rates(trim(output_name)//"_rates.txt", .false.)
+    call output_chemical_amounts(tree, trim(output_name)//"_amounts.txt", .false.)
+
     if (output_regression_test) then
        write(fname, "(A,I6.6)") trim(output_name) // "_rtest.log"
        call output_regression_log(tree, fname, output_cnt, wc_time)
@@ -385,11 +394,11 @@ contains
 
 #if NDIM == 2
     if (ST_cylindrical) then
-      if(cross_write) then
-        write(fname, "(A,I6.6)") trim(output_name) // &
-        "_cross_", output_cnt
-        call output_cross(tree, fname)
-      endif
+       if(cross_write) then
+          write(fname, "(A,I6.6)") trim(output_name) // &
+               "_cross_", output_cnt
+          call output_cross(tree, fname)
+       end if
     end if
 #endif
 
@@ -502,7 +511,7 @@ contains
   end subroutine add_variables
 
   subroutine output_log(tree, filename, out_cnt, wc_time)
-    use m_field, only: field_voltage
+    use m_field, only: current_voltage
     use m_user_methods
     use m_chemistry
     use m_analysis
@@ -519,7 +528,7 @@ contains
     real(dp)                     :: max_elec, max_field, max_Er, min_Er
     real(dp)                     :: sum_elem_charge, tmp, ne_zminmax(2)
     real(dp)                     :: elecdens_threshold, max_field_tip
-    real(dp)                     :: r0(NDIM), r1(NDIM)
+    real(dp)                     :: r0(NDIM), r1(NDIM), r_tip(NDIM)
     type(af_loc_t)               :: loc_elec, loc_field, loc_Er, loc_tip
     integer                      :: i, n_reals, n_user_vars
     character(len=name_len)      :: var_names(user_max_log_vars)
@@ -566,6 +575,12 @@ contains
     call analysis_max_var_region(tree, i_electric_fld, r0, r1, &
          max_field_tip, loc_tip)
 
+    if (loc_tip%id > 0) then
+       r_tip = af_r_loc(tree, loc_tip)
+    else
+       r_tip = 0.0_dp
+    end if
+
     sum_elem_charge = 0
     do n = n_gas_species+1, n_species
        if (species_charge(n) /= 0) then
@@ -583,20 +598,19 @@ contains
 
     if (first_time) then
        first_time = .false.
-
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
+            &sum(charge) sum(J.E) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
             &max(Etip) x wc_time n_cells min(dx) &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
+            &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
             &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) max(E) x y z max(n_e) x y z voltage &
+            &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
             &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
@@ -612,18 +626,18 @@ contains
     end if
 
 #if NDIM == 1
-    n_reals = 16
+    n_reals = 17
 #elif NDIM == 2
-    n_reals = 23
+    n_reals = 24
 #elif NDIM == 3
-    n_reals = 22
+    n_reals = 23
 #endif
 
     if (associated(user_log_variables)) then
-       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E16.8,I12,1E16.8,I3,", &
-            n_user_vars, "E16.8)"
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3,", &
+            n_user_vars, "E20.8)"
     else
-       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E16.8,I12,1E16.8,I3)"
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3)"
     end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -633,27 +647,27 @@ contains
          position="append")
 #if NDIM == 1
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
-         max_field_tip, af_r_loc(tree, loc_tip), &
+         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
+         max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         field_voltage, ne_zminmax, max_field_tip, af_r_loc(tree, loc_tip), &
+         current_voltage, ne_zminmax, max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, &
+         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), field_voltage, ne_zminmax, &
-         max_field_tip, af_r_loc(tree, loc_tip), &
+         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
+         max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree),tree%highest_lvl, &
          var_values(1:n_user_vars)
@@ -661,6 +675,117 @@ contains
     close(my_unit)
 
   end subroutine output_log
+
+  !> Write a net stoichiometric matrix to a file
+  subroutine output_stoichiometric_matrix(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, m, i, ix
+    integer, allocatable         :: stoich(:,:)
+
+    allocate(stoich(n_reactions, n_species))
+    stoich(:, :) = 0
+
+    do m = 1, n_reactions
+       ! Subtract consumed species
+       do i = 1, size(reactions(m)%ix_in)
+          ix = reactions(m)%ix_in(i)
+          stoich(m, ix) = stoich(m, ix) - 1
+       end do
+
+       ! Add produced species
+       do i = 1, size(reactions(m)%ix_out)
+          ix = reactions(m)%ix_out(i)
+          stoich(m, ix) = stoich(m, ix) + &
+               reactions(m)%multiplicity_out(i)
+       end do
+    end do
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_species
+       write(my_unit, *) stoich(:, i)
+    end do
+    write(my_unit, *) ""
+    close(my_unit)
+  end subroutine output_stoichiometric_matrix
+
+  !> Write a list of chemical species
+  subroutine output_chemical_species(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, i
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_species
+       write(my_unit, "(A)") species_list(i)
+    end do
+    write(my_unit, "(A)") ""
+    close(my_unit)
+  end subroutine output_chemical_species
+
+  !> Write a list of chemical reactions
+  subroutine output_chemical_reactions(filename)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    integer                      :: my_unit, i
+
+    open(newunit=my_unit, file=trim(filename), action="write")
+    do i = 1, n_reactions
+       write(my_unit, "(A)") reactions(i)%description
+    end do
+    write(my_unit, "(A)") ""
+    close(my_unit)
+  end subroutine output_chemical_reactions
+
+  !> Write space-integrated and time-integrated reaction rates
+  subroutine output_chemical_rates(filename, first_time)
+    use m_chemistry
+    character(len=*), intent(in) :: filename
+    logical, intent(in)          :: first_time
+    integer                      :: my_unit, iostate
+
+    if (first_time) then
+       ! Clear the file
+       open(newunit=my_unit, file=trim(filename), iostat=iostate)
+       if (iostate == 0) close(my_unit, status='delete')
+    else
+       open(newunit=my_unit, file=trim(filename), action="write", &
+            position="append")
+       write(my_unit, "(*(E20.8))") global_time, &
+            sum(ST_global_rates(1:n_reactions, :), dim=2)
+       close(my_unit)
+    end if
+  end subroutine output_chemical_rates
+
+  !> Write space-integrated species densities
+  subroutine output_chemical_amounts(tree, filename, first_time)
+    use m_chemistry
+    type(af_t), intent(in)       :: tree
+    character(len=*), intent(in) :: filename
+    logical, intent(in)          :: first_time
+    integer                      :: my_unit, n, iostate
+    real(dp)                     :: sum_dens(n_species)
+
+    if (first_time) then
+       ! Clear the file
+       open(newunit=my_unit, file=trim(filename), iostat=iostate)
+       if (iostate == 0) close(my_unit, status='delete')
+    else
+       do n = 1, n_species
+          if (species_itree(n) > 0) then
+             call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          else
+             sum_dens(n) = 0.0_dp ! A neutral gas specie
+          end if
+       end do
+
+       open(newunit=my_unit, file=trim(filename), action="write", &
+            position="append")
+       write(my_unit, "(*(E20.8))") global_time, sum_dens
+       close(my_unit)
+    end if
+
+  end subroutine output_chemical_amounts
 
   !> Write statistics to a file that can be used for regression testing
   subroutine output_regression_log(tree, filename, out_cnt, wc_time)
@@ -678,9 +803,16 @@ contains
 
     vol = af_total_volume(tree)
     do n = 1, n_species
-       call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
-       call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
-       call af_tree_max_cc(tree, species_itree(n), max_dens(n))
+       if (species_itree(n) > 0) then
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens(n))
+          call af_tree_sum_cc(tree, species_itree(n), sum_dens_sq(n), power=2)
+          call af_tree_max_cc(tree, species_itree(n), max_dens(n))
+       else
+          ! A neutral gas specie
+          sum_dens(n) = 0.0_dp
+          sum_dens_sq(n) = 0.0_dp
+          max_dens(n) = 0.0_dp
+       end if
     end do
 
     if (out_cnt == 0) then
@@ -702,7 +834,7 @@ contains
        close(my_unit)
     end if
 
-    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E16.8)"
+    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E20.8)"
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
@@ -857,10 +989,10 @@ contains
 
        ! Compute the pressure
        box%cc(IJK, gas_prim_vars(i_e)) = (gas_euler_gamma-1.0_dp) * (box%cc(IJK,gas_vars( i_e)) - &
-         0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
+            0.5_dp*box%cc(IJK,gas_vars( i_rho))* sum(box%cc(IJK, gas_vars(i_mom(:)))**2))
        ! Compute the temperature (T = P/(n*kB), n=gas number density)
        box%cc(IJK, gas_prim_vars(i_e+1)) = box%cc(IJK, gas_prim_vars(i_e))/ &
-                                          (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
+            (box%cc(IJK, i_gas_dens)* UC_boltzmann_const)
 
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
@@ -879,7 +1011,6 @@ contains
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, i_surf))
 #elif NDIM == 3
-!FLAG
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, :, i_surf))
 #endif

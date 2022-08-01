@@ -21,7 +21,6 @@ program streamer
   use m_lookup_table
   use m_table_data
   use m_units_constants
-  use m_circuit
   use m_dielectric
 
   implicit none
@@ -32,7 +31,7 @@ program streamer
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
   integer, allocatable      :: ref_links(:, :)
-  logical                   :: write_out, evolve_electrons
+  logical                   :: write_out
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
@@ -99,95 +98,69 @@ program streamer
      end if
   end do
 
-  ! Initialize the tree (which contains all the mesh information)
-  ! check if calculating for line approximation
-  if (lc_reading) then
-     time = 0.0_dp
-     coord_type = af_cyl
-     call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
-          ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
-          r_min=ST_domain_origin, mem_limit_gb=memory_limit_GB)
-     call set_initial_conditions(tree, mg)
+  ! These values are overwritten when restarting
+  it               = 0
+  time             = 0.0_dp ! Simulation time (all times are in s)
+  global_time      = time
+  photoi_prev_time = time   ! Time of last photoionization computation
+  dt               = global_dt
+  initial_streamer_pos = 0.0_dp ! Initial streamer position
 
-     ! insert rhs values along axis
-     
-     call table_from_file(lc_file, "z_vs_Q/L", x_data, y_data)
-     ! read the Q/L data, need Q then rhs
-     call table_from_file(lc_file, "z_vs_e/L", x_data, z_data)
+   ! Initialize the tree (which contains all the mesh information)
+   ! start from a previous run
+   if (restart_from_file /= undefined_str) then
+      tree_copy = tree           ! Store the settings
+      call af_read_tree(tree, restart_from_file, read_sim_data)
 
-#if NDIM == 2
-     rr_val(1) = lc_r
-     do n = 1, cross_npoints
-      rr_val(2) = x_data(n)
-      loc_z = af_get_loc(tree, rr_val)
-      tree%boxes(loc_z%id)%cc(loc_z%ix(1), loc_z%ix(2), i_rhs) = y_data(n) &
-         * UC_elec_q_over_eps0 / (2.0_dp*UC_pi*rr_val(1)*af_min_dr(tree)) 
-      tree%boxes(loc_z%id)%cc(loc_z%ix(1), loc_z%ix(2), i_electron) = z_data(n) &
-         / (2.0_dp*UC_pi*rr_val(1)*af_min_dr(tree))
-     end do   
-#endif
-     ! compute E field and equipotential lines
-     call field_compute_rhs(tree, mg, 0, time, .false.)
-     ! output and end 
-     call output_write(tree, 1, 0.0_dp, lc_reading, write_sim_data)
+      ! Restore some of the settings
+      tree%cc_write_output = tree_copy%cc_write_output
+      tree%cc_write_binary = tree_copy%cc_write_binary
+      tree%fc_write_binary = tree_copy%fc_write_binary
 
-  ! if not line approximation, run streamer simulation
-  else 
-  
-    !start from a previous run
-    if (restart_from_file /= undefined_str) then
-       tree_copy = tree           ! Store the settings
-       call af_read_tree(tree, restart_from_file, read_sim_data)
+      box_bytes = af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
+      tree%box_limit = nint(memory_limit_GB * 2.0_dp**30 / box_bytes)
 
-       ! Restore some of the settings
-       tree%cc_write_output = tree_copy%cc_write_output
-       tree%cc_write_binary = tree_copy%cc_write_binary
-       tree%fc_write_binary = tree_copy%fc_write_binary
+      if (tree%n_cell /= ST_box_size) &
+         error stop "restart_from_file: incompatible box size"
 
-       box_bytes = af_box_bytes(tree%n_cell, tree%n_var_cell, tree%n_var_face)
-       tree%box_limit = nint(memory_limit_GB * 2.0_dp**30 / box_bytes)
+      if (tree%n_var_cell /= tree_copy%n_var_cell) then
+         print *, "n_var_cell here:", tree_copy%n_var_cell
+         print *, "n_var_cell file:", tree%n_var_cell
+         error stop "restart_from_file: incompatible variable list"
+      end if
 
-       if (tree%n_cell /= ST_box_size) &
-          error stop "restart_from_file: incompatible box size"
+      if (ST_use_dielectric) error stop "Restarting not support with dielectric"
 
-       if (tree%n_var_cell /= tree_copy%n_var_cell) then
-          print *, "n_var_cell here:", tree_copy%n_var_cell
-          print *, "n_var_cell file:", tree%n_var_cell
-          error stop "restart_from_file: incompatible variable list"
-       end if
+      ! @todo more consistency checks
 
-       if (ST_use_dielectric) error stop "Restarting not support with dielectric"
-
-       ! @todo more consistency checks
-
-       ! This routine always needs to be called when using multigrid
-       call mg_init(tree, mg)
+      ! This routine always needs to be called when using multigrid
+      call mg_init(tree, mg)
        
-    !start from scratch
-    else
+   ! start from scratch
+   else
      time             = 0.0_dp ! Simulation time (all times are in s)
      global_time      = time
      photoi_prev_time = time   ! Time of last photoionization computation
      dt               = global_dt
      initial_streamer_pos = 0.0_dp ! Initial streamer position
 
-     if (ST_cylindrical) then
+      if (ST_cylindrical) then
         coord_type = af_cyl
-     else
+      else
         coord_type = af_xyz
-     end if
+      end if
 
-       call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
+      call af_init(tree, ST_box_size, ST_domain_origin + ST_domain_len, &
             ST_coarse_grid_size, periodic=ST_periodic, coord=coord_type, &
             r_min=ST_domain_origin, mem_limit_gb=memory_limit_GB)
 
        ! Set up the initial conditions
-       call set_initial_conditions(tree, mg)
+      call set_initial_conditions(tree, mg)
 
        ! Write initial output
-       output_cnt = 0 ! Number of output files written
-       call output_write(tree, output_cnt, 0.0_dp, lc_reading, write_sim_data)
-    end if
+      output_cnt = 0 ! Number of output files written
+      call output_write(tree, output_cnt, 0.0_dp, lc_reading, write_sim_data)
+   end if
 
   print *, "Simulation output: ", trim(output_name)
   print *, "Number of threads: ", af_get_max_threads()
@@ -200,149 +173,127 @@ program streamer
   time_last_print  = -1e10_dp
   time_last_output = time
 
-  do it = 1, huge(1)-1
-     if (ST_use_end_time .and. time >= ST_end_time) exit
+   do 
+      it = it + 1
+      if (time >= ST_end_time) exit
 
-     if (associated(user_generic_method)) then
+      if (associated(user_generic_method)) then
         call user_generic_method(tree, time)
-     end if
+      end if
 
-     ! Initialize starting position of streamer
-     if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
+      ! Initialize starting position of streamer
+      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
         call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
         loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
-     end if
+      end if
 
        ! Check if streamer length exceeds the defined maximal streamer length
-       if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
+      if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
          call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
          loc_field_coord = af_r_loc(tree, loc_field)
          if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
-       end if
+      end if
 
-       ! Update wall clock time
-       call system_clock(t_current)
-       wc_time = (t_current - t_start) * inv_count_rate
+      ! Update wall clock time
+      call system_clock(t_current)
+      wc_time = (t_current - t_start) * inv_count_rate
 
-       ! Every ST_print_status_interval, print some info about progress
-       if (wc_time - time_last_print > output_status_delay) then
-          call output_status(tree, time, wc_time, it, dt)
-          time_last_print = wc_time
-       end if
+      ! Every ST_print_status_interval, print some info about progress
+      if (wc_time - time_last_print > output_status_delay) then
+         call output_status(tree, time, wc_time, it, dt)
+         time_last_print = wc_time
+      end if
 
-       ! Every output_dt, write output
-       if (time + dt >= time_last_output + output_dt) then
-          write_out        = .true.
-          dt               = time_last_output + output_dt - time
-          time_last_output = time_last_output + output_dt
-          output_cnt       = output_cnt + 1
-       else
-          write_out = .false.
-       end if
+      ! Every output_dt, write output
+      if (time + dt >= time_last_output + output_dt) then
+         write_out        = .true.
+         dt               = time_last_output + output_dt - time
+         time_last_output = time_last_output + output_dt
+         output_cnt       = output_cnt + 1
+      else
+         write_out = .false.
+      end if
 
-       evolve_electrons = .true.
-       if (associated(user_evolve_electrons)) &
-            evolve_electrons = user_evolve_electrons(tree, time)
+      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+        call photoi_set_src(tree, time - photoi_prev_time)
+        photoi_prev_time = time
+      end if
 
-       if (evolve_electrons) then
-          if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-             call photoi_set_src(tree, time - photoi_prev_time)
-             photoi_prev_time = time
-          end if
+      if (ST_use_electrode) then
+        call set_electrode_densities(tree)
+      end if
 
-        if (ST_use_electrode) then
-           call set_electrode_densities(tree)
-        end if
+      call af_advance(tree, dt, dt_lim, time, &
+          species_itree(n_gas_species+1:n_species), &
+          time_integrator, forward_euler)
 
-        if (ST_use_dielectric) then
-           call af_advance(tree, dt, dt_lim, time, &
-                species_itree(n_gas_species+1:n_species), &
-                time_integrator, forward_euler, &
-                dielectric_combine_substeps)
-        else
-           call af_advance(tree, dt, dt_lim, time, &
-                species_itree(n_gas_species+1:n_species), &
-             time_integrator, forward_euler)
-        end if
+      ! Make sure field is available for latest time state
+      call field_compute(tree, mg, 0, time, .true.)
 
-          ! Make sure field is available for latest time state
-          call field_compute(tree, mg, 0, time, .true.)
+      if (gas_dynamics) then
+        call coupling_add_fluid_source(tree, dt)
 
-          if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
-          if (circuit_used) call circuit_update(tree, dt)
-       else
-          dt_lim = dt_max
-       end if
+        ! Go back to time at beginning of step
+        time = global_time
 
-       if (gas_dynamics) then
-          ! Go back to time at beginning of step
-          time = global_time
-
-          call af_advance(tree, dt, dt_gas_lim, time, &
+         call af_advance(tree, dt, dt_gas_lim, time, &
                gas_vars, time_integrator, gas_forward_euler)
-          call coupling_update_gas_density(tree)
-       else
-          dt_gas_lim = dt_max
-       end if
-
-     ! If neither electrons or the gas is evolved, make sure time is increased
-     if (.not. (evolve_electrons .or. gas_dynamics)) then
-        time = time + dt
-     end if
+         call coupling_update_gas_density(tree)
+      else
+         dt_gas_lim = dt_max
+      end if
 
      ! dt is modified when writing output, global_dt not
-     dt          = min(dt_lim, dt_gas_lim)
-     global_dt   = dt_lim
-     global_time = time
+      dt          = min(dt_lim, dt_gas_lim)
+      global_dt   = dt
+      global_time = time
 
-       if (global_dt < dt_min) then
-          write(*, "(A,E12.4,A)") " Time step (dt =", global_dt, &
+      if (global_dt < dt_min) then
+         write(*, "(A,E12.4,A)") " Time step (dt =", global_dt, &
              ") getting too small"
-          print *, "See the documentation on time integration"
-          call output_status(tree, time, wc_time, it, dt)
-          if (.not. write_out) then
+         print *, "See the documentation on time integration"
+         call output_status(tree, time, wc_time, it, dt)
+         if (.not. write_out) then
              write_out = .true.
              output_cnt = output_cnt + 1
-          end if
-       end if
+         end if
+      end if
 
-       if (write_out) then
-          call output_write(tree, output_cnt, wc_time, lc_reading, write_sim_data)
-       end if
+      if (write_out) then
+         call output_write(tree, output_cnt, wc_time, lc_reading, write_sim_data)
+      end if
 
-       if (global_dt < dt_min) error stop "dt too small"
+      if (global_dt < dt_min) error stop "dt too small"
 
-       if (mod(it, refine_per_steps) == 0) then
-          ! Restrict species, for the ghost cells near refinement boundaries
-          call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
-          call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+      if (mod(it, refine_per_steps) == 0) then
+         ! Restrict species, for the ghost cells near refinement boundaries
+         call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
+         call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
 
-          if (gas_dynamics) then
-             call af_restrict_tree(tree, gas_vars)
-             call af_gc_tree(tree, gas_vars)
-          end if
+         if (gas_dynamics) then
+            call af_restrict_tree(tree, gas_vars)
+            call af_gc_tree(tree, gas_vars)
+         end if
 
-        if (ST_use_dielectric) then
-           ! Make sure there are no refinement jumps across the dielectric
-           call surface_get_refinement_links(diel, ref_links)
-           call af_adjust_refinement(tree, refine_routine, ref_info, &
-             refine_buffer_width, ref_links)
-           call surface_update_after_refinement(tree, diel, ref_info)
-        else
-           call af_adjust_refinement(tree, refine_routine, ref_info, &
+         if (ST_use_dielectric) then
+            ! Make sure there are no refinement jumps across the dielectric
+            call surface_get_refinement_links(diel, ref_links)
+            call af_adjust_refinement(tree, refine_routine, ref_info, &
+                refine_buffer_width, ref_links)
+            call surface_update_after_refinement(tree, diel, ref_info)
+         else
+            call af_adjust_refinement(tree, refine_routine, ref_info, &
                 refine_buffer_width)
-          end if
+         end if
 
-          if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
-             ! Compute the field on the new mesh
-             call field_compute(tree, mg, 0, time, .true.)
-          end if
-       end if
-    end do
+         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
+            ! Compute the field on the new mesh
+            call field_compute(tree, mg, 0, time, .true.)
+         end if
+      end if
+   end do
 
-    call output_status(tree, time, wc_time, it, dt)
-
-  endif 
+   call output_status(tree, time, wc_time, it, dt)
 
 contains
 
@@ -368,12 +319,11 @@ contains
     call photoi_initialize(tree, cfg)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
-    call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
     call dielectric_initialize(tree, cfg)
 
-    call output_initial_summary()
+    call output_initial_summary(tree)
 
   end subroutine initialize_modules
 
@@ -440,21 +390,30 @@ contains
   subroutine write_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    write(my_unit) it
     write(my_unit) output_cnt
     write(my_unit) time
     write(my_unit) global_time
     write(my_unit) photoi_prev_time
     write(my_unit) global_dt
+
+    write(my_unit) sum(ST_global_rates(1:n_reactions, :), dim=2)
+    write(my_unit) sum(ST_global_JdotE(1, :))
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    read(my_unit) it
     read(my_unit) output_cnt
     read(my_unit) time
     read(my_unit) global_time
     read(my_unit) photoi_prev_time
     read(my_unit) global_dt
+
+    ! Data is stored in location of first thread
+    read(my_unit) ST_global_rates(1:n_reactions, 1)
+    read(my_unit) ST_global_JdotE(1, 1)
 
     dt = global_dt
   end subroutine read_sim_data
@@ -509,7 +468,7 @@ contains
 #endif
 
           if (any(lsf_nb > 0) .and. &
-            associated(bc_species, af_bc_neumann_zero)) then
+               associated(bc_species, af_bc_neumann_zero)) then
              ! At the boundary of the electrode
 #if NDIM == 1
              dens_nb = [box%cc(i-1, i_electron), &

@@ -17,6 +17,7 @@ module m_units_constants
   real(dp), parameter :: UC_elec_mass        = 9.10938189d-31          ! the electron mass in kg
   real(dp), parameter :: UC_atomic_mass      = 1.66053886D-27          ! the atomic mass unit in kg
   real(dp), parameter :: UC_N2_mass          = 28.0D0 * UC_atomic_mass ! The mass of a N2 molecule
+  real(dp), parameter :: UC_O2_mass          = 32.0D0 * UC_atomic_mass ! The mass of an O2 molecule
   real(dp), parameter :: UC_lightspeed       = 299792458d0             ! the speed of light in m/s
   real(dp), parameter :: UC_boltzmann_const  = 1.3806503d-23           ! the Boltzmann constant
   real(dp), parameter :: UC_bohr_radius      = 5.29d-11                ! the Bohr radius (m)

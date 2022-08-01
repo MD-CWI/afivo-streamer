@@ -5,6 +5,7 @@
 module m_af_multigrid
   use m_af_types
   use m_af_stencil
+  use m_af_ghostcell
   use m_coarse_solver
 
   implicit none
@@ -130,7 +131,6 @@ contains
   !> that this routine needs valid ghost cells (for i_phi) on input, and gives
   !> back valid ghost cells on output
   subroutine mg_fas_fmg(tree, mg, set_residual, have_guess)
-    use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_boxes_copy_cc
     type(af_t), intent(inout)       :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout)         :: mg   !< Multigrid options
@@ -166,7 +166,7 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Update ghost cells
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
+       call af_gc_lvl(tree, lvl, [mg%i_phi])
 
        call mg_fas_vcycle(tree, mg, set_residual .and. &
             lvl == tree%highest_lvl, lvl, standalone=.false.)
@@ -179,7 +179,6 @@ contains
   !> needs valid ghost cells (for i_phi) on input, and gives back valid ghost
   !> cells on output
   subroutine mg_fas_vcycle(tree, mg, set_residual, highest_lvl, standalone)
-    use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_tree_sum_cc
     type(af_t), intent(inout)     :: tree         !< Tree to do multigrid on
     type(mg_t), intent(in)        :: mg           !< Multigrid options
@@ -201,7 +200,7 @@ contains
 
     do lvl = max_lvl, 2, -1
        ! Downwards relaxation
-       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_down)
+       call gsrb_boxes(tree, lvl, mg, mg_cycle_down)
 
        ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
        ! correction later
@@ -217,10 +216,10 @@ contains
        call correct_children(tree%boxes, tree%lvls(lvl-1)%parents, mg)
 
        ! Have to fill ghost cells after correction
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
+       call af_gc_lvl(tree, lvl, [mg%i_phi])
 
        ! Upwards relaxation
-       call gsrb_boxes(tree, tree%lvls(lvl)%ids, mg, mg_cycle_up)
+       call gsrb_boxes(tree, lvl, mg, mg_cycle_up)
     end do
 
     if (set_residual) then
@@ -261,7 +260,6 @@ contains
   end subroutine mg_fas_vcycle
 
   subroutine solve_coarse_grid(tree, mg)
-    use m_af_ghostcell, only: af_gc_ids
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(in)    :: mg   !< Multigrid options
 
@@ -270,12 +268,11 @@ contains
     call coarse_solver_get_phi(tree, mg)
 
     ! Set ghost cells for the new coarse grid solution
-    call af_gc_ids(tree, tree%lvls(1)%ids, [mg%i_phi])
+    call af_gc_lvl(tree, 1, [mg%i_phi])
   end subroutine solve_coarse_grid
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
   subroutine mg_sides_rb(boxes, id, nb, iv)
-    use m_af_ghostcell, only: af_gc_prolong_copy
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)          :: id       !< Id of box
     integer, intent(in)          :: nb       !< Ghost cell direction
@@ -450,7 +447,6 @@ contains
   !> take the average between this corner point and a coarse neighbor to fill
   !> ghost cells for the fine cells.
   subroutine mg_sides_rb_extrap(boxes, id, nb, iv)
-    use m_af_ghostcell, only: af_gc_prolong_copy
     type(box_t), intent(inout) :: boxes(:) !< List of all boxes
     integer, intent(in)         :: id        !< Id of box
     integer, intent(in)         :: nb        !< Ghost cell direction
@@ -630,14 +626,13 @@ contains
     !$omp end parallel do
   end subroutine correct_children
 
-  subroutine gsrb_boxes(tree, ids, mg, type_cycle)
-    use m_af_ghostcell, only: af_gc_box
+  subroutine gsrb_boxes(tree, lvl, mg, type_cycle)
     type(af_t), intent(inout) :: tree       !< Tree containing full grid
-    type(mg_t), intent(in)   :: mg         !< Multigrid options
-    integer, intent(in)        :: ids(:)     !< Operate on these boxes
-    integer, intent(in)        :: type_cycle !< Type of cycle to perform
-    integer                    :: n, i, n_cycle
-    logical                    :: use_corners
+    type(mg_t), intent(in)    :: mg         !< Multigrid options
+    integer, intent(in)       :: lvl        !< Operate on this refinement level
+    integer, intent(in)       :: type_cycle !< Type of cycle to perform
+    integer                   :: n, i, n_cycle
+    logical                   :: use_corners
 
     select case (type_cycle)
     case (mg_cycle_down)
@@ -648,31 +643,34 @@ contains
        error stop "gsrb_boxes: invalid cycle type"
     end select
 
-    !$omp parallel private(n, i)
-    do n = 1, 2 * n_cycle
-       !$omp do
-       do i = 1, size(ids)
-          call mg%box_gsrb(tree%boxes(ids(i)), n, mg)
-       end do
-       !$omp end do
+    associate (ids => tree%lvls(lvl)%ids)
+      !$omp parallel private(n, i)
+      do n = 1, 2 * n_cycle
+         !$omp do
+         do i = 1, size(ids)
+            call mg%box_gsrb(tree%boxes(ids(i)), n, mg)
+         end do
+         !$omp end do
 
-       use_corners = mg%use_corners .or. &
-            (type_cycle /= mg_cycle_down .and. n == 2 * n_cycle)
+         ! If corner ghost cells are not required, only store them during the
+         ! final upward cycle
+         use_corners = mg%use_corners .or. &
+              (type_cycle /= mg_cycle_down .and. n == 2 * n_cycle)
 
-       !$omp do
-       do i = 1, size(ids)
-          call af_gc_box(tree, ids(i), [mg%i_phi], use_corners)
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
+         !$omp do
+         do i = 1, size(ids)
+            call af_gc_box(tree, ids(i), [mg%i_phi], use_corners)
+         end do
+         !$omp end do
+      end do
+      !$omp end parallel
+    end associate
   end subroutine gsrb_boxes
 
   ! Set rhs on coarse grid, restrict phi, and copy i_phi to i_tmp for the
   ! correction later
   subroutine update_coarse(tree, lvl, mg)
     use m_af_utils, only: af_box_add_cc, af_box_copy_cc
-    use m_af_ghostcell, only: af_gc_ids
     type(af_t), intent(inout) :: tree !< Tree containing full grid
     integer, intent(in)        :: lvl !< Update coarse values at lvl-1
     type(mg_t), intent(in)   :: mg !< Multigrid options
@@ -699,7 +697,7 @@ contains
     end do
     !$omp end parallel do
 
-    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, [mg%i_phi])
+    call af_gc_lvl(tree, lvl-1, [mg%i_phi])
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined, and
     ! store current coarse phi in tmp.
@@ -723,7 +721,6 @@ contains
   !> This routine performs the same as update_coarse, but it ignores the tmp
   !> variable
   subroutine set_coarse_phi_rhs(tree, lvl, mg)
-    use m_af_ghostcell, only: af_gc_ids
     use m_af_utils, only: af_box_add_cc
     type(af_t), intent(inout) :: tree !< Tree containing full grid
     integer, intent(in)        :: lvl !< Update coarse values at lvl-1
@@ -732,7 +729,7 @@ contains
 
     ! Fill ghost cells here to be sure
     if (lvl == tree%highest_lvl) then
-       call af_gc_ids(tree, tree%lvls(lvl)%ids, [mg%i_phi])
+       call af_gc_lvl(tree, lvl, [mg%i_phi])
     end if
 
     !$omp parallel do private(id, p_id)
@@ -746,7 +743,7 @@ contains
     end do
     !$omp end parallel do
 
-    call af_gc_ids(tree, tree%lvls(lvl-1)%ids, [mg%i_phi])
+    call af_gc_lvl(tree, lvl-1, [mg%i_phi])
 
     ! Set rhs_c = laplacian(phi_c) + restrict(res) where it is refined
 
@@ -827,6 +824,8 @@ contains
           call mg_box_lsf_stencil(box, mg, ix)
        case (mg_veps_box, mg_ceps_box)
           call mg_box_lpld_stencil(box, mg, ix)
+       case (mg_veps_box+mg_lsf_box, mg_ceps_box+mg_lsf_box)
+          call mg_box_lpld_lsf_stencil(box, mg, ix)
        case default
           error stop "mg_store_operator_stencil: unknown box tag"
        end select
@@ -856,15 +855,19 @@ contains
     case (mg_prolong_sparse)
        call mg_box_prolong_sparse_stencil(tree%boxes(id), &
             tree%boxes(p_id), mg, ix)
-    case (mg_auto_prolongation)
+    case (mg_prolong_auto)
        ! Use box tag
        associate (box=>tree%boxes(id), box_p=>tree%boxes(p_id))
          select case (iand(box%tag, mg%operator_mask))
-         case (mg_normal_box)
+         case (mg_normal_box, mg_ceps_box)
             call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
-         case (mg_lsf_box)
-            call mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
-         case (mg_ceps_box, mg_veps_box)
+         case (mg_lsf_box, mg_ceps_box+mg_lsf_box)
+            if (mg%lsf_use_custom_prolongation) then
+               call mg_box_prolong_lsf_stencil(box, box_p, mg, ix)
+            else
+               call mg_box_prolong_linear_stencil(box, box_p, mg, ix)
+            end if
+         case (mg_veps_box, mg_veps_box + mg_lsf_box)
             call mg_box_prolong_eps_stencil(box, box_p, mg, ix)
          case default
             error stop "mg_store_prolongation_stencil: unknown box tag"
@@ -1366,6 +1369,7 @@ contains
 
          v(:, IJK) = [3 * dd(2), dd(1)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         where (dd < 1) v(:, IJK) = 0
       end do
 #elif NDIM == 2
       v(1, :, :) = 0.5_dp
@@ -1386,9 +1390,9 @@ contains
          dd(2) = mg%lsf_dist(a, af_r_cc(box_p, [i_c2, j_c1]), mg)
          dd(3) = mg%lsf_dist(a, af_r_cc(box_p, [i_c1, j_c2]), mg)
 
-         v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(2), &
-              dd(1) * dd(3)]
+         v(:, IJK) = [2 * dd(2) * dd(3), dd(1) * dd(3), dd(1) * dd(2)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         where (dd < 1) v(:, IJK) = 0
       end do
 #elif NDIM == 3
       v(:, :, :, :) = 0.25_dp
@@ -1415,6 +1419,7 @@ contains
               dd(1) * dd(3) * dd(4), dd(1) * dd(2) * dd(4), &
               dd(1) * dd(2) * dd(3)]
          v(:, IJK) = v(:, IJK) / sum(v(:, IJK))
+         where (dd < 1) v(:, IJK) = 0
       end do
 #endif
     end associate
@@ -1468,6 +1473,100 @@ contains
 
   end subroutine mg_box_lpld_stencil
 
+  !> Store stencil for a box with variable coefficient and level set function
+  subroutine mg_box_lpld_lsf_stencil(box, mg, ix)
+    type(box_t), intent(inout) :: box
+    type(mg_t), intent(in)     :: mg
+    integer, intent(in)        :: ix !< Index of the stencil
+    integer                    :: IJK, nc, n_coeff
+    real(dp)                   :: idr2(2*NDIM), a0, a(2*NDIM), dr2(NDIM)
+    integer                    :: n, m, idim, s_ix(NDIM), ix_dist
+    real(dp)                   :: dd(2*NDIM)
+    real(dp), allocatable      :: all_distances(:, DTIMES(:))
+    logical                    :: success
+
+    nc               = box%n_cell
+    idr2(1:2*NDIM:2) = 1/box%dr**2
+    idr2(2:2*NDIM:2) = idr2(1:2*NDIM:2)
+    dr2              = box%dr**2
+
+    box%stencils(ix)%shape = af_stencil_357
+    box%stencils(ix)%stype = stencil_variable
+    ! A custom correction for cylindrical geometry could be more accurate. This
+    ! would require the derivation of a discretization for cells in which both
+    ! epsilon changes and a boundary is present.
+    box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
+    n_coeff                = af_stencil_sizes(af_stencil_357)
+
+    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    allocate(box%stencils(ix)%f(DTIMES(nc)))
+    allocate(box%stencils(ix)%bc_correction(DTIMES(nc)))
+    allocate(all_distances(2*NDIM, DTIMES(nc)))
+
+    box%stencils(ix)%f = 0.0_dp
+    ! Distance 1 indicates no boundary
+    all_distances = 1.0_dp
+
+    ix_dist = af_stencil_index(box, mg_lsf_distance_key)
+    if (ix_dist == af_stencil_none) error stop "No distances stored"
+
+    ! Use sparse storage of boundary distances to update all_distances
+    do n = 1, size(box%stencils(ix_dist)%sparse_ix, 2)
+       s_ix = box%stencils(ix_dist)%sparse_ix(:, n)
+       all_distances(:, DINDEX(s_ix)) = &
+            box%stencils(ix_dist)%sparse_v(:, n)
+    end do
+
+    associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
+      do KJI_DO(1, nc)
+         dd = all_distances(:, IJK)
+
+#if NDIM == 1
+         a0 = box%cc(i, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, i_eps)
+#elif NDIM == 2
+         a0 = box%cc(i, j, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, j, i_eps)
+         a(3:4) = box%cc(i, j-1:j+1:2, i_eps)
+#elif NDIM == 3
+         a0 = box%cc(i, j, k, i_eps)
+         a(1:2) = box%cc(i-1:i+1:2, j, k, i_eps)
+         a(3:4) = box%cc(i, j-1:j+1:2, k, i_eps)
+         a(5:6) = box%cc(i, j, k-1:k+1:2, i_eps)
+#endif
+         ! Generalized Laplacian for neighbors at distance dd * dx
+         do idim = 1, NDIM
+            box%stencils(ix)%v(1+2*idim-1, IJK) = 1 / &
+                 (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
+                 dd(2*idim-1))
+            box%stencils(ix)%v(1+2*idim, IJK) = 1 / &
+                 (0.5_dp * dr2(idim) * (dd(2*idim-1) + dd(2*idim)) * &
+                 dd(2*idim))
+         end do
+
+         ! Account for permittivity
+         !> @todo This is not fully accurate when there is both a change in
+         !> epsilon and a boundary for the same cell
+         box%stencils(ix)%v(2:, IJK) = box%stencils(ix)%v(2:, IJK) * &
+              2 * a0*a(:)/(a0 + a(:))
+
+         box%stencils(ix)%v(1, IJK) = -sum(box%stencils(ix)%v(2:, IJK))
+
+         ! Move internal boundaries to right-hand side
+         do m = 1, 2 * NDIM
+            if (dd(m) < 1.0_dp) then
+               box%stencils(ix)%f(IJK) = box%stencils(ix)%f(IJK) - &
+                    box%stencils(ix)%v(m+1, IJK)
+               box%stencils(ix)%v(m+1, IJK) = 0.0_dp
+            end if
+         end do
+      end do; CLOSE_DO
+    end associate
+
+    call af_stencil_try_constant(box, ix, epsilon(1.0_dp), success)
+
+  end subroutine mg_box_lpld_lsf_stencil
+
   !> Compute distance to boundary starting at point a going to point b, in
   !> the range from [0, 1], with 1 meaning there is no boundary
   function mg_lsf_dist_linear(a, b, mg) result(dist)
@@ -1482,7 +1581,7 @@ contains
     if (lsf_a * lsf_b < 0) then
        ! There is a boundary between the points
        dist = lsf_a / (lsf_a - lsf_b)
-       dist = max(dist, mg_lsf_min_rel_distance)
+       dist = max(dist, mg%lsf_min_rel_distance)
     else
        dist = 1.0_dp
     end if
@@ -1526,7 +1625,7 @@ contains
     end if
 
     dist = norm2(r_root - a)/norm2(b-a)
-    dist = max(dist, mg_lsf_min_rel_distance)
+    dist = max(dist, mg%lsf_min_rel_distance)
   end function mg_lsf_dist_gss
 
   !> Simple bisection
@@ -1641,12 +1740,7 @@ contains
     dr2 = box%dr**2
 
     ix_dist = af_stencil_index(box, mg_lsf_distance_key)
-
-    if (ix_dist == af_stencil_none) then
-       ! No boundaries in this box
-       call mg_box_lpl_stencil(box, mg, ix)
-       return
-    end if
+    if (ix_dist == af_stencil_none) error stop "No distances stored"
 
     ! Use stored distances to construct stencil
     box%stencils(ix)%shape = af_stencil_357
@@ -1726,7 +1820,8 @@ contains
           select case (iand(tree%boxes(id)%tag, mg%operator_mask))
           case (mg_normal_box, mg_ceps_box)
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
-          case (mg_lsf_box)
+          case (mg_lsf_box, mg_ceps_box+mg_lsf_box, mg_veps_box+mg_lsf_box)
+             ! @todo is this okay for the case mg_veps_box+mg_lsf_box?
              if (af_has_children(tree%boxes(id))) then
                 !> @todo Solution on coarse grid can lead to large gradient due
                 !> to inconsistencies with level set function
@@ -1735,12 +1830,12 @@ contains
                 call mg_box_lpllsf_gradient(tree, id, mg, i_fc, fac)
              end if
           case (mg_veps_box)
-             ! Should call dielectric_correct_field_fc afterwards
+             ! Should call surface_correct_field_fc afterwards
              call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
           case (af_init_tag)
-             error stop "mg_auto_op: box tag not set"
+             error stop "box tag not set"
           case default
-             error stop "mg_auto_op: unknown box tag"
+             error stop "unknown box tag"
           end select
 
           if (present(i_norm)) then
@@ -1915,8 +2010,7 @@ contains
     call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
 
     ix_dist = af_stencil_index(tree%boxes(id), mg_lsf_distance_key)
-    if (ix_dist == af_stencil_none) &
-         error stop "No distances stored for this box"
+    if (ix_dist == af_stencil_none) error stop "No distances stored"
 
     associate(box => tree%boxes(id), cc => tree%boxes(id)%cc)
       nc     = box%n_cell

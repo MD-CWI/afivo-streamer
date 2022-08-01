@@ -45,14 +45,14 @@ program poisson_benchmark
   end if
 
   if (n_args >= 3) then
-     call get_command_argument(2, arg_string)
+     call get_command_argument(3, arg_string)
      read(arg_string, *) max_ref_lvl
   else
      max_ref_lvl = 2
   end if
 
   if (n_args >= 4) then
-     call get_command_argument(3, arg_string)
+     call get_command_argument(4, arg_string)
      read(arg_string, *) runtime
      if (runtime < 1e-3_dp) stop "Run time should be > 1e-3 seconds"
   else

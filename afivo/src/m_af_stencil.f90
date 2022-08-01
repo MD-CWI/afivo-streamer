@@ -716,7 +716,7 @@ contains
     end select
   end subroutine af_stencil_gsrb_box
 
-  !> Apply a constant 3/5/7-point stencil in 1D/2D/3D
+  !> Perform Gauss-Seidel red-black on a 3/5/7-point stencil in 1D/2D/3D
   subroutine stencil_gsrb_357(box, stencil, redblack, iv, i_rhs)
     type(box_t), intent(inout)  :: box      !< Operate on this box
     type(stencil_t), intent(in) :: stencil  !< Stencil

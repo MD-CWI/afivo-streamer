@@ -28,7 +28,7 @@ by eight children instead of four in 2D. The 1D equivalent of such trees is also
 supported in Afivo. Properties of such trees are summarized in the table below.
 
 Property | 1D tree | Quadtree | Octree
----|---|---
+---|---|---|---
 Children of a box | 2 | 4 | 8
 Number of corners | 0 | 4 | 8
 Number of faces | 2 | 4 | 6
