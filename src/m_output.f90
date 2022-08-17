@@ -95,6 +95,9 @@ module m_output
   ! Print status every this many seconds
   real(dp), public, protected :: output_status_delay = 60.0_dp
 
+  ! To reduce output when the voltage is off
+  integer, public, protected :: output_dt_factor_pulse_off = 1
+
   ! Density threshold for detecting plasma regions
   real(dp) :: density_threshold = 1e18_dp
 
@@ -141,6 +144,10 @@ contains
 
     call CFG_add_get(cfg, "output%status_delay", output_status_delay, &
          "Print status every this many seconds")
+
+    call CFG_add_get(cfg, "output%dt_factor_pulse_off", &
+         output_dt_factor_pulse_off, &
+         "To reduce output when the voltage is off")
 
     call CFG_add(cfg, "output%only", empty_names, &
          "If defined, only output these variables", .true.)

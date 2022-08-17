@@ -38,7 +38,7 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
-  real(dp)                  :: breakdown_field_Td
+  real(dp)                  :: breakdown_field_Td, current_output_dt
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -178,11 +178,17 @@ program streamer
         time_last_print = wc_time
      end if
 
+     if (abs(current_voltage) > 0.0_dp) then
+        current_output_dt = output_dt
+     else
+        current_output_dt = output_dt * output_dt_factor_pulse_off
+     end if
+
      ! Every output_dt, write output
-     if (time + dt >= time_last_output + output_dt) then
+     if (time + dt >= time_last_output + current_output_dt) then
         write_out        = .true.
-        dt               = time_last_output + output_dt - time
-        time_last_output = time_last_output + output_dt
+        dt               = time_last_output + current_output_dt - time
+        time_last_output = time_last_output + current_output_dt
         output_cnt       = output_cnt + 1
      else
         write_out = .false.
