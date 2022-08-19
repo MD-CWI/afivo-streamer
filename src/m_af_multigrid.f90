@@ -1129,10 +1129,10 @@ contains
             n = af_stencil_index(box, mg%operator_key)
          end if
 
-         ! Right-hand side correction for internal boundaries
+         ! Compute right-hand side correction for internal boundaries
          if (allocated(box%stencils(n)%f)) then
-            box%stencils(n)%bc_correction = &
-                 box%stencils(n)%f * mg%lsf_boundary_value
+            box%stencils(n)%bc_correction = box%stencils(n)%f * &
+                 mg_lsf_boundary_value(box, mg)
          end if
 
          if (lvl > 1) then
@@ -2005,6 +2005,7 @@ contains
     integer                   :: IJK
     integer                   :: n, nc, i_phi, ix_dist
     real(dp)                  :: inv_dr(NDIM), dd(2*NDIM)
+    real(dp)                  :: bc(DTIMES(tree%n_cell))
 
     ! Compute regular values, correct part of them below
     call mg_box_lpl_gradient(tree, id, mg, i_fc, fac)
@@ -2016,6 +2017,7 @@ contains
       nc     = box%n_cell
       i_phi  = mg%i_phi
       inv_dr = fac / box%dr
+      bc     = mg_lsf_boundary_value(box, mg)
 
       ! Use sparse storage of boundary distances
       do n = 1, size(box%stencils(ix_dist)%sparse_ix, 2)
@@ -2026,11 +2028,11 @@ contains
 
          if (dd(1) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, 1, i_fc) = inv_dr(1) * &
-                 (cc(i, i_phi) - mg%lsf_boundary_value) / dd(1)
+                 (cc(i, i_phi) - bc(IJK)) / dd(1)
          end if
          if (dd(2) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i+1, 1, i_fc) = inv_dr(1) * &
-                 (mg%lsf_boundary_value - cc(i, i_phi)) / dd(2)
+                 (bc(IJK) - cc(i, i_phi)) / dd(2)
          end if
 #elif NDIM == 2
          i = box%stencils(ix_dist)%sparse_ix(1, n)
@@ -2038,19 +2040,19 @@ contains
 
          if (dd(1) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j, 1, i_fc) = inv_dr(1) * &
-                 (cc(i, j, i_phi) - mg%lsf_boundary_value) / dd(1)
+                 (cc(i, j, i_phi) - bc(IJK)) / dd(1)
          end if
          if (dd(2) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i+1, j, 1, i_fc) = inv_dr(1) * &
-                 (mg%lsf_boundary_value - cc(i, j, i_phi)) / dd(2)
+                 (bc(IJK) - cc(i, j, i_phi)) / dd(2)
          end if
          if (dd(3) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j, 2, i_fc) = inv_dr(2) * &
-                 (cc(i, j, i_phi) - mg%lsf_boundary_value) / dd(3)
+                 (cc(i, j, i_phi) - bc(IJK)) / dd(3)
          end if
          if (dd(4) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j+1, 2, i_fc) = inv_dr(2) * &
-                 (mg%lsf_boundary_value - cc(i, j, i_phi)) / dd(4)
+                 (bc(IJK) - cc(i, j, i_phi)) / dd(4)
          end if
 #elif NDIM == 3
          i = box%stencils(ix_dist)%sparse_ix(1, n)
@@ -2059,27 +2061,27 @@ contains
 
          if (dd(1) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j, k, 1, i_fc) = inv_dr(1) * &
-                 (cc(IJK, i_phi) - mg%lsf_boundary_value) / dd(1)
+                 (cc(IJK, i_phi) - bc(IJK)) / dd(1)
          end if
          if (dd(2) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i+1, j, k, 1, i_fc) = inv_dr(1) * &
-                 (mg%lsf_boundary_value - cc(IJK, i_phi)) / dd(2)
+                 (bc(IJK) - cc(IJK, i_phi)) / dd(2)
          end if
          if (dd(3) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j, k, 2, i_fc) = inv_dr(2) * &
-                 (cc(IJK, i_phi) - mg%lsf_boundary_value) / dd(3)
+                 (cc(IJK, i_phi) - bc(IJK)) / dd(3)
          end if
          if (dd(4) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j+1, k, 2, i_fc) = inv_dr(2) * &
-                 (mg%lsf_boundary_value - cc(IJK, i_phi)) / dd(4)
+                 (bc(IJK) - cc(IJK, i_phi)) / dd(4)
          end if
          if (dd(5) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j, k, 3, i_fc) = inv_dr(3) * &
-                 (cc(IJK, i_phi) - mg%lsf_boundary_value) / dd(5)
+                 (cc(IJK, i_phi) - bc(IJK)) / dd(5)
          end if
          if (dd(6) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
             box%fc(i, j, k+1, 3, i_fc) = inv_dr(3) * &
-                 (mg%lsf_boundary_value - cc(IJK, i_phi)) / dd(6)
+                 (bc(IJK) - cc(IJK, i_phi)) / dd(6)
          end if
 #endif
       end do
