@@ -205,6 +205,7 @@ contains
        do i = 1, n
           lineout_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
        end do
+       deallocate(varname)
 
        call CFG_add_get(cfg, "lineout%npoints", lineout_npoints, &
             "Use this many points for lineout data")
@@ -236,6 +237,7 @@ contains
        do i = 1, n
           plane_ivar(i) = af_find_cc_variable(tree, trim(varname(i)))
        end do
+       deallocate(varname)
 
        call CFG_add_get(cfg, "plane%npixels", plane_npixels, &
             "Use this many pixels for plane data")
@@ -275,6 +277,18 @@ contains
        n_extra_vars = n_extra_vars + 1
        output_extra_vars(n_extra_vars) = "sigma"
     end if
+
+    call CFG_add(cfg, "output%write_derivatives", empty_names, &
+         "Write derivatives of these species to output", dynamic_size=.true.)
+    call CFG_get_size(cfg, "output%write_derivatives", n)
+    allocate(varname(n))
+    call CFG_get(cfg, "output%write_derivatives", varname)
+
+    do i = 1, n
+       n_extra_vars = n_extra_vars + 1
+       output_extra_vars(n_extra_vars) = "src_" // trim(varname(i))
+    end do
+    deallocate(varname)
 
   end subroutine output_initialize
 
@@ -402,12 +416,18 @@ contains
   subroutine add_variables(box, new_vars, n_var)
     use m_gas
     use m_transport_data
+    use m_chemistry
     type(box_t), intent(in) :: box
     integer, intent(in)     :: n_var
     real(dp)                :: new_vars(DTIMES(0:box%n_cell+1), n_var)
-    integer                 :: n
+    integer                 :: n, nc, n_cells, i_species
+    character(len=name_len) :: species_name
     real(dp)                :: N_inv(DTIMES(0:box%n_cell+1))
     real(dp)                :: Td(DTIMES(0:box%n_cell+1))
+    real(dp)                :: dens((box%n_cell+2)**NDIM, n_species)
+    real(dp)                :: rates((box%n_cell+2)**NDIM, n_reactions)
+    real(dp)                :: derivs((box%n_cell+2)**NDIM, n_species)
+    logical                 :: have_derivs
 
     if (.not. gas_constant_density) then
        N_inv = 1/box%cc(DTIMES(:), i_gas_dens)
@@ -416,6 +436,10 @@ contains
     end if
 
     Td = SI_to_Townsend * box%cc(DTIMES(:), i_electric_fld) * N_inv
+
+    have_derivs = .false.
+    nc = box%n_cell
+    n_cells = (nc+2)**NDIM
 
     do n = 1, n_var
        select case (output_extra_vars(n))
@@ -427,7 +451,29 @@ contains
           new_vars(DTIMES(:), n) = LT_get_col(td_tbl, td_mobility, Td) * &
                N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
        case default
-          error stop "Unknown variable"
+          ! Assume temporal production of some species is added, prefixed by "src_"
+
+          if (.not. have_derivs) then
+             call get_rates(pack(Td, .true.), rates, n_cells)
+
+             dens(:, n_gas_species+1:n_species) = reshape(&
+                  box%cc(DTIMES(:), species_itree(n_gas_species+1:n_species)), &
+                  [n_cells, n_plasma_species])
+
+             call get_derivatives(dens, rates, derivs, n_cells)
+             have_derivs = .true.
+          end if
+
+          species_name = trim(output_extra_vars(n)(5:))
+          i_species = species_index(species_name)
+
+          if (i_species == -1) then
+             print *, "No species corresponding to ", species_name
+             error stop "Error adding time derivative to output"
+          else
+             new_vars(DTIMES(:), n) = reshape(derivs(:, i_species), &
+                  [DTIMES(nc+2)])
+          end if
        end select
     end do
   end subroutine add_variables
