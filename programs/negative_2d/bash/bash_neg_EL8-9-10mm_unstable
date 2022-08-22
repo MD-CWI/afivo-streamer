@@ -1,0 +1,7 @@
+#!/bin/bash
+
+cd ../
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.936" -field_rod_radius=0.8e-3 -end_streamer_length=95e-3 -field_amplitude=11.688e5 -cross%write=T -plane%write=T -output%name+=neg_EL8-9-10mm_unstable/neg_EL8mm_146.1kV
+
+./streamer air_negative_125mm_chem_electro9mm.cfg -coarse_grid_size="128 128" -field_rod_r0="0 0.92" -field_rod_radius=1.0e-3 -end_streamer_length=90e-3 -field_amplitude=11.688e5 -cross%write=T -plane%write=T -output%name+=neg_EL8-9-10mm_unstable/neg_EL10mm_146.1kV
