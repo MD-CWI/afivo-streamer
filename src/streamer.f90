@@ -17,7 +17,6 @@ program streamer
   use m_types
   use m_user_methods
   use m_output
-  use m_circuit
   use m_dielectric
 
   implicit none
@@ -28,7 +27,7 @@ program streamer
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
   integer, allocatable      :: ref_links(:, :)
-  logical                   :: write_out, evolve_electrons
+  logical                   :: write_out
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: dt_gas_lim
   real(dp)                  :: memory_limit_GB = 16.0_dp
@@ -39,7 +38,7 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
-  real(dp)                  :: breakdown_field_Td
+  real(dp)                  :: breakdown_field_Td, current_output_dt
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -82,6 +81,14 @@ program streamer
      end if
   end do
 
+  ! These values are overwritten when restarting
+  it               = 0
+  time             = 0.0_dp ! Simulation time (all times are in s)
+  global_time      = time
+  photoi_prev_time = time   ! Time of last photoionization computation
+  dt               = global_dt
+  initial_streamer_pos = 0.0_dp ! Initial streamer position
+
   ! Initialize the tree (which contains all the mesh information)
   if (restart_from_file /= undefined_str) then
      tree_copy = tree           ! Store the settings
@@ -111,12 +118,6 @@ program streamer
      ! This routine always needs to be called when using multigrid
      call mg_init(tree, mg)
   else
-     time             = 0.0_dp ! Simulation time (all times are in s)
-     global_time      = time
-     photoi_prev_time = time   ! Time of last photoionization computation
-     dt               = global_dt
-     initial_streamer_pos = 0.0_dp ! Initial streamer position
-
      if (ST_cylindrical) then
         coord_type = af_cyl
      else
@@ -146,8 +147,9 @@ program streamer
   time_last_print  = -1e10_dp
   time_last_output = time
 
-  do it = 1, huge(1)-1
-     if (ST_use_end_time .and. time >= ST_end_time) exit
+  do
+     it = it + 1
+     if (time >= ST_end_time) exit
 
      if (associated(user_generic_method)) then
         call user_generic_method(tree, time)
@@ -176,51 +178,41 @@ program streamer
         time_last_print = wc_time
      end if
 
+     if (abs(current_voltage) > 0.0_dp) then
+        current_output_dt = output_dt
+     else
+        current_output_dt = output_dt * output_dt_factor_pulse_off
+     end if
+
      ! Every output_dt, write output
-     if (time + dt >= time_last_output + output_dt) then
+     if (time + dt >= time_last_output + current_output_dt) then
         write_out        = .true.
-        dt               = time_last_output + output_dt - time
-        time_last_output = time_last_output + output_dt
+        dt               = time_last_output + current_output_dt - time
+        time_last_output = time_last_output + current_output_dt
         output_cnt       = output_cnt + 1
      else
         write_out = .false.
      end if
 
-     evolve_electrons = .true.
-     if (associated(user_evolve_electrons)) &
-          evolve_electrons = user_evolve_electrons(tree, time)
-
-     if (evolve_electrons) then
-        if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
-           call photoi_set_src(tree, time - photoi_prev_time)
-           photoi_prev_time = time
-        end if
-
-        if (ST_use_electrode) then
-           call set_electrode_densities(tree)
-        end if
-
-        if (ST_use_dielectric) then
-           call af_advance(tree, dt, dt_lim, time, &
-                species_itree(n_gas_species+1:n_species), &
-                time_integrator, forward_euler, &
-                dielectric_combine_substeps)
-        else
-           call af_advance(tree, dt, dt_lim, time, &
-                species_itree(n_gas_species+1:n_species), &
-             time_integrator, forward_euler)
-        end if
-
-        ! Make sure field is available for latest time state
-        call field_compute(tree, mg, 0, time, .true.)
-
-        if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
-        if (circuit_used) call circuit_update(tree, dt)
-     else
-        dt_lim = dt_max
+     if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+        call photoi_set_src(tree, time - photoi_prev_time)
+        photoi_prev_time = time
      end if
 
+     if (ST_use_electrode) then
+        call set_electrode_densities(tree)
+     end if
+
+     call af_advance(tree, dt, dt_lim, time, &
+          species_itree(n_gas_species+1:n_species), &
+          time_integrator, forward_euler)
+
+     ! Make sure field is available for latest time state
+     call field_compute(tree, mg, 0, time, .true.)
+
      if (gas_dynamics) then
+        call coupling_add_fluid_source(tree, dt)
+
         ! Go back to time at beginning of step
         time = global_time
 
@@ -231,14 +223,9 @@ program streamer
         dt_gas_lim = dt_max
      end if
 
-     ! If neither electrons or the gas is evolved, make sure time is increased
-     if (.not. (evolve_electrons .or. gas_dynamics)) then
-        time = time + dt
-     end if
-
      ! dt is modified when writing output, global_dt not
      dt          = min(dt_lim, dt_gas_lim)
-     global_dt   = dt_lim
+     global_dt   = dt
      global_time = time
 
      if (global_dt < dt_min) then
@@ -272,7 +259,7 @@ program streamer
            ! Make sure there are no refinement jumps across the dielectric
            call surface_get_refinement_links(diel, ref_links)
            call af_adjust_refinement(tree, refine_routine, ref_info, &
-             refine_buffer_width, ref_links)
+                refine_buffer_width, ref_links)
            call surface_update_after_refinement(tree, diel, ref_info)
         else
            call af_adjust_refinement(tree, refine_routine, ref_info, &
@@ -312,7 +299,6 @@ contains
     call photoi_initialize(tree, cfg)
     call refine_initialize(cfg)
     call field_initialize(tree, cfg, mg)
-    call circuit_initialize(tree, cfg, restart)
     call init_cond_initialize(tree, cfg)
     call output_initialize(tree, cfg)
     call dielectric_initialize(tree, cfg)
@@ -384,21 +370,30 @@ contains
   subroutine write_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    write(my_unit) it
     write(my_unit) output_cnt
     write(my_unit) time
     write(my_unit) global_time
     write(my_unit) photoi_prev_time
     write(my_unit) global_dt
+
+    write(my_unit) sum(ST_global_rates(1:n_reactions, :), dim=2)
+    write(my_unit) sum(ST_global_JdotE(1, :))
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    read(my_unit) it
     read(my_unit) output_cnt
     read(my_unit) time
     read(my_unit) global_time
     read(my_unit) photoi_prev_time
     read(my_unit) global_dt
+
+    ! Data is stored in location of first thread
+    read(my_unit) ST_global_rates(1:n_reactions, 1)
+    read(my_unit) ST_global_JdotE(1, 1)
 
     dt = global_dt
   end subroutine read_sim_data
@@ -453,7 +448,7 @@ contains
 #endif
 
           if (any(lsf_nb > 0) .and. &
-            associated(bc_species, af_bc_neumann_zero)) then
+               associated(bc_species, af_bc_neumann_zero)) then
              ! At the boundary of the electrode
 #if NDIM == 1
              dens_nb = [box%cc(i-1, i_electron), &

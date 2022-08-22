@@ -5,11 +5,12 @@
 program poisson_lsf_test
   use m_af_all
   use m_config
+  use omp_lib
 
   implicit none
 
   integer            :: box_size         = 8
-  integer, parameter :: n_iterations     = 10
+  integer            :: n_iterations     = 10
   integer            :: max_refine_level = 4
   integer            :: min_refine_level = 2
   integer            :: i_phi
@@ -25,8 +26,8 @@ program poisson_lsf_test
   logical :: write_numpy = .false.
   integer :: refinement_type = 1
 
-  ! Which shape to use, 1 = circle, 2 = heart, 3 = rhombus, 4-5 = triangle
-  integer             :: shape             = 1
+  ! Which shape to use
+  integer             :: shape = 1
 
   real(dp) :: sharpness_t             = 4.0_dp
   real(dp) :: boundary_value          = 1.0_dp
@@ -41,9 +42,12 @@ program poisson_lsf_test
   real(dp)           :: residu, max_error, max_field
   character(len=150) :: fname
   character(len=20)  :: output_suffix = ""
+  character(len=20)  :: prolongation = "auto"
   type(mg_t)         :: mg
   type(CFG_t)        :: cfg
   real(dp)           :: error_squared, rmse
+  real(dp)           :: mem_limit_gb = 8.0_dp
+  real(dp)           :: t0, t_sum
   logical            :: write_output = .true.
 
   call af_add_cc_variable(tree, "phi", ix=i_phi)
@@ -79,6 +83,12 @@ program poisson_lsf_test
        "Index of the shape used")
   call CFG_add_get(cfg, "box_size", box_size, &
        "Size of grid boxes")
+  call CFG_add_get(cfg, "n_iterations", n_iterations, &
+       "Number of multigrid iterations")
+  call CFG_add_get(cfg, "n_cycle_up", mg%n_cycle_up, &
+       "Number of relaxation steps going up")
+  call CFG_add_get(cfg, "n_cycle_down", mg%n_cycle_down, &
+       "Number of relaxation steps going down")
   call CFG_add_get(cfg, "solution%sharpness", sharpness_t, &
        "Sharpness of solution (for some cases)")
   call CFG_add_get(cfg, "solution%r0", solution_r0, &
@@ -91,6 +101,10 @@ program poisson_lsf_test
        "Smallest width to resolve in the solution")
   call CFG_add_get(cfg, "boundary_value", boundary_value, &
        "Value for Dirichlet boundary condition")
+  call CFG_add_get(cfg, "mem_limit_gb", mem_limit_gb, &
+       "Memory limit (GByte)")
+  call CFG_add_get(cfg, "prolongation", prolongation, &
+       "Prolongation method (linear, sparse, auto, custom)")
 
   call CFG_check(cfg)
   ! call CFG_write(cfg, "stdout")
@@ -113,12 +127,26 @@ program poisson_lsf_test
   mg%lsf => get_lsf
   mg%lsf_length_scale = solution_smallest_width
 
+  select case (prolongation)
+  case ("linear")
+     mg%prolongation_type = mg_prolong_linear
+  case ("sparse")
+     mg%prolongation_type = mg_prolong_sparse
+  case ("auto")
+     mg%prolongation_type = mg_prolong_auto
+  case ("custom")
+     mg%lsf_use_custom_prolongation = .true.
+  case default
+     error stop "Unknown prolongation method"
+  end select
+
   ! Initialize tree
   call af_init(tree, & ! Tree to initialize
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(1.0_dp)], &
        [DTIMES(box_size)], &
-       coord=coord)
+       coord=coord, &
+       mem_limit_gb=mem_limit_gb)
 
   call af_refine_up_to_lvl(tree, min_refine_level)
   call mg_init(tree, mg)
@@ -129,19 +157,23 @@ program poisson_lsf_test
      if (ref_info%n_add == 0) exit
   end do
 
+  ! Set mask where lsf changes sign
+  call af_loop_box(tree, set_lsf_mask)
+  call af_gc_tree(tree, [i_lsf_mask])
+
   call af_print_info(tree)
 
+  t_sum = 0
   write(*, "(A,A4,4A14)") "# ", "iter", "residu", "max_error", "rmse", "max_field"
 
   do mg_iter = 1, n_iterations
+     t0 = omp_get_wtime()
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
+     t_sum = t_sum + omp_get_wtime() - t0
+
      call mg_compute_phi_gradient(tree, mg, i_field, 1.0_dp, i_field_norm)
      call af_gc_tree(tree, [i_field_norm])
      call af_loop_box(tree, set_error)
-
-     ! Set mask where lsf changes sign
-     call af_loop_box(tree, set_lsf_mask)
-     call af_gc_tree(tree, [i_lsf_mask])
 
      ! Determine the minimum and maximum residual and error
      call af_tree_maxabs_cc(tree, i_tmp, residu)
@@ -151,8 +183,8 @@ program poisson_lsf_test
      rmse = sqrt(error_squared/af_total_volume(tree))
      write(*, "(A,i4,4E14.5)") "# ", mg_iter, residu, max_error, rmse, max_field
 
-     write(fname, "(A,I0,A)") "output/poisson_lsf_test_" // DIMNAME // &
-          "_", mg_iter, trim(output_suffix)
+     write(fname, "(A,I0)") "output/poisson_lsf_test_" // DIMNAME // &
+          trim(output_suffix) // "_", mg_iter
      if (write_output) then
         call af_write_silo(tree, trim(fname))
      end if
@@ -162,6 +194,8 @@ program poisson_lsf_test
              ixs_cc=[i_phi, i_lsf_mask])
      end if
   end do
+
+  write(*, "(A,E14.5)") " seconds_per_FMG_cycle", t_sum/n_iterations
 
   call af_stencil_print_info(tree)
 

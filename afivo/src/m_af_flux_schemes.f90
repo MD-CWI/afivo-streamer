@@ -232,18 +232,20 @@ contains
   end subroutine flux_kurganovTadmor_1d
 
   subroutine flux_update_densities(tree, dt, n_vars, i_cc, i_flux, &
-       s_deriv, s_prev, s_out, add_source_box)
+       s_deriv, n_prev, s_prev, w_prev, s_out, add_source_box)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
     integer, intent(in)       :: n_vars         !< Number of variables
     integer, intent(in)       :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)       :: i_flux(n_vars) !< Flux variables
     integer, intent(in)       :: s_deriv        !< State to compute derivatives from
-    integer, intent(in)       :: s_prev         !< Previous time state
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out          !< Output time state
     !> Method to include source terms
     procedure(subr_source)    :: add_source_box
-    integer                   :: lvl, n, id, IJK, nc
+    integer                   :: lvl, n, id, IJK, nc, i_var, iv
     real(dp)                  :: dt_dr(NDIM)
     real(dp)                  :: rfac(2, tree%n_cell)
 
@@ -257,12 +259,16 @@ contains
           id    = tree%lvls(lvl)%leaves(n)
           dt_dr = dt/tree%boxes(id)%dr
 
-          tree%boxes(id)%cc(DTIMES(1:nc), i_cc+s_out) = &
-               tree%boxes(id)%cc(DTIMES(1:nc), i_cc+s_prev)
-
-          call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, s_out)
-
           associate(cc => tree%boxes(id)%cc, fc => tree%boxes(id)%fc)
+            do i_var = 1, n_vars
+               iv = i_cc(i_var)
+               do KJI_DO(1, nc)
+                  tree%boxes(id)%cc(IJK, iv+s_out) = sum(w_prev * &
+                       tree%boxes(id)%cc(IJK, iv+s_prev))
+               end do; CLOSE_DO
+            end do
+
+            call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, s_out)
 #if NDIM == 1
             do KJI_DO(1, nc)
                cc(i, i_cc+s_out) = cc(i, i_cc+s_out) + &

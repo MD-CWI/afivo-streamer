@@ -84,12 +84,6 @@ module m_streamer
   !> Ensure that flux limiting does not lead to fields higher than this
   real(dp), public, protected :: ST_drt_max_field = 1.0e100_dp
 
-  !> Limit velocities to this value (m/s)
-  real(dp), public, protected :: ST_max_velocity = -1.0_dp
-
-  !> Disable diffusion parallel to fields above this threshold (V/m)
-  real(dp), public, protected :: ST_diffusion_field_limit = 1.0e100_dp
-
   !> Use source factor to prevent unphysical effects due to diffusion
   integer, public, protected :: ST_source_factor
 
@@ -102,14 +96,8 @@ module m_streamer
   !> Minimal density for including electron sources
   real(dp), public, protected :: ST_source_min_density = -1e10_dp
 
-  !> Correction used for to compute cell-centered fields
-  character(len=name_len), public, protected :: ST_field_correction = "none"
-
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
-
-  !> If we are using ST_end_time
-  logical, public, protected :: ST_use_end_time = .true.
 
   !> Whether streamer length is used as a simulation stopping
   logical, public, protected :: ST_use_end_streamer_length = .false.
@@ -135,6 +123,15 @@ module m_streamer
 
   !> Whether the domain is periodic (per dimension)
   logical, public, protected :: ST_periodic(NDIM) = .false.
+
+  !> Whether to limit plasma reactions to a certain region
+  logical, public, protected :: ST_plasma_region_enabled = .false.
+
+  !> Limit plasma reactions to coordinates between rmin and rmax
+  real(dp), public, protected :: ST_plasma_region_rmin(NDIM) = -1e100_dp
+
+  !> Limit plasma reactions to coordinates between rmin and rmax
+  real(dp), public, protected :: ST_plasma_region_rmax(NDIM) = 1e100_dp
 
   !> Number of V-cycles to perform per time step
   integer, public, protected :: ST_multigrid_num_vcycles = 2
@@ -282,8 +279,6 @@ contains
        call af_add_cc_variable(tree, "power_density", ix = i_power_density)
     end if
 
-    call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
-         "Whether end_time is used to end the simulation")
     call CFG_add_get(cfg, "use_end_streamer_length", ST_use_end_streamer_length, &
          "Whether the length of the streamer is used to end the simulation")
     call CFG_add_get(cfg, "end_streamer_length", ST_end_streamer_length, &
@@ -305,6 +300,13 @@ contains
          "The origin of the domain (m)")
     call CFG_add_get(cfg, "periodic", ST_periodic, &
          "Whether the domain is periodic (per dimension)")
+
+    call CFG_add_get(cfg, "plasma_region_enabled", ST_plasma_region_enabled, &
+         "Whether to limit plasma reactions to a certain region")
+    call CFG_add_get(cfg, "plasma_region_rmin", ST_plasma_region_rmin, &
+         "Limit plasma reactions to coordinates between rmin and rmax")
+    call CFG_add_get(cfg, "plasma_region_rmax", ST_plasma_region_rmax, &
+         "Limit plasma reactions to coordinates between rmin and rmax")
 
     if (all(ST_coarse_grid_size == -1)) then
        ! Not set, automatically determine size
@@ -347,19 +349,12 @@ contains
          "Enable flux limiting, but prevent field from exceeding this value")
     if (ST_drt_max_field < 1e100_dp) ST_drt_limit_flux = .true.
 
-    call CFG_add_get(cfg, "fixes%max_velocity", ST_max_velocity, &
-         "Limit velocities to this value (m/s)")
-    call CFG_add_get(cfg, "fixes%diffusion_field_limit", ST_diffusion_field_limit, &
-         "Disable diffusion parallel to fields above this threshold (V/m)")
     call CFG_add_get(cfg, "fixes%source_factor", source_factor, &
          "Use source factor to prevent unphysical effects due to diffusion")
     call CFG_add_get(cfg, "fixes%write_source_factor", write_source_factor, &
          "Whether to write the source factor to the output")
     call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
          "Minimal density for including electron sources")
-    call CFG_add_get(cfg, "fixes%field_correction", ST_field_correction, &
-         "Correction used for computing cell-centered fields " // &
-         "(none, divE, harmonic)")
 
     select case (source_factor)
     case ("none")

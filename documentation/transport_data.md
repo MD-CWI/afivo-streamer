@@ -141,6 +141,7 @@ E/N range | 1-1200 Td | A reasonable range for streamer simulations
 E/N profile | exponential | To have more points at lower fields, quadratic could also work
 `Tgas` | 300 K | Gas temperature
 Super-elastic collisions | include | Probably not significant at low gas temperature and high E/N
+Growth model | temporal | Temporal is recommended, see this [paper](https://doi.org/10.1088/1361-6595/ac417b)
 
 After pressing **run calculations**, you can download the swarm parameters in a text file. This file can be converted to input for the afivo-streamer code with the script `tools/bolsig_convert.py`, for example like:
 

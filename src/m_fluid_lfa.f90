@@ -16,8 +16,8 @@ contains
   !> Advance fluid model using forward Euler step. If the equation is written as
   !> y' = f(y), the result is: y(s_out) = y(s_prev) + f(y(s_dt)), where the
   !> s_... refer to temporal states.
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, s_prev, s_out, &
-       i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+       w_prev, s_out, i_step, n_steps)
     use m_chemistry
     use m_streamer
     use m_field
@@ -25,16 +25,16 @@ contains
     use m_transport_data
     use m_dielectric
     type(af_t), intent(inout) :: tree
-    real(dp), intent(in)      :: dt     !< Time step
-    real(dp), intent(inout)   :: dt_lim !< Time step limitation
-    real(dp), intent(in)      :: time
-    !> Time state to compute derivatives from
-    integer, intent(in)       :: s_deriv
-    !> Time state to add derivatives to
-    integer, intent(in)       :: s_prev
-    !< Time state to store result in
-    integer, intent(in)       :: s_out
-    integer, intent(in)       :: i_step, n_steps
+    real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
+    real(dp), intent(in)      :: time           !< Current time
+    integer, intent(in)       :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)       :: s_out          !< Output state
+    integer, intent(in)       :: i_step         !< Step of the integrator
+    integer, intent(in)       :: n_steps        !< Total number of steps
     integer                   :: lvl, i, id, p_id, nc, ix, id_out
     logical                   :: set_dt
 
@@ -83,7 +83,7 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           call update_solution(tree%boxes(id), nc, dt, s_deriv, &
-               s_prev, s_out, set_dt)
+               n_prev, s_prev, w_prev, s_out, set_dt)
 
        end do
        !$omp end do
@@ -115,6 +115,65 @@ contains
     end if
   end subroutine forward_euler
 
+  !> Get velocity and diffusion coefficient for electron flux
+  subroutine compute_flux_coeff_1d(nc, E_cc, E_x, ne, N_gas, dt, dx, v, dc, fmax)
+    use m_gas
+    use m_streamer
+    use m_units_constants
+    use m_lookup_table
+    use m_transport_data
+    integer, intent(in)     :: nc
+    real(dp), intent(in)    :: E_cc(0:nc+1)  !< Cell-centered field strengths
+    real(dp), intent(in)    :: E_x(nc+1)     !< Face-centered field components
+    real(dp), intent(in)    :: ne(0:nc+1)    !< Electron densities
+    real(dp), intent(in)    :: N_gas(0:nc+1) !< Gas number density at cell centers
+    real(dp), intent(in)    :: dt            !< Current time step
+    real(dp), intent(in)    :: dx            !< Grid spacing
+    real(dp), intent(out)   :: v(nc+1)       !< Velocity at cell faces
+    real(dp), intent(out)   :: dc(nc+1)      !< Diffusion coefficient at cell faces
+    real(dp), intent(inout) :: fmax(nc+1)    !< Maximum allowed flux
+
+    real(dp), parameter :: nsmall = 1.0_dp ! A small density
+    integer             :: n
+    real(dp)            :: E_face(nc+1), Td(nc+1), N_inv(nc+1)
+    real(dp)            :: mu(nc+1), tmp, drt_fac, inv_dx
+
+    if (gas_constant_density) then
+       N_inv = 1/gas_number_density
+    else
+       ! Compute gas number density at cell faces
+       do n = 1, nc+1
+          N_inv(n) = 2 / (N_gas(n-1) + N_gas(n))
+       end do
+    end if
+
+    ! Compute field strength at cell faces, which is used to compute the
+    ! mobility and diffusion coefficient at the interface
+    do n = 1, nc+1
+       E_face(n) = 0.5_dp * (E_cc(n-1) + E_cc(n))
+       Td(n) = E_face(n) * SI_to_Townsend * N_inv(n)
+    end do
+
+    mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+    dc = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
+
+    ! Compute velocity, -mu accounts for negative electron charge
+    v = -mu * E_x
+
+    if (ST_drt_limit_flux) then
+       !> Compute maximal flux if the dielectric relaxation time is not taken
+       !> into account, see https://doi.org/10.1088/1361-6595/ab6757
+       drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
+       inv_dx = 1/dx
+
+       do n = 1, nc+1
+          tmp = abs(ne(n-1) - ne(n)) / max(ne(n-1), ne(n), nsmall)
+          tmp = max(E_face(n), tmp * inv_dx * dc(n) / mu(n))
+          fmax(n) = drt_fac * tmp
+       end do
+    end if
+  end subroutine compute_flux_coeff_1d
+
   !> Compute the electron fluxes due to drift and diffusion
   subroutine fluxes_elec(tree, id, nc, dt, s_in, set_dt)
     use m_af_flux_schemes
@@ -126,31 +185,32 @@ contains
     use m_lookup_table
     use m_transport_data
     type(af_t), intent(inout) :: tree
-    integer, intent(in)        :: id
-    integer, intent(in)        :: nc   !< Number of cells per dimension
-    real(dp), intent(in)       :: dt
-    integer, intent(in)        :: s_in !< Input time state
-    logical, intent(in)        :: set_dt
-    real(dp)                   :: inv_dr(NDIM), fld, Td
+    integer, intent(in)       :: id
+    integer, intent(in)       :: nc   !< Number of cells per dimension
+    real(dp), intent(in)      :: dt
+    integer, intent(in)       :: s_in !< Input time state
+    logical, intent(in)       :: set_dt
+    real(dp)                  :: dr(NDIM), inv_dr(NDIM), Td
     ! Velocities at cell faces
-    real(dp)                   :: v(DTIMES(1:nc+1), NDIM)
+    real(dp)                  :: v(DTIMES(1:nc+1), NDIM)
     ! Diffusion coefficients at cell faces
-    real(dp)                   :: dc(DTIMES(1:nc+1), NDIM)
+    real(dp)                  :: dc(DTIMES(1:nc+1), NDIM)
     ! Maximal fluxes at cell faces
-    real(dp)                   :: fmax(DTIMES(1:nc+1), NDIM)
+    real(dp)                  :: fmax(DTIMES(1:nc+1), NDIM)
     ! Cell-centered densities
-    real(dp)                   :: cc(DTIMES(-1:nc+2), 1)
-    real(dp)                   :: mu, max_mu_ion, fld_face, drt_fac, tmp
-    real(dp)                   :: nsmall, N_inv
-    real(dp)                   :: dt_cfl, dt_drt, dt_dif
-    real(dp)                   :: vmean(NDIM)
-    real(dp), parameter        :: eps = 1e-100_dp
-    integer                    :: n, IJK, tid
-#if NDIM > 1
-    integer                    :: m
-#endif
-#if NDIM == 3
-    integer                    :: l
+    real(dp)                  :: cc(DTIMES(-1:nc+2), 1)
+
+    real(dp)                  :: mu, max_mu_ion, N_inv
+    real(dp)                  :: dt_cfl, dt_drt, dt_dif
+    real(dp)                  :: vmean(NDIM), N_gas(0:nc+1)
+    real(dp)                  :: v_x(nc+1), dc_x(nc+1), fmax_x(nc+1)
+    real(dp)                  :: E_cc(0:nc+1), E_fc(nc+1), ne(0:nc+1)
+    real(dp), parameter       :: eps = 1e-100_dp
+    integer                   :: IJK, tid, dir
+#if NDIM == 2
+    integer                   :: m
+#elif NDIM == 3
+    integer                   :: m, n
 #endif
 
     ! Inside the dielectric, set the flux to zero. We later determine the
@@ -162,193 +222,97 @@ contains
        end if
     end if
 
-    inv_dr  = 1/tree%boxes(id)%dr
-    drt_fac = UC_eps0 / max(1e-100_dp, UC_elem_charge * dt)
-    nsmall  = 1.0_dp ! A small density
-    N_inv   = 1/gas_number_density ! For constant gas densities
-
-    v  = 0.0_dp
-    dc = 0.0_dp
-
-    if (ST_drt_limit_flux) then
-       fmax = 0.0_dp
-    end if
+    dr     = tree%boxes(id)%dr
+    inv_dr = 1/tree%boxes(id)%dr
+    v      = 0.0_dp
+    dc     = 0.0_dp
+    fmax   = 0.0_dp
 
     ! Fill cc with interior data plus two layers of ghost cells
     call af_gc2_box(tree, id, [i_electron+s_in], cc)
 
     associate(box => tree%boxes(id))
-      ! We use the average field to compute the mobility and diffusion coefficient
-      ! at the interface
-      do n = 1, nc+1
 #if NDIM == 1
-         if (.not. gas_constant_density) then
-            N_inv = 2 / (box%cc(n-1, i_gas_dens) + &
-                 box%cc(n, i_gas_dens))
-         end if
+      dir = 1                ! x-component
+      if (.not. gas_constant_density) N_gas = box%cc(0:nc+1, i_gas_dens)
 
-         fld = 0.5_dp * (box%cc(n-1, i_electric_fld) + &
-              box%cc(n, i_electric_fld))
-         Td = fld * SI_to_Townsend * N_inv
-         mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-         fld_face = box%fc(n, 1, electric_fld)
-         v(n, 1)  = -mu * fld_face
-         dc(n, 1) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
+      E_cc = box%cc(0:nc+1, i_electric_fld)
+      E_fc = box%fc(:, dir, electric_fld)
+      ne = cc(0:nc+1, 1)
+      call compute_flux_coeff_1d(nc, E_cc, E_fc, ne, N_gas, dt, dr(dir), &
+           v_x, dc_x, fmax_x)
+      v(:, dir) = v_x
+      dc(:, dir) = dc_x
+      fmax(:, dir) = fmax_x
+#elif NDIM == 2
+      do m = 1, nc
+         dir = 1                ! x-component
+         if (.not. gas_constant_density) N_gas = box%cc(0:nc+1, m, i_gas_dens)
 
-         if (ST_drt_limit_flux) then
-            tmp = abs(cc(n-1, 1) - cc(n, 1)) / &
-                 max(cc(n-1, 1), cc(n, 1), nsmall)
-            tmp = max(fld, tmp * inv_dr(1) * dc(n, 1) / mu)
-            fmax(n, 1) = drt_fac * tmp
-         end if
+         ! Avoid allocating array temporaries, but explicitly copy
+         E_cc = box%cc(0:nc+1, m, i_electric_fld)
+         E_fc = box%fc(:, m, dir, electric_fld)
+         ne = cc(0:nc+1, m, 1)
+         call compute_flux_coeff_1d(nc, E_cc, E_fc, ne, N_gas, dt, dr(dir), &
+              v_x, dc_x, fmax_x)
+         v(:, m, dir) = v_x
+         dc(:, m, dir) = dc_x
+         fmax(:, m, dir) = fmax_x
 
-         if (abs(fld_face) > ST_diffusion_field_limit .and. &
-              (cc(n-1, 1) - cc(n, 1)) * fld_face > 0.0_dp) then
-            dc(n, 1) = 0.0_dp
-         end if
-#else
-         do m = 1, nc
-#if NDIM == 2
-            if (.not. gas_constant_density) then
-               N_inv = 2 / (box%cc(n-1, m, i_gas_dens) + &
-                    box%cc(n, m, i_gas_dens))
-            end if
+         dir = 2                ! y-component
+         if (.not. gas_constant_density) N_gas = box%cc(m, 0:nc+1, i_gas_dens)
 
-            fld = 0.5_dp * (box%cc(n-1, m, i_electric_fld) + &
-                 box%cc(n, m, i_electric_fld))
-            Td = fld * SI_to_Townsend * N_inv
-            mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-            fld_face = box%fc(n, m, 1, electric_fld)
-            v(n, m, 1)  = -mu * fld_face
-            dc(n, m, 1) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
-
-            if (ST_drt_limit_flux) then
-               tmp = abs(cc(n-1, m, 1) - cc(n, m, 1)) / &
-                    max(cc(n-1, m, 1), cc(n, m, 1), nsmall)
-               tmp = max(fld, tmp * inv_dr(1) * dc(n, m, 1) / mu)
-               fmax(n, m, 1) = drt_fac * tmp
-            end if
-
-            if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                 (cc(n-1, m, 1) - cc(n, m, 1)) * fld_face > 0.0_dp) then
-               dc(n, m, 1) = 0.0_dp
-            end if
-
-            if (.not. gas_constant_density) then
-               N_inv = 2 / (box%cc(m, n-1, i_gas_dens) + &
-                    box%cc(m, n, i_gas_dens))
-            end if
-
-            fld = 0.5_dp * (box%cc(m, n-1, i_electric_fld) + &
-                 box%cc(m, n, i_electric_fld))
-            Td = fld * SI_to_Townsend * N_inv
-            mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-            fld_face = box%fc(m, n, 2, electric_fld)
-            v(m, n, 2)  = -mu * fld_face
-            dc(m, n, 2) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
-
-            if (ST_drt_limit_flux) then
-               tmp = abs(cc(m, n-1, 1) - cc(m, n, 1)) / &
-                    max(cc(m, n-1, 1), cc(m, n, 1), nsmall)
-               tmp = max(fld, tmp * inv_dr(2) * dc(m, n, 2) / mu)
-               fmax(m, n, 2) = drt_fac * tmp
-            end if
-
-            if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                 (cc(m, n-1, 1) - cc(m, n, 1)) * fld_face > 0.0_dp) then
-               dc(m, n, 2) = 0.0_dp
-            end if
-#elif NDIM == 3
-            do l = 1, nc
-               if (.not. gas_constant_density) then
-                  N_inv = 2 / (box%cc(n-1, m, l, i_gas_dens) + &
-                       box%cc(n, m, l, i_gas_dens))
-               end if
-
-               fld = 0.5_dp * (&
-                    box%cc(n-1, m, l, i_electric_fld) + &
-                    box%cc(n, m, l, i_electric_fld))
-               Td = fld * SI_to_Townsend * N_inv
-               mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-               fld_face = box%fc(n, m, l, 1, electric_fld)
-               v(n, m, l, 1)  = -mu * fld_face
-               dc(n, m, l, 1) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
-
-               if (ST_drt_limit_flux) then
-                  tmp = abs(cc(n-1, m, l, 1) - cc(n, m, l, 1)) / &
-                       max(cc(n-1, m, l, 1), cc(n, m, l, 1), nsmall)
-                  tmp = max(fld, tmp * inv_dr(1) * dc(n, m, l, 1) / mu)
-                  fmax(n, m, l, 1) = drt_fac * tmp
-               end if
-
-               if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                    (cc(n-1, m, l, 1) - cc(n, m, l, 1)) * fld_face > 0.0_dp) then
-                  dc(n, m, l, 1) = 0.0_dp
-               end if
-
-               if (.not. gas_constant_density) then
-                  N_inv = 2 / (box%cc(m, n-1, l, i_gas_dens) + &
-                       box%cc(m, n, l, i_gas_dens))
-               end if
-
-               fld = 0.5_dp * (&
-                    box%cc(m, n-1, l, i_electric_fld) + &
-                    box%cc(m, n, l, i_electric_fld))
-               Td = fld * SI_to_Townsend * N_inv
-               mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-               fld_face = box%fc(m, n, l, 2, electric_fld)
-               v(m, n, l, 2)  = -mu * fld_face
-               dc(m, n, l, 2) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
-
-               if (ST_drt_limit_flux) then
-                  tmp = abs(cc(m, n-1, l, 1) - cc(m, n, l, 1)) / &
-                       max(cc(m, n-1, l, 1), cc(m, n, l, 1), nsmall)
-                  tmp = max(fld, tmp * inv_dr(2) * dc(m, n, l, 2) / mu)
-                  fmax(m, n, l, 2) = drt_fac * tmp
-               end if
-
-               if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                    (cc(m, n-1, l, 1) - cc(m, n, l, 1)) * fld_face > 0.0_dp) then
-                  dc(m, n, l, 2) = 0.0_dp
-               end if
-
-               if (.not. gas_constant_density) then
-                  N_inv = 2 / (box%cc(m, l, n-1, i_gas_dens) + &
-                       box%cc(m, l, n, i_gas_dens))
-               end if
-
-               fld = 0.5_dp * (&
-                    box%cc(m, l, n-1, i_electric_fld) + &
-                    box%cc(m, l, n, i_electric_fld))
-               Td = fld * SI_to_Townsend * N_inv
-               mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-               fld_face = box%fc(m, l, n, 3, electric_fld)
-               v(m, l, n, 3)  = -mu * fld_face
-               dc(m, l, n, 3) = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
-
-               if (ST_drt_limit_flux) then
-                  tmp = abs(cc(m, l, n-1, 1) - cc(m, l, n, 1)) / &
-                       max(cc(m, l, n-1, 1), cc(m, l, n, 1), nsmall)
-                  tmp = max(fld, tmp * inv_dr(3) * dc(m, l, n, 3) / mu)
-                  fmax(m, l, n, 3) = drt_fac * tmp
-               end if
-
-               if (abs(fld_face) > ST_diffusion_field_limit .and. &
-                    (cc(m, l, n-1, 1) - cc(m, l, n, 1)) * fld_face > 0.0_dp) then
-                  dc(m, l, n, 3) = 0.0_dp
-               end if
-            end do
-#endif
-         end do
-#endif
+         E_cc = box%cc(m, 0:nc+1, i_electric_fld)
+         E_fc = box%fc(m, :, dir, electric_fld)
+         ne = cc(m, 0:nc+1, 1)
+         call compute_flux_coeff_1d(nc, E_cc, E_fc, ne, N_gas, dt, dr(dir), &
+              v_x, dc_x, fmax_x)
+         v(m, :, dir) = v_x
+         dc(m, :, dir) = dc_x
+         fmax(m, :, dir) = fmax_x
       end do
-    end associate
+#elif NDIM == 3
+      do n = 1, nc
+         do m = 1, nc
+            dir = 1                ! x-component
+            if (.not. gas_constant_density) N_gas = box%cc(0:nc+1, m, n, i_gas_dens)
 
-    if (ST_max_velocity > 0.0_dp) then
-       where (abs(v) > ST_max_velocity)
-          v = sign(ST_max_velocity, v)
-       end where
-    end if
+            E_cc = box%cc(0:nc+1, m, n, i_electric_fld)
+            E_fc = box%fc(:, m, n, dir, electric_fld)
+            ne = cc(0:nc+1, m, n, 1)
+            call compute_flux_coeff_1d(nc, E_cc, E_fc, ne, N_gas, dt, dr(dir), &
+                 v_x, dc_x, fmax_x)
+            v(:, m, n, dir) = v_x
+            dc(:, m, n, dir) = dc_x
+            fmax(:, m, n, dir) = fmax_x
+
+            dir = 2                ! y-component
+            if (.not. gas_constant_density) N_gas = box%cc(m, 0:nc+1, n, i_gas_dens)
+
+            E_cc = box%cc(m, 0:nc+1, n, i_electric_fld)
+            E_fc = box%fc(m, :, n, dir, electric_fld)
+            ne = cc(m, 0:nc+1, n, 1)
+            call compute_flux_coeff_1d(nc, E_cc, E_fc, ne, N_gas, dt, dr(dir), &
+                 v_x, dc_x, fmax_x)
+            v(m, :, n, dir) = v_x
+            dc(m, :, n, dir) = dc_x
+            fmax(m, :, n, dir) = fmax_x
+
+            dir = 3                ! z-component
+            if (.not. gas_constant_density) N_gas = box%cc(m, n, 0:nc+1, i_gas_dens)
+
+            E_cc = box%cc(m, n, 0:nc+1, i_electric_fld)
+            E_fc = box%fc(m, n, :, dir, electric_fld)
+            ne = cc(m, n, 0:nc+1, 1)
+            call compute_flux_coeff_1d(nc, E_cc, E_fc, ne, N_gas, dt, dr(dir), &
+                 v_x, dc_x, fmax_x)
+            v(m, n, :, dir) = v_x
+            dc(m, n, :, dir) = dc_x
+            fmax(m, n, :, dir) = fmax_x
+         end do
+      end do
+#endif
+    end associate
 
     if (set_dt) then
        tid    = omp_get_thread_num() + 1
@@ -372,8 +336,8 @@ contains
           dt_dif = minval(tree%boxes(id)%dr)**2 / &
                max(2 * NDIM * maxval(dc(IJK, :)), eps)
 
-          ! Take the combined CFL-diffusion condition with Courant number 0.5
-          dt_cfl = 0.5_dp/(1/dt_cfl + 1/dt_dif)
+          ! Take combined CFL-diffusion condition
+          dt_cfl = dt_cfl_number/(1/dt_cfl + 1/dt_dif)
 
           if (gas_constant_density) then
              N_inv = 1 / gas_number_density
@@ -495,7 +459,9 @@ contains
     do ix = 1, transport_data_ions%n_mobile_ions
        i_ion  = flux_species(ix+1)
        i_flux = flux_variables(ix+1)
-       mu     = transport_data_ions%mobilities(ix)
+       ! Account for ion charge in mobility
+       mu     = transport_data_ions%mobilities(ix) * &
+            flux_species_charge(ix+1)
 
 #if NDIM == 1
        do n = 1, nc+1
@@ -580,7 +546,8 @@ contains
 
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
-  subroutine update_solution(box, nc, dt, s_dt, s_prev, s_out, set_dt)
+  subroutine update_solution(box, nc, dt, s_dt, n_prev, s_prev, w_prev, &
+       s_out, set_dt)
     use omp_lib
     use m_units_constants
     use m_gas
@@ -591,12 +558,14 @@ contains
     use m_lookup_table
     use m_transport_data
     type(box_t), intent(inout) :: box
-    integer, intent(in)        :: nc     !< Box size
-    real(dp), intent(in)       :: dt     !< Time step
-    integer, intent(in)        :: s_dt   !< Time state to compute derivatives from
-    integer, intent(in)        :: s_prev !< Time state to add derivatives to
-    integer, intent(in)        :: s_out  !< Output time state
-    logical, intent(in)        :: set_dt !< Whether to set new time step
+    integer, intent(in)        :: nc             !< Box size
+    real(dp), intent(in)       :: dt             !< Time step
+    integer, intent(in)        :: s_dt           !< Time state to compute derivatives from
+    integer, intent(in)        :: n_prev         !< Number of previous states
+    integer, intent(in)        :: s_prev(n_prev) !< Time state to add derivatives to
+    real(dp), intent(in)       :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)        :: s_out          !< Output time state
+    logical, intent(in)        :: set_dt         !< Whether to set new time step
     real(dp)                   :: inv_dr(NDIM)
     real(dp)                   :: tmp
     real(dp)                   :: rates(nc**NDIM, n_reactions)
@@ -604,6 +573,7 @@ contains
     real(dp)                   :: dens(nc**NDIM, n_species)
     real(dp)                   :: fields(nc**NDIM), box_rates(n_reactions)
     real(dp)                   :: source_factor(nc**NDIM)
+    real(dp)                   :: coords(nc, NDIM), r(NDIM)
 #if NDIM == 2
     real(dp)                   :: rfac(2, box%n_cell)
 #endif
@@ -710,9 +680,31 @@ contains
     end if
 #endif
 
+    if (ST_plasma_region_enabled) then
+       ! Compute box coordinates
+       do n = 1, NDIM
+          coords(:, n) = box%r_min(n) + box%dr(n) * [(i-0.5_dp, i=1,nc)]
+       end do
+    end if
+
     ix = 0
     do KJI_DO(1,nc)
        ix = ix + 1
+
+       if (ST_plasma_region_enabled) then
+          r(1) = coords(i, 1)
+#if NDIM > 1
+          r(2) = coords(j, 2)
+#endif
+#if NDIM > 2
+          r(3) = coords(k, 3)
+#endif
+          if (any(r < ST_plasma_region_rmin) .or. &
+               any(r > ST_plasma_region_rmax)) then
+             ! Disable all reactions outside the plasma region
+             derivs(ix, :) = 0.0_dp
+          end if
+       end if
 
        ! Contribution of flux
 #if NDIM == 1
@@ -750,7 +742,8 @@ contains
 
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
-          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_prev) + dt * derivs(ix, n)
+          box%cc(IJK, iv+s_out) = sum(w_prev * box%cc(IJK, iv+s_prev)) + &
+               dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
 

@@ -27,6 +27,9 @@ module m_dt
   ! Safety factor for the time step
   real(dp), public, protected :: dt_safety_factor = 0.9_dp
 
+  !> CFL number to use
+  real(dp), public, protected :: dt_cfl_number = undefined_real
+
   ! Small density for the chemistry time step
   real(dp), public, protected :: dt_chemistry_nmin = 1e15
 
@@ -49,6 +52,7 @@ contains
     use omp_lib
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n_threads
+    real(dp)                   :: default_cfl_number = 0.5_dp
     character(len=name_len)    :: integrator
 
     !> [relevant_parameters]
@@ -58,26 +62,30 @@ contains
          "The minimum timestep (s)")
     call CFG_add_get(cfg, "dt_safety_factor", dt_safety_factor, &
          "Safety factor for the time step")
+    call CFG_add_get(cfg, "dt_cfl_number", dt_cfl_number, &
+         "CFL number to use")
     call CFG_add_get(cfg, "dt_chemistry_nmin", dt_chemistry_nmin, &
          "Small density for the chemistry time step")
     !> [relevant_parameters]
 
     integrator = "heuns_method"
     call CFG_add_get(cfg, "time_integrator", integrator, &
-         "Time integrator (forward_euler, heuns_method)")
-    !> [integrators]
-    select case (integrator)
-    case ("forward_euler")
-       time_integrator = af_forward_euler
-    case ("rk2")
-       time_integrator = af_midpoint_method
-    case ("heuns_method")
-       time_integrator = af_heuns_method
-    case default
-       print *, "Time integrator: ", trim(integrator)
-       error stop "Invalid time integrator"
-    end select
-    !> [integrators]
+         "Time integrator (use arbitrary value to see options)")
+
+    do time_integrator = 1, af_num_integrators
+       if (integrator == af_integrator_names(time_integrator)) exit
+    end do
+
+    if (time_integrator == af_num_integrators+1) then
+       print *, "Use one of the following time integrators:"
+       do time_integrator = 1, af_num_integrators
+          print *, trim(af_integrator_names(time_integrator))
+       end do
+       error stop "Unknown time integrator"
+    end if
+
+    ! Set CFL number automatically if not set
+    if (dt_cfl_number <= undefined_real) dt_cfl_number = default_cfl_number
 
     n_threads = af_get_max_threads()
     ! Prevent cache invalidation issues by enlarging the array

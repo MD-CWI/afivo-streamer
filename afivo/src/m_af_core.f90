@@ -407,27 +407,7 @@ contains
   !> "Destroy" the data in a tree. Since we don't use pointers, you can also
   !> just let a tree get out of scope
   subroutine af_destroy(tree)
-    type(af_t), intent(inout) :: tree
-    integer                   :: lvl
-
-    if (.not. tree%ready) stop "af_destroy: Tree not fully initialized"
-    deallocate(tree%boxes)
-    deallocate(tree%removed_ids)
-    deallocate(tree%cc_auto_vars)
-    deallocate(tree%cc_func_vars)
-
-    do lvl = af_min_lvl, af_max_lvl
-       deallocate(tree%lvls(lvl)%ids)
-       deallocate(tree%lvls(lvl)%leaves)
-       deallocate(tree%lvls(lvl)%parents)
-    end do
-
-    tree%highest_lvl = 0
-    tree%highest_id  = 0
-    tree%n_var_cell  = 0
-    tree%n_var_face  = 0
-    tree%n_removed_ids = 0
-    tree%ready       = .false.
+    type(af_t), intent(out) :: tree
   end subroutine af_destroy
 
   !> Create an array for easy lookup of indices

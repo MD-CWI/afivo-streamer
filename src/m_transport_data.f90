@@ -181,6 +181,9 @@ contains
     call CFG_get(cfg, "input_data%ion_mobilities", &
          transport_data_ions%mobilities)
 
+    if (any(transport_data_ions%mobilities < 0)) &
+       error stop "Ion mobilities should be given as positive numbers"
+
     ! Scale ion mobilities with gas number density at 300 K and 1 bar
     transport_data_ions%mobilities = transport_data_ions%mobilities * &
          (1e5_dp / (UC_boltzmann_const * 300))
