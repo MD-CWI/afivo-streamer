@@ -105,7 +105,7 @@ module m_output
   integer :: n_extra_vars = 0
 
   ! Names of extra variables to add to output
-  character(len=af_nlen) :: output_extra_vars(10)
+  character(len=af_nlen) :: output_extra_vars(100)
 
   ! Output the electron energy in eV from the local field approximation
   logical :: output_electron_energy = .false.
