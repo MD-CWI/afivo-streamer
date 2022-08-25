@@ -17,6 +17,10 @@ Some key features/characteristics of the framework are:
 * Written in modern Fortran
 * Open source
 
+# Installation
+
+See the [installation instructions](@ref documentation/installation.md), afterwards have a look at the <a href="examples.html">examples</a>.
+
 # What is included? {#included-functionality}
 
 Afivo provides general functionality for parallel simulations with adaptive mesh

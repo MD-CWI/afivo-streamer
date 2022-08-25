@@ -1,5 +1,5 @@
 #include "../src/cpp_macros.h"
-!> \example two_electrodes_2d.f90
+!> \example two_electrodes.f90
 !>
 !> Test with two electrodes
 program two_electrodes
@@ -11,12 +11,14 @@ program two_electrodes
 
   integer            :: box_size         = 8
   integer            :: n_iterations     = 10
-  integer            :: max_refine_level = 5
-  integer            :: min_refine_level = 2
+  integer            :: max_refine_level = 7
+  integer            :: min_refine_level = 5
   integer            :: i_phi
   integer            :: i_rhs
   integer            :: i_tmp
   integer            :: i_lsf
+  integer            :: i_field
+  integer            :: i_field_norm
 
   type(af_t)         :: tree
   type(ref_info_t)   :: ref_info
@@ -27,10 +29,26 @@ program two_electrodes
   real(dp)           :: mem_limit_gb = 8.0_dp
   real(dp)           :: t0, t_sum
 
+  real(dp) :: rod_r0(NDIM), rod_r1(NDIM), rod_radius
+  real(dp) :: sphere_r0(NDIM), sphere_radius
+
+  rod_r0 = 0.5_dp
+  rod_r0(NDIM) = 0.7_dp
+  rod_r1 = 0.5_dp
+  rod_r1(NDIM) = 1.0_dp
+  rod_radius = 0.05_dp
+
+  sphere_r0 = 0.5_dp
+  sphere_r0(NDIM) = 0.0_dp
+  sphere_radius = 0.25_dp
+
   call af_add_cc_variable(tree, "phi", ix=i_phi)
   call af_add_cc_variable(tree, "rhs", ix=i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=i_tmp)
   call af_add_cc_variable(tree, "lsf", ix=i_lsf)
+  call af_add_cc_variable(tree, "field_norm", ix=i_field_norm)
+  call af_add_fc_variable(tree, "field", ix=i_field)
+
   call af_set_cc_methods(tree, i_lsf, funcval=set_lsf)
 
   tree%mg_i_lsf = i_lsf
@@ -69,11 +87,14 @@ program two_electrodes
      call mg_fas_fmg(tree, mg, .true., mg_iter>1)
      t_sum = t_sum + omp_get_wtime() - t0
 
+     call mg_compute_phi_gradient(tree, mg, i_field, 1.0_dp, i_field_norm)
+     call af_loop_box(tree, set_field_to_zero_inside)
+
      ! Determine the minimum and maximum residual and error
      call af_tree_maxabs_cc(tree, i_tmp, residu)
      write(*, "(A,i4,4E14.5)") "# ", mg_iter, residu
 
-     write(fname, "(A,I0)") "output/two_electrodes_", mg_iter
+     write(fname, "(A,I0)") "output/two_electrodes_" // DIMNAME // "_", mg_iter
      call af_write_silo(tree, trim(fname))
   end do
 
@@ -87,12 +108,23 @@ contains
   subroutine ref_routine(box, cell_flags)
     type(box_t), intent(in) :: box
     integer, intent(out)    :: cell_flags(DTIMES(box%n_cell))
+    integer                 :: IJK, nc
+    real(dp)                :: r(NDIM), r_ref(NDIM)
 
+    nc = box%n_cell
     cell_flags(DTIMES(:)) = af_keep_ref
 
-    ! Uniform refinement
+    ! Refine around this point
+    r_ref = rod_r0
+    r_ref(NDIM) = r_ref(NDIM) - rod_radius
+
     if (box%lvl < max_refine_level) then
-       cell_flags(DTIMES(:)) = af_do_ref
+       do KJI_DO(1, nc)
+          r = af_r_cc(box, [IJK])
+          if (norm2(r - r_ref) < 2 * rod_radius) then
+             cell_flags(DTIMES(:)) = af_do_ref
+          end if
+       end do; CLOSE_DO
     end if
   end subroutine ref_routine
 
@@ -126,12 +158,13 @@ contains
     real(dp), intent(in) :: r(NDIM)
 
     if (r(NDIM) > 0.5_dp) then
-       get_lsf = GM_dist_line(r, [0.5_dp, 0.7_dp], [0.5_dp, 1.0_dp], 2) - 0.05_dp
+       get_lsf = GM_dist_line(r, rod_r0, rod_r1, NDIM) - rod_radius
     else
-       get_lsf = norm2(r - [0.5_dp, 0.0_dp]) - 0.25_dp
+       get_lsf = norm2(r - sphere_r0) - sphere_radius
     end if
   end function get_lsf
 
+  !> To set boundary conditions at the sides of the domain
   subroutine bc_sides(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
@@ -155,6 +188,15 @@ contains
        bc_val = 0.0_dp
     end if
   end subroutine bc_sides
+
+  !> To set the electric field to zero inside the object
+  subroutine set_field_to_zero_inside(box)
+    type(box_t), intent(inout) :: box
+
+    where (box%cc(DTIMES(:), i_lsf) < 0)
+       box%cc(DTIMES(:), i_field_norm) = 0
+    end where
+  end subroutine set_field_to_zero_inside
 
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1
