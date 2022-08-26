@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
-# This script prints the volume integral of a variable, possibly constrained to
-# a region, as well as the total integration volume
+# This script prints the volume integral of a variable *where it satisfies a
+# condition*, as well as the total integration volume
 
 from __future__ import absolute_import
 from __future__ import division
@@ -21,10 +21,8 @@ def get_argparser():
                     help='Input file (e.g. sim.silo)')
     pr.add_argument('variable', type=str,
                     help='Name of variable')
-    pr.add_argument('-rmin', nargs=3, type=float, default=[-1e10, -1e10, -1e10],
-                    help='Minimal coordinates')
-    pr.add_argument('-rmax', nargs=3, type=float, default=[1e10, 1e10, 1e10],
-                    help='Maximal coordinates')
+    pr.add_argument('-condition', type=str, default='ge(electric_fld, 3e6)',
+                    help='Condition for integration')
     pr.add_argument('-cyl', action='store_true',
                     help='Take cylindrical geometry into account')
     return pr
@@ -47,16 +45,7 @@ if __name__ == '__main__':
     expressions = [expr_var, expr_const]
 
     for name, expr in zip(names, expressions):
-        DefineScalarExpression(
-            name,
-            """if(and(and(
-            and(ge(min_coord(mesh, "X"), {}), le(max_coord(mesh, "X"), {})),
-            and(ge(min_coord(mesh, "Y"), {}), le(max_coord(mesh, "Y"), {}))),
-            and(ge(min_coord(mesh, "Z"), {}), le(max_coord(mesh, "Z"), {}))),
-            {}, 0.0)""".format(args.rmin[0], args.rmax[0],
-                               args.rmin[1], args.rmax[1],
-                               args.rmin[2], args.rmax[2],
-                               expr))
+        DefineScalarExpression(name, "if({}, {}, 0.0)".format(args.condition, expr))
 
     OpenDatabase(args.filename)
 
