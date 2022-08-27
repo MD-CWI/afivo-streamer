@@ -14,10 +14,10 @@ module m_user
   ! Whether field waveform versus time is enabled
   logical, protected, public :: field_waveform_enabled = .false.
 
-  real(dp) :: rise_time = 2.0e-9_dp
-  real(dp) :: fall_time = 2.0e-9_dp
-  real(dp) :: pulse_field = -1.5e6_dp
-  real(dp) :: turn_off_z = 8.0e-3_dp
+  real(dp) :: rise_time = 1.0e-9_dp
+  real(dp) :: fall_time = 1.0e-9_dp
+  real(dp) :: pulse_field = -1.4e6_dp
+  real(dp) :: turn_off_z = 18.0e-3_dp
   real(dp) :: detection_density = 1e16_dp
   
 contains
@@ -50,42 +50,20 @@ contains
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
     real(dp)               :: amplitude, zmin
-    real(dp), save         :: turn_off_time, prev_time
-    
-    if (rise_time == 0.0_dp) then
-      if (time <= rise_time) then
-        amplitude = pulse_field
-        turn_off_time= time
-        prev_time = time
-      else
-        ! Get lowest z-coordinate of a streamer
-        call af_reduction(tree, streamer_min_z, reduce_min, 1e100_dp, zmin)
-        if (zmin >= turn_off_z .and. turn_off_time >= prev_time) then
-          amplitude = pulse_field
-          turn_off_time = time
-        else if (fall_time == 0.0_dp) then
-          amplitude = 0.0_dp
-        else if(time <= (turn_off_time + fall_time)) then
-          amplitude = pulse_field - pulse_field / fall_time * (time - turn_off_time)
-        else 
-          amplitude = 0.0_dp
-        end if
-        prev_time = time
-      end if
-    else if (time <= rise_time) then
+    real(dp), save         :: voltage_off_time, prev_time
+
+    if (time <= rise_time) then
       amplitude = pulse_field / rise_time * time
-      turn_off_time= time
+      voltage_off_time = time
       prev_time = time
     else 
       ! Get lowest z-coordinate of a streamer
       call af_reduction(tree, streamer_min_z, reduce_min, 1e100_dp, zmin)
-      if (zmin >= turn_off_z .and. turn_off_time >= prev_time) then
+      if (zmin > turn_off_z .and. voltage_off_time >= prev_time) then
         amplitude = pulse_field
-        turn_off_time = time
-      else if (fall_time == 0.0_dp) then
-        amplitude = 0.0_dp
-      else if(time <= (turn_off_time + fall_time)) then
-        amplitude = pulse_field - pulse_field / fall_time * (time - turn_off_time)
+        voltage_off_time = time
+      else if(time <= (voltage_off_time + fall_time)) then
+        amplitude = pulse_field - pulse_field / fall_time * (time - voltage_off_time)
       else 
         amplitude = 0.0_dp
       end if
