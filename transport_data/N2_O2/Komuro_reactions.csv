@@ -67,7 +67,7 @@ N(^2D) + O2 \to NO + O(^3P), 2.52\times10^{-12}\exp(\frac{-185}{T_g}), cm, \cite
 N(^2D) + NO \to N2 + O(^3P), 1.80\times10^{-10}, cm, \cite{Capitelli:2000}, https://doi.org/10.1007/978-3-662-04158-1
 N(^2D) + N2 \to N(^4S) + N2, 1.70\times10^{-14}, cm, \cite{Herron:1999}, https://doi.org/10.1063/1.556043
 N(^2D) + O(^3P) \to N(^4S) + O(^3P), 3.30\times10^{-12}\exp(\frac{-260}{T_g}), cm, \cite{Herron:1999}, https://doi.org/10.1063/1.556043
-N(^4S) + NO \to N2 + O(^3P), 3.51\times10^{-11}\exp(\frac{49.84}{T_g}), cm, \cite{Gordillo:2008}, https://doi.org/10.1088/0022-3727/41/23/234016
+N(^4S) + NO \to N2 + O(^3P), 3.51\times10^{-11}\exp(\frac{-49.84}{T_g}), cm, \cite{Gordillo:2008}, https://doi.org/10.1088/0022-3727/41/23/234016, # Changed rate constant from 49.84 to -49.84
 N(^4S) + N(^4S) + N2 \to N2 + N2, 1.38\times10^{-33}\exp(\frac{502.9}{T_g}), cm, \cite{Clyne:1967}, https://doi.org/10.1021/j100868a056
 N(^4S) + NO2 \to NO + NO, 2.30\times10^{-12}, cm, \cite{Gordillo:2008}, https://doi.org/10.1088/0022-3727/41/23/234016
 N(^4S) + NO2 \to O(^3P) + N2O, 5.80\times10^{-12}\exp(\frac{220}{T_g}), cm, \cite{DeMore:1997}, https://jpldataeval.jpl.nasa.gov/pdf/Atmos97_Anotated.pdf
@@ -90,11 +90,11 @@ O(^3P) + O2 + O2 \to O3 + O2, 6.00\times10^{-34}(\frac{T_g}{300})^{-2.6}, cm, \c
 O(^3P) + O(^3P) + N2 \to O2 + N2, 9.46\times10^{-34}\exp(\frac{-484.7}{T_g}), cm, \cite{Campbell:1973}, https://doi.org/10.1016/0009-2614(73)80479-8
 O(^3P) + O(^3P) + O2 \to O2 + O2, 4.49\times10^{-33}, cm, \cite{Marshall:1962}, https://doi.org/10.1063/1.1724443
 O(^3P) + N(^4S) + N2 \to NO + N2, 6.89\times10^{-33}\exp(\frac{134.7}{T_g}), cm, \cite{Campbell:1973}, https://doi.org/10.1016/0009-2614(73)80479-8
-O(^3P) + NO + N2 \to NO2 + N2, 1.03\times10^{-30}(\frac{T_g}{300})^{-2.87}\exp(\frac{-780.5}{T_g}), cm, \cite{Tsang:1991}, https://doi.org/10.1063/1.555890
-O(^3P) + NO2 \to O2 + NO, 5.50\times10^{-12}\exp(\frac{187.9}{T_g}), cm, \cite{Atkinson:2004}, https://doi.org/10.5194/acp-4-1461-2004
+O(^3P) + NO + N2 \to NO2 + N2, 1.01\times10^{-30}(\frac{T_g}{300})^{-2.87}\exp(\frac{-781}{T_g}), cm, \cite{Tsang:1991}, https://doi.org/10.1063/1.555890, # Changed rate constant from 1.03 to 1.01 and from 780.5 to 781
+O(^3P) + NO2 \to O2 + NO, 5.50\times10^{-12}\exp(\frac{188}{T_g}), cm, \cite{Atkinson:2004}, https://doi.org/10.5194/acp-4-1461-2004, # Changed rate constant from 187.9 to 188
 O(^1D) + O2 \to O(^3P) + O2, 3.12\times10^{-11}\exp(\frac{70}{T_g}), cm, \cite{Dunlea:2004}, https://doi.org/10.1039/b400247d
 O(^1D) + N2 \to O(^3P) + N2, 2.10\times10^{-11}\exp(\frac{115}{T_g}), cm, \cite{Dunlea:2004}, https://doi.org/10.1039/b400247d
-O3 + NO \to NO2 + O2, 3.16\times10^{-12}\exp(\frac{-1563}{T_g}), cm, \cite{Ray:1981}, https://doi.org/10.1021/j150612a015
+O3 + NO \to NO2 + O2, 3.16\times10^{-12}\exp(\frac{-1556}{T_g}), cm, \cite{Ray:1981}, https://doi.org/10.1021/j150612a015, # Changed rate constant from 1563 to 1556
 O3 + O(^3P) \to O2 + O2, 8.00\times10^{-12}\exp(\frac{-2060}{T_g}), cm, \cite{Atkinson:2004}, https://doi.org/10.5194/acp-4-1461-2004
 O3 + O(^1D) \to O2 + 2O(^3P), 1.20\times10^{-10}, cm, \cite{Atkinson:1989}, https://doi.org/10.1063/1.555832
 O3 + O3 \to O2 + O(^3P) + O3, 7.16\times10^{-10}\exp(\frac{-11200}{T_g}), cm, \cite{Heimerl:1979}, https://doi.org/10.1016/0010-2180(79)90015-4
