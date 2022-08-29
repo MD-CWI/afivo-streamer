@@ -18,7 +18,7 @@ module m_user
   real(dp) :: fall_time = 1.0e-9_dp
   real(dp) :: pulse_field = -1.4e6_dp
   real(dp) :: turn_off_z = 18.0e-3_dp
-  real(dp) :: detection_density = 1e16_dp
+  real(dp) :: detection_density = 1e18_dp
   
 contains
 
