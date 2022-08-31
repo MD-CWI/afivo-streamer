@@ -8,8 +8,8 @@
 reaction_list
 -----------------------
 # Rotational excitation
-e + N2 -> e + N2*(rot),field_table,C2 N2 Excitation 0.020 eV
-e + O2 -> e + O2*(rot),field_table,C30 O2 Excitation 0.020 eV
+e + N2 -> e + N2*(J),field_table,C2 N2 Excitation 0.020 eV
+e + O2 -> e + O2*(J),field_table,C30 O2 Excitation 0.020 eV
 # Vibrational excitation
 e + N2 -> e + N2*(v1),field_table,C3 N2 Excitation 0.29 eV
 e + N2 -> e + N2*(v1),field_table,C4 N2 Excitation 0.29 eV
@@ -122,7 +122,7 @@ N(^2D) + O2 -> NO + O(^3P),c1*exp(-c2/Tg),2.52e-12 185.0,cm
 N(^2D) + NO -> N2 + O(^3P),c1,1.8e-10,cm
 N(^2D) + N2 -> N(^4S) + N2,c1,1.7e-14,cm
 N(^2D) + O(^3P) -> N(^4S) + O(^3P),c1*exp(-c2/Tg),3.3e-12 260.0,cm
-N(^4S) + NO -> N2 + O(^3P),c1*exp(-c2/Tg),3.51e-11 -49.84,cm
+N(^4S) + NO -> N2 + O(^3P),c1*exp(-c2/Tg),3.51e-11 49.84,cm
 N(^4S) + N(^4S) + N2 -> N2 + N2,c1*exp(-c2/Tg),1.38e-33 -502.9,cm
 N(^4S) + NO2 -> NO + NO,c1,2.3e-12,cm
 N(^4S) + NO2 -> O(^3P) + N2O,c1*exp(-c2/Tg),5.8e-12 -220.0,cm
@@ -145,11 +145,11 @@ O(^3P) + O2 + O2 -> O3 + O2,c1*(Tg/c2)**c3,6e-34 300.0 -2.6,cm
 O(^3P) + O(^3P) + N2 -> O2 + N2,c1*exp(-c2/Tg),9.46e-34 484.7,cm
 O(^3P) + O(^3P) + O2 -> O2 + O2,c1,4.49e-33,cm
 O(^3P) + N(^4S) + N2 -> NO + N2,c1*exp(-c2/Tg),6.89e-33 -134.7,cm
-O(^3P) + NO + N2 -> NO2 + N2,c1*(Tg/300)**c2*exp(-c3/Tg),1.03e-30 -2.87 780.5,cm
-O(^3P) + NO2 -> O2 + NO,c1*exp(-c2/Tg),5.5e-12 -187.9,cm
+O(^3P) + NO + N2 -> NO2 + N2,c1*(Tg/300)**c2*exp(-c3/Tg),1.01e-30 -2.87 781.0,cm
+O(^3P) + NO2 -> O2 + NO,c1*exp(-c2/Tg),5.5e-12 -188.0,cm
 O(^1D) + O2 -> O(^3P) + O2,c1*exp(-c2/Tg),3.12e-11 -70.0,cm
 O(^1D) + N2 -> O(^3P) + N2,c1*exp(-c2/Tg),2.1e-11 -115.0,cm
-O3 + NO -> NO2 + O2,c1*exp(-c2/Tg),3.16e-12 1563.0,cm
+O3 + NO -> NO2 + O2,c1*exp(-c2/Tg),3.16e-12 1556.0,cm
 O3 + O(^3P) -> O2 + O2,c1*exp(-c2/Tg),8e-12 2060.0,cm
 O3 + O(^1D) -> O2 + 2O(^3P),c1,1.2e-10,cm
 O3 + O3 -> O2 + O(^3P) + O3,c1*exp(-c2/Tg),7.16e-10 11200.0,cm
