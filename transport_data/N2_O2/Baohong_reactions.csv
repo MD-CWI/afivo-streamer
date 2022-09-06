@@ -6,6 +6,7 @@ reaction,rate,unit,reference,DOI,comment
 # Popov 2011 (https://doi.org/10.1088/0022-3727/44/28/285201)
 # Panchesnyi 2013 (https://doi.org/10.1088/0022-3727/46/15/155201)
 # Ono and Komuro 2020 (https://doi.org/10.1088/1361-6463/ab4e65)
+# Note that e + NO2 \to NO2- and N(^2D) + NO \to N2O have actually three-body nature
 #
 # Charged particle reactions
 # Attachment
