@@ -41,7 +41,7 @@ if __name__ == '__main__':
         expr_const = "coord(mesh)[0] * 6.283185307179586 * zonal_constant(mesh, 1.0)"
     else:
         expr_var = args.variable
-        expr_const = "zonal_constant(1.0)"
+        expr_const = "zonal_constant(mesh, 1.0)"
 
     names = ['tmp_var', 'tmp_const']
     expressions = [expr_var, expr_const]

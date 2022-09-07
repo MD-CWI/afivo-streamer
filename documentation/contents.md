@@ -11,7 +11,9 @@
 * [Photoionization](documentation/photoionization.md) Description of photoionization methods
 * [Writing output](documentation/writing_output.md) How to write output
 * [Specifying voltage/electric field](documentation/voltage.md) How to specify the voltage/field for repetitive pulse simulations.
-* [Visualization/Postprocessing](documentation/visualization.md) How to make videos/get data along a line/plane and some postprocessing examples 
+* [Electrodes and boundary conditions](documentation/electrodes_bc.md) How to define electrodes and boundary conditions
+* [Visualization/Postprocessing](documentation/visualization.md) How to make videos/get data along a line/plane and some postprocessing examples
+* [Customizing the code](documentation/m_user.md) How to define custom methods in `m_user.f90`
 * [Time integration](documentation/time_integration.md) Time integration and time steps
 * [Publications](documentation/publications.md) Relevant publications
 * [Contributors](documentation/contributors.md) List of people who contributed

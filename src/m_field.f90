@@ -165,8 +165,9 @@ contains
     end if
 
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
-         "Type of boundary condition to use (homogeneous, ...)")
+         "Boundary condition for electric potential (homogeneous, neumann)")
 
+    !< [electrode_settings]
     call CFG_add_get(cfg, "field_electrode_grounded", field_electrode_grounded, &
          "Whether the electrode is grounded or at the applied voltage")
     call CFG_add_get(cfg, "field_rod_r0", field_rod_r0, &
@@ -182,7 +183,8 @@ contains
 
     electrode_type = "rod"
     call CFG_add_get(cfg, "field_electrode_type", electrode_type, &
-         "Type of electrode")
+         "Type of electrode (rod or rod_cone_top)")
+    !< [electrode_settings]
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc

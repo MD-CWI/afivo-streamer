@@ -36,11 +36,15 @@ contains
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
     integer                   :: lvl, i, id, p_id, nc, ix, id_out
-    logical                   :: set_dt
+    logical                   :: last_step
 
     nc = tree%n_cell
 
-    set_dt = (i_step == n_steps)
+    ! Set current rates to zero; they are summed below
+    ST_current_rates = 0
+    ST_current_JdotE = 0
+
+    last_step = (i_step == n_steps)
 
     ! Use a shared array to determine maximum time step
     dt_matrix(1:dt_num_cond, :) = dt_max
@@ -58,10 +62,10 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
-          call fluxes_elec(tree, id, nc, dt, s_deriv, set_dt)
+          call fluxes_elec(tree, id, nc, dt, s_deriv, last_step)
 
           if (transport_data_ions%n_mobile_ions > 0) then
-             call fluxes_ions(tree, id, nc, dt, s_deriv, set_dt)
+             call fluxes_ions(tree, id, nc, dt, s_deriv, last_step)
           end if
        end do
        !$omp end do
@@ -83,7 +87,7 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           id = tree%lvls(lvl)%leaves(i)
           call update_solution(tree%boxes(id), nc, dt, s_deriv, &
-               n_prev, s_prev, w_prev, s_out, set_dt)
+               n_prev, s_prev, w_prev, s_out, last_step)
 
        end do
        !$omp end do
@@ -109,7 +113,7 @@ contains
        end do
     end if
 
-    if (set_dt) then
+    if (last_step) then
        dt_lim = min(2 * global_dt, dt_safety_factor * &
             minval(dt_matrix(1:dt_num_cond, :)))
     end if
@@ -175,7 +179,7 @@ contains
   end subroutine compute_flux_coeff_1d
 
   !> Compute the electron fluxes due to drift and diffusion
-  subroutine fluxes_elec(tree, id, nc, dt, s_in, set_dt)
+  subroutine fluxes_elec(tree, id, nc, dt, s_in, last_step)
     use m_af_flux_schemes
     use m_units_constants
     use omp_lib
@@ -189,7 +193,7 @@ contains
     integer, intent(in)       :: nc   !< Number of cells per dimension
     real(dp), intent(in)      :: dt
     integer, intent(in)       :: s_in !< Input time state
-    logical, intent(in)       :: set_dt
+    logical, intent(in)       :: last_step
     real(dp)                  :: dr(NDIM), inv_dr(NDIM), Td
     ! Velocities at cell faces
     real(dp)                  :: v(DTIMES(1:nc+1), NDIM)
@@ -314,7 +318,7 @@ contains
 #endif
     end associate
 
-    if (set_dt) then
+    if (last_step) then
        tid    = omp_get_thread_num() + 1
        dt_cfl = dt_max
        dt_drt = dt_matrix(dt_ix_cfl, tid)
@@ -426,7 +430,7 @@ contains
 
   end subroutine fluxes_elec
 
-  subroutine fluxes_ions(tree, id, nc, dt, s_in, set_dt)
+  subroutine fluxes_ions(tree, id, nc, dt, s_in, last_step)
     use m_af_flux_schemes
     use m_streamer
     use m_gas
@@ -436,7 +440,7 @@ contains
     integer, intent(in)        :: nc   !< Number of cells per dimension
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: s_in !< Input time state
-    logical, intent(in)        :: set_dt
+    logical, intent(in)        :: last_step
     real(dp)                   :: inv_dr(NDIM)
     ! Velocities at cell faces
     real(dp)                   :: v(DTIMES(1:nc+1), NDIM)
@@ -547,7 +551,7 @@ contains
   !> Advance solution in a box over dt based on the fluxes and reactions, using
   !> a forward Euler update
   subroutine update_solution(box, nc, dt, s_dt, n_prev, s_prev, w_prev, &
-       s_out, set_dt)
+       s_out, last_step)
     use omp_lib
     use m_units_constants
     use m_gas
@@ -565,7 +569,7 @@ contains
     integer, intent(in)        :: s_prev(n_prev) !< Time state to add derivatives to
     real(dp), intent(in)       :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)        :: s_out          !< Output time state
-    logical, intent(in)        :: set_dt         !< Whether to set new time step
+    logical, intent(in)        :: last_step         !< Whether to set new time step
     real(dp)                   :: inv_dr(NDIM)
     real(dp)                   :: tmp
     real(dp)                   :: rates(nc**NDIM, n_reactions)
@@ -655,21 +659,20 @@ contains
        end do; CLOSE_DO
     end if
 
-    if (set_dt) then
+    if (last_step) then
        tid = omp_get_thread_num() + 1
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
             minval((abs(dens) + dt_chemistry_nmin) / max(abs(derivs), eps)))
 
-       ! Keep track of chemical production at last time integration step (at
-       ! which set_dt is true)
+       ! Keep track of chemical production at last time integration step
        call chemical_rates_box(box, nc, rates, box_rates)
 
        !> Integrate rates over space and time into global storage
-       ST_global_rates(1:n_reactions, tid) = &
-         ST_global_rates(1:n_reactions, tid) + box_rates * dt
+       ST_current_rates(1:n_reactions, tid) = &
+         ST_current_rates(1:n_reactions, tid) + box_rates
 
        ! Keep track of J.E
-       call sum_global_JdotE(box, dt, tid)
+       call sum_global_JdotE(box, tid)
     end if
 
 #if NDIM == 2
@@ -1035,12 +1038,11 @@ contains
     end if
   end subroutine chemical_rates_box
 
-  !> Integrate J.E over space and time into global storage
-  subroutine sum_global_JdotE(box, dt, tid)
+  !> Integrate J.E over space into global storage
+  subroutine sum_global_JdotE(box, tid)
     use m_streamer
     use m_units_constants
     type(box_t), intent(in) :: box
-    real(dp), intent(in)    :: dt  !< Time step
     integer, intent(in)     :: tid !< Thread id
     integer                 :: IJK, nc
     real(dp)                :: JdotE, tmp
@@ -1079,8 +1081,8 @@ contains
        JdotE = JdotE + tmp * volume(i)
     end do; CLOSE_DO
 
-    ST_global_JdotE(1, tid) = ST_global_JdotE(1, tid) + &
-         JdotE * UC_elec_charge * dt
+    ST_current_JdotE(1, tid) = ST_current_JdotE(1, tid) + &
+         JdotE * UC_elec_charge
   end subroutine sum_global_JdotE
 
 end module m_fluid_lfa

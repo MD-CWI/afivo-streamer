@@ -1,6 +1,6 @@
 # File with transport data and reaction rates for an air chemistry.
 # Transport data calculated using the online BOLSIG+ solver with data from the Phelps database (N2, O2).
-# The reactions were provided to us by Alejandro Malagon
+# The reactions were provided to us by Alejandro Malagon from Luque et. al., PSST 2017
 
 # Changes:
 # 18 Dec 2019 (Jannis): included the second ionization process for N2 Not sure
