@@ -207,6 +207,12 @@ program streamer
           species_itree(n_gas_species+1:n_species), &
           time_integrator, forward_euler)
 
+     ! Update global variable based on current space-integrated data
+     ST_global_rates = ST_global_rates + &
+          sum(ST_current_rates(1:n_reactions, :), dim=2) * dt
+     ST_global_JdotE = ST_global_JdotE + &
+          sum(ST_current_JdotE(1, :)) * dt
+
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
 
@@ -377,8 +383,8 @@ contains
     write(my_unit) photoi_prev_time
     write(my_unit) global_dt
 
-    write(my_unit) sum(ST_global_rates(1:n_reactions, :), dim=2)
-    write(my_unit) sum(ST_global_JdotE(1, :))
+    write(my_unit) ST_global_rates
+    write(my_unit) ST_global_JdotE
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
@@ -392,8 +398,8 @@ contains
     read(my_unit) global_dt
 
     ! Data is stored in location of first thread
-    read(my_unit) ST_global_rates(1:n_reactions, 1)
-    read(my_unit) ST_global_JdotE(1, 1)
+    read(my_unit) ST_global_rates
+    read(my_unit) ST_global_JdotE
 
     dt = global_dt
   end subroutine read_sim_data

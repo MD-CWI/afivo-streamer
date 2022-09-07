@@ -615,7 +615,7 @@ contains
          position="append")
 #if NDIM == 1
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
+         sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, r_tip, &
@@ -624,7 +624,7 @@ contains
          var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
+         sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          current_voltage, ne_zminmax, max_field_tip, r_tip, &
@@ -632,7 +632,7 @@ contains
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
-         sum_pos_ion, sum_elem_charge, sum(ST_global_JdotE(1, :)), &
+         sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, r_tip, &
@@ -719,8 +719,7 @@ contains
     else
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
-       write(my_unit, "(*(E20.8))") global_time, &
-            sum(ST_global_rates(1:n_reactions, :), dim=2)
+       write(my_unit, "(*(E20.8))") global_time, ST_global_rates
        close(my_unit)
     end if
   end subroutine output_chemical_rates

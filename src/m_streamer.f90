@@ -145,11 +145,17 @@ module m_streamer
   !> Global time step
   real(dp), public :: global_dt = 0.0_dp
 
-  !> Global sum of rates
-  real(dp), public, allocatable :: ST_global_rates(:, :)
+  !> Current sum of reaction rates per thread
+  real(dp), public, allocatable :: ST_current_rates(:, :)
+
+  !> Global sum of reaction rates
+  real(dp), public, allocatable :: ST_global_rates(:)
+
+  !> Current sum of J.E per thread
+  real(dp), public, allocatable :: ST_current_JdotE(:, :)
 
   !> Global sum of J.E
-  real(dp), public, allocatable :: ST_global_JdotE(:, :)
+  real(dp), public :: ST_global_JdotE
 
   !> Method used to prolong (interpolate) densities
   procedure(af_subr_prolong), pointer, public, protected :: &
@@ -401,8 +407,9 @@ contains
 
     ! Initialize global storage of reaction rates, +32 to avoid threads writing
     ! to nearby memory
-    allocate(ST_global_rates(n_reactions+32, n_threads))
-    allocate(ST_global_JdotE(1+32, n_threads))
+    allocate(ST_current_rates(n_reactions+32, n_threads))
+    allocate(ST_global_rates(n_reactions))
+    allocate(ST_current_JdotE(1+32, n_threads))
     ST_global_rates = 0
     ST_global_JdotE = 0
 
