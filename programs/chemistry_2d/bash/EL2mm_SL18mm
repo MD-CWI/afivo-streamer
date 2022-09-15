@@ -2,27 +2,62 @@
 
 cd ../
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.15e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -dt_min=1e-17 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.15e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.15e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -dt_min=1e-17 -end_time=70e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.15e6_pulse
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.2e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.2e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.15e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -dt_min=1e-17 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.15e6_pulse_000700.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.15e6_off
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.3e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.3e6
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.4e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.4e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.2e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=60e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.2e6_pulse
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.5e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.5e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.2e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.2e6_pulse_000600.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.2e6_off
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.6e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.6e6
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.7e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.7e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.3e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=50e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.3e6_pulse
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.8e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.8e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.3e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.3e6_pulse_000500.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.3e6_off
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.0e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.0e6
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.2e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.2e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.4e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=40e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.4e6_pulse
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.4e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.4e6
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.4e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.4e6_pulse_000400.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.4e6_off
 
-./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_streamer_length=3.7e-2 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.6e6
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.5e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=40e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.5e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.5e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.5e6_pulse_000400.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.5e6_off
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.6e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=40e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.6e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.6e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.6e6_pulse_000400.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.6e6_off
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.7e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=30e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.7e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.7e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.7e6_pulse_000300.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.7e6_off
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.8e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=30e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.8e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-1.8e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.8e6_pulse_000300.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_1.8e6_off
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.0e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=20e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.0e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.0e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.0e6_pulse_000200.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.0e6_off
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.2e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=20e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.2e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.2e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.2e6_pulse_000200.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.2e6_off
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.4e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=20e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.4e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.4e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.4e6_pulse_000200.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.4e6_off
+
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -end_time=20e-9 -output%dt=1e-10 -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.6e6_pulse
+
+./streamer air_d40mm_chemistry.cfg -field_waveform%pulse_field=-2.6e6 -field_waveform%turn_off_z=20e-3 -field_rod_r0="0 0.955" -field_rod_radius=0.2e-3 -datfile%write=F -restart_from_file=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.6e6_pulse_000200.dat -output%name=/export/scratch2/md/baohong/chemistry/d40mm_double_pulses/EL2mm_SL18mm_2.6e6_off
 
