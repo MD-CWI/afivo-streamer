@@ -719,7 +719,7 @@ contains
     else
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
-       write(my_unit, "(*(E20.8))") global_time, ST_global_rates
+       write(my_unit, *) global_time, ST_global_rates
        close(my_unit)
     end if
   end subroutine output_chemical_rates
@@ -748,7 +748,7 @@ contains
 
        open(newunit=my_unit, file=trim(filename), action="write", &
             position="append")
-       write(my_unit, "(*(E20.8))") global_time, sum_dens
+       write(my_unit, *) global_time, sum_dens
        close(my_unit)
     end if
 
