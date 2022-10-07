@@ -187,8 +187,9 @@ program streamer
      ! Every output_dt, write output
      if (time + dt >= time_last_output + current_output_dt) then
         write_out        = .true.
-        dt               = time_last_output + current_output_dt - time
-        time_last_output = time_last_output + current_output_dt
+        ! Ensure that dt is non-negative, even when current_output_dt changes
+        dt               = max(0.0_dp, time_last_output + current_output_dt - time)
+        time_last_output = time + dt
         output_cnt       = output_cnt + 1
      else
         write_out = .false.
