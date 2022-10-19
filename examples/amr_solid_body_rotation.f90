@@ -50,6 +50,7 @@ program solid_body_rotation
   !call af_write_silo(tree, "testsbr_amr", dir="output")
   !Setting the time step data
   time = 0.0
+  t_iter = 1
   end_time = 0.5_dp*acos(-1.0_dp)
 
   !Starting the time integration

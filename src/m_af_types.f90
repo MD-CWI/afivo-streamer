@@ -593,7 +593,8 @@ module m_af_types
      !> Store lambda^2 for Helmholtz equations (L phi - lamda phi = f)
      real(dp) :: helmholtz_lambda = 0.0_dp
 
-     !> Boundary value for level set function
+     !> Boundary value for level set function (if lsf_boundary_function is not
+     !> set)
      real(dp) :: lsf_boundary_value = 0.0_dp
 
      !> Safety factor for gradient of level set function
@@ -616,6 +617,9 @@ module m_af_types
 
      !> Routine to determine distance from level-set function
      procedure(mg_lsf_distf), pointer, nopass :: lsf_dist => null()
+
+     !> Function to get boundary value for level set function
+     procedure(mg_func_lsf), pointer, nopass :: lsf_boundary_function => null()
 
      !> Routine to call for filling ghost cells near physical boundaries
      procedure(af_subr_bc), pointer, nopass   :: sides_bc => null()
