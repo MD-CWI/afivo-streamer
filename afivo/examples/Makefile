@@ -19,9 +19,9 @@ PROGS_1D := $(PROGS_XD:%=%_1d)
 PROGS_2D := $(PROGS_XD:%=%_2d) poisson_cyl poisson_cyl_dielectric		\
 simple_streamer poisson_cyl_analytic poisson_helmholtz_cyl solid_body_rotation	\
 amr_solid_body_rotation euler_gas_dynamics dielectric_surface			\
-electrode_dielectric electrode_example
+electrode_dielectric electrode_example two_electrodes_2d
 
-PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning
+PROGS_3D := $(PROGS_XD:%=%_3d) poisson_div_cleaning two_electrodes_3d
 
 PROGS := $(PROGS_1D) $(PROGS_2D) $(PROGS_3D)
 

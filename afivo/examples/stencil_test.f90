@@ -1,5 +1,5 @@
 #include "../src/cpp_macros.h"
-!> \example stencil_test
+!> \example stencil_test.f90
 !>
 !> This example shows how to define and apply numerical stencils
 program stencil_test

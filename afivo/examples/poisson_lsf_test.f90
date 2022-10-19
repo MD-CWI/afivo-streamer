@@ -2,6 +2,15 @@
 !> \example poisson_lsf_test.f90
 !>
 !> Test of the level-set functionality of the Poisson solver
+!>
+!> In this example, multiple irregular boundaries can be defined, for example a
+!> sphere or a heart shape. For the case of a sphere, an analytic solution is
+!> provided in 1d, 2d and 3d.
+!>
+!> The example contains quite a few parameters that can be changed via the command line, using the config_fortran module documented at https://github.com/jannisteunissen/config_fortran
+!> 
+!> Options can for example be set like this:
+!> `./poisson_lsf_test_2d -max_refine_level=7 -shape=2`
 program poisson_lsf_test
   use m_af_all
   use m_config

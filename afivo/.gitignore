@@ -68,3 +68,4 @@ tests/results/*
 /tools/__pycache__/
 /examples/gmon.out
 /examples/time_integration_?d
+/examples/two_electrodes_?d

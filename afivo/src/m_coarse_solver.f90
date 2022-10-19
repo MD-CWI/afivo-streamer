@@ -61,6 +61,9 @@ module m_coarse_solver
   public :: coarse_solver_get_phi
   public :: coarse_solver
 
+  ! Could be moved to another module at some point
+  public :: mg_lsf_boundary_value
+
 contains
 
   !> Initialize the coarse grid solver
@@ -282,7 +285,8 @@ contains
 
        ! Add contribution of level-set function to rhs
        if (mg%i_lsf /= -1) then
-          tmp = tmp + mg%csolver%lsf_fac(DTIMES(:), n) * mg%lsf_boundary_value
+          tmp = tmp + mg%csolver%lsf_fac(DTIMES(:), n) * &
+               mg_lsf_boundary_value(tree%boxes(id), mg)
        end if
 
        ilo = (tree%boxes(id)%ix - 1) * nc + 1
@@ -444,5 +448,25 @@ contains
     end do
 
   end subroutine stencil_handle_boundaries
+
+  !> Compute boundary value for internal boundaries
+  function mg_lsf_boundary_value(box, mg) result(bc)
+    type(box_t), intent(in) :: box
+    type(mg_t), intent(in)  :: mg
+    real(dp)                :: bc(DTIMES(box%n_cell))
+    integer                 :: IJK, nc
+    real(dp)                :: r(NDIM)
+
+    nc = box%n_cell
+
+    if (associated(mg%lsf_boundary_function)) then
+       do KJI_DO(1,nc)
+          r = af_r_cc(box, [IJK])
+          bc(IJK) = mg%lsf_boundary_function(r)
+       end do; CLOSE_DO
+    else
+       bc = mg%lsf_boundary_value
+    end if
+  end function mg_lsf_boundary_value
 
 end module m_coarse_solver

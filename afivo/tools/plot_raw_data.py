@@ -14,8 +14,9 @@ p.add_argument('-project_dims', type=int, nargs='+', choices=[0, 1, 2],
                help='Project (integrate) along dimension(s)')
 p.add_argument('-save_plot', type=str,
                help='Save the plot into this file')
+p.add_argument('-vmin', type=float, help='Minimum intensity in plot')
 p.add_argument('-vmax', type=float, help='Maximum intensity in plot')
-p.add_argument('-xlim', type=float, nargs=2,
+p.add_argument('-xlim', type=int, nargs=2,
                help='Plot range in x direction (pixels)')
 p.add_argument('-ylim', type=int, nargs=2,
                help='Plot range in y direction (pixels)')
@@ -23,6 +24,8 @@ p.add_argument('-hide_axes', action='store_true',
                help='Hide axes etc.')
 p.add_argument('-save_npz', type=str,
                help='Save the data into npz file and do not plot')
+p.add_argument('-cmap', type=str, default='plasma',
+               help='Use this colormap')
 args = p.parse_args()
 
 grids, domain = get_raw_data(args.silo_file, args.project_dims)
@@ -66,7 +69,7 @@ else:
     elif ndim == 2:
         pos = ax.imshow(uniform_data.T, origin='lower',
                         extent=[x[0][0], x[0][-1], x[1][0], x[1][-1]],
-                        vmin=0, vmax=args.vmax)
+                        vmin=args.vmin, vmax=args.vmax, cmap=args.cmap)
         if not args.hide_axes:
             fig.colorbar(pos, ax=ax)
     else:
