@@ -16,10 +16,10 @@ p.add_argument('-save_plot', type=str,
                help='Save the plot into this file')
 p.add_argument('-vmin', type=float, help='Minimum intensity in plot')
 p.add_argument('-vmax', type=float, help='Maximum intensity in plot')
-p.add_argument('-xlim', type=int, nargs=2,
-               help='Plot range in x direction (pixels)')
-p.add_argument('-ylim', type=int, nargs=2,
-               help='Plot range in y direction (pixels)')
+p.add_argument('-xlim', type=float, nargs=2,
+               help='Plot range in x direction')
+p.add_argument('-ylim', type=float, nargs=2,
+               help='Plot range in y direction')
 p.add_argument('-hide_axes', action='store_true',
                help='Hide axes etc.')
 p.add_argument('-save_npz', type=str,
