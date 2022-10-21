@@ -41,13 +41,13 @@ module m_field
   !> Whether the electrode is grounded or at the applied voltage
   logical :: field_electrode_grounded = .false.
 
-  !> First electrode position
+  !> First coordinate of electrode
   real(dp) :: field_rod_r0(NDIM) = -1.0_dp
 
-  !> Second electrode position
+  !> Second coordinate of electrode
   real(dp) :: field_rod_r1(NDIM) = -1.0_dp
 
-  !> Third electrode position
+  !> Third coordinate of electrode
   real(dp) :: field_rod_r2(NDIM) = -1.0_dp
 
   !> Electrode radius (in m, for standard rod electrode)
@@ -165,7 +165,7 @@ contains
     end if
 
     call CFG_add_get(cfg, "field_bc_type", field_bc_type, &
-         "Boundary condition for electric potential (homogeneous, neumann)")
+         "Boundary condition for electric potential")
 
     !< [electrode_settings]
     call CFG_add_get(cfg, "field_electrode_grounded", field_electrode_grounded, &
@@ -183,7 +183,7 @@ contains
 
     electrode_type = "rod"
     call CFG_add_get(cfg, "field_electrode_type", electrode_type, &
-         "Type of electrode (rod or rod_cone_top)")
+         "Type of electrode (sphere, rod, rod_cone_top)")
     !< [electrode_settings]
 
     if (associated(user_potential_bc)) then
@@ -195,6 +195,8 @@ contains
           mg%sides_bc => field_bc_homogeneous
        case ("neumann")
           mg%sides_bc => field_bc_neumann
+       case ("all_neumann")
+          mg%sides_bc => field_bc_all_neumann
        case default
           error stop "field_bc_select error: invalid condition"
        end select
@@ -208,26 +210,19 @@ contains
     if (ST_use_dielectric) tree%mg_i_eps = i_eps
 
     if (ST_use_electrode) then
-       if (any(field_rod_r0 <= -1.0_dp)) &
-            error stop "field_rod_r0 not set correctly"
-       if (any(field_rod_r1 <= -1.0_dp)) &
-            error stop "field_rod_r1 not set correctly"
-       if (field_rod_radius <= 0) &
-            error stop "field_rod_radius not set correctly"
-       if (any(field_rod_r1 < field_rod_r0)) &
-            error stop "Should have field_rod_r1 >= field_rod_r0"
-
        select case (electrode_type)
+       case ("sphere")
+          mg%lsf => sphere_lsf
        case ("rod")
-          call af_set_cc_methods(tree, i_lsf, funcval=set_field_rod_lsf)
-          mg%lsf => field_rod_lsf
+          call check_rod_parameters()
+          mg%lsf => rod_lsf
        case ("rod_cone_top")
+          call check_rod_parameters()
           if (any(field_rod_r2 < field_rod_r1)) &
                error stop "Should have field_rod_r2 >= field_rod_r1"
           if (field_tip_radius <= 0) &
                error stop "field_tip_radius not set correctly"
-          call af_set_cc_methods(tree, i_lsf, funcval=set_field_conical_rod_top_lsf)
-          mg%lsf => field_conical_rod_top_lsf
+          mg%lsf => conical_rod_top_lsf
 
           r0    = field_rod_r0 * ST_domain_len
           r1    = field_rod_r1 * ST_domain_len
@@ -240,20 +235,47 @@ contains
           conical_rod_R_o = R_tip/cos(alpha)
           conical_rod_y_o = r0(NDIM) + R_tip * tan(alpha)
           conical_rod_ro = [r0(1:NDIM-1), conical_rod_y_o]
+       case ("user")
+          if (.not. associated(user_lsf)) then
+             error stop "user_lsf not set"
+          else
+             mg%lsf => user_lsf
+          end if
+
+          if (associated(user_lsf_bc)) then
+             mg%lsf_boundary_function => user_lsf_bc
+          end if
        case default
-          error stop "Invalid electrode type (option: rod, rod_cone_top)"
+          print *, "Electrode types: sphere, rod, rod_cone_top, user"
+          error stop "Invalid electrode type"
        end select
 
+       call af_set_cc_methods(tree, i_lsf, funcval=set_lsf_box)
        tree%mg_i_lsf = i_lsf
     end if
 
     mg%lsf_dist => mg_lsf_dist_gss
+
+    if (field_rod_radius <= 0) then
+       error stop "set field_rod_radius to smallest length scale of electrode"
+    end if
     mg%lsf_length_scale = field_rod_radius
 
     call af_set_cc_methods(tree, i_electric_fld, &
          af_bc_neumann_zero, af_gc_interp)
 
   end subroutine field_initialize
+
+  subroutine check_rod_parameters()
+    if (any(field_rod_r0 <= -1.0_dp)) &
+         error stop "field_rod_r0 not set correctly"
+    if (any(field_rod_r1 <= -1.0_dp)) &
+         error stop "field_rod_r1 not set correctly"
+    if (field_rod_radius <= 0) &
+         error stop "field_rod_radius not set correctly"
+    if (any(field_rod_r1 < field_rod_r0)) &
+         error stop "Should have field_rod_r1 >= field_rod_r0"
+  end subroutine check_rod_parameters
 
   subroutine field_set_rhs(tree, s_in)
     use m_units_constants
@@ -478,46 +500,46 @@ contains
     end if
   end subroutine field_bc_neumann
 
+  !> All Neumann zero boundary conditions for the potential
+  subroutine field_bc_all_neumann(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    bc_type = af_bc_neumann
+    bc_val = 0.0_dp
+  end subroutine field_bc_all_neumann
+
   ! This routine sets the level set function for a simple rod
-  subroutine set_field_rod_lsf(box, iv)
+  subroutine set_lsf_box(box, iv)
     type(box_t), intent(inout) :: box
     integer, intent(in)        :: iv
     integer                    :: IJK, nc
     real(dp)                   :: rr(NDIM)
 
     nc = box%n_cell
-
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
-       box%cc(IJK, iv) = field_rod_lsf(rr)
+       box%cc(IJK, iv) = mg%lsf(rr)
     end do; CLOSE_DO
+  end subroutine set_lsf_box
 
-  end subroutine set_field_rod_lsf
+  real(dp) function sphere_lsf(r)
+    real(dp), intent(in) :: r(NDIM)
+    sphere_lsf = norm2(r - field_rod_r0 * ST_domain_len) - field_rod_radius
+  end function sphere_lsf
 
-  real(dp) function field_rod_lsf(r)
+  real(dp) function rod_lsf(r)
     use m_geometry
     real(dp), intent(in)    :: r(NDIM)
-    field_rod_lsf = GM_dist_line(r, field_rod_r0 * ST_domain_len, &
+    rod_lsf = GM_dist_line(r, field_rod_r0 * ST_domain_len, &
          field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
-  end function field_rod_lsf
+  end function rod_lsf
 
-  ! This routine sets the level set function for a simple rod
-  subroutine set_field_conical_rod_top_lsf(box, iv)
-    type(box_t), intent(inout) :: box
-    integer, intent(in)        :: iv
-    integer                    :: IJK, nc
-    real(dp)                   :: rr(NDIM)
-
-    nc = box%n_cell
-
-    do KJI_DO(0,nc+1)
-       rr = af_r_cc(box, [IJK])
-       box%cc(IJK, iv) = field_conical_rod_top_lsf(rr)
-    end do; CLOSE_DO
-
-  end subroutine set_field_conical_rod_top_lsf
-
-  function field_conical_rod_top_lsf(r) result(lsf)
+  function conical_rod_top_lsf(r) result(lsf)
     use m_geometry
     real(dp), intent(in)    :: r(NDIM)
     real(dp)                :: lsf
@@ -538,6 +560,6 @@ contains
        lsf = GM_dist_line(r, conical_rod_ro, conical_rod_ro, NDIM) - &
             conical_rod_R_o
     end if
-  end function field_conical_rod_top_lsf
+  end function conical_rod_top_lsf
 
 end module m_field

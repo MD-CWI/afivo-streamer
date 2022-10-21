@@ -31,6 +31,12 @@ module m_user_methods
 
   !> To add entries to the log file
   procedure(log_vars), pointer :: user_log_variables => null()
+
+  !> Custom level-set function
+  procedure(mg_func_lsf), pointer :: user_lsf => null()
+
+  !> Function to get boundary value for level set function
+  procedure(mg_func_lsf), pointer :: user_lsf_bc => null()
   !< [method_list]
 
   integer, parameter :: user_max_log_vars = 20
