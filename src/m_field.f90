@@ -252,14 +252,14 @@ contains
 
        call af_set_cc_methods(tree, i_lsf, funcval=set_lsf_box)
        tree%mg_i_lsf = i_lsf
-    end if
 
-    mg%lsf_dist => mg_lsf_dist_gss
+       mg%lsf_dist => mg_lsf_dist_gss
 
-    if (field_rod_radius <= 0) then
-       error stop "set field_rod_radius to smallest length scale of electrode"
+       if (field_rod_radius <= 0) then
+          error stop "set field_rod_radius to smallest length scale of electrode"
+       end if
+       mg%lsf_length_scale = field_rod_radius
     end if
-    mg%lsf_length_scale = field_rod_radius
 
     call af_set_cc_methods(tree, i_electric_fld, &
          af_bc_neumann_zero, af_gc_interp)
