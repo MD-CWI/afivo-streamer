@@ -22,6 +22,7 @@ module m_init_cond
      real(dp), allocatable           :: seed_width(:)
      character(string_len), allocatable :: seed_falloff(:)
      integer, allocatable            :: seed1_species(:) !< Custom seed 1 species
+     integer, allocatable            :: background_species(:) !< Custom background species
   end type initcnd_t
 
   ! This will contain the initial conditions
@@ -44,6 +45,7 @@ contains
     real(dp), allocatable      :: tmp_vec(:)
     character(len=name_len)    :: empty_string(0)
     character(len=name_len), allocatable :: seed_species(:)
+    character(len=name_len), allocatable :: background_species(:)
     type(initcnd_t)            :: ic
 
     call CFG_add(cfg, "background_density", 0.0_dp, &
@@ -64,6 +66,8 @@ contains
          "Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)", .true.)
     call CFG_add(cfg, "seed1_species", empty_string, &
          "Names of custom species for the first seed", .true.)
+    call CFG_add(cfg, "background_species", empty_string, &
+         "Names of custom species for the background density", .true.)
 
     call CFG_get_size(cfg, "seed_density", n_cond)
     ic%n_cond = n_cond
@@ -116,13 +120,22 @@ contains
     call CFG_get(cfg, "seed_density2", ic%seed_density2)
 
     call CFG_get_size(cfg, "seed1_species", varsize)
-
     if (varsize > 0) then
        allocate(seed_species(varsize))
        allocate(ic%seed1_species(varsize))
        call CFG_get(cfg, "seed1_species", seed_species)
        do n = 1, varsize
           ic%seed1_species(n) = af_find_cc_variable(tree, seed_species(n))
+       end do
+    end if
+
+    call CFG_get_size(cfg, "background_species", varsize)
+    if (varsize > 0) then
+       allocate(background_species(varsize))
+       allocate(ic%background_species(varsize))
+       call CFG_get(cfg, "background_species", background_species)
+       do n = 1, varsize
+          ic%background_species(n) = af_find_cc_variable(tree, background_species(n))
        end do
     end if
 
@@ -211,8 +224,14 @@ contains
     real(dp)                   :: density
 
     nc = box%n_cell
-    box%cc(DTIMES(:), i_electron) = init_conds%background_density
-    box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
+
+    if (allocated(init_conds%background_species)) then
+       box%cc(DTIMES(:), init_conds%background_species) = &
+                  init_conds%background_density
+    else
+       box%cc(DTIMES(:), i_electron) = init_conds%background_density
+       box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
+    end if
 
     do KJI_DO(0,nc+1)
        rr = af_r_cc(box, [IJK])
