@@ -66,6 +66,9 @@ module m_refine
   ! Maximum coordinate of the refinement limits
   real(dp), protected, allocatable :: refine_limits_rmax(:,:)
 
+  ! Use effective alpha (minus attachment) for refinement
+  logical, protected :: refine_use_alpha_effective
+
   procedure(af_subr_ref), pointer :: refine_routine => null()
 
   ! Public methods
@@ -114,6 +117,8 @@ contains
          "Ensure grid spacing around electrode is less than this value")
     call CFG_add_get(cfg, "refine_min_dens", refine_min_dens, &
          "Minimum electron density for adding grid refinement")
+    call CFG_add_get(cfg, "refine_use_alpha_effective", refine_use_alpha_effective, &
+         "Use effective alpha (minus attachment) for refinement")
 
     call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
          "Refine regions up to this grid spacing", .true.)
@@ -196,8 +201,17 @@ contains
           gas_dens = box%cc(IJK, i_gas_dens)
        end if
        fld   = box%cc(IJK, i_electric_fld) * SI_to_Townsend / gas_dens
-       alpha = LT_get_col(td_tbl, td_alpha, refine_adx_fac * fld) * &
-            gas_dens / refine_adx_fac
+
+       if (refine_use_alpha_effective) then
+          alpha = (LT_get_col(td_tbl, td_alpha, refine_adx_fac * fld) - &
+               LT_get_col(td_tbl, td_eta, refine_adx_fac * fld)) * &
+               gas_dens / refine_adx_fac
+          alpha = max(0.0_dp, alpha)
+       else
+          alpha = LT_get_col(td_tbl, td_alpha, refine_adx_fac * fld) * &
+               gas_dens / refine_adx_fac
+       end if
+
        adx   = max_dx * alpha
        elec_dens = box%cc(IJK, i_electron)
 
