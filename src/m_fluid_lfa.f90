@@ -114,8 +114,7 @@ contains
     end if
 
     if (last_step) then
-       dt_lim = min(2 * global_dt, dt_safety_factor * &
-            minval(dt_matrix(1:dt_num_cond, :)))
+       dt_lim = minval(dt_matrix(1:dt_num_cond, :))
     end if
   end subroutine forward_euler
 

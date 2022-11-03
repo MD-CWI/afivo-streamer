@@ -240,7 +240,7 @@ contains
        end if
     end do
 
-    call af_add_cc_variable(tree, "phi", ix=i_phi)
+    call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
     call af_add_cc_variable(tree, "tmp", write_out=.false., &

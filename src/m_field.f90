@@ -75,6 +75,7 @@ module m_field
   public :: field_set_voltage
 
   public :: field_bc_homogeneous
+  public :: field_from_potential
 
 contains
 
@@ -320,9 +321,7 @@ contains
   !> Compute electric field on the tree. First perform multigrid to get electric
   !> potential, then take numerical gradient to geld field.
   subroutine field_compute(tree, mg, s_in, time, have_guess)
-    use m_units_constants
     use m_chemistry
-    use m_dielectric
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg ! Multigrid option struct
     integer, intent(in)       :: s_in
@@ -399,7 +398,17 @@ contains
        if (residuals(i) < residual_threshold) exit
     end do
 
-    ! Compute field from potential
+    call field_from_potential(tree, mg)
+
+  end subroutine field_compute
+
+  !> Compute field from potential
+  subroutine field_from_potential(tree, mg)
+    use m_units_constants
+    use m_dielectric
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(in)    :: mg ! Multigrid option struct
+
     if (ST_use_dielectric) then
        call mg_compute_phi_gradient(tree, mg, electric_fld, -1.0_dp)
        call surface_correct_field_fc(tree, diel, i_surf_dens, &
@@ -411,7 +420,7 @@ contains
 
     ! Set the field norm also in ghost cells
     call af_gc_tree(tree, [i_electric_fld])
-  end subroutine field_compute
+  end subroutine field_from_potential
 
   !> Set the current voltage
   subroutine field_set_voltage(tree, time)

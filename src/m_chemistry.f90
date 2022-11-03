@@ -273,7 +273,7 @@ contains
 
     do n = n_gas_species+1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
-            n_copies=af_advance_num_steps(time_integrator), &
+            n_copies=af_advance_num_steps(time_integrator)+1, &
             ix=species_itree(n))
     end do
 
