@@ -357,6 +357,8 @@ contains
        i_elec = species_index("e")
        n_fields = td_tbl%n_points
 
+       if (n_fields < 3) error stop "Not enough data for linear extrapolation"
+
        allocate(fields(n_fields))
        fields = td_tbl%x
 
