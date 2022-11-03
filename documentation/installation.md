@@ -4,7 +4,7 @@
 
 If you have `git` installed, you can download a copy of the repository with:
 
-    $ git clone https://gitlab.com/MD-CWI-NL/afivo.git
+    $ git clone https://github.com/MD-CWI/afivo.git
 
 To update the local copy, use the command
 
@@ -12,7 +12,7 @@ To update the local copy, use the command
 
 in the `afivo` directory. You can also download
 a
-[zip file with the latest version](https://gitlab.com/MD-CWI-NL/afivo/repository/archive.zip?ref=master),
+[zip file with the latest version](https://github.com/MD-CWI/afivo/repository/archive.zip?ref=master),
 but then it harder to update.
 
 # Requirements
