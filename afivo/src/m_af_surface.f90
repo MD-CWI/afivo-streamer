@@ -68,6 +68,7 @@ module m_af_surface
   public :: surface_initialize
   public :: surface_set_values
   public :: surface_set_weighted_sum
+  public :: surface_copy_variable
   public :: surface_get_integral
   public :: surface_update_after_refinement
   public :: surface_inside_layer_to_surface
@@ -265,6 +266,24 @@ contains
        end if
     end do
   end subroutine surface_set_weighted_sum
+
+  !> Copy surface variable to another index
+  subroutine surface_copy_variable(diel, i_in, i_out)
+    type(surfaces_t), intent(inout) :: diel
+    integer, intent(in)             :: i_in  !< Input surface density
+    integer, intent(in)             :: i_out !< Output surface density
+    integer                         :: ix
+
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+#if NDIM == 2
+          diel%surfaces(ix)%sd(:, i_out) = diel%surfaces(ix)%sd(:, i_in)
+#elif NDIM == 3
+          diel%surfaces(ix)%sd(:, :, i_out) = diel%surfaces(ix)%sd(:, :, i_in)
+#endif
+       end if
+    end do
+  end subroutine surface_copy_variable
 
   !> Compute integral of surface variable
   subroutine surface_get_integral(diel, i_surf, surf_int)
