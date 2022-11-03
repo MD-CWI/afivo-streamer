@@ -211,11 +211,11 @@ program streamer
              time_integrator, forward_euler)
 
         ! Check if dt was small enough for the new state
-        step_accepted = (dt < dt_lim)
+        step_accepted = (dt <= dt_lim)
 
         if (.not. step_accepted) then
-           write(*, "(A,E12.4,A,E12.4,A,E12.4,A)") "Step rejected (time =", &
-                time, ", dt =", dt, ", dt_lim =", dt_lim, ")"
+           print *, "Step rejected (dt > dt_lim)"
+           call output_status(tree, time, wc_time, it, dt)
 
            ! Go back to previous state and try with a smaller dt
            dt = dt_safety_factor * dt_lim
