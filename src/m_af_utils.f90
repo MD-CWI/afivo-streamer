@@ -27,8 +27,11 @@ module m_af_utils
   public :: af_box_lincomb_cc
   public :: af_box_copy_cc_to
   public :: af_box_copy_cc
+  public :: af_box_copy_ccs
   public :: af_boxes_copy_cc
+  public :: af_boxes_copy_ccs
   public :: af_tree_copy_cc
+  public :: af_tree_copy_ccs
   public :: af_reduction
   public :: af_reduction_vec
   public :: af_reduction_loc
@@ -539,6 +542,13 @@ contains
     box%cc(DTIMES(:), iv_to) = box%cc(DTIMES(:), iv_from)
   end subroutine af_box_copy_cc
 
+  !> Copy cc(..., iv_from) to box%cc(..., iv_to)
+  subroutine af_box_copy_ccs(box, iv_from, iv_to)
+    type(box_t), intent(inout) :: box
+    integer, intent(in)         :: iv_from(:), iv_to(:)
+    box%cc(DTIMES(:), iv_to) = box%cc(DTIMES(:), iv_from)
+  end subroutine af_box_copy_ccs
+
   !> Copy cc(..., iv_from) to box%cc(..., iv_to) for all ids
   subroutine af_boxes_copy_cc(boxes, ids, iv_from, iv_to)
     type(box_t), intent(inout) :: boxes(:)
@@ -552,6 +562,19 @@ contains
     !$omp end parallel do
   end subroutine af_boxes_copy_cc
 
+  !> Copy cc(..., iv_from) to box%cc(..., iv_to) for all ids
+  subroutine af_boxes_copy_ccs(boxes, ids, iv_from, iv_to)
+    type(box_t), intent(inout) :: boxes(:)
+    integer, intent(in)         :: ids(:), iv_from(:), iv_to(:)
+    integer                     :: i
+
+    !$omp parallel do
+    do i = 1, size(ids)
+       call af_box_copy_ccs(boxes(ids(i)), iv_from, iv_to)
+    end do
+    !$omp end parallel do
+  end subroutine af_boxes_copy_ccs
+
   !> Copy cc(..., iv_from) to box%cc(..., iv_to) for full tree
   subroutine af_tree_copy_cc(tree, iv_from, iv_to)
     type(af_t), intent(inout) :: tree
@@ -562,6 +585,17 @@ contains
        call af_boxes_copy_cc(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
     end do
   end subroutine af_tree_copy_cc
+
+  !> Copy cc(..., iv_from) to box%cc(..., iv_to) for full tree
+  subroutine af_tree_copy_ccs(tree, iv_from, iv_to)
+    type(af_t), intent(inout) :: tree
+    integer, intent(in)       :: iv_from(:), iv_to(:)
+    integer                   :: lvl
+
+    do lvl = 1, tree%highest_lvl
+       call af_boxes_copy_ccs(tree%boxes, tree%lvls(lvl)%ids, iv_from, iv_to)
+    end do
+  end subroutine af_tree_copy_ccs
 
   !> A general scalar reduction method
   subroutine af_reduction(tree, box_func, reduction, init_val, out_val)
