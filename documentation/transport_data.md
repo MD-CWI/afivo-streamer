@@ -125,7 +125,7 @@ Transport data can be computed from cross sections with a so-called Boltzmann so
   solver, implemented in Python)
 * [Magboltz](http://consult.cern.ch/writeup/magboltz/) (Particle / Monte Carlo
   method implemented in Matlab, open source)
-* [Particle_swarm](https://gitlab.com/MD-CWI-NL/particle_swarm) (Particle /
+* [Particle_swarm](https://github.com/MD-CWI/particle_swarm) (Particle /
   Monte Carlo method, open source, implemented in Fortran)
 
 ## Bolsig+ {#td-bolsigplus}
@@ -158,7 +158,7 @@ where `swarm.txt` is the output of Bolsig+. Execute `bolsig_convert.py` with the
 
 One still has to define the reactions before the file can be used as input for the afivo-streamer code, see @ref td-format
 
-A more advanced way to compute transport data is to download an offline version of a Boltzmann solver and compute the data locally, for example using [BOLSIG+](http://www.bolsig.laplace.univ-tlse.fr/download.html) (Windows), [BOLSIG-](http://www.bolsig.laplace.univ-tlse.fr/download.html) (linux), or [particle_swarm](https://gitlab.com/MD-CWI-NL/particle_swarm). When input data is linearly interpolated, it is best to compute a large number of data points to reduce interpolation errors, in particular in the rate coefficients, which are often far from linear. Another option is to enable cubic interpolation of the input data, see @ref td-interpolation.
+A more advanced way to compute transport data is to download an offline version of a Boltzmann solver and compute the data locally, for example using [BOLSIG+](http://www.bolsig.laplace.univ-tlse.fr/download.html) (Windows), [BOLSIG-](http://www.bolsig.laplace.univ-tlse.fr/download.html) (linux), or [particle_swarm](https://github.com/MD-CWI/particle_swarm). When input data is linearly interpolated, it is best to compute a large number of data points to reduce interpolation errors, in particular in the rate coefficients, which are often far from linear. Another option is to enable cubic interpolation of the input data, see @ref td-interpolation.
 
 # Transport data format {#td-format}
 

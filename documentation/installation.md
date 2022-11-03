@@ -11,7 +11,7 @@
 
 Run the following command in a folder to clone the repository:
 
-    git clone https://gitlab.com/MD-CWI-NL/afivo-streamer.git
+    git clone https://github.com/MD-CWI/afivo-streamer.git
 
 Then you can go into the folder and compile the code:
 
