@@ -5,3 +5,6 @@
 /usage_example
 /saved_table.dat
 /test_lookup_table_index
+/*.o
+/m_lookup_table.mod
+/test_correctness

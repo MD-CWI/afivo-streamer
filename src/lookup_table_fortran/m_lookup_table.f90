@@ -27,6 +27,7 @@ module m_lookup_table
      integer  :: xspacing  !< Type of table spacing
      real(dp) :: x_min    !< The minimum lookup coordinate
      real(dp) :: inv_fac  !< The inverse x-spacing
+     logical  :: extrapolate_above !< Linearly extrapolate above x_max
 
      ! The table is stored in two ways, to speed up different types of lookups.
      real(dp), allocatable :: x(:) !< The x values in the table
@@ -182,12 +183,15 @@ contains
   ! ** 1D lookup table routines **
 
   !> This function returns a new lookup table
-  function LT_create(x_min, x_max, n_points, n_cols, xspacing) result(my_lt)
+  function LT_create(x_min, x_max, n_points, n_cols, xspacing, &
+       extrapolate_above) result(my_lt)
     real(dp), intent(in) :: x_min  !< Minimum x-coordinate
     real(dp), intent(in) :: x_max  !< Maximum x-coordinate
     integer, intent(in)  :: n_points !< How many x-values to store
     integer, intent(in)  :: n_cols !< Number of variables that will be looked up
     integer, intent(in), optional :: xspacing !< Spacing of data
+    !> Linearly extrapolate above x_max
+    logical, intent(in), optional :: extrapolate_above
     type(LT_t)           :: my_lt
 
     if (x_max <= x_min) error stop "x_max should be > x_min"
@@ -198,6 +202,8 @@ contains
     my_lt%x_min    = x_min
     my_lt%xspacing  = LT_xspacing_linear
     if (present(xspacing)) my_lt%xspacing = xspacing
+    my_lt%extrapolate_above = .false.
+    if (present(extrapolate_above)) my_lt%extrapolate_above = extrapolate_above
 
     allocate(my_lt%x(n_points))
     call table_set_x(n_points, my_lt%xspacing, x_min, x_max, &
@@ -341,9 +347,13 @@ contains
     if (frac <= 0) then
        my_loc%low_ix   = 1
        my_loc%low_frac = 1
-    else if (frac >= my_lt%n_points) then
+    else if (frac >= my_lt%n_points - 1) then
        my_loc%low_ix   = my_lt%n_points - 1
-       my_loc%low_frac = 0
+       if (my_lt%extrapolate_above) then
+          my_loc%low_frac = my_loc%low_ix - frac
+       else
+          my_loc%low_frac = 0
+       end if
     else
        my_loc%low_ix   = ceiling(frac)
        my_loc%low_frac = my_loc%low_ix - frac
@@ -514,7 +524,7 @@ contains
        my_loc%low_frac = 1
     end where
 
-    where (my_loc%low_ix >= my_lt%n_points)
+    where (my_loc%low_ix >= my_lt%n_points - 1)
        my_loc%low_ix   = my_lt%n_points - 1
        my_loc%low_frac = 0
     end where
