@@ -72,7 +72,7 @@ if args.plot_all:
 for soi in args.soi:
     # Visualize the source and sink reactions for a given specie
     sidx = species_list.index(soi)
-    fig, ax = plt.subplots(2, figsize=(8, 8), sharex=True)
+    fig, ax = plt.subplots(3, figsize=(8, 12), sharex=True)
 
     srce_idx = np.where(stoich_matrix[sidx, :] > 0)[0]
     sink_idx = np.where(stoich_matrix[sidx, :] < 0)[0]
@@ -92,6 +92,13 @@ for soi in args.soi:
         ax[i].set_ylabel('Production (#)')
         ax[i].legend()
 
+    gross_prod = np.dot(rates[:, srce_idx], stoich_matrix[sidx, srce_idx])
+    net_prod = np.dot(rates, stoich_matrix[sidx])
+    ax[2].plot(time, gross_prod, label='gross production')
+    ax[2].plot(time, net_prod, label='net production')
+    ax[2].set_xlabel('Time (s)')
+    ax[2].set_ylabel('Production (#)')
+    ax[2].legend()
     fig.suptitle(f'{len(srce_idx)+len(sink_idx)} of {n_reactions}'
                  f' influence {soi}')
 
