@@ -2,6 +2,7 @@
 !> Fluid model module
 module m_fluid_lfa
   use m_af_all
+  use m_streamer
 
   implicit none
   private
@@ -19,7 +20,6 @@ contains
   subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
        w_prev, s_out, i_step, n_steps)
     use m_chemistry
-    use m_streamer
     use m_field
     use m_dt
     use m_transport_data
@@ -121,7 +121,6 @@ contains
   !> Get velocity and diffusion coefficient for electron flux
   subroutine compute_flux_coeff_1d(nc, E_cc, E_x, ne, N_gas, dt, dx, v, dc, fmax)
     use m_gas
-    use m_streamer
     use m_units_constants
     use m_lookup_table
     use m_transport_data
@@ -182,7 +181,6 @@ contains
     use m_af_flux_schemes
     use m_units_constants
     use omp_lib
-    use m_streamer
     use m_gas
     use m_dt
     use m_lookup_table
@@ -350,7 +348,9 @@ contains
 
           ! Ion mobility
           if (size(transport_data_ions%mobilities) > 0) then
-             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv
+             ! This should be an over-estimate
+             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv * &
+                  ST_sheath_max_ion_mobility_factor
           else
              max_mu_ion = 0.0_dp
           end if
@@ -359,9 +359,9 @@ contains
           Td = tree%boxes(id)%cc(IJK, i_electric_fld) * SI_to_Townsend * N_inv
           mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
 
-          ! Take maximum of electron and ion mobility, in the future we should
+          ! Take sum of electron and ion mobility, in the future we should
           ! probably apply a weighted sum (weighted with species densities)
-          mu = max(mu, max_mu_ion)
+          mu = mu + max_mu_ion
 
           ! Dielectric relaxation time
           dt_drt = UC_eps0 / max(UC_elem_charge * mu * cc(IJK, 1), eps)
@@ -431,7 +431,6 @@ contains
 
   subroutine fluxes_ions(tree, id, nc, dt, s_in, last_step)
     use m_af_flux_schemes
-    use m_streamer
     use m_gas
     use m_transport_data
     type(af_t), intent(inout) :: tree
@@ -463,37 +462,33 @@ contains
        i_ion  = flux_species(ix+1)
        i_flux = flux_variables(ix+1)
        ! Account for ion charge in mobility
-       mu     = transport_data_ions%mobilities(ix) * &
-            flux_species_charge(ix+1)
+       mu = transport_data_ions%mobilities(ix) * flux_species_charge(ix+1)
 
+       associate (box => tree%boxes(id), fc => tree%boxes(id)%fc, &
+            cc => tree%boxes(id)%cc)
 #if NDIM == 1
-       do n = 1, nc+1
-          v(n, 1) = mu * get_N_inv_face(tree%boxes(id), n, 1) * &
-               tree%boxes(id)%fc(n, 1, electric_fld)
-       end do
+         do n = 1, nc+1
+            v(n, 1) = get_ion_velocity(box, n, 1, mu)
+         end do
 #elif NDIM == 2
-       do n = 1, nc+1
-          do m = 1, nc
-             v(n, m, 1) = mu * get_N_inv_face(tree%boxes(id), n, m, 1) * &
-                  tree%boxes(id)%fc(n, m, 1, electric_fld)
-             v(m, n, 2) = mu * get_N_inv_face(tree%boxes(id), m, n, 2) * &
-                  tree%boxes(id)%fc(m, n, 2, electric_fld)
-          end do
-       end do
+         do n = 1, nc+1
+            do m = 1, nc
+               v(n, m, 1) = get_ion_velocity(box, n, m, 1, mu)
+               v(m, n, 2) = get_ion_velocity(box, m, n, 2, mu)
+            end do
+         end do
 #elif NDIM == 3
-       do n = 1, nc+1
-          do m = 1, nc
-             do l = 1, nc
-                v(n, m, l, 1) = mu * get_N_inv_face(tree%boxes(id), n, m, l, 1) * &
-                     tree%boxes(id)%fc(n, m, l, 1, electric_fld)
-                v(m, n, l, 2) = mu * get_N_inv_face(tree%boxes(id), m, n, l, 2) * &
-                     tree%boxes(id)%fc(m, n, l, 2, electric_fld)
-                v(m, l, n, 3) = mu * get_N_inv_face(tree%boxes(id), m, l, n, 3) * &
-                     tree%boxes(id)%fc(m, l, n, 3, electric_fld)
-             end do
-          end do
-       end do
+         do n = 1, nc+1
+            do m = 1, nc
+               do l = 1, nc
+                  v(n, m, l, 1) = get_ion_velocity(box, n, m, l, 1, mu)
+                  v(m, n, l, 2) = get_ion_velocity(box, m, n, l, 2, mu)
+                  v(m, l, n, 3) = get_ion_velocity(box, m, l, n, 3, mu)
+               end do
+            end do
+         end do
 #endif
+       end associate
 
 #if NDIM == 1
        call flux_koren_1d(cc(DTIMES(:), ix), v, nc, 2)
@@ -508,6 +503,60 @@ contains
 
   end subroutine fluxes_ions
 
+  real(dp) function get_ion_velocity(box, IJK, dim, mu) result(v)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: IJK !< Flux index
+    integer, intent(in)     :: dim !< Flux dimension
+    real(dp), intent(in)    :: mu  !< Original mobility
+    real(dp)                :: field_norm, field_face, factor, lsf_face
+
+    field_face = box%fc(IJK, dim, electric_fld)
+    factor = 1.0_dp
+
+    if (ST_sheath_max_ion_mobility_factor > 1 .and. ST_use_electrode) then
+       ! Get lsf value at the cell face, which should be (approximately) the
+       ! distance to the electrode
+       lsf_face = cc_average_at_cell_face(box, IJK, dim, i_lsf)
+
+       if (lsf_face < ST_sheath_max_lsf) then
+          field_norm = cc_average_at_cell_face(box, IJK, dim, i_electric_fld)
+          factor = max(1.0_dp, exp(field_norm/ST_sheath_field_threshold - 1))
+          factor = min(factor, ST_sheath_max_ion_mobility_factor)
+       end if
+    end if
+
+    v = mu * factor * field_face * get_N_inv_face(box, IJK, dim)
+  end function get_ion_velocity
+
+  !> Get average of cell-centered quantity at a cell face
+  pure function cc_average_at_cell_face(box, IJK, idim, iv) result(avg)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: IJK  !< Face index
+    integer, intent(in)     :: idim !< Direction of the cell face
+    integer, intent(in)     :: iv   !< Index of cell-centered variable
+    real(dp)                :: avg
+
+#if NDIM == 1
+    avg = 0.5_dp * (box%cc(i-1, iv) + box%cc(i, iv))
+#elif NDIM == 2
+    select case (idim)
+    case (1)
+       avg = 0.5_dp * (box%cc(i-1, j, iv) + box%cc(i, j, iv))
+    case default
+       avg = 0.5_dp * (box%cc(i, j-1, iv) + box%cc(i, j, iv))
+    end select
+#elif NDIM == 3
+    select case (idim)
+    case (1)
+       avg = 0.5_dp * (box%cc(i-1, j, k, iv) + box%cc(i, j, k, iv))
+    case (2)
+       avg = 0.5_dp * (box%cc(i, j-1, k, iv) + box%cc(i, j, k, iv))
+    case default
+       avg = 0.5_dp * (box%cc(i, j, k-1, iv) + box%cc(i, j, k, iv))
+    end select
+#endif
+  end function cc_average_at_cell_face
+
   !> Get inverse gas density at a cell face, between cell-centered index i-1 and
   !> i along dimension idim
   pure real(dp) function get_N_inv_face(box, IJK, idim)
@@ -519,31 +568,7 @@ contains
     if (gas_constant_density) then
        get_N_inv_face = gas_inverse_number_density
     else
-#if NDIM == 1
-       get_N_inv_face = 2 / (box%cc(i-1, i_gas_dens) + &
-            box%cc(i, i_gas_dens))
-#elif NDIM == 2
-       select case (idim)
-       case (1)
-          get_N_inv_face = 2 / (box%cc(i-1, j, i_gas_dens) + &
-            box%cc(i, j, i_gas_dens))
-       case default
-          get_N_inv_face = 2 / (box%cc(i, j-1, i_gas_dens) + &
-            box%cc(i, j, i_gas_dens))
-       end select
-#elif NDIM == 3
-       select case (idim)
-       case (1)
-          get_N_inv_face = 2 / (box%cc(i-1, j, k, i_gas_dens) + &
-            box%cc(i, j, k, i_gas_dens))
-       case (2)
-          get_N_inv_face = 2 / (box%cc(i, j-1, k, i_gas_dens) + &
-               box%cc(i, j, k, i_gas_dens))
-       case default
-          get_N_inv_face = 2 / (box%cc(i, j, k-1, i_gas_dens) + &
-               box%cc(i, j, k, i_gas_dens))
-       end select
-#endif
+       get_N_inv_face = 1 / cc_average_at_cell_face(box, IJK, idim, i_gas_dens)
     end if
   end function get_N_inv_face
 
@@ -555,7 +580,6 @@ contains
     use m_units_constants
     use m_gas
     use m_chemistry
-    use m_streamer
     use m_photoi
     use m_dt
     use m_lookup_table
@@ -784,7 +808,6 @@ contains
   !> Compute adjustment factor for electron source terms. Used to reduce them in
   !> certain regimes.
   subroutine compute_source_factor(box, nc, elec_dens, fields, s_dt, source_factor)
-    use m_streamer
     use m_gas
     use m_transport_data
     use m_lookup_table
@@ -925,7 +948,6 @@ contains
   !> Handle secondary emission from positive ions
   subroutine handle_ion_se_flux(box)
     use m_transport_data
-    use m_streamer
     type(box_t), intent(inout) :: box
     integer                    :: nc, nb, n, ion_flux
 
@@ -1039,7 +1061,6 @@ contains
 
   !> Integrate J.E over space into global storage
   subroutine sum_global_JdotE(box, tid)
-    use m_streamer
     use m_units_constants
     type(box_t), intent(in) :: box
     integer, intent(in)     :: tid !< Thread id
