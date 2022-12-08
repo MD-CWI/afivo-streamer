@@ -17,6 +17,8 @@ p.add_argument('-plot_all', action='store_true',
                help='Plot all reaction rates together')
 p.add_argument('-time_interval', nargs=2, type=float,
                help='Time interval over which to analyse the reactions (s)')
+p.add_argument('-threshold', type=float, default=0.01,
+               help='Threshold (relative) for plotting reactions')
 args = p.parse_args()
 
 # Assume the other files are in the same folder
@@ -43,6 +45,9 @@ if args.time_interval is not None:
 
     time = time[t1_idx:t2_idx]
     rates = rates[t1_idx:t2_idx]
+
+# Subtract initial state from rates
+rates = rates - rates[0]
 
 if args.list_species:
     for i, name in enumerate(species_list):
@@ -78,8 +83,9 @@ for soi in args.soi:
         frac = amount[-1]/amount[-1].sum()
 
         for j, idx in enumerate(ix):
-            ax[i].plot(time, amount[:, j], label=reactions_list[idx] +
-                       f' ({100*frac[j]:.2f}%)')
+            if frac[j] > args.threshold:
+                ax[i].plot(time, amount[:, j], label=reactions_list[idx] +
+                           f' ({100*frac[j]:.2f}%)')
 
         ax[i].set_title(text + ' reactions')
         ax[i].set_xlabel('Time (s)')
