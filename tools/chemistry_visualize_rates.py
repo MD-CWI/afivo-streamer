@@ -15,6 +15,8 @@ p.add_argument('-list_species', action='store_true', help='List species')
 p.add_argument('-list_reactions', action='store_true', help='List reactions')
 p.add_argument('-plot_all', action='store_true',
                help='Plot all reaction rates together')
+p.add_argument("-time_interval", nargs="+", type=float, default=[float("NaN"), float("NaN")], 
+               help="Time interval over which to analyse the reactions (default is the time range from the rates_file")
 args = p.parse_args()
 
 # Assume the other files are in the same folder
@@ -31,6 +33,12 @@ n_species, n_reactions = stoich_matrix.shape
 tmp = np.loadtxt(base_name + '_rates.txt')
 time = tmp[:, 0]
 rates = tmp[:, 1:]
+if (not np.isnan(args.time_interval[0])) and (args.time_interval[0] != args.time_interval[1]):
+    #Here we assume that the times supplied have the timesteps saved
+    t1_idx = np.where(np.abs(time-args.time_interval[0])<6e-10)[0][0]
+    t2_idx = np.where(np.abs(time-args.time_interval[1])<6e-10)[0][0]
+    time = tmp[t1_idx:t2_idx,0]
+    rates = tmp[t1_idx:t2_idx,1:]
 
 if args.list_species:
     for i, name in enumerate(species_list):
