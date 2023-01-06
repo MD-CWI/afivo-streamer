@@ -1,14 +1,14 @@
 # File with transport data and reaction rates for an air chemistry.
 # Transport data calculated using the online BOLSIG+ solver with data from the Phelps database (N2, O2).
-# The reactions were provided to us by Alejandro Malagon from Luque et. al., PSST 2017
+# The reactions were provided to us by Alejandro Malagon
 
 # Changes:
-# 18 Dec 2019 (Jannis): included the second ionization process for N2 
+# Jannis 18 Dec 2019: included the second ionization process for N2
 # Not sure why it was not there before
 #
 # 21 Apr 2022 (Jannis): included the right-hand side of reactions and added ignored_species
 #
-# 24 Apr 2022 (Baohong): added more reactions for positive ion conversion and recombination
+# 24 Apr 2022 (Baohong): added ion conversion and electron recombination
 
 reaction_list
 -----------------------
@@ -26,48 +26,18 @@ O- + N2 -> e + N2O,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
 O- + O2 -> O2- + O,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
 O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 # Positive ion conversion (Kossyi et. al. 1992, Aleksandrov and Bazelyan 1999)
-# Included N2+ + O2 conversion (Kossyi et. al. 1992)
 N2+ + O2 -> O2+ + N2,c1*(300/Tg)**c2,6e-17 0.5
 N2+ + N2 + M -> N4+ + M,c1*(300/Tg)**c2,5e-41 2.0
 N4+ + O2 -> O2+ + 2N2,c1,2.5e-16
 O2+ + O2 + M -> O4+ + M,c1*(300/Tg)**c2,2.4e-42 3.0
 # Electron recombination (Kossyi et. al. 1992)
-# Included electron reombination with N4+ (Kossyi et. al. 1992)
 e + N4+ -> 2N2,c1*(300/Te)**c2,2e-12 0.5
 e + O4+ -> 2O2,c1*(300/Te)**c2,1.4e-12 0.5
-# Recombination (Kossyi et. al. 1992)
-N2+ + O- -> N + N + O,c1,1e-13
-N2+ + O2- -> N + N + O2,c1,1e-13
-N2+ + O3- -> N + N + O3,c1,1e-13
-O2+ + O- -> O + O + O,c1,1e-13
-O2+ + O2- -> O + O + O2,c1,1e-13
-O2+ + O3- -> O + O + O3,c1,1e-13
-O4+ + O- -> O2 + O2 + O,c1,1e-13
-O4+ + O2- -> O2 + O2 + O2,c1,1e-13
-O4+ + O3- -> O2 + O2 + O3,c1,1e-13
-N4+ + O- -> N2 + N2 + O,c1,1e-13
-N4+ + O2- -> N2 + N2 + O2,c1,1e-13
-N4+ + O3- -> N2 + N2 + O3,c1,1e-13
-# Included the following recombination (Kossyi et. al. 1992)
-N2+ + O- + M -> N2O + M,c1*(300/Tg)**c2,2e-37 2.5
-N2+ + O- + M -> N2 + O + M,c1*(300/Tg)**c2,2e-37 2.5
-N2+ + O- -> N2 + O,c1*(300/Tg)**c2,2e-13 0.5
-N2+ + O2- + M -> N2 + O2 + M,c1*(300/Tg)**c2,2e-37 2.5
-N2+ + O2- -> N2 + O2,c1*(300/Tg)**c2,2e-13 0.5
-N2+ + O3- -> N2 + O3,c1*(300/Tg)**c2,2e-13 0.5
-O2+ + O- + M -> O3 + M,c1*(300/Tg)**c2,2e-37 2.5
-O2+ + O- + M -> O2 + O + M,c1*(300/Tg)**c2,2e-37 2.5
-O2+ + O- -> O2 + O,c1*(300/Tg)**c2,2e-13 0.5
-O2+ + O2- + M -> 2O2 + M,c1*(300/Tg)**c2,2e-37 2.5
-O2+ + O2- -> O2 + O2,c1*(300/Tg)**c2,2e-13 0.5
-O2+ + O3- -> O2 + O3,c1*(300/Tg)**c2,2e-13 0.5
 -----------------------
 
 ignored_species
 -----------------------
-N
 O
-O3
 N2O
 -----------------------
 

@@ -3,13 +3,12 @@
 # The reactions were provided to us by Alejandro Malagon from Luque et. al., PSST 2017
 
 # Changes:
-# 18 Dec 2019 (Jannis): included the second ionization process for N2 Not sure
-# why it was not there before
+# 18 Dec 2019 (Jannis): included the second ionization process for N2 
+# Not sure why it was not there before
 #
-# 21 Apr 2022 (Jannis): included the right-hand side of reactions and added
-# ignored_species
+# 21 Apr 2022 (Jannis): included the right-hand side of reactions and added ignored_species
 #
-# 24 Apr 2022 (Baohong): added some important reactions for positive ion conversion, electron recombination and recombination
+# 24 Apr 2022 (Baohong): added more reactions for positive ion conversion and recombination
 
 reaction_list
 -----------------------
@@ -50,10 +49,16 @@ N4+ + O- -> N2 + N2 + O,c1,1e-13
 N4+ + O2- -> N2 + N2 + O2,c1,1e-13
 N4+ + O3- -> N2 + N2 + O3,c1,1e-13
 # Included the following recombination (Kossyi et. al. 1992)
+N2+ + O- + M -> N2O + M,c1*(300/Tg)**c2,2e-37 2.5
+N2+ + O- + M -> N2 + O + M,c1*(300/Tg)**c2,2e-37 2.5
 N2+ + O- -> N2 + O,c1*(300/Tg)**c2,2e-13 0.5
+N2+ + O2- + M -> N2 + O2 + M,c1*(300/Tg)**c2,2e-37 2.5
 N2+ + O2- -> N2 + O2,c1*(300/Tg)**c2,2e-13 0.5
 N2+ + O3- -> N2 + O3,c1*(300/Tg)**c2,2e-13 0.5
+O2+ + O- + M -> O3 + M,c1*(300/Tg)**c2,2e-37 2.5
+O2+ + O- + M -> O2 + O + M,c1*(300/Tg)**c2,2e-37 2.5
 O2+ + O- -> O2 + O,c1*(300/Tg)**c2,2e-13 0.5
+O2+ + O2- + M -> 2O2 + M,c1*(300/Tg)**c2,2e-37 2.5
 O2+ + O2- -> O2 + O2,c1*(300/Tg)**c2,2e-13 0.5
 O2+ + O3- -> O2 + O3,c1*(300/Tg)**c2,2e-13 0.5
 -----------------------
