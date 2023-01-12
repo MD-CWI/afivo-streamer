@@ -70,8 +70,15 @@ program streamer
   end do
 
   if (.not. gas_constant_density) then
-     call af_set_cc_methods(tree, i_gas_dens, &
-          af_bc_neumann_zero, af_gc_interp, ST_prolongation_method)
+     if (gas_dynamics) then
+        ! Let the gas density evolve in time
+        call af_set_cc_methods(tree, i_gas_dens, &
+             af_bc_neumann_zero, af_gc_interp, ST_prolongation_method)
+     else
+        ! The gas density is specified by a function
+        call af_set_cc_methods(tree, i_gas_dens, &
+             funcval=set_gas_density_from_user_function)
+     end if
   end if
 
   do i = 1, tree%n_var_cell
@@ -534,5 +541,18 @@ contains
        call surface_copy_variable(diel, i_surf_dens+n_states, i_surf_dens )
     end if
   end subroutine restore_previous_state
+
+  !> A wrapper routine to set the gas density in a box by a user-defined
+  !> function
+  subroutine set_gas_density_from_user_function(box, iv)
+    type(box_t), intent(inout) :: box !< Box to fill values in
+    integer, intent(in)        :: iv  !< Index of variable
+    integer                    :: IJK, nc
+    nc = box%n_cell
+
+    do KJI_DO(0, nc+1)
+       box%cc(IJK, iv) = user_gas_density(box, IJK)
+    end do; CLOSE_DO
+  end subroutine set_gas_density_from_user_function
 
 end program streamer

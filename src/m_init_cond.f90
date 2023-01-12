@@ -252,8 +252,6 @@ contains
                gas_pressure * 1e5_dp / (gas_euler_gamma - 1) + &
                0.5_dp * sum(box%cc(IJK, gas_vars(i_mom))**2) / &
                box%cc(IJK, gas_vars(i_rho))
-       else if (associated(user_gas_density)) then
-          box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
        end if
 
        do n = 1, init_conds%n_cond
