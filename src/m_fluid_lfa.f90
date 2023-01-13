@@ -818,18 +818,22 @@ contains
     integer, intent(in)        :: s_dt
     real(dp), intent(out)      :: source_factor(nc**NDIM)
     real(dp)                   :: mobilities(nc**NDIM), diffc(nc**NDIM)
-    real(dp)                   :: tmp, inv_dr(NDIM), f(2*NDIM)
+    real(dp)                   :: N_inv(nc**NDIM)
+    real(dp)                   :: inv_dr(NDIM), f(2*NDIM)
     real(dp)                   :: Evec(NDIM), gradn(NDIM)
-    real(dp), parameter        :: small_flux = 1.0e-9_dp ! A small flux
+    real(dp), parameter        :: small_flux      = 1.0e-9_dp ! A small flux
     real(dp), parameter        :: harmonic_factor = 2.0_dp
     integer                    :: ix, IJK
 
-    if (.not. gas_constant_density) &
-         error stop "source_factor: gas_constant_density is false"
-
     inv_dr = 1/box%dr
-    tmp = 1 / gas_number_density
-    mobilities = LT_get_col(td_tbl, td_mobility, fields) * tmp
+
+    if (gas_constant_density) then
+       N_inv = 1 / gas_number_density
+    else
+       N_inv = pack(1 / box%cc(DTIMES(1:nc), i_gas_dens), .true.)
+    end if
+
+    mobilities = LT_get_col(td_tbl, td_mobility, fields) * N_inv
 
     select case (ST_source_factor)
     case (source_factor_flux)
@@ -893,7 +897,7 @@ contains
             pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
     case (source_factor_original_cc)
        ! This is the 'original' scheme, 1 - (E_hat . F_diff)/F_flux
-       diffc = LT_get_col(td_tbl, td_diffusion, fields) * tmp
+       diffc = LT_get_col(td_tbl, td_diffusion, fields) * N_inv
        ix = 0
        do KJI_DO(1,nc)
           ix = ix + 1
