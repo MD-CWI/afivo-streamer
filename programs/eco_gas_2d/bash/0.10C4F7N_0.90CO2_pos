@@ -1,0 +1,26 @@
+#!/bin/bash
+
+cd ../
+
+#./streamer d20mm_0.10C4F7N_0.90CO2.cfg -field_given_by="field -5.5e6" -background_species="O_min CO2_plus" -background_density=1e18 -output%name=/export/scratch2/baohong/eco_gas/0.10C4F7N_0.90CO2/0.10C4F7N_0.90CO2_detO-_bd1e18
+
+
+#./streamer d20mm_0.10C4F7N_0.90CO2.cfg -field_given_by="field -5.0e6" -background_species="O_min O2_min CO2_plus C4F7N_plus" -background_density=5e14 -output%name=/export/scratch2/baohong/eco_gas/0.10C4F7N_0.90CO2/0.10C4F7N_0.90CO2_detO-O2-_bd5e14
+
+
+#./streamer d20mm_0.10C4F7N_0.90CO2.cfg -field_given_by="field -4.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -background_density=1e15 -end_time=5e-7 -output%name=/export/scratch2/baohong/eco_gas/0.10C4F7N_0.90CO2/0.10C4F7N_0.90CO2_detO-C4F7N-_bd1e15_4.0e6_ion_corr
+
+
+#./streamer d20mm_0.10C4F7N_0.90CO2.cfg -field_given_by="field -6.25e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -background_density=1e12 -output%name=/export/scratch2/baohong/eco_gas/0.10C4F7N_0.90CO2/0.10C4F7N_0.90CO2_detO-C4F7N-_bd1e12_6.25e6_ion
+
+
+
+./streamer d20mm_0.10C4F7N_0.90CO2.cfg -field_given_by="field 6.0e6" -background_density=1e11 -output%name=/export/scratch2/baohong/eco_gas/0.10C4F7N_0.90CO2/0.10C4F7N_0.90CO2_bd1e11_neg
+
+
+
+
+
+
+
+

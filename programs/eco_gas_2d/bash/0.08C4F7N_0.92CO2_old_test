@@ -1,0 +1,96 @@
+#!/bin/bash
+
+cd ../
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_density=1e15 -background_species="O_min CO2_plus" -refine_use_alpha_effective=T -dt_chemistry_nmin=1e17 -end_time=1e-7 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_density=1e13 -background_species="O_min CO2_plus" -refine_use_alpha_effective=T -dt_chemistry_nmin=1e17 -end_time=1e-7 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e13_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_density=1e15 -background_species="O_min CO2_plus" -refine_use_alpha_effective=T -dt_chemistry_nmin=1e15 -end_time=1e-7 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_dtm_dtchem1e15
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_density=1e15 -background_species="O_min CO2_plus" -refine_use_alpha_effective=F -dt_chemistry_nmin=1e17 -end_time=1e-7 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_dtm_ruaef
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_density=1e15 -background_species="e CO2_plus" -refine_use_alpha_effective=T -dt_chemistry_nmin=1e17 -end_time=1e-7 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_dtm_e
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_density=1e15 -background_species="e CO2_plus" -refine_use_alpha_effective=T -dt_chemistry_nmin=1e17 -end_time=1e-7 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry.txt -output%name=/export/scratch3/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_nodtm
+
+
+
+./streamer d20mm_0.08C4F7N_0.92CO2_seed.cfg -field_given_by="field -2.0e6" -background_species="e CO2_plus" -seed_density=1e19 -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_2.0e6_bd1e15_sd1e19
+
+
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -2.0e6" -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_2.0e6_bd1e15_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -2.0e6" -refine_adx=1 -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_2.0e6_bd1e15_dtm_adx1
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -1.5e6" -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_1.5e6_bd1e15_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -refine_adx=1 -output%name=/export/scratch3/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_dtm_adx1
+
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 4.5e6" -refine_adx=1 -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_4.5e6_bd1e15_dtm_adx1
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 5.0e6" -refine_adx=1 -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_5.0e6_bd1e15_dtm_adx1
+
+
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -2.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_2.0e6_bd1e15_full_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/md/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_full_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.5e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.5e6_bd1e15_full_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.8e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.8e6_bd1e15_full_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -4.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/md/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_4.0e6_bd1e15_full_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -4.2e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_4.2e6_bd1e15_full_dtm
+
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1.5 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_bd1e15_full_dtm_adx1.5
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.5e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1.5 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.5e6_bd1e15_full_dtm_adx1.5
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -4.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1.5 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch3/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_4.0e6_bd1e15_full_dtm_adx1.5
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -4.5e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1.5 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_4.5e6_bd1e15_full_dtm_adx1.5
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -5.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1.5 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/md/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_5.0e6_bd1e15_full_dtm_adx1.5
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -5.5e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1.5 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch3/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_5.5e6_bd1e15_full_dtm_adx1.5
+
+
+
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 4.5e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_4.5e6_bd1e15_full_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 5.0e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_5.0e6_bd1e15_full_dtm
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 5.5e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -refine_adx=1.5 -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemistry_full_detachment.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_5.5e6_bd1e15_full_dtm_adx1.5
+
+
+
+
+./streamer d40mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.0e6" -refine_adx=1.5 -output%name=/export/scratch3/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.0e6_nomobility
+
+./streamer d40mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -3.5e6" -refine_adx=1.5 -output%name=/export/scratch3/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_3.5e6_nomobility
+
+./streamer d40mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field -5.0e6" -refine_adx=1.5 -output%name=/export/scratch2/md/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_pos_5.0e6
+
+./streamer d40mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 5.0e6" -refine_adx=1.5 -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_5.0e6
+
+./streamer d40mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 5.2e6" -refine_adx=1.5 -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_5.2e6_nomobility
+
+./streamer d40mm_0.08C4F7N_0.92CO2.cfg -field_given_by="field 5.5e6" -refine_adx=1.5 -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/0.08C4F7N_0.92CO2_neg_5.5e6
+
+
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/test_pos_4.0e6
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemsitry_new.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/test_pos_4.0e6_new
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemsitry_new.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/test_pos_4.0e6_new_det1e6
+
+./streamer d20mm_0.08C4F7N_0.92CO2.cfg -input_data%file=../../transport_data/eco_gas/0.08C4F7N_0.92CO2_chemsitry_new.txt -output%name=/export/scratch2/baohong/eco_gas/0.08C4F7N_0.92CO2/test_pos_4.0e6_new_det1e8
+

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cd ../
+
+./streamer d20mm_0.15C4F7N_0.85CO2.cfg -field_given_by="field -5.5e6" -background_species="O_min CO2_plus" -background_density=5e15 -output%name=/export/scratch2/baohong/eco_gas/0.15C4F7N_0.85CO2/0.15C4F7N_0.85CO2_detO-_bd5e15_pos_5.5e6

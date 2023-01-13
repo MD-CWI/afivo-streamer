@@ -1,0 +1,27 @@
+#!/bin/bash
+
+cd ../
+
+
+#./streamer d20mm_CO2.cfg -field_given_by="field -1.6e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.6e6
+
+#./streamer d20mm_CO2.cfg -field_given_by="field -1.7e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.7e6
+
+#./streamer d20mm_CO2.cfg -field_given_by="field -1.8e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.8e6
+
+#./streamer d20mm_CO2.cfg -field_given_by="field -1.9e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.9e6
+
+#./streamer d20mm_CO2.cfg -field_given_by="field -2.0e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_2.0e6
+
+
+./streamer d20mm_CO2.cfg -field_given_by="field -1.5e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.5e6
+
+./streamer d20mm_CO2.cfg -field_given_by="field -1.4e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.4e6
+
+./streamer d20mm_CO2.cfg -field_given_by="field -1.3e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.3e6
+
+./streamer d20mm_CO2.cfg -field_given_by="field -1.2e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.2e6
+
+./streamer d20mm_CO2.cfg -field_given_by="field -1.1e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.1e6
+
+./streamer d20mm_CO2.cfg -field_given_by="field -1.0e6" -output%name=/export/scratch2/baohong/eco_gas/CO2/CO2_1bar_pos_1.0e6

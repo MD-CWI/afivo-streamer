@@ -1,0 +1,10 @@
+#!/bin/bash
+
+cd ../
+
+./streamer d20mm_0.01C4F7N_0.99CO2.cfg -field_given_by="field 3.3e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -background_density=1e15 -output%name=/export/scratch2/baohong/eco_gas/0.01C4F7N_0.99CO2/0.01C4F7N_0.99CO2_det_bd1e15_seed_neg_3.3e6
+
+./streamer d20mm_0.01C4F7N_0.99CO2.cfg -field_given_by="field 3.5e6" -background_species="O_min C4F7N_min CO2_plus C4F7N_plus" -background_density=1e14 -output%name=/export/scratch2/baohong/eco_gas/0.01C4F7N_0.99CO2/0.01C4F7N_0.99CO2_det_bd1e14_seed_neg_3.5e6
+
+
+./streamer d20mm_0.01C4F7N_0.99CO2.cfg -field_given_by="field 3.7e6" -background_species="e CO2_plus" -background_density=1e8 -output%name=/export/scratch2/baohong/eco_gas/0.01C4F7N_0.99CO2/0.01C4F7N_0.99CO2_nodet_bd1e8_seed_neg_3.7e6
