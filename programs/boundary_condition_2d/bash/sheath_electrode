@@ -1,0 +1,52 @@
+#!/bin/bash
+
+cd ../
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="neumann_zero" -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_neumann
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%source_factor="flux" -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_flux
+
+
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=3e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft3e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=5e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft5e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft10e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=12e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft12e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=15e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft15e6_imf100
+
+
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=5e6 -fixes%sheath_max_ion_mobility_factor=500 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft5e6_imf500
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=5e6 -fixes%sheath_max_ion_mobility_factor=1000 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft5e6_imf1000
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=5e6 -fixes%sheath_max_ion_mobility_factor=5000 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft5e6_imf5000
+
+./streamer sheath_electrode_dirichlet.cfg -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=5e6 -fixes%sheath_max_ion_mobility_factor=10000 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_2.0e6_dirichlet_ft5e6_imf10000
+
+
+
+#restart from EL2mm_dirichlet_2.0e6 for 1ns inception
+./streamer sheath_electrode_dirichlet.cfg -restart_from_file="output/EL2mm_dirichlet_2.0e6_000005.dat" -use_end_streamer_length=F -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=3e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/restart1ns_EL2mm_2.0e6_dirichlet_ft3e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -restart_from_file="output/EL2mm_dirichlet_2.0e6_000005.dat" -use_end_streamer_length=F -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=5e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/restart1ns_EL2mm_2.0e6_dirichlet_ft5e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -restart_from_file="output/EL2mm_dirichlet_2.0e6_000005.dat" -use_end_streamer_length=F -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/restart1ns_EL2mm_2.0e6_dirichlet_ft10e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -restart_from_file="output/EL2mm_dirichlet_2.0e6_000005.dat" -use_end_streamer_length=F -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=12e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/restart1ns_EL2mm_2.0e6_dirichlet_ft12e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -restart_from_file="output/EL2mm_dirichlet_2.0e6_000005.dat" -use_end_streamer_length=F -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=15e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/restart1ns_EL2mm_2.0e6_dirichlet_ft15e6_imf100
+
+
+
+#restart from EL2mm_dirichlet_2.0e6_ft3e6_imf100 for 1ns inception
+./streamer sheath_electrode_dirichlet.cfg -restart_from_file="output/EL2mm_dirichlet_2.0e6_ft3e6_imf100_000005.dat" -use_end_streamer_length=F -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/restart1ns_ft3e6_EL2mm_2.0e6_dirichlet_ft10e6_imf100
+
+./streamer sheath_electrode_dirichlet.cfg -restart_from_file="output/EL2mm_dirichlet_2.0e6_ft3e6_imf100_000005.dat" -use_end_streamer_length=F -field_given_by="field 2.0e6" -species_boundary_condition="dirichlet_zero" -fixes%sheath_field_threshold=15e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/restart1ns_ft3e6_EL2mm_2.0e6_dirichlet_ft15e6_imf100
+

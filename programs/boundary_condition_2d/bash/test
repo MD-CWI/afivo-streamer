@@ -1,0 +1,28 @@
+#!/bin/bash
+
+cd ../
+
+./streamer streamer_cyl_sheath_test.cfg -fixes%sheath_field_threshold=3e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft3e6_imf100
+
+./streamer streamer_cyl_sheath_test.cfg -fixes%sheath_field_threshold=5e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft5e6_imf100
+
+./streamer streamer_cyl_sheath_test.cfg -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft10e6_imf100
+
+
+./streamer streamer_cyl_sheath_test.cfg -background_density=1e11 -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft10e6_bd1e11
+
+./streamer streamer_cyl_sheath_test.cfg -background_density=1e11 -fixes%sheath_field_threshold=3e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft3e6_bd1e11
+
+
+./streamer streamer_cyl_sheath_test.cfg -background_density=1e11 -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft10e6_bd1e11_newinput
+
+./streamer streamer_cyl_sheath_test.cfg -background_density=1e11 -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft10e6_bd1e11_newinput_newelectrode
+
+./streamer streamer_cyl_sheath_test.cfg -background_density=1e11 -fixes%sheath_field_threshold=3e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.0e6_ft3e6_bd1e11_newinput_newelectrode
+
+
+./streamer streamer_cyl_sheath_test.cfg -background_density=1e11 -field_given_by="field 2.1e6" -fixes%sheath_field_threshold=10e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.1e6_ft10e6_bd1e11_newinput_newelectrode
+
+./streamer streamer_cyl_sheath_test.cfg -background_density=1e11 -field_given_by="field 2.1e6" -fixes%sheath_field_threshold=3e6 -fixes%sheath_max_ion_mobility_factor=100 -output%name=/export/scratch2/baohong/boundary_conditions/electrode/EL2mm_dirichlet_2.1e6_ft3e6_bd1e11_newinput_newelectrode
+
+
