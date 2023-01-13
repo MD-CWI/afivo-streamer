@@ -1,12 +1,17 @@
 # File with transport data and reaction rates for an air chemistry.
-# Transport data calculated using the offline BOLSIG+ solver with data from the Phelps database (N2, O2).
+# Transport data calculated using the offline BOLSIG- solver with data from the Phelps database (N2, O2).
 # The reactions are primarily from:
-# Kossyi 1992 (https://doi.org/10.1088/0963-0252/1/3/011), 
-# Fresnet 2002 (https://doi.org/10.1088/0963-0252/11/2/305),
-# Gordillo 2008 (https://doi.org/10.1088/0022-3727/41/23/234016),
-# Popov 2011 (https://doi.org/10.1088/0022-3727/44/28/285201),
-# Panchesnyi 2013 (https://doi.org/10.1088/0022-3727/46/15/155201),
-# Ono and Komuro 2020 (https://doi.org/10.1088/1361-6463/ab4e65).
+# Kossyi:1992 (https://doi.org/10.1088/0963-0252/1/3/011)
+# Gordiets:1995 (https://doi.org/10.1109/27.467998) 
+# Aleksandrov:1999 (https://doi.org/10.1088/0963-0252/8/2/309)
+# Fresnet:2002 (https://doi.org/10.1088/0963-0252/11/2/305)
+# Tochikubo:2002 (https://doi.org/10/d9tq56)
+# Atkinson:2004 (https://doi.org/10.5194/acp-4-1461-2004)
+# Florescu:2006 (https://doi.org/10.1016/j.physrep.2006.04.002)
+# Gordillo:2008 (https://doi.org/10.1088/0022-3727/41/23/234016)
+# Popov:2011 (https://doi.org/10.1088/0022-3727/44/28/285201)
+# Panchesnyi:2013 (https://doi.org/10.1088/0022-3727/46/15/155201)
+# Note that e + NO2 -> NO2- and N(^2D) + NO -> N2O have actually three-body nature
 
 reaction_list
 -----------------------
@@ -30,8 +35,8 @@ e + O2 -> e + O2*(v2),field_table,C34 O2 Excitation 0.38 eV
 e + O2 -> e + O2*(v3),field_table,C35 O2 Excitation 0.57 eV
 e + O2 -> e + O2*(v4),field_table,C36 O2 Excitation 0.75 eV
 # Electronic excitation
-e + N2 -> e + N2*(A1),field_table,C12 N2 Excitation 6.17 eV
-e + N2 -> e + N2*(A2),field_table,C13 N2 Excitation 7.00 eV
+e + N2 -> e + N2*(A),field_table,C12 N2 Excitation 6.17 eV
+e + N2 -> e + N2*(A),field_table,C13 N2 Excitation 7.00 eV
 e + N2 -> e + N2*(B),field_table,C14 N2 Excitation 7.35 eV
 e + N2 -> e + N2*(B),field_table,C15 N2 Excitation 7.36 eV
 e + N2 -> e + N2*(B),field_table,C16 N2 Excitation 7.80 eV
@@ -57,7 +62,7 @@ e + O2 -> e + e + O2+,field_table,C43 O2 Ionization 12.06 eV
 # Attachment
 e + O2 + O2 -> O2- + O2,field_table,C27 O2 Attachment
 e + O2 -> O- + O(^3P),field_table,C28 O2 Attachment
-e + O2 + N2 -> O2- + N2,c1,1e-31,cm
+e + O2 + N2 -> O2- + N2,c1,1.1e-31,cm
 e + O3 + O2 -> O3- + O2,c1,1e-31,cm
 e + O3 -> O2- + O(^3P),c1,1e-09,cm
 e + O3 -> O- + O2,c1,1e-11,cm
@@ -74,7 +79,7 @@ O- + O2*(a) -> e + O3,c1,3e-10,cm
 O- + O2*(b) -> e + O2 + O(^3P),c1,6.9e-10,cm
 O- + O3 -> e + 2O2,c1,5.3e-10,cm
 O- + N2 -> e + N2O,c1*exp(-(c2/(c3+Td))**c4),1.16e-12 48.9 11.0 2.0,cm
-O- + N2*(A1) -> e + N2 + O(^3P),c1,2.2e-09,cm
+O- + N2*(A) -> e + N2 + O(^3P),c1,2.2e-09,cm
 O- + N2*(B) -> e + N2 + O(^3P),c1,1.9e-09,cm
 O- + NO -> e + NO2,c1,2.6e-10,cm
 O- + O(^3P) -> e + O2,c1,5e-10,cm
@@ -82,7 +87,7 @@ O- + N(^4S) -> e + NO,c1,2.6e-10,cm
 O2- + M -> e + O2 + M,c1*exp(-(c2/(c3+Td))**c4),1.24e-11 179.0 8.8 2.0,cm
 O2- + O2*(a) -> e + 2O2,c1,2e-10,cm
 O2- + O2*(b) -> e + 2O2,c1,3.6e-10,cm
-O2- + N2*(A1) -> e + O2 + N2,c1,2.1e-09,cm
+O2- + N2*(A) -> e + O2 + N2,c1,2.1e-09,cm
 O2- + N2*(B) -> e + O2 + N2,c1,2.5e-09,cm
 O2- + O(^3P) -> e + O3,c1,1.5e-10,cm
 O2- + N(^4S) -> e + NO2,c1,5e-10,cm
@@ -117,10 +122,9 @@ O4- + O(^3P) -> O- + 2O2,c1,3e-10,cm
 O4- + O(^3P) -> O3- + O2,c1,4e-10,cm
 # Positive ion conversion
 N2+ + O2 -> O2+ + N2,c1*(300/Tg)**c2,6e-11 0.5,cm
-N2+ + O2 -> NO+ + NO,c1,1e-17,cm
 N2+ + O3 -> O2+ + N2 + O(^3P),c1,1e-10,cm
-N2+ + N2 + M -> N4+ + M,c1*(300/Tg)**c2,5.2e-29 2.2,cm
-N2+ + N2*(A1) -> N3+ + N(^4S),c1,3e-10,cm
+N2+ + N2 + M -> N4+ + M,c1*(300/Tg)**c2,5e-29 2.0,cm
+N2+ + N2*(A) -> N3+ + N(^4S),c1,3e-10,cm
 N2+ + NO -> NO+ + N2,c1,3.3e-10,cm
 N2+ + NO2 -> NO2+ + N2,c1,3e-10,cm
 N2+ + N2O -> NO+ + N2 + N(^4S),c1,4e-10,cm
@@ -134,7 +138,7 @@ N4+ + N2 -> N2+ + 2N2,10**(c1+c2*(Tg-300)),-14.6 0.0036,cm
 N4+ + NO -> NO+ + 2N2,c1,4e-10,cm
 N4+ + O(^3P) -> O+ + 2N2,c1,2.5e-10,cm
 N4+ + N(^4S) -> N+ + 2N2,c1,1e-11,cm
-O2+ + O2 + M -> O4+ + M,c1*(300/Tg)**c2,2.4e-30 3.2,cm
+O2+ + O2 + M -> O4+ + M,c1*(300/Tg)**c2,2.4e-30 3.0,cm
 O2+ + N2 + N2 -> N2O2+ + N2,c1*(300/Tg)**c2,9e-31 2.0,cm
 O2+ + N2 -> NO+ + NO,c1,1e-17,cm
 O2+ + NO -> NO+ + O2,c1,4.4e-10,cm
@@ -155,12 +159,9 @@ e + N2+ + M -> N2 + M,c1*(300/Te)**c2,6e-27 1.5,cm
 e + N2+ -> N(^4S) + N(^4S),c1*(300/Te)**c2,2.8e-07 0.5,cm
 e + N2+ -> N(^4S) + N(^2D),c1*(300/Te)**c2,2e-07 0.5,cm
 e + N4+ -> 2N2,c1*(300/Te)**c2,2e-06 0.5,cm
-e + N4+ -> N2 + 2N(^4S),c1*(300/Te)**c2,3.13e-07 0.41,cm
 e + O2+ + M -> O2 + M,c1*(300/Te)**c2,6e-27 1.5,cm
-e + O2+ -> O(^3P) + O(^3P),c1*(300/Te)**c2,2.4e-07 0.7,cm
 e + O2+ -> O(^3P) + O(^1D),c1*(300/Te)**c2,1.95e-07 0.7,cm
 e + O4+ -> 2O2,c1*(300/Te)**c2,1.4e-06 0.5,cm
-e + O4+ -> O2 + 2O(^3P),c1*(300/Te)**c2,4.2e-06 0.48,cm
 e + N2O2+ -> N2 + O2,c1*(300/Te)**c2,1.3e-06 0.5,cm
 # Ion recombination
 N2+ + O- + M -> N2O + M,c1*(300/Tg)**c2,2e-25 2.5,cm
@@ -172,7 +173,6 @@ N2+ + O2- -> N2 + O2,c1*(300/Tg)**c2,2e-07 0.5,cm
 N2+ + O2- -> O2 + 2N(^4S),c1,1e-07,cm
 N2+ + O3- -> N2 + O3,c1*(300/Tg)**c2,2e-07 0.5,cm
 N2+ + O3- -> O3 + 2N(^4S),c1,1e-07,cm
-N2+ + O3- -> N2O + O2,c1,7.8e-06,cm
 N2+ + O4- -> N2 + 2O2,c1,1e-07,cm
 N4+ + O- -> 2N2 + O(^3P),c1,1e-07,cm
 N4+ + O2- -> 2N2 + O2,c1,1e-07,cm
@@ -186,13 +186,10 @@ O2+ + O2- + M -> 2O2 + M,c1*(300/Tg)**c2,2e-25 2.5,cm
 O2+ + O2- -> 2O2,c1*(300/Tg)**c2,2e-07 0.5,cm
 O2+ + O2- -> O2 + 2O(^3P),c1,1e-07,cm
 O2+ + O3- -> O2 + O3,c1*(300/Tg)**c2,2e-07 0.5,cm
-O2+ + O3- -> 2O2 + 2O(^3P),c1,7.8e-06,cm
 O2+ + O3- -> O3 + 2O(^3P),c1,1e-07,cm
 O2+ + O4- -> 3O2,c1,1e-07,cm
-O4+ + O- -> O2 + O3,c1,7.8e-06,cm
 O4+ + O- -> 2O2 + O(^3P),c1,1e-07,cm
 O4+ + O2- -> 3O2,c1,1e-07,cm
-O4+ + O2- -> 2O2 + 2O(^3P),c1,2e-06,cm
 O4+ + O3- -> 2O2 + O3,c1,1e-07,cm
 O4+ + O4- -> 4O2,c1,1e-07,cm
 N2O2+ + O- -> N2 + O2 + O(^3P),c1,1e-07,cm
@@ -203,75 +200,55 @@ N2O2+ + O3- -> N2 + O2 + O3,c1,1e-07,cm
 N2O2+ + O3- -> 2NO + O3,c1,1e-07,cm
 N2O2+ + O4- -> N2 + 3O2,c1,1e-07,cm
 # Neutral species conversion
-N2*(A1) + O2 -> N2 + O2*(a),c1,1.29e-12,cm
-N2*(A1) + O2 -> N2 + O2*(b),c1,7.5e-13,cm
-N2*(A1) + O2 -> N2 + 2O(^3P),c1,1.7e-12,cm
-N2*(A1) + O2 -> N2O + O(^3P),c1,7.8e-14,cm
-N2*(A1) + N2 -> 2N2,c1,3e-16,cm
-N2*(A1) + N2*(A1) -> N2 + N2*(B),c1,7.7e-11,cm
-N2*(A1) + N2*(A1) -> N2 + N2*(C),c1,1.6e-10,cm
-N2*(A1) + N2*(A1) -> N2 + N2*(E),c1,1e-11,cm
-N2*(A1) + NO -> N2 + NO(A),c1,6.9e-11,cm
-N2*(A1) + NO2 -> N2 + NO + O(^3P),c1,1.3e-11,cm
-N2*(A1) + N2O -> N2 + NO + N(^4S),c1,1e-11,cm
-N2*(A1) + N2O -> 2N2 + O(^3P),c1,8e-11,cm
-N2*(A1) + O(^3P) -> N2 + O(^3P),c1,2e-11,cm
-N2*(A1) + O(^3P) -> N2 + O(^1S),c1,3e-11,cm
-N2*(A1) + O(^3P) -> NO + N(^2D),c1,7e-12,cm
-N2*(A1) + N(^4S) -> N2 + N(^4S),c1,2e-12,cm
-N2*(A1) + N(^4S) -> N2 + N(^2P),c1,5e-11,cm
-N2*(A2) + N2 -> 2N2,c1,3e-16,cm
-N2*(A2) + N2 -> N2 + N2*(A1),c1,1e-11,cm
-N2*(A2) + NO -> N2 + NO(A),c1,6.9e-11,cm
-N2*(A2) + NO2 -> N2 + NO + O(^3P),c1,1.3e-11,cm
-N2*(A2) + O(^3P) -> N2 + O(^3P),c1,2e-11,cm
-N2*(A2) + O(^3P) -> NO + N(^4S),c1,7e-12,cm
+N2*(A) + O2 -> N2 + O2*(a),c1,5.4e-13,cm
+N2*(A) + O2 -> N2 + O2*(b),c1,7.5e-13,cm
+N2*(A) + O2 -> N2 + 2O(^3P),c1,2.54e-12,cm
+N2*(A) + O2 -> N2O + O(^3P),c1,7.8e-14,cm
+N2*(A) + N2 -> 2N2,c1,3e-18,cm
+N2*(A) + N2*(A) -> N2 + N2*(B),c1,7.7e-11,cm
+N2*(A) + N2*(A) -> N2 + N2*(C),c1,1.6e-10,cm
+N2*(A) + NO -> N2 + NO,c1,7e-11,cm
+N2*(A) + N2O -> N2 + NO + N(^4S),c1,1e-11,cm
+N2*(A) + O(^3P) -> N2 + O(^1S),c1,2.1e-11,cm
+N2*(A) + O(^3P) -> NO + N(^2D),c1,7e-12,cm
+N2*(A) + N(^4S) -> N2 + N(^4S),c1,2e-12,cm
+N2*(A) + N(^4S) -> N2 + N(^2P),c1,5e-11,cm
 N2*(B) + O2 -> N2 + 2O(^3P),c1,3e-10,cm
 N2*(B) + N2 -> 2N2,c1,2e-12,cm
-N2*(B) + N2 -> N2 + N2*(A2),c1,2e-11,cm
-N2*(B) + NO -> NO + N2*(A1),c1,2.4e-10,cm
-N2*(B) -> N2*(A1),c1,1.1e5
-N2*(a) + O2 -> N2 + O(^3P) + O(^1D),c1,2.8e-11,cm
-N2*(a) + N2 -> N2 + N2*(B),c1,2.4e-13,cm
+N2*(B) + N2 -> N2 + N2*(A),c1,5e-11,cm
+N2*(B) + NO -> NO + N2*(A),c1,2.4e-10,cm
+N2*(B) -> N2*(A),c1,1.5e5
+N2*(a) + O2 -> N2 + O(^3P) + O(^3P),c1,2.8e-11,cm
+N2*(a) + N2 -> N2 + N2*(B),c1,2e-13,cm
 N2*(a) + NO -> N2 + N(^4S) + O(^3P),c1,3.6e-10,cm
-N2*(C) + O2 -> N2 + 2O(^3P),c1,2.5e-10,cm
 N2*(C) + O2 -> N2 + O(^3P) + O(^1S),c1,3e-10,cm
-N2*(C) + N2 -> N2 + N2*(B),c1,1e-11,cm
 N2*(C) + N2 -> N2 + N2*(a),c1,1e-11,cm
-N2*(C) -> N2*(B),c1,2.4e7
+N2*(C) -> N2*(B),c1,3e7
 N2*(E) + N2 -> N2 + N2*(C),c1,1e-11,cm
-N(^4S) + O2 -> NO + O(^3P),c1*Tg**c2*exp(-c3/Tg),9.7e-15 1.01 3120.0,cm
+N(^4S) + O2 -> NO + O(^3P),c1*exp(-c2/Tg),4.5e-12 3220.0,cm
 N(^4S) + O3 -> NO + O2,c1,2e-16,cm
-N(^4S) + NO -> N2 + O(^3P),c1*exp(-c2/Tg),3.51e-11 49.84,cm
+N(^4S) + NO -> N2 + O(^3P),c1*Tg**c2,1.05e-12 0.5,cm
 N(^4S) + NO2 -> N2 + O2,c1,7e-13,cm
 N(^4S) + NO2 -> N2 + 2O(^3P),c1,9.1e-13,cm
 N(^4S) + NO2 -> 2NO,c1,2.3e-12,cm
 N(^4S) + NO2 -> N2O + O(^3P),c1,3e-12,cm
 N(^4S) + O(^3P) + M -> NO + M,c1*Tg**c2,1.76e-31 -0.5,cm
-N(^4S) + O(^3P) + O(^3P) -> O2 + N(^4S),c1*(300/Tg)**c2,3.2e-33 0.41,cm
-N(^4S) + O(^1S) -> O(^3P) + N(^4S),c1,1e-12,cm
 N(^4S) + N(^4S) + M -> N2 + M,c1*exp(-c2/Tg),8.27e-34 -500.0,cm
-N(^4S) + N(^4S) + N(^4S) -> N2 + N(^4S),c1*(300/Tg)**c2,3.31e-27 1.5,cm
 N(^4S) + N(^2P) -> N(^4S) + N(^2D),c1,1.8e-12,cm
 N(^2D) + O2 -> NO + O(^3P),c1*(Tg/c2)**c3,1.5e-12 300.0 0.5,cm
-N(^2D) + O2 -> NO + O(^1D),c1*(Tg/c2)**c3,6.0e-12 300.0 0.5,cm
-N(^2D) + N2 -> N2 + N(^4S),c1,1.7e-14,cm
-N(^2D) + NO -> N2 + O(^3P),c1,1.8e-10,cm
+N(^2D) + O2 -> NO + O(^1D),c1*(Tg/c2)**c3,6e-12 300.0 0.5,cm
+N(^2D) + N2 -> N2 + N(^4S),c1,6e-15,cm
 N(^2D) + NO -> N2O,c1,6e-11,cm
 N(^2D) + N2O -> NO + N2,c1,3e-12,cm
-N(^2D) + O(^3P) -> N(^4S) + O(^3P),c1*exp(-c2/Tg),3.3e-12 260.0,cm
-N(^2D) + O(^3P) -> N(^4S) + O(^1D),c1,4e-13,cm
 N(^2P) + O2 -> NO + O(^3P),c1,2.6e-12,cm
 N(^2P) + N2 -> N2 + N(^2D),c1,2e-18,cm
-N(^2P) + NO -> N2*(A1) + O(^3P),c1,3.4e-11,cm
-N(^2P) + O(^3P) -> N(^4S) + O(^3P),c1,1e-12,cm
+N(^2P) + NO -> N2*(A) + O(^3P),c1,3.4e-11,cm
 O2*(a) + O2 -> 2O2,c1*(Tg/c2)**c3,2.2e-18 300.0 0.8,cm
 O2*(a) + O2*(a) + O2 -> 2O3,c1,1e-31,cm
 O2*(a) + O2*(a) -> O2 + O2*(b),c1*Tg**c2*exp(-c3/Tg),7e-28 3.8 -700.0,cm
 O2*(a) + O3 -> 2O2 + O(^3P),c1*exp(-c2/Tg),9.7e-13 1564.0,cm
 O2*(a) + N2 -> O2 + N2,c1,3e-21,cm
 O2*(a) + NO -> NO + O2,c1,2.5e-11,cm
-O2*(a) + NO -> NO2 + O(^3P),c1,4.88e-18,cm
 O2*(a) + O(^3P) -> O2 + O(^3P),c1,7e-16,cm
 O2*(a) + O(^1S) -> 3O(^3P),c1,3.4e-11,cm
 O2*(a) + O(^1S) -> O2*(b) + O(^1D),c1,3.6e-11,cm
@@ -287,7 +264,6 @@ O2*(A) + O2 -> 2O2*(b),c1,2.9e-13,cm
 O2*(A) + N2 -> N2 + O2*(b),c1,3e-13,cm
 O2*(A) + O(^3P) -> O2*(b) + O(^1D),c1,9e-12,cm
 O(^3P) + O2 + O2 -> O3 + O2,c1*(300/Tg)**c2,6.9e-34 1.25,cm
-O(^3P) + O2 + O3 -> 2O3,c1*exp(-c2/Tg),1.5e-34 -750.0,cm
 O(^3P) + O2 + N2 -> O3 + N2,c1*(300/Tg)**c2,6.2e-34 2.0,cm
 O(^3P) + O3 -> 2O2,c1*exp(-c2/Tg),2e-11 2300.0,cm
 O(^3P) + NO + O2 -> NO2 + O2,c1*(300/Tg)**c2,9.3e-32 1.682,cm
@@ -296,23 +272,17 @@ O(^3P) + NO2 + M -> NO3 + M,c1*(300/Tg)**c2,8.9e-32 2.0,cm
 O(^3P) + NO2 -> NO + O2,c1*(Tg/c2)**c3,1.13e-11 1000.0 0.18,cm
 O(^3P) + NO3 -> NO2 + O2,c1,1e-11,cm
 O(^3P) + O(^3P) + O2 -> 2O2,c1*Tg**c2,2.45e-31 -0.63,cm
-O(^3P) + O(^3P) + O2 -> O3 + O(^3P),c1*exp(-c2/Tg),2.15e-34 -345.0,cm
 O(^3P) + O(^3P) + N2 -> O2 + N2,c1*exp(-c2/Tg),2.76e-34 -720.0,cm
-O(^3P) + O(^1D) + N2 -> O2 + N2,c1,9.9e-33,cm
-O(^3P) + O(^1D) -> 2O(^3P),c1,8e-12,cm
 O(^3P) + O(^1S) -> O(^3P) + O(^1D),c1*exp(-c2/Tg),5e-11 301.0,cm
 O(^1D) + O2 -> O2 + O(^3P),c1*exp(-c2/Tg),6.4e-12 -67.0,cm
 O(^1D) + O2 -> O2*(b) + O(^3P),c1*exp(-c2/Tg),2.56e-11 -67.0,cm
-O(^1D) + O3 -> 2O2,c1,2.4e-10,cm
+O(^1D) + O3 -> 2O2,c1,1.2e-10,cm
 O(^1D) + O3  -> O2 + 2O(^3P),c1,1.2e-10,cm
-O(^1D) + O3  -> O3 + O(^3P),c1,2.41e-10,cm
-O(^1D) + N2 + N2 -> N2O + N2,c1,2.8e-36,cm
-O(^1D) + N2 -> N2 + O(^3P),c1*exp(-c2/Tg),2.1e-11 -115.0,cm
+O(^1D) + N2 -> N2 + O(^3P),c1*exp(-c2/Tg),1.8e-11 -107.0,cm
 O(^1D) + NO -> O2 + N(^4S),c1,1.7e-10,cm
 O(^1D) + NO2 -> NO + O2,c1,3e-10,cm
-O(^1D) + N2O -> N2 + O2,c1,4.9e-11,cm
+O(^1D) + N2O -> N2 + O2,c1,4.4e-11,cm
 O(^1D) + N2O -> 2NO,c1,7.2e-11,cm
-O(^1D) + N2O -> N2O + O(^3P),c1,1e-12,cm
 O(^1S) + O2 -> O2 + O(^1D),c1*exp(-c2/Tg),1.33e-12 850.0,cm
 O(^1S) + O2 -> O2*(A) + O(^3P),c1*exp(-c2/Tg),2.97e-12 850.0,cm
 O(^1S) + O3 -> 2O2,c1,2.9e-10,cm
@@ -321,15 +291,11 @@ O(^1S) + NO -> NO + O(^3P),c1,1.8e-10,cm
 O(^1S) + NO -> NO + O(^1D),c1,3.2e-10,cm
 O(^1S) + N2O -> N2O + O(^3P),c1,6.3e-12,cm
 O(^1S) + N2O -> N2O + O(^1D),c1,3.1e-12,cm
-NO(A) + O2 -> NO + O2,c1,1.51e-10,cm
-NO(A) + N2 -> NO + N2*(A1),c1,5e-14,cm
-NO(A) -> NO,c1,5.1e6
 NO + O3 -> NO2 + O2,c1*exp(-c2/Tg),4.3e-12 1560.0,cm
 NO + NO + O2 -> 2NO2,c1*exp(-c2/Tg),3.3e-39 -530.0,cm
 NO + NO2 + N2 -> N2O3 + N2,c1*(300/Tg)**c2,3.1e-34 7.7,cm
 NO + NO2 + NO3 -> NO + N2O5,c1*(300/Tg)**c2,5.9e-29 1.27,cm
-NO + NO3 -> 2NO + O2,c1*Tg**c2*exp(-c3/Tg),2.71e-11 -0.23 947.0,cm
-NO + NO3 -> 2NO2,c1*exp(-c2/Tg),1.8e-11 -110.0,cm
+NO + NO3 -> 2NO2,c1,1.7e-11,cm
 NO2 + O3 -> NO3 + O2,c1*exp(-c2/Tg),1.2e-13 2450.0,cm
 NO2 + NO2 + N2 -> N2O4 + N2,c1*(300/Tg)**c2,1.4e-33 3.8,cm
 NO2 + NO3 + M -> N2O5 + M,c1*(300/Tg)**c2,5.9e-29 1.27,cm
