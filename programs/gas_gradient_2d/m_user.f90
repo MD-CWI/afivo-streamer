@@ -13,11 +13,14 @@ module m_user
   ! Public methods
   public :: user_initialize
 
-  real(dp) :: density_ratio       = 0.5_dp
-  real(dp) :: shock_width         = 0.02_dp
+  real(dp) :: density_ratio       = 0.8_dp
+  real(dp) :: shock_width         = 0.01_dp
   real(dp) :: line_coeff(NDIM+1)  = 0.0_dp
   real(dp) :: sphere_center(NDIM) = 0.5_dp
   real(dp) :: sphere_radius       = 0.1_dp
+
+  ! Whether density ratio is inside sphere
+  logical, protected, public :: density_ratio_inside_sphere = .false.
 
 contains
 
@@ -49,7 +52,9 @@ contains
          "Center (relative to domain) of sphere")
     call CFG_add_get(cfg, "sphere_radius", sphere_radius, &
          "Radius (relative to domain) of sphere")
-
+    call CFG_add_get(cfg, "density_ratio_inside_sphere", density_ratio_inside_sphere, &
+         "Whether density ratio is inside sphere")
+         
   end subroutine user_initialize
 
   !> Gas density is different on two sides of a line
@@ -87,11 +92,20 @@ contains
 
     if (q < sphere_radius - shock_width) then
        gas_density_sphere = gas_number_density
+       if (density_ratio_inside_sphere) then
+          gas_density_sphere = gas_number_density * density_ratio
+       end if
     else if (q > sphere_radius + shock_width) then
        gas_density_sphere = gas_number_density * density_ratio
+       if (density_ratio_inside_sphere) then
+          gas_density_sphere = gas_number_density
+       end if
     else
        ! Linear interpolation
        tmp = (q - sphere_radius + shock_width) / (2 * shock_width)
+       if (density_ratio_inside_sphere) then
+          tmp = (sphere_radius + shock_width - q) / (2 * shock_width)
+       end if
        gas_density_sphere = gas_number_density * (1 + (density_ratio-1) * tmp)
     end if
   end function gas_density_sphere
