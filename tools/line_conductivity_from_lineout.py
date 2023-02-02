@@ -12,7 +12,7 @@ pr = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 pr.add_argument('lineout', type=str,
                 help='File with radial lineout of conductivity')
-pr.add_argument('-conductivity_threshold', type=float, default=1e-3,
+pr.add_argument('-conductivity_threshold', type=float, default=10e-2,
                 help='Threshold for conductivity for determining radius')
 args = pr.parse_args()
 
