@@ -260,15 +260,30 @@ contains
   end subroutine mg_fas_vcycle
 
   subroutine solve_coarse_grid(tree, mg)
+    use omp_lib
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(in)    :: mg   !< Multigrid options
+    integer                   :: num_iterations, max_threads
+    integer                   :: n_unknowns
 
     call coarse_solver_set_rhs_phi(tree, mg)
-    call coarse_solver(mg%csolver)
+    n_unknowns = product(tree%coarse_grid_size)
+
+    if (n_unknowns < mg%csolver%min_unknowns_for_openmp) then
+       ! Use single thread if there are too few unknowns
+       max_threads = omp_get_max_threads()
+       call omp_set_num_threads(1)
+    end if
+
+    call coarse_solver(mg%csolver, num_iterations)
     call coarse_solver_get_phi(tree, mg)
 
     ! Set ghost cells for the new coarse grid solution
     call af_gc_lvl(tree, 1, [mg%i_phi])
+
+    if (n_unknowns < mg%csolver%min_unknowns_for_openmp) then
+       call omp_set_num_threads(max_threads)
+    end if
   end subroutine solve_coarse_grid
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.

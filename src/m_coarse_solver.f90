@@ -381,17 +381,21 @@ contains
   end subroutine hypre_prepare_solve
 
   ! Solve the system A x = b
-  subroutine coarse_solver(cs)
+  subroutine coarse_solver(cs, num_iterations)
     type(coarse_solve_t), intent(in) :: cs
+    integer, intent(out)             :: num_iterations
     integer                          :: ierr
 
     select case (cs%solver_type)
     case (coarse_solver_hypre_pcg)
        call HYPRE_StructPCGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+       call HYPRE_StructPCGGetNumIterations(cs%solver, num_iterations, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+       call HYPRE_StructSMGGetNumIterations(cs%solver, num_iterations, ierr)
     case (coarse_solver_hypre_pfmg)
        call HYPRE_StructPFMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+       call HYPRE_StructPFMGGetNumIteration(cs%solver, num_iterations, ierr)
     case default
        error stop "coarse_solver: unknown solver type"
     end select
