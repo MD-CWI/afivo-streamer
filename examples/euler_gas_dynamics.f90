@@ -250,7 +250,7 @@ contains
     w = sound_speeds + abs(u(:, i_mom(flux_dim)))
   end subroutine max_wavespeed
 
-  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux, box, line_ix)
+  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux, box, line_ix, u_diff)
     integer, intent(in)     :: n_values !< Number of cell faces
     integer, intent(in)     :: n_var    !< Number of variables
     integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
@@ -258,6 +258,7 @@ contains
     real(dp), intent(out)   :: flux(n_values, n_var)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: line_ix(NDIM-1)
+    real(dp), intent(in)    :: u_diff(n_values, n_var)
     real(dp)                :: E(n_values), inv_fac
     integer                 :: i
 

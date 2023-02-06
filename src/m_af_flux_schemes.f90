@@ -27,7 +27,7 @@ module m_af_flux_schemes
        real(dp), intent(out) :: w(nf)
      end subroutine subr_max_wavespeed
 
-     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux, box, line_ix)
+     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux, box, line_ix, u_diff)
        import
        integer, intent(in)     :: nf              !< Number of cell faces
        integer, intent(in)     :: n_var           !< Number of variables
@@ -36,6 +36,7 @@ module m_af_flux_schemes
        real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
        type(box_t), intent(in) :: box             !< Current box
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+       real(dp), intent(in)    :: u_diff(nf, n_var) !< Difference vector
      end subroutine subr_flux_from_prim
 
      subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out)
@@ -181,14 +182,17 @@ contains
     end do
   end subroutine flux_koren_2d
 
-  subroutine reconstruct_lr_1d(nc, ngc, n_vars, cc, u_l, u_r, limiter)
+  subroutine reconstruct_lr_1d(nc, ngc, n_vars, cc, u_l, u_r, u_diff, limiter)
     integer, intent(in)           :: nc                       !< Number of cells
     integer, intent(in)           :: ngc                      !< Number of ghost cells
     integer, intent(in)           :: n_vars                   !< Number of variables
     real(dp), intent(in)          :: cc(1-ngc:nc+ngc, n_vars) !< Cell-centered values
-    !> Reconstructed (left, right) values at every interface
+    !> Reconstructed "left" values at every interface
     real(dp), intent(inout)       :: u_l(1:nc+1, n_vars)
+    !> Reconstructed "right" values at every interface
     real(dp), intent(inout)       :: u_r(1:nc+1, n_vars)
+    !> Difference between original cell-centered values
+    real(dp), intent(inout)       :: u_diff(1:nc+1, n_vars)
     integer, intent(in), optional :: limiter                  !< Which limiter to use
     real(dp)                      :: slopes(0:nc+1, n_vars)
     integer                       :: use_limiter
@@ -214,6 +218,8 @@ contains
     ! Reconstruct values on the faces
     u_l(1:nc+1, :) = cc(0:nc, :) + 0.5_dp * slopes(0:nc, :) ! left
     u_r(1:nc+1, :) = cc(1:nc+1, :) - 0.5_dp * slopes(1:nc+1, :) ! right
+
+    u_diff(1:nc+1, :) = cc(1:nc+1, :) - cc(0:nc, :)
   end subroutine reconstruct_lr_1d
 
   !> Compute flux for the KT scheme
@@ -381,7 +387,7 @@ contains
     real(dp) :: cc_line(-1:nc+2, n_vars)
     real(dp) :: flux(nc+1, n_vars)
     real(dp) :: u_l(nc+1, n_vars), u_r(nc+1, n_vars)
-    real(dp) :: w_l(nc+1), w_r(nc+1)
+    real(dp) :: w_l(nc+1), w_r(nc+1), u_diff(nc+1, n_vars)
     real(dp) :: flux_l(nc+1, n_vars), flux_r(nc+1, n_vars)
     integer  :: flux_dim, line_ix(NDIM-1)
 #if NDIM > 1
@@ -434,14 +440,14 @@ contains
              call to_primitive(nc+4, n_vars, cc_line)
 
              ! Reconstruct to cell faces
-             call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r)
+             call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r, u_diff)
 
              call max_wavespeed(nc+1, n_vars, flux_dim, u_l, w_l)
              call max_wavespeed(nc+1, n_vars, flux_dim, u_r, w_r)
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_l, flux_l, &
-                  tree%boxes(id), line_ix)
+                  tree%boxes(id), line_ix, u_diff)
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r, &
-                  tree%boxes(id), line_ix)
+                  tree%boxes(id), line_ix, u_diff)
 
              call to_conservative(nc+1, n_vars, u_l)
              call to_conservative(nc+1, n_vars, u_r)
