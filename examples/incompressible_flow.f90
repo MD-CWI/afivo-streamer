@@ -10,6 +10,7 @@ program incompressible_flow
   integer, parameter          :: box_size        = 8
   integer, parameter          :: i_mom(NDIM)     = [1, 2]
   integer, parameter          :: n_vars          = 2
+  integer                     :: i_pressure      = -1
   real(dp), parameter         :: domain_len      = 2.0_dp
   character(len=2), parameter :: mom_names(NDIM) = ["ux", "uy"]
 
@@ -28,8 +29,10 @@ program incompressible_flow
   integer, parameter :: n_states = af_advance_num_steps(integrator)
 
   integer            :: global_iv_velocity(NDIM)
+  real(dp)           :: global_dt
   integer            :: i, it
-  integer            :: variables(NDIM)
+  integer            :: flow_variables(NDIM)
+  integer            :: all_variables(NDIM+1)
   integer            :: fluxes(NDIM)
   type(af_t)         :: tree
   integer            :: output_cnt
@@ -42,16 +45,20 @@ program incompressible_flow
   print *, "Number of threads", af_get_max_threads()
 
   do i = 1, NDIM
-     call af_add_cc_variable(tree, mom_names(i), ix=variables(i), &
+     call af_add_cc_variable(tree, mom_names(i), ix=flow_variables(i), &
           n_copies=n_states)
      call af_add_fc_variable(tree, "flux", ix=fluxes(i))
   end do
+
+  call af_add_cc_variable(tree, "p", ix=i_pressure, n_copies=n_states)
+  all_variables(1:NDIM) = flow_variables
+  all_variables(NDIM+1) = i_pressure
 
   call af_add_cc_variable(tree, "phi", ix=mg%i_phi)
   call af_add_cc_variable(tree, "rhs", ix=mg%i_rhs)
   call af_add_cc_variable(tree, "tmp", ix=mg%i_tmp)
   mg%sides_bc => af_bc_neumann_zero
-  mg%subtract_mean = .true.
+  mg%subtract_mean = .false.
 
   test_case = "channel_flow"
 
@@ -59,22 +66,24 @@ program incompressible_flow
      call get_command_argument(1, test_case)
   end if
 
+  call af_set_cc_methods(tree, i_pressure, af_bc_neumann_zero)
+
   select case (test_case)
   case ("cavity_flow")
      ux_top = 1.0_dp
      nu = 0.1_dp
      source_ux = 0.0_dp
 
-     call af_set_cc_methods(tree, variables(1), bc_ux)
-     call af_set_cc_methods(tree, variables(2), af_bc_dirichlet_zero)
+     call af_set_cc_methods(tree, flow_variables(1), bc_ux)
+     call af_set_cc_methods(tree, flow_variables(2), af_bc_dirichlet_zero)
 
      call af_init(tree, box_size, [DTIMES(domain_len)], [DTIMES(box_size)])
   case ("channel_flow")
      nu = 0.1_dp
      source_ux = 1.0_dp
 
-     call af_set_cc_methods(tree, variables(1), af_bc_dirichlet_zero)
-     call af_set_cc_methods(tree, variables(2), af_bc_dirichlet_zero)
+     call af_set_cc_methods(tree, flow_variables(1), af_bc_dirichlet_zero)
+     call af_set_cc_methods(tree, flow_variables(2), af_bc_dirichlet_zero)
      call af_init(tree, box_size, [DTIMES(domain_len)], [DTIMES(box_size)], &
           periodic=[.true., .false.])
   case default
@@ -89,26 +98,26 @@ program incompressible_flow
   dt_output  = 1.0_dp
   end_time   = 30.0_dp
 
-  call af_refine_up_to_lvl(tree, 3)
+  call af_refine_up_to_lvl(tree, 2)
   call af_loop_box(tree, set_initial_condition)
-
-  call af_gc_tree(tree, i_mom)
+  call af_gc_tree(tree, all_variables)
 
   dt_diff = 0.5_dp * 0.25_dp * af_min_dr(tree)**2 / nu
   dt      = min(dt_diff, 1e-6_dp)
+  dt_lim  = 0.0_dp
 
   ! Starting simulation
   do while (time < end_time)
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
         write(fname, "(A,I0)") "output/incompressible_flow_" // DIMNAME // "_", output_cnt
-        call af_gc_tree(tree, variables)
+        call af_gc_tree(tree, all_variables)
         call af_write_silo(tree, trim(fname), output_cnt, time)
         print *, it, dt, dt_lim
      end if
 
-     call af_advance(tree, dt, dt_lim, time, variables, &
-          af_midpoint_method, forward_euler)
+     call af_advance(tree, dt, dt_lim, time, all_variables, &
+          af_forward_euler, forward_euler)
      dt = 0.9_dp * min(dt_lim, dt_diff, 2.0_dp * dt)
      it = it + 1
      ! print *, it, dt, dt_lim
@@ -122,7 +131,8 @@ contains
 
     nc = box%n_cell
     do KJI_DO(0,nc+1)
-       box%cc(IJK, variables) = 0.0_dp
+       box%cc(IJK, flow_variables) = 0.0_dp
+       box%cc(IJK, i_pressure) = 0.0_dp
     end do; CLOSE_DO
   end subroutine set_initial_condition
 
@@ -140,17 +150,20 @@ contains
     integer, intent(in)       :: i_step, n_steps
     real(dp)                  :: wmax(NDIM), tmp
 
-    call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, wmax, &
+    call flux_generic_tree(tree, n_vars, flow_variables, s_deriv, fluxes, wmax, &
          max_wavespeed, get_flux, flux_dummy_conversion, flux_dummy_conversion)
 
-    call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
+    call flux_update_densities(tree, dt, n_vars, flow_variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, source_term)
 
-    call remove_velocity_divergence(tree, variables+s_out)
+    ! call remove_velocity_divergence(tree, flow_variables+s_out, dt)
 
     ! Compute maximal time step
     tmp = sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
     dt_lim = 1.0_dp / max(tmp, 1.0e-10_dp)
+
+    ! Update pressure
+    ! TODO
   end subroutine forward_euler
 
   subroutine source_term(box, dt, n_vars, i_cc, s_deriv, s_out)
@@ -178,7 +191,7 @@ contains
     w = abs(u(:, i_mom(flux_dim)))
   end subroutine max_wavespeed
 
-  subroutine get_flux(n_values, n_var, flux_dim, u, flux, box, line_ix, u_diff)
+  subroutine get_flux(n_values, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
     integer, intent(in)     :: n_values !< Number of cell faces
     integer, intent(in)     :: n_var    !< Number of variables
     integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
@@ -186,36 +199,40 @@ contains
     real(dp), intent(out)   :: flux(n_values, n_var)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: line_ix(NDIM-1)
-    real(dp), intent(in)    :: u_diff(n_values, n_var)
+    integer, intent(in)     :: s_deriv
     real(dp)                :: inv_dr(NDIM)
+    real(dp)                :: cc(0:n_values, 2), u_diff(n_values)
+    integer                 :: i
 
     inv_dr = 1/box%dr
+
+    call flux_get_line_cc(box, [flow_variables+s_deriv], flux_dim, line_ix, cc)
 
     do i = 1, NDIM
        ! Momentum flux
        flux(:,  i_mom(i)) = u(:, i_mom(i)) * u(:, i_mom(flux_dim))
 
        ! Viscosity
-       flux(:,  i_mom(i)) = flux(:,  i_mom(i)) - &
-            nu * u_diff(:, i_mom(i)) * inv_dr(i)
+       ! u_diff = cc(1:, i_mom(i)) - cc(0:n_values-1, i_mom(i))
+       ! flux(:,  i_mom(i)) = flux(:,  i_mom(i)) - nu * u_diff * inv_dr(i)
     end do
-
   end subroutine get_flux
 
-  subroutine remove_velocity_divergence(tree, iv_velocity)
+  subroutine remove_velocity_divergence(tree, iv_velocity, dt)
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: iv_velocity(NDIM)
-    logical                   :: use_4th_order = .false.
+    real(dp), intent(in)      :: dt
+    logical                   :: use_4th_order    = .true.
     real(dp)                  :: tmp
     logical, parameter        :: print_divergence = .false.
 
     global_iv_velocity = iv_velocity
+    global_dt          = dt
     call af_restrict_ref_boundary(tree, iv_velocity)
 
     if (use_4th_order) then
        call af_loop_tree(tree, box_set_rhs_4th_order, .true.)
     else
-       call af_gc_tree(tree, iv_velocity, corners=.false., leaves_only=.true.)
        call af_loop_tree(tree, box_set_rhs_2nd_order, .true.)
     end if
 
@@ -233,7 +250,6 @@ contains
        if (use_4th_order) then
           call af_loop_tree(tree, box_set_rhs_4th_order, .true.)
        else
-          call af_gc_tree(tree, iv_velocity, corners=.false., leaves_only=.true.)
           call af_loop_tree(tree, box_set_rhs_2nd_order, .true.)
        end if
        call af_tree_sum_cc(tree, mg%i_rhs, tmp)
@@ -248,9 +264,10 @@ contains
     real(dp)                  :: tmp(NDIM)
 
     associate (box => tree%boxes(id))
-      tmp = 0.5_dp / box%dr
+      tmp = 0.5_dp / (box%dr * global_dt)
       iv = global_iv_velocity
       nc = box%n_cell
+      call af_gc_box(tree, id, iv, .false.)
 
       do KJI_DO(1,nc)
          box%cc(IJK, mg%i_rhs) = &
@@ -269,7 +286,7 @@ contains
 
     associate (box => tree%boxes(id))
       nc  = box%n_cell
-      tmp = 1/(12 * box%dr)
+      tmp = 1/(12 * box%dr * global_dt)
       iv  = global_iv_velocity
       call af_gc2_box(tree, id, iv, cc)
 
@@ -289,7 +306,7 @@ contains
     real(dp)                   :: tmp(NDIM)
 
     iv = global_iv_velocity
-    tmp = 0.5_dp / box%dr
+    tmp = 0.5_dp * global_dt / box%dr
 
     nc = box%n_cell
     do KJI_DO(1,nc)
