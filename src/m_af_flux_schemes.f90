@@ -255,7 +255,7 @@ contains
     nc = tree%n_cell
     rfac = 0.0_dp ! Prevent warnings in 3D
 
-    !$omp parallel private(lvl, n, id, IJK, dt_dr, rfac)
+    !$omp parallel private(lvl, n, id, IJK, dt_dr, rfac, iv)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do n = 1, size(tree%lvls(lvl)%leaves)
