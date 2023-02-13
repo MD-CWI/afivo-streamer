@@ -39,6 +39,17 @@ module m_af_flux_schemes
        integer, intent(in)     :: s_deriv        !< State to compute derivatives from
      end subroutine subr_flux_from_prim
 
+     subroutine subr_flux_other(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
+       import
+       integer, intent(in)     :: nf              !< Number of cell faces
+       integer, intent(in)     :: n_var           !< Number of variables
+       integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+       real(dp), intent(inout) :: flux(nf, n_var) !< Computed fluxes
+       type(box_t), intent(in) :: box             !< Current box
+       integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+       integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+     end subroutine subr_flux_other
+
      subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out)
        import
        type(box_t), intent(inout) :: box
@@ -58,6 +69,7 @@ module m_af_flux_schemes
   public :: flux_update_densities
   public :: flux_dummy_conversion
   public :: flux_dummy_source
+  public :: flux_dummy_other
   public :: flux_get_line_cc, flux_get_line_fc
 
 contains
@@ -317,7 +329,7 @@ contains
   end subroutine flux_update_densities
 
   subroutine flux_generic_tree(tree, n_vars, i_cc, s_deriv, i_flux, wmax, &
-       max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
+       max_wavespeed, flux_from_primitives, flux_other, to_primitive, to_conservative)
     use m_af_restrict
     use m_af_core
     type(af_t), intent(inout)      :: tree
@@ -330,6 +342,8 @@ contains
     procedure(subr_max_wavespeed)  :: max_wavespeed
     !> Compute the flux from primitive variables
     procedure(subr_flux_from_prim) :: flux_from_primitives
+    !> Other flux contributions
+    procedure(subr_flux_other)     :: flux_other
     !> Convert conservative variables to primitive ones
     procedure(subr_prim_cons)      :: to_primitive
     !> Convert primitive variables to conservative ones
@@ -348,7 +362,7 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
                n_vars, i_cc, s_deriv, i_flux, wmax, max_wavespeed, &
-               flux_from_primitives, to_primitive, to_conservative)
+               flux_from_primitives, flux_other, to_primitive, to_conservative)
        end do
        !$omp end do
     end do
@@ -361,7 +375,7 @@ contains
 
   !> Compute generic finite volume flux
   subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, wmax, &
-       max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
+       max_wavespeed, flux_from_primitives, flux_other, to_primitive, to_conservative)
     use m_af_types
     use m_af_ghostcell
     type(af_t), intent(inout)      :: tree
@@ -374,8 +388,10 @@ contains
     real(dp), intent(inout)        :: wmax(NDIM)     !< Maximum wave speed found
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed)  :: max_wavespeed
-    !> Compute the flux from primitive variables
+    !> Compute the flux from primitive variables on cell faces
     procedure(subr_flux_from_prim) :: flux_from_primitives
+    !> Other flux contributions
+    procedure(subr_flux_other)     :: flux_other
     !> Convert conservative variables to primitive ones
     procedure(subr_prim_cons) :: to_primitive
     !> Convert primitive variables to conservative ones
@@ -457,6 +473,12 @@ contains
 
              ! Store maximum wave speed
              wmax(flux_dim) = max(wmax(flux_dim), maxval(w_l))
+
+             ! Add other flux components
+             flux_l = 0.0_dp
+             call flux_other(nc+1, n_vars, flux_dim, flux_l, &
+                  tree%boxes(id), line_ix, s_deriv)
+             flux = flux + flux_l
 
              ! Store the computed fluxes
              select case (flux_dim)
@@ -721,5 +743,15 @@ contains
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
   end subroutine flux_dummy_source
+
+  subroutine flux_dummy_other(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
+    integer, intent(in)     :: nf              !< Number of cell faces
+    integer, intent(in)     :: n_var           !< Number of variables
+    integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+    real(dp), intent(inout) :: flux(nf, n_var) !< Computed fluxes
+    type(box_t), intent(in) :: box             !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+  end subroutine flux_dummy_other
 
 end module m_af_flux_schemes

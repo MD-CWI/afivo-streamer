@@ -32,7 +32,6 @@ program incompressible_flow
   real(dp)           :: global_dt
   integer            :: i, it
   integer            :: flow_variables(NDIM)
-  integer            :: all_variables(NDIM+1)
   integer            :: fluxes(NDIM)
   type(af_t)         :: tree
   integer            :: output_cnt
@@ -50,9 +49,7 @@ program incompressible_flow
      call af_add_fc_variable(tree, "flux", ix=fluxes(i))
   end do
 
-  call af_add_cc_variable(tree, "p", ix=i_pressure, n_copies=n_states)
-  all_variables(1:NDIM) = flow_variables
-  all_variables(NDIM+1) = i_pressure
+  call af_add_cc_variable(tree, "pressure", ix=i_pressure)
 
   call af_add_cc_variable(tree, "phi", ix=mg%i_phi)
   call af_add_cc_variable(tree, "rhs", ix=mg%i_rhs)
@@ -98,9 +95,9 @@ program incompressible_flow
   dt_output  = 1.0_dp
   end_time   = 30.0_dp
 
-  call af_refine_up_to_lvl(tree, 2)
+  call af_refine_up_to_lvl(tree, 3)
   call af_loop_box(tree, set_initial_condition)
-  call af_gc_tree(tree, all_variables)
+  call af_gc_tree(tree, flow_variables)
 
   dt_diff = 0.5_dp * 0.25_dp * af_min_dr(tree)**2 / nu
   dt      = min(dt_diff, 1e-6_dp)
@@ -111,13 +108,13 @@ program incompressible_flow
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
         write(fname, "(A,I0)") "output/incompressible_flow_" // DIMNAME // "_", output_cnt
-        call af_gc_tree(tree, all_variables)
+        call af_gc_tree(tree, flow_variables)
         call af_write_silo(tree, trim(fname), output_cnt, time)
         print *, it, dt, dt_lim
      end if
 
-     call af_advance(tree, dt, dt_lim, time, all_variables, &
-          af_forward_euler, forward_euler)
+     call af_advance(tree, dt, dt_lim, time, flow_variables, &
+          af_midpoint_method, forward_euler)
      dt = 0.9_dp * min(dt_lim, dt_diff, 2.0_dp * dt)
      it = it + 1
      ! print *, it, dt, dt_lim
@@ -151,19 +148,18 @@ contains
     real(dp)                  :: wmax(NDIM), tmp
 
     call flux_generic_tree(tree, n_vars, flow_variables, s_deriv, fluxes, wmax, &
-         max_wavespeed, get_flux, flux_dummy_conversion, flux_dummy_conversion)
+         max_wavespeed, get_flux_lr, flux_other, &
+         flux_dummy_conversion, flux_dummy_conversion)
 
     call flux_update_densities(tree, dt, n_vars, flow_variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, source_term)
 
-    ! call remove_velocity_divergence(tree, flow_variables+s_out, dt)
+    call remove_velocity_divergence(tree, flow_variables+s_out, dt)
 
     ! Compute maximal time step
     tmp = sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
     dt_lim = 1.0_dp / max(tmp, 1.0e-10_dp)
 
-    ! Update pressure
-    ! TODO
   end subroutine forward_euler
 
   subroutine source_term(box, dt, n_vars, i_cc, s_deriv, s_out)
@@ -191,7 +187,7 @@ contains
     w = abs(u(:, i_mom(flux_dim)))
   end subroutine max_wavespeed
 
-  subroutine get_flux(n_values, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
+  subroutine get_flux_lr(n_values, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
     integer, intent(in)     :: n_values !< Number of cell faces
     integer, intent(in)     :: n_var    !< Number of variables
     integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
@@ -200,8 +196,24 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(in)     :: line_ix(NDIM-1)
     integer, intent(in)     :: s_deriv
+
+    do i = 1, NDIM
+       ! Momentum flux
+       flux(:,  i_mom(i)) = u(:, i_mom(i)) * u(:, i_mom(flux_dim))
+    end do
+  end subroutine get_flux_lr
+
+  subroutine flux_other(n_values, n_var, flux_dim, flux, box, line_ix, s_deriv)
+    integer, intent(in)     :: n_values !< Number of cell faces
+    integer, intent(in)     :: n_var    !< Number of variables
+    integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
+    real(dp), intent(inout) :: flux(n_values, n_var)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: line_ix(NDIM-1)
+    integer, intent(in)     :: s_deriv
     real(dp)                :: inv_dr(NDIM)
     real(dp)                :: cc(0:n_values, 2), u_diff(n_values)
+    ! real(dp)                :: p(0:n_values, 1)
     integer                 :: i
 
     inv_dr = 1/box%dr
@@ -209,14 +221,11 @@ contains
     call flux_get_line_cc(box, [flow_variables+s_deriv], flux_dim, line_ix, cc)
 
     do i = 1, NDIM
-       ! Momentum flux
-       flux(:,  i_mom(i)) = u(:, i_mom(i)) * u(:, i_mom(flux_dim))
-
        ! Viscosity
-       ! u_diff = cc(1:, i_mom(i)) - cc(0:n_values-1, i_mom(i))
-       ! flux(:,  i_mom(i)) = flux(:,  i_mom(i)) - nu * u_diff * inv_dr(i)
+       u_diff = cc(1:, i_mom(i)) - cc(:n_values-1, i_mom(i))
+       flux(:,  i_mom(i)) = -nu * u_diff * inv_dr(i)
     end do
-  end subroutine get_flux
+  end subroutine flux_other
 
   subroutine remove_velocity_divergence(tree, iv_velocity, dt)
     type(af_t), intent(inout) :: tree
@@ -228,8 +237,15 @@ contains
 
     global_iv_velocity = iv_velocity
     global_dt          = dt
+
+    ! Correct with previous pressure
+    call af_tree_copy_cc(tree, i_pressure, mg%i_phi)
+    call af_loop_box(tree, box_correct_velocity, .true.)
+
+    ! This ensures ghost cells are set correctly
     call af_restrict_ref_boundary(tree, iv_velocity)
 
+    ! Compute remaining divergence
     if (use_4th_order) then
        call af_loop_tree(tree, box_set_rhs_4th_order, .true.)
     else
@@ -237,24 +253,23 @@ contains
     end if
 
     if (print_divergence) then
-       call af_tree_sum_cc(tree, mg%i_rhs, tmp)
-       print *, "BEFORE", tmp
+       call af_tree_maxabs_cc(tree, mg%i_rhs, tmp)
+       print *, "DIVERGENCE", tmp, iv_velocity(1)
     end if
 
-    ! call mg_fas_fmg(tree, mg, .false., .true.)
-    ! call mg_fas_fmg(tree, mg, .true., .true.)
+    ! Zero initial guess for pressure correction
+    call af_tree_clear_cc(tree, mg%i_phi)
+
+    ! Solve Poisson equation (approximately)
     call mg_fas_vcycle(tree, mg, .true.)
+    ! call mg_fas_fmg(tree, mg, .false., .true.)
+
+    ! Correct velocities
     call af_loop_box(tree, box_correct_velocity, .true.)
 
-    if (print_divergence) then
-       if (use_4th_order) then
-          call af_loop_tree(tree, box_set_rhs_4th_order, .true.)
-       else
-          call af_loop_tree(tree, box_set_rhs_2nd_order, .true.)
-       end if
-       call af_tree_sum_cc(tree, mg%i_rhs, tmp)
-       print *, "AFTER", tmp
-    end if
+    ! Update pressure
+    call af_tree_apply(tree, i_pressure, mg%i_phi, '+')
+
   end subroutine remove_velocity_divergence
 
   subroutine box_set_rhs_2nd_order(tree, id)
