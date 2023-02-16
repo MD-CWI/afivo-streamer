@@ -50,6 +50,7 @@ module m_af_stencil
   public :: af_stencil_remove
   public :: af_stencil_store_box
   public :: af_stencil_check_box
+  public :: af_stencil_allocate_coeff
   public :: af_stencil_store
   public :: af_stencil_apply
   public :: af_stencil_apply_box
@@ -165,6 +166,62 @@ contains
        error stop "Stencil with this key has already been stored"
     end if
   end subroutine af_stencil_prepare_store
+
+  !> Allocate storage for stencil coefficients
+  subroutine af_stencil_allocate_coeff(stencil, nc, use_f, n_sparse)
+    type(stencil_t), intent(inout) :: stencil !< Stencil
+    !> Number of cells per box dimension
+    integer, intent(in)            :: nc
+    !> Whether storage for the extra arrays f and bc_correction is required
+    !> (only for variable stencils)
+    logical, intent(in), optional  :: use_f
+    !> Number of entries for sparse stencil
+    integer, intent(in), optional  :: n_sparse
+    logical                        :: allocate_f
+    integer                        :: n_coeff
+
+    allocate_f = .false.; if (present(use_f)) allocate_f = use_f
+    if (stencil%shape < 1 .or. stencil%shape > num_shapes) &
+         error stop "Unknown stencil shape"
+
+    n_coeff = af_stencil_sizes(stencil%shape)
+
+    select case (stencil%stype)
+    case (stencil_constant)
+       if (.not. allocated(stencil%c)) then
+          allocate(stencil%c(n_coeff))
+       else if (size(stencil%c) /= n_coeff) then
+          deallocate(stencil%c)
+          allocate(stencil%c(n_coeff))
+       end if
+    case (stencil_variable)
+       if (.not. allocated(stencil%v)) then
+          allocate(stencil%v(n_coeff, DTIMES(nc)))
+       else if (size(stencil%v, 1) /= n_coeff) then
+          deallocate(stencil%v)
+          allocate(stencil%v(n_coeff, DTIMES(nc)))
+       end if
+
+       if (allocate_f .and. .not. allocated(stencil%f)) then
+          allocate(stencil%f(DTIMES(nc)))
+          allocate(stencil%bc_correction(DTIMES(nc)))
+       end if
+    case (stencil_sparse)
+       if (.not. present(n_sparse)) error stop "n_sparse required"
+
+       if (.not. allocated(stencil%sparse_v)) then
+          allocate(stencil%sparse_ix(NDIM, n_sparse))
+          allocate(stencil%sparse_v(n_coeff, n_sparse))
+       else if (any(size(stencil%sparse_v) /= [n_coeff, n_sparse])) then
+          deallocate(stencil%sparse_v)
+          deallocate(stencil%sparse_ix)
+          allocate(stencil%sparse_ix(NDIM, n_sparse))
+          allocate(stencil%sparse_v(n_coeff, n_sparse))
+       end if
+    case default
+       error stop "Unknow stencil%stype"
+    end select
+  end subroutine af_stencil_allocate_coeff
 
   !> Remove a stencil
   subroutine af_stencil_remove(tree, key)
