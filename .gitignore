@@ -71,4 +71,4 @@ tests/results/*
 /examples/time_integration_?d
 /examples/two_electrodes_?d
 /examples/incompressible_flow_?d
-
+/examples/helmholtz_variable_stencil_?d
