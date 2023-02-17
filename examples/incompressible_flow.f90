@@ -133,10 +133,11 @@ contains
     end do; CLOSE_DO
   end subroutine set_initial_condition
 
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
-       w_prev, s_out, i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, &
+       s_prev, w_prev, s_out, i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
     real(dp), intent(in)      :: time
     real(dp), intent(inout)   :: dt_lim
     integer, intent(in)       :: s_deriv
