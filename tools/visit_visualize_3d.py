@@ -88,7 +88,7 @@ def get_args():
     pr.add_argument('-rfullpause', type=int, default=20,
                     help='Pause this number of frames before full rotation')
     pr.add_argument('-rsteps', type=int, default=2,
-                    help='Number of rotation steps per time step')
+                    help='If rdeg != 0: number of rotation steps per time step')
     pr.add_argument('-rframes', type=int, nargs='+', default=[],
                     help='Perform full rotations at these time steps')
     pr.add_argument('-rend', action='store_true',
@@ -203,6 +203,7 @@ if __name__ == '__main__':
     s.height = args.height
     s.screenCapture = 0
     s.fileName = args.fname
+    s.family = 1
     s.outputDirectory = args.outdir
     s.outputToCurrentDirectory = 0
     v.SetSaveWindowAttributes(s)
