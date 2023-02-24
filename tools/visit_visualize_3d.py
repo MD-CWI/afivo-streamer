@@ -97,6 +97,27 @@ def get_args():
     return pr.parse_args()
 
 
+def save_window(fname, i):
+    s = v.SaveWindowAttributes()
+    if args.fmt == 'png':
+        s.format = s.PNG
+    elif args.r == 'bmp':
+        s.format = s.BMP
+    elif args.r == 'jpg':
+        s.format = s.JPEG
+
+    s.width = args.width
+    s.height = args.height
+    s.screenCapture = 0
+    s.family = 0
+    s.outputDirectory = args.outdir
+    s.outputToCurrentDirectory = 0
+    s.fileName = args.fname + '_{0:04d}'.format(i)
+    v.SetSaveWindowAttributes(s)
+    v.SaveWindow()
+    return i+1
+
+
 if __name__ == '__main__':
     args = get_args()
 
@@ -190,24 +211,6 @@ if __name__ == '__main__':
         v.SetOperatorOptions(batts)
         v.DrawPlots()
 
-    # Set output options
-    s = v.SaveWindowAttributes()
-    if args.fmt == 'png':
-        s.format = s.PNG
-    elif args.r == 'bmp':
-        s.format = s.BMP
-    elif args.r == 'jpg':
-        s.format = s.JPEG
-
-    s.width = args.width
-    s.height = args.height
-    s.screenCapture = 0
-    s.fileName = args.fname
-    s.family = 1
-    s.outputDirectory = args.outdir
-    s.outputToCurrentDirectory = 0
-    v.SetSaveWindowAttributes(s)
-
     if args.t1 is not None:
         imax = args.t1 + 1
     else:
@@ -233,20 +236,22 @@ if __name__ == '__main__':
         full_steps = int(round(args.rfulldeg * (math.pi/180) / dphi))
         dphi_full = args.rfulldeg * (math.pi/180) / full_steps
 
+    i_output = 0
+
     for i in range(imin, imax, args.tstep):
         v.TimeSliderSetState(i)
-        v.SaveWindow()
+        i_output = save_window(args.fname, i_output)
         for j in range(args.rsteps):
             cc.viewNormal = rotateXY(cc.viewNormal, dphi)
             v.SetView3D(cc)
             if (j > 0):
-                v.SaveWindow()
+                i_output = save_window(args.fname, i_output)
         if i in args.rframes:
             for j in range(args.rfullpause):
-                v.SaveWindow()
+                i_output = save_window(args.fname, i_output)
             for j in range(full_steps):
                 cc.viewNormal = rotateXY(cc.viewNormal, dphi_full)
                 v.SetView3D(cc)
-                v.SaveWindow()
+                i_output = save_window(args.fname, i_output)
 
     sys.exit()
