@@ -17,11 +17,11 @@ module m_user
   real(dp) :: shock_width         = 0.01_dp
   real(dp) :: line_coeff(NDIM+1)  = 0.0_dp
   real(dp) :: sphere_center(NDIM) = 0.5_dp
-  real(dp) :: sphere_radius       = 0.1_dp
+  real(dp) :: sphere_radius       = 0.2_dp
 
-  ! Whether density ratio is inside sphere
-  logical, protected, public :: density_ratio_inside_sphere = .false.
-
+  ! Whether density ratio is outside sphere
+  logical, protected, public :: density_ratio_outside_sphere = .false.
+  
 contains
 
   subroutine user_initialize(cfg, tree)
@@ -43,7 +43,7 @@ contains
     end select
 
     call CFG_add_get(cfg, "density_ratio", density_ratio, &
-         "Density ratio (<= 1)")
+         "Density ratio (> 0)")
     call CFG_add_get(cfg, "shock_width", shock_width, &
          "Shock width (relative to domain size)")
     call CFG_add_get(cfg, "line_coeff", line_coeff, &
@@ -52,8 +52,8 @@ contains
          "Center (relative to domain) of sphere")
     call CFG_add_get(cfg, "sphere_radius", sphere_radius, &
          "Radius (relative to domain) of sphere")
-    call CFG_add_get(cfg, "density_ratio_inside_sphere", density_ratio_inside_sphere, &
-         "Whether density ratio is inside sphere")
+    call CFG_add_get(cfg, "density_ratio_outside_sphere", density_ratio_outside_sphere, &
+         "Whether density ratio is outside sphere")
          
   end subroutine user_initialize
 
@@ -90,21 +90,21 @@ contains
     q = norm2((af_r_cc(box, [IJK]) - ST_domain_origin)/ST_domain_len &
          - sphere_center)
 
-    if (q < sphere_radius - shock_width) then
+    if (q > sphere_radius + shock_width) then
        gas_density_sphere = gas_number_density
-       if (density_ratio_inside_sphere) then
+       if (density_ratio_outside_sphere) then
           gas_density_sphere = gas_number_density * density_ratio
        end if
-    else if (q > sphere_radius + shock_width) then
+    else if (q < sphere_radius - shock_width) then
        gas_density_sphere = gas_number_density * density_ratio
-       if (density_ratio_inside_sphere) then
+       if (density_ratio_outside_sphere) then
           gas_density_sphere = gas_number_density
        end if
     else
        ! Linear interpolation
-       tmp = (q - sphere_radius + shock_width) / (2 * shock_width)
-       if (density_ratio_inside_sphere) then
-          tmp = (sphere_radius + shock_width - q) / (2 * shock_width)
+       tmp = (sphere_radius + shock_width - q) / (2 * shock_width)
+       if (density_ratio_outside_sphere) then
+          tmp = (q - sphere_radius + shock_width) / (2 * shock_width)
        end if
        gas_density_sphere = gas_number_density * (1 + (density_ratio-1) * tmp)
     end if
