@@ -112,7 +112,7 @@ def save_window(fname, i):
     s.family = 0
     s.outputDirectory = args.outdir
     s.outputToCurrentDirectory = 0
-    s.fileName = args.fname + '_{0:04d}'.format(i)
+    s.fileName = args.fname + '_{0:04d}'.format(i+args.t0)
     v.SetSaveWindowAttributes(s)
     v.SaveWindow()
     return i+1
