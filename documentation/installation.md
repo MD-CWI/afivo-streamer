@@ -3,7 +3,7 @@
 # Requirements
 
 * A UNIX-like operating system such as GNU/Linux
-* A recent Fortran compiler such as gfortran 4.8 or newer
+* A recent Fortran compiler such as `gfortran 11`, which supports Fortran 2008
 * A recent C compiler such as gcc to compile the [Silo](https://wci.llnl.gov/simulation/computer-codes/silo) library
 * `git` to download and update the source code
 
