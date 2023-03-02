@@ -14,7 +14,7 @@ module load GCC/11.3.0
 export OMP_NUM_THREADS=32
 export GFORTRAN_UNBUFFERED_PRECONNECTED=y
 
-cd afivo-streamer/programs/gas_gradient_3d/
+cd /home/baohongg/afivo-streamer/programs/gas_gradient_3d/
 
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -gradient_type="sphere" -density_ratio=0.9 -shock_width=0.01 -sphere_center="0.7 0.5 0.5" -sphere_radius=0.2 -density_ratio_outside_sphere=F -output%name=/scratch-shared/baohongg/3d_sphere/in_1.6e6_dr0.9_sw0.01_sc0.7-0.5_sr0.2 &
 

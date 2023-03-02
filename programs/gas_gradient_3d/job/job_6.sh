@@ -14,7 +14,7 @@ module load GCC/11.3.0
 export OMP_NUM_THREADS=32
 export GFORTRAN_UNBUFFERED_PRECONNECTED=y
 
-cd afivo-streamer/programs/gas_gradient_3d/
+cd /home/baohongg/afivo-streamer/programs/gas_gradient_3d/
 
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=0.7 -shock_width=0.01 -line_coeff="-0.5 2 0 -1" -output%name=/scratch-shared/baohongg/3d_line/line-0.5+2x-z_1.6e6_dr0.7_sw0.01 &
 
