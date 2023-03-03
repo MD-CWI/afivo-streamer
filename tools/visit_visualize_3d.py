@@ -47,7 +47,7 @@ def get_args():
                     help='Maximum value')
     pr.add_argument('-attenuation', type=float, default=1.0,
                     help='Attenuatin (transparency)')
-    pr.add_argument('-t0', type=int,
+    pr.add_argument('-t0', type=int, default=0,
                     help='First frame (counting starts at 0)')
     pr.add_argument('-t1', type=int,
                     help='Last frame (counting starts at 0)')
@@ -85,9 +85,9 @@ def get_args():
                     help='Rotation angle per time step (degrees)')
     pr.add_argument('-rfulldeg', type=float, default=360,
                     help='Full rotation angle (degrees)')
-    pr.add_argument('-rfullpause', type=int, default=20,
+    pr.add_argument('-rfullpause', type=int, default=0,
                     help='Pause this number of frames before full rotation')
-    pr.add_argument('-rsteps', type=int, default=2,
+    pr.add_argument('-rsteps', type=int, default=0,
                     help='If rdeg != 0: number of rotation steps per time step')
     pr.add_argument('-rframes', type=int, nargs='+', default=[],
                     help='Perform full rotations at these time steps')
@@ -244,8 +244,7 @@ if __name__ == '__main__':
         for j in range(args.rsteps):
             cc.viewNormal = rotateXY(cc.viewNormal, dphi)
             v.SetView3D(cc)
-            if (j > 0):
-                i_output = save_window(args.fname, i_output)
+            i_output = save_window(args.fname, i_output)
         if i in args.rframes:
             for j in range(args.rfullpause):
                 i_output = save_window(args.fname, i_output)
