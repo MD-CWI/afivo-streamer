@@ -85,9 +85,9 @@ def get_args():
                     help='Rotation angle per time step (degrees)')
     pr.add_argument('-rfulldeg', type=float, default=360,
                     help='Full rotation angle (degrees)')
-    pr.add_argument('-rfullpause', type=int, default=20,
+    pr.add_argument('-rfullpause', type=int, default=0,
                     help='Pause this number of frames before full rotation')
-    pr.add_argument('-rsteps', type=int, default=2,
+    pr.add_argument('-rsteps', type=int, default=0,
                     help='If rdeg != 0: number of rotation steps per time step')
     pr.add_argument('-rframes', type=int, nargs='+', default=[],
                     help='Perform full rotations at these time steps')
