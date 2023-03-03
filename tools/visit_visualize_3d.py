@@ -244,8 +244,7 @@ if __name__ == '__main__':
         for j in range(args.rsteps):
             cc.viewNormal = rotateXY(cc.viewNormal, dphi)
             v.SetView3D(cc)
-            if (j > 0):
-                i_output = save_window(args.fname, i_output)
+            i_output = save_window(args.fname, i_output)
         if i in args.rframes:
             for j in range(args.rfullpause):
                 i_output = save_window(args.fname, i_output)
