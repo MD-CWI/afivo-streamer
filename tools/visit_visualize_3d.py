@@ -94,6 +94,13 @@ def get_args():
     pr.add_argument('-rend', action='store_true',
                     help='Perform full rotation at end')
 
+    pr.add_argument('-contour_var', type=str,
+                    help='Include a contour of this variable')
+    pr.add_argument('-contour_level', type=float, default=0.,
+                    help='Level for the contour')
+    pr.add_argument('-contour_rgb', type=int, default=[192, 192, 192],
+                    help='RGB value (0-255) for the contour')
+
     return pr.parse_args()
 
 
@@ -131,6 +138,27 @@ if __name__ == '__main__':
         v.AddPlot('Mesh', 'mesh')
         matts = v.MeshAttributes()
         v.SetPlotOptions(matts)
+
+    # Potentially add a contour
+    if args.contour_var:
+        v.AddPlot("Contour", args.contour_var)
+        catts = v.ContourAttributes()
+        catts.colorType = catts.ColorBySingleColor
+        catts.legendFlag = 0
+        catts.lineStyle = catts.SOLID  # SOLID, DASH, DOT, DOTDASH
+        catts.lineWidth = 2
+        catts.singleColor = (args.contour_rgb[0], args.contour_rgb[1],
+                             args.contour_rgb[2], 255)
+        catts.contourNLevels = 1
+        catts.contourValue = ()
+        catts.contourMethod = catts.Level  # Level, Value, Percent
+        catts.minFlag = 1
+        catts.maxFlag = 0
+        catts.min = args.contour_level
+        catts.max = 1
+        catts.wireframe = 0
+        v.SetPlotOptions(catts)
+
     v.DrawPlots()
 
     # Set rendering type
