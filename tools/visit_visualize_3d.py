@@ -47,7 +47,7 @@ def get_args():
                     help='Maximum value')
     pr.add_argument('-attenuation', type=float, default=1.0,
                     help='Attenuatin (transparency)')
-    pr.add_argument('-t0', type=int,
+    pr.add_argument('-t0', type=int, default=0,
                     help='First frame (counting starts at 0)')
     pr.add_argument('-t1', type=int,
                     help='Last frame (counting starts at 0)')
