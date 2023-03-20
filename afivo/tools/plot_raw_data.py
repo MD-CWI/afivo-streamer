@@ -4,10 +4,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from raw_reader import get_raw_data, map_grid_data_to
 import argparse
+import os
+import tempfile
+import subprocess
 
 p = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-p.add_argument('silo_file', type=str, help='Input silo file')
+p.add_argument('input_file', type=str, help='Input silo or raw file')
+p.add_argument('-variable', type=str, help='Which variable to plot')
 p.add_argument('-min_pixels', type=int, default=512,
                help='Min. pixels for any dimension')
 p.add_argument('-project_dims', type=int, nargs='+', choices=[0, 1, 2],
@@ -26,9 +30,27 @@ p.add_argument('-save_npz', type=str,
                help='Save the data into npz file and do not plot')
 p.add_argument('-cmap', type=str, default='plasma',
                help='Use this colormap')
+p.add_argument('-silo_to_raw', type=str, default='./silo_to_raw',
+               help='Path to silo_to_raw converter')
 args = p.parse_args()
 
-grids, domain = get_raw_data(args.silo_file, args.project_dims)
+
+extension = os.path.splitext(args.input_file)[1]
+
+if extension == ".silo":
+    if not args.variable:
+        raise ValueError('Specify variable to plot using -variable')
+
+    if not os.path.exists(args.silo_to_raw):
+        raise ValueError('Could not find silo_to_raw, specify -silo_to_raw')
+
+    # Convert silo to raw
+    with tempfile.NamedTemporaryFile() as fp:
+        res = subprocess.call([args.silo_to_raw, args.input_file,
+                               args.variable, fp.name])
+        grids, domain = get_raw_data(fp.name, args.project_dims)
+else:
+    grids, domain = get_raw_data(args.input_file, args.project_dims)
 
 # Grid size nx should be of form 2^k * domain['n_cells_coarse']
 ratio = args.min_pixels / domain['n_cells_coarse'].min()

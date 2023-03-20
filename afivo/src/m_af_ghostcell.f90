@@ -673,7 +673,7 @@ contains
     type(af_t), intent(inout) :: tree   !< Tree to fill ghost cells on
     integer, intent(in)       :: id     !< Id of box for which we set ghost cells
     integer, intent(in)       :: ivs(:) !< Variables for which ghost cells are set
-    real(dp)                  :: cc(DTIMES(-1:tree%n_cell+2), size(ivs))
+    real(dp), intent(inout)   :: cc(DTIMES(-1:tree%n_cell+2), size(ivs))
     integer                   :: i, iv, nb, nc, nb_id, bc_type, ix
     integer                   :: lo(NDIM), hi(NDIM), dnb(NDIM)
     integer                   :: nlo(NDIM), nhi(NDIM)
@@ -746,6 +746,9 @@ contains
   !> Conservative prolongation with a limited slope for ghost cells near
   !> refinement boundaries
   !>
+  !> This method assumes that the ghost cells for leaves on a coarser level have
+  !> already been set, which is typically the case.
+  !>
   !> @todo make compatible with arbitrary number of ghost cells
   subroutine gc2_prolong_rb(boxes, id, nb, iv, nc, cc)
     type(box_t), intent(in) :: boxes(:)            !< List of all boxes
@@ -769,7 +772,8 @@ contains
     lo_c = ix_offset + (lo+1)/2
     hi_c = ix_offset + (hi+1)/2
 
-    ! Convert to index on neighbor of parent box
+    ! Convert to index on neighbor of parent box. These indices should then lie
+    ! in the range [1, nc]
     lo_c = lo_c - af_neighb_dix(:, nb) * nc
     hi_c = hi_c - af_neighb_dix(:, nb) * nc
 
@@ -847,16 +851,20 @@ contains
 
   contains
 
-    ! Take minimum of two slopes if they have the same sign, else take zero
+    ! Generalized minmod limiter. The parameter theta controls how dissipative
+    ! the limiter is, with 1 corresponding to the minmod limiter and 2 to the MC
+    ! limiter. The value 4/3 ensures that values are non-negative in 3D.
     elemental function limit_slope(ll, rr) result(slope)
       real(dp), intent(in) :: ll, rr
       real(dp)             :: slope
+      real(dp), parameter  :: theta = 4/3.0_dp
 
       if (ll * rr < 0) then
          slope = 0.0_dp
       else
-         ! MC limiter
-         slope = sign(minval(abs([2 * ll, 2 * rr, 0.5_dp * (ll + rr)])), ll)
+         ! Generalized minmod limiter with parameter theta
+         slope = sign(minval(abs([theta * ll, theta * rr, &
+              0.5_dp * (ll + rr)])), ll)
       end if
     end function limit_slope
 

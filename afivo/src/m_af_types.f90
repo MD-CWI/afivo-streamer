@@ -560,6 +560,9 @@ module m_af_types
      integer  :: n_cycle_down   = 1
      integer  :: n_cycle_up     = 1
      real(dp) :: tolerance      = 1e-6_dp
+
+     !> Minimum number of unknowns to use OpenMP parallelization
+     integer  :: min_unknowns_for_openmp = 10*1000
   end type coarse_solve_t
 
   !> Type to store multigrid options in
