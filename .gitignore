@@ -72,3 +72,4 @@ tests/results/*
 /examples/two_electrodes_?d
 /examples/incompressible_flow_?d
 /examples/helmholtz_variable_stencil_?d
+/examples/check_ghostcells_?d
