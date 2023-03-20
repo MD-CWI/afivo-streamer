@@ -12,6 +12,9 @@ module m_types
   !> Undefined number
   real(dp), parameter :: undefined_real = -1e100_dp
 
+  !> Huge number
+  real(dp), parameter :: huge_real = 1e100_dp
+
   !> Default length of strings
   integer, parameter :: string_len = 200
 
