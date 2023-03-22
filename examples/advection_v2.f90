@@ -22,6 +22,7 @@ program advection
   real(dp)           :: sum_phi, sum_phi_t0
   real(dp)           :: dt_amr, dt_output
   real(dp)           :: velocity(NDIM)
+  real(dp)           :: cfl_number
   character(len=100) :: fname
 
   print *, "Running advection_" // DIMNAME // ""
@@ -50,6 +51,7 @@ program advection
   end_time    = 5.0_dp
   velocity(:) = -0.5_dp
   velocity(1) = 1.0_dp
+  cfl_number  = 0.5_dp
 
   ! Set up the initial conditions
   refine_steps=0
@@ -79,7 +81,7 @@ program advection
 
   call af_tree_sum_cc(tree, i_phi, sum_phi_t0)
 
-  dt = 0.5_dp / (sum(abs(velocity/af_lvl_dr(tree, tree%highest_lvl))) + &
+  dt = cfl_number / (sum(abs(velocity/af_lvl_dr(tree, tree%highest_lvl))) + &
        epsilon(1.0_dp))
   time_prev_refine = time
 
@@ -110,10 +112,11 @@ program advection
      if (time > end_time) exit
 
      call af_advance(tree, dt, dt_lim, time, [i_phi], &
-          af_midpoint_method, forward_euler)
-     dt = 0.8_dp * dt_lim
+          af_heuns_method, forward_euler)
+     dt = cfl_number * dt_lim
 
      if (time > time_prev_refine + dt_amr) then
+        call af_restrict_tree(tree, [i_phi])
         call af_gc_tree(tree, [i_phi])
         call af_adjust_refinement(tree, refine_routine, refine_info, 1)
         time_prev_refine = time
@@ -230,12 +233,13 @@ contains
 
     call flux_generic_tree(tree, 1, [i_phi], s_deriv, [i_flux], wmax, &
          max_wavespeed, get_flux, flux_dummy_other, &
-         flux_dummy_conversion, flux_dummy_conversion)
+         flux_dummy_conversion, flux_dummy_conversion, af_limiter_koren_t)
     call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
 
     ! Compute maximal time step
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
+
   end subroutine forward_euler
 
   subroutine max_wavespeed(n_values, n_var, flux_dim, u, w)

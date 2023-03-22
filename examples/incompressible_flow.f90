@@ -150,7 +150,7 @@ contains
 
     call flux_generic_tree(tree, n_vars, flow_variables, s_deriv, fluxes, wmax, &
          max_wavespeed, get_flux_lr, flux_other, &
-         flux_dummy_conversion, flux_dummy_conversion)
+         flux_dummy_conversion, flux_dummy_conversion, af_limiter_vanleer_t)
 
     call flux_update_densities(tree, dt, n_vars, flow_variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, source_term)
