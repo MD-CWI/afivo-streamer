@@ -249,6 +249,8 @@ module m_af_types
      procedure(af_subr_bc_custom), pointer, nopass :: bc_custom => null()
      !> Function defining the values of this variables
      procedure(af_subr_funcval), pointer, nopass :: funcval => null()
+     !> Integer determining the type of limiter to use for ghost cells
+     integer :: gc_limiter = -1
   end type af_cc_methods
 
   !> Value indicating the absence of a stencil
