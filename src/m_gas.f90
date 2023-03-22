@@ -175,6 +175,7 @@ contains
   subroutine gas_forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, &
        s_prev, w_prev, s_out, i_step, n_steps)
     use m_af_flux_schemes
+    use m_af_limiters
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
     real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms (IMEX)
@@ -191,7 +192,7 @@ contains
 
     call flux_generic_tree(tree, n_vars_euler, gas_vars, s_deriv, &
          gas_fluxes, wmax, max_wavespeed, get_fluxes, &
-         flux_dummy_other, to_primitive, to_conservative)
+         flux_dummy_other, to_primitive, to_conservative, af_limiter_vanleer_t)
     if (tree%coord_t == af_cyl) then
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
             s_deriv, n_prev, s_prev, w_prev, s_out, add_geometric_source)
