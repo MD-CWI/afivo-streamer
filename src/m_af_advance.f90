@@ -16,7 +16,7 @@ module m_af_advance
   integer, parameter, public :: af_midpoint_method  = 3
   !> Optimal 3-stage third-order SSPRK method (Shu & Osher), CFL coefficient of
   !> 1
-  integer, parameter, public :: af_ssprk3_method    = 4
+  integer, parameter, public :: af_ssprk33_method    = 4
   !> Optimal 4-stage third-order SSPRK method (Ruuth & Spiteri), CFL coefficient
   !> of 2
   integer, parameter, public :: af_ssprk43_method   = 5
@@ -28,7 +28,7 @@ module m_af_advance
 
   character(len=af_nlen), public :: af_integrator_names(af_num_integrators) = &
        [character(len=af_nlen) :: "forward_euler", "heuns_method", &
-       "midpoint_method", "ssprk3", "ssprk4", "imex_euler", &
+       "midpoint_method", "ssprk33", "ssprk43", "imex_euler", &
        "imex_trapezoidal"]
 
   !> How many steps the time integrators take
@@ -155,7 +155,7 @@ contains
             1, [0], [1.0_dp], 1, 1, n_steps)
        call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 1, &
             2, [0, 1], [0.5_dp, 0.5_dp], 0, 2, n_steps)
-    case (af_ssprk3_method)
+    case (af_ssprk33_method)
        call forward_euler(tree, dt, dt, dt_lim, time, 0, &
             1, [0], [1.0_dp], 1, 1, n_steps)
        call forward_euler(tree, 0.25_dp*dt, 0.25_dp*dt, dt_lim, time, 1, &
