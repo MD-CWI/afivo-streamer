@@ -8,17 +8,19 @@ program check_ghostcells
   implicit none
 
   integer, parameter :: box_size = 8
+  integer, parameter :: n_runs = 50
   integer            :: i_phi
   real(dp)           :: gradient(NDIM)
+  logical, parameter :: write_silo = .false.
 
   write(*,'(A,I0,A)') 'program check_ghostcells_', NDIM, "d"
   print *, "Number of threads", af_get_max_threads()
 
   ! Check whether ghost cells lie in a valid range
-  call test_valid_range(100)
+  call test_valid_range(n_runs)
 
   ! Check whether ghost cells are exact for a linear gradient
-  call test_gradient(100)
+  call test_gradient(n_runs)
 
   print *, "Tests passed"
 
@@ -31,13 +33,14 @@ contains
     type(ref_info_t)    :: ref_info
     character(len=100)  :: fname
 
+    print *, "Testing range of ghost cells"
+
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_set_cc_methods(tree, i_phi, af_bc_dirichlet_zero)
 
     call af_init(tree, box_size, [DTIMES(1.0_dp)], &
-         [DTIMES(box_size)], periodic=[DTIMES(.true.)])
-
-    call af_print_info(tree)
+         [DTIMES(box_size)], periodic=[DTIMES(.true.)], &
+         mem_limit_gb=0.5_dp)
 
     do iter = 1, max_iter
        call af_adjust_refinement(tree, ref_routine, ref_info, ref_buffer=0)
@@ -46,9 +49,11 @@ contains
        call af_restrict_ref_boundary(tree, [i_phi])
        call af_loop_tree(tree, check_range_box, leaves_only=.true.)
 
-       write(fname, "(A,I0)") "output/check_ghostcells_range_" &
-            // DIMNAME // "_", iter
-       call af_write_silo(tree, trim(fname), n_cycle=iter)
+       if (write_silo) then
+          write(fname, "(A,I0)") "output/check_ghostcells_range_" &
+               // DIMNAME // "_", iter
+          call af_write_silo(tree, trim(fname), n_cycle=iter)
+       end if
     end do
   end subroutine test_valid_range
 
@@ -59,13 +64,14 @@ contains
     type(ref_info_t)    :: ref_info
     character(len=100)  :: fname
 
+    print *, "Testing linear gradient"
+
     call af_add_cc_variable(tree, "phi", ix=i_phi)
     call af_set_cc_methods(tree, i_phi, bc_gradient)
 
     call af_init(tree, box_size, [DTIMES(1.0_dp)], &
-         [DTIMES(box_size)], periodic=[DTIMES(.false.)])
-
-    call af_print_info(tree)
+         [DTIMES(box_size)], periodic=[DTIMES(.false.)], &
+         mem_limit_gb=0.5_dp)
 
     do iter = 1, max_iter
        call random_number(gradient)
@@ -75,9 +81,11 @@ contains
        call af_restrict_ref_boundary(tree, [i_phi])
        call af_loop_tree(tree, check_gradient_box, leaves_only=.true.)
 
-       write(fname, "(A,I0)") "output/check_ghostcells_gradient_" &
-            // DIMNAME // "_", iter
-       call af_write_silo(tree, trim(fname), n_cycle=iter)
+       if (write_silo) then
+          write(fname, "(A,I0)") "output/check_ghostcells_gradient_" &
+               // DIMNAME // "_", iter
+          call af_write_silo(tree, trim(fname), n_cycle=iter)
+       end if
     end do
   end subroutine test_gradient
 
@@ -194,7 +202,7 @@ contains
 
     ! Set solution
     diff = 0.0_dp
-    do KJI_DO(-1, nc+1)
+    do KJI_DO(0, nc+1)
        if (mask(IJK)) then
           r = af_r_cc(tree%boxes(id), [IJK])
           diff(IJK) = abs(sum(gradient * r) - cc(IJK, 1))
@@ -210,7 +218,7 @@ contains
     end if
   end subroutine check_gradient_box
 
-  !> With this method we can set ghost cells manually
+  !> Set boundary conditions for a linear gradient solution
   subroutine bc_gradient(box, nb, iv, coords, bc_val, bc_type)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nb
