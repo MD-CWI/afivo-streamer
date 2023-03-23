@@ -65,6 +65,7 @@ m_af_particles.o: m_af_ghostcell.mod
 m_af_particles.o: m_af_restrict.mod
 m_af_particles.o: m_af_types.mod
 m_af_particles.o: m_af_utils.mod
+m_af_prolong.o: m_af_limiters.mod
 m_af_prolong.o: m_af_types.mod
 m_af_restrict.o: m_af_types.mod
 m_af_stencil.o: m_af_types.mod
