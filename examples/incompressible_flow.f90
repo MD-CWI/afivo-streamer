@@ -197,6 +197,7 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(in)     :: line_ix(NDIM-1)
     integer, intent(in)     :: s_deriv
+    integer                 :: i
 
     do i = 1, NDIM
        ! Momentum flux
