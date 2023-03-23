@@ -235,7 +235,7 @@ contains
        i_c = i + ix_offset(1)
        i_f = 2 * i - 1
 
-       f0 = 0.5_dp * box_p%cc(i_c, iv)
+       f0 = 0.75_dp * box_p%cc(i_c, iv)
        flx = 0.25_dp * box_p%cc(i_c-1, iv)
        fhx = 0.25_dp * box_p%cc(i_c+1, iv)
 
