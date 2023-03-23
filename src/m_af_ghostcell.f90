@@ -780,7 +780,7 @@ contains
     hi_c = hi_c - af_neighb_dix(:, nb) * nc
 
     associate(cc_p => tree%boxes(p_nb_id)%cc, &
-         limiter => tree%cc_methods(iv)%gc_limiter)
+         limiter => tree%cc_methods(iv)%prolong_limiter)
 #if NDIM == 1
       do i = lo_c(1), hi_c(1)
          i_f = lo(1) + 2 * (i - lo_c(1))

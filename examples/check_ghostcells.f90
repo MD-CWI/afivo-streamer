@@ -20,6 +20,8 @@ program check_ghostcells
   ! Check whether ghost cells are exact for a linear gradient
   call test_gradient(100)
 
+  print *, "Tests passed"
+
 contains
 
   subroutine test_valid_range(max_iter)
