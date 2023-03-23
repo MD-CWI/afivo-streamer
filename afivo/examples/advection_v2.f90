@@ -23,14 +23,16 @@ program advection
   real(dp)           :: dt_amr, dt_output
   real(dp)           :: velocity(NDIM)
   real(dp)           :: cfl_number
+  integer            :: integrator
   character(len=100) :: fname
 
   print *, "Running advection_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
-  ! Add variables to the mesh. This is a scalar advection example with second
-  ! order time stepping, which is why there are two copies of phi.
-  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
+  integrator = af_heuns_method
+
+  call af_add_cc_variable(tree, "phi", ix=i_phi, &
+       n_copies=af_advance_num_steps(integrator))
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
@@ -111,8 +113,7 @@ program advection
 
      if (time > end_time) exit
 
-     call af_advance(tree, dt, dt_lim, time, [i_phi], &
-          af_heuns_method, forward_euler)
+     call af_advance(tree, dt, dt_lim, time, [i_phi], integrator, forward_euler)
      dt = cfl_number * dt_lim
 
      if (time > time_prev_refine + dt_amr) then

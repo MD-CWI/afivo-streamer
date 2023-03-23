@@ -249,8 +249,8 @@ module m_af_types
      procedure(af_subr_bc_custom), pointer, nopass :: bc_custom => null()
      !> Function defining the values of this variables
      procedure(af_subr_funcval), pointer, nopass :: funcval => null()
-     !> Integer determining the type of limiter to use for ghost cells
-     integer :: gc_limiter = -1
+     !> The type of limiter to use for prolongation
+     integer :: prolong_limiter = -1
   end type af_cc_methods
 
   !> Value indicating the absence of a stencil
@@ -495,13 +495,14 @@ module m_af_types
      end subroutine af_subr_funcval
 
      !> Subroutine for prolongation
-     subroutine af_subr_prolong(box_p, box_c, iv, iv_to, add)
+     subroutine af_subr_prolong(box_p, box_c, iv, iv_to, add, limiter)
        import
        type(box_t), intent(in)     :: box_p !< Parent box
        type(box_t), intent(inout)  :: box_c !< Child box
        integer, intent(in)           :: iv    !< Variable to fill
        integer, intent(in), optional :: iv_to !< Destination variable
        logical, intent(in), optional :: add   !< Add to old values
+       integer, intent(in), optional :: limiter !< What kind of limiter to use
      end subroutine af_subr_prolong
 
      !> Subroutine for restriction

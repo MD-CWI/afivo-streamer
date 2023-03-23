@@ -7,19 +7,26 @@ module m_af_limiters
   private
 
   !> Number of limiters
-  integer, parameter :: af_num_limiters = 6
+  integer, parameter :: af_num_limiters = 7
 
   ! Constants to identify limiters
   integer, parameter, public :: af_limiter_none_t = 1
+  !> van Leer limiter
   integer, parameter, public :: af_limiter_vanleer_t = 2
+  !> Koren limiter
   integer, parameter, public :: af_limiter_koren_t = 3
+  !> Minmod limiter
   integer, parameter, public :: af_limiter_minmod_t = 4
+  !> MC limiter
   integer, parameter, public :: af_limiter_mc_t = 5
+  !> Generalized minmod limiter with theta = 4/3
   integer, parameter, public :: af_limiter_gminmod43_t = 6
+  !> All slopes are zero
+  integer, parameter, public :: af_limiter_zero_t = 7
 
   !> Whether limiters are symmetric
   logical, parameter, public :: af_limiter_symmetric(af_num_limiters) = &
-       [.true., .true., .false., .true., .true., .true.]
+       [.true., .true., .false., .true., .true., .true., .true.]
 
   public :: af_limiter_apply
   public :: af_limiter_koren
@@ -50,6 +57,8 @@ contains
        slope = af_limiter_mc(a, b)
     case (af_limiter_gminmod43_t)
        slope = af_limiter_gminmod43(a, b)
+    case (af_limiter_zero_t)
+       slope = 0.0_dp
     case default
        ! Cannot (yet) stop in elemental function, so use default limiter
        slope = af_limiter_vanleer(a, b)
