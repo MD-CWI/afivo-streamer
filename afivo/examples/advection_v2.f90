@@ -22,14 +22,17 @@ program advection
   real(dp)           :: sum_phi, sum_phi_t0
   real(dp)           :: dt_amr, dt_output
   real(dp)           :: velocity(NDIM)
+  real(dp)           :: cfl_number
+  integer            :: integrator
   character(len=100) :: fname
 
   print *, "Running advection_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
-  ! Add variables to the mesh. This is a scalar advection example with second
-  ! order time stepping, which is why there are two copies of phi.
-  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
+  integrator = af_heuns_method
+
+  call af_add_cc_variable(tree, "phi", ix=i_phi, &
+       n_copies=af_advance_num_steps(integrator))
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
@@ -50,6 +53,7 @@ program advection
   end_time    = 5.0_dp
   velocity(:) = -0.5_dp
   velocity(1) = 1.0_dp
+  cfl_number  = 0.5_dp
 
   ! Set up the initial conditions
   refine_steps=0
@@ -79,7 +83,7 @@ program advection
 
   call af_tree_sum_cc(tree, i_phi, sum_phi_t0)
 
-  dt = 0.5_dp / (sum(abs(velocity/af_lvl_dr(tree, tree%highest_lvl))) + &
+  dt = cfl_number / (sum(abs(velocity/af_lvl_dr(tree, tree%highest_lvl))) + &
        epsilon(1.0_dp))
   time_prev_refine = time
 
@@ -109,11 +113,11 @@ program advection
 
      if (time > end_time) exit
 
-     call af_advance(tree, dt, dt_lim, time, [i_phi], &
-          af_midpoint_method, forward_euler)
-     dt = 0.8_dp * dt_lim
+     call af_advance(tree, dt, dt_lim, time, [i_phi], integrator, forward_euler)
+     dt = cfl_number * dt_lim
 
      if (time > time_prev_refine + dt_amr) then
+        call af_restrict_tree(tree, [i_phi])
         call af_gc_tree(tree, [i_phi])
         call af_adjust_refinement(tree, refine_routine, refine_info, 1)
         time_prev_refine = time
@@ -213,10 +217,11 @@ contains
     end select
   end function solution
 
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
-       w_prev, s_out, i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, &
+       s_prev, w_prev, s_out, i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
     real(dp), intent(in)      :: time
     real(dp), intent(inout)   :: dt_lim
     integer, intent(in)       :: s_deriv
@@ -227,13 +232,15 @@ contains
     integer, intent(in)       :: i_step, n_steps
     real(dp)                  :: wmax(NDIM)
 
-    call flux_generic_tree(tree, 1, [i_phi+s_deriv], [i_flux], wmax, &
-         max_wavespeed, get_flux, flux_dummy_conversion, flux_dummy_conversion)
+    call flux_generic_tree(tree, 1, [i_phi], s_deriv, [i_flux], wmax, &
+         max_wavespeed, get_flux, flux_dummy_other, &
+         flux_dummy_conversion, flux_dummy_conversion, af_limiter_koren_t)
     call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
 
     ! Compute maximal time step
     dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
+
   end subroutine forward_euler
 
   subroutine max_wavespeed(n_values, n_var, flux_dim, u, w)
@@ -246,7 +253,7 @@ contains
     w = abs(velocity(flux_dim))
   end subroutine max_wavespeed
 
-  subroutine get_flux(n_values, n_var, flux_dim, u, flux, box, line_ix)
+  subroutine get_flux(n_values, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
     integer, intent(in)     :: n_values !< Number of cell faces
     integer, intent(in)     :: n_var    !< Number of variables
     integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
@@ -254,6 +261,7 @@ contains
     real(dp), intent(out)   :: flux(n_values, n_var)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: line_ix(NDIM-1)
+    integer, intent(in)     :: s_deriv
 
     flux = u * velocity(flux_dim)
   end subroutine get_flux

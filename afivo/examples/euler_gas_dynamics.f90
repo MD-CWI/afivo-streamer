@@ -163,10 +163,11 @@ program KT_euler
 contains
 
   !> [forward_euler_gasd]
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
-       w_prev, s_out, i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, &
+       s_prev, w_prev, s_out, i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
     real(dp), intent(inout)   :: dt_lim
     real(dp), intent(in)      :: time
     integer, intent(in)       :: s_deriv
@@ -177,8 +178,9 @@ contains
     integer, intent(in)       :: i_step, n_steps
     real(dp)                  :: wmax(NDIM)
 
-    call flux_generic_tree(tree, n_vars, variables+s_deriv, fluxes, wmax, &
-         max_wavespeed, get_fluxes, to_primitive, to_conservative)
+    call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, wmax, &
+         max_wavespeed, get_fluxes, flux_dummy_other, to_primitive, &
+         to_conservative, af_limiter_vanleer_t)
     call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
 
@@ -250,7 +252,7 @@ contains
     w = sound_speeds + abs(u(:, i_mom(flux_dim)))
   end subroutine max_wavespeed
 
-  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux, box, line_ix)
+  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
     integer, intent(in)     :: n_values !< Number of cell faces
     integer, intent(in)     :: n_var    !< Number of variables
     integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
@@ -258,6 +260,7 @@ contains
     real(dp), intent(out)   :: flux(n_values, n_var)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: line_ix(NDIM-1)
+    integer, intent(in)     :: s_deriv
     real(dp)                :: E(n_values), inv_fac
     integer                 :: i
 

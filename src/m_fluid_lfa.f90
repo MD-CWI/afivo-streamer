@@ -17,8 +17,8 @@ contains
   !> Advance fluid model using forward Euler step. If the equation is written as
   !> y' = f(y), the result is: y(s_out) = y(s_prev) + f(y(s_dt)), where the
   !> s_... refer to temporal states.
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
-       w_prev, s_out, i_step, n_steps)
+  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, &
+       s_prev, w_prev, s_out, i_step, n_steps)
     use m_chemistry
     use m_field
     use m_dt
@@ -26,6 +26,7 @@ contains
     use m_dielectric
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms (IMEX)
     real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
     real(dp), intent(in)      :: time           !< Current time
     integer, intent(in)       :: s_deriv        !< State to compute derivatives from

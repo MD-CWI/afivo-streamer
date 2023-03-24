@@ -66,6 +66,11 @@ tests/results/*
 /examples/particles_gravity
 /tools/silo_to_raw
 /tools/__pycache__/
-/examples/gmon.out
+/examples/*.out
+/examples/*.prof
 /examples/time_integration_?d
 /examples/two_electrodes_?d
+/examples/incompressible_flow_?d
+/examples/helmholtz_variable_stencil_?d
+/examples/check_ghostcells_?d
+/examples/check_prolongation_?d

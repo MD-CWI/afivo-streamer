@@ -673,7 +673,7 @@ contains
     type(af_t), intent(inout) :: tree   !< Tree to fill ghost cells on
     integer, intent(in)       :: id     !< Id of box for which we set ghost cells
     integer, intent(in)       :: ivs(:) !< Variables for which ghost cells are set
-    real(dp)                  :: cc(DTIMES(-1:tree%n_cell+2), size(ivs))
+    real(dp), intent(inout)   :: cc(DTIMES(-1:tree%n_cell+2), size(ivs))
     integer                   :: i, iv, nb, nc, nb_id, bc_type, ix
     integer                   :: lo(NDIM), hi(NDIM), dnb(NDIM)
     integer                   :: nlo(NDIM), nhi(NDIM)
@@ -711,7 +711,7 @@ contains
           ! Refinement boundary
           do i = 1, size(ivs)
              iv = ivs(i)
-             call gc2_prolong_rb(tree%boxes, id, nb, iv, tree%n_cell, &
+             call gc2_prolong_rb(tree, id, nb, iv, tree%n_cell, &
                   cc(DTIMES(:), i))
           end do
        else
@@ -746,43 +746,50 @@ contains
   !> Conservative prolongation with a limited slope for ghost cells near
   !> refinement boundaries
   !>
+  !> This method assumes that the ghost cells for leaves on a coarser level have
+  !> already been set, which is typically the case.
+  !>
   !> @todo make compatible with arbitrary number of ghost cells
-  subroutine gc2_prolong_rb(boxes, id, nb, iv, nc, cc)
-    type(box_t), intent(in) :: boxes(:)            !< List of all boxes
+  subroutine gc2_prolong_rb(tree, id, nb, iv, nc, cc)
+    use m_af_limiters
+    type(af_t), intent(in)  :: tree                 !< Tree
     integer, intent(in)     :: id                  !< Index of box to fill ghost cells for
     integer, intent(in)     :: nb                  !< Neighbor direction
     integer, intent(in)     :: iv                  !< Index of variable
     integer, intent(in)     :: nc                  !< Number of cells
     real(dp), intent(inout) :: cc(DTIMES(-1:nc+2)) !< Enlarged array
-    integer                 :: IJK, IJK_(f), p_nb_id
+    integer                 :: IJK, IJK_(f), p_id, p_nb_id
     integer                 :: lo_c(NDIM), hi_c(NDIM), ix_offset(NDIM)
     integer                 :: lo(NDIM), hi(NDIM)
-    real(dp)                :: f(0:NDIM)
+    real(dp)                :: f(0:NDIM), slopes_a(NDIM), slopes_b(NDIM)
 
-    p_nb_id = boxes(boxes(id)%parent)%neighbors(nb)
+    p_id = tree%boxes(id)%parent
+    p_nb_id = tree%boxes(p_id)%neighbors(nb)
 
     ! Get index in current box
     call af_get_index_bc_outside(nb, nc, 2, lo, hi)
 
     ! Convert to index on parent box
-    ix_offset = af_get_child_offset(boxes(id))
+    ix_offset = af_get_child_offset(tree%boxes(id))
     lo_c = ix_offset + (lo+1)/2
     hi_c = ix_offset + (hi+1)/2
 
-    ! Convert to index on neighbor of parent box
+    ! Convert to index on neighbor of parent box. These indices should then lie
+    ! in the range [1, nc]
     lo_c = lo_c - af_neighb_dix(:, nb) * nc
     hi_c = hi_c - af_neighb_dix(:, nb) * nc
 
-    associate(cc_p => boxes(p_nb_id)%cc)
+    associate(cc_p => tree%boxes(p_nb_id)%cc, &
+         limiter => tree%cc_methods(iv)%prolong_limiter)
 #if NDIM == 1
       do i = lo_c(1), hi_c(1)
          i_f = lo(1) + 2 * (i - lo_c(1))
 
          ! Compute slopes on parent
          f(0) = cc_p(i, iv)
-         f(1) = 0.25_dp * limit_slope( &
-              cc_p(i, iv) - cc_p(i-1, iv), &
-              cc_p(i+1, iv) - cc_p(i, iv))
+         slopes_a = [cc_p(i, iv) - cc_p(i-1, iv)]
+         slopes_b = [cc_p(i+1, iv) - cc_p(i, iv)]
+         f(1:1) = 0.25_dp * af_limiter_apply(slopes_a, slopes_b, limiter)
 
          ! Prolong to fine cells
          cc(i_f) = f(0) - f(1)
@@ -796,12 +803,11 @@ contains
 
             ! Compute slopes on parent
             f(0) = cc_p(i, j, iv)
-            f(1) = 0.25_dp * limit_slope( &
-                 cc_p(i, j, iv) - cc_p(i-1, j, iv), &
-                 cc_p(i+1, j, iv) - cc_p(i, j, iv))
-            f(2) = 0.25_dp * limit_slope( &
-                 cc_p(i, j, iv) - cc_p(i, j-1, iv), &
-                 cc_p(i, j+1, iv) - cc_p(i, j, iv))
+            slopes_a = [cc_p(i, j, iv) - cc_p(i-1, j, iv), &
+                 cc_p(i, j, iv) - cc_p(i, j-1, iv)]
+            slopes_b = [cc_p(i+1, j, iv) - cc_p(i, j, iv), &
+                 cc_p(i, j+1, iv) - cc_p(i, j, iv)]
+            f(1:2) = 0.25_dp * af_limiter_apply(slopes_a, slopes_b, limiter)
 
             ! Prolong to fine cells
             cc(i_f,   j_f) = f(0) - f(1) - f(2)
@@ -820,15 +826,13 @@ contains
 
                ! Compute slopes on parent
                f(0) = cc_p(i, j, k, iv)
-               f(1) = 0.25_dp * limit_slope( &
-                    cc_p(i, j, k, iv) - cc_p(i-1, j, k, iv), &
-                    cc_p(i+1, j, k, iv) - cc_p(i, j, k, iv))
-               f(2) = 0.25_dp * limit_slope( &
+               slopes_a = [cc_p(i, j, k, iv) - cc_p(i-1, j, k, iv), &
                     cc_p(i, j, k, iv) - cc_p(i, j-1, k, iv), &
-                    cc_p(i, j+1, k, iv) - cc_p(i, j, k, iv))
-               f(3) = 0.25_dp * limit_slope( &
-                    cc_p(i, j, k, iv) - cc_p(i, j, k-1, iv), &
-                    cc_p(i, j, k+1, iv) - cc_p(i, j, k, iv))
+                    cc_p(i, j, k, iv) - cc_p(i, j, k-1, iv)]
+               slopes_b = [cc_p(i+1, j, k, iv) - cc_p(i, j, k, iv), &
+                    cc_p(i, j+1, k, iv) - cc_p(i, j, k, iv), &
+                    cc_p(i, j, k+1, iv) - cc_p(i, j, k, iv)]
+               f(1:3) = 0.25_dp * af_limiter_apply(slopes_a, slopes_b, limiter)
 
                ! Prolong to fine cells
                cc(i_f,   j_f,   k_f)   = f(0) - f(1) - f(2) - f(3)
@@ -847,18 +851,7 @@ contains
 
   contains
 
-    ! Take minimum of two slopes if they have the same sign, else take zero
-    elemental function limit_slope(ll, rr) result(slope)
-      real(dp), intent(in) :: ll, rr
-      real(dp)             :: slope
 
-      if (ll * rr < 0) then
-         slope = 0.0_dp
-      else
-         ! MC limiter
-         slope = sign(minval(abs([2 * ll, 2 * rr, 0.5_dp * (ll + rr)])), ll)
-      end if
-    end function limit_slope
 
   end subroutine gc2_prolong_rb
 

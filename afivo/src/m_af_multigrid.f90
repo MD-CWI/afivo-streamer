@@ -26,6 +26,7 @@ module m_af_multigrid
   public :: mg_set_box_tag
   public :: mg_set_operators_lvl
   public :: mg_set_operators_tree
+  public :: mg_update_operator_stencil
 
   ! Methods for normal Laplacian
   public :: mg_box_lpl_gradient
@@ -111,6 +112,7 @@ contains
     call coarse_solver_destroy(mg%csolver)
   end subroutine mg_destroy
 
+  !> Make sure box tags and operators are set
   subroutine use_mg(tree, mg)
     type(af_t), intent(inout)      :: tree
     type(mg_t), intent(in), target :: mg !< Multigrid options
@@ -118,10 +120,10 @@ contains
     if (.not. mg%initialized) error stop "mg%initialized is false"
     tree%mg_current_operator_mask = mg%operator_mask
 
-    ! Make sure box tags and operators are set
     call mg_set_operators_tree(tree, mg)
   end subroutine use_mg
 
+  !> To be called at the end of a multigrid solve
   subroutine done_with_mg(tree)
     type(af_t), intent(inout)      :: tree
     tree%mg_current_operator_mask = -1
@@ -260,15 +262,30 @@ contains
   end subroutine mg_fas_vcycle
 
   subroutine solve_coarse_grid(tree, mg)
+    use omp_lib
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(in)    :: mg   !< Multigrid options
+    integer                   :: num_iterations, max_threads
+    integer                   :: n_unknowns
 
     call coarse_solver_set_rhs_phi(tree, mg)
-    call coarse_solver(mg%csolver)
+    n_unknowns = product(tree%coarse_grid_size)
+
+    if (n_unknowns < mg%csolver%min_unknowns_for_openmp) then
+       ! Use single thread if there are too few unknowns
+       max_threads = omp_get_max_threads()
+       call omp_set_num_threads(1)
+    end if
+
+    call coarse_solver(mg%csolver, num_iterations)
     call coarse_solver_get_phi(tree, mg)
 
     ! Set ghost cells for the new coarse grid solution
     call af_gc_lvl(tree, 1, [mg%i_phi])
+
+    if (n_unknowns < mg%csolver%min_unknowns_for_openmp) then
+       call omp_set_num_threads(max_threads)
+    end if
   end subroutine solve_coarse_grid
 
   !> Fill ghost cells near refinement boundaries which preserves diffusive fluxes.
@@ -801,12 +818,15 @@ contains
   end subroutine mg_auto_gsrb
 
   !> Store operator stencil for a box
-  subroutine mg_store_operator_stencil(box, mg)
+  subroutine mg_store_operator_stencil(box, mg, ix)
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
-    integer                    :: ix
+    !> Index of the stencil. If equal to af_stencil_none, store a new stencil
+    integer, intent(inout)     :: ix
 
-    call af_stencil_prepare_store(box, mg%operator_key, ix)
+    if (ix == af_stencil_none) then
+       call af_stencil_prepare_store(box, mg%operator_key, ix)
+    end if
 
     select case (mg%operator_type)
     case (mg_normal_operator)
@@ -981,7 +1001,8 @@ contains
        call af_stencil_prepare_store(box, mg_lsf_mask_key, ix)
        box%stencils(ix)%stype = stencil_sparse
        box%stencils(ix)%shape = af_stencil_mask
-       allocate(box%stencils(ix)%sparse_ix(NDIM, n_mask))
+       call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell, &
+            n_sparse=n_mask)
 
        m = 0
        do KJI_DO(1, nc)
@@ -1065,8 +1086,10 @@ contains
        call af_stencil_prepare_store(box, mg_lsf_distance_key, ix)
        box%stencils(ix)%stype = stencil_sparse
        box%stencils(ix)%shape = af_stencil_246
-       box%stencils(ix)%sparse_ix = ixs(:, 1:n)
-       box%stencils(ix)%sparse_v = v(:, 1:n)
+       call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell, &
+            n_sparse=n)
+       box%stencils(ix)%sparse_ix(:, :) = ixs(:, 1:n)
+       box%stencils(ix)%sparse_v(:, :) = v(:, 1:n)
     end if
 
   end subroutine store_lsf_distance_matrix
@@ -1125,8 +1148,7 @@ contains
          ! Check if stencils are available
          n = af_stencil_index(box, mg%operator_key)
          if (n == af_stencil_none) then
-            call mg_store_operator_stencil(box, mg)
-            n = af_stencil_index(box, mg%operator_key)
+            call mg_store_operator_stencil(box, mg, n)
          end if
 
          ! Compute right-hand side correction for internal boundaries
@@ -1145,6 +1167,30 @@ contains
     end do
     !$omp end parallel do
   end subroutine mg_set_operators_lvl
+
+  !> Update stencil for an operator, because (part of) the coefficients have changed
+  subroutine mg_update_operator_stencil(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(inout) :: mg
+    integer                   :: lvl, i, id, n
+
+    !$omp parallel private(lvl, i, id, n)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          associate (box => tree%boxes(id))
+            n = af_stencil_index(box, mg%operator_key)
+            if (n == af_stencil_none) error stop "Operator stencil not yet stored"
+            call mg_store_operator_stencil(box, mg, n)
+          end associate
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    call coarse_solver_update_matrix(tree, mg)
+  end subroutine mg_update_operator_stencil
 
   subroutine mg_set_operators_tree(tree, mg)
     type(af_t), intent(inout) :: tree
@@ -1181,15 +1227,14 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Stencil index
     real(dp)                   :: inv_dr2(NDIM)
-    integer                    :: n_coeff, idim
+    integer                    :: idim
 
     box%stencils(ix)%shape    = af_stencil_357
     box%stencils(ix)%stype    = stencil_constant
     box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
-    n_coeff                   = af_stencil_sizes(af_stencil_357)
     inv_dr2                   = 1 / box%dr**2
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell)
 
-    allocate(box%stencils(ix)%c(n_coeff))
     do idim = 1, NDIM
        box%stencils(ix)%c(2*idim:2*idim+1) = inv_dr2(idim)
     end do
@@ -1203,13 +1248,11 @@ contains
     type(box_t), intent(in)    :: box_p !< Parent box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
-    integer                    :: n_coeff
 
     box%stencils(ix)%shape = af_stencil_p248
     box%stencils(ix)%stype = stencil_constant
-    n_coeff                = af_stencil_sizes(af_stencil_p248)
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell)
 
-    allocate(box%stencils(ix)%c(n_coeff))
 #if NDIM == 1
     box%stencils(ix)%c(:) = [0.75_dp, 0.25_dp]
 #elif NDIM == 2
@@ -1225,13 +1268,11 @@ contains
     type(box_t), intent(in)    :: box_p !< Parent box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
-    integer                    :: n_coeff
 
     box%stencils(ix)%shape = af_stencil_p234
     box%stencils(ix)%stype = stencil_constant
-    n_coeff                = af_stencil_sizes(af_stencil_p234)
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell)
 
-    allocate(box%stencils(ix)%c(n_coeff))
 #if NDIM == 1
     box%stencils(ix)%c(:) = [0.75_dp, 0.25_dp]
 #elif NDIM == 2
@@ -1249,7 +1290,7 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
     real(dp)                   :: a0, a(NDIM)
-    integer                    :: n_coeff, i_eps, nc
+    integer                    :: i_eps, nc
     logical                    :: success
     integer                    :: IJK, IJK_(c1)
     integer                    :: IJK_(c2), ix_offset(NDIM)
@@ -1261,8 +1302,7 @@ contains
     box%stencils(ix)%shape = af_stencil_p234
     box%stencils(ix)%stype = stencil_variable
     ix_offset              = af_get_child_offset(box)
-    n_coeff                = af_stencil_sizes(af_stencil_p234)
-    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell)
 
     i_eps = mg%i_eps
 
@@ -1334,7 +1374,7 @@ contains
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix    !< Stencil index
     real(dp)                   :: dd(NDIM+1), a(NDIM)
-    integer                    :: n_coeff, i_lsf, nc, ix_mask
+    integer                    :: i_lsf, nc, ix_mask
     logical                    :: success
     integer                    :: IJK, IJK_(c1), n, n_mask
     integer                    :: IJK_(c2), ix_offset(NDIM)
@@ -1343,9 +1383,8 @@ contains
     box%stencils(ix)%shape = af_stencil_p234
     box%stencils(ix)%stype = stencil_variable
     ix_offset              = af_get_child_offset(box)
-    n_coeff                = af_stencil_sizes(af_stencil_p234)
     i_lsf                  = mg%i_lsf
-    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell)
 
     ix_mask = af_stencil_index(box, mg_lsf_mask_key)
     if (ix_mask == af_stencil_none) error stop "No LSF root mask stored"
@@ -1434,7 +1473,7 @@ contains
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Index of the stencil
-    integer                    :: IJK, nc, n_coeff
+    integer                    :: IJK, nc
     real(dp)                   :: idr2(2*NDIM), a0, a(2*NDIM)
     logical                    :: success
 
@@ -1445,9 +1484,7 @@ contains
     box%stencils(ix)%shape = af_stencil_357
     box%stencils(ix)%stype = stencil_variable
     box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
-    n_coeff                = af_stencil_sizes(af_stencil_357)
-
-    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell)
 
     associate (cc => box%cc, n => mg%i_phi, i_eps => mg%i_eps)
       do KJI_DO(1, nc)
@@ -1478,7 +1515,7 @@ contains
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Index of the stencil
-    integer                    :: IJK, nc, n_coeff
+    integer                    :: IJK, nc
     real(dp)                   :: idr2(2*NDIM), a0, a(2*NDIM), dr2(NDIM)
     integer                    :: n, m, idim, s_ix(NDIM), ix_dist
     real(dp)                   :: dd(2*NDIM)
@@ -1496,11 +1533,7 @@ contains
     ! would require the derivation of a discretization for cells in which both
     ! epsilon changes and a boundary is present.
     box%stencils(ix)%cylindrical_gradient = (box%coord_t == af_cyl)
-    n_coeff                = af_stencil_sizes(af_stencil_357)
-
-    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
-    allocate(box%stencils(ix)%f(DTIMES(nc)))
-    allocate(box%stencils(ix)%bc_correction(DTIMES(nc)))
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell, use_f=.true.)
     allocate(all_distances(2*NDIM, DTIMES(nc)))
 
     box%stencils(ix)%f = 0.0_dp
@@ -1728,7 +1761,7 @@ contains
     type(box_t), intent(inout) :: box
     type(mg_t), intent(in)     :: mg
     integer, intent(in)        :: ix !< Index of stencil
-    integer                    :: IJK, n, nc, idim, n_coeff
+    integer                    :: IJK, n, nc, idim
     integer                    :: s_ix(NDIM), ix_dist
     real(dp)                   :: dd(2*NDIM), dr2(NDIM)
     real(dp), allocatable      :: all_distances(:, DTIMES(:))
@@ -1747,11 +1780,7 @@ contains
     box%stencils(ix)%stype = stencil_variable
     ! Perform a custom correction in cylindrical coordinates
     box%stencils(ix)%cylindrical_gradient = .false.
-    n_coeff                = af_stencil_sizes(af_stencil_357)
-
-    allocate(box%stencils(ix)%v(n_coeff, DTIMES(nc)))
-    allocate(box%stencils(ix)%f(DTIMES(nc)))
-    allocate(box%stencils(ix)%bc_correction(DTIMES(nc)))
+    call af_stencil_allocate_coeff(box%stencils(ix), box%n_cell, use_f=.true.)
     box%stencils(ix)%f = 0.0_dp
 
     allocate(all_distances(2*NDIM, DTIMES(nc)))

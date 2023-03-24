@@ -198,10 +198,11 @@ contains
   end subroutine refine_routine
   !> [refine_routine]
 
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, s_prev, &
        w_prev, s_out, i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
     real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
     real(dp), intent(in)      :: time           !< Current time
     integer, intent(in)       :: s_deriv        !< State to compute derivatives from

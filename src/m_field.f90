@@ -24,13 +24,13 @@ module m_field
   real(dp) :: field_rise_time = 0.0_dp
 
   !> Pulse width excluding rise and fall time
-  real(dp) :: field_pulse_width = huge(1.0_dp)
+  real(dp) :: field_pulse_width = huge_real
 
   !> Number of voltage pulses
   integer :: field_num_pulses = 1
 
   !> Time of one complete voltage pulse
-  real(dp) :: field_pulse_period = huge(1.0_dp)
+  real(dp) :: field_pulse_period = huge_real
 
   !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = undefined_real
@@ -153,13 +153,13 @@ contains
     call CFG_add_get(cfg, "field_pulse_period", field_pulse_period, &
          "Time of one complete voltage pulse (s)")
 
-    if (field_pulse_width < huge(1.0_dp) .and. field_rise_time <= 0) &
+    if (field_pulse_width < huge_real .and. field_rise_time <= 0) &
          error stop "Set field_rise_time when using field_pulse_width"
 
     if (field_num_pulses > 1) then
-       if (field_pulse_period >= huge(1.0_dp)) &
+       if (field_pulse_period >= huge_real) &
             error stop "field_num_pulses > 1 requires field_pulse_period"
-       if (field_pulse_width >= huge(1.0_dp)) &
+       if (field_pulse_width >= huge_real) &
             error stop "field_num_pulses > 1 requires field_pulse_width"
        if (field_pulse_width + 2 * field_rise_time > field_pulse_period) &
             error stop "field_pulse_period shorter than one full pulse"

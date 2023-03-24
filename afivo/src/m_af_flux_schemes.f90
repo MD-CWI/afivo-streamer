@@ -3,13 +3,10 @@
 !> explicitly, as well as handling diffusion explicitly.
 module m_af_flux_schemes
   use m_af_types
+  use m_af_limiters
 
   implicit none
   private
-
-  integer, parameter :: limiter_vanleer = 1
-  integer, parameter :: limiter_koren = 2
-  integer, parameter :: limiter_minmod = 3
 
   interface
      subroutine subr_prim_cons(n_values, n_vars, u)
@@ -27,7 +24,7 @@ module m_af_flux_schemes
        real(dp), intent(out) :: w(nf)
      end subroutine subr_max_wavespeed
 
-     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux, box, line_ix)
+     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
        import
        integer, intent(in)     :: nf              !< Number of cell faces
        integer, intent(in)     :: n_var           !< Number of variables
@@ -36,7 +33,19 @@ module m_af_flux_schemes
        real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
        type(box_t), intent(in) :: box             !< Current box
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+       integer, intent(in)     :: s_deriv        !< State to compute derivatives from
      end subroutine subr_flux_from_prim
+
+     subroutine subr_flux_other(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
+       import
+       integer, intent(in)     :: nf              !< Number of cell faces
+       integer, intent(in)     :: n_var           !< Number of variables
+       integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+       real(dp), intent(inout) :: flux(nf, n_var) !< Computed fluxes
+       type(box_t), intent(in) :: box             !< Current box
+       integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+       integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+     end subroutine subr_flux_other
 
      subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out)
        import
@@ -57,6 +66,8 @@ module m_af_flux_schemes
   public :: flux_update_densities
   public :: flux_dummy_conversion
   public :: flux_dummy_source
+  public :: flux_dummy_other
+  public :: flux_get_line_cc, flux_get_line_fc
 
 contains
 
@@ -149,10 +160,10 @@ contains
        gradc = cc(n) - cc(n-1)  ! Current gradient
        if (v(n) < 0.0_dp) then
           gradn = cc(n+1) - cc(n) ! Next gradient
-          v(n) = v(n) * (cc(n) - koren_mlim(gradc, gradn))
+          v(n) = v(n) * (cc(n) - 0.5_dp * af_limiter_koren(gradc, gradn))
        else                     ! v(n) > 0
           gradp = cc(n-1) - cc(n-2) ! Previous gradient
-          v(n) = v(n) * (cc(n-1) + koren_mlim(gradc, gradp))
+          v(n) = v(n) * (cc(n-1) + 0.5_dp * af_limiter_koren(gradc, gradp))
        end if
     end do
 
@@ -182,38 +193,32 @@ contains
   end subroutine flux_koren_2d
 
   subroutine reconstruct_lr_1d(nc, ngc, n_vars, cc, u_l, u_r, limiter)
-    integer, intent(in)           :: nc                       !< Number of cells
-    integer, intent(in)           :: ngc                      !< Number of ghost cells
-    integer, intent(in)           :: n_vars                   !< Number of variables
-    real(dp), intent(in)          :: cc(1-ngc:nc+ngc, n_vars) !< Cell-centered values
-    !> Reconstructed (left, right) values at every interface
-    real(dp), intent(inout)       :: u_l(1:nc+1, n_vars)
-    real(dp), intent(inout)       :: u_r(1:nc+1, n_vars)
-    integer, intent(in), optional :: limiter                  !< Which limiter to use
-    real(dp)                      :: slopes(0:nc+1, n_vars)
-    integer                       :: use_limiter
+    integer, intent(in)     :: nc                       !< Number of cells
+    integer, intent(in)     :: ngc                      !< Number of ghost cells
+    integer, intent(in)     :: n_vars                   !< Number of variables
+    real(dp), intent(in)    :: cc(1-ngc:nc+ngc, n_vars) !< Cell-centered values
+    !> Reconstructed "left" values at every interface
+    real(dp), intent(inout) :: u_l(1:nc+1, n_vars)
+    !> Reconstructed "right" values at every interface
+    real(dp), intent(inout) :: u_r(1:nc+1, n_vars)
+    integer, intent(in)     :: limiter                  !< Which limiter to use
+    real(dp)                :: slopes(0:nc+1, n_vars)
 
-    use_limiter = limiter_vanleer
-    if (present(limiter)) use_limiter = limiter
+    associate (a=>cc(1:nc+2, :) - cc(0:nc+1, :), &
+         b=>cc(0:nc+1, :) - cc(-1:nc, :))
+      ! Compute limited slopes at the cell centers
+      slopes = af_limiter_apply(a, b, limiter)
 
-    ! Compute limited slopes at the cell centers
-    select case (use_limiter)
-    case (limiter_vanleer)
-       slopes = vanLeer_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
-            cc(0:nc+1, :) - cc(-1:nc, :))
-    case (limiter_koren)
-       slopes = koren_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
-            cc(0:nc+1, :) - cc(-1:nc, :))
-    case (limiter_minmod)
-       slopes = minmod_mlim(cc(1:nc+2, :) - cc(0:nc+1, :), &
-            cc(0:nc+1, :) - cc(-1:nc, :))
-    case default
-       error stop "unknown limiter"
-    end select
+      ! Reconstruct values on the faces
+      u_l(1:nc+1, :) = cc(0:nc, :) + 0.5_dp * slopes(0:nc, :) ! left
 
-    ! Reconstruct values on the faces
-    u_l(1:nc+1, :) = cc(0:nc, :) + 0.5_dp * slopes(0:nc, :) ! left
-    u_r(1:nc+1, :) = cc(1:nc+1, :) - 0.5_dp * slopes(1:nc+1, :) ! right
+      if (af_limiter_symmetric(limiter)) then
+         u_r(1:nc+1, :) = cc(1:nc+1, :) - 0.5_dp * slopes(1:nc+1, :) ! right
+      else
+         slopes = af_limiter_apply(b, a, limiter)
+         u_r(1:nc+1, :) = cc(1:nc+1, :) - 0.5_dp * slopes(1:nc+1, :) ! right
+      end if
+    end associate
   end subroutine reconstruct_lr_1d
 
   !> Compute flux for the KT scheme
@@ -252,7 +257,7 @@ contains
     nc = tree%n_cell
     rfac = 0.0_dp ! Prevent warnings in 3D
 
-    !$omp parallel private(lvl, n, id, IJK, dt_dr, rfac)
+    !$omp parallel private(lvl, n, id, IJK, dt_dr, rfac, iv)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do n = 1, size(tree%lvls(lvl)%leaves)
@@ -313,28 +318,34 @@ contains
     !$omp end parallel
   end subroutine flux_update_densities
 
-  subroutine flux_generic_tree(tree, n_vars, i_cc, i_flux, wmax, &
-       max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
+  subroutine flux_generic_tree(tree, n_vars, i_cc, s_deriv, i_flux, wmax, &
+       max_wavespeed, flux_from_primitives, flux_other, &
+       to_primitive, to_conservative, limiter)
     use m_af_restrict
     use m_af_core
     type(af_t), intent(inout)      :: tree
     integer, intent(in)            :: n_vars         !< Number of variables
     integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)            :: s_deriv        !< State to compute derivatives from
     integer, intent(in)            :: i_flux(n_vars) !< Flux variables
     real(dp), intent(out)          :: wmax(NDIM)     !< Maximum wave speed found
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed)  :: max_wavespeed
     !> Compute the flux from primitive variables
     procedure(subr_flux_from_prim) :: flux_from_primitives
+    !> Other flux contributions
+    procedure(subr_flux_other)     :: flux_other
     !> Convert conservative variables to primitive ones
     procedure(subr_prim_cons)      :: to_primitive
     !> Convert primitive variables to conservative ones
     procedure(subr_prim_cons)      :: to_conservative
+    !> Type of slope limiter to use for flux calculation
+    integer, intent(in)            :: limiter
 
     integer :: lvl, i
 
     ! Ensure ghost cells near refinement boundaries can be properly filled
-    call af_restrict_ref_boundary(tree, i_cc)
+    call af_restrict_ref_boundary(tree, i_cc+s_deriv)
 
     wmax(:) = 0
 
@@ -343,8 +354,9 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, i_flux, wmax, max_wavespeed, &
-               flux_from_primitives, to_primitive, to_conservative)
+               n_vars, i_cc, s_deriv, i_flux, wmax, max_wavespeed, &
+               flux_from_primitives, flux_other, to_primitive, to_conservative, &
+               limiter)
        end do
        !$omp end do
     end do
@@ -356,8 +368,9 @@ contains
   end subroutine flux_generic_tree
 
   !> Compute generic finite volume flux
-  subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, i_flux, wmax, &
-       max_wavespeed, flux_from_primitives, to_primitive, to_conservative)
+  subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, wmax, &
+       max_wavespeed, flux_from_primitives, flux_other, &
+       to_primitive, to_conservative, limiter)
     use m_af_types
     use m_af_ghostcell
     type(af_t), intent(inout)      :: tree
@@ -365,16 +378,21 @@ contains
     integer, intent(in)            :: nc             !< Number of cells
     integer, intent(in)            :: n_vars         !< Number of variables
     integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)            :: s_deriv        !< State to compute derivatives from
     integer, intent(in)            :: i_flux(n_vars) !< Flux variables
     real(dp), intent(inout)        :: wmax(NDIM)     !< Maximum wave speed found
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed)  :: max_wavespeed
-    !> Compute the flux from primitive variables
+    !> Compute the flux from primitive variables on cell faces
     procedure(subr_flux_from_prim) :: flux_from_primitives
+    !> Other flux contributions
+    procedure(subr_flux_other)     :: flux_other
     !> Convert conservative variables to primitive ones
-    procedure(subr_prim_cons) :: to_primitive
+    procedure(subr_prim_cons)      :: to_primitive
     !> Convert primitive variables to conservative ones
-    procedure(subr_prim_cons) :: to_conservative
+    procedure(subr_prim_cons)      :: to_conservative
+    !> Type of slope limiter to use for flux calculation
+    integer, intent(in)            :: limiter
 
 
     real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
@@ -392,7 +410,7 @@ contains
 #endif
 
     ! Get two layers of ghost cell data
-    call af_gc2_box(tree, id, i_cc, cc)
+    call af_gc2_box(tree, id, i_cc+s_deriv, cc)
 
     ! Jannis: Below, there are function calls in the inner part of a loop. When
     ! I did some benchmarks, it was not significantly slower than using a buffer
@@ -434,14 +452,14 @@ contains
              call to_primitive(nc+4, n_vars, cc_line)
 
              ! Reconstruct to cell faces
-             call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r)
+             call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r, limiter)
 
              call max_wavespeed(nc+1, n_vars, flux_dim, u_l, w_l)
              call max_wavespeed(nc+1, n_vars, flux_dim, u_r, w_r)
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_l, flux_l, &
-                  tree%boxes(id), line_ix)
+                  tree%boxes(id), line_ix, s_deriv)
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r, &
-                  tree%boxes(id), line_ix)
+                  tree%boxes(id), line_ix, s_deriv)
 
              call to_conservative(nc+1, n_vars, u_l)
              call to_conservative(nc+1, n_vars, u_r)
@@ -452,6 +470,12 @@ contains
 
              ! Store maximum wave speed
              wmax(flux_dim) = max(wmax(flux_dim), maxval(w_l))
+
+             ! Add other flux components
+             flux_l = 0.0_dp
+             call flux_other(nc+1, n_vars, flux_dim, flux_l, &
+                  tree%boxes(id), line_ix, s_deriv)
+             flux = flux + flux_l
 
              ! Store the computed fluxes
              select case (flux_dim)
@@ -481,6 +505,65 @@ contains
     end do
 
   end subroutine flux_generic_box
+
+  !> Extract cell-centered data along a line in a box, including a single layer
+  !> of ghost cells. This is convenient to get extra variables in a flux
+  !> computation.
+  subroutine flux_get_line_cc(box, ivs, flux_dim, line_ix, cc_line)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: ivs(:)          !< Indices of the variables
+    integer, intent(in)     :: flux_dim        !< Dimension of flux computation
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line
+    real(dp), intent(inout) :: cc_line(box%n_cell+2, size(ivs))
+
+    select case (flux_dim)
+#if NDIM == 1
+    case (1)
+       cc_line = box%cc(:, ivs)
+#elif NDIM == 2
+    case (1)
+       cc_line = box%cc(:, line_ix(1), ivs)
+    case (2)
+       cc_line = box%cc(line_ix(1), :, ivs)
+#elif NDIM == 3
+    case (1)
+       cc_line = box%cc(:, line_ix(1), line_ix(2), ivs)
+    case (2)
+       cc_line = box%cc(line_ix(1), :, line_ix(2), ivs)
+    case (3)
+       cc_line = box%cc(:, line_ix(1), line_ix(2), ivs)
+#endif
+    end select
+  end subroutine flux_get_line_cc
+
+  !> Extract face-centered data along a line in a box. This is convenient to get
+  !> extra variables in a flux computation.
+  subroutine flux_get_line_fc(box, ivs, flux_dim, line_ix, fc_line)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: ivs(:)          !< Indices of the variables
+    integer, intent(in)     :: flux_dim        !< Dimension of flux computation
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line
+    real(dp), intent(inout) :: fc_line(box%n_cell+1, size(ivs))
+
+    select case (flux_dim)
+#if NDIM == 1
+    case (1)
+       fc_line = box%fc(:, flux_dim, ivs)
+#elif NDIM == 2
+    case (1)
+       fc_line = box%fc(:, line_ix(1), flux_dim, ivs)
+    case (2)
+       fc_line = box%fc(line_ix(1), :, flux_dim, ivs)
+#elif NDIM == 3
+    case (1)
+       fc_line = box%fc(:, line_ix(1), line_ix(2), flux_dim, ivs)
+    case (2)
+       fc_line = box%fc(line_ix(1), :, line_ix(2), flux_dim, ivs)
+    case (3)
+       fc_line = box%fc(:, line_ix(1), line_ix(2), flux_dim, ivs)
+#endif
+    end select
+  end subroutine flux_get_line_fc
 
   !> Compute flux according to Koren limiter
   subroutine flux_koren_3d(cc, v, nc, ngc)
@@ -515,57 +598,6 @@ contains
        end do
     end do
   end subroutine flux_koren_3d
-
-  !> Modified implementation of Koren limiter, to avoid division and the min/max
-  !> functions, which can be problematic / expensive. In most literature, you
-  !> have r = a / b (ratio of gradients). Then the limiter phi(r) is multiplied
-  !> with b. With this implementation, you get phi(r) * b
-  elemental function koren_mlim(a, b) result(bphi)
-    real(dp), intent(in) :: a  !< Density gradient (numerator)
-    real(dp), intent(in) :: b  !< Density gradient (denominator)
-    real(dp), parameter  :: sixth = 1/6.0_dp
-    real(dp)             :: bphi, aa, ab
-
-    aa = a * a
-    ab = a * b
-
-
-    if (ab <= 0) then
-       ! a and b have different sign or one of them is zero, so r is either 0,
-       ! inf or negative (special case a == b == 0 is ignored)
-       bphi = 0
-    else if (aa <= 0.25_dp * ab) then
-       ! 0 < a/b <= 1/4, limiter has value a/b
-       bphi = a
-    else if (aa <= 2.5_dp * ab) then
-       ! 1/4 < a/b <= 2.5, limiter has value (1+2*a/b)/6
-       bphi = sixth * (b + 2*a)
-    else
-       ! (1+2*a/b)/6 >= 1, limiter has value 1
-       bphi = b
-    end if
-  end function koren_mlim
-
-  elemental function vanLeer_mlim(a, b) result(phi)
-    real(dp), intent(in) :: a
-    real(dp), intent(in) :: b
-    real(dp) :: ab, phi
-
-    ab = a * b
-    if (ab > 0) then
-       phi = 2 * ab / (a + b)
-    else
-       phi = 0
-    end if
-  end function vanLeer_mlim
-
-  elemental function minmod_mlim(a, b) result(phi)
-    real(dp), intent(in) :: a
-    real(dp), intent(in) :: b
-    real(dp)             :: phi
-    phi = 0.5_dp*(sign(1.0_dp, a) + sign(1.0_dp, b)) * &
-         min(abs(a), abs(b))
-  end function minmod_mlim
 
   !> Compute flux with first order upwind scheme
   subroutine flux_upwind_1d(cc, v, nc, ngc)
@@ -657,5 +689,15 @@ contains
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
   end subroutine flux_dummy_source
+
+  subroutine flux_dummy_other(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
+    integer, intent(in)     :: nf              !< Number of cell faces
+    integer, intent(in)     :: n_var           !< Number of variables
+    integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+    real(dp), intent(inout) :: flux(nf, n_var) !< Computed fluxes
+    type(box_t), intent(in) :: box             !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+  end subroutine flux_dummy_other
 
 end module m_af_flux_schemes

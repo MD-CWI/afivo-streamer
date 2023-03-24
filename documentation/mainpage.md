@@ -16,7 +16,7 @@ adaptive mesh refinement and parallelization.
 
 ### Strong points
 
-* **Computational efficiency**: relative to typical other codes, afivo-streamer has a high computational efficiency, see e.g. https://doi.org/10.1088/1361-6595/aad768
+* **Computational efficiency**: relative to typical other codes, afivo-streamer has a high computational efficiency, see e.g. [this paper](https://doi.org/10.1088/1361-6595/aad768). This usually makes it possible to do 2D simulations on a normal computer rather interactively.
 * **Possibility of doing 3D simulations**: due to the computational efficiency it is possible to do relevant 3D simulations in a reasonable time on typical hardware
 * **Usage**: the code has frequently been used for streamer simulations in various publications, which also means that things like plasma chemisty and different photoionization models are included
 * **Open source**: anyone can in principle change the code (although doing so might not always be easy)

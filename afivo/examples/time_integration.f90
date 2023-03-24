@@ -1,7 +1,8 @@
 #include "../src/cpp_macros.h"
 !> \example time_integration.f90
 !>
-!> An advection example
+!> An example to test the accuracy of time integration, solving a simple
+!> equation: d/dt y = -y
 program time_integration
   use m_af_all
 
@@ -45,11 +46,6 @@ contains
     box%cc(DTIMES(:), i_phi) = initial_value
   end subroutine set_initial_condition
 
-  elemental real(dp) function derivative(phi)
-    real(dp), intent(in) :: phi
-    derivative = -phi
-  end function derivative
-
   elemental real(dp) function solution(t)
     real(dp), intent(in) :: t
     solution = initial_value * exp(-t)
@@ -66,10 +62,11 @@ contains
     end do; CLOSE_DO
   end subroutine set_error
 
-  subroutine forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, s_prev, &
+  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, s_prev, &
        w_prev, s_out, i_step, n_steps)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
     real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
     real(dp), intent(in)      :: time           !< Current time
     integer, intent(in)       :: s_deriv        !< State to compute derivatives from
@@ -90,8 +87,8 @@ contains
           id = tree%lvls(lvl)%leaves(n)
           associate(cc => tree%boxes(id)%cc)
             do KJI_DO(1,nc)
-               cc(IJK, i_phi+s_out) = sum(w_prev * cc(IJK, i_phi+s_prev)) + &
-                    dt * derivative(cc(IJK, i_phi+s_deriv))
+               cc(IJK, i_phi+s_out) = sum(w_prev * cc(IJK, i_phi+s_prev)) - &
+                    dt_stiff * cc(IJK, i_phi+s_deriv)
             end do; CLOSE_DO
           end associate
        end do
@@ -117,14 +114,48 @@ contains
     call af_add_cc_variable(tree, "err", ix=i_err)
     call af_set_cc_methods(tree, i_phi, af_bc_neumann_zero)
     call af_init(tree, box_size, [DTIMES(1.0_dp)], [DTIMES(box_size)], &
-         periodic=[DTIMES(.true.)])
+         periodic=[DTIMES(.true.)], mem_limit_gb=1e-3_dp)
 
     call af_loop_box(tree, set_initial_condition)
 
     do n = 1, n_steps
        call af_advance(tree, dt, dt_lim, time, [i_phi], integrator, &
-            forward_euler)
+            forward_euler, implicit_solver)
     end do
   end subroutine integrate
+
+  !> Implicit solver for equation d/dt y = -y, which has the solution
+  !> y_n+1 = y_n / (1 + dt)
+  subroutine implicit_solver(tree, dt_stiff, time, n_prev, s_prev, w_prev, s_out)
+    type(af_t), intent(inout) :: tree
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
+    real(dp), intent(in)      :: time           !< Current time
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)       :: s_out          !< Output state
+
+    integer                   :: lvl, IJK, n, id, nc
+
+    nc = tree%n_cell
+
+    !$omp parallel private(lvl, n, id, IJK)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do n = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(n)
+          associate(cc => tree%boxes(id)%cc)
+            do KJI_DO(1,nc)
+               cc(IJK, i_phi+s_out) = sum(w_prev * cc(IJK, i_phi+s_prev)) / &
+                    (1 + dt_stiff)
+            end do; CLOSE_DO
+          end associate
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    call af_gc_tree(tree, [i_phi])
+  end subroutine implicit_solver
 
 end program time_integration
