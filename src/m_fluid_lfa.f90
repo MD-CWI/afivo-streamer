@@ -98,6 +98,7 @@ contains
     if (ST_use_dielectric) then
        ! Update surface charge and handle photon emission
        ! @todo For parallelization, think about corner cells with two surfaces
+       ! @todo fix bug here: use s_prev and w_prev
        do ix = 1, diel%max_ix
           if (diel%surfaces(ix)%in_use) then
              id_out = diel%surfaces(ix)%id_out
