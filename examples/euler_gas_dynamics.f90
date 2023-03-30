@@ -179,8 +179,8 @@ contains
     real(dp)                  :: wmax(NDIM)
 
     call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, wmax, &
-         max_wavespeed, get_fluxes, flux_dummy_other, to_primitive, &
-         to_conservative, af_limiter_vanleer_t)
+         max_wavespeed, get_fluxes, flux_dummy_modify, flux_dummy_line_modify, &
+         to_primitive, to_conservative, af_limiter_vanleer_t)
     call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
 

@@ -36,16 +36,27 @@ module m_af_flux_schemes
        integer, intent(in)     :: s_deriv        !< State to compute derivatives from
      end subroutine subr_flux_from_prim
 
-     subroutine subr_flux_other(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
+     subroutine subr_flux_modify(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
        import
        integer, intent(in)     :: nf              !< Number of cell faces
        integer, intent(in)     :: n_var           !< Number of variables
        integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
-       real(dp), intent(inout) :: flux(nf, n_var) !< Computed fluxes
+       real(dp), intent(inout) :: flux(nf, n_var) !< Flux that will be modified
        type(box_t), intent(in) :: box             !< Current box
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
        integer, intent(in)     :: s_deriv         !< State to compute derivatives from
-     end subroutine subr_flux_other
+     end subroutine subr_flux_modify
+
+     subroutine subr_line_modify(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
+       import
+       integer, intent(in)     :: n_cc                 !< Number of cell centers
+       integer, intent(in)     :: n_var                !< Number of variables
+       real(dp), intent(inout) :: cc_line(n_cc, n_var) !< Line values to modify
+       integer, intent(in)     :: flux_dim             !< In which dimension fluxes are computed
+       type(box_t), intent(in) :: box                  !< Current box
+       integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
+       integer, intent(in)     :: s_deriv              !< State to compute derivatives from
+     end subroutine subr_line_modify
 
      subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out)
        import
@@ -66,7 +77,8 @@ module m_af_flux_schemes
   public :: flux_update_densities
   public :: flux_dummy_conversion
   public :: flux_dummy_source
-  public :: flux_dummy_other
+  public :: flux_dummy_modify
+  public :: flux_dummy_line_modify
   public :: flux_get_line_cc, flux_get_line_fc
 
 contains
@@ -237,7 +249,7 @@ contains
   end subroutine flux_kurganovTadmor_1d
 
   subroutine flux_update_densities(tree, dt, n_vars, i_cc, i_flux, &
-       s_deriv, n_prev, s_prev, w_prev, s_out, add_source_box)
+       s_deriv, n_prev, s_prev, w_prev, s_out, add_source_box, i_lsf)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
     integer, intent(in)       :: n_vars         !< Number of variables
@@ -250,6 +262,8 @@ contains
     integer, intent(in)       :: s_out          !< Output time state
     !> Method to include source terms
     procedure(subr_source)    :: add_source_box
+    !> If present, only update in region where level set function is positive
+    integer, intent(in), optional :: i_lsf
     integer                   :: lvl, n, id, IJK, nc, i_var, iv
     real(dp)                  :: dt_dr(NDIM)
     real(dp)                  :: rfac(2, tree%n_cell)
@@ -275,41 +289,91 @@ contains
 
             call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, s_out)
 #if NDIM == 1
-            do KJI_DO(1, nc)
-               cc(i, i_cc+s_out) = cc(i, i_cc+s_out) + &
-                    dt_dr(1) * &
-                    (fc(i, 1, i_flux) - fc(i+1, 1, i_flux))
-            end do; CLOSE_DO
-#elif NDIM == 2
-            if (tree%coord_t == af_cyl) then
-               call af_cyl_flux_factors(tree%boxes(id), rfac)
+            if (present(i_lsf)) then
                do KJI_DO(1, nc)
-                  cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
-                       dt_dr(1) * (&
-                       rfac(1, i) * fc(i, j, 1, i_flux) - &
-                       rfac(2, i) * fc(i+1, j, 1, i_flux)) &
-                       + dt_dr(2) * &
-                       (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+                  if (cc(IJK, i_lsf) > 0) then
+                     cc(i, i_cc+s_out) = cc(i, i_cc+s_out) + &
+                          dt_dr(1) * &
+                          (fc(i, 1, i_flux) - fc(i+1, 1, i_flux))
+                  end if
                end do; CLOSE_DO
             else
                do KJI_DO(1, nc)
-                  cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
+                  cc(i, i_cc+s_out) = cc(i, i_cc+s_out) + &
                        dt_dr(1) * &
-                       (fc(i, j, 1, i_flux) - fc(i+1, j, 1, i_flux)) &
-                       + dt_dr(2) * &
-                       (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+                       (fc(i, 1, i_flux) - fc(i+1, 1, i_flux))
                end do; CLOSE_DO
             end if
+#elif NDIM == 2
+            if (present(i_lsf)) then
+               if (tree%coord_t == af_cyl) then
+                  call af_cyl_flux_factors(tree%boxes(id), rfac)
+                  do KJI_DO(1, nc)
+                     if (cc(IJK, i_lsf) > 0) then
+                        cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
+                             dt_dr(1) * (&
+                             rfac(1, i) * fc(i, j, 1, i_flux) - &
+                             rfac(2, i) * fc(i+1, j, 1, i_flux)) &
+                             + dt_dr(2) * &
+                             (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+                     end if
+                  end do; CLOSE_DO
+               else
+                  do KJI_DO(1, nc)
+                     if (cc(IJK, i_lsf) > 0) then
+                        cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
+                             dt_dr(1) * &
+                             (fc(i, j, 1, i_flux) - fc(i+1, j, 1, i_flux)) &
+                             + dt_dr(2) * &
+                             (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+                     end if
+                  end do; CLOSE_DO
+               end if
+            else
+               if (tree%coord_t == af_cyl) then
+                  call af_cyl_flux_factors(tree%boxes(id), rfac)
+                  do KJI_DO(1, nc)
+                     cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
+                          dt_dr(1) * (&
+                          rfac(1, i) * fc(i, j, 1, i_flux) - &
+                          rfac(2, i) * fc(i+1, j, 1, i_flux)) &
+                          + dt_dr(2) * &
+                          (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+                  end do; CLOSE_DO
+               else
+                  do KJI_DO(1, nc)
+                     cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
+                          dt_dr(1) * &
+                          (fc(i, j, 1, i_flux) - fc(i+1, j, 1, i_flux)) &
+                          + dt_dr(2) * &
+                          (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+                  end do; CLOSE_DO
+               end if
+            end if
 #elif NDIM == 3
-            do KJI_DO(1, nc)
-               cc(i, j, k, i_cc+s_out) = cc(i, j, k, i_cc+s_out) + &
-                    dt_dr(1) * &
-                    (fc(i, j, k, 1, i_flux) - fc(i+1, j, k, 1, i_flux)) + &
-                    dt_dr(2) * &
-                    (fc(i, j, k, 2, i_flux) - fc(i, j+1, k, 2, i_flux)) + &
-                    dt_dr(3) * &
-                    (fc(i, j, k, 3, i_flux) - fc(i, j, k+1, 3, i_flux))
-            end do; CLOSE_DO
+            if (present(i_lsf)) then
+               do KJI_DO(1, nc)
+                  if (cc(IJK, i_lsf) > 0) then
+                     cc(i, j, k, i_cc+s_out) = cc(i, j, k, i_cc+s_out) + &
+                          dt_dr(1) * &
+                          (fc(i, j, k, 1, i_flux) - fc(i+1, j, k, 1, i_flux)) + &
+                          dt_dr(2) * &
+                          (fc(i, j, k, 2, i_flux) - fc(i, j+1, k, 2, i_flux)) + &
+                          dt_dr(3) * &
+                          (fc(i, j, k, 3, i_flux) - fc(i, j, k+1, 3, i_flux))
+                  end if
+               end do; CLOSE_DO
+            else
+               do KJI_DO(1, nc)
+                  cc(i, j, k, i_cc+s_out) = cc(i, j, k, i_cc+s_out) + &
+                       dt_dr(1) * &
+                       (fc(i, j, k, 1, i_flux) - fc(i+1, j, k, 1, i_flux)) + &
+                       dt_dr(2) * &
+                       (fc(i, j, k, 2, i_flux) - fc(i, j+1, k, 2, i_flux)) + &
+                       dt_dr(3) * &
+                       (fc(i, j, k, 3, i_flux) - fc(i, j, k+1, 3, i_flux))
+               end do; CLOSE_DO
+            end if
 #endif
           end associate
        end do
@@ -319,7 +383,7 @@ contains
   end subroutine flux_update_densities
 
   subroutine flux_generic_tree(tree, n_vars, i_cc, s_deriv, i_flux, wmax, &
-       max_wavespeed, flux_from_primitives, flux_other, &
+       max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
        to_primitive, to_conservative, limiter)
     use m_af_restrict
     use m_af_core
@@ -334,7 +398,9 @@ contains
     !> Compute the flux from primitive variables
     procedure(subr_flux_from_prim) :: flux_from_primitives
     !> Other flux contributions
-    procedure(subr_flux_other)     :: flux_other
+    procedure(subr_flux_modify)    :: flux_modify
+    !> Potentially modify line densities
+    procedure(subr_line_modify)    :: line_modify
     !> Convert conservative variables to primitive ones
     procedure(subr_prim_cons)      :: to_primitive
     !> Convert primitive variables to conservative ones
@@ -355,8 +421,8 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
                n_vars, i_cc, s_deriv, i_flux, wmax, max_wavespeed, &
-               flux_from_primitives, flux_other, to_primitive, to_conservative, &
-               limiter)
+               flux_from_primitives, flux_modify, line_modify, &
+               to_primitive, to_conservative, limiter)
        end do
        !$omp end do
     end do
@@ -369,7 +435,7 @@ contains
 
   !> Compute generic finite volume flux
   subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, wmax, &
-       max_wavespeed, flux_from_primitives, flux_other, &
+       max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
        to_primitive, to_conservative, limiter)
     use m_af_types
     use m_af_ghostcell
@@ -385,8 +451,10 @@ contains
     procedure(subr_max_wavespeed)  :: max_wavespeed
     !> Compute the flux from primitive variables on cell faces
     procedure(subr_flux_from_prim) :: flux_from_primitives
-    !> Other flux contributions
-    procedure(subr_flux_other)     :: flux_other
+    !> Modify flux for other contributions
+    procedure(subr_flux_modify)    :: flux_modify
+    !> Potentially modify line densities
+    procedure(subr_line_modify)    :: line_modify
     !> Convert conservative variables to primitive ones
     procedure(subr_prim_cons)      :: to_primitive
     !> Convert primitive variables to conservative ones
@@ -449,33 +517,45 @@ contains
              line_ix = [i, j]
 #endif
 
+             ! Optionally modify data, e.g. to take into account a boundary
+             call line_modify(nc+4, n_vars, cc_line, flux_dim, &
+                  tree%boxes(id), line_ix, s_deriv)
+
+             ! Flux computation is based on primitive variables (this can be a
+             ! dummy procedure)
              call to_primitive(nc+4, n_vars, cc_line)
 
-             ! Reconstruct to cell faces
+             ! Reconstruct to cell faces, getting a left and right state at
+             ! every face
              call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r, limiter)
 
+             ! Determine the maximal wave speed for the left and right state
              call max_wavespeed(nc+1, n_vars, flux_dim, u_l, w_l)
              call max_wavespeed(nc+1, n_vars, flux_dim, u_r, w_r)
+
+             ! Compute the fluxes for the left and right state
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_l, flux_l, &
                   tree%boxes(id), line_ix, s_deriv)
              call flux_from_primitives(nc+1, n_vars, flux_dim, u_r, flux_r, &
                   tree%boxes(id), line_ix, s_deriv)
 
+             ! Convert back to conservative form
              call to_conservative(nc+1, n_vars, u_l)
              call to_conservative(nc+1, n_vars, u_r)
 
-             w_l = max(w_l, w_r) ! Get maximum of left/right wave speed
+             ! Get maximum of left/right wave speed
+             w_l = max(w_l, w_r)
+
+             ! Combine left and right fluxes to obtain a single flux
              call flux_kurganovTadmor_1d(nc+1, n_vars, flux_l, flux_r, &
                   u_l, u_r, w_l, flux)
 
              ! Store maximum wave speed
              wmax(flux_dim) = max(wmax(flux_dim), maxval(w_l))
 
-             ! Add other flux components
-             flux_l = 0.0_dp
-             call flux_other(nc+1, n_vars, flux_dim, flux_l, &
+             ! Potentially add other flux components
+             call flux_modify(nc+1, n_vars, flux_dim, flux, &
                   tree%boxes(id), line_ix, s_deriv)
-             flux = flux + flux_l
 
              ! Store the computed fluxes
              select case (flux_dim)
@@ -690,14 +770,25 @@ contains
     integer, intent(in)        :: s_out
   end subroutine flux_dummy_source
 
-  subroutine flux_dummy_other(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
+  subroutine flux_dummy_modify(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
     integer, intent(in)     :: nf              !< Number of cell faces
     integer, intent(in)     :: n_var           !< Number of variables
     integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
-    real(dp), intent(inout) :: flux(nf, n_var) !< Computed fluxes
+    real(dp), intent(inout) :: flux(nf, n_var) !< Flux that will be modified
     type(box_t), intent(in) :: box             !< Current box
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv         !< State to compute derivatives from
-  end subroutine flux_dummy_other
+  end subroutine flux_dummy_modify
+
+  subroutine flux_dummy_line_modify(n_cc, n_var, cc_line, flux_dim, box, &
+       line_ix, s_deriv)
+    integer, intent(in)     :: n_cc                 !< Number of cell centers
+    integer, intent(in)     :: n_var                !< Number of variables
+    real(dp), intent(inout) :: cc_line(n_cc, n_var) !< Flux that will be modified
+    integer, intent(in)     :: flux_dim             !< In which dimension fluxes are computed
+    type(box_t), intent(in) :: box                  !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv              !< State to compute derivatives from
+  end subroutine flux_dummy_line_modify
 
 end module m_af_flux_schemes

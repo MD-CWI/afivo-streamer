@@ -149,7 +149,7 @@ contains
     real(dp)                  :: wmax(NDIM), tmp
 
     call flux_generic_tree(tree, n_vars, flow_variables, s_deriv, fluxes, wmax, &
-         max_wavespeed, get_flux_lr, flux_other, &
+         max_wavespeed, get_flux_lr, flux_add_diffusion, flux_dummy_line_modify, &
          flux_dummy_conversion, flux_dummy_conversion, af_limiter_vanleer_t)
 
     call flux_update_densities(tree, dt, n_vars, flow_variables, fluxes, &
@@ -205,7 +205,7 @@ contains
     end do
   end subroutine get_flux_lr
 
-  subroutine flux_other(n_values, n_var, flux_dim, flux, box, line_ix, s_deriv)
+  subroutine flux_add_diffusion(n_values, n_var, flux_dim, flux, box, line_ix, s_deriv)
     integer, intent(in)     :: n_values !< Number of cell faces
     integer, intent(in)     :: n_var    !< Number of variables
     integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
@@ -225,9 +225,9 @@ contains
     do i = 1, NDIM
        ! Viscosity
        u_diff = cc(1:, i_mom(i)) - cc(:n_values-1, i_mom(i))
-       flux(:,  i_mom(i)) = -nu * u_diff * inv_dr(i)
+       flux(:,  i_mom(i)) = flux(:,  i_mom(i)) - nu * u_diff * inv_dr(i)
     end do
-  end subroutine flux_other
+  end subroutine flux_add_diffusion
 
   subroutine remove_velocity_divergence(tree, iv_velocity, dt)
     type(af_t), intent(inout) :: tree

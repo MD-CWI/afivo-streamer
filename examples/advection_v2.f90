@@ -233,7 +233,7 @@ contains
     real(dp)                  :: wmax(NDIM)
 
     call flux_generic_tree(tree, 1, [i_phi], s_deriv, [i_flux], wmax, &
-         max_wavespeed, get_flux, flux_dummy_other, &
+         max_wavespeed, get_flux, flux_dummy_modify, flux_dummy_line_modify, &
          flux_dummy_conversion, flux_dummy_conversion, af_limiter_koren_t)
     call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
