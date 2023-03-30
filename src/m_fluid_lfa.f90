@@ -98,7 +98,6 @@ contains
     if (ST_use_dielectric) then
        ! Update surface charge and handle photon emission
        ! @todo For parallelization, think about corner cells with two surfaces
-       ! @todo fix bug here: use s_prev and w_prev
        do ix = 1, diel%max_ix
           if (diel%surfaces(ix)%in_use) then
              id_out = diel%surfaces(ix)%id_out
@@ -106,11 +105,11 @@ contains
              ! Convert fluxes onto dielectric to surface charge, and handle
              ! secondary emission
              call dielectric_update_surface_charge(tree%boxes(id_out), &
-                  diel%surfaces(ix), dt, s_deriv, s_out)
+                  diel%surfaces(ix), dt, n_prev, s_prev, w_prev, s_out)
 
              ! Add secondary emission from photons hitting the surface
              call dielectric_photon_emission(tree%boxes(id_out), &
-                  diel%surfaces(ix), dt, s_deriv, s_out)
+                  diel%surfaces(ix), dt, s_out)
           end if
        end do
     end if
