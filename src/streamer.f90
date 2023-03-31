@@ -188,8 +188,10 @@ program streamer
 
      if (abs(current_voltage) > 0.0_dp) then
         current_output_dt = output_dt
+        current_electrode_dx = refine_electrode_dx
      else
         current_output_dt = output_dt * output_dt_factor_pulse_off
+        current_electrode_dx = electrode_derefine_factor*refine_electrode_dx
      end if
 
      ! Every output_dt, write output
