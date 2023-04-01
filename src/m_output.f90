@@ -122,6 +122,7 @@ module m_output
   public :: output_write
   public :: output_log
   public :: output_status
+  public :: output_surface_write
 
 contains
 
@@ -841,6 +842,50 @@ contains
          minval(dt_matrix(1:dt_num_cond, :), dim=2), &
          " (cfl diff drt chem)"
   end subroutine output_status
+
+  subroutine output_surface_write(tree, diel, output_cnt)
+   !  use m_af_output
+    use m_npy
+    type(af_t), intent(inout)    :: tree
+    type(surfaces_t), intent(in) :: diel
+    integer, intent(in)          :: output_cnt
+    integer                      :: i, ix, id_out
+    character(len=string_len)    :: fname, filename, subname
+
+    write(filename, "(A,I6.6,A)") trim(output_name) // "_", output_cnt, "_surface.npz"
+    write(fname, "(A,I6.6,A)") trim(output_name) // "_", output_cnt, "_info.npy"
+    call save_npy(fname, [diel%max_ix, diel%n_removed, diel%surface_limit, diel%n_cell])
+    call add_to_zip(filename, fname, .false., 'info')
+
+    i = 0
+    write(fname, "(A,I6.6,A)") trim(output_name) // "_", output_cnt, "_tmp.npy"
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+       i = i + 1
+#if NDIM == 2
+       call save_npy(fname, diel%surfaces(ix)%sd(:, :))
+       write (subname, "(I6.6,A)") i, "_sd"
+       call add_to_zip(filename, fname, .false., subname)
+       associate(box => tree%boxes(diel%surfaces(ix)%id_out))
+         call save_npy(fname, [box%r_min,box%dr,real(diel%surfaces(ix)%direction, 8)])
+       end associate
+       write (subname, "(I6.6,A)") i, "_loc"
+       call add_to_zip(filename, fname, .false., subname)
+#elif NDIM == 3
+       call save_npy(fname, diel%surfaces(ix)%sd(:, :, :))
+       write (subname, "(I6.6,A)") i, "_sd"
+       call add_to_zip(filename, fname, .false., subname)
+       associate(box => tree%boxes(diel%surfaces(ix)%id_out))
+         call save_npy(fname, [box%r_min,box%dr,real(diel%surfaces(ix)%direction, 8)])
+       end associate
+       write (subname, "(I6.6,A)") i, "_loc"
+       call add_to_zip(filename, fname, .false., subname)
+#endif
+       end if
+    end do
+    print *, "output_surface_write: written " // trim(filename)
+
+  end subroutine output_surface_write
 
   subroutine output_fld_maxima(tree, filename)
     use m_analysis

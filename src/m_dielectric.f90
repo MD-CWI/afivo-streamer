@@ -18,6 +18,9 @@ module m_dielectric
   !> To store dielectric surface
   type(surfaces_t), public :: diel
 
+  ! Output surface related information
+  logical, public, protected :: surface_output = .false.
+
   ! Maximum travel distance for testing boundary intersection
   real(dp), protected :: photon_step_length = 1.0e-3_dp
 
@@ -80,6 +83,10 @@ contains
     call CFG_get(cfg, "dielectric%preset_charge", preset_charge)
     call CFG_get(cfg, "dielectric%preset_charge_distribution", preset_charge_distribution)
     preset_charge_distribution = preset_charge_distribution * ST_domain_len(NDIM)
+
+    call CFG_add_get(cfg, "dielectric%write", &
+    surface_output, "Output surface related information")
+
 
   end subroutine dielectric_initialize
 
