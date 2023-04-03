@@ -221,8 +221,8 @@ program streamer
         step_accepted = (dt <= dt_lim)
 
         if (.not. step_accepted) then
-           print *, "Step rejected (dt > dt_lim)"
-           call output_status(tree, time, wc_time, it, dt)
+           write (*, "(I0,A,2E12.4)") it, " Step rejected, (dt, dt_lim) = ", &
+                dt, dt_lim
 
            ! Go back to previous state and try with a smaller dt
            dt = dt_safety_factor * dt_lim
