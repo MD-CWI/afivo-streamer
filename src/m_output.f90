@@ -14,9 +14,6 @@ module m_output
   ! Name for the output files
   character(len=string_len), public, protected :: output_name = "output/my_sim"
 
-  ! Optional variable (to show ionization source term)
-  integer, public, protected :: i_src = -1 ! Source term
-
   ! If defined, only output these variables
   character(len=af_nlen), allocatable :: output_only(:)
 
@@ -172,11 +169,6 @@ contains
          "Write to a log file for regression testing")
     call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
          "Electron density threshold (1/m3, will be scaled by N)")
-
-    if (output_src_term) then
-       call af_add_cc_variable(tree, "src", ix=i_src)
-       call af_set_cc_methods(tree, i_src, af_bc_neumann_zero, af_gc_interp)
-    end if
 
     tmp = 1/output_src_decay_rate
     call CFG_add_get(cfg, "output%src_decay_time", tmp, &
