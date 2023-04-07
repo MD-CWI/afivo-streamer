@@ -837,46 +837,68 @@ contains
          " (cfl diff drt chem)"
   end subroutine output_status
 
-  subroutine output_surface_write(tree, diel, output_cnt)
-   !  use m_af_output
+  !> Write surface quantities to a separate output file
+  subroutine output_surface_write(tree, output_cnt)
     use m_npy
+    use m_dielectric
     type(af_t), intent(inout)    :: tree
-    type(surfaces_t), intent(in) :: diel
     integer, intent(in)          :: output_cnt
-    integer                      :: i, ix, id_out
-    character(len=string_len)    :: fname, filename, subname
+    integer                      :: n, i, ix, nc
+    integer                      :: lo(NDIM-1), hi(NDIM-1)
+    character(len=string_len)    :: tmpname, filename
 
-    write(filename, "(A,I6.6,A)") trim(output_name) // "_", output_cnt, "_surface.npz"
-    write(fname, "(A,I6.6,A)") trim(output_name) // "_", output_cnt, "_info.npy"
-    call save_npy(fname, [diel%max_ix, diel%n_removed, diel%surface_limit, diel%n_cell])
-    call add_to_zip(filename, fname, .false., 'info')
+    real(dp)              :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp), allocatable :: r(:, :), dr(:, :)
+    real(dp), allocatable :: photon_flux(:), surf_dens(:)
+    integer, allocatable  :: surf_dim(:)
+
+    nc = diel%n_cell
+    n = count(diel%surfaces(1:diel%max_ix)%in_use)
+    allocate(r(NDIM, n*nc), photon_flux(n*nc), surf_dens(n*nc))
+    allocate(dr(NDIM-1, n), surf_dim(n))
+
+    write(filename, "(A,I6.6,A)") trim(output_name) // "_", &
+         output_cnt, "_surface.npz"
+    write(tmpname, "(A,I6.6,A)") trim(output_name) // "_", &
+         output_cnt, "_tmp.npy"
 
     i = 0
-    write(fname, "(A,I6.6,A)") trim(output_name) // "_", output_cnt, "_tmp.npy"
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
-       i = i + 1
+          i = i + 1
+          lo = (i-1) * nc + 1
+          hi = i * nc
+
+          associate(box => tree%boxes(diel%surfaces(ix)%id_out), &
+               surf => diel%surfaces(ix))
+            call af_get_face_coords(box, surf%direction, coords)
 #if NDIM == 2
-       call save_npy(fname, diel%surfaces(ix)%sd(:, :))
-       write (subname, "(I6.6,A)") i, "_sd"
-       call add_to_zip(filename, fname, .false., subname)
-       associate(box => tree%boxes(diel%surfaces(ix)%id_out))
-         call save_npy(fname, [box%r_min,box%dr,real(diel%surfaces(ix)%direction, 8)])
-       end associate
-       write (subname, "(I6.6,A)") i, "_loc"
-       call add_to_zip(filename, fname, .false., subname)
+            r(:, lo(1):hi(1)) = coords
+            dr(:, i) = surf%dr
+            surf_dim(i) = af_neighb_dim(surf%direction)
+            photon_flux(lo(1):hi(1)) = surf%sd(:, i_photon_flux)
+            surf_dens(lo(1):hi(1)) = surf%sd(:, i_surf_dens)
 #elif NDIM == 3
-       call save_npy(fname, diel%surfaces(ix)%sd(:, :, :))
-       write (subname, "(I6.6,A)") i, "_sd"
-       call add_to_zip(filename, fname, .false., subname)
-       associate(box => tree%boxes(diel%surfaces(ix)%id_out))
-         call save_npy(fname, [box%r_min,box%dr,real(diel%surfaces(ix)%direction, 8)])
-       end associate
-       write (subname, "(I6.6,A)") i, "_loc"
-       call add_to_zip(filename, fname, .false., subname)
+            error stop "not implemented"
 #endif
+          end associate
        end if
     end do
+
+    call save_npy(tmpname, [n])
+    call add_to_zip(filename, tmpname, .false., "n_surfaces")
+    call save_npy(tmpname, [nc])
+    call add_to_zip(filename, tmpname, .false., "n_cell")
+    call save_npy(tmpname, r)
+    call add_to_zip(filename, tmpname, .false., "r")
+    call save_npy(tmpname, dr)
+    call add_to_zip(filename, tmpname, .false., "dr")
+    call save_npy(tmpname, photon_flux)
+    call add_to_zip(filename, tmpname, .false., "photon_flux")
+    call save_npy(tmpname, surf_dens)
+    call add_to_zip(filename, tmpname, .false., "surf_dens")
+    call save_npy(tmpname, surf_dim)
+    call add_to_zip(filename, tmpname, .false., "normal_dim")
     print *, "output_surface_write: written " // trim(filename)
 
   end subroutine output_surface_write
