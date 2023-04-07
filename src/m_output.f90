@@ -271,11 +271,12 @@ contains
        output_extra_vars(n_extra_vars) = "sigma"
     end if
 
-    call CFG_add(cfg, "output%write_derivatives", empty_names, &
-         "Write derivatives of these species to output", dynamic_size=.true.)
-    call CFG_get_size(cfg, "output%write_derivatives", n)
+    call CFG_add(cfg, "output%write_source", empty_names, &
+         "Write chemistry source terms of these species to output", &
+         dynamic_size=.true.)
+    call CFG_get_size(cfg, "output%write_source", n)
     allocate(varname(n))
-    call CFG_get(cfg, "output%write_derivatives", varname)
+    call CFG_get(cfg, "output%write_source", varname)
 
     do i = 1, n
        n_extra_vars = n_extra_vars + 1
@@ -457,6 +458,7 @@ contains
              have_derivs = .true.
           end if
 
+          ! Trim "src_" from the name
           species_name = trim(output_extra_vars(n)(5:))
           i_species = species_index(species_name)
 
