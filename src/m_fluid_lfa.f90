@@ -639,6 +639,11 @@ contains
     dens(:, n_gas_species+1:n_species) = reshape(box%cc(DTIMES(1:nc), &
          species_itree(n_gas_species+1:n_species)+s_dt), [n_cells, n_plasma_species])
 
+    ! It is assumed that species densities should be non-negative. When
+    ! computing the effect of chemical reactions, this can also help with
+    ! stability, see e.g. http://dx.doi.org/10.1088/1749-4699/6/1/015001
+    dens = max(dens, 0.0_dp)
+
     call get_rates(fields, rates, n_cells)
 
     if (ST_source_factor /= source_factor_none .or. &
