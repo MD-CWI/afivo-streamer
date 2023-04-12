@@ -608,17 +608,58 @@ contains
     integer                    :: IJK, ix, n_cells, n, iv, i_flux
     integer                    :: tid
     real(dp), parameter        :: eps = 1e-100_dp
+    logical                    :: chemistry_mask(nc**NDIM)
 
     n_cells = box%n_cell**NDIM
     inv_dr  = 1/box%dr
 
-    ! Inside the dielectric, do not update the species densities, which should
-    ! always be zero
-    if (ST_use_dielectric) then
-       if (box%cc(DTIMES(1), i_eps) > 1.0_dp) then
-          return
-       end if
+    ! Only evolve chemistry where this mask is true
+    chemistry_mask = .true.
+
+    ! Do no update chemistry inside electrode
+    if (ST_use_electrode) then
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
+          if (box%cc(IJK, i_lsf) <= 0.0_dp) chemistry_mask(ix) = .false.
+       end do; CLOSE_DO
     end if
+
+    ! Optionally limit chemistry to a particular region
+    if (ST_plasma_region_enabled) then
+       ! Compute box coordinates
+       do n = 1, NDIM
+          coords(:, n) = box%r_min(n) + box%dr(n) * [(i-0.5_dp, i=1,nc)]
+       end do
+
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
+          r(1) = coords(i, 1)
+#if NDIM > 1
+          r(2) = coords(j, 2)
+#endif
+#if NDIM > 2
+          r(3) = coords(k, 3)
+#endif
+          if (any(r < ST_plasma_region_rmin) .or. &
+               any(r > ST_plasma_region_rmax)) then
+             chemistry_mask(ix) = .false.
+          end if
+       end do; CLOSE_DO
+    end if
+
+    ! Inside the dielectric, do not update the species densities
+    if (ST_use_dielectric) then
+       ix = 0
+       do KJI_DO(1,nc)
+          ix = ix + 1
+          if (abs(box%cc(IJK, i_eps) - 1) > eps) chemistry_mask(ix) = .false.
+       end do; CLOSE_DO
+    end if
+
+    ! Skip this routine if there are no cells to update
+    if (.not. any(chemistry_mask)) return
 
     if (gas_constant_density) then
        ! Compute field in Townsends
@@ -674,22 +715,20 @@ contains
        end do
     end if
 
+    ! Note that this routine updates its rates argument
     call get_derivatives(dens, rates, derivs, n_cells)
-
-    ! TODO clean this up in the future (when we set electrode Neumann boundary
-    ! conditions in actual flux computation)
-    if (iand(box%tag, mg_lsf_box) > 0) then
-       ix = 0
-       do KJI_DO(1,nc)
-          ix = ix + 1
-          if (box%cc(IJK, i_lsf) <= 0.0_dp) then
-             derivs(ix, :) = 0
-          end if
-       end do; CLOSE_DO
-    end if
 
     if (last_step) then
        tid = omp_get_thread_num() + 1
+
+       do n = 1, n_reactions
+          where (.not. chemistry_mask) rates(:, n) = 0
+       end do
+       do n = 1, n_species
+          where (.not. chemistry_mask) derivs(:, n) = 0
+       end do
+
+       ! Update chemistry time step
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
             minval((abs(dens) + dt_chemistry_nmin) / max(abs(derivs), eps)))
 
@@ -712,31 +751,10 @@ contains
     end if
 #endif
 
-    if (ST_plasma_region_enabled) then
-       ! Compute box coordinates
-       do n = 1, NDIM
-          coords(:, n) = box%r_min(n) + box%dr(n) * [(i-0.5_dp, i=1,nc)]
-       end do
-    end if
-
     ix = 0
     do KJI_DO(1,nc)
        ix = ix + 1
-
-       if (ST_plasma_region_enabled) then
-          r(1) = coords(i, 1)
-#if NDIM > 1
-          r(2) = coords(j, 2)
-#endif
-#if NDIM > 2
-          r(3) = coords(k, 3)
-#endif
-          if (any(r < ST_plasma_region_rmin) .or. &
-               any(r > ST_plasma_region_rmax)) then
-             ! Disable all reactions outside the plasma region
-             derivs(ix, :) = 0.0_dp
-          end if
-       end if
+       if (.not. chemistry_mask(ix)) cycle
 
        ! Contribution of flux
 #if NDIM == 1
@@ -762,14 +780,8 @@ contains
        if (photoi_enabled) then
           derivs(ix, ix_electron) = derivs(ix, ix_electron) + &
                box%cc(IJK, i_photo)
-          derivs(ix, ix_1pos_ion) = derivs(ix, ix_1pos_ion) + &
-               box%cc(IJK, i_photo)
-       end if
-
-       if (ST_use_electrode) then
-          if (box%cc(IJK, i_lsf) <= 0.0_dp) then
-             derivs(ix, :) = 0
-          end if
+          derivs(ix, photoi_species_index) = &
+               derivs(ix, photoi_species_index) + box%cc(IJK, i_photo)
        end if
 
        do n = n_gas_species+1, n_species
@@ -784,11 +796,11 @@ contains
        iv     = flux_species(n)
        i_flux = flux_variables(n)
 
+       ix = 0
        do KJI_DO(1,nc)
-          ! Contribution of ion flux
-          if (ST_use_electrode) then
-             if (box%cc(IJK, i_lsf) <= 0.0_dp) cycle
-          end if
+          ix = ix + 1
+          if (.not. chemistry_mask(ix)) cycle
+
 #if NDIM == 1
           tmp = inv_dr(1) * (box%fc(i, 1, i_flux) - &
                box%fc(i+1, 1, i_flux))
