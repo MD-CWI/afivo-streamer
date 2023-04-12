@@ -14,8 +14,8 @@ p.add_argument("-y", type=str, nargs='+', default='[max(E)]',
                help="Name of y variables")
 args = p.parse_args()
 
-logs = [pd.read_csv(f, delim_whitespace=True) for f in args.log_file]
-numbered_files = [f'{i}: {f}' for i, f in enumerate(args.log_file)]
+logs = [pd.read_csv(f, delim_whitespace=True) for f in args.log_files]
+numbered_files = [f'{i}: {f}' for i, f in enumerate(args.log_files)]
 
 fig, axes = plt.subplots(1, 1, constrained_layout=True)
 fig.suptitle('\n'.join(numbered_files))
