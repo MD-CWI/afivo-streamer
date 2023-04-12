@@ -479,6 +479,7 @@ contains
     use m_chemistry
     use m_analysis
     use m_dielectric
+    use m_dt
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
@@ -565,16 +566,18 @@ contains
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
-            &max(Etip) x wc_time n_cells min(dx) &
+            &max(Etip) x wc_time n_cells min(dx) dt_cfl dt_diff dt_drt dt_chem &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
-            &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) highest(lvl)"
+            &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) &
+            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
-            &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) highest(lvl)"
+            &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) &
+            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
           do i = 1, n_user_vars
@@ -597,10 +600,10 @@ contains
 #endif
 
     if (associated(user_log_variables)) then
-       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3,", &
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,5E20.8,I3,", &
             n_user_vars, "E20.8)"
     else
-       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3)"
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,5E20.8,I3)"
     end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -615,15 +618,16 @@ contains
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
-         af_min_dr(tree),tree%highest_lvl, &
-         var_values(1:n_user_vars)
+         af_min_dr(tree), minval(dt_matrix(1:dt_num_cond, :), dim=2), &
+         tree%highest_lvl, var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          current_voltage, ne_zminmax, max_field_tip, r_tip, &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
+         wc_time, af_num_cells_used(tree), af_min_dr(tree), &
+         minval(dt_matrix(1:dt_num_cond, :), dim=2), tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
@@ -632,8 +636,8 @@ contains
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
-         af_min_dr(tree),tree%highest_lvl, &
-         var_values(1:n_user_vars)
+         af_min_dr(tree), minval(dt_matrix(1:dt_num_cond, :), dim=2), &
+         tree%highest_lvl, var_values(1:n_user_vars)
 #endif
     close(my_unit)
 
