@@ -26,7 +26,7 @@ dim = 1 - normal_dim
 r = X['r'][dim]
 
 # For convenience, determine the grid spacing for each cell
-dr = np.repeat(X['dr'][dim], nc)
+dr = np.repeat(X['dr'][0], nc)
 
 # Get indices that sort values along the surface coordinate
 ix = np.argsort(r)
