@@ -307,14 +307,6 @@ contains
                   tree%boxes(id)%cc(DTIMES(:), i_rhs) + &
                   q * tree%boxes(id)%cc(DTIMES(:), ix)
           end do
-
-          if (ST_use_electrode) then
-             ! Ignore charge inside electrode (which could be present to due
-             ! boundary conditions and refinement)
-             where (tree%boxes(id)%cc(DTIMES(:), i_lsf) <= 0)
-                tree%boxes(id)%cc(DTIMES(:), i_rhs) = 0.0_dp
-             end where
-          end if
        end do
        !$omp end do nowait
     end do

@@ -506,6 +506,8 @@ contains
              ! Set electron density to average of outside neighbors
              box%cc(IJK, i_electron) = sum(dens_nb, mask=(lsf_nb > 0)) / &
                   count(lsf_nb > 0)
+             ! Set first positive ion density for charge neutrality
+             box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_electron)
           end if
        end if
     end do; CLOSE_DO
