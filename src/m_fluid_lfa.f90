@@ -608,20 +608,20 @@ contains
     integer                    :: IJK, ix, n_cells, n, iv, i_flux
     integer                    :: tid
     real(dp), parameter        :: eps = 1e-100_dp
-    logical                    :: chemistry_mask(nc**NDIM)
+    logical                    :: update_mask(nc**NDIM)
 
     n_cells = box%n_cell**NDIM
     inv_dr  = 1/box%dr
 
-    ! Only evolve chemistry where this mask is true
-    chemistry_mask = .true.
+    ! Only update species densities where this mask is true
+    update_mask = .true.
 
     ! Do no update chemistry inside electrode
     if (ST_use_electrode) then
        ix = 0
        do KJI_DO(1,nc)
           ix = ix + 1
-          if (box%cc(IJK, i_lsf) <= 0.0_dp) chemistry_mask(ix) = .false.
+          if (box%cc(IJK, i_lsf) <= 0.0_dp) update_mask(ix) = .false.
        end do; CLOSE_DO
     end if
 
@@ -644,7 +644,7 @@ contains
 #endif
           if (any(r < ST_plasma_region_rmin) .or. &
                any(r > ST_plasma_region_rmax)) then
-             chemistry_mask(ix) = .false.
+             update_mask(ix) = .false.
           end if
        end do; CLOSE_DO
     end if
@@ -654,12 +654,12 @@ contains
        ix = 0
        do KJI_DO(1,nc)
           ix = ix + 1
-          if (abs(box%cc(IJK, i_eps) - 1) > eps) chemistry_mask(ix) = .false.
+          if (abs(box%cc(IJK, i_eps) - 1) > eps) update_mask(ix) = .false.
        end do; CLOSE_DO
     end if
 
     ! Skip this routine if there are no cells to update
-    if (.not. any(chemistry_mask)) return
+    if (.not. any(update_mask)) return
 
     if (gas_constant_density) then
        ! Compute field in Townsends
@@ -718,15 +718,18 @@ contains
     ! Note that this routine updates its rates argument
     call get_derivatives(dens, rates, derivs, n_cells)
 
+    ! Inside electrode/dielectrics, rates and derivatives are zero. Setting this
+    ! here is redundant, but the last_step code below otherwise becomes more
+    ! complicated.
+    do n = 1, n_reactions
+       where (.not. update_mask) rates(:, n) = 0
+    end do
+    do n = 1, n_species
+       where (.not. update_mask) derivs(:, n) = 0
+    end do
+
     if (last_step) then
        tid = omp_get_thread_num() + 1
-
-       do n = 1, n_reactions
-          where (.not. chemistry_mask) rates(:, n) = 0
-       end do
-       do n = 1, n_species
-          where (.not. chemistry_mask) derivs(:, n) = 0
-       end do
 
        ! Update chemistry time step
        dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
@@ -737,7 +740,7 @@ contains
 
        !> Integrate rates over space and time into global storage
        ST_current_rates(1:n_reactions, tid) = &
-         ST_current_rates(1:n_reactions, tid) + box_rates
+            ST_current_rates(1:n_reactions, tid) + box_rates
 
        ! Keep track of J.E
        call sum_global_JdotE(box, tid)
@@ -754,7 +757,6 @@ contains
     ix = 0
     do KJI_DO(1,nc)
        ix = ix + 1
-       if (.not. chemistry_mask(ix)) cycle
 
        ! Contribution of flux
 #if NDIM == 1
@@ -784,6 +786,9 @@ contains
                derivs(ix, photoi_species_index) + box%cc(IJK, i_photo)
        end if
 
+       ! Inside electrode/dielectrics, rates and derivatives are zero
+       if (.not. update_mask(ix)) derivs(ix, :) = 0.0_dp
+
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
           box%cc(IJK, iv+s_out) = sum(w_prev * box%cc(IJK, iv+s_prev)) + &
@@ -799,8 +804,6 @@ contains
        ix = 0
        do KJI_DO(1,nc)
           ix = ix + 1
-          if (.not. chemistry_mask(ix)) cycle
-
 #if NDIM == 1
           tmp = inv_dr(1) * (box%fc(i, 1, i_flux) - &
                box%fc(i+1, 1, i_flux))
@@ -817,6 +820,10 @@ contains
                inv_dr(3) * (box%fc(i, j, k, 3, i_flux) - &
                box%fc(i, j, k+1, 3, i_flux))
 #endif
+
+          ! Inside electrode/dielectrics, rates and derivatives are zero
+          if (.not. update_mask(ix)) tmp = 0.0_dp
+
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_out) + tmp * dt
        end do; CLOSE_DO
     end do
