@@ -39,6 +39,7 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp)                  :: breakdown_field_Td, current_output_dt
+  real(dp)                  :: prev_voltage
   logical                   :: step_accepted
 
   !> The configuration for the simulation
@@ -186,7 +187,17 @@ program streamer
         time_last_print = wc_time
      end if
 
+     ! Check the voltage at the end of the next step
+     prev_voltage = current_voltage
+     call field_set_voltage(tree, time + dt)
+
      if (abs(current_voltage) > 0.0_dp) then
+        ! If switching to positive voltage again, use a small time step
+        if (abs(prev_voltage) <= 0) then
+           global_dt = dt_min
+           dt = dt_min
+        end if
+
         current_output_dt = output_dt
         current_electrode_dx = refine_electrode_dx
      else
