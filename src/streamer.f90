@@ -39,8 +39,8 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp)                  :: breakdown_field_Td, current_output_dt
-  real(dp)                  :: prev_voltage
-  logical                   :: step_accepted
+  real(dp)                  :: time_until_next_pulse
+  logical                   :: step_accepted, start_of_new_pulse
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -187,17 +187,10 @@ program streamer
         time_last_print = wc_time
      end if
 
-     ! Check the voltage at the end of the next step
-     prev_voltage = current_voltage
-     call field_set_voltage(tree, time + dt)
+     time_until_next_pulse = field_pulse_period - modulo(time, field_pulse_period)
 
-     if (abs(current_voltage) > 0.0_dp) then
-        ! If switching to positive voltage again, use a small time step
-        if (abs(prev_voltage) <= 0) then
-           global_dt = dt_min
-           dt = dt_min
-        end if
-
+     if (abs(current_voltage) > 0.0_dp .or. &
+          time_until_next_pulse < refine_prepulse_time) then
         current_output_dt = output_dt
         current_electrode_dx = refine_electrode_dx
      else
@@ -210,6 +203,12 @@ program streamer
      if (write_out) then
         ! Ensure that dt is non-negative, even when current_output_dt changes
         dt = max(0.0_dp, time_last_output + current_output_dt - time)
+     end if
+
+     ! Make sure to capture the start of the next pulse
+     start_of_new_pulse = (dt >= time_until_next_pulse)
+     if (start_of_new_pulse) then
+        dt = time_until_next_pulse
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
@@ -268,7 +267,16 @@ program streamer
      end if
 
      ! dt is modified when writing output, global_dt not
-     dt          = min(2 * global_dt, dt_safety_factor * min(dt_lim, dt_gas_lim))
+     dt = min(2 * global_dt, dt_safety_factor * min(dt_lim, dt_gas_lim))
+
+     if (start_of_new_pulse) then
+        ! Start a new pulse with a small time step
+        dt = dt_min
+        if (associated(user_new_pulse_conditions)) then
+           call af_loop_box(tree, user_new_pulse_conditions)
+        end if
+     end if
+
      global_dt   = dt
      global_time = time
 

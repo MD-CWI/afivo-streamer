@@ -48,7 +48,10 @@ module m_refine
 
   ! Multiply the above value by this factor to derefine 
   ! during interpulse
-  real(dp), public :: electrode_derefine_factor = 1.0
+  real(dp), public, protected :: electrode_derefine_factor = 1.0
+
+  ! Start refining electrode some time before the start of a new pulse
+  real(dp), public, protected :: refine_prepulse_time = 1.0e-9_dp
 
   ! Minimum electron density for adding grid refinement
   real(dp), protected :: refine_min_dens = -1.0e99_dp
@@ -127,6 +130,8 @@ contains
     call CFG_add_get(cfg, "electrode_derefine_factor", &
           electrode_derefine_factor, &
          "Multiplication factor to derefine electrode during interpulse")
+    call CFG_add_get(cfg, "refine_prepulse_time", refine_prepulse_time, &
+         "Start refining electrode some time before the start of a new pulse")
     call CFG_add_get(cfg, "refine_min_dens", refine_min_dens, &
          "Minimum electron density for adding grid refinement")
     call CFG_add_get(cfg, "refine_use_alpha_effective", refine_use_alpha_effective, &

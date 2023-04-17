@@ -14,6 +14,9 @@ module m_user_methods
   !> If defined, call this routine after setting initial conditions
   procedure(af_subr), pointer :: user_initial_conditions => null()
 
+  !> If defined, call this routine after a new voltage pulse starts
+  procedure(af_subr), pointer :: user_new_pulse_conditions => null()
+
   !> To set custom boundary conditions for the electric potential
   procedure(af_subr_bc), pointer :: user_potential_bc => null()
 
