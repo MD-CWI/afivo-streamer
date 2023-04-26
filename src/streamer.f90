@@ -208,7 +208,7 @@ program streamer
      ! Make sure to capture the start of the next pulse
      start_of_new_pulse = (dt >= time_until_next_pulse)
      if (start_of_new_pulse) then
-        dt = time_until_next_pulse
+        dt = max(time_until_next_pulse, dt_min)
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
