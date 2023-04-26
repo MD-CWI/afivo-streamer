@@ -1,5 +1,5 @@
-# File created by Baohong Guo on 26/04/2023 with transport data and reaction rates for pure CO2.
-# Transport data calculated using the offline BOLSIG- solver with data from the IST Lisbon database (CO2).
+# File created by Baohong Guo on 22/10/2022 with transport data and reaction rates for pure CO2.
+# Transport data calculated using the offline BOLSIG+ solver with data from the IST Lisbon database (CO2).
 
 reaction_list
 -----------------------

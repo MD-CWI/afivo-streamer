@@ -1,4 +1,4 @@
-# File created by Baohong Guo on 26/04/2023 with transport data and reaction rates for an air chemistry.
+# File created by Baohong Guo on 22/10/2022 with transport data and reaction rates for an air chemistry.
 # Transport data calculated using the offline BOLSIG- solver with data from the Phelps database (N2, O2).
 
 reaction_list
