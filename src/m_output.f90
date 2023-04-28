@@ -110,6 +110,9 @@ module m_output
   ! Output the conductivity of the plasma
   logical :: output_conductivity = .false.
 
+  ! Output the electron conduction current
+  logical :: output_electron_current = .false.
+
   ! Table with energy in eV vs electric field
   type(LT_t) :: eV_vs_fld
 
@@ -251,6 +254,9 @@ contains
          "Show the electron energy in eV from the local field approximation")
     call CFG_add_get(cfg, "output%conductivity", output_conductivity, &
          "Output the conductivity of the plasma")
+    call CFG_add_get(cfg, "output%electron_current", output_electron_current, &
+         "Output the electron conduction current (can also be computed in &
+         &Visit as -gradient(phi) * sigma)")
 
     if (output_electron_energy) then
        n_extra_vars = n_extra_vars + 1
@@ -269,6 +275,13 @@ contains
     if (output_conductivity) then
        n_extra_vars = n_extra_vars + 1
        output_extra_vars(n_extra_vars) = "sigma"
+    end if
+
+    if (output_electron_current) then
+       do i = 1, NDIM
+          n_extra_vars = n_extra_vars + 1
+          write(output_extra_vars(n_extra_vars), "(A,I0)") "Je_", i
+       end do
     end if
 
     call CFG_add(cfg, "output%write_source", empty_names, &
@@ -414,10 +427,12 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(in)     :: n_var
     real(dp)                :: new_vars(DTIMES(0:box%n_cell+1), n_var)
-    integer                 :: n, nc, n_cells, i_species
+    integer                 :: n, nc, n_cells, i_species, idim
     character(len=name_len) :: species_name
     real(dp)                :: N_inv(DTIMES(0:box%n_cell+1))
     real(dp)                :: Td(DTIMES(0:box%n_cell+1))
+    real(dp)                :: sigma(DTIMES(1:box%n_cell))
+    real(dp)                :: E_vector(DTIMES(1:box%n_cell), NDIM)
     real(dp)                :: dens((box%n_cell+2)**NDIM, n_species)
     real(dp)                :: rates((box%n_cell+2)**NDIM, n_reactions)
     real(dp)                :: derivs((box%n_cell+2)**NDIM, n_species)
@@ -444,6 +459,19 @@ contains
           ! Add plasma conductivity (e mu n_e)
           new_vars(DTIMES(:), n) = LT_get_col(td_tbl, td_mobility, Td) * &
                N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
+       case ("Je_1")
+          ! Add electron current density  (e mu n_e E_vector)
+          E_vector = get_E_vector(box)
+          sigma = LT_get_col(td_tbl, td_mobility, &
+               Td(DTIMES(1:nc))) * N_inv * box%cc(DTIMES(1:nc), i_electron) * &
+               UC_elem_charge
+          do idim = 1, NDIM
+             new_vars(DTIMES(1:nc), n+idim-1) = sigma * E_vector(DTIMES(:), idim)
+          end do
+       case ("Je_2")
+          continue              ! already set above
+       case ("Je_3")
+          continue              ! already set above
        case default
           ! Assume temporal production of some species is added, prefixed by "src_"
 
@@ -1004,6 +1032,31 @@ contains
        box%cc(IJK, i_power_density) = J_dot_E * UC_elec_charge
     end do; CLOSE_DO
   end subroutine set_power_density_box
+
+  function get_E_vector(box) result(E_vector)
+    type(box_t), intent(in) :: box
+    real(dp)                :: E_vector(DTIMES(1:box%n_cell), NDIM)
+    integer                 :: nc
+
+    nc = box%n_cell
+
+#if NDIM == 1
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1, electric_fld))
+#elif NDIM == 2
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1:nc, 1, electric_fld))
+    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 2, electric_fld) + &
+         box%fc(1:nc, 2:nc+1, 2, electric_fld))
+#elif NDIM == 3
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))
+    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
+         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))
+    E_vector(DTIMES(:), 3) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
+         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))
+#endif
+  end function get_E_vector
 
   subroutine set_gas_primitives_box(box)
     type(box_t), intent(inout) :: box
