@@ -154,12 +154,13 @@ def grid_project(in_grid, project_dims):
     return g
 
 
-def map_grid_data_to(g, r_min, dr):
+def map_grid_data_to(g, r_min, dr, axisymmetric=False):
     """Map grid data to another grid with origin r_min and grid spacing dr
 
     :param g: input grid
     :param r_min: origin of new grid
     :param dr: grid spacing of new grid
+    :param axisymmetric: whether to account for an axisymmetric geometry
     :returns: data and indices on new grid
 
     """
@@ -179,21 +180,39 @@ def map_grid_data_to(g, r_min, dr):
     if ratios[0] > 1 + eps:
         # Reduce resolution. Determine coarse indices for each cell center
         cix = []
+        coords_fine = []
+        coords_coarse = []
         for d in range(g['n_dims']):
             dim_coords = g['coords_cc'][d]
-            cc = dim_coords[g['ilo'][d]:g['ihi'][d]]
-            ix = ((cc - r_min[d])/dr[d]).astype(int)
+            cc_fine = dim_coords[g['ilo'][d]:g['ihi'][d]]
+            ix = ((cc_fine - r_min[d])/dr[d]).astype(int)
+            cc_coarse = r_min[d] + (ix + 0.5) * dr[d]
+
             cix.append(ix - ix_lo[d])
+            coords_fine.append(cc_fine)
+            coords_coarse.append(cc_coarse)
 
         # Create meshgrid of coarse indices
         ixs = np.meshgrid(*cix)
 
         # Add fine grid values at coarse indices, weighted by relative volume
         cdata = np.zeros(nx)
-        rvolume = np.product(g['dr']/dr)
-        values = rvolume * g['values'][valid_ix].ravel(order='F')
+
+        if axisymmetric:
+            rvolume = np.product(g['dr']/dr) * coords_fine[0]/coords_coarse[0]
+            # Broadcast to have volume weight for every grid cell
+            rvolume = np.broadcast_to(rvolume[:, None], g['ihi']-g['ilo'])
+            # Important to use Fortran order here
+            values = rvolume.ravel(order='F') * \
+                g['values'][valid_ix].ravel(order='F')
+        else:
+            # Cartesian grid, simple averaging
+            rvolume = np.product(g['dr']/dr)
+            values = rvolume * g['values'][valid_ix].ravel(order='F')
+
         np.add.at(cdata, tuple(map(np.ravel, ixs)), values)
     elif ratios[0] < 1 - eps:
+        # TODO: could maybe include axisymmetric correction here as well
         # To interpolate data, compute coordinates of new cell centers
         c_new = [np.linspace(a, b, n) for a, b, n in
                  zip(g['r_min']+0.5*dr, g['r_max']-0.5*dr, nx)]
