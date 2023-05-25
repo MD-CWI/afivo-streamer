@@ -6,41 +6,43 @@ module m_af_advance
   implicit none
   private
 
-  integer, parameter, public :: af_num_integrators  = 7
+  integer, parameter, public :: af_num_integrators  = 8
   !> Forward Euler method
   integer, parameter, public :: af_forward_euler    = 1
   !> Heun's method (AKA modified Euler's method, explicit trapezoidal rule), CFL
-  !> coefficient of 1
+  !> coefficient of 1. See e.g. https://en.wikipedia.org/wiki/Heun%27s_method
   integer, parameter, public :: af_heuns_method     = 2
-  !> Midpoint method
+  !> Midpoint method, see e.g. https://en.wikipedia.org/wiki/Midpoint_method
   integer, parameter, public :: af_midpoint_method  = 3
   !> Optimal 3-stage third-order SSPRK method (Shu & Osher), CFL coefficient of
-  !> 1
-  integer, parameter, public :: af_ssprk33_method    = 4
+  !> 1, see e.g. https://doi.org/10.1137/S0036142902419284
+  integer, parameter, public :: af_ssprk33_method   = 4
   !> Optimal 4-stage third-order SSPRK method (Ruuth & Spiteri), CFL coefficient
-  !> of 2
+  !> of 2, see e.g. https://doi.org/10.1137/S0036142902419284
   integer, parameter, public :: af_ssprk43_method   = 5
   !> 1st order IMEX method, forward Euler and then implicit solve
   integer, parameter, public :: af_imex_euler       = 6
   !> Trapezoidal IMEX method (2nd order)
   integer, parameter, public :: af_imex_trapezoidal = 7
-
+  !> Classic 4th order Runge Kutta method, see e.g.
+  !> https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
+  integer, parameter, public :: af_rk4_method       = 8
 
   character(len=af_nlen), public :: af_integrator_names(af_num_integrators) = &
        [character(len=af_nlen) :: "forward_euler", "heuns_method", &
        "midpoint_method", "ssprk33", "ssprk43", "imex_euler", &
-       "imex_trapezoidal"]
+       "imex_trapezoidal", "rk4"]
 
   !> How many steps the time integrators take
   integer, parameter, public :: &
-       af_advance_num_steps(af_num_integrators) = [1, 2, 2, 3, 4, 1, 2]
+       af_advance_num_steps(af_num_integrators) = [1, 2, 2, 3, 4, 1, 2, 4]
 
   !> How many variable copies are required for the time integrators
   integer, parameter :: req_copies(af_num_integrators) = af_advance_num_steps
 
   !> Whether an implicit solver is required for the scheme
   logical, parameter :: req_implicit(af_num_integrators) = &
-       [.false., .false., .false., .false., .false., .true., .true.]
+       [.false., .false., .false., .false., .false., .true., .true., .false.]
 
   interface
      !> Interface for a generic forward Euler scheme for time integration
@@ -111,6 +113,8 @@ contains
   !> The indices of the cell-centered variables that will be operated on should
   !> also be provided, so that higher-order schemes can be constructed
   !> automatically from the forward Euler method.
+  !>
+  !> @todo check whether time in sub-steps is accurate with some test
   subroutine af_advance(tree, dt, dt_lim, time, i_cc, time_integrator, &
        forward_euler, implicit_solver)
     type(af_t), intent(inout) :: tree
@@ -148,28 +152,28 @@ contains
     case (af_midpoint_method)
        call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 0, &
             1, [0], [1.0_dp], 1, 1, n_steps)
-       call forward_euler(tree, dt, dt, dt_lim, time, 1, &
+       call forward_euler(tree, dt, dt, dt_lim, time+0.5_dp*dt, 1, &
             1, [0], [1.0_dp], 0, 2, n_steps)
     case (af_heuns_method)
        call forward_euler(tree, dt, dt, dt_lim, time, 0, &
             1, [0], [1.0_dp], 1, 1, n_steps)
-       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 1, &
+       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time+dt, 1, &
             2, [0, 1], [0.5_dp, 0.5_dp], 0, 2, n_steps)
     case (af_ssprk33_method)
        call forward_euler(tree, dt, dt, dt_lim, time, 0, &
             1, [0], [1.0_dp], 1, 1, n_steps)
-       call forward_euler(tree, 0.25_dp*dt, 0.25_dp*dt, dt_lim, time, 1, &
+       call forward_euler(tree, 0.25_dp*dt, 0.25_dp*dt, dt_lim, time+dt, 1, &
             2, [0, 1], [0.75_dp, 0.25_dp], 2, 2, n_steps)
-       call forward_euler(tree, 2*third*dt, 2*third*dt, dt_lim, time, 2, &
+       call forward_euler(tree, 2*third*dt, 2*third*dt, dt_lim, time+0.5_dp*dt, 2, &
             2, [0, 2], [third, 2*third], 0, 3, n_steps)
     case (af_ssprk43_method)
        call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 0, &
             1, [0], [1.0_dp], 1, 1, n_steps)
-       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 1, &
+       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time+0.5_dp*dt, 1, &
             1, [1], [1.0_dp], 2, 2, n_steps)
-       call forward_euler(tree, sixth*dt, sixth*dt, dt_lim, time, 2, &
+       call forward_euler(tree, sixth*dt, sixth*dt, dt_lim, time+dt, 2, &
             2, [0, 2], [2*third, third], 3, 3, n_steps)
-       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 3, &
+       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time+0.5_dp*dt, 3, &
             1, [3], [1.0_dp], 0, 4, n_steps)
     case (af_imex_euler)
        call forward_euler(tree, dt, 0*dt, dt_lim, time, 0, &
@@ -186,6 +190,19 @@ contains
             1, [0], [1.0_dp], 0, 1, n_steps)
        call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 1, &
             1, [0], [1.0_dp], 0, 2, n_steps)
+    case (af_rk4_method)
+       ! This looks different than the standard formulation in most textbooks.
+       ! The idea is to construct the states needed for the derivatives, and
+       ! then take a linear combination. Note the negative coefficient used in
+       ! the last step.
+       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time, 0, &
+            1, [0], [1.0_dp], 1, 1, n_steps)
+       call forward_euler(tree, 0.5_dp*dt, 0.5_dp*dt, dt_lim, time+0.5_dp*dt, 1, &
+            1, [0], [1.0_dp], 2, 2, n_steps)
+       call forward_euler(tree, dt, dt, dt_lim, time+0.5_dp*dt, 2, &
+            1, [0], [1.0_dp], 3, 3, n_steps)
+       call forward_euler(tree, sixth*dt, sixth*dt, dt_lim, time+dt, 3, &
+            4, [0, 1, 2, 3], [-third, third, 2*third, third], 0, 4, n_steps)
     case default
        error stop "Unknown time integrator"
     end select

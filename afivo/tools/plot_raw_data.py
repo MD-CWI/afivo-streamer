@@ -18,6 +18,10 @@ p.add_argument('-project_dims', type=int, nargs='+', choices=[0, 1, 2],
                help='Project (integrate) along dimension(s)')
 p.add_argument('-save_plot', type=str,
                help='Save the plot into this file')
+p.add_argument('-axisymmetric', action='store_true',
+               help='Assume axisymmetric geometry when averaging')
+p.add_argument('-abel_transform', action='store_true',
+               help='Perform forward Abel transform (implies axisymmetric)')
 p.add_argument('-vmin', type=float, help='Minimum intensity in plot')
 p.add_argument('-vmax', type=float, help='Maximum intensity in plot')
 p.add_argument('-xlim', type=float, nargs=2,
@@ -34,6 +38,8 @@ p.add_argument('-silo_to_raw', type=str, default='./silo_to_raw',
                help='Path to silo_to_raw converter')
 args = p.parse_args()
 
+if args.abel_transform:
+    args.axisymmetric = True
 
 extension = os.path.splitext(args.input_file)[1]
 
@@ -56,10 +62,12 @@ else:
 ratio = args.min_pixels / domain['n_cells_coarse'].min()
 ratio = 2**(np.ceil(np.log2(ratio)).astype(int))
 nx = domain['n_cells_coarse'] * ratio
-print(f'Resolution: {nx}')
 
 # Grid spacing on uniform grid
 dr = (domain['r_max'] - domain['r_min']) / nx
+
+print(f'Resolution:   {nx}')
+print(f'Grid spacing: {dr}')
 
 # List of coordinates
 x = [np.linspace(a, b, n) for a, b, n in
@@ -69,12 +77,20 @@ uniform_data = np.zeros(nx)
 
 # Map each grid to the uniformly spaced output
 for g in grids:
-    grid_data, ix_lo, ix_hi = map_grid_data_to(g, domain['r_min'], dr)
+    grid_data, ix_lo, ix_hi = map_grid_data_to(g, domain['r_min'],
+                                               dr, args.axisymmetric)
 
     # Index range on the output array
     g_ix = tuple([np.s_[i:j] for (i, j) in zip(ix_lo, ix_hi)])
     uniform_data[g_ix] += grid_data
 
+
+if args.abel_transform:
+    from abel.hansenlaw import hansenlaw_transform
+    if args.xlim and args.xlim[0] > 0:
+        raise ValueError('Abel transform requires xlim[0] to be 0.')
+    tmp = hansenlaw_transform(uniform_data.T, dr[0], direction='forward')
+    uniform_data = tmp.T
 
 if args.save_npz:
     # Save data
