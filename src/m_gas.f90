@@ -192,7 +192,8 @@ contains
 
     call flux_generic_tree(tree, n_vars_euler, gas_vars, s_deriv, &
          gas_fluxes, wmax, max_wavespeed, get_fluxes, &
-         flux_dummy_other, to_primitive, to_conservative, af_limiter_vanleer_t)
+         flux_dummy_modify, flux_dummy_line_modify, to_primitive, &
+         to_conservative, af_limiter_vanleer_t)
     if (tree%coord_t == af_cyl) then
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
             s_deriv, n_prev, s_prev, w_prev, s_out, add_geometric_source)
