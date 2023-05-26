@@ -24,7 +24,7 @@ module m_af_flux_schemes
        real(dp), intent(out) :: w(nf)
      end subroutine subr_max_wavespeed
 
-     subroutine subr_flux_from_prim(nf, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
+     subroutine subr_flux(nf, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
        import
        integer, intent(in)     :: nf              !< Number of cell faces
        integer, intent(in)     :: n_var           !< Number of variables
@@ -34,7 +34,7 @@ module m_af_flux_schemes
        type(box_t), intent(in) :: box             !< Current box
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
        integer, intent(in)     :: s_deriv        !< State to compute derivatives from
-     end subroutine subr_flux_from_prim
+     end subroutine subr_flux
 
      subroutine subr_flux_modify(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
        import
@@ -204,6 +204,9 @@ contains
     end do
   end subroutine flux_koren_2d
 
+  !> Reconstruct "left" and "right" values at cell faces from cell-centered
+  !> data. The left value is for right-going waves, and the right value for
+  !> left-going waves.
   subroutine reconstruct_lr_1d(nc, ngc, n_vars, cc, u_l, u_r, limiter)
     integer, intent(in)     :: nc                       !< Number of cells
     integer, intent(in)     :: ngc                      !< Number of ghost cells
@@ -382,31 +385,32 @@ contains
     !$omp end parallel
   end subroutine flux_update_densities
 
+  !> Compute generic finite volume flux with a second order MUSCL scheme
   subroutine flux_generic_tree(tree, n_vars, i_cc, s_deriv, i_flux, wmax, &
        max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
        to_primitive, to_conservative, limiter)
     use m_af_restrict
     use m_af_core
-    type(af_t), intent(inout)      :: tree
-    integer, intent(in)            :: n_vars         !< Number of variables
-    integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
-    integer, intent(in)            :: s_deriv        !< State to compute derivatives from
-    integer, intent(in)            :: i_flux(n_vars) !< Flux variables
-    real(dp), intent(out)          :: wmax(NDIM)     !< Maximum wave speed found
+    type(af_t), intent(inout)     :: tree
+    integer, intent(in)           :: n_vars         !< Number of variables
+    integer, intent(in)           :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)           :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)           :: i_flux(n_vars) !< Flux variables
+    real(dp), intent(out)         :: wmax(NDIM)     !< Maximum wave speed found
     !> Compute the maximum wave speed
-    procedure(subr_max_wavespeed)  :: max_wavespeed
+    procedure(subr_max_wavespeed) :: max_wavespeed
     !> Compute the flux from primitive variables
-    procedure(subr_flux_from_prim) :: flux_from_primitives
+    procedure(subr_flux)          :: flux_from_primitives
     !> Other flux contributions
-    procedure(subr_flux_modify)    :: flux_modify
+    procedure(subr_flux_modify)   :: flux_modify
     !> Potentially modify line densities
-    procedure(subr_line_modify)    :: line_modify
+    procedure(subr_line_modify)   :: line_modify
     !> Convert conservative variables to primitive ones
-    procedure(subr_prim_cons)      :: to_primitive
+    procedure(subr_prim_cons)     :: to_primitive
     !> Convert primitive variables to conservative ones
-    procedure(subr_prim_cons)      :: to_conservative
+    procedure(subr_prim_cons)     :: to_conservative
     !> Type of slope limiter to use for flux calculation
-    integer, intent(in)            :: limiter
+    integer, intent(in)           :: limiter
 
     integer :: lvl, i
 
@@ -433,34 +437,34 @@ contains
 
   end subroutine flux_generic_tree
 
-  !> Compute generic finite volume flux
+  !> Compute generic finite volume flux with a second order MUSCL scheme
   subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, wmax, &
        max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
        to_primitive, to_conservative, limiter)
     use m_af_types
     use m_af_ghostcell
-    type(af_t), intent(inout)      :: tree
-    integer, intent(in)            :: id             !< Id of box
-    integer, intent(in)            :: nc             !< Number of cells
-    integer, intent(in)            :: n_vars         !< Number of variables
-    integer, intent(in)            :: i_cc(n_vars)   !< Cell-centered variables
-    integer, intent(in)            :: s_deriv        !< State to compute derivatives from
-    integer, intent(in)            :: i_flux(n_vars) !< Flux variables
-    real(dp), intent(inout)        :: wmax(NDIM)     !< Maximum wave speed found
+    type(af_t), intent(inout)     :: tree
+    integer, intent(in)           :: id             !< Id of box
+    integer, intent(in)           :: nc             !< Number of cells
+    integer, intent(in)           :: n_vars         !< Number of variables
+    integer, intent(in)           :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)           :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)           :: i_flux(n_vars) !< Flux variables
+    real(dp), intent(inout)       :: wmax(NDIM)     !< Maximum wave speed found
     !> Compute the maximum wave speed
-    procedure(subr_max_wavespeed)  :: max_wavespeed
+    procedure(subr_max_wavespeed) :: max_wavespeed
     !> Compute the flux from primitive variables on cell faces
-    procedure(subr_flux_from_prim) :: flux_from_primitives
+    procedure(subr_flux)          :: flux_from_primitives
     !> Modify flux for other contributions
-    procedure(subr_flux_modify)    :: flux_modify
+    procedure(subr_flux_modify)   :: flux_modify
     !> Potentially modify line densities
-    procedure(subr_line_modify)    :: line_modify
+    procedure(subr_line_modify)   :: line_modify
     !> Convert conservative variables to primitive ones
-    procedure(subr_prim_cons)      :: to_primitive
+    procedure(subr_prim_cons)     :: to_primitive
     !> Convert primitive variables to conservative ones
-    procedure(subr_prim_cons)      :: to_conservative
+    procedure(subr_prim_cons)     :: to_conservative
     !> Type of slope limiter to use for flux calculation
-    integer, intent(in)            :: limiter
+    integer, intent(in)           :: limiter
 
 
     real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
