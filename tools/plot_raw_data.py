@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+# Tool to map Silo data to a uniform grid and plot it with python
+#
+# Author: Jannis Teunissen
+#
+# External requirements:
+# pyabel (for Abel transform)
+
 import numpy as np
 import matplotlib.pyplot as plt
 from raw_reader import get_raw_data, map_grid_data_to
@@ -87,8 +94,6 @@ for g in grids:
 
 if args.abel_transform:
     from abel.hansenlaw import hansenlaw_transform
-    if args.xlim and args.xlim[0] > 0:
-        raise ValueError('Abel transform requires xlim[0] to be 0.')
     tmp = hansenlaw_transform(uniform_data.T, dr[0], direction='forward')
     uniform_data = tmp.T
 
