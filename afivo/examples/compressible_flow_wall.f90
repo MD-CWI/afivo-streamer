@@ -227,7 +227,8 @@ contains
 
   end subroutine get_fluxes
 
-  !> Modify line data to approximate a slip boundary condition
+  !> Modify line data to approximate a slip boundary condition. However, in case
+  !> of a staircase pattern, this becomes more of a no-slip boundary condition.
   subroutine line_modify(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
     integer, intent(in)     :: n_cc                 !< Number of cell centers
     integer, intent(in)     :: n_var                !< Number of variables
