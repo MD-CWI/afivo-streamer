@@ -193,7 +193,7 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
             coords_coarse.append(cc_coarse)
 
         # Create meshgrid of coarse indices
-        ixs = np.meshgrid(*cix)
+        ixs = np.meshgrid(*cix, indexing='ij')
 
         # Add fine grid values at coarse indices, weighted by relative volume
         cdata = np.zeros(nx)
@@ -203,12 +203,11 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
             # Broadcast to have volume weight for every grid cell
             rvolume = np.broadcast_to(rvolume[:, None], g['ihi']-g['ilo'])
             # Important to use Fortran order here
-            values = rvolume.ravel(order='F') * \
-                g['values'][valid_ix].ravel(order='F')
+            values = rvolume.ravel() * g['values'][valid_ix].ravel()
         else:
             # Cartesian grid, simple averaging
             rvolume = np.product(g['dr']/dr)
-            values = rvolume * g['values'][valid_ix].ravel(order='F')
+            values = rvolume * g['values'][valid_ix].ravel()
 
         np.add.at(cdata, tuple(map(np.ravel, ixs)), values)
     elif ratios[0] < 1 - eps:
