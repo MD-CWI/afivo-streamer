@@ -154,17 +154,25 @@ def grid_project(in_grid, project_dims):
     return g
 
 
-def map_grid_data_to(g, r_min, dr, axisymmetric=False):
+def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False):
     """Map grid data to another grid with origin r_min and grid spacing dr
 
     :param g: input grid
     :param r_min: origin of new grid
+    :param r_max: upper location of new grid
     :param dr: grid spacing of new grid
     :param axisymmetric: whether to account for an axisymmetric geometry
     :returns: data and indices on new grid
 
     """
+    # Check if grids overlap
+    if np.any(g['r_min'] > r_max) or np.any(g['r_max'] < r_min):
+        return None, None, None
+
     ratios = dr / g['dr']
+
+    if not np.allclose(ratios, ratios[0], atol=0.):
+        raise ValueError('Grid ratio not uniform')
 
     # Get index range corresponding to non-ghost grid cells
     valid_ix = tuple([np.s_[i:j] for (i, j) in zip(g['ilo'], g['ihi'])])
@@ -173,8 +181,20 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
     eps = 1e-10
 
     # Compute coarse grid min and max index
-    ix_lo = ((g['r_min'] - r_min)/dr + eps).astype(int)
-    ix_hi = ((g['r_max'] - r_min)/dr - eps).astype(int)
+    if ratios[0] > 1 + eps:
+        # Fine-to-coarse, first compute index for fine grid
+        ix_lo_fine = np.round((g['r_min'] - r_min)/g['dr']).astype(int)
+        ix_hi_fine = np.round((g['r_max'] - r_min)/g['dr']).astype(int) - 1
+
+        # Then convert to coarse grid index
+        r = np.round(ratios).astype(int)
+        ix_lo, ix_hi = ix_lo_fine//r, ix_hi_fine//r
+    else:
+        # Grid is at same refinement level or coarser, so we can directly
+        # compute index with rounding
+        ix_lo = np.round((g['r_min'] - r_min)/dr).astype(int)
+        ix_hi = np.round((g['r_max'] - r_min)/dr).astype(int) - 1
+
     nx = ix_hi - ix_lo + 1
 
     if ratios[0] > 1 + eps:
@@ -185,7 +205,7 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
         for d in range(g['n_dims']):
             dim_coords = g['coords_cc'][d]
             cc_fine = dim_coords[g['ilo'][d]:g['ihi'][d]]
-            ix = ((cc_fine - r_min[d])/dr[d]).astype(int)
+            ix = np.floor((cc_fine - r_min[d])/dr[d]).astype(int)
             cc_coarse = r_min[d] + (ix + 0.5) * dr[d]
 
             cix.append(ix - ix_lo[d])

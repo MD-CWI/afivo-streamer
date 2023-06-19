@@ -23,6 +23,10 @@ p.add_argument('-min_pixels', type=int, default=512,
                help='Min. pixels for any dimension')
 p.add_argument('-project_dims', type=int, nargs='+', choices=[0, 1, 2],
                help='Project (integrate) along dimension(s)')
+p.add_argument('-r_min', type=float, nargs='+',
+               help='Data range in x direction')
+p.add_argument('-r_max', type=float, nargs='+',
+               help='Data range in y direction')
 p.add_argument('-save_plot', type=str,
                help='Save the plot into this file')
 p.add_argument('-axisymmetric', action='store_true',
@@ -31,10 +35,8 @@ p.add_argument('-abel_transform', action='store_true',
                help='Perform forward Abel transform (implies axisymmetric)')
 p.add_argument('-vmin', type=float, help='Minimum intensity in plot')
 p.add_argument('-vmax', type=float, help='Maximum intensity in plot')
-p.add_argument('-xlim', type=float, nargs=2,
-               help='Plot range in x direction')
-p.add_argument('-ylim', type=float, nargs=2,
-               help='Plot range in y direction')
+p.add_argument('-xlim', type=float, nargs=2, help='Plot range in x direction')
+p.add_argument('-ylim', type=float, nargs=2, help='Plot range in y direction')
 p.add_argument('-hide_axes', action='store_true',
                help='Hide axes etc.')
 p.add_argument('-save_npz', type=str,
@@ -73,27 +75,48 @@ nx = domain['n_cells_coarse'] * ratio
 # Grid spacing on uniform grid
 dr = (domain['r_max'] - domain['r_min']) / nx
 
+r_min, r_max = domain['r_min'], domain['r_max']
+
+# Get coordinates of user-defined box on coarse grid
+if args.r_min is not None:
+    r_min = domain['r_min'] + np.floor((args.r_min-domain['r_min'])/dr) * dr
+if args.r_max is not None:
+    r_max = domain['r_max'] - np.floor((domain['r_max']-args.r_max)/dr) * dr
+
+nx = np.round((r_max - r_min)/dr).astype(int)
+
 print(f'Resolution:   {nx}')
 print(f'Grid spacing: {dr}')
 
 # List of coordinates
-x = [np.linspace(a, b, n) for a, b, n in
-     zip(domain['r_min']+0.5*dr, domain['r_max']-0.5*dr, nx)]
+x = [np.linspace(a, b, n) for a, b, n in zip(r_min+0.5*dr, r_max-0.5*dr, nx)]
 
 uniform_data = np.zeros(nx)
 
 # Map each grid to the uniformly spaced output
 for g in grids:
-    grid_data, ix_lo, ix_hi = map_grid_data_to(g, domain['r_min'],
-                                               dr, args.axisymmetric)
+    grid_data, ix_lo, ix_hi = \
+        map_grid_data_to(g, r_min, r_max, dr, args.axisymmetric)
 
-    # Index range on the output array
-    g_ix = tuple([np.s_[i:j] for (i, j) in zip(ix_lo, ix_hi)])
-    uniform_data[g_ix] += grid_data
+    if grid_data is not None:
+        # Get index range that is valid on uniform grid
+        offset_lo = np.maximum(0, -ix_lo)
+        offset_hi = np.maximum(0, ix_hi - nx)
+
+        # Index range on the output array
+        g_ix = tuple([np.s_[i:j] for (i, j) in zip(ix_lo + offset_lo,
+                                                   ix_hi - offset_hi)])
+        # Index range on the grid_data
+        grid_lo, grid_hi = offset_lo, grid_data.shape - offset_hi
+        d_ix = tuple([np.s_[i:j] for (i, j) in zip(grid_lo, grid_hi)])
+
+        uniform_data[g_ix] += grid_data[d_ix]
 
 
 if args.abel_transform:
     from abel.hansenlaw import hansenlaw_transform
+    if args.r_min is not None and args.r_min[0] > 0:
+        raise ValueError('Abel transform requires r_min[0] to be 0.')
     tmp = hansenlaw_transform(uniform_data.T, dr[0], direction='forward')
     uniform_data = tmp.T
 
