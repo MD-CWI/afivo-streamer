@@ -154,7 +154,8 @@ def grid_project(in_grid, project_dims):
     return g
 
 
-def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False):
+def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
+                     interpolation_method='linear'):
     """Map grid data to another grid with origin r_min and grid spacing dr
 
     :param g: input grid
@@ -162,12 +163,15 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False):
     :param r_max: upper location of new grid
     :param dr: grid spacing of new grid
     :param axisymmetric: whether to account for an axisymmetric geometry
+    :param interpolation_method: how to interpolate data (linear, nearest)
     :returns: data and indices on new grid
 
     """
     # Check if grids overlap
     if np.any(g['r_min'] > r_max) or np.any(g['r_max'] < r_min):
-        return None, None, None
+        Ndim = len(r_min)
+        # Return empty index range
+        return 0., np.zeros(Ndim, dtype=int), np.zeros(Ndim, dtype=int)
 
     ratios = dr / g['dr']
 
@@ -231,20 +235,31 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False):
 
         np.add.at(cdata, tuple(map(np.ravel, ixs)), values)
     elif ratios[0] < 1 - eps:
-        # TODO: could maybe include axisymmetric correction here as well
         # To interpolate data, compute coordinates of new cell centers
+        # TODO: could maybe include axisymmetric correction here as well
         c_new = [np.linspace(a, b, n) for a, b, n in
                  zip(g['r_min']+0.5*dr, g['r_max']-0.5*dr, nx)]
         mgrid = np.meshgrid(*c_new, indexing='ij')
         new_coords = np.vstack(tuple(map(np.ravel, mgrid))).T
 
-        # Near physical boundaries, extrapolation will be performed
+        # Near physical boundaries, extrapolation will be performed when using
+        # linear interpolation
         f_interp = RegularGridInterpolator(
-            tuple(g['coords_cc']), g['values'],
-            bounds_error=False, fill_value=None)
+            tuple(g['coords_cc']), g['values'], bounds_error=False,
+            fill_value=None, method=interpolation_method)
+
         cdata = f_interp(new_coords).reshape(nx)
     else:
         # Can directly use available data
         cdata = g['values'][valid_ix]
 
-    return cdata, ix_lo, ix_hi+1
+    # Get index range that is valid on uniform grid
+    nx_uniform = np.round((r_max - r_min)/dr).astype(int)
+    offset_lo = np.maximum(0, -ix_lo)
+    offset_hi = np.maximum(0, ix_hi+1 - nx_uniform)
+
+    # Index range on the grid_data
+    grid_lo, grid_hi = offset_lo, nx-offset_hi
+    d_ix = tuple([np.s_[i:j] for (i, j) in zip(grid_lo, grid_hi)])
+
+    return cdata[d_ix], ix_lo+offset_lo, ix_hi+1-offset_hi
