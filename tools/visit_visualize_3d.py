@@ -207,6 +207,7 @@ if __name__ == '__main__':
     aatts.legendInfoFlag = 0
     aatts.databaseInfoFlag = 0
     if args.time:
+        aatts.databaseInfoFlag = 1
         aatts.timeInfoFlag = 1
     if args.legend:
         aatts.legendInfoFlag = 1
