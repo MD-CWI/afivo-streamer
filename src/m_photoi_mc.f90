@@ -30,6 +30,9 @@ module m_photoi_mc
   !> Number of photons to use
   integer, protected :: phmc_num_photons = 100*1000
 
+  !> Minimal photon weight
+  real(dp), protected :: phmc_min_weight = 1.0_dp
+
   !> Table for photoionization
   type(phmc_tbl_t), public, protected :: phmc_tbl
 
@@ -56,6 +59,8 @@ contains
     call CFG_add_get(cfg, "photoi_mc%physical_photons", &
          phmc_physical_photons, &
          "Whether physical photons are used")
+    call CFG_add_get(cfg, "photoi_mc%min_weight", phmc_min_weight, &
+         "Minimal photon weight (default: 1.0)")
     call CFG_add_get(cfg, "photoi_mc%const_dx", &
          phmc_const_dx, &
          "Whether a constant grid spacing is used for photoionization")
@@ -392,7 +397,7 @@ contains
     integer                     :: IJK, n, n_used
     integer                     :: proc_id, n_procs
     integer                     :: pho_lvl, max_num_photons
-    real(dp)                    :: dr(NDIM), dt_fac, dist
+    real(dp)                    :: dr(NDIM), dt_fac, dist, n_produced
     real(dp)                    :: sum_production_rate, pi_lengthscale
     real(dp), allocatable       :: xyz_src(:, :)
     real(dp), allocatable       :: xyz_abs(:, :)
@@ -421,12 +426,18 @@ contains
 
     ! dt_fac is used to convert a discrete number of photons to a number of
     ! photons per unit time. Depending on the arguments dt and phmc_num_photons,
-    ! 'physical' photons with a weight of 1.0, or super-photons with a weight
-    ! larger (or smaller) than one can be used.
+    ! 'physical' photons with a weight of phmc_min_weight, or super-photons with
+    ! a weight larger (or smaller) than one can be used.
     if (present(dt)) then
        ! Create "physical" photons when less than phmc_num_photons are produced,
        ! otherwise create approximately phmc_num_photons
-       dt_fac = min(dt, phmc_num_photons / (sum_production_rate + small_value))
+       n_produced = dt * sum_production_rate / phmc_min_weight
+
+       if (n_produced < phmc_num_photons) then
+          dt_fac = dt/phmc_min_weight
+       else
+          dt_fac = phmc_num_photons / (sum_production_rate + small_value)
+       end if
     else
        ! Create approximately phmc_num_photons by setting dt_fac like this
        dt_fac = phmc_num_photons / (sum_production_rate + small_value)
