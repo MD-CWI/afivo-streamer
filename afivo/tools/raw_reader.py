@@ -154,17 +154,29 @@ def grid_project(in_grid, project_dims):
     return g
 
 
-def map_grid_data_to(g, r_min, dr, axisymmetric=False):
+def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
+                     interpolation_method='linear'):
     """Map grid data to another grid with origin r_min and grid spacing dr
 
     :param g: input grid
     :param r_min: origin of new grid
+    :param r_max: upper location of new grid
     :param dr: grid spacing of new grid
     :param axisymmetric: whether to account for an axisymmetric geometry
+    :param interpolation_method: how to interpolate data (linear, nearest)
     :returns: data and indices on new grid
 
     """
+    # Check if grids overlap
+    if np.any(g['r_min'] > r_max) or np.any(g['r_max'] < r_min):
+        Ndim = len(r_min)
+        # Return empty index range
+        return 0., np.zeros(Ndim, dtype=int), np.zeros(Ndim, dtype=int)
+
     ratios = dr / g['dr']
+
+    if not np.allclose(ratios, ratios[0], atol=0.):
+        raise ValueError('Grid ratio not uniform')
 
     # Get index range corresponding to non-ghost grid cells
     valid_ix = tuple([np.s_[i:j] for (i, j) in zip(g['ilo'], g['ihi'])])
@@ -173,8 +185,20 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
     eps = 1e-10
 
     # Compute coarse grid min and max index
-    ix_lo = ((g['r_min'] - r_min)/dr + eps).astype(int)
-    ix_hi = ((g['r_max'] - r_min)/dr - eps).astype(int)
+    if ratios[0] > 1 + eps:
+        # Fine-to-coarse, first compute index for fine grid
+        ix_lo_fine = np.round((g['r_min'] - r_min)/g['dr']).astype(int)
+        ix_hi_fine = np.round((g['r_max'] - r_min)/g['dr']).astype(int) - 1
+
+        # Then convert to coarse grid index
+        r = np.round(ratios).astype(int)
+        ix_lo, ix_hi = ix_lo_fine//r, ix_hi_fine//r
+    else:
+        # Grid is at same refinement level or coarser, so we can directly
+        # compute index with rounding
+        ix_lo = np.round((g['r_min'] - r_min)/dr).astype(int)
+        ix_hi = np.round((g['r_max'] - r_min)/dr).astype(int) - 1
+
     nx = ix_hi - ix_lo + 1
 
     if ratios[0] > 1 + eps:
@@ -185,7 +209,7 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
         for d in range(g['n_dims']):
             dim_coords = g['coords_cc'][d]
             cc_fine = dim_coords[g['ilo'][d]:g['ihi'][d]]
-            ix = ((cc_fine - r_min[d])/dr[d]).astype(int)
+            ix = np.floor((cc_fine - r_min[d])/dr[d]).astype(int)
             cc_coarse = r_min[d] + (ix + 0.5) * dr[d]
 
             cix.append(ix - ix_lo[d])
@@ -193,7 +217,7 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
             coords_coarse.append(cc_coarse)
 
         # Create meshgrid of coarse indices
-        ixs = np.meshgrid(*cix)
+        ixs = np.meshgrid(*cix, indexing='ij')
 
         # Add fine grid values at coarse indices, weighted by relative volume
         cdata = np.zeros(nx)
@@ -203,29 +227,39 @@ def map_grid_data_to(g, r_min, dr, axisymmetric=False):
             # Broadcast to have volume weight for every grid cell
             rvolume = np.broadcast_to(rvolume[:, None], g['ihi']-g['ilo'])
             # Important to use Fortran order here
-            values = rvolume.ravel(order='F') * \
-                g['values'][valid_ix].ravel(order='F')
+            values = rvolume.ravel() * g['values'][valid_ix].ravel()
         else:
             # Cartesian grid, simple averaging
             rvolume = np.product(g['dr']/dr)
-            values = rvolume * g['values'][valid_ix].ravel(order='F')
+            values = rvolume * g['values'][valid_ix].ravel()
 
         np.add.at(cdata, tuple(map(np.ravel, ixs)), values)
     elif ratios[0] < 1 - eps:
-        # TODO: could maybe include axisymmetric correction here as well
         # To interpolate data, compute coordinates of new cell centers
+        # TODO: could maybe include axisymmetric correction here as well
         c_new = [np.linspace(a, b, n) for a, b, n in
                  zip(g['r_min']+0.5*dr, g['r_max']-0.5*dr, nx)]
         mgrid = np.meshgrid(*c_new, indexing='ij')
         new_coords = np.vstack(tuple(map(np.ravel, mgrid))).T
 
-        # Near physical boundaries, extrapolation will be performed
+        # Near physical boundaries, extrapolation will be performed when using
+        # linear interpolation
         f_interp = RegularGridInterpolator(
-            tuple(g['coords_cc']), g['values'],
-            bounds_error=False, fill_value=None)
+            tuple(g['coords_cc']), g['values'], bounds_error=False,
+            fill_value=None, method=interpolation_method)
+
         cdata = f_interp(new_coords).reshape(nx)
     else:
         # Can directly use available data
         cdata = g['values'][valid_ix]
 
-    return cdata, ix_lo, ix_hi+1
+    # Get index range that is valid on uniform grid
+    nx_uniform = np.round((r_max - r_min)/dr).astype(int)
+    offset_lo = np.maximum(0, -ix_lo)
+    offset_hi = np.maximum(0, ix_hi+1 - nx_uniform)
+
+    # Index range on the grid_data
+    grid_lo, grid_hi = offset_lo, nx-offset_hi
+    d_ix = tuple([np.s_[i:j] for (i, j) in zip(grid_lo, grid_hi)])
+
+    return cdata[d_ix], ix_lo+offset_lo, ix_hi+1-offset_hi
