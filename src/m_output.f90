@@ -101,6 +101,9 @@ module m_output
   ! Number of extra variables to add to output
   integer :: n_extra_vars = 0
 
+  ! Maximum refinement level for output
+  integer :: output_max_lvl = 100
+
   ! Names of extra variables to add to output
   character(len=af_nlen) :: output_extra_vars(100)
 
@@ -149,6 +152,9 @@ contains
     call CFG_add_get(cfg, "output%dt_factor_pulse_off", &
          output_dt_factor_pulse_off, &
          "To reduce output when the voltage is off")
+
+    call CFG_add_get(cfg, "output%max_lvl", output_max_lvl, &
+         "Maximum refinement level for output")
 
     call CFG_add(cfg, "output%only", empty_names, &
          "If defined, only output these variables", .true.)
@@ -356,9 +362,11 @@ contains
        if (n_extra_vars > 0) then
           call af_write_silo(tree, fname, output_cnt, global_time, &
                add_vars=add_variables, &
-               add_names=output_extra_vars(1:n_extra_vars))
+               add_names=output_extra_vars(1:n_extra_vars), &
+               max_lvl=output_max_lvl)
        else
-          call af_write_silo(tree, fname, output_cnt, global_time)
+          call af_write_silo(tree, fname, output_cnt, global_time, &
+               max_lvl=output_max_lvl)
        end if
     end if
 
