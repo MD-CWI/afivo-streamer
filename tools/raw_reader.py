@@ -59,6 +59,9 @@ def get_raw_data(fname, project_dims=None):
 
     """
     with open(fname, 'rb') as f:
+        cycle = unpack('=i', f.read(calcsize('=i')))[0]
+        time = unpack('=d', f.read(calcsize('=d')))[0]
+
         grids = []
         n_grids = unpack('=i', f.read(calcsize('=i')))[0]
 
@@ -75,6 +78,8 @@ def get_raw_data(fname, project_dims=None):
             grids.append(grid)
 
     domain_props = get_domain_properties(grids)
+    domain_props['cycle'] = cycle
+    domain_props['time'] = time
     return grids, domain_props
 
 
