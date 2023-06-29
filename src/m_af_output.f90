@@ -913,10 +913,11 @@ contains
     integer, intent(in), optional          :: ixs_cc(:)    !< Only include these cell variables
     procedure(subr_add_vars), optional     :: add_vars     !< Optional routine to add extra variables
     character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
-    !> Maximum refinement level for output. Currently not implemented
+    !> Maximum refinement level for output
     integer, intent(in), optional          :: max_lvl
     integer                                :: n, i, id, ix, lvl, n_boxes
     integer                                :: dbix, n_cc, n_leaves, nc
+    integer                                :: highest_lvl
     integer, allocatable                   :: icc_val(:), id_leaves(:)
     integer, allocatable                   :: id_sorted_ix(:)
     real(dp), allocatable                  :: xmin_leaves(:)
@@ -924,7 +925,8 @@ contains
     character(len=af_nlen)                 :: yname
     character(len=400)                     :: fname
 
-    if (present(max_lvl)) error stop "Not implemented in 1D yet"
+    highest_lvl = tree%highest_lvl
+    if (present(max_lvl)) highest_lvl = min(max_lvl, tree%highest_lvl)
 
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
@@ -939,8 +941,18 @@ contains
          error stop "add_vars / add_names not implemented in 1D"
 
     n_cc     = size(icc_val)
-    n_leaves = af_num_leaves_used(tree)
     nc       = tree%n_cell
+
+    ! Count number of leaves
+    n = 0
+    do lvl = 1, highest_lvl
+       if (lvl < highest_lvl) then
+          n = n + size(tree%lvls(lvl)%leaves)
+       else
+          n = n + size(tree%lvls(lvl)%ids)
+       end if
+    end do
+    n_leaves = n
 
     allocate(ydata(n_leaves * nc, n_cc))
     allocate(xdata(n_leaves * nc))
@@ -950,9 +962,14 @@ contains
 
     ! Store ids of all leaves
     n = 0
-    do lvl = 1, tree%highest_lvl
-       n_boxes = size(tree%lvls(lvl)%leaves)
-       id_leaves(n+1:n+n_boxes) = tree%lvls(lvl)%leaves
+    do lvl = 1, highest_lvl
+       if (lvl < highest_lvl) then
+          n_boxes = size(tree%lvls(lvl)%leaves)
+          id_leaves(n+1:n+n_boxes) = tree%lvls(lvl)%leaves
+       else
+          n_boxes = size(tree%lvls(lvl)%ids)
+          id_leaves(n+1:n+n_boxes) = tree%lvls(lvl)%ids
+       end if
        n = n + n_boxes
     end do
 
