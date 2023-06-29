@@ -89,6 +89,7 @@ def plot_raw_data(args):
 
     nx = np.round((r_max - r_min)/dr).astype(int)
 
+    print(f'File:         {args.input_file}')
     print(f'Resolution:   {nx}')
     print(f'Grid spacing: {dr}')
 
