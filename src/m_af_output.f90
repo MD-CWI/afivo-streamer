@@ -1052,7 +1052,7 @@ contains
     end if
 
     highest_lvl = tree%highest_lvl
-    if (present(max_lvl)) highest_lvl = max_lvl
+    if (present(max_lvl)) highest_lvl = min(max_lvl, tree%highest_lvl)
 
     n_cc = size(icc_val)
 
