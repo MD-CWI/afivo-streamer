@@ -16,7 +16,21 @@ int main(int argc, char* argv[]){
   DBfile* dbfile = DBOpen(silo_file, DB_UNKNOWN, DB_READ);
   DBmultivar *mvar = DBGetMultivar(dbfile, variable_name);
 
+  double time = 0.0;
+  int cycle = 0;
+
+  /* Read time and cycle */
+  if (DBInqVarExists(dbfile, "dtime")) {
+    DBReadVar(dbfile, "dtime", &time);
+  }
+  if (DBInqVarExists(dbfile, "cycle")) {
+    DBReadVar(dbfile, "cycle", &cycle);
+  }
+
   FILE *output = fopen(output_file, "wb");
+
+  fwrite(&cycle, sizeof(int), 1, output);
+  fwrite(&time, sizeof(double), 1, output);
   fwrite(&mvar->nvars, sizeof(int), 1, output);
 
   for (int i = 0; i < mvar->nvars; i++) {

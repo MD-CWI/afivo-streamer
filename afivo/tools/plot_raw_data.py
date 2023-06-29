@@ -117,7 +117,8 @@ def plot_raw_data(args):
 
     if args.save_npz:
         # Save data
-        np.savez(args.save_npz, uniform_data=uniform_data, *x)
+        np.savez(args.save_npz, uniform_data=uniform_data,
+                 cycle=domain['cycle'], time=domain['time'], *x)
     else:
         # Plot data
         fig, ax = plt.subplots()
