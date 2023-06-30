@@ -27,6 +27,9 @@ def get_args():
     pr.add_argument('varname', type=str,
                     help='Plot this scalar quantity')
 
+    pr.add_argument('-no_volume_render', action='store_true',
+                    help='Do not do any volume rendering')
+
     pr.add_argument('-outdir', type=str, default=os.getcwd(),
                     help='Output directory')
     pr.add_argument('-fname', type=str, default='visit',
@@ -132,7 +135,9 @@ if __name__ == '__main__':
     v.SetTreatAllDBsAsTimeVarying(1)
 
     v.OpenDatabase(args.database + ' database')
-    v.AddPlot('Volume', args.varname, 1, 1)
+
+    if not args.no_volume_render:
+        v.AddPlot('Volume', args.varname, 1, 1)
 
     if args.mesh:
         v.AddPlot('Mesh', 'mesh')
