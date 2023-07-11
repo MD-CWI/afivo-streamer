@@ -162,6 +162,9 @@ module m_streamer
   !> Current sum of J.E per thread
   real(dp), public, allocatable :: ST_current_JdotE(:, :)
 
+  !> Current estimated electric current
+  real(dp), public :: ST_global_current
+
   !> Global sum of J.E
   real(dp), public :: ST_global_JdotE
 

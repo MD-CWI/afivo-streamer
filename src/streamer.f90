@@ -18,6 +18,7 @@ program streamer
   use m_user_methods
   use m_output
   use m_dielectric
+  use m_units_constants
 
   implicit none
 
@@ -249,6 +250,9 @@ program streamer
           sum(ST_current_rates(1:n_reactions, :), dim=2) * dt
      ST_global_JdotE = ST_global_JdotE + &
           sum(ST_current_JdotE(1, :)) * dt
+
+     ! Estimate current according to Sato's equation V*I = sum(J.E)
+     ST_global_current = sum(ST_current_JdotE(1, :)) / current_voltage
 
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
