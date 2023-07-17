@@ -251,7 +251,8 @@ program streamer
      ST_global_JdotE = ST_global_JdotE + &
           sum(ST_current_JdotE(1, :)) * dt
 
-     ! Estimate current according to Sato's equation V*I = sum(J.E)
+     ! Estimate electric current according to Sato's equation V*I = sum(J.E).
+     ! TODO: only consider background electric field when computing sum(J.E)
      ST_global_current = sum(ST_current_JdotE(1, :)) / current_voltage
 
      ! Make sure field is available for latest time state
