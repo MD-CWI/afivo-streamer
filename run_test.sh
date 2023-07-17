@@ -2,7 +2,7 @@
 
 # Usage:
 # ./run_test.sh (runs all tests)
-# ./run_test.sh my_test.cfg (run a single test)
+# ./run_test.sh path_to/my_test.cfg (run one or more tests)
 #
 # The parent directory of a cfg file should contain the "streamer" executable
 
@@ -38,11 +38,13 @@ run_test() {
 # Use array to store test results
 declare -a test_results
 
-if (( "$#" == 1 )); then
-    # Run a single test
-    out=$(run_test "$1" "$top_dir")
-    echo "$out"
-    results+=("$out")
+if (( "$#" > 0 )); then
+    # Run given tests (note that this does not compile the code)
+    for cfg in "$@"; do
+        out=$(run_test "$cfg" "$top_dir")
+        echo "$out"
+        results+=("$out")
+    done
 else
     # Run all tests
     declare -a test_dirs=("programs/standard_1d/tests"

@@ -328,6 +328,12 @@ program streamer
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
            call field_compute(tree, mg, 0, time, .true.)
+
+           ! Compute photoionization on new mesh
+           if (photoi_enabled) then
+              call photoi_set_src(tree, time - photoi_prev_time)
+              photoi_prev_time = time
+           end if
         end if
      end if
   end do
