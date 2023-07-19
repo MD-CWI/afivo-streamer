@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main master github-test
+      - main
+      - master
+      - github-test
   pull_request:
 
 jobs:
