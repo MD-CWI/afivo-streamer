@@ -325,6 +325,7 @@ contains
     use m_field
     use m_user_methods
     use m_analysis
+    use m_chemistry
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
@@ -333,7 +334,6 @@ contains
          integer, intent(in) :: my_unit
        end subroutine write_sim_data
     end interface
-    integer                   :: i
     character(len=string_len) :: fname
 
     if (compute_power_density) then
@@ -348,13 +348,12 @@ contains
          modulo(output_cnt, silo_per_outputs) == 0) then
        call field_set_rhs(tree, 0)
 
-       do i = 1, tree%n_var_cell
-          if (tree%cc_write_output(i) .and. .not. &
-               associated(tree%cc_methods(i)%funcval)) then
-             call af_restrict_tree(tree, [i])
-             call af_gc_tree(tree, [i])
-          end if
-       end do
+       ! Ensure valid ghost cells for density-based variables
+       call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
+       call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+
+       call af_restrict_tree(tree, [i_rhs])
+       call af_gc_tree(tree, [i_rhs])
 
        write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
        if (n_extra_vars > 0) then
