@@ -15,8 +15,11 @@ run_test() {
     cfg=$(basename "$1")
 
     # Execute the test in the directory of the .cfg file
+    start=`date +%s.%N`
     (cd "$dir" && ../streamer "$cfg" > run.log ||
              { cat run.log; return 1; })
+    end=`date +%s.%N`
+    runtime_sec=$(printf "%.2f" $(echo "$end - $start" | bc -l))
 
     if (($? != 0)); then
         echo "FAILED $1"
@@ -29,9 +32,9 @@ run_test() {
 
     # Compare log files
     if "$2"/tools/compare_logs.py "$log_a" "$log_b"; then
-        echo "PASSED $1"
+        echo "PASSED $1 (${runtime_sec})"
     else
-        echo "FAILED $1"
+        echo "FAILED $1 (${runtime_sec})"
     fi
 }
 
