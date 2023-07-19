@@ -1,4 +1,4 @@
-name: 'afivo-streamer test suite'
+name: 'afivo-streamer test suite v2'
 
 on:
   workflow_dispatch:
