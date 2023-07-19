@@ -1,5 +1,5 @@
-- name: afivo external libraries
-  uses: actions/upload-artifact@v3.1.2
-  with:
-    name: store afivo libraries
-    path: afivo/external_libraries
+name: 'afivo external libraries'
+uses: actions/upload-artifact@v3.1.2
+with:
+  name: store afivo libraries
+  path: afivo/external_libraries

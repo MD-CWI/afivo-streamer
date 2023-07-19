@@ -1,12 +1,5 @@
 name: 'afivo-streamer test suite'
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main master github-test
-  pull_request:
-
 jobs:
   run-tests:
     runs-on: ubuntu-latest
