@@ -1,4 +1,4 @@
-name: 'afivo-streamer test suite v2'
+name: 'afivo-streamer regression tests'
 
 on:
   workflow_dispatch:
@@ -20,6 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install gfortran
+          sudo apt install python3-numpy
 
       - name: Compile
         run: make

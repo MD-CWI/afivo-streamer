@@ -1,0 +1,9 @@
+steps:
+- uses: actions/checkout@v3
+
+- run: make -C afivo
+
+- uses: actions/upload-artifact@v3
+  with:
+    name: afivo library
+    path: afivo/external_libraries
