@@ -138,6 +138,7 @@ contains
          "The gas pressure (bar)")
     call CFG_add_get(cfg, "gas%temperature", gas_temperature, &
          "The gas temperature (Kelvin)")
+    !> @todo compute gas molecular weight from gas composition
     call CFG_add_get(cfg, "gas%molecular_weight", gas_molecular_weight, &
          "Gas mean molecular weight (kg), for gas dynamics")
     call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
