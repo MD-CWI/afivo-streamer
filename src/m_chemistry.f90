@@ -393,15 +393,11 @@ contains
 
        ! Write to a file
        open(newunit=my_unit, file=trim(fname), action="write")
-       write(my_unit, "(A)") "# Description of columns"
-       write(my_unit, "(A)") "# 1: E/N [Td]"
-       write(my_unit, "(A)") "# 2: E [V/m]"
-       write(my_unit, "(A)") "# 3: Electron mobility [m^2/(V s)]"
-       write(my_unit, "(A)") "# 4: Electron diffusion [m^2/s]"
-       write(my_unit, "(A)") "# 5: Townsend ioniz. coef. alpha [1/m]"
-       write(my_unit, "(A)") "# 6: Townsend attach. coef. eta [1/m]"
-       write(my_unit, "(A)") "# 7: Ionization rate [1/s]"
-       write(my_unit, "(A)") "# 8: Attachment rate [1/s]"
+       write(my_unit, "(A)") &
+            "E/N[Td] E[V/m] Electron_mobility[m^2/(Vs)] &
+            &Electron_diffusion[m^2/s] Townsend_ioniz._coef._alpha[1/m] &
+            &Townsend_attach._coef._eta[1/m] Ionization_rate[1/s] &
+            &Attachment_rate[1/s]"
        do n = 1, n_fields
           write(my_unit, *) fields(n), &
                fields(n) * Townsend_to_SI * gas_number_density, &
