@@ -632,10 +632,10 @@ contains
 #endif
 
     if (associated(user_log_variables)) then
-       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,5E20.8,I3,", &
-            n_user_vars, "E20.8)"
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,5E20.8e3,I3,", &
+            n_user_vars, "E20.8e3)"
     else
-       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,5E20.8,I3)"
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,5E20.8e3,I3)"
     end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -832,7 +832,7 @@ contains
        close(my_unit)
     end if
 
-    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E20.8)"
+    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E20.8e3)"
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
