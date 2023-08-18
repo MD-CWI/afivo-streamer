@@ -296,8 +296,10 @@ contains
     integer, intent(in)          :: i_surf   !< Surface variables
     real(dp), intent(out)        :: surf_int !< Surface integral
     integer                      :: ix
+#if NDIM == 2
     real(dp), parameter          :: two_pi = 2 * acos(-1.0_dp)
     real(dp)                     :: coords(NDIM, diel%n_cell**(NDIM-1))
+#endif
 
     surf_int = 0
     do ix = 1, diel%max_ix
