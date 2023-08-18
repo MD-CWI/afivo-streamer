@@ -146,6 +146,8 @@ def plot_raw_data(args):
         if args.ylim:
             ax.set_ylim(*args.ylim)
 
+        ax.set_title(f't = {domain["time"]:.3e}')
+
         if args.save_plot:
             print(f'Saving to {args.save_plot}')
             plt.savefig(args.save_plot, dpi=200, bbox_inches='tight')
