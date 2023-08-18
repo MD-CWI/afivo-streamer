@@ -125,7 +125,6 @@ module m_output
   public :: output_write
   public :: output_log
   public :: output_status
-  public :: output_surface_write
 
 contains
 
@@ -587,7 +586,7 @@ contains
     end do
 
     if (ST_use_dielectric) then
-       call todo_diel_get_integral(diel, i_surf_dens, tmp)
+       call surface_get_integral(tree, diel, i_surf_dens, tmp)
        sum_elem_charge = sum_elem_charge + tmp
     end if
 
@@ -874,72 +873,6 @@ contains
          " (cfl diff drt chem)"
   end subroutine output_status
 
-  !> Write surface quantities to a separate output file
-  subroutine output_surface_write(tree, output_cnt)
-    use m_npy
-    use m_dielectric
-    type(af_t), intent(inout)    :: tree
-    integer, intent(in)          :: output_cnt
-    integer                      :: n, i, ix, nc
-    integer                      :: lo(NDIM-1), hi(NDIM-1)
-    character(len=string_len)    :: tmpname, filename
-
-    real(dp)              :: coords(NDIM, tree%n_cell**(NDIM-1))
-    real(dp), allocatable :: r(:, :), dr(:, :)
-    real(dp), allocatable :: photon_flux(:), surf_dens(:)
-    integer, allocatable  :: surf_dim(:)
-
-    nc = diel%n_cell
-    n = count(diel%surfaces(1:diel%max_ix)%in_use)
-    allocate(r(NDIM, n*nc), photon_flux(n*nc), surf_dens(n*nc))
-    allocate(dr(NDIM-1, n), surf_dim(n))
-
-    write(filename, "(A,I6.6,A)") trim(output_name) // "_", &
-         output_cnt, "_surface.npz"
-    write(tmpname, "(A,I6.6,A)") trim(output_name) // "_", &
-         output_cnt, "_tmp.npy"
-
-    i = 0
-    do ix = 1, diel%max_ix
-       if (diel%surfaces(ix)%in_use) then
-          i = i + 1
-          lo = (i-1) * nc + 1
-          hi = i * nc
-
-          associate(box => tree%boxes(diel%surfaces(ix)%id_out), &
-               surf => diel%surfaces(ix))
-            call af_get_face_coords(box, surf%direction, coords)
-#if NDIM == 2
-            r(:, lo(1):hi(1)) = coords
-            dr(:, i) = surf%dr
-            surf_dim(i) = af_neighb_dim(surf%direction)
-            photon_flux(lo(1):hi(1)) = surf%sd(:, i_photon_flux)
-            surf_dens(lo(1):hi(1)) = surf%sd(:, i_surf_dens)
-#elif NDIM == 3
-            error stop "not implemented"
-#endif
-          end associate
-       end if
-    end do
-
-    call save_npy(tmpname, [n])
-    call add_to_zip(filename, tmpname, .false., "n_surfaces")
-    call save_npy(tmpname, [nc])
-    call add_to_zip(filename, tmpname, .false., "n_cell")
-    call save_npy(tmpname, r)
-    call add_to_zip(filename, tmpname, .false., "r")
-    call save_npy(tmpname, dr)
-    call add_to_zip(filename, tmpname, .false., "dr")
-    call save_npy(tmpname, photon_flux)
-    call add_to_zip(filename, tmpname, .false., "photon_flux")
-    call save_npy(tmpname, surf_dens)
-    call add_to_zip(filename, tmpname, .false., "surf_dens")
-    call save_npy(tmpname, surf_dim)
-    call add_to_zip(filename, tmpname, .false., "normal_dim")
-    print *, "output_surface_write: written " // trim(filename)
-
-  end subroutine output_surface_write
-
   subroutine output_fld_maxima(tree, filename)
     use m_analysis
     type(af_t), intent(in)       :: tree
@@ -1084,26 +1017,5 @@ contains
 
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
-
-  !> @todo replace this by routine in afivo/src/m_dielectric
-  subroutine todo_diel_get_integral(diel, i_surf, surf_int)
-    type(surfaces_t), intent(inout) :: diel
-    integer, intent(in)               :: i_surf   !< Surface variables
-    real(dp), intent(out)             :: surf_int !< Surface integral
-    integer                           :: ix
-
-    surf_int = 0
-    do ix = 1, diel%max_ix
-       if (diel%surfaces(ix)%in_use) then
-#if NDIM == 2
-          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
-               sum(diel%surfaces(ix)%sd(:, i_surf))
-#elif NDIM == 3
-          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
-               sum(diel%surfaces(ix)%sd(:, :, i_surf))
-#endif
-       end if
-    end do
-  end subroutine todo_diel_get_integral
 
 end module m_output

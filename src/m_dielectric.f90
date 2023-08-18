@@ -85,8 +85,7 @@ contains
     preset_charge_distribution = preset_charge_distribution * ST_domain_len(NDIM)
 
     call CFG_add_get(cfg, "dielectric%write", &
-    surface_output, "Output surface related information")
-
+         surface_output, "Output surface related information")
 
   end subroutine dielectric_initialize
 

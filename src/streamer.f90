@@ -298,7 +298,8 @@ program streamer
         time_last_output = global_time
         call output_write(tree, output_cnt, wc_time, write_sim_data)
         if (ST_use_dielectric .and. surface_output) then
-           call output_surface_write(tree, output_cnt)
+           call surface_write_output(tree, diel, [i_photon_flux, i_surf_dens], &
+                ["photon_flux", "surf_dens  "], output_name, output_cnt)
         end if
      end if
 
