@@ -61,8 +61,10 @@ def plot_raw_data(args):
         if not os.path.exists(args.silo_to_raw):
             raise ValueError('Could not find silo_to_raw, set -silo_to_raw')
 
-        # Convert silo to raw
-        with tempfile.NamedTemporaryFile() as fp:
+        # Convert silo to raw. Place temporary files in the same folder as
+        # there can otherwise be issues with a full /tmp folder
+        dirname = os.path.dirname(args.input_file)
+        with tempfile.NamedTemporaryFile(dir=dirname) as fp:
             _ = subprocess.call([args.silo_to_raw, args.input_file,
                                  args.variable, fp.name])
             grids, domain = get_raw_data(fp.name, args.project_dims)
@@ -143,6 +145,8 @@ def plot_raw_data(args):
             ax.set_xlim(*args.xlim)
         if args.ylim:
             ax.set_ylim(*args.ylim)
+
+        ax.set_title(f't = {domain["time"]:.3e}')
 
         if args.save_plot:
             print(f'Saving to {args.save_plot}')
