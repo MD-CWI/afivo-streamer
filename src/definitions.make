@@ -72,6 +72,7 @@ m_af_stencil.o: m_af_types.mod
 m_af_surface.o: m_af_ghostcell.mod
 m_af_surface.o: m_af_types.mod
 m_af_surface.o: m_af_utils.mod
+m_af_surface.o: m_npy.mod
 m_af_utils.o: m_af_types.mod
 m_coarse_solver.o: m_af_stencil.mod
 m_coarse_solver.o: m_af_types.mod
