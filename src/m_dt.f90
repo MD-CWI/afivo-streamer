@@ -31,7 +31,7 @@ module m_dt
   real(dp), public, protected :: dt_cfl_number = undefined_real
 
   !> If > 0, a density to control the accuracy of the chemistry time step
-  real(dp), public, protected :: dt_chemistry_nmin = 1e15
+  real(dp), public, protected :: dt_chemistry_nmin = -1.0_dp
 
   ! Maximum allowed time step
   real(dp), public, protected :: dt_max = 1.0e-11_dp
