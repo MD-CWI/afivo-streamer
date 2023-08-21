@@ -962,7 +962,7 @@ contains
                box%cc(IJK, i_electric_fld)**2)
        end do; CLOSE_DO
     case (source_factor_original_flux)
-       ! Compute source factor as 1 - (E . F_diff)/F_drift
+       ! Compute source factor as 1 - (E_hat . F_diff)/F_drift
        source_factor = 1 - pack(box%cc(DTIMES(1:nc), i_srcfac), .true.) / &
             (small_flux + elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld)**2, .true.))
