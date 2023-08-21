@@ -27,6 +27,7 @@ program streamer
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
+  integer                   :: n_steps_rejected
   integer, allocatable      :: ref_links(:, :)
   logical                   :: write_out
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
@@ -97,6 +98,7 @@ program streamer
   global_time      = time
   photoi_prev_time = time   ! Time of last photoionization computation
   dt               = global_dt
+  n_steps_rejected = 0
   initial_streamer_pos = 0.0_dp ! Initial streamer position
 
   ! Initialize the tree (which contains all the mesh information)
@@ -234,8 +236,10 @@ program streamer
         step_accepted = (dt <= dt_lim)
 
         if (.not. step_accepted) then
-           write (*, "(I0,A,2E12.4)") it, " Step rejected, (dt, dt_lim) = ", &
-                dt, dt_lim
+           n_steps_rejected = n_steps_rejected + 1
+           write (*, "(I0,A,I0,A,2E12.4,A)") it, " Step rejected (#", &
+                n_steps_rejected, ") (dt, dt_lim) = ", dt, dt_lim
+           call output_status(tree, time, wc_time, it, dt)
 
            ! Go back to previous state and try with a smaller dt
            dt = dt_safety_factor * dt_lim
