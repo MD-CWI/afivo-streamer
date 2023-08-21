@@ -28,7 +28,7 @@ module m_photoi_mc
   real(dp), protected :: phmc_absorp_fac = 0.25_dp
 
   !> Number of photons to use
-  integer, protected :: phmc_num_photons = 100*1000
+  integer, protected :: phmc_num_photons = 5000*1000
 
   !> Minimal photon weight
   real(dp), protected :: phmc_min_weight = 1.0_dp
