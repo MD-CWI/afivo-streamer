@@ -30,7 +30,7 @@ module m_dt
   !> CFL number to use
   real(dp), public, protected :: dt_cfl_number = undefined_real
 
-  ! Small density for the chemistry time step
+  !> If > 0, a density to control the accuracy of the chemistry time step
   real(dp), public, protected :: dt_chemistry_nmin = 1e15
 
   ! Maximum allowed time step
@@ -68,7 +68,7 @@ contains
     call CFG_add_get(cfg, "dt_cfl_number", dt_cfl_number, &
          "CFL number to use")
     call CFG_add_get(cfg, "dt_chemistry_nmin", dt_chemistry_nmin, &
-         "Small density for the chemistry time step")
+         "If > 0, a density to control the accuracy of the chemistry time step")
     !> [relevant_parameters]
 
     call CFG_add_get(cfg, "dt_max_growth_factor", dt_max_growth_factor, &

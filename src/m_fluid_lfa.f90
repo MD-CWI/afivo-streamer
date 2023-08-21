@@ -731,9 +731,17 @@ contains
     if (last_step) then
        tid = omp_get_thread_num() + 1
 
-       ! Update chemistry time step
-       dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
-            minval((abs(dens) + dt_chemistry_nmin) / max(abs(derivs), eps)))
+       ! Update chemistry time step. Note that 'dens' is already non-negative.
+       if (dt_chemistry_nmin > 0) then
+          ! The time step is restricted by both the production and destruction
+          ! rate of species
+          tmp = minval((dens + dt_chemistry_nmin) / max(abs(derivs), eps))
+       else
+          ! Prevent negative values due to too much removal of a species
+          tmp = minval(max(dens, eps) / max(-derivs, eps))
+       end if
+
+       dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), tmp)
 
        ! Keep track of chemical production at last time integration step
        call chemical_rates_box(box, nc, rates, box_rates)
