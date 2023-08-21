@@ -39,6 +39,9 @@ module m_dt
   ! Minimum allowed time step
   real(dp), public, protected :: dt_min = 1.0e-14_dp
 
+  !> Maximal relative increase dt for the next iteration
+  real(dp), public, protected :: dt_max_growth_factor = 2.0_dp
+
   !> Which time integrator is used
   integer, public, protected :: time_integrator
 
@@ -67,6 +70,9 @@ contains
     call CFG_add_get(cfg, "dt_chemistry_nmin", dt_chemistry_nmin, &
          "Small density for the chemistry time step")
     !> [relevant_parameters]
+
+    call CFG_add_get(cfg, "dt_max_growth_factor", dt_max_growth_factor, &
+         "Maximal relative increase dt for the next iteration")
 
     integrator = "heuns_method"
     call CFG_add_get(cfg, "time_integrator", integrator, &

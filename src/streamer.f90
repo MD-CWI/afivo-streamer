@@ -272,7 +272,8 @@ program streamer
      end if
 
      ! dt is modified when writing output, global_dt not
-     dt = min(2 * global_dt, dt_safety_factor * min(dt_lim, dt_gas_lim))
+     dt = min(dt_max_growth_factor * global_dt, &
+          dt_safety_factor * min(dt_lim, dt_gas_lim))
 
      if (start_of_new_pulse) then
         ! Start a new pulse with a small time step
