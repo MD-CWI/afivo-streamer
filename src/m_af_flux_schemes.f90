@@ -536,7 +536,7 @@ contains
              case (2)
                 cc_line = cc(i, :, j, :)
              case (3)
-                cc_line = cc(:, i, j, :)
+                cc_line = cc(i, j, :, :)
 #endif
              end select
 
@@ -602,7 +602,7 @@ contains
              case (2)
                 tree%boxes(id)%fc(i, :, j, flux_dim, i_flux) = flux
              case (3)
-                tree%boxes(id)%fc(:, i, j, flux_dim, i_flux) = flux
+                tree%boxes(id)%fc(i, j, :, flux_dim, i_flux) = flux
 #endif
              end select
 #if NDIM > 1
@@ -729,7 +729,7 @@ contains
                case (2)
                   cc_line = cc(i, :, j, :)
                case (3)
-                  cc_line = cc(:, i, j, :)
+                  cc_line = cc(i, j, :, :)
 #endif
                end select
 
@@ -777,7 +777,7 @@ contains
                   fc(i, :, j, flux_dim, i_flux) = flux
                   cfl_sum(i, :, j) = cfl_sum(i, :, j) + cfl_sum_line
                case (3)
-                  fc(:, i, j, flux_dim, i_flux) = flux
+                  fc(i, j, :, flux_dim, i_flux) = flux
                   cfl_sum(i, j, :) = cfl_sum(i, j, :) + cfl_sum_line
 #endif
                end select
