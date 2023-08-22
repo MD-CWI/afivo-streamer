@@ -10,10 +10,10 @@ include $(AF_DIR)/src/makerules.make
 PROGS_XD := random_refinement poisson_basic poisson_benchmark advection		\
  computational_domain boundary_conditions poisson_neumann particles_to_grid	\
  ghostcell_benchmark particles_gravity poisson_coarse_solver implicit_diffusion	\
- poisson_dielectric poisson_helmholtz reaction_diffusion advection_v2		\
- electrode_example poisson_lsf_test stencil_test poisson_stencil		\
- dielectric_surface time_integration helmholtz_variable_stencil			\
- check_ghostcells check_prolongation
+ poisson_dielectric poisson_helmholtz reaction_diffusion electrode_example	\
+ poisson_lsf_test stencil_test poisson_stencil dielectric_surface		\
+ time_integration helmholtz_variable_stencil check_ghostcells			\
+ check_prolongation
 
 PROGS_1D := $(PROGS_XD:%=%_1d)
 
