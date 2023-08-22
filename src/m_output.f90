@@ -23,9 +23,6 @@ module m_output
   ! Include ionization source term in output
   logical, public, protected :: output_src_term = .false.
 
-  ! If positive: decay rate for source term (1/s) for time-averaged values
-  real(dp), public, protected :: output_src_decay_rate = -1.0_dp
-
   ! Write to a log file for regression testing
   logical, protected :: output_regression_test = .false.
 
@@ -137,7 +134,6 @@ contains
     character(len=af_nlen)     :: empty_names(0)
     integer                    :: n, i
     character(len=string_len)  :: td_file
-    real(dp)                   :: tmp
     real(dp), allocatable      :: x_data(:), y_data(:)
 
     call CFG_add_get(cfg, "output%name", output_name, &
@@ -176,12 +172,8 @@ contains
     call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
          "Write to a log file for regression testing")
     call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
-         "Electron density threshold (1/m3, will be scaled by N)")
-
-    tmp = 1/output_src_decay_rate
-    call CFG_add_get(cfg, "output%src_decay_time", tmp, &
-         "If positive: decay time for source term (s) for time-averaged values")
-    output_src_decay_rate = 1/tmp
+         "Electron density threshold for detecting plasma regions &
+         &(1/m3, will be scaled by gas density)")
 
     call CFG_add_get(cfg, "silo_write", silo_write, &
          "Write silo output")
