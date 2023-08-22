@@ -20,9 +20,6 @@ module m_output
   ! Time between writing output
   real(dp), public, protected :: output_dt = 1.0e-10_dp
 
-  ! Include ionization source term in output
-  logical, public, protected :: output_src_term = .false.
-
   ! Write to a log file for regression testing
   logical, protected :: output_regression_test = .false.
 
@@ -167,8 +164,6 @@ contains
 
     call CFG_add_get(cfg, "output%dt", output_dt, &
          "The timestep for writing output (s)")
-    call CFG_add_get(cfg, "output%src_term", output_src_term, &
-         "Include ionization source term in output")
     call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
          "Write to a log file for regression testing")
     call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
