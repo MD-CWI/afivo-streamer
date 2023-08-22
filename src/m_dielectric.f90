@@ -105,8 +105,6 @@ contains
 #if NDIM == 2
     integer                        :: i
     real(dp)                       :: se_flux(box%n_cell)
-#elif NDIM == 3
-    real(dp)                       :: se_flux(box%n_cell, box%n_cell)
 #endif
     integer                        :: nc
     real(dp)                       :: dr
