@@ -91,9 +91,6 @@ module m_streamer
   integer, public, parameter :: source_factor_flux = 1
   integer, public, parameter :: source_factor_original_flux = 2
 
-  !> Minimal density for including electron sources
-  real(dp), public, protected :: ST_source_min_density = -1e10_dp
-
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
@@ -359,8 +356,6 @@ contains
          "Use source factor to prevent unphysical effects due to diffusion")
     call CFG_add_get(cfg, "fixes%write_source_factor", write_source_factor, &
          "Whether to write the source factor to the output")
-    call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
-         "Minimal density for including electron sources")
 
     select case (source_factor)
     case ("none")

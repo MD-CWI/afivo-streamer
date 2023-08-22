@@ -672,19 +672,12 @@ contains
 
     call get_rates(fields, rates, n_cells)
 
-    if (ST_source_factor /= source_factor_none .or. &
-         ST_source_min_density > 0) then
+    if (ST_source_factor /= source_factor_none) then
        if (ST_source_factor /= source_factor_none) then
           call compute_source_factor(box, nc, dens(:, ix_electron), &
                fields, s_dt, source_factor)
        else
           source_factor(:) = 1.0_dp
-       end if
-
-       if (ST_source_min_density > 0) then
-          where (dens(:, ix_electron) < ST_source_min_density)
-             source_factor = 0.0_dp
-          end where
        end if
 
        if (i_srcfac > 0) then
