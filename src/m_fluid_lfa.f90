@@ -835,12 +835,10 @@ contains
     real(dp), intent(in)       :: fields(nc**NDIM)
     integer, intent(in)        :: s_dt
     real(dp), intent(out)      :: source_factor(nc**NDIM)
-    real(dp)                   :: mobilities(nc**NDIM), diffc(nc**NDIM)
+    real(dp)                   :: mobilities(nc**NDIM)
     real(dp)                   :: N_inv(nc**NDIM)
-    real(dp)                   :: inv_dr(NDIM), f(2*NDIM)
-    real(dp)                   :: Evec(NDIM), gradn(NDIM)
+    real(dp)                   :: inv_dr(NDIM)
     real(dp), parameter        :: small_flux      = 1.0e-9_dp ! A small flux
-    real(dp), parameter        :: harmonic_factor = 2.0_dp
     integer                    :: ix, IJK
 
     inv_dr = 1/box%dr
@@ -879,81 +877,6 @@ contains
        source_factor = (source_factor + small_flux) / (small_flux + &
             elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
-    case (source_factor_flux_hmean)
-       ix = 0
-       do KJI_DO(1,nc)
-          ix = ix + 1
-
-          ! Compute norm of flux at cell center, but taking harmonic mean of
-          ! flux components
-#if NDIM == 1
-          f = abs([box%fc(i, 1, flux_elec), box%fc(i+1, 1, flux_elec)])
-          source_factor(ix) = 2*f(1)*f(2)/(f(1)+f(2)+small_flux)
-#elif NDIM == 2
-          f = abs([box%fc(i, j, 1, flux_elec), box%fc(i+1, j, 1, flux_elec), &
-               box%fc(i, j, 2, flux_elec), box%fc(i, j+1, 2, flux_elec)])
-          source_factor(ix) = norm2([2*f(1)*f(2)/(f(1)+f(2)+small_flux), &
-               2*f(3)*f(4)/(f(3)+f(4)+small_flux)])
-#elif NDIM == 3
-          f = abs([&
-               box%fc(i, j, k, 1, flux_elec), box%fc(i+1, j, k, 1, flux_elec), &
-               box%fc(i, j, k, 2, flux_elec), box%fc(i, j+1, k, 2, flux_elec), &
-               box%fc(i, j, k, 3, flux_elec), box%fc(i, j, k+1, 3, flux_elec)])
-          source_factor(ix) = norm2([&
-               2*f(1)*f(2)/(f(1)+f(2)+small_flux), &
-               2*f(3)*f(4)/(f(3)+f(4)+small_flux), &
-               2*f(5)*f(6)/(f(5)+f(6)+small_flux)])
-#endif
-       end do; CLOSE_DO
-
-       ! Compute source factor as harmonic_factor * |flux|/(n_e * mu * E). The
-       ! harmonic_factor is used to ensure 'regular' solutions are not affected;
-       ! only when source_factor < 1/harmonic_factor does it start to affect the
-       ! solution.
-       source_factor = harmonic_factor * (source_factor + small_flux) / &
-            (small_flux + elec_dens * mobilities * &
-            pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
-    case (source_factor_original_cc)
-       ! This is the 'original' scheme, 1 - (E_hat . F_diff)/F_flux
-       diffc = LT_get_col(td_tbl, td_diffusion, fields) * N_inv
-       ix = 0
-       do KJI_DO(1,nc)
-          ix = ix + 1
-#if NDIM == 1
-          Evec = 0.5_dp * [box%fc(i, 1, electric_fld) + &
-               box%fc(i+1, 1, electric_fld)]
-          gradn = 0.5_dp * inv_dr * [&
-               box%cc(i+1, i_electron+s_dt) &
-               - box%cc(i-1, i_electron+s_dt)]
-#elif NDIM == 2
-          Evec = 0.5_dp * [box%fc(i, j, 1, electric_fld) + &
-               box%fc(i+1, j, 1, electric_fld), &
-               box%fc(i, j, 2, electric_fld) + &
-               box%fc(i, j+1, 2, electric_fld)]
-          gradn = 0.5_dp * inv_dr * [&
-               box%cc(i+1, j, i_electron+s_dt) &
-               - box%cc(i-1, j, i_electron+s_dt), &
-               box%cc(i, j+1, i_electron+s_dt) &
-               - box%cc(i, j-1, i_electron+s_dt)]
-#elif NDIM == 3
-          Evec = 0.5_dp * [box%fc(i, j, k, 1, electric_fld) + &
-               box%fc(i+1, j, k, 1, electric_fld), &
-               box%fc(i, j, k, 2, electric_fld) + &
-               box%fc(i, j+1, k, 2, electric_fld), &
-               box%fc(i, j, k, 3, electric_fld) + &
-               box%fc(i, j, k+1, 3, electric_fld)]
-          gradn = 0.5_dp * inv_dr * [&
-               box%cc(i+1, j, k, i_electron+s_dt) &
-               - box%cc(i-1, j, k, i_electron+s_dt), &
-               box%cc(i, j+1, k, i_electron+s_dt) &
-               - box%cc(i, j-1, k, i_electron+s_dt), &
-               box%cc(i, j, k+1, i_electron+s_dt) &
-               - box%cc(i, j, k-1, i_electron+s_dt)]
-#endif
-          source_factor(ix) = 1 + diffc(ix) * sum(Evec * gradn) / &
-               (small_flux + elec_dens(ix) * mobilities(ix) * &
-               box%cc(IJK, i_electric_fld)**2)
-       end do; CLOSE_DO
     case (source_factor_original_flux)
        ! Compute source factor as 1 - (E_hat . F_diff)/F_drift
        source_factor = 1 - pack(box%cc(DTIMES(1:nc), i_srcfac), .true.) / &
@@ -961,7 +884,7 @@ contains
             pack(box%cc(DTIMES(1:nc), i_electric_fld)**2, .true.))
     case default
        error stop
-    end select
+    end select 
 
     source_factor = min(1.0_dp, source_factor)
     source_factor = max(0.0_dp, source_factor)
