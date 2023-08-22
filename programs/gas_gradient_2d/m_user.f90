@@ -66,7 +66,7 @@ contains
 
     ! Get relative coordinates in the range [0, 1]
     r_rel = (af_r_cc(box, [IJK]) - ST_domain_origin)/ST_domain_len
-    q = line_coeff(1) + sum(line_coeff(2:) * r_rel)
+    q = (line_coeff(1) + sum(line_coeff(2:) * r_rel))/norm2(line_coeff(2:))
 
     if (q < -shock_width) then
        gas_density_line = gas_number_density

@@ -65,17 +65,23 @@ cd ../
 
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.4e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.5 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.5-z_1.4e6_dr1.6_sw0.01
 
-./streamer d10mm_3d_new.cfg -field_given_by="field -1.5e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.5 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.5-z_1.5e6_dr1.6_sw0.01
-
-./streamer d10mm_3d_new.cfg -field_given_by="field -1.7e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.5 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.5-z_1.7e6_dr1.6_sw0.01
-
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.8e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.5 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.5-z_1.8e6_dr1.6_sw0.01
+
+
+# vary electrode-gradient distance
+./streamer d10mm_3d_new.cfg -field_given_by="field -1.8e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.55 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.55-z_1.8e6_dr1.6_sw0.01
+
+./streamer d10mm_3d_new.cfg -field_given_by="field -1.8e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.6 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.6-z_1.8e6_dr1.6_sw0.01
+
+./streamer d10mm_3d_new.cfg -field_given_by="field -1.8e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.65 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.65-z_1.8e6_dr1.6_sw0.01
+
+./streamer d10mm_3d_new.cfg -field_given_by="field -1.8e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.7 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.7-z_1.8e6_dr1.6_sw0.01
+
+./streamer d10mm_3d_new.cfg -field_given_by="field -1.8e6" -density_ratio=1.6 -shock_width=0.01 -line_coeff="0.75 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.75-z_1.8e6_dr1.6_sw0.01
 
 
 # density changes gradually
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=2 -shock_width=0.35 -line_coeff="0.35 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.35-z_1.6e6_dr2_sw0.35
-
-./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=3 -shock_width=0.35 -line_coeff="0.35 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.35-z_1.6e6_dr3_sw0.35
 
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=4 -shock_width=0.35 -line_coeff="0.35 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.35-z_1.6e6_dr4_sw0.35
 
@@ -86,8 +92,6 @@ cd ../
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=10 -shock_width=0.35 -line_coeff="0.35 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.35-z_1.6e6_dr10_sw0.35
 
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=20 -shock_width=0.35 -line_coeff="0.35 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.35-z_1.6e6_dr20_sw0.35
-
-./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=25 -shock_width=0.35 -line_coeff="0.35 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.35-z_1.6e6_dr25_sw0.35
 
 ./streamer d10mm_3d_new.cfg -field_given_by="field -1.6e6" -density_ratio=30 -shock_width=0.35 -line_coeff="0.35 0 0 -1" -output%name=/export/scratch2/baohong/gas_gradients/3d_line/line0.35-z_1.6e6_dr30_sw0.35
 
