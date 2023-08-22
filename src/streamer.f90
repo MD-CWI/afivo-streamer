@@ -37,9 +37,9 @@ program streamer
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
-  real(dp)                  :: max_field, initial_streamer_pos
-  type(af_loc_t)            :: loc_field, loc_field_initial
-  real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+  real(dp)                  :: max_field
+  type(af_loc_t)            :: loc_field, loc_field_t0
+  real(dp)                  :: pos_Emax(NDIM), pos_Emax_t0(NDIM)
   real(dp)                  :: breakdown_field_Td, current_output_dt
   real(dp)                  :: time_until_next_pulse
   logical                   :: step_accepted, start_of_new_pulse
@@ -99,7 +99,7 @@ program streamer
   photoi_prev_time = time   ! Time of last photoionization computation
   dt               = global_dt
   n_steps_rejected = 0
-  initial_streamer_pos = 0.0_dp ! Initial streamer position
+  pos_Emax_t0 = 0.0_dp ! Initial streamer position
 
   ! Initialize the tree (which contains all the mesh information)
   if (restart_from_file /= undefined_str) then
@@ -169,15 +169,19 @@ program streamer
 
      ! Initialize starting position of streamer
      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
-        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
-        loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_t0)
+        pos_Emax_t0 = af_r_loc(tree, loc_field_t0)
      end if
 
      ! Check if streamer length exceeds the defined maximal streamer length
      if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
         call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-        loc_field_coord = af_r_loc(tree, loc_field)
-        if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
+        pos_Emax = af_r_loc(tree, loc_field)
+
+        if (norm2(pos_Emax_t0 - pos_Emax) >= ST_end_streamer_length) then
+           print *, "Streamer reached its desired length"
+           exit
+        end if
      end if
 
      ! Update wall clock time
