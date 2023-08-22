@@ -261,6 +261,34 @@ contains
     end associate
   end subroutine reconstruct_lr_1d
 
+  !> Reconstruct upwind values at cell faces from cell-centered data.
+  subroutine reconstruct_upwind_1d(nc, ngc, n_vars, cc, u_f, limiter, direction_positive)
+    integer, intent(in)     :: nc                       !< Number of cells
+    integer, intent(in)     :: ngc                      !< Number of ghost cells
+    integer, intent(in)     :: n_vars                   !< Number of variables
+    real(dp), intent(in)    :: cc(1-ngc:nc+ngc, n_vars) !< Cell-centered values
+    !> Reconstructed values at every interface
+    real(dp), intent(inout) :: u_f(1:nc+1, n_vars)
+    integer, intent(in)     :: limiter                  !< Which limiter to use
+    !> True means positive flow (to the "right"), false to the left
+    logical, intent(in)     :: direction_positive(nc+1)
+    real(dp)                :: slope(n_vars)
+    integer                 :: n
+
+    associate (a=>cc(1:nc+2, :) - cc(0:nc+1, :), &
+         b=>cc(0:nc+1, :) - cc(-1:nc, :))
+      do n = 1, nc+1
+         if (direction_positive(n)) then
+            slope = af_limiter_apply(a(n, :), b(n, :), limiter)
+            u_f(n, :) = cc(n-1, :) + 0.5_dp * slope
+         else
+            slope = af_limiter_apply(b(n+1, :), a(n+1, :), limiter)
+            u_f(n, :) = cc(n, :) - 0.5_dp * slope
+         end if
+      end do
+    end associate
+  end subroutine reconstruct_upwind_1d
+
   !> Compute flux for the KT scheme
   subroutine flux_kurganovTadmor_1d(n_values, n_vars, flux_l, flux_r, &
        u_l, u_r, wmax, flux)
@@ -682,10 +710,10 @@ contains
     real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
     real(dp) :: cc_line(-1:nc+2, n_vars)
     real(dp) :: flux(nc+1, n_vars)
-    real(dp) :: u_l(nc+1, n_vars), u_r(nc+1, n_vars)
+    real(dp) :: u_l(nc+1, n_vars)
     real(dp) :: cfl_sum(DTIMES(nc)), cfl_sum_line(nc)
     logical  :: direction_positive(nc+1)
-    integer  :: flux_dim, line_ix(NDIM-1), n
+    integer  :: flux_dim, line_ix(NDIM-1)
 #if NDIM > 1
     integer  :: i
 #endif
@@ -746,12 +774,8 @@ contains
                     tree%boxes(id), line_ix, s_deriv)
 
                ! Reconstruct to cell faces
-               call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r, limiter)
-
-               ! Keep only the upwind direction
-               do n = 1, nc+1
-                  if (.not. direction_positive(n)) u_l(n, :) = u_r(n, :)
-               end do
+               call reconstruct_upwind_1d(nc, 2, n_vars, cc_line, u_l, &
+                    limiter, direction_positive)
 
                call flux_upwind(nc+1, n_vars, flux_dim, u_l, flux, &
                     cfl_sum_line, tree%boxes(id), line_ix, s_deriv)
