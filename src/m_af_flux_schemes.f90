@@ -36,6 +36,20 @@ module m_af_flux_schemes
        integer, intent(in)     :: s_deriv        !< State to compute derivatives from
      end subroutine subr_flux
 
+     subroutine subr_flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, box, line_ix, s_deriv)
+       import
+       integer, intent(in)     :: nf              !< Number of cell faces
+       integer, intent(in)     :: n_var           !< Number of variables
+       integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+       real(dp), intent(in)    :: u(nf, n_var)    !< Face values
+       real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
+       !> Terms per cell-center to be added to CFL sum, see flux_upwind_box
+       real(dp), intent(out)   :: cfl_sum(nf-1)
+       type(box_t), intent(in) :: box             !< Current box
+       integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+       integer, intent(in)     :: s_deriv        !< State to compute derivatives from
+     end subroutine subr_flux_upwind
+
      subroutine subr_flux_modify(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
        import
        integer, intent(in)     :: nf              !< Number of cell faces
@@ -46,6 +60,16 @@ module m_af_flux_schemes
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
        integer, intent(in)     :: s_deriv         !< State to compute derivatives from
      end subroutine subr_flux_modify
+
+     subroutine subr_flux_dir(box, line_ix, s_deriv, flux_dim, direction_positive)
+       import
+       type(box_t), intent(in) :: box             !< Current box
+       integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+       integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+       integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+       !> True means positive flow (to the "right"), false to the left
+       logical, intent(out)    :: direction_positive(box%n_cell+1)
+     end subroutine subr_flux_dir
 
      subroutine subr_line_modify(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
        import
@@ -74,6 +98,7 @@ module m_af_flux_schemes
   public :: flux_upwind_1d, flux_upwind_2d, flux_upwind_3d
   public :: flux_kurganovTadmor_1d, reconstruct_lr_1d
   public :: flux_generic_box, flux_generic_tree
+  public :: flux_upwind_box, flux_upwind_tree
   public :: flux_update_densities
   public :: flux_dummy_conversion
   public :: flux_dummy_source
@@ -589,6 +614,186 @@ contains
     end do
 
   end subroutine flux_generic_box
+
+  !> Compute upwind fluxes
+  subroutine flux_upwind_tree(tree, n_vars, i_cc, s_deriv, i_flux, dt_lim, &
+       flux_upwind, flux_direction, line_modify, limiter)
+    use m_af_restrict
+    use m_af_core
+    type(af_t), intent(inout)   :: tree
+    integer, intent(in)         :: n_vars         !< Number of variables
+    integer, intent(in)         :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)         :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)         :: i_flux(n_vars) !< Flux variables
+    real(dp), intent(out)       :: dt_lim         !< Time step restriction
+    !> Method to compute fluxes
+    procedure(subr_flux_upwind) :: flux_upwind
+    !> Method to get direction of flux (positive or negative)
+    procedure(subr_flux_dir)    :: flux_direction
+    !> Potentially modify line densities
+    procedure(subr_line_modify) :: line_modify
+    !> Type of slope limiter to use for flux calculation
+    integer, intent(in)         :: limiter
+
+    integer :: lvl, i
+
+    ! Ensure ghost cells near refinement boundaries can be properly filled
+    call af_restrict_ref_boundary(tree, i_cc+s_deriv)
+
+    !$omp parallel private(lvl, i) reduction(min:dt_lim)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%leaves)
+          call flux_upwind_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
+               n_vars, i_cc, s_deriv, i_flux, dt_lim, flux_upwind, &
+               flux_direction, line_modify, limiter)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    ! Compute coarse fluxes from the fine ones at refinement boundaries
+    call af_consistent_fluxes(tree, i_flux)
+
+  end subroutine flux_upwind_tree
+
+  !> Compute generic finite volume flux
+  subroutine flux_upwind_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, &
+       dt_lim, flux_upwind, flux_direction, line_modify, limiter)
+    use m_af_types
+    use m_af_ghostcell
+    type(af_t), intent(inout)   :: tree
+    integer, intent(in)         :: id             !< Id of box
+    integer, intent(in)         :: nc             !< Number of cells
+    integer, intent(in)         :: n_vars         !< Number of variables
+    integer, intent(in)         :: i_cc(n_vars)   !< Cell-centered variables
+    integer, intent(in)         :: s_deriv        !< State to compute derivatives from
+    integer, intent(in)         :: i_flux(n_vars) !< Flux variables
+    real(dp), intent(inout)     :: dt_lim         !< Time step restriction
+    !> Method to compute fluxes
+    procedure(subr_flux_upwind) :: flux_upwind
+    !> Method to get direction of flux (positive or negative)
+    procedure(subr_flux_dir)    :: flux_direction
+    !> Potentially modify line densities
+    procedure(subr_line_modify) :: line_modify
+    !> Type of slope limiter to use for flux calculation
+    integer, intent(in)         :: limiter
+
+    real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
+    real(dp) :: cc_line(-1:nc+2, n_vars)
+    real(dp) :: flux(nc+1, n_vars)
+    real(dp) :: u_l(nc+1, n_vars), u_r(nc+1, n_vars)
+    real(dp) :: cfl_sum(DTIMES(nc)), cfl_sum_line(nc)
+    logical  :: direction_positive(nc+1)
+    integer  :: flux_dim, line_ix(NDIM-1), n
+#if NDIM > 1
+    integer  :: i
+#endif
+#if NDIM > 2
+    integer  :: j
+#endif
+
+    ! Get two layers of ghost cell data
+    call af_gc2_box(tree, id, i_cc+s_deriv, cc)
+
+    ! This will contain the sum of CFL-related conditions. For example, one can
+    ! write dt * (vx/dx + vy/dy) < 1. This sum will then contain (vx/dx +
+    ! vy/dy).
+    cfl_sum = 0.0_dp
+
+    ! Jannis: Below, there are function calls in the inner part of a loop. When
+    ! I did some benchmarks, it was not significantly slower than using a buffer
+    ! and fewer functions calls.
+
+    associate (fc => tree%boxes(id)%fc)
+      do flux_dim = 1, NDIM
+#if NDIM > 2
+         do j = 1, nc
+#endif
+#if NDIM > 1
+            do i = 1, nc
+#endif
+               ! Extract cell-centered values along a line
+               select case (flux_dim)
+#if NDIM == 1
+               case (1)
+                  cc_line = cc(:, :)
+#elif NDIM == 2
+               case (1)
+                  cc_line = cc(:, i, :)
+               case (2)
+                  cc_line = cc(i, :, :)
+#elif NDIM == 3
+               case (1)
+                  cc_line = cc(:, i, j, :)
+               case (2)
+                  cc_line = cc(i, :, j, :)
+               case (3)
+                  cc_line = cc(:, i, j, :)
+#endif
+               end select
+
+#if NDIM == 2
+               line_ix = [i]
+#elif NDIM == 3
+               line_ix = [i, j]
+#endif
+               call flux_direction(tree%boxes(id), line_ix, s_deriv, &
+                    flux_dim, direction_positive)
+
+               ! Optionally modify data, e.g. to take into account a boundary
+               call line_modify(nc+4, n_vars, cc_line, flux_dim, &
+                    tree%boxes(id), line_ix, s_deriv)
+
+               ! Reconstruct to cell faces
+               call reconstruct_lr_1d(nc, 2, n_vars, cc_line, u_l, u_r, limiter)
+
+               ! Keep only the upwind direction
+               do n = 1, nc+1
+                  if (.not. direction_positive(n)) u_l(n, :) = u_r(n, :)
+               end do
+
+               call flux_upwind(nc+1, n_vars, flux_dim, u_l, flux, &
+                    cfl_sum_line, tree%boxes(id), line_ix, s_deriv)
+
+               ! Store the computed fluxes
+               select case (flux_dim)
+#if NDIM == 1
+               case (1)
+                  fc(:, flux_dim, i_flux) = flux
+                  cfl_sum = cfl_sum + cfl_sum_line
+#elif NDIM == 2
+               case (1)
+                  fc(:, i, flux_dim, i_flux) = flux
+                  cfl_sum(:, i) = cfl_sum(:, i) + cfl_sum_line
+               case (2)
+                  fc(i, :, flux_dim, i_flux) = flux
+                  cfl_sum(i, :) = cfl_sum(i, :) + cfl_sum_line
+#elif NDIM == 3
+               case (1)
+                  fc(:, i, j, flux_dim, i_flux) = flux
+                  cfl_sum(:, i, j) = cfl_sum(:, i, j) + cfl_sum_line
+               case (2)
+                  fc(i, :, j, flux_dim, i_flux) = flux
+                  cfl_sum(i, :, j) = cfl_sum(i, :, j) + cfl_sum_line
+               case (3)
+                  fc(:, i, j, flux_dim, i_flux) = flux
+                  cfl_sum(i, j, :) = cfl_sum(i, j, :) + cfl_sum_line
+#endif
+               end select
+#if NDIM > 1
+            end do
+#endif
+#if NDIM > 2
+         end do
+#endif
+      end do
+    end associate
+
+    ! Determine maximal time step
+    dt_lim = 1/maxval(cfl_sum)
+
+  end subroutine flux_upwind_box
 
   !> Extract cell-centered data along a line in a box, including a single layer
   !> of ghost cells. This is convenient to get extra variables in a flux
