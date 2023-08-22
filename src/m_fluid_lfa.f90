@@ -350,8 +350,7 @@ contains
           ! Ion mobility
           if (size(transport_data_ions%mobilities) > 0) then
              ! This should be an over-estimate
-             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv * &
-                  ST_sheath_max_ion_mobility_factor
+             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv
           else
              max_mu_ion = 0.0_dp
           end if
@@ -509,24 +508,10 @@ contains
     integer, intent(in)     :: IJK !< Flux index
     integer, intent(in)     :: dim !< Flux dimension
     real(dp), intent(in)    :: mu  !< Original mobility
-    real(dp)                :: field_norm, field_face, factor, lsf_face
+    real(dp)                :: field_face
 
     field_face = box%fc(IJK, dim, electric_fld)
-    factor = 1.0_dp
-
-    if (ST_sheath_max_ion_mobility_factor > 1 .and. ST_use_electrode) then
-       ! Get lsf value at the cell face, which should be (approximately) the
-       ! distance to the electrode
-       lsf_face = cc_average_at_cell_face(box, IJK, dim, i_lsf)
-
-       if (lsf_face < ST_sheath_max_lsf) then
-          field_norm = cc_average_at_cell_face(box, IJK, dim, i_electric_fld)
-          factor = max(1.0_dp, exp(field_norm/ST_sheath_field_threshold - 1))
-          factor = min(factor, ST_sheath_max_ion_mobility_factor)
-       end if
-    end if
-
-    v = mu * factor * field_face * get_N_inv_face(box, IJK, dim)
+    v = mu * field_face * get_N_inv_face(box, IJK, dim)
   end function get_ion_velocity
 
   !> Get average of cell-centered quantity at a cell face

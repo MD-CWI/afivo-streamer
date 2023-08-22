@@ -96,15 +96,6 @@ module m_streamer
   !> Minimal density for including electron sources
   real(dp), public, protected :: ST_source_min_density = -1e10_dp
 
-  !> Maximal factor for ion mobility to reduce field in cathode sheath
-  real(dp), public, protected :: ST_sheath_max_ion_mobility_factor = 1.0_dp
-
-  !> Threshold field in cathode sheath (V/m)
-  real(dp), public, protected :: ST_sheath_field_threshold = 1e100_dp
-
-  !> Threshold lsf value for cathode sheath (typically m)
-  real(dp), public, protected :: ST_sheath_max_lsf = 0.5e-3_dp
-
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
@@ -372,16 +363,6 @@ contains
          "Whether to write the source factor to the output")
     call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
          "Minimal density for including electron sources")
-
-    call CFG_add_get(cfg, "fixes%sheath_max_ion_mobility_factor", &
-         ST_sheath_max_ion_mobility_factor, &
-         "Maximal factor for ion mobility to reduce field in cathode sheath")
-    call CFG_add_get(cfg, "fixes%sheath_field_threshold", &
-         ST_sheath_field_threshold, &
-         "Threshold field in cathode sheath (V/m)")
-    call CFG_add_get(cfg, "fixes%sheath_max_lsf", &
-         ST_sheath_max_lsf, &
-         "Threshold lsf value for cathode sheath (typically m)")
 
     select case (source_factor)
     case ("none")
