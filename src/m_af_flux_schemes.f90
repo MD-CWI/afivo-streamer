@@ -466,20 +466,25 @@ contains
     procedure(subr_prim_cons)     :: to_conservative
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)           :: limiter
+    real(dp)                      :: my_dt
 
     integer :: lvl, i
 
     ! Ensure ghost cells near refinement boundaries can be properly filled
     call af_restrict_ref_boundary(tree, i_cc+s_deriv)
 
-    !$omp parallel private(lvl, i) reduction(min:dt_lim)
+    dt_lim = 1e100_dp
+    my_dt = 1e100_dp
+
+    !$omp parallel private(lvl, i, my_dt) reduction(min:dt_lim)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, s_deriv, i_flux, dt_lim, max_wavespeed, &
+               n_vars, i_cc, s_deriv, i_flux, my_dt, max_wavespeed, &
                flux_from_primitives, flux_modify, line_modify, &
                to_primitive, to_conservative, limiter)
+          dt_lim = min(dt_lim, my_dt)
        end do
        !$omp end do
     end do
@@ -681,19 +686,23 @@ contains
     procedure(subr_line_modify) :: line_modify
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)         :: limiter
-
-    integer :: lvl, i
+    integer                     :: lvl, i
+    real(dp)                    :: my_dt
 
     ! Ensure ghost cells near refinement boundaries can be properly filled
     call af_restrict_ref_boundary(tree, i_cc+s_deriv)
 
-    !$omp parallel private(lvl, i) reduction(min:dt_lim)
+    dt_lim = 1e100_dp
+    my_dt = 1e100_dp
+
+    !$omp parallel private(lvl, i, my_dt) reduction(min:dt_lim)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_upwind_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, s_deriv, i_flux, dt_lim, flux_upwind, &
+               n_vars, i_cc, s_deriv, i_flux, my_dt, flux_upwind, &
                flux_direction, line_modify, limiter)
+          dt_lim = min(dt_lim, my_dt)
        end do
        !$omp end do
     end do
