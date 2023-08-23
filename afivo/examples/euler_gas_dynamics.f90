@@ -176,16 +176,12 @@ contains
     real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
-    real(dp)                  :: wmax(NDIM)
 
-    call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, wmax, &
+    call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, dt_lim, &
          max_wavespeed, get_fluxes, flux_dummy_modify, flux_dummy_line_modify, &
          to_primitive, to_conservative, af_limiter_vanleer_t)
     call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
-
-    ! Compute new time step
-    dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine forward_euler
   !> [forward_euler_gasd]
 

@@ -1,8 +1,7 @@
 #include "../src/cpp_macros.h"
-!> \example advection.f90
+!> \example advection_v2.f90
 !>
-!> An advection example using the Koren flux limiter. Time stepping is done with
-!> the explicit trapezoidal rule.
+!> An advection example
 program advection
   use m_af_all
 
@@ -13,30 +12,34 @@ program advection
   integer             :: i_err
   integer             :: i_flux
   integer, parameter  :: sol_type   = 2
-  ! Set coord_type to af_cyl to test conservation in cyl. coordinates
-  integer, parameter  :: coord_type = af_xyz
   real(dp), parameter :: domain_len = 2 * acos(-1.0_dp)
 
   type(af_t)         :: tree
   type(ref_info_t)   :: refine_info
-  integer            :: refine_steps, time_steps, output_cnt
-  integer            :: n, n_steps
-  real(dp)           :: dt, time, end_time, err, sum_err2
+  integer            :: refine_steps, output_cnt
+  real(dp)           :: dt, dt_lim, time, time_prev_refine
+  real(dp)           :: end_time, err, sum_err2
   real(dp)           :: sum_phi, sum_phi_t0
-  real(dp)           :: dt_adapt, dt_output, dt_lim
-  real(dp)           :: velocity(NDIM), dr_min(NDIM)
+  real(dp)           :: dt_amr, dt_output
+  real(dp)           :: velocity(NDIM)
+  real(dp)           :: cfl_number
+  integer            :: integrator
   character(len=100) :: fname
-  integer            :: count_rate, t_start, t_end
-
-  integer, parameter :: integrator = af_heuns_method
-  integer, parameter :: n_copies = af_advance_num_steps(integrator)
+  character(len=20)  :: flux_method
 
   print *, "Running advection_" // DIMNAME // ""
   print *, "Number of threads", af_get_max_threads()
 
-  ! Add variables to the mesh. This is a scalar advection example with second
-  ! order time stepping, which is why there are two copies of phi.
-  call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=n_copies)
+  flux_method = "generic"
+
+  if (command_argument_count() > 0) then
+     call get_command_argument(1, flux_method)
+  end if
+
+  integrator = af_heuns_method
+
+  call af_add_cc_variable(tree, "phi", ix=i_phi, &
+       n_copies=af_advance_num_steps(integrator))
   call af_add_cc_variable(tree, "err", ix=i_err)
   call af_add_fc_variable(tree, "flux", ix=i_flux)
 
@@ -48,19 +51,18 @@ program advection
        box_size, &     ! A box contains box_size**DIM cells
        [DTIMES(domain_len)], &
        [DTIMES(box_size)], &
-       periodic=[DTIMES(.true.)], &
-       coord=coord_type)
+       periodic=[DTIMES(.true.)])
 
-  output_cnt = 0
-  time       = 0
-  dt_adapt   = 0.01_dp
-  dt_output  = 0.5_dp
-  end_time   = 5.0_dp
+  output_cnt  = 0
+  time        = 0
+  dt_amr      = 0.01_dp
+  dt_output   = 0.5_dp
+  end_time    = 5.0_dp
   velocity(:) = -0.5_dp
   velocity(1) = 1.0_dp
+  cfl_number  = 0.5_dp
 
   ! Set up the initial conditions
-  call system_clock(t_start,count_rate)
   refine_steps=0
 
   do
@@ -77,11 +79,6 @@ program advection
      ! If no new boxes have been added, exit the loop
      if (refine_info%n_add == 0) exit
   end do
-  call system_clock(t_end, count_rate)
-
-  write(*, "(A,i0,A,Es10.3,A)") " Wall-clock time for ", &
-       refine_steps, " refinement steps: ", &
-       (t_end-t_start) / real(count_rate, dp), " seconds"
 
   call af_print_info(tree)
 
@@ -91,23 +88,16 @@ program advection
   ! Fill ghost cells for variables i_phi on the sides of all boxes
   call af_gc_tree(tree, [i_phi])
 
-  call system_clock(t_start, count_rate)
-  time_steps = 0
-
   call af_tree_sum_cc(tree, i_phi, sum_phi_t0)
+
+  dt = cfl_number / (sum(abs(velocity/af_min_dr(tree))) + epsilon(1.0_dp))
+  time_prev_refine = time
 
   ! Starting simulation
   do
-     time_steps = time_steps + 1
-     dr_min  = af_min_dr(tree)
-     dt      = 0.5_dp / (sum(abs(velocity/dr_min)) + epsilon(1.0_dp))
-
-     n_steps = ceiling(dt_adapt/dt)
-     dt      = dt_adapt / n_steps
-
      if (output_cnt * dt_output <= time) then
         output_cnt = output_cnt + 1
-        write(fname, "(A,I0)") "output/advection_" // DIMNAME // "_", output_cnt
+        write(fname, "(A,I0)") "output/advection_v2_" // DIMNAME // "_", output_cnt
 
         ! Call procedure set_error (see below) for each box in tree, with argument time
         call af_loop_box_arg(tree, set_error, [time])
@@ -129,33 +119,16 @@ program advection
 
      if (time > end_time) exit
 
-     do n = 1, n_steps
-        call af_advance(tree, dt, dt_lim, time, [i_phi], integrator, &
-             forward_euler)
-     end do
+     call af_advance(tree, dt, dt_lim, time, [i_phi], integrator, forward_euler)
+     dt = cfl_number * dt_lim
 
-     ! Fill ghost cells for variable i_phi
-     call af_restrict_tree(tree, [i_phi])
-     call af_gc_tree(tree, [i_phi])
-
-     !> [adjust_refinement]
-     ! Adjust the refinement of a tree using refine_routine (see below) for grid
-     ! refinement. On input, the tree should be balanced. On output, the tree is
-     ! still balanced, and its refinement is updated (with at most one level per
-     ! call).
-     call af_adjust_refinement(tree, refine_routine, refine_info, 1)
-     !> [adjust_refinement]
+     if (time > time_prev_refine + dt_amr) then
+        call af_restrict_tree(tree, [i_phi])
+        call af_gc_tree(tree, [i_phi])
+        call af_adjust_refinement(tree, refine_routine, refine_info, 1)
+        time_prev_refine = time
+     end if
   end do
-
-  call system_clock(t_end,count_rate)
-  write(*, "(A,I0,A,Es10.3,A)") &
-       " Wall-clock time after ",time_steps, &
-       " time steps: ", (t_end-t_start) / real(count_rate, dp), &
-       " seconds"
-
-  ! This call is not really necessary here, but cleaning up the data in a tree
-  ! is important if your program continues with other tasks.
-  call af_destroy(tree)
 
 contains
 
@@ -198,46 +171,6 @@ contains
   end subroutine refine_routine
   !> [refine_routine]
 
-  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, s_prev, &
-       w_prev, s_out, i_step, n_steps)
-    type(af_t), intent(inout) :: tree
-    real(dp), intent(in)      :: dt             !< Time step
-    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
-    real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
-    real(dp), intent(in)      :: time           !< Current time
-    integer, intent(in)       :: s_deriv        !< State to compute derivatives from
-    integer, intent(in)       :: n_prev         !< Number of previous states
-    integer, intent(in)       :: s_prev(n_prev) !< Previous states
-    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
-    integer, intent(in)       :: s_out          !< Output state
-    integer, intent(in)       :: i_step         !< Step of the integrator
-    integer, intent(in)       :: n_steps        !< Total number of steps
-
-    integer :: lvl, i, id
-
-    ! Ensure ghost cells near refinement boundaries can be properly filled
-    call af_restrict_ref_boundary(tree, [i_phi+s_deriv])
-
-    ! Compute fluxes
-    !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          call fluxes_koren(tree, id, s_deriv)
-       end do
-       !$omp end do
-    end do
-    !$omp end parallel
-
-    ! Restrict fluxes from children to parents on refinement boundaries.
-    call af_consistent_fluxes(tree, [i_flux])
-
-    call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
-         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
-
-  end subroutine forward_euler
-
   !> This routine sets the initial conditions for each box
   subroutine set_initial_condition(box)
     type(box_t), intent(inout) :: box
@@ -254,9 +187,9 @@ contains
   !> This routine computes the error in i_phi
   subroutine set_error(box, time)
     type(box_t), intent(inout) :: box
-    real(dp), intent(in)         :: time(:)
-    integer                      :: IJK, nc
-    real(dp)                     :: rr(NDIM)
+    real(dp), intent(in)       :: time(:)
+    integer                    :: IJK, nc
+    real(dp)                   :: rr(NDIM)
 
     nc = box%n_cell
     do KJI_DO(1,nc)
@@ -290,6 +223,59 @@ contains
     end select
   end function solution
 
+  subroutine forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, &
+       s_prev, w_prev, s_out, i_step, n_steps)
+    type(af_t), intent(inout) :: tree
+    real(dp), intent(in)      :: dt
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms
+    real(dp), intent(in)      :: time
+    real(dp), intent(inout)   :: dt_lim
+    integer, intent(in)       :: s_deriv
+    integer, intent(in)       :: n_prev         !< Number of previous states
+    integer, intent(in)       :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)       :: s_out
+    integer, intent(in)       :: i_step, n_steps
+    integer                   :: lvl, i, id
+
+    select case (flux_method)
+    case ("generic")
+       call flux_generic_tree(tree, 1, [i_phi], s_deriv, [i_flux], dt_lim, &
+            max_wavespeed, get_flux, flux_dummy_modify, flux_dummy_line_modify, &
+            flux_dummy_conversion, flux_dummy_conversion, af_limiter_koren_t)
+    case ("upwind")
+       call flux_upwind_tree(tree, 1, [i_phi], s_deriv, [i_flux], &
+            dt_lim, flux_upwind, flux_direction, &
+            flux_dummy_line_modify, af_limiter_koren_t)
+    case ("custom")
+       ! Ensure ghost cells near refinement boundaries can be properly filled
+       call af_restrict_ref_boundary(tree, [i_phi+s_deriv])
+
+       ! Compute fluxes
+       !$omp parallel private(lvl, i, id)
+       do lvl = 1, tree%highest_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             call fluxes_koren(tree, id, s_deriv)
+          end do
+          !$omp end do
+       end do
+       !$omp end parallel
+
+       ! Restrict fluxes from children to parents on refinement boundaries.
+       call af_consistent_fluxes(tree, [i_flux])
+
+       dt_lim = 1/(sum(abs(velocity/af_min_dr(tree))) + epsilon(1.0_dp))
+    case default
+       error stop "Unknown flux_method, choices: generic, upwind, custom"
+    end select
+
+    call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
+         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
+
+  end subroutine forward_euler
+
   !> This routine computes the x-fluxes and y-fluxes interior (advective part)
   !> with the Koren limiter
   subroutine fluxes_koren(tree, id, s_deriv)
@@ -322,5 +308,58 @@ contains
     tree%boxes(id)%fc(DTIMES(:), :, i_flux) = v
 
   end subroutine fluxes_koren
+
+  subroutine max_wavespeed(n_values, n_var, flux_dim, u, w)
+    integer, intent(in)   :: n_values !< Number of cell faces
+    integer, intent(in)   :: n_var    !< Number of variables
+    integer, intent(in)   :: flux_dim !< In which dimension fluxes are computed
+    real(dp), intent(in)  :: u(n_values, n_var) !< Primitive variables
+    real(dp), intent(out) :: w(n_values) !< Maximum speed
+
+    w = abs(velocity(flux_dim))
+  end subroutine max_wavespeed
+
+  subroutine get_flux(n_values, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
+    integer, intent(in)     :: n_values !< Number of cell faces
+    integer, intent(in)     :: n_var    !< Number of variables
+    integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
+    real(dp), intent(in)    :: u(n_values, n_var)
+    real(dp), intent(out)   :: flux(n_values, n_var)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: line_ix(NDIM-1)
+    integer, intent(in)     :: s_deriv
+
+    flux = u * velocity(flux_dim)
+  end subroutine get_flux
+
+  subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, box, line_ix, s_deriv)
+    integer, intent(in)     :: nf              !< Number of cell faces
+    integer, intent(in)     :: n_var           !< Number of variables
+    integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+    real(dp), intent(in)    :: u(nf, n_var)    !< Face values
+    real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
+    !> Terms per cell-center to be added to CFL sum, see flux_upwind_box
+    real(dp), intent(out)   :: cfl_sum(nf-1)
+    type(box_t), intent(in) :: box             !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv        !< State to compute derivatives from
+    real(dp) :: tmp
+
+    flux = u * velocity(flux_dim)
+
+    tmp = abs(velocity(flux_dim)) / box%dr(flux_dim)
+    cfl_sum = tmp
+  end subroutine flux_upwind
+
+  subroutine flux_direction(box, line_ix, s_deriv, flux_dim, direction_positive)
+    type(box_t), intent(in) :: box             !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+    integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+    !> True means positive flow (to the "right"), false to the left
+    logical, intent(out)    :: direction_positive(box%n_cell+1)
+
+    direction_positive(:) = (velocity(flux_dim) > 0)
+  end subroutine flux_direction
 
 end program
