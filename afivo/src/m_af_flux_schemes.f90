@@ -104,7 +104,8 @@ module m_af_flux_schemes
   public :: flux_dummy_source
   public :: flux_dummy_modify
   public :: flux_dummy_line_modify
-  public :: flux_get_line_cc, flux_get_line_fc
+  public :: flux_get_line_cc, flux_get_line_1cc
+  public :: flux_get_line_fc, flux_get_line_1fc
 
 contains
 
@@ -465,20 +466,25 @@ contains
     procedure(subr_prim_cons)     :: to_conservative
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)           :: limiter
+    real(dp)                      :: my_dt
 
     integer :: lvl, i
 
     ! Ensure ghost cells near refinement boundaries can be properly filled
     call af_restrict_ref_boundary(tree, i_cc+s_deriv)
 
-    !$omp parallel private(lvl, i) reduction(min:dt_lim)
+    dt_lim = 1e100_dp
+    my_dt = 1e100_dp
+
+    !$omp parallel private(lvl, i, my_dt) reduction(min:dt_lim)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, s_deriv, i_flux, dt_lim, max_wavespeed, &
+               n_vars, i_cc, s_deriv, i_flux, my_dt, max_wavespeed, &
                flux_from_primitives, flux_modify, line_modify, &
                to_primitive, to_conservative, limiter)
+          dt_lim = min(dt_lim, my_dt)
        end do
        !$omp end do
     end do
@@ -680,19 +686,23 @@ contains
     procedure(subr_line_modify) :: line_modify
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)         :: limiter
-
-    integer :: lvl, i
+    integer                     :: lvl, i
+    real(dp)                    :: my_dt
 
     ! Ensure ghost cells near refinement boundaries can be properly filled
     call af_restrict_ref_boundary(tree, i_cc+s_deriv)
 
-    !$omp parallel private(lvl, i) reduction(min:dt_lim)
+    dt_lim = 1e100_dp
+    my_dt = 1e100_dp
+
+    !$omp parallel private(lvl, i, my_dt) reduction(min:dt_lim)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_upwind_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, s_deriv, i_flux, dt_lim, flux_upwind, &
+               n_vars, i_cc, s_deriv, i_flux, my_dt, flux_upwind, &
                flux_direction, line_modify, limiter)
+          dt_lim = min(dt_lim, my_dt)
        end do
        !$omp end do
     end do
@@ -858,10 +868,40 @@ contains
     case (2)
        cc_line = box%cc(line_ix(1), :, line_ix(2), ivs)
     case (3)
-       cc_line = box%cc(:, line_ix(1), line_ix(2), ivs)
+       cc_line = box%cc(line_ix(1), line_ix(2), :, ivs)
 #endif
     end select
   end subroutine flux_get_line_cc
+
+  !> Extract cell-centered data along a line in a box, including a single layer
+  !> of ghost cells. This is convenient to get extra variables in a flux
+  !> computation.
+  subroutine flux_get_line_1cc(box, iv, flux_dim, line_ix, cc_line)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: iv              !< Index of the variable
+    integer, intent(in)     :: flux_dim        !< Dimension of flux computation
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line
+    real(dp), intent(inout) :: cc_line(box%n_cell+2)
+
+    select case (flux_dim)
+#if NDIM == 1
+    case (1)
+       cc_line = box%cc(:, iv)
+#elif NDIM == 2
+    case (1)
+       cc_line = box%cc(:, line_ix(1), iv)
+    case (2)
+       cc_line = box%cc(line_ix(1), :, iv)
+#elif NDIM == 3
+    case (1)
+       cc_line = box%cc(:, line_ix(1), line_ix(2), iv)
+    case (2)
+       cc_line = box%cc(line_ix(1), :, line_ix(2), iv)
+    case (3)
+       cc_line = box%cc(line_ix(1), line_ix(2), :, iv)
+#endif
+    end select
+  end subroutine flux_get_line_1cc
 
   !> Extract face-centered data along a line in a box. This is convenient to get
   !> extra variables in a flux computation.
@@ -887,10 +927,39 @@ contains
     case (2)
        fc_line = box%fc(line_ix(1), :, line_ix(2), flux_dim, ivs)
     case (3)
-       fc_line = box%fc(:, line_ix(1), line_ix(2), flux_dim, ivs)
+       fc_line = box%fc(line_ix(1), line_ix(2), :, flux_dim, ivs)
 #endif
     end select
   end subroutine flux_get_line_fc
+
+  !> Extract face-centered data along a line in a box. This is convenient to get
+  !> extra variables in a flux computation.
+  subroutine flux_get_line_1fc(box, iv, flux_dim, line_ix, fc_line)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: iv              !< Index of the variable
+    integer, intent(in)     :: flux_dim        !< Dimension of flux computation
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line
+    real(dp), intent(inout) :: fc_line(box%n_cell+1)
+
+    select case (flux_dim)
+#if NDIM == 1
+    case (1)
+       fc_line = box%fc(:, flux_dim, iv)
+#elif NDIM == 2
+    case (1)
+       fc_line = box%fc(:, line_ix(1), flux_dim, iv)
+    case (2)
+       fc_line = box%fc(line_ix(1), :, flux_dim, iv)
+#elif NDIM == 3
+    case (1)
+       fc_line = box%fc(:, line_ix(1), line_ix(2), flux_dim, iv)
+    case (2)
+       fc_line = box%fc(line_ix(1), :, line_ix(2), flux_dim, iv)
+    case (3)
+       fc_line = box%fc(line_ix(1), line_ix(2), :, flux_dim, iv)
+#endif
+    end select
+  end subroutine flux_get_line_1fc
 
   !> Compute flux according to Koren limiter
   subroutine flux_koren_3d(cc, v, nc, ngc)
