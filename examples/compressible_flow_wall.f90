@@ -101,7 +101,7 @@ program compressible_flow_wall
 
      call af_advance(tree, dt, dt_lim, time, variables, &
           time_integrator, forward_euler)
-     dt = dt_lim
+     dt = cfl_number * dt_lim
      if (time > end_time) exit
   end do
 
@@ -122,16 +122,12 @@ contains
     real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
-    real(dp)                  :: wmax(NDIM)
 
-    call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, wmax, &
+    call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, dt_lim, &
          max_wavespeed, get_fluxes, flux_dummy_modify, line_modify, &
          to_primitive, to_conservative, af_limiter_vanleer_t)
     call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source, i_lsf)
-
-    ! Compute new time step
-    dt_lim = cfl_number / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine forward_euler
 
   subroutine set_init_conds(box)

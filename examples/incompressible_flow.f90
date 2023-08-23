@@ -146,9 +146,9 @@ contains
     real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
-    real(dp)                  :: wmax(NDIM), tmp
+    real(dp)                  :: tmp
 
-    call flux_generic_tree(tree, n_vars, flow_variables, s_deriv, fluxes, wmax, &
+    call flux_generic_tree(tree, n_vars, flow_variables, s_deriv, fluxes, dt_lim, &
          max_wavespeed, get_flux_lr, flux_add_diffusion, flux_dummy_line_modify, &
          flux_dummy_conversion, flux_dummy_conversion, af_limiter_vanleer_t)
 
@@ -156,10 +156,6 @@ contains
          s_deriv, n_prev, s_prev, w_prev, s_out, source_term)
 
     call remove_velocity_divergence(tree, flow_variables+s_out, dt)
-
-    ! Compute maximal time step
-    tmp = sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
-    dt_lim = 1.0_dp / max(tmp, 1.0e-10_dp)
 
   end subroutine forward_euler
 

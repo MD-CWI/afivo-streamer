@@ -236,17 +236,13 @@ contains
     real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
-    real(dp)                  :: wmax(NDIM)
     integer                   :: lvl, i, id
 
     select case (flux_method)
     case ("generic")
-       call flux_generic_tree(tree, 1, [i_phi], s_deriv, [i_flux], wmax, &
+       call flux_generic_tree(tree, 1, [i_phi], s_deriv, [i_flux], dt_lim, &
             max_wavespeed, get_flux, flux_dummy_modify, flux_dummy_line_modify, &
             flux_dummy_conversion, flux_dummy_conversion, af_limiter_koren_t)
-
-       ! Compute maximal time step
-       dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
     case ("upwind")
        call flux_upwind_tree(tree, 1, [i_phi], s_deriv, [i_flux], &
             dt_lim, flux_upwind, flux_direction, &

@@ -439,7 +439,7 @@ contains
   end subroutine flux_update_densities
 
   !> Compute generic finite volume flux with a second order MUSCL scheme
-  subroutine flux_generic_tree(tree, n_vars, i_cc, s_deriv, i_flux, wmax, &
+  subroutine flux_generic_tree(tree, n_vars, i_cc, s_deriv, i_flux, dt_lim, &
        max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
        to_primitive, to_conservative, limiter)
     use m_af_restrict
@@ -449,7 +449,8 @@ contains
     integer, intent(in)           :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)           :: s_deriv        !< State to compute derivatives from
     integer, intent(in)           :: i_flux(n_vars) !< Flux variables
-    real(dp), intent(out)         :: wmax(NDIM)     !< Maximum wave speed found
+    !> Maximal time step, assuming a CFL number of 1.0
+    real(dp), intent(out)         :: dt_lim
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed) :: max_wavespeed
     !> Compute the flux from primitive variables
@@ -470,14 +471,12 @@ contains
     ! Ensure ghost cells near refinement boundaries can be properly filled
     call af_restrict_ref_boundary(tree, i_cc+s_deriv)
 
-    wmax(:) = 0
-
-    !$omp parallel private(lvl, i) reduction(max:wmax)
+    !$omp parallel private(lvl, i) reduction(min:dt_lim)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, s_deriv, i_flux, wmax, max_wavespeed, &
+               n_vars, i_cc, s_deriv, i_flux, dt_lim, max_wavespeed, &
                flux_from_primitives, flux_modify, line_modify, &
                to_primitive, to_conservative, limiter)
        end do
@@ -491,7 +490,7 @@ contains
   end subroutine flux_generic_tree
 
   !> Compute generic finite volume flux with a second order MUSCL scheme
-  subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, wmax, &
+  subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, dt_lim, &
        max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
        to_primitive, to_conservative, limiter)
     use m_af_types
@@ -503,7 +502,8 @@ contains
     integer, intent(in)           :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)           :: s_deriv        !< State to compute derivatives from
     integer, intent(in)           :: i_flux(n_vars) !< Flux variables
-    real(dp), intent(inout)       :: wmax(NDIM)     !< Maximum wave speed found
+    !> Maximal time step, assuming a CFL number of 1.0
+    real(dp), intent(out)         :: dt_lim
     !> Compute the maximum wave speed
     procedure(subr_max_wavespeed) :: max_wavespeed
     !> Compute the flux from primitive variables on cell faces
@@ -526,6 +526,7 @@ contains
     real(dp) :: u_l(nc+1, n_vars), u_r(nc+1, n_vars)
     real(dp) :: w_l(nc+1), w_r(nc+1)
     real(dp) :: flux_l(nc+1, n_vars), flux_r(nc+1, n_vars)
+    real(dp) :: cfl_sum(DTIMES(nc)), cfl_sum_line(nc), inv_dr(NDIM)
     integer  :: flux_dim, line_ix(NDIM-1)
 #if NDIM > 1
     integer  :: i
@@ -534,8 +535,15 @@ contains
     integer  :: j
 #endif
 
+    inv_dr = 1/tree%boxes(id)%dr
+
     ! Get two layers of ghost cell data
     call af_gc2_box(tree, id, i_cc+s_deriv, cc)
+
+    ! This will contain the sum of CFL-related conditions. For example, one can
+    ! write dt * (vx/dx + vy/dy) < 1. This sum will then contain (vx/dx +
+    ! vy/dy).
+    cfl_sum = 0.0_dp
 
     ! Jannis: Below, there are function calls in the inner part of a loop. When
     ! I did some benchmarks, it was not significantly slower than using a buffer
@@ -603,12 +611,12 @@ contains
              ! Get maximum of left/right wave speed
              w_l = max(w_l, w_r)
 
+             ! Get maximal wave speed for each cell center
+             cfl_sum_line = max(w_l(1:nc), w_l(2:nc+1)) * inv_dr(NDIM)
+
              ! Combine left and right fluxes to obtain a single flux
              call flux_kurganovTadmor_1d(nc+1, n_vars, flux_l, flux_r, &
                   u_l, u_r, w_l, flux)
-
-             ! Store maximum wave speed
-             wmax(flux_dim) = max(wmax(flux_dim), maxval(w_l))
 
              ! Potentially add other flux components
              call flux_modify(nc+1, n_vars, flux_dim, flux, &
@@ -619,18 +627,24 @@ contains
 #if NDIM == 1
              case (1)
                 tree%boxes(id)%fc(:, flux_dim, i_flux) = flux
+                cfl_sum = cfl_sum + cfl_sum_line
 #elif NDIM == 2
              case (1)
                 tree%boxes(id)%fc(:, i, flux_dim, i_flux) = flux
+                cfl_sum(:, i) = cfl_sum(:, i) + cfl_sum_line
              case (2)
                 tree%boxes(id)%fc(i, :, flux_dim, i_flux) = flux
+                cfl_sum(i, :) = cfl_sum(i, :) + cfl_sum_line
 #elif NDIM == 3
              case (1)
                 tree%boxes(id)%fc(:, i, j, flux_dim, i_flux) = flux
+                cfl_sum(:, i, j) = cfl_sum(:, i, j) + cfl_sum_line
              case (2)
                 tree%boxes(id)%fc(i, :, j, flux_dim, i_flux) = flux
+                cfl_sum(i, :, j) = cfl_sum(i, :, j) + cfl_sum_line
              case (3)
                 tree%boxes(id)%fc(i, j, :, flux_dim, i_flux) = flux
+                cfl_sum(i, j, :) = cfl_sum(i, j, :) + cfl_sum_line
 #endif
              end select
 #if NDIM > 1
@@ -640,6 +654,9 @@ contains
        end do
 #endif
     end do
+
+    ! Determine maximal time step
+    dt_lim = 1/maxval(cfl_sum)
 
   end subroutine flux_generic_box
 
@@ -653,7 +670,8 @@ contains
     integer, intent(in)         :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)         :: s_deriv        !< State to compute derivatives from
     integer, intent(in)         :: i_flux(n_vars) !< Flux variables
-    real(dp), intent(out)       :: dt_lim         !< Time step restriction
+    !> Maximal time step, assuming a CFL number of 1.0
+    real(dp), intent(out)       :: dt_lim
     !> Method to compute fluxes
     procedure(subr_flux_upwind) :: flux_upwind
     !> Method to get direction of flux (positive or negative)
@@ -728,10 +746,6 @@ contains
     ! write dt * (vx/dx + vy/dy) < 1. This sum will then contain (vx/dx +
     ! vy/dy).
     cfl_sum = 0.0_dp
-
-    ! Jannis: Below, there are function calls in the inner part of a loop. When
-    ! I did some benchmarks, it was not significantly slower than using a buffer
-    ! and fewer functions calls.
 
     associate (fc => tree%boxes(id)%fc)
       do flux_dim = 1, NDIM
