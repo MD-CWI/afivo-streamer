@@ -189,10 +189,9 @@ contains
     integer, intent(in)       :: s_out          !< Output state
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
-    real(dp)                  :: wmax(NDIM)
 
     call flux_generic_tree(tree, n_vars_euler, gas_vars, s_deriv, &
-         gas_fluxes, wmax, max_wavespeed, get_fluxes, &
+         gas_fluxes, dt_lim, max_wavespeed, get_fluxes, &
          flux_dummy_modify, flux_dummy_line_modify, to_primitive, &
          to_conservative, af_limiter_vanleer_t)
     if (tree%coord_t == af_cyl) then
@@ -202,9 +201,6 @@ contains
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
             s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
     end if
-
-    ! Compute new time step
-    dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine gas_forward_euler
 
 
