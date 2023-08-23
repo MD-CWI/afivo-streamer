@@ -104,7 +104,8 @@ module m_af_flux_schemes
   public :: flux_dummy_source
   public :: flux_dummy_modify
   public :: flux_dummy_line_modify
-  public :: flux_get_line_cc, flux_get_line_fc
+  public :: flux_get_line_cc, flux_get_line_1cc
+  public :: flux_get_line_fc, flux_get_line_1fc
 
 contains
 
@@ -858,10 +859,40 @@ contains
     case (2)
        cc_line = box%cc(line_ix(1), :, line_ix(2), ivs)
     case (3)
-       cc_line = box%cc(:, line_ix(1), line_ix(2), ivs)
+       cc_line = box%cc(line_ix(1), line_ix(2), :, ivs)
 #endif
     end select
   end subroutine flux_get_line_cc
+
+  !> Extract cell-centered data along a line in a box, including a single layer
+  !> of ghost cells. This is convenient to get extra variables in a flux
+  !> computation.
+  subroutine flux_get_line_1cc(box, iv, flux_dim, line_ix, cc_line)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: iv              !< Index of the variable
+    integer, intent(in)     :: flux_dim        !< Dimension of flux computation
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line
+    real(dp), intent(inout) :: cc_line(box%n_cell+2)
+
+    select case (flux_dim)
+#if NDIM == 1
+    case (1)
+       cc_line = box%cc(:, iv)
+#elif NDIM == 2
+    case (1)
+       cc_line = box%cc(:, line_ix(1), iv)
+    case (2)
+       cc_line = box%cc(line_ix(1), :, iv)
+#elif NDIM == 3
+    case (1)
+       cc_line = box%cc(:, line_ix(1), line_ix(2), iv)
+    case (2)
+       cc_line = box%cc(line_ix(1), :, line_ix(2), iv)
+    case (3)
+       cc_line = box%cc(line_ix(1), line_ix(2), :, iv)
+#endif
+    end select
+  end subroutine flux_get_line_1cc
 
   !> Extract face-centered data along a line in a box. This is convenient to get
   !> extra variables in a flux computation.
@@ -887,10 +918,39 @@ contains
     case (2)
        fc_line = box%fc(line_ix(1), :, line_ix(2), flux_dim, ivs)
     case (3)
-       fc_line = box%fc(:, line_ix(1), line_ix(2), flux_dim, ivs)
+       fc_line = box%fc(line_ix(1), line_ix(2), :, flux_dim, ivs)
 #endif
     end select
   end subroutine flux_get_line_fc
+
+  !> Extract face-centered data along a line in a box. This is convenient to get
+  !> extra variables in a flux computation.
+  subroutine flux_get_line_1fc(box, iv, flux_dim, line_ix, fc_line)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: iv              !< Index of the variable
+    integer, intent(in)     :: flux_dim        !< Dimension of flux computation
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line
+    real(dp), intent(inout) :: fc_line(box%n_cell+1)
+
+    select case (flux_dim)
+#if NDIM == 1
+    case (1)
+       fc_line = box%fc(:, flux_dim, iv)
+#elif NDIM == 2
+    case (1)
+       fc_line = box%fc(:, line_ix(1), flux_dim, iv)
+    case (2)
+       fc_line = box%fc(line_ix(1), :, flux_dim, iv)
+#elif NDIM == 3
+    case (1)
+       fc_line = box%fc(:, line_ix(1), line_ix(2), flux_dim, iv)
+    case (2)
+       fc_line = box%fc(line_ix(1), :, line_ix(2), flux_dim, iv)
+    case (3)
+       fc_line = box%fc(line_ix(1), line_ix(2), :, flux_dim, iv)
+#endif
+    end select
+  end subroutine flux_get_line_1fc
 
   !> Compute flux according to Koren limiter
   subroutine flux_koren_3d(cc, v, nc, ngc)
