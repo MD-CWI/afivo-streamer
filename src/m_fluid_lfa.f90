@@ -37,7 +37,8 @@ contains
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
     integer                   :: lvl, i, id, p_id, nc, ix, id_out
-    logical                   :: last_step
+    logical                   :: last_step, new_flux
+    real(dp)                  :: all_dt(2)
 
     nc = tree%n_cell
 
@@ -50,30 +51,40 @@ contains
     ! Use a shared array to determine maximum time step
     dt_matrix(1:dt_num_cond, :) = dt_max
 
-    ! So that ghost cells can be computed properly near refinement boundaries
-    call af_restrict_ref_boundary(tree, flux_species+s_deriv)
-
     ! Since field_compute is called after performing time integration, we don't
     ! have to call it again for the first sub-step of the next iteration
     if (i_step > 1) call field_compute(tree, mg, s_deriv, time, .true.)
 
-    ! First calculate fluxes
-    !$omp parallel private(lvl, i, id)
-    do lvl = 1, tree%highest_lvl
-       !$omp do
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
-          call fluxes_elec(tree, id, nc, dt, s_deriv, last_step)
+    new_flux = .true.
+    if (new_flux) then
+       call flux_upwind_tree(tree, 1, [i_electron], s_deriv, [flux_elec], &
+            2, all_dt, flux_upwind, flux_direction, &
+            flux_dummy_line_modify, af_limiter_koren_t)
+       dt_matrix(dt_ix_cfl, 1) = all_dt(1) * dt_cfl_number
+       dt_matrix(dt_ix_drt, 1) = all_dt(2)
+       ! print *, i_step, "all_dt", all_dt, all_dt(1) * dt_cfl_number
+    else
+       ! So that ghost cells can be computed properly near refinement boundaries
+       call af_restrict_ref_boundary(tree, flux_species+s_deriv)
 
-          if (transport_data_ions%n_mobile_ions > 0) then
-             call fluxes_ions(tree, id, nc, dt, s_deriv, last_step)
-          end if
+       ! First calculate fluxes
+       !$omp parallel private(lvl, i, id)
+       do lvl = 1, tree%highest_lvl
+          !$omp do
+          do i = 1, size(tree%lvls(lvl)%leaves)
+             id = tree%lvls(lvl)%leaves(i)
+             call fluxes_elec(tree, id, nc, dt, s_deriv, last_step)
+
+             if (transport_data_ions%n_mobile_ions > 0) then
+                call fluxes_ions(tree, id, nc, dt, s_deriv, last_step)
+             end if
+          end do
+          !$omp end do
        end do
-       !$omp end do
-    end do
-    !$omp end parallel
+       !$omp end parallel
 
-    call af_consistent_fluxes(tree, flux_variables)
+       call af_consistent_fluxes(tree, flux_variables)
+    end if
 
     if (transport_data_ions%n_mobile_ions > 0 .and. &
          ion_se_yield > 0.0_dp) then
@@ -116,6 +127,7 @@ contains
 
     if (last_step) then
        dt_lim = minval(dt_matrix(1:dt_num_cond, :))
+       ! print *, i_step, "dt_matrix", minval(dt_matrix(1:dt_num_cond, :), dim=2)new_flux
     end if
   end subroutine forward_euler
 
@@ -335,8 +347,7 @@ contains
           dt_cfl = 1.0_dp/sum(max(abs(vmean), eps) * inv_dr)
 
           ! Diffusion condition
-          dt_dif = minval(tree%boxes(id)%dr)**2 / &
-               max(2 * NDIM * maxval(dc(IJK, :)), eps)
+          dt_dif = 1/sum(2 * max(dc(IJK, :), eps) / tree%boxes(id)%dr**2)
 
           ! Take combined CFL-diffusion condition
           dt_cfl = dt_cfl_number/(1/dt_cfl + 1/dt_dif)
@@ -428,6 +439,99 @@ contains
     end if
 
   end subroutine fluxes_elec
+
+  subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
+       n_other_dt, other_dt, box, line_ix, s_deriv)
+    use m_af_flux_schemes
+    use m_units_constants
+    use m_gas
+    use m_lookup_table
+    use m_transport_data
+    integer, intent(in)     :: nf              !< Number of cell faces
+    integer, intent(in)     :: n_var           !< Number of variables
+    integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+    real(dp), intent(in)    :: u(nf, n_var)    !< Face values
+    real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
+    !> Terms per cell-center to be added to CFL sum, see flux_upwind_box
+    real(dp), intent(out)   :: cfl_sum(nf-1)
+    integer, intent(in)     :: n_other_dt !< Number of non-cfl time step restrictions
+    real(dp), intent(inout) :: other_dt(n_other_dt) !< Non-cfl time step restrictions
+    type(box_t), intent(in) :: box             !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv        !< State to compute derivatives from
+
+    real(dp) :: E_cc(0:nf)  !< Cell-centered field strengths
+    real(dp) :: E_x(nf)     !< Face-centered field components
+    real(dp) :: N_gas(0:nf) !< Gas number density at cell centers
+    real(dp) :: ne_cc(0:nf) !< Electron density at cell centers
+    real(dp) :: v(nf)       !< Velocity at cell faces
+    real(dp) :: dc(nf)      !< Diffusion coefficient at cell faces
+    real(dp) :: E_face(nf), Td(nf), N_inv(nf)
+    real(dp) :: mu(nf), inv_dx, tmp
+    integer  :: n, nc
+
+    nc = box%n_cell
+    inv_dx = 1/box%dr(flux_dim)
+
+    ! Inside dielectrics, set the flux to zero
+    if (ST_use_dielectric) then
+       if (box%cc(DTIMES(1), i_eps) > 1.0_dp) then
+          flux = 0.0_dp
+          return
+       end if
+    end if
+
+    call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
+    call flux_get_line_1cc(box, i_electric_fld, flux_dim, line_ix, E_cc)
+    call flux_get_line_1cc(box, i_electron+s_deriv, flux_dim, line_ix, ne_cc)
+
+    if (gas_constant_density) then
+       N_inv = 1/gas_number_density
+    else
+       ! Compute gas number density at cell faces
+       call flux_get_line_1cc(box, i_gas_dens, flux_dim, line_ix, N_gas)
+       do n = 1, nc+1
+          N_inv(n) = 2 / (N_gas(n-1) + N_gas(n))
+       end do
+    end if
+
+    ! Compute field strength at cell faces, which is used to compute the
+    ! mobility and diffusion coefficient at the interface
+    do n = 1, nc+1
+       E_face(n) = 0.5_dp * (E_cc(n-1) + E_cc(n))
+       Td(n) = E_face(n) * SI_to_Townsend * N_inv(n)
+    end do
+
+    mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
+    dc = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
+
+    ! Compute velocity, -mu accounts for negative electron charge
+    v = -mu * E_x
+
+    ! Combine advective and diffusive flux
+    flux(:, 1) = v * u(:, 1) - dc * inv_dx * (ne_cc(1:nc+1) - ne_cc(0:nc))
+
+    ! Used to determine CFL time step
+    cfl_sum = 0.5_dp * abs(v(2:) + v(:nf-1)) * inv_dx + 2 * dc(:nf-1) * inv_dx**2
+
+    ! Dielectric relaxation time
+    tmp = maxval(mu * u(:, 1))
+    other_dt(1) = UC_eps0 / (UC_elem_charge * max(tmp, 1e-100_dp))
+  end subroutine flux_upwind
+
+  subroutine flux_direction(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)
+    type(box_t), intent(in) :: box             !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+    integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
+    integer, intent(in)     :: n_var           !< Number of variables
+    !> True means positive flow (to the "right"), false to the left
+    logical, intent(out)    :: direction_positive(box%n_cell+1, n_var)
+    real(dp)                :: E_x(box%n_cell+1)
+
+    call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
+    direction_positive(:, 1) = (E_x < 0) ! Electrons have negative charge
+  end subroutine flux_direction
 
   subroutine fluxes_ions(tree, id, nc, dt, s_in, last_step)
     use m_af_flux_schemes
