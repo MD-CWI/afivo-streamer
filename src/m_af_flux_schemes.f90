@@ -61,14 +61,15 @@ module m_af_flux_schemes
        integer, intent(in)     :: s_deriv         !< State to compute derivatives from
      end subroutine subr_flux_modify
 
-     subroutine subr_flux_dir(box, line_ix, s_deriv, flux_dim, direction_positive)
+     subroutine subr_flux_dir(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)
        import
        type(box_t), intent(in) :: box             !< Current box
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
        integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+       integer, intent(in)     :: n_var           !< Number of variables
        integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
        !> True means positive flow (to the "right"), false to the left
-       logical, intent(out)    :: direction_positive(box%n_cell+1)
+       logical, intent(out)    :: direction_positive(box%n_cell+1, n_var)
      end subroutine subr_flux_dir
 
      subroutine subr_line_modify(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
@@ -272,21 +273,17 @@ contains
     real(dp), intent(inout) :: u_f(1:nc+1, n_vars)
     integer, intent(in)     :: limiter                  !< Which limiter to use
     !> True means positive flow (to the "right"), false to the left
-    logical, intent(in)     :: direction_positive(nc+1)
-    real(dp)                :: slope(n_vars)
-    integer                 :: n
+    logical, intent(in)     :: direction_positive(nc+1, n_vars)
 
     associate (a=>cc(1:nc+2, :) - cc(0:nc+1, :), &
          b=>cc(0:nc+1, :) - cc(-1:nc, :))
-      do n = 1, nc+1
-         if (direction_positive(n)) then
-            slope = af_limiter_apply(a(n, :), b(n, :), limiter)
-            u_f(n, :) = cc(n-1, :) + 0.5_dp * slope
-         else
-            slope = af_limiter_apply(b(n+1, :), a(n+1, :), limiter)
-            u_f(n, :) = cc(n, :) - 0.5_dp * slope
-         end if
-      end do
+      where (direction_positive)
+         u_f = cc(0:nc, :) + 0.5_dp * &
+              af_limiter_apply(a(1:nc+1, :), b(1:nc+1, :), limiter)
+      elsewhere
+         u_f = cc(1:nc+1, :) - 0.5_dp * &
+              af_limiter_apply(b(2:nc+2, :), a(2:nc+2, :), limiter)
+      end where
     end associate
   end subroutine reconstruct_upwind_1d
 
@@ -740,7 +737,7 @@ contains
     real(dp) :: flux(nc+1, n_vars)
     real(dp) :: u_l(nc+1, n_vars)
     real(dp) :: cfl_sum(DTIMES(nc)), cfl_sum_line(nc)
-    logical  :: direction_positive(nc+1)
+    logical  :: direction_positive(nc+1, n_vars)
     integer  :: flux_dim, line_ix(NDIM-1)
 #if NDIM > 1
     integer  :: i
@@ -791,7 +788,7 @@ contains
                line_ix = [i, j]
 #endif
                call flux_direction(tree%boxes(id), line_ix, s_deriv, &
-                    flux_dim, direction_positive)
+                    n_vars, flux_dim, direction_positive)
 
                ! Optionally modify data, e.g. to take into account a boundary
                call line_modify(nc+4, n_vars, cc_line, flux_dim, &

@@ -351,15 +351,16 @@ contains
     cfl_sum = tmp
   end subroutine flux_upwind
 
-  subroutine flux_direction(box, line_ix, s_deriv, flux_dim, direction_positive)
+  subroutine flux_direction(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)
     type(box_t), intent(in) :: box             !< Current box
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+    integer, intent(in)     :: n_var           !< Number of variables
     integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
     !> True means positive flow (to the "right"), false to the left
-    logical, intent(out)    :: direction_positive(box%n_cell+1)
+    logical, intent(out)    :: direction_positive(box%n_cell+1, n_var)
 
-    direction_positive(:) = (velocity(flux_dim) > 0)
+    direction_positive(:, 1) = (velocity(flux_dim) > 0)
   end subroutine flux_direction
 
 end program
