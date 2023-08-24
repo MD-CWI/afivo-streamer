@@ -115,8 +115,12 @@ contains
           call af_add_cc_variable(tree, gas_var_names(n), ix=gas_vars(n), &
                n_copies=af_advance_num_steps(time_integrator))
           call af_add_fc_variable(tree, "flux", ix=gas_fluxes(n))
-          ! @todo improve boundary conditions?
-          call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
+
+          if (tree%coord_t == af_cyl .and. n == i_mom(1)) then
+             call af_set_cc_methods(tree, gas_vars(n), bc_radial_momentum)
+          else
+             call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
+          end if
        end do
        call af_add_cc_variable(tree, "u", ix=gas_prim_vars(i_mom(1)))
 #if NDIM > 1
@@ -335,5 +339,25 @@ contains
     flux(:, i_e) = u(:, i_mom(flux_dim)) * (E + u(:, i_e))
 
   end subroutine get_fluxes
+
+  !> Boundary condition for a radial momentum flux (in axisymmetric coordinates)
+  subroutine bc_radial_momentum(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (nb == af_neighb_lowx) then
+       ! This will ensure the radial momentum is zero on the axis (by having
+       ! ghost values with opposite sign)
+       bc_type = af_bc_dirichlet
+       bc_val  = 0.0_dp
+    else
+       bc_type = af_bc_neumann
+       bc_val  = 0.0_dp
+    end if
+  end subroutine bc_radial_momentum
 
 end module m_gas
