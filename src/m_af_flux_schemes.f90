@@ -36,7 +36,8 @@ module m_af_flux_schemes
        integer, intent(in)     :: s_deriv        !< State to compute derivatives from
      end subroutine subr_flux
 
-     subroutine subr_flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, box, line_ix, s_deriv)
+     subroutine subr_flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
+          n_other_dt, other_dt, box, line_ix, s_deriv)
        import
        integer, intent(in)     :: nf              !< Number of cell faces
        integer, intent(in)     :: n_var           !< Number of variables
@@ -45,9 +46,11 @@ module m_af_flux_schemes
        real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
        !> Terms per cell-center to be added to CFL sum, see flux_upwind_box
        real(dp), intent(out)   :: cfl_sum(nf-1)
+       integer, intent(in)     :: n_other_dt !< Number of non-cfl time step restrictions
+       real(dp), intent(inout) :: other_dt(n_other_dt) !< Non-cfl time step restrictions
        type(box_t), intent(in) :: box             !< Current box
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
-       integer, intent(in)     :: s_deriv        !< State to compute derivatives from
+       integer, intent(in)     :: s_deriv         !< State to compute derivatives from
      end subroutine subr_flux_upwind
 
      subroutine subr_flux_modify(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
@@ -664,7 +667,7 @@ contains
   end subroutine flux_generic_box
 
   !> Compute upwind fluxes
-  subroutine flux_upwind_tree(tree, n_vars, i_cc, s_deriv, i_flux, dt_lim, &
+  subroutine flux_upwind_tree(tree, n_vars, i_cc, s_deriv, i_flux, n_dt, dt_lim, &
        flux_upwind, flux_direction, line_modify, limiter)
     use m_af_restrict
     use m_af_core
@@ -673,8 +676,10 @@ contains
     integer, intent(in)         :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)         :: s_deriv        !< State to compute derivatives from
     integer, intent(in)         :: i_flux(n_vars) !< Flux variables
-    !> Maximal time step, assuming a CFL number of 1.0
-    real(dp), intent(out)       :: dt_lim
+    !> Number of time steps restrictions (first is CFL)
+    integer, intent(in)         :: n_dt
+    !> Maximal allowed time steps, assuming a CFL number of 1.0
+    real(dp), intent(out)       :: dt_lim(n_dt)
     !> Method to compute fluxes
     procedure(subr_flux_upwind) :: flux_upwind
     !> Method to get direction of flux (positive or negative)
@@ -684,7 +689,7 @@ contains
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)         :: limiter
     integer                     :: lvl, i
-    real(dp)                    :: my_dt
+    real(dp)                    :: my_dt(n_dt)
 
     ! Ensure ghost cells near refinement boundaries can be properly filled
     call af_restrict_ref_boundary(tree, i_cc+s_deriv)
@@ -697,7 +702,7 @@ contains
        !$omp do
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_upwind_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
-               n_vars, i_cc, s_deriv, i_flux, my_dt, flux_upwind, &
+               n_vars, i_cc, s_deriv, i_flux, n_dt, my_dt, flux_upwind, &
                flux_direction, line_modify, limiter)
           dt_lim = min(dt_lim, my_dt)
        end do
@@ -712,7 +717,7 @@ contains
 
   !> Compute generic finite volume flux
   subroutine flux_upwind_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, &
-       dt_lim, flux_upwind, flux_direction, line_modify, limiter)
+       n_dt, dt_lim, flux_upwind, flux_direction, line_modify, limiter)
     use m_af_types
     use m_af_ghostcell
     type(af_t), intent(inout)   :: tree
@@ -722,7 +727,9 @@ contains
     integer, intent(in)         :: i_cc(n_vars)   !< Cell-centered variables
     integer, intent(in)         :: s_deriv        !< State to compute derivatives from
     integer, intent(in)         :: i_flux(n_vars) !< Flux variables
-    real(dp), intent(inout)     :: dt_lim         !< Time step restriction
+    !> Number of time steps restrictions (first is CFL)
+    integer, intent(in)         :: n_dt
+    real(dp), intent(inout)     :: dt_lim(n_dt) !< Time step restrictions
     !> Method to compute fluxes
     procedure(subr_flux_upwind) :: flux_upwind
     !> Method to get direction of flux (positive or negative)
@@ -737,6 +744,7 @@ contains
     real(dp) :: flux(nc+1, n_vars)
     real(dp) :: u_l(nc+1, n_vars)
     real(dp) :: cfl_sum(DTIMES(nc)), cfl_sum_line(nc)
+    real(dp) :: other_dt(n_dt-1)
     logical  :: direction_positive(nc+1, n_vars)
     integer  :: flux_dim, line_ix(NDIM-1)
 #if NDIM > 1
@@ -753,6 +761,8 @@ contains
     ! write dt * (vx/dx + vy/dy) < 1. This sum will then contain (vx/dx +
     ! vy/dy).
     cfl_sum = 0.0_dp
+    dt_lim(2:) = 1e100_dp
+    other_dt = 1e100_dp
 
     associate (fc => tree%boxes(id)%fc)
       do flux_dim = 1, NDIM
@@ -798,8 +808,9 @@ contains
                call reconstruct_upwind_1d(nc, 2, n_vars, cc_line, u_l, &
                     limiter, direction_positive)
 
-               call flux_upwind(nc+1, n_vars, flux_dim, u_l, flux, &
-                    cfl_sum_line, tree%boxes(id), line_ix, s_deriv)
+               call flux_upwind(nc+1, n_vars, flux_dim, u_l, flux, cfl_sum_line, &
+                    n_dt-1, other_dt, tree%boxes(id), line_ix, s_deriv)
+               dt_lim(2:) = min(dt_lim(2:), other_dt)
 
                ! Store the computed fluxes
                select case (flux_dim)
@@ -835,8 +846,8 @@ contains
       end do
     end associate
 
-    ! Determine maximal time step
-    dt_lim = 1/maxval(cfl_sum)
+    ! Determine maximal CFL time step
+    dt_lim(1) = 1/maxval(cfl_sum)
 
   end subroutine flux_upwind_box
 
