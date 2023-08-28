@@ -261,7 +261,11 @@ program streamer
 
      ! Estimate electric current according to Sato's equation V*I = sum(J.E).
      ! TODO: only consider background electric field when computing sum(J.E)
-     ST_global_current = sum(ST_current_JdotE(1, :)) / current_voltage
+     if (abs(current_voltage) > 0.0_dp) then
+        ST_global_current = sum(ST_current_JdotE(1, :)) / current_voltage
+     else
+        ST_global_current = 0.0_dp
+     end if
 
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
