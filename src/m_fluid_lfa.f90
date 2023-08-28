@@ -470,7 +470,7 @@ contains
     real(dp) :: v(nf)       !< Velocity at cell faces
     real(dp) :: dc(nf)      !< Diffusion coefficient at cell faces
     real(dp) :: E_face(nf), Td(nf), N_inv(nf)
-    real(dp) :: mu(nf), mu_ion(nf), inv_dx, tmp
+    real(dp) :: mu(nf), sigma(nf), inv_dx
     integer  :: n, nc
 
     nc = box%n_cell
@@ -518,16 +518,19 @@ contains
     cfl_sum = max(abs(v(2:)), abs(v(:nf-1))) * inv_dx + &
          2 * max(dc(2:), dc(:nf-1))  * inv_dx**2
 
-    ! Dielectric relaxation time (TODO: include ions)
-    tmp = maxval(mu * u(:, 1))
-    other_dt(1) = UC_eps0 / (UC_elem_charge * max(tmp, 1e-100_dp))
+    ! Electron conductivity
+    sigma = mu * u(:, 1)
 
     ! Ion fluxes
     do n = 2, flux_num_species
-       mu_ion = flux_species_charge_sign(n) * &
-            transport_data_ions%mobilities(n-1) * N_inv
-       flux(:, n) = mu_ion * E_x * u(:, n)
+       mu = transport_data_ions%mobilities(n-1) * N_inv
+       v = flux_species_charge_sign(n) * mu * E_x
+       flux(:, n) = v * u(:, n)
+       sigma = sigma + mu * u(:, n)
     end do
+
+    ! Dielectric relaxation time
+    other_dt(1) = UC_eps0 / (UC_elem_charge * max(maxval(sigma), 1e-100_dp))
   end subroutine flux_upwind
 
   subroutine flux_direction(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)
