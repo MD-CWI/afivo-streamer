@@ -47,12 +47,16 @@ module m_streamer
   integer, public, protected :: flux_elec    = -1
   !> Index of electric field vector
   integer, public, protected :: electric_fld = -1
+  !> Number of flux variables
+  integer, public, protected :: flux_num_species = -1
   !> List of all flux variables (face-centered index)
   integer, public, protected, allocatable :: flux_variables(:)
   !> List of all flux species (cell-centered index)
   integer, public, protected, allocatable :: flux_species(:)
   !> List of the charges of the flux species
   integer, public, protected, allocatable :: flux_species_charge(:)
+  !> List of the signs of the charges of the flux species (+- 1)
+  integer, public, protected, allocatable :: flux_species_charge_sign(:)
   !> List of positive ion fluxes (useful for secondary emission)
   integer, public, protected, allocatable :: flux_pos_ion(:)
 
@@ -204,12 +208,14 @@ contains
          write_binary=.false.)
     call af_add_fc_variable(tree, "field", ix=electric_fld)
 
-    allocate(flux_species(1+transport_data_ions%n_mobile_ions))
-    allocate(flux_species_charge(1+transport_data_ions%n_mobile_ions))
-    allocate(flux_variables(1+transport_data_ions%n_mobile_ions))
-    flux_species(1)        = i_electron
-    flux_species_charge(1) = -1
-    flux_variables(1)      = flux_elec
+    flux_num_species = 1+transport_data_ions%n_mobile_ions
+    allocate(flux_species(flux_num_species))
+    allocate(flux_species_charge(flux_num_species))
+    allocate(flux_species_charge_sign(flux_num_species))
+    allocate(flux_variables(flux_num_species))
+    flux_species(1)             = i_electron
+    flux_species_charge(1)      = -1
+    flux_variables(1)           = flux_elec
 
     do n = 1, transport_data_ions%n_mobile_ions
        flux_species(1+n) = af_find_cc_variable(tree, &
@@ -224,6 +230,8 @@ contains
     end do
 
     if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
+
+    flux_species_charge_sign = sign(1, flux_species_charge)
 
     ! Create a list of positive ion fluxes for secondary emission
     n = count(flux_species_charge > 0)

@@ -57,8 +57,8 @@ contains
 
     new_flux = .true.
     if (new_flux) then
-       call flux_upwind_tree(tree, 1, [i_electron], s_deriv, [flux_elec], &
-            2, all_dt, flux_upwind, flux_direction, &
+       call flux_upwind_tree(tree, flux_num_species, flux_species, s_deriv, &
+            [flux_variables], 2, all_dt, flux_upwind, flux_direction, &
             flux_dummy_line_modify, af_limiter_koren_t)
        dt_matrix(dt_ix_cfl, 1) = all_dt(1) * dt_cfl_number
        dt_matrix(dt_ix_drt, 1) = all_dt(2)
@@ -470,7 +470,7 @@ contains
     real(dp) :: v(nf)       !< Velocity at cell faces
     real(dp) :: dc(nf)      !< Diffusion coefficient at cell faces
     real(dp) :: E_face(nf), Td(nf), N_inv(nf)
-    real(dp) :: mu(nf), inv_dx, tmp
+    real(dp) :: mu(nf), mu_ion(nf), inv_dx, tmp
     integer  :: n, nc
 
     nc = box%n_cell
@@ -518,9 +518,16 @@ contains
     cfl_sum = max(abs(v(2:)), abs(v(:nf-1))) * inv_dx + &
          2 * max(dc(2:), dc(:nf-1))  * inv_dx**2
 
-    ! Dielectric relaxation time
+    ! Dielectric relaxation time (TODO: include ions)
     tmp = maxval(mu * u(:, 1))
     other_dt(1) = UC_eps0 / (UC_elem_charge * max(tmp, 1e-100_dp))
+
+    ! Ion fluxes
+    do n = 2, flux_num_species
+       mu_ion = flux_species_charge_sign(n) * &
+            transport_data_ions%mobilities(n-1) * N_inv
+       flux(:, n) = mu_ion * E_x * u(:, n)
+    end do
   end subroutine flux_upwind
 
   subroutine flux_direction(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)
@@ -532,9 +539,12 @@ contains
     !> True means positive flow (to the "right"), false to the left
     logical, intent(out)    :: direction_positive(box%n_cell+1, n_var)
     real(dp)                :: E_x(box%n_cell+1)
+    integer                 :: n
 
     call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
-    direction_positive(:, 1) = (E_x < 0) ! Electrons have negative charge
+    do n = 1, n_var
+       direction_positive(:, n) = (flux_species_charge_sign(n) * E_x > 0)
+    end do
   end subroutine flux_direction
 
   subroutine fluxes_ions(tree, id, nc, dt, s_in, last_step)
