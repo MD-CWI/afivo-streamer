@@ -86,7 +86,7 @@ module m_af_flux_schemes
        integer, intent(in)     :: s_deriv              !< State to compute derivatives from
      end subroutine subr_line_modify
 
-     subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out)
+     subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out, mask)
        import
        type(box_t), intent(inout) :: box
        real(dp), intent(in)       :: dt
@@ -94,7 +94,14 @@ module m_af_flux_schemes
        integer, intent(in)        :: i_cc(n_vars)
        integer, intent(in)        :: s_deriv
        integer, intent(in)        :: s_out
+       logical, intent(in)        :: mask(DTIMES(box%n_cell))
      end subroutine subr_source
+
+     subroutine subr_box_mask(box, mask)
+       import
+       type(box_t), intent(in) :: box
+       logical, intent(out)    :: mask(DTIMES(box%n_cell))
+     end subroutine subr_box_mask
   end interface
 
   public :: flux_diff_1d, flux_diff_2d, flux_diff_3d
@@ -305,13 +312,15 @@ contains
     flux = 0.5_dp * (flux_l + flux_r - spread(wmax, 2, n_vars) * (u_r - u_l))
   end subroutine flux_kurganovTadmor_1d
 
-  subroutine flux_update_densities(tree, dt, n_vars, i_cc, i_flux, &
-       s_deriv, n_prev, s_prev, w_prev, s_out, add_source_box, i_lsf)
+  subroutine flux_update_densities(tree, dt, n_vars, i_cc, n_vars_flux, i_cc_flux, i_flux, &
+       s_deriv, n_prev, s_prev, w_prev, s_out, add_source_box, get_mask)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
-    integer, intent(in)       :: n_vars         !< Number of variables
-    integer, intent(in)       :: i_cc(n_vars)   !< Cell-centered variables
-    integer, intent(in)       :: i_flux(n_vars) !< Flux variables
+    integer, intent(in)       :: n_vars         !< Number of cell-centered variables
+    integer, intent(in)       :: i_cc(n_vars)   !< All cell-centered indices
+    integer, intent(in)       :: n_vars_flux    !< Number of variables with fluxes
+    integer, intent(in)       :: i_cc_flux(n_vars_flux) !< Cell-centered indices of flux variables
+    integer, intent(in)       :: i_flux(n_vars_flux) !< Indices of fluxes
     integer, intent(in)       :: s_deriv        !< State to compute derivatives from
     integer, intent(in)       :: n_prev         !< Number of previous states
     integer, intent(in)       :: s_prev(n_prev) !< Previous states
@@ -319,16 +328,17 @@ contains
     integer, intent(in)       :: s_out          !< Output time state
     !> Method to include source terms
     procedure(subr_source)    :: add_source_box
-    !> If present, only update in region where level set function is positive
-    integer, intent(in), optional :: i_lsf
+    !> If present, only update where the mask is true
+    procedure(subr_box_mask), optional :: get_mask
     integer                   :: lvl, n, id, IJK, nc, i_var, iv
+    logical                   :: mask(DTIMES(tree%n_cell))
     real(dp)                  :: dt_dr(NDIM)
     real(dp)                  :: rfac(2, tree%n_cell)
 
     nc = tree%n_cell
     rfac = 0.0_dp ! Prevent warnings in 3D
 
-    !$omp parallel private(lvl, n, id, IJK, dt_dr, rfac, iv)
+    !$omp parallel private(lvl, n, id, IJK, dt_dr, i_var, rfac, iv, mask)
     do lvl = 1, tree%highest_lvl
        !$omp do
        do n = 1, size(tree%lvls(lvl)%leaves)
@@ -336,6 +346,12 @@ contains
           dt_dr = dt/tree%boxes(id)%dr
 
           associate(cc => tree%boxes(id)%cc, fc => tree%boxes(id)%fc)
+            if (present(get_mask)) then
+               call get_mask(tree%boxes(id), mask)
+            else
+               mask = .true.
+            end if
+
             do i_var = 1, n_vars
                iv = i_cc(i_var)
                do KJI_DO(1, nc)
@@ -344,93 +360,52 @@ contains
                end do; CLOSE_DO
             end do
 
-            call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, s_out)
+            call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, &
+                 s_out, mask)
 #if NDIM == 1
-            if (present(i_lsf)) then
-               do KJI_DO(1, nc)
-                  if (cc(IJK, i_lsf) > 0) then
-                     cc(i, i_cc+s_out) = cc(i, i_cc+s_out) + &
-                          dt_dr(1) * &
-                          (fc(i, 1, i_flux) - fc(i+1, 1, i_flux))
-                  end if
-               end do; CLOSE_DO
-            else
-               do KJI_DO(1, nc)
-                  cc(i, i_cc+s_out) = cc(i, i_cc+s_out) + &
+            do KJI_DO(1, nc)
+               if (mask(IJK)) then
+                  cc(i, i_cc_flux+s_out) = cc(i, i_cc_flux+s_out) + &
                        dt_dr(1) * &
                        (fc(i, 1, i_flux) - fc(i+1, 1, i_flux))
-               end do; CLOSE_DO
-            end if
-#elif NDIM == 2
-            if (present(i_lsf)) then
-               if (tree%coord_t == af_cyl) then
-                  call af_cyl_flux_factors(tree%boxes(id), rfac)
-                  do KJI_DO(1, nc)
-                     if (cc(IJK, i_lsf) > 0) then
-                        cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
-                             dt_dr(1) * (&
-                             rfac(1, i) * fc(i, j, 1, i_flux) - &
-                             rfac(2, i) * fc(i+1, j, 1, i_flux)) &
-                             + dt_dr(2) * &
-                             (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
-                     end if
-                  end do; CLOSE_DO
-               else
-                  do KJI_DO(1, nc)
-                     if (cc(IJK, i_lsf) > 0) then
-                        cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
-                             dt_dr(1) * &
-                             (fc(i, j, 1, i_flux) - fc(i+1, j, 1, i_flux)) &
-                             + dt_dr(2) * &
-                             (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
-                     end if
-                  end do; CLOSE_DO
                end if
-            else
-               if (tree%coord_t == af_cyl) then
-                  call af_cyl_flux_factors(tree%boxes(id), rfac)
-                  do KJI_DO(1, nc)
-                     cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
+            end do; CLOSE_DO
+#elif NDIM == 2
+            if (tree%coord_t == af_cyl) then
+               call af_cyl_flux_factors(tree%boxes(id), rfac)
+               do KJI_DO(1, nc)
+                  if (mask(IJK)) then
+                     cc(i, j, i_cc_flux+s_out) = cc(i, j, i_cc_flux+s_out) + &
                           dt_dr(1) * (&
                           rfac(1, i) * fc(i, j, 1, i_flux) - &
                           rfac(2, i) * fc(i+1, j, 1, i_flux)) &
                           + dt_dr(2) * &
                           (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
-                  end do; CLOSE_DO
-               else
-                  do KJI_DO(1, nc)
-                     cc(i, j, i_cc+s_out) = cc(i, j, i_cc+s_out) + &
-                          dt_dr(1) * &
-                          (fc(i, j, 1, i_flux) - fc(i+1, j, 1, i_flux)) &
-                          + dt_dr(2) * &
-                          (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
-                  end do; CLOSE_DO
-               end if
-            end if
-#elif NDIM == 3
-            if (present(i_lsf)) then
-               do KJI_DO(1, nc)
-                  if (cc(IJK, i_lsf) > 0) then
-                     cc(i, j, k, i_cc+s_out) = cc(i, j, k, i_cc+s_out) + &
-                          dt_dr(1) * &
-                          (fc(i, j, k, 1, i_flux) - fc(i+1, j, k, 1, i_flux)) + &
-                          dt_dr(2) * &
-                          (fc(i, j, k, 2, i_flux) - fc(i, j+1, k, 2, i_flux)) + &
-                          dt_dr(3) * &
-                          (fc(i, j, k, 3, i_flux) - fc(i, j, k+1, 3, i_flux))
                   end if
                end do; CLOSE_DO
             else
                do KJI_DO(1, nc)
-                  cc(i, j, k, i_cc+s_out) = cc(i, j, k, i_cc+s_out) + &
+                  if (mask(IJK)) then
+                     cc(i, j, i_cc_flux+s_out) = cc(i, j, i_cc_flux+s_out) + &
+                          dt_dr(1) * &
+                          (fc(i, j, 1, i_flux) - fc(i+1, j, 1, i_flux)) &
+                          + dt_dr(2) * &
+                          (fc(i, j, 2, i_flux) - fc(i, j+1, 2, i_flux))
+                  end if
+               end do; CLOSE_DO
+            end if
+#elif NDIM == 3
+            do KJI_DO(1, nc)
+               if (mask(IJK)) then
+                  cc(i, j, k, i_cc_flux+s_out) = cc(i, j, k, i_cc_flux+s_out) + &
                        dt_dr(1) * &
                        (fc(i, j, k, 1, i_flux) - fc(i+1, j, k, 1, i_flux)) + &
                        dt_dr(2) * &
                        (fc(i, j, k, 2, i_flux) - fc(i, j+1, k, 2, i_flux)) + &
                        dt_dr(3) * &
                        (fc(i, j, k, 3, i_flux) - fc(i, j, k+1, 3, i_flux))
-               end do; CLOSE_DO
-            end if
+               end if
+            end do; CLOSE_DO
 #endif
           end associate
        end do
@@ -1085,13 +1060,14 @@ contains
     real(dp), intent(inout) :: u(n_values, n_vars)
   end subroutine flux_dummy_conversion
 
-  subroutine flux_dummy_source(box, dt, n_vars, i_cc, s_deriv, s_out)
+  subroutine flux_dummy_source(box, dt, n_vars, i_cc, s_deriv, s_out, mask)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: n_vars
     integer, intent(in)        :: i_cc(n_vars)
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
+    logical, intent(in)        :: mask(DTIMES(box%n_cell))
   end subroutine flux_dummy_source
 
   subroutine flux_dummy_modify(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
