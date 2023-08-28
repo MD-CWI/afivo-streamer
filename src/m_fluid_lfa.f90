@@ -764,9 +764,6 @@ contains
        end do; CLOSE_DO
     end if
 
-    ! Skip this routine if there are no cells to update
-    if (.not. any(update_mask)) return
-
     if (gas_constant_density) then
        ! Compute field in Townsends
        tmp = 1 / gas_number_density
