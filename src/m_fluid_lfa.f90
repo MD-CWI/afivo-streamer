@@ -216,7 +216,7 @@ contains
 
     real(dp)                  :: mu, max_mu_ion, N_inv
     real(dp)                  :: dt_cfl, dt_drt, dt_dif
-    real(dp)                  :: vmean(NDIM), N_gas(0:nc+1)
+    real(dp)                  :: vmax(NDIM), Dmax(NDIM), N_gas(0:nc+1)
     real(dp)                  :: v_x(nc+1), dc_x(nc+1), fmax_x(nc+1)
     real(dp)                  :: E_cc(0:nc+1), E_fc(nc+1), ne(0:nc+1)
     real(dp), parameter       :: eps = 1e-100_dp
@@ -335,19 +335,22 @@ contains
 
        do KJI_DO(1,nc)
 #if NDIM == 1
-          vmean = 0.5_dp * (v(IJK, :) + [v(i+1, 1)])
+          vmax = max(abs(v(IJK, :)), abs(v(i+1, :)))
+          Dmax = max(dc(IJK, :), dc(i+1, :))
 #elif NDIM == 2
-          vmean = 0.5_dp * (v(IJK, :) + &
-               [v(i+1, j, 1), v(i, j+1, 2)])
+          vmax = max(abs(v(IJK, :)), abs([v(i+1, j, 1), v(i, j+1, 2)]))
+          Dmax = max(dc(IJK, :), [dc(i+1, j, 1), dc(i, j+1, 2)])
 #elif NDIM == 3
-          vmean = 0.5_dp * (v(IJK, :) + &
-               [v(i+1, j, k, 1), v(i, j+1, k, 2), v(i, j, k+1, 3)])
+          vmax = max(abs(v(IJK, :)), &
+               abs([v(i+1, j, k, 1), v(i, j+1, k, 2), v(i, j, k+1, 3)]))
+          Dmax = max(dc(IJK, :), &
+               [dc(i+1, j, k, 1), dc(i, j+1, k, 2), dc(i, j, k+1, 3)])
 #endif
           ! CFL condition
-          dt_cfl = 1.0_dp/sum(max(abs(vmean), eps) * inv_dr)
+          dt_cfl = 1.0_dp/max(sum(vmax * inv_dr), eps)
 
           ! Diffusion condition
-          dt_dif = 1/sum(2 * max(dc(IJK, :), eps) / tree%boxes(id)%dr**2)
+          dt_dif = 1/max(sum(2 * Dmax/tree%boxes(id)%dr**2), eps)
 
           ! Take combined CFL-diffusion condition
           dt_cfl = dt_cfl_number/(1/dt_cfl + 1/dt_dif)
@@ -512,7 +515,8 @@ contains
     flux(:, 1) = v * u(:, 1) - dc * inv_dx * (ne_cc(1:nc+1) - ne_cc(0:nc))
 
     ! Used to determine CFL time step
-    cfl_sum = 0.5_dp * abs(v(2:) + v(:nf-1)) * inv_dx + 2 * dc(:nf-1) * inv_dx**2
+    cfl_sum = max(abs(v(2:)), abs(v(:nf-1))) * inv_dx + &
+         2 * max(dc(2:), dc(:nf-1))  * inv_dx**2
 
     ! Dielectric relaxation time
     tmp = maxval(mu * u(:, 1))
