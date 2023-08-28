@@ -619,10 +619,10 @@ contains
 #endif
 
     if (associated(user_log_variables)) then
-       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,5E20.8e3,I3,", &
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,4E20.8e3,I3,", &
             n_user_vars, "E20.8e3)"
     else
-       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,5E20.8e3,I3)"
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,4E20.8e3,I3)"
     end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -855,9 +855,9 @@ contains
          " ncell:", real(af_num_cells_used(tree), dp)
 
     ! This line prints the different time step restrictions
-    write(*, "(A,4E10.3,A)") "         dt: ", &
+    write(*, "(A,3E10.3,A)") "         dt: ", &
          minval(dt_matrix(1:dt_num_cond, :), dim=2), &
-         " (cfl diff drt chem)"
+         " (cfl drt chem)"
   end subroutine output_status
 
   subroutine output_fld_maxima(tree, filename)

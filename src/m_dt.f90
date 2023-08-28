@@ -7,7 +7,7 @@ module m_dt
   private
 
   ! Number of time step restrictions
-  integer, parameter, public :: dt_num_cond = 4
+  integer, parameter, public :: dt_num_cond = 3
 
   ! Array of time step restrictions per thread
   real(dp), allocatable, public :: dt_matrix(:, :)
@@ -15,14 +15,11 @@ module m_dt
   ! Index of CFL condition
   integer, parameter, public :: dt_ix_cfl = 1
 
-  ! Index of diffusion time step condition
-  integer, parameter, public :: dt_ix_diff = 2
-
   ! Index of dielectric relaxation time step condition
-  integer, parameter, public :: dt_ix_drt = 3
+  integer, parameter, public :: dt_ix_drt = 2
 
   ! Index of reaction rate time step condition
-  integer, parameter, public :: dt_ix_rates = 4
+  integer, parameter, public :: dt_ix_rates = 3
 
   ! Safety factor for the time step
   real(dp), public, protected :: dt_safety_factor = 0.9_dp
