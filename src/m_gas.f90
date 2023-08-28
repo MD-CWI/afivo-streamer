@@ -195,23 +195,26 @@ contains
          flux_dummy_modify, flux_dummy_line_modify, to_primitive, &
          to_conservative, af_limiter_vanleer_t)
     if (tree%coord_t == af_cyl) then
-       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-            s_deriv, n_prev, s_prev, w_prev, s_out, add_geometric_source)
+       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, n_vars_euler, &
+            gas_vars, gas_fluxes, s_deriv, n_prev, s_prev, w_prev, s_out, &
+            add_geometric_source)
     else
-       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-            s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
+       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, n_vars_euler, &
+            gas_vars, gas_fluxes, s_deriv, n_prev, s_prev, w_prev, s_out, &
+            flux_dummy_source)
     end if
   end subroutine gas_forward_euler
 
 
   !> Add geometric source term for axisymmetric simulations
-  subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out)
+  subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out, mask)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: n_vars
     integer, intent(in)        :: i_cc(n_vars)
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
+    logical, intent(in)        :: mask(DTIMES(box%n_cell))
 
 #if NDIM == 2
     real(dp)                   :: pressure(DTIMES(box%n_cell))
@@ -223,9 +226,11 @@ contains
 
     do i = 1, nc
        inv_radius = 1/af_cyl_radius_cc(box, i)
-       box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) = &
-            box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) + dt * &
-            pressure(i, :) * inv_radius
+       where (mask(i, :))
+          box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) = &
+               box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) + dt * &
+               pressure(i, :) * inv_radius
+       end where
     end do
 #endif
   end subroutine add_geometric_source

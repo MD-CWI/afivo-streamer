@@ -358,7 +358,10 @@ contains
 
     call CFG_add_get(cfg, "fixes%drt_max_field", ST_drt_max_field, &
          "Enable flux limiting, but prevent field from exceeding this value")
-    if (ST_drt_max_field < 1e100_dp) ST_drt_limit_flux = .true.
+    if (ST_drt_max_field < 1e100_dp) then
+       error stop "fixes%drt_max_field not yet implemented"
+       ST_drt_limit_flux = .true.
+    end if
 
     call CFG_add_get(cfg, "fixes%source_factor", source_factor, &
          "Use source factor to prevent unphysical effects due to diffusion")
@@ -370,15 +373,8 @@ contains
        ST_source_factor = source_factor_none
     case ("flux")
        ST_source_factor = source_factor_flux
-    case ("original_flux")
-       ST_source_factor = source_factor_original_flux
-       if (.not. write_source_factor) then
-          print *, "source factor scheme original_flux requires ", &
-               "fixes%write_source_factor = T"
-          error stop
-       end if
     case default
-       print *, "Options fixes%source_factor: none, flux, original_flux"
+       print *, "Options fixes%source_factor: none, flux"
        error stop "Unknown fixes%source_factor"
     end select
 
