@@ -637,7 +637,7 @@ contains
     end do
 
     ! Determine maximal time step
-    dt_lim = 1/maxval(cfl_sum)
+    dt_lim = 1/max(maxval(cfl_sum), 1e-100_dp)
 
   end subroutine flux_generic_box
 

@@ -273,7 +273,7 @@ contains
        error stop "Unknown flux_method, choices: generic, upwind, custom"
     end select
 
-    call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
+    call flux_update_densities(tree, dt, 1, [i_phi], 1, [i_phi], [i_flux], &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
 
   end subroutine forward_euler
