@@ -249,14 +249,8 @@ contains
        if (reactions(n)%rate_type == rate_tabulated_field) then
           i = i + 1
           reactions(n)%lookup_table_index = i
-          if (td_bulk_scale_reactions) then
-             call table_set_column(chemtbl, i, reactions(n)%x_data, &
-                  reactions(n)%y_data * &
-                  LT_get_col(td_tbl, td_bulk_scaling, reactions(n)%x_data))
-          else
-             call table_set_column(chemtbl, i, reactions(n)%x_data, &
-                  reactions(n)%y_data)
-          end if
+          call table_set_column(chemtbl, i, reactions(n)%x_data, &
+               reactions(n)%y_data)
        end if
     end do
 
