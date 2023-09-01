@@ -86,14 +86,19 @@ module m_af_flux_schemes
        integer, intent(in)     :: s_deriv              !< State to compute derivatives from
      end subroutine subr_line_modify
 
-     subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out, mask)
+     subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out, n_dt, dt_lim, mask)
        import
        type(box_t), intent(inout) :: box
-       real(dp), intent(in)       :: dt
-       integer, intent(in)        :: n_vars
-       integer, intent(in)        :: i_cc(n_vars)
-       integer, intent(in)        :: s_deriv
-       integer, intent(in)        :: s_out
+       real(dp), intent(in)       :: dt           !< Time step
+       integer, intent(in)        :: n_vars       !< Number of cell-centered variables
+       integer, intent(in)        :: i_cc(n_vars) !< Indices of all cell-centered variables
+       integer, intent(in)        :: s_deriv      !< State to compute derivatives from
+       integer, intent(in)        :: s_out        !< State to update
+       !> Number of time steps restrictions
+       integer, intent(in)        :: n_dt
+       !> Maximal allowed time steps
+       real(dp), intent(inout)    :: dt_lim(n_dt)
+       !> Mask where to update solution
        logical, intent(in)        :: mask(DTIMES(box%n_cell))
      end subroutine subr_source
 
@@ -313,7 +318,7 @@ contains
   end subroutine flux_kurganovTadmor_1d
 
   subroutine flux_update_densities(tree, dt, n_vars, i_cc, n_vars_flux, i_cc_flux, i_flux, &
-       s_deriv, n_prev, s_prev, w_prev, s_out, add_source_box, get_mask)
+       s_deriv, n_prev, s_prev, w_prev, s_out, add_source_box, n_dt, dt_lim, get_mask)
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
     integer, intent(in)       :: n_vars         !< Number of cell-centered variables
@@ -328,17 +333,26 @@ contains
     integer, intent(in)       :: s_out          !< Output time state
     !> Method to include source terms
     procedure(subr_source)    :: add_source_box
+    !> Number of time steps restrictions
+    integer, intent(in)       :: n_dt
+    !> Maximal allowed time steps
+    real(dp), intent(out)     :: dt_lim(n_dt)
     !> If present, only update where the mask is true
     procedure(subr_box_mask), optional :: get_mask
     integer                   :: lvl, n, id, IJK, nc, i_var, iv
     logical                   :: mask(DTIMES(tree%n_cell))
-    real(dp)                  :: dt_dr(NDIM)
+    real(dp)                  :: dt_dr(NDIM), my_dt(n_dt)
     real(dp)                  :: rfac(2, tree%n_cell)
 
     nc = tree%n_cell
     rfac = 0.0_dp ! Prevent warnings in 3D
 
-    !$omp parallel private(lvl, n, id, IJK, dt_dr, i_var, rfac, iv, mask)
+    dt_lim = 1e100_dp
+
+    !$omp parallel private(lvl, n, id, IJK, dt_dr, i_var, rfac, iv, mask, my_dt) &
+    !$omp &reduction(min:dt_lim)
+    my_dt = 1e100_dp
+
     do lvl = 1, tree%highest_lvl
        !$omp do
        do n = 1, size(tree%lvls(lvl)%leaves)
@@ -361,7 +375,9 @@ contains
             end do
 
             call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, &
-                 s_out, mask)
+                 s_out, n_dt, my_dt, mask)
+            dt_lim = min(dt_lim, my_dt)
+
 #if NDIM == 1
             do KJI_DO(1, nc)
                if (mask(IJK)) then
@@ -1060,13 +1076,15 @@ contains
     real(dp), intent(inout) :: u(n_values, n_vars)
   end subroutine flux_dummy_conversion
 
-  subroutine flux_dummy_source(box, dt, n_vars, i_cc, s_deriv, s_out, mask)
+  subroutine flux_dummy_source(box, dt, n_vars, i_cc, s_deriv, s_out, n_dt, dt_lim, mask)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: n_vars
     integer, intent(in)        :: i_cc(n_vars)
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
+    integer, intent(in)        :: n_dt
+    real(dp), intent(inout)    :: dt_lim(n_dt)
     logical, intent(in)        :: mask(DTIMES(box%n_cell))
   end subroutine flux_dummy_source
 

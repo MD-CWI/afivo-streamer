@@ -274,7 +274,7 @@ contains
     end select
 
     call flux_update_densities(tree, dt, 1, [i_phi], 1, [i_phi], [i_flux], &
-         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
+         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source, 0, all_dt)
 
   end subroutine forward_euler
 
