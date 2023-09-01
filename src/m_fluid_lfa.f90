@@ -300,12 +300,13 @@ contains
     real(dp), intent(inout)    :: dt_lim(n_dt)
     logical, intent(in)        :: mask(DTIMES(box%n_cell))
 
-    real(dp)                   :: tmp, gain, loss_rate, mean_energy, max_energy
+    real(dp)                   :: tmp, gain, loss_rate
     real(dp)                   :: rates(box%n_cell**NDIM, n_reactions)
     real(dp)                   :: derivs(box%n_cell**NDIM, n_species)
     real(dp)                   :: dens(box%n_cell**NDIM, n_species)
     real(dp)                   :: fields(box%n_cell**NDIM), box_rates(n_reactions)
     real(dp)                   :: source_factor(box%n_cell**NDIM)
+    real(dp)                   :: mean_energies(box%n_cell**NDIM)
     integer                    :: IJK, ix, nc, n_cells, n, iv
     integer                    :: tid
     real(dp), parameter        :: eps = 1e-100_dp
@@ -340,7 +341,14 @@ contains
     ! stability, see e.g. http://dx.doi.org/10.1088/1749-4699/6/1/015001
     dens = max(dens, 0.0_dp)
 
-    call get_rates(fields, rates, n_cells)
+    if (td_use_energy_equation) then
+       mean_energies = pack(mean_electron_energy(box%cc(DTIMES(1:nc), i_electron_energy+s_out), &
+               box%cc(DTIMES(1:nc), i_electron+s_out)), .true.)
+       call get_rates(fields, rates, n_cells, mean_energies)
+    else
+       mean_energies = 0
+       call get_rates(fields, rates, n_cells)
+    end if
 
     if (ST_source_factor /= source_factor_none) then
        if (ST_source_factor /= source_factor_none) then
@@ -393,7 +401,6 @@ contains
     end if
 
     ix = 0
-    max_energy = 0
     do KJI_DO(1,nc)
        ix = ix + 1
        if (.not. mask(IJK)) cycle
@@ -407,10 +414,7 @@ contains
 
        if (td_use_energy_equation) then
           gain = -fc_inner_product(box, IJK, flux_elec, electric_fld)
-          mean_energy = mean_electron_energy(box%cc(IJK, i_electron_energy+s_out), &
-               box%cc(IJK, i_electron+s_out))
-          loss_rate = LT_get_col(td_ee_tbl, td_ee_loss, mean_energy)
-          max_energy = max(max_energy, mean_energy)
+          loss_rate = LT_get_col(td_ee_tbl, td_ee_loss, mean_energies(ix))
 
           box%cc(IJK, i_electron_energy+s_out) = box%cc(IJK, i_electron_energy+s_out) &
                + dt * (gain - loss_rate * box%cc(IJK, i_electron+s_out))
@@ -422,9 +426,10 @@ contains
        end do
     end do; CLOSE_DO
 
-    if (max_energy > 0) then
+    tmp = maxval(mean_energies)
+    if (tmp > 0) then
        ! Set time step restriction for energy loss
-       dt_lim(2) = max_energy/LT_get_col(td_ee_tbl, td_ee_loss, max_energy)
+       dt_lim(2) = tmp/LT_get_col(td_ee_tbl, td_ee_loss, tmp)
     end if
 
   end subroutine add_source_terms

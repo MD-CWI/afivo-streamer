@@ -93,6 +93,7 @@ m_photoi_mc.o: m_lookup_table.mod
 m_photoi_mc.o: m_random.mod
 m_photoi_mc.o: m_streamer.mod
 m_photoi_mc.o: m_units_constants.mod
+m_photoi.o: m_chemistry.mod
 m_photoi.o: m_config.mod
 m_photoi.o: m_gas.mod
 m_photoi.o: m_lookup_table.mod
@@ -112,6 +113,7 @@ m_refine.o: m_transport_data.mod
 m_refine.o: m_user_methods.mod
 m_streamer.o: m_chemistry.mod
 m_streamer.o: m_config.mod
+m_streamer.o: m_dt.mod
 m_streamer.o: m_gas.mod
 m_streamer.o: m_lookup_table.mod
 m_streamer.o: m_random.mod
@@ -146,5 +148,6 @@ streamer.o: m_streamer.mod
 streamer.o: m_table_data.mod
 streamer.o: m_transport_data.mod
 streamer.o: m_types.mod
+streamer.o: m_units_constants.mod
 streamer.o: m_user_methods.mod
 streamer.o: m_user.mod

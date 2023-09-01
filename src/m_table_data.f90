@@ -17,6 +17,9 @@ module m_table_data
   !> Maximum field (Td) for lookup tables
   real(dp), public, protected :: table_max_townsend = 1e3_dp
 
+  !> Maximum energy (eV) for lookup tables
+  real(dp), public, protected :: table_max_energy = 20.0_dp
+
   ! The maximum number of rows per entry
   integer, parameter :: table_max_rows   = 1500
 

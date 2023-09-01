@@ -33,6 +33,9 @@ module m_transport_data
   !> Electron energy loss
   integer, protected, public :: td_ee_loss = 3
 
+  !> Field as a function of energy
+  integer, protected, public :: td_ee_field = 4
+
   !> Whether old style transport data is used (alpha, eta, mu, D vs V/m)
   logical, public, protected :: td_old_style = .false.
 
@@ -139,7 +142,7 @@ contains
        call table_from_file(td_file, "Mean energy (eV)", field_Td, energy_eV)
        n_rows = size(energy_eV)
        td_ee_tbl = LT_create(0.0_dp, energy_eV(n_rows), &
-            table_size, 3, table_xspacing)
+            table_size, 4, table_xspacing)
 
        call table_from_file(td_file, "Mobility *N (1/m/V/s)", xx, yy)
        if (.not. same_data(xx, field_Td)) &
@@ -161,6 +164,9 @@ contains
        ! Also prepend a zero, since at zero energy there can be no diffusion
        call table_set_column(td_ee_tbl, td_ee_diffusion, &
             [0.0_dp, energy_eV], [0.0_dp, yy])
+
+       call table_set_column(td_ee_tbl, td_ee_field, &
+            [0.0_dp, energy_eV], [0.0_dp, xx])
     end if
 
     call CFG_add(cfg, "input_data%mobile_ions", dummy_string, &
