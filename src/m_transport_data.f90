@@ -14,14 +14,30 @@ module m_transport_data
   integer, parameter, public :: td_diffusion = 2 !< Electron diffusion constant
   integer, parameter, public :: td_alpha     = 3 !< Ionization coefficient
   integer, parameter, public :: td_eta       = 4 !< Attachment coefficient
+
   !> Electron energy in eV (used with chemistry)
   integer, protected, public :: td_energy_eV = -1
 
   ! Table with transport data vs electric field
   type(LT_t), public, protected :: td_tbl
 
+  ! Table with transport data vs electron energy
+  type(LT_t), public, protected :: td_ee_tbl
+
+  !> Electron mobility as a function of energy
+  integer, protected, public :: td_ee_mobility = 1
+
+  !> Electron diffusion coefficient as a function of energy
+  integer, protected, public :: td_ee_diffusion = 2
+
+  !> Electron energy loss
+  integer, protected, public :: td_ee_loss = 3
+
   !> Whether old style transport data is used (alpha, eta, mu, D vs V/m)
   logical, public, protected :: td_old_style = .false.
+
+  !> Whether an energy equation is used for electrons
+  logical, public, protected :: td_use_energy_equation = .false.
 
   ! @todo move this to separate ion module
   type ion_transport_t
@@ -47,10 +63,11 @@ contains
     use m_units_constants
     type(CFG_t), intent(inout) :: cfg
     character(len=string_len)  :: td_file = undefined_str
-    real(dp), allocatable      :: x_data(:), y_data(:)
+    real(dp), allocatable      :: xx(:), yy(:)
+    real(dp), allocatable      :: energy_eV(:), field_Td(:)
     real(dp)                   :: dummy_real(0)
     character(len=10)          :: dummy_string(0)
-    integer                    :: n
+    integer                    :: n, n_rows
 
     call CFG_add_get(cfg, "input_data%file", td_file, &
          "Input file with transport (and reaction) data")
@@ -58,6 +75,9 @@ contains
 
     call CFG_add_get(cfg, "input_data%old_style", td_old_style, &
          "Use old style transport data (alpha, eta, mu, D vs V/m)")
+
+    call CFG_add_get(cfg, "input_data%use_energy_equation", &
+         td_use_energy_equation, "Whether an energy equation is used")
 
     ! Fill table with data
     if (td_old_style) then
@@ -68,51 +88,79 @@ contains
        td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, &
             4, table_xspacing)
 
-       call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", x_data, y_data)
-       x_data = x_data * SI_to_Townsend / gas_number_density
-       y_data = y_data * gas_number_density
-       call table_set_column(td_tbl, td_mobility, x_data, y_data)
+       call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", xx, yy)
+       xx = xx * SI_to_Townsend / gas_number_density
+       yy = yy * gas_number_density
+       call table_set_column(td_tbl, td_mobility, xx, yy)
 
-       call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", x_data, y_data)
-       x_data = x_data * SI_to_Townsend / gas_number_density
-       y_data = y_data * gas_number_density
-       call table_set_column(td_tbl, td_diffusion, x_data, y_data)
+       call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", xx, yy)
+       xx = xx * SI_to_Townsend / gas_number_density
+       yy = yy * gas_number_density
+       call table_set_column(td_tbl, td_diffusion, xx, yy)
 
        call table_from_file(td_file, "efield[V/m]_vs_alpha[1/m]", &
-            x_data, y_data)
-       x_data = x_data * SI_to_Townsend / gas_number_density
-       y_data = y_data / gas_number_density
-       call table_set_column(td_tbl, td_alpha, x_data, y_data)
+            xx, yy)
+       xx = xx * SI_to_Townsend / gas_number_density
+       yy = yy / gas_number_density
+       call table_set_column(td_tbl, td_alpha, xx, yy)
 
        call table_from_file(td_file, "efield[V/m]_vs_eta[1/m]", &
-            x_data, y_data)
-       x_data = x_data * SI_to_Townsend / gas_number_density
-       y_data = y_data / gas_number_density
-       call table_set_column(td_tbl, td_eta, x_data, y_data)
+            xx, yy)
+       xx = xx * SI_to_Townsend / gas_number_density
+       yy = yy / gas_number_density
+       call table_set_column(td_tbl, td_eta, xx, yy)
     else
        ! Create a lookup table for the model coefficients
        td_tbl = LT_create(table_min_townsend, table_max_townsend, &
             table_size, 5, table_xspacing)
 
-       call table_from_file(td_file, "Mobility *N (1/m/V/s)", x_data, y_data)
-       call table_set_column(td_tbl, td_mobility, x_data, y_data)
+       call table_from_file(td_file, "Mobility *N (1/m/V/s)", xx, yy)
+       call table_set_column(td_tbl, td_mobility, xx, yy)
 
        call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
-               x_data, y_data)
-       call table_set_column(td_tbl, td_diffusion, x_data, y_data)
+               xx, yy)
+       call table_set_column(td_tbl, td_diffusion, xx, yy)
 
        call table_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
-            x_data, y_data)
-       call table_set_column(td_tbl, td_alpha, x_data, y_data)
+            xx, yy)
+       call table_set_column(td_tbl, td_alpha, xx, yy)
 
        call table_from_file(td_file, "Townsend attach. coef. eta/N (m2)", &
-            x_data, y_data)
-       call table_set_column(td_tbl, td_eta, x_data, y_data)
+            xx, yy)
+       call table_set_column(td_tbl, td_eta, xx, yy)
 
        td_energy_eV = 5
        call table_from_file(td_file, "Mean energy (eV)", &
-            x_data, y_data)
-       call table_set_column(td_tbl, td_energy_eV, x_data, y_data)
+            xx, yy)
+       call table_set_column(td_tbl, td_energy_eV, xx, yy)
+    end if
+
+    if (td_use_energy_equation) then
+       call table_from_file(td_file, "Mean energy (eV)", field_Td, energy_eV)
+       n_rows = size(energy_eV)
+       td_ee_tbl = LT_create(0.0_dp, energy_eV(n_rows), &
+            table_size, 3, table_xspacing)
+
+       call table_from_file(td_file, "Mobility *N (1/m/V/s)", xx, yy)
+       if (.not. same_data(xx, field_Td)) &
+            error stop "Same reduced field table required in all input data"
+
+       ! Mobility as a function of energy
+       call table_set_column(td_ee_tbl, td_ee_mobility, energy_eV, yy)
+
+       ! Energy loss is mu E^2 as a function of energy. Prepend a zero, since at
+       ! zero energy there can be no energy loss.
+       yy = yy * xx**2 * Townsend_to_SI**2 * gas_number_density
+       call table_set_column(td_ee_tbl, td_ee_loss, &
+            [0.0_dp, energy_eV], [0.0_dp, yy])
+
+       call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", xx, yy)
+       if (.not. same_data(xx, field_Td)) &
+            error stop "Same reduced field table required in all input data"
+
+       ! Also prepend a zero, since at zero energy there can be no diffusion
+       call table_set_column(td_ee_tbl, td_ee_diffusion, &
+            [0.0_dp, energy_eV], [0.0_dp, yy])
     end if
 
     call CFG_add(cfg, "input_data%mobile_ions", dummy_string, &
@@ -141,5 +189,16 @@ contains
          "Secondary electron emission yield for positive ions")
 
   end subroutine transport_data_initialize
+
+  !> Check whether data is the same
+  pure logical function same_data(x1, x2)
+    real(dp), intent(in) :: x1(:), x2(:)
+
+    if (size(x1) == size(x2)) then
+       same_data = minval(abs(x1-x2)) < tiny_real
+    else
+       same_data = .false.
+    end if
+  end function same_data
 
 end module m_transport_data

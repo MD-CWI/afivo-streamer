@@ -15,6 +15,9 @@ module m_types
   !> Huge number
   real(dp), parameter :: huge_real = 1e100_dp
 
+  !> Small number
+  real(dp), parameter :: tiny_real = 1/huge_real
+
   !> Default length of strings
   integer, parameter :: string_len = 200
 

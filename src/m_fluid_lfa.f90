@@ -37,7 +37,6 @@ contains
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
     integer                   :: ix, id_out
-    real(dp)                  :: all_dt(2)
 
     ! Set current rates to zero; they are summed below
     ST_current_rates = 0
@@ -45,19 +44,13 @@ contains
 
     last_step = (i_step == n_steps)
 
-    ! Use a shared array to determine maximum time step
-    dt_matrix(1:dt_num_cond, :) = dt_max
-
     ! Since field_compute is called after performing time integration, we don't
     ! have to call it again for the first sub-step of the next iteration
     if (i_step > 1) call field_compute(tree, mg, s_deriv, time, .true.)
 
     call flux_upwind_tree(tree, flux_num_species, flux_species, s_deriv, &
-         flux_variables, 2, all_dt, flux_upwind, flux_direction, &
+         flux_variables, 2, dt_limits(1:2), flux_upwind, flux_direction, &
          flux_dummy_line_modify, af_limiter_koren_t)
-
-    dt_matrix(dt_ix_cfl, 1) = all_dt(1) * dt_cfl_number
-    dt_matrix(dt_ix_drt, 1) = all_dt(2)
 
     if (transport_data_ions%n_mobile_ions > 0 .and. &
          ion_se_yield > 0.0_dp) then
@@ -65,10 +58,10 @@ contains
        call af_loop_box(tree, handle_ion_se_flux, .true.)
     end if
 
-    call flux_update_densities(tree, dt, n_species-n_gas_species, &
-         species_itree(n_gas_species+1:n_species), flux_num_species, &
+    call flux_update_densities(tree, dt, size(all_densities), &
+         all_densities, flux_num_species, &
          flux_species, flux_variables, s_deriv, n_prev, s_prev, &
-         w_prev, s_out, add_source_terms, set_box_mask)
+         w_prev, s_out, add_source_terms, 2, dt_limits(3:4), set_box_mask)
 
     if (ST_use_dielectric) then
        ! Update surface charge and handle photon emission
@@ -89,9 +82,9 @@ contains
        end do
     end if
 
-    if (last_step) then
-       dt_lim = minval(dt_matrix(1:dt_num_cond, :))
-    end if
+    ! Set time step limit
+    dt_limits(1) = dt_limits(1) * dt_cfl_number
+    dt_lim = min(dt_max, minval(dt_limits))
   end subroutine forward_euler
 
   subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
@@ -114,15 +107,18 @@ contains
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv        !< State to compute derivatives from
 
+    real(dp), parameter :: five_third = 5/3.0_dp
+
     real(dp) :: E_cc(0:nf)  !< Cell-centered field strengths
     real(dp) :: E_x(nf)     !< Face-centered field components
     real(dp) :: N_gas(0:nf) !< Gas number density at cell centers
     real(dp) :: ne_cc(0:nf) !< Electron density at cell centers
+    real(dp) :: en_cc(0:nf) !< Electron energy density at cell centers
     real(dp) :: v(nf)       !< Velocity at cell faces
     real(dp) :: dc(nf)      !< Diffusion coefficient at cell faces
-    real(dp) :: E_face(nf), Td(nf), N_inv(nf)
-    real(dp) :: mu(nf), sigma(nf), inv_dx
-    integer  :: n, nc
+    real(dp) :: E_face(nf), tmp_fc(nf), N_inv(nf)
+    real(dp) :: mu(nf), sigma(nf), inv_dx, cfl_factor
+    integer  :: n, nc, flux_ix
 
     nc = box%n_cell
     inv_dx = 1/box%dr(flux_dim)
@@ -135,10 +131,6 @@ contains
        end if
     end if
 
-    call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
-    call flux_get_line_1cc(box, i_electric_fld, flux_dim, line_ix, E_cc)
-    call flux_get_line_1cc(box, i_electron+s_deriv, flux_dim, line_ix, ne_cc)
-
     if (gas_constant_density) then
        N_inv = 1/gas_number_density
     else
@@ -149,15 +141,28 @@ contains
        end do
     end if
 
-    ! Compute field strength at cell faces, which is used to compute the
-    ! mobility and diffusion coefficient at the interface
-    do n = 1, nc+1
-       E_face(n) = 0.5_dp * (E_cc(n-1) + E_cc(n))
-       Td(n) = E_face(n) * SI_to_Townsend * N_inv(n)
-    end do
+    call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
+    call flux_get_line_1cc(box, i_electron+s_deriv, flux_dim, line_ix, ne_cc)
 
-    mu = LT_get_col(td_tbl, td_mobility, Td) * N_inv
-    dc = LT_get_col(td_tbl, td_diffusion, Td) * N_inv
+    if (td_use_energy_equation) then
+       call flux_get_line_1cc(box, i_electron_energy+s_deriv, &
+            flux_dim, line_ix, en_cc)
+       tmp_fc = mean_electron_energy(u(:, 2), u(:, 1))
+       mu = LT_get_col(td_ee_tbl, td_ee_mobility, tmp_fc) * N_inv
+       dc = LT_get_col(td_ee_tbl, td_ee_diffusion, tmp_fc) * N_inv
+       cfl_factor = five_third
+    else
+       call flux_get_line_1cc(box, i_electric_fld, flux_dim, line_ix, E_cc)
+
+       ! Compute field strength at cell faces, which is used to compute the
+       ! mobility and diffusion coefficient at the interface
+       E_face = 0.5_dp * (E_cc(0:nc) + E_cc(1:nc+1))
+       tmp_fc = E_face * SI_to_Townsend * N_inv
+
+       mu = LT_get_col(td_tbl, td_mobility, tmp_fc) * N_inv
+       dc = LT_get_col(td_tbl, td_diffusion, tmp_fc) * N_inv
+       cfl_factor = 1.0_dp
+    end if
 
     ! Compute velocity, -mu accounts for negative electron charge
     v = -mu * E_x
@@ -166,18 +171,24 @@ contains
     flux(:, 1) = v * u(:, 1) - dc * inv_dx * (ne_cc(1:nc+1) - ne_cc(0:nc))
 
     ! Used to determine electron CFL time step
-    cfl_sum = max(abs(v(2:)), abs(v(:nf-1))) * inv_dx + &
+    cfl_sum = cfl_factor * max(abs(v(2:)), abs(v(:nf-1))) * inv_dx + &
          2 * max(dc(2:), dc(:nf-1))  * inv_dx**2
 
     ! Electron conductivity
     sigma = mu * u(:, 1)
 
+    if (td_use_energy_equation) then
+       flux(:, 2) = five_third * (v * u(:, 2) - &
+            dc * inv_dx * (en_cc(1:nc+1) - en_cc(0:nc)))
+    end if
+
     ! Ion fluxes (note: ions are slow, so their CFL condition is ignored)
-    do n = 2, flux_num_species
-       mu = transport_data_ions%mobilities(n-1) * N_inv
-       v = flux_species_charge_sign(n) * mu * E_x
-       flux(:, n) = v * u(:, n)
-       sigma = sigma + mu * u(:, n)
+    do n = 1, transport_data_ions%n_mobile_ions
+       flux_ix = flux_num_electron_vars + n
+       mu = transport_data_ions%mobilities(n) * N_inv
+       v = flux_species_charge_sign(flux_ix) * mu * E_x
+       flux(:, flux_ix) = v * u(:, flux_ix)
+       sigma = sigma + mu * u(:, flux_ix)
     end do
 
     ! Dielectric relaxation time
@@ -230,6 +241,30 @@ contains
 #endif
   end function cc_average_at_cell_face
 
+  !> Get inner product of face-centered variables
+  pure function fc_inner_product(box, IJK, flux_a, flux_b) result(inprod)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: IJK  !< Face index
+    integer, intent(in)     :: flux_a !< Index of first face-centered variable
+    integer, intent(in)     :: flux_b !< Index of second face-centered variable
+    real(dp)                :: inprod
+
+    inprod = 0.5_dp * sum(box%fc(IJK, :, flux_a) * box%fc(IJK, :, flux_b))
+#if NDIM == 1
+    inprod = inprod + 0.5_dp * (&
+         box%fc(i+1, 1, flux_a) * box%fc(i+1, 1, flux_b))
+#elif NDIM == 2
+    inprod = inprod + 0.5_dp * (&
+         box%fc(i+1, j, 1, flux_a) * box%fc(i+1, j, 1, flux_b) + &
+         box%fc(i, j+1, 2, flux_a) * box%fc(i, j+1, 2, flux_b))
+#elif NDIM == 3
+    inprod = inprod + 0.5_dp * (&
+         box%fc(i+1, j, k, 1, flux_a) * box%fc(i+1, j, k, 1, flux_b) + &
+         box%fc(i, j+1, k, 2, flux_a) * box%fc(i, j+1, k, 2, flux_b) + &
+         box%fc(i, j, k+1, 3, flux_a) * box%fc(i, j, k+1, 3, flux_b))
+#endif
+  end function fc_inner_product
+
   !> Get inverse gas density at a cell face, between cell-centered index i-1 and
   !> i along dimension idim
   pure real(dp) function get_N_inv_face(box, IJK, idim)
@@ -246,7 +281,7 @@ contains
   end function get_N_inv_face
 
   !> Add chemistry and photoionization source terms
-  subroutine add_source_terms(box, dt, n_vars, i_cc, s_deriv, s_out, mask)
+  subroutine add_source_terms(box, dt, n_vars, i_cc, s_deriv, s_out, n_dt, dt_lim, mask)
     use omp_lib
     use m_units_constants
     use m_gas
@@ -261,9 +296,11 @@ contains
     integer, intent(in)        :: i_cc(n_vars)
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
+    integer, intent(in)        :: n_dt
+    real(dp), intent(inout)    :: dt_lim(n_dt)
     logical, intent(in)        :: mask(DTIMES(box%n_cell))
 
-    real(dp)                   :: tmp
+    real(dp)                   :: tmp, gain, loss_rate, mean_energy, max_energy
     real(dp)                   :: rates(box%n_cell**NDIM, n_reactions)
     real(dp)                   :: derivs(box%n_cell**NDIM, n_species)
     real(dp)                   :: dens(box%n_cell**NDIM, n_species)
@@ -342,7 +379,7 @@ contains
           tmp = minval(max(dens, eps) / max(-derivs, eps))
        end if
 
-       dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), tmp)
+       dt_lim(1) = tmp
 
        ! Keep track of chemical production at last time integration step
        call chemical_rates_box(box, nc, rates, box_rates)
@@ -356,6 +393,7 @@ contains
     end if
 
     ix = 0
+    max_energy = 0
     do KJI_DO(1,nc)
        ix = ix + 1
        if (.not. mask(IJK)) cycle
@@ -367,11 +405,27 @@ contains
                derivs(ix, photoi_species_index) + box%cc(IJK, i_photo)
        end if
 
+       if (td_use_energy_equation) then
+          gain = -fc_inner_product(box, IJK, flux_elec, electric_fld)
+          mean_energy = mean_electron_energy(box%cc(IJK, i_electron_energy+s_out), &
+               box%cc(IJK, i_electron+s_out))
+          loss_rate = LT_get_col(td_ee_tbl, td_ee_loss, mean_energy)
+          max_energy = max(max_energy, mean_energy)
+
+          box%cc(IJK, i_electron_energy+s_out) = box%cc(IJK, i_electron_energy+s_out) &
+               + dt * (gain - loss_rate * box%cc(IJK, i_electron+s_out))
+       end if
+
        do n = n_gas_species+1, n_species
           iv = species_itree(n)
           box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_out) + dt * derivs(ix, n)
        end do
     end do; CLOSE_DO
+
+    if (max_energy > 0) then
+       ! Set time step restriction for energy loss
+       dt_lim(2) = max_energy/LT_get_col(td_ee_tbl, td_ee_loss, max_energy)
+    end if
 
   end subroutine add_source_terms
 
@@ -423,6 +477,12 @@ contains
     end if
 
   end subroutine set_box_mask
+
+  !> Get mean electron energy
+  pure elemental real(dp) function mean_electron_energy(n_energy, n_e)
+    real(dp), intent(in) :: n_energy, n_e
+    mean_electron_energy = n_energy / max(n_e, 1.0_dp)
+  end function mean_electron_energy
 
   !> Compute adjustment factor for electron source terms. Used to reduce them in
   !> certain regimes.
@@ -624,21 +684,7 @@ contains
 
     nc = box%n_cell
     do KJI_DO(1, nc)
-       ! Compute inner product flux * field over the cell faces
-       tmp = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
-#if NDIM == 1
-       tmp = tmp + 0.5_dp * (&
-            box%fc(i+1, 1, flux_elec) * box%fc(i+1, 1, electric_fld))
-#elif NDIM == 2
-       tmp = tmp + 0.5_dp * (&
-            box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
-            box%fc(i, j+1, 2, flux_elec) * box%fc(i, j+1, 2, electric_fld))
-#elif NDIM == 3
-       tmp = tmp + 0.5_dp * (&
-            box%fc(i+1, j, k, 1, flux_elec) * box%fc(i+1, j, k, 1, electric_fld) + &
-            box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
-            box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
-#endif
+       tmp = fc_inner_product(box, IJK, flux_elec, electric_fld)
        JdotE = JdotE + tmp * volume(i)
     end do; CLOSE_DO
 

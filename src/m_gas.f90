@@ -189,6 +189,7 @@ contains
     integer, intent(in)       :: s_out          !< Output state
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
+    real(dp)                  :: dt_dummy(0)
 
     call flux_generic_tree(tree, n_vars_euler, gas_vars, s_deriv, &
          gas_fluxes, dt_lim, max_wavespeed, get_fluxes, &
@@ -197,17 +198,18 @@ contains
     if (tree%coord_t == af_cyl) then
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, n_vars_euler, &
             gas_vars, gas_fluxes, s_deriv, n_prev, s_prev, w_prev, s_out, &
-            add_geometric_source)
+            add_geometric_source, 0, dt_dummy)
     else
        call flux_update_densities(tree, dt, n_vars_euler, gas_vars, n_vars_euler, &
             gas_vars, gas_fluxes, s_deriv, n_prev, s_prev, w_prev, s_out, &
-            flux_dummy_source)
+            flux_dummy_source, 0, dt_dummy)
     end if
   end subroutine gas_forward_euler
 
 
   !> Add geometric source term for axisymmetric simulations
-  subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out, mask)
+  subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out, &
+       n_dt, dt_lim, mask)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: n_vars
@@ -215,6 +217,8 @@ contains
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
     logical, intent(in)        :: mask(DTIMES(box%n_cell))
+    integer, intent(in)        :: n_dt
+    real(dp), intent(inout)    :: dt_lim(n_dt)
 
 #if NDIM == 2
     real(dp)                   :: pressure(DTIMES(box%n_cell))

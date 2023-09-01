@@ -20,6 +20,8 @@ module m_streamer
   integer, public, protected :: i_electron     = -1
   !> Index of electron density (in species list)
   integer, public, protected :: ix_electron    = -1
+  !> Index of electron energy density
+  integer, public, protected :: i_electron_energy = -1
   !> Index of first positive ion species
   integer, public, protected :: i_1pos_ion     = -1
   !> Index of first positive ion (in species list)
@@ -35,6 +37,9 @@ module m_streamer
   !> Index can be set to include an electrode
   integer, public, protected :: i_lsf          = -1
 
+  !> Index of all densities that evolve in time
+  integer, public, protected, allocatable :: all_densities(:)
+
   !> Include deposited power density in output
   logical, public, protected :: compute_power_density = .false.
   !> Index of deposited power density
@@ -45,10 +50,15 @@ module m_streamer
 
   !> Index of electron flux
   integer, public, protected :: flux_elec    = -1
+  !> Index of electron energy flux
+  integer, public, protected :: flux_energy  = -1
   !> Index of electric field vector
   integer, public, protected :: electric_fld = -1
+
   !> Number of flux variables
   integer, public, protected :: flux_num_species = -1
+  !> Number of electron flux variables
+  integer, public, protected :: flux_num_electron_vars = -1
   !> List of all flux variables (face-centered index)
   integer, public, protected, allocatable :: flux_variables(:)
   !> List of all flux species (cell-centered index)
@@ -175,6 +185,7 @@ contains
     use m_units_constants
     use m_gas
     use m_transport_data
+    use m_dt
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
@@ -186,6 +197,7 @@ contains
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
     real(dp)                   :: tmp
+    integer                    :: flux_ix
     logical                    :: write_source_factor = .false.
 
     ! Set index of electrons
@@ -208,30 +220,51 @@ contains
          write_binary=.false.)
     call af_add_fc_variable(tree, "field", ix=electric_fld)
 
-    flux_num_species = 1+transport_data_ions%n_mobile_ions
+    all_densities = species_itree(n_gas_species+1:n_species)
+
+    if (td_use_energy_equation) then
+       call af_add_cc_variable(tree, "e_energy", ix=i_electron_energy, &
+            n_copies=af_advance_num_steps(time_integrator)+1)
+       call af_add_fc_variable(tree, "flux_energy", ix=flux_energy, &
+            write_binary=.false.)
+
+       flux_num_electron_vars = 2
+       all_densities = [all_densities, i_electron_energy]
+    else
+       flux_num_electron_vars = 1
+    end if
+
+    flux_num_species = flux_num_electron_vars+transport_data_ions%n_mobile_ions
     allocate(flux_species(flux_num_species))
     allocate(flux_species_charge(flux_num_species))
     allocate(flux_species_charge_sign(flux_num_species))
     allocate(flux_variables(flux_num_species))
+
     flux_species(1)             = i_electron
     flux_species_charge(1)      = -1
+    flux_species_charge_sign(1) = -1
     flux_variables(1)           = flux_elec
 
+    if (td_use_energy_equation) then
+       flux_species(2) = i_electron_energy
+       flux_species_charge(2) = 0
+       flux_species_charge_sign(2) = -1 ! Used to determine upwind direction
+       flux_variables(2) = flux_energy
+    end if
+
     do n = 1, transport_data_ions%n_mobile_ions
-       flux_species(1+n) = af_find_cc_variable(tree, &
+       flux_ix = flux_num_electron_vars + n
+       flux_species(flux_ix) = af_find_cc_variable(tree, &
             trim(transport_data_ions%names(n)))
 
        ! Get index in chemistry list and determine charge
        ix_chemistry = species_index(trim(transport_data_ions%names(n)))
-       flux_species_charge(1+n) = species_charge(ix_chemistry)
+       flux_species_charge(flux_ix) = species_charge(ix_chemistry)
+       flux_species_charge_sign(flux_ix) = sign(1, species_charge(ix_chemistry))
 
        call af_add_fc_variable(tree, trim(transport_data_ions%names(n)), &
-            ix=flux_variables(1+n), write_binary=.false.)
+            ix=flux_variables(flux_ix), write_binary=.false.)
     end do
-
-    if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
-
-    flux_species_charge_sign = sign(1, flux_species_charge)
 
     ! Create a list of positive ion fluxes for secondary emission
     n = count(flux_species_charge > 0)
@@ -245,6 +278,7 @@ contains
        end if
     end do
 
+    ! Add one copy so that the old value can be restored
     call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
