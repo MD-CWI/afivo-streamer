@@ -3,6 +3,7 @@
 module m_fluid_lfa
   use m_af_all
   use m_streamer
+  use m_model
 
   implicit none
   private
@@ -87,6 +88,7 @@ contains
     dt_lim = min(dt_max, minval(dt_limits))
   end subroutine forward_euler
 
+  !> Compute flux for the fluid model
   subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
        n_other_dt, other_dt, box, line_ix, s_deriv)
     use m_af_flux_schemes
@@ -116,7 +118,7 @@ contains
     real(dp) :: en_cc(0:nf) !< Electron energy density at cell centers
     real(dp) :: v(nf)       !< Velocity at cell faces
     real(dp) :: dc(nf)      !< Diffusion coefficient at cell faces
-    real(dp) :: E_face(nf), tmp_fc(nf), N_inv(nf)
+    real(dp) :: tmp_fc(nf), N_inv(nf)
     real(dp) :: mu(nf), sigma(nf), inv_dx, cfl_factor
     integer  :: n, nc, flux_ix
 
@@ -144,24 +146,22 @@ contains
     call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
     call flux_get_line_1cc(box, i_electron+s_deriv, flux_dim, line_ix, ne_cc)
 
-    if (td_use_energy_equation) then
+    if (model_has_energy_equation) then
        call flux_get_line_1cc(box, i_electron_energy+s_deriv, &
             flux_dim, line_ix, en_cc)
+
+       ! Get mean electron energies at cell faces
        tmp_fc = mean_electron_energy(u(:, 2), u(:, 1))
        mu = LT_get_col(td_ee_tbl, td_ee_mobility, tmp_fc) * N_inv
        dc = LT_get_col(td_ee_tbl, td_ee_diffusion, tmp_fc) * N_inv
-       cfl_factor = five_third
     else
        call flux_get_line_1cc(box, i_electric_fld, flux_dim, line_ix, E_cc)
 
        ! Compute field strength at cell faces, which is used to compute the
        ! mobility and diffusion coefficient at the interface
-       E_face = 0.5_dp * (E_cc(0:nc) + E_cc(1:nc+1))
-       tmp_fc = E_face * SI_to_Townsend * N_inv
-
+       tmp_fc = 0.5_dp * (E_cc(0:nc) + E_cc(1:nc+1)) * SI_to_Townsend * N_inv
        mu = LT_get_col(td_tbl, td_mobility, tmp_fc) * N_inv
        dc = LT_get_col(td_tbl, td_diffusion, tmp_fc) * N_inv
-       cfl_factor = 1.0_dp
     end if
 
     ! Compute velocity, -mu accounts for negative electron charge
@@ -170,17 +170,20 @@ contains
     ! Combine advective and diffusive flux
     flux(:, 1) = v * u(:, 1) - dc * inv_dx * (ne_cc(1:nc+1) - ne_cc(0:nc))
 
-    ! Used to determine electron CFL time step
-    cfl_sum = cfl_factor * max(abs(v(2:)), abs(v(:nf-1))) * inv_dx + &
-         2 * max(dc(2:), dc(:nf-1))  * inv_dx**2
-
     ! Electron conductivity
     sigma = mu * u(:, 1)
 
-    if (td_use_energy_equation) then
+    if (model_has_energy_equation) then
        flux(:, 2) = five_third * (v * u(:, 2) - &
             dc * inv_dx * (en_cc(1:nc+1) - en_cc(0:nc)))
+       cfl_factor = five_third
+    else
+       cfl_factor = 1.0_dp
     end if
+
+    ! Used to determine electron CFL time step
+    cfl_sum = cfl_factor * max(abs(v(2:)), abs(v(:nf-1))) * inv_dx + &
+         2 * max(dc(2:), dc(:nf-1))  * inv_dx**2
 
     ! Ion fluxes (note: ions are slow, so their CFL condition is ignored)
     do n = 1, transport_data_ions%n_mobile_ions
@@ -195,6 +198,7 @@ contains
     other_dt(1) = UC_eps0 / (UC_elem_charge * max(maxval(sigma), 1e-100_dp))
   end subroutine flux_upwind
 
+  !> Determine the direction of fluxes
   subroutine flux_direction(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)
     type(box_t), intent(in) :: box             !< Current box
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
@@ -341,12 +345,13 @@ contains
     ! stability, see e.g. http://dx.doi.org/10.1088/1749-4699/6/1/015001
     dens = max(dens, 0.0_dp)
 
-    if (td_use_energy_equation) then
-       mean_energies = pack(mean_electron_energy(box%cc(DTIMES(1:nc), i_electron_energy+s_out), &
-               box%cc(DTIMES(1:nc), i_electron+s_out)), .true.)
+    if (model_has_energy_equation) then
+       mean_energies = pack(mean_electron_energy(&
+            box%cc(DTIMES(1:nc), i_electron_energy+s_out), &
+            box%cc(DTIMES(1:nc), i_electron+s_out)), .true.)
        call get_rates(fields, rates, n_cells, mean_energies)
     else
-       mean_energies = 0
+       mean_energies = 0.0_dp
        call get_rates(fields, rates, n_cells)
     end if
 
@@ -412,10 +417,9 @@ contains
                derivs(ix, photoi_species_index) + box%cc(IJK, i_photo)
        end if
 
-       if (td_use_energy_equation) then
+       if (model_has_energy_equation) then
           gain = -fc_inner_product(box, IJK, flux_elec, electric_fld)
           loss_rate = LT_get_col(td_ee_tbl, td_ee_loss, mean_energies(ix))
-
           box%cc(IJK, i_electron_energy+s_out) = box%cc(IJK, i_electron_energy+s_out) &
                + dt * (gain - loss_rate * box%cc(IJK, i_electron+s_out))
        end if
@@ -551,11 +555,11 @@ contains
     source_factor = max(0.0_dp, source_factor)
   end subroutine compute_source_factor
 
-  !> Handle secondary emission from positive ions
+  !> Handle secondary emission from positive ions at the domain walls
   subroutine handle_ion_se_flux(box)
     use m_transport_data
     type(box_t), intent(inout) :: box
-    integer                    :: nc, nb, n, ion_flux
+    integer                    :: nc, nb, n, ion_flux, flux_ix
 
     nc = box%n_cell
 
@@ -565,10 +569,12 @@ contains
     do nb = 1, af_num_neighbors
        ! Check for physical boundary
        if (box%neighbors(nb) < af_no_box) then
+
           ! Loop over positive ion species
           do n = 1, transport_data_ions%n_mobile_ions
-             if (flux_species_charge(n+1) > 0.0_dp) then
-                ion_flux = flux_variables(n+1)
+             flux_ix = flux_num_electron_vars + n
+             if (flux_species_charge(flux_ix) > 0.0_dp) then
+                ion_flux = flux_variables(flux_ix)
                 select case (nb)
 #if NDIM == 1
                 case (af_neighb_lowx)

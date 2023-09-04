@@ -5,6 +5,7 @@ module m_chemistry
   use m_af_all
   use m_lookup_table
   use m_table_data
+  use m_model
 
   implicit none
   private
@@ -219,7 +220,7 @@ contains
           reactions(1)%y_data = td_tbl%rows_cols(:, td_alpha) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(1)%x_data * &
                Townsend_to_SI * gas_number_density
-          reactions(1)%description = "e + M > e + e + M+"
+          reactions(1)%description = "e + M -> e + e + M+"
 
           ! Attachment reaction
           reactions(2)%ix_in = [1]
@@ -232,10 +233,16 @@ contains
           reactions(2)%y_data = td_tbl%rows_cols(:, td_eta) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(2)%x_data * &
                Townsend_to_SI * gas_number_density
-          reactions(2)%description = "e + M > M-"
+          reactions(2)%description = "e + M -> M-"
        else
           error stop "Varying gas density not yet supported"
        end if
+    end if
+
+    ! In case of energy equation, add an extra species
+    if (model_has_energy_equation) then
+       n_species = n_species + 1
+       species_list(n_species) = "e_energy"
     end if
 
     ! Convert names to simple ascii
@@ -304,13 +311,14 @@ contains
     end do
 
     ! Create lookup tables for tabulated reaction data. First determine number
-    ! of reactions.
+    ! of reactions. In case of an energy equation, ionization and attachment
+    ! reactions are converted to use the electron energy instead of the field.
     i = 0
-    j = 0
+    j = count(reactions(1:n_reactions)%rate_type == rate_tabulated_energy)
     do n = 1, n_reactions
        if (reactions(n)%rate_type == rate_tabulated_field) then
           rtype = reactions(n)%reaction_type
-          if (td_use_energy_equation .and. (rtype == ionization_reaction &
+          if (model_has_energy_equation .and. (rtype == ionization_reaction &
                .or. rtype == attachment_reaction)) then
              j = j + 1
           else
@@ -330,7 +338,7 @@ contains
        if (reactions(n)%rate_type == rate_tabulated_field) then
           rtype = reactions(n)%reaction_type
 
-          if (td_use_energy_equation .and. (rtype == ionization_reaction &
+          if (model_has_energy_equation .and. (rtype == ionization_reaction &
                .or. rtype == attachment_reaction)) then
              reactions(n)%rate_type = rate_tabulated_energy
              j = j + 1
@@ -345,6 +353,11 @@ contains
              call table_set_column(chemtbl_fld, i, reactions(n)%x_data, &
                   reactions(n)%y_data)
           end if
+       else if (reactions(n)%rate_type == rate_tabulated_energy) then
+          j = j + 1
+          reactions(n)%lookup_table_index = j
+          call table_set_column(chemtbl_ee, j, reactions(n)%x_data, &
+                  reactions(n)%y_data)
        end if
     end do
 
@@ -396,7 +409,7 @@ contains
 
        fields = td_tbl%x
 
-       if (td_use_energy_equation) then
+       if (model_has_energy_equation) then
           energies = LT_get_col(td_tbl, td_energy_eV, td_tbl%x)
           call get_rates(fields, rates, n_fields, energies)
        else
@@ -480,7 +493,7 @@ contains
     allocate(src(n_fields), loss(n_fields))
 
     fields = td_tbl%x
-    if (td_use_energy_equation) then
+    if (model_has_energy_equation) then
        energies = LT_get_col(td_tbl, td_energy_eV, td_tbl%x)
        call get_rates(fields, rates, n_fields, energies)
     else
@@ -520,16 +533,11 @@ contains
     integer               :: n, n_coeff
     real(dp)              :: c0, c(rate_max_num_coeff)
     real(dp)              :: Te(n_cells)                 !> Electron Temperature in Kelvin
-    real(dp)              :: fields_for_energy(n_cells)
     logical               :: Te_available
 
     ! Conversion factor to go from eV to Kelvin
     real(dp), parameter   :: electron_eV_to_K = 2 * UC_elec_volt / &
          (3 * UC_boltzmann_const)
-
-    if (present(energy_eV)) then
-       fields_for_energy = LT_get_col(td_ee_tbl, td_ee_field, energy_eV)
-    end if
 
     Te_available = .false.
 
@@ -560,6 +568,8 @@ contains
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
        case (rate_analytic_k1)
           if (.not. Te_available) then
+             ! Note that we could use energy_eV if present, but this energy is
+             ! not guaranteed to be well-behaved
              Te = electron_eV_to_K * LT_get_col(td_tbl, td_energy_eV, fields)
           end if
           rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
@@ -592,10 +602,12 @@ contains
        case (rate_analytic_k14)
           rates(:, n) = c0 * c(1) * exp(-(fields / c(2))**c(3))
        case (rate_analytic_k15)
-          ! Note that this reaction depends on Ti, ionic temperature, which according to Galimberti(1979),
-          ! Ti = T_gas + fields/c(3), with c(3) = 0.18 Td/Kelvin, UC_boltzmann_const is in J/Kelvin,
-          ! c(2) is given in Joule in the input file
-          rates(:, n) = c0 * c(1) * exp(-(c(2) / (UC_boltzmann_const * (gas_temperature + fields/c(3))))**c(4))
+          ! Note that this reaction depends on Ti, ionic temperature.
+          ! According to Galimberti(1979): Ti = T_gas + fields/c(3),
+          ! with c(3) = 0.18 Td/Kelvin, UC_boltzmann_const is in J/Kelvin, c(2)
+          ! is given in Joule in the input file
+          rates(:, n) = c0 * c(1) * exp(-(c(2) / (UC_boltzmann_const * &
+               (gas_temperature + fields/c(3))))**c(4))
        end select
     end do
   end subroutine get_rates

@@ -335,8 +335,8 @@ contains
        call field_set_rhs(tree, 0)
 
        ! Ensure valid ghost cells for density-based variables
-       call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
-       call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+       call af_restrict_tree(tree, all_densities)
+       call af_gc_tree(tree, all_densities)
 
        call af_restrict_tree(tree, [i_rhs])
        call af_gc_tree(tree, [i_rhs])

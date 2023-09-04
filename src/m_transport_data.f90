@@ -39,9 +39,6 @@ module m_transport_data
   !> Whether old style transport data is used (alpha, eta, mu, D vs V/m)
   logical, public, protected :: td_old_style = .false.
 
-  !> Whether an energy equation is used for electrons
-  logical, public, protected :: td_use_energy_equation = .false.
-
   ! @todo move this to separate ion module
   type ion_transport_t
      integer                        :: n_mobile_ions ! Number of mobile ions
@@ -64,6 +61,7 @@ contains
     use m_table_data
     use m_gas
     use m_units_constants
+    use m_model
     type(CFG_t), intent(inout) :: cfg
     character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: xx(:), yy(:)
@@ -78,9 +76,6 @@ contains
 
     call CFG_add_get(cfg, "input_data%old_style", td_old_style, &
          "Use old style transport data (alpha, eta, mu, D vs V/m)")
-
-    call CFG_add_get(cfg, "input_data%use_energy_equation", &
-         td_use_energy_equation, "Whether an energy equation is used")
 
     ! Fill table with data
     if (td_old_style) then
@@ -138,7 +133,7 @@ contains
        call table_set_column(td_tbl, td_energy_eV, xx, yy)
     end if
 
-    if (td_use_energy_equation) then
+    if (model_has_energy_equation) then
        call table_from_file(td_file, "Mean energy (eV)", field_Td, energy_eV)
        n_rows = size(energy_eV)
        td_ee_tbl = LT_create(0.0_dp, energy_eV(n_rows), &

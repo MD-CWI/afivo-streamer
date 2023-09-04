@@ -186,6 +186,7 @@ contains
     use m_gas
     use m_transport_data
     use m_dt
+    use m_model
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
@@ -222,14 +223,11 @@ contains
 
     all_densities = species_itree(n_gas_species+1:n_species)
 
-    if (td_use_energy_equation) then
-       call af_add_cc_variable(tree, "e_energy", ix=i_electron_energy, &
-            n_copies=af_advance_num_steps(time_integrator)+1)
+    if (model_has_energy_equation) then
+       i_electron_energy = af_find_cc_variable(tree, "e_energy")
        call af_add_fc_variable(tree, "flux_energy", ix=flux_energy, &
             write_binary=.false.)
-
        flux_num_electron_vars = 2
-       all_densities = [all_densities, i_electron_energy]
     else
        flux_num_electron_vars = 1
     end if
@@ -245,7 +243,7 @@ contains
     flux_species_charge_sign(1) = -1
     flux_variables(1)           = flux_elec
 
-    if (td_use_energy_equation) then
+    if (model_has_energy_equation) then
        flux_species(2) = i_electron_energy
        flux_species_charge(2) = 0
        flux_species_charge_sign(2) = -1 ! Used to determine upwind direction
