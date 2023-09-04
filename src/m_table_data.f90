@@ -17,9 +17,6 @@ module m_table_data
   !> Maximum field (Td) for lookup tables
   real(dp), public, protected :: table_max_townsend = 1e3_dp
 
-  !> Maximum energy (eV) for lookup tables
-  real(dp), public, protected :: table_max_energy = 20.0_dp
-
   ! The maximum number of rows per entry
   integer, parameter :: table_max_rows   = 1500
 
@@ -50,7 +47,7 @@ contains
     call CFG_add_get(cfg, "table_data%min_townsend", table_min_townsend, &
          "Minimal field (in Td) for the rate coeff. lookup table")
     call CFG_add_get(cfg, "table_data%max_townsend", table_max_townsend, &
-         "Maximal field (in Td) for the rate coeff. lookup table")
+         "Maximal field (Td) for lookup tables, < 0 means automatic")
 
     method = "linear"
     call CFG_add_get(cfg, "table_data%input_interpolation", method, &

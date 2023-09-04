@@ -327,9 +327,9 @@ contains
        end if
     end do
 
-    chemtbl_fld = LT_create(table_min_townsend, table_max_townsend, &
+    chemtbl_fld = LT_create(td_tbl%x(1), td_tbl%x(td_tbl%n_points), &
          table_size, i, table_xspacing)
-    chemtbl_ee = LT_create(0.0_dp, table_max_energy, &
+    chemtbl_ee = LT_create(0.0_dp, td_max_eV, &
          table_size, j, table_xspacing)
 
     i = 0

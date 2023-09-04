@@ -39,6 +39,9 @@ module m_transport_data
   !> Whether old style transport data is used (alpha, eta, mu, D vs V/m)
   logical, public, protected :: td_old_style = .false.
 
+  !> Maximal energy (eV) in input data (automatically updated)
+  real(dp), public, protected :: td_max_eV = 20.0_dp
+
   ! @todo move this to separate ion module
   type ion_transport_t
      integer                        :: n_mobile_ions ! Number of mobile ions
@@ -66,9 +69,9 @@ contains
     character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: xx(:), yy(:)
     real(dp), allocatable      :: energy_eV(:), field_Td(:)
-    real(dp)                   :: dummy_real(0)
+    real(dp)                   :: dummy_real(0), max_Td, max_eV
     character(len=10)          :: dummy_string(0)
-    integer                    :: n, n_rows
+    integer                    :: n
 
     call CFG_add_get(cfg, "input_data%file", td_file, &
          "Input file with transport (and reaction) data")
@@ -81,14 +84,23 @@ contains
     if (td_old_style) then
        if (.not. gas_constant_density) &
             error stop "Old style transport used with varying gas density"
-
-       ! Create a lookup table for the model coefficients
-       td_tbl = LT_create(table_min_townsend, table_max_townsend, table_size, &
-            4, table_xspacing)
+       if (model_has_energy_equation) &
+            error stop "Old style transport used with energy equation"
 
        call table_from_file(td_file, "efield[V/m]_vs_mu[m2/Vs]", xx, yy)
        xx = xx * SI_to_Townsend / gas_number_density
        yy = yy * gas_number_density
+
+       ! Create a lookup table for the model coefficients
+       if (table_max_townsend < 0) then
+          max_Td = xx(size(xx))
+       else
+          max_Td = table_max_townsend
+       end if
+
+       td_tbl = LT_create(table_min_townsend, max_Td, table_size, &
+            4, table_xspacing)
+
        call table_set_column(td_tbl, td_mobility, xx, yy)
 
        call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", xx, yy)
@@ -108,15 +120,22 @@ contains
        yy = yy / gas_number_density
        call table_set_column(td_tbl, td_eta, xx, yy)
     else
+       call table_from_file(td_file, "Mobility *N (1/m/V/s)", xx, yy)
+
        ! Create a lookup table for the model coefficients
-       td_tbl = LT_create(table_min_townsend, table_max_townsend, &
+       if (table_max_townsend < 0) then
+          max_Td = xx(size(xx))
+       else
+          max_Td = table_max_townsend
+       end if
+
+       td_tbl = LT_create(table_min_townsend, max_Td, &
             table_size, 5, table_xspacing)
 
-       call table_from_file(td_file, "Mobility *N (1/m/V/s)", xx, yy)
        call table_set_column(td_tbl, td_mobility, xx, yy)
 
        call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
-               xx, yy)
+            xx, yy)
        call table_set_column(td_tbl, td_diffusion, xx, yy)
 
        call table_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
@@ -131,13 +150,13 @@ contains
        call table_from_file(td_file, "Mean energy (eV)", &
             xx, yy)
        call table_set_column(td_tbl, td_energy_eV, xx, yy)
+       td_max_eV = yy(size(yy))
     end if
 
     if (model_has_energy_equation) then
        call table_from_file(td_file, "Mean energy (eV)", field_Td, energy_eV)
-       n_rows = size(energy_eV)
-       td_ee_tbl = LT_create(0.0_dp, energy_eV(n_rows), &
-            table_size, 4, table_xspacing)
+       max_eV = energy_eV(size(energy_eV))
+       td_ee_tbl = LT_create(0.0_dp, max_eV, table_size, 4, table_xspacing)
 
        call table_from_file(td_file, "Mobility *N (1/m/V/s)", xx, yy)
        if (.not. same_data(xx, field_Td)) &
@@ -180,7 +199,7 @@ contains
          transport_data_ions%mobilities)
 
     if (any(transport_data_ions%mobilities < 0)) &
-       error stop "Ion mobilities should be given as positive numbers"
+         error stop "Ion mobilities should be given as positive numbers"
 
     ! Scale ion mobilities with gas number density at 300 K and 1 bar
     transport_data_ions%mobilities = transport_data_ions%mobilities * &
