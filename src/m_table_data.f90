@@ -95,6 +95,13 @@ contains
        ! Perform cubic spline interpolation
        call spline_set_coeffs(x, y, size(x), spl)
        y_table = spline_evaluate(tbl%x, spl)
+
+       if (minval(y) >= 0.0_dp) then
+          ! If original data is non-negative, ensure interpolated data is also
+          ! non-negative (important for e.g. rate coefficients)
+          y_table = max(0.0_dp, y_table)
+       end if
+
        call LT_set_col_data(tbl, i_col, y_table)
     case default
        error stop "invalid input_interpolation"
