@@ -105,6 +105,9 @@ module m_streamer
   integer, public, parameter :: source_factor_flux = 1
   integer, public, parameter :: source_factor_original_flux = 2
 
+  !> Minimum number of electrons per cell to include source terms
+  real(dp), public, protected :: ST_source_min_electrons_per_cell = -1e100_dp
+
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
 
@@ -399,6 +402,9 @@ contains
          "Use source factor to prevent unphysical effects due to diffusion")
     call CFG_add_get(cfg, "fixes%write_source_factor", write_source_factor, &
          "Whether to write the source factor to the output")
+    call CFG_add_get(cfg, "fixes%source_min_electrons_per_cell", &
+         ST_source_min_electrons_per_cell, &
+         "Minimum number of electrons per cell to include source terms")
 
     select case (source_factor)
     case ("none")

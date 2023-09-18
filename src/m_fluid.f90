@@ -363,6 +363,16 @@ contains
           source_factor(:) = 1.0_dp
        end if
 
+       if (ST_source_min_electrons_per_cell > 0) then
+          ! Prevent ionization in cells with a low number of electrons. Note
+          ! that that the radius is not taken into account for axisymmetric
+          ! cases, as this would lead to artifacts.
+          where (dens(:, ix_electron) * minval(box%dr)**3 < &
+               ST_source_min_electrons_per_cell)
+             source_factor = 0.0_dp
+          end where
+       end if
+
        if (i_srcfac > 0) then
           ! Write source factor to variable
           box%cc(DTIMES(1:nc), i_srcfac) = &
