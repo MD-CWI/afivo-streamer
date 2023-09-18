@@ -165,8 +165,14 @@ module m_streamer
   !> Current sum of J.E per thread
   real(dp), public, allocatable :: ST_current_JdotE(:, :)
 
-  !> Current estimated electric current
-  real(dp), public :: ST_global_current
+  !> Per how many iterations the electric current is computed
+  integer, public, protected :: current_update_per_steps = 10
+
+  !> Electric current through electrodes due to J.E
+  real(dp), public :: ST_global_JdotE_current
+
+  !> Electric current through electrodes due to displacement current
+  real(dp), public :: ST_global_displ_current
 
   !> Global sum of J.E
   real(dp), public :: ST_global_JdotE
@@ -372,6 +378,10 @@ contains
     call CFG_add_get(cfg, "multigrid_max_rel_residual", &
          ST_multigrid_max_rel_residual, &
          "Stop multigrid when residual is smaller than this factor times max(|rhs|)")
+
+    call CFG_add_get(cfg, "current_update_per_steps", &
+         current_update_per_steps, &
+         "Per how many iterations the electric current is computed")
 
     prolong_method = "limit"
     call CFG_add_get(cfg, "prolong_density", prolong_method, &

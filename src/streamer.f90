@@ -43,6 +43,8 @@ program streamer
   real(dp)                  :: pos_Emax(NDIM), pos_Emax_t0(NDIM)
   real(dp)                  :: breakdown_field_Td, current_output_dt
   real(dp)                  :: time_until_next_pulse
+  real(dp)                  :: field_energy, field_energy_prev
+  real(dp)                  :: tmp, field_energy_prev_time
   logical                   :: step_accepted, start_of_new_pulse
 
   !> The configuration for the simulation
@@ -160,6 +162,9 @@ program streamer
   time_last_print  = -1e10_dp
   time_last_output = time
 
+  call field_compute_energy(tree, field_energy_prev)
+  field_energy_prev_time = time
+
   do
      it = it + 1
      if (time >= ST_end_time) exit
@@ -259,12 +264,27 @@ program streamer
      ST_global_JdotE = ST_global_JdotE + &
           sum(ST_current_JdotE(1, :)) * dt
 
-     ! Estimate electric current according to Sato's equation V*I = sum(J.E).
-     ! TODO: only consider background electric field when computing sum(J.E)
-     if (abs(current_voltage) > 0.0_dp) then
-        ST_global_current = sum(ST_current_JdotE(1, :)) / current_voltage
-     else
-        ST_global_current = 0.0_dp
+     ! Estimate electric current according to Sato's equation V*I = sum(J.E),
+     ! where J includes both the conduction current and the displacement
+     ! current, see 10.1088/0022-3727/32/5/005.
+     ! The latter is computed through the field energy, which contains
+     ! some noise, so the current is only updated every N iterations.
+     if (mod(it, current_update_per_steps) == 0) then
+        call field_compute_energy(tree, field_energy)
+
+        ! Time derivative of field energy
+        tmp = (field_energy - field_energy_prev)/(time - field_energy_prev_time)
+        field_energy_prev      = field_energy
+        field_energy_prev_time = time
+
+        ! Add J.E term
+        if (abs(current_voltage) > 0.0_dp) then
+           ST_global_JdotE_current = sum(ST_current_JdotE(1, :)) / current_voltage
+           ST_global_displ_current = tmp/current_voltage
+        else
+           ST_global_JdotE_current = 0.0_dp
+           ST_global_displ_current = 0.0_dp
+        end if
      end if
 
      ! Make sure field is available for latest time state

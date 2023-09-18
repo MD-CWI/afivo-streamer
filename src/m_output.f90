@@ -584,17 +584,20 @@ contains
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) sum(J.E) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
+            &sum(charge) sum(J.E) max(E) x max(n_e) x voltage current_J.E &
+            &current_displ ne_zmin ne_zmax &
             &max(Etip) x wc_time n_cells min(dx) dt_cfl dt_diff dt_drt dt_chem &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
+            &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) &
+            &voltage current_J.E current_displ &
             &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) &
             &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
+            &current_J.E current_displ &
             &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) &
             &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #endif
@@ -611,11 +614,11 @@ contains
     end if
 
 #if NDIM == 1
-    n_reals = 17
+    n_reals = 19
 #elif NDIM == 2
-    n_reals = 24
+    n_reals = 26
 #elif NDIM == 3
-    n_reals = 23
+    n_reals = 25
 #endif
 
     if (associated(user_log_variables)) then
@@ -634,7 +637,8 @@ contains
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
+         af_r_loc(tree, loc_elec), current_voltage, ST_global_JdotE_current, &
+         ST_global_displ_current, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree), dt_limits, &
@@ -644,7 +648,8 @@ contains
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         current_voltage, ne_zminmax, max_field_tip, r_tip, &
+         current_voltage, ST_global_JdotE_current, &
+         ST_global_displ_current, ne_zminmax, max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), af_min_dr(tree), &
          dt_limits, tree%highest_lvl, &
          var_values(1:n_user_vars)
@@ -652,7 +657,8 @@ contains
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
+         af_r_loc(tree, loc_elec), current_voltage, ST_global_JdotE_current, &
+         ST_global_displ_current, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
          af_min_dr(tree), dt_limits, &
