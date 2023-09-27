@@ -9,6 +9,7 @@ module m_user
 
   real(dp) :: desired_current = 0.1_dp
   real(dp) :: relaxation_time = 5e-9_dp
+  logical  :: current_control = .false.
 
   ! Public methods
   public :: user_initialize
@@ -19,7 +20,11 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout) :: tree
 
-    user_field_amplitude => my_field_amplitude
+    call CFG_add_get(cfg, "user_current_control", current_control, &
+        "Whether to use current control")
+    if (current_control) then
+        user_field_amplitude => my_field_amplitude
+    end if
     call CFG_add_get(cfg, "user_current", desired_current, &
         "Supplying the desired current")
     call CFG_add_get(cfg, "user_relaxation_time", relaxation_time, &
@@ -35,6 +40,7 @@ contains
     real(dp), intent(in)   :: time
 
     real(dp)       :: resistance, goal_voltage, voltage_change, dt
+    real(dp)       :: total_current
     integer, save  :: counter   = 0
     real(dp), save :: prev_time = 0
 
@@ -42,11 +48,10 @@ contains
 
     if (time < 14e-9_dp) then
        my_field_amplitude = -24e3 / (ST_domain_len(NDIM))
-       !my_field_amplitude = current_voltage / (ST_domain_len(NDIM))
-       !print *, "Ampli", current_voltage
     else ! Estimate resistance
 
-       resistance = current_voltage/ST_global_displ_current
+       total_current = ST_global_displ_current + ST_global_JdotE_current
+       resistance = -current_voltage/total_current
 
        goal_voltage = desired_current * resistance
        voltage_change = (goal_voltage - current_voltage) * dt / relaxation_time
@@ -54,7 +59,7 @@ contains
 
        counter = counter + 1
        if (modulo(counter, 100) == 0) then
-          print *, time, ST_global_displ_current, my_field_amplitude, resistance
+          print *, "time, current, field, resistance", time, total_current, my_field_amplitude, resistance
        end if
     end if
 
@@ -71,10 +76,13 @@ contains
 
 
        n_vars = 2
-       var_names(1) = 'current'
+       var_names(1) = 'displ_current'
        var_values(1) = ST_global_displ_current
        var_names(2) = 'power_deposited'
        call af_tree_sum_cc(tree, i_power_density, var_values(2))
+       n_vars = n_vars+1
+       var_names(3) = 'JdotE_current'
+       var_values(3) = ST_global_JdotE_current
        !var_names(3) = 'Je_x'
        !call af_tree_sum_cc(tree, af_find_cc_variable(tree,"Je_1"), var_values(3))
        !var_names(4) = 'Je_y'
