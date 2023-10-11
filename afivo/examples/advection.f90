@@ -237,6 +237,7 @@ contains
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
     integer                   :: lvl, i, id
+    real(dp)                  :: all_dt(1)
 
     select case (flux_method)
     case ("generic")
@@ -245,8 +246,9 @@ contains
             flux_dummy_conversion, flux_dummy_conversion, af_limiter_koren_t)
     case ("upwind")
        call flux_upwind_tree(tree, 1, [i_phi], s_deriv, [i_flux], &
-            dt_lim, flux_upwind, flux_direction, &
+            1, all_dt, flux_upwind, flux_direction, &
             flux_dummy_line_modify, af_limiter_koren_t)
+       dt_lim = all_dt(1)
     case ("custom")
        ! Ensure ghost cells near refinement boundaries can be properly filled
        call af_restrict_ref_boundary(tree, [i_phi+s_deriv])
@@ -271,8 +273,8 @@ contains
        error stop "Unknown flux_method, choices: generic, upwind, custom"
     end select
 
-    call flux_update_densities(tree, dt, 1, [i_phi], [i_flux], &
-         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
+    call flux_update_densities(tree, dt, 1, [i_phi], 1, [i_phi], [i_flux], &
+         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source, 0, all_dt)
 
   end subroutine forward_euler
 
@@ -332,7 +334,8 @@ contains
     flux = u * velocity(flux_dim)
   end subroutine get_flux
 
-  subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, box, line_ix, s_deriv)
+  subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
+       n_other_dt, other_dt, box, line_ix, s_deriv)
     integer, intent(in)     :: nf              !< Number of cell faces
     integer, intent(in)     :: n_var           !< Number of variables
     integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
@@ -340,6 +343,8 @@ contains
     real(dp), intent(out)   :: flux(nf, n_var) !< Computed fluxes
     !> Terms per cell-center to be added to CFL sum, see flux_upwind_box
     real(dp), intent(out)   :: cfl_sum(nf-1)
+    integer, intent(in)     :: n_other_dt !< Number of non-cfl time step restrictions
+    real(dp), intent(inout) :: other_dt(n_other_dt) !< Non-cfl time step restrictions
     type(box_t), intent(in) :: box             !< Current box
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv        !< State to compute derivatives from
@@ -351,15 +356,16 @@ contains
     cfl_sum = tmp
   end subroutine flux_upwind
 
-  subroutine flux_direction(box, line_ix, s_deriv, flux_dim, direction_positive)
+  subroutine flux_direction(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)
     type(box_t), intent(in) :: box             !< Current box
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+    integer, intent(in)     :: n_var           !< Number of variables
     integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
     !> True means positive flow (to the "right"), false to the left
-    logical, intent(out)    :: direction_positive(box%n_cell+1)
+    logical, intent(out)    :: direction_positive(box%n_cell+1, n_var)
 
-    direction_positive(:) = (velocity(flux_dim) > 0)
+    direction_positive(:, 1) = (velocity(flux_dim) > 0)
   end subroutine flux_direction
 
 end program

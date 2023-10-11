@@ -218,6 +218,7 @@ contains
     use m_geometry
     use m_gas
     use m_user_methods
+    use m_streamer
     type(box_t), intent(inout) :: box
     integer                    :: IJK, n, nc
     real(dp)                   :: rr(NDIM)
@@ -282,7 +283,7 @@ contains
 
        if (ST_use_electrode) then
           if (box%cc(IJK, i_lsf) <= 0) then
-             box%cc(IJK, species_itree(n_gas_species+1:n_species)) = 0.0_dp
+             box%cc(IJK, all_densities) = 0.0_dp
           end if
        end if
     end do; CLOSE_DO

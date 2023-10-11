@@ -19,6 +19,7 @@ program streamer
   use m_output
   use m_dielectric
   use m_units_constants
+  use m_model
 
   implicit none
 
@@ -42,6 +43,8 @@ program streamer
   real(dp)                  :: pos_Emax(NDIM), pos_Emax_t0(NDIM)
   real(dp)                  :: breakdown_field_Td, current_output_dt
   real(dp)                  :: time_until_next_pulse
+  real(dp)                  :: field_energy, field_energy_prev
+  real(dp)                  :: tmp, field_energy_prev_time
   logical                   :: step_accepted, start_of_new_pulse
 
   !> The configuration for the simulation
@@ -67,8 +70,8 @@ program streamer
   write(*, '(A,E12.4)') " Estimated breakdown field (Td): ", breakdown_field_Td
 
   ! Specify default methods for all the variables
-  do i = n_gas_species+1, n_species
-     call af_set_cc_methods(tree, species_itree(i), &
+  do i = 1, size(all_densities)
+     call af_set_cc_methods(tree, all_densities(i), &
           bc_species, af_gc_interp_lim, ST_prolongation_method)
   end do
 
@@ -159,6 +162,9 @@ program streamer
   time_last_print  = -1e10_dp
   time_last_output = time
 
+  call field_compute_energy(tree, field_energy_prev)
+  field_energy_prev_time = time
+
   do
      it = it + 1
      if (time >= ST_end_time) exit
@@ -232,8 +238,7 @@ program streamer
      do while (.not. step_accepted)
         call copy_current_state()
 
-        call af_advance(tree, dt, dt_lim, time, &
-             species_itree(n_gas_species+1:n_species), &
+        call af_advance(tree, dt, dt_lim, time, all_densities, &
              time_integrator, forward_euler)
 
         ! Check if dt was small enough for the new state
@@ -259,9 +264,28 @@ program streamer
      ST_global_JdotE = ST_global_JdotE + &
           sum(ST_current_JdotE(1, :)) * dt
 
-     ! Estimate electric current according to Sato's equation V*I = sum(J.E).
-     ! TODO: only consider background electric field when computing sum(J.E)
-     ST_global_current = sum(ST_current_JdotE(1, :)) / current_voltage
+     ! Estimate electric current according to Sato's equation V*I = sum(J.E),
+     ! where J includes both the conduction current and the displacement
+     ! current, see 10.1088/0022-3727/32/5/005.
+     ! The latter is computed through the field energy, which contains
+     ! some noise, so the current is only updated every N iterations.
+     if (mod(it, current_update_per_steps) == 0) then
+        call field_compute_energy(tree, field_energy)
+
+        ! Time derivative of field energy
+        tmp = (field_energy - field_energy_prev)/(time - field_energy_prev_time)
+        field_energy_prev      = field_energy
+        field_energy_prev_time = time
+
+        ! Add J.E term
+        if (abs(current_voltage) > 0.0_dp) then
+           ST_global_JdotE_current = sum(ST_current_JdotE(1, :)) / current_voltage
+           ST_global_displ_current = tmp/current_voltage
+        else
+           ST_global_JdotE_current = 0.0_dp
+           ST_global_displ_current = 0.0_dp
+        end if
+     end if
 
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
@@ -316,8 +340,8 @@ program streamer
 
      if (mod(it, refine_per_steps) == 0) then
         ! Restrict species, for the ghost cells near refinement boundaries
-        call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
-        call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+        call af_restrict_tree(tree, all_densities)
+        call af_gc_tree(tree, all_densities)
 
         if (gas_dynamics) then
            call af_restrict_tree(tree, gas_vars)
@@ -362,6 +386,7 @@ contains
     type(mg_t), intent(inout)  :: mg
     logical, intent(in)        :: restart
 
+    call model_initialize(cfg)
     call user_initialize(cfg, tree)
     call dt_initialize(cfg)
     global_dt = dt_min
@@ -504,7 +529,7 @@ contains
     do KJI_DO(1, nc)
        if (box%cc(IJK, i_lsf) < 0) then
           ! Set all species densities to zero
-          box%cc(IJK, species_itree(n_gas_species+1:n_species)) = 0.0_dp
+          box%cc(IJK, all_densities) = 0.0_dp
 
 #if NDIM == 1
           lsf_nb = [box%cc(i-1, i_lsf), &
@@ -558,8 +583,7 @@ contains
     integer :: n_states
 
     n_states = af_advance_num_steps(time_integrator)
-    call af_tree_copy_ccs(tree, species_itree(n_gas_species+1:n_species), &
-         species_itree(n_gas_species+1:n_species) + n_states)
+    call af_tree_copy_ccs(tree, all_densities, all_densities+n_states)
 
     ! Copy potential
     call af_tree_copy_cc(tree, i_phi, i_phi+1)
@@ -575,8 +599,7 @@ contains
 
     n_states = af_advance_num_steps(time_integrator)
 
-    call af_tree_copy_ccs(tree, species_itree(n_gas_species+1:n_species) + n_states, &
-         species_itree(n_gas_species+1:n_species))
+    call af_tree_copy_ccs(tree, all_densities+n_states, all_densities)
 
     ! Copy potential and compute field again
     call af_tree_copy_cc(tree, i_phi+1, i_phi)

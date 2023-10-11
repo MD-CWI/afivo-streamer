@@ -76,6 +76,7 @@ module m_field
 
   public :: field_bc_homogeneous
   public :: field_from_potential
+  public :: field_compute_energy
 
 contains
 
@@ -570,5 +571,50 @@ contains
             conical_rod_R_o
     end if
   end function conical_rod_top_lsf
+
+  !> Compute total field energy in Joule, defined as the volume integral over
+  !> 1/2 * epsilon * E^2
+  subroutine field_compute_energy(tree, field_energy)
+    type(af_t), intent(in) :: tree
+    real(dp), intent(out)  :: field_energy
+
+    call af_reduction(tree, field_energy_box, reduce_sum, 0.0_dp, field_energy)
+  end subroutine field_compute_energy
+
+  !> Get the electrostatic field energy in a box
+  real(dp) function field_energy_box(box)
+    use m_units_constants
+    type(box_t), intent(in) :: box
+#if NDIM == 2
+    integer                 :: i
+    real(dp), parameter     :: twopi = 2 * acos(-1.0_dp)
+#endif
+    real(dp)                :: w(DTIMES(box%n_cell))
+    integer                 :: nc
+
+    nc = box%n_cell
+
+    if (ST_use_dielectric) then
+       w = 0.5_dp * UC_eps0 * box%cc(DTIMES(1:nc), i_eps) * product(box%dr)
+    else
+       w = 0.5_dp * UC_eps0 * product(box%dr)
+    end if
+
+#if NDIM == 2
+    if (box%coord_t == af_cyl) then
+       ! Weight by 2 * pi * r
+       do i = 1, nc
+          w(i, :) = w(i, :) * twopi * af_cyl_radius_cc(box, i)
+       end do
+    end if
+#endif
+
+    field_energy_box = sum(w * box%cc(DTIMES(1:nc), i_electric_fld)**2)
+  end function field_energy_box
+
+  real(dp) function reduce_sum(a, b)
+    real(dp), intent(in) :: a, b
+    reduce_sum = a + b
+  end function reduce_sum
 
 end module m_field

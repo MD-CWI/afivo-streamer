@@ -122,13 +122,25 @@ contains
     real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
+    real(dp)                  :: dummy_dt(0)
 
     call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, dt_lim, &
          max_wavespeed, get_fluxes, flux_dummy_modify, line_modify, &
          to_primitive, to_conservative, af_limiter_vanleer_t)
-    call flux_update_densities(tree, dt, n_vars, variables, fluxes, &
-         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source, i_lsf)
+    call flux_update_densities(tree, dt, n_vars, variables, n_vars, variables, fluxes, &
+         s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source, 0, dummy_dt, &
+         set_box_mask)
   end subroutine forward_euler
+
+  !> Set a mask to true where the solution should be updated
+  subroutine set_box_mask(box, mask)
+    type(box_t), intent(in) :: box
+    logical, intent(out)    :: mask(DTIMES(box%n_cell))
+    integer                 :: nc
+
+    nc = box%n_cell
+    mask = (box%cc(DTIMES(1:nc), i_lsf) > 0.0_dp)
+  end subroutine set_box_mask
 
   subroutine set_init_conds(box)
     type(box_t), intent(inout) :: box
@@ -234,18 +246,18 @@ contains
     integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv              !< State to compute derivatives from
 
-    real(dp)                :: lsf(0:box%n_cell+2, 1)
+    real(dp)                :: lsf(0:box%n_cell+1)
     integer                 :: i
 
     ! Get level set function along the line of the flux computation
-    call flux_get_line_cc(box, [i_lsf], flux_dim, line_ix, lsf)
+    call flux_get_line_1cc(box, i_lsf, flux_dim, line_ix, lsf)
 
     if (all(lsf > 0)) return    ! no boundary
 
     do i = 0, box%n_cell
-       if (lsf(i, 1) * lsf(i+1, 1) <= 0) then
+       if (lsf(i) * lsf(i+1) <= 0) then
           ! There is an interface
-          if (lsf(i, 1) > 0) then
+          if (lsf(i) > 0) then
              cc_line(i+1, :) = cc_line(i, :)
              cc_line(i+2, :) = cc_line(i-1, :)
              cc_line(i+1, i_mom(flux_dim)) = -cc_line(i, i_mom(flux_dim))
@@ -377,4 +389,4 @@ contains
 
   end function get_lsf
 
-end program compressible_flow_wall
+end program

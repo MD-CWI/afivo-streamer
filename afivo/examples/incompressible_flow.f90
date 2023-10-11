@@ -146,26 +146,30 @@ contains
     real(dp), intent(in)      :: w_prev(n_prev) !< Weights of previous states
     integer, intent(in)       :: s_out
     integer, intent(in)       :: i_step, n_steps
-    real(dp)                  :: tmp
+    real(dp)                  :: dummy_dt(0)
 
     call flux_generic_tree(tree, n_vars, flow_variables, s_deriv, fluxes, dt_lim, &
          max_wavespeed, get_flux_lr, flux_add_diffusion, flux_dummy_line_modify, &
          flux_dummy_conversion, flux_dummy_conversion, af_limiter_vanleer_t)
 
-    call flux_update_densities(tree, dt, n_vars, flow_variables, fluxes, &
-         s_deriv, n_prev, s_prev, w_prev, s_out, source_term)
+    call flux_update_densities(tree, dt, n_vars, flow_variables, n_vars, &
+         flow_variables, fluxes, s_deriv, n_prev, s_prev, w_prev, s_out, &
+         source_term, 0, dummy_dt)
 
     call remove_velocity_divergence(tree, flow_variables+s_out, dt)
 
   end subroutine forward_euler
 
-  subroutine source_term(box, dt, n_vars, i_cc, s_deriv, s_out)
+  subroutine source_term(box, dt, n_vars, i_cc, s_deriv, s_out, n_dt, dt_lim, mask)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: n_vars
     integer, intent(in)        :: i_cc(n_vars)
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
+    integer, intent(in)        :: n_dt
+    real(dp), intent(inout)    :: dt_lim(n_dt)
+    logical, intent(in)        :: mask(DTIMES(box%n_cell))
 
     integer :: nc
     nc = box%n_cell
