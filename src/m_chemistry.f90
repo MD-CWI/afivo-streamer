@@ -381,7 +381,47 @@ contains
     end do
     print *, "-------------------------"
 
+    ! Optionally modify rates
+    call chemistry_modify_rates(cfg)
+
   end subroutine chemistry_initialize
+
+  !> Modify reaction rates for sensitivity analysis
+  subroutine chemistry_modify_rates(cfg)
+    use m_config
+    type(CFG_t), intent(inout) :: cfg
+    integer                    :: n_modified, n, dummy_int(0), ix
+    real(dp)                   :: dummy_real(0)
+    integer, allocatable       :: reaction_ix(:)
+    real(dp), allocatable      :: rate_factors(:)
+
+    call CFG_add(cfg, "input_data%modified_reaction_ix", dummy_int, &
+         "Indices of reactions to be modified", .true.)
+    call CFG_add(cfg, "input_data%modified_rate_factors", dummy_real, &
+         "Reaction rate factors for modified reactions", .true.)
+    call CFG_get_size(cfg, "input_data%modified_reaction_ix", n_modified)
+    call CFG_get_size(cfg, "input_data%modified_rate_factors", n)
+
+    if (n /= n_modified) &
+         error stop "size(modified_reaction_ix) /= size(modified_rate_factors)"
+
+    if (n_modified > 0) then
+       allocate(reaction_ix(n_modified), rate_factors(n_modified))
+       call CFG_get(cfg, "input_data%modified_reaction_ix", reaction_ix)
+       call CFG_get(cfg, "input_data%modified_rate_factors", rate_factors)
+
+       if (minval(rate_factors) < 0) &
+            error stop "Negative value in modified_rate_factors"
+       if (minval(reaction_ix) < 1 .or. maxval(reaction_ix) > n_reactions) &
+            error stop "modified_reaction_ix outside valid range"
+
+       do n = 1, n_modified
+          ix = reaction_ix(n)
+          reactions(ix)%rate_factor = reactions(ix)%rate_factor * rate_factors(n)
+       end do
+    end if
+
+  end subroutine chemistry_modify_rates
 
   !> Write a summary of the reactions (TODO) and the ionization and attachment
   !> coefficients (if working at constant pressure)
