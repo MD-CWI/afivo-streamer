@@ -22,6 +22,16 @@ Documentation is available at http://teunissen.net/afivo_streamer
 
 ## News
 
+* A new version 0.3.0 has been pushed, which contains the following changes:
+
+- Improved flux computation: the code now computes flux along a line, which is automatically generalized to 2D/3D simulations
+- Inclusion of fluid model based on an energy equation (so m_fluid_lfa has been renamed to m_fluid)
+- Cleaning up of unused functionality
+- Improvement of boundary conditions for gas dynamics
+- Improved time step computation
+- The code now avoids tiny negative rates when using cubic spline interpolation of input data
+- And more ...
+
 * The code has been moved to Github due to [these changes at gitlab](https://about.gitlab.com/blog/2022/03/24/efficient-free-tier/)
 
 
