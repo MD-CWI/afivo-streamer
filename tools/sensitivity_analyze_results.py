@@ -4,7 +4,6 @@
 # - Have option to read in chemistry output (species amounts)
 
 import numpy as np
-import matplotlib.pyplot as plt
 import argparse
 import pandas as pd
 
@@ -15,9 +14,9 @@ parser = argparse.ArgumentParser(
 parser.add_argument('logs', type=str, nargs='+',
                     help='Log files')
 parser.add_argument('-y', type=str, nargs='+', default=["sum(n_e)"],
-                    help='y variable of the files to analyse')
+                    help='Variables in the log files to compare')
 parser.add_argument('-time_index', type=int, default=-1,
-                    help='Which time index to consider')
+                    help='Which time index in the log files to consider')
 args = parser.parse_args()
 
 logs = sorted(args.logs)
