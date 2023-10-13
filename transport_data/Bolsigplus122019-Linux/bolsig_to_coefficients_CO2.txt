@@ -40,8 +40,8 @@ CLEARRUNS
 
 RUNSERIES
 1          / Variable: 1=E/N; 2=Mean energy; 3=Maxwellian energy
-1  1000.   / Min Max
-200        / Number
+1  4000.   / Min Max
+400        / Number
 3          / Type: 1=Linear; 2=Quadratic; 3=Exponential
 
 /SAVERESULTS can be called multiple times to write in different formats
