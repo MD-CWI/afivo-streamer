@@ -1,0 +1,52 @@
+e + N2+ -> N + N,c1*(300/Te)**c2,2.8e-07 0.5,cm
+e + N4+ -> N2 + N2,c1*(300/Te)**c2,2.6e-06 0.41,cm
+e + O2+ -> O + O,c1*(300/Te)**c2,2e-07 1.0,cm
+e + O4+ -> O2 + O2,c1*(300/Te)**c2,4.2e-06 0.48,cm
+e + N2H+ -> H + N2,c1,2.4e-07,cm
+e + N2O2+ -> N2 + O2,c1*(300/Te)**c2,1.3e-06 0.5,cm
+e + H2O+ -> neutrals,c1*(300/Te)**c2,4.3e-07 0.7,cm
+e + H3O+ -> neutrals,c1*(300/Te)**c2,8e-07 0.8,cm
+e + H3O+(OH) -> neutrals,c1*(300/Te)**c2,2e-06 0.5,cm
+e + H3O+(H2O) -> H + 2H2O,c1*(300/Te)**c2,2.5e-06 0.5,cm
+e + H3O+(H2O)2 -> H + 3H2O,c1*(300/Te)**c2,4.5e-06 0.5,cm
+e + H3O+(H2O)3 -> H + 4H2O,c1*(300/Te)**c2,6.5e-06 0.5,cm
+e + H3O+(H2O)4 -> H + 5H2O,c1*(300/Te)**c2,8.5e-06 0.5,cm
+e + H3O+(H2O)5 -> H + 6H2O,c1*(300/Te)**c2,1.05e-05 0.5,cm
+e + H3O+(H2O)6 -> H + 7H2O,c1*(300/Te)**c2,1.25e-05 0.5,cm
+e + H3O+(H2O) + H2O -> H + 3H2O,c1*(300/Te)**c2,2.7e-23 2.0,cm
+e + H3O+(H2O)2 + H2O -> H + 4H2O,c1*(300/Te)**c2,2.7e-23 2.0,cm
+e + H3O+(H2O)3 + H2O -> H + 5H2O,c1*(300/Te)**c2,2.7e-23 2.0,cm
+e + H3O+(H2O)4 + H2O -> H + 6H2O,c1*(300/Te)**c2,2.7e-23 2.0,cm
+e + H3O+(H2O)5 + H2O -> H + 7H2O,c1*(300/Te)**c2,2.7e-23 2.0,cm
+e + H3O+(H2O)6 + H2O -> H + 8H2O,c1*(300/Te)**c2,2.7e-23 2.0,cm
+e + O2+(H2O) -> O2 + H2O,c1*(300/Te)**c2,3e-07 0.5,cm
+2e + N2+ -> e + N2,c1*(300/Te)**c2,1e-19 4.5,cm
+2e + O2+ -> e + O2,c1*(300/Te)**c2,1e-19 4.5,cm
+2e + H2O+ -> e + H2O,c1*(300/Te)**c2,1e-19 4.5,cm
+O2- + N2+ + M -> O2 + N2 + M,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + O2+ + M -> O2 + O2 + M,c1*(300/Tg)**c2,2e-25 2.5,cm
+O2- + H2O+ + M -> O2 + H2O + M,c1*(300/Tg)**c2,2e-25 2.5,cm
+N2+ + N2 + M -> N4+ + M,c1,5e-29,cm
+N2+ + O2 -> O2+ + N2,c1,6e-11,cm
+N2+ + H2O -> H2O+ + N2,c1*(300/Tg)**c2,2.3e-09 0.5,cm
+N2+ + H2O -> N2H+ + OH,c1*(300/Tg)**c2,5e-10 0.5,cm
+N4+ + O2 -> O2+ + 2N2,c1,2.5e-10,cm
+N4+ + H2O -> H2O+ + 2N2,c1*(300/Tg)**c2,2.4e-09 0.5,cm
+O2+ + N2 + M -> N2O2+ + M,c1,9e-31,cm
+O2+ + O2 + M -> O4+ + M,c1,2.4e-30,cm
+O2+ + H2O + M -> O2+(H2O) + M,c1*(300/Tg)**c2,2.6e-28 4.0,cm
+O4+ + H2O -> O2+(H2O) + O2,c1,1.7e-09,cm
+N2H+ + H2O -> H3O+ + N2,c1*(300/Tg)**c2,2.6e-09 0.5,cm
+N2O2+ + N2 -> O2+ + 2N2,c1,4.3e-10,cm
+N2O2+ + O2 -> O4+ + N2,c1,1e-09,cm
+H2O+ + O2 -> O2+ + H2O,c1,4.1e-10,cm
+H2O+ + H2O -> H3O+ + OH,c1*(300/Tg)**c2,2.1e-09 0.5,cm
+O2+(H2O) + H2O -> H3O+ + OH + O2,c1,3e-10,cm
+O2+(H2O) + H2O -> H3O+(OH) + O2,c1,1.9e-09,cm
+H3O+(OH) + H2O -> H3O+(H2O) + OH,c1,3e-09,cm
+H3O+ + H2O + M -> H3O+(H2O) + M,c1*(300/Tg)**c2,3.2e-27 4.0,cm
+H3O+(H2O) + H2O + M -> H3O+(H2O)2 + M,c1*(300/Tg)**c2,7.4e-27 7.5,cm
+H3O+(H2O)2 + H2O + M -> H3O+(H2O)3 + M,c1*(300/Tg)**c2,2.5e-27 8.1,cm
+H3O+(H2O)3 + H2O + M -> H3O+(H2O)4 + M,c1*(300/Tg)**c2,3.3e-28 14.0,cm
+H3O+(H2O)4 + H2O + M -> H3O+(H2O)5 + M,c1*(300/Tg)**c2,4e-29 15.3,cm
+H3O+(H2O)5 + H2O + M -> H3O+(H2O)6 + M,c1*(300/Tg)**c2,4.5e-30 16.0,cm

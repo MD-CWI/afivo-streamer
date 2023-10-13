@@ -1,8 +1,8 @@
 LXCat, www.lxcat.net
-Generated on 06 Jan 2023. All rights reserved.
+Generated on 13 Oct 2023. All rights reserved.
 
 RECOMMENDED REFERENCE FORMAT
-- Phelps database, www.lxcat.net, retrieved on January 6, 2023.
+- Phelps database, www.lxcat.net, retrieved on October 13, 2023.
 Be aware that some databases and solvers can additionally have instructions how to reference corresponding data.
 Please check below in the headers of databases.
 

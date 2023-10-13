@@ -2,10 +2,10 @@ BOLSIG+ version: 11/2019
 Collision input data:
 --------------------------------------------------
 N2                                                              
-cross_section_air_phelps.txt
+cross_sections_N2_O2_phelps.txt
 --------------------------------------------------
 O2                                                              
-cross_section_air_phelps.txt
+cross_sections_N2_O2_phelps.txt
  
  
  
