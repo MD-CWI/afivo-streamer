@@ -22,6 +22,13 @@ args = parser.parse_args()
 logs = sorted(args.logs)
 logs_df = [pd.read_csv(f, delim_whitespace=True) for f in args.logs]
 
+log_sizes = np.array([len(df) for df in logs_df])
+max_size, min_size = log_sizes.max(), log_sizes.min()
+
+if max_size > min_size:
+    print(f'Warning: logs have different size, truncating to {min_size} rows')
+    logs_df = [df.head(min_size) for df in logs_df]
+
 all_cases = {}
 
 for log, df in zip(logs, logs_df):
@@ -44,7 +51,7 @@ reaction_ix = [ix for ix in all_cases.keys() if ix != 0]
 
 effect_magnitudes = np.zeros(len(reaction_ix))
 
-print(f'Using data at time t = {times[args.time_index]}')
+print(f'Using data at time t = {times[args.time_index]}\n')
 
 # Here mu indicates the mean derivative, mustar the mean absolute derivative,
 # and sigma the standard deviation in the derivative. All derivatives w.r.t. a
