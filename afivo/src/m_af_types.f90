@@ -249,6 +249,8 @@ module m_af_types
      procedure(af_subr_bc_custom), pointer, nopass :: bc_custom => null()
      !> Function defining the values of this variables
      procedure(af_subr_funcval), pointer, nopass :: funcval => null()
+     !> The type of limiter to use for prolongation
+     integer :: prolong_limiter = -1
   end type af_cc_methods
 
   !> Value indicating the absence of a stencil
@@ -493,13 +495,14 @@ module m_af_types
      end subroutine af_subr_funcval
 
      !> Subroutine for prolongation
-     subroutine af_subr_prolong(box_p, box_c, iv, iv_to, add)
+     subroutine af_subr_prolong(box_p, box_c, iv, iv_to, add, limiter)
        import
        type(box_t), intent(in)     :: box_p !< Parent box
        type(box_t), intent(inout)  :: box_c !< Child box
        integer, intent(in)           :: iv    !< Variable to fill
        integer, intent(in), optional :: iv_to !< Destination variable
        logical, intent(in), optional :: add   !< Add to old values
+       integer, intent(in), optional :: limiter !< What kind of limiter to use
      end subroutine af_subr_prolong
 
      !> Subroutine for restriction
@@ -560,6 +563,9 @@ module m_af_types
      integer  :: n_cycle_down   = 1
      integer  :: n_cycle_up     = 1
      real(dp) :: tolerance      = 1e-6_dp
+
+     !> Minimum number of unknowns to use OpenMP parallelization
+     integer  :: min_unknowns_for_openmp = 10*1000
   end type coarse_solve_t
 
   !> Type to store multigrid options in

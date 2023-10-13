@@ -104,8 +104,8 @@ program implicit_diffusion
      ! Call procedure set_error (see below) for each box in tree, with argument time
      call af_loop_box_arg(tree, set_error, [time])
 
-     ! Write the cell centered data of tree to a vtk unstructured file fname.
-     ! Only the leaves of the tree are used
+     ! Write the cell centered data of tree to a file.
+     ! Only the leaves of the tree are used.
      call af_write_silo(tree, trim(fname), output_cnt, time)
 
      if (time > end_time) exit

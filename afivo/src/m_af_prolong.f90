@@ -118,12 +118,13 @@ contains
   end subroutine af_prolong_copy
 
   !> Zeroth order prolongation
-  subroutine af_prolong_zeroth(box_p, box_c, iv, iv_to, add)
+  subroutine af_prolong_zeroth(box_p, box_c, iv, iv_to, add, limiter)
     type(box_t), intent(in)       :: box_p !< Parent box
     type(box_t), intent(inout)    :: box_c !< Child box
     integer, intent(in)           :: iv    !< Variable to fill
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
+    integer, intent(in), optional :: limiter !< What kind of limiter to use
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
     integer                       :: IJK, IJK_(c), IJK_(f)
     real(dp)                      :: f0
@@ -201,12 +202,13 @@ contains
   !> Prolongation to a child (from parent) using linear interpolation. We use
   !> 2-1-1 interpolation (2D) and 1-1-1-1 interpolation (3D) which do not need
   !> corner ghost cells.
-  subroutine af_prolong_sparse(box_p, box_c, iv, iv_to, add)
+  subroutine af_prolong_sparse(box_p, box_c, iv, iv_to, add, limiter)
     type(box_t), intent(in)      :: box_p !< Parent box
     type(box_t), intent(inout)   :: box_c !< Child box
     integer, intent(in)           :: iv       !< Variable to fill
     integer, intent(in), optional :: iv_to    !< Destination variable
     logical, intent(in), optional :: add      !< Add to old values
+    integer, intent(in), optional :: limiter !< What kind of limiter to use
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
     integer                       :: IJK, IJK_(c), IJK_(f)
     real(dp)                      :: f0, flx, fhx
@@ -233,7 +235,7 @@ contains
        i_c = i + ix_offset(1)
        i_f = 2 * i - 1
 
-       f0 = 0.5_dp * box_p%cc(i_c, iv)
+       f0 = 0.75_dp * box_p%cc(i_c, iv)
        flx = 0.25_dp * box_p%cc(i_c-1, iv)
        fhx = 0.25_dp * box_p%cc(i_c+1, iv)
 
@@ -305,17 +307,18 @@ contains
 #endif
   end subroutine af_prolong_sparse
 
-  !> Conservative prolongation using the gradient from the coarse cells, taking
-  !> the minimum of the slopes and zero if they differ
-  subroutine af_prolong_limit(box_p, box_c, iv, iv_to, add)
-    type(box_t), intent(in)     :: box_p !< Parent box
-    type(box_t), intent(inout)  :: box_c !< Child box
+  !> Conservative prolongation using the limited gradient from the coarse cells
+  subroutine af_prolong_limit(box_p, box_c, iv, iv_to, add, limiter)
+    use m_af_limiters
+    type(box_t), intent(in)       :: box_p   !< Parent box
+    type(box_t), intent(inout)    :: box_c   !< Child box
     integer, intent(in)           :: iv    !< Variable to fill
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
+    integer, intent(in), optional :: limiter !< What kind of limiter to use
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
     integer                       :: IJK, IJK_(c), IJK_(f)
-    real(dp)                      :: f(0:NDIM)
+    real(dp)                      :: f(0:NDIM), slopes_a(NDIM), slopes_b(NDIM)
     logical                       :: add_to
 
     nc        = box_c%n_cell
@@ -324,116 +327,107 @@ contains
     add_to    = .false.; if (present(add)) add_to = add
     ivc       = iv; if (present(iv_to)) ivc = iv_to
 
+    if (.not. present(limiter)) error stop "limiter argument required"
+
     if (.not. add_to) then
        box_c%cc(DTIMES(1:nc), ivc) = 0
     end if
 
+    associate(cc_p => box_p%cc, cc_c => box_c%cc)
 #if NDIM == 1
-    do i = 1, hnc
-       i_c = i + ix_offset(1)
-       i_f = 2 * i - 1
+      do i = 1, hnc
+         i_c = i + ix_offset(1)
+         i_f = 2 * i - 1
 
-       f(0) = box_p%cc(i_c, iv)
-       f(1) = 0.25_dp * limit_slope( &
-            box_p%cc(i_c, iv) - box_p%cc(i_c-1, iv), &
-            box_p%cc(i_c+1, iv) - box_p%cc(i_c, iv))
+         f(0) = cc_p(i_c, iv)
+         slopes_a = [cc_p(i_c, iv) - cc_p(i_c-1, iv)]
+         slopes_b = [cc_p(i_c+1, iv) - cc_p(i_c, iv)]
+         f(1:1) = 0.25_dp * af_limiter_apply(slopes_a, slopes_b, limiter)
 
-       box_c%cc(i_f, ivc) = f(0) - f(1) + box_c%cc(i_f, ivc)
-       box_c%cc(i_f+1, ivc) = f(0) + f(1) + box_c%cc(i_f+1, ivc)
-    end do
+         cc_c(i_f, ivc) = f(0) - f(1) + cc_c(i_f, ivc)
+         cc_c(i_f+1, ivc) = f(0) + f(1) + cc_c(i_f+1, ivc)
+      end do
 #elif NDIM == 2
-    do j = 1, hnc
-       j_c = j + ix_offset(2)
-       j_f = 2 * j - 1
-       do i = 1, hnc
-          i_c = i + ix_offset(1)
-          i_f = 2 * i - 1
+      do j = 1, hnc
+         j_c = j + ix_offset(2)
+         j_f = 2 * j - 1
+         do i = 1, hnc
+            i_c = i + ix_offset(1)
+            i_f = 2 * i - 1
 
-          f(0) = box_p%cc(i_c, j_c, iv)
-          f(1) = 0.25_dp * limit_slope( &
-               box_p%cc(i_c, j_c, iv) - box_p%cc(i_c-1, j_c, iv), &
-               box_p%cc(i_c+1, j_c, iv) - box_p%cc(i_c, j_c, iv))
-          f(2) = 0.25_dp * limit_slope( &
-               box_p%cc(i_c, j_c, iv) - box_p%cc(i_c, j_c-1, iv), &
-               box_p%cc(i_c, j_c+1, iv) - box_p%cc(i_c, j_c, iv))
+            f(0) = cc_p(i_c, j_c, iv)
+            slopes_a = [&
+                 cc_p(i_c, j_c, iv) - cc_p(i_c-1, j_c, iv), &
+                 cc_p(i_c, j_c, iv) - cc_p(i_c, j_c-1, iv)]
+            slopes_b = [&
+                 cc_p(i_c+1, j_c, iv) - cc_p(i_c, j_c, iv), &
+                 cc_p(i_c, j_c+1, iv) - cc_p(i_c, j_c, iv)]
+            f(1:2) = 0.25_dp * af_limiter_apply(slopes_a, slopes_b, limiter)
 
-          box_c%cc(i_f,   j_f,   ivc) = f(0) - f(1) - f(2) &
-               + box_c%cc(i_f,   j_f,   ivc)
-          box_c%cc(i_f+1, j_f,   ivc) = f(0) + f(1) - f(2) &
-               + box_c%cc(i_f+1, j_f,   ivc)
-          box_c%cc(i_f,   j_f+1, ivc) = f(0) - f(1) + f(2) &
-               + box_c%cc(i_f,   j_f+1, ivc)
-          box_c%cc(i_f+1, j_f+1, ivc) = f(0) + f(1) + f(2) &
-               + box_c%cc(i_f+1, j_f+1, ivc)
-       end do
-    end do
+            cc_c(i_f,   j_f,   ivc) = f(0) - f(1) - f(2) &
+                 + cc_c(i_f,   j_f,   ivc)
+            cc_c(i_f+1, j_f,   ivc) = f(0) + f(1) - f(2) &
+                 + cc_c(i_f+1, j_f,   ivc)
+            cc_c(i_f,   j_f+1, ivc) = f(0) - f(1) + f(2) &
+                 + cc_c(i_f,   j_f+1, ivc)
+            cc_c(i_f+1, j_f+1, ivc) = f(0) + f(1) + f(2) &
+                 + cc_c(i_f+1, j_f+1, ivc)
+         end do
+      end do
 #elif NDIM == 3
-    do k = 1, hnc
-       k_c = k + ix_offset(3)
-       k_f = 2 * k - 1
-       do j = 1, hnc
-          j_c = j + ix_offset(2)
-          j_f = 2 * j - 1
-          do i = 1, hnc
-             i_c = i + ix_offset(1)
-             i_f = 2 * i - 1
+      do k = 1, hnc
+         k_c = k + ix_offset(3)
+         k_f = 2 * k - 1
+         do j = 1, hnc
+            j_c = j + ix_offset(2)
+            j_f = 2 * j - 1
+            do i = 1, hnc
+               i_c = i + ix_offset(1)
+               i_f = 2 * i - 1
 
-             f(0) = box_p%cc(i_c, j_c, k_c, iv)
-             f(1) = 0.25_dp * limit_slope( &
-                  box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c-1, j_c, k_c, iv), &
-                  box_p%cc(i_c+1, j_c, k_c, iv) - box_p%cc(i_c, j_c, k_c, iv))
-             f(2) = 0.25_dp * limit_slope( &
-                  box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c, j_c-1, k_c, iv), &
-                  box_p%cc(i_c, j_c+1, k_c, iv) - box_p%cc(i_c, j_c, k_c, iv))
-             f(3) = 0.25_dp * limit_slope( &
-                  box_p%cc(i_c, j_c, k_c, iv) - box_p%cc(i_c, j_c, k_c-1, iv), &
-                  box_p%cc(i_c, j_c, k_c+1, iv) - box_p%cc(i_c, j_c, k_c, iv))
+               f(0) = cc_p(i_c, j_c, k_c, iv)
+               slopes_a = [&
+                    cc_p(i_c, j_c, k_c, iv) - cc_p(i_c-1, j_c, k_c, iv), &
+                    cc_p(i_c, j_c, k_c, iv) - cc_p(i_c, j_c-1, k_c, iv), &
+                    cc_p(i_c, j_c, k_c, iv) - cc_p(i_c, j_c, k_c-1, iv)]
+               slopes_b = [&
+                    cc_p(i_c+1, j_c, k_c, iv) - cc_p(i_c, j_c, k_c, iv), &
+                    cc_p(i_c, j_c+1, k_c, iv) - cc_p(i_c, j_c, k_c, iv), &
+                    cc_p(i_c, j_c, k_c+1, iv) - cc_p(i_c, j_c, k_c, iv)]
+               f(1:3) = 0.25_dp * af_limiter_apply(slopes_a, slopes_b, limiter)
 
-             box_c%cc(i_f,   j_f,   k_f,   ivc) = f(0) - f(1) - &
-                  f(2) - f(3) + box_c%cc(i_f,   j_f,   k_f,   ivc)
-             box_c%cc(i_f+1, j_f,   k_f,   ivc) = f(0) + f(1) - &
-                  f(2) - f(3) + box_c%cc(i_f+1, j_f,   k_f,   ivc)
-             box_c%cc(i_f,   j_f+1, k_f,   ivc) = f(0) - f(1) + &
-                  f(2) - f(3) + box_c%cc(i_f,   j_f+1, k_f,   ivc)
-             box_c%cc(i_f+1, j_f+1, k_f,   ivc) = f(0) + f(1) + &
-                  f(2) - f(3) + box_c%cc(i_f+1, j_f+1, k_f,   ivc)
-             box_c%cc(i_f,   j_f,   k_f+1, ivc) = f(0) - f(1) - &
-                  f(2) + f(3) + box_c%cc(i_f,   j_f,   k_f+1, ivc)
-             box_c%cc(i_f+1, j_f,   k_f+1, ivc) = f(0) + f(1) - &
-                  f(2) + f(3) + box_c%cc(i_f+1, j_f,   k_f+1, ivc)
-             box_c%cc(i_f,   j_f+1, k_f+1, ivc) = f(0) - f(1) + &
-                  f(2) + f(3) + box_c%cc(i_f,   j_f+1, k_f+1, ivc)
-             box_c%cc(i_f+1, j_f+1, k_f+1, ivc) = f(0) + f(1) + &
-                  f(2) + f(3) + box_c%cc(i_f+1, j_f+1, k_f+1, ivc)
-          end do
-       end do
-    end do
+               cc_c(i_f,   j_f,   k_f,   ivc) = f(0) - f(1) - &
+                    f(2) - f(3) + cc_c(i_f,   j_f,   k_f,   ivc)
+               cc_c(i_f+1, j_f,   k_f,   ivc) = f(0) + f(1) - &
+                    f(2) - f(3) + cc_c(i_f+1, j_f,   k_f,   ivc)
+               cc_c(i_f,   j_f+1, k_f,   ivc) = f(0) - f(1) + &
+                    f(2) - f(3) + cc_c(i_f,   j_f+1, k_f,   ivc)
+               cc_c(i_f+1, j_f+1, k_f,   ivc) = f(0) + f(1) + &
+                    f(2) - f(3) + cc_c(i_f+1, j_f+1, k_f,   ivc)
+               cc_c(i_f,   j_f,   k_f+1, ivc) = f(0) - f(1) - &
+                    f(2) + f(3) + cc_c(i_f,   j_f,   k_f+1, ivc)
+               cc_c(i_f+1, j_f,   k_f+1, ivc) = f(0) + f(1) - &
+                    f(2) + f(3) + cc_c(i_f+1, j_f,   k_f+1, ivc)
+               cc_c(i_f,   j_f+1, k_f+1, ivc) = f(0) - f(1) + &
+                    f(2) + f(3) + cc_c(i_f,   j_f+1, k_f+1, ivc)
+               cc_c(i_f+1, j_f+1, k_f+1, ivc) = f(0) + f(1) + &
+                    f(2) + f(3) + cc_c(i_f+1, j_f+1, k_f+1, ivc)
+            end do
+         end do
+      end do
 #endif
-  contains
-
-    ! Take minimum of two slopes if they have the same sign, else take zero
-    elemental function limit_slope(ll, rr) result(slope)
-      real(dp), intent(in) :: ll, rr
-      real(dp)             :: slope
-
-      if (ll * rr < 0) then
-         slope = 0.0_dp
-      else
-         ! MC limiter
-         slope = sign(minval(abs([2 * ll, 2 * rr, 0.5_dp * (ll + rr)])), ll)
-      end if
-    end function limit_slope
-
+    end associate
   end subroutine af_prolong_limit
 
   ! Prolong with a linear (unlimited) slope in the coarse cells, which can
   ! result in negative densities. This procedure is conservative.
-  subroutine af_prolong_linear_cons(box_p, box_c, iv, iv_to, add)
+  subroutine af_prolong_linear_cons(box_p, box_c, iv, iv_to, add, limiter)
     type(box_t), intent(in)     :: box_p !< Parent box
     type(box_t), intent(inout)  :: box_c !< Child box
     integer, intent(in)           :: iv    !< Variable to fill
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
+    integer, intent(in), optional :: limiter !< What kind of limiter to use
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
     integer                       :: IJK, IJK_(c), IJK_(f)
     real(dp)                      :: f(0:NDIM)
@@ -534,12 +528,13 @@ contains
   end subroutine af_prolong_linear_cons
 
   !> Bi/trilinear prolongation to a child (from parent)
-  subroutine af_prolong_linear(box_p, box_c, iv, iv_to, add)
+  subroutine af_prolong_linear(box_p, box_c, iv, iv_to, add, limiter)
     type(box_t), intent(in)     :: box_p !< Parent box
     type(box_t), intent(inout)  :: box_c !< Child box
     integer, intent(in)           :: iv    !< Variable to fill
     integer, intent(in), optional :: iv_to !< Destination variable
     logical, intent(in), optional :: add   !< Add to old values
+    integer, intent(in), optional :: limiter !< What kind of limiter to use
     integer                       :: hnc, nc, ix_offset(NDIM), ivc
     integer                       :: IJK, IJK_(c), IJK_(f)
     logical                       :: add_to

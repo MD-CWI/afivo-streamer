@@ -6,47 +6,55 @@ module m_photoi
   use m_af_all
   use m_streamer
   use m_types
+  use m_chemistry
 
   implicit none
   private
 
-  ! Whether photoionization is enabled
+  !> Whether photoionization is enabled
   logical, protected, public :: photoi_enabled = .false.
 
-  ! Whether photoemission is enabled
+  !> Whether photoemission is enabled
   logical, protected, public :: photoe_enabled = .false.
 
-  ! Whether photoionization is enabled in gas
+  !> Whether photoionization is enabled in gas
   logical, protected, public :: photoi_enabled_ingas = .true.
 
-  ! Which photoionization method to use (helmholtz, montecarlo)
+  !> Which photoionization method to use (helmholtz, montecarlo)
   character(len=20) :: photoi_method = 'helmholtz'
 
-  ! Which photoionization source to use (Zheleznyak, from_species)
+  !> Which photoionization source to use (Zheleznyak, from_species)
   character(len=20) :: photoi_source_type = 'Zheleznyak'
 
-  ! Name of the excited species in case photoi_source_type is 'from_species'
+  !> Which species is ionized by photoionization
+  character(len=20) :: photoi_species = 'O2_plus'
+
+  !> Index of species ionized by photoionization (in list of chemical species)
+  integer, public, protected :: photoi_species_index = -1
+
+  !> Name of the excited species in case photoi_source_type is 'from_species'
   character(len=string_len) :: photoi_excited_species = 'UNDEFINED'
 
-  ! Index of the excited species
+  !> Index of the excited species
   integer :: i_excited_species = -1
 
-  ! Photoionization efficiency factor, typically around 0.05-0.1, not for Helmholtz-Luque should be 1.0
+  !> Photoionization efficiency factor, typically around 0.05-0.1, not for
+  !> Helmholtz-Luque should be 1.0
   real(dp) :: photoi_eta = 0.05_dp
 
-  ! Quenching pressure
-  real(dp) :: photoi_quenching_pressure = 40e-3 ! mbar
+  !> Quenching pressure
+  real(dp) :: photoi_quenching_pressure = 40e-3 ! bar
 
-  ! Decay time in case photoi_source_type is 'from_species'
+  !> Decay time in case photoi_source_type is 'from_species'
   real(dp) :: photoi_photoemission_time = 0.0_dp
 
-  ! Update photoionization every N time step
+  !> Update photoionization every N time step
   integer, protected, public :: photoi_per_steps = 5
 
-  ! Update photoemission every N time step
+  !> Update photoemission every N time step
   integer, protected, public :: photoe_per_steps = 10
 
-  ! Optional variable (when using photoionization)
+  !> Optional variable (when using photoionization)
   integer, public, protected :: i_photo = -1 ! Photoionization rate
 
   public :: photoi_initialize
@@ -79,6 +87,8 @@ contains
          "Which excited species to use when photoi%source_type = from_species")
     call CFG_add_get(cfg, "photoi%photoemission_time", photoi_photoemission_time, &
          "Photoemission time delay in case photoi_source_type is 'from_species'")
+    call CFG_add_get(cfg, "photoi%species", photoi_species, &
+         "Which species is ionized by photoionization")
 
     call CFG_add_get(cfg, "photoe%enabled", photoe_enabled, &
          "Whether photoemission is enabled")
@@ -90,6 +100,12 @@ contains
        if (photoi_eta > 1.0_dp) error stop "photoi%eta > 1.0"
        if (photoi_quenching_pressure <= 0.0_dp) &
             error stop "photoi%quenching_pressure <= 0.0"
+
+       photoi_species_index = species_index(photoi_species)
+       if (photoi_species_index == -1) then
+          print *, "photoi%species not found (", trim(photoi_species), ")"
+          error stop "photoi%species not present"
+       end if
 
        call af_add_cc_variable(tree, "photo", ix=i_photo)
        call af_set_cc_methods(tree, i_photo, photoi_helmh_bc, af_gc_interp)

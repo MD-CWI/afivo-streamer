@@ -5,6 +5,7 @@ module m_chemistry
   use m_af_all
   use m_lookup_table
   use m_table_data
+  use m_model
 
   implicit none
   private
@@ -52,6 +53,9 @@ module m_chemistry
      integer, allocatable  :: ix_out(:)
      integer, allocatable  :: multiplicity_out(:)
   end type tiny_react_t
+
+  !> Reaction with a field-dependent reaction rate
+  integer, parameter :: rate_tabulated_energy = 0
 
   !> Reaction with a field-dependent reaction rate
   integer, parameter :: rate_tabulated_field = 1
@@ -143,8 +147,11 @@ module m_chemistry
   !> A copy of the list of reactions for performance reasons
   type(tiny_react_t)                         :: tiny_react(max_num_reactions)
 
-  !> Lookup table with reaction rates
-  type(LT_t)                                 :: chemtbl
+  !> Lookup table with reaction rates versus field
+  type(LT_t)                                 :: chemtbl_fld
+
+  !> Lookup table with reaction rates versus electron energy
+  type(LT_t)                                 :: chemtbl_ee
 
   !> List with indices of charged species
   integer, allocatable, protected :: charged_species_itree(:)
@@ -176,7 +183,7 @@ contains
     use m_dt
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
-    integer                    :: n, i, i_elec
+    integer                    :: n, i, j, i_elec, rtype
     character(len=string_len)  :: reaction_file
     character(len=comp_len)    :: tmp_name
     logical                    :: read_success
@@ -213,7 +220,7 @@ contains
           reactions(1)%y_data = td_tbl%rows_cols(:, td_alpha) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(1)%x_data * &
                Townsend_to_SI * gas_number_density
-          reactions(1)%description = "e + M > e + e + M+"
+          reactions(1)%description = "e + M -> e + e + M+"
 
           ! Attachment reaction
           reactions(2)%ix_in = [1]
@@ -226,10 +233,16 @@ contains
           reactions(2)%y_data = td_tbl%rows_cols(:, td_eta) * &
                td_tbl%rows_cols(:, td_mobility) * reactions(2)%x_data * &
                Townsend_to_SI * gas_number_density
-          reactions(2)%description = "e + M > M-"
+          reactions(2)%description = "e + M -> M-"
        else
           error stop "Varying gas density not yet supported"
        end if
+    end if
+
+    ! In case of energy equation, add an extra species
+    if (model_has_energy_equation) then
+       n_species = n_species + 1
+       species_list(n_species) = "e_energy"
     end if
 
     ! Convert names to simple ascii
@@ -237,27 +250,6 @@ contains
        tmp_name = species_list(n)
        call to_simple_ascii(trim(tmp_name), species_list(n), &
             species_charge(n))
-    end do
-
-    ! Store reactions of the tabulated field type
-    i = count(reactions(1:n_reactions)%rate_type == rate_tabulated_field)
-    chemtbl = LT_create(table_min_townsend, table_max_townsend, &
-         table_size, i, table_xspacing)
-
-    i = 0
-    do n = 1, n_reactions
-       if (reactions(n)%rate_type == rate_tabulated_field) then
-          i = i + 1
-          reactions(n)%lookup_table_index = i
-          if (td_bulk_scale_reactions) then
-             call table_set_column(chemtbl, i, reactions(n)%x_data, &
-                  reactions(n)%y_data * &
-                  LT_get_col(td_tbl, td_bulk_scaling, reactions(n)%x_data))
-          else
-             call table_set_column(chemtbl, i, reactions(n)%x_data, &
-                  reactions(n)%y_data)
-          end if
-       end if
     end do
 
     ! Also store in more memory-efficient structure
@@ -318,6 +310,57 @@ contains
        end if
     end do
 
+    ! Create lookup tables for tabulated reaction data. First determine number
+    ! of reactions. In case of an energy equation, ionization and attachment
+    ! reactions are converted to use the electron energy instead of the field.
+    i = 0
+    j = count(reactions(1:n_reactions)%rate_type == rate_tabulated_energy)
+    do n = 1, n_reactions
+       if (reactions(n)%rate_type == rate_tabulated_field) then
+          rtype = reactions(n)%reaction_type
+          if (model_has_energy_equation .and. (rtype == ionization_reaction &
+               .or. rtype == attachment_reaction)) then
+             j = j + 1
+          else
+             i = i + 1
+          end if
+       end if
+    end do
+
+    chemtbl_fld = LT_create(td_tbl%x(1), td_tbl%x(td_tbl%n_points), &
+         table_size, i, table_xspacing)
+    chemtbl_ee = LT_create(0.0_dp, td_max_eV, &
+         table_size, j, table_xspacing)
+
+    i = 0
+    j = 0
+    do n = 1, n_reactions
+       if (reactions(n)%rate_type == rate_tabulated_field) then
+          rtype = reactions(n)%reaction_type
+
+          if (model_has_energy_equation .and. (rtype == ionization_reaction &
+               .or. rtype == attachment_reaction)) then
+             reactions(n)%rate_type = rate_tabulated_energy
+             j = j + 1
+             reactions(n)%lookup_table_index = j
+             ! Convert field to energy
+             call table_set_column(chemtbl_ee, j, &
+                  LT_get_col(td_tbl, td_energy_eV, reactions(n)%x_data), &
+                  reactions(n)%y_data)
+          else
+             i = i + 1
+             reactions(n)%lookup_table_index = i
+             call table_set_column(chemtbl_fld, i, reactions(n)%x_data, &
+                  reactions(n)%y_data)
+          end if
+       else if (reactions(n)%rate_type == rate_tabulated_energy) then
+          j = j + 1
+          reactions(n)%lookup_table_index = j
+          call table_set_column(chemtbl_ee, j, reactions(n)%x_data, &
+                  reactions(n)%y_data)
+       end if
+    end do
+
     print *, "--- List of reactions ---"
     do n = 1, n_reactions
        write(*, "(I4,' (',I0,') ',A15,A)") n, reactions(n)%n_species_in, &
@@ -338,7 +381,47 @@ contains
     end do
     print *, "-------------------------"
 
+    ! Optionally modify rates
+    call chemistry_modify_rates(cfg)
+
   end subroutine chemistry_initialize
+
+  !> Modify reaction rates for sensitivity analysis
+  subroutine chemistry_modify_rates(cfg)
+    use m_config
+    type(CFG_t), intent(inout) :: cfg
+    integer                    :: n_modified, n, dummy_int(0), ix
+    real(dp)                   :: dummy_real(0)
+    integer, allocatable       :: reaction_ix(:)
+    real(dp), allocatable      :: rate_factors(:)
+
+    call CFG_add(cfg, "input_data%modified_reaction_ix", dummy_int, &
+         "Indices of reactions to be modified", .true.)
+    call CFG_add(cfg, "input_data%modified_rate_factors", dummy_real, &
+         "Reaction rate factors for modified reactions", .true.)
+    call CFG_get_size(cfg, "input_data%modified_reaction_ix", n_modified)
+    call CFG_get_size(cfg, "input_data%modified_rate_factors", n)
+
+    if (n /= n_modified) &
+         error stop "size(modified_reaction_ix) /= size(modified_rate_factors)"
+
+    if (n_modified > 0) then
+       allocate(reaction_ix(n_modified), rate_factors(n_modified))
+       call CFG_get(cfg, "input_data%modified_reaction_ix", reaction_ix)
+       call CFG_get(cfg, "input_data%modified_rate_factors", rate_factors)
+
+       if (minval(rate_factors) < 0) &
+            error stop "Negative value in modified_rate_factors"
+       if (minval(reaction_ix) < 1 .or. maxval(reaction_ix) > n_reactions) &
+            error stop "modified_reaction_ix outside valid range"
+
+       do n = 1, n_modified
+          ix = reaction_ix(n)
+          reactions(ix)%rate_factor = reactions(ix)%rate_factor * rate_factors(n)
+       end do
+    end if
+
+  end subroutine chemistry_modify_rates
 
   !> Write a summary of the reactions (TODO) and the ionization and attachment
   !> coefficients (if working at constant pressure)
@@ -346,7 +429,7 @@ contains
     use m_gas
     use m_transport_data
     character(len=*), intent(in) :: fname
-    real(dp), allocatable        :: fields(:)
+    real(dp), allocatable        :: fields(:), energies(:)
     real(dp), allocatable        :: rates(:, :)
     real(dp), allocatable        :: eta(:), alpha(:), src(:), loss(:)
     real(dp), allocatable        :: v(:), mu(:), diff(:)
@@ -360,13 +443,20 @@ contains
        if (n_fields < 3) error stop "Not enough data for linear extrapolation"
 
        allocate(fields(n_fields))
-       fields = td_tbl%x
-
+       allocate(energies(n_fields))
        allocate(rates(n_fields, n_reactions))
        allocate(eta(n_fields), alpha(n_fields), src(n_fields), loss(n_fields))
-       call get_rates(fields, rates, n_fields)
 
-       loss(:)   = 0.0_dp
+       fields = td_tbl%x
+
+       if (model_has_energy_equation) then
+          energies = LT_get_col(td_tbl, td_energy_eV, td_tbl%x)
+          call get_rates(fields, rates, n_fields, energies)
+       else
+          call get_rates(fields, rates, n_fields)
+       end if
+
+       loss(:) = 0.0_dp
        src(:) = 0.0_dp
 
        do n = 1, n_reactions
@@ -393,15 +483,11 @@ contains
 
        ! Write to a file
        open(newunit=my_unit, file=trim(fname), action="write")
-       write(my_unit, "(A)") "# Description of columns"
-       write(my_unit, "(A)") "# 1: E/N [Td]"
-       write(my_unit, "(A)") "# 2: E [V/m]"
-       write(my_unit, "(A)") "# 3: Electron mobility [m^2/(V s)]"
-       write(my_unit, "(A)") "# 4: Electron diffusion [m^2/s]"
-       write(my_unit, "(A)") "# 5: Townsend ioniz. coef. alpha [1/m]"
-       write(my_unit, "(A)") "# 6: Townsend attach. coef. eta [1/m]"
-       write(my_unit, "(A)") "# 7: Ionization rate [1/s]"
-       write(my_unit, "(A)") "# 8: Attachment rate [1/s]"
+       write(my_unit, "(A)") &
+            "E/N[Td] E[V/m] Electron_mobility[m^2/(Vs)] &
+            &Electron_diffusion[m^2/s] Townsend_ioniz._coef._alpha[1/m] &
+            &Townsend_attach._coef._eta[1/m] Ionization_rate[1/s] &
+            &Attachment_rate[1/s]"
        do n = 1, n_fields
           write(my_unit, *) fields(n), &
                fields(n) * Townsend_to_SI * gas_number_density, &
@@ -437,15 +523,22 @@ contains
     real(dp), intent(in)  :: min_growth_rate
 
     integer               :: n, n_fields
+    real(dp), allocatable :: energies(:)
     real(dp), allocatable :: fields(:), rates(:, :), src(:), loss(:)
 
     n_fields = td_tbl%n_points
     allocate(fields(n_fields))
-    fields = td_tbl%x
-
+    allocate(energies(n_fields))
     allocate(rates(n_fields, n_reactions))
     allocate(src(n_fields), loss(n_fields))
-    call get_rates(fields, rates, n_fields)
+
+    fields = td_tbl%x
+    if (model_has_energy_equation) then
+       energies = LT_get_col(td_tbl, td_energy_eV, td_tbl%x)
+       call get_rates(fields, rates, n_fields, energies)
+    else
+       call get_rates(fields, rates, n_fields)
+    end if
 
     loss(:) = 0.0_dp
     src(:)  = 0.0_dp
@@ -469,13 +562,14 @@ contains
   !> Compute reaction rates
   !>
   !> @todo These reactions do not take into account a variable gas_temperature
-  subroutine get_rates(fields, rates, n_cells)
+  subroutine get_rates(fields, rates, n_cells, energy_eV)
     use m_units_constants
     use m_gas
     use m_transport_data
     integer, intent(in)   :: n_cells                     !< Number of cells
     real(dp), intent(in)  :: fields(n_cells)             !< The field (in Td) in the cells
     real(dp), intent(out) :: rates(n_cells, n_reactions) !< The reaction rates
+    real(dp), intent(in), optional :: energy_eV(n_cells) !< Electron energy in eV
     integer               :: n, n_coeff
     real(dp)              :: c0, c(rate_max_num_coeff)
     real(dp)              :: Te(n_cells)                 !> Electron Temperature in Kelvin
@@ -497,8 +591,12 @@ contains
        c(1:n_coeff) = reactions(n)%rate_data(1:n_coeff)
 
        select case (reactions(n)%rate_type)
+       case (rate_tabulated_energy)
+          if (.not. present(energy_eV)) error stop "energy_eV required"
+          rates(:, n) = c0 * LT_get_col(chemtbl_ee, &
+               reactions(n)%lookup_table_index, energy_eV)
        case (rate_tabulated_field)
-          rates(:, n) = c0 * LT_get_col(chemtbl, &
+          rates(:, n) = c0 * LT_get_col(chemtbl_fld, &
                reactions(n)%lookup_table_index, fields)
        case (rate_analytic_constant)
           rates(:, n) = c0 * c(1)
@@ -510,6 +608,8 @@ contains
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
        case (rate_analytic_k1)
           if (.not. Te_available) then
+             ! Note that we could use energy_eV if present, but this energy is
+             ! not guaranteed to be well-behaved
              Te = electron_eV_to_K * LT_get_col(td_tbl, td_energy_eV, fields)
           end if
           rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
@@ -542,11 +642,13 @@ contains
        case (rate_analytic_k14)
           rates(:, n) = c0 * c(1) * exp(-(fields / c(2))**c(3))
        case (rate_analytic_k15)
-          ! Note that this reaction depends on Ti, ionic temperature, which according to Galimberti(1979),
-          ! Ti = T_gas + fields/c(3), with c(3) = 0.18 Td/Kelvin, UC_boltzmann_const is in J/Kelvin,
-          ! c(2) is given in Joule in the input file
-          rates(:, n) = c0 * c(1) * exp(-(c(2) / (UC_boltzmann_const * (gas_temperature + fields/c(3))))**c(4))
-      end select
+          ! Note that this reaction depends on Ti, ionic temperature.
+          ! According to Galimberti(1979): Ti = T_gas + fields/c(3),
+          ! with c(3) = 0.18 Td/Kelvin, UC_boltzmann_const is in J/Kelvin, c(2)
+          ! is given in Joule in the input file
+          rates(:, n) = c0 * c(1) * exp(-(c(2) / (UC_boltzmann_const * &
+               (gas_temperature + fields/c(3))))**c(4))
+       end select
     end do
   end subroutine get_rates
 

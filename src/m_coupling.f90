@@ -57,6 +57,7 @@ contains
     type(af_t), intent(inout) :: tree
 
     call af_loop_box(tree, update_gas_density, .true.)
+    call af_gc_tree(tree, [i_gas_dens])
   end subroutine coupling_update_gas_density
 
   subroutine update_gas_density(box)

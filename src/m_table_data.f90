@@ -47,7 +47,7 @@ contains
     call CFG_add_get(cfg, "table_data%min_townsend", table_min_townsend, &
          "Minimal field (in Td) for the rate coeff. lookup table")
     call CFG_add_get(cfg, "table_data%max_townsend", table_max_townsend, &
-         "Maximal field (in Td) for the rate coeff. lookup table")
+         "Maximal field (Td) for lookup tables, < 0 means automatic")
 
     method = "linear"
     call CFG_add_get(cfg, "table_data%input_interpolation", method, &
@@ -95,6 +95,13 @@ contains
        ! Perform cubic spline interpolation
        call spline_set_coeffs(x, y, size(x), spl)
        y_table = spline_evaluate(tbl%x, spl)
+
+       if (minval(y) >= 0.0_dp) then
+          ! If original data is non-negative, ensure interpolated data is also
+          ! non-negative (important for e.g. rate coefficients)
+          y_table = max(0.0_dp, y_table)
+       end if
+
        call LT_set_col_data(tbl, i_col, y_table)
     case default
        error stop "invalid input_interpolation"

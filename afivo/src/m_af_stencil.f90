@@ -6,6 +6,9 @@ module m_af_stencil
   implicit none
   private
 
+  !> Initial size of stencil list
+  integer, parameter :: stencil_list_initial_size = 10
+
   integer, parameter, public :: stencil_constant = 1 !< Constant stencil
   integer, parameter, public :: stencil_variable = 2 !< Variable stencil
   integer, parameter, public :: stencil_sparse   = 3 !< Sparse stencil
@@ -44,8 +47,10 @@ module m_af_stencil
   public :: af_stencil_print_info
   public :: af_stencil_index
   public :: af_stencil_prepare_store
+  public :: af_stencil_remove
   public :: af_stencil_store_box
   public :: af_stencil_check_box
+  public :: af_stencil_allocate_coeff
   public :: af_stencil_store
   public :: af_stencil_apply
   public :: af_stencil_apply_box
@@ -146,8 +151,8 @@ contains
 
     if (ix == af_stencil_none) then
        ! Allocate storage if necessary
-       if (box%n_stencils == 0) then
-          allocate(box%stencils(1))
+       if (.not. allocated(box%stencils)) then
+          allocate(box%stencils(stencil_list_initial_size))
        else if (box%n_stencils == size(box%stencils)) then
           allocate(tmp(2 * box%n_stencils))
           tmp(1:box%n_stencils) = box%stencils
@@ -162,6 +167,80 @@ contains
     end if
   end subroutine af_stencil_prepare_store
 
+  !> Allocate storage for stencil coefficients
+  subroutine af_stencil_allocate_coeff(stencil, nc, use_f, n_sparse)
+    type(stencil_t), intent(inout) :: stencil !< Stencil
+    !> Number of cells per box dimension
+    integer, intent(in)            :: nc
+    !> Whether storage for the extra arrays f and bc_correction is required
+    !> (only for variable stencils)
+    logical, intent(in), optional  :: use_f
+    !> Number of entries for sparse stencil
+    integer, intent(in), optional  :: n_sparse
+    logical                        :: allocate_f
+    integer                        :: n_coeff
+
+    allocate_f = .false.; if (present(use_f)) allocate_f = use_f
+    if (stencil%shape < 1 .or. stencil%shape > num_shapes) &
+         error stop "Unknown stencil shape"
+
+    n_coeff = af_stencil_sizes(stencil%shape)
+
+    select case (stencil%stype)
+    case (stencil_constant)
+       if (.not. allocated(stencil%c)) then
+          allocate(stencil%c(n_coeff))
+       else if (size(stencil%c) /= n_coeff) then
+          deallocate(stencil%c)
+          allocate(stencil%c(n_coeff))
+       end if
+    case (stencil_variable)
+       if (.not. allocated(stencil%v)) then
+          allocate(stencil%v(n_coeff, DTIMES(nc)))
+       else if (size(stencil%v, 1) /= n_coeff) then
+          deallocate(stencil%v)
+          allocate(stencil%v(n_coeff, DTIMES(nc)))
+       end if
+
+       if (allocate_f .and. .not. allocated(stencil%f)) then
+          allocate(stencil%f(DTIMES(nc)))
+          allocate(stencil%bc_correction(DTIMES(nc)))
+       end if
+    case (stencil_sparse)
+       if (.not. present(n_sparse)) error stop "n_sparse required"
+
+       if (.not. allocated(stencil%sparse_v)) then
+          allocate(stencil%sparse_ix(NDIM, n_sparse))
+          allocate(stencil%sparse_v(n_coeff, n_sparse))
+       else if (any(size(stencil%sparse_v) /= [n_coeff, n_sparse])) then
+          deallocate(stencil%sparse_v)
+          deallocate(stencil%sparse_ix)
+          allocate(stencil%sparse_ix(NDIM, n_sparse))
+          allocate(stencil%sparse_v(n_coeff, n_sparse))
+       end if
+    case default
+       error stop "Unknow stencil%stype"
+    end select
+  end subroutine af_stencil_allocate_coeff
+
+  !> Remove a stencil
+  subroutine af_stencil_remove(tree, key)
+    type(af_t), intent(inout)  :: tree
+    integer, intent(in)        :: key !< Stencil key
+    integer                    :: lvl, i, id
+
+    !$omp parallel private(lvl, i, id)
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+          call af_stencil_remove_box(tree%boxes(id), key)
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+  end subroutine af_stencil_remove
+
   !> Store a stencil for a box
   subroutine af_stencil_store_box(box, key, set_stencil)
     type(box_t), intent(inout)   :: box
@@ -173,6 +252,27 @@ contains
     call af_stencil_prepare_store(box, key, ix)
     call set_stencil(box, box%stencils(ix))
   end subroutine af_stencil_store_box
+
+  !> Remove a stencil from a box. This will change the order of other stencils.
+  subroutine af_stencil_remove_box(box, key)
+    type(box_t), intent(inout) :: box
+    integer, intent(in)        :: key !< Stencil key
+    integer                    :: ix
+    type(stencil_t)            :: empty_stencil
+
+    ix = af_stencil_index(box, key)
+    if (ix == af_stencil_none) error stop "Stencil not present"
+
+    ! Ensure there are no gaps in the stencil list
+    if (ix == box%n_stencils) then
+       box%stencils(ix) = empty_stencil
+    else
+       box%stencils(ix) = box%stencils(box%n_stencils)
+       box%stencils(box%n_stencils) = empty_stencil
+    end if
+
+    box%n_stencils       = box%n_stencils - 1
+  end subroutine af_stencil_remove_box
 
   !> Check if a stencil was correctly stored for a box
   subroutine af_stencil_check_box(box, key, ix)

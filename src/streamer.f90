@@ -18,6 +18,8 @@ program streamer
   use m_user_methods
   use m_output
   use m_dielectric
+  use m_units_constants
+  use m_model
 
   implicit none
 
@@ -26,6 +28,7 @@ program streamer
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, coord_type, box_bytes
+  integer                   :: n_steps_rejected
   integer, allocatable      :: ref_links(:, :)
   logical                   :: write_out
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
@@ -35,11 +38,14 @@ program streamer
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
   character(len=string_len) :: restart_from_file = undefined_str
-  real(dp)                  :: max_field, initial_streamer_pos
-  type(af_loc_t)            :: loc_field, loc_field_initial
-  real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+  real(dp)                  :: max_field
+  type(af_loc_t)            :: loc_field, loc_field_t0
+  real(dp)                  :: pos_Emax(NDIM), pos_Emax_t0(NDIM)
   real(dp)                  :: breakdown_field_Td, current_output_dt
-  logical                   :: step_accepted
+  real(dp)                  :: time_until_next_pulse
+  real(dp)                  :: field_energy, field_energy_prev
+  real(dp)                  :: tmp, field_energy_prev_time
+  logical                   :: step_accepted, start_of_new_pulse
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -64,8 +70,8 @@ program streamer
   write(*, '(A,E12.4)') " Estimated breakdown field (Td): ", breakdown_field_Td
 
   ! Specify default methods for all the variables
-  do i = n_gas_species+1, n_species
-     call af_set_cc_methods(tree, species_itree(i), &
+  do i = 1, size(all_densities)
+     call af_set_cc_methods(tree, all_densities(i), &
           bc_species, af_gc_interp_lim, ST_prolongation_method)
   end do
 
@@ -95,7 +101,8 @@ program streamer
   global_time      = time
   photoi_prev_time = time   ! Time of last photoionization computation
   dt               = global_dt
-  initial_streamer_pos = 0.0_dp ! Initial streamer position
+  n_steps_rejected = 0
+  pos_Emax_t0 = 0.0_dp ! Initial streamer position
 
   ! Initialize the tree (which contains all the mesh information)
   if (restart_from_file /= undefined_str) then
@@ -155,6 +162,9 @@ program streamer
   time_last_print  = -1e10_dp
   time_last_output = time
 
+  call field_compute_energy(tree, field_energy_prev)
+  field_energy_prev_time = time
+
   do
      it = it + 1
      if (time >= ST_end_time) exit
@@ -165,15 +175,19 @@ program streamer
 
      ! Initialize starting position of streamer
      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
-        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_initial)
-        loc_field_initial_coord = af_r_loc(tree, loc_field_initial)
+        call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field_t0)
+        pos_Emax_t0 = af_r_loc(tree, loc_field_t0)
      end if
 
      ! Check if streamer length exceeds the defined maximal streamer length
      if (ST_use_end_streamer_length .and. it > ST_initial_streamer_pos_steps_wait) then
         call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
-        loc_field_coord = af_r_loc(tree, loc_field)
-        if (NORM2(loc_field_initial_coord - loc_field_coord) >= ST_end_streamer_length) exit
+        pos_Emax = af_r_loc(tree, loc_field)
+
+        if (norm2(pos_Emax_t0 - pos_Emax) >= ST_end_streamer_length) then
+           print *, "Streamer reached its desired length"
+           exit
+        end if
      end if
 
      ! Update wall clock time
@@ -186,10 +200,15 @@ program streamer
         time_last_print = wc_time
      end if
 
-     if (abs(current_voltage) > 0.0_dp) then
+     time_until_next_pulse = field_pulse_period - modulo(time, field_pulse_period)
+
+     if (abs(current_voltage) > 0.0_dp .or. &
+          time_until_next_pulse < refine_prepulse_time) then
         current_output_dt = output_dt
+        current_electrode_dx = refine_electrode_dx
      else
         current_output_dt = output_dt * output_dt_factor_pulse_off
+        current_electrode_dx = electrode_derefine_factor*refine_electrode_dx
      end if
 
      ! Every output_dt, write output
@@ -197,6 +216,12 @@ program streamer
      if (write_out) then
         ! Ensure that dt is non-negative, even when current_output_dt changes
         dt = max(0.0_dp, time_last_output + current_output_dt - time)
+     end if
+
+     ! Make sure to capture the start of the next pulse
+     start_of_new_pulse = (dt >= time_until_next_pulse)
+     if (start_of_new_pulse) then
+        dt = max(time_until_next_pulse, dt_min)
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
@@ -213,15 +238,16 @@ program streamer
      do while (.not. step_accepted)
         call copy_current_state()
 
-        call af_advance(tree, dt, dt_lim, time, &
-             species_itree(n_gas_species+1:n_species), &
+        call af_advance(tree, dt, dt_lim, time, all_densities, &
              time_integrator, forward_euler)
 
         ! Check if dt was small enough for the new state
         step_accepted = (dt <= dt_lim)
 
         if (.not. step_accepted) then
-           print *, "Step rejected (dt > dt_lim)"
+           n_steps_rejected = n_steps_rejected + 1
+           write (*, "(I0,A,I0,A,2E12.4,A)") it, " Step rejected (#", &
+                n_steps_rejected, ") (dt, dt_lim) = ", dt, dt_lim
            call output_status(tree, time, wc_time, it, dt)
 
            ! Go back to previous state and try with a smaller dt
@@ -237,6 +263,29 @@ program streamer
           sum(ST_current_rates(1:n_reactions, :), dim=2) * dt
      ST_global_JdotE = ST_global_JdotE + &
           sum(ST_current_JdotE(1, :)) * dt
+
+     ! Estimate electric current according to Sato's equation V*I = sum(J.E),
+     ! where J includes both the conduction current and the displacement
+     ! current, see 10.1088/0022-3727/32/5/005.
+     ! The latter is computed through the field energy, which contains
+     ! some noise, so the current is only updated every N iterations.
+     if (mod(it, current_update_per_steps) == 0) then
+        call field_compute_energy(tree, field_energy)
+
+        ! Time derivative of field energy
+        tmp = (field_energy - field_energy_prev)/(time - field_energy_prev_time)
+        field_energy_prev      = field_energy
+        field_energy_prev_time = time
+
+        ! Add J.E term
+        if (abs(current_voltage) > 0.0_dp) then
+           ST_global_JdotE_current = sum(ST_current_JdotE(1, :)) / current_voltage
+           ST_global_displ_current = tmp/current_voltage
+        else
+           ST_global_JdotE_current = 0.0_dp
+           ST_global_displ_current = 0.0_dp
+        end if
+     end if
 
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
@@ -255,7 +304,17 @@ program streamer
      end if
 
      ! dt is modified when writing output, global_dt not
-     dt          = min(2 * global_dt, dt_safety_factor * min(dt_lim, dt_gas_lim))
+     dt = min(dt_max_growth_factor * global_dt, &
+          dt_safety_factor * min(dt_lim, dt_gas_lim))
+
+     if (start_of_new_pulse) then
+        ! Start a new pulse with a small time step
+        dt = dt_min
+        if (associated(user_new_pulse_conditions)) then
+           call af_loop_box(tree, user_new_pulse_conditions)
+        end if
+     end if
+
      global_dt   = dt
      global_time = time
 
@@ -271,14 +330,18 @@ program streamer
         output_cnt       = output_cnt + 1
         time_last_output = global_time
         call output_write(tree, output_cnt, wc_time, write_sim_data)
+        if (ST_use_dielectric .and. surface_output) then
+           call surface_write_output(tree, diel, [i_photon_flux, i_surf_dens], &
+                ["photon_flux", "surf_dens  "], output_name, output_cnt)
+        end if
      end if
 
      if (global_dt < dt_min) error stop "dt too small"
 
      if (mod(it, refine_per_steps) == 0) then
         ! Restrict species, for the ghost cells near refinement boundaries
-        call af_restrict_tree(tree, species_itree(n_gas_species+1:n_species))
-        call af_gc_tree(tree, species_itree(n_gas_species+1:n_species))
+        call af_restrict_tree(tree, all_densities)
+        call af_gc_tree(tree, all_densities)
 
         if (gas_dynamics) then
            call af_restrict_tree(tree, gas_vars)
@@ -299,6 +362,12 @@ program streamer
         if (ref_info%n_add > 0 .or. ref_info%n_rm > 0) then
            ! Compute the field on the new mesh
            call field_compute(tree, mg, 0, time, .true.)
+
+           ! Compute photoionization on new mesh
+           if (photoi_enabled) then
+              call photoi_set_src(tree, time - photoi_prev_time)
+              photoi_prev_time = time
+           end if
         end if
      end if
   end do
@@ -317,6 +386,7 @@ contains
     type(mg_t), intent(inout)  :: mg
     logical, intent(in)        :: restart
 
+    call model_initialize(cfg)
     call user_initialize(cfg, tree)
     call dt_initialize(cfg)
     global_dt = dt_min
@@ -459,7 +529,7 @@ contains
     do KJI_DO(1, nc)
        if (box%cc(IJK, i_lsf) < 0) then
           ! Set all species densities to zero
-          box%cc(IJK, species_itree(n_gas_species+1:n_species)) = 0.0_dp
+          box%cc(IJK, all_densities) = 0.0_dp
 
 #if NDIM == 1
           lsf_nb = [box%cc(i-1, i_lsf), &
@@ -513,8 +583,7 @@ contains
     integer :: n_states
 
     n_states = af_advance_num_steps(time_integrator)
-    call af_tree_copy_ccs(tree, species_itree(n_gas_species+1:n_species), &
-         species_itree(n_gas_species+1:n_species) + n_states)
+    call af_tree_copy_ccs(tree, all_densities, all_densities+n_states)
 
     ! Copy potential
     call af_tree_copy_cc(tree, i_phi, i_phi+1)
@@ -530,8 +599,7 @@ contains
 
     n_states = af_advance_num_steps(time_integrator)
 
-    call af_tree_copy_ccs(tree, species_itree(n_gas_species+1:n_species) + n_states, &
-         species_itree(n_gas_species+1:n_species))
+    call af_tree_copy_ccs(tree, all_densities+n_states, all_densities)
 
     ! Copy potential and compute field again
     call af_tree_copy_cc(tree, i_phi+1, i_phi)

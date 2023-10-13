@@ -333,18 +333,21 @@ contains
 
   !> Set the methods for a cell-centered variable
   subroutine af_set_cc_methods(tree, iv, bc, rb, prolong, restrict, &
-       bc_custom, funcval)
+       bc_custom, funcval, prolong_limiter)
     use m_af_ghostcell, only: af_gc_interp
     use m_af_prolong, only: af_prolong_linear
     use m_af_restrict, only: af_restrict_box
-    type(af_t), intent(inout)              :: tree      !< Tree to operate on
-    integer, intent(in)                    :: iv        !< Index of variable
-    procedure(af_subr_bc), optional        :: bc        !< Boundary condition method
-    procedure(af_subr_rb), optional        :: rb        !< Refinement boundary method
-    procedure(af_subr_prolong), optional   :: prolong   !< Prolongation method
-    procedure(af_subr_restrict), optional  :: restrict  !< Restriction method
-    procedure(af_subr_bc_custom), optional :: bc_custom !< Custom b.c. method
-    procedure(af_subr_funcval), optional   :: funcval   !< Variable defined by function
+    use m_af_limiters
+    type(af_t), intent(inout)              :: tree       !< Tree to operate on
+    integer, intent(in)                    :: iv         !< Index of variable
+    procedure(af_subr_bc), optional        :: bc         !< Boundary condition method
+    procedure(af_subr_rb), optional        :: rb         !< Refinement boundary method
+    procedure(af_subr_prolong), optional   :: prolong    !< Prolongation method
+    procedure(af_subr_restrict), optional  :: restrict   !< Restriction method
+    procedure(af_subr_bc_custom), optional :: bc_custom  !< Custom b.c. method
+    procedure(af_subr_funcval), optional   :: funcval    !< Variable defined by function
+    !< Type of limiter to use for prolongation (of values or ghost cells)
+    integer, intent(in), optional          :: prolong_limiter
     integer                                :: i
 
     if (tree%has_cc_method(iv)) then
@@ -383,6 +386,17 @@ contains
           tree%cc_methods(i)%restrict => restrict
        else
           tree%cc_methods(i)%restrict => af_restrict_box
+       end if
+
+       if (present(prolong_limiter)) then
+          tree%cc_methods(i)%prolong_limiter = prolong_limiter
+       else if (NDIM < 3) then
+          tree%cc_methods(i)%prolong_limiter = af_limiter_mc_t
+       else
+          ! To ensure the interpolation of ghost cells near refinement
+          ! boundaries is non-negative and does not create new maxima in 3D,
+          ! this limiter can be used
+          tree%cc_methods(i)%prolong_limiter = af_limiter_gminmod43_t
        end if
 
        tree%has_cc_method(i) = .true.
@@ -839,7 +853,7 @@ contains
           do n = 1, size(tree%cc_auto_vars)
              iv = tree%cc_auto_vars(n)
              call tree%cc_methods(iv)%prolong(tree%boxes(p_id), &
-                  tree%boxes(id), iv)
+                  tree%boxes(id), iv, limiter=tree%cc_methods(iv)%prolong_limiter)
           end do
           do n = 1, size(tree%cc_func_vars)
              iv = tree%cc_func_vars(n)

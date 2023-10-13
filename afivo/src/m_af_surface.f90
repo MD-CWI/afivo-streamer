@@ -42,6 +42,8 @@ module m_af_surface
      integer :: max_ix = 0
      !> Maximum number of surfaces
      integer :: surface_limit = -1
+     !> Whether there is a 2D cylindrical geometry
+     logical :: cylindrical = .false.
 
      !> List of all the surfaces
      type(surface_t), allocatable :: surfaces(:)
@@ -76,6 +78,7 @@ module m_af_surface
   public :: surface_correct_field_fc
   public :: surface_get_refinement_links
   public :: surface_get_surface_cell
+  public :: surface_write_output
 #if NDIM == 2
   public :: surface_correct_field_cc
 #endif
@@ -102,6 +105,7 @@ contains
     end if
 
     diel%initialized   = .true.
+    diel%cylindrical   = (tree%coord_t == af_cyl)
     diel%i_eps         = i_eps
     nc                 = tree%n_cell
     diel%max_ix        = 0
@@ -286,20 +290,32 @@ contains
   end subroutine surface_copy_variable
 
   !> Compute integral of surface variable
-  subroutine surface_get_integral(diel, i_surf, surf_int)
-    type(surfaces_t), intent(inout) :: diel
-    integer, intent(in)               :: i_surf   !< Surface variables
-    real(dp), intent(out)             :: surf_int !< Surface integral
-    integer                           :: ix
+  subroutine surface_get_integral(tree, diel, i_surf, surf_int)
+    type(af_t), intent(in)       :: tree
+    type(surfaces_t), intent(in) :: diel
+    integer, intent(in)          :: i_surf   !< Surface variables
+    real(dp), intent(out)        :: surf_int !< Surface integral
+    integer                      :: ix
+#if NDIM == 2
+    real(dp), parameter          :: two_pi = 2 * acos(-1.0_dp)
+    real(dp)                     :: coords(NDIM, diel%n_cell**(NDIM-1))
+#endif
 
     surf_int = 0
     do ix = 1, diel%max_ix
        if (diel%surfaces(ix)%in_use) then
 #if NDIM == 2
-          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
-               sum(diel%surfaces(ix)%sd(:, i_surf))
+          if (diel%cylindrical) then
+             ! Multiply surface elements with 2 * pi * r
+             call af_get_face_coords(tree%boxes(diel%surfaces(ix)%id_out), &
+                  diel%surfaces(ix)%direction, coords)
+             surf_int = surf_int + two_pi * diel%surfaces(ix)%dr(1) * &
+                  sum(diel%surfaces(ix)%sd(:, i_surf) * coords(1, :))
+          else
+             surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
+                  sum(diel%surfaces(ix)%sd(:, i_surf))
+          end if
 #elif NDIM == 3
-!FLAG
           surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
                sum(diel%surfaces(ix)%sd(:, :, i_surf))
 #endif
@@ -830,5 +846,76 @@ contains
     dim       = af_neighb_dim(direction)
     ix_cell   = pack(loc%ix, [(i, i=1,NDIM)] /= dim)
   end subroutine surface_get_surface_cell
+
+    !> Write surface quantities to a separate output file
+  subroutine surface_write_output(tree, diel, i_vars, var_names, output_name, &
+       output_cnt)
+    use m_npy
+    type(af_t), intent(inout)    :: tree
+    type(surfaces_t), intent(in) :: diel
+    integer, intent(in)          :: i_vars(:) !< Indices of the variables
+    character(len=*), intent(in) :: var_names(:) !< Names of the variables
+    character(len=*), intent(in) :: output_name !< Base name for output
+    integer, intent(in)          :: output_cnt !< Index of output
+    integer                      :: n, i, ix, nc, n_vars
+    integer                      :: lo(NDIM-1), hi(NDIM-1)
+    character(len=200)           :: tmpname, filename
+
+    real(dp)              :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp), allocatable :: r(:, :), dr(:, :)
+    real(dp), allocatable :: surface_vars(:, :)
+    integer, allocatable  :: surf_dim(:)
+
+    nc = diel%n_cell
+    n = count(diel%surfaces(1:diel%max_ix)%in_use)
+    n_vars = size(i_vars)
+    allocate(r(NDIM, n*nc), surface_vars(n*nc, n_vars))
+    allocate(dr(NDIM-1, n), surf_dim(n))
+
+    write(filename, "(A,I6.6,A)") trim(output_name) // "_", &
+         output_cnt, "_surface.npz"
+    write(tmpname, "(A,I6.6,A)") trim(output_name) // "_", &
+         output_cnt, "_tmp.npy"
+
+    i = 0
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+          i = i + 1
+          lo = (i-1) * nc + 1
+          hi = i * nc
+
+          associate(box => tree%boxes(diel%surfaces(ix)%id_out), &
+               surf => diel%surfaces(ix))
+            call af_get_face_coords(box, surf%direction, coords)
+#if NDIM == 2
+            r(:, lo(1):hi(1)) = coords
+            dr(:, i) = surf%dr
+            surf_dim(i) = af_neighb_dim(surf%direction)
+            surface_vars(lo(1):hi(1), :) = surf%sd(:, i_vars)
+#elif NDIM == 3
+            error stop "not implemented"
+#endif
+          end associate
+       end if
+    end do
+
+    call save_npy(tmpname, [n])
+    call add_to_zip(filename, tmpname, .false., "n_surfaces")
+    call save_npy(tmpname, [nc])
+    call add_to_zip(filename, tmpname, .false., "n_cell")
+    call save_npy(tmpname, r)
+    call add_to_zip(filename, tmpname, .false., "r")
+    call save_npy(tmpname, dr)
+    call add_to_zip(filename, tmpname, .false., "dr")
+    call save_npy(tmpname, surf_dim)
+    call add_to_zip(filename, tmpname, .false., "normal_dim")
+
+    do n = 1, n_vars
+       call save_npy(tmpname, surface_vars(:, n))
+       call add_to_zip(filename, tmpname, .false., trim(var_names(n)))
+    end do
+    print *, "surface_write_output: written " // trim(filename)
+
+  end subroutine surface_write_output
 
 end module m_af_surface

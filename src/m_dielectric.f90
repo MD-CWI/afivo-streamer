@@ -18,6 +18,9 @@ module m_dielectric
   !> To store dielectric surface
   type(surfaces_t), public :: diel
 
+  ! Output surface related information
+  logical, public, protected :: surface_output = .false.
+
   ! Maximum travel distance for testing boundary intersection
   real(dp), protected :: photon_step_length = 1.0e-3_dp
 
@@ -81,23 +84,30 @@ contains
     call CFG_get(cfg, "dielectric%preset_charge_distribution", preset_charge_distribution)
     preset_charge_distribution = preset_charge_distribution * ST_domain_len(NDIM)
 
+    call CFG_add_get(cfg, "dielectric%write", &
+         surface_output, "Output surface related information")
+
   end subroutine dielectric_initialize
 
-  subroutine dielectric_update_surface_charge(box, surface, dt, s_in, s_out)
+  !> Update charge on dielectric surface based on particle fluxes. In case of
+  !> secondary emission, also update the electron density next to the surface.
+  subroutine dielectric_update_surface_charge(box, surface, dt, n_prev, &
+       s_prev, w_prev, s_out)
     use m_units_constants
     use m_streamer
-    type(box_t), intent(inout)          :: box
+    type(box_t), intent(inout)     :: box
     type(surface_t), intent(inout) :: surface
-    real(dp), intent(in)                :: dt    !< Time step
-    integer, intent(in)                 :: s_in  !< Input state
-    integer, intent(in)                 :: s_out !< Output state
+    real(dp), intent(in)           :: dt             !< Time step
+    integer, intent(in)            :: n_prev         !< Number of previous states
+    integer, intent(in)            :: s_prev(n_prev) !< Previous states
+    real(dp), intent(in)           :: w_prev(n_prev) !< Weights of previous states
+    integer, intent(in)            :: s_out          !< Output state
 #if NDIM == 2
-    real(dp)                            :: se_flux(box%n_cell)
-#elif NDIM == 3
-    real(dp)                            :: se_flux(box%n_cell, box%n_cell)
+    integer                        :: i
+    real(dp)                       :: se_flux(box%n_cell)
 #endif
-    integer                             :: nc
-    real(dp)                            :: dr
+    integer                        :: nc
+    real(dp)                       :: dr
 
     nc  = box%n_cell
     dr  = box%dr(af_neighb_dim(surface%direction))
@@ -105,9 +115,11 @@ contains
     select case (surface%direction)
 #if NDIM == 2
     case (af_neighb_lowx)
-       surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) - &
-            dt * matmul(box%fc(1, 1:nc, 1, flux_variables), &
-            flux_species_charge)
+       do i = 1, nc
+          surface%sd(i, i_surf_dens+s_out) = &
+               sum(w_prev * surface%sd(i, i_surf_dens+s_prev)) - &
+               dt * sum(box%fc(1, i, 1, flux_variables) * flux_species_charge)
+       end do
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
           ! Compute secondary emission flux
@@ -118,9 +130,11 @@ contains
                dt * se_flux
        end if
     case (af_neighb_highx)
-       surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) + &
-            dt * matmul(box%fc(nc+1, 1:nc, 1, flux_variables), &
-            flux_species_charge)
+       do i = 1, nc
+          surface%sd(i, i_surf_dens+s_out) = &
+               sum(w_prev * surface%sd(i, i_surf_dens+s_prev)) + &
+               dt * sum(box%fc(nc+1, i, 1, flux_variables) * flux_species_charge)
+       end do
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
           ! Compute secondary emission flux
@@ -131,9 +145,11 @@ contains
                dt * se_flux
        end if
     case (af_neighb_lowy)
-       surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) - &
-            dt * matmul(box%fc(1:nc, 1, 2, flux_variables), &
-            flux_species_charge)
+       do i = 1, nc
+          surface%sd(i, i_surf_dens+s_out) = &
+               sum(w_prev * surface%sd(i, i_surf_dens+s_prev)) - &
+               dt * sum(box%fc(i, 1, 2, flux_variables) * flux_species_charge)
+       end do
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
           ! Compute secondary emission flux
@@ -144,9 +160,11 @@ contains
                dt * se_flux
        end if
     case (af_neighb_highy)
-       surface%sd(:, i_surf_dens+s_out) = surface%sd(:, i_surf_dens+s_in) + &
-            dt * matmul(box%fc(1:nc, nc+1, 2, flux_variables), &
-            flux_species_charge)
+       do i = 1, nc
+          surface%sd(i, i_surf_dens+s_out) = &
+               sum(w_prev * surface%sd(i, i_surf_dens+s_prev)) + &
+               dt * sum(box%fc(i, nc+1, 2, flux_variables) * flux_species_charge)
+       end do
 
        if (size(flux_pos_ion) > 0 .and. gamma_se_ion > 0.0_dp) then
           ! Compute secondary emission flux
@@ -163,13 +181,12 @@ contains
     end select
   end subroutine dielectric_update_surface_charge
 
-  subroutine dielectric_photon_emission(box, surface, dt, s_in, s_out)
+  subroutine dielectric_photon_emission(box, surface, dt, s_out)
     use m_units_constants
     use m_streamer
     type(box_t), intent(inout)          :: box
     type(surface_t), intent(inout) :: surface
     real(dp), intent(in)                :: dt    !< Time step
-    integer, intent(in)                 :: s_in  !< Input state
     integer, intent(in)                 :: s_out !< Output state
     integer                             :: nc
     real(dp)                            :: dr

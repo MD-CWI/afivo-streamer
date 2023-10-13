@@ -14,20 +14,11 @@ module m_output
   ! Name for the output files
   character(len=string_len), public, protected :: output_name = "output/my_sim"
 
-  ! Optional variable (to show ionization source term)
-  integer, public, protected :: i_src = -1 ! Source term
-
   ! If defined, only output these variables
   character(len=af_nlen), allocatable :: output_only(:)
 
   ! Time between writing output
   real(dp), public, protected :: output_dt = 1.0e-10_dp
-
-  ! Include ionization source term in output
-  logical, public, protected :: output_src_term = .false.
-
-  ! If positive: decay rate for source term (1/s) for time-averaged values
-  real(dp), public, protected :: output_src_decay_rate = -1.0_dp
 
   ! Write to a log file for regression testing
   logical, protected :: output_regression_test = .false.
@@ -104,6 +95,9 @@ module m_output
   ! Number of extra variables to add to output
   integer :: n_extra_vars = 0
 
+  ! Maximum refinement level for output
+  integer :: output_max_lvl = 100
+
   ! Names of extra variables to add to output
   character(len=af_nlen) :: output_extra_vars(100)
 
@@ -112,6 +106,9 @@ module m_output
 
   ! Output the conductivity of the plasma
   logical :: output_conductivity = .false.
+
+  ! Output the electron conduction current
+  logical :: output_electron_current = .false.
 
   ! Table with energy in eV vs electric field
   type(LT_t) :: eV_vs_fld
@@ -134,7 +131,6 @@ contains
     character(len=af_nlen)     :: empty_names(0)
     integer                    :: n, i
     character(len=string_len)  :: td_file
-    real(dp)                   :: tmp
     real(dp), allocatable      :: x_data(:), y_data(:)
 
     call CFG_add_get(cfg, "output%name", output_name, &
@@ -148,6 +144,9 @@ contains
     call CFG_add_get(cfg, "output%dt_factor_pulse_off", &
          output_dt_factor_pulse_off, &
          "To reduce output when the voltage is off")
+
+    call CFG_add_get(cfg, "output%max_lvl", output_max_lvl, &
+         "Maximum refinement level for output")
 
     call CFG_add(cfg, "output%only", empty_names, &
          "If defined, only output these variables", .true.)
@@ -165,22 +164,11 @@ contains
 
     call CFG_add_get(cfg, "output%dt", output_dt, &
          "The timestep for writing output (s)")
-    call CFG_add_get(cfg, "output%src_term", output_src_term, &
-         "Include ionization source term in output")
     call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
          "Write to a log file for regression testing")
     call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
-         "Electron density threshold (1/m3, will be scaled by N)")
-
-    if (output_src_term) then
-       call af_add_cc_variable(tree, "src", ix=i_src)
-       call af_set_cc_methods(tree, i_src, af_bc_neumann_zero, af_gc_interp)
-    end if
-
-    tmp = 1/output_src_decay_rate
-    call CFG_add_get(cfg, "output%src_decay_time", tmp, &
-         "If positive: decay time for source term (s) for time-averaged values")
-    output_src_decay_rate = 1/tmp
+         "Electron density threshold for detecting plasma regions &
+         &(1/m3, will be scaled by gas density)")
 
     call CFG_add_get(cfg, "silo_write", silo_write, &
          "Write silo output")
@@ -258,6 +246,9 @@ contains
          "Show the electron energy in eV from the local field approximation")
     call CFG_add_get(cfg, "output%conductivity", output_conductivity, &
          "Output the conductivity of the plasma")
+    call CFG_add_get(cfg, "output%electron_current", output_electron_current, &
+         "Output the electron conduction current (can also be computed in &
+         &Visit as -gradient(phi) * sigma)")
 
     if (output_electron_energy) then
        n_extra_vars = n_extra_vars + 1
@@ -278,11 +269,19 @@ contains
        output_extra_vars(n_extra_vars) = "sigma"
     end if
 
-    call CFG_add(cfg, "output%write_derivatives", empty_names, &
-         "Write derivatives of these species to output", dynamic_size=.true.)
-    call CFG_get_size(cfg, "output%write_derivatives", n)
+    if (output_electron_current) then
+       do i = 1, NDIM
+          n_extra_vars = n_extra_vars + 1
+          write(output_extra_vars(n_extra_vars), "(A,I0)") "Je_", i
+       end do
+    end if
+
+    call CFG_add(cfg, "output%write_source", empty_names, &
+         "Write chemistry source terms of these species to output", &
+         dynamic_size=.true.)
+    call CFG_get_size(cfg, "output%write_source", n)
     allocate(varname(n))
-    call CFG_get(cfg, "output%write_derivatives", varname)
+    call CFG_get(cfg, "output%write_source", varname)
 
     do i = 1, n
        n_extra_vars = n_extra_vars + 1
@@ -312,6 +311,7 @@ contains
     use m_field
     use m_user_methods
     use m_analysis
+    use m_chemistry
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: output_cnt
     real(dp), intent(in)      :: wc_time
@@ -320,7 +320,6 @@ contains
          integer, intent(in) :: my_unit
        end subroutine write_sim_data
     end interface
-    integer                   :: i
     character(len=string_len) :: fname
 
     if (compute_power_density) then
@@ -333,25 +332,24 @@ contains
 
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
-       ! Because the mesh could have changed
-       if (photoi_enabled) call photoi_set_src(tree, global_dt)
        call field_set_rhs(tree, 0)
 
-       do i = 1, tree%n_var_cell
-          if (tree%cc_write_output(i) .and. .not. &
-               associated(tree%cc_methods(i)%funcval)) then
-             call af_restrict_tree(tree, [i])
-             call af_gc_tree(tree, [i])
-          end if
-       end do
+       ! Ensure valid ghost cells for density-based variables
+       call af_restrict_tree(tree, all_densities)
+       call af_gc_tree(tree, all_densities)
+
+       call af_restrict_tree(tree, [i_rhs])
+       call af_gc_tree(tree, [i_rhs])
 
        write(fname, "(A,I6.6)") trim(output_name) // "_", output_cnt
        if (n_extra_vars > 0) then
           call af_write_silo(tree, fname, output_cnt, global_time, &
                add_vars=add_variables, &
-               add_names=output_extra_vars(1:n_extra_vars))
+               add_names=output_extra_vars(1:n_extra_vars), &
+               max_lvl=output_max_lvl)
        else
-          call af_write_silo(tree, fname, output_cnt, global_time)
+          call af_write_silo(tree, fname, output_cnt, global_time, &
+               max_lvl=output_max_lvl)
        end if
     end if
 
@@ -420,10 +418,12 @@ contains
     type(box_t), intent(in) :: box
     integer, intent(in)     :: n_var
     real(dp)                :: new_vars(DTIMES(0:box%n_cell+1), n_var)
-    integer                 :: n, nc, n_cells, i_species
+    integer                 :: n, nc, n_cells, i_species, idim
     character(len=name_len) :: species_name
     real(dp)                :: N_inv(DTIMES(0:box%n_cell+1))
     real(dp)                :: Td(DTIMES(0:box%n_cell+1))
+    real(dp)                :: sigma(DTIMES(1:box%n_cell))
+    real(dp)                :: E_vector(DTIMES(1:box%n_cell), NDIM)
     real(dp)                :: dens((box%n_cell+2)**NDIM, n_species)
     real(dp)                :: rates((box%n_cell+2)**NDIM, n_reactions)
     real(dp)                :: derivs((box%n_cell+2)**NDIM, n_species)
@@ -450,6 +450,19 @@ contains
           ! Add plasma conductivity (e mu n_e)
           new_vars(DTIMES(:), n) = LT_get_col(td_tbl, td_mobility, Td) * &
                N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
+       case ("Je_1")
+          ! Add electron current density  (e mu n_e E_vector)
+          E_vector = get_E_vector(box)
+          sigma = LT_get_col(td_tbl, td_mobility, &
+               Td(DTIMES(1:nc))) * N_inv * box%cc(DTIMES(1:nc), i_electron) * &
+               UC_elem_charge
+          do idim = 1, NDIM
+             new_vars(DTIMES(1:nc), n+idim-1) = sigma * E_vector(DTIMES(:), idim)
+          end do
+       case ("Je_2")
+          continue              ! already set above
+       case ("Je_3")
+          continue              ! already set above
        case default
           ! Assume temporal production of some species is added, prefixed by "src_"
 
@@ -464,6 +477,7 @@ contains
              have_derivs = .true.
           end if
 
+          ! Trim "src_" from the name
           species_name = trim(output_extra_vars(n)(5:))
           i_species = species_index(species_name)
 
@@ -484,6 +498,7 @@ contains
     use m_chemistry
     use m_analysis
     use m_dielectric
+    use m_dt
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
@@ -558,7 +573,7 @@ contains
     end do
 
     if (ST_use_dielectric) then
-       call todo_diel_get_integral(diel, i_surf_dens, tmp)
+       call surface_get_integral(tree, diel, i_surf_dens, tmp)
        sum_elem_charge = sum_elem_charge + tmp
     end if
 
@@ -569,17 +584,22 @@ contains
        open(newunit=my_unit, file=trim(filename), action="write")
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) sum(J.E) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
-            &max(Etip) x wc_time n_cells min(dx) &
+            &sum(charge) sum(J.E) max(E) x max(n_e) x voltage current_J.E &
+            &current_displ ne_zmin ne_zmax &
+            &max(Etip) x wc_time n_cells min(dx) dt_cfl dt_diff dt_drt dt_chem &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
-            &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
-            &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) highest(lvl)"
+            &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) &
+            &voltage current_J.E current_displ &
+            &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) &
+            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
-            &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) highest(lvl)"
+            &current_J.E current_displ &
+            &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) &
+            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
           do i = 1, n_user_vars
@@ -594,18 +614,18 @@ contains
     end if
 
 #if NDIM == 1
-    n_reals = 17
+    n_reals = 19
 #elif NDIM == 2
-    n_reals = 24
+    n_reals = 26
 #elif NDIM == 3
-    n_reals = 23
+    n_reals = 25
 #endif
 
     if (associated(user_log_variables)) then
-       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3,", &
-            n_user_vars, "E20.8)"
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,5E20.8e3,I3,", &
+            n_user_vars, "E20.8e3)"
     else
-       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3)"
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8e3,I12,5E20.8e3,I3)"
     end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -617,28 +637,32 @@ contains
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
+         af_r_loc(tree, loc_elec), current_voltage, ST_global_JdotE_current, &
+         ST_global_displ_current, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
-         af_min_dr(tree),tree%highest_lvl, &
-         var_values(1:n_user_vars)
+         af_min_dr(tree), dt_limits, &
+         tree%highest_lvl, var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
-         current_voltage, ne_zminmax, max_field_tip, r_tip, &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
+         current_voltage, ST_global_JdotE_current, &
+         ST_global_displ_current, ne_zminmax, max_field_tip, r_tip, &
+         wc_time, af_num_cells_used(tree), af_min_dr(tree), &
+         dt_limits, tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
-         af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
+         af_r_loc(tree, loc_elec), current_voltage, ST_global_JdotE_current, &
+         ST_global_displ_current, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
-         af_min_dr(tree),tree%highest_lvl, &
-         var_values(1:n_user_vars)
+         af_min_dr(tree), dt_limits, &
+         tree%highest_lvl, var_values(1:n_user_vars)
 #endif
     close(my_unit)
 
@@ -801,7 +825,7 @@ contains
        close(my_unit)
     end if
 
-    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E20.8)"
+    write(fmt, "(A,I0,A)") "(I0,", 3+3*n_species, "E20.8e3)"
 
     open(newunit=my_unit, file=trim(filename), action="write", &
          position="append")
@@ -838,8 +862,7 @@ contains
 
     ! This line prints the different time step restrictions
     write(*, "(A,4E10.3,A)") "         dt: ", &
-         minval(dt_matrix(1:dt_num_cond, :), dim=2), &
-         " (cfl diff drt chem)"
+         dt_limits, " (cfl drt chem other)"
   end subroutine output_status
 
   subroutine output_fld_maxima(tree, filename)
@@ -940,6 +963,31 @@ contains
     end do; CLOSE_DO
   end subroutine set_power_density_box
 
+  function get_E_vector(box) result(E_vector)
+    type(box_t), intent(in) :: box
+    real(dp)                :: E_vector(DTIMES(1:box%n_cell), NDIM)
+    integer                 :: nc
+
+    nc = box%n_cell
+
+#if NDIM == 1
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1, electric_fld))
+#elif NDIM == 2
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1:nc, 1, electric_fld))
+    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 2, electric_fld) + &
+         box%fc(1:nc, 2:nc+1, 2, electric_fld))
+#elif NDIM == 3
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))
+    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
+         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))
+    E_vector(DTIMES(:), 3) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
+         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))
+#endif
+  end function get_E_vector
+
   subroutine set_gas_primitives_box(box)
     type(box_t), intent(inout) :: box
     integer                    :: IJK, nc, idim
@@ -961,26 +1009,5 @@ contains
 
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
-
-  !> @todo replace this by routine in afivo/src/m_dielectric
-  subroutine todo_diel_get_integral(diel, i_surf, surf_int)
-    type(surfaces_t), intent(inout) :: diel
-    integer, intent(in)               :: i_surf   !< Surface variables
-    real(dp), intent(out)             :: surf_int !< Surface integral
-    integer                           :: ix
-
-    surf_int = 0
-    do ix = 1, diel%max_ix
-       if (diel%surfaces(ix)%in_use) then
-#if NDIM == 2
-          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
-               sum(diel%surfaces(ix)%sd(:, i_surf))
-#elif NDIM == 3
-          surf_int = surf_int + product(diel%surfaces(ix)%dr) * &
-               sum(diel%surfaces(ix)%sd(:, :, i_surf))
-#endif
-       end if
-    end do
-  end subroutine todo_diel_get_integral
 
 end module m_output

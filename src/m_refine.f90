@@ -40,7 +40,18 @@ module m_refine
   real(dp), protected :: refine_init_fac = 0.25_dp
 
   ! Ensure grid spacing around electrode is less than this value
-  real(dp), protected :: refine_electrode_dx = 1e99_dp
+  real(dp), public :: refine_electrode_dx = 1e99_dp
+
+  ! Auxiliary variable used for electrode derefinement
+  ! it will be the same value as above
+  real(dp), public :: current_electrode_dx = 1e99_dp
+
+  ! Multiply the above value by this factor to derefine 
+  ! during interpulse
+  real(dp), public, protected :: electrode_derefine_factor = 1.0
+
+  ! Start refining electrode some time before the start of a new pulse
+  real(dp), public, protected :: refine_prepulse_time = 1.0e-9_dp
 
   ! Minimum electron density for adding grid refinement
   real(dp), protected :: refine_min_dens = -1.0e99_dp
@@ -115,6 +126,12 @@ contains
          "Refine until dx is smaller than this factor times the seed width")
     call CFG_add_get(cfg, "refine_electrode_dx", refine_electrode_dx, &
          "Ensure grid spacing around electrode is less than this value")
+     current_electrode_dx = refine_electrode_dx
+    call CFG_add_get(cfg, "electrode_derefine_factor", &
+          electrode_derefine_factor, &
+         "Multiplication factor to derefine electrode during interpulse")
+    call CFG_add_get(cfg, "refine_prepulse_time", refine_prepulse_time, &
+         "Start refining electrode some time before the start of a new pulse")
     call CFG_add_get(cfg, "refine_min_dens", refine_min_dens, &
          "Minimum electron density for adding grid refinement")
     call CFG_add_get(cfg, "refine_use_alpha_effective", refine_use_alpha_effective, &
@@ -239,7 +256,7 @@ contains
 
        ! Refine around electrode
        if (iand(box%tag, mg_lsf_box) > 0 .and. &
-            max_dx > refine_electrode_dx) then
+            max_dx > current_electrode_dx) then
           cell_flags(IJK) = af_do_ref
        end if
     end do; CLOSE_DO

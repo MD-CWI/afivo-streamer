@@ -10,19 +10,19 @@ module m_dt
   integer, parameter, public :: dt_num_cond = 4
 
   ! Array of time step restrictions per thread
-  real(dp), allocatable, public :: dt_matrix(:, :)
+  real(dp), public :: dt_limits(dt_num_cond)
 
   ! Index of CFL condition
   integer, parameter, public :: dt_ix_cfl = 1
 
-  ! Index of diffusion time step condition
-  integer, parameter, public :: dt_ix_diff = 2
-
   ! Index of dielectric relaxation time step condition
-  integer, parameter, public :: dt_ix_drt = 3
+  integer, parameter, public :: dt_ix_drt = 2
 
   ! Index of reaction rate time step condition
-  integer, parameter, public :: dt_ix_rates = 4
+  integer, parameter, public :: dt_ix_rates = 3
+
+  ! Index of other time step restrictions
+  integer, parameter, public :: dt_ix_other = 4
 
   ! Safety factor for the time step
   real(dp), public, protected :: dt_safety_factor = 0.9_dp
@@ -30,14 +30,17 @@ module m_dt
   !> CFL number to use
   real(dp), public, protected :: dt_cfl_number = undefined_real
 
-  ! Small density for the chemistry time step
-  real(dp), public, protected :: dt_chemistry_nmin = 1e15
+  !> If > 0, a density to control the accuracy of the chemistry time step
+  real(dp), public, protected :: dt_chemistry_nmin = -1.0_dp
 
   ! Maximum allowed time step
   real(dp), public, protected :: dt_max = 1.0e-11_dp
 
   ! Minimum allowed time step
   real(dp), public, protected :: dt_min = 1.0e-14_dp
+
+  !> Maximal relative increase dt for the next iteration
+  real(dp), public, protected :: dt_max_growth_factor = 2.0_dp
 
   !> Which time integrator is used
   integer, public, protected :: time_integrator
@@ -49,9 +52,7 @@ contains
   !> Initialize the time step module
   subroutine dt_initialize(cfg)
     use m_config
-    use omp_lib
     type(CFG_t), intent(inout) :: cfg
-    integer                    :: n_threads
     real(dp)                   :: default_cfl_number = 0.5_dp
     character(len=name_len)    :: integrator
 
@@ -65,8 +66,11 @@ contains
     call CFG_add_get(cfg, "dt_cfl_number", dt_cfl_number, &
          "CFL number to use")
     call CFG_add_get(cfg, "dt_chemistry_nmin", dt_chemistry_nmin, &
-         "Small density for the chemistry time step")
+         "If > 0, a density to control the accuracy of the chemistry time step")
     !> [relevant_parameters]
+
+    call CFG_add_get(cfg, "dt_max_growth_factor", dt_max_growth_factor, &
+         "Maximal relative increase dt for the next iteration")
 
     integrator = "heuns_method"
     call CFG_add_get(cfg, "time_integrator", integrator, &
@@ -86,11 +90,6 @@ contains
 
     ! Set CFL number automatically if not set
     if (dt_cfl_number <= undefined_real) dt_cfl_number = default_cfl_number
-
-    n_threads = af_get_max_threads()
-    ! Prevent cache invalidation issues by enlarging the array
-    allocate(dt_matrix(dt_num_cond+32, n_threads))
-    dt_matrix(:, :) = 0.0_dp
 
   end subroutine dt_initialize
 

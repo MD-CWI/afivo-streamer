@@ -115,8 +115,12 @@ contains
           call af_add_cc_variable(tree, gas_var_names(n), ix=gas_vars(n), &
                n_copies=af_advance_num_steps(time_integrator))
           call af_add_fc_variable(tree, "flux", ix=gas_fluxes(n))
-          ! @todo improve boundary conditions?
-          call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
+
+          if (tree%coord_t == af_cyl .and. n == i_mom(1)) then
+             call af_set_cc_methods(tree, gas_vars(n), bc_radial_momentum)
+          else
+             call af_set_cc_methods(tree, gas_vars(n), af_bc_neumann_zero)
+          end if
        end do
        call af_add_cc_variable(tree, "u", ix=gas_prim_vars(i_mom(1)))
 #if NDIM > 1
@@ -138,6 +142,7 @@ contains
          "The gas pressure (bar)")
     call CFG_add_get(cfg, "gas%temperature", gas_temperature, &
          "The gas temperature (Kelvin)")
+    !> @todo compute gas molecular weight from gas composition
     call CFG_add_get(cfg, "gas%molecular_weight", gas_molecular_weight, &
          "Gas mean molecular weight (kg), for gas dynamics")
     call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
@@ -172,11 +177,13 @@ contains
   end subroutine gas_initialize
 
   !> A forward-Euler method for the Euler equations
-  subroutine gas_forward_euler(tree, dt, dt_lim, time, s_deriv, n_prev, &
+  subroutine gas_forward_euler(tree, dt, dt_stiff, dt_lim, time, s_deriv, n_prev, &
        s_prev, w_prev, s_out, i_step, n_steps)
     use m_af_flux_schemes
+    use m_af_limiters
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
+    real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms (IMEX)
     real(dp), intent(inout)   :: dt_lim         !< Computed time step limit
     real(dp), intent(in)      :: time           !< Current time
     integer, intent(in)       :: s_deriv        !< State to compute derivatives from
@@ -186,32 +193,36 @@ contains
     integer, intent(in)       :: s_out          !< Output state
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
-    real(dp)                  :: wmax(NDIM)
+    real(dp)                  :: dt_dummy(0)
 
-    call flux_generic_tree(tree, n_vars_euler, gas_vars+s_deriv, &
-         gas_fluxes, wmax, max_wavespeed, get_fluxes, &
-         to_primitive, to_conservative)
+    call flux_generic_tree(tree, n_vars_euler, gas_vars, s_deriv, &
+         gas_fluxes, dt_lim, max_wavespeed, get_fluxes, &
+         flux_dummy_modify, flux_dummy_line_modify, to_primitive, &
+         to_conservative, af_limiter_vanleer_t)
     if (tree%coord_t == af_cyl) then
-       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-            s_deriv, n_prev, s_prev, w_prev, s_out, add_geometric_source)
+       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, n_vars_euler, &
+            gas_vars, gas_fluxes, s_deriv, n_prev, s_prev, w_prev, s_out, &
+            add_geometric_source, 0, dt_dummy)
     else
-       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, gas_fluxes, &
-            s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source)
+       call flux_update_densities(tree, dt, n_vars_euler, gas_vars, n_vars_euler, &
+            gas_vars, gas_fluxes, s_deriv, n_prev, s_prev, w_prev, s_out, &
+            flux_dummy_source, 0, dt_dummy)
     end if
-
-    ! Compute new time step
-    dt_lim = 1.0_dp / sum(wmax/af_lvl_dr(tree, tree%highest_lvl))
   end subroutine gas_forward_euler
 
 
   !> Add geometric source term for axisymmetric simulations
-  subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out)
+  subroutine add_geometric_source(box, dt, n_vars, i_cc, s_deriv, s_out, &
+       n_dt, dt_lim, mask)
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt
     integer, intent(in)        :: n_vars
     integer, intent(in)        :: i_cc(n_vars)
     integer, intent(in)        :: s_deriv
     integer, intent(in)        :: s_out
+    logical, intent(in)        :: mask(DTIMES(box%n_cell))
+    integer, intent(in)        :: n_dt
+    real(dp), intent(inout)    :: dt_lim(n_dt)
 
 #if NDIM == 2
     real(dp)                   :: pressure(DTIMES(box%n_cell))
@@ -223,9 +234,11 @@ contains
 
     do i = 1, nc
        inv_radius = 1/af_cyl_radius_cc(box, i)
-       box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) = &
-            box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) + dt * &
-            pressure(i, :) * inv_radius
+       where (mask(i, :))
+          box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) = &
+               box%cc(i, 1:nc, i_cc(i_mom(1))+s_out) + dt * &
+               pressure(i, :) * inv_radius
+       end where
     end do
 #endif
   end subroutine add_geometric_source
@@ -299,7 +312,7 @@ contains
     w = sound_speeds + abs(u(:, i_mom(flux_dim)))
   end subroutine max_wavespeed
 
-  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux, box, line_ix)
+  subroutine get_fluxes(n_values, n_var, flux_dim, u, flux, box, line_ix, s_deriv)
     integer, intent(in)     :: n_values !< Number of cell faces
     integer, intent(in)     :: n_var    !< Number of variables
     integer, intent(in)     :: flux_dim !< In which dimension fluxes are computed
@@ -307,6 +320,7 @@ contains
     real(dp), intent(out)   :: flux(n_values, n_var)
     type(box_t), intent(in) :: box
     integer, intent(in)     :: line_ix(NDIM-1)
+    integer, intent(in)     :: s_deriv        !< State to compute derivatives from
     real(dp)                :: E(n_values), inv_fac
     integer                 :: i
 
@@ -334,5 +348,25 @@ contains
     flux(:, i_e) = u(:, i_mom(flux_dim)) * (E + u(:, i_e))
 
   end subroutine get_fluxes
+
+  !> Boundary condition for a radial momentum flux (in axisymmetric coordinates)
+  subroutine bc_radial_momentum(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (nb == af_neighb_lowx) then
+       ! This will ensure the radial momentum is zero on the axis (by having
+       ! ghost values with opposite sign)
+       bc_type = af_bc_dirichlet
+       bc_val  = 0.0_dp
+    else
+       bc_type = af_bc_neumann
+       bc_val  = 0.0_dp
+    end if
+  end subroutine bc_radial_momentum
 
 end module m_gas

@@ -20,6 +20,8 @@ module m_streamer
   integer, public, protected :: i_electron     = -1
   !> Index of electron density (in species list)
   integer, public, protected :: ix_electron    = -1
+  !> Index of electron energy density
+  integer, public, protected :: i_electron_energy = -1
   !> Index of first positive ion species
   integer, public, protected :: i_1pos_ion     = -1
   !> Index of first positive ion (in species list)
@@ -35,6 +37,9 @@ module m_streamer
   !> Index can be set to include an electrode
   integer, public, protected :: i_lsf          = -1
 
+  !> Index of all densities that evolve in time
+  integer, public, protected, allocatable :: all_densities(:)
+
   !> Include deposited power density in output
   logical, public, protected :: compute_power_density = .false.
   !> Index of deposited power density
@@ -45,14 +50,23 @@ module m_streamer
 
   !> Index of electron flux
   integer, public, protected :: flux_elec    = -1
+  !> Index of electron energy flux
+  integer, public, protected :: flux_energy  = -1
   !> Index of electric field vector
   integer, public, protected :: electric_fld = -1
+
+  !> Number of flux variables
+  integer, public, protected :: flux_num_species = -1
+  !> Number of electron flux variables
+  integer, public, protected :: flux_num_electron_vars = -1
   !> List of all flux variables (face-centered index)
   integer, public, protected, allocatable :: flux_variables(:)
   !> List of all flux species (cell-centered index)
   integer, public, protected, allocatable :: flux_species(:)
   !> List of the charges of the flux species
   integer, public, protected, allocatable :: flux_species_charge(:)
+  !> List of the signs of the charges of the flux species (+- 1)
+  integer, public, protected, allocatable :: flux_species_charge_sign(:)
   !> List of positive ion fluxes (useful for secondary emission)
   integer, public, protected, allocatable :: flux_pos_ion(:)
 
@@ -89,21 +103,10 @@ module m_streamer
 
   integer, public, parameter :: source_factor_none = 0
   integer, public, parameter :: source_factor_flux = 1
-  integer, public, parameter :: source_factor_flux_hmean = 2
-  integer, public, parameter :: source_factor_original_cc = 3
-  integer, public, parameter :: source_factor_original_flux = 4
+  integer, public, parameter :: source_factor_original_flux = 2
 
-  !> Minimal density for including electron sources
-  real(dp), public, protected :: ST_source_min_density = -1e10_dp
-
-  !> Maximal factor for ion mobility to reduce field in cathode sheath
-  real(dp), public, protected :: ST_sheath_max_ion_mobility_factor = 1.0_dp
-
-  !> Threshold field in cathode sheath (V/m)
-  real(dp), public, protected :: ST_sheath_field_threshold = 1e100_dp
-
-  !> Threshold lsf value for cathode sheath (typically m)
-  real(dp), public, protected :: ST_sheath_max_lsf = 0.5e-3_dp
+  !> Minimum number of electrons per cell to include source terms
+  real(dp), public, protected :: ST_source_min_electrons_per_cell = -1e100_dp
 
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
@@ -162,6 +165,15 @@ module m_streamer
   !> Current sum of J.E per thread
   real(dp), public, allocatable :: ST_current_JdotE(:, :)
 
+  !> Per how many iterations the electric current is computed
+  integer, public, protected :: current_update_per_steps = 10
+
+  !> Electric current through electrodes due to J.E
+  real(dp), public :: ST_global_JdotE_current
+
+  !> Electric current through electrodes due to displacement current
+  real(dp), public :: ST_global_displ_current
+
   !> Global sum of J.E
   real(dp), public :: ST_global_JdotE
 
@@ -182,6 +194,8 @@ contains
     use m_units_constants
     use m_gas
     use m_transport_data
+    use m_dt
+    use m_model
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg  !< The configuration for the simulation
     integer, intent(in)        :: ndim !< Number of dimensions
@@ -193,6 +207,7 @@ contains
          [8123, 91234, 12399, 293434]
     integer(int64)             :: rng_int8_seed(2)
     real(dp)                   :: tmp
+    integer                    :: flux_ix
     logical                    :: write_source_factor = .false.
 
     ! Set index of electrons
@@ -215,26 +230,48 @@ contains
          write_binary=.false.)
     call af_add_fc_variable(tree, "field", ix=electric_fld)
 
-    allocate(flux_species(1+transport_data_ions%n_mobile_ions))
-    allocate(flux_species_charge(1+transport_data_ions%n_mobile_ions))
-    allocate(flux_variables(1+transport_data_ions%n_mobile_ions))
-    flux_species(1)        = i_electron
-    flux_species_charge(1) = -1
-    flux_variables(1)      = flux_elec
+    all_densities = species_itree(n_gas_species+1:n_species)
+
+    if (model_has_energy_equation) then
+       i_electron_energy = af_find_cc_variable(tree, "e_energy")
+       call af_add_fc_variable(tree, "flux_energy", ix=flux_energy, &
+            write_binary=.false.)
+       flux_num_electron_vars = 2
+    else
+       flux_num_electron_vars = 1
+    end if
+
+    flux_num_species = flux_num_electron_vars+transport_data_ions%n_mobile_ions
+    allocate(flux_species(flux_num_species))
+    allocate(flux_species_charge(flux_num_species))
+    allocate(flux_species_charge_sign(flux_num_species))
+    allocate(flux_variables(flux_num_species))
+
+    flux_species(1)             = i_electron
+    flux_species_charge(1)      = -1
+    flux_species_charge_sign(1) = -1
+    flux_variables(1)           = flux_elec
+
+    if (model_has_energy_equation) then
+       flux_species(2) = i_electron_energy
+       flux_species_charge(2) = 0
+       flux_species_charge_sign(2) = -1 ! Used to determine upwind direction
+       flux_variables(2) = flux_energy
+    end if
 
     do n = 1, transport_data_ions%n_mobile_ions
-       flux_species(1+n) = af_find_cc_variable(tree, &
+       flux_ix = flux_num_electron_vars + n
+       flux_species(flux_ix) = af_find_cc_variable(tree, &
             trim(transport_data_ions%names(n)))
 
        ! Get index in chemistry list and determine charge
        ix_chemistry = species_index(trim(transport_data_ions%names(n)))
-       flux_species_charge(1+n) = species_charge(ix_chemistry)
+       flux_species_charge(flux_ix) = species_charge(ix_chemistry)
+       flux_species_charge_sign(flux_ix) = sign(1, species_charge(ix_chemistry))
 
        call af_add_fc_variable(tree, trim(transport_data_ions%names(n)), &
-            ix=flux_variables(1+n), write_binary=.false.)
+            ix=flux_variables(flux_ix), write_binary=.false.)
     end do
-
-    if (i_1pos_ion == -1) error stop "No positive ion species (1+) found"
 
     ! Create a list of positive ion fluxes for secondary emission
     n = count(flux_species_charge > 0)
@@ -248,6 +285,7 @@ contains
        end if
     end do
 
+    ! Add one copy so that the old value can be restored
     call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
@@ -341,6 +379,10 @@ contains
          ST_multigrid_max_rel_residual, &
          "Stop multigrid when residual is smaller than this factor times max(|rhs|)")
 
+    call CFG_add_get(cfg, "current_update_per_steps", &
+         current_update_per_steps, &
+         "Per how many iterations the electric current is computed")
+
     prolong_method = "limit"
     call CFG_add_get(cfg, "prolong_density", prolong_method, &
          "Density prolongation method (limit, linear, linear_cons, sparse)")
@@ -361,44 +403,26 @@ contains
 
     call CFG_add_get(cfg, "fixes%drt_max_field", ST_drt_max_field, &
          "Enable flux limiting, but prevent field from exceeding this value")
-    if (ST_drt_max_field < 1e100_dp) ST_drt_limit_flux = .true.
+    if (ST_drt_max_field < 1e100_dp) then
+       error stop "fixes%drt_max_field not yet implemented"
+       ST_drt_limit_flux = .true.
+    end if
 
     call CFG_add_get(cfg, "fixes%source_factor", source_factor, &
          "Use source factor to prevent unphysical effects due to diffusion")
     call CFG_add_get(cfg, "fixes%write_source_factor", write_source_factor, &
          "Whether to write the source factor to the output")
-    call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
-         "Minimal density for including electron sources")
-
-    call CFG_add_get(cfg, "fixes%sheath_max_ion_mobility_factor", &
-         ST_sheath_max_ion_mobility_factor, &
-         "Maximal factor for ion mobility to reduce field in cathode sheath")
-    call CFG_add_get(cfg, "fixes%sheath_field_threshold", &
-         ST_sheath_field_threshold, &
-         "Threshold field in cathode sheath (V/m)")
-    call CFG_add_get(cfg, "fixes%sheath_max_lsf", &
-         ST_sheath_max_lsf, &
-         "Threshold lsf value for cathode sheath (typically m)")
+    call CFG_add_get(cfg, "fixes%source_min_electrons_per_cell", &
+         ST_source_min_electrons_per_cell, &
+         "Minimum number of electrons per cell to include source terms")
 
     select case (source_factor)
     case ("none")
        ST_source_factor = source_factor_none
     case ("flux")
        ST_source_factor = source_factor_flux
-    case ("flux_hmean")
-       ST_source_factor = source_factor_flux_hmean
-    case ("original_cc")
-       ST_source_factor = source_factor_original_cc
-    case ("original_flux")
-       ST_source_factor = source_factor_original_flux
-       if (.not. write_source_factor) then
-          print *, "source factor scheme original_flux requires ", &
-               "fixes%write_source_factor = T"
-          error stop
-       end if
     case default
-       print *, "Options fixes%source_factor: none, flux, flux_hmean, ", &
-            "original_cc, original_flux"
+       print *, "Options fixes%source_factor: none, flux"
        error stop "Unknown fixes%source_factor"
     end select
 

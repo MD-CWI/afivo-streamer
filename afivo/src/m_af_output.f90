@@ -899,8 +899,10 @@ contains
   end subroutine af_write_numpy
 
 #if NDIM == 1
+  !> Note: a 1D version is present below, and seems to work, but its output
+  !> cannot be visualized by Visit. That's why we use curve output for 1D cases.
   subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, &
-       add_vars, add_names)
+       add_vars, add_names, max_lvl)
     use m_write_silo
     use m_mrgrnk
 
@@ -911,14 +913,20 @@ contains
     integer, intent(in), optional          :: ixs_cc(:)    !< Only include these cell variables
     procedure(subr_add_vars), optional     :: add_vars     !< Optional routine to add extra variables
     character(len=*), intent(in), optional :: add_names(:) !< Names of extra variables
+    !> Maximum refinement level for output
+    integer, intent(in), optional          :: max_lvl
     integer                                :: n, i, id, ix, lvl, n_boxes
     integer                                :: dbix, n_cc, n_leaves, nc
+    integer                                :: highest_lvl
     integer, allocatable                   :: icc_val(:), id_leaves(:)
     integer, allocatable                   :: id_sorted_ix(:)
     real(dp), allocatable                  :: xmin_leaves(:)
     real(dp), allocatable                  :: xdata(:), ydata(:, :)
     character(len=af_nlen)                 :: yname
     character(len=400)                     :: fname
+
+    highest_lvl = tree%highest_lvl
+    if (present(max_lvl)) highest_lvl = min(max_lvl, tree%highest_lvl)
 
     if (present(ixs_cc)) then
        if (maxval(ixs_cc) > tree%n_var_cell .or. &
@@ -933,8 +941,18 @@ contains
          error stop "add_vars / add_names not implemented in 1D"
 
     n_cc     = size(icc_val)
-    n_leaves = af_num_leaves_used(tree)
     nc       = tree%n_cell
+
+    ! Count number of leaves
+    n = 0
+    do lvl = 1, highest_lvl
+       if (lvl < highest_lvl) then
+          n = n + size(tree%lvls(lvl)%leaves)
+       else
+          n = n + size(tree%lvls(lvl)%ids)
+       end if
+    end do
+    n_leaves = n
 
     allocate(ydata(n_leaves * nc, n_cc))
     allocate(xdata(n_leaves * nc))
@@ -944,9 +962,14 @@ contains
 
     ! Store ids of all leaves
     n = 0
-    do lvl = 1, tree%highest_lvl
-       n_boxes = size(tree%lvls(lvl)%leaves)
-       id_leaves(n+1:n+n_boxes) = tree%lvls(lvl)%leaves
+    do lvl = 1, highest_lvl
+       if (lvl < highest_lvl) then
+          n_boxes = size(tree%lvls(lvl)%leaves)
+          id_leaves(n+1:n+n_boxes) = tree%lvls(lvl)%leaves
+       else
+          n_boxes = size(tree%lvls(lvl)%ids)
+          id_leaves(n+1:n+n_boxes) = tree%lvls(lvl)%ids
+       end if
        n = n + n_boxes
     end do
 
@@ -980,11 +1003,8 @@ contains
 #else
   !> Write the cell centered data of a tree to a Silo file. Only the
   !> leaves of the tree are used
-  !>
-  !> Note: a 1D version is present below, and seems to work, but its output
-  !> cannot be visualized by Visit. That's why we use curve output for 1D cases.
   subroutine af_write_silo(tree, filename, n_cycle, time, ixs_cc, &
-       add_vars, add_names, add_curve_names, add_curve_dat)
+       add_vars, add_names, add_curve_names, add_curve_dat, max_lvl)
     use m_write_silo
 
     type(af_t), intent(in)       :: tree        !< Tree to write out
@@ -995,6 +1015,9 @@ contains
     procedure(subr_add_vars), optional :: add_vars !< Optional routine to add extra variables
     character(len=*), intent(in), optional :: add_names(:), add_curve_names(:) !< Names of extra variables or curves
     real(dp), intent(in), optional  :: add_curve_dat(:, :, :) !< Data for additional curves (#curves, x/y-dimensions, #points)
+    !> Maximum refinement level for output. Note that the user has to ensure the
+    !> coarse grid data is up to date
+    integer, intent(in), optional   :: max_lvl
 
     character(len=*), parameter     :: grid_name = "gg", block_prefix = "blk_"
     character(len=*), parameter     :: amr_name  = "mesh", meshdir = "data"
@@ -1002,7 +1025,7 @@ contains
     character(len=100), allocatable :: var_list(:, :), var_names(:)
     character(len=400)              :: fname
     integer                         :: lvl, i, id, i_grid, iv, nc, n_grids_max
-    integer                         :: n_cc, n_add, dbix
+    integer                         :: n_cc, n_add, dbix, highest_lvl
     integer                         :: nx, nx_prev, ix
     integer                         :: n_cycle_val, ncurve, ncurve_add
     integer                         :: lo(NDIM), hi(NDIM), vlo(NDIM), vhi(NDIM)
@@ -1045,6 +1068,9 @@ contains
        call get_output_vars(tree, icc_val)
     end if
 
+    highest_lvl = tree%highest_lvl
+    if (present(max_lvl)) highest_lvl = min(max_lvl, tree%highest_lvl)
+
     n_cc = size(icc_val)
 
     allocate(var_names(n_cc+n_add))
@@ -1056,8 +1082,12 @@ contains
 
     nc = tree%n_cell
     n_grids_max = 0
-    do lvl = 1, tree%highest_lvl
-       n_grids_max = n_grids_max + size(tree%lvls(lvl)%leaves)
+    do lvl = 1, highest_lvl
+       if (lvl < highest_lvl) then
+          n_grids_max = n_grids_max + size(tree%lvls(lvl)%leaves)
+       else
+          n_grids_max = n_grids_max + size(tree%lvls(lvl)%ids)
+       end if
     end do
 
     allocate(grid_list(n_grids_max))
@@ -1084,10 +1114,14 @@ contains
 
     i_grid = 0
 
-    do lvl = 1, tree%highest_lvl
-       do i = 1, size(tree%lvls(lvl)%leaves)
-          id = tree%lvls(lvl)%leaves(i)
+    do lvl = 1, highest_lvl
+       do i = 1, size(tree%lvls(lvl)%ids)
+          id = tree%lvls(lvl)%ids(i)
+
           if (box_done(id)) cycle
+
+          ! Skip non-leaf boxes except for at the highest level
+          if (lvl < highest_lvl .and. af_has_children(tree%boxes(id))) cycle
 
           i_grid = i_grid + 1
 

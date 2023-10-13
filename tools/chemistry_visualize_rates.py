@@ -36,6 +36,11 @@ tmp = np.loadtxt(base_name + '_rates.txt')
 time = tmp[:, 0]
 rates = tmp[:, 1:]
 
+# Load amounts of species in the total simulation volume
+amounts = np.loadtxt(base_name + '_amounts.txt')
+# Drop time column
+amounts = amounts[:, 1:]
+
 if args.time_interval is not None:
     # Only consider chemistry within the given interval
     t1_idx = np.where(time >= args.time_interval[0])[0][0]
@@ -96,6 +101,7 @@ for soi in args.soi:
     net_prod = np.dot(rates, stoich_matrix[sidx])
     ax[2].plot(time, gross_prod, label='gross production')
     ax[2].plot(time, net_prod, label='net production')
+    ax[2].plot(time, amounts[:, sidx], '--', label='amount present')
     ax[2].set_xlabel('Time (s)')
     ax[2].set_ylabel('Production (#)')
     ax[2].legend()

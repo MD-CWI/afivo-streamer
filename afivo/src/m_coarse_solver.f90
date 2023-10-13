@@ -60,6 +60,7 @@ module m_coarse_solver
   public :: coarse_solver_set_rhs_phi
   public :: coarse_solver_get_phi
   public :: coarse_solver
+  public :: coarse_solver_update_matrix
 
   ! Could be moved to another module at some point
   public :: mg_lsf_boundary_value
@@ -70,20 +71,11 @@ contains
   subroutine coarse_solver_initialize(tree, mg)
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg
-    integer                   :: n, n_boxes, nc, id, IJK
-    integer                   :: cnt, stencil_size, ierr
-    integer                   :: nx(NDIM), ilo(NDIM), ihi(NDIM)
-    real(dp), allocatable     :: coeffs(:, :)
-    real(dp)                  :: full_coeffs(2*NDIM+1, DTIMES(tree%n_cell))
-    integer, allocatable      :: stencil_ix(:)
-    integer, parameter        :: zero_to_n(max_stencil_size) = [(i, i=0, max_stencil_size-1)]
+    integer                   :: nx(NDIM)
+
+    nx = tree%coarse_grid_size(1:NDIM)
 
     if (.not. tree%ready) error stop "coarse_solver_initialize: tree not ready"
-
-    nc                   = tree%n_cell
-    nx                   = tree%coarse_grid_size(1:NDIM)
-    n_boxes              = size(tree%lvls(1)%ids)
-
     if (any(nx == -1)) &
          error stop "coarse_solver_initialize: coarse_grid_size not set"
 
@@ -91,6 +83,35 @@ contains
     call hypre_create_grid(mg%csolver%grid, nx, tree%periodic)
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%phi)
     call hypre_create_vector(mg%csolver%grid, nx, mg%csolver%rhs)
+    call hypre_set_matrix(tree, mg)
+
+    if (mg%csolver%solver_type <= 0) then
+       if (NDIM == 1) then
+          ! PFMG cannot be used in 1D
+          mg%csolver%solver_type = coarse_solver_hypre_pcg
+       else
+          mg%csolver%solver_type = coarse_solver_hypre_pfmg
+       end if
+    end if
+
+    call hypre_prepare_solve(mg%csolver)
+
+  end subroutine coarse_solver_initialize
+
+  !> Set matrix type and store coefficients
+  subroutine hypre_set_matrix(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(inout) :: mg
+    integer                   :: n, n_boxes, nc, id, IJK
+    integer                   :: cnt, stencil_size, ierr
+    integer                   :: ilo(NDIM), ihi(NDIM)
+    real(dp), allocatable     :: coeffs(:, :)
+    real(dp)                  :: full_coeffs(2*NDIM+1, DTIMES(tree%n_cell))
+    integer, allocatable      :: stencil_ix(:)
+    integer, parameter        :: zero_to_n(max_stencil_size) = [(i, i=0, max_stencil_size-1)]
+
+    nc      = tree%n_cell
+    n_boxes = size(tree%lvls(1)%ids)
 
     if (tree%coord_t == af_cyl .or. mg%i_lsf /= -1) then
        ! The symmetry option does not seem to work well with axisymmetric
@@ -125,8 +146,12 @@ contains
     call hypre_create_matrix(mg%csolver%matrix, mg%csolver%grid, &
          stencil_size, stencil_offsets(:, stencil_ix), mg%csolver%symmetric)
 
-    allocate(mg%csolver%bc_to_rhs(nc**(NDIM-1), af_num_neighbors, n_boxes))
-    allocate(mg%csolver%lsf_fac(DTIMES(nc), n_boxes))
+    if (.not. allocated(mg%csolver%bc_to_rhs)) then
+       allocate(mg%csolver%bc_to_rhs(nc**(NDIM-1), af_num_neighbors, n_boxes))
+    end if
+    if (.not. allocated(mg%csolver%lsf_fac)) then
+       allocate(mg%csolver%lsf_fac(DTIMES(nc), n_boxes))
+    end if
     allocate(coeffs(stencil_size, tree%n_cell**NDIM))
 
     mg%csolver%bc_to_rhs = 0.0_dp
@@ -164,19 +189,20 @@ contains
 
     call HYPRE_StructMatrixAssemble(mg%csolver%matrix, ierr)
 
-    if (mg%csolver%solver_type <= 0) then
-       if (NDIM == 1) then
-          ! PFMG cannot be used in 1D
-          mg%csolver%solver_type = coarse_solver_hypre_pcg
-       else
-          mg%csolver%solver_type = coarse_solver_hypre_pfmg
-       end if
-    end if
+  end subroutine hypre_set_matrix
 
+  !> Update matrix coefficients
+  subroutine coarse_solver_update_matrix(tree, mg)
+    type(af_t), intent(inout) :: tree
+    type(mg_t), intent(inout) :: mg
+    integer                   :: ierr
+
+    call HYPRE_StructMatrixDestroy(mg%csolver%matrix, ierr)
+    call hypre_set_matrix(tree, mg)
     call hypre_prepare_solve(mg%csolver)
+  end subroutine coarse_solver_update_matrix
 
-  end subroutine coarse_solver_initialize
-
+  !> De-allocate storage for all coarse solver components
   subroutine coarse_solver_destroy(cs)
     type(coarse_solve_t), intent(inout) :: cs
     integer                             :: ierr
@@ -185,6 +211,14 @@ contains
     call HYPRE_StructMatrixDestroy(cs%matrix, ierr)
     call HYPRE_StructVectorDestroy(cs%rhs, ierr)
     call HYPRE_StructVectorDestroy(cs%phi, ierr)
+
+    call hypre_destroy_solver(cs)
+  end subroutine coarse_solver_destroy
+
+  !> De-allocate storage for solver
+  subroutine hypre_destroy_solver(cs)
+    type(coarse_solve_t), intent(inout) :: cs
+    integer                             :: ierr
 
     select case (cs%solver_type)
     case (coarse_solver_hypre_pcg)
@@ -196,7 +230,7 @@ contains
     case default
        error stop "hypre_solver_destroy: unknown solver type"
     end select
-  end subroutine coarse_solver_destroy
+  end subroutine hypre_destroy_solver
 
   subroutine hypre_create_grid(grid, nx, periodic)
     type(c_ptr), intent(out) :: grid
@@ -381,17 +415,21 @@ contains
   end subroutine hypre_prepare_solve
 
   ! Solve the system A x = b
-  subroutine coarse_solver(cs)
+  subroutine coarse_solver(cs, num_iterations)
     type(coarse_solve_t), intent(in) :: cs
+    integer, intent(out)             :: num_iterations
     integer                          :: ierr
 
     select case (cs%solver_type)
     case (coarse_solver_hypre_pcg)
        call HYPRE_StructPCGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+       call HYPRE_StructPCGGetNumIterations(cs%solver, num_iterations, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+       call HYPRE_StructSMGGetNumIterations(cs%solver, num_iterations, ierr)
     case (coarse_solver_hypre_pfmg)
        call HYPRE_StructPFMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+       call HYPRE_StructPFMGGetNumIteration(cs%solver, num_iterations, ierr)
     case default
        error stop "coarse_solver: unknown solver type"
     end select
