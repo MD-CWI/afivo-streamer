@@ -45,8 +45,8 @@ N(4S) + NO -> N2 + O(3P),c1*exp(-c2/Tg),3.51e-11 49.84,cm
 N(4S) + N(4S) + N2 -> N2 + N2,c1*exp(-c2/Tg),1.38e-33 502.9,cm
 N(4S) + NO2 -> NO + NO,c1,2.3e-12,cm
 N(4S) + NO2 -> O(3P) + N2O,c1*exp(-c2/Tg),5.8e-12 220.0,cm
-N(4S) + O2 -> NO + O(P),c1*(Tg/300)**c2*exp(-c3/Tg),4.47e-12 1.0 3270.2,cm
-O2(a) + N(S) -> O(3P) + NO,c1,2e-14,cm
+N(4S) + O2 -> NO + O(3P),c1*(Tg/300)**c2*exp(-c3/Tg),4.47e-12 1.0 3270.2,cm
+O2(a) + N(4S) -> O(3P) + NO,c1,2e-14,cm
 O2(a) + O(3P) -> O(3P) + O2,c1,7e-16,cm
 O2(a) + O2 -> O2 + O2,c1*(Tg/c2)**c3,2.2e-18 300.0 0.8,cm
 O2(a) + N2 -> O2 + N2,c1,1.4e-19,cm
