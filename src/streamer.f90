@@ -25,6 +25,7 @@ program streamer
 
   integer, parameter        :: int8       = selected_int_kind(18)
   integer, parameter        :: max_attemps_per_time_step = 10
+  integer, parameter        :: datfile_version = 30
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
@@ -492,6 +493,8 @@ contains
   subroutine write_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    write(my_unit) datfile_version
+
     write(my_unit) it
     write(my_unit) output_cnt
     write(my_unit) time
@@ -501,10 +504,15 @@ contains
 
     write(my_unit) ST_global_rates
     write(my_unit) ST_global_JdotE
+    write(my_unit) fraction_steps_rejected
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
+    integer             :: version
+
+    read(my_unit) version
+    if (version /= datfile_version) error stop "Different datfile version"
 
     read(my_unit) it
     read(my_unit) output_cnt
@@ -513,9 +521,9 @@ contains
     read(my_unit) photoi_prev_time
     read(my_unit) global_dt
 
-    ! Data is stored in location of first thread
     read(my_unit) ST_global_rates
     read(my_unit) ST_global_JdotE
+    read(my_unit) fraction_steps_rejected
 
     dt = global_dt
   end subroutine read_sim_data
