@@ -12,7 +12,7 @@ parser.add_argument('-command_file', type=str, default='commands.txt',
 parser.add_argument('-ix_range', type=int, nargs=2, required=True,
                     help='Index range of reactions to modify')
 parser.add_argument('-rate_factors', type=float, nargs='+',
-                    default=[0.5, 2.0],
+                    default=[0.8, 1.2],
                     help='List of reaction rate factors')
 args = parser.parse_args()
 
