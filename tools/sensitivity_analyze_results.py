@@ -93,9 +93,8 @@ base_name = logs[0].replace('_log.txt', '')
 with open(base_name + '_reactions.txt', 'r') as f:
     reactions_list = [x.strip() for x in f.readlines() if x.strip()]
 
-j = 0
 ix_sort = np.argsort(effect_magnitudes)[::-1]
-for i in ix_sort:
+for n, i in enumerate(ix_sort):
     ix = reaction_ix[i]
-    j += 1
-    print(f'{j:<6} R{ix:<6} {reactions_list[ix-1]:40} {effect_magnitudes[i]:<15.8f}')
+    print(f'{n+1:<6} R{ix:<6} {reactions_list[ix-1]:40} ' +
+          f'{effect_magnitudes[i]:<15.8f}')

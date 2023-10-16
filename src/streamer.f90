@@ -24,15 +24,18 @@ program streamer
   implicit none
 
   integer, parameter        :: int8       = selected_int_kind(18)
+  integer, parameter        :: max_attemps_per_time_step = 10
+  integer, parameter        :: datfile_version = 30
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
-  integer                   :: i, it, coord_type, box_bytes
+  integer                   :: i, it, n, coord_type, box_bytes
   integer                   :: n_steps_rejected
   integer, allocatable      :: ref_links(:, :)
   logical                   :: write_out
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
-  real(dp)                  :: dt_gas_lim
+  real(dp)                  :: dt_gas_lim, dt_lim_step
+  real(dp)                  :: fraction_steps_rejected
   real(dp)                  :: memory_limit_GB = 16.0_dp
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
@@ -102,6 +105,7 @@ program streamer
   photoi_prev_time = time   ! Time of last photoionization computation
   dt               = global_dt
   n_steps_rejected = 0
+  fraction_steps_rejected = 0.0_dp
   pos_Emax_t0 = 0.0_dp ! Initial streamer position
 
   ! Initialize the tree (which contains all the mesh information)
@@ -234,29 +238,43 @@ program streamer
      end if
 
      ! Advance over dt, but make a copy first so that we can try again if dt was too large
+     dt_lim = huge_real
      step_accepted = .false.
-     do while (.not. step_accepted)
+     do n = 1, max_attemps_per_time_step
         call copy_current_state()
 
-        call af_advance(tree, dt, dt_lim, time, all_densities, &
+        call af_advance(tree, dt, dt_lim_step, time, all_densities, &
              time_integrator, forward_euler)
 
-        ! Check if dt was small enough for the new state
-        step_accepted = (dt <= dt_lim)
+        ! dt_lim is the minimum over all steps taken (including rejected ones)
+        dt_lim = min(dt_lim, dt_lim_step)
 
-        if (.not. step_accepted) then
+        ! Check if dt was small enough for the new state
+        step_accepted = (dt <= dt_lim_step)
+
+        if (step_accepted) then
+           exit
+        else
            n_steps_rejected = n_steps_rejected + 1
-           write (*, "(I0,A,I0,A,2E12.4,A)") it, " Step rejected (#", &
-                n_steps_rejected, ") (dt, dt_lim) = ", dt, dt_lim
+           write (*, "(I0,A,I0,A,2E12.4,A,F6.2)") it, " Step rejected (#", &
+                n_steps_rejected, ") (dt, dt_lim) = ", dt, dt_lim, &
+                " frac", fraction_steps_rejected
            call output_status(tree, time, wc_time, it, dt)
 
            ! Go back to previous state and try with a smaller dt
-           dt = dt_safety_factor * dt_lim
+           dt = dt_safety_factor * dt_lim_step
            time = global_time
            write_out = .false. ! Since we advance less far in time
            call restore_previous_state()
         end if
      end do
+
+     ! The approximate fraction of rejected steps, over the last ~100
+     fraction_steps_rejected = 0.99_dp * fraction_steps_rejected
+     if (n > 1) fraction_steps_rejected = fraction_steps_rejected + 0.01_dp
+
+     if (n == max_attemps_per_time_step+1) &
+          error stop "All time steps were rejected"
 
      ! Update global variable based on current space-integrated data
      ST_global_rates = ST_global_rates + &
@@ -303,9 +321,12 @@ program streamer
         dt_gas_lim = dt_max
      end if
 
-     ! dt is modified when writing output, global_dt not
-     dt = min(dt_max_growth_factor * global_dt, &
-          dt_safety_factor * min(dt_lim, dt_gas_lim))
+     ! Do not increase time step when many steps are rejected. Here we a pretty
+     ! arbitrary threshold of 0.1
+     tmp = dt_max_growth_factor
+     if (fraction_steps_rejected > 0.1_dp) tmp = 1.0_dp
+
+     dt = min(tmp * global_dt, dt_safety_factor * min(dt_lim, dt_gas_lim))
 
      if (start_of_new_pulse) then
         ! Start a new pulse with a small time step
@@ -315,6 +336,7 @@ program streamer
         end if
      end if
 
+     ! dt is modified when writing output, global_dt not
      global_dt   = dt
      global_time = time
 
@@ -471,6 +493,8 @@ contains
   subroutine write_sim_data(my_unit)
     integer, intent(in) :: my_unit
 
+    write(my_unit) datfile_version
+
     write(my_unit) it
     write(my_unit) output_cnt
     write(my_unit) time
@@ -480,10 +504,15 @@ contains
 
     write(my_unit) ST_global_rates
     write(my_unit) ST_global_JdotE
+    write(my_unit) fraction_steps_rejected
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
     integer, intent(in) :: my_unit
+    integer             :: version
+
+    read(my_unit) version
+    if (version /= datfile_version) error stop "Different datfile version"
 
     read(my_unit) it
     read(my_unit) output_cnt
@@ -492,9 +521,9 @@ contains
     read(my_unit) photoi_prev_time
     read(my_unit) global_dt
 
-    ! Data is stored in location of first thread
     read(my_unit) ST_global_rates
     read(my_unit) ST_global_JdotE
+    read(my_unit) fraction_steps_rejected
 
     dt = global_dt
   end subroutine read_sim_data
