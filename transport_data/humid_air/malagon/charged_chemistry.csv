@@ -1,0 +1,79 @@
+O2- + M -> e + O2 + M,c1*exp(-(c2/(c3+Td))**2),1.24e-11 179.0 8.8,cm
+O- + N2 -> e + N2O,c1*exp(-(c2/(c3+Td))**2),1.16e-12 48.9 11.0,cm
+H- + O2 -> e + HO2,c1,1.2e-09,cm
+O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-30 65.0,cm
+O- + O2 -> O2- + O,c1*exp(-(c2/(c3+Td))**2),6.96e-11 198.0 5.6,cm
+O- + H2O -> OH- + OH,c1,6e-13,cm
+H- + O2 -> O- + OH,c1,1e-11,cm
+H- + O2 -> O2- + H,c1,1e-11,cm
+H- + H2O -> OH- + H2,c1,3.8e-09,cm
+O2- + H2O + M -> H2O3- + M,c1,2.2e-28,cm
+H2O3- + H2O + M -> H4O4- + M,c1,5e-28,cm
+H4O4- + H2O + M -> H6O5- + M,c1,5e-29,cm
+H2O3- + M -> O2- + H2O + M,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),5.91e-09 1.28e-19 0.18 1.0,cm
+H4O4- + M -> H2O3- + H2O + M,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-08 5.8e-20 0.18 1.0,cm
+H6O5- + M -> H4O4- + H2O + M,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-09 4.49e-20 0.18 1.0,cm
+N2+ + N2 + M -> N4+ + M,c1*(300/Tg)**c2,5e-29 2.0,cm
+N4+ + O2 -> O2+ + 2N2,c1,2.5e-10,cm
+O2+ + O2 + M -> O4+ + M,c1*(300/Tg)**c2,2.4e-30 3.0,cm
+O2+ + H2O + M -> H2O3+ + M,c1,2.6e-28,cm
+H2O3+ + H2O -> H3O+ + OH + O2,c1,3e-10,cm
+H3O+ + H2O + M -> H5O2+ + M,c1,3e-27,cm
+H5O2+ + H2O + M -> H7O3+ + M,c1,3e-27,cm
+H7O3+ + H2O + M -> H9O4+ + M,c1,3e-27,cm
+e + O4+ -> O2 + O2,c1*(300/Te)**c2,1.4e-06 0.5,cm
+e + H9O4+ -> H + 4H2O,c1*(300/Te)**c2,6.5e-06 0.5,cm
+N2+ + O- -> 2N + O,c1,1e-07,cm
+N2+ + O2- -> 2N + O2,c1,1e-07,cm
+N2+ + O3- -> 2N + O3,c1,1e-07,cm
+N2+ + H2O3- ->,c1,1e-07,cm
+N2+ + H4O4- ->,c1,1e-07,cm
+N2+ + H6O5- ->,c1,1e-07,cm
+N4+ + O- -> 2N2 + O,c1,1e-07,cm
+N4+ + O2- -> 2N2 + O2,c1,1e-07,cm
+N4+ + O3- -> 2N2 + O3,c1,1e-07,cm
+N4+ + H2O3- ->,c1,1e-07,cm
+N4+ + H4O4- ->,c1,1e-07,cm
+N4+ + H6O5- ->,c1,1e-07,cm
+O2+ + O- -> 2O + O,c1,1e-07,cm
+O2+ + O2- -> 2O + O2,c1,1e-07,cm
+O2+ + O3- -> 2O + O3,c1,1e-07,cm
+O2+ + H2O3- ->,c1,1e-07,cm
+O2+ + H4O4- ->,c1,1e-07,cm
+O2+ + H6O5- ->,c1,1e-07,cm
+O4+ + O- -> 2O2 + O,c1,1e-07,cm
+O4+ + O2- -> 2O2 + O2,c1,1e-07,cm
+O4+ + O3- -> 2O2 + O3,c1,1e-07,cm
+O4+ + H2O3- ->,c1,1e-07,cm
+O4+ + H4O4- ->,c1,1e-07,cm
+O4+ + H6O5- ->,c1,1e-07,cm
+H2O3+ + O- ->,c1,1e-07,cm
+H2O3+ + O2- ->,c1,1e-07,cm
+H2O3+ + O3- ->,c1,1e-07,cm
+H2O3+ + H2O3- ->,c1,1e-07,cm
+H2O3+ + H4O4- ->,c1,1e-07,cm
+H2O3+ + H6O5- ->,c1,1e-07,cm
+H3O+ + O- ->,c1,1e-07,cm
+H3O+ + O2- ->,c1,1e-07,cm
+H3O+ + O3- ->,c1,1e-07,cm
+H3O+ + H2O3- ->,c1,1e-07,cm
+H3O+ + H4O4- ->,c1,1e-07,cm
+H3O+ + H6O5- ->,c1,1e-07,cm
+H5O2+ + O- ->,c1,1e-07,cm
+H5O2+ + O2- ->,c1,1e-07,cm
+H5O2+ + O3- ->,c1,1e-07,cm
+H5O2+ + H2O3- ->,c1,1e-07,cm
+H5O2+ + H4O4- ->,c1,1e-07,cm
+H5O2+ + H6O5- ->,c1,1e-07,cm
+H7O3+ + O- ->,c1,1e-07,cm
+H7O3+ + O2- ->,c1,1e-07,cm
+H7O3+ + O3- ->,c1,1e-07,cm
+H7O3+ + H2O3- ->,c1,1e-07,cm
+H7O3+ + H4O4- ->,c1,1e-07,cm
+H7O3+ + H6O5- ->,c1,1e-07,cm
+H9O4+ + O- ->,c1,1e-07,cm
+H9O4+ + O2- ->,c1,1e-07,cm
+H9O4+ + O3- ->,c1,1e-07,cm
+H9O4+ + H2O3- ->,c1,1e-07,cm
+H9O4+ + H4O4- ->,c1,1e-07,cm
+H9O4+ + H6O5- ->,c1,1e-07,cm

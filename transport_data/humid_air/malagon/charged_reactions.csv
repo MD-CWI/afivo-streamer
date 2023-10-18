@@ -1,0 +1,86 @@
+reaction,rate
+# Charged particle reactions
+# Electron detachment
+O2- + M \to e + O2 + M,1.24\times10^{-11}\exp(-(179/(8.8+T_d))^{2})
+O- + N2 \to e + N2O,1.16\times10^{-12}\exp(-(48.9/(11+T_d))^{2})
+H- + O2 \to e + HO2,1.2\times10^{-9}
+# Negative ion conversion
+O- + O2 + M \to O3- + M,1.1\times10^{-30}\exp(-(T_d/65)^{2}) 
+O- + O2 \to O2- + O,6.96\times10^{-11}\exp(-(198/(5.6+T_d))^{2})
+O- + H2O \to OH- + OH,6.0\times10^{-13}
+H- + O2 \to O- + OH,1.0\times10^{-11}
+H- + O2 \to O2- + H,1.0\times10^{-11}
+H- + H2O \to OH- + H2,3.8\times10^{-9}
+O2- + H2O + M \to H2O3- + M,2.2\times10^{-28}
+H2O3- + H2O + M \to H4O4- + M,5.0\times10^{-28}
+H4O4- + H2O + M \to H6O5- + M,5.0\times10^{-29}
+H2O3- + M \to O2- + H2O + M,5.91\times10^{-9}\exp(-(1.28\times10^{-19}/(kb*(T_g+T_d/0.18)))^{1}) 
+H4O4- + M \to H2O3- + H2O + M,1.34\times10^{-8}\exp(-(5.8\times10^{-20}/(kb*(T_g+T_d/0.18)))^{1}) 
+H6O5- + M \to H4O4- + H2O + M,1.34\times10^{-9}\exp(-(4.49\times10^{-20}/(kb*(T_g+T_d/0.18)))^{1}) 
+# Positive ion conversion
+N2+ + N2 + M \to N4+ + M,5.0\times10^{-29}(\frac{300}{T_g})^{2}
+N4+ + O2 \to O2+ + 2N2,2.5\times10^{-10}
+O2+ + O2 + M \to O4+ + M,2.4\times10^{-30}(\frac{300}{T_g})^{3}
+O2+ + H2O + M \to H2O3+ + M,2.6\times10^{-28}
+H2O3+ + H2O \to H3O+ + OH + O2,3.0\times10^{-10}
+H3O+ + H2O + M \to H5O2+ + M,3.0\times10^{-27}
+H5O2+ + H2O + M \to H7O3+ + M,3.0\times10^{-27}
+H7O3+ + H2O + M \to H9O4+ + M,3.0\times10^{-27} 
+# Electron-ion recombination
+e + O4+ \to O2 + O2,1.4\times10^{-6}(\frac{300}{T_e})^{0.5}
+e + H9O4+ \to H + 4H2O,6.5\times10^{-6}(\frac{300}{T_e})^{0.5}
+# Ion-ion recombination
+N2+ + O- \to 2N + O,1.0\times10^{-7}
+N2+ + O2- \to 2N + O2,1.0\times10^{-7}
+N2+ + O3- \to 2N + O3,1.0\times10^{-7}
+N2+ + H2O3- \to,1.0\times10^{-7}
+N2+ + H4O4- \to,1.0\times10^{-7}
+N2+ + H6O5- \to,1.0\times10^{-7}
+N4+ + O- \to 2N2 + O,1.0\times10^{-7}
+N4+ + O2- \to 2N2 + O2,1.0\times10^{-7}
+N4+ + O3- \to 2N2 + O3,1.0\times10^{-7}
+N4+ + H2O3- \to,1.0\times10^{-7}
+N4+ + H4O4- \to,1.0\times10^{-7}
+N4+ + H6O5- \to,1.0\times10^{-7}
+O2+ + O- \to 2O + O,1.0\times10^{-7}
+O2+ + O2- \to 2O + O2,1.0\times10^{-7}
+O2+ + O3- \to 2O + O3,1.0\times10^{-7}
+O2+ + H2O3- \to,1.0\times10^{-7}
+O2+ + H4O4- \to,1.0\times10^{-7}
+O2+ + H6O5- \to,1.0\times10^{-7}
+O4+ + O- \to 2O2 + O,1.0\times10^{-7}
+O4+ + O2- \to 2O2 + O2,1.0\times10^{-7}
+O4+ + O3- \to 2O2 + O3,1.0\times10^{-7}
+O4+ + H2O3- \to,1.0\times10^{-7}
+O4+ + H4O4- \to,1.0\times10^{-7}
+O4+ + H6O5- \to,1.0\times10^{-7}
+H2O3+ + O- \to,1.0\times10^{-7}
+H2O3+ + O2- \to,1.0\times10^{-7}
+H2O3+ + O3- \to,1.0\times10^{-7}
+H2O3+ + H2O3- \to,1.0\times10^{-7}
+H2O3+ + H4O4- \to,1.0\times10^{-7}
+H2O3+ + H6O5- \to,1.0\times10^{-7}
+H3O+ + O- \to,1.0\times10^{-7}
+H3O+ + O2- \to,1.0\times10^{-7}
+H3O+ + O3- \to,1.0\times10^{-7}
+H3O+ + H2O3- \to,1.0\times10^{-7}
+H3O+ + H4O4- \to,1.0\times10^{-7}
+H3O+ + H6O5- \to,1.0\times10^{-7}
+H5O2+ + O- \to,1.0\times10^{-7}
+H5O2+ + O2- \to,1.0\times10^{-7}
+H5O2+ + O3- \to,1.0\times10^{-7}
+H5O2+ + H2O3- \to,1.0\times10^{-7}
+H5O2+ + H4O4- \to,1.0\times10^{-7}
+H5O2+ + H6O5- \to,1.0\times10^{-7}
+H7O3+ + O- \to,1.0\times10^{-7}
+H7O3+ + O2- \to,1.0\times10^{-7}
+H7O3+ + O3- \to,1.0\times10^{-7}
+H7O3+ + H2O3- \to,1.0\times10^{-7}
+H7O3+ + H4O4- \to,1.0\times10^{-7}
+H7O3+ + H6O5- \to,1.0\times10^{-7}
+H9O4+ + O- \to,1.0\times10^{-7}
+H9O4+ + O2- \to,1.0\times10^{-7}
+H9O4+ + O3- \to,1.0\times10^{-7}
+H9O4+ + H2O3- \to,1.0\times10^{-7}
+H9O4+ + H4O4- \to,1.0\times10^{-7}
+H9O4+ + H6O5- \to,1.0\times10^{-7} 

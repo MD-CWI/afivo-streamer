@@ -12,6 +12,31 @@ e + H2O -> e + e + H2O+,field_table,C53 H2O Ionization 13.00 eV
 # Attachment
 e + O2 + O2 -> O2- + O2,field_table,C27 O2 Attachment
 e + O2 + H2O -> O2- + H2O,field_table,C54 H2O Attachment
+# Positive ion conversion
+N2+ + N2 + M -> N4+ + M,c1,5e-29,cm
+N2+ + O2 -> O2+ + N2,c1,6e-11,cm
+N2+ + H2O -> H2O+ + N2,c1*(300/Tg)**c2,2.3e-09 0.5,cm
+N2+ + H2O -> N2H+ + OH,c1*(300/Tg)**c2,5e-10 0.5,cm
+N4+ + O2 -> O2+ + 2N2,c1,2.5e-10,cm
+N4+ + H2O -> H2O+ + 2N2,c1*(300/Tg)**c2,2.4e-09 0.5,cm
+O2+ + N2 + M -> N2O2+ + M,c1,9e-31,cm
+O2+ + O2 + M -> O4+ + M,c1,2.4e-30,cm
+O2+ + H2O + M -> H2O3+ + M,c1*(300/Tg)**c2,2.6e-28 4.0,cm
+O4+ + H2O -> H2O3+ + O2,c1,1.7e-09,cm
+N2H+ + H2O -> H3O+ + N2,c1*(300/Tg)**c2,2.6e-09 0.5,cm
+N2O2+ + N2 -> O2+ + 2N2,c1,4.3e-10,cm
+N2O2+ + O2 -> O4+ + N2,c1,1e-09,cm
+H2O+ + O2 -> O2+ + H2O,c1,4.1e-10,cm
+H2O+ + H2O -> H3O+ + OH,c1*(300/Tg)**c2,2.1e-09 0.5,cm
+H2O3+ + H2O -> H3O+ + OH + O2,c1,3e-10,cm
+H2O3+ + H2O -> H4O2+ + O2,c1,1.9e-09,cm
+H4O2+ + H2O -> H5O2+ + OH,c1,3e-09,cm
+H3O+ + H2O + M -> H5O2+ + M,c1*(300/Tg)**c2,3.2e-27 4.0,cm
+H5O2+ + H2O + M -> H7O3+ + M,c1*(300/Tg)**c2,7.4e-27 7.5,cm
+H7O3+ + H2O + M -> H9O4+ + M,c1*(300/Tg)**c2,2.5e-27 8.1,cm
+H9O4+ + H2O + M -> H11O5+ + M,c1*(300/Tg)**c2,3.3e-28 14.0,cm
+H11O5+ + H2O + M -> H13O6+ + M,c1*(300/Tg)**c2,4e-29 15.3,cm
+H13O6+ + H2O + M -> H15O7+ + M,c1*(300/Tg)**c2,4.5e-30 16.0,cm
 # Electron-ion recombination
 e + N2+ -> N + N,c1*(300/Te)**c2,2.8e-07 0.5,cm
 e + N4+ -> N2 + N2,c1*(300/Te)**c2,2.6e-06 0.41,cm
@@ -42,31 +67,6 @@ e + H2O3+ -> O2 + H2O,c1*(300/Te)**c2,3e-07 0.5,cm
 O2- + N2+ + M -> O2 + N2 + M,c1*(300/Tg)**c2,2e-25 2.5,cm
 O2- + O2+ + M -> O2 + O2 + M,c1*(300/Tg)**c2,2e-25 2.5,cm
 O2- + H2O+ + M -> O2 + H2O + M,c1*(300/Tg)**c2,2e-25 2.5,cm
-# Positive ion conversion
-N2+ + N2 + M -> N4+ + M,c1,5e-29,cm
-N2+ + O2 -> O2+ + N2,c1,6e-11,cm
-N2+ + H2O -> H2O+ + N2,c1*(300/Tg)**c2,2.3e-09 0.5,cm
-N2+ + H2O -> N2H+ + OH,c1*(300/Tg)**c2,5e-10 0.5,cm
-N4+ + O2 -> O2+ + 2N2,c1,2.5e-10,cm
-N4+ + H2O -> H2O+ + 2N2,c1*(300/Tg)**c2,2.4e-09 0.5,cm
-O2+ + N2 + M -> N2O2+ + M,c1,9e-31,cm
-O2+ + O2 + M -> O4+ + M,c1,2.4e-30,cm
-O2+ + H2O + M -> H2O3+ + M,c1*(300/Tg)**c2,2.6e-28 4.0,cm
-O4+ + H2O -> H2O3+ + O2,c1,1.7e-09,cm
-N2H+ + H2O -> H3O+ + N2,c1*(300/Tg)**c2,2.6e-09 0.5,cm
-N2O2+ + N2 -> O2+ + 2N2,c1,4.3e-10,cm
-N2O2+ + O2 -> O4+ + N2,c1,1e-09,cm
-H2O+ + O2 -> O2+ + H2O,c1,4.1e-10,cm
-H2O+ + H2O -> H3O+ + OH,c1*(300/Tg)**c2,2.1e-09 0.5,cm
-H2O3+ + H2O -> H3O+ + OH + O2,c1,3e-10,cm
-H2O3+ + H2O -> H4O2+ + O2,c1,1.9e-09,cm
-H4O2+ + H2O -> H5O2+ + OH,c1,3e-09,cm
-H3O+ + H2O + M -> H5O2+ + M,c1*(300/Tg)**c2,3.2e-27 4.0,cm
-H5O2+ + H2O + M -> H7O3+ + M,c1*(300/Tg)**c2,7.4e-27 7.5,cm
-H7O3+ + H2O + M -> H9O4+ + M,c1*(300/Tg)**c2,2.5e-27 8.1,cm
-H9O4+ + H2O + M -> H11O5+ + M,c1*(300/Tg)**c2,3.3e-28 14.0,cm
-H11O5+ + H2O + M -> H13O6+ + M,c1*(300/Tg)**c2,4e-29 15.3,cm
-H13O6+ + H2O + M -> H15O7+ + M,c1*(300/Tg)**c2,4.5e-30 16.0,cm
 -----------------------
 
 ignored_species

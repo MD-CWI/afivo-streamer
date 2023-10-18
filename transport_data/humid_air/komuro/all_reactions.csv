@@ -1,0 +1,170 @@
+reaction,rate
+# Charged particle reactions
+# Electron detachment
+O2- + N2 \to e + N2 + O2,1.90\times10^{-12}(\frac{T_g}{300})^{0.5}\exp(\frac{-4990}{T_g})
+O2- + O2 \to e + O2 + O2,2.70\times10^{-10}(\frac{T_g}{300})^{0.5}\exp(\frac{-5590}{T_g})
+O2- + O2(a) \to e + 2O2,2.00\times10^{-10}
+O2- + O(3P) \to e + O3,3.00\times10^{-10}
+O2- + H \to e + HO2,1.20\times10^{-9}
+O- + O2(a) \to e + O3,3.00\times10^{-10}
+O- + O(3P) \to e + O2,2.00\times10^{-10}
+H- + O2 \to e + HO2,1.20\times10^{-9}
+H- + H \to e + H2,2.00\times10^{-9}
+OH- + O(3P) \to e + HO2,2.00\times10^{-10}
+OH- + H \to e + H2O,1.40\times10^{-9}
+# Negative ion conversion
+O2- + H \to OH- + O(3P),1.50\times10^{-9}
+H- + H2O \to OH- + H2,1.00\times10^{-9}
+# Positive ion conversion
+N2+ + N2 + M \to N4+ + M,5.20\times10^{-29}(\frac{300}{T_g})^{2.2}
+O2+ + N2 + N2 \to N2O2+ + N2,9.00\times10^{-31}(\frac{300}{T_g})^{2} 
+O2+ + O2 + M \to O4+ + M,2.40\times10^{-30}(\frac{300}{T_g})^{3.2}
+O2+ + H2O + M \to H2O3+ + M,2.60\times10^{-28}(\frac{300}{T_g})^{4}
+N4+ + N2 \to N2+ + 2N2,10**(-14.6+0.0036(T_g-300))
+N4+ + O2 \to O2+ + 2N2,2.50\times10^{-10}
+O4+ + N2 \to N2O2+ + O2,4.60\times10^{-12}(\frac{T_g}{300})^{2.5}\exp(\frac{-2650}{T_g})
+O4+ + O2 \to O2+ + 2O2,3.30\times10^{-6}(\frac{300}{T_g})^{4}\exp(\frac{-5030}{T_g})
+O4+ + O2(a) \to O2+ + 2O2,1.00\times10^{-10}
+O4+ + O2(b) \to O2+ + 2O2,1.00\times10^{-10}
+O4+ + O(3P) \to O2+ + O3,3.00\times10^{-10}
+O4+ + O(1D) \to O2+ + O3,3.00\times10^{-10}
+O4+ + O(1S) \to O2+ + O3,3.00\times10^{-10}
+O4+ + H2O \to H2O3+ + O2,1.70\times10^{-9}
+H2O3+ + H2O \to H3O+ + OH + O2,1.30\times10^{-9}
+N2O2+ + N2 \to O2+ + 2N2,1.10\times10^{-6}(\frac{300}{T_g})^{5.3}\exp(\frac{-2357}{T_g}) 
+N2O2+ + O2 \to O4+ + N2,1.00\times10^{-9}
+H3O+ + H2O + M \to H5O2+ + M,3.40\times10^{-27}(\frac{300}{T_g})^{4}
+H5O2+ + H2O + M \to H7O3+ + M,2.30\times10^{-27}(\frac{300}{T_g})^{4}
+H7O3+ + H2O + M \to H9O4+ + M,2.40\times10^{-27}(\frac{300}{T_g})^{4}
+# Electron-ion recombination
+e + N2+ \to N(4S) + N(4S),1.80\times10^{-7}(\frac{300}{T_e})^{0.39}
+e + N2+ \to N2,4.00\times10^{-12}
+e + N4+ \to N2 + N2,2.00\times10^{-6}(\frac{300}{T_e})^{0.5}
+e + O2+ \to O(3P) + O(3P),2.00\times10^{-7}(\frac{300}{T_e})^{0.7}
+e + O2+ \to O2,4.00\times10^{-12}
+e + O4+ \to O2 + O2,1.40\times10^{-6}(\frac{300}{T_e})^{0.5}
+e + N2O2+ \to N2 + O2,1.30\times10^{-6}(\frac{300}{T_e})^{0.5}
+e + H2O+ \to OH + H,3.80\times10^{-7}
+e + H2O+ \to H2 + O(3P),1.40\times10^{-7}
+e + H2O+ \to 2H + O(3P),1.70\times10^{-7}
+e + H9O4+ \to H + 4H2O,5.50\times10^{-7}(\frac{300}{T_e})^{0.78} 
+# Ion-ion recombination 
+N2+ + O- \to N2 + O(3P),4.00\times10^{-7}
+N2+ + O2- \to N2 + O2,1.60\times10^{-7}
+O2+ + O- \to O2 + O(3P),9.60\times10^{-8}
+O2+ + O2- \to O2 + O2,4.20\times10^{-7}
+O2+ + O2- + O2 \to 2O(3P) + 2O2,2.00\times10^{-25}(\frac{300}{T_g})^{2.5}
+O4+ + O2- + O2 \to 2O(3P) + 3O2,2.00\times10^{-25}(\frac{300}{T_g})^{2.5}
+H2O+ + O- \to H2O + O(3P),4.00\times10^{-7}
+H2O+ + O2- \to H2O + O2,4.00\times10^{-7}
+# Neutral particle reactions
+# Neutral species conversion
+N2(A1) + O2 \to N2 + O2(b),7.50\times10^{-13}
+N2(A1) + O2 \to N2 + 2O(3P),1.70\times10^{-12}
+N2(A1) + O2 \to N2O + O(3P),7.80\times10^{-12}
+N2(A1) + N2(A1) \to N2 + N2(B),7.70\times10^{-11}
+N2(A1) + N2(A1) \to N2 + N2(C),1.60\times10^{-10}
+N2(A1) + N2(A1) \to N2 + N2(E),1.00\times10^{-11}
+N2(A1) + O(3P) \to N2 + O(3P),2.00\times10^{-11}
+N2(A1) + O(3P) \to N2 + O(1S),3.00\times10^{-11}
+N2(A1) + O(3P) \to NO + N(2D),7.00\times10^{-12}
+N2(A1) + H \to N2 + H,2.10\times10^{-10}
+N2(A1) + OH \to N2 + OH,1.00\times10^{-10}
+N2(A1) + H2O \to N2 + H + OH,5.00\times10^{-14}
+N2(A1) + NO \to N2 + NO(A),6.90\times10^{-11}
+N2(A2) + N2 \to N2 + N2(A1),1.00\times10^{-11}
+N2(A2) + O(3P) \to N2 + O(3P),2.00\times10^{-11}
+N2(A2) + O(3P) \to NO + N(4S),7.00\times10^{-12}
+N2(A2) + H \to N2 + H,2.10\times10^{-10}
+N2(A2) + OH \to N2 + OH,1.00\times10^{-10}
+N2(A2) + H2O \to N2 + H + OH,5.00\times10^{-14}
+N2(A2) + NO \to N2 + NO(A),6.90\times10^{-11}
+N2(B) + O2 \to N2 + 2O(3P),3.00\times10^{-10}
+N2(B) + N2 \to N2 + N2(A1),1.00\times10^{-11}
+N2(B) \to N2(A1),1.50\times10^{5}
+N2(a) + O2 \to N2 + O(3P) + O(1D),2.80\times10^{-11}
+N2(a) + N2 \to N2 + N2,2.00\times10^{-13}
+N2(a) + N2 \to N2 + N2(B),2.00\times10^{-13}
+N2(a) + H2O \to N2 + H + OH,3.00\times10^{-10}
+N2(a) + H2 \to N2 + 2H,2.60\times10^{-10}
+N2(a) + NO \to N2 + N(4S) + O(3P),3.60\times10^{-10}
+N2(C) + O2 \to N2 + 2O(3P),2.50\times10^{-10}
+N2(C) + N2 \to N2 + N2(B) ,1.00\times10^{-11}
+N2(C) + N2 \to N2 + N2(a),1.00\times10^{-11}
+N2(C) \to N2(B),2.80\times10^{7}
+N2(E) + N2 \to N2 + N2(C),1.00\times10^{-10}
+NO(A) \to NO,5.10\times10^{6}
+N(4S) + O2 \to NO + O(3P),4.47\times10^{-12}(\frac{T_g}{300})^{1}\exp(\frac{-3270.2}{T_g})
+N(4S) + O(3P) + N2 \to N2 + NO,6.89\times10^{-33}\exp(\frac{134.7}{T_g})
+N(4S) + N(4S) + N2 \to N2 + N2,8.27\times10^{-34}\exp(\frac{500}{T_g})
+N(4S) + OH \to NO + H,3.80\times10^{-11}\exp(\frac{85.39}{T_g})
+N(4S) + HO2 \to NO + OH,2.19\times10^{-11}
+N(4S) + NO \to N2 + O(3P),3.51\times10^{-11}\exp(\frac{-49.84}{T_g})
+N(4S) + NO2 \to NO + NO,2.30\times10^{-12}
+N(4S) + NO2 \to N2O + O(3P),5.80\times10^{-12}\exp(\frac{-220}{T_g})
+N(2D) + O2 \to NO + O(3P),1.50\times10^{-12}(\frac{T_g}{300})^{0.5}
+N(2D) + O2 \to NO + O(1D),9.70\times10^{-12}\exp(\frac{185}{T_g})
+N(2D) + N2 \to N2 + N(4S),1.70\times10^{-14}
+N(2D) + O(3P) \to N(4S) + O(3P),3.30\times10^{-12}\exp(\frac{260}{T_g})
+N(2D) + H2O \to NH + OH,4.00\times10^{-11}
+N(2D) + NO \to N2 + O(3P),1.80\times10^{-10}
+O2(a) + O2 \to O2 + O2,2.20\times10^{-18}(\frac{T_g}{300})^{0.8}
+O2(a) + N2 \to N2 + O2,1.40\times10^{-19}
+O2(a) + O(3P) \to O2 + O(3P),7.00\times10^{-16}
+O2(a) + N(4S) \to NO + O(3P),2.00\times10^{-14}
+O2(a) + NO \to O2 + NO,2.50\times10^{-11}
+O2(a) + NO \to NO2 + O(3P),3.49\times10^{-17}
+O2(b) + O2 \to O2 + O2(a),4.10\times10^{-17}
+O2(b) + N2 \to N2 + O2(a),2.10\times10^{-15}
+O2(b) + O(3P) \to O2 + O(3P),8.00\times10^{-14}
+O2(b) + H2O \to O2 + H2O,4.60\times10^{-12}
+O2(b) + NO \to O2(a) + NO,4.00\times10^{-14}
+O2(b) + O3 \to 2O2(a) + O(3P),1.80\times10^{-11}
+O2(A) + O2 \to O2(b) + O2(b),2.90\times10^{-13}
+O2(A) + N2 \to N2 + O2(b),3.00\times10^{-13}
+O2(A) + O(3P) \to O2(b) + O(1D),9.00\times10^{-12}
+O(3P) + O2 + O2 \to O2 + O3,6.01\times10^{-34}(\frac{300}{T_g})^{2.6}
+O(3P) + O2 + N2 \to N2 + O3,5.51\times10^{-34}(\frac{300}{T_g})^{2.6}
+O(3P) + O(3P) + O2 \to O2 + O2,3.81\times10^{-33}(\frac{300}{T_g})^{0.63}
+O(3P) + O(3P) + N2 \to N2 + O2,9.46\times10^{-34}\exp(\frac{484.7}{T_g})
+O(3P) + OH \to O2 + H,2.40\times10^{-11}\exp(\frac{110}{T_g})
+O(3P) + HO2 \to O2 + OH,2.70\times10^{-11}\exp(\frac{224}{T_g})
+O(3P) + NO + N2 \to N2 + NO2,1.03\times10^{-30}(\frac{300}{T_g})^{2.87}\exp(\frac{780.5}{T_g})
+O(3P) + NO2 \to O2 + NO,5.50\times10^{-12}\exp(\frac{-187.9}{T_g})
+O(3P) + O3 \to O2 + O2,8.00\times10^{-12}\exp(\frac{-2060}{T_g})
+O(1D) + O2 \to O2 + O(3P),3.12\times10^{-11}\exp(\frac{70}{T_g})
+O(1D) + N2 \to N2 + O(3P),2.10\times10^{-11}\exp(\frac{115}{T_g})
+O(1D) + H2O \to O2 + H2,3.57\times10^{-10}
+O(1D) + H2O \to OH + OH,2.20\times10^{-10}
+O(1D) + H2 \to H + OH,1.10\times10^{-10}
+O(1D) + H2O2 \to O2 + H2O,5.20\times10^{-10}
+O(1D) + O3 \to O2 + 2O(3P),1.20\times10^{-10}
+O(1S) + H2O \to O2 + H2,5.00\times10^{-10}
+O(1S) + H2O \to H2O + O(3P),3.00\times10^{-10}
+O(1S) + H2O \to OH + OH,5.00\times10^{-10}
+O3 + H \to O2 + OH,1.40\times10^{-10}\exp(\frac{-480}{T_g})
+O3 + OH \to O2 + HO2,1.70\times10^{-12}\exp(\frac{-940}{T_g})
+O3 + NO \to O2 + NO2,3.16\times10^{-12}\exp(\frac{1563}{T_g})
+O3 + O3 \to O2 + O3 + O(3P),7.16\times10^{-10}\exp(\frac{-11200}{T_g})
+H + O2 + O2 \to O2 + HO2,5.94\times10^{-32}(\frac{300}{T_g})^{1}
+H + O2 + N2 \to N2 + HO2,5.94\times10^{-32}(\frac{300}{T_g})^{1}
+H + OH + N2 \to N2 + H2O,6.87\times10^{-31}(\frac{300}{T_g})^{2}
+H + OH + H2O \to H2O + H2O,4.38\times10^{-31}(\frac{300}{T_g})^{2}
+H + HO2 \to O2 + H2,1.75\times10^{-10}\exp(\frac{-1030}{T_g})
+H + HO2 \to H2O + O(3P),5.00\times10^{-11}\exp(\frac{-866}{T_g})
+H + HO2 \to OH + OH,7.40\times10^{-10}\exp(\frac{-700}{T_g})
+OH + OH \to H2O + O(3P),6.20\times10^{-14}(\frac{T_g}{300})^{2.6}\exp(\frac{945}{T_g})
+OH + OH \to H2O2,2.60\times10^{-11}
+OH + OH + O2 \to O2 + H2O2,6.05\times10^{-31}(\frac{300}{T_g})^{3}
+OH + OH + N2 \to N2 + H2O2,6.90\times10^{-31}(\frac{300}{T_g})^{0.8}
+OH + OH + H2O \to H2O + H2O2,1.54\times10^{-31}(\frac{300}{T_g})^{2}\exp(\frac{183.6}{T_g})
+OH + HO2 \to O2 + H2O,4.80\times10^{-11}\exp(\frac{250}{T_g})
+OH + NO + O2 \to O2 + HNO2,7.40\times10^{-31}(\frac{300}{T_g})^{2.4}
+OH + NO + N2 \to N2 + HNO2,7.40\times10^{-31}(\frac{300}{T_g})^{2.4}
+OH + NO2 + O2 \to O2 + HNO3,2.20\times10^{-30}(\frac{300}{T_g})^{2.9}
+OH + NO2 + N2 \to N2 + HNO3,2.60\times10^{-30}(\frac{300}{T_g})^{2.9}
+HO2 + NO \to OH + NO2,3.60\times10^{-12}\exp(\frac{269.4}{T_g})
+HO2 + NO2 \to O2 + HNO2,1.20\times10^{-13}
+HO2 + HO2 \to O2 + H2O2,2.20\times10^{-19}\exp(\frac{600.2}{T_g})
+HO2 + HO2 + O2 \to 2O2 + H2O2,1.90\times10^{-33}\exp(\frac{980}{T_g})
+HO2 + HO2 + N2 \to O2 + N2 + H2O2,1.90\times10^{-33}\exp(\frac{980}{T_g})

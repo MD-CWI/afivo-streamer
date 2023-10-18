@@ -10,115 +10,112 @@ e + N2 -> e + e + N2+,field_table,C26 N2 Ionization 18.80 eV
 e + O2 -> e + e + O2+,field_table,C43 O2 Ionization 12.06 eV
 e + H2O -> e + e + H2O+,field_table,C53 H2O Ionization 13.00 eV
 # Attachment
-e + O2 + O2 -> O2-,field_table,C27 O2 Attachment
-e + O2 -> O-,field_table,C28 O2 Attachment
-e + H2O -> O-,field_table,C44 H2O Attachment
-e + H2O -> H-,field_table,C45 H2O Attachment
-e + H2O -> OH-,field_table,C46 H2O Attachment
-e + O2 + H2O -> O2-,field_table,C54 H2O Attachment
-# Detachment (Panchesnyi 2013)
-O2- + M -> e,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
-O- + N2 -> e,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
-H- + O2 -> e,c1,1.2e-15
-# Negative ion conversion (Panchesnyi 2013)
-O- + O2 -> O2-,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
-O- + O2 + M -> O3-,c1*exp(-(Td/c2)**2),1.1e-42 65.0
-H- + H2O -> OH-,c1,3.8e-15
-O- + H2O -> OH-,c1,6e-19
-H- + O2 -> O-,c1,1e-17
-H- + O2 -> O2-,c1,1e-17
+e + O2 + O2 -> O2- + O2,field_table,C27 O2 Attachment
+e + O2 -> O- + O,field_table,C28 O2 Attachment
+e + H2O -> O- + H2,field_table,C44 H2O Attachment
+e + H2O -> H- + OH,field_table,C45 H2O Attachment
+e + H2O -> OH- + H,field_table,C46 H2O Attachment
+e + O2 + H2O -> O2- + H2O,field_table,C54 H2O Attachment
+# Detachment
+O2- + M -> e + O2 + M,c1*exp(-(c2/(c3+Td))**2),1.24e-11 179.0 8.8,cm
+O- + N2 -> e + N2O,c1*exp(-(c2/(c3+Td))**2),1.16e-12 48.9 11.0,cm
+H- + O2 -> e + HO2,c1,1.2e-09,cm
+# Negative ion conversion
+O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-30 65.0,cm
+O- + O2 -> O2- + O,c1*exp(-(c2/(c3+Td))**2),6.96e-11 198.0 5.6,cm
+O- + H2O -> OH- + OH,c1,6e-13,cm
+H- + O2 -> O- + OH,c1,1e-11,cm
+H- + O2 -> O2- + H,c1,1e-11,cm
+H- + H2O -> OH- + H2,c1,3.8e-09,cm
+O2- + H2O + M -> H2O3- + M,c1,2.2e-28,cm
+H2O3- + H2O + M -> H4O4- + M,c1,5e-28,cm
+H4O4- + H2O + M -> H6O5- + M,c1,5e-29,cm
+H2O3- + M -> O2- + H2O + M,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),5.91e-09 1.28e-19 0.18 1.0,cm
+H4O4- + M -> H2O3- + H2O + M,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-08 5.8e-20 0.18 1.0,cm
+H6O5- + M -> H4O4- + H2O + M,c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4),1.34e-09 4.49e-20 0.18 1.0,cm
 # Positive ion conversion
-# These rates depends on the temperature. For T=300K:
-N2+ + N2 + M -> N4+,c1,5.0e-41
-N4+ + O2 -> O2+,c1,2.5e-16
-O2+ + O2 + M -> O4+,c1,2.4e-42
-# Electron recombination
-e + O4+ ->,c1*(300/Te)**c2,1.4e-12 0.5
-e + H9O4+ ->,c1*(300/Te)**c2,6.5e-12 0.5
-# Water cluster formation
-O2- + H2O + M -> H2O3-,c1,2.2e-40
-H2O3- + H2O + M -> H4O4-,c1,5e-40
-H4O4- + H2O + M -> H6O5-,c1,5e-41
-O2+ + H2O + M -> H2O3+,c1,2.6e-40
-H2O3+ + H2O -> H3O+,c1,3e-16
-H3O+ + H2O + M -> H5O2+,c1,3e-39
-H5O2+ + H2O + M -> H7O3+,c1,3e-39
-H7O3+ + H2O + M -> H9O4+,c1,3e-39
-# Water cluster destruction
-H2O3- + M -> O2-,c1*exp(-c2/Tg),5.91e-15 -1.28e-19
-H4O4- + M -> H2O3-,c1*exp(-c2/Tg),1.34e-14 -5.8e-20
-H6O5- + M -> H4O4-,c1*exp(-c2/Tg),1.34e-15 -4.49e-20
-# Recombination
-N2+ + O- ->,c1,1e-13
-N2+ + O3- ->,c1,1e-13
-N2+ + O2- ->,c1,1e-13
-N2+ + H2O3- ->,c1,1e-13
-N2+ + H4O4- ->,c1,1e-13
-N2+ + H6O5- ->,c1,1e-13
-O2+ + O- ->,c1,1e-13
-O2+ + O3- ->,c1,1e-13
-O2+ + O2- ->,c1,1e-13
-O2+ + H2O3- ->,c1,1e-13
-O2+ + H4O4- ->,c1,1e-13
-O2+ + H6O5- ->,c1,1e-13
-O4+ + O- ->,c1,1e-13
-O4+ + O2- ->,c1,1e-13
-O4+ + O3- ->,c1,1e-13
-O4+ + H2O3- ->,c1,1e-13
-O4+ + H4O4- ->,c1,1e-13
-O4+ + H6O5- ->,c1,1e-13
-N4+ + O- ->,c1,1e-13
-N4+ + O2- ->,c1,1e-13
-N4+ + O3- ->,c1,1e-13
-N4+ + H2O3- ->,c1,1e-13
-N4+ + H4O4- ->,c1,1e-13
-N4+ + H6O5- ->,c1,1e-13
-H2O3+ + O- ->,c1,1e-13
-H2O3+ + O2- ->,c1,1e-13
-H2O3+ + O3- ->,c1,1e-13
-H2O3+ + H2O3- ->,c1,1e-13
-H2O3+ + H4O4- ->,c1,1e-13
-H2O3+ + H6O5- ->,c1,1e-13
-H3O+ + O- ->,c1,1e-13
-H3O+ + O2- ->,c1,1e-13
-H3O+ + O3- ->,c1,1e-13
-H3O+ + H2O3- ->,c1,1e-13
-H3O+ + H4O4- ->,c1,1e-13
-H3O+ + H6O5- ->,c1,1e-13
-H5O2+ + O- ->,c1,1e-13
-H5O2+ + O2- ->,c1,1e-13
-H5O2+ + O3- ->,c1,1e-13
-H5O2+ + H2O3- ->,c1,1e-13
-H5O2+ + H4O4- ->,c1,1e-13
-H5O2+ + H6O5- ->,c1,1e-13
-H7O3+ + O- ->,c1,1e-13
-H7O3+ + O2- ->,c1,1e-13
-H7O3+ + O3- ->,c1,1e-13
-H7O3+ + H2O3- ->,c1,1e-13
-H7O3+ + H4O4- ->,c1,1e-13
-H7O3+ + H6O5- ->,c1,1e-13
-H9O4+ + O- ->,c1,1e-13
-H9O4+ + O2- ->,c1,1e-13
-H9O4+ + O3- ->,c1,1e-13
-H9O4+ + H2O3- ->,c1,1e-13
-H9O4+ + H4O4- ->,c1,1e-13
-H9O4+ + H6O5- ->,c1,1e-13
+N2+ + N2 + M -> N4+ + M,c1*(300/Tg)**c2,5e-29 2.0,cm
+N4+ + O2 -> O2+ + 2N2,c1,2.5e-10,cm
+O2+ + O2 + M -> O4+ + M,c1*(300/Tg)**c2,2.4e-30 3.0,cm
+O2+ + H2O + M -> H2O3+ + M,c1,2.6e-28,cm
+H2O3+ + H2O -> H3O+ + OH + O2,c1,3e-10,cm
+H3O+ + H2O + M -> H5O2+ + M,c1,3e-27,cm
+H5O2+ + H2O + M -> H7O3+ + M,c1,3e-27,cm
+H7O3+ + H2O + M -> H9O4+ + M,c1,3e-27,cm
+# Electron-ion recombination
+e + O4+ -> O2 + O2,c1*(300/Te)**c2,1.4e-06 0.5,cm
+e + H9O4+ -> H + 4H2O,c1*(300/Te)**c2,6.5e-06 0.5,cm
+# Ion-ion recombination
+N2+ + O- -> 2N + O,c1,1e-07,cm
+N2+ + O2- -> 2N + O2,c1,1e-07,cm
+N2+ + O3- -> 2N + O3,c1,1e-07,cm
+N2+ + H2O3- ->,c1,1e-07,cm
+N2+ + H4O4- ->,c1,1e-07,cm
+N2+ + H6O5- ->,c1,1e-07,cm
+N4+ + O- -> 2N2 + O,c1,1e-07,cm
+N4+ + O2- -> 2N2 + O2,c1,1e-07,cm
+N4+ + O3- -> 2N2 + O3,c1,1e-07,cm
+N4+ + H2O3- ->,c1,1e-07,cm
+N4+ + H4O4- ->,c1,1e-07,cm
+N4+ + H6O5- ->,c1,1e-07,cm
+O2+ + O- -> 2O + O,c1,1e-07,cm
+O2+ + O2- -> 2O + O2,c1,1e-07,cm
+O2+ + O3- -> 2O + O3,c1,1e-07,cm
+O2+ + H2O3- ->,c1,1e-07,cm
+O2+ + H4O4- ->,c1,1e-07,cm
+O2+ + H6O5- ->,c1,1e-07,cm
+O4+ + O- -> 2O2 + O,c1,1e-07,cm
+O4+ + O2- -> 2O2 + O2,c1,1e-07,cm
+O4+ + O3- -> 2O2 + O3,c1,1e-07,cm
+O4+ + H2O3- ->,c1,1e-07,cm
+O4+ + H4O4- ->,c1,1e-07,cm
+O4+ + H6O5- ->,c1,1e-07,cm
+H2O3+ + O- ->,c1,1e-07,cm
+H2O3+ + O2- ->,c1,1e-07,cm
+H2O3+ + O3- ->,c1,1e-07,cm
+H2O3+ + H2O3- ->,c1,1e-07,cm
+H2O3+ + H4O4- ->,c1,1e-07,cm
+H2O3+ + H6O5- ->,c1,1e-07,cm
+H3O+ + O- ->,c1,1e-07,cm
+H3O+ + O2- ->,c1,1e-07,cm
+H3O+ + O3- ->,c1,1e-07,cm
+H3O+ + H2O3- ->,c1,1e-07,cm
+H3O+ + H4O4- ->,c1,1e-07,cm
+H3O+ + H6O5- ->,c1,1e-07,cm
+H5O2+ + O- ->,c1,1e-07,cm
+H5O2+ + O2- ->,c1,1e-07,cm
+H5O2+ + O3- ->,c1,1e-07,cm
+H5O2+ + H2O3- ->,c1,1e-07,cm
+H5O2+ + H4O4- ->,c1,1e-07,cm
+H5O2+ + H6O5- ->,c1,1e-07,cm
+H7O3+ + O- ->,c1,1e-07,cm
+H7O3+ + O2- ->,c1,1e-07,cm
+H7O3+ + O3- ->,c1,1e-07,cm
+H7O3+ + H2O3- ->,c1,1e-07,cm
+H7O3+ + H4O4- ->,c1,1e-07,cm
+H7O3+ + H6O5- ->,c1,1e-07,cm
+H9O4+ + O- ->,c1,1e-07,cm
+H9O4+ + O2- ->,c1,1e-07,cm
+H9O4+ + O3- ->,c1,1e-07,cm
+H9O4+ + H2O3- ->,c1,1e-07,cm
+H9O4+ + H4O4- ->,c1,1e-07,cm
+H9O4+ + H6O5- ->,c1,1e-07,cm
 # For the optical emissions
-e + N2 -> e + N2(B),field_table,C14 N2 Excitation 7.35 eV
-e + N2 -> e + N2(C),field_table,C21 N2 Excitation 11.03 eV
+#e + N2 -> e + N2(B),field_table,C14 N2 Excitation 7.35 eV
+#e + N2 -> e + N2(C),field_table,C21 N2 Excitation 11.03 eV
 # Radiative decay
-N2(C) -> SPS,c1,2.4e7
-N2(B) -> FPS,c1,1.34e5
+#N2(C) -> SPS,c1,2.4e7
+#N2(B) -> FPS,c1,1.34e5
 # Quenching (see default_dry, blues_humid)
-N2(B) + O2 ->,c1,3e-16
-N2(B) + N2 ->,c1,1e-17
-N2(B) + N2 ->,c1,7.83e-18
-N2(B) + N2 ->,c1,1.72e-17
-N2(C) + N2 ->,c1,2e-17
-N2(C) + N2 -> N2(B),c1,1e-17
-N2(C) + O2 ->,c1,2.5e-16
-N2(C) + O2 ->,c1,3e-16
-N2(C) + O2 ->,c1,3e-16
+#N2(B) + O2 ->,c1,3e-16
+#N2(B) + N2 ->,c1,1e-17
+#N2(B) + N2 ->,c1,7.83e-18
+#N2(B) + N2 ->,c1,1.72e-17
+#N2(C) + N2 ->,c1,2e-17
+#N2(C) + N2 -> N2(B),c1,1e-17
+#N2(C) + O2 ->,c1,2.5e-16
+#N2(C) + O2 ->,c1,3e-16
+#N2(C) + O2 ->,c1,3e-16
 -----------------------
 
 ignored_species
