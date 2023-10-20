@@ -413,9 +413,3 @@
 ./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=206 -input_data%modified_rate_factors=1.2 -output%name+=_ix0206_fac1.2
 ./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=207 -input_data%modified_rate_factors=0.8 -output%name+=_ix0207_fac0.8
 ./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=207 -input_data%modified_rate_factors=1.2 -output%name+=_ix0207_fac1.2
-./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=208 -input_data%modified_rate_factors=0.8 -output%name+=_ix0208_fac0.8
-./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=208 -input_data%modified_rate_factors=1.2 -output%name+=_ix0208_fac1.2
-./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=209 -input_data%modified_rate_factors=0.8 -output%name+=_ix0209_fac0.8
-./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=209 -input_data%modified_rate_factors=1.2 -output%name+=_ix0209_fac1.2
-./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=210 -input_data%modified_rate_factors=0.8 -output%name+=_ix0210_fac0.8
-./streamer humid_komuro_1.4e6.cfg -input_data%modified_reaction_ix=210 -input_data%modified_rate_factors=1.2 -output%name+=_ix0210_fac1.2

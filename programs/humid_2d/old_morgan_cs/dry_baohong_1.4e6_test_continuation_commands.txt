@@ -1,0 +1,8 @@
+
+./streamer dry_baohong_1.4e6_test_continuation.cfg -restart_from_file="/export/scratch2/baohong/humid_air/sensitivity_test/baohong_1.4e6_000014.dat" -output%name+=_restart_0.3e6_14ns
+
+./streamer dry_baohong_1.4e6_test_continuation.cfg -restart_from_file="/export/scratch2/baohong/humid_air/sensitivity_test/baohong_1.4e6_000016.dat" -output%name+=_restart_0.3e6_16ns
+
+./streamer dry_baohong_1.4e6_test_continuation.cfg -restart_from_file="/export/scratch2/baohong/humid_air/sensitivity_test/baohong_1.4e6_000018.dat" -output%name+=_restart_0.3e6_18ns
+
+./streamer dry_baohong_1.4e6_test_continuation.cfg -restart_from_file="/export/scratch2/baohong/humid_air/sensitivity_test/baohong_1.4e6_000020.dat" -output%name+=_restart_0.3e6_20ns

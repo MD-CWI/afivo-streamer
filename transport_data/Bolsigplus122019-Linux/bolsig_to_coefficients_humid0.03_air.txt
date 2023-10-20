@@ -6,17 +6,17 @@
 /READCOLLISIONS can be called multiple times to read from different files
 
 READCOLLISIONS
-cross_sections_N2_O2_phelps.txt                 /File
+cross_sections_N2_O2_Phelps.txt                 /File
 N2		/Species
 0		/Extrapolate: 0= No 1= Yes
 
 READCOLLISIONS
-cross_sections_N2_O2_phelps.txt                 /File
+cross_sections_N2_O2_Phelps.txt                 /File
 O2 		/Species
 0		/Extrapolate: 0= No 1= Yes
 
 READCOLLISIONS
-cross_sections_H2O_morgan.txt                 /File
+cross_sections_H2O_Kawaguchi.txt                 /File
 H2O 		/Species
 0		/Extrapolate: 0= No 1= Yes
 
@@ -35,7 +35,7 @@ CONDITIONS
 1         / Energy sharing: 1=Equal*; 2=One takes all
 1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
 0.        / Maxwellian mean energy (eV)
-200       / # of grid points
+400       / # of grid points
 0         / Manual grid: 0=No; 1=Linear; 2=Parabolic
 200.      / Manual maximum energy (eV)
 1e-10     / Precision
@@ -52,7 +52,7 @@ RUNSERIES
 1          / Variable: 1=E/N; 2=Mean energy; 3=Maxwellian energy
 1  1000.   / Min Max
 200        / Number
-3          / Type: 1=Linear; 2=Quadratic; 3=Exponential
+2          / Type: 1=Linear; 2=Quadratic; 3=Exponential
 
 /SAVERESULTS can be called multiple times to write in different formats
 
