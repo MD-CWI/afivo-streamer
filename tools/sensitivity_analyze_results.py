@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(
     description='''Script to analyze results from a sensitivity study
     Authors: Hemaditya Malla, Jannis Teunissen''')
 parser.add_argument('logs', type=str, nargs='+',
-                    help='Log/rates files')
+                    help='Log/amounts files')
 parser.add_argument('-y', type=str, nargs='+', default=["sum(n_e)"],
                     help='Variables in the log files to compare')
 parser.add_argument('-time_index', type=int, default=-1,
@@ -20,8 +20,27 @@ parser.add_argument('-time_index', type=int, default=-1,
 args = parser.parse_args()
 
 logs = sorted(args.logs)
-print(logs)
-logs_df = [pd.read_csv(f, delim_whitespace=True) for f in args.logs]
+
+# Determine whether we analyse log files(pandas dataframe) or species amounts(txt files)
+if not all([x.endswith('amounts.txt') for x in logs]):
+    logs_df = [pd.read_csv(f, delim_whitespace=True) for f in args.logs]
+    base_name = logs[0].replace('_log.txt', '')
+else:
+    # Can we use the below variable elsewhere below?
+    analyse_chemistry = True
+    # Make sure that the default argument is changed
+    if args.y[0] == "sum(n_e)":
+        args.y = ["e"]
+
+    # Loading the species list and appending the time column to it
+    base_name = logs[0].replace('_amounts.txt', '')
+    with open(base_name + '_species.txt', 'r') as f:
+        species_list = [x.strip() for x in f.readlines() if x.strip()]
+    species_list.insert(0, "time")
+
+    # Load amounts of species and create a dataframe of them so that the below code wont break
+    logs_df = [pd.DataFrame(np.loadtxt(f), columns=species_list) for f in args.logs]
+
 
 log_sizes = np.array([len(df) for df in logs_df])
 max_size, min_size = log_sizes.max(), log_sizes.min()
@@ -92,7 +111,7 @@ print('\nReactions sorted by their overall importance:')
 print(f'{"rank":<6} R{"#":<6} {"reaction_list":40} {"max(mustar)":15}')
 
 # Load reaction names
-base_name = logs[0].replace('_log.txt', '')
+# base_name = logs[0].replace('_log.txt', '')
 with open(base_name + '_reactions.txt', 'r') as f:
     reactions_list = [x.strip() for x in f.readlines() if x.strip()]
 
