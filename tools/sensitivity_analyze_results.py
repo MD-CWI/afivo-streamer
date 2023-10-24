@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(
     description='''Script to analyze results from a sensitivity study
     Authors: Hemaditya Malla, Jannis Teunissen''')
 parser.add_argument('logs', type=str, nargs='+',
-                    help='Log files')
+                    help='Log/rates files')
 parser.add_argument('-y', type=str, nargs='+', default=["sum(n_e)"],
                     help='Variables in the log files to compare')
 parser.add_argument('-time_index', type=int, default=-1,
@@ -20,6 +20,7 @@ parser.add_argument('-time_index', type=int, default=-1,
 args = parser.parse_args()
 
 logs = sorted(args.logs)
+print(logs)
 logs_df = [pd.read_csv(f, delim_whitespace=True) for f in args.logs]
 
 log_sizes = np.array([len(df) for df in logs_df])
@@ -59,7 +60,9 @@ print(f'Using data at time t = {times[args.time_index]}\n')
 print(f'R{"#":<4} {"variable":15} {"mu":>15} {"mustar":>15} {"sigma":>15}')
 
 for i, ix in enumerate(reaction_ix):
-    values = np.array([df[args.y] for _, df in all_cases[ix]])
+    # print("test: ", args.y)
+    # test = [df[args.y] for _, df in all_cases[ix]]
+    values = np.array([df[args.y].to_numpy() for _, df in all_cases[ix]])
     factors = np.array([f for f, _ in all_cases[ix]])
 
     # Get values at time index
