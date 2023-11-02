@@ -10,11 +10,6 @@ cross_section_C4F7N_XJTU.txt                 /File
 C4F7N 		/Species
 0		/Extrapolate: 0= No 1= Yes
 
-READCOLLISIONS
-cross_section_CO2_IST-Lisbon.txt                 /File
-CO2 		/Species
-0		/Extrapolate: 0= No 1= Yes
-
 CONDITIONS
 1000.     / Electric field / N (Td)
 0.        / Angular field frequency / N (m3/s)
@@ -36,7 +31,7 @@ CONDITIONS
 1e-10     / Precision
 1e-4      / Convergence
 1000      / Maximum # of iterations
-0.2 0.8   / Gas composition fractions
+1   / Gas composition fractions
 1         / Normalize composition to unity: 0=No; 1=Yes
 
 RUN
@@ -52,7 +47,7 @@ RUNSERIES
 /SAVERESULTS can be called multiple times to write in different formats
 
 SAVERESULTS
-convert_0.20C4F7N_0.80CO2.txt        / File
+convert_C4F7N.txt        / File
 2        / Format: 1=Run by run; 2=Combined; 3=E/N; 4=Energy; 5=SIGLO; 6=PLASIMO
 1        / Conditions: 0=No; 1=Yes
 1        / Transport coefficients: 0=No; 1=Yes

@@ -1,4 +1,4 @@
-BOLSIG+ script file: bolsig_to_coefficients_eco.txt
+BOLSIG+ script file: bolsig_to_coefficients_C4F7N.txt
 READCOLLISIONS
 C4F7N
 cross_section_C4F7N_XJTU.txt
@@ -9,82 +9,63 @@ C4    C4F7N    Excitation    0.15 eV
 C5    C4F7N    Excitation    0.28 eV                            
 C6    C4F7N    Excitation    14.00 eV                           
 C7    C4F7N    Ionization    14.00 eV                           
-READCOLLISIONS
-CO2
-cross_section_CO2_IST-Lisbon.txt
-C8    CO2    Attachment                                         
-C9    CO2    Effective (momentum)                               
-C10   CO2    Excitation    0.083 eV                             
-C11   CO2    Excitation    0.17 eV                              
-C12   CO2    Excitation    0.17 eV                              
-C13   CO2    Excitation    0.25 eV                              
-C14   CO2    Excitation    0.29 eV                              
-C15   CO2    Excitation    0.34 eV                              
-C16   CO2    Excitation    0.34 eV                              
-C17   CO2    Excitation    0.42 eV                              
-C18   CO2    Excitation    0.50 eV                              
-C19   CO2    Excitation    0.51 eV                              
-C20   CO2    Excitation    2.50 eV                              
-C21   CO2    Excitation    7.00 eV                              
-C22   CO2    Excitation    10.50 eV                             
-C23   CO2    Ionization    13.80 eV                             
 RUN
-R1    1000. Td    11.8 eV                                       
+R1    1000. Td    9.80 eV                                       
 CLEARRUNS
 RUNSERIES
-R1    1.00 Td    0.0381 eV                                      
-R2    1.02 Td    0.0381 eV                                      
-R3    1.04 Td    0.0381 eV                                      
-R4    1.06 Td    0.0380 eV                                      
-R5    1.09 Td    0.0380 eV                                      
-R6    1.11 Td    0.0380 eV                                      
-R7    1.13 Td    0.0379 eV                                      
-R8    1.16 Td    0.0379 eV                                      
-R9    1.18 Td    0.0378 eV                                      
-R10   1.21 Td    0.0378 eV                                      
-R11   1.23 Td    0.0377 eV                                      
-R12   1.26 Td    0.0377 eV                                      
-R13   1.28 Td    0.0376 eV                                      
-R14   1.31 Td    0.0375 eV                                      
-R15   1.34 Td    0.0375 eV                                      
-R16   1.37 Td    0.0374 eV                                      
-R17   1.39 Td    0.0374 eV                                      
-R18   1.42 Td    0.0373 eV                                      
-R19   1.45 Td    0.0373 eV                                      
-R20   1.48 Td    0.0372 eV                                      
-R21   1.52 Td    0.0372 eV                                      
-R22   1.55 Td    0.0371 eV                                      
-R23   1.58 Td    0.0371 eV                                      
-R24   1.61 Td    0.0370 eV                                      
-R25   1.65 Td    0.0370 eV                                      
-R26   1.68 Td    0.0370 eV                                      
-R27   1.72 Td    0.0370 eV                                      
-R28   1.75 Td    0.0370 eV                                      
-R29   1.79 Td    0.0370 eV                                      
-R30   1.83 Td    0.0370 eV                                      
-R31   1.87 Td    0.0371 eV                                      
-R32   1.90 Td    0.0371 eV                                      
-R33   1.94 Td    0.0372 eV                                      
-R34   1.99 Td    0.0373 eV                                      
-R35   2.03 Td    0.0374 eV                                      
-R36   2.07 Td    0.0376 eV                                      
-R37   2.11 Td    0.0377 eV                                      
-R38   2.16 Td    0.0379 eV                                      
-R39   2.20 Td    0.0381 eV                                      
-R40   2.25 Td    0.0384 eV                                      
-R41   2.30 Td    0.0386 eV                                      
-R42   2.34 Td    0.0390 eV                                      
-R43   2.39 Td    0.0393 eV                                      
-R44   2.44 Td    0.0397 eV                                      
-R45   2.50 Td    0.0402 eV                                      
-R46   2.55 Td    0.0407 eV                                      
-R47   2.60 Td    0.0467 eV                                      
-R48   2.66 Td    0.0472 eV                                      
-R49   2.71 Td    0.0478 eV                                      
-R50   2.77 Td    0.0485 eV                                      
-R51   2.83 Td    0.0493 eV                                      
-R52   2.89 Td    0.0502 eV                                      
-R53   2.95 Td    0.0512 eV                                      
+R1    1.00 Td    Failed                                         
+R2    1.02 Td    Failed                                         
+R3    1.04 Td    Failed                                         
+R4    1.06 Td    Failed                                         
+R5    1.09 Td    Failed                                         
+R6    1.11 Td    Failed                                         
+R7    1.13 Td    Failed                                         
+R8    1.16 Td    Failed                                         
+R9    1.18 Td    Failed                                         
+R10   1.21 Td    Failed                                         
+R11   1.23 Td    Failed                                         
+R12   1.26 Td    Failed                                         
+R13   1.28 Td    Failed                                         
+R14   1.31 Td    Failed                                         
+R15   1.34 Td    Failed                                         
+R16   1.37 Td    Failed                                         
+R17   1.39 Td    Failed                                         
+R18   1.42 Td    Failed                                         
+R19   1.45 Td    Failed                                         
+R20   1.48 Td    Failed                                         
+R21   1.52 Td    Failed                                         
+R22   1.55 Td    Failed                                         
+R23   1.58 Td    Failed                                         
+R24   1.61 Td    Failed                                         
+R25   1.65 Td    Failed                                         
+R26   1.68 Td    Failed                                         
+R27   1.72 Td    Failed                                         
+R28   1.75 Td    Failed                                         
+R29   1.79 Td    Failed                                         
+R30   1.83 Td    Failed                                         
+R31   1.87 Td    Failed                                         
+R32   1.90 Td    Failed                                         
+R33   1.94 Td    Failed                                         
+R34   1.99 Td    Failed                                         
+R35   2.03 Td    Failed                                         
+R36   2.07 Td    Failed                                         
+R37   2.11 Td    Failed                                         
+R38   2.16 Td    Failed                                         
+R39   2.20 Td    Failed                                         
+R40   2.25 Td    Failed                                         
+R41   2.30 Td    Failed                                         
+R42   2.34 Td    Failed                                         
+R43   2.39 Td    Failed                                         
+R44   2.44 Td    Failed                                         
+R45   2.50 Td    Failed                                         
+R46   2.55 Td    Failed                                         
+R47   2.60 Td    Failed                                         
+R48   2.66 Td    Failed                                         
+R49   2.71 Td    Failed                                         
+R50   2.77 Td    Failed                                         
+R51   2.83 Td    Failed                                         
+R52   2.89 Td    Failed                                         
+R53   2.95 Td    Failed                                         
 R54   3.01 Td    Failed                                         
 R55   3.07 Td    Failed                                         
 R56   3.14 Td    Failed                                         
@@ -100,338 +81,338 @@ R65   3.78 Td    Failed
 R66   3.86 Td    Failed                                         
 R67   3.94 Td    Failed                                         
 R68   4.03 Td    Failed                                         
-R69   4.11 Td    0.694 eV                                       
-R70   4.20 Td    0.704 eV                                       
-R71   4.28 Td    0.714 eV                                       
-R72   4.37 Td    0.724 eV                                       
-R73   4.47 Td    0.734 eV                                       
-R74   4.56 Td    0.745 eV                                       
-R75   4.66 Td    0.755 eV                                       
-R76   4.75 Td    0.766 eV                                       
-R77   4.85 Td    0.777 eV                                       
-R78   4.96 Td    0.788 eV                                       
-R79   5.06 Td    0.799 eV                                       
-R80   5.17 Td    0.811 eV                                       
-R81   5.27 Td    0.822 eV                                       
-R82   5.39 Td    0.834 eV                                       
-R83   5.50 Td    0.845 eV                                       
-R84   5.61 Td    0.857 eV                                       
-R85   5.73 Td    0.869 eV                                       
-R86   5.85 Td    0.882 eV                                       
-R87   5.98 Td    0.894 eV                                       
-R88   6.10 Td    0.906 eV                                       
-R89   6.23 Td    0.919 eV                                       
-R90   6.36 Td    0.931 eV                                       
-R91   6.49 Td    0.944 eV                                       
-R92   6.63 Td    0.956 eV                                       
-R93   6.77 Td    0.969 eV                                       
-R94   6.91 Td    0.982 eV                                       
-R95   7.06 Td    0.995 eV                                       
-R96   7.20 Td    1.01 eV                                        
-R97   7.36 Td    1.02 eV                                        
-R98   7.51 Td    1.03 eV                                        
-R99   7.67 Td    1.05 eV                                        
-R100  7.83 Td    1.06 eV                                        
-R101  7.99 Td    1.07 eV                                        
-R102  8.16 Td    1.09 eV                                        
-R103  8.33 Td    1.10 eV                                        
-R104  8.51 Td    1.11 eV                                        
-R105  8.69 Td    1.12 eV                                        
-R106  8.87 Td    1.14 eV                                        
-R107  9.06 Td    1.15 eV                                        
-R108  9.25 Td    1.16 eV                                        
-R109  9.44 Td    1.18 eV                                        
-R110  9.64 Td    1.19 eV                                        
-R111  9.84 Td    1.20 eV                                        
-R112  10.0 Td    1.21 eV                                        
-R113  10.3 Td    1.23 eV                                        
-R114  10.5 Td    1.24 eV                                        
-R115  10.7 Td    1.25 eV                                        
-R116  10.9 Td    1.26 eV                                        
-R117  11.1 Td    1.27 eV                                        
-R118  11.4 Td    1.29 eV                                        
-R119  11.6 Td    1.30 eV                                        
-R120  11.9 Td    1.31 eV                                        
-R121  12.1 Td    1.32 eV                                        
-R122  12.4 Td    1.33 eV                                        
-R123  12.6 Td    1.35 eV                                        
-R124  12.9 Td    1.36 eV                                        
-R125  13.2 Td    1.37 eV                                        
-R126  13.4 Td    1.38 eV                                        
-R127  13.7 Td    1.39 eV                                        
-R128  14.0 Td    1.40 eV                                        
-R129  14.3 Td    1.41 eV                                        
-R130  14.6 Td    1.42 eV                                        
-R131  14.9 Td    1.43 eV                                        
-R132  15.2 Td    1.44 eV                                        
-R133  15.5 Td    1.45 eV                                        
-R134  15.9 Td    1.46 eV                                        
-R135  16.2 Td    1.47 eV                                        
-R136  16.5 Td    1.48 eV                                        
-R137  16.9 Td    1.49 eV                                        
-R138  17.3 Td    1.50 eV                                        
-R139  17.6 Td    1.51 eV                                        
-R140  18.0 Td    1.52 eV                                        
-R141  18.4 Td    1.53 eV                                        
-R142  18.7 Td    1.54 eV                                        
-R143  19.1 Td    1.55 eV                                        
-R144  19.5 Td    1.56 eV                                        
-R145  20.0 Td    1.56 eV                                        
-R146  20.4 Td    1.57 eV                                        
-R147  20.8 Td    1.58 eV                                        
-R148  21.2 Td    1.59 eV                                        
-R149  21.7 Td    1.60 eV                                        
-R150  22.1 Td    1.61 eV                                        
-R151  22.6 Td    1.62 eV                                        
-R152  23.1 Td    1.63 eV                                        
-R153  23.6 Td    1.64 eV                                        
-R154  24.1 Td    1.65 eV                                        
-R155  24.6 Td    1.66 eV                                        
-R156  25.1 Td    1.67 eV                                        
-R157  25.6 Td    1.68 eV                                        
-R158  26.1 Td    1.69 eV                                        
-R159  26.7 Td    1.70 eV                                        
-R160  27.3 Td    1.71 eV                                        
-R161  27.8 Td    1.73 eV                                        
-R162  28.4 Td    1.74 eV                                        
-R163  29.0 Td    1.76 eV                                        
-R164  29.6 Td    1.77 eV                                        
-R165  30.2 Td    1.79 eV                                        
-R166  30.9 Td    1.81 eV                                        
-R167  31.5 Td    1.83 eV                                        
-R168  32.2 Td    1.85 eV                                        
-R169  32.9 Td    1.87 eV                                        
-R170  33.5 Td    1.89 eV                                        
-R171  34.3 Td    1.91 eV                                        
-R172  35.0 Td    1.93 eV                                        
-R173  35.7 Td    1.96 eV                                        
-R174  36.5 Td    1.98 eV                                        
-R175  37.2 Td    2.01 eV                                        
-R176  38.0 Td    2.04 eV                                        
-R177  38.8 Td    2.06 eV                                        
-R178  39.6 Td    2.09 eV                                        
-R179  40.5 Td    2.12 eV                                        
-R180  41.3 Td    2.15 eV                                        
-R181  42.2 Td    2.18 eV                                        
-R182  43.1 Td    2.21 eV                                        
-R183  44.0 Td    2.24 eV                                        
-R184  44.9 Td    2.27 eV                                        
-R185  45.8 Td    2.30 eV                                        
-R186  46.8 Td    2.33 eV                                        
-R187  47.8 Td    2.37 eV                                        
-R188  48.8 Td    2.40 eV                                        
-R189  49.8 Td    2.43 eV                                        
-R190  50.8 Td    2.47 eV                                        
-R191  51.9 Td    2.50 eV                                        
-R192  53.0 Td    2.53 eV                                        
-R193  54.1 Td    2.57 eV                                        
-R194  55.3 Td    2.60 eV                                        
-R195  56.4 Td    2.64 eV                                        
-R196  57.6 Td    2.67 eV                                        
-R197  58.8 Td    2.71 eV                                        
-R198  60.0 Td    2.74 eV                                        
-R199  61.3 Td    2.78 eV                                        
-R200  62.6 Td    2.82 eV                                        
-R201  63.9 Td    2.85 eV                                        
-R202  65.2 Td    2.89 eV                                        
-R203  66.6 Td    2.93 eV                                        
-R204  68.0 Td    2.97 eV                                        
-R205  69.4 Td    3.00 eV                                        
-R206  70.9 Td    3.04 eV                                        
-R207  72.4 Td    3.08 eV                                        
-R208  73.9 Td    3.12 eV                                        
-R209  75.5 Td    3.16 eV                                        
-R210  77.1 Td    3.20 eV                                        
-R211  78.7 Td    3.24 eV                                        
-R212  80.3 Td    3.28 eV                                        
-R213  82.0 Td    3.32 eV                                        
-R214  83.7 Td    3.36 eV                                        
-R215  85.5 Td    3.40 eV                                        
-R216  87.3 Td    3.44 eV                                        
-R217  89.1 Td    3.49 eV                                        
-R218  91.0 Td    3.53 eV                                        
-R219  92.9 Td    3.57 eV                                        
-R220  94.9 Td    3.62 eV                                        
-R221  96.8 Td    3.66 eV                                        
-R222  98.9 Td    3.71 eV                                        
-R223  101. Td    3.75 eV                                        
-R224  103. Td    3.80 eV                                        
-R225  105. Td    3.85 eV                                        
-R226  107. Td    3.89 eV                                        
-R227  110. Td    3.94 eV                                        
-R228  112. Td    3.99 eV                                        
-R229  114. Td    4.04 eV                                        
-R230  117. Td    4.09 eV                                        
-R231  119. Td    4.14 eV                                        
-R232  122. Td    4.19 eV                                        
-R233  124. Td    4.24 eV                                        
-R234  127. Td    4.29 eV                                        
-R235  130. Td    4.34 eV                                        
-R236  132. Td    4.39 eV                                        
-R237  135. Td    4.44 eV                                        
-R238  138. Td    4.50 eV                                        
-R239  141. Td    4.55 eV                                        
-R240  144. Td    4.60 eV                                        
-R241  147. Td    4.66 eV                                        
-R242  150. Td    4.71 eV                                        
-R243  153. Td    4.77 eV                                        
-R244  156. Td    4.82 eV                                        
-R245  160. Td    4.88 eV                                        
-R246  163. Td    4.94 eV                                        
-R247  166. Td    4.99 eV                                        
-R248  170. Td    5.05 eV                                        
-R249  173. Td    5.11 eV                                        
-R250  177. Td    5.17 eV                                        
-R251  181. Td    5.22 eV                                        
-R252  184. Td    5.28 eV                                        
-R253  188. Td    5.34 eV                                        
-R254  192. Td    5.40 eV                                        
-R255  196. Td    5.46 eV                                        
-R256  200. Td    5.52 eV                                        
-R257  205. Td    5.58 eV                                        
-R258  209. Td    5.64 eV                                        
-R259  213. Td    5.70 eV                                        
-R260  218. Td    5.77 eV                                        
-R261  222. Td    5.83 eV                                        
-R262  227. Td    5.89 eV                                        
-R263  232. Td    5.95 eV                                        
-R264  237. Td    6.02 eV                                        
-R265  242. Td    6.08 eV                                        
-R266  247. Td    6.14 eV                                        
-R267  252. Td    6.21 eV                                        
-R268  257. Td    6.27 eV                                        
-R269  263. Td    6.34 eV                                        
-R270  268. Td    6.40 eV                                        
-R271  274. Td    6.47 eV                                        
-R272  280. Td    6.53 eV                                        
-R273  285. Td    6.60 eV                                        
-R274  291. Td    6.67 eV                                        
-R275  298. Td    6.73 eV                                        
-R276  304. Td    6.80 eV                                        
-R277  310. Td    6.87 eV                                        
-R278  317. Td    6.94 eV                                        
-R279  323. Td    7.00 eV                                        
-R280  330. Td    7.07 eV                                        
-R281  337. Td    7.14 eV                                        
-R282  344. Td    7.21 eV                                        
-R283  351. Td    7.28 eV                                        
-R284  359. Td    7.35 eV                                        
-R285  366. Td    7.42 eV                                        
-R286  374. Td    7.49 eV                                        
-R287  382. Td    7.57 eV                                        
-R288  390. Td    7.64 eV                                        
-R289  398. Td    7.71 eV                                        
-R290  406. Td    7.79 eV                                        
-R291  415. Td    7.86 eV                                        
-R292  424. Td    7.93 eV                                        
-R293  433. Td    8.01 eV                                        
-R294  442. Td    8.09 eV                                        
-R295  451. Td    8.16 eV                                        
-R296  460. Td    8.24 eV                                        
-R297  470. Td    8.32 eV                                        
-R298  480. Td    8.39 eV                                        
-R299  490. Td    8.47 eV                                        
-R300  500. Td    8.55 eV                                        
-R301  511. Td    8.63 eV                                        
-R302  522. Td    8.71 eV                                        
-R303  533. Td    8.80 eV                                        
-R304  544. Td    8.88 eV                                        
-R305  555. Td    8.96 eV                                        
-R306  567. Td    9.05 eV                                        
-R307  579. Td    9.13 eV                                        
-R308  591. Td    9.22 eV                                        
-R309  603. Td    9.31 eV                                        
-R310  616. Td    9.39 eV                                        
-R311  629. Td    9.48 eV                                        
-R312  642. Td    9.57 eV                                        
-R313  656. Td    9.66 eV                                        
-R314  669. Td    9.75 eV                                        
-R315  683. Td    9.85 eV                                        
-R316  698. Td    9.94 eV                                        
-R317  712. Td    10.0 eV                                        
-R318  727. Td    10.1 eV                                        
-R319  743. Td    10.2 eV                                        
-R320  758. Td    10.3 eV                                        
-R321  774. Td    10.4 eV                                        
-R322  790. Td    10.5 eV                                        
-R323  807. Td    10.6 eV                                        
-R324  824. Td    10.7 eV                                        
-R325  841. Td    10.8 eV                                        
-R326  859. Td    11.0 eV                                        
-R327  877. Td    11.1 eV                                        
-R328  895. Td    11.2 eV                                        
-R329  914. Td    11.3 eV                                        
-R330  934. Td    11.4 eV                                        
-R331  953. Td    11.5 eV                                        
-R332  973. Td    11.6 eV                                        
-R333  994. Td    11.8 eV                                        
-R334  1014. Td    11.9 eV                                       
-R335  1036. Td    12.0 eV                                       
-R336  1058. Td    12.1 eV                                       
-R337  1080. Td    12.2 eV                                       
-R338  1102. Td    12.4 eV                                       
-R339  1126. Td    12.5 eV                                       
-R340  1149. Td    12.6 eV                                       
-R341  1173. Td    12.8 eV                                       
-R342  1198. Td    12.9 eV                                       
-R343  1223. Td    13.1 eV                                       
-R344  1249. Td    13.2 eV                                       
-R345  1275. Td    13.3 eV                                       
-R346  1302. Td    13.5 eV                                       
-R347  1329. Td    13.6 eV                                       
-R348  1357. Td    13.8 eV                                       
-R349  1386. Td    14.0 eV                                       
-R350  1415. Td    14.1 eV                                       
-R351  1444. Td    14.3 eV                                       
-R352  1475. Td    14.4 eV                                       
-R353  1506. Td    14.6 eV                                       
-R354  1537. Td    14.8 eV                                       
-R355  1570. Td    15.0 eV                                       
-R356  1603. Td    15.1 eV                                       
-R357  1636. Td    15.3 eV                                       
-R358  1671. Td    15.5 eV                                       
-R359  1706. Td    15.7 eV                                       
-R360  1742. Td    15.9 eV                                       
-R361  1778. Td    16.1 eV                                       
-R362  1816. Td    16.3 eV                                       
-R363  1854. Td    16.5 eV                                       
-R364  1893. Td    16.7 eV                                       
-R365  1932. Td    16.9 eV                                       
-R366  1973. Td    17.2 eV                                       
-R367  2014. Td    17.4 eV                                       
-R368  2057. Td    17.6 eV                                       
-R369  2100. Td    17.8 eV                                       
-R370  2144. Td    18.1 eV                                       
-R371  2189. Td    18.3 eV                                       
-R372  2235. Td    18.6 eV                                       
-R373  2282. Td    18.8 eV                                       
-R374  2330. Td    19.1 eV                                       
-R375  2379. Td    19.4 eV                                       
-R376  2429. Td    19.6 eV                                       
-R377  2480. Td    19.9 eV                                       
-R378  2532. Td    20.2 eV                                       
-R379  2585. Td    20.5 eV                                       
-R380  2639. Td    20.8 eV                                       
-R381  2695. Td    21.1 eV                                       
-R382  2751. Td    21.4 eV                                       
-R383  2809. Td    21.7 eV                                       
-R384  2868. Td    22.1 eV                                       
-R385  2928. Td    22.4 eV                                       
-R386  2990. Td    22.7 eV                                       
-R387  3053. Td    23.1 eV                                       
-R388  3117. Td    23.5 eV                                       
-R389  3182. Td    23.8 eV                                       
-R390  3249. Td    24.2 eV                                       
-R391  3317. Td    24.6 eV                                       
-R392  3387. Td    25.0 eV                                       
-R393  3458. Td    25.4 eV                                       
-R394  3531. Td    25.8 eV                                       
-R395  3605. Td    26.2 eV                                       
-R396  3681. Td    26.7 eV                                       
-R397  3758. Td    27.1 eV                                       
-R398  3837. Td    27.6 eV                                       
-R399  3918. Td    28.0 eV                                       
-R400  4000. Td    28.5 eV                                       
+R69   4.11 Td    Failed                                         
+R70   4.20 Td    Failed                                         
+R71   4.28 Td    Failed                                         
+R72   4.37 Td    Failed                                         
+R73   4.47 Td    Failed                                         
+R74   4.56 Td    Failed                                         
+R75   4.66 Td    Failed                                         
+R76   4.75 Td    Failed                                         
+R77   4.85 Td    Failed                                         
+R78   4.96 Td    Failed                                         
+R79   5.06 Td    Failed                                         
+R80   5.17 Td    Failed                                         
+R81   5.27 Td    Failed                                         
+R82   5.39 Td    Failed                                         
+R83   5.50 Td    Failed                                         
+R84   5.61 Td    Failed                                         
+R85   5.73 Td    Failed                                         
+R86   5.85 Td    Failed                                         
+R87   5.98 Td    Failed                                         
+R88   6.10 Td    Failed                                         
+R89   6.23 Td    Failed                                         
+R90   6.36 Td    Failed                                         
+R91   6.49 Td    Failed                                         
+R92   6.63 Td    Failed                                         
+R93   6.77 Td    Failed                                         
+R94   6.91 Td    Failed                                         
+R95   7.06 Td    Failed                                         
+R96   7.20 Td    Failed                                         
+R97   7.36 Td    Failed                                         
+R98   7.51 Td    Failed                                         
+R99   7.67 Td    Failed                                         
+R100  7.83 Td    1.97 eV                                        
+R101  7.99 Td    1.97 eV                                        
+R102  8.16 Td    1.98 eV                                        
+R103  8.33 Td    1.99 eV                                        
+R104  8.51 Td    1.99 eV                                        
+R105  8.69 Td    2.00 eV                                        
+R106  8.87 Td    2.01 eV                                        
+R107  9.06 Td    2.01 eV                                        
+R108  9.25 Td    2.02 eV                                        
+R109  9.44 Td    2.03 eV                                        
+R110  9.64 Td    2.03 eV                                        
+R111  9.84 Td    2.04 eV                                        
+R112  10.0 Td    2.05 eV                                        
+R113  10.3 Td    2.06 eV                                        
+R114  10.5 Td    2.06 eV                                        
+R115  10.7 Td    2.07 eV                                        
+R116  10.9 Td    2.08 eV                                        
+R117  11.1 Td    2.08 eV                                        
+R118  11.4 Td    2.09 eV                                        
+R119  11.6 Td    2.10 eV                                        
+R120  11.9 Td    2.11 eV                                        
+R121  12.1 Td    2.12 eV                                        
+R122  12.4 Td    2.12 eV                                        
+R123  12.6 Td    2.13 eV                                        
+R124  12.9 Td    2.14 eV                                        
+R125  13.2 Td    2.15 eV                                        
+R126  13.4 Td    2.16 eV                                        
+R127  13.7 Td    2.17 eV                                        
+R128  14.0 Td    2.17 eV                                        
+R129  14.3 Td    2.18 eV                                        
+R130  14.6 Td    2.19 eV                                        
+R131  14.9 Td    2.20 eV                                        
+R132  15.2 Td    2.21 eV                                        
+R133  15.5 Td    2.22 eV                                        
+R134  15.9 Td    2.23 eV                                        
+R135  16.2 Td    2.24 eV                                        
+R136  16.5 Td    2.25 eV                                        
+R137  16.9 Td    2.26 eV                                        
+R138  17.3 Td    2.27 eV                                        
+R139  17.6 Td    2.28 eV                                        
+R140  18.0 Td    2.29 eV                                        
+R141  18.4 Td    2.30 eV                                        
+R142  18.7 Td    2.31 eV                                        
+R143  19.1 Td    2.33 eV                                        
+R144  19.5 Td    2.34 eV                                        
+R145  20.0 Td    2.35 eV                                        
+R146  20.4 Td    2.36 eV                                        
+R147  20.8 Td    2.37 eV                                        
+R148  21.2 Td    2.39 eV                                        
+R149  21.7 Td    2.40 eV                                        
+R150  22.1 Td    2.41 eV                                        
+R151  22.6 Td    2.43 eV                                        
+R152  23.1 Td    2.44 eV                                        
+R153  23.6 Td    2.46 eV                                        
+R154  24.1 Td    2.47 eV                                        
+R155  24.6 Td    2.49 eV                                        
+R156  25.1 Td    2.50 eV                                        
+R157  25.6 Td    2.52 eV                                        
+R158  26.1 Td    2.54 eV                                        
+R159  26.7 Td    2.56 eV                                        
+R160  27.3 Td    2.57 eV                                        
+R161  27.8 Td    2.59 eV                                        
+R162  28.4 Td    2.61 eV                                        
+R163  29.0 Td    2.63 eV                                        
+R164  29.6 Td    2.65 eV                                        
+R165  30.2 Td    2.67 eV                                        
+R166  30.9 Td    2.69 eV                                        
+R167  31.5 Td    2.71 eV                                        
+R168  32.2 Td    2.73 eV                                        
+R169  32.9 Td    2.75 eV                                        
+R170  33.5 Td    2.78 eV                                        
+R171  34.3 Td    2.80 eV                                        
+R172  35.0 Td    2.82 eV                                        
+R173  35.7 Td    2.85 eV                                        
+R174  36.5 Td    2.87 eV                                        
+R175  37.2 Td    2.89 eV                                        
+R176  38.0 Td    2.92 eV                                        
+R177  38.8 Td    2.94 eV                                        
+R178  39.6 Td    2.97 eV                                        
+R179  40.5 Td    2.99 eV                                        
+R180  41.3 Td    3.02 eV                                        
+R181  42.2 Td    3.04 eV                                        
+R182  43.1 Td    3.07 eV                                        
+R183  44.0 Td    3.09 eV                                        
+R184  44.9 Td    3.12 eV                                        
+R185  45.8 Td    3.14 eV                                        
+R186  46.8 Td    3.17 eV                                        
+R187  47.8 Td    3.19 eV                                        
+R188  48.8 Td    3.22 eV                                        
+R189  49.8 Td    3.24 eV                                        
+R190  50.8 Td    3.27 eV                                        
+R191  51.9 Td    3.29 eV                                        
+R192  53.0 Td    3.31 eV                                        
+R193  54.1 Td    3.34 eV                                        
+R194  55.3 Td    3.36 eV                                        
+R195  56.4 Td    3.39 eV                                        
+R196  57.6 Td    3.41 eV                                        
+R197  58.8 Td    3.44 eV                                        
+R198  60.0 Td    3.46 eV                                        
+R199  61.3 Td    3.49 eV                                        
+R200  62.6 Td    3.51 eV                                        
+R201  63.9 Td    3.53 eV                                        
+R202  65.2 Td    3.56 eV                                        
+R203  66.6 Td    3.58 eV                                        
+R204  68.0 Td    3.61 eV                                        
+R205  69.4 Td    3.63 eV                                        
+R206  70.9 Td    3.66 eV                                        
+R207  72.4 Td    3.69 eV                                        
+R208  73.9 Td    3.71 eV                                        
+R209  75.5 Td    3.74 eV                                        
+R210  77.1 Td    3.77 eV                                        
+R211  78.7 Td    3.80 eV                                        
+R212  80.3 Td    3.83 eV                                        
+R213  82.0 Td    3.86 eV                                        
+R214  83.7 Td    3.89 eV                                        
+R215  85.5 Td    3.92 eV                                        
+R216  87.3 Td    3.96 eV                                        
+R217  89.1 Td    4.00 eV                                        
+R218  91.0 Td    4.04 eV                                        
+R219  92.9 Td    4.08 eV                                        
+R220  94.9 Td    4.12 eV                                        
+R221  96.8 Td    4.17 eV                                        
+R222  98.9 Td    4.22 eV                                        
+R223  101. Td    4.27 eV                                        
+R224  103. Td    4.32 eV                                        
+R225  105. Td    4.38 eV                                        
+R226  107. Td    4.44 eV                                        
+R227  110. Td    4.50 eV                                        
+R228  112. Td    4.56 eV                                        
+R229  114. Td    4.63 eV                                        
+R230  117. Td    4.70 eV                                        
+R231  119. Td    4.77 eV                                        
+R232  122. Td    4.84 eV                                        
+R233  124. Td    4.92 eV                                        
+R234  127. Td    4.99 eV                                        
+R235  130. Td    5.07 eV                                        
+R236  132. Td    5.15 eV                                        
+R237  135. Td    5.23 eV                                        
+R238  138. Td    5.30 eV                                        
+R239  141. Td    5.38 eV                                        
+R240  144. Td    5.46 eV                                        
+R241  147. Td    5.53 eV                                        
+R242  150. Td    5.61 eV                                        
+R243  153. Td    5.68 eV                                        
+R244  156. Td    5.75 eV                                        
+R245  160. Td    5.82 eV                                        
+R246  163. Td    5.89 eV                                        
+R247  166. Td    5.95 eV                                        
+R248  170. Td    6.02 eV                                        
+R249  173. Td    6.08 eV                                        
+R250  177. Td    6.14 eV                                        
+R251  181. Td    6.20 eV                                        
+R252  184. Td    6.26 eV                                        
+R253  188. Td    6.32 eV                                        
+R254  192. Td    6.37 eV                                        
+R255  196. Td    6.42 eV                                        
+R256  200. Td    6.47 eV                                        
+R257  205. Td    6.52 eV                                        
+R258  209. Td    6.57 eV                                        
+R259  213. Td    6.62 eV                                        
+R260  218. Td    6.67 eV                                        
+R261  222. Td    6.71 eV                                        
+R262  227. Td    6.75 eV                                        
+R263  232. Td    6.80 eV                                        
+R264  237. Td    6.84 eV                                        
+R265  242. Td    6.88 eV                                        
+R266  247. Td    6.92 eV                                        
+R267  252. Td    6.96 eV                                        
+R268  257. Td    7.00 eV                                        
+R269  263. Td    7.03 eV                                        
+R270  268. Td    7.07 eV                                        
+R271  274. Td    7.11 eV                                        
+R272  280. Td    7.15 eV                                        
+R273  285. Td    7.18 eV                                        
+R274  291. Td    7.22 eV                                        
+R275  298. Td    7.25 eV                                        
+R276  304. Td    7.29 eV                                        
+R277  310. Td    7.32 eV                                        
+R278  317. Td    7.36 eV                                        
+R279  323. Td    7.39 eV                                        
+R280  330. Td    7.43 eV                                        
+R281  337. Td    7.46 eV                                        
+R282  344. Td    7.50 eV                                        
+R283  351. Td    7.53 eV                                        
+R284  359. Td    7.57 eV                                        
+R285  366. Td    7.60 eV                                        
+R286  374. Td    7.64 eV                                        
+R287  382. Td    7.67 eV                                        
+R288  390. Td    7.71 eV                                        
+R289  398. Td    7.74 eV                                        
+R290  406. Td    7.78 eV                                        
+R291  415. Td    7.81 eV                                        
+R292  424. Td    7.85 eV                                        
+R293  433. Td    7.89 eV                                        
+R294  442. Td    7.92 eV                                        
+R295  451. Td    7.96 eV                                        
+R296  460. Td    8.00 eV                                        
+R297  470. Td    8.04 eV                                        
+R298  480. Td    8.08 eV                                        
+R299  490. Td    8.11 eV                                        
+R300  500. Td    8.15 eV                                        
+R301  511. Td    8.19 eV                                        
+R302  522. Td    8.23 eV                                        
+R303  533. Td    8.27 eV                                        
+R304  544. Td    8.31 eV                                        
+R305  555. Td    8.35 eV                                        
+R306  567. Td    8.40 eV                                        
+R307  579. Td    8.44 eV                                        
+R308  591. Td    8.48 eV                                        
+R309  603. Td    8.53 eV                                        
+R310  616. Td    8.57 eV                                        
+R311  629. Td    8.61 eV                                        
+R312  642. Td    8.66 eV                                        
+R313  656. Td    8.71 eV                                        
+R314  669. Td    8.75 eV                                        
+R315  683. Td    8.80 eV                                        
+R316  698. Td    8.85 eV                                        
+R317  712. Td    8.90 eV                                        
+R318  727. Td    8.94 eV                                        
+R319  743. Td    8.99 eV                                        
+R320  758. Td    9.04 eV                                        
+R321  774. Td    9.10 eV                                        
+R322  790. Td    9.15 eV                                        
+R323  807. Td    9.20 eV                                        
+R324  824. Td    9.26 eV                                        
+R325  841. Td    9.31 eV                                        
+R326  859. Td    9.37 eV                                        
+R327  877. Td    9.42 eV                                        
+R328  895. Td    9.48 eV                                        
+R329  914. Td    9.54 eV                                        
+R330  934. Td    9.60 eV                                        
+R331  953. Td    9.66 eV                                        
+R332  973. Td    9.72 eV                                        
+R333  994. Td    9.78 eV                                        
+R334  1014. Td    9.84 eV                                       
+R335  1036. Td    9.91 eV                                       
+R336  1058. Td    9.97 eV                                       
+R337  1080. Td    10.0 eV                                       
+R338  1102. Td    10.1 eV                                       
+R339  1126. Td    10.2 eV                                       
+R340  1149. Td    10.2 eV                                       
+R341  1173. Td    10.3 eV                                       
+R342  1198. Td    10.4 eV                                       
+R343  1223. Td    10.5 eV                                       
+R344  1249. Td    10.5 eV                                       
+R345  1275. Td    10.6 eV                                       
+R346  1302. Td    10.7 eV                                       
+R347  1329. Td    10.8 eV                                       
+R348  1357. Td    10.8 eV                                       
+R349  1386. Td    10.9 eV                                       
+R350  1415. Td    11.0 eV                                       
+R351  1444. Td    11.1 eV                                       
+R352  1475. Td    11.2 eV                                       
+R353  1506. Td    11.3 eV                                       
+R354  1537. Td    11.4 eV                                       
+R355  1570. Td    11.5 eV                                       
+R356  1603. Td    11.6 eV                                       
+R357  1636. Td    11.6 eV                                       
+R358  1671. Td    11.7 eV                                       
+R359  1706. Td    11.8 eV                                       
+R360  1742. Td    11.9 eV                                       
+R361  1778. Td    12.0 eV                                       
+R362  1816. Td    12.2 eV                                       
+R363  1854. Td    12.3 eV                                       
+R364  1893. Td    12.4 eV                                       
+R365  1932. Td    12.5 eV                                       
+R366  1973. Td    12.6 eV                                       
+R367  2014. Td    12.7 eV                                       
+R368  2057. Td    12.8 eV                                       
+R369  2100. Td    13.0 eV                                       
+R370  2144. Td    13.1 eV                                       
+R371  2189. Td    13.2 eV                                       
+R372  2235. Td    13.3 eV                                       
+R373  2282. Td    13.5 eV                                       
+R374  2330. Td    13.6 eV                                       
+R375  2379. Td    13.7 eV                                       
+R376  2429. Td    13.9 eV                                       
+R377  2480. Td    14.0 eV                                       
+R378  2532. Td    14.2 eV                                       
+R379  2585. Td    14.3 eV                                       
+R380  2639. Td    14.5 eV                                       
+R381  2695. Td    14.6 eV                                       
+R382  2751. Td    14.8 eV                                       
+R383  2809. Td    14.9 eV                                       
+R384  2868. Td    15.1 eV                                       
+R385  2928. Td    15.3 eV                                       
+R386  2990. Td    15.5 eV                                       
+R387  3053. Td    15.6 eV                                       
+R388  3117. Td    15.8 eV                                       
+R389  3182. Td    16.0 eV                                       
+R390  3249. Td    16.2 eV                                       
+R391  3317. Td    16.4 eV                                       
+R392  3387. Td    16.6 eV                                       
+R393  3458. Td    16.8 eV                                       
+R394  3531. Td    17.0 eV                                       
+R395  3605. Td    17.2 eV                                       
+R396  3681. Td    17.4 eV                                       
+R397  3758. Td    17.6 eV                                       
+R398  3837. Td    17.9 eV                                       
+R399  3918. Td    18.1 eV                                       
+R400  4000. Td    18.3 eV                                       
 SAVERESULTS
-convert_0.20C4F7N_0.80CO2.txt
+convert_C4F7N.txt
 FINISHED
