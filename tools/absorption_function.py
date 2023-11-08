@@ -46,6 +46,9 @@ def get_args():
     p.add_argument('-show_curve', metavar='A_i L_i', type=float, nargs='+',
                    help='Show curve for (A1, L1, A2, L2, ...), where A are'
                    ' amplitudes and L are lambdas (multiplied by user)')
+    p.add_argument('-figure_name', type=str,
+                   default='plot_of_absorption_function.png',
+                   help='File name of figure')
     return p.parse_args()
 
 
@@ -282,6 +285,5 @@ if args.show_curve:
 plt.legend()
 
 fig.tight_layout()
-fname = 'plot_of_absorption_function.png'
-plt.savefig(fname, bbox_inches='tight', dpi=200)
-print('Saved {}'.format(fname))
+plt.savefig(args.figure_name, bbox_inches='tight', dpi=200)
+print('Saved {}'.format(args.figure_name))
