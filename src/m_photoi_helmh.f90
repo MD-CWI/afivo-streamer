@@ -124,6 +124,7 @@ contains
        coeffs  = coeffs * (frac_O2 * gas_pressure)**2 ! 1/m^2
     case ("custom")
        call CFG_get_size(cfg, "photoi_helmh%lambdas", n_modes)
+       if (n_modes < 1) error stop "Custom photoionization lambdas and coeffs missing."
        allocate(lambdas(n_modes))
        allocate(coeffs(n_modes))
        call CFG_get(cfg, "photoi_helmh%lambdas", lambdas)
