@@ -55,7 +55,7 @@ contains
     real(dp)                   :: frac_O2, dummy(0)
 
     call CFG_add_get(cfg, "photoi_helmh%author", author, &
-         "Can be Luque (default), Bourdon-2, Bourdon-3 or custom")
+         "Can be Bourdon-3 (default), Bourdon-2, Luque or custom")
     call CFG_add(cfg, "photoi_helmh%lambdas", dummy, &
          "Lambdas to use in Helmholtz eq; unit 1/(m bar)", &
          .true.)
