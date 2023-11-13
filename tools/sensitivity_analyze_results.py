@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
 # TODO:
-# - Have option to read in chemistry output (species amounts)
+# - Remove zero effect reactions while making the bar plots
+# - Make the bar plots prettier
 
 import numpy as np
 import argparse
 import pandas as pd
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -17,6 +19,8 @@ parser.add_argument('-y', type=str, nargs='+', default=["sum(n_e)"],
                     help='Variables in the log files to compare')
 parser.add_argument('-time_index', type=int, default=-1,
                     help='Which time index in the log files to consider')
+parser.add_argument('-bar_plot', action='store_true',
+               help='Make a bar plot for each variable y')
 args = parser.parse_args()
 
 logs = sorted(args.logs)
@@ -69,8 +73,10 @@ base_case = all_cases[0][0][1]
 times = np.array(base_case['time'])
 reaction_ix = [ix for ix in all_cases.keys() if ix != 0]
 
+print(f"Reaction test: {len(reaction_ix)}")
 effect_magnitudes = np.zeros(len(reaction_ix))
 
+print(times)
 print(f'Using data at time t = {times[args.time_index]}\n')
 
 # Here mu indicates the mean derivative, mustar the mean absolute derivative,
@@ -78,6 +84,7 @@ print(f'Using data at time t = {times[args.time_index]}\n')
 # factor f.
 print(f'R{"#":<4} {"variable":15} {"mu":>15} {"mustar":>15} {"sigma":>15}')
 
+stats = np.zeros((len(reaction_ix), len(args.y), 3))
 for i, ix in enumerate(reaction_ix):
     # print("test: ", args.y)
     # test = [df[args.y] for _, df in all_cases[ix]]
@@ -101,6 +108,7 @@ for i, ix in enumerate(reaction_ix):
     derivs_meanabs = np.mean(np.abs(derivs_normalized), axis=0)
     derivs_sigma = np.std(derivs_normalized, axis=0)
 
+    stats[i] = np.array([derivs_mean, derivs_meanabs, derivs_sigma]).T
     for name, mu, mustar, sigma in zip(
             args.y, derivs_mean, derivs_meanabs, derivs_sigma):
         print(f'R{ix:<4} {name:15} {mu:15.8f} {mustar:15.8f} {sigma:15.8f}')
@@ -116,7 +124,21 @@ with open(base_name + '_reactions.txt', 'r') as f:
     reactions_list = [x.strip() for x in f.readlines() if x.strip()]
 
 ix_sort = np.argsort(effect_magnitudes)[::-1]
+used_reactions_list = []
 for n, i in enumerate(ix_sort):
     ix = reaction_ix[i]
+    used_reactions_list.append(reactions_list[ix-1])
     print(f'{n+1:<6} R{ix:<6} {reactions_list[ix-1]:40} ' +
           f'{effect_magnitudes[i]:<15.8f}')
+
+
+# Plotting stuff
+if args.bar_plot:
+    for i, iy in enumerate(args.y):
+        fig, ax = plt.subplots(1,1, figsize=(5, 20))
+        fig.suptitle(f"Sensitivity mean and sigma for $\Delta$ {iy}")
+        ax.barh(np.arange(stats.shape[0]), stats[:, i, 0],
+                xerr=stats[:,i,2], align='center', 
+                tick_label=used_reactions_list)
+        plt.tight_layout()
+    plt.show()
