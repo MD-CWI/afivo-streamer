@@ -3,11 +3,10 @@ module m_transport_data
   use m_lookup_table
   use m_types
   use m_spline_interp
+  use m_af_types
 
   implicit none
   private
-
-  integer, parameter :: dp = kind(0.0d0)
 
   ! ** Indices of transport data **
   integer, parameter, public :: td_mobility  = 1 !< Electron mobility
@@ -46,7 +45,7 @@ module m_transport_data
   type ion_transport_t
      integer                        :: n_mobile_ions ! Number of mobile ions
      real(dp), allocatable          :: mobilities(:) ! Mobility of the ions
-     character(len=10), allocatable :: names(:)      ! Names of the ions
+     character(len=af_nlen), allocatable :: names(:) ! Names of the ions
   end type ion_transport_t
 
   type(ion_transport_t), public :: transport_data_ions
