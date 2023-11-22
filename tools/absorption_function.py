@@ -35,11 +35,13 @@ def get_args():
     p.add_argument('-guess_lambdas', type=float,
                    help='Initial guess for lambdas of Helmholtz modes')
     p.add_argument('-fit_what', type=str, default='numerical',
-                   choices=['numerical', 'Naidis', 'Aints'],
+                   choices=['numerical', 'Zheleznyak', 'Aints'],
                    help='What type of data/function to fit')
     p.add_argument('-fit_type', type=str, default='least_squares',
                    choices=['least_squares', 'relative', 'log'],
                    help='What type of errors to use in fit')
+    p.add_argument('-ptot_for_quenching', type=float,
+                   help='Total gas pressure (bar) to show quenching info')
     p.add_argument('-show_Zheleznyak', action='store_true',
                    help='Show Zheleznyak curve for air')
     p.add_argument('-show_Naidis_moist', action='store_true',
@@ -69,6 +71,7 @@ LAMBDA_MAX = 102.5e-9           # maximum wavelength (nm)
 # Zheleznyak coefficients for air
 MU_MAX = 2.0e2 / ONE_TORR       # convert to 1/(m * bar)
 MU_MIN = 0.035e2 / ONE_TORR     # convert to 1/(m * bar)
+pq_air_Zheleznyak = 30 * ONE_TORR  # Quenching parameter
 
 # convert to 1/(m * bar) Naidis 2006 PSST 15 253
 K_H2O = 0.26e2 / ONE_TORR
@@ -76,6 +79,7 @@ K_H2O = 0.26e2 / ONE_TORR
 K_H2O_MIN = 0.13e2 / ONE_TORR
 # convert to 1/(m * bar) Aints Plasma Processes and Polymers 2008 5, 672-680
 K_H2O_MAX = 0.57e2 / ONE_TORR
+pq_H2O_Aints = 0.5 * ONE_TORR   # Quenching parameter
 
 
 def zheleznyak_f(r):
@@ -177,7 +181,8 @@ all_names = [x.gas for x in all_gases]
 # Construct lists of absorbing and ionizing gases present
 f_absorption = []
 f_ionizing = []
-p = {}                          # Pressures
+# Pressures
+p = {'O2': 0., 'CO2': 0., 'H2O': 0.}
 
 for gas, pressure in zip(args.gases, args.pressures):
     ix = all_names.index(gas)
@@ -217,10 +222,17 @@ for i in range(args.n_points):
 
 if args.fit_what == 'numerical':
     f_to_fit = f_numerical
-elif args.fit_what == 'Naidis':
+elif args.fit_what == 'Zheleznyak':
     f_to_fit = naidis_moist_zheleznyak_f(r)
 elif args.fit_what == 'Aints':
     f_to_fit = aints_moist_zheleznyak_f(r)
+    # Show quenching information
+    if args.ptot_for_quenching is not None:
+        Q = (1 + (args.ptot_for_quenching - p['H2O'])/pq_air_Zheleznyak +
+             p['H2O']/pq_H2O_Aints)**-1
+        pq_effective = -Q * args.ptot_for_quenching/(Q - 1)
+        print('Effective quenching pressure for Aints model: '
+              f'{pq_effective:.5e} bar')
 else:
     raise ValueError('Invalid argument for fit_what')
 
