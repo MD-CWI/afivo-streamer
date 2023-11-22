@@ -1,0 +1,899 @@
+LXCat, www.lxcat.net
+Generated on 13 Oct 2023. All rights reserved.
+
+RECOMMENDED REFERENCE FORMAT
+- Itikawa database, www.lxcat.net, retrieved on October 13, 2023.
+
+CROSS SECTION DATA FORMAT
+In downloaded files, each collision process is defined by a block consisting of
+1st line
+Keyword in capitals indicating the type of the collision. Possible collision types are elastic, effective, excitation,
+ionization, or attachment (capital letters required, key words are case sensitive), where "elastic" is used to denote
+the elastic momentum transfer cross section and where "effective" denotes the total momentum transfer cross section (sum
+of elastic momentum transfer and total inelastic cross sections).  The latter is useful for solving the Boltzmann
+equation in the 2-term approximation.
+2nd line
+Name of the target particle species. This name is a character string, freely chosen by the user, e.g. "Ar". Optionally
+for excitation processes, the name of the corresponding excited state can be specified on the same line, separated from
+the first name either by arrow "->" (dash + greater than) or by double-head arrow "<->" (less than + dash +
+greater than), e.g. "Ar -> Ar*" and "Ar <-> Ar*", respectively. In the later case BOLSIG+ will automatically
+define the inverse superelastic process, constructing the superelastic cross-section by detailed balancing, and
+considering the indicated excited state as the target. In this case, the ratio of statistical weights must be input in
+the 3rd line (see below).
+3rd line
+For elastic and effective collisions, the ratio of the electron mass to the target particle mass. For excitation or
+ionization collisions, the electron energy loss (nominally the threshold energy) in eV. For attachment, the 3rd line is
+missing. In case of an excitation process where an excited state has been indicated on the 2nd line using double-head
+arrow "<->", the 3rd line must specify also ratio of the statistical weights of the final state to the initial state
+as the second parameter in 3rd line this is needed by BOLSIG+ to calculate the de-excitation cross-section. The
+statistical weight ratio, if given, will also be used by the automatic superelastics option in BOLSIG+. If this ratio is
+not provided then BOLSIG+ will assume it unity.
+from 4th line (optionally)
+User comments and reference information, maximum 100 lines. The only constraint on format is that these comment lines
+must not start with a number.
+Finally
+Table of the cross section as a function of energy. The table starts and ends by a line of dashes "------" (at least 5),
+and has otherwise two numbers per line: the energy in eV and the cross section in m2.
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+DATABASE:         Itikawa database
+PERMLINK:         www.lxcat.net/Itikawa
+DESCRIPTION:      A set of recommended cross section data (angle integrated) for electron collisions with H2, N2, O2,
+                  CO, H2O, and CO2. The data are taken from the tables in the references listed for each species.  The
+                  recommendations are based on available experimental data.  In that sense, the present sets of cross
+                  sections are not complete.  Uncertainty estimates are given in the references.
+CONTACT:          Yukikazu Itikawa
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+************************************************************************************************************************
+
+COMMENT: Y Itikawa and N Mason, Cross Sections for Electron Collisions with Water Molecules, J. Phys. Chem. Ref. Data 34, 1
+         (2005) 10.1063/1.1799251.
+
+********************************************************** H2O **********************************************************
+
+ATTACHMENT
+H2O -> H+OH^-
+SPECIES: e / H2O
+PROCESS: E + H2O -> H+OH-, Attachment
+PARAM.:  E = 0 eV
+COMMENT: Recommended cross sections for production of OH^- from H2O.
+UPDATED: 2012-06-04 23:46:14
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 4.300000e+0	0.000000e+0
+ 4.510000e+0	9.000000e-26
+ 4.750000e+0	1.870000e-25
+ 5.000000e+0	4.000000e-25
+ 5.210000e+0	6.600000e-25
+ 5.390000e+0	1.090000e-24
+ 5.560000e+0	1.650000e-24
+ 5.690000e+0	2.460000e-24
+ 5.836000e+0	3.790000e-24
+ 6.000000e+0	5.370000e-24
+ 6.100000e+0	7.570000e-24
+ 6.270000e+0	1.048000e-23
+ 6.360000e+0	1.140000e-23
+ 6.437000e+0	1.160000e-23
+ 6.536000e+0	1.154000e-23
+ 6.626000e+0	1.105000e-23
+ 6.770000e+0	9.500000e-24
+ 6.874000e+0	7.630000e-24
+ 7.020000e+0	6.200000e-24
+ 7.150000e+0	4.890000e-24
+ 7.320000e+0	3.760000e-24
+ 7.413000e+0	3.560000e-24
+ 7.490000e+0	3.450000e-24
+ 7.600000e+0	3.600000e-24
+ 7.730000e+0	4.170000e-24
+ 7.830000e+0	4.800000e-24
+ 8.020000e+0	6.700000e-24
+ 8.190000e+0	7.800000e-24
+ 8.310000e+0	8.200000e-24
+ 8.385000e+0	8.300000e-24
+ 8.530000e+0	8.100000e-24
+ 8.640000e+0	7.560000e-24
+ 8.850000e+0	5.700000e-24
+ 9.000000e+0	4.360000e-24
+ 9.230000e+0	3.040000e-24
+ 9.360000e+0	2.440000e-24
+ 9.490000e+0	2.010000e-24
+ 9.570000e+0	1.940000e-24
+ 9.654000e+0	2.020000e-24
+ 9.780000e+0	2.290000e-24
+ 1.001000e+1	3.580000e-24
+ 1.026000e+1	5.300000e-24
+ 1.052000e+1	6.690000e-24
+ 1.082500e+1	7.750000e-24
+ 1.100000e+1	8.235000e-24
+ 1.113000e+1	8.470000e-24
+ 1.130000e+1	8.300000e-24
+ 1.145000e+1	7.950000e-24
+ 1.160000e+1	6.990000e-24
+ 1.187000e+1	4.818000e-24
+ 1.200000e+1	4.020000e-24
+ 1.219000e+1	3.110000e-24
+ 1.247000e+1	1.840000e-24
+-----------------------------
+
+ATTACHMENT
+H2O -> H2+O^-
+SPECIES: e / H2O
+PROCESS: E + H2O -> H2+O-, Attachment
+PARAM.:  E = 0 eV
+COMMENT: Recommended cross sections for production of O^- from H2O.
+UPDATED: 2012-06-04 23:46:06
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 4.430000e+0	0.000000e+0
+ 4.590000e+0	4.400000e-25
+ 4.710000e+0	1.100000e-24
+ 5.000000e+0	2.500000e-24
+ 5.290000e+0	5.000000e-24
+ 5.720000e+0	9.130000e-24
+ 6.000000e+0	1.160000e-23
+ 6.190000e+0	1.280000e-23
+ 6.320000e+0	1.330000e-23
+ 6.450000e+0	1.220000e-23
+ 6.640000e+0	1.000000e-23
+ 7.000000e+0	4.850000e-24
+ 7.186000e+0	3.130000e-24
+ 7.300000e+0	2.870000e-24
+ 7.430000e+0	3.600000e-24
+ 7.560000e+0	6.200000e-24
+ 7.700000e+0	1.330000e-23
+ 8.000000e+0	2.300000e-23
+ 8.210000e+0	2.860000e-23
+ 8.350000e+0	3.100000e-23
+ 8.440000e+0	3.160000e-23
+ 8.600000e+0	3.100000e-23
+ 8.760000e+0	2.850000e-23
+ 9.000000e+0	2.440000e-23
+ 9.220000e+0	2.130000e-23
+ 9.400000e+0	2.080000e-23
+ 9.560000e+0	2.140000e-23
+ 9.670000e+0	2.260000e-23
+ 9.890000e+0	2.560000e-23
+ 1.000000e+1	2.850000e-23
+ 1.013800e+1	3.370000e-23
+ 1.046000e+1	4.930000e-23
+ 1.066000e+1	5.500000e-23
+ 1.080000e+1	5.700000e-23
+ 1.090000e+1	5.760000e-23
+ 1.100000e+1	5.760000e-23
+ 1.118000e+1	5.530000e-23
+ 1.150000e+1	4.660000e-23
+ 1.200000e+1	3.270000e-23
+ 1.250000e+1	2.000000e-23
+ 1.300000e+1	1.080000e-23
+ 1.328000e+1	6.880000e-24
+ 1.362500e+1	3.800000e-24
+ 1.380000e+1	2.640000e-24
+ 1.400000e+1	2.300000e-24
+-----------------------------
+
+ATTACHMENT
+H2O -> HO+H^-
+SPECIES: e / H2O
+PROCESS: E + H2O -> HO+H-, Attachment
+PARAM.:  E = 0 eV
+COMMENT: Recommended cross sections for production of H^- from H2O.
+UPDATED: 2012-06-04 23:45:57
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 5.400000e+0	0.000000e+0
+ 5.500000e+0	2.000000e-24
+ 5.740000e+0	1.600000e-23
+ 5.900000e+0	9.850000e-23
+ 6.010000e+0	4.300000e-22
+ 6.165000e+0	6.220000e-22
+ 6.286000e+0	6.317000e-22
+ 6.400000e+0	6.370000e-22
+ 6.520000e+0	6.250000e-22
+ 6.650000e+0	5.790000e-22
+ 6.810000e+0	4.890000e-22
+ 7.000000e+0	3.560000e-22
+ 7.465000e+0	1.290000e-22
+ 7.690000e+0	8.770000e-23
+ 7.890000e+0	7.400000e-23
+ 8.000000e+0	7.900000e-23
+ 8.090000e+0	9.950000e-23
+ 8.140000e+0	1.090000e-22
+ 8.235000e+0	1.166000e-22
+ 8.395000e+0	1.040000e-22
+ 8.790000e+0	7.600000e-23
+ 9.010000e+0	6.200000e-23
+ 9.570000e+0	2.800000e-23
+ 9.800000e+0	1.700000e-23
+ 1.000000e+1	9.800000e-24
+-----------------------------
+
+ELASTIC
+H2O
+ 3.043000e-5
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O, Elastic
+PARAM.:  m/M = 0.00003043
+COMMENT: Momentum transfer cross sections.
+UPDATED: 2012-06-04 23:44:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.860000e-3	4.303000e-18
+ 5.390000e-3	3.250000e-18
+ 1.563000e-2	2.284000e-18
+ 4.528000e-2	1.392000e-18
+ 1.312000e-1	6.071000e-19
+ 3.802000e-1	2.111000e-19
+ 1.102000e+0	6.042000e-20
+ 1.989000e+0	3.975000e-20
+ 3.160000e+0	4.334000e-20
+ 5.020000e+0	5.055000e-20
+ 6.909000e+0	7.769000e-20
+ 9.386000e+0	8.529000e-20
+ 1.275000e+1	9.052000e-20
+ 1.732000e+1	7.244000e-20
+ 2.353000e+1	5.150000e-20
+ 3.196000e+1	3.561000e-20
+ 4.342000e+1	2.500000e-20
+ 7.000000e+1	1.500000e-20
+ 1.000000e+2	1.000000e-20
+-----------------------------
+
+EXCITATION
+H2O -> H (Balmar alpha 3-2)
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H (Balmar alpha 3-2), Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross section for the emission of H Balmer Alpha (3-2) line produced by electron impact
+COMMENT: dissociation of H2O, measured by Mohlmann and de Heer 1979.
+UPDATED: 2012-08-12 13:08:51
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 2.000000e+1	2.040000e-23
+ 3.000000e+1	1.050000e-22
+ 4.000000e+1	1.690000e-22
+ 5.000000e+1	2.240000e-22
+ 6.000000e+1	2.910000e-22
+ 7.000000e+1	3.260000e-22
+ 8.000000e+1	3.460000e-22
+ 9.000000e+1	3.540000e-22
+ 1.000000e+2	3.550000e-22
+ 1.500000e+2	3.110000e-22
+ 2.000000e+2	2.690000e-22
+ 3.000000e+2	2.040000e-22
+ 4.000000e+2	1.620000e-22
+ 5.000000e+2	1.320000e-22
+ 6.000000e+2	1.140000e-22
+ 7.000000e+2	1.010000e-22
+ 8.000000e+2	8.920000e-23
+ 9.000000e+2	8.140000e-23
+ 1.000000e+3	7.340000e-23
+-----------------------------
+
+EXCITATION
+H2O -> H 121.6nm
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H 121.6nm, Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross sections for the emission of H Lyman alpha (2-1) and O resonance lines produced by
+COMMENT: electron impact on H2O, measured by Morgan and Mentall 1974 and renormalized.
+UPDATED: 2012-08-12 13:07:18
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 2.500000e+1	6.010000e-23
+ 3.750000e+1	2.270000e-22
+ 5.000000e+1	4.050000e-22
+ 6.250000e+1	5.900000e-22
+ 7.500000e+1	7.270000e-22
+ 8.750000e+1	8.230000e-22
+ 1.000000e+2	8.450000e-22
+ 1.125000e+2	8.390000e-22
+ 1.250000e+2	8.290000e-22
+ 1.375000e+2	8.120000e-22
+ 1.500000e+2	7.990000e-22
+ 1.750000e+2	7.640000e-22
+ 2.000000e+2	7.330000e-22
+ 2.250000e+2	6.980000e-22
+ 2.500000e+2	6.650000e-22
+-----------------------------
+
+EXCITATION
+H2O -> H Balmer Beta (4-2)
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H Balmer Beta (4-2), Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross section for the emissions of H Balmer Beta, O 844.7, and O 777.4 lines upon e+H2O
+COMMENT: collisions, measured by Beenakker et al.1974.
+UPDATED: 2012-08-12 13:09:40
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 2.000000e+1	4.150000e-24
+ 2.250000e+1	6.070000e-24
+ 2.500000e+1	7.260000e-24
+ 2.750000e+1	9.910000e-24
+ 3.000000e+1	1.550000e-23
+ 3.250000e+1	2.170000e-23
+ 3.500000e+1	2.540000e-23
+ 3.750000e+1	2.840000e-23
+ 4.000000e+1	3.060000e-23
+ 5.000000e+1	4.040000e-23
+ 6.000000e+1	5.250000e-23
+ 7.000000e+1	5.890000e-23
+ 8.000000e+1	6.250000e-23
+ 9.000000e+1	6.400000e-23
+ 1.000000e+2	6.410000e-23
+ 1.200000e+2	6.130000e-23
+ 1.400000e+2	5.830000e-23
+ 1.700000e+2	5.220000e-23
+ 2.000000e+2	4.860000e-23
+ 2.500000e+2	4.180000e-23
+ 3.000000e+2	3.680000e-23
+ 3.500000e+2	3.270000e-23
+ 4.000000e+2	2.920000e-23
+ 4.500000e+2	2.620000e-23
+ 5.000000e+2	2.390000e-23
+ 6.000000e+2	2.050000e-23
+ 7.000000e+2	1.820000e-23
+ 8.000000e+2	1.610000e-23
+ 9.000000e+2	1.470000e-23
+ 1.000000e+3	1.380000e-23
+-----------------------------
+
+EXCITATION
+H2O -> H2O(rot)
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(rot), Excitation
+PARAM.:  E = 0 eV
+COMMENT: J=0-0.
+UPDATED: 2012-06-04 23:45:27
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.000000e-3	4.815300e-16
+ 2.000000e-3	2.360000e-16
+ 3.000000e-3	1.541100e-16
+ 4.000000e-3	1.135800e-16
+ 5.000000e-3	8.952000e-17
+ 6.000000e-3	7.365000e-17
+ 7.000000e-3	6.241000e-17
+ 8.000000e-3	5.405000e-17
+ 9.000000e-3	4.760000e-17
+ 1.000000e-2	4.248000e-17
+ 1.200000e-2	3.486000e-17
+ 1.500000e-2	2.735000e-17
+ 1.700000e-2	2.385000e-17
+ 2.000000e-2	1.997000e-17
+ 2.200000e-2	1.798000e-17
+ 2.500000e-2	1.562000e-17
+ 3.000000e-2	1.277000e-17
+ 4.000000e-2	9.263000e-18
+ 5.000000e-2	7.204000e-18
+ 6.000000e-2	5.854000e-18
+ 7.000000e-2	4.903000e-18
+ 8.000000e-2	4.200000e-18
+ 9.000000e-2	3.658000e-18
+ 1.000000e-1	3.230000e-18
+ 1.200000e-1	2.596000e-18
+ 1.500000e-1	1.975000e-18
+ 1.700000e-1	1.689000e-18
+ 2.000000e-1	1.373000e-18
+ 2.200000e-1	1.212000e-18
+ 2.500000e-1	1.023000e-18
+ 3.000000e-1	7.974000e-19
+ 4.000000e-1	5.271000e-19
+ 5.000000e-1	3.742000e-19
+ 6.000000e-1	2.781000e-19
+ 7.000000e-1	2.134000e-19
+ 8.000000e-1	1.677000e-19
+ 9.000000e-1	1.342000e-19
+ 1.000000e+0	1.090000e-19
+ 1.200000e+0	7.452000e-20
+ 1.500000e+0	4.507000e-20
+ 1.700000e+0	3.345000e-20
+ 2.000000e+0	2.262000e-20
+ 2.200000e+0	1.821000e-20
+ 2.500000e+0	1.432000e-20
+ 3.000000e+0	1.252000e-20
+ 4.000000e+0	1.828000e-20
+ 5.000000e+0	2.884000e-20
+-----------------------------
+
+EXCITATION
+H2O -> O 130.4 nm
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + O 130.4 nm, Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross sections for the emission of H Lyman alpha (2-1) and O resonance lines produced by
+COMMENT: electron impact on H2O, measured by Morgan and Mentall 1974 and renormalized.
+UPDATED: 2012-08-12 13:06:47
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 2.500000e+1	1.940000e-24
+ 3.750000e+1	8.320000e-24
+ 5.000000e+1	1.450000e-23
+ 6.250000e+1	2.090000e-23
+ 7.500000e+1	2.560000e-23
+ 8.750000e+1	2.780000e-23
+ 1.000000e+2	2.830000e-23
+ 1.125000e+2	2.810000e-23
+ 1.250000e+2	2.750000e-23
+ 1.375000e+2	2.680000e-23
+ 1.500000e+2	2.600000e-23
+ 1.750000e+2	2.390000e-23
+ 2.000000e+2	2.220000e-23
+ 2.250000e+2	2.020000e-23
+ 2.500000e+2	1.860000e-23
+-----------------------------
+
+EXCITATION
+H2O -> O 777 .4 nm
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + O 777 .4 nm, Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross section for the emissions of H Balmer Beta, O 844.7, and O 777.4 lines upon e+H2O
+COMMENT: collisions, measured by Beenakker et al.1974.
+UPDATED: 2012-08-12 13:05:37
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 2.000000e+1	3.500000e-25
+ 2.250000e+1	7.800000e-25
+ 2.500000e+1	1.450000e-24
+ 2.750000e+1	3.080000e-24
+ 3.000000e+1	4.890000e-24
+ 3.250000e+1	6.530000e-24
+ 3.500000e+1	7.650000e-24
+ 3.750000e+1	8.610000e-24
+ 4.000000e+1	9.450000e-24
+ 5.000000e+1	1.160000e-23
+ 6.000000e+1	1.290000e-23
+ 7.000000e+1	1.330000e-23
+ 8.000000e+1	1.320000e-23
+ 9.000000e+1	1.280000e-23
+ 1.000000e+2	1.260000e-23
+ 1.200000e+2	1.170000e-23
+ 1.400000e+2	1.020000e-23
+ 1.700000e+2	8.040000e-24
+ 2.000000e+2	7.340000e-24
+ 2.500000e+2	5.400000e-24
+ 3.000000e+2	4.610000e-24
+ 3.500000e+2	4.250000e-24
+ 4.000000e+2	3.620000e-24
+ 4.500000e+2	3.470000e-24
+ 5.000000e+2	2.820000e-24
+ 6.000000e+2	2.440000e-24
+ 7.000000e+2	1.720000e-24
+ 8.000000e+2	1.700000e-24
+ 9.000000e+2	1.600000e-24
+ 1.000000e+3	1.350000e-24
+-----------------------------
+
+EXCITATION
+H2O -> O 844.7 nm
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + O 844.7 nm, Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross section for the emissions of H Balmer Beta, O 844.7, and O 777.4 lines upon e+H2O
+COMMENT: collisions, measured by Beenakker et al.1974.
+UPDATED: 2012-08-12 13:03:53
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 2.000000e+1	2.360000e-24
+ 2.250000e+1	3.540000e-24
+ 2.500000e+1	5.280000e-24
+ 2.750000e+1	8.180000e-24
+ 3.000000e+1	9.720000e-24
+ 3.250000e+1	1.070000e-23
+ 3.500000e+1	1.170000e-23
+ 3.750000e+1	1.290000e-23
+ 4.000000e+1	1.400000e-23
+ 5.000000e+1	1.880000e-23
+ 6.000000e+1	2.300000e-23
+ 7.000000e+1	2.540000e-23
+ 8.000000e+1	2.700000e-23
+ 9.000000e+1	2.800000e-23
+ 1.000000e+2	2.860000e-23
+ 1.200000e+2	2.870000e-23
+ 1.400000e+2	2.590000e-23
+ 1.700000e+2	2.530000e-23
+ 2.000000e+2	2.320000e-23
+ 2.500000e+2	1.900000e-23
+ 3.000000e+2	1.670000e-23
+ 3.500000e+2	1.450000e-23
+ 4.000000e+2	1.300000e-23
+ 4.500000e+2	1.130000e-23
+ 5.000000e+2	1.050000e-23
+ 6.000000e+2	8.920000e-24
+ 7.000000e+2	7.840000e-24
+ 8.000000e+2	6.800000e-24
+ 9.000000e+2	5.860000e-24
+ 1.000000e+3	5.320000e-24
+-----------------------------
+
+EXCITATION
+H2O -> O(O1S)
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + O(O1S), Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross section for the production of O (1S) from H2O by electron impact, measured by
+COMMENT: Kedzierski et al, 1998.
+UPDATED: 2012-05-07 07:51:35
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.856000e+1	2.000000e-23
+ 2.252000e+1	3.600000e-23
+ 2.648000e+1	4.800000e-23
+ 3.044000e+1	6.700000e-23
+ 3.440000e+1	7.800000e-23
+ 4.232000e+1	1.040000e-22
+ 5.024000e+1	1.200000e-22
+ 5.420000e+1	1.250000e-22
+ 6.212000e+1	1.360000e-22
+ 7.004000e+1	1.390000e-22
+ 8.192000e+1	1.450000e-22
+ 9.380000e+1	1.490000e-22
+ 1.017200e+2	1.500000e-22
+ 1.056800e+2	1.500000e-22
+ 1.136000e+2	1.500000e-22
+ 1.215200e+2	1.490000e-22
+ 1.254800e+2	1.480000e-22
+ 1.334000e+2	1.470000e-22
+ 1.373600e+2	1.460000e-22
+ 1.413200e+2	1.460000e-22
+ 1.452800e+2	1.450000e-22
+ 1.532000e+2	1.430000e-22
+ 1.571600e+2	1.430000e-22
+ 1.611200e+2	1.420000e-22
+ 1.650800e+2	1.400000e-22
+ 1.730000e+2	1.360000e-22
+ 1.769600e+2	1.340000e-22
+ 1.809200e+2	1.330000e-22
+ 1.848800e+2	1.330000e-22
+ 1.928000e+2	1.300000e-22
+ 1.967600e+2	1.290000e-22
+ 2.007200e+2	1.280000e-22
+ 2.126000e+2	1.260000e-22
+ 2.205200e+2	1.240000e-22
+ 2.324000e+2	1.200000e-22
+ 2.403200e+2	1.160000e-22
+ 2.522000e+2	1.120000e-22
+ 2.601200e+2	1.110000e-22
+ 2.720000e+2	1.070000e-22
+ 2.838800e+2	1.050000e-22
+ 2.918000e+2	1.030000e-22
+ 3.036800e+2	1.000000e-22
+ 3.116000e+2	9.800000e-23
+ 3.195200e+2	9.500000e-23
+-----------------------------
+
+EXCITATION
+H2O -> OH (X)
+ 0.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + OH (X), Excitation
+PARAM.:  E = 0 eV
+COMMENT: Cross section for the production of OH (X) from H2O by electron impact, measured by Harb
+COMMENT: et al.2001.
+UPDATED: 2012-05-07 07:55:54
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.000000e+1	1.500000e-21
+ 1.500000e+1	4.800000e-21
+ 2.000000e+1	7.000000e-21
+ 3.000000e+1	1.300000e-20
+ 5.000000e+1	1.900000e-20
+ 7.500000e+1	2.100000e-20
+ 1.000000e+2	2.050000e-20
+ 1.500000e+2	1.980000e-20
+ 2.000000e+2	1.750000e-20
+ 2.500000e+2	1.600000e-20
+ 3.000000e+2	1.400000e-20
+-----------------------------
+
+EXCITATION
+H2O -> H2O(rot)
+ 4.604000e-3
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(rot), Excitation
+PARAM.:  E = 0.004604 eV
+COMMENT: J=0-1.
+UPDATED: 2012-06-04 23:45:05
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 4.604000e-3	0.000000e+0
+ 5.000000e-3	1.214000e-17
+ 6.000000e-3	1.915000e-17
+ 7.000000e-3	2.152000e-17
+ 8.000000e-3	2.236000e-17
+ 9.000000e-3	2.252000e-17
+ 1.000000e-2	2.233000e-17
+ 1.200000e-2	2.151000e-17
+ 1.500000e-2	1.998000e-17
+ 1.700000e-2	1.898000e-17
+ 2.000000e-2	1.761000e-17
+ 2.200000e-2	1.679000e-17
+ 2.500000e-2	1.570000e-17
+ 3.000000e-2	1.417000e-17
+ 4.000000e-2	1.191000e-17
+ 5.000000e-2	1.033000e-17
+ 6.000000e-2	9.145000e-18
+ 7.000000e-2	8.230000e-18
+ 8.000000e-2	7.498000e-18
+ 9.000000e-2	6.897000e-18
+ 1.000000e-1	6.395000e-18
+ 1.200000e-1	5.600000e-18
+ 1.500000e-1	4.745000e-18
+ 1.700000e-1	4.318000e-18
+ 2.000000e-1	3.816000e-18
+ 2.200000e-1	3.546000e-18
+ 2.500000e-1	3.212000e-18
+ 3.000000e-1	2.786000e-18
+ 4.000000e-1	2.218000e-18
+ 5.000000e-1	1.854000e-18
+ 6.000000e-1	1.599000e-18
+ 7.000000e-1	1.409000e-18
+ 8.000000e-1	1.262000e-18
+ 9.000000e-1	1.145000e-18
+ 1.000000e+0	1.049000e-18
+ 1.200000e+0	9.004000e-19
+ 1.500000e+0	7.463000e-19
+ 1.700000e+0	6.715000e-19
+ 2.000000e+0	5.854000e-19
+ 2.200000e+0	5.402000e-19
+ 2.500000e+0	4.850000e-19
+ 3.000000e+0	4.160000e-19
+ 4.000000e+0	3.263000e-19
+ 5.000000e+0	2.702000e-19
+-----------------------------
+
+EXCITATION
+H2O -> H2O(rot )
+ 8.690000e-3
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(rot ), Excitation
+PARAM.:  E = 0.00869 eV
+COMMENT: J=0-2.
+UPDATED: 2012-06-04 23:45:12
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 8.690000e-3	0.000000e+0
+ 9.000000e-3	1.018000e-19
+ 1.000000e-2	1.816000e-19
+ 1.200000e-2	2.410000e-19
+ 1.500000e-2	2.753000e-19
+ 1.700000e-2	3.012000e-19
+ 2.000000e-2	4.191000e-19
+ 2.200000e-2	4.271000e-19
+ 2.500000e-2	4.187000e-19
+ 3.000000e-2	3.888000e-19
+ 4.000000e-2	3.265000e-19
+ 5.000000e-2	2.774000e-19
+ 6.000000e-2	2.402000e-19
+ 7.000000e-2	2.114000e-19
+ 8.000000e-2	1.886000e-19
+ 9.000000e-2	1.701000e-19
+ 1.000000e-1	1.549000e-19
+ 1.200000e-1	1.314000e-19
+ 1.500000e-1	1.070000e-19
+ 1.700000e-1	9.526000e-20
+ 2.000000e-1	8.184000e-20
+ 2.200000e-1	7.486000e-20
+ 2.500000e-1	6.644000e-20
+ 3.000000e-1	5.613000e-20
+ 4.000000e-1	4.334000e-20
+ 5.000000e-1	3.582000e-20
+ 6.000000e-1	3.092000e-20
+ 7.000000e-1	2.750000e-20
+ 8.000000e-1	2.498000e-20
+ 9.000000e-1	2.305000e-20
+ 1.000000e+0	2.153000e-20
+ 1.200000e+0	1.929000e-20
+ 1.500000e+0	1.712000e-20
+ 1.700000e+0	1.614000e-20
+ 2.000000e+0	1.509000e-20
+ 2.200000e+0	1.458000e-20
+ 2.500000e+0	1.398000e-20
+ 3.000000e+0	1.326000e-20
+ 4.000000e+0	1.239000e-20
+ 5.000000e+0	1.204000e-20
+-----------------------------
+
+EXCITATION
+H2O -> H2O(rot)
+ 1.180000e-2
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(rot), Excitation
+PARAM.:  E = 0.0118 eV
+COMMENT: J=0-3.
+UPDATED: 2012-06-04 23:45:21
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.180000e-2	0.000000e+0
+ 2.000000e-2	5.580000e-20
+ 2.200000e-2	6.584000e-20
+ 2.500000e-2	7.069000e-20
+ 3.000000e-2	7.011000e-20
+ 4.000000e-2	6.909000e-20
+ 5.000000e-2	6.288000e-20
+ 6.000000e-2	5.595000e-20
+ 7.000000e-2	4.997000e-20
+ 8.000000e-2	4.498000e-20
+ 9.000000e-2	4.083000e-20
+ 1.000000e-1	3.734000e-20
+ 1.200000e-1	3.183000e-20
+ 1.500000e-1	2.603000e-20
+ 1.700000e-1	2.320000e-20
+ 2.000000e-1	1.995000e-20
+ 2.200000e-1	1.824000e-20
+ 2.500000e-1	1.618000e-20
+ 3.000000e-1	1.362000e-20
+ 4.000000e-1	1.040000e-20
+ 5.000000e-1	8.458000e-21
+ 6.000000e-1	7.168000e-21
+ 7.000000e-1	6.251000e-21
+ 8.000000e-1	5.566000e-21
+ 9.000000e-1	5.036000e-21
+ 1.000000e+0	4.613000e-21
+ 1.200000e+0	3.983000e-21
+ 1.500000e+0	3.362000e-21
+ 1.700000e+0	3.079000e-21
+ 2.000000e+0	2.775000e-21
+ 2.200000e+0	2.631000e-21
+ 2.500000e+0	2.475000e-21
+ 3.000000e+0	2.331000e-21
+ 4.000000e+0	2.287000e-21
+ 5.000000e+0	2.431000e-21
+-----------------------------
+
+EXCITATION
+H2O -> H2O(v 010)
+ 1.980000e-1
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(v 010), Excitation
+PARAM.:  E = 0.198 eV
+UPDATED: 2012-06-04 23:45:45
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.980000e-1	0.000000e+0
+ 3.000000e-1	1.710000e-20
+ 3.400000e-1	1.805000e-20
+ 3.900000e-1	1.748000e-20
+ 6.000000e-1	7.885000e-21
+ 8.620000e-1	3.990000e-21
+ 1.000000e+0	3.700000e-21
+ 2.000000e+0	2.000000e-21
+ 2.200000e+0	1.900000e-21
+ 3.000000e+0	1.600000e-21
+ 4.000000e+0	1.500000e-21
+ 5.000000e+0	1.570000e-21
+ 6.000000e+0	1.630000e-21
+ 8.000000e+0	1.700000e-21
+ 1.000000e+1	1.800000e-21
+ 1.500000e+1	1.300000e-21
+ 2.000000e+1	1.000000e-21
+-----------------------------
+
+EXCITATION
+H2O -> H2O(v 100+001)
+ 4.530000e-1
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(v 100+001), Excitation
+PARAM.:  E = 0.453 eV
+UPDATED: 2012-06-04 23:45:36
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 4.530000e-1	0.000000e+0
+ 5.300000e-1	2.250000e-20
+ 5.800000e-1	2.320000e-20
+ 6.300000e-1	2.270000e-20
+ 8.000000e-1	6.000000e-21
+ 1.000000e+0	5.000000e-21
+ 2.100000e+0	3.200000e-21
+ 3.000000e+0	3.100000e-21
+ 4.000000e+0	3.850000e-21
+ 5.000000e+0	4.300000e-21
+ 6.000000e+0	4.890000e-21
+ 7.000000e+0	5.200000e-21
+ 7.500000e+0	5.290000e-21
+ 8.000000e+0	4.950000e-21
+ 8.875000e+0	4.130000e-21
+ 1.000000e+1	3.250000e-21
+ 1.500000e+1	1.900000e-21
+ 2.000000e+1	8.000000e-22
+-----------------------------
+
+EXCITATION
+H2O -> OH(A)
+ 9.000000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + OH(A), Excitation
+PARAM.:  E = 9 eV
+COMMENT: Cross section for the A-X emission from OH in dissociation of H2O by electron impact,
+COMMENT: measured by Beenaker et al.1974.
+UPDATED: 2012-08-12 13:04:23
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 9.000000e+0	0.000000e+0
+ 1.000000e+1	1.870000e-22
+ 1.250000e+1	7.330000e-22
+ 1.500000e+1	9.190000e-22
+ 1.750000e+1	9.320000e-22
+ 2.000000e+1	9.110000e-22
+ 2.250000e+1	8.450000e-22
+ 2.500000e+1	7.970000e-22
+ 2.750000e+1	7.670000e-22
+ 3.000000e+1	7.450000e-22
+ 3.500000e+1	6.980000e-22
+ 4.000000e+1	6.630000e-22
+ 5.000000e+1	6.030000e-22
+ 6.000000e+1	5.660000e-22
+ 7.000000e+1	5.350000e-22
+ 8.000000e+1	5.080000e-22
+ 9.000000e+1	4.830000e-22
+ 1.000000e+2	4.640000e-22
+ 1.200000e+2	4.320000e-22
+ 1.400000e+2	4.000000e-22
+ 1.700000e+2	3.640000e-22
+ 2.000000e+2	3.390000e-22
+ 2.500000e+2	2.970000e-22
+ 3.000000e+2	2.660000e-22
+ 3.500000e+2	2.400000e-22
+ 4.000000e+2	2.240000e-22
+ 4.500000e+2	2.060000e-22
+ 5.000000e+2	1.960000e-22
+ 6.000000e+2	1.790000e-22
+ 7.000000e+2	1.580000e-22
+ 8.000000e+2	1.490000e-22
+ 9.000000e+2	1.310000e-22
+ 1.000000e+3	1.210000e-22
+-----------------------------
+
+IONIZATION
+H2O -> H2O^+
+ 1.350000e+1
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + E + H2O+, Ionization
+PARAM.:  E = 13.5 eV
+COMMENT: Total Ionization.
+UPDATED: 2012-05-04 09:26:32
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.350000e+1	0.000000e+0
+ 1.350000e+1	2.500000e-22
+ 1.500000e+1	1.260000e-21
+ 1.750000e+1	2.740000e-21
+ 2.000000e+1	4.280000e-21
+ 2.250000e+1	6.090000e-21
+ 2.500000e+1	7.610000e-21
+ 3.000000e+1	1.020000e-20
+ 3.500000e+1	1.260000e-20
+ 4.000000e+1	1.430000e-20
+ 4.500000e+1	1.590000e-20
+ 5.000000e+1	1.720000e-20
+ 6.000000e+1	1.880000e-20
+ 7.000000e+1	1.990000e-20
+ 8.000000e+1	2.090000e-20
+ 9.000000e+1	2.130000e-20
+ 1.000000e+2	2.160000e-20
+ 1.100000e+2	2.150000e-20
+ 1.250000e+2	2.130000e-20
+ 1.500000e+2	2.050000e-20
+ 1.750000e+2	1.990000e-20
+ 2.000000e+2	1.900000e-20
+ 2.500000e+2	1.730000e-20
+ 3.000000e+2	1.570000e-20
+ 4.000000e+2	1.340000e-20
+ 5.000000e+2	1.160000e-20
+ 6.000000e+2	1.020000e-20
+ 7.000000e+2	9.170000e-21
+ 8.000000e+2	8.300000e-21
+ 9.000000e+2	7.630000e-21
+ 1.000000e+3	7.050000e-21
+-----------------------------
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

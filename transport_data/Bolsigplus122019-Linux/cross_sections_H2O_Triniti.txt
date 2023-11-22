@@ -1,0 +1,324 @@
+LXCat, www.lxcat.net
+Generated on 13 Oct 2023. All rights reserved.
+
+RECOMMENDED REFERENCE FORMAT
+- TRINITI database, www.lxcat.net, retrieved on October 13, 2023.
+
+CROSS SECTION DATA FORMAT
+In downloaded files, each collision process is defined by a block consisting of
+1st line
+Keyword in capitals indicating the type of the collision. Possible collision types are elastic, effective, excitation,
+ionization, or attachment (capital letters required, key words are case sensitive), where "elastic" is used to denote
+the elastic momentum transfer cross section and where "effective" denotes the total momentum transfer cross section (sum
+of elastic momentum transfer and total inelastic cross sections).  The latter is useful for solving the Boltzmann
+equation in the 2-term approximation.
+2nd line
+Name of the target particle species. This name is a character string, freely chosen by the user, e.g. "Ar". Optionally
+for excitation processes, the name of the corresponding excited state can be specified on the same line, separated from
+the first name either by arrow "->" (dash + greater than) or by double-head arrow "<->" (less than + dash +
+greater than), e.g. "Ar -> Ar*" and "Ar <-> Ar*", respectively. In the later case BOLSIG+ will automatically
+define the inverse superelastic process, constructing the superelastic cross-section by detailed balancing, and
+considering the indicated excited state as the target. In this case, the ratio of statistical weights must be input in
+the 3rd line (see below).
+3rd line
+For elastic and effective collisions, the ratio of the electron mass to the target particle mass. For excitation or
+ionization collisions, the electron energy loss (nominally the threshold energy) in eV. For attachment, the 3rd line is
+missing. In case of an excitation process where an excited state has been indicated on the 2nd line using double-head
+arrow "<->", the 3rd line must specify also ratio of the statistical weights of the final state to the initial state
+as the second parameter in 3rd line this is needed by BOLSIG+ to calculate the de-excitation cross-section. The
+statistical weight ratio, if given, will also be used by the automatic superelastics option in BOLSIG+. If this ratio is
+not provided then BOLSIG+ will assume it unity.
+from 4th line (optionally)
+User comments and reference information, maximum 100 lines. The only constraint on format is that these comment lines
+must not start with a number.
+Finally
+Table of the cross section as a function of energy. The table starts and ends by a line of dashes "------" (at least 5),
+and has otherwise two numbers per line: the energy in eV and the cross section in m2.
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+DATABASE:         TRINITI database
+PERMLINK:         www.lxcat.net/TRINITI
+DESCRIPTION:      These cross sections retrieved from the EEDF software package for calculations of electron energy
+                  distribution function developed by Prof. Napartovich A. P. and  Drs. Dyatko N. A., Kochetov I. V.,
+                  Sukharev A. G. from The State Science Center Troitsk Institute for Innovation and Fusion Research,
+                  Russia
+CONTACT:          Contact person is Dr. Igor Kochetov
+                  kochet@@triniti.ru
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+************************************************************************************************************************
+
+
+********************************************************** H2O **********************************************************
+
+ATTACHMENT
+H2O -> H2 + O(-)
+SPECIES: e / H2O
+PROCESS: E + H2O -> H2 + O(-), Attachment
+PARAM.:  complete set
+COMMENT: Dis.attM.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 4.900000e+0	0.000000e+0
+ 5.010000e+0	1.474000e-24
+ 5.610000e+0	3.683000e-24
+ 5.700000e+0	4.914000e-24
+ 6.000000e+0	5.400000e-24
+ 6.170000e+0	7.344000e-24
+ 6.860000e+0	2.257000e-23
+ 7.430000e+0	7.830000e-24
+ 7.520000e+0	5.940000e-24
+ 7.780000e+0	5.400000e-24
+ 8.000000e+0	6.372000e-24
+ 8.740000e+0	4.860000e-23
+ 9.000000e+0	5.400000e-23
+ 9.520000e+0	4.417000e-23
+ 9.780000e+0	3.888000e-23
+ 9.870000e+0	3.780000e-23
+ 1.026000e+1	4.169000e-23
+ 1.043000e+1	4.811000e-23
+ 1.087000e+1	7.560000e-23
+ 1.126000e+1	9.234000e-23
+ 1.143000e+1	9.450000e-23
+ 1.170000e+1	9.180000e-23
+ 1.187000e+1	7.938000e-23
+ 1.209000e+1	7.560000e-23
+ 1.326000e+1	2.554000e-23
+ 1.417000e+1	8.370000e-24
+ 1.470000e+1	3.942000e-24
+ 1.500000e+1	2.970000e-24
+ 1.600000e+1	2.430000e-24
+ 1.700000e+1	5.400000e-30
+ 1.000000e+3	5.400000e-30
+-----------------------------
+
+ATTACHMENT
+H2O -> OH + H(-)
+SPECIES: e / H2O
+PROCESS: E + H2O -> OH + H(-), Attachment
+PARAM.:  complete set
+COMMENT: Dis.attM.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 5.700000e+0	0.000000e+0
+ 5.850000e+0	6.048000e-23
+ 6.000000e+0	1.145000e-22
+ 6.050000e+0	1.755000e-22
+ 6.100000e+0	2.263000e-22
+ 6.200000e+0	2.900000e-22
+ 6.400000e+0	3.672000e-22
+ 6.500000e+0	3.710000e-22
+ 6.650000e+0	3.672000e-22
+ 7.050000e+0	2.160000e-22
+ 7.400000e+0	1.080000e-22
+ 7.700000e+0	6.426000e-23
+ 7.900000e+0	5.940000e-23
+ 8.250000e+0	7.074000e-23
+ 8.800000e+0	5.400000e-23
+ 9.200000e+0	4.050000e-23
+ 9.800000e+0	2.160000e-22
+ 1.050000e+1	1.080000e-22
+ 1.120000e+1	1.404000e-23
+ 1.150000e+1	1.010000e-23
+ 1.175000e+1	9.990000e-24
+ 1.200000e+1	5.400000e-30
+ 1.000000e+3	5.400000e-30
+-----------------------------
+
+EFFECTIVE
+H2O
+ 3.025600e-5
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O, Effective
+PARAM.:  m/M = 0.000030256, complete set
+COMMENT: QT H2O M.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 0.000000e+0	1.650000e-17
+ 1.000000e-2	8.800000e-18
+ 2.000000e-2	7.700000e-18
+ 3.000000e-2	7.040000e-18
+ 5.000000e-2	5.555000e-18
+ 7.000000e-2	4.730000e-18
+ 1.000000e-1	3.850000e-18
+ 1.400000e-1	3.080000e-18
+ 2.000000e-1	2.200000e-18
+ 3.000000e-1	1.430000e-18
+ 5.000000e-1	7.260000e-19
+ 6.000000e-1	5.500000e-19
+ 7.000000e-1	4.400000e-19
+ 8.000000e-1	3.520000e-19
+ 9.000000e-1	2.750000e-19
+ 1.000000e+0	2.310000e-19
+ 1.500000e+0	9.900000e-20
+ 2.000000e+0	6.380000e-20
+ 3.000000e+0	5.170000e-20
+ 4.000000e+0	5.280000e-20
+ 5.000000e+0	5.500000e-20
+ 6.000000e+0	5.830000e-20
+ 7.000000e+0	6.160000e-20
+ 8.000000e+0	6.435000e-20
+ 9.000000e+0	6.600000e-20
+ 1.000000e+1	6.820000e-20
+ 1.300000e+1	6.875000e-20
+ 1.700000e+1	6.380000e-20
+ 2.000000e+1	6.050000e-20
+ 3.000000e+1	5.170000e-20
+ 5.000000e+1	3.740000e-20
+ 1.000000e+2	2.310000e-20
+ 2.000000e+2	1.375000e-20
+ 3.000000e+2	9.900000e-21
+ 5.000000e+2	6.160000e-21
+-----------------------------
+
+EXCITATION
+H2O -> H2O(ROT)
+ 4.000000e-2
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(ROT), Excitation
+PARAM.:  E = 0.04 eV, complete set
+COMMENT: Qrot M.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 4.000000e-2	0.000000e+0
+ 6.500000e-2	2.400000e-20
+ 7.500000e-2	7.200000e-20
+ 8.500000e-2	9.200000e-20
+ 1.250000e-1	1.120000e-19
+ 2.000000e-1	1.280000e-19
+ 3.000000e-1	1.384000e-19
+ 4.000000e-1	1.440000e-19
+ 5.000000e-1	1.480000e-19
+ 6.000000e-1	1.496000e-19
+ 7.000000e-1	1.480000e-19
+ 9.000000e-1	1.400000e-19
+ 1.200000e+0	1.200000e-19
+ 1.500000e+0	1.040000e-19
+ 4.000000e+0	8.000000e-30
+ 1.000000e+3	8.000000e-30
+-----------------------------
+
+EXCITATION
+H2O -> H2O(010)
+ 1.980000e-1
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(010), Excitation
+PARAM.:  E = 0.198 eV, complete set
+COMMENT: Vib. M.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.980000e-1	0.000000e+0
+ 3.000000e-1	1.800000e-20
+ 3.400000e-1	1.900000e-20
+ 3.900000e-1	1.840000e-20
+ 6.000000e-1	8.300000e-21
+ 8.620000e-1	4.200000e-21
+ 1.000000e+0	3.800000e-21
+ 1.470000e+0	2.500000e-21
+ 2.000000e+0	2.000000e-21
+ 3.210000e+0	1.500000e-21
+ 5.000000e+0	1.550000e-21
+ 7.000000e+0	1.700000e-21
+ 8.000000e+0	1.700000e-21
+ 9.000000e+0	1.650000e-21
+ 1.000000e+1	1.600000e-21
+ 1.100000e+1	1.000000e-30
+ 1.000000e+3	1.000000e-30
+-----------------------------
+
+EXCITATION
+H2O -> H2O(101)
+ 4.530000e-1
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H2O(101), Excitation
+PARAM.:  E = 0.453 eV, complete set
+COMMENT: Vib. M.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 4.530000e-1	0.000000e+0
+ 5.300000e-1	3.800000e-20
+ 5.800000e-1	3.920000e-20
+ 6.300000e-1	3.830000e-20
+ 8.200000e-1	7.900000e-21
+ 1.020000e+0	5.100000e-21
+ 1.450000e+0	3.400000e-21
+ 2.410000e+0	2.900000e-21
+ 3.000000e+0	3.100000e-21
+ 5.000000e+0	4.200000e-21
+ 7.000000e+0	5.100000e-21
+ 8.000000e+0	5.000000e-21
+ 9.000000e+0	4.500000e-21
+ 1.000000e+1	3.600000e-21
+ 1.100000e+1	1.000000e-30
+ 1.000000e+3	1.000000e-30
+-----------------------------
+
+EXCITATION
+H2O -> H + OH
+ 7.100000e+0
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + H + OH, Excitation
+PARAM.:  E = 7.1 eV, complete set
+COMMENT: Qex V M.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 7.100000e+0	0.000000e+0
+ 1.500000e+1	1.750000e-20
+ 2.000000e+1	3.000000e-20
+ 3.000000e+1	4.000000e-20
+ 4.000000e+1	4.750000e-20
+ 5.500000e+1	5.000000e-20
+ 8.000000e+1	4.500000e-20
+ 1.000000e+2	3.750000e-20
+ 1.200000e+2	3.000000e-20
+ 1.400000e+2	2.250000e-20
+ 1.800000e+2	1.750000e-20
+ 2.600000e+2	1.000000e-20
+ 3.200000e+2	5.000000e-21
+ 4.000000e+2	2.500000e-21
+ 5.000000e+2	0.000000e+0
+-----------------------------
+
+IONIZATION
+H2O -> H2O(+)
+ 1.261000e+1
+SPECIES: e / H2O
+PROCESS: E + H2O -> E + E + H2O(+), Ionization
+PARAM.:  E = 12.61 eV, complete set
+COMMENT: Qion M.Yousfi et al.Cent.de Phys.Atom.de Toulouse Univ.diPadova1987.
+UPDATED: 2017-01-18 10:50:58
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.261000e+1	0.000000e+0
+ 2.000000e+1	5.000000e-21
+ 3.000000e+1	1.300000e-20
+ 4.000000e+1	2.700000e-20
+ 5.000000e+1	3.700000e-20
+ 6.000000e+1	3.900000e-20
+ 8.000000e+1	3.980000e-20
+ 9.000000e+1	4.020000e-20
+ 1.000000e+2	4.080000e-20
+ 1.050000e+2	4.160000e-20
+ 1.270000e+2	4.100000e-20
+ 1.430000e+2	4.020000e-20
+ 1.710000e+2	3.880000e-20
+ 1.890000e+2	3.760000e-20
+ 2.230000e+2	3.520000e-20
+ 2.500000e+2	3.100000e-20
+ 2.790000e+2	2.920000e-20
+ 3.330000e+2	2.680000e-20
+ 3.900000e+2	2.420000e-20
+ 4.690000e+2	2.200000e-20
+ 5.530000e+2	1.952000e-20
+ 6.730000e+2	1.722000e-20
+ 7.820000e+2	1.524000e-20
+ 9.600000e+2	1.318000e-20
+-----------------------------
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
