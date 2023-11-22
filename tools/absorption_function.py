@@ -29,13 +29,15 @@ def get_args():
     p.add_argument('-n_modes', type=int, default=3,
                    help='Number of Helmholtz modes')
     p.add_argument('-H2O_model', type=str, choices=['Naidis', 'Aints'],
-                   default='Naidis', help='Type of H2O absorption model')
+                   default='Naidis',
+                   help='H2O absorption coefficients for '
+                   'numerical absorption function')
     p.add_argument('-guess_amplitudes', type=float,
                    help='Initial guess for amplitude of Helmholtz modes')
     p.add_argument('-guess_lambdas', type=float,
                    help='Initial guess for lambdas of Helmholtz modes')
     p.add_argument('-fit_what', type=str, default='numerical',
-                   choices=['numerical', 'Zheleznyak', 'Aints'],
+                   choices=['numerical', 'Zheleznyak-H2O', 'Aints'],
                    help='What type of data/function to fit')
     p.add_argument('-fit_type', type=str, default='least_squares',
                    choices=['least_squares', 'relative', 'log'],
@@ -222,7 +224,7 @@ for i in range(args.n_points):
 
 if args.fit_what == 'numerical':
     f_to_fit = f_numerical
-elif args.fit_what == 'Zheleznyak':
+elif args.fit_what == 'Zheleznyak-H2O':
     f_to_fit = naidis_moist_zheleznyak_f(r)
 elif args.fit_what == 'Aints':
     f_to_fit = aints_moist_zheleznyak_f(r)
