@@ -6,7 +6,7 @@
 
 import numpy as np
 import copy
-from struct import unpack, calcsize
+from struct import pack, unpack, calcsize
 from scipy.interpolate import RegularGridInterpolator
 
 
@@ -81,6 +81,44 @@ def get_raw_data(fname, project_dims=None):
     domain_props['cycle'] = cycle
     domain_props['time'] = time
     return grids, domain_props
+
+
+def write_single_grid(f, grid):
+    """Write single grid to binary file"""
+    f.write(pack('=i', grid['n_dims']))
+
+    fmt = '=' + str(grid['n_dims']) + 'i'
+    f.write(pack(fmt, *grid['dims']))
+
+    # lo and hi index range of non-phony data
+    f.write(pack(fmt, *grid['ilo']))
+    f.write(pack(fmt, *grid['ihi']))
+
+    # Mesh coordinates
+    for i in range(grid['n_dims']):
+        fmt = '=' + str(grid['dims'][i]) + 'd'
+        f.write(pack(fmt, *grid['coords'][i]))
+
+    # Number of cell centers is one less than number of faces
+    n_cells = grid['dims']-1
+    fmt = '=' + str(np.product(n_cells)) + 'd'
+    f.write(grid['values'].tobytes(order='F'))
+
+
+def write_raw_data(fname, grids, domain):
+    """Write grid data to a raw file again
+
+    :param fname: filename of raw data
+    :param grids: list of grids
+    :param domain: domain properties
+    """
+    with open(fname, 'wb') as f:
+        f.write(pack('=i', domain['cycle']))
+        f.write(pack('=d', domain['time']))
+        f.write(pack('=i', len(grids)))
+
+        for g in grids:
+            write_single_grid(f, g)
 
 
 def get_grid_properties(g):
