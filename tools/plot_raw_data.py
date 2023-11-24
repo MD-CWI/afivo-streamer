@@ -50,9 +50,8 @@ p.add_argument('-silo_to_raw', type=str, default='./silo_to_raw',
                help='Path to silo_to_raw converter')
 
 
-def plot_raw_data(args):
-
-    extension = os.path.splitext(args.input_file)[1]
+def load_file(fname, args):
+    extension = os.path.splitext(fname)[1]
 
     if extension == ".silo":
         if not args.variable:
@@ -63,14 +62,18 @@ def plot_raw_data(args):
 
         # Convert silo to raw. Place temporary files in the same folder as
         # there can otherwise be issues with a full /tmp folder
-        dirname = os.path.dirname(args.input_file)
+        dirname = os.path.dirname(fname)
         with tempfile.NamedTemporaryFile(dir=dirname) as fp:
-            _ = subprocess.call([args.silo_to_raw, args.input_file,
+            _ = subprocess.call([args.silo_to_raw, fname,
                                  args.variable, fp.name])
             grids, domain = get_raw_data(fp.name, args.project_dims)
     else:
-        grids, domain = get_raw_data(args.input_file, args.project_dims)
+        grids, domain = get_raw_data(fname, args.project_dims)
 
+    return grids, domain
+
+
+def plot_uniform(grids, domain, args):
     # Grid size nx should be of form 2^k * domain['n_cells_coarse']
     ratio = args.min_pixels / domain['n_cells_coarse'].min()
     ratio = 2**(np.ceil(np.log2(ratio)).astype(int))
@@ -91,7 +94,6 @@ def plot_raw_data(args):
 
     nx = np.round((r_max - r_min)/dr).astype(int)
 
-    print(f'File:         {args.input_file}')
     print(f'Resolution:   {nx}')
     print(f'Grid spacing: {dr}')
 
@@ -157,4 +159,6 @@ def plot_raw_data(args):
 
 if __name__ == '__main__':
     args = p.parse_args()
-    plot_raw_data(args)
+
+    grids, domain = load_file(args.input_file, args)
+    plot_uniform(grids, domain, args)
