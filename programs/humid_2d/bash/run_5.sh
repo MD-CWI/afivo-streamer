@@ -2,16 +2,15 @@
 
 cd ../
 
-#./streamer d200mm_0.03H2O_photoi_custom.cfg -field_given_by="field -1.0e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.03H2O_1.0e6_photoifit-0.03H2O
-#./streamer d200mm_0.03H2O_photoi_custom.cfg -field_given_by="field -1.0e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.03H2O_1.0e6_photoifit-0.00H2O -photoi_helmh%coeffs="6.10470E+06 8.07758E+08 1.51443E+05" -photoi_helmh%lambdas="4.03631E+03 3.57734E+04 1.06251E+03"
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/starikovskiy_0.03H2O_Kawaguchi.txt -output%name=/export/scratch2/baohong/humid_air/streamer_comparison/starikovskiy_1.4e6_0.03H2O_Aints
+./streamer d200mm_0.10H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/starikovskiy_0.10H2O_Kawaguchi.txt -output%name=/export/scratch2/baohong/humid_air/streamer_comparison/starikovskiy_1.4e6_0.10H2O_Aints
 
-#./streamer d200mm_0.03H2O_photoi_custom.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.03H2O_1.4e6_photoifit-0.03H2O
-#./streamer d200mm_0.03H2O_photoi_custom.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.03H2O_1.4e6_photoifit-0.00H2O -photoi_helmh%coeffs="6.10470E+06 8.07758E+08 1.51443E+05" -photoi_helmh%lambdas="4.03631E+03 3.57734E+04 1.06251E+03"
 
-#./streamer d200mm_0.10H2O.cfg -field_given_by="field -1.0e6" -input_data%file=../../transport_data/humid_air/malagon_0.10H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.10H2O_1.0e6_photoifit_0.10H2O
-#./streamer d200mm_0.10H2O.cfg -field_given_by="field -1.0e6" -input_data%file=../../transport_data/humid_air/malagon_0.10H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.10H2O_1.0e6_bourdon3_0.00H2O -photoi_helmh%author="Bourdon-3"
 
-./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.0e6" -field_rod_r0="0 0.95725" -field_rod_radius=0.45e-3 -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.03H2O_1.0e6_EL9mm_0.45mm
-
-./streamer d200mm_0.03H2O.cfg -field_given_by="field -0.8e6" -field_rod_r0="0 0.9525" -field_rod_radius=0.5e-3 -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.03H2O_0.8e6_EL10mm_0.5mm
-./streamer d200mm_0.03H2O.cfg -field_given_by="field -0.85e6" -field_rod_r0="0 0.9525" -field_rod_radius=0.5e-3 -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_air_chemistry.txt -output%name=/export/scratch2/baohong/humid_air/comparison/d200_malagon_0.03H2O_0.85e6_EL10mm_0.5mm
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_Kawaguchi_ioniza_fac0.5.txt -output%name=/export/scratch2/baohong/humid_air/chemistry_sensitivity/malagon_1.4e6_0.03H2O_Aints_ioniza_fac0.5
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_Kawaguchi_ioniza_fac0.6.txt -output%name=/export/scratch2/baohong/humid_air/chemistry_sensitivity/malagon_1.4e6_0.03H2O_Aints_ioniza_fac0.6
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_Kawaguchi_ioniza_fac0.7.txt -output%name=/export/scratch2/baohong/humid_air/chemistry_sensitivity/malagon_1.4e6_0.03H2O_Aints_ioniza_fac0.7
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_Kawaguchi_ioniza_fac0.75.txt -output%name=/export/scratch2/baohong/humid_air/chemistry_sensitivity/malagon_1.4e6_0.03H2O_Aints_ioniza_fac0.75
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_Kawaguchi_ioniza_fac0.8.txt -output%name=/export/scratch2/baohong/humid_air/chemistry_sensitivity/malagon_1.4e6_0.03H2O_Aints_ioniza_fac0.8
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_Kawaguchi_ioniza_fac0.9.txt -output%name=/export/scratch2/baohong/humid_air/chemistry_sensitivity/malagon_1.4e6_0.03H2O_Aints_ioniza_fac0.9
+./streamer d200mm_0.03H2O.cfg -field_given_by="field -1.4e6" -input_data%file=../../transport_data/humid_air/malagon_0.03H2O_Kawaguchi.txt -output%name=/export/scratch2/baohong/humid_air/chemistry_sensitivity/malagon_1.4e6_0.03H2O_Aints_ioniza_fac1.0

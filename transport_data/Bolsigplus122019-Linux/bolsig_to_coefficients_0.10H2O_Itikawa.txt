@@ -24,8 +24,8 @@ CONDITIONS
 1000.     / Electric field / N (Td)
 0.        / Angular field frequency / N (m3/s)
 0.        / Cosine of E-B field angle
-319.3      / Gas temperature (K)
-319.3      / Excitation temperature (K)
+320.      / Gas temperature (K)
+320.      / Excitation temperature (K)
 0.        / Transition energy (eV)
 0.        / Ionization degree
 1e18      / Plasma density (1/m3)

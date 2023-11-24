@@ -1,0 +1,69 @@
+! Comment
+/ Comment
+
+/NOSCREEN
+
+/READCOLLISIONS can be called multiple times to read from different files
+
+READCOLLISIONS
+cross_sections_N2_O2_Phelps.txt                 /File
+N2		/Species
+0		/Extrapolate: 0= No 1= Yes
+
+READCOLLISIONS
+cross_sections_N2_O2_Phelps.txt                 /File
+O2 		/Species
+0		/Extrapolate: 0= No 1= Yes
+
+READCOLLISIONS
+cross_sections_H2O_Morgan.txt                 /File
+H2O 		/Species
+0		/Extrapolate: 0= No 1= Yes
+
+CONDITIONS
+1000.     / Electric field / N (Td)
+0.        / Angular field frequency / N (m3/s)
+0.        / Cosine of E-B field angle
+333.6      / Gas temperature (K)
+333.6      / Excitation temperature (K)
+0.        / Transition energy (eV)
+0.        / Ionization degree
+1e18      / Plasma density (1/m3)
+1.        / Ion charge parameter
+1.        / Ion/neutral mass ratio
+0         / e-e momentum effects: 0=No; 1=Yes*
+1         / Energy sharing: 1=Equal*; 2=One takes all
+1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
+0.        / Maxwellian mean energy (eV)
+400       / # of grid points
+0         / Manual grid: 0=No; 1=Linear; 2=Parabolic
+200.      / Manual maximum energy (eV)
+1e-10     / Precision
+1e-4      / Convergence
+1000      / Maximum # of iterations
+0.64 0.16 0.2   / Gas composition fractions
+1         / Normalize composition to unity: 0=No; 1=Yes
+
+RUN
+
+CLEARRUNS
+
+RUNSERIES
+1          / Variable: 1=E/N; 2=Mean energy; 3=Maxwellian energy
+1  1000.   / Min Max
+200        / Number
+2          / Type: 1=Linear; 2=Quadratic; 3=Exponential
+
+/SAVERESULTS can be called multiple times to write in different formats
+
+SAVERESULTS
+convert_0.20H2O_Morgan.txt        / File
+2        / Format: 1=Run by run; 2=Combined; 3=E/N; 4=Energy; 5=SIGLO; 6=PLASIMO
+1        / Conditions: 0=No; 1=Yes
+1        / Transport coefficients: 0=No; 1=Yes
+1        / Rate coefficients: 0=No; 1=Yes
+0        / Reverse rate coefficients: 0=No; 1=Yes
+0        / Energy loss coefficients: 0=No; 1=Yes
+0        / Distribution function: 0=No; 1=Yes
+0        / Skip failed runs: 0=No; 1=Yes
+END
