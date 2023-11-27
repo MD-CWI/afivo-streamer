@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1	     # number of tasks to run
 #SBATCH --cpus-per-task=128    # number of cpus required per task
 #SBATCH --partition=rome	     # partition requested
-#SBATCH --time=2-00:00:00	     # wall-clock time limit
+#SBATCH --time=5-00:00:00	     # wall-clock time limit
 
 module load 2022
 module load GCC/11.3.0
