@@ -1,0 +1,16 @@
+The following five cases appear second streamers after the first streamers:
+malagon_0.9e6_0.10H2O_Bourdon
+malagon_0.9e6_0.10H2O_Bourdon_Morgan  (This case is also decelerating)
+malagon_0.9e6_0.10H2O_Bourdon_Phelps
+malagon_0.9e6_0.10H2O_Bourdon_Triniti
+malagon_0.9e6_0.10H2O_Aints
+
+These two cases are decelerating:
+malagon_0.9e6_0.10H2O_Bourdon_Itikawa (stagnate)
+starikovskiy_0.9e6_0.10H2O_Aints
+
+
+
+Have to rerun these two cases (take more than 1 day to run):
+malagon_0.9e6_0.10H2O_Bourdon_Morgan
+starikovskiy_0.9e6_0.10H2O_Aints
