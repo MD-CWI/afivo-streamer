@@ -9,11 +9,8 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from raw_reader import get_raw_data, map_grid_data_to
+from raw_reader import load_file, map_grid_data_to
 import argparse
-import os
-import tempfile
-import subprocess
 
 p = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -48,29 +45,6 @@ p.add_argument('-cmap', type=str, default='plasma',
                help='Use this colormap')
 p.add_argument('-silo_to_raw', type=str, default='./silo_to_raw',
                help='Path to silo_to_raw converter')
-
-
-def load_file(fname, args):
-    extension = os.path.splitext(fname)[1]
-
-    if extension == ".silo":
-        if not args.variable:
-            raise ValueError('Specify variable to plot using -variable')
-
-        if not os.path.exists(args.silo_to_raw):
-            raise ValueError('Could not find silo_to_raw, set -silo_to_raw')
-
-        # Convert silo to raw. Place temporary files in the same folder as
-        # there can otherwise be issues with a full /tmp folder
-        dirname = os.path.dirname(fname)
-        with tempfile.NamedTemporaryFile(dir=dirname) as fp:
-            _ = subprocess.call([args.silo_to_raw, fname,
-                                 args.variable, fp.name])
-            grids, domain = get_raw_data(fp.name, args.project_dims)
-    else:
-        grids, domain = get_raw_data(fname, args.project_dims)
-
-    return grids, domain
 
 
 def plot_uniform(grids, domain, args):
@@ -160,5 +134,6 @@ def plot_uniform(grids, domain, args):
 if __name__ == '__main__':
     args = p.parse_args()
 
-    grids, domain = load_file(args.input_file, args)
+    grids, domain = load_file(args.input_file, args.project_dims,
+                              args.variable, args.silo_to_raw)
     plot_uniform(grids, domain, args)

@@ -8,6 +8,41 @@ import numpy as np
 import copy
 from struct import pack, unpack, calcsize
 from scipy.interpolate import RegularGridInterpolator
+import tempfile
+import os
+import subprocess
+
+
+def load_file(fname, project_dims=None, variable=None,
+              silo_to_raw='./silo_to_raw'):
+    """Read a Silo or a raw file
+
+    :param fname: name of the raw file
+    :param project_dims: project along these dimensions
+    :param variable: read this variable from a Silo file
+    :param silo_to_raw: path to silo_to_raw executable
+    :returns: grids, domains
+    """
+    extension = os.path.splitext(fname)[1]
+
+    if extension == ".silo":
+        if not variable:
+            raise ValueError('Specify variable to plot for a Silo file')
+
+        if not os.path.exists(silo_to_raw):
+            raise ValueError('Could not find silo_to_raw at {silo_to_raw}')
+
+        # Convert silo to raw. Place temporary files in the same folder as
+        # there can otherwise be issues with a full /tmp folder
+        dirname = os.path.dirname(fname)
+        with tempfile.NamedTemporaryFile(dir=dirname) as fp:
+            _ = subprocess.call([silo_to_raw, fname,
+                                 variable, fp.name])
+            grids, domain = get_raw_data(fp.name, project_dims)
+    else:
+        grids, domain = get_raw_data(fname, project_dims)
+
+    return grids, domain
 
 
 def read_single_grid(f):
