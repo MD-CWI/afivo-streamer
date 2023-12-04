@@ -32,7 +32,8 @@ p.add_argument('-abel_transform', action='store_true',
                help='Perform forward Abel transform (implies axisymmetric)')
 p.add_argument('-interpolation', default='linear',
                choices=['linear', 'nearest'],
-               help='Interpolation method. Linear requires valid ghost cells.')
+               help='Interpolation method. Linear requires valid ghost cells'
+               ' and is not conservative')
 p.add_argument('-vmin', type=float, help='Minimum intensity in plot')
 p.add_argument('-vmax', type=float, help='Maximum intensity in plot')
 p.add_argument('-xlim', type=float, nargs=2, help='Plot range in x direction')
