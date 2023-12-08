@@ -44,7 +44,7 @@ p.add_argument('-save_npz', type=str,
                help='Save the data into npz file and do not plot')
 p.add_argument('-cmap', type=str, default='plasma',
                help='Use this colormap')
-p.add_argument('-silo_to_raw', type=str, default='./silo_to_raw',
+p.add_argument('-silo_to_raw', type=str, default=None,
                help='Path to silo_to_raw converter')
 
 

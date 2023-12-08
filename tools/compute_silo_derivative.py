@@ -13,9 +13,12 @@ import copy
 
 p = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-p.add_argument('input_files', type=str, nargs=2,
-               help='Input Silo or raw files at times t1 and t2')
-p.add_argument('raw_output', type=str,
+p.add_argument('input_files', type=str, nargs='+',
+               help='Input Silo or raw files at times t_1, t_2, ..., t_n')
+p.add_argument('-deriv_type', type=str, default='1st_central',
+               choices=['1st_central', '2nd_central'],
+               help='Type of derivative to compute')
+p.add_argument('-output', type=str, required=True,
                help='Output raw file with the time derivative')
 p.add_argument('-variable', type=str, help='Which variable to consider')
 p.add_argument('-project_dims', type=int, nargs='+', choices=[0, 1, 2],
@@ -26,8 +29,6 @@ p.add_argument('-interpolation', default='nearest',
                choices=['linear', 'nearest'],
                help='Interpolation method. Linear requires valid ghost cells'
                ' and is not conservative')
-p.add_argument('-silo_to_raw', type=str, default='./silo_to_raw',
-               help='Path to silo_to_raw converter')
 
 
 def map_grid_a_to_b(grids_a, grids_b, axisymmetric=False,
@@ -67,24 +68,62 @@ def map_grid_a_to_b(grids_a, grids_b, axisymmetric=False,
 if __name__ == '__main__':
     args = p.parse_args()
 
-    grids_a, domain_a = load_file(args.input_files[0], args.project_dims,
-                                  args.variable, args.silo_to_raw)
-    grids_b, domain_b = load_file(args.input_files[1], args.project_dims,
-                                  args.variable, args.silo_to_raw)
-    grids_c = map_grid_a_to_b(grids_a, grids_b, args.axisymmetric,
-                              args.interpolation)
+    all_gd = [load_file(f, args.project_dims, args.variable)
+              for f in args.input_files]
 
-    dt = domain_b['time'] - domain_a['time']
-    inv_dt = 1/dt
+    grids = [gd[0] for gd in all_gd]
+    domains = [gd[1] for gd in all_gd]
+    times = np.array([d['time'] for d in domains])
+    cycles = np.array([d['cycle'] for d in domains])
 
-    t_avg = 0.5 * (domain_b['time'] + domain_a['time'])
-    cycle_avg = (domain_b['cycle'] + domain_a['cycle'])//2
+    if args.deriv_type == '1st_central':
+        if len(grids) != 2:
+            raise ValueError('1st_central requires len(grids) == 2')
 
-    for gb, gc in zip(grids_b, grids_c):
-        gc['values'] = (gb['values'] - gc['values']) * inv_dt
+        # Map onto last grid
+        grids[0] = map_grid_a_to_b(grids[0], grids[1],
+                                   args.axisymmetric, args.interpolation)
 
-    domain_c = domain_b.copy()
-    domain_c['time'] = t_avg
-    domain_c['cycle'] = cycle_avg
-    write_raw_data(args.raw_output, grids_c, domain_c)
-    print(f'Time derivative has been written to {args.raw_output}')
+        # Compute 1st order derivative
+        dt = times[1] - times[0]
+        w = np.array([-1, 1]) / dt
+
+        # Store results in grids[0]
+        for i in range(len(grids[0])):
+            grids[0][i]['values'] = w[0] * grids[0][i]['values'] + \
+                w[1] * grids[1][i]['values']
+
+        domains[0]['time'] = 0.5 * (times[0] + times[1])
+        domains[0]['cycle'] = int((cycles[0] + cycles[1])//2)
+
+    elif args.deriv_type == '2nd_central':
+        if len(grids) != 3:
+            raise ValueError('2nd_central requires len(grids) == 3')
+
+        # Map onto last grid
+        grids[0] = map_grid_a_to_b(grids[0], grids[2],
+                                   args.axisymmetric, args.interpolation)
+        grids[1] = map_grid_a_to_b(grids[1], grids[2],
+                                   args.axisymmetric, args.interpolation)
+        t_grid = times[1]
+
+        # Compute 2nd order derivative, allowing for variable dt
+        dt_a = times[1] - times[0]
+        dt_b = times[2] - times[1]
+        w = np.zeros(3)
+
+        w[0] = dt_b/dt_a * 2 / (dt_b**2 + dt_a * dt_b)
+        w[2] = 2 / (dt_b**2 + dt_a * dt_b)
+        w[1] = -(w[0] + w[2])
+
+        # Store results in grids[0]
+        for i in range(len(grids[0])):
+            grids[0][i]['values'] = w[0] * grids[0][i]['values'] + \
+                w[1] * grids[1][i]['values'] + \
+                w[2] * grids[2][i]['values']
+
+        domains[0]['time'] = times[1]
+        domains[0]['cycle'] = cycles[1]
+
+    write_raw_data(args.output, grids[0], domains[0])
+    print(f'Written {args.output}')

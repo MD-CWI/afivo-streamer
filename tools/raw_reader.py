@@ -10,11 +10,13 @@ from struct import pack, unpack, calcsize
 from scipy.interpolate import RegularGridInterpolator
 import tempfile
 import os
+import sys
 import subprocess
+import pathlib
 
 
 def load_file(fname, project_dims=None, variable=None,
-              silo_to_raw='./silo_to_raw'):
+              silo_to_raw=None):
     """Read a Silo or a raw file
 
     :param fname: name of the raw file
@@ -29,8 +31,12 @@ def load_file(fname, project_dims=None, variable=None,
         if not variable:
             raise ValueError('Specify variable to plot for a Silo file')
 
+        if silo_to_raw is None:
+            this_folder = pathlib.Path(__file__).parent.resolve()
+            silo_to_raw = os.path.join(this_folder, 'silo_to_raw')
+
         if not os.path.exists(silo_to_raw):
-            raise ValueError('Could not find silo_to_raw at {silo_to_raw}')
+            raise ValueError(f'Could not find silo_to_raw at {silo_to_raw}')
 
         # Convert silo to raw. Place temporary files in the same folder as
         # there can otherwise be issues with a full /tmp folder
