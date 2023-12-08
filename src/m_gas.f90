@@ -50,6 +50,9 @@ module m_gas
   ! Joule heating efficiency
   real(dp), public, protected :: gas_heating_efficiency  = 1.0_dp
 
+  ! Factor for the EHD force term (should be 1 by default)
+  real(dp), public, protected :: gas_EHD_factor = 1.0_dp
+
   ! Ratio of heat capacities (polytropic index)
   real(dp), public, protected :: gas_euler_gamma = 1.4_dp
 
@@ -147,6 +150,8 @@ contains
          "Gas mean molecular weight (kg), for gas dynamics")
     call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
          "Joule heating efficiency (between 0.0 and 1.0)")
+    call CFG_add_get(cfg, "gas%EHD_factor", gas_EHD_factor, &
+         "Factor for the EHD force term (should be 1 by default)")
 
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
