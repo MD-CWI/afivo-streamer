@@ -453,6 +453,9 @@ contains
                N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
        case ("Je_1")
           ! Add electron current density  (e mu n_e E_vector)
+          !
+          ! TODO: we could also add diffusive fluxes (or re-use the electron
+          ! flux computation)
           E_vector = field_get_E_vector(box)
           sigma = LT_get_col(td_tbl, td_mobility, &
                Td(DTIMES(1:nc))) * N_inv * box%cc(DTIMES(1:nc), i_electron) * &
