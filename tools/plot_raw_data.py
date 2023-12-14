@@ -21,9 +21,9 @@ p.add_argument('-min_pixels', type=int, default=512,
 p.add_argument('-project_dims', type=int, nargs='+', choices=[0, 1, 2],
                help='Project (integrate) along dimension(s)')
 p.add_argument('-r_min', type=float, nargs='+',
-               help='Data range in x direction')
+               help='Only consider data above this coordinate')
 p.add_argument('-r_max', type=float, nargs='+',
-               help='Data range in y direction')
+               help='Only consider data below this coordinate')
 p.add_argument('-save_plot', type=str,
                help='Save the plot into this file')
 p.add_argument('-axisymmetric', action='store_true',
@@ -137,4 +137,9 @@ if __name__ == '__main__':
 
     grids, domain = load_file(args.input_file, args.project_dims,
                               args.variable, args.silo_to_raw)
-    plot_uniform(grids, domain, args)
+    if domain['n_dims'] > 0:
+        plot_uniform(grids, domain, args)
+    else:
+        # All spatial dimensions are projected, print time and sum
+        grid_values = np.array([g['values'] for g in grids])
+        print(f'{domain["time"]:<16.8e} {grid_values.sum():<16.8e}')
