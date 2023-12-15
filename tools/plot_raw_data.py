@@ -99,7 +99,7 @@ def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
     return uniform_data, x
 
 
-def plot_uniform_data(uniform_data, x, vmin=None, vmax=None, cmap=None,
+def plot_uniform_data(uniform_data, x, time, vmin=None, vmax=None, cmap=None,
                       xlim=None, ylim=None, hide_axes=False, save_plot=None):
     # Plot data
     fig, ax = plt.subplots()
@@ -125,7 +125,7 @@ def plot_uniform_data(uniform_data, x, vmin=None, vmax=None, cmap=None,
     if ylim:
         ax.set_ylim(*ylim)
 
-    ax.set_title(f't = {domain["time"]:.3e}')
+    ax.set_title(f't = {time:.3e}')
 
     if save_plot:
         print(f'Saving to {save_plot}')
@@ -151,7 +151,8 @@ if __name__ == '__main__':
             np.savez(args.save_npz, uniform_data=values,
                      cycle=domain['cycle'], time=domain['time'], *coords)
         else:
-            plot_uniform_data(values, coords, vmin=args.vmin, vmax=args.vmax,
+            plot_uniform_data(values, coords, domain['time'],
+                              vmin=args.vmin, vmax=args.vmax,
                               cmap=args.cmap, xlim=args.xlim, ylim=args.ylim,
                               hide_axes=args.hide_axes,
                               save_plot=args.save_plot)
