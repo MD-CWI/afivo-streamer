@@ -112,7 +112,7 @@ N2(a) + NO -> N2 + N(4S) + O(3P),c1,3.6e-10,cm
 N2(C) + O2 -> N2 + 2O(3P),c1,2.5e-10,cm
 N2(C) + N2 -> N2 + N2(B),c1,1e-11,cm
 N2(C) + N2 -> N2 + N2(a),c1,1e-11,cm
-N2(C) -> N2(B),c1,2.8e7
+N2(C) -> N2(B) + SPS,c1,2.8e7
 N2(E) + N2 -> N2 + N2(C),c1,1e-10,cm
 NO(A) -> NO,c1,5.1e6
 N(4S) + O2 -> NO + O(3P),c1*(Tg/300)**c2*exp(-c3/Tg),4.47e-12 1.0 3270.2,cm

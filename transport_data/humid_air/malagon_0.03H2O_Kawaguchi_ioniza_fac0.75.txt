@@ -109,7 +109,7 @@ H9O4+ + H6O5- ->,c1,1e-07,cm
 e + N2 -> e + N2(C),field_table,C21 N2 Excitation 11.03 eV
 N2(C) + N2 -> N2 + N2,c1,1.3e-11,cm
 N2(C) + O2 -> N2 + O2,c1,3e-10,cm
-N2(C) -> N2(B),c1,2.381e7
+N2(C) -> N2(B) + SPS,c1,2.381e7
 -----------------------
 
 ignored_species
