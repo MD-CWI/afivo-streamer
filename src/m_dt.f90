@@ -33,6 +33,9 @@ module m_dt
   !> If > 0, a density to control the accuracy of the chemistry time step
   real(dp), public, protected :: dt_chemistry_nmin = -1.0_dp
 
+  !> Limit dt to prevent negative densities due to loss reactions
+  logical, public, protected :: dt_chemistry_limit_loss = .true.
+
   ! Maximum allowed time step
   real(dp), public, protected :: dt_max = 1.0e-11_dp
 
@@ -67,6 +70,8 @@ contains
          "CFL number to use")
     call CFG_add_get(cfg, "dt_chemistry_nmin", dt_chemistry_nmin, &
          "If > 0, a density to control the accuracy of the chemistry time step")
+    call CFG_add_get(cfg, "dt_chemistry_limit_loss", dt_chemistry_limit_loss, &
+         "Limit dt to prevent negative densities due to loss reactions")
     !> [relevant_parameters]
 
     call CFG_add_get(cfg, "dt_max_growth_factor", dt_max_growth_factor, &

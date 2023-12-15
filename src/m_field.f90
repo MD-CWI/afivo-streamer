@@ -77,6 +77,7 @@ module m_field
   public :: field_bc_homogeneous
   public :: field_from_potential
   public :: field_compute_energy
+  public :: field_get_E_vector
 
 contains
 
@@ -616,5 +617,30 @@ contains
     real(dp), intent(in) :: a, b
     reduce_sum = a + b
   end function reduce_sum
+
+  function field_get_E_vector(box) result(E_vector)
+    type(box_t), intent(in) :: box
+    real(dp)                :: E_vector(DTIMES(1:box%n_cell), NDIM)
+    integer                 :: nc
+
+    nc = box%n_cell
+
+#if NDIM == 1
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1, electric_fld))
+#elif NDIM == 2
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1:nc, 1, electric_fld))
+    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 2, electric_fld) + &
+         box%fc(1:nc, 2:nc+1, 2, electric_fld))
+#elif NDIM == 3
+    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
+         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))
+    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
+         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))
+    E_vector(DTIMES(:), 3) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
+         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))
+#endif
+  end function field_get_E_vector
 
 end module m_field

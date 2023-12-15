@@ -6,6 +6,8 @@ module m_coupling
   use m_units_constants
   use m_gas
   use m_streamer
+  use m_chemistry
+  use m_field
 
   implicit none
   private
@@ -27,7 +29,9 @@ contains
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc
-    real(dp)                   :: J_dot_E
+    real(dp)                   :: J_dot_E, ehd_force(NDIM)
+    real(dp)                   :: E_vt_release, tmp, eff_fast, eff_slow
+    real(dp)                   :: E_vector(DTIMES(1:box%n_cell), NDIM)
 
     nc = box%n_cell
     do KJI_DO(1, nc)
@@ -47,9 +51,34 @@ contains
             box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
 #endif
 
-       box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-           gas_heating_efficiency *  J_dot_E * UC_elec_charge * dt_vec(1)
+       tmp = J_dot_E * UC_elec_charge * dt_vec(1)
+
+       if (gas_fraction_slow_heating > 0) then
+          eff_fast = gas_heating_efficiency * (1 - gas_fraction_slow_heating)
+          eff_slow = gas_heating_efficiency * gas_fraction_slow_heating
+
+          E_vt_release = box%cc(IJK, i_vibration_energy)/gas_vt_time * dt_vec(1)
+          box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy) + &
+               eff_slow * tmp - E_vt_release
+          box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
+               eff_fast * tmp + E_vt_release
+       else
+          box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
+               gas_heating_efficiency * tmp
+       end if
     end do; CLOSE_DO
+
+    E_vector = field_get_E_vector(box)
+
+    ! EHD force
+    do KJI_DO(1, nc)
+       ehd_force = UC_elem_charge * sum(box%cc(IJK, charged_species_itree) * &
+            charged_species_charge) * E_vector(IJK, :)
+
+       box%cc(IJK, gas_vars(i_mom)) = box%cc(IJK, gas_vars(i_mom)) + &
+            gas_EHD_factor * ehd_force * dt_vec(1)
+    end do; CLOSE_DO
+
   end subroutine add_heating_box
 
   !> Update gas number density in the fluid model

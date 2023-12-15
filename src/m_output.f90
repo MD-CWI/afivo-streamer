@@ -7,6 +7,7 @@ module m_output
   use m_gas
   use m_lookup_table
   use m_units_constants
+  use m_field
 
   implicit none
   private
@@ -452,7 +453,10 @@ contains
                N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
        case ("Je_1")
           ! Add electron current density  (e mu n_e E_vector)
-          E_vector = get_E_vector(box)
+          !
+          ! TODO: we could also add diffusive fluxes (or re-use the electron
+          ! flux computation)
+          E_vector = field_get_E_vector(box)
           sigma = LT_get_col(td_tbl, td_mobility, &
                Td(DTIMES(1:nc))) * N_inv * box%cc(DTIMES(1:nc), i_electron) * &
                UC_elem_charge
@@ -962,31 +966,6 @@ contains
        box%cc(IJK, i_power_density) = J_dot_E * UC_elec_charge
     end do; CLOSE_DO
   end subroutine set_power_density_box
-
-  function get_E_vector(box) result(E_vector)
-    type(box_t), intent(in) :: box
-    real(dp)                :: E_vector(DTIMES(1:box%n_cell), NDIM)
-    integer                 :: nc
-
-    nc = box%n_cell
-
-#if NDIM == 1
-    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1, electric_fld))
-#elif NDIM == 2
-    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1, electric_fld))
-    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 2, electric_fld))
-#elif NDIM == 3
-    E_vector(DTIMES(:), 1) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))
-    E_vector(DTIMES(:), 2) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))
-    E_vector(DTIMES(:), 3) = 0.5_dp * (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
-         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))
-#endif
-  end function get_E_vector
 
   subroutine set_gas_primitives_box(box)
     type(box_t), intent(inout) :: box

@@ -397,9 +397,11 @@ contains
           ! The time step is restricted by both the production and destruction
           ! rate of species
           tmp = minval((dens + dt_chemistry_nmin) / max(abs(derivs), eps))
-       else
+       else if (dt_chemistry_limit_loss) then
           ! Prevent negative values due to too much removal of a species
           tmp = minval(max(dens, eps) / max(-derivs, eps))
+       else
+          tmp = 1e100_dp
        end if
 
        dt_lim(1) = tmp

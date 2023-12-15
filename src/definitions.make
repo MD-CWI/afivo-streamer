@@ -26,6 +26,8 @@ m_chemistry.o: m_table_data.mod
 m_chemistry.o: m_transport_data.mod
 m_chemistry.o: m_types.mod
 m_chemistry.o: m_units_constants.mod
+m_coupling.o: m_chemistry.mod
+m_coupling.o: m_field.mod
 m_coupling.o: m_gas.mod
 m_coupling.o: m_streamer.mod
 m_coupling.o: m_types.mod
@@ -158,3 +160,4 @@ streamer.o: m_types.mod
 streamer.o: m_units_constants.mod
 streamer.o: m_user_methods.mod
 streamer.o: m_user.mod
+

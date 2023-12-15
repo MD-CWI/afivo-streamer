@@ -47,8 +47,17 @@ module m_gas
   ! Gas mean molecular weight (kg)
   real(dp), public, protected :: gas_molecular_weight = 28.8_dp * UC_atomic_mass
 
-  ! Joule heating efficiency
-  real(dp), public, protected :: gas_heating_efficiency  = 1.0_dp
+  !> Vibration-Translation relaxation time (s)
+  real(dp), public, protected :: gas_vt_time = 20e-6_dp
+
+  ! Joule heating efficiency (between 0.0 and 1.0)
+  real(dp), public, protected :: gas_heating_efficiency = 1.0_dp
+
+  ! Fraction of gas heating that occurs via V-T relaxation
+  real(dp), public, protected :: gas_fraction_slow_heating = 0.0_dp
+
+  ! Factor for the EHD force term (should be 1 by default)
+  real(dp), public, protected :: gas_EHD_factor = 1.0_dp
 
   ! Ratio of heat capacities (polytropic index)
   real(dp), public, protected :: gas_euler_gamma = 1.4_dp
@@ -63,6 +72,9 @@ module m_gas
 
   ! Indices of the Euler fluxes
   integer, public, protected :: gas_fluxes(n_vars_euler) = -1
+
+  ! Index of slow heating term
+  integer, public, protected :: i_vibration_energy = -1
 
   ! Names of the Euler variables
   character(len=name_len), public, protected :: gas_var_names(n_vars_euler)
@@ -147,6 +159,16 @@ contains
          "Gas mean molecular weight (kg), for gas dynamics")
     call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
          "Joule heating efficiency (between 0.0 and 1.0)")
+    call CFG_add_get(cfg, "gas%fraction_slow_heating", gas_fraction_slow_heating, &
+         "Fraction of gas heating that occurs via V-T relaxation")
+    call CFG_add_get(cfg, "gas%vt_relaxation_time", gas_vt_time, &
+         "Vibration-Translation relaxation time")
+    call CFG_add_get(cfg, "gas%EHD_factor", gas_EHD_factor, &
+         "Factor for the EHD force term (should be 1 by default)")
+
+    if (gas_fraction_slow_heating > 0) then
+       call af_add_cc_variable(tree, "vibrational_energy", ix=i_vibration_energy)
+    end if
 
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
