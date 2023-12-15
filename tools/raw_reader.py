@@ -285,6 +285,15 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
 
     nx = ix_hi - ix_lo + 1
 
+    # Get index range that is valid on uniform grid
+    nx_uniform = np.round((r_max - r_min)/dr).astype(int)
+    offset_lo = np.maximum(0, -ix_lo)
+    offset_hi = np.maximum(0, ix_hi+1 - nx_uniform)
+
+    # Index range on the grid_data
+    grid_lo, grid_hi = offset_lo, nx-offset_hi
+    d_ix = tuple([np.s_[i:j] for (i, j) in zip(grid_lo, grid_hi)])
+
     if ratios[0] > 1 + eps:
         # Reduce resolution. Determine coarse indices for each cell center
         cix = []
@@ -318,11 +327,17 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
             values = rvolume * g['values'][valid_ix].ravel()
 
         np.add.at(cdata, tuple(map(np.ravel, ixs)), values)
+
+        # Extract region that overlaps with uniform grid
+        cdata = cdata[d_ix]
     elif ratios[0] < 1 - eps:
         # To interpolate data, compute coordinates of new cell centers
         # TODO: could maybe include axisymmetric correction here as well
+        r0 = g['r_min'] + (offset_lo + 0.5) * dr
+        r1 = g['r_max'] - (offset_hi + 0.5) * dr
+
         c_new = [np.linspace(a, b, n) for a, b, n in
-                 zip(g['r_min']+0.5*dr, g['r_max']-0.5*dr, nx)]
+                 zip(r0, r1, grid_hi - grid_lo)]
         mgrid = np.meshgrid(*c_new, indexing='ij')
         new_coords = np.vstack(tuple(map(np.ravel, mgrid))).T
 
@@ -332,18 +347,12 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
             tuple(g['coords_cc']), g['values'], bounds_error=False,
             fill_value=None, method=interpolation_method)
 
-        cdata = f_interp(new_coords).reshape(nx)
+        cdata = f_interp(new_coords).reshape(grid_hi - grid_lo)
     else:
         # Can directly use available data
         cdata = g['values'][valid_ix]
 
-    # Get index range that is valid on uniform grid
-    nx_uniform = np.round((r_max - r_min)/dr).astype(int)
-    offset_lo = np.maximum(0, -ix_lo)
-    offset_hi = np.maximum(0, ix_hi+1 - nx_uniform)
+        # Extract region that overlaps with uniform grid
+        cdata = cdata[d_ix]
 
-    # Index range on the grid_data
-    grid_lo, grid_hi = offset_lo, nx-offset_hi
-    d_ix = tuple([np.s_[i:j] for (i, j) in zip(grid_lo, grid_hi)])
-
-    return cdata[d_ix], ix_lo+offset_lo, ix_hi+1-offset_hi
+    return cdata, ix_lo+offset_lo, ix_hi+1-offset_hi
