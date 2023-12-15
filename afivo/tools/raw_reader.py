@@ -6,8 +6,49 @@
 
 import numpy as np
 import copy
-from struct import unpack, calcsize
+from struct import pack, unpack, calcsize
 from scipy.interpolate import RegularGridInterpolator
+import tempfile
+import os
+import sys
+import subprocess
+import pathlib
+
+
+def load_file(fname, project_dims=None, variable=None,
+              silo_to_raw=None):
+    """Read a Silo or a raw file
+
+    :param fname: name of the raw file
+    :param project_dims: project along these dimensions
+    :param variable: read this variable from a Silo file
+    :param silo_to_raw: path to silo_to_raw executable
+    :returns: grids, domains
+    """
+    extension = os.path.splitext(fname)[1]
+
+    if extension == ".silo":
+        if not variable:
+            raise ValueError('Specify variable to plot for a Silo file')
+
+        if silo_to_raw is None:
+            this_folder = pathlib.Path(__file__).parent.resolve()
+            silo_to_raw = os.path.join(this_folder, 'silo_to_raw')
+
+        if not os.path.exists(silo_to_raw):
+            raise ValueError(f'Could not find silo_to_raw at {silo_to_raw}')
+
+        # Convert silo to raw. Place temporary files in the same folder as
+        # there can otherwise be issues with a full /tmp folder
+        dirname = os.path.dirname(fname)
+        with tempfile.NamedTemporaryFile(dir=dirname) as fp:
+            _ = subprocess.call([silo_to_raw, fname,
+                                 variable, fp.name])
+            grids, domain = get_raw_data(fp.name, project_dims)
+    else:
+        grids, domain = get_raw_data(fname, project_dims)
+
+    return grids, domain
 
 
 def read_single_grid(f):
@@ -81,6 +122,44 @@ def get_raw_data(fname, project_dims=None):
     domain_props['cycle'] = cycle
     domain_props['time'] = time
     return grids, domain_props
+
+
+def write_single_grid(f, grid):
+    """Write single grid to binary file"""
+    f.write(pack('=i', grid['n_dims']))
+
+    fmt = '=' + str(grid['n_dims']) + 'i'
+    f.write(pack(fmt, *grid['dims']))
+
+    # lo and hi index range of non-phony data
+    f.write(pack(fmt, *grid['ilo']))
+    f.write(pack(fmt, *grid['ihi']))
+
+    # Mesh coordinates
+    for i in range(grid['n_dims']):
+        fmt = '=' + str(grid['dims'][i]) + 'd'
+        f.write(pack(fmt, *grid['coords'][i]))
+
+    # Number of cell centers is one less than number of faces
+    n_cells = grid['dims']-1
+    fmt = '=' + str(np.product(n_cells)) + 'd'
+    f.write(grid['values'].tobytes(order='F'))
+
+
+def write_raw_data(fname, grids, domain):
+    """Write grid data to a raw file again
+
+    :param fname: filename of raw data
+    :param grids: list of grids
+    :param domain: domain properties
+    """
+    with open(fname, 'wb') as f:
+        f.write(pack('=i', domain['cycle']))
+        f.write(pack('=d', domain['time']))
+        f.write(pack('=i', len(grids)))
+
+        for g in grids:
+            write_single_grid(f, g)
 
 
 def get_grid_properties(g):
@@ -206,6 +285,15 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
 
     nx = ix_hi - ix_lo + 1
 
+    # Get index range that is valid on uniform grid
+    nx_uniform = np.round((r_max - r_min)/dr).astype(int)
+    offset_lo = np.maximum(0, -ix_lo)
+    offset_hi = np.maximum(0, ix_hi+1 - nx_uniform)
+
+    # Index range on the grid_data
+    grid_lo, grid_hi = offset_lo, nx-offset_hi
+    d_ix = tuple([np.s_[i:j] for (i, j) in zip(grid_lo, grid_hi)])
+
     if ratios[0] > 1 + eps:
         # Reduce resolution. Determine coarse indices for each cell center
         cix = []
@@ -239,11 +327,17 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
             values = rvolume * g['values'][valid_ix].ravel()
 
         np.add.at(cdata, tuple(map(np.ravel, ixs)), values)
+
+        # Extract region that overlaps with uniform grid
+        cdata = cdata[d_ix]
     elif ratios[0] < 1 - eps:
         # To interpolate data, compute coordinates of new cell centers
         # TODO: could maybe include axisymmetric correction here as well
+        r0 = g['r_min'] + (offset_lo + 0.5) * dr
+        r1 = g['r_max'] - (offset_hi + 0.5) * dr
+
         c_new = [np.linspace(a, b, n) for a, b, n in
-                 zip(g['r_min']+0.5*dr, g['r_max']-0.5*dr, nx)]
+                 zip(r0, r1, grid_hi - grid_lo)]
         mgrid = np.meshgrid(*c_new, indexing='ij')
         new_coords = np.vstack(tuple(map(np.ravel, mgrid))).T
 
@@ -253,18 +347,12 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
             tuple(g['coords_cc']), g['values'], bounds_error=False,
             fill_value=None, method=interpolation_method)
 
-        cdata = f_interp(new_coords).reshape(nx)
+        cdata = f_interp(new_coords).reshape(grid_hi - grid_lo)
     else:
         # Can directly use available data
         cdata = g['values'][valid_ix]
 
-    # Get index range that is valid on uniform grid
-    nx_uniform = np.round((r_max - r_min)/dr).astype(int)
-    offset_lo = np.maximum(0, -ix_lo)
-    offset_hi = np.maximum(0, ix_hi+1 - nx_uniform)
+        # Extract region that overlaps with uniform grid
+        cdata = cdata[d_ix]
 
-    # Index range on the grid_data
-    grid_lo, grid_hi = offset_lo, nx-offset_hi
-    d_ix = tuple([np.s_[i:j] for (i, j) in zip(grid_lo, grid_hi)])
-
-    return cdata[d_ix], ix_lo+offset_lo, ix_hi+1-offset_hi
+    return cdata, ix_lo+offset_lo, ix_hi+1-offset_hi
