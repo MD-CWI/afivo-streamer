@@ -141,8 +141,11 @@ contains
           field_voltage = -ST_domain_len(NDIM) * field_amplitude
        end if
     case default
-       print *, "field_given_by value: ", trim(given_by)
-       print *, "Options are: voltage, field, voltage_table, field_table"
+       print *, "field_given_by value: ", trim(given_by), ", options are:"
+       print *, "1. voltage <value in V>"
+       print *, "2. field <value in V/m>"
+       print *, "3. voltage_table <filename>"
+       print *, "4. field_table <filename>"
        error stop "Unknown field_given_by value"
     end select
 
