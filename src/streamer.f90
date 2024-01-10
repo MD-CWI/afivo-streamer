@@ -36,7 +36,7 @@ program streamer
   real(dp)                  :: time, dt, dt_lim, photoi_prev_time
   real(dp)                  :: dt_gas_lim, dt_lim_step
   real(dp)                  :: fraction_steps_rejected
-  real(dp)                  :: memory_limit_GB = 16.0_dp
+  real(dp)                  :: memory_limit_GB
   type(af_t)                :: tree_copy      ! Used when reading a tree from a file
   type(ref_info_t)          :: ref_info       ! Contains info about refinement changes
   integer                   :: output_cnt = 0 ! Number of output files written
@@ -62,6 +62,8 @@ program streamer
 
   call CFG_add_get(cfg, "restart_from_file", restart_from_file, &
        "If set, restart simulation from a previous .dat file")
+
+  memory_limit_GB = 4.0_dp**(NDIM-1) ! 1, 4, 16 GB for 1D, 2D, 3D
   call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
        "Memory limit (GB)")
 
