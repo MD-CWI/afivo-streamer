@@ -38,22 +38,34 @@ module m_field
   !> The applied voltage (vertical direction)
   real(dp) :: field_voltage = undefined_real
 
-  !> Whether the electrode is grounded or at the applied voltage
+  !> Whether electrode 1 is grounded or at the applied voltage
   logical :: field_electrode_grounded = .false.
 
-  !> First coordinate of electrode
+  !> Whether electrode 2 is grounded or at the applied voltage
+  logical :: field_electrode2_grounded = .false.
+
+  !> Electrode 1: first relative coordinate
   real(dp) :: field_rod_r0(NDIM) = -1.0_dp
 
-  !> Second coordinate of electrode
+  !> Electrode 1: second relative coordinate
   real(dp) :: field_rod_r1(NDIM) = -1.0_dp
 
-  !> Third coordinate of electrode
+  !> Electrode 1: third relative coordinate (not always needed)
   real(dp) :: field_rod_r2(NDIM) = -1.0_dp
 
-  !> Electrode radius (in m, for standard rod electrode)
+  !> Electrode 2: first relative coordinate
+  real(dp) :: field_rod2_r0(NDIM) = -1.0_dp
+
+  !> Electrode 2: second relative coordinate
+  real(dp) :: field_rod2_r1(NDIM) = -1.0_dp
+
+  !> Electrode 1 radius (in m)
   real(dp) :: field_rod_radius = -1.0_dp
 
-  !> Electrode tip radius (for conical electrode)
+  !> Electrode 2 radius (in m)
+  real(dp) :: field_rod2_radius = -1.0_dp
+
+  !> Electrode 1 tip radius (for conical electrode)
   real(dp) :: field_tip_radius = -1.0_dp
 
   ! Internal variables
@@ -175,21 +187,29 @@ contains
 
     !< [electrode_settings]
     call CFG_add_get(cfg, "field_electrode_grounded", field_electrode_grounded, &
-         "Whether the electrode is grounded or at the applied voltage")
+         "Whether electrode 1 is grounded or at the applied voltage")
+    call CFG_add_get(cfg, "field_electrode2_grounded", field_electrode2_grounded, &
+         "Whether electrode 2 is grounded or at the applied voltage")
     call CFG_add_get(cfg, "field_rod_r0", field_rod_r0, &
-         "First electrode relative position")
+         "Electrode 1: first relative coordinate")
     call CFG_add_get(cfg, "field_rod_r1", field_rod_r1, &
-         "Second electrode relative position")
+         "Electrode 1: second relative coordinate")
     call CFG_add_get(cfg, "field_rod_r2", field_rod_r2, &
-         "Third electrode relative position")
+         "Electrode 1: third relative coordinate (not always needed)")
+    call CFG_add_get(cfg, "field_rod2_r0", field_rod2_r0, &
+         "Electrode 2: first relative coordinate")
+    call CFG_add_get(cfg, "field_rod2_r1", field_rod2_r1, &
+         "Electrode 2: second relative coordinate")
     call CFG_add_get(cfg, "field_rod_radius", field_rod_radius, &
-         "Electrode radius (in m, for standard rod electrode)")
+         "Electrode 1 radius (in m)")
+    call CFG_add_get(cfg, "field_rod2_radius", field_rod2_radius, &
+         "Electrode 2 radius (in m)")
     call CFG_add_get(cfg, "field_tip_radius", field_tip_radius, &
-         "Electrode tip radius (for conical electrode)")
+         "Electrode 1 tip radius (only for conical electrode)")
 
     electrode_type = "rod"
     call CFG_add_get(cfg, "field_electrode_type", electrode_type, &
-         "Type of electrode (sphere, rod, rod_cone_top)")
+         "Type of electrode (sphere, rod, rod_cone_top, rod_rod, user)")
     !< [electrode_settings]
 
     if (associated(user_potential_bc)) then
@@ -218,16 +238,21 @@ contains
     if (ST_use_electrode) then
        select case (electrode_type)
        case ("sphere")
+          if (any(field_rod_r0 <= -1.0_dp)) &
+               error stop "field_rod_r0 not set correctly"
+          if (field_rod_radius <= 0) &
+               error stop "field_rod_radius not set correctly"
           mg%lsf => sphere_lsf
        case ("rod")
-          call check_rod_parameters()
+          call check_general_electrode_parameters()
           mg%lsf => rod_lsf
        case ("rod_cone_top")
-          call check_rod_parameters()
+          call check_general_electrode_parameters()
           if (any(field_rod_r2 < field_rod_r1)) &
                error stop "Should have field_rod_r2 >= field_rod_r1"
           if (field_tip_radius <= 0) &
                error stop "field_tip_radius not set correctly"
+
           mg%lsf => conical_rod_top_lsf
 
           r0    = field_rod_r0 * ST_domain_len
@@ -241,6 +266,22 @@ contains
           conical_rod_R_o = R_tip/cos(alpha)
           conical_rod_y_o = r0(NDIM) + R_tip * tan(alpha)
           conical_rod_ro = [r0(1:NDIM-1), conical_rod_y_o]
+       case ("rod_rod")
+          call check_general_electrode_parameters()
+
+          if (any(field_rod2_r0 <= -1.0_dp)) &
+               error stop "field_rod2_r0 not set correctly"
+          if (any(field_rod2_r1 <= -1.0_dp)) &
+               error stop "field_rod2_r1 not set correctly"
+          if (field_rod2_radius <= 0) &
+               error stop "field_rod2_radius not set correctly"
+          if (any(field_rod2_r1 < field_rod2_r0)) &
+               error stop "Should have field_rod2_r1 >= field_rod2_r0"
+
+          mg%lsf => rod_rod_lsf
+
+          ! Provide a function to set the voltage on the electrodes
+          mg%lsf_boundary_function => rod_rod_get_potential
        case ("user")
           if (.not. associated(user_lsf)) then
              error stop "user_lsf not set"
@@ -252,7 +293,7 @@ contains
              mg%lsf_boundary_function => user_lsf_bc
           end if
        case default
-          print *, "Electrode types: sphere, rod, rod_cone_top, user"
+          print *, "Electrode types: sphere, rod, rod_cone_top, rod_rod, user"
           error stop "Invalid electrode type"
        end select
 
@@ -272,7 +313,7 @@ contains
 
   end subroutine field_initialize
 
-  subroutine check_rod_parameters()
+  subroutine check_general_electrode_parameters()
     if (any(field_rod_r0 <= -1.0_dp)) &
          error stop "field_rod_r0 not set correctly"
     if (any(field_rod_r1 <= -1.0_dp)) &
@@ -281,7 +322,7 @@ contains
          error stop "field_rod_radius not set correctly"
     if (any(field_rod_r1 < field_rod_r0)) &
          error stop "Should have field_rod_r1 >= field_rod_r0"
-  end subroutine check_rod_parameters
+  end subroutine check_general_electrode_parameters
 
   subroutine field_set_rhs(tree, s_in)
     use m_units_constants
@@ -575,6 +616,46 @@ contains
             conical_rod_R_o
     end if
   end function conical_rod_top_lsf
+
+  !> Get level set function for case of two rods
+  real(dp) function rod_rod_lsf(r)
+    use m_geometry
+    real(dp), intent(in) :: r(NDIM)
+
+    rod_rod_lsf = min(&
+         GM_dist_line(r, field_rod_r0 * ST_domain_len, &
+         field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius, &
+         GM_dist_line(r, field_rod2_r0 * ST_domain_len, &
+         field_rod2_r1 * ST_domain_len, NDIM) - field_rod2_radius)
+  end function rod_rod_lsf
+
+  !> Get potential to apply at electrode when there are two rods
+  function rod_rod_get_potential(r) result(phi)
+    use m_geometry
+    real(dp), intent(in) :: r(NDIM)
+    real(dp)             :: phi, d1, d2
+
+    ! Determine distance to electrodes
+    d1 = GM_dist_line(r, field_rod_r0 * ST_domain_len, &
+         field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
+    d2 = GM_dist_line(r, field_rod2_r0 * ST_domain_len, &
+         field_rod2_r1 * ST_domain_len, NDIM) - field_rod2_radius
+
+    if (d1 < d2) then
+       ! Closer to electrode 1
+       if (field_electrode_grounded) then
+          phi = 0.0_dp
+       else
+          phi = current_voltage
+       end if
+    else
+       if (field_electrode2_grounded) then
+          phi = 0.0_dp
+       else
+          phi = current_voltage
+       end if
+    end if
+  end function rod_rod_get_potential
 
   !> Compute total field energy in Joule, defined as the volume integral over
   !> 1/2 * epsilon * E^2
