@@ -38,7 +38,7 @@ contains
        dist_vec = r - r1
     else
        dist_vec = r - (r0 + frac/line_len2 * (r1 - r0))
-       frac = sqrt(frac / line_len2)
+       frac = frac / line_len2
     end if
   end subroutine GM_dist_vec_line
 
