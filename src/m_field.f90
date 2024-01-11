@@ -45,39 +45,39 @@ module m_field
   logical :: field_electrode2_grounded = .false.
 
   !> Electrode 1: first relative coordinate
-  real(dp) :: field_rod_r0(NDIM) = -1.0_dp
+  real(dp) :: rod_r0(NDIM) = -1.0e100_dp
 
   !> Electrode 1: second relative coordinate
-  real(dp) :: field_rod_r1(NDIM) = -1.0_dp
-
-  !> Electrode 1: third relative coordinate (not always needed)
-  real(dp) :: field_rod_r2(NDIM) = -1.0_dp
+  real(dp) :: rod_r1(NDIM) = -1.0e100_dp
 
   !> Electrode 2: first relative coordinate
-  real(dp) :: field_rod2_r0(NDIM) = -1.0_dp
+  real(dp) :: rod2_r0(NDIM) = -1.0e100_dp
 
   !> Electrode 2: second relative coordinate
-  real(dp) :: field_rod2_r1(NDIM) = -1.0_dp
+  real(dp) :: rod2_r1(NDIM) = -1.0e100_dp
 
   !> Electrode 1 radius (in m)
-  real(dp) :: field_rod_radius = -1.0_dp
+  real(dp) :: rod_radius = -1.0e100_dp
 
   !> Electrode 2 radius (in m)
-  real(dp) :: field_rod2_radius = -1.0_dp
+  real(dp) :: rod2_radius = -1.0e100_dp
 
-  !> Electrode 1 tip radius (for conical electrode)
-  real(dp) :: field_tip_radius = -1.0_dp
+  !> Electrode 1: fraction of conical part (if conical)
+  real(dp) :: cone_length_frac = -1.0e100_dp
+
+  !> Electrode 1: tip radius (if conical)
+  real(dp) :: cone_tip_radius = -1.0e100_dp
 
   ! Internal variables
 
+  !> Electrode 1: 'origin' of spherical tip (if conical)
+  real(dp) :: cone_tip_center(NDIM)
+
+  !> Electrode 1: radius of curvature of spherical tip (if conical)
+  real(dp) :: cone_tip_radius_of_curvature
+
   !> The current applied voltage
   real(dp), public, protected :: current_voltage = 0.0_dp
-
-  ! Parameters that are pre-computed for conical rods
-  ! @todo Add explanations/documentation for conical rods
-  real(dp) :: conical_rod_R_o
-  real(dp) :: conical_rod_y_o
-  real(dp) :: conical_rod_ro(NDIM)
 
   character(string_len) :: field_bc_type = "homogeneous"
 
@@ -104,8 +104,6 @@ contains
     character(len=string_len)  :: given_by, user_value
     character(len=string_len)  :: electrode_type
     integer                    :: first_blank
-    real(dp)                   :: R_rod, R_tip, y_tip, alpha
-    real(dp)                   :: r0(NDIM), r1(NDIM), r2(NDIM)
 
     ! This is for backward compatibility
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
@@ -190,22 +188,27 @@ contains
          "Whether electrode 1 is grounded or at the applied voltage")
     call CFG_add_get(cfg, "field_electrode2_grounded", field_electrode2_grounded, &
          "Whether electrode 2 is grounded or at the applied voltage")
-    call CFG_add_get(cfg, "field_rod_r0", field_rod_r0, &
+    call CFG_add_get(cfg, "field_rod_r0", rod_r0, &
          "Electrode 1: first relative coordinate")
-    call CFG_add_get(cfg, "field_rod_r1", field_rod_r1, &
+    call CFG_add_get(cfg, "field_rod_r1", rod_r1, &
          "Electrode 1: second relative coordinate")
-    call CFG_add_get(cfg, "field_rod_r2", field_rod_r2, &
-         "Electrode 1: third relative coordinate (not always needed)")
-    call CFG_add_get(cfg, "field_rod2_r0", field_rod2_r0, &
+    call CFG_add_get(cfg, "field_rod2_r0", rod2_r0, &
          "Electrode 2: first relative coordinate")
-    call CFG_add_get(cfg, "field_rod2_r1", field_rod2_r1, &
+    call CFG_add_get(cfg, "field_rod2_r1", rod2_r1, &
          "Electrode 2: second relative coordinate")
-    call CFG_add_get(cfg, "field_rod_radius", field_rod_radius, &
+    call CFG_add_get(cfg, "field_rod_radius", rod_radius, &
          "Electrode 1 radius (in m)")
-    call CFG_add_get(cfg, "field_rod2_radius", field_rod2_radius, &
+    call CFG_add_get(cfg, "field_rod2_radius", rod2_radius, &
          "Electrode 2 radius (in m)")
-    call CFG_add_get(cfg, "field_tip_radius", field_tip_radius, &
-         "Electrode 1 tip radius (only for conical electrode)")
+    call CFG_add_get(cfg, "cone_tip_radius", cone_tip_radius, &
+         "Electrode 1: tip radius (if conical)")
+    call CFG_add_get(cfg, "cone_length_frac", cone_length_frac, &
+         "Electrode 1: fraction of conical part (if conical)")
+
+    rod_r0 = ST_domain_origin + rod_r0 * ST_domain_len
+    rod_r1 = ST_domain_origin + rod_r1 * ST_domain_len
+    rod2_r0 = ST_domain_origin + rod_r0 * ST_domain_len
+    rod2_r1 = ST_domain_origin + rod_r1 * ST_domain_len
 
     electrode_type = "rod"
     call CFG_add_get(cfg, "field_electrode_type", electrode_type, &
@@ -238,50 +241,46 @@ contains
     if (ST_use_electrode) then
        select case (electrode_type)
        case ("sphere")
-          if (any(field_rod_r0 <= -1.0_dp)) &
+          ! A single spherical electrode
+          if (any(rod_r0 <= -1.0e10_dp)) &
                error stop "field_rod_r0 not set correctly"
-          if (field_rod_radius <= 0) &
+          if (rod_radius <= 0) &
                error stop "field_rod_radius not set correctly"
           mg%lsf => sphere_lsf
        case ("rod")
+          ! A single rod electrode with a semi-spherical cap
           call check_general_electrode_parameters()
           mg%lsf => rod_lsf
        case ("rod_cone_top")
+          ! A single rod-shaped electrode with a conical top
           call check_general_electrode_parameters()
-          if (any(field_rod_r2 < field_rod_r1)) &
-               error stop "Should have field_rod_r2 >= field_rod_r1"
-          if (field_tip_radius <= 0) &
-               error stop "field_tip_radius not set correctly"
+          if (cone_tip_radius <= 0 .or. cone_tip_radius > rod_radius) &
+               error stop "cone_tip_radius should be smaller than rod radius"
+          if (cone_length_frac < 0) &
+               error stop "cone_length_frac not set correctly"
+
+          call get_conical_rod_properties(rod_r0, rod_r1, rod_radius, &
+               cone_tip_radius, cone_tip_center, cone_tip_radius_of_curvature)
 
           mg%lsf => conical_rod_top_lsf
-
-          r0    = field_rod_r0 * ST_domain_len
-          r1    = field_rod_r1 * ST_domain_len
-          r2    = field_rod_r2 * ST_domain_len
-          R_rod = field_rod_radius
-          R_tip = field_tip_radius
-          y_tip = (r0(NDIM)*R_rod-r1(NDIM)*R_tip)/(R_rod-R_tip)
-          alpha = atan(R_rod/(r1(NDIM)-y_tip))
-
-          conical_rod_R_o = R_tip/cos(alpha)
-          conical_rod_y_o = r0(NDIM) + R_tip * tan(alpha)
-          conical_rod_ro = [r0(1:NDIM-1), conical_rod_y_o]
        case ("rod_rod")
+          ! Two rod electrodes with semi-spherical caps
           call check_general_electrode_parameters()
 
-          if (any(field_rod2_r0 <= -1.0_dp)) &
+          if (any(rod2_r0 <= -1.0e10_dp)) &
                error stop "field_rod2_r0 not set correctly"
-          if (any(field_rod2_r1 <= -1.0_dp)) &
+          if (any(rod2_r1 <= -1.0e10_dp)) &
                error stop "field_rod2_r1 not set correctly"
-          if (field_rod2_radius <= 0) &
+          if (rod2_radius <= 0) &
                error stop "field_rod2_radius not set correctly"
-          if (any(field_rod2_r1 < field_rod2_r0)) &
-               error stop "Should have field_rod2_r1 >= field_rod2_r0"
 
           mg%lsf => rod_rod_lsf
 
           ! Provide a function to set the voltage on the electrodes
           mg%lsf_boundary_function => rod_rod_get_potential
+       case ("rod_cone_rod_cone")
+          ! Two rod-shaped electrodes with conical tops
+          error stop "TODO"
        case ("user")
           if (.not. associated(user_lsf)) then
              error stop "user_lsf not set"
@@ -302,10 +301,10 @@ contains
 
        mg%lsf_dist => mg_lsf_dist_gss
 
-       if (field_rod_radius <= 0) then
+       if (rod_radius <= 0) then
           error stop "set field_rod_radius to smallest length scale of electrode"
        end if
-       mg%lsf_length_scale = field_rod_radius
+       mg%lsf_length_scale = rod_radius
     end if
 
     call af_set_cc_methods(tree, i_electric_fld, &
@@ -314,14 +313,12 @@ contains
   end subroutine field_initialize
 
   subroutine check_general_electrode_parameters()
-    if (any(field_rod_r0 <= -1.0_dp)) &
+    if (any(rod_r0 <= -1.0e10_dp)) &
          error stop "field_rod_r0 not set correctly"
-    if (any(field_rod_r1 <= -1.0_dp)) &
+    if (any(rod_r1 <= -1.0e10_dp)) &
          error stop "field_rod_r1 not set correctly"
-    if (field_rod_radius <= 0) &
+    if (rod_radius <= 0) &
          error stop "field_rod_radius not set correctly"
-    if (any(field_rod_r1 < field_rod_r0)) &
-         error stop "Should have field_rod_r1 >= field_rod_r0"
   end subroutine check_general_electrode_parameters
 
   subroutine field_set_rhs(tree, s_in)
@@ -584,36 +581,59 @@ contains
 
   real(dp) function sphere_lsf(r)
     real(dp), intent(in) :: r(NDIM)
-    sphere_lsf = norm2(r - field_rod_r0 * ST_domain_len) - field_rod_radius
+    sphere_lsf = norm2(r - rod_r0) - rod_radius
   end function sphere_lsf
 
   real(dp) function rod_lsf(r)
     use m_geometry
-    real(dp), intent(in)    :: r(NDIM)
-    rod_lsf = GM_dist_line(r, field_rod_r0 * ST_domain_len, &
-         field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
+    real(dp), intent(in) :: r(NDIM)
+    rod_lsf = GM_dist_line(r, rod_r0, rod_r1, NDIM) - rod_radius
   end function rod_lsf
+
+  !> Compute several parameters for a conical rod
+  subroutine get_conical_rod_properties(r0, r1, &
+       rod_radius, tip_radius, cone_tip_center, cone_tip_radius_of_curvature)
+    real(dp), intent(in)  :: r0(NDIM) !< Beginning of rod
+    real(dp), intent(in)  :: r1(NDIM) !< End of conical part
+    real(dp), intent(in)  :: rod_radius   !< Radius of rod
+    real(dp), intent(in)  :: tip_radius   !< Radius of curvature of tip
+    real(dp), intent(out) :: cone_tip_center(NDIM)
+    real(dp), intent(out) :: cone_tip_radius_of_curvature
+    real(dp)              :: cone_angle, cone_length
+
+    ! Determine (half) the opening angle of the top cone, which goes from
+    ! rod_radius to tip_radius over cone_length
+    cone_length = cone_length_frac * norm2(r1 - r0)
+    cone_angle  = atan((rod_radius - tip_radius) / cone_length)
+
+    ! We have a point on a sphere with coordinates of the form (R*cos(a),
+    ! R*sin(a)) = (tip_radius, y), so we can get R and subtract R sin(a) to
+    ! obtain the center of the sphere
+    cone_tip_radius_of_curvature = tip_radius/cos(cone_angle)
+    cone_tip_center = r1 - sin(cone_angle) * &
+         cone_tip_radius_of_curvature * (r1 - r0)/norm2(r1 - r0)
+  end subroutine get_conical_rod_properties
 
   function conical_rod_top_lsf(r) result(lsf)
     use m_geometry
     real(dp), intent(in)    :: r(NDIM)
     real(dp)                :: lsf
-    real(dp)                :: r0(NDIM), r1(NDIM), r2(NDIM)
-    real(dp)                :: radius_at_height
+    real(dp)                :: dist_vec(NDIM), frac, radius_at_height, tmp
 
-    r0 = field_rod_r0 * ST_domain_len
-    r1 = field_rod_r1 * ST_domain_len
-    r2 = field_rod_r2 * ST_domain_len
+    ! Project onto line from r0 to r1
+    call GM_dist_vec_line(r, rod_r0, rod_r1, NDIM, dist_vec, frac)
 
-    if (r(NDIM) > r1(NDIM)) then
-       lsf = GM_dist_line(r, r1, r2, NDIM) - field_rod_radius
-    else if (r(NDIM) > r0(NDIM)) then
-       radius_at_height = field_tip_radius + (r(NDIM) - r0(NDIM)) / &
-            (r1(NDIM) - r0(NDIM)) * (field_rod_radius - field_tip_radius)
-       lsf = GM_dist_line(r, r0, r1, NDIM) - radius_at_height
+    if (frac <= 1 - cone_length_frac) then
+       ! Cylindrical part
+       lsf = norm2(dist_vec) - rod_radius
+    else if (frac < 1.0_dp) then
+       ! Conical part
+       tmp = (1 - frac) / cone_length_frac ! between 0 and 1
+       radius_at_height = cone_tip_radius + tmp * (rod_radius - cone_tip_radius)
+       lsf = norm2(dist_vec) - radius_at_height
     else
-       lsf = GM_dist_line(r, conical_rod_ro, conical_rod_ro, NDIM) - &
-            conical_rod_R_o
+       ! Spherical tip
+       lsf = norm2(r - cone_tip_center) - cone_tip_radius_of_curvature
     end if
   end function conical_rod_top_lsf
 
@@ -622,11 +642,8 @@ contains
     use m_geometry
     real(dp), intent(in) :: r(NDIM)
 
-    rod_rod_lsf = min(&
-         GM_dist_line(r, field_rod_r0 * ST_domain_len, &
-         field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius, &
-         GM_dist_line(r, field_rod2_r0 * ST_domain_len, &
-         field_rod2_r1 * ST_domain_len, NDIM) - field_rod2_radius)
+    rod_rod_lsf = min(GM_dist_line(r, rod_r0, rod_r1, NDIM) - rod_radius, &
+         GM_dist_line(r, rod2_r0, rod2_r1, NDIM) - rod2_radius)
   end function rod_rod_lsf
 
   !> Get potential to apply at electrode when there are two rods
@@ -636,10 +653,8 @@ contains
     real(dp)             :: phi, d1, d2
 
     ! Determine distance to electrodes
-    d1 = GM_dist_line(r, field_rod_r0 * ST_domain_len, &
-         field_rod_r1 * ST_domain_len, NDIM) - field_rod_radius
-    d2 = GM_dist_line(r, field_rod2_r0 * ST_domain_len, &
-         field_rod2_r1 * ST_domain_len, NDIM) - field_rod2_radius
+    d1 = GM_dist_line(r, rod_r0, rod_r1, NDIM) - rod_radius
+    d2 = GM_dist_line(r, rod2_r0, rod2_r1, NDIM) - rod2_radius
 
     if (d1 < d2) then
        ! Closer to electrode 1
