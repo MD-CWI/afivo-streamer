@@ -20,7 +20,7 @@ contains
 
   !> Compute distance vector between point and its projection onto a line
   !> between r0 and r1
-  subroutine GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
+  pure subroutine GM_dist_vec_line(r, r0, r1, n_dim, dist_vec, frac)
     integer, intent(in)   :: n_dim
     real(dp), intent(in)  :: r(n_dim), r0(n_dim), r1(n_dim)
     real(dp), intent(out) :: dist_vec(n_dim)

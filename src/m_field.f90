@@ -65,16 +65,26 @@ module m_field
   !> Electrode 1: fraction of conical part (if conical)
   real(dp) :: cone_length_frac = -1.0e100_dp
 
+  !> Electrode 2: fraction of conical part (if conical)
+  real(dp) :: cone2_length_frac = -1.0e100_dp
+
   !> Electrode 1: tip radius (if conical)
   real(dp) :: cone_tip_radius = -1.0e100_dp
+
+  !> Electrode 2: tip radius (if conical)
+  real(dp) :: cone2_tip_radius = -1.0e100_dp
 
   ! Internal variables
 
   !> Electrode 1: 'origin' of spherical tip (if conical)
   real(dp) :: cone_tip_center(NDIM)
+  !> Electrode 2: 'origin' of spherical tip (if conical)
+  real(dp) :: cone2_tip_center(NDIM)
 
   !> Electrode 1: radius of curvature of spherical tip (if conical)
-  real(dp) :: cone_tip_radius_of_curvature
+  real(dp) :: cone_tip_r_curvature
+  !> Electrode 2: radius of curvature of spherical tip (if conical)
+  real(dp) :: cone2_tip_r_curvature
 
   !> The current applied voltage
   real(dp), public, protected :: current_voltage = 0.0_dp
@@ -204,11 +214,15 @@ contains
          "Electrode 1: tip radius (if conical)")
     call CFG_add_get(cfg, "cone_length_frac", cone_length_frac, &
          "Electrode 1: fraction of conical part (if conical)")
+    call CFG_add_get(cfg, "cone2_tip_radius", cone2_tip_radius, &
+         "Electrode 2: tip radius (if conical)")
+    call CFG_add_get(cfg, "cone2_length_frac", cone2_length_frac, &
+         "Electrode 2: fraction of conical part (if conical)")
 
     rod_r0 = ST_domain_origin + rod_r0 * ST_domain_len
     rod_r1 = ST_domain_origin + rod_r1 * ST_domain_len
-    rod2_r0 = ST_domain_origin + rod_r0 * ST_domain_len
-    rod2_r1 = ST_domain_origin + rod_r1 * ST_domain_len
+    rod2_r0 = ST_domain_origin + rod2_r0 * ST_domain_len
+    rod2_r1 = ST_domain_origin + rod2_r1 * ST_domain_len
 
     electrode_type = "rod"
     call CFG_add_get(cfg, "field_electrode_type", electrode_type, &
@@ -256,13 +270,13 @@ contains
           call check_general_electrode_parameters()
           if (cone_tip_radius <= 0 .or. cone_tip_radius > rod_radius) &
                error stop "cone_tip_radius should be smaller than rod radius"
-          if (cone_length_frac < 0) &
+          if (cone_length_frac < 0 .or. cone_length_frac > 1) &
                error stop "cone_length_frac not set correctly"
 
           call get_conical_rod_properties(rod_r0, rod_r1, rod_radius, &
-               cone_tip_radius, cone_tip_center, cone_tip_radius_of_curvature)
+               cone_tip_radius, cone_tip_center, cone_tip_r_curvature)
 
-          mg%lsf => conical_rod_top_lsf
+          mg%lsf => conical_rod_lsf
        case ("rod_rod")
           ! Two rod electrodes with semi-spherical caps
           call check_general_electrode_parameters()
@@ -278,9 +292,34 @@ contains
 
           ! Provide a function to set the voltage on the electrodes
           mg%lsf_boundary_function => rod_rod_get_potential
-       case ("rod_cone_rod_cone")
-          ! Two rod-shaped electrodes with conical tops
-          error stop "TODO"
+       case ("two_rod_cone_electrodes")
+          ! Two rod-shaped electrodes with conical tops (for now assumed to have
+          ! the same shape)
+          call check_general_electrode_parameters()
+          if (any(rod2_r0 <= -1.0e10_dp)) &
+               error stop "field_rod2_r0 not set correctly"
+          if (any(rod2_r1 <= -1.0e10_dp)) &
+               error stop "field_rod2_r1 not set correctly"
+          if (rod2_radius <= 0) &
+               error stop "field_rod2_radius not set correctly"
+          if (cone_tip_radius <= 0 .or. cone_tip_radius > rod_radius) &
+               error stop "cone tip radius should be smaller than rod radius"
+          if (cone2_tip_radius <= 0 .or. cone2_tip_radius > rod2_radius) &
+               error stop "cone2 tip radius should be smaller than rod2 radius"
+          if (cone_length_frac < 0 .or. cone_length_frac > 1) &
+               error stop "cone_length_frac not set correctly"
+          if (cone2_length_frac < 0 .or. cone2_length_frac > 1) &
+               error stop "cone2_length_frac not set correctly"
+
+          call get_conical_rod_properties(rod_r0, rod_r1, rod_radius, &
+               cone_tip_radius, cone_tip_center, cone_tip_r_curvature)
+          call get_conical_rod_properties(rod2_r0, rod2_r1, rod2_radius, &
+               cone2_tip_radius, cone2_tip_center, cone2_tip_r_curvature)
+
+          mg%lsf => two_conical_rods_lsf
+
+          ! Provide a function to set the voltage on the electrodes
+          mg%lsf_boundary_function => two_conical_rods_get_potential
        case ("user")
           if (.not. associated(user_lsf)) then
              error stop "user_lsf not set"
@@ -592,13 +631,13 @@ contains
 
   !> Compute several parameters for a conical rod
   subroutine get_conical_rod_properties(r0, r1, &
-       rod_radius, tip_radius, cone_tip_center, cone_tip_radius_of_curvature)
+       rod_radius, tip_radius, cone_tip_center, cone_tip_r_curvature)
     real(dp), intent(in)  :: r0(NDIM) !< Beginning of rod
     real(dp), intent(in)  :: r1(NDIM) !< End of conical part
     real(dp), intent(in)  :: rod_radius   !< Radius of rod
     real(dp), intent(in)  :: tip_radius   !< Radius of curvature of tip
     real(dp), intent(out) :: cone_tip_center(NDIM)
-    real(dp), intent(out) :: cone_tip_radius_of_curvature
+    real(dp), intent(out) :: cone_tip_r_curvature
     real(dp)              :: cone_angle, cone_length
 
     ! Determine (half) the opening angle of the top cone, which goes from
@@ -609,19 +648,24 @@ contains
     ! We have a point on a sphere with coordinates of the form (R*cos(a),
     ! R*sin(a)) = (tip_radius, y), so we can get R and subtract R sin(a) to
     ! obtain the center of the sphere
-    cone_tip_radius_of_curvature = tip_radius/cos(cone_angle)
+    cone_tip_r_curvature = tip_radius/cos(cone_angle)
     cone_tip_center = r1 - sin(cone_angle) * &
-         cone_tip_radius_of_curvature * (r1 - r0)/norm2(r1 - r0)
+         cone_tip_r_curvature * (r1 - r0)/norm2(r1 - r0)
   end subroutine get_conical_rod_properties
 
-  function conical_rod_top_lsf(r) result(lsf)
+  !> Helper function to compute lsf for a rod with a conical tip
+  pure function conical_rod_lsf_arg(r, r0, r1, cone_tip_center, &
+       rod_radius, tip_radius, cone_length_frac, r_curvature) result (lsf)
     use m_geometry
-    real(dp), intent(in)    :: r(NDIM)
-    real(dp)                :: lsf
-    real(dp)                :: dist_vec(NDIM), frac, radius_at_height, tmp
+    real(dp), intent(in) :: r(NDIM)
+    real(dp), intent(in) :: r0(NDIM), r1(NDIM), cone_tip_center(NDIM)
+    real(dp), intent(in) :: rod_radius, tip_radius, cone_length_frac
+    real(dp), intent(in) :: r_curvature
+    real(dp)             :: lsf
+    real(dp)             :: dist_vec(NDIM), frac, radius_at_height, tmp
 
     ! Project onto line from r0 to r1
-    call GM_dist_vec_line(r, rod_r0, rod_r1, NDIM, dist_vec, frac)
+    call GM_dist_vec_line(r, r0, r1, NDIM, dist_vec, frac)
 
     if (frac <= 1 - cone_length_frac) then
        ! Cylindrical part
@@ -629,13 +673,56 @@ contains
     else if (frac < 1.0_dp) then
        ! Conical part
        tmp = (1 - frac) / cone_length_frac ! between 0 and 1
-       radius_at_height = cone_tip_radius + tmp * (rod_radius - cone_tip_radius)
+       radius_at_height = tip_radius + tmp * (rod_radius - tip_radius)
        lsf = norm2(dist_vec) - radius_at_height
     else
        ! Spherical tip
-       lsf = norm2(r - cone_tip_center) - cone_tip_radius_of_curvature
+       lsf = norm2(r - cone_tip_center) - r_curvature
     end if
-  end function conical_rod_top_lsf
+  end function conical_rod_lsf_arg
+
+  real(dp) function conical_rod_lsf(r)
+    real(dp), intent(in)    :: r(NDIM)
+    conical_rod_lsf = conical_rod_lsf_arg(r, rod_r0, rod_r1, cone_tip_center, &
+         rod_radius, cone_tip_radius, cone_length_frac, cone_tip_r_curvature)
+  end function conical_rod_lsf
+
+  !> Get lsf for two conical rods
+  real(dp) function two_conical_rods_lsf(r)
+    real(dp), intent(in) :: r(NDIM)
+    real(dp)             :: lsf_1, lsf_2
+
+    lsf_1 = conical_rod_lsf_arg(r, rod_r0, rod_r1, cone_tip_center, &
+         rod_radius, cone_tip_radius, cone_length_frac, cone_tip_r_curvature)
+    lsf_2 = conical_rod_lsf_arg(r, rod2_r0, rod2_r1, cone2_tip_center, &
+         rod2_radius, cone2_tip_radius, cone2_length_frac, cone2_tip_r_curvature)
+    two_conical_rods_lsf = min(lsf_1, lsf_2)
+  end function two_conical_rods_lsf
+
+  real(dp) function two_conical_rods_get_potential(r) result(phi)
+    real(dp), intent(in) :: r(NDIM)
+    real(dp)             :: lsf_1, lsf_2
+
+    lsf_1 = conical_rod_lsf_arg(r, rod_r0, rod_r1, cone_tip_center, &
+         rod_radius, cone_tip_radius, cone_length_frac, cone_tip_r_curvature)
+    lsf_2 = conical_rod_lsf_arg(r, rod2_r0, rod2_r1, cone2_tip_center, &
+         rod2_radius, cone2_tip_radius, cone2_length_frac, cone2_tip_r_curvature)
+
+    if (lsf_1 < lsf_2) then
+       ! Closer to electrode 1
+       if (field_electrode_grounded) then
+          phi = 0.0_dp
+       else
+          phi = current_voltage
+       end if
+    else
+       if (field_electrode2_grounded) then
+          phi = 0.0_dp
+       else
+          phi = current_voltage
+       end if
+    end if
+  end function two_conical_rods_get_potential
 
   !> Get level set function for case of two rods
   real(dp) function rod_rod_lsf(r)
@@ -650,13 +737,13 @@ contains
   function rod_rod_get_potential(r) result(phi)
     use m_geometry
     real(dp), intent(in) :: r(NDIM)
-    real(dp)             :: phi, d1, d2
+    real(dp)             :: phi, lsf_1, lsf_2
 
     ! Determine distance to electrodes
-    d1 = GM_dist_line(r, rod_r0, rod_r1, NDIM) - rod_radius
-    d2 = GM_dist_line(r, rod2_r0, rod2_r1, NDIM) - rod2_radius
+    lsf_1 = GM_dist_line(r, rod_r0, rod_r1, NDIM) - rod_radius
+    lsf_2 = GM_dist_line(r, rod2_r0, rod2_r1, NDIM) - rod2_radius
 
-    if (d1 < d2) then
+    if (lsf_1 < lsf_2) then
        ! Closer to electrode 1
        if (field_electrode_grounded) then
           phi = 0.0_dp
