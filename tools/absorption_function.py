@@ -50,6 +50,8 @@ def get_args():
                    help='Show Naidis curve for moist air')
     p.add_argument('-show_Aints_moist', action='store_true',
                    help='Show Aints curve for moist air')
+    p.add_argument('-hide_fit', action='store_true',
+                   help='Hide fit in plot')
     p.add_argument('-n_points', type=int, default=300,
                    help='Number of points to use for numerical approximation')
     p.add_argument('-show_curve', metavar='A_i L_i', type=float, nargs='+',
@@ -323,8 +325,11 @@ plt.subplot(121)
 plt.xlabel('r (m)')
 plt.ylabel('absorption function (1/m)')
 plt.title('Logarithmic scale')
-plt.semilogy(r, f_numerical, '.', label='numerical')
-plt.semilogy(r, fit_func(r, *popt), label='fit ({}-term)'.format(args.n_modes))
+
+if not args.hide_fit:
+    plt.semilogy(r, f_numerical, '.', label='numerical')
+    plt.semilogy(r, fit_func(r, *popt),
+                 label='fit ({}-term)'.format(args.n_modes))
 
 for name, f in f_to_display:
     plt.semilogy(r, f(r), '--', label=name)
@@ -337,8 +342,11 @@ plt.subplot(122)
 plt.xlabel('r (m)')
 plt.ylabel('absorption function (1/m)')
 plt.title('Linear scale')
-plt.plot(r, f_numerical, '.', label='numerical')
-plt.plot(r, fit_func(r, *popt), label='fit ({}-term)'.format(args.n_modes))
+
+if not args.hide_fit:
+    plt.plot(r, f_numerical, '.', label='numerical')
+    plt.plot(r, fit_func(r, *popt),
+             label='fit ({}-term)'.format(args.n_modes))
 
 for name, f in f_to_display:
     plt.plot(r, f(r), '--', label=name)
