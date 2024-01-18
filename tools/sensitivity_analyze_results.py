@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-# TODO:
-# - Have option to read in chemistry output (species amounts)
-
 import numpy as np
 import argparse
 import pandas as pd
@@ -17,7 +14,14 @@ parser.add_argument('-y', type=str, nargs='+', default=["sum(n_e)"],
                     help='Variables in the log files to compare')
 parser.add_argument('-time_index', type=int, default=-1,
                     help='Which time index in the log files to consider')
+parser.add_argument('-num_bar_plot', type=int, default=0,
+                    help='If >0, show N most important reactions for y[0]')
+parser.add_argument('-figname', type=str,
+                    help='Name of figure to save')
 args = parser.parse_args()
+
+if args.num_bar_plot > 0 and len(args.y) > 1:
+    raise ValueError('For bar plot, specify only one y variable')
 
 logs = sorted(args.logs)
 
@@ -40,7 +44,6 @@ else:
 
     # Load amounts of species and create a dataframe of them so that the below code wont break
     logs_df = [pd.DataFrame(np.loadtxt(f), columns=species_list) for f in args.logs]
-
 
 log_sizes = np.array([len(df) for df in logs_df])
 max_size, min_size = log_sizes.max(), log_sizes.min()
@@ -67,9 +70,11 @@ if 0 not in all_cases:
 
 base_case = all_cases[0][0][1]
 times = np.array(base_case['time'])
-reaction_ix = [ix for ix in all_cases.keys() if ix != 0]
+reaction_ix = np.array([ix for ix in all_cases.keys() if ix != 0])
 
 effect_magnitudes = np.zeros(len(reaction_ix))
+derivatives_mean = np.zeros((len(reaction_ix), len(args.y)))
+derivatives_sigma = np.zeros((len(reaction_ix), len(args.y)))
 
 print(f'Using data at time t = {times[args.time_index]}\n')
 
@@ -106,12 +111,13 @@ for i, ix in enumerate(reaction_ix):
         print(f'R{ix:<4} {name:15} {mu:15.8f} {mustar:15.8f} {sigma:15.8f}')
 
     effect_magnitudes[i] = derivs_meanabs.max()
+    derivatives_mean[i] = derivs_mean
+    derivatives_sigma[i] = derivs_sigma
 
 print('\nReactions sorted by their overall importance:')
 print(f'{"rank":<6} R{"#":<6} {"reaction_list":40} {"max(mustar)":15}')
 
 # Load reaction names
-# base_name = logs[0].replace('_log.txt', '')
 with open(base_name + '_reactions.txt', 'r') as f:
     reactions_list = [x.strip() for x in f.readlines() if x.strip()]
 
@@ -120,3 +126,23 @@ for n, i in enumerate(ix_sort):
     ix = reaction_ix[i]
     print(f'{n+1:<6} R{ix:<6} {reactions_list[ix-1]:40} ' +
           f'{effect_magnitudes[i]:<15.8f}')
+
+if args.num_bar_plot > 0:
+    # Make bar plot for args.y[0]
+    import matplotlib.pyplot as plt
+
+    N = args.num_bar_plot
+    ixs = ix_sort[:N]
+    r_ixs = reaction_ix[ixs]
+    labels = [reactions_list[i-1] for i in r_ixs]
+    colors = ['green' if x > 0 else 'red' for x in derivatives_mean[ixs, 0]]
+    fig, ax = plt.subplots(1, 1, figsize=(5, 6), layout='constrained')
+
+    fig.suptitle(f'Sensitivities for {args.y[0]}')
+    ax.barh(np.arange(N, 0, -1), np.abs(derivatives_mean[ixs, 0]),
+            tick_label=labels, xerr=derivatives_sigma[ixs, 0],
+            color=colors)
+    if args.figname:
+        plt.savefig(args.figname, dpi=200, bbox_inches='tight')
+    else:
+        plt.show()
