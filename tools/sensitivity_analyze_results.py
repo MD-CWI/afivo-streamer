@@ -16,6 +16,8 @@ parser.add_argument('-time_index', type=int, default=-1,
                     help='Which time index in the log files to consider')
 parser.add_argument('-num_bar_plot', type=int, default=0,
                     help='If >0, show N most important reactions for y[0]')
+parser.add_argument('-bar_plot_xlim', type=float, nargs=2,
+                    help='x-range for bar plots')
 parser.add_argument('-figname', type=str,
                     help='Name of figure to save')
 args = parser.parse_args()
@@ -104,7 +106,7 @@ for i, ix in enumerate(reaction_ix):
     derivs_normalized = derivs / base_values
     derivs_mean = np.mean(derivs_normalized, axis=0)
     derivs_meanabs = np.mean(np.abs(derivs_normalized), axis=0)
-    derivs_sigma = np.std(derivs_normalized, axis=0)
+    derivs_sigma = np.std(derivs_normalized, axis=0, ddof=1)
 
     for name, mu, mustar, sigma in zip(
             args.y, derivs_mean, derivs_meanabs, derivs_sigma):
@@ -137,11 +139,17 @@ if args.num_bar_plot > 0:
     labels = [reactions_list[i-1] for i in r_ixs]
     colors = ['green' if x > 0 else 'red' for x in derivatives_mean[ixs, 0]]
     fig, ax = plt.subplots(1, 1, figsize=(5, 6), layout='constrained')
+    thickness = 0.8
+    x_values = np.arange(N, 0, -1)
 
-    fig.suptitle(f'Sensitivities for {args.y[0]}')
-    ax.barh(np.arange(N, 0, -1), np.abs(derivatives_mean[ixs, 0]),
-            tick_label=labels, xerr=derivatives_sigma[ixs, 0],
-            color=colors)
+    bars = ax.barh(x_values, np.abs(derivatives_mean[ixs, 0]),
+                   tick_label=labels, color=colors, height=thickness)
+
+    sigma_labels = [r'$\pm$ ' + f'{s:.1f}' for s in derivatives_sigma[ixs, 0]]
+    ax.bar_label(bars, sigma_labels, padding=5, color='black')
+
+    if args.bar_plot_xlim:
+        ax.set_xlim(args.bar_plot_xlim)
     if args.figname:
         plt.savefig(args.figname, dpi=200, bbox_inches='tight')
     else:
