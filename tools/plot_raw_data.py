@@ -142,7 +142,9 @@ if __name__ == '__main__':
                               args.silo_to_raw)
 
     # No longer axisymmetric if projected
-    axisymmetric = (args.axisymmetric and 0 not in args.project_dims)
+    axisymmetric = args.axisymmetric
+    if args.project_dims is not None and 0 in args.project_dims:
+        axisymmetric = False
 
     if domain['n_dims'] > 0:
         values, coords = get_uniform_data(grids, domain, args.min_pixels,

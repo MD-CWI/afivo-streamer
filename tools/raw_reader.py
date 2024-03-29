@@ -330,7 +330,7 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
         if axisymmetric:
             rvolume = np.product(g['dr']/dr) * coords_fine[0]/coords_coarse[0]
 
-            if rvolume.ndim < g['ihi'].ndim:
+            if rvolume.ndim < len(g['ihi']):
                 # Broadcast to have volume weight for every grid cell
                 rvolume = np.broadcast_to(rvolume[:, None], g['ihi']-g['ilo'])
 
