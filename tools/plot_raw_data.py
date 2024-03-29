@@ -138,12 +138,17 @@ if __name__ == '__main__':
     args = p.parse_args()
 
     grids, domain = load_file(args.input_file, args.project_dims,
-                              args.variable, args.silo_to_raw)
+                              args.axisymmetric, args.variable,
+                              args.silo_to_raw)
+
+    # No longer axisymmetric if projected
+    axisymmetric = (args.axisymmetric and 0 not in args.project_dims)
+
     if domain['n_dims'] > 0:
         values, coords = get_uniform_data(grids, domain, args.min_pixels,
                                           args.interpolation,
                                           args.r_min, args.r_max,
-                                          args.axisymmetric,
+                                          axisymmetric,
                                           args.abel_transform)
 
         if args.save_npz:

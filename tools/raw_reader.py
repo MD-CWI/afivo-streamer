@@ -10,17 +10,17 @@ from struct import pack, unpack, calcsize
 from scipy.interpolate import RegularGridInterpolator
 import tempfile
 import os
-import sys
 import subprocess
 import pathlib
 
 
-def load_file(fname, project_dims=None, variable=None,
-              silo_to_raw=None):
+def load_file(fname, project_dims=None, axisymmetric=False,
+              variable=None, silo_to_raw=None):
     """Read a Silo or a raw file
 
     :param fname: name of the raw file
     :param project_dims: project along these dimensions
+    :param axisymmetric: bool, whether the data is axisymmetric
     :param variable: read this variable from a Silo file
     :param silo_to_raw: path to silo_to_raw executable
     :returns: grids, domains
@@ -44,7 +44,7 @@ def load_file(fname, project_dims=None, variable=None,
         with tempfile.NamedTemporaryFile(dir=dirname) as fp:
             _ = subprocess.call([silo_to_raw, fname,
                                  variable, fp.name])
-            grids, domain = get_raw_data(fp.name, project_dims)
+            grids, domain = get_raw_data(fp.name, project_dims, axisymmetric)
     else:
         grids, domain = get_raw_data(fname, project_dims)
 
@@ -91,11 +91,12 @@ def read_single_grid(f):
     return grid
 
 
-def get_raw_data(fname, project_dims=None):
+def get_raw_data(fname, project_dims=None, axisymmetric=False):
     """Read raw data extracted from a Silo file
 
     :param fname: filename of raw data
     :param project_dims: int, integrate over these dimensions
+    :param axisymmetric: bool, whether the data is axisymmetric
     :returns: grids and domain properties
 
     """
@@ -114,7 +115,7 @@ def get_raw_data(fname, project_dims=None):
             grid.update(props)
 
             if project_dims is not None:
-                grid = grid_project(grid, project_dims)
+                grid = grid_project(grid, project_dims, axisymmetric)
 
             grids.append(grid)
 
@@ -205,7 +206,7 @@ def get_domain_properties(grids):
     return props
 
 
-def grid_project(in_grid, project_dims):
+def grid_project(in_grid, project_dims, axisymmetric):
     """Integrate grid data along one or more dimensions"""
     g = copy.deepcopy(in_grid)
 
@@ -214,14 +215,25 @@ def grid_project(in_grid, project_dims):
     # Index range to use for values below. Along the projected dimensions,
     # exclude ghost cells.
     ilo = 0 * g['dims']
-    ihi = 1 * g['dims']
+    ihi = 1 * g['dims'] - 1     # number of faces - 1
     ilo[pdims] = g['ilo'][pdims]
     ihi[pdims] = g['ihi'][pdims]
 
     # Get index range corresponding to non-ghost grid cells
     valid_ix = tuple([np.s_[i:j] for (i, j) in zip(ilo, ihi)])
-    fac = np.product(g['dr'][pdims])
-    g['values'] = g['values'][valid_ix].sum(axis=tuple(pdims)) * fac
+
+    # Sum values along projected dimensions
+    if axisymmetric and 0 in pdims:
+        # Multiply with 2 * pi * r
+        r = g['coords_cc'][0][valid_ix[0]]
+        w = np.product(g['dr'][pdims]) * 2 * np.pi * r
+
+        # Broadcast to have volume weight for every grid cell
+        w = np.broadcast_to(w[:, None], ihi-ilo)
+        g['values'] = (g['values'][valid_ix] * w).sum(axis=tuple(pdims))
+    else:
+        fac = np.product(g['dr'][pdims])
+        g['values'] = fac * g['values'][valid_ix].sum(axis=tuple(pdims))
 
     g['n_dims'] -= len(project_dims)
     g['dims'] = np.delete(g['dims'], pdims)
@@ -317,8 +329,11 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
 
         if axisymmetric:
             rvolume = np.product(g['dr']/dr) * coords_fine[0]/coords_coarse[0]
-            # Broadcast to have volume weight for every grid cell
-            rvolume = np.broadcast_to(rvolume[:, None], g['ihi']-g['ilo'])
+
+            if rvolume.ndim < g['ihi'].ndim:
+                # Broadcast to have volume weight for every grid cell
+                rvolume = np.broadcast_to(rvolume[:, None], g['ihi']-g['ilo'])
+
             # Important to use Fortran order here
             values = rvolume.ravel() * g['values'][valid_ix].ravel()
         else:
