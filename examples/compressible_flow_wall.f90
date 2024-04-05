@@ -23,11 +23,12 @@ program compressible_flow_wall
   integer            :: time_integrator = af_heuns_method
   real(dp)           :: rho_0, u_0, p_0, T_0, sound_speed, mach_number
   real(dp)           :: molecular_mass, domain_size(NDIM)
-  real(dp)           :: wedge_angle
+  real(dp)           :: wedge_angle, wedge_normal(2)
   integer            :: variables(n_vars)
   integer            :: cc_rho, cc_mom(2), cc_e
   integer            :: fluxes(n_vars)
   integer            :: grid_size(NDIM)
+  integer            :: iteration
   real(dp)           :: u_init(1, n_vars)
   type(af_t)         :: tree
   real(dp)           :: dt, dt_lim, time, end_time, dt_output
@@ -48,6 +49,7 @@ program compressible_flow_wall
   p_0            = 101.35e3_dp        ! Pa
   T_0            = 288.9_dp           ! K
   wedge_angle    = 15.0_dp * acos(-1.0_dp) / 180.0_dp
+  wedge_normal   = [-sin(wedge_angle), cos(wedge_angle)]
 
   ! gas density in kg/m3
   rho_0          = p_0 * molecular_mass * dalton / (k_boltzmann * T_0)
@@ -88,9 +90,11 @@ program compressible_flow_wall
   time             = 0.0_dp
   dt               = 0.0_dp ! Start from zero time step
   output_cnt       = 0
+  iteration        = 0
   dt_output        = end_time / 100
 
   do
+     iteration = iteration + 1
      if (output_cnt * dt_output <= time) then
         write(fname, "(A,I0)") "output/compressible_flow_wall_" &
              // DIMNAME // "_", output_cnt
@@ -105,6 +109,8 @@ program compressible_flow_wall
      if (time > end_time) exit
   end do
 
+  print *, "Number of time steps: ", iteration
+  print *, "Number of grid cells: ", af_num_leaves_used(tree) * box_size**NDIM
   call af_destroy(tree)
 
 contains
@@ -149,6 +155,9 @@ contains
     nc = box%n_cell
     do KJI_DO(0, nc+1)
        box%cc(IJK, variables) = u_init(1, :)
+       if (box%cc(IJK, i_lsf) <= 0) then
+          box%cc(IJK, i_mom) = 0.0_dp
+       end if
     end do; CLOSE_DO
   end subroutine set_init_conds
 
@@ -235,8 +244,7 @@ contains
 
   end subroutine get_fluxes
 
-  !> Modify line data to approximate a slip boundary condition. However, in case
-  !> of a staircase pattern, this becomes more of a no-slip boundary condition.
+  !> Modify line data to approximate a slip boundary condition
   subroutine line_modify(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
     integer, intent(in)     :: n_cc                 !< Number of cell centers
     integer, intent(in)     :: n_var                !< Number of variables
@@ -247,6 +255,7 @@ contains
     integer, intent(in)     :: s_deriv              !< State to compute derivatives from
 
     real(dp)                :: lsf(0:box%n_cell+1)
+    real(dp)                :: mom(2), mom_par(2), mom_perp(2)
     integer                 :: i
 
     ! Get level set function along the line of the flux computation
@@ -260,13 +269,34 @@ contains
           if (lsf(i) > 0) then
              cc_line(i+1, :) = cc_line(i, :)
              cc_line(i+2, :) = cc_line(i-1, :)
-             cc_line(i+1, i_mom(flux_dim)) = -cc_line(i, i_mom(flux_dim))
-             cc_line(i+2, i_mom(flux_dim)) = -cc_line(i-1, i_mom(flux_dim))
+
+             ! Project momentum onto a component parallel and perpendicular to
+             ! the boundary. The parallel momentum is copied, but for the
+             ! perpendicular moment a negative sign is used so that the
+             ! "average" perpendicular momentum is zero.
+             ! TODO: use gradient of lsf, take distance into account?
+             mom = cc_line(i, i_mom)
+             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+             mom_par = mom - mom_perp
+             cc_line(i+1, i_mom) = mom_par - mom_perp
+
+             mom = cc_line(i-1, i_mom)
+             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+             mom_par = mom - mom_perp
+             cc_line(i+2, i_mom) = mom_par - mom_perp
           else
              cc_line(i, :) = cc_line(i+1, :)
              cc_line(i-1, :) = cc_line(i+2, :)
-             cc_line(i, i_mom(flux_dim)) = -cc_line(i+1, i_mom(flux_dim))
-             cc_line(i-1, i_mom(flux_dim)) = -cc_line(i+2, i_mom(flux_dim))
+
+             mom = cc_line(i+1, i_mom)
+             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+             mom_par = mom - mom_perp
+             cc_line(i, i_mom) = mom_par - mom_perp
+
+             mom = cc_line(i+2, i_mom)
+             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+             mom_par = mom - mom_perp
+             cc_line(i-1, i_mom) = mom_par - mom_perp
           end if
        end if
     end do
