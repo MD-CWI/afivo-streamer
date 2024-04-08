@@ -46,6 +46,8 @@ p.add_argument('-cmap', type=str, default='plasma',
                help='Use this colormap')
 p.add_argument('-silo_to_raw', type=str, default=None,
                help='Path to silo_to_raw converter')
+p.add_argument('-q', action='store_true',
+               help='Print no information to stdout')
 
 
 def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
@@ -71,8 +73,9 @@ def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
 
     nx = np.round((r_max - r_min)/dr).astype(int)
 
-    print(f'Resolution:   {nx}')
-    print(f'Grid spacing: {dr}')
+    if not args.q:
+        print(f'Resolution:   {nx}')
+        print(f'Grid spacing: {dr}')
 
     # List of coordinates
     x = [np.linspace(a, b, n) for a, b, n in
