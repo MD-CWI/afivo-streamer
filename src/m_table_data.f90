@@ -207,18 +207,41 @@ contains
 777 continue ! If the end of the file is reached after finding data
     print *, "table_from_file unexpectedly reached end of " // trim(file_name)
     print *, "searching '" // trim(data_name) // "'"
+    call print_usage(file_name, data_name)
     error stop
 
 888 continue ! If the end of the file is reached without finding data
     print *, "table_from_file: no data in " // trim(file_name)
     print *, "searching '" // trim(data_name) // "'"
+    call print_usage(file_name, data_name)
     error stop
 
 999 continue ! If there was an input error, the routine will end here
     print *, "table_from_file error at line", nL
     print *, "ioState = ", ioState, " in ", trim(file_name)
     print *, "searching '" // trim(data_name) // "'"
+    call print_usage(file_name, data_name)
     error stop
+
+  contains
+
+    subroutine print_usage(file_name, data_name)
+      character(len=*), intent(in) :: file_name
+      character(len=*), intent(in) :: data_name
+
+      print *, ""
+      print *, "Expected a file '", trim(file_name), &
+           "' with the following structure:"
+      print *, trim(data_name)
+      print *, "FACTOR: 1.0         [optional: multiply with this factor]"
+      print *, "[other lines]"
+      print *, "------------------  [at least 5 dashes]"
+      print *, "xxx       xxx       [data in two column format]"
+      print *, "...       ..."
+      print *, "xxx       xxx"
+      print *, "------------------"
+      print *, ""
+    end subroutine print_usage
 
   end subroutine table_from_file
 
