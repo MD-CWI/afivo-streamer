@@ -46,6 +46,8 @@ p.add_argument('-cmap', type=str, default='plasma',
                help='Use this colormap')
 p.add_argument('-silo_to_raw', type=str, default=None,
                help='Path to silo_to_raw converter')
+p.add_argument('-q', action='store_true',
+               help='Print no information to stdout')
 
 
 def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
@@ -71,8 +73,9 @@ def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
 
     nx = np.round((r_max - r_min)/dr).astype(int)
 
-    print(f'Resolution:   {nx}')
-    print(f'Grid spacing: {dr}')
+    if not args.q:
+        print(f'Resolution:   {nx}')
+        print(f'Grid spacing: {dr}')
 
     # List of coordinates
     x = [np.linspace(a, b, n) for a, b, n in
@@ -138,12 +141,19 @@ if __name__ == '__main__':
     args = p.parse_args()
 
     grids, domain = load_file(args.input_file, args.project_dims,
-                              args.variable, args.silo_to_raw)
+                              args.axisymmetric, args.variable,
+                              args.silo_to_raw)
+
+    # No longer axisymmetric if projected
+    axisymmetric = args.axisymmetric
+    if args.project_dims is not None and 0 in args.project_dims:
+        axisymmetric = False
+
     if domain['n_dims'] > 0:
         values, coords = get_uniform_data(grids, domain, args.min_pixels,
                                           args.interpolation,
                                           args.r_min, args.r_max,
-                                          args.axisymmetric,
+                                          axisymmetric,
                                           args.abel_transform)
 
         if args.save_npz:

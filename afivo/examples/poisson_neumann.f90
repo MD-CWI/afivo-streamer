@@ -5,7 +5,6 @@
 !> conditions. There is also a test case for a cylindrical geometry.
 program poisson_neumann
   use m_af_all
-  use m_gaussians
 
   implicit none
 

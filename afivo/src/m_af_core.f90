@@ -135,7 +135,8 @@ contains
   end function af_find_fc_variable
 
   !> Initialize a NDIM-d octree/quadtree grid
-  subroutine af_init(tree, n_cell, r_max, grid_size, periodic, r_min, coord, mem_limit_gb)
+  subroutine af_init(tree, n_cell, r_max, grid_size, periodic, r_min, coord, &
+       mem_limit_gb, box_limit)
     type(af_t), intent(inout)      :: tree            !< The tree to initialize
     integer, intent(in)            :: n_cell          !< Boxes have n_cell^dim cells
     real(dp), intent(in)           :: r_max(NDIM)     !< Maximal coordinates of the domain
@@ -144,6 +145,8 @@ contains
     real(dp), intent(in), optional :: r_min(NDIM)     !< Lowest coordinate, default is (0., 0., 0.)
     integer, intent(in), optional  :: coord           !< Select coordinate type
     real(dp), intent(in), optional :: mem_limit_gb    !< Memory limit in GByte
+    !> Maximum number of boxes (overrides mem_limit_gb)
+    integer, intent(in), optional  :: box_limit
 
     real(dp)                       :: r_min_a(NDIM), gb_limit
     integer                        :: lvl, coord_a, box_bytes
@@ -173,9 +176,14 @@ contains
     tree%highest_lvl = 0
     tree%coord_t     = coord_a
 
-    ! Calculate size of a box
-    box_bytes = af_box_bytes(n_cell, tree%n_var_cell, tree%n_var_face)
-    tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
+    if (present(box_limit)) then
+       if (box_limit <= 0) stop "af_init: box_limit should be > 0"
+       tree%box_limit = box_limit
+    else
+       ! Calculate size of a box
+       box_bytes = af_box_bytes(n_cell, tree%n_var_cell, tree%n_var_face)
+       tree%box_limit = nint(gb_limit * 2.0_dp**30 / box_bytes)
+    end if
 
     ! Allocate the full list of boxes
     allocate(tree%boxes(tree%box_limit))
