@@ -12,8 +12,8 @@ module m_af_multigrid
   private
 
   public :: mg_t
-
   public :: mg_init
+  public :: mg_use
   public :: mg_destroy
   public :: mg_fas_fmg
   public :: mg_fas_vcycle
@@ -113,7 +113,7 @@ contains
   end subroutine mg_destroy
 
   !> Make sure box tags and operators are set
-  subroutine use_mg(tree, mg)
+  subroutine mg_use(tree, mg)
     type(af_t), intent(inout)      :: tree
     type(mg_t), intent(in), target :: mg !< Multigrid options
 
@@ -121,7 +121,7 @@ contains
     tree%mg_current_operator_mask = mg%operator_mask
 
     call mg_set_operators_tree(tree, mg)
-  end subroutine use_mg
+  end subroutine mg_use
 
   !> To be called at the end of a multigrid solve
   subroutine done_with_mg(tree)
@@ -140,7 +140,7 @@ contains
     logical, intent(in)             :: have_guess   !< If false, start from phi = 0
     integer                         :: lvl
 
-    call use_mg(tree, mg)
+    call mg_use(tree, mg)
 
     if (have_guess) then
        do lvl = tree%highest_lvl,  2, -1
@@ -194,7 +194,7 @@ contains
     by_itself = .true.; if (present(standalone)) by_itself = standalone
 
     if (by_itself) then
-       call use_mg(tree, mg)
+       call mg_use(tree, mg)
     end if
 
     max_lvl = tree%highest_lvl
