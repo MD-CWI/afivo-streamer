@@ -17,8 +17,8 @@ module m_coarse_solver
   ! Multigrid with point-wise smoother (fast/cheap)
   integer, parameter, public :: coarse_solver_hypre_pfmg = 2
 
-  ! PCG solver (slow)
-  integer, parameter, public :: coarse_solver_hypre_pcg = 3
+  ! Cyclic reduction solver
+  integer, parameter, public :: coarse_solver_hypre_cycred = 3
 
   ! Size of the stencil (only direct neighbors)
   integer, parameter :: max_stencil_size = 2*NDIM + 1
@@ -90,7 +90,7 @@ contains
     if (mg%csolver%solver_type <= 0) then
        if (NDIM == 1) then
           ! PFMG cannot be used in 1D
-          mg%csolver%solver_type = coarse_solver_hypre_pcg
+          mg%csolver%solver_type = coarse_solver_hypre_cycred
        else
           mg%csolver%solver_type = coarse_solver_hypre_pfmg
        end if
@@ -224,8 +224,8 @@ contains
     integer                             :: ierr
 
     select case (cs%solver_type)
-    case (coarse_solver_hypre_pcg)
-       call HYPRE_StructPCGDestroy(cs%solver, ierr)
+    case (coarse_solver_hypre_cycred)
+       call HYPRE_StructCycRedDestroy(cs%solver, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGDestroy(cs%solver, ierr)
     case (coarse_solver_hypre_pfmg)
@@ -395,9 +395,9 @@ contains
     integer                             :: ierr
 
     select case (cs%solver_type)
-    case (coarse_solver_hypre_pcg)
-       call HYPRE_StructPCGCreate(MPI_COMM_WORLD, cs%solver, ierr)
-       call HYPRE_StructPCGSetup(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+    case (coarse_solver_hypre_cycred)
+       call HYPRE_StructCycRedCreate(MPI_COMM_WORLD, cs%solver, ierr)
+       call HYPRE_StructCycRedSetup(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGCreate(MPI_COMM_WORLD, cs%solver, ierr)
        call HYPRE_StructSMGSetMaxIter(cs%solver, cs%max_iterations, ierr)
@@ -424,9 +424,9 @@ contains
     integer                          :: ierr
 
     select case (cs%solver_type)
-    case (coarse_solver_hypre_pcg)
-       call HYPRE_StructPCGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
-       call HYPRE_StructPCGGetNumIterations(cs%solver, num_iterations, ierr)
+    case (coarse_solver_hypre_cycred)
+       call HYPRE_StructCycRedSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
+       ! call HYPRE_StructCycRedGetNumIterations(cs%solver, num_iterations, ierr)
     case (coarse_solver_hypre_smg)
        call HYPRE_StructSMGSolve(cs%solver, cs%matrix, cs%rhs, cs%phi, ierr)
        call HYPRE_StructSMGGetNumIterations(cs%solver, num_iterations, ierr)
