@@ -3,7 +3,7 @@ SRC_DIRS	:= lib_1d lib_2d lib_3d examples tests
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
 
-.PHONY:	all test doc clean $(SRC_DIRS) $(EXT_LIBS) $(CLEANSRC)
+.PHONY:	all test doc clean $(SRC_DIRS) $(CLEANSRC)
 
 all:	$(SRC_DIRS)
 

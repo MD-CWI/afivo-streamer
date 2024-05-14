@@ -71,13 +71,15 @@ contains
   subroutine coarse_solver_initialize(tree, mg)
     type(af_t), intent(inout) :: tree !< Tree to do multigrid on
     type(mg_t), intent(inout) :: mg
-    integer                   :: nx(NDIM)
+    integer                   :: nx(NDIM), ierr
 
     nx = tree%coarse_grid_size(1:NDIM)
 
     if (.not. tree%ready) error stop "coarse_solver_initialize: tree not ready"
     if (any(nx == -1)) &
          error stop "coarse_solver_initialize: coarse_grid_size not set"
+
+    call hypre_initialize(ierr)
 
     ! Construct grid and vectors
     call hypre_create_grid(mg%csolver%grid, nx, tree%periodic)
@@ -213,6 +215,7 @@ contains
     call HYPRE_StructVectorDestroy(cs%phi, ierr)
 
     call hypre_destroy_solver(cs)
+    call hypre_finalize(ierr)
   end subroutine coarse_solver_destroy
 
   !> De-allocate storage for solver

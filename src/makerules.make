@@ -6,14 +6,15 @@ COMPILER = gfortran
 ifeq ($(COMPILER), gfortran)
 	FC := gfortran
 	FFLAGS := -O2 -g -std=f2008 -fopenmp -Wall -Wextra -Wimplicit-interface	\
-	-Wshadow -Wno-unused-dummy-argument -cpp
+	-Wshadow -Wno-unused-dummy-argument -cpp -fPIC
 	ifeq ($(DEBUG), 1)
 		FFLAGS += -O0 -fcheck=all -pg				\
 		-ffpe-trap=invalid,zero,overflow -pedantic -finit-real=snan
 	endif
 else ifeq ($(COMPILER), ifort)
 	FC 	:= ifort
-	FFLAGS := -warn all -O2 -g -stand f08 -openmp -assume realloc-lhs -fpp
+	FFLAGS := -warn all -O2 -g -stand f08 -openmp -assume realloc-lhs -fpp	\
+	-fpic
 	ifeq ($(DEBUG), 1)
 		FFLAGS += -check all,noarg_temp_created -p -debug all
 	endif
