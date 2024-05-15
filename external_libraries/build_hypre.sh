@@ -24,5 +24,11 @@ cd ${hypre_dirname}/src
     --with-print-errors\
     --prefix=${target_dir}
 
+# A bit of a hack to add the -fPIC flag without compiling a shared library
+# This flag is necessary when using the library with f2py
+sed -i 's/$(FC_COMPILE_FLAGS)/-fPIC $(FC_COMPILE_FLAGS)/g' config/Makefile.config
+sed -i 's/$(C_COMPILE_FLAGS)/-fPIC $(C_COMPILE_FLAGS)/g' config/Makefile.config
+sed -i 's/$(CXX_COMPILE_FLAGS)/-fPIC $(CXX_COMPILE_FLAGS)/g' config/Makefile.config
+
 make -j
 make install
