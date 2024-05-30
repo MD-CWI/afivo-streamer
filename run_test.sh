@@ -15,11 +15,11 @@ run_test() {
     cfg=$(basename "$1")
 
     # Execute the test in the directory of the .cfg file
-    start=`date +%s.%N`
+    start=`date +%s`
     (cd "$dir" && ../streamer "$cfg" > run.log ||
              { cat run.log; return 1; })
-    end=`date +%s.%N`
-    runtime_sec=$(python -c "print('{:.2f}'.format($end - $start))")
+    end=`date +%s`
+    runtime_sec=$((end-start))
 
     if (($? != 0)); then
         echo "FAILED $1"
