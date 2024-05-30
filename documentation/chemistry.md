@@ -4,28 +4,31 @@
 
 # Including chemical reactions {#chem-intro}
 
-Chemical reactions can be defined in the `input_data%file`, as in the following example:
+Chemical reactions can be defined in the `input_data%%file`, as in the following example:
 
     reaction_list
     -----------------------
     # Ionization
     e + N2 -> e + e + N2+,field_table,C25 N2 Ionization 15.60 eV
+    e + N2 -> e + e + N2+,field_table,C26 N2 Ionization 18.80 eV
     e + O2 -> e + e + O2+,field_table,C43 O2 Ionization 12.06 eV
     # Attachment
-    e + O2 + O2 -> O2-,field_table,C27 O2 Attachment
+    e + O2 + O2 -> O2- + O2,field_table,C27 O2 Attachment
     e + O2 -> O- + O,field_table,C28 O2 Attachment
-    # Detachment
+    # Detachment (Panchesnyi 2013)
     O2- + M -> e + O2 + M,c1*exp(-(c2/(c3+Td))**2),1.24e-17 179.0 8.8
     O- + N2 -> e + N2O,c1*exp(-(c2/(c3+Td))**2),1.16e-18 48.9 11.0
-    # Negative ion conversion
+    # Negative ion conversion (Panchesnyi 2013)
     O- + O2 -> O2- + O,c1*exp(-(c2/(c3+Td))**2),6.96e-17 198.0 5.6
     O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
-    O3- + O -> O2- + O2,c1,3.2e-16
-    # Positive ion conversion
-    # We can assume this rates are constant
-    N2+ + N2 + M -> N4+ + M,c1,5.0e-41
-    N4+ + O2 -> N2 + N2 + O2+,c1,2.5e-16
-    O2+ + O2 + M -> O4+ + M,c1,2.4e-42
+    # Positive ion conversion (Kossyi et. al. 1992, Aleksandrov and Bazelyan 1999)
+    N2+ + O2 -> O2+ + N2,c1*(300/Tg)**c2,6e-17 0.5
+    N2+ + N2 + M -> N4+ + M,c1*(300/Tg)**c2,5e-41 2.0
+    N4+ + O2 -> O2+ + 2N2,c1,2.5e-16
+    O2+ + O2 + M -> O4+ + M,c1*(300/Tg)**c2,2.4e-42 3.0
+    # Electron recombination (Kossyi et. al. 1992)
+    e + N4+ -> 2N2,c1*(300/Te)**c2,2e-12 0.5
+    e + O4+ -> 2O2,c1*(300/Te)**c2,1.4e-12 0.5
     -----------------------
 
 The format of these reactions is
@@ -34,7 +37,7 @@ The format of these reactions is
 
 where:
 
-* `reaction` is the reaction text, as in the example above
+* `reaction` is the reaction formula, as in the example above
 * `rate_type` denotes the method used to obtain the reaction rate. Several
   options are described below.
 * `value(s)` are one or more values needed to obtain the reaction rate, for
@@ -44,21 +47,7 @@ where:
   rates given in units of `cm^3/s` or `cm^6/s` to `m^3/s` or `m^6/s`
   respectively. The time unit is always a second.
 
-## Ignoring the production of certain species {#chem-ignored}
-
-To simplify a reaction set, it is possible to ignore the production of certain species. This can be done by adding a table of the following form:
-
-    ignored_species
-    -----------------------
-    NO2
-    NO
-    O
-    N
-    -----------------------
-
-When ignored species occur on the left-hand side of a reaction, and if they do not correspond to the background gas that is initially present, the reaction will be ignored.
-
-When ignored species occur on the right-hand side of a reaction, their production will be ignored, but the reaction will still be included.
+All the species that are present in the chemistry file will automatically be present in the simulation, so it is not necessary to provide a list of species.
 
 # Chemistry syntax {#chem-syntax}
 
@@ -87,30 +76,31 @@ The symbols with an `@` will be replaced by the respective values specified in t
 
 The number of such replacement groups is flexible.
 
-## Rate function syntax {#chem-syntax-rate-function}
-
-The following symbols can be used:
-
-symbol | meaning | unit
----|---|---
-c1, c2, ..., c9 | Constants that will be specified | -
-Td | The reduced electric field E/N | Townsend
-Te | Electron 'temperature' (given by 2*energy/(3*kB))| K
-Ti | Ion temperature | K
-Tg | Gas temperature | K
-kB | Boltzmann constant | J/K
-kB_eV | Boltzmann constant | eV/K
-
-There should be no spaces in the reaction string.
-
 ## Supported reaction rate formats {#chem-syntax-rate-formats}
 
-* `field_table`
+### Field-dependent reactions
+If the reaction depends on the reduced electric field, `rate_type` should be set to `field_table`, and `value` should be set to the name of the table in `input_data%file`. For example
 
-For a table of the reaction rate versus the reduced electric
-field (E/N) in Townsend. Value: the name of the table in `input_data%file`
+    e + N2 -> e + e + N2+,field_table,C25 N2 Ionization 15.60 eV
 
-**Functional expressions**
+means that the rate for this reaction will be obtained by interpolating the tabulated data following the string "C25 N2 Ionization 15.60 eV". An example of such tabulated data is given below, where the first column is the field in Townsend:
+
+    C25 N2 Ionization 15.60 eV
+    -----------------------
+    1.000000000000000000e+00 0.000000000000000000e+00
+    1.151000000000000023e+00 0.000000000000000000e+00
+    1.326000000000000068e+00 0.000000000000000000e+00
+    1.526000000000000023e+00 0.000000000000000000e+00
+    1.758000000000000007e+00 0.000000000000000000e+00
+    2.024000000000000021e+00 0.000000000000000000e+00
+    2.330000000000000071e+00 0.000000000000000000e+00
+    ...
+    -----------------------
+
+### Functional expressions
+
+Reactions with analytic formulas can be included by giving the form of the analytic expression.
+This expression should not contain spaces, and it should be one of the following:
 
 * `c1`
 * `c1*(Td-c2)`
@@ -135,7 +125,31 @@ For these expressions, the values specified should be `c1`, `c2`, etc. So for ex
 
     O- + O2 + M -> O3- + M,c1*exp(-(Td/c2)**2),1.1e-42 65.0
 
-means that the reaction rate is given by `1.1e-42 * exp(-(Td/65.0)**2)`.
+means that the reaction rate is given by `1.1e-42 * exp(-(Td/65.0)**2)`. The above symbols have the following meanings:
+
+symbol | meaning | unit
+---|---|---
+Td | The reduced electric field E/N | Townsend
+Te | Electron 'temperature' (given by 2*energy/(3*kB))| K
+Ti | Ion temperature | K
+Tg | Gas temperature | K
+kB | Boltzmann constant | J/K
+kB_eV | Boltzmann constant | eV/K
+
+# Ignoring the production of certain species {#chem-ignored}
+
+To simplify a reaction set, it is possible to ignore the production of certain species. This can be done by adding a table of the following form:
+
+    ignored_species
+    -----------------------
+    NO2
+    NO
+    O
+    N
+    -----------------------
+
+When ignored species occur on the left-hand side of a reaction, and if they do not correspond to the background gas that is initially present, the reaction will be ignored.
+When ignored species occur on the right-hand side of a reaction, their production will be ignored, but the reaction will still be included.
 
 # Adding new types of reactions {#chem-new-reactions}
 
@@ -157,11 +171,11 @@ follows:
 # Visualization {#chem-vis}
 
 Each simulation produces the following files:
-1. `<base_name>\_rates.txt`: Contains volume and time-integrated reaction rates, for each timestep.
-2. `<base_name>\_amounts.txt`: Contains the amount of each species (volume-integrated densities), for each timestep.
-3. `<base_name>\_reactions.txt`: Contains the list of all the reactions used in the simulation
-4. `<base_name>\_species.txt`: Contains the list of all the species used in the simulation
-4. `<base_name>\_stoich\_matrix.txt`: This file contains the [stoichiometric matrix](https://en.wikipedia.org/wiki/Stoichiometry#Stoichiometry_matrix) of the reaction set used in the simulation.
+1. `<base_name>/_rates.txt`: Contains volume and time-integrated reaction rates, for each timestep.
+2. `<base_name>/_amounts.txt`: Contains the amount of each species (volume-integrated densities), for each timestep.
+3. `<base_name>/_reactions.txt`: Contains the list of all the reactions used in the simulation
+4. `<base_name>/_species.txt`: Contains the list of all the species used in the simulation
+4. `<base_name>/_stoich_matrix.txt`: This file contains the [stoichiometric matrix](https://en.wikipedia.org/wiki/Stoichiometry#Stoichiometry_matrix) of the reaction set used in the simulation.
 
 The data in the above files can be visualized using the `chemistry_visualize_rates.py` script in the `/tools` directory. The documentation for each of the arguments can be found by typing `python chemistry_visualize_rates.py -h`.
 
