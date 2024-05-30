@@ -66,4 +66,9 @@ transport_data | Input data files for simulations
 * **Research type code**: which means there is not much documentation, no extensive test suite, there are experimental features, etc.
 * **Complex geometries**: although curved electrodes can be included, curved dielectrics and complex geometries are generally not supported
 
-# Related software
+# Links and related software
+
+* [Lxcat website](https://lxcat.net), where input data can be obtained
+* [Bolsig+](http://www.bolsig.laplace.univ-tlse.fr/), which can be used to compute transport data from electron-neutral cross sections
+* [Particle_swarm](https://github.com/MD-CWI/particle_swarm), which can also be used to compute transport data using a Monte Carlo approach
+* [Chombo discharge](https://github.com/chombo-discharge/chombo-discharge), “A multiphysics code which uses Chombo for discharge simulations with adaptive mesh refinement (AMR) on embedded boundary grids”, developed by Robert Marskar
