@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module to compute electric fields
 module m_field
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
   use m_types
   use m_streamer

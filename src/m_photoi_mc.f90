@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module that provides routines for Monte Carlo photoionization
 module m_photoi_mc
+#include "../afivo/src/cpp_macros.h"
   use m_streamer
   use m_lookup_table
   use m_af_all

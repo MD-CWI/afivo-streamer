@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Top-module for photoionization, which can make use of different methods
 module m_photoi
+#include "../afivo/src/cpp_macros.h"
   use m_photoi_mc
   use m_photoi_helmh
   use m_af_all

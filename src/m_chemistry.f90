@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module for handling chemical reactions
 module m_chemistry
+#include "../afivo/src/cpp_macros.h"
   use m_types
   use m_af_all
   use m_lookup_table

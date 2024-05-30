@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Fluid model module
-module m_fluid_lfa
+module m_fluid
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
   use m_streamer
   use m_model
@@ -715,4 +715,4 @@ contains
          JdotE * UC_elec_charge
   end subroutine sum_global_JdotE
 
-end module m_fluid_lfa
+end module m_fluid

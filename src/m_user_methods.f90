@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> This module contains all the methods that users can customize
 module m_user_methods
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
   use m_types
 

@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module that stores parameters related to the gas
 module m_gas
+#include "../afivo/src/cpp_macros.h"
   use m_types
   use m_af_types
   use m_units_constants

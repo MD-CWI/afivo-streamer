@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module with routines to help analyze simulations
 module m_analysis
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
   use m_types
 

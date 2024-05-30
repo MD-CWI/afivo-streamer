@@ -1,4 +1,3 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module for photoionization with the Helmholtz approximation
 !>
 !> The equations solved are nabla^2 phi_i - lambda_i^2 * phi_i = f, where f is
@@ -11,6 +10,7 @@
 !>
 !> TODO: look up values for the case N=3
 module m_photoi_helmh
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
   use m_streamer
 

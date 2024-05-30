@@ -1,10 +1,10 @@
-#include "../afivo/src/cpp_macros.h"
 !> This module contains several pre-defined variables like:
 !! * Indices of cell-centered variables
 !! * Names of the cell-centered variables
 !! * Indices of face-centered variables
 !! * Indices of transport data
 module m_streamer
+#include "../afivo/src/cpp_macros.h"
   use m_types
   use m_af_all
   use m_random

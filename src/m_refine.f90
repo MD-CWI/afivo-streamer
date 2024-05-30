@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module with grid refinement settings and routines
 module m_refine
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
 
   implicit none

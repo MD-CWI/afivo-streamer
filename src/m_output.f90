@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module with methods and parameters related to writing output
 module m_output
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
   use m_types
   use m_streamer

@@ -1,9 +1,9 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module with settings and routines to handle dielectrics
 !>
 !> @todo Make sure species densities are initially zero inside the dielectric
 !> @todo Use special prolongation for multigrid when there are surface charges
 module m_dielectric
+#include "../afivo/src/cpp_macros.h"
   use m_af_all
   use m_streamer
   use m_types

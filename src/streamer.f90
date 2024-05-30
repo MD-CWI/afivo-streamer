@@ -1,7 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Program to perform streamer simulations with AMR
 program streamer
-
+#include "../afivo/src/cpp_macros.h"
   use m_config
   use m_af_all
   use m_streamer
@@ -12,7 +11,7 @@ program streamer
   use m_chemistry
   use m_gas
   use m_coupling
-  use m_fluid_lfa
+  use m_fluid
   use m_dt
   use m_types
   use m_user_methods

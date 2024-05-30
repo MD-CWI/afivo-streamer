@@ -1,6 +1,6 @@
-#include "../afivo/src/cpp_macros.h"
 !> Module for the coupling between the gas dynamics and the fluid model
 module m_coupling
+#include "../afivo/src/cpp_macros.h"
   use m_types
   use m_af_all
   use m_units_constants
