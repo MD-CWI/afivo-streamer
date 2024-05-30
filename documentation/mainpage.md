@@ -9,7 +9,7 @@ adaptive mesh refinement and parallelization.
 
 * [git repository](https://github.com/MD-CWI/afivo-streamer)
 * [Installation instructions](documentation/installation.md)
-* [Contents of the documentation](@ref doc-contents)
+* [Examples](documentation/examples.md)
 * [Recent changes](https://github.com/MD-CWI/afivo-streamer/activity)
 
 ## Opiniated comparison against typical alternatives (advantages and disadvantages)

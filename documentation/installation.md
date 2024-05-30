@@ -1,26 +1,37 @@
 # Installation
 
-# Requirements
+[TOC]
 
-* A UNIX-like operating system such as GNU/Linux
-* A recent Fortran compiler such as `gfortran 11`, which supports Fortran 2008
-* A recent C compiler such as gcc to compile the [Silo](https://wci.llnl.gov/simulation/computer-codes/silo) library
+# Requirements {#requirements}
+
+* A UNIX-like operating system such as GNU/Linux, or alternative the Windows subsystem for linux (see @ref wsl-installation)
+* A recent Fortran compiler such as `gfortran`, which supports Fortran 2008
+* A recent C compiler such as `gcc` to compile the included libraries
 * `git` to download and update the source code
+* `python3` with `numpy`, `pandas` and `matplotlib` for some of the included tools
 
-# Installation
+# Obtaining the source code {#obtaining-src}
 
 Run the following command in a folder to clone the repository:
 
     git clone https://github.com/MD-CWI/afivo-streamer.git
 
-Then you can go into the folder and compile the code:
+The code can also be downloaded as a [zip file](https://github.com/MD-CWI/afivo-streamer/archive/refs/heads/master.zip).
+
+# Compiling the source code {#compiling}
+
+Go into the afivo-streamer folder and compile the code:
 
     cd afivo-streamer
     make
 
-Afterwards, you can run some of the example, see @ref md_documentation_examples.
+This will first compile the `afivo` library and its dependencies, and afterwards compile most of the programs included with `afivo-streamer`. To test whether the code is working as expected, you can run several tests using
 
-# Updating to the latest version
+    bash run_tests.sh
+
+To run some of the examples, see @ref md_documentation_examples.
+
+# Updating to the latest version {#updating}
 
 If you want to update your previously downloaded code, go into your afivo-streamer folder and pull the new version:
 
@@ -32,7 +43,7 @@ Afterwards, you can recompile the code by typing
 
 either in the `afivo-streamer` folder, or in a specific program folder with a `Makefile`.
 
-# Compilation flags and recompilation
+# Compilation flags and recompilation {#compilation-flags}
 
 A number of flags can be set to help with debugging or performance testing. To apply these, first remove all previously compiled files:
 
@@ -47,25 +58,29 @@ This is also useful when upgrading e.g. the compiler on your system. Afterwards,
 
 Afterwards, perform `make allclean` again to revert to the standard compilation settings.
 
-# List of issues and solutions
+# Windows subsystem for linux {#wsl-installation}
 
-## Installation 'Error 2':
-* Simply typing `make` to compile the code in Fedora systems (30 and above) gives an error. A closer inspection indicates that the `g77` compiler is missing. This is because the makefile is unable to find the `gcc`, `gfortran` and `g++` compilers. This can be overcome by typing the following in the terminal:
+Follow the instructions on https://learn.microsoft.com/en-us/windows/wsl/install to install `wsl` (windows subsystem for linux). After installation, launch `wsl`. For Ubuntu/Debian (Ubuntu is the default), the required compilers and python tools can be installed with:
+
+    sudo apt update
+    sudo apt install gfortran gcc g++ make git python3 python3-numpy python3-pandas python3-matplotlib
+
+Afterwards, the regular installation instructions can be followed. The Linux files are also accessible from Windows, so simulation output can be visualized from the Windows environment.
+
+# List of issues and solutions {#issues-solutions}
+
+## Compilation errors after pulling a new version
+
+1. Remove the old compiles with `make allclean`
+2. Rarely, the Silo or Hypre libraries have to be recompiled. To do this, go to `afivo/external_libraries`, remove  and execute the `build_...` scripts.
+
+## Specifying the compilers to use
+
+Sometimes, no suitable compilers are found (or used). This can be overcome by manually specifying which compilers to use. If `gcc`, `g++` and `gfortran` can be found in `/usr/bin/`, then this can  for example be done with:
     * `export CC=/usr/bin/gcc`
     * `export CXX=/usr/bin/g++`
     * `export FORT=/usr/bin/gfortran`
-* *Attention*: The above locations `/usr/bin` is the default installation location for the GNU compilers. If you have them installed in a different directory (in case you have multiple versions of compilers), then make sure you use that particular location (instead of `/usr/bin`).
 
-## Problems compiling Silo
+## Missing libraries
 
-* The script `build_silo.sh` can be executed manually from the `afivo/external_libraries' folder for easier debugging. 
-* Make sure the default C, C++ and Fortran compiler are configured correctly. For example, use `export FC=/usr/bin/gfortran' in your shell to specify the Fortran compiler.
 * `/usr/bin/ld: cannot find -lsz`. **Solution** (on Fedora) `sudo dnf install libaec-devel`
-
-### The above solution gives a new error (encountered by some users using Fedora 30)
-
-* Add the following lines to `build_silo.sh` just before the `#Configure` comment:
-    `export CC=/usr/bin/gcc`
-    `export CXX=/usr/bin/g++`
-    `export FC=/usr/bin/gfortran`
-    

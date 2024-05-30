@@ -4,7 +4,7 @@
 
 # Overview of included tools {#tools-overview}
 
-The tools described below can be found in the `tools` folder. For all the Python-based tools, executate them with a `-h` argument to see how they can be used.
+The tools described below can be found in the `tools` folder. For all the Python-based tools, execute them with a `-h` argument to see how they can be used.
 
 ## plot_log_file.py
 
