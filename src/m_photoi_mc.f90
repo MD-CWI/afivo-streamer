@@ -53,7 +53,7 @@ contains
     use m_streamer
     use m_gas
     type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
-    logical, intent(in)        :: is_used
+    logical, intent(in)        :: is_used !< Whether Monte Carlo photoionization is used
     integer                    :: ix
 
     call CFG_add_get(cfg, "photoi_mc%physical_photons", &

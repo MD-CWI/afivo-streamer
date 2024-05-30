@@ -34,10 +34,10 @@ module m_init_cond
 
 contains
 
-  ! Set the initial conditions from the configuration
+  !> Set the initial conditions from the configuration
   subroutine init_cond_initialize(tree, cfg)
     use m_config
-    type(af_t), intent(in)     :: tree
+    type(af_t), intent(in)     :: tree !< Tree
     type(CFG_t), intent(inout) :: cfg !< Settings
 
     integer                    :: n, n_cond, varsize, empty_int(0)
