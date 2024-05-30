@@ -1,4 +1,4 @@
-# Tools {#tools}
+# Python tools for input, output and analysis {#tools}
 
 [TOC]
 

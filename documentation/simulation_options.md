@@ -1,4 +1,26 @@
-# Simulation options
+# Config files and command-line arguments
+
+[TOC]
+
+# Passing configuration files via the command line
+
+One or more configuration files can be specified when running a simulation:
+
+    ./streamer file_1.cfg file_2.cfg ...
+
+Options from later files will override those from earlier files.
+
+# Setting variables from the command line
+
+Individual options can be specified via the command line:
+
+    ./streamer file_1.cfg -var=value
+
+If necessary, you can use quotes to specify for example an array:
+
+    ./streamer file_1.cfg -var="a b c"
+
+# The config-fortran module
 
 Afivo-streamer uses the
 [config_fortran](https://github.com/jannisteunissen/config_fortran) module to
@@ -30,24 +52,6 @@ name | example | meaning
 `gas%%fractions` | 0.8 0.2 | gas fractions
 `gas%%pressure` | 1.0 | pressure (bar)
 `field_amplitude` | 2e6 | amplitude of the background field (V/m)
-
-# Passing configuration files via the command line
-
-One or more configuration files can be specified when running a simulation:
-
-    ./streamer file_1.cfg file_2.cfg ...
-
-Options from later files will override those from earlier files.
-
-# Setting variables from the command line
-
-Individual options can be specified via the command line:
-
-    ./streamer file_1.cfg -var=value
-
-If necessary, you can use quotes to specify for example an array:
-
-    ./streamer file_1.cfg -var="a b c"
 
 # A list of all options
 
