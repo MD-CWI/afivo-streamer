@@ -19,7 +19,7 @@ run_test() {
     (cd "$dir" && ../streamer "$cfg" > run.log ||
              { cat run.log; return 1; })
     end=`date +%s.%N`
-    runtime_sec=$(printf "%.2f" $(echo "$end - $start" | bc -l))
+    runtime_sec=$(python -c "print('{:.2f}'.format($end - $start))")
 
     if (($? != 0)); then
         echo "FAILED $1"
@@ -32,9 +32,9 @@ run_test() {
 
     # Compare log files
     if "$2"/tools/compare_logs.py "$log_a" "$log_b"; then
-        echo "PASSED $1 (${runtime_sec})"
+        echo "PASSED $1 (${runtime_sec} s)"
     else
-        echo "FAILED $1 (${runtime_sec})"
+        echo "FAILED $1 (${runtime_sec} s)"
     fi
 }
 
