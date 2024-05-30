@@ -99,8 +99,10 @@ contains
        call check_coarse_representation_lsf(tree, mg)
     end if
 
-    ! Set the proper methods for the phi variable
-    call af_set_cc_methods(tree, mg%i_phi, mg%sides_bc, mg%sides_rb)
+    if (.not. tree%has_cc_method(mg%i_phi)) then
+       ! Set the proper methods for the phi variable
+       call af_set_cc_methods(tree, mg%i_phi, mg%sides_bc, mg%sides_rb)
+    end if
 
     mg%initialized = .true.
 
