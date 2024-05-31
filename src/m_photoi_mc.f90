@@ -18,7 +18,7 @@ module m_photoi_mc
   !> Whether physical photons are used
   logical, public, protected :: phmc_physical_photons = .true.
 
-  !> Whether a constant or adaptive grid spacing is usedn
+  !> Whether a constant or adaptive grid spacing is used
   logical, protected :: phmc_const_dx = .true.
 
   !> Minimum grid spacing for photoionization
@@ -56,22 +56,22 @@ contains
     logical, intent(in)        :: is_used !< Whether Monte Carlo photoionization is used
     integer                    :: ix
 
-    call CFG_add_get(cfg, "photoi_mc%physical_photons", &
-         phmc_physical_photons, &
+    !< [photoi_mc_parameters]
+    call CFG_add_get(cfg, "photoi_mc%physical_photons", phmc_physical_photons, &
          "Whether physical photons are used")
     call CFG_add_get(cfg, "photoi_mc%min_weight", phmc_min_weight, &
          "Minimal photon weight (default: 1.0)")
-    call CFG_add_get(cfg, "photoi_mc%const_dx", &
-         phmc_const_dx, &
+    call CFG_add_get(cfg, "photoi_mc%const_dx", phmc_const_dx, &
          "Whether a constant grid spacing is used for photoionization")
-    call CFG_add_get(cfg, "photoi_mc%min_dx", &
-         phmc_min_dx, &
+    call CFG_add_get(cfg, "photoi_mc%min_dx", phmc_min_dx, &
          "Minimum grid spacing for photoionization")
     call CFG_add_get(cfg, "photoi_mc%absorp_fac", phmc_absorp_fac, &
          "At which grid spacing photons are absorbed compared to their mean distance")
-    if (phmc_absorp_fac <= 0.0_dp) error stop "photoi_mc%absorp_fac <= 0.0"
     call CFG_add_get(cfg, "photoi_mc%num_photons", phmc_num_photons, &
          "Maximum number of discrete photons to use")
+    !< [photoi_mc_parameters]
+
+    if (phmc_absorp_fac <= 0.0_dp) error stop "photoi_mc%absorp_fac <= 0.0"
     if (phmc_num_photons < 1) error stop "photoi_mc%num_photons < 1"
 
     if (is_used) then

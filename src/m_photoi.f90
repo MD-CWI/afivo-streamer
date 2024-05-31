@@ -17,9 +17,6 @@ module m_photoi
   !> Whether photoemission is enabled
   logical, protected, public :: photoe_enabled = .false.
 
-  !> Whether photoionization is enabled in gas
-  logical, protected, public :: photoi_enabled_ingas = .true.
-
   !> Which photoionization method to use (helmholtz, montecarlo)
   character(len=20) :: photoi_method = 'helmholtz'
 
@@ -69,12 +66,11 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
 
+    !< [photoi_general_parameters]
     call CFG_add_get(cfg, "photoi%enabled", photoi_enabled, &
          "Whether photoionization is enabled")
-    call CFG_add_get(cfg, "photoi%enabled_ingas", photoi_enabled_ingas, &
-         "Whether photoionization is enabled in gas")
     call CFG_add_get(cfg, "photoi%per_steps", photoi_per_steps, &
-         "Update photoionization every N time step")
+         "Update photoionization every N time steps")
     call CFG_add_get(cfg, "photoi%method", photoi_method, &
          "Which photoionization method to use (helmholtz, montecarlo)")
     call CFG_add_get(cfg, "photoi%eta", photoi_eta, &
@@ -85,11 +81,12 @@ contains
          "How to compute the photoi. source (Zheleznyak, from_species)")
     call CFG_add_get(cfg, "photoi%excited_species", photoi_excited_species, &
          "Which excited species to use when photoi%source_type = from_species")
-    call CFG_add_get(cfg, "photoi%photoemission_time", photoi_photoemission_time, &
-         "Photoemission time delay in case photoi_source_type is 'from_species'")
     call CFG_add_get(cfg, "photoi%species", photoi_species, &
          "Which species is ionized by photoionization")
+    !< [photoi_general_parameters]
 
+    call CFG_add_get(cfg, "photoi%photoemission_time", photoi_photoemission_time, &
+         "Photoemission time delay in case photoi_source_type is 'from_species'")
     call CFG_add_get(cfg, "photoe%enabled", photoe_enabled, &
          "Whether photoemission is enabled")
     call CFG_add_get(cfg, "photoe%per_steps", photoe_per_steps, &

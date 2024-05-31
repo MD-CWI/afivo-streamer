@@ -63,7 +63,7 @@ transport_data | Input data files for simulations
 ## Weak points
 
 * **Complexity**: it can be rather difficult to change the code or to add new physics, in particular due to the use of adaptive mesh refinement and parallelization
-* **Research type code**: which means there is not much documentation and there is no graphical user interface
+* **Research type code**: which means there is not that much documentation and there is no graphical user interface
 * **Complex geometries**: although curved electrodes can be included, curved dielectrics and complex geometries are generally not supported
 
 # Links and related software

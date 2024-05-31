@@ -35,7 +35,7 @@ module m_user_methods
   !> To add entries to the log file
   procedure(log_vars), pointer :: user_log_variables => null()
 
-  !> Custom level-set function
+  !> Custom level-set function to define an electrode
   procedure(mg_func_lsf), pointer :: user_lsf => null()
 
   !> Function to get boundary value for level set function

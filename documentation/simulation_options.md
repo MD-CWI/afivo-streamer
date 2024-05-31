@@ -1,24 +1,6 @@
-# Config files and command-line arguments
+# Config files and command-line arguments {#config-parameters}
 
 [TOC]
-
-# Passing configuration files via the command line
-
-One or more configuration files can be specified when running a simulation:
-
-    ./streamer file_1.cfg file_2.cfg ...
-
-Options from later files will override those from earlier files.
-
-# Setting variables from the command line
-
-Individual options can be specified via the command line:
-
-    ./streamer file_1.cfg -var=value
-
-If necessary, you can use quotes to specify for example an array:
-
-    ./streamer file_1.cfg -var="a b c"
 
 # The config-fortran module
 
@@ -38,6 +20,36 @@ Multiple settings from the same group can be given like this:
 
 Options can be of type integer, real, logical or string. Some options are arrays,
 and they can also have a variable length.
+
+In the source code, parameters are usually added with the `CFG_add_get` method, with the following syntax:
+
+    call CFG_add_get(cfg, name, variable, description)
+
+For example, for the `end_time` variable, which is internally stored as `ST_end_time`:
+
+    real(dp) :: ST_end_time = 10e-9_dp
+    ...
+    call CFG_add_get(cfg, "end_time", ST_end_time, "The desired endtime (s) of the simulation")
+
+If the user does not set `end_time`, then it will retain its default value.
+
+# Passing configuration files via the command line
+
+One or more configuration files can be specified when running a simulation:
+
+    ./streamer file_1.cfg file_2.cfg ...
+
+Options from later files will override those from earlier files.
+
+# Setting variables from the command line
+
+Individual options can be specified via the command line:
+
+    ./streamer file_1.cfg -var=value
+
+If necessary, you can use quotes to specify for example an array:
+
+    ./streamer file_1.cfg -var="a b c"
 
 # Examples of a few important options
 

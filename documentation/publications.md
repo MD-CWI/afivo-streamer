@@ -1,20 +1,57 @@
 # Papers about or using afivo-streamer
 
-## Papers that describe the code or new functionality
+## Papers that describe or test the code
 
-* Paper about Afivo-streamer: [Simulating streamer discharges in 3D with the parallel adaptive Afivo framework](https://doi.org/10.1088/1361-6463/aa8faf)
-* Paper about Afivo: [Afivo: a framework for quadtree/octree AMR with shared-memory parallelization and geometric multigrid methods](https://doi.org/10.1016/j.cpc.2018.06.018)
-  [arXiv](https://arxiv.org/abs/1701.04329)
-* First paper using Afivo-streamer: [The role of free electrons in the guiding of positive streamers](http://dx.doi.org/10.1088/0963-0252/25/4/044001)
-* More information about the photoionization method can be found in chapter 11
-  of: [3D Simulations and Analysis of Pulsed Discharges](https://research.tue.nl/en/publications/3d-simulations-and-analysis-of-pulsed-discharges),
-  J. Teunissen, PhD Thesis, Eindhoven University of Technology, 2015.
+The main code and field solver are described in:
+
+* [Simulating streamer discharges in 3D with the parallel adaptive Afivo framework](https://doi.org/10.1088/1361-6463/aa8faf)
+  J. Teunissen, U. Ebert, J. Phys. D: Appl. Phys. (2017),
+* [Afivo: a simulation framework with multigrid routines for quadtree and octree grids](https://doi.org/10.1016/j.cpc.2018.06.018)
+  J. Teunissen, U. Ebert, Computer Physics Communications (2018)
+* [Geometric multigrid method for solving Poisson's equation on octree grids with irregular boundaries](https://doi.org/10.1016/j.cpc.2023.108665)
+  J. Teunissen and F. Schiavello, Computer Physics Communications (2023)
+
+More information about the photoionization methods can be found in:
+* Chapter 11 of: [3D Simulations and Analysis of Pulsed Discharges](https://research.tue.nl/en/publications/3d-simulations-and-analysis-of-pulsed-discharges)
+* [The effect of the stochasticity of photoionization on 3D streamer simulations](https://doi.org/10.1088/1361-6595/ab1331)
+  B. Bagheri and J. Teunissen, Plasma Sources Sci. Technol. (2019)
+* [3D PIC-MCC simulations of discharge inception around a sharp anode in nitrogen/oxygen mixtures](https://dx.doi.org/10.1088/0963-0252/25/4/044005)
+  J. Teunissen, U. Ebert, Plasma Sources Sci. Technol. (2016)
+
+Code testing, benchmarking and validation efforts:
+
+* [Comparison of six simulation codes for positive streamers in air](https://doi.org/10.1088/1361-6595/aad768)
+  B. Bagheri, J. Teunissen, U. Ebert, M.M. Becker, S. Chen, O. Ducasse, O. Eichwald, D. Loffhagen, A. Luque, D. Mihailova, J.M. Plewa, J. van Dijk, M. Yousfi Plasma Sources Sci. Technol. (2018)
+* [Comparing simulations and experiments of positive streamers in air: steps toward model validation](https://doi.org/10.1088/1361-6595/ac1b36)
+  X. Li, S. Dijcks, S. Nijdam, A. Sun, U. Ebert, J. Teunissen, Plasma Sources Sci. Technol. (2021)
+* [A comparison of particle and fluid models for positive streamer discharges in air](https://doi.org/10.1088/1361-6595/ac417b)
+  Z. Wang, A. Sun, J. Teunissen, Plasma Sources Sci. Technol. (2021)
+* [Quantitative modeling of streamer discharge branching in air](https://doi.org/10.1088/1361-6595/ace9fa)
+  Z. Wang, S. Dijcks, Y. Guo, M. van der Leegte, A. Sun, U. Ebert, S. Nijdam, J. Teunissen
+Plasma Sources Sci. Technol. (2023)
 
 ## Papers using afivo-streamer
 
-* Xiaoran Li, Anbang Sun, and Jannis Teunissen. A computational study of negative surface discharges: Characteristics of surface streamers and surface charges. IEEE Transactions on Dielectrics and Electrical Insulation, 27(4):1178–1186, Aug 2020.
-* Xiaoran Li, Anbang Sun, Guanjun Zhang, and Jannis Teunissen. A computational study of positive streamers interacting with dielectrics. Plasma Sources Science and Technology, 29(6):065004, Jun 2020.
-* A. Malagón‐Romero, J. Teunissen, H. C. Stenbaek‐Nielsen, M. G. McHarg, U. Ebert, and A. Luque. On the emergence mechanism of carrot sprites. Geophysical Research Letters, 47(1), Jan 2020.
-* B Bagheri and J Teunissen. The effect of the stochasticity of photoionization on 3d streamer simulations. Plasma Sources Science and Technology, 28(4):045013, Apr 2019.
-* B Bagheri, J Teunissen, U Ebert, M M Becker, S Chen, O Ducasse, O Eichwald, D Loffhagen, A Luque, D Mihailova, and et al. Comparison of six simulation codes for positive streamers in air. Plasma Sources Science and Technology, 27(9):095002, Sep 2018.
-* S Nijdam, J Teunissen, E Takahashi, and U Ebert. The role of free electrons in the guiding of positive streamers. Plasma Sources Science and Technology, 25(4):044001, May 2016.
+This list is not complete, any additions are welcome:
+
+* [Temporal evolution and mechanism of secondary streamers in N2/O2 mixtures at atmospheric pressure under DC voltage](https://doi.org/10.1088/1361-6463/ad15be) (2024)
+* [Associative electron detachment in sprites](10.22541/essoar.170534137.75776904/v1) (2024)
+* [Repetitively pulsed streamer discharge with laser-induced surface trapped electron desorption to exploit residual charges in situ](https://doi.org/10.1088/1361-6595/acf87d) (2024)
+* [3D modeling of positive streamers in air with inhomogeneous density](https://doi.org/10.1088/1361-6595/acf87d) (2023)
+* [Streamer dynamics and periodical discharge regime transitions under repetitive nanosecond pulses with airflow](https://doi.org/10.1088/1361-6595/acacc5) (2023)
+* [Estimating the properties of single positive air streamers from measurable parameters](https://doi.org/10.1088/1361-6595/ace792) (2023)
+* [Double-pulse streamer simulations for varying interpulse times in air](https://doi.org/10.1088/1361-6595/acf60e) (2023)
+* [Evolutions of streamer dynamics and discharge instabilities under repetitive pulses in humid air](https://doi.org/10.1088/1361-6595/ad0d08) (2023)
+* [A computational study on the energy efficiency of species production by pulsed streamer discharges in air](https://doi.org/10.1088/1361-6595/acb462) (2023)
+* [A computational study of accelerating, steady and fading negative streamers in ambient air](https://doi.org/10.1088/1361-6595/ac8e2e) (2022)
+* [A computational study of steady and stagnating positive streamers in N2-O2 mixtures](https://doi.org/10.1088/1361-6595/ac7747) (2022)
+* [Streamer propagation in humid air](https://doi.org/10.1088/1361-6595/ac969f) (2022)
+* [Simulations of positive streamers in air in different electric fields: steady motion of solitary streamer heads and the stability field](https://doi.org/10.1088/1361-6595/ac2f76) (2021)
+* [Electrically isolated propagating streamer heads formed by strong electron attachment](https://dx.doi.org/10.1088/1361-6595/abdaa3) (2021)
+* [Transport behaviour of residual charges in repetitively pulsed streamer evolution in gas gap and along solid surface](https://doi.org/10.1049/icp.2022.0013) (2021)
+* [Simulation of positive streamers in CO2 and in air: the role of photoionization or other electron sources](https://dx.doi.org/10.1088/1361-6595/abc93e) (2020)
+* [A computational study of negative surface discharges: Characteristics of surface streamers and surface charges](https://doi.org/10.1109/TDEI.2020.008880) (2020)
+* [A computational study of positive streamers interacting with dielectrics](https://doi.org/10.1088/1361-6595/ab8f75) (2020)
+* [On the emergence mechanism of carrot sprites](https://doi.org/10.1029/2019GL085776) (2019)
+* [The role of free electrons in the guiding of positive streamers](https://dx.doi.org/10.1088/0963-0252/25/4/044001) (2016)
+

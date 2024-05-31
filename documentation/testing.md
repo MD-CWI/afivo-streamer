@@ -36,6 +36,6 @@ You should now be able to run the test, for example like this:
 
 Optionally, add the `tests/` directory to the variable `test_dirs` in `run_test.sh` if it is not yet present. The test will then run automatically, so make sure it doesn't take too long.
 
-# Test configuration
+# Automatic tests
 
-The test configuration can be found in the file `.gitlab-ci.yml`.
+After code changes, the tests automatically run on Github, as specified in the file `.github/workflows/github_run_tests.yml`.

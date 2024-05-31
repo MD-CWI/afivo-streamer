@@ -54,16 +54,16 @@ contains
     character(len=12)          :: author = "Bourdon-3"
     real(dp)                   :: frac_O2, dummy(0)
 
+    !< [helmholtz_parameters]
     call CFG_add_get(cfg, "photoi_helmh%author", author, &
          "Can be Bourdon-3 (default), Bourdon-2, Luque or custom")
     call CFG_add(cfg, "photoi_helmh%lambdas", dummy, &
-         "Lambdas to use in Helmholtz eq; unit 1/(m bar)", &
-         .true.)
+         "Lambdas to use in Helmholtz eq; unit 1/(m bar)", .true.)
     call CFG_add(cfg, "photoi_helmh%coeffs", dummy, &
-         "Weights corresponding to the lambdas; unit 1/(m bar)^2", &
-         .true.)
+         "Weights corresponding to the lambdas; unit 1/(m bar)^2", .true.)
     call CFG_add_get(cfg, "photoi_helmh%max_rel_residual", max_rel_residual, &
-         "Maximum residual relative to max(|rhs|)")
+         "Maximum residual for Helmholtz solver, relative to max(|rhs|)")
+    !< [helmholtz_parameters]
 
     ! Exit here if the module is not used
     if (.not. is_used) return

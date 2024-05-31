@@ -6,6 +6,10 @@
 
 The tools described below can be found in the `tools` folder. For all the Python-based tools, execute them with a `-h` argument to see how they can be used.
 
+## afivo/tools/plot_raw_data.py
+
+This script can be used to visualize and convert Silo files from Python, see @ref documentation/output_and_visualization.md
+
 ## bolsig_convert.py
 
 This script can be used to convert the output from [Bolsig+](https://us.lxcat.net/solvers/BolsigPlus/) to a format that `afivo-streamer` can work with. The script also works with output generated from [lxcat](https://lxcat.net).

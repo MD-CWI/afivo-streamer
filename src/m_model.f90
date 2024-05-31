@@ -29,9 +29,9 @@ contains
     type(CFG_t), intent(inout) :: cfg
     character(len=name_len)    :: model_name
 
+    !< [model_types]
     model_name = "lfa"
-    call CFG_add_get(cfg, "model%type", model_name, &
-         "Which type of model is used")
+    call CFG_add_get(cfg, "model%type", model_name, "Type of model to use")
 
     select case (model_name)
        case ("lfa")
@@ -42,6 +42,7 @@ contains
     case default
        error stop "Unknown model (choices: lfa, ee53)"
     end select
+    !< [model_types]
 
   end subroutine model_initialize
 

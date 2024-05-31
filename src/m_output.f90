@@ -134,55 +134,33 @@ contains
     character(len=string_len)  :: td_file
     real(dp), allocatable      :: x_data(:), y_data(:)
 
+    !< [main_output_settings]
     call CFG_add_get(cfg, "output%name", output_name, &
          "Name for the output files (e.g. output/my_sim)")
-
-    call check_path_writable(output_name)
-
-    call CFG_add_get(cfg, "output%status_delay", output_status_delay, &
-         "Print status every this many seconds")
-
-    call CFG_add_get(cfg, "output%dt_factor_pulse_off", &
-         output_dt_factor_pulse_off, &
-         "To reduce output when the voltage is off")
-
-    call CFG_add_get(cfg, "output%max_lvl", output_max_lvl, &
-         "Maximum refinement level for output")
-
-    call CFG_add(cfg, "output%only", empty_names, &
-         "If defined, only output these variables", .true.)
-    call CFG_get_size(cfg, "output%only", n)
-    allocate(output_only(n))
-    call CFG_get(cfg, "output%only", output_only)
-
-    if (size(output_only) > 0) then
-       tree%cc_write_output(:) = .false.
-       do n = 1, size(output_only)
-          i = af_find_cc_variable(tree, trim(output_only(n)))
-          tree%cc_write_output(i) = .true.
-       end do
-    end if
-
     call CFG_add_get(cfg, "output%dt", output_dt, &
          "The timestep for writing output (s)")
-    call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
-         "Write to a log file for regression testing")
-    call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
-         "Electron density threshold for detecting plasma regions &
-         &(1/m3, will be scaled by gas density)")
-
     call CFG_add_get(cfg, "silo_write", silo_write, &
          "Write silo output")
     call CFG_add_get(cfg, "silo%per_outputs", silo_per_outputs, &
          "Write silo output files every N outputs")
-
     call CFG_add_get(cfg, "datfile%write", datfile_write, &
          "Write binary output files (to resume later)")
     call CFG_add_get(cfg, "datfile%per_outputs", datfile_per_outputs, &
          "Write binary output files every N outputs")
+    call CFG_add_get(cfg, "output%electron_energy", output_electron_energy, &
+         "Show the electron energy in eV from the local field approximation")
+    call CFG_add_get(cfg, "output%conductivity", output_conductivity, &
+         "Output the conductivity of the plasma")
+    !< [main_output_settings]
 
+    call check_path_writable(output_name)
+
+    call CFG_add_get(cfg, "output%electron_current", output_electron_current, &
+         "Output the electron conduction current (can also be computed in &
+         &Visit as -gradient(phi) * sigma)")
     call CFG_add_get(cfg, "lineout%write", lineout_write, &
          "Write output along a line")
+
     if (lineout_write) then
        call CFG_add(cfg, "lineout%varname", ["e"], &
             "Names of variable to write in lineout", dynamic_size=.true.)
@@ -202,6 +180,33 @@ contains
             "Relative position of line minimum coordinate")
        call CFG_add_get(cfg, "lineout%rmax", lineout_rmax(1:NDIM), &
             "Relative position of line maximum coordinate")
+    end if
+
+    call CFG_add_get(cfg, "output%status_delay", output_status_delay, &
+         "Print status every this many seconds")
+    call CFG_add_get(cfg, "output%max_lvl", output_max_lvl, &
+         "Maximum refinement level for output, to reduce file size")
+    call CFG_add_get(cfg, "output%dt_factor_pulse_off", &
+         output_dt_factor_pulse_off, &
+         "Reduce output frequency with this factor when the voltage is off")
+    call CFG_add_get(cfg, "output%regression_test", output_regression_test, &
+         "Write to a log file for regression testing")
+    call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
+         "Electron density threshold for detecting plasma regions &
+         &(1/m3, will be scaled by gas density)")
+    call CFG_add(cfg, "output%only", empty_names, &
+         "If defined, only output these variables", .true.)
+
+    call CFG_get_size(cfg, "output%only", n)
+    allocate(output_only(n))
+    call CFG_get(cfg, "output%only", output_only)
+
+    if (size(output_only) > 0) then
+       tree%cc_write_output(:) = .false.
+       do n = 1, size(output_only)
+          i = af_find_cc_variable(tree, trim(output_only(n)))
+          tree%cc_write_output(i) = .true.
+       end do
     end if
 
     call CFG_add_get(cfg, "cross%write", cross_write, &
@@ -242,14 +247,6 @@ contains
          "Threshold value (V/m) for electric field maxima")
     call CFG_add_get(cfg, "field_maxima%distance", field_maxima_distance, &
          "Minimal distance (m) between electric field maxima")
-
-    call CFG_add_get(cfg, "output%electron_energy", output_electron_energy, &
-         "Show the electron energy in eV from the local field approximation")
-    call CFG_add_get(cfg, "output%conductivity", output_conductivity, &
-         "Output the conductivity of the plasma")
-    call CFG_add_get(cfg, "output%electron_current", output_electron_current, &
-         "Output the electron conduction current (can also be computed in &
-         &Visit as -gradient(phi) * sigma)")
 
     if (output_electron_energy) then
        n_extra_vars = n_extra_vars + 1
