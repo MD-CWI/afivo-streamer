@@ -1,4 +1,4 @@
-SRC_DIRS	:= lib_1d lib_2d lib_3d examples tests
+SRC_DIRS	:= lib_1d lib_2d lib_3d examples tests tools
 
 # Directories with altered names (useful for cleaning)
 CLEANSRC	:= $(SRC_DIRS:%=clean-%)
