@@ -1,8 +1,8 @@
-#include "cpp_macros.h"
 !> This module contains routines related to interpolation, which can interpolate
 !> 'to' the grid and 'from' the grid (useful for e.g. particle simulations). The
 !> interpolation for meshes is called prolongation, see m_aX_prolong.
 module m_af_interp
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

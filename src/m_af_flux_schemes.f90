@@ -1,7 +1,7 @@
-#include "cpp_macros.h"
 !> Module containing a couple flux schemes for solving hyperbolic problems
 !> explicitly, as well as handling diffusion explicitly.
 module m_af_flux_schemes
+#include "cpp_macros.h"
   use m_af_types
   use m_af_limiters
 

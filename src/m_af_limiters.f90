@@ -1,6 +1,6 @@
-#include "cpp_macros.h"
 !> Module containing slope limiters
 module m_af_limiters
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

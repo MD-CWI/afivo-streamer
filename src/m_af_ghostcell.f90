@@ -1,7 +1,7 @@
-#include "cpp_macros.h"
 !> This module contains routines related to the filling of ghost cells. Note that
 !> corner ghost cells are not used in Afivo.
 module m_af_ghostcell
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

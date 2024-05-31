@@ -1,8 +1,8 @@
-#include "../src/cpp_macros.h"
 !> This module contains the geometric multigrid routines that come with Afivo
 !>
 !> @todo How to use box tag with different types of operators?
 module m_af_multigrid
+#include "../src/cpp_macros.h"
   use m_af_types
   use m_af_stencil
   use m_af_ghostcell
