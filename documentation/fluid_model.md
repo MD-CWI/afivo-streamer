@@ -16,8 +16,8 @@ with the electron flux given by
 In these equations, the symbols have the following meaning:
 * \f$\mu_e\f$ is the electron mobility
 * \f$D_e\f$ the scalar electron diffusion coefficient
-* \f$S_\mathrm{chem}\f$ is a source term due to chemical reactions (including ionization and attachment), see @ref documentation/chemistry.md
-* \f$S_\mathrm{ph}\f$ is a source term due to photoionization, see @ref documentation/photoionization.md
+* \f$S_\mathrm{chem}\f$ is a source term due to chemical reactions (including ionization and attachment), see [chemistry](documentation/chemistry.md).
+* \f$S_\mathrm{ph}\f$ is a source term due to photoionization, see [photoionization](documentation/photoionization.md).
 
 With the local field approximation (LFA), electron transport coefficients are assumed to depend on the local electric field strength. In the code, so-called reduced transport coefficients are used. For example, the input data for the electron mobility is a table with rows
 

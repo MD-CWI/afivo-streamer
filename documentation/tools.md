@@ -8,7 +8,7 @@ The tools described below can be found in the `tools` folder. For all the Python
 
 ## afivo/tools/plot_raw_data.py
 
-This script can be used to visualize and convert Silo files from Python, see @ref documentation/output_and_visualization.md
+This script can be used to visualize and convert Silo files from Python, see [output and visualization](documentation/output_and_visualization.md).
 
 ## bolsig_convert.py
 

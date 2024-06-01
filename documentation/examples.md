@@ -19,7 +19,7 @@ The 2D program can also be used for axisymmetric simulations:
 
     ./streamer streamer_cyl.cfg
 
-For more information about the configuration files, see @ref md_documentation_simulation_options.
+For more information about the configuration files, see [simulation options](documentation/simulation_options.md)
 
 ## Examples in 1D and 3D
 

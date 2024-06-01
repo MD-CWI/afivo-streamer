@@ -19,7 +19,7 @@ An example of how to use these parameters in a config file is shown below:
         # Name for the output files (e.g. output/my_sim):
         name = 'output/test'
 
-For a full list of parameters that control the output, see the source code of @ref m_output::output_initialize or @ref documentation/simulation_options.md
+For a full list of parameters that control the output, see the source code of @ref m_output::output_initialize or the [options documentation](documentation/simulation_options.md).
 
 # Viewing results with Visit
 

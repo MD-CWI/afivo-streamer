@@ -11,7 +11,7 @@ There is a parameter `field_bc_type`, that can be set to:
 * 'homogeneous': Neumann zero on the sides, zero voltage at the bottom, and a fixed applied voltage on top.
 * 'neumann': Neumann zero on the sides, zero voltage at the bottom, and a Neumann boundary at the top corresponding to the applied electric field
 
-To have more flexibility, a custom routine for boundary conditions can be defined in the `m_user.f90` file, which will override the above setting, see @ref documentation/m_user.md
+To have more flexibility, a custom routine for boundary conditions can be defined in the `m_user.f90` file, which will override the above setting, see the [m_user documentation](documentation/m_user.md).
 
 ## Species boundary conditions {#bc-species}
 

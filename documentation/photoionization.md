@@ -27,7 +27,7 @@ The basic idea is to approximate the absorption function for photons with a seri
 
 For further details, see the source code of @ref m_photoi_helmh::photoi_helmh_initialize
 
-There is a tool available to generate Helmholtz coefficients for a new gas, see @ref documentation/tools.md
+There is a tool available to generate Helmholtz coefficients for a new gas, see [tools](documentation/tools.md).
 
 # Monte Carlo approach
 
