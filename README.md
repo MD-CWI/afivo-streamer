@@ -15,11 +15,6 @@ A brief summary of features:
 
 Documentation is available at http://teunissen.net/afivo_streamer
 
-## Requirements
-
-* A unix-like system (e.g., GNU/Linux)
-* Gfortran 5 or newer
-
 ## News
 
 * The Hypre library has been updated. It has to be recompiled using the `build_hypre.sh` script in the `afivo/external_libraries` folder.
