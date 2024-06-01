@@ -168,7 +168,8 @@ follows:
 1. Define a new parameter, e.g. `integer, parameter :: rate_analytic_kN = ...` in `m_chemistry`
 2. Add a new `case` statement with the new reaction format in `m_chemistry::read_reactions()`
 3. Implement the new reaction with a new case in `m_chemistry::get_rates()`
-# Visualization {#chem-vis}
+
+# Chemistry output and visualization {#chem-vis}
 
 Each simulation produces the following files:
 1. `<base_name>/_rates.txt`: Contains volume and time-integrated reaction rates, for each timestep.

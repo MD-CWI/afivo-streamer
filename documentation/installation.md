@@ -29,7 +29,7 @@ This will first compile the `afivo` library and its dependencies, and afterwards
 
     bash run_tests.sh
 
-To run some of the examples, see [examples](documentation/examples.md).
+To run some of the examples, see [tutorials](documentation/tutorials.md).
 
 # Updating to the latest version {#updating}
 

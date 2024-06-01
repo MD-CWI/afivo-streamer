@@ -21,7 +21,17 @@ An example of how to use these parameters in a config file is shown below:
 
 For a full list of parameters that control the output, see the source code of @ref m_output::output_initialize or the [options documentation](documentation/simulation_options.md).
 
-# Viewing results with Visit
+# The typical output of a simulation
+
+Simulations will typically produce at least the following output:
+
+* `<simulation_name>_<number>.silo`: Silo files that can be visualized using e.g. Visit, see @ref visualization-with-visit
+* `<simulation_name>_log.txt`: a log file, see @ref #log-files
+* `<simulation_name>_out.cfg`: includes all the parameter specified by the user, as well as the other parameters that had their default value, together with brief documentation.
+* `<simulation_name>_summary.txt`: contains a table with electron transport data. The ionization and attachment coefficients are computed based on the chemical reactions. They can differ from the coefficients given as input data if there are for example three-body attachment reactions.
+* `<simulation_name>_rates.txt`, `..._species.txt`, `..._reactions.txt`, `..._stoich_matrix.txt`: chemistry output, see @ref chem-vis
+
+# Viewing results with Visit {#visualization-with-visit}
 
 By default, the simulations produce Silo files (`.silo`) for which the recommended viewer is [Visit](https://visit-dav.github.io/visit-website/). Extensive documentation is available on the website, but a brief summary of basic steps is given below.
 
@@ -74,7 +84,7 @@ The script does not support 3D visualization, so 3D data should be projected fir
 
 ![2D plot of electric field using plot_raw_data.py](images/plot_raw_data_example.png){html: width=50%}
 
-# Log files
+# Log files {#log-files}
 
 Every simulation produces a log file `<output_name>_log.txt`. The log file is a text file containing information about the physics and numerical properties of the simulation. It is possible to write extra variables to the log file by defining the routine `user_log_variables()`, see `m_user_methods`.
 

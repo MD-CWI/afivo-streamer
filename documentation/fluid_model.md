@@ -34,7 +34,7 @@ The equation for ions looks similar to that of electrons,
 but there are a couple of differences:
 
 * By default, the ion flux is assumed to be zero
-* If a non-zero ion mobility has been specified using the parameters `input_data%mobile_ions` and `input_data%ion_mobilities`, then the ion flux is computed as \f$\boldsymbol{\Gamma}_j = \pm \mu_j \boldsymbol{E} n_e\f$, with the sign depending on the ion charge
+* If a non-zero ion mobility has been specified using the parameters `input_data%%mobile_ions` and `input_data%%ion_mobilities`, then the ion flux is computed as \f$\boldsymbol{\Gamma}_j = \pm \mu_j \boldsymbol{E} n_e\f$, with the sign depending on the ion charge
 * The photoionization source term only contributes to the production of one particular ion species
 
 ## Neutrals
@@ -52,4 +52,6 @@ The use of a different models is controlled by the following code:
 
 \snippet m_model.f90 model_types
 
+# Gas dynamics
 
+TODO

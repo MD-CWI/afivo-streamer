@@ -64,6 +64,8 @@ name | example | meaning
 `gas%%fractions` | 0.8 0.2 | gas fractions
 `gas%%pressure` | 1.0 | pressure (bar)
 `field_amplitude` | 2e6 | amplitude of the background field (V/m)
+`cylindrical` | T | Whether the simulation has an axisymmetric geometry
+`refine_adx` | 1.0 | Parameter that controls the grid refinement (smaller means finer)
 
 # A list of all options
 

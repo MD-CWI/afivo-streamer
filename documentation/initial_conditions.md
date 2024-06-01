@@ -39,12 +39,12 @@ then you can for example set species density to zero (in 2D) with
 
     box%cc(:, :, i_species) = 0.0_dp
 
-<h1>Using a static grid for a specific region in the domain</h1>
+## Using a static grid for a specific region in the domain
 
-<p>The user can specify a specific region of the domain to have fixed grid spacing. The following flags are utilized for that purpose:</p>
-<ul>
-	<li><i>refine_regions_dr</i> - equate to the value you want the minimum grid spacing in the region to be</li>
-	<li><i>refine_regions_rmin</i> - mark the starting boundary of the region you want to have a static grid</li>
-	<li><i>refine_regions_rmax</i> - mark the closing boundary of the region you want to have a static grid</li>
-</ul>
-<p>The flag <i>refine_regions_rmin</i> should have two values if working in a two dimensional domain and three values if in a three dimensional domain. The same is the case for <i>refine_regions_rmax</i>. The values are separated by spaces. For example, having <i>refine_regions_rmin = 0.0 0.0</i> and  <i>refine_regions_rmax = 6.0e-4 5.0e-2</i> in a cylindrically symmetric simulation corresponds to the region bounded by the lines r = 0.0, z = 0.0, r = 6.0e-4, and z = 5.0e-2.</p>
+The user can specify a specific region of the domain to have fixed grid spacing. The following flags are utilized for that purpose:
+
+* `refine_regions_dr`: the minimum grid spacing in the region
+* `refine_regions_rmin`: the starting boundary of the region
+* `refine_regions_rmax`: the closing boundary of the region
+
+The flag `refine_regions_rmin` should have two values if working in a two dimensional domain and three values if in a three dimensional domain. The same is the case for `refine_regions_rmax`. The values are separated by spaces. For example, having `refine_regions_rmin = 0.0 0.0` and  `refine_regions_rmax = 6.0e-4 5.0e-2` in a cylindrically symmetric simulation corresponds to the region bounded by the lines `r = 0.0`, `z = 0.0`, `r = 6.0e-4`, and `z = 5.0e-2`.
