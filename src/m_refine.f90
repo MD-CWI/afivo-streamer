@@ -103,9 +103,9 @@ contains
     call CFG_add_get(cfg, "refine_per_steps", refine_per_steps, &
          "The number of steps after which the mesh is updated")
     call CFG_add_get(cfg, "refine_min_dx", refine_min_dx, &
-         "The grid spacing will always be larger than this value")
+         "The grid spacing will always be larger than this value (m)")
     call CFG_add_get(cfg, "refine_max_dx", refine_max_dx, &
-         "The grid spacing will always be smaller than this value")
+         "The grid spacing will always be smaller than this value (m)")
 
     if (refine_min_dx > refine_max_dx) &
          error stop "Cannot have refine_min_dx < refine_max_dx"
@@ -125,7 +125,7 @@ contains
     call CFG_add_get(cfg, "refine_init_fac", refine_init_fac, &
          "Refine until dx is smaller than this factor times the seed width")
     call CFG_add_get(cfg, "refine_electrode_dx", refine_electrode_dx, &
-         "Ensure grid spacing around electrode is less than this value")
+         "Ensure grid spacing around electrode is less than this value (m)")
      current_electrode_dx = refine_electrode_dx
     call CFG_add_get(cfg, "electrode_derefine_factor", &
           electrode_derefine_factor, &
@@ -138,7 +138,7 @@ contains
          "Use effective alpha (minus attachment) for refinement")
 
     call CFG_add(cfg, "refine_regions_dr", [1.0e99_dp], &
-         "Refine regions up to this grid spacing", .true.)
+         "Refine regions up to this grid spacing (m)", .true.)
     call CFG_add(cfg, "refine_regions_tstop", [1.0e99_dp], &
          "Refine regions up to this simulation time", .true.)
     vec = 0.0_dp

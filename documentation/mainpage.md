@@ -7,12 +7,18 @@ using plasma fluid models. Afivo-streamer makes uses of the [afivo
 framework](https://github.com/MD-CWI/afivo), which for example provides
 adaptive mesh refinement and parallelization.
 
-# Quick links
+# Recommended reading for new users
 
-* <a href="pages.html">An overview of all documentation</a>
-* [git repository](https://github.com/MD-CWI/afivo-streamer)
 * [Installation instructions](documentation/installation.md)
-* [Tutorials](documentation/tutorials.md)
+* [Config files and command-line arguments](documentation/simulation_options.md)
+* [Saving output and visualization](documentation/output_and_visualization.md)
+* [Electrodes and boundary conditions](documentation/electrodes_bc.md)
+* [Initial conditions](documentation/initial_conditions.md)
+* Any of the tutorials listed on <a href="pages.html">the overview of all documentation</a>
+
+# Git repository links
+
+* [git repository](https://github.com/MD-CWI/afivo-streamer)
 * [Recent changes](https://github.com/MD-CWI/afivo-streamer/activity)
 
 # Features

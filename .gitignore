@@ -26,11 +26,13 @@ Other files
 *.vtu
 
 /programs/*/output/
+/tutorials/*/output/
 afivo/examples/*
 afivo/tutorial/*
 afivo/external_libraries/*
 /afivo/examples/*
 /programs/*/streamer
+/tutorials/*/streamer
 *gmon.out
 documentation/html/*
 **/tests/output/*
