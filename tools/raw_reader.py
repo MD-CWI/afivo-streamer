@@ -74,7 +74,7 @@ def read_single_grid(f):
 
     # Number of cell centers is one less than number of faces
     n_cells = dims-1
-    fmt = '=' + str(np.product(n_cells)) + 'd'
+    fmt = '=' + str(np.prod(n_cells)) + 'd'
     tmp = unpack(fmt, f.read(calcsize(fmt)))
     vals = np.array(tmp).reshape(n_cells, order='F')
 
@@ -143,7 +143,7 @@ def write_single_grid(f, grid):
 
     # Number of cell centers is one less than number of faces
     n_cells = grid['dims']-1
-    fmt = '=' + str(np.product(n_cells)) + 'd'
+    fmt = '=' + str(np.prod(n_cells)) + 'd'
     f.write(grid['values'].tobytes(order='F'))
 
 
@@ -226,13 +226,13 @@ def grid_project(in_grid, project_dims, axisymmetric):
     if axisymmetric and 0 in pdims:
         # Multiply with 2 * pi * r
         r = g['coords_cc'][0][valid_ix[0]]
-        w = np.product(g['dr'][pdims]) * 2 * np.pi * r
+        w = np.prod(g['dr'][pdims]) * 2 * np.pi * r
 
         # Broadcast to have volume weight for every grid cell
         w = np.broadcast_to(w[:, None], ihi-ilo)
         g['values'] = (g['values'][valid_ix] * w).sum(axis=tuple(pdims))
     else:
-        fac = np.product(g['dr'][pdims])
+        fac = np.prod(g['dr'][pdims])
         g['values'] = fac * g['values'][valid_ix].sum(axis=tuple(pdims))
 
     g['n_dims'] -= len(project_dims)
@@ -328,7 +328,7 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
         cdata = np.zeros(nx)
 
         if axisymmetric:
-            rvolume = np.product(g['dr']/dr) * coords_fine[0]/coords_coarse[0]
+            rvolume = np.prod(g['dr']/dr) * coords_fine[0]/coords_coarse[0]
 
             if rvolume.ndim < len(g['ihi']):
                 # Broadcast to have volume weight for every grid cell
@@ -338,7 +338,7 @@ def map_grid_data_to(g, r_min, r_max, dr, axisymmetric=False,
             values = rvolume.ravel() * g['values'][valid_ix].ravel()
         else:
             # Cartesian grid, simple averaging
-            rvolume = np.product(g['dr']/dr)
+            rvolume = np.prod(g['dr']/dr)
             values = rvolume * g['values'][valid_ix].ravel()
 
         np.add.at(cdata, tuple(map(np.ravel, ixs)), values)
