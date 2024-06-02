@@ -1,4 +1,4 @@
-# Fluid model equations
+# Fluid model equations {#fluid-model-eqns}
 
 [TOC]
 

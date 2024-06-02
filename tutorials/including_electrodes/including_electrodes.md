@@ -1,4 +1,4 @@
-# Including electrodes {#tutorial-rod}
+# Tutorial: including electrodes {#tutorial-electrodes}
 
 ## A single rod with a hemispherical cap
 

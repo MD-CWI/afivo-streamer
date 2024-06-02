@@ -1,4 +1,4 @@
-# Tutorial: changing the gas and the chemistry
+# Tutorial: changing the gas and the chemistry {#tutorial-changing-gas}
 
 [TOC]
 

@@ -1,4 +1,4 @@
-# Initial conditions
+# Initial conditions {#initial-conditions}
 
 # Using a standard seed
 

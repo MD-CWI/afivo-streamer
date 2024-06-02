@@ -1,4 +1,4 @@
-# Customizing the code through m_user.f90 {#m-user}
+# Customizing the code through m_user.f90 {#customizing-m-user}
 
 # Introduction
 

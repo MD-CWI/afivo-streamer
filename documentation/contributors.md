@@ -1,4 +1,4 @@
-# Contributors
+# Contributors {#contributors}
 
 This is an incomple list of people who have contributed to the afivo-streamer code:
 

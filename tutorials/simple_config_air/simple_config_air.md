@@ -1,4 +1,4 @@
-# A simple config file for an axisymmetric streamer in air  {#tutorial-air-simple}
+# Tutorial: simple config file for an axisymmetric streamer in air  {#tutorial-air-simple}
 
 Here we will briefly show how to construct a simple config file, leaving most parameters to their default values. An axisymmetric positive streamer will be simulated in air. Below, it is assumed that a file `tutorial_air_simple.cfg` is created in the `programds/standard_2d` folder. The following settings should then be specified in the config file.
 
