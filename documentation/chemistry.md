@@ -169,15 +169,4 @@ follows:
 2. Add a new `case` statement with the new reaction format in `m_chemistry::read_reactions()`
 3. Implement the new reaction with a new case in `m_chemistry::get_rates()`
 
-# Chemistry output and visualization {#chem-vis}
-
-Each simulation produces the following files:
-1. `<base_name>/_rates.txt`: Contains volume and time-integrated reaction rates, for each timestep.
-2. `<base_name>/_amounts.txt`: Contains the amount of each species (volume-integrated densities), for each timestep.
-3. `<base_name>/_reactions.txt`: Contains the list of all the reactions used in the simulation
-4. `<base_name>/_species.txt`: Contains the list of all the species used in the simulation
-4. `<base_name>/_stoich_matrix.txt`: This file contains the [stoichiometric matrix](https://en.wikipedia.org/wiki/Stoichiometry#Stoichiometry_matrix) of the reaction set used in the simulation.
-
-The data in the above files can be visualized using the `chemistry_visualize_rates.py` script in the `/tools` directory. The documentation for each of the arguments can be found by typing `python chemistry_visualize_rates.py -h`.
-
 

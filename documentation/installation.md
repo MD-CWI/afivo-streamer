@@ -12,9 +12,13 @@
 
 # Obtaining the source code {#obtaining-src}
 
-Run the following command in a folder to clone the repository:
+Run the following command in a folder to clone the complete repository:
 
     git clone https://github.com/MD-CWI/afivo-streamer.git
+
+If you only want the `master` branch, then you can use
+
+    git clone -b master --single-branch https://github.com/MD-CWI/afivo-streamer
 
 The code can also be downloaded as a [zip file](https://github.com/MD-CWI/afivo-streamer/archive/refs/heads/master.zip).
 
