@@ -1,8 +1,8 @@
-#include "cpp_macros.h"
 !> This module contains all kinds of different 'helper' routines for Afivo. If
 !> the number of routines for a particular topic becomes large, they should
 !> probably be put in a separate module.
 module m_af_utils
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

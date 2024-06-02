@@ -1,7 +1,7 @@
-#include "cpp_macros.h"
 !> This module contains the routines related to prolongation: going from
 !> coarse to fine variables.
 module m_af_prolong
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

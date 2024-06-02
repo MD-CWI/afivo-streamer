@@ -1,12 +1,14 @@
-#include "cpp_macros.h"
 !> Module with methods to perform time integration
 module m_af_advance
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none
   private
 
   integer, parameter, public :: af_num_integrators  = 8
+
+  !< [time_integration_schemes]
   !> Forward Euler method
   integer, parameter, public :: af_forward_euler    = 1
   !> Heun's method (AKA modified Euler's method, explicit trapezoidal rule), CFL
@@ -27,6 +29,7 @@ module m_af_advance
   !> Classic 4th order Runge Kutta method, see e.g.
   !> https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
   integer, parameter, public :: af_rk4_method       = 8
+  !< [time_integration_schemes]
 
   character(len=af_nlen), public :: af_integrator_names(af_num_integrators) = &
        [character(len=af_nlen) :: "forward_euler", "heuns_method", &

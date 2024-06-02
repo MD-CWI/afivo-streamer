@@ -1,7 +1,7 @@
-#include "cpp_macros.h"
 !> This module contains the core routines of Afivo, namely those that deal with
 !> initializing and changing the quadtree/octree mesh.
 module m_af_core
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

@@ -1,8 +1,8 @@
-#include "cpp_macros.h"
 !> This module contains routines for including flat surfaces between changes in
 !> epsilon (some material property). This can for example be used to include
 !> flat dielectrics in electrostatic computations.
 module m_af_surface
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

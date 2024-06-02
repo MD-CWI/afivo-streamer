@@ -1,7 +1,7 @@
-#include "../src/cpp_macros.h"
 !> Module to solve elliptic PDEs on the coarse grid. This module contains an
 !> interface to Hypre, assuming Hypre is compiled with OpenMP and without MPI
 module m_coarse_solver
+#include "../src/cpp_macros.h"
   use m_af_types
   use m_af_stencil
 

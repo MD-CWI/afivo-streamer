@@ -103,7 +103,8 @@ def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
 
 
 def plot_uniform_data(uniform_data, x, time, vmin=None, vmax=None, cmap=None,
-                      xlim=None, ylim=None, hide_axes=False, save_plot=None):
+                      xlim=None, ylim=None, hide_axes=False, save_plot=None,
+                      variable=None):
     # Plot data
     fig, ax = plt.subplots()
     ndim = uniform_data.ndim
@@ -128,7 +129,10 @@ def plot_uniform_data(uniform_data, x, time, vmin=None, vmax=None, cmap=None,
     if ylim:
         ax.set_ylim(*ylim)
 
-    ax.set_title(f't = {time:.3e}')
+    title = f't = {time:.3e}'
+    if variable is not None:
+        title = title + ' - ' + variable
+    ax.set_title(title)
 
     if save_plot:
         print(f'Saving to {save_plot}')
@@ -165,7 +169,8 @@ if __name__ == '__main__':
                               vmin=args.vmin, vmax=args.vmax,
                               cmap=args.cmap, xlim=args.xlim, ylim=args.ylim,
                               hide_axes=args.hide_axes,
-                              save_plot=args.save_plot)
+                              save_plot=args.save_plot,
+                              variable=args.variable)
     else:
         # All spatial dimensions are projected, only print time and sum
         grid_values = np.array([g['values'] for g in grids])

@@ -1,8 +1,7 @@
-#include "cpp_macros.h"
 !> This module contains routines for restriction: going from fine to coarse
 !> variables.
 module m_af_restrict
-
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

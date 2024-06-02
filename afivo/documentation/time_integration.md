@@ -6,9 +6,7 @@ The `m_af_advance` module can be used to perform time integration.
 
 Currently, the following explicit methods are included:
 
-* [Forward Euler](https://en.wikipedia.org/wiki/Euler_method) (`af_forward_euler`)
-* [Midpoint method](https://en.wikipedia.org/wiki/Midpoint_method) (`af_midpoint_method`)
-* [Heun's method](https://en.wikipedia.org/wiki/Heun%27s_method) (`af_heuns_method`)
+\snippet m_af_advance.f90 time_integration_schemes
 
 New integrators can be added relatively easily by modifying the `af_advance` routine.
 

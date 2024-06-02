@@ -1,8 +1,7 @@
-#include "cpp_macros.h"
 !> This module contains routines for writing output files with Afivo. The Silo
 !> format should probably be used for larger files, especially in 3D.
 module m_af_output
-
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none

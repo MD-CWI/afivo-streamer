@@ -1,7 +1,7 @@
-#include "cpp_macros.h"
 !> This module contains the basic types and constants that are used in the
 !> NDIM-dimensional version of Afivo, together with some basic routines.
 module m_af_types
+#include "cpp_macros.h"
   use iso_c_binding, only: c_ptr
 
   implicit none

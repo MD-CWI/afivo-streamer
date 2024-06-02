@@ -1,6 +1,6 @@
-#include "cpp_macros.h"
 !> This module contains functionality for dealing with numerical stencils
 module m_af_stencil
+#include "cpp_macros.h"
   use m_af_types
 
   implicit none
