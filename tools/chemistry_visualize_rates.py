@@ -9,8 +9,7 @@ import argparse
 p = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 p.add_argument('rates_file', type=str, help='File with reaction rates')
-p.add_argument('-soi', type=str, default=[], nargs='+',
-               help='Species of interest')
+p.add_argument('-soi', type=str, help='Species of interest')
 p.add_argument('-list_species', action='store_true', help='List species')
 p.add_argument('-list_reactions', action='store_true', help='List reactions')
 p.add_argument('-plot_all', action='store_true',
@@ -19,6 +18,8 @@ p.add_argument('-time_interval', nargs=2, type=float,
                help='Time interval over which to analyse the reactions (s)')
 p.add_argument('-threshold', type=float, default=0.01,
                help='Threshold (relative) for plotting reactions')
+p.add_argument('-savefig', type=str,
+               help='Save figures using this filename')
 args = p.parse_args()
 
 # Assume the other files are in the same folder
@@ -74,40 +75,41 @@ if args.plot_all:
                  f' ({100*rates[-1, i]/sum_of_rates:.2f}%)')
     plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
 
-for soi in args.soi:
-    # Visualize the source and sink reactions for a given specie
-    sidx = species_list.index(soi)
-    fig, ax = plt.subplots(3, figsize=(8, 12), sharex=True)
+# Visualize the source and sink reactions for a given specie
+sidx = species_list.index(args.soi)
+fig, ax = plt.subplots(3, figsize=(5, 7.5), sharex=True,
+                       layout='constrained')
 
-    srce_idx = np.where(stoich_matrix[sidx, :] > 0)[0]
-    sink_idx = np.where(stoich_matrix[sidx, :] < 0)[0]
-    titles = ['Source', 'Sink']
+srce_idx = np.where(stoich_matrix[sidx, :] > 0)[0]
+sink_idx = np.where(stoich_matrix[sidx, :] < 0)[0]
+titles = ['Source', 'Sink']
 
-    for i, (ix, text) in enumerate(zip([srce_idx, sink_idx], titles)):
-        amount = stoich_matrix[sidx, ix] * rates[:, ix]
-        frac = amount[-1]/amount[-1].sum()
+for i, (ix, text) in enumerate(zip([srce_idx, sink_idx], titles)):
+    amount = stoich_matrix[sidx, ix] * rates[:, ix]
+    frac = amount[-1]/amount[-1].sum()
 
-        for j, idx in enumerate(ix):
-            if frac[j] > args.threshold:
-                ax[i].plot(time, amount[:, j], label=reactions_list[idx] +
-                           f' ({100*frac[j]:.2f}%)')
+    for j, idx in enumerate(ix):
+        if frac[j] > args.threshold:
+            ax[i].plot(time, amount[:, j], label=reactions_list[idx] +
+                       f' ({100*frac[j]:.2f}%)')
 
-        ax[i].set_title(text + ' reactions')
-        ax[i].set_xlabel('Time (s)')
-        ax[i].set_ylabel('Production (#)')
-        ax[i].legend()
+    ax[i].set_title(text + ' reactions')
+    ax[i].set_ylabel('Production (#)')
+    ax[i].legend()
 
-    gross_prod = np.dot(rates[:, srce_idx], stoich_matrix[sidx, srce_idx])
-    net_prod = np.dot(rates, stoich_matrix[sidx])
-    ax[2].plot(time, gross_prod, label='gross production')
-    ax[2].plot(time, net_prod, label='net production')
-    ax[2].plot(time, amounts[:, sidx], '--', label='amount present')
-    ax[2].set_xlabel('Time (s)')
-    ax[2].set_ylabel('Production (#)')
-    ax[2].legend()
-    fig.suptitle(f'{len(srce_idx)+len(sink_idx)} of {n_reactions}'
-                 f' influence {soi}')
+gross_prod = np.dot(rates[:, srce_idx], stoich_matrix[sidx, srce_idx])
+net_prod = np.dot(rates, stoich_matrix[sidx])
+ax[2].plot(time, gross_prod, label='gross production')
+ax[2].plot(time, net_prod, label='net production')
+ax[2].plot(time, amounts[:, sidx], '--', label='amount present')
+ax[2].set_xlabel('Time (s)')
+ax[2].set_ylabel('Production (#)')
+ax[2].legend()
+fig.suptitle(f'{len(srce_idx)+len(sink_idx)} of {n_reactions}' +
+             f' influence {args.soi}')
 
-if plt.get_fignums():
-    plt.tight_layout()
+if args.savefig is not None:
+    plt.savefig(args.savefig, bbox_inches='tight', dpi=200)
+    print(f'Saved {args.savefig}')
+else:
     plt.show()
