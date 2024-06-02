@@ -8,4 +8,5 @@ This is an incomple list of people who have contributed to the afivo-streamer co
 * Behnaz Bagheri: General code testing; improving Helmholtz photoionization
 * Alejandro Malagon: Helped to implement the chemistry part
 * Hemaditya Malla: helped with inclusion of gas dynamics, development of python tools
-* Baohong Guo and Xiaoran Li: lots of code testing, help with development of python tools
+* Baohong Guo: lots of code testing, help with development of python tools
+* Xiaoran Li: implementing dielectrics, code testing, development of python tools
