@@ -31,6 +31,8 @@ Simulations will typically produce at least the following output:
 * `<simulation_name>_summary.txt`: contains a table with electron transport data. The ionization and attachment coefficients are computed based on the chemical reactions. They can differ from the coefficients given as input data if there are for example three-body attachment reactions.
 * `<simulation_name>_rates.txt`, `..._species.txt`, `..._reactions.txt`, `..._stoich_matrix.txt`: chemistry output, see @ref chem-vis
 
+Note that there are several Python tools that can be used to visualize or analyze the above`.txt` files, see [Python tools for input, output and analysis](documentation/tools.md).
+
 # Viewing results with Visit {#visualization-with-visit}
 
 By default, the simulations produce Silo files (`.silo`) for which the recommended viewer is [Visit](https://visit-dav.github.io/visit-website/). Extensive documentation is available on the website, but a brief summary of basic steps is given below.
