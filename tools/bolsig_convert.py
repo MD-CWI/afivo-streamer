@@ -52,8 +52,7 @@ def convert():
     while lines[i1].strip() != "":
         i1 += 1
 
-    tbl_string = ";".join(lines[i0:i1])
-    transport_data = np.matrix(tbl_string)
+    transport_data = np.loadtxt(lines[i0:i1])
 
     rate_labels = ['R#', 'E/N', 'eV']
     rate_desc = [None, None, None]
