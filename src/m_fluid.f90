@@ -25,6 +25,7 @@ contains
     use m_dt
     use m_transport_data
     use m_dielectric
+    use omp_lib
     type(af_t), intent(inout) :: tree
     real(dp), intent(in)      :: dt             !< Time step
     real(dp), intent(in)      :: dt_stiff       !< Time step for stiff terms (IMEX)
@@ -38,6 +39,7 @@ contains
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
     integer                   :: ix, id_out
+    real(dp)                  :: t1, t2, t3, t4
 
     ! Set current rates to zero; they are summed below
     ST_current_rates = 0
@@ -47,11 +49,16 @@ contains
 
     ! Since field_compute is called after performing time integration, we don't
     ! have to call it again for the first sub-step of the next iteration
+    t1 = omp_get_wtime()
     if (i_step > 1) call field_compute(tree, mg, s_deriv, time, .true.)
+    t2 = omp_get_wtime()
+    wc_time_field = wc_time_field + t2 - t1
 
     call flux_upwind_tree(tree, flux_num_species, flux_species, s_deriv, &
          flux_variables, 2, dt_limits(1:2), flux_upwind, flux_direction, &
          flux_dummy_line_modify, af_limiter_koren_t)
+    t3 = omp_get_wtime()
+    wc_time_flux = wc_time_flux + t3 - t2
 
     if (transport_data_ions%n_mobile_ions > 0 .and. &
          ion_se_yield > 0.0_dp) then
@@ -59,10 +66,13 @@ contains
        call af_loop_box(tree, handle_ion_se_flux, .true.)
     end if
 
+    t1 = omp_get_wtime()
     call flux_update_densities(tree, dt, size(all_densities), &
          all_densities, flux_num_species, &
          flux_species, flux_variables, s_deriv, n_prev, s_prev, &
          w_prev, s_out, add_source_terms, 2, dt_limits(3:4), set_box_mask)
+    t4 = omp_get_wtime()
+    wc_time_source = wc_time_source + t4 - t3
 
     if (ST_use_dielectric) then
        ! Update surface charge and handle photon emission

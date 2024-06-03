@@ -166,7 +166,7 @@ module m_streamer
   real(dp), public, allocatable :: ST_current_JdotE(:, :)
 
   !> Per how many iterations the electric current is computed
-  integer, public, protected :: current_update_per_steps = 10
+  integer, public, protected :: current_update_per_steps = 1000*1000
 
   !> Electric current through electrodes due to J.E
   real(dp), public :: ST_global_JdotE_current
@@ -176,6 +176,15 @@ module m_streamer
 
   !> Global sum of J.E
   real(dp), public :: ST_global_JdotE
+
+  ! To keep track of the computational cost of different parts
+  real(dp), public :: wc_time_flux = 0.0_dp
+  real(dp), public :: wc_time_source = 0.0_dp
+  real(dp), public :: wc_time_copy_state = 0.0_dp
+  real(dp), public :: wc_time_field = 0.0_dp
+  real(dp), public :: wc_time_output = 0.0_dp
+  real(dp), public :: wc_time_refine = 0.0_dp
+  real(dp), public :: wc_time_photoi = 0.0_dp
 
   !> Method used to prolong (interpolate) densities
   procedure(af_subr_prolong), pointer, public, protected :: &

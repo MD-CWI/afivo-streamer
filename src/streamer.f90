@@ -19,6 +19,7 @@ program streamer
   use m_dielectric
   use m_units_constants
   use m_model
+  use omp_lib
 
   implicit none
 
@@ -26,7 +27,7 @@ program streamer
   integer, parameter        :: max_attemps_per_time_step = 10
   integer, parameter        :: datfile_version = 30
   integer(int8)             :: t_start, t_current, count_rate
-  real(dp)                  :: wc_time, inv_count_rate
+  real(dp)                  :: wc_time = 0.0_dp, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
   integer                   :: i, it, n, coord_type, box_bytes
   integer                   :: n_steps_rejected
@@ -48,6 +49,9 @@ program streamer
   real(dp)                  :: field_energy, field_energy_prev
   real(dp)                  :: tmp, field_energy_prev_time
   logical                   :: step_accepted, start_of_new_pulse
+
+  ! To keep track of the computational cost of different parts
+  real(dp) :: t1, t2, t3
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -230,7 +234,10 @@ program streamer
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
+        t1 = omp_get_wtime()
         call photoi_set_src(tree, time - photoi_prev_time)
+        t2 = omp_get_wtime()
+        wc_time_photoi = wc_time_photoi + t2 - t1
         photoi_prev_time = time
      end if
 
@@ -242,7 +249,10 @@ program streamer
      dt_lim = huge_real
      step_accepted = .false.
      do n = 1, max_attemps_per_time_step
+        t1 = omp_get_wtime()
         call copy_current_state()
+        t2 = omp_get_wtime()
+        wc_time_copy_state = wc_time_copy_state + t2 - t1
 
         call af_advance(tree, dt, dt_lim_step, time, all_densities, &
              time_integrator, forward_euler)
@@ -307,7 +317,10 @@ program streamer
      end if
 
      ! Make sure field is available for latest time state
+     t1 = omp_get_wtime()
      call field_compute(tree, mg, 0, time, .true.)
+     t2 = omp_get_wtime()
+     wc_time_field = wc_time_field + t2 - t1
 
      if (gas_dynamics) then
         call coupling_add_fluid_source(tree, dt)
@@ -349,6 +362,7 @@ program streamer
         write_out = .true.
      end if
 
+     t1 = omp_get_wtime()
      if (write_out) then
         output_cnt       = output_cnt + 1
         time_last_output = global_time
@@ -358,6 +372,8 @@ program streamer
                 ["photon_flux", "surf_dens  "], output_name, output_cnt)
         end if
      end if
+     t2 = omp_get_wtime()
+     wc_time_output = wc_time_output + t2 - t1
 
      if (global_dt < dt_min) error stop "dt too small"
 
@@ -393,9 +409,20 @@ program streamer
            end if
         end if
      end if
+
+     t3 = omp_get_wtime()
+     wc_time_refine = wc_time_refine + t3 - t2
   end do
 
   call output_status(tree, time, wc_time, it, dt)
+
+  write(*, "(A)") "Computational cost breakdown (%)"
+  write(*, "(7(A10))") "flux", "source", "copy", "field", "output", &
+       "refine", "photoi"
+  write(*, "(7(F10.2))") 1e2*wc_time_flux/wc_time, 1e2*wc_time_source/wc_time, &
+       1e2*wc_time_copy_state/wc_time, 1e2*wc_time_field/wc_time, &
+       1e2*wc_time_output/wc_time, 1e2*wc_time_refine/wc_time, &
+       1e2*wc_time_photoi/wc_time
 
 contains
 
