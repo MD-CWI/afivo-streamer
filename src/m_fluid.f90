@@ -445,16 +445,21 @@ contains
           box%cc(IJK, i_electron_energy+s_out) = box%cc(IJK, i_electron_energy+s_out) &
                + dt * (gain - loss_rate * box%cc(IJK, i_electron+s_out))
        end if
-
-       do n = n_gas_species+1, n_species
-          iv = species_itree(n)
-          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_out) + dt * derivs(ix, n)
-       end do
     end do; CLOSE_DO
 
-    tmp = maxval(mean_energies)
-    if (tmp > 0) then
+    do n = n_gas_species+1, n_species
+       ix = 0
+       iv = species_itree(n)
+       do KJI_DO(1,nc)
+          ix = ix + 1
+          if (.not. mask(IJK)) cycle
+          box%cc(IJK, iv+s_out) = box%cc(IJK, iv+s_out) + dt * derivs(ix, n)
+       end do; CLOSE_DO
+    end do
+
+    if (model_has_energy_equation) then
        ! Set time step restriction for energy loss
+       tmp = maxval(mean_energies)
        dt_lim(2) = tmp/LT_get_col(td_ee_tbl, td_ee_loss, tmp)
     end if
 
