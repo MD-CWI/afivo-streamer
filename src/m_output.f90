@@ -75,6 +75,21 @@ module m_output
   ! Relative position of plane maximum coordinate
   real(dp), public, protected :: plane_rmax(NDIM) = 1.0_dp
 
+  ! Write uniform output in a plane
+  logical, public, protected :: fc_plane_write = .false.
+
+  ! Which variable to include in plane
+  integer, allocatable, public, protected :: fc_plane_ivar
+
+  ! Use this many points for plane data
+  integer, public, protected :: fc_plane_npixels(2) = [64, 64]
+
+  ! Relative position of plane minimum coordinate
+  real(dp), public, protected :: fc_plane_rmin(NDIM) = 0.0_dp
+
+  ! Relative position of plane maximum coordinate
+  real(dp), public, protected :: fc_plane_rmax(NDIM) = 1.0_dp
+
   ! Output electric field maxima and their locations
   logical, public, protected :: field_maxima_write = .false.
 
@@ -129,6 +144,7 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     character(len=name_len), allocatable :: varname(:)
+    character(len=name_len)    :: fc_varname
     character(len=af_nlen)     :: empty_names(0)
     integer                    :: n, i
     character(len=string_len)  :: td_file
@@ -218,6 +234,8 @@ contains
 
     call CFG_add_get(cfg, "plane%write", plane_write, &
          "Write uniform output in a plane")
+    call CFG_add_get(cfg, "fc_plane%write", fc_plane_write, &
+         "Write uniform fc output in a plane")
 
     if (plane_write) then
        call CFG_add(cfg, "plane%varname", ["e"], &
@@ -240,6 +258,22 @@ contains
        call CFG_add_get(cfg, "plane%rmax", plane_rmax(1:NDIM), &
             "Relative position of plane maximum coordinate")
     end if
+
+    if (fc_plane_write) then
+      call CFG_add(cfg, "fc_plane%varname", ["field"], &
+           "Names of variable to write in a plane", dynamic_size=.true.)
+      call CFG_get(cfg, "fc_plane%varname", fc_varname)
+
+      fc_plane_ivar = af_find_fc_variable(tree, trim(fc_varname))
+
+      call CFG_add_get(cfg, "fc_plane%npixels", fc_plane_npixels, &
+           "Use this many pixels for plane data")
+      call CFG_add_get(cfg, "fc_plane%rmin", fc_plane_rmin(1:NDIM), &
+           "Relative position of plane minimum coordinate")
+      call CFG_add_get(cfg, "fc_plane%rmax", fc_plane_rmax(1:NDIM), &
+           "Relative position of plane maximum coordinate")
+   end if
+
 
     call CFG_add_get(cfg, "field_maxima%write", field_maxima_write, &
          "Output electric field maxima and their locations")
@@ -386,6 +420,15 @@ contains
             plane_rmax * ST_domain_len + ST_domain_origin, &
             plane_npixels)
     end if
+
+    if (fc_plane_write) then
+      write(fname, "(A,I6.6)") trim(output_name) // &
+           "_fc_plane_", output_cnt
+      call af_write_fc_plane(tree, fname, fc_plane_ivar, &
+           fc_plane_rmin * ST_domain_len + ST_domain_origin, &
+           fc_plane_rmax * ST_domain_len + ST_domain_origin, &
+           fc_plane_npixels)
+   end if
 #endif
 
     if (lineout_write) then
