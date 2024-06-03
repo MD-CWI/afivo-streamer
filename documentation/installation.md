@@ -31,7 +31,7 @@ Go into the afivo-streamer folder and compile the code:
 
 This will first compile the `afivo` library and its dependencies, and afterwards compile most of the programs included with `afivo-streamer`. To test whether the code is working as expected, you can run several tests using
 
-    bash run_tests.sh
+    bash run_test.sh
 
 To run some of the examples, see [running examples](documentation/running_examples.md).
 
