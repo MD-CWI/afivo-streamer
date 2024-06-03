@@ -27,7 +27,9 @@ This defines an electrode with a length of 0.2 times the domain height and a rad
     # Ensure grid spacing around electrode is less than this value:
     refine_electrode_dx = 2.5e-5
 
-An example configuration file is provided at `tutorials/including_electrodes/rod_electrode.cfg`.
+An example configuration file is provided at `tutorials/including_electrodes/rod_electrode.cfg`, and the resulting initial electric field is shown below.
+
+![Initial field around rod electrode](rod_electrode.png){html: width=50%}
 
 ## Two rod electrodes
 
@@ -63,5 +65,7 @@ One of the other built-in options is to include two rod electrodes, for example 
     # Electrode 2 radius (in m):
     field_rod2_radius = 0.5e-3
 
-An example configuration file is provided at `tutorials/including_electrodes/two_rod_electrodes.cfg`.
+An example configuration file is provided at `tutorials/including_electrodes/two_rod_electrodes.cfg`, and the initial field is shown below:
+
+![Initial field due to two rod electrodes](two_rod_electrodes.png){html: width=50%}
 
