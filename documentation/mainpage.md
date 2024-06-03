@@ -78,3 +78,4 @@ transport_data | Input data files for simulations
 * [Bolsig+](http://www.bolsig.laplace.univ-tlse.fr/), which can be used to compute transport data from electron-neutral cross sections
 * [Particle_swarm](https://github.com/MD-CWI/particle_swarm), which can also be used to compute transport data using a Monte Carlo approach
 * [Chombo discharge](https://github.com/chombo-discharge/chombo-discharge), “A multiphysics code which uses Chombo for discharge simulations with adaptive mesh refinement (AMR) on embedded boundary grids”, developed by Robert Marskar
+* [PASSKey](http://www.plasma-tech.net/parser/passkey/)"Parallel Streamer Solver with Kinetics" by Yifei Zhu and others at LPP

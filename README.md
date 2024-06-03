@@ -13,7 +13,7 @@ A brief summary of features:
 
 ## Documentation
 
-Documentation is available at http://teunissen.net/afivo_streamer
+Documentation is available at https://teunissen.net/afivo_streamer
 
 ## News
 
