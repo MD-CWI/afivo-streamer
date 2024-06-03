@@ -4,7 +4,7 @@
 
 # Requirements {#requirements}
 
-* A UNIX-like operating system such as GNU/Linux, or alternative the Windows subsystem for linux (see @ref wsl-installation)
+* A UNIX-like operating system such as GNU/Linux, or the Windows subsystem for linux (see @ref wsl-installation)
 * A recent Fortran compiler such as `gfortran`, which supports Fortran 2008
 * A recent C compiler such as `gcc` to compile the included libraries
 * `git` to download and update the source code
@@ -71,12 +71,12 @@ Follow the instructions on https://learn.microsoft.com/en-us/windows/wsl/install
 
 Afterwards, the regular installation instructions can be followed. The Linux files are also accessible from Windows, so simulation output can be visualized from the Windows environment.
 
-# List of issues and solutions {#issues-solutions}
+# Potential issues and solutions {#issues-solutions}
 
 ## Compilation errors after pulling a new version
 
 1. Remove the old compiles with `make allclean`
-2. Rarely, the Silo or Hypre libraries have to be recompiled. To do this, go to `afivo/external_libraries`, remove  and execute the `build_...` scripts.
+2. Rarely, the Silo or Hypre libraries have to be recompiled. To do this, go to `afivo/external_libraries` and execute the `build_...` scripts.
 
 ## Specifying the compilers to use
 

@@ -38,13 +38,3 @@ To set the value of a particular species, first find its index with
 then you can for example set species density to zero (in 2D) with
 
     box%cc(:, :, i_species) = 0.0_dp
-
-## Using a static grid for a specific region in the domain
-
-The user can specify a specific region of the domain to have fixed grid spacing. The following flags are utilized for that purpose:
-
-* `refine_regions_dr`: the minimum grid spacing in the region
-* `refine_regions_rmin`: the starting boundary of the region
-* `refine_regions_rmax`: the closing boundary of the region
-
-The flag `refine_regions_rmin` should have two values if working in a two dimensional domain and three values if in a three dimensional domain. The same is the case for `refine_regions_rmax`. The values are separated by spaces. For example, having `refine_regions_rmin = 0.0 0.0` and  `refine_regions_rmax = 6.0e-4 5.0e-2` in a cylindrically symmetric simulation corresponds to the region bounded by the lines `r = 0.0`, `z = 0.0`, `r = 6.0e-4`, and `z = 5.0e-2`.

@@ -34,4 +34,4 @@ The parameter `field_electrode_type` can be set to:
 * `rod_rod`: two electrodes of rod type
 * `user`: a user-defined electrode
 
-For a rod electrode, the relative coordinates `field_rod_r0` and `field_rod_r0` need to be defined. For the conical tip, `field_rod_r2` also needs to be specified.
+For a rod electrode, the relative coordinates `field_rod_r0` and `field_rod_r0` need to be defined. For the conical tip, `field_rod_r2` also needs to be specified. See the [electrode tutorial](tutorials/including_electrodes/including_electrodes.md) for examples.

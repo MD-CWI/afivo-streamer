@@ -60,22 +60,6 @@ All the species that are present in the chemistry file will automatically be pre
 
 Note that in the output, special characters such as `+` and `-` are converted, because only alphanumeric symbols and `_` can be include in Silo variable names.
 
-## Reaction groups {#chem-syntax-groups}
-
-Sometimes, there are many similar reactions. To write these more compactly, the following syntax is available, somewhat similar to ZDPlaskin:
-
-    e + @x -> e + e + @x+,field_table,@source
-    @x = N2,N2,O2
-    @source = C25 N2,C26 N2,C43 O2
-
-The symbols with an `@` will be replaced by the respective values specified in the lines below. So for this example, the reaction set would become:
-
-    e + N2 -> e + e + N2+,field_table,C25 N2
-    e + N2 -> e + e + N2+,field_table,C26 N2
-    e + O2 -> e + e + O2+,field_table,C43 O2
-
-The number of such replacement groups is flexible.
-
 ## Supported reaction rate formats {#chem-syntax-rate-formats}
 
 ### Field-dependent reactions
@@ -136,7 +120,7 @@ Tg | Gas temperature | K
 kB | Boltzmann constant | J/K
 kB_eV | Boltzmann constant | eV/K
 
-# Ignoring the production of certain species {#chem-ignored}
+## Ignoring the production of certain species {#chem-ignored}
 
 To simplify a reaction set, it is possible to ignore the production of certain species. This can be done by adding a table of the following form:
 
@@ -150,6 +134,22 @@ To simplify a reaction set, it is possible to ignore the production of certain s
 
 When ignored species occur on the left-hand side of a reaction, and if they do not correspond to the background gas that is initially present, the reaction will be ignored.
 When ignored species occur on the right-hand side of a reaction, their production will be ignored, but the reaction will still be included.
+
+## Reaction groups {#chem-syntax-groups}
+
+Sometimes, there are many similar reactions. To write these more compactly, the following syntax is available, somewhat similar to ZDPlaskin:
+
+    e + @x -> e + e + @x+,field_table,@source
+    @x = N2,N2,O2
+    @source = C25 N2,C26 N2,C43 O2
+
+The symbols with an `@` will be replaced by the respective values specified in the lines below. So for this example, the reaction set would become:
+
+    e + N2 -> e + e + N2+,field_table,C25 N2
+    e + N2 -> e + e + N2+,field_table,C26 N2
+    e + O2 -> e + e + O2+,field_table,C43 O2
+
+The number of such replacement groups is flexible.
 
 # Adding new types of reactions {#chem-new-reactions}
 
@@ -168,5 +168,4 @@ follows:
 1. Define a new parameter, e.g. `integer, parameter :: rate_analytic_kN = ...` in `m_chemistry`
 2. Add a new `case` statement with the new reaction format in `m_chemistry::read_reactions()`
 3. Implement the new reaction with a new case in `m_chemistry::get_rates()`
-
 

@@ -19,6 +19,12 @@ There are several parameters that control the production of photoionization, whi
 
 \snippet m_photoi.f90 photoi_general_parameters
 
+The amount of photoionization can be varied using the `photoi%%eta` parameter, for example by doing different simulations using:
+
+    photoi%eta = 0.0375
+    photoi%eta = 0.075
+    photoi%eta = 0.15
+
 # Helmholtz approach
 
 The basic idea is to approximate the absorption function for photons with a series expansion. The user can either use one of the built-in expansions, or define custom coefficients through the following parameters:

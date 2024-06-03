@@ -1,4 +1,4 @@
-# Tutorial: running built-in examples
+# Running built-in examples
 
 To run the standard 2D examples, go to the folder `programs/standard_2d`:
 
