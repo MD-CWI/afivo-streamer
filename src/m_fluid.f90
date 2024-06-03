@@ -39,7 +39,7 @@ contains
     integer, intent(in)       :: i_step         !< Step of the integrator
     integer, intent(in)       :: n_steps        !< Total number of steps
     integer                   :: ix, id_out
-    real(dp)                  :: t1, t2, t3, t4
+    real(dp)                  :: t1, t2, t3
 
     ! Set current rates to zero; they are summed below
     ST_current_rates = 0
@@ -71,8 +71,8 @@ contains
          all_densities, flux_num_species, &
          flux_species, flux_variables, s_deriv, n_prev, s_prev, &
          w_prev, s_out, add_source_terms, 2, dt_limits(3:4), set_box_mask)
-    t4 = omp_get_wtime()
-    wc_time_source = wc_time_source + t4 - t3
+    t2 = omp_get_wtime()
+    wc_time_source = wc_time_source + t2 - t1
 
     if (ST_use_dielectric) then
        ! Update surface charge and handle photon emission
