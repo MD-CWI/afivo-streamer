@@ -31,6 +31,7 @@ module m_af_output
   public :: af_write_numpy
 #if NDIM > 1
   public :: af_write_plane
+  public :: af_write_fc_plane
 #endif
   public :: af_write_silo
   public :: af_write_line
@@ -549,6 +550,97 @@ contains
     end do
     close(my_unit)
   end subroutine af_write_plane
+
+ !> Write data in a plane (2D) to a VTK ASCII file. In 3D, r_min and r_max
+  !> should have one identical coordinate (i.e., they differ in two
+  !> coordinates).
+subroutine af_write_fc_plane(tree, filename, iv, r_min, r_max, n_pixels)
+   use m_af_interp, only: af_interp1_fc
+   type(af_t), intent(in)       :: tree        !< Tree to write out
+   character(len=*), intent(in) :: filename    !< Filename for the vtk file
+   integer, intent(in)          :: iv      !< Variables to write
+   real(dp), intent(in)         :: r_min(NDIM)   !< Minimum coordinate of plane
+   real(dp), intent(in)         :: r_max(NDIM)   !< Maximum coordinate of plane
+   integer, intent(in)          :: n_pixels(2) !< Number of pixels in the plane
+
+   integer, parameter    :: my_unit = 100
+   character(len=100)    :: fmt_string
+   character(len=400)    :: fname
+   integer               :: i, j, n_cc, dim_unused, n_points(3)
+   real(dp)              :: r(NDIM), dvec(3)
+   real(dp)              :: v1(NDIM), v2(NDIM)
+   real(dp), allocatable :: pixel_data(:, :, :)
+   logical               :: success
+
+#if NDIM == 2
+   n_cc = 2
+   dvec(1:2)   = r_max(1:2) - r_min(1:2)
+   dvec(3)     = 0
+   dim_unused  = 3
+   n_points    = [n_pixels(1), n_pixels(2), 1]
+   v1          = [dvec(1), 0.0_dp] / (n_pixels(1) - 1)
+   v2          = [0.0_dp, dvec(2)] / (n_pixels(2) - 1)
+#elif NDIM == 3
+   n_cc = 3
+   dvec        = r_max - r_min
+   dim_unused  = minloc(abs(dvec), 1)
+
+   select case (dim_unused)
+   case (1)
+      v1 = [0.0_dp, dvec(2), 0.0_dp] / (n_pixels(1) - 1)
+      v2 = [0.0_dp, 0.0_dp, dvec(3)] / (n_pixels(2) - 1)
+      n_points = [1, n_pixels(1), n_pixels(2)]
+   case (2)
+      v1 = [dvec(1), 0.0_dp, 0.0_dp] / (n_pixels(1) - 1)
+      v2 = [0.0_dp, 0.0_dp, dvec(3)] / (n_pixels(2) - 1)
+      n_points = [n_pixels(1), 1, n_pixels(2)]
+   case (3)
+      v1 = [dvec(1), 0.0_dp, 0.0_dp] / (n_pixels(1) - 1)
+      v2 = [0.0_dp, dvec(2), 0.0_dp] / (n_pixels(2) - 1)
+      n_points = [n_pixels(1), n_pixels(2), 1]
+   end select
+#endif
+
+   allocate(pixel_data(n_cc, n_pixels(1), n_pixels(2)))
+
+   !$omp parallel do private(i, r)
+   do j = 1, n_pixels(2)
+      do i = 1, n_pixels(1)
+         r = r_min + (i-1) * v1 + (j-1) * v2
+         pixel_data(:, i, j) = af_interp1_fc(tree, r, iv, success)
+         if (.not. success) error stop "af_write_fc_plane: interpolation error"
+      end do
+   end do
+   !$omp end parallel do
+
+   ! Construct format string. Write one row at a time
+   write(fmt_string, '(A,I0,A)') '(', n_pixels(1), 'E20.8)'
+
+   ! Construct file name
+   fname = trim(filename) // ".vtk"
+
+   open(my_unit, file=trim(fname), action="write")
+   write(my_unit, '(A)') "# vtk DataFile Version 2.0"
+   write(my_unit, '(A)') trim(filename)
+   write(my_unit, '(A)') "ASCII"
+   write(my_unit, '(A)') "DATASET STRUCTURED_POINTS"
+   write(my_unit, '(A,3I10)') "DIMENSIONS ", n_points
+#if NDIM == 2
+   write(my_unit, '(A,3E20.8)') "ORIGIN ", [r_min(1), r_min(2), 0.0_dp]
+   write(my_unit, '(A,3E20.8)') "SPACING ", &
+        [v1(1) + v2(1), v1(2) + v2(2), 0.0_dp]
+#elif NDIM == 3
+   write(my_unit, '(A,3E20.8)') "ORIGIN ", r_min
+   write(my_unit, '(A,3E20.8)') "SPACING ", v1 + v2
+#endif
+   write(my_unit, '(A,2I0)') "POINT_DATA ", product(n_points)
+   do i = 1, n_cc
+      write(my_unit, '(A)') "SCALARS "
+      write(my_unit, '(A)') "LOOKUP_TABLE default"
+      write(my_unit, trim(fmt_string)) pixel_data(i, :, :)
+   end do
+   close(my_unit)
+ end subroutine af_write_fc_plane
 #endif
 
   !> Write the cell centered data of a tree to a vtk unstructured file. Only the

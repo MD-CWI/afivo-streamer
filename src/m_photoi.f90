@@ -158,16 +158,26 @@ contains
             [photoi_eta * quench_fac], .true.)
     case ('from_species')
        ! effective decay time when we have quenching
-       eff_decay_time = photoi_photoemission_time * quench_fac
-       decay_fraction = 1 - exp(-dt / eff_decay_time)
-       if (dt > 1e-6_dp * eff_decay_time) then
-          decay_rate = decay_fraction / dt
-       else
-          decay_rate = 1.0 / eff_decay_time
-       end if
+     !   eff_decay_time = photoi_photoemission_time * quench_fac
+     !   decay_fraction = 1 - exp(-dt / eff_decay_time)
+     !   if (dt > 1e-6_dp * eff_decay_time) then
+     !      decay_rate = decay_fraction / dt
+     !   else
+     !      decay_rate = 1.0 / eff_decay_time
+     !   end if
 
-       call af_loop_box_arg(tree, photoionization_rate_from_species, &
-            [ quench_fac * decay_rate, 1-decay_fraction], .true.)
+     !   call af_loop_box_arg(tree, photoionization_rate_from_species, &
+     !        [quench_fac * decay_rate, 1-decay_fraction], .true.)
+     eff_decay_time = photoi_photoemission_time
+     decay_fraction = 1 - exp(-dt / eff_decay_time)
+     if (dt > 1e-6_dp * eff_decay_time) then
+        decay_rate = decay_fraction / dt
+     else
+        decay_rate = 1.0 / eff_decay_time
+     end if
+
+     call af_loop_box_arg(tree, photoionization_rate_from_species, &
+          [ quench_fac * decay_rate, 1-decay_fraction], .true.)
     end select
 
     select case (photoi_method)
