@@ -17,7 +17,7 @@ In most experiments, a pointed electrode is used to generate streamer discharges
     field_rod_r0 = 0. 0.
 
     # Electrode 1: second relative coordinate:
-    field_rod_r1 = 0.2 0.
+    field_rod_r1 = 0.0 0.2
 
     # Electrode 1 radius (in m):
     field_rod_radius = 0.5e-3
