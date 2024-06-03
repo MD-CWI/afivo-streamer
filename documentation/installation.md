@@ -20,7 +20,7 @@ If you only want the `master` branch, then you can use
 
     git clone -b master --single-branch https://github.com/MD-CWI/afivo-streamer
 
-The code can also be downloaded as a [zip file](https://github.com/MD-CWI/afivo-streamer/archive/refs/heads/master.zip).
+The code can also be downloaded as a [zip file](https://github.com/MD-CWI/afivo-streamer/archive/refs/heads/master.zip). If there are difficulties accessing Github, there is also a [Gitlab mirror](https://gitlab.com/MD-CWI-NL/afivo-streamer), but it can lag a bit behind.
 
 # Compiling the source code {#compiling}
 
