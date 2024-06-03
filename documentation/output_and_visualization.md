@@ -26,7 +26,7 @@ For a full list of parameters that control the output, see the source code of @r
 Simulations will typically produce at least the following output:
 
 * `<simulation_name>_<number>.silo`: Silo files that can be visualized using e.g. Visit, see @ref visualization-with-visit
-* `<simulation_name>_log.txt`: a log file, see @ref #log-files
+* `<simulation_name>_log.txt`: a log file, see @ref log-files
 * `<simulation_name>_out.cfg`: includes all the parameter specified by the user, as well as the other parameters that had their default value, together with brief documentation.
 * `<simulation_name>_summary.txt`: contains a table with electron transport data. The ionization and attachment coefficients are computed based on the chemical reactions. They can differ from the coefficients given as input data if there are for example three-body attachment reactions.
 1. `<simulation_name>_rates.txt`: Contains volume and time-integrated reaction rates, for each timestep.
@@ -35,7 +35,7 @@ Simulations will typically produce at least the following output:
 4. `<simulation_name>_species.txt`: Contains the list of all the species used in the simulation
 4. `<simulation_name>_stoich_matrix.txt`: This file contains the [stoichiometric matrix](https://en.wikipedia.org/wiki/Stoichiometry#Stoichiometry_matrix) of the reaction set used in the simulation.
 
-Note that there are several Python tools that can be used to visualize or analyze the above`.txt` files, see [Python tools for input, output and analysis](documentation/tools.md). In particular, the chemistry output files can be visualized using the `chemistry_visualize_rates.py` script in the `/tools` directory.
+Note that there are several Python tools that can be used to visualize or analyze the above `.txt` files, see [Python tools for input, output and analysis](documentation/tools.md). In particular, the chemistry output files can be visualized using the `chemistry_visualize_rates.py` script.
 
 # Viewing results with Visit {#visualization-with-visit}
 

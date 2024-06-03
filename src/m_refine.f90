@@ -98,6 +98,7 @@ contains
     real(dp)                   :: vec(NDIM)
     real(dp), allocatable      :: dbuffer(:)
 
+    !< [basic_refinement_settings]
     call CFG_add_get(cfg, "refine_buffer_width", refine_buffer_width, &
          "The refinement buffer width in cells (around flagged cells)")
     call CFG_add_get(cfg, "refine_per_steps", refine_per_steps, &
@@ -106,18 +107,8 @@ contains
          "The grid spacing will always be larger than this value (m)")
     call CFG_add_get(cfg, "refine_max_dx", refine_max_dx, &
          "The grid spacing will always be smaller than this value (m)")
-
-    if (refine_min_dx > refine_max_dx) &
-         error stop "Cannot have refine_min_dx < refine_max_dx"
-
     call CFG_add_get(cfg, "refine_adx", refine_adx, &
          "Refine if alpha*dx is larger than this value")
-    call CFG_add_get(cfg, "refine_adx_fac", refine_adx_fac, &
-         "For refinement, use alpha(f * E)/f, where f is this factor")
-    call CFG_add_get(cfg, "refine_cphi", refine_cphi, &
-         "Refine if the curvature in phi is larger than this value")
-    call CFG_add_get(cfg, "derefine_cphi", derefine_cphi, &
-         "Allow derefinement if the curvature in phi is smaller than this value")
     call CFG_add_get(cfg, "derefine_dx", derefine_dx, &
          "Only derefine if grid spacing if smaller than this value")
     call CFG_add_get(cfg, "refine_init_time", refine_init_time, &
@@ -126,9 +117,22 @@ contains
          "Refine until dx is smaller than this factor times the seed width")
     call CFG_add_get(cfg, "refine_electrode_dx", refine_electrode_dx, &
          "Ensure grid spacing around electrode is less than this value (m)")
-     current_electrode_dx = refine_electrode_dx
+    !< [basic_refinement_settings]
+
+    if (refine_min_dx > refine_max_dx) &
+         error stop "Cannot have refine_min_dx < refine_max_dx"
+    current_electrode_dx = refine_electrode_dx
+
+
+    call CFG_add_get(cfg, "refine_adx_fac", refine_adx_fac, &
+         "For refinement, use alpha(f * E)/f, where f is this factor")
+    call CFG_add_get(cfg, "refine_cphi", refine_cphi, &
+         "Refine if the curvature in phi is larger than this value")
+    call CFG_add_get(cfg, "derefine_cphi", derefine_cphi, &
+         "Allow derefinement if the curvature in phi is smaller than this value")
+
     call CFG_add_get(cfg, "electrode_derefine_factor", &
-          electrode_derefine_factor, &
+         electrode_derefine_factor, &
          "Multiplication factor to derefine electrode during interpulse")
     call CFG_add_get(cfg, "refine_prepulse_time", refine_prepulse_time, &
          "Start refining electrode some time before the start of a new pulse")
