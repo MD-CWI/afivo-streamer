@@ -37,3 +37,16 @@ There are also 1D and 3D examples, which can be found in
 
     programs/standard_1d
     programs/standard_3d (note that this example takes a long time!)
+
+## Controlling the number of threads
+
+The code uses OpenMP parallelism. If the default `gfortran` compiler was used, the number of threads can be controlled by specifying `OMP_NUM_THREADS`, for example with:
+
+    OMP_NUM_THREADS=1 ./streamer <config file>
+
+or with
+
+    export OMP_NUM_THREADS=1
+    ./streamer <config file>
+
+For 2D simulations, it might not be beneficial to use more than say 4 threads. For 3D simulations, 16 or 32 is the recommended upper limit, if your system has that many physical cores.
