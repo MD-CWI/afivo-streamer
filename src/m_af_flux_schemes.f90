@@ -339,8 +339,9 @@ contains
     real(dp), intent(out)     :: dt_lim(n_dt)
     !> If present, only update where the mask is true
     procedure(subr_box_mask), optional :: get_mask
-    integer                   :: lvl, n, id, IJK, nc, i_var, iv
+    integer                   :: lvl, n, m, id, IJK, nc, i_var, iv
     logical                   :: mask(DTIMES(tree%n_cell))
+    real(dp)                  :: tmp(DTIMES(tree%n_cell))
     real(dp)                  :: dt_dr(NDIM), my_dt(n_dt)
     real(dp)                  :: rfac(2, tree%n_cell)
 
@@ -349,7 +350,7 @@ contains
 
     dt_lim = 1e100_dp
 
-    !$omp parallel private(lvl, n, id, IJK, dt_dr, i_var, rfac, iv, mask, my_dt) &
+    !$omp parallel private(lvl, n, m, id, IJK, dt_dr, i_var, rfac, iv, mask, my_dt, tmp) &
     !$omp &reduction(min:dt_lim)
     my_dt = 1e100_dp
 
@@ -366,12 +367,16 @@ contains
                mask = .true.
             end if
 
+            ! Set output state to the weighted sum of previous states
             do i_var = 1, n_vars
                iv = i_cc(i_var)
-               do KJI_DO(1, nc)
-                  tree%boxes(id)%cc(IJK, iv+s_out) = sum(w_prev * &
-                       tree%boxes(id)%cc(IJK, iv+s_prev))
-               end do; CLOSE_DO
+               tmp = 0.0_dp
+
+               do m = 1, n_prev
+                  tmp = tmp + w_prev(m) * cc(DTIMES(1:nc), iv+s_prev(m))
+               end do
+
+               cc(DTIMES(1:nc), iv+s_out) = tmp
             end do
 
             call add_source_box(tree%boxes(id), dt, n_vars, i_cc, s_deriv, &
