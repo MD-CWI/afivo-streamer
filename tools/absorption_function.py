@@ -319,42 +319,39 @@ print(f'{"Numerical":<20} {simpson(f_numerical, r):12.5f}')
 for name, f in f_to_display:
     print(f'{name:<20} {simpson(f(r), r):12.5f}')
 
-fig, ax = plt.subplots(1, 2)
+fig, ax = plt.subplots(1, 2, layout='constrained', figsize=(7, 4))
 
-plt.subplot(121)
-plt.xlabel('r (m)')
-plt.ylabel('absorption function (1/m)')
-plt.title('Logarithmic scale')
-
-if not args.hide_fit:
-    plt.semilogy(r, f_numerical, '.', label='numerical')
-    plt.semilogy(r, fit_func(r, *popt),
-                 label='fit ({}-term)'.format(args.n_modes))
-
-for name, f in f_to_display:
-    plt.semilogy(r, f(r), '--', label=name)
-
-if args.show_curve:
-    plt.semilogy(r, fit_func(r, *args.show_curve), label='custom')
-plt.legend()
-
-plt.subplot(122)
-plt.xlabel('r (m)')
-plt.ylabel('absorption function (1/m)')
-plt.title('Linear scale')
+ax[0].set_xlabel('r (m)')
+ax[0].set_ylabel('absorption function (1/m)')
+ax[0].set_title('Logarithmic scale')
+ax[0].semilogy(r, f_numerical, '.-', label='numerical')
 
 if not args.hide_fit:
-    plt.plot(r, f_numerical, '.', label='numerical')
-    plt.plot(r, fit_func(r, *popt),
-             label='fit ({}-term)'.format(args.n_modes))
+    ax[0].semilogy(r, fit_func(r, *popt),
+                   label='fit ({}-term)'.format(args.n_modes))
 
 for name, f in f_to_display:
-    plt.plot(r, f(r), '--', label=name)
+    ax[0].semilogy(r, f(r), '--', label=name)
 
 if args.show_curve:
-    plt.plot(r, fit_func(r, *args.show_curve), label='custom')
-plt.legend()
+    ax[0].semilogy(r, fit_func(r, *args.show_curve), label='custom')
+ax[0].legend()
 
-fig.tight_layout()
+ax[1].set_xlabel('r (m)')
+ax[1].set_ylabel('absorption function (1/m)')
+ax[1].set_title('Linear scale')
+ax[1].plot(r, f_numerical, '.-', label='numerical')
+
+if not args.hide_fit:
+    ax[1].plot(r, fit_func(r, *popt),
+               label='fit ({}-term)'.format(args.n_modes))
+
+for name, f in f_to_display:
+    ax[1].plot(r, f(r), '--', label=name)
+
+if args.show_curve:
+    ax[1].plot(r, fit_func(r, *args.show_curve), label='custom')
+ax[1].legend()
+
 plt.savefig(args.figure_name, bbox_inches='tight', dpi=200)
 print('Saved {}'.format(args.figure_name))

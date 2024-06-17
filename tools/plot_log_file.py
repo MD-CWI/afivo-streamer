@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 
 p = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
 p.add_argument("log_file", type=str, nargs='+', help="Input log file(s)")
+p.add_argument("-velocity_window", type=int,
+               help="Compute average velocity over this window size")
 args = p.parse_args()
 
 logs = [pd.read_csv(f, delim_whitespace=True) for f in args.log_file]
@@ -33,6 +34,11 @@ for i, log in enumerate(logs):
     mask = np.logical_or(log['velocity'].abs() < 0.5 * v_low,
                          log['velocity'].abs() > 2 * v_hi)
     log['velocity'].mask(mask, np.nan, inplace=True)
+
+    if args.velocity_window is not None:
+        # Compute average
+        w = args.velocity_window
+        log['velocity'] = log['velocity'].rolling(window=w).mean()
 
     # Remove outliers in radius
     v_low = log['x.2'].abs().quantile(0.1)
