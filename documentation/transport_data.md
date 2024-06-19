@@ -195,10 +195,14 @@ To speed up computations, transport and reaction coefficients are stored in look
 **Step 2** The input data is interpolated to have a regular spacing in `E/N`. This interpolation is controlled by the following parameters:
 
     table_data%min_townsend = 0. (minimum E/N)
-    table_data%max_townsend = 1000. (maximum E/N)
+    table_data%max_townsend = -1.0 (maximum E/N, if negative, determine automatically)
     table_data%size = 1000 (number of points in the table)
     table_data%input_interpolation = linear (or cubic_spline)
 
-Note there are two options for the interpolation of input data: linear (the default) and cubic spline interpolation. The interpolated data is then stored in a lookup table.
+Note there are two options for the interpolation of input data: linear (the default) and cubic spline interpolation. The interpolated data is then stored in a lookup table. There are two choices for the spacing of the x-values of this table, controlled by the parameter
 
-**Step 3** When a value is required at a certain `E/N`, the values in the lookup table are *linearly interpolated*.
+    table_data%xspacing = linear (or quadratic)
+
+With a quadratic spacing, the table has more data at lower `E/N` values, which can reduce interpolation errors in for example the mobility or attachment coefficient.
+
+**Step 3** When a value is required at a certain `E/N`, the values in the lookup table are interpolated.
