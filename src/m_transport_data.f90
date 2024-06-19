@@ -68,7 +68,7 @@ contains
     character(len=string_len)  :: td_file = undefined_str
     real(dp), allocatable      :: xx(:), yy(:)
     real(dp), allocatable      :: energy_eV(:), field_Td(:)
-    real(dp)                   :: dummy_real(0), max_Td, max_eV
+    real(dp)                   :: dummy_real(0), max_Td, max_eV, rel_err
     character(len=10)          :: dummy_string(0)
     integer                    :: n
 
@@ -78,6 +78,8 @@ contains
 
     call CFG_add_get(cfg, "input_data%old_style", td_old_style, &
          "Use old style transport data (alpha, eta, mu, D vs V/m)")
+
+    print *, 'Approximate relative lookup table interpolation errors:'
 
     ! Fill table with data
     if (td_old_style) then
@@ -100,24 +102,28 @@ contains
        td_tbl = LT_create(table_min_townsend, max_Td, table_size, &
             4, table_xspacing)
 
-       call table_set_column(td_tbl, td_mobility, xx, yy)
+       call table_set_column(td_tbl, td_mobility, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Mobility:', rel_err
 
        call table_from_file(td_file, "efield[V/m]_vs_dif[m2/s]", xx, yy)
        xx = xx * SI_to_Townsend / gas_number_density
        yy = yy * gas_number_density
-       call table_set_column(td_tbl, td_diffusion, xx, yy)
+       call table_set_column(td_tbl, td_diffusion, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Diffusion coefficient:', rel_err
 
        call table_from_file(td_file, "efield[V/m]_vs_alpha[1/m]", &
             xx, yy)
        xx = xx * SI_to_Townsend / gas_number_density
        yy = yy / gas_number_density
-       call table_set_column(td_tbl, td_alpha, xx, yy)
+       call table_set_column(td_tbl, td_alpha, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Ionization coefficient:', rel_err
 
        call table_from_file(td_file, "efield[V/m]_vs_eta[1/m]", &
             xx, yy)
        xx = xx * SI_to_Townsend / gas_number_density
        yy = yy / gas_number_density
-       call table_set_column(td_tbl, td_eta, xx, yy)
+       call table_set_column(td_tbl, td_eta, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Attachment coefficient:', rel_err
     else
        call table_from_file(td_file, "Mobility *N (1/m/V/s)", xx, yy)
 
@@ -131,19 +137,23 @@ contains
        td_tbl = LT_create(table_min_townsend, max_Td, &
             table_size, 5, table_xspacing)
 
-       call table_set_column(td_tbl, td_mobility, xx, yy)
+       call table_set_column(td_tbl, td_mobility, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Mobility:', rel_err
 
        call table_from_file(td_file, "Diffusion coefficient *N (1/m/s)", &
             xx, yy)
-       call table_set_column(td_tbl, td_diffusion, xx, yy)
+       call table_set_column(td_tbl, td_diffusion, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Diffusion coefficient:', rel_err
 
        call table_from_file(td_file, "Townsend ioniz. coef. alpha/N (m2)", &
             xx, yy)
-       call table_set_column(td_tbl, td_alpha, xx, yy)
+       call table_set_column(td_tbl, td_alpha, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Ionization coefficient:', rel_err
 
        call table_from_file(td_file, "Townsend attach. coef. eta/N (m2)", &
             xx, yy)
-       call table_set_column(td_tbl, td_eta, xx, yy)
+       call table_set_column(td_tbl, td_eta, xx, yy, rel_err)
+       write(*, '(A30,F12.4)') 'Attachment coefficient:', rel_err
 
        td_energy_eV = 5
        call table_from_file(td_file, "Mean energy (eV)", &
