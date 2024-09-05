@@ -23,16 +23,18 @@ parser.add_argument('-E_bg', type=float,
                     help='Background electric field')
 parser.add_argument('-factor', type=float, default=0.5,
                     help='Fit until value is below max(E) * factor')
-parser.add_argument('-delim_whitespace', type=bool, default=True,
-                    help='Whether the data has a whitespace delimiter')
+parser.add_argument('-sep', type=str, default=r'\s+',
+                    help='Delimiter for data')
 parser.add_argument('-skiprows', type=int, default=0,
                     help='Skip this many rows when reading the data')
 parser.add_argument('-charge_layer_width', type=float,
                     help='Manually set width of the charge layer')
+parser.add_argument('-compact_output', action='store_true',
+                    help='Compact output for processing with other scripts')
 args = parser.parse_args()
 
 # Load data
-df = pd.read_csv(args.infile, delim_whitespace=args.delim_whitespace,
+df = pd.read_csv(args.infile, sep=r'\s+',
                  skiprows=args.skiprows, dtype=float, header=0,
                  names=['z', 'E'], usecols=[args.z_column, args.E_column])
 
@@ -52,7 +54,8 @@ E_bg = args.E_bg
 
 if E_bg is None:
     E_bg = np.median(E)
-    print(f'Estimated background field: {E_bg:.3e}')
+    if not args.compact_output:
+        print(f'Estimated background field: {E_bg:.3e}')
 
 # Locate distance where value has dropped to factor * max(E)
 distance_pos = np.argmax(E[i_max:] < args.factor * E_max)
@@ -75,23 +78,28 @@ def fit_func(z, R, E_max):
 R_guess = (args.factor + args.factor**0.5)/(1 - args.factor) * z[-1]
 
 if args.charge_layer_width is None:
-    # Start fit from location where the derivative has the largest amplitude
-    n_skip = np.argmax(np.abs(np.gradient(E)))
-    print(f'Estimated charge layer width: {z[n_skip]:.3e}')
+    # Start fit from location where the derivative starts to decrease
+    dEdz = np.abs(np.gradient(E))
+    n_skip = np.argmax(np.diff(dEdz) < 0)
+    if not args.compact_output:
+        print(f'Estimated charge layer width: {z[n_skip]:.3e}')
 else:
     n_skip = np.argmax(z - args.charge_layer_width >= 0)
 
 popt, pcov = curve_fit(fit_func, z[n_skip:], E[n_skip:],
                        p0=[R_guess, E[n_skip]])
 
-print(f'Fitted radius: {popt[0]:.3e}')
-print(f'Fitted E_max:  {popt[1]:.3e}')
+if args.compact_output:
+    print(f'{popt[0]:.3e}')
+else:
+    print(f'Fitted radius: {popt[0]:.3e}')
+    print(f'Fitted E_max:  {popt[1]:.3e}')
 
-fig, ax = plt.subplots()
+    fig, ax = plt.subplots()
 
-ax.plot(z, E, label='data')
-ax.plot(z[n_skip:], E[n_skip:], ls='--', label='fit range')
-ax.plot(z, fit_func(z, *popt), label='fit')
-ax.legend()
+    ax.plot(z, E, label='data')
+    ax.plot(z[n_skip:], E[n_skip:], ls='--', label='fit range')
+    ax.plot(z, fit_func(z, *popt), label='fit')
+    ax.legend()
 
-plt.show()
+    plt.show()
