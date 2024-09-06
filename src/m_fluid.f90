@@ -56,7 +56,7 @@ contains
 
     call flux_upwind_tree(tree, flux_num_species, flux_species, s_deriv, &
          flux_variables, 2, dt_limits(1:2), flux_upwind, flux_direction, &
-         flux_dummy_line_modify, af_limiter_koren_t)
+         line_modify_electrode, af_limiter_koren_t)
     t3 = omp_get_wtime()
     wc_time_flux = wc_time_flux + t3 - t2
 
@@ -97,6 +97,48 @@ contains
     dt_limits(1) = dt_limits(1) * dt_cfl_number
     dt_lim = min(dt_max, minval(dt_limits))
   end subroutine forward_euler
+
+  !> Modify line data to handle boundary conditions at electrodes
+  subroutine line_modify_electrode(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
+    integer, intent(in)     :: n_cc                 !< Number of cell centers
+    integer, intent(in)     :: n_var                !< Number of variables
+    real(dp), intent(inout) :: cc_line(-1:n_cc-2, n_var) !< Line values to modify
+    integer, intent(in)     :: flux_dim             !< In which dimension fluxes are computed
+    type(box_t), intent(in) :: box                  !< Current box
+    integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
+    integer, intent(in)     :: s_deriv              !< State to compute derivatives from
+
+    real(dp)                :: lsf(0:box%n_cell+1), fac
+    integer                 :: i
+
+
+    ! Check if box contains an electrode boundary
+    if (iand(box%tag, mg_lsf_box) == 0) return
+
+    if (associated(bc_species, af_bc_neumann_zero)) then
+       fac = 1.0_dp
+    else
+       fac = 0.0_dp
+    end if
+
+    ! Get level set function along the line of the flux computation
+    call flux_get_line_1cc(box, i_lsf, flux_dim, line_ix, lsf)
+
+    do i = 0, box%n_cell
+       if (lsf(i) * lsf(i+1) <= 0) then
+          ! There is an interface
+          if (lsf(i) > 0) then
+             ! Two 'ghost' points are at i+1 and i+2
+             cc_line(i+1, :) = fac * cc_line(i, :)
+             cc_line(i+2, :) = fac * cc_line(i-1, :)
+          else
+             cc_line(i, :) = fac * cc_line(i+1, :)
+             cc_line(i-1, :) = fac * cc_line(i+2, :)
+          end if
+       end if
+    end do
+
+  end subroutine line_modify_electrode
 
   !> Compute flux for the fluid model
   subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
