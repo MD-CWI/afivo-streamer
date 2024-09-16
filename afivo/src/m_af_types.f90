@@ -398,7 +398,14 @@ module m_af_types
      integer :: ix(NDIM) = -1     !< Index inside the box
   end type af_loc_t
 
-    abstract interface
+  !> To store information about an internal boundary along a 'line' of flux
+  type af_line_bnd_t
+     logical  :: has_boundary = .false.
+     integer  :: i_lo   !< Boundary is between i_lo and i_lo+1
+     real(dp) :: lsf(2) !< Level set values at i_lo and i_lo+1
+  end type af_line_bnd_t
+
+  abstract interface
      !> Subroutine for setting refinement flags
      subroutine af_subr_ref(box, cell_flags)
        import

@@ -241,6 +241,10 @@ program streamer
         photoi_prev_time = time
      end if
 
+     if (ST_use_electrode) then
+        call zero_density_inside_electrode(tree)
+     end if
+
      ! Advance over dt, but make a copy first so that we can try again if dt was too large
      dt_lim = huge_real
      step_accepted = .false.
@@ -576,6 +580,7 @@ contains
 
   subroutine zero_density_inside_electrode_box(box)
     type(box_t), intent(inout) :: box
+    real(dp)                   :: lsf_nb(2*NDIM), dens_nb(2*NDIM)
     integer                    :: nc, IJK
 
     if (iand(box%tag, mg_lsf_box) == 0) return
@@ -585,6 +590,50 @@ contains
        if (box%cc(IJK, i_lsf) < 0) then
           ! Set all species densities to zero
           box%cc(IJK, all_densities) = 0.0_dp
+
+#if NDIM == 1
+          lsf_nb = [box%cc(i-1, i_lsf), &
+               box%cc(i+1, i_lsf)]
+#elif NDIM == 2
+          lsf_nb = [box%cc(i-1, j, i_lsf), &
+               box%cc(i+1, j, i_lsf), &
+               box%cc(i, j-1, i_lsf), &
+               box%cc(i, j+1, i_lsf)]
+#elif NDIM == 3
+          lsf_nb = [box%cc(i-1, j, k, i_lsf), &
+               box%cc(i+1, j, k, i_lsf), &
+               box%cc(i, j-1, k, i_lsf), &
+               box%cc(i, j+1, k, i_lsf), &
+               box%cc(i, j, k-1, i_lsf), &
+               box%cc(i, j, k+1, i_lsf)]
+#endif
+
+          if (any(lsf_nb > 0) .and. &
+               associated(bc_species, af_bc_neumann_zero)) then
+             ! At the boundary of the electrode
+#if NDIM == 1
+             dens_nb = [box%cc(i-1, i_electron), &
+                  box%cc(i+1, i_electron)]
+#elif NDIM == 2
+             dens_nb = [box%cc(i-1, j, i_electron), &
+                  box%cc(i+1, j, i_electron), &
+                  box%cc(i, j-1, i_electron), &
+                  box%cc(i, j+1, i_electron)]
+#elif NDIM == 3
+             dens_nb = [box%cc(i-1, j, k, i_electron), &
+                  box%cc(i+1, j, k, i_electron), &
+                  box%cc(i, j-1, k, i_electron), &
+                  box%cc(i, j+1, k, i_electron), &
+                  box%cc(i, j, k-1, i_electron), &
+                  box%cc(i, j, k+1, i_electron)]
+#endif
+
+             ! Set electron density to average of outside neighbors
+             box%cc(IJK, i_electron) = sum(dens_nb, mask=(lsf_nb > 0)) / &
+                  count(lsf_nb > 0)
+             ! Set first positive ion density for charge neutrality
+             box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_electron)
+          end if
        end if
     end do; CLOSE_DO
   end subroutine zero_density_inside_electrode_box

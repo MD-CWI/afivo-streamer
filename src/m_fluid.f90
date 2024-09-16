@@ -56,7 +56,7 @@ contains
 
     call flux_upwind_tree(tree, flux_num_species, flux_species, s_deriv, &
          flux_variables, 2, dt_limits(1:2), flux_upwind, flux_direction, &
-         line_modify_electrode, af_limiter_koren_t)
+         line_modify_electrode, af_limiter_koren_t, i_lsf)
     t3 = omp_get_wtime()
     wc_time_flux = wc_time_flux + t3 - t2
 
@@ -99,50 +99,35 @@ contains
   end subroutine forward_euler
 
   !> Modify line data to handle boundary conditions at electrodes
-  subroutine line_modify_electrode(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
-    integer, intent(in)     :: n_cc                 !< Number of cell centers
-    integer, intent(in)     :: n_var                !< Number of variables
-    real(dp), intent(inout) :: cc_line(-1:n_cc-2, n_var) !< Line values to modify
-    integer, intent(in)     :: flux_dim             !< In which dimension fluxes are computed
-    type(box_t), intent(in) :: box                  !< Current box
-    integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
-    integer, intent(in)     :: s_deriv              !< State to compute derivatives from
+  subroutine line_modify_electrode(n_cc, n_var, cc_line, line_bnd)
+    integer, intent(in)             :: n_cc !< Number of cell centers
+    integer, intent(in)             :: n_var !< Number of variables
+    real(dp), intent(inout)         :: cc_line(-1:n_cc-2, n_var) !< Line values to modify
+    type(af_line_bnd_t), intent(in) :: line_bnd !< Information about line boundary
+    real(dp)                        :: fac
 
-    real(dp)                :: lsf(0:box%n_cell+1), fac
-    integer                 :: i
-
-
-    ! Check if box contains an electrode boundary
-    if (iand(box%tag, mg_lsf_box) == 0) return
-
-    if (associated(bc_species, af_bc_neumann_zero)) then
+    if (bc_species_type == bc_neumann_zero) then
        fac = 1.0_dp
     else
        fac = 0.0_dp
     end if
 
-    ! Get level set function along the line of the flux computation
-    call flux_get_line_1cc(box, i_lsf, flux_dim, line_ix, lsf)
-
-    do i = 0, box%n_cell
-       if (lsf(i) * lsf(i+1) <= 0) then
-          ! There is an interface
-          if (lsf(i) > 0) then
-             ! Two 'ghost' points are at i+1 and i+2
-             cc_line(i+1, :) = fac * cc_line(i, :)
-             cc_line(i+2, :) = fac * cc_line(i-1, :)
-          else
-             cc_line(i, :) = fac * cc_line(i+1, :)
-             cc_line(i-1, :) = fac * cc_line(i+2, :)
-          end if
-       end if
-    end do
+    associate(i => line_bnd%i_lo)
+      if (line_bnd%lsf(1) > 0) then
+         ! Two 'ghost' points are at i+1 and i+2
+         cc_line(i+1, :) = fac * cc_line(i, :)
+         cc_line(i+2, :) = fac * cc_line(i, :)
+      else
+         cc_line(i, :) = fac * cc_line(i+1, :)
+         cc_line(i-1, :) = fac * cc_line(i+1, :)
+      end if
+    end associate
 
   end subroutine line_modify_electrode
 
   !> Compute flux for the fluid model
   subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
-       n_other_dt, other_dt, box, line_ix, s_deriv)
+       n_other_dt, other_dt, box, line_ix, s_deriv, line_bnd)
     use m_af_flux_schemes
     use m_units_constants
     use m_gas
@@ -160,6 +145,7 @@ contains
     type(box_t), intent(in) :: box             !< Current box
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv        !< State to compute derivatives from
+    type(af_line_bnd_t), intent(in) :: line_bnd   !< Information about line boundary
 
     real(dp), parameter :: five_third = 5/3.0_dp
 
@@ -179,28 +165,35 @@ contains
 
     ! Inside dielectrics, set the flux to zero
     if (ST_use_dielectric) then
+       ! An interior dielectric cell implies the whole box is a dielectric
        if (box%cc(DTIMES(1), i_eps) > 1.0_dp) then
           flux = 0.0_dp
           return
        end if
     end if
 
+    ! Get electric field on cell faces
+    call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
+
+    ! Get electron density at cell centers for diffusive flux
+    call flux_get_line_1cc(box, i_electron+s_deriv, flux_dim, line_ix, ne_cc)
+    call apply_line_bc_cc(line_bnd, bc_species_type, nc, ne_cc)
+
+    ! Get inverse gas number density at cell faces
     if (gas_constant_density) then
        N_inv = 1/gas_number_density
     else
-       ! Compute gas number density at cell faces
        call flux_get_line_1cc(box, i_gas_dens, flux_dim, line_ix, N_gas)
+       call apply_line_bc_cc(line_bnd, bc_neumann_zero, nc, N_gas)
        do n = 1, nc+1
           N_inv(n) = 2 / (N_gas(n-1) + N_gas(n))
        end do
     end if
 
-    call flux_get_line_1fc(box, electric_fld, flux_dim, line_ix, E_x)
-    call flux_get_line_1cc(box, i_electron+s_deriv, flux_dim, line_ix, ne_cc)
-
     if (model_has_energy_equation) then
        call flux_get_line_1cc(box, i_electron_energy+s_deriv, &
             flux_dim, line_ix, en_cc)
+       call apply_line_bc_cc(line_bnd, bc_neumann_zero, nc, en_cc)
 
        ! Get mean electron energies at cell faces
        tmp_fc = mean_electron_energy(u(:, 2), u(:, 1))
@@ -208,6 +201,7 @@ contains
        dc = LT_get_col(td_ee_tbl, td_ee_diffusion, tmp_fc) * N_inv
     else
        call flux_get_line_1cc(box, i_electric_fld, flux_dim, line_ix, E_cc)
+       call apply_line_bc_cc(line_bnd, bc_neumann_zero, nc, E_cc)
 
        ! Compute field strength at cell faces, which is used to compute the
        ! mobility and diffusion coefficient at the interface
@@ -248,7 +242,35 @@ contains
 
     ! Dielectric relaxation time
     other_dt(1) = UC_eps0 / (UC_elem_charge * max(maxval(sigma), 1e-100_dp))
+
   end subroutine flux_upwind
+
+  !> Apply boundary conditions along a line
+  subroutine apply_line_bc_cc(line_bnd, bc_type, nc, cc_line)
+    type(af_line_bnd_t), intent(in) :: line_bnd
+    integer, intent(in)             :: bc_type
+    integer, intent(in)             :: nc
+    real(dp), intent(inout)         :: cc_line(0:nc+1)
+    real(dp)                        :: fac
+
+    if (bc_type == bc_neumann_zero) then
+       fac = 1.0_dp
+    else
+       fac = 0.0_dp
+    end if
+
+    associate(i => line_bnd%i_lo)
+      if (line_bnd%has_boundary) then
+         ! Set single ghost point at i+1 or i
+         if (line_bnd%lsf(1) > 0) then
+            cc_line(i+1) = fac * cc_line(i)
+         else
+            cc_line(i) = fac * cc_line(i+1)
+         end if
+
+      end if
+    end associate
+  end subroutine apply_line_bc_cc
 
   !> Determine the direction of fluxes
   subroutine flux_direction(box, line_ix, s_deriv, n_var, flux_dim, direction_positive)

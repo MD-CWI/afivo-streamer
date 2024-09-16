@@ -37,7 +37,7 @@ module m_af_flux_schemes
      end subroutine subr_flux
 
      subroutine subr_flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
-          n_other_dt, other_dt, box, line_ix, s_deriv)
+          n_other_dt, other_dt, box, line_ix, s_deriv, line_bnd)
        import
        integer, intent(in)     :: nf              !< Number of cell faces
        integer, intent(in)     :: n_var           !< Number of variables
@@ -51,6 +51,7 @@ module m_af_flux_schemes
        type(box_t), intent(in) :: box             !< Current box
        integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
        integer, intent(in)     :: s_deriv         !< State to compute derivatives from
+       type(af_line_bnd_t), intent(in) :: line_bnd   !< Information about line boundary
      end subroutine subr_flux_upwind
 
      subroutine subr_flux_modify(nf, n_var, flux_dim, flux, box, line_ix, s_deriv)
@@ -75,15 +76,12 @@ module m_af_flux_schemes
        logical, intent(out)    :: direction_positive(box%n_cell+1, n_var)
      end subroutine subr_flux_dir
 
-     subroutine subr_line_modify(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
+     subroutine subr_line_modify(n_cc, n_var, cc_line, line_bnd)
        import
        integer, intent(in)     :: n_cc                 !< Number of cell centers
        integer, intent(in)     :: n_var                !< Number of variables
-       real(dp), intent(inout) :: cc_line(n_cc, n_var) !< Line values to modify
-       integer, intent(in)     :: flux_dim             !< In which dimension fluxes are computed
-       type(box_t), intent(in) :: box                  !< Current box
-       integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
-       integer, intent(in)     :: s_deriv              !< State to compute derivatives from
+       real(dp), intent(inout) :: cc_line(n_cc, n_var) !< Flux that will be modified
+       type(af_line_bnd_t), intent(in) :: line_bnd   !< Information about line boundary
      end subroutine subr_line_modify
 
      subroutine subr_source(box, dt, n_vars, i_cc, s_deriv, s_out, n_dt, dt_lim, mask)
@@ -438,7 +436,7 @@ contains
   !> Compute generic finite volume flux with a second order MUSCL scheme
   subroutine flux_generic_tree(tree, n_vars, i_cc, s_deriv, i_flux, dt_lim, &
        max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
-       to_primitive, to_conservative, limiter)
+       to_primitive, to_conservative, limiter, i_lsf)
     use m_af_restrict
     use m_af_core
     type(af_t), intent(inout)     :: tree
@@ -462,6 +460,7 @@ contains
     procedure(subr_prim_cons)     :: to_conservative
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)           :: limiter
+    integer, intent(in), optional :: i_lsf !< Index of level set function
     real(dp)                      :: my_dt
 
     integer :: lvl, i
@@ -479,7 +478,7 @@ contains
           call flux_generic_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
                n_vars, i_cc, s_deriv, i_flux, my_dt, max_wavespeed, &
                flux_from_primitives, flux_modify, line_modify, &
-               to_primitive, to_conservative, limiter)
+               to_primitive, to_conservative, limiter, i_lsf)
           dt_lim = min(dt_lim, my_dt)
        end do
        !$omp end do
@@ -494,7 +493,7 @@ contains
   !> Compute generic finite volume flux with a second order MUSCL scheme
   subroutine flux_generic_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, dt_lim, &
        max_wavespeed, flux_from_primitives, flux_modify, line_modify, &
-       to_primitive, to_conservative, limiter)
+       to_primitive, to_conservative, limiter, i_lsf)
     use m_af_types
     use m_af_ghostcell
     type(af_t), intent(inout)     :: tree
@@ -520,6 +519,7 @@ contains
     procedure(subr_prim_cons)     :: to_conservative
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)           :: limiter
+    integer, intent(in), optional :: i_lsf !< Index of level set function
 
 
     real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
@@ -530,6 +530,7 @@ contains
     real(dp) :: flux_l(nc+1, n_vars), flux_r(nc+1, n_vars)
     real(dp) :: cfl_sum(DTIMES(nc)), cfl_sum_line(nc), inv_dr(NDIM)
     integer  :: flux_dim, line_ix(NDIM-1)
+    type(af_line_bnd_t) :: line_bnd
 #if NDIM > 1
     integer  :: i
 #endif
@@ -585,8 +586,12 @@ contains
 #endif
 
              ! Optionally modify data, e.g. to take into account a boundary
-             call line_modify(nc+4, n_vars, cc_line, flux_dim, &
-                  tree%boxes(id), line_ix, s_deriv)
+             if (present(i_lsf)) then
+                call get_line_boundary(i_lsf, flux_dim, tree%boxes(id), &
+                     line_ix, line_bnd)
+                if (line_bnd%has_boundary) &
+                     call line_modify(nc+4, n_vars, cc_line, line_bnd)
+             end if
 
              ! Flux computation is based on primitive variables (this can be a
              ! dummy procedure)
@@ -664,7 +669,7 @@ contains
 
   !> Compute upwind fluxes
   subroutine flux_upwind_tree(tree, n_vars, i_cc, s_deriv, i_flux, n_dt, dt_lim, &
-       flux_upwind, flux_direction, line_modify, limiter)
+       flux_upwind, flux_direction, line_modify, limiter, i_lsf)
     use m_af_restrict
     use m_af_core
     type(af_t), intent(inout)   :: tree
@@ -684,6 +689,7 @@ contains
     procedure(subr_line_modify) :: line_modify
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)         :: limiter
+    integer, intent(in), optional :: i_lsf !< Index of level set function
     integer                     :: lvl, i
     real(dp)                    :: my_dt(n_dt)
 
@@ -699,7 +705,7 @@ contains
        do i = 1, size(tree%lvls(lvl)%leaves)
           call flux_upwind_box(tree, tree%lvls(lvl)%leaves(i), tree%n_cell, &
                n_vars, i_cc, s_deriv, i_flux, n_dt, my_dt, flux_upwind, &
-               flux_direction, line_modify, limiter)
+               flux_direction, line_modify, limiter, i_lsf)
           dt_lim = min(dt_lim, my_dt)
        end do
        !$omp end do
@@ -713,7 +719,7 @@ contains
 
   !> Compute generic finite volume flux
   subroutine flux_upwind_box(tree, id, nc, n_vars, i_cc, s_deriv, i_flux, &
-       n_dt, dt_lim, flux_upwind, flux_direction, line_modify, limiter)
+       n_dt, dt_lim, flux_upwind, flux_direction, line_modify, limiter, i_lsf)
     use m_af_types
     use m_af_ghostcell
     type(af_t), intent(inout)   :: tree
@@ -734,6 +740,7 @@ contains
     procedure(subr_line_modify) :: line_modify
     !> Type of slope limiter to use for flux calculation
     integer, intent(in)         :: limiter
+    integer, intent(in), optional :: i_lsf !< Index of level set function
 
     real(dp) :: cc(DTIMES(-1:nc+2), n_vars)
     real(dp) :: cc_line(-1:nc+2, n_vars)
@@ -743,6 +750,7 @@ contains
     real(dp) :: other_dt(n_dt-1)
     logical  :: direction_positive(nc+1, n_vars)
     integer  :: flux_dim, line_ix(NDIM-1)
+    type(af_line_bnd_t) :: line_bnd
 #if NDIM > 1
     integer  :: i
 #endif
@@ -797,15 +805,19 @@ contains
                     n_vars, flux_dim, direction_positive)
 
                ! Optionally modify data, e.g. to take into account a boundary
-               call line_modify(nc+4, n_vars, cc_line, flux_dim, &
-                    tree%boxes(id), line_ix, s_deriv)
+               if (present(i_lsf)) then
+                  call get_line_boundary(i_lsf, flux_dim, tree%boxes(id), &
+                       line_ix, line_bnd)
+                  if (line_bnd%has_boundary) &
+                       call line_modify(nc+4, n_vars, cc_line, line_bnd)
+               end if
 
                ! Reconstruct to cell faces
                call reconstruct_upwind_1d(nc, 2, n_vars, cc_line, u_l, &
                     limiter, direction_positive)
 
                call flux_upwind(nc+1, n_vars, flux_dim, u_l, flux, cfl_sum_line, &
-                    n_dt-1, other_dt, tree%boxes(id), line_ix, s_deriv)
+                    n_dt-1, other_dt, tree%boxes(id), line_ix, s_deriv, line_bnd)
                dt_lim(2:) = min(dt_lim(2:), other_dt)
 
                ! Store the computed fluxes
@@ -1075,6 +1087,36 @@ contains
     end do
   end subroutine flux_upwind_3d
 
+  !> Determine location of internal boundaries along a flux 'line'
+  subroutine get_line_boundary(i_lsf, flux_dim, box, line_ix, line_bnd)
+    integer, intent(in)                :: i_lsf           !< Index of level set function
+    integer, intent(in)                :: flux_dim        !< In which dimension fluxes are computed
+    type(box_t), intent(in)            :: box             !< Current box
+    integer, intent(in)                :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
+    type(af_line_bnd_t), intent(out) :: line_bnd        !< Information about boundary
+    real(dp)                           :: lsf(0:box%n_cell+1)
+    integer                            :: i
+
+    ! Check if box contains an electrode boundary
+    if (iand(box%tag, mg_lsf_box) == 0) return
+
+    ! Get level set function along the line of the flux computation
+    call flux_get_line_1cc(box, i_lsf, flux_dim, line_ix, lsf)
+
+    do i = 0, box%n_cell
+       if (lsf(i) * lsf(i+1) <= 0) then
+          ! There is an interface
+          if (line_bnd%has_boundary) &
+               error stop "Not implemented: multiple interfaces along block"
+
+          line_bnd%has_boundary = .true.
+          line_bnd%i_lo = i
+          line_bnd%lsf = lsf(i:i+1)
+       end if
+    end do
+
+  end subroutine get_line_boundary
+
   !> Dummy conversion between primitive and conservative variables
   subroutine flux_dummy_conversion(n_values, n_vars, u)
     integer, intent(in)     :: n_values, n_vars
@@ -1103,15 +1145,11 @@ contains
     integer, intent(in)     :: s_deriv         !< State to compute derivatives from
   end subroutine flux_dummy_modify
 
-  subroutine flux_dummy_line_modify(n_cc, n_var, cc_line, flux_dim, box, &
-       line_ix, s_deriv)
+  subroutine flux_dummy_line_modify(n_cc, n_var, cc_line, line_bnd)
     integer, intent(in)     :: n_cc                 !< Number of cell centers
     integer, intent(in)     :: n_var                !< Number of variables
     real(dp), intent(inout) :: cc_line(n_cc, n_var) !< Flux that will be modified
-    integer, intent(in)     :: flux_dim             !< In which dimension fluxes are computed
-    type(box_t), intent(in) :: box                  !< Current box
-    integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
-    integer, intent(in)     :: s_deriv              !< State to compute derivatives from
+    type(af_line_bnd_t), intent(in) :: line_bnd   !< Information about line boundary
   end subroutine flux_dummy_line_modify
 
 end module m_af_flux_schemes

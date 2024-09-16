@@ -335,7 +335,7 @@ contains
   end subroutine get_flux
 
   subroutine flux_upwind(nf, n_var, flux_dim, u, flux, cfl_sum, &
-       n_other_dt, other_dt, box, line_ix, s_deriv)
+       n_other_dt, other_dt, box, line_ix, s_deriv, line_bnd)
     integer, intent(in)     :: nf              !< Number of cell faces
     integer, intent(in)     :: n_var           !< Number of variables
     integer, intent(in)     :: flux_dim        !< In which dimension fluxes are computed
@@ -348,6 +348,7 @@ contains
     type(box_t), intent(in) :: box             !< Current box
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv        !< State to compute derivatives from
+    type(af_line_bnd_t), intent(in) :: line_bnd   !< Information about line boundary
     real(dp) :: tmp
 
     flux = u * velocity(flux_dim)

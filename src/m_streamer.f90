@@ -83,6 +83,12 @@ module m_streamer
   procedure(af_subr_bc), public, protected, pointer :: &
        bc_species => null()
 
+  integer, public, parameter :: bc_neumann_zero = 0
+  integer, public, parameter :: bc_dirichlet_zero = 1
+
+  !> Integer to store boundary condition type
+  integer, public, protected :: bc_species_type = bc_neumann_zero
+
   !> Multigrid option structure
   type(mg_t), public :: mg
 
@@ -325,8 +331,10 @@ contains
     select case (bc_method)
     case ("neumann_zero")
        bc_species => af_bc_neumann_zero
+       bc_species_type = bc_neumann_zero
     case ("dirichlet_zero")
        bc_species => bc_species_dirichlet_zero
+       bc_species_type = bc_dirichlet_zero
     case default
        print *, "Unknown boundary condition: ", trim(bc_method)
        print *, "Try neumann_zero or dirichlet_zero"

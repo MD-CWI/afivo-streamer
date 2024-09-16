@@ -2069,21 +2069,45 @@ contains
          i = box%stencils(ix_dist)%sparse_ix(1, n)
          j = box%stencils(ix_dist)%sparse_ix(2, n)
 
-         if (dd(1) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
-            box%fc(i, j, 1, i_fc) = inv_dr(1) * &
-                 (cc(i, j, i_phi) - bc(IJK)) / dd(1)
+         if (dd(1) < 1) then
+            if (cc(IJK, mg%i_lsf) >= 0) then
+               box%fc(i, j, 1, i_fc) = inv_dr(1) * &
+                    (cc(i, j, i_phi) - bc(IJK)) / dd(1)
+            else if (i == 1 .and. cc(IJK, mg%i_lsf) < 0) then
+               ! At boundary, compute field from gas side. This is also done
+               ! for the other cases below. This can be important when there
+               ! is a refinement boundary, so that fluxes from the fine side
+               ! are used on the coarse neighbor.
+               box%fc(i, j, 1, i_fc) = inv_dr(1) * &
+                    (bc(IJK) - cc(i-1, j, i_phi)) / (1 - dd(1))
+            end if
          end if
-         if (dd(2) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
-            box%fc(i+1, j, 1, i_fc) = inv_dr(1) * &
-                 (bc(IJK) - cc(i, j, i_phi)) / dd(2)
+         if (dd(2) < 1) then
+            if (cc(IJK, mg%i_lsf) >= 0) then
+               box%fc(i+1, j, 1, i_fc) = inv_dr(1) * &
+                    (bc(IJK) - cc(i, j, i_phi)) / dd(2)
+            else if (i == nc .and. cc(IJK, mg%i_lsf) < 0) then
+               box%fc(i+1, j, 1, i_fc) = inv_dr(1) * &
+                    (cc(i+1, j, i_phi) - bc(IJK)) / (1 - dd(2))
+            end if
          end if
-         if (dd(3) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
-            box%fc(i, j, 2, i_fc) = inv_dr(2) * &
-                 (cc(i, j, i_phi) - bc(IJK)) / dd(3)
+         if (dd(3) < 1) then
+            if (cc(IJK, mg%i_lsf) >= 0) then
+               box%fc(i, j, 2, i_fc) = inv_dr(2) * &
+                    (cc(i, j, i_phi) - bc(IJK)) / dd(3)
+            else if (j == 1 .and. cc(IJK, mg%i_lsf) < 0) then
+               box%fc(i, j, 2, i_fc) = inv_dr(2) * &
+                    (bc(IJK) - cc(i, j-1, i_phi)) / (1 - dd(3))
+            end if
          end if
-         if (dd(4) < 1 .and. cc(IJK, mg%i_lsf) >= 0) then
-            box%fc(i, j+1, 2, i_fc) = inv_dr(2) * &
-                 (bc(IJK) - cc(i, j, i_phi)) / dd(4)
+         if (dd(4) < 1) then
+            if (cc(IJK, mg%i_lsf) >= 0) then
+               box%fc(i, j+1, 2, i_fc) = inv_dr(2) * &
+                    (bc(IJK) - cc(i, j, i_phi)) / dd(4)
+            else
+               box%fc(i, j+1, 2, i_fc) = inv_dr(2) * &
+                    (cc(i, j+1, i_phi) - bc(IJK)) / (1 - dd(4))
+            end if
          end if
 #elif NDIM == 3
          i = box%stencils(ix_dist)%sparse_ix(1, n)

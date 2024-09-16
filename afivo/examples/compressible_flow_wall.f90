@@ -132,7 +132,7 @@ contains
 
     call flux_generic_tree(tree, n_vars, variables, s_deriv, fluxes, dt_lim, &
          max_wavespeed, get_fluxes, flux_dummy_modify, line_modify, &
-         to_primitive, to_conservative, af_limiter_vanleer_t)
+         to_primitive, to_conservative, af_limiter_vanleer_t, i_lsf)
     call flux_update_densities(tree, dt, n_vars, variables, n_vars, variables, fluxes, &
          s_deriv, n_prev, s_prev, w_prev, s_out, flux_dummy_source, 0, dummy_dt, &
          set_box_mask)
@@ -245,62 +245,48 @@ contains
   end subroutine get_fluxes
 
   !> Modify line data to approximate a slip boundary condition
-  subroutine line_modify(n_cc, n_var, cc_line, flux_dim, box, line_ix, s_deriv)
+  subroutine line_modify(n_cc, n_var, cc_line, line_bnd)
     integer, intent(in)     :: n_cc                 !< Number of cell centers
     integer, intent(in)     :: n_var                !< Number of variables
     real(dp), intent(inout) :: cc_line(-1:n_cc-2, n_var) !< Line values to modify
-    integer, intent(in)     :: flux_dim             !< In which dimension fluxes are computed
-    type(box_t), intent(in) :: box                  !< Current box
-    integer, intent(in)     :: line_ix(NDIM-1)      !< Index of line for dim /= flux_dim
-    integer, intent(in)     :: s_deriv              !< State to compute derivatives from
+    type(af_line_bnd_t), intent(in) :: line_bnd   !< Information about line boundary
 
-    real(dp)                :: lsf(0:box%n_cell+1)
     real(dp)                :: mom(2), mom_par(2), mom_perp(2)
-    integer                 :: i
 
-    ! Get level set function along the line of the flux computation
-    call flux_get_line_1cc(box, i_lsf, flux_dim, line_ix, lsf)
+    associate (i => line_bnd%i_lo)
+      if (line_bnd%lsf(1) > 0) then
+         cc_line(i+1, :) = cc_line(i, :)
+         cc_line(i+2, :) = cc_line(i-1, :)
 
-    if (all(lsf > 0)) return    ! no boundary
+         ! Project momentum onto a component parallel and perpendicular to
+         ! the boundary. The parallel momentum is copied, but for the
+         ! perpendicular moment a negative sign is used so that the
+         ! "average" perpendicular momentum is zero.
+         ! TODO: use gradient of lsf, take distance into account?
+         mom = cc_line(i, i_mom)
+         mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+         mom_par = mom - mom_perp
+         cc_line(i+1, i_mom) = mom_par - mom_perp
 
-    do i = 0, box%n_cell
-       if (lsf(i) * lsf(i+1) <= 0) then
-          ! There is an interface
-          if (lsf(i) > 0) then
-             cc_line(i+1, :) = cc_line(i, :)
-             cc_line(i+2, :) = cc_line(i-1, :)
+         mom = cc_line(i-1, i_mom)
+         mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+         mom_par = mom - mom_perp
+         cc_line(i+2, i_mom) = mom_par - mom_perp
+      else
+         cc_line(i, :) = cc_line(i+1, :)
+         cc_line(i-1, :) = cc_line(i+2, :)
 
-             ! Project momentum onto a component parallel and perpendicular to
-             ! the boundary. The parallel momentum is copied, but for the
-             ! perpendicular moment a negative sign is used so that the
-             ! "average" perpendicular momentum is zero.
-             ! TODO: use gradient of lsf, take distance into account?
-             mom = cc_line(i, i_mom)
-             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
-             mom_par = mom - mom_perp
-             cc_line(i+1, i_mom) = mom_par - mom_perp
+         mom = cc_line(i+1, i_mom)
+         mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+         mom_par = mom - mom_perp
+         cc_line(i, i_mom) = mom_par - mom_perp
 
-             mom = cc_line(i-1, i_mom)
-             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
-             mom_par = mom - mom_perp
-             cc_line(i+2, i_mom) = mom_par - mom_perp
-          else
-             cc_line(i, :) = cc_line(i+1, :)
-             cc_line(i-1, :) = cc_line(i+2, :)
-
-             mom = cc_line(i+1, i_mom)
-             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
-             mom_par = mom - mom_perp
-             cc_line(i, i_mom) = mom_par - mom_perp
-
-             mom = cc_line(i+2, i_mom)
-             mom_perp = dot_product(mom, wedge_normal) * wedge_normal
-             mom_par = mom - mom_perp
-             cc_line(i-1, i_mom) = mom_par - mom_perp
-          end if
-       end if
-    end do
-
+         mom = cc_line(i+2, i_mom)
+         mom_perp = dot_product(mom, wedge_normal) * wedge_normal
+         mom_par = mom - mom_perp
+         cc_line(i-1, i_mom) = mom_par - mom_perp
+      end if
+    end associate
   end subroutine line_modify
 
   !> Write primitive variables to output
