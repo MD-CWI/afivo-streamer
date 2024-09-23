@@ -58,7 +58,9 @@ program helmholtz_variable_stencil
      mg%helmholtz_lambda = 1/(diffusion_coeff * dt)
      print *, k_factor, dt, n_steps
 
-     if (k_factor > 1) call mg_update_operator_stencil(tree, mg)
+     if (k_factor > 1) then
+        call mg_update_operator_stencil(tree, mg, .false., .true.)
+     end if
 
      call af_loop_box(tree, set_initial_condition)
      call af_gc_tree(tree, [mg%i_phi])

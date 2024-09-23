@@ -1097,16 +1097,30 @@ contains
   end subroutine store_lsf_distance_matrix
 
   !> Set tag (box type) for a box in the tree
-  subroutine mg_set_box_tag(tree, id, mg)
+  subroutine mg_set_box_tag(tree, id, mg, new_lsf, new_eps)
     type(af_t), intent(inout) :: tree
     integer, intent(in)       :: id
     type(mg_t), intent(in)    :: mg
-    logical                   :: has_lsf
+    logical, intent(in)       :: new_lsf !< Whether the lsf has changed
+    logical, intent(in)       :: new_eps !< Whether epsilon has changed
+    logical                   :: has_lsf, update_lsf, update_eps
     real(dp)                  :: a, b
 
     associate (box => tree%boxes(id))
-      box%tag = mg_normal_box
-      if (tree%mg_i_lsf /= -1) then
+      if (box%tag == af_init_tag) then
+         box%tag = mg_normal_box
+         update_lsf = .true.
+         update_eps = .true.
+      else
+         update_lsf = new_lsf
+         update_eps = new_eps
+
+         ! Remove flags for updated variables
+         if (new_lsf) box%tag = iand(box%tag, not(mg_lsf_box))
+         if (new_eps) box%tag = iand(box%tag, not(ior(mg_veps_box, mg_ceps_box)))
+      end if
+
+      if (tree%mg_i_lsf /= -1 .and. update_lsf) then
          call store_lsf_distance_matrix(box, box%n_cell, mg, has_lsf)
          if (has_lsf) then
             ! Add bits indicating a level set function
@@ -1114,7 +1128,7 @@ contains
          end if
       end if
 
-      if (tree%mg_i_eps /= -1) then
+      if (tree%mg_i_eps /= -1 .and. update_eps) then
          a = minval(box%cc(DTIMES(:), tree%mg_i_eps))
          b = maxval(box%cc(DTIMES(:), tree%mg_i_eps))
 
@@ -1144,7 +1158,7 @@ contains
          if (box%tag == af_init_tag) then
             ! We could use the tag of the parent box, but sometimes a part of a
             ! sharp feature can only be detected in the children
-            call mg_set_box_tag(tree, id, mg)
+            call mg_set_box_tag(tree, id, mg, .true., .true.)
          end if
 
          ! Check if stencils are available
@@ -1171,9 +1185,11 @@ contains
   end subroutine mg_set_operators_lvl
 
   !> Update stencil for an operator, because (part of) the coefficients have changed
-  subroutine mg_update_operator_stencil(tree, mg)
+  subroutine mg_update_operator_stencil(tree, mg, new_lsf, new_eps)
     type(af_t), intent(inout) :: tree
     type(mg_t), intent(inout) :: mg
+    logical, intent(in)       :: new_lsf !< Whether the lsf has changed
+    logical, intent(in)       :: new_eps !< Whether epsilon has changed
     integer                   :: lvl, i, id, n
 
     !$omp parallel private(lvl, i, id, n)
@@ -1183,7 +1199,10 @@ contains
           id = tree%lvls(lvl)%ids(i)
           associate (box => tree%boxes(id))
             n = af_stencil_index(box, mg%operator_key)
-            if (n == af_stencil_none) error stop "Operator stencil not yet stored"
+
+            ! Update box tag
+            call mg_set_box_tag(tree, id, mg, new_lsf, new_eps)
+
             call mg_store_operator_stencil(box, mg, n)
           end associate
        end do
