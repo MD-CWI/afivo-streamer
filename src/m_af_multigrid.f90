@@ -1598,9 +1598,10 @@ contains
                  dd(2*idim))
          end do
 
-         ! Account for permittivity
-         !> @todo This is not fully accurate when there is both a change in
-         !> epsilon and a boundary for the same cell
+         ! Account for permittivity. If there is an electrode boundary, assume
+         ! the permittivity is constant up to the boundary.
+         where (dd(:) < 1.0_dp) a(:) = a0
+
          box%stencils(ix)%v(2:, IJK) = box%stencils(ix)%v(2:, IJK) * &
               2 * a0*a(:)/(a0 + a(:))
 
