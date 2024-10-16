@@ -83,6 +83,9 @@ module m_streamer
   procedure(af_subr_bc), public, protected, pointer :: &
        bc_species => null()
 
+  !> Assume Maxwellian to compute the diffusive flux at domain boundaries
+  logical, public, protected :: ST_assume_Maxwellian_bc = .false.
+
   !> Multigrid option structure
   type(mg_t), public :: mg
 
@@ -332,6 +335,9 @@ contains
        print *, "Try neumann_zero or dirichlet_zero"
        error stop
     end select
+
+    call CFG_add_get(cfg, "assume_Maxwellian_bc", ST_assume_Maxwellian_bc, &
+         "Assume Maxwellian to compute the diffusive flux at domain boundaries")
 
     call CFG_add_get(cfg, "compute_power_density", compute_power_density, &
          "Whether to compute the deposited power density")

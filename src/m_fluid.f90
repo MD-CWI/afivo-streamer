@@ -119,7 +119,7 @@ contains
     integer, intent(in)     :: line_ix(NDIM-1) !< Index of line for dim /= flux_dim
     integer, intent(in)     :: s_deriv        !< State to compute derivatives from
 
-    real(dp), parameter :: five_third = 5/3.0_dp
+    real(dp), parameter :: five_third = 5/3.0_dp, two_third = 2/3.0_dp
 
     real(dp) :: E_cc(0:nf)  !< Cell-centered field strengths
     real(dp) :: E_x(nf)     !< Face-centered field components
@@ -129,7 +129,7 @@ contains
     real(dp) :: v(nf)       !< Velocity at cell faces
     real(dp) :: dc(nf)      !< Diffusion coefficient at cell faces
     real(dp) :: tmp_fc(nf), N_inv(nf)
-    real(dp) :: mu(nf), sigma(nf), inv_dx, cfl_factor
+    real(dp) :: mu(nf), sigma(nf), inv_dx, cfl_factor, kT
     integer  :: n, nc, flux_ix
 
     nc = box%n_cell
@@ -179,6 +179,21 @@ contains
 
     ! Combine advective and diffusive flux
     flux(:, 1) = v * u(:, 1) - dc * inv_dx * (ne_cc(1:nc+1) - ne_cc(0:nc))
+
+    ! Potentially modify the flux near domain boundaries
+    if (ST_assume_Maxwellian_bc .and. flux_dim == NDIM .and. &
+         box%neighbors(2*flux_dim-1) < af_no_box) then
+       kT = two_third * LT_get_col(td_tbl, td_energy_eV, E_cc(1)) * UC_elec_volt
+       flux(1, 1) = v(1) * u(1, 1) - 0.25_dp * ne_cc(1) * &
+            sqrt((8.0 * kT) / (2.0_dp * UC_pi * UC_elec_mass))
+    end if
+
+    if (ST_assume_Maxwellian_bc .and. flux_dim == NDIM .and. &
+         box%neighbors(2*flux_dim) < af_no_box) then
+       kT = two_third * LT_get_col(td_tbl, td_energy_eV, E_cc(nc)) * UC_elec_volt
+       flux(nc+1, 1) = v(nc+1) * u(nc+1, 1) + 0.25_dp * ne_cc(nc) * &
+            sqrt((8.0 * kT) / (2.0_dp * UC_pi * UC_elec_mass))
+    end if
 
     ! Electron conductivity
     sigma = mu * u(:, 1)
