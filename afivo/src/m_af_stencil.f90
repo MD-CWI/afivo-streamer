@@ -194,6 +194,12 @@ contains
           deallocate(stencil%c)
           allocate(stencil%c(n_coeff))
        end if
+
+       ! Clean up other storage if it is present
+       if (allocated(stencil%v)) deallocate(stencil%v)
+       if (allocated(stencil%f)) deallocate(stencil%f, stencil%bc_correction)
+       if (allocated(stencil%sparse_v)) &
+            deallocate(stencil%sparse_v, stencil%sparse_ix)
     case (stencil_variable)
        if (.not. allocated(stencil%v)) then
           allocate(stencil%v(n_coeff, DTIMES(nc)))
@@ -205,7 +211,14 @@ contains
        if (allocate_f .and. .not. allocated(stencil%f)) then
           allocate(stencil%f(DTIMES(nc)))
           allocate(stencil%bc_correction(DTIMES(nc)))
+       else if (.not. allocate_f .and. allocated(stencil%f)) then
+          deallocate(stencil%f, stencil%bc_correction)
        end if
+
+       ! Clean up other storage if it is present
+       if (allocated(stencil%c)) deallocate(stencil%c)
+       if (allocated(stencil%sparse_v)) &
+            deallocate(stencil%sparse_v, stencil%sparse_ix)
     case (stencil_sparse)
        if (.not. present(n_sparse)) error stop "n_sparse required"
 
@@ -218,6 +231,11 @@ contains
           allocate(stencil%sparse_ix(NDIM, n_sparse))
           allocate(stencil%sparse_v(n_coeff, n_sparse))
        end if
+
+       ! Clean up other storage if it is present
+       if (allocated(stencil%c)) deallocate(stencil%c)
+       if (allocated(stencil%v)) deallocate(stencil%v)
+       if (allocated(stencil%f)) deallocate(stencil%f, stencil%bc_correction)
     case default
        error stop "Unknow stencil%stype"
     end select
