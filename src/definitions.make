@@ -140,13 +140,14 @@ m_transport_data.o: m_table_data.mod
 m_transport_data.o: m_types.mod
 m_transport_data.o: m_units_constants.mod
 m_user_methods.o: m_types.mod
+streamer.o: m_analysis.mod
 streamer.o: m_chemistry.mod
 streamer.o: m_config.mod
 streamer.o: m_coupling.mod
 streamer.o: m_dielectric.mod
 streamer.o: m_dt.mod
 streamer.o: m_field.mod
-streamer.o: m_fluid_lfa.mod
+streamer.o: m_fluid.mod
 streamer.o: m_gas.mod
 streamer.o: m_init_cond.mod
 streamer.o: m_model.mod
@@ -160,4 +161,3 @@ streamer.o: m_types.mod
 streamer.o: m_units_constants.mod
 streamer.o: m_user_methods.mod
 streamer.o: m_user.mod
-

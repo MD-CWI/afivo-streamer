@@ -120,6 +120,9 @@ module m_streamer
   !> Streamer length at which the simulation will stop
   real(dp), public, protected :: ST_end_streamer_length = 15e-3
 
+  !> Abort axisymmetric simulations if there is branching
+  logical, public, protected :: ST_abort_axisymmetric_if_branching = .false.
+
   !> The size of the boxes that we use to construct our mesh
   integer, public, protected :: ST_box_size = 8
 
@@ -348,6 +351,10 @@ contains
          ST_initial_streamer_pos_steps_wait, &
          "Number of simulation steps to wait before initializing "&
          "the starting position of the streamer")
+
+    call CFG_add_get(cfg, "abort_axisymmetric_if_branching", &
+         ST_abort_axisymmetric_if_branching, &
+         "Abort axisymmetric simulations if there is branching")
 
     call CFG_add_get(cfg, "end_time", ST_end_time, &
          "The desired endtime (s) of the simulation")

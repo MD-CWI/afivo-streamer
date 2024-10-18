@@ -1,6 +1,7 @@
 !> Program to perform streamer simulations with AMR
 program streamer
 #include "../afivo/src/cpp_macros.h"
+  use iso_fortran_env, only: error_unit
   use m_config
   use m_af_all
   use m_streamer
@@ -19,6 +20,7 @@ program streamer
   use m_dielectric
   use m_units_constants
   use m_model
+  use m_analysis
   use omp_lib
 
   implicit none
@@ -130,8 +132,8 @@ program streamer
           error stop "restart_from_file: incompatible box size"
 
      if (tree%n_var_cell /= tree_copy%n_var_cell) then
-        print *, "n_var_cell here:", tree_copy%n_var_cell
-        print *, "n_var_cell file:", tree%n_var_cell
+        write(error_unit, *) "n_var_cell here:", tree_copy%n_var_cell
+        write(error_unit, *) "n_var_cell file:", tree%n_var_cell
         error stop "restart_from_file: incompatible variable list"
      end if
 
@@ -335,8 +337,8 @@ program streamer
         dt_gas_lim = dt_max
      end if
 
-     ! Do not increase time step when many steps are rejected. Here we a pretty
-     ! arbitrary threshold of 0.1
+     ! Do not increase time step when many steps are rejected. Here we use a
+     ! pretty arbitrary threshold of 0.1
      tmp = dt_max_growth_factor
      if (fraction_steps_rejected > 0.1_dp) tmp = 1.0_dp
 
@@ -355,9 +357,9 @@ program streamer
      global_time = time
 
      if (global_dt < dt_min) then
-        write(*, "(A,E12.4,A)") " Time step (dt =", global_dt, &
+        write(error_unit, "(A,E12.4,A)") " Time step (dt =", global_dt, &
              ") getting too small"
-        print *, "See the documentation on time integration"
+        write(error_unit, *) "See the documentation on time integration"
         call output_status(tree, time, wc_time, it, dt)
         write_out = .true.
      end if
@@ -376,6 +378,12 @@ program streamer
      wc_time_output = wc_time_output + t2 - t1
 
      if (global_dt < dt_min) error stop "dt too small"
+
+     if (ST_cylindrical .and. ST_abort_axisymmetric_if_branching) then
+        if (axisymmetric_is_branching(tree)) then
+           error stop  "Branching detected, abort"
+        end if
+     end if
 
      if (mod(it, refine_per_steps) == 0) then
         ! Restrict species, for the ghost cells near refinement boundaries
@@ -679,5 +687,22 @@ contains
        box%cc(IJK, iv) = user_gas_density(box, IJK)
     end do; CLOSE_DO
   end subroutine set_gas_density_from_user_function
+
+  logical function axisymmetric_is_branching(tree)
+    type(af_t), intent(in) :: tree
+    real(dp)               :: max_field, axis_field
+    type(af_loc_t)         :: loc_field
+
+    ! Get location of max(E) in full domain
+    call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
+
+    ! Compare with maximum in region near axis
+    call analysis_max_var_region(tree, i_electric_fld, [0.0_dp, 0.0_dp], &
+         [1e-2_dp * ST_domain_len(1), ST_domain_len(2)], axis_field, loc_field)
+
+    axisymmetric_is_branching = (max_field > 1.1_dp * axis_field)
+
+    if (axisymmetric_is_branching) print *, max_field, axis_field
+  end function axisymmetric_is_branching
 
 end program streamer
