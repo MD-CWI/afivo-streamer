@@ -690,15 +690,18 @@ contains
 
   logical function axisymmetric_is_branching(tree)
     type(af_t), intent(in) :: tree
-    real(dp)               :: max_field, axis_field
+    real(dp)               :: max_field, axis_field, rmin(NDIM), rmax(NDIM)
     type(af_loc_t)         :: loc_field
 
     ! Get location of max(E) in full domain
     call af_tree_max_cc(tree, i_electric_fld, max_field, loc_field)
 
     ! Compare with maximum in region near axis
-    call analysis_max_var_region(tree, i_electric_fld, [0.0_dp, 0.0_dp], &
-         [1e-2_dp * ST_domain_len(1), ST_domain_len(2)], axis_field, loc_field)
+    rmin = 0.0_dp
+    rmax(1) = 1e-2_dp * ST_domain_len(1)
+    rmax(2:) = ST_domain_len(2:)
+    call analysis_max_var_region(tree, i_electric_fld, rmin, &
+         rmax, axis_field, loc_field)
 
     axisymmetric_is_branching = (max_field > 1.1_dp * axis_field)
 
