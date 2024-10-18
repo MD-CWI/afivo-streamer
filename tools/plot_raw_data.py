@@ -52,7 +52,7 @@ p.add_argument('-q', action='store_true',
 
 def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
                      rmin=None, rmax=None, axisymmetric=False,
-                     abel_transform=False):
+                     abel_transform=False, quiet=False):
     # Grid size nx should be of form 2^k * domain['n_cells_coarse']
     ratio = min_pixels / domain['n_cells_coarse'].min()
     ratio = 2**(np.ceil(np.log2(ratio)).astype(int))
@@ -73,7 +73,7 @@ def get_uniform_data(grids, domain, min_pixels, interpolation='linear',
 
     nx = np.round((r_max - r_min)/dr).astype(int)
 
-    if not args.q:
+    if not quiet:
         print(f'Resolution:   {nx}')
         print(f'Grid spacing: {dr}')
 
@@ -158,7 +158,7 @@ if __name__ == '__main__':
                                           args.interpolation,
                                           args.r_min, args.r_max,
                                           axisymmetric,
-                                          args.abel_transform)
+                                          args.abel_transform, args.q)
 
         if args.save_npz:
             # Save data
