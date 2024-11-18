@@ -3,6 +3,7 @@
 import numpy as np
 import argparse
 import pandas as pd
+import re
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -20,6 +21,8 @@ parser.add_argument('-bar_plot_xlim', type=float, nargs=2,
                     help='x-range for bar plots')
 parser.add_argument('-figname', type=str,
                     help='Name of figure to save')
+parser.add_argument('-label_replacement', nargs='+', type=str,
+                    help='Pairs of (text to replace) and (replacement)')
 args = parser.parse_args()
 
 if args.num_bar_plot > 0 and len(args.y) > 1:
@@ -27,9 +30,10 @@ if args.num_bar_plot > 0 and len(args.y) > 1:
 
 logs = sorted(args.logs)
 
-# Determine whether we analyse log files(pandas dataframe) or species amounts(txt files)
+# Determine whether we analyse log files (pandas dataframes) or species
+# amounts (text files)
 if not all([x.endswith('amounts.txt') for x in logs]):
-    logs_df = [pd.read_csv(f, delim_whitespace=True) for f in args.logs]
+    logs_df = [pd.read_csv(f, sep=r'\s+') for f in args.logs]
     base_name = logs[0].replace('_log.txt', '')
 else:
     # Can we use the below variable elsewhere below?
@@ -44,8 +48,10 @@ else:
         species_list = [x.strip() for x in f.readlines() if x.strip()]
     species_list.insert(0, "time")
 
-    # Load amounts of species and create a dataframe of them so that the below code wont break
-    logs_df = [pd.DataFrame(np.loadtxt(f), columns=species_list) for f in args.logs]
+    # Load amounts of species and create a dataframe of them so that the below
+    # code wont break
+    logs_df = [pd.DataFrame(np.loadtxt(f), columns=species_list)
+               for f in args.logs]
 
 log_sizes = np.array([len(df) for df in logs_df])
 max_size, min_size = log_sizes.max(), log_sizes.min()
@@ -129,21 +135,59 @@ for n, i in enumerate(ix_sort):
     print(f'{n+1:<6} R{ix:<6} {reactions_list[ix-1]:40} ' +
           f'{effect_magnitudes[i]:<15.8f}')
 
+
+def reaction_to_latex_format(label):
+    # Convert a reaction to latex format
+
+    tex = label
+
+    if args.label_replacement is not None:
+        for orig, repl in zip(args.label_replacement[::2],
+                              args.label_replacement[1::2]):
+            tex = tex.replace(orig, repl)
+
+    # Replace +, - with superscript version ($^+$ or $^-$)
+    pattern_plusmin = r'\b([+-])'
+    tex = re.sub(pattern_plusmin, r'$^{\1}$', tex)
+
+    # Match number following a letter (case of `letter+number`) and
+    # replace with $_N$
+    pattern_letter_number = r'([a-zA-Z])(\d+)'
+    tex = re.sub(pattern_letter_number, r'\1$_{\2}$', tex)
+
+    # Match number following '(' and replace with $^N$
+    pattern_paren_number = r'\((\d+)'
+    tex = re.sub(pattern_paren_number, r'($^{\1}$', tex)
+
+    # Nicer arrows
+    tex = tex.replace('->', r'$\to$')
+    # Remove double $$
+    tex = tex.replace('$$', '')
+    print(label, tex)
+
+    return tex
+
+
 if args.num_bar_plot > 0:
     # Make bar plot for args.y[0]
     import matplotlib.pyplot as plt
 
+    plt.rcParams["font.family"] = "serif"
+    plt.rcParams["mathtext.fontset"] = "dejavuserif"
+
     N = args.num_bar_plot
     ixs = ix_sort[:N]
     r_ixs = reaction_ix[ixs]
-    labels = [reactions_list[i-1] for i in r_ixs]
+    labels = [reaction_to_latex_format(reactions_list[i-1]) for i in r_ixs]
     colors = ['green' if x > 0 else 'red' for x in derivatives_mean[ixs, 0]]
-    fig, ax = plt.subplots(1, 1, figsize=(5, 6), layout='constrained')
+    fig, ax = plt.subplots(1, 1, figsize=(5.0, 4), layout='constrained')
     thickness = 0.8
     x_values = np.arange(N, 0, -1)
 
     bars = ax.barh(x_values, np.abs(derivatives_mean[ixs, 0]),
                    tick_label=labels, color=colors, height=thickness)
+
+    ax.set_xlabel(r'relative sensitivity')
 
     sigma_labels = [r'$\pm$ ' + f'{s:.1f}' for s in derivatives_sigma[ixs, 0]]
     ax.bar_label(bars, sigma_labels, padding=5, color='black')
@@ -152,5 +196,6 @@ if args.num_bar_plot > 0:
         ax.set_xlim(args.bar_plot_xlim)
     if args.figname:
         plt.savefig(args.figname, dpi=200, bbox_inches='tight')
+        print(f'Saved {args.figname}')
     else:
         plt.show()
