@@ -83,7 +83,7 @@ K_H2O = 0.26e2 / ONE_TORR
 K_H2O_MIN = 0.13e2 / ONE_TORR
 # convert to 1/(m * bar) Aints Plasma Processes and Polymers 2008 5, 672-680
 K_H2O_MAX = 0.57e2 / ONE_TORR
-pq_H2O_Aints = 0.5 * ONE_TORR   # Quenching parameter
+pq_H2O_Aints = 0.3 * ONE_TORR   # Quenching parameter
 
 
 def zheleznyak_f(r):
