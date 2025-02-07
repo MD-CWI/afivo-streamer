@@ -23,6 +23,8 @@ parser.add_argument('-figname', type=str,
                     help='Name of figure to save')
 parser.add_argument('-label_replacement', nargs='+', type=str,
                     help='Pairs of (text to replace) and (replacement)')
+parser.add_argument('-font', type=str,
+                    help='Name of font to use')
 args = parser.parse_args()
 
 if args.num_bar_plot > 0 and len(args.y) > 1:
@@ -36,8 +38,6 @@ if not all([x.endswith('amounts.txt') for x in logs]):
     logs_df = [pd.read_csv(f, sep=r'\s+') for f in args.logs]
     base_name = logs[0].replace('_log.txt', '')
 else:
-    # Can we use the below variable elsewhere below?
-    analyse_chemistry = True
     # Make sure that the default argument is changed
     if args.y[0] == "sum(n_e)":
         args.y = ["e"]
@@ -163,7 +163,6 @@ def reaction_to_latex_format(label):
     tex = tex.replace('->', r'$\to$')
     # Remove double $$
     tex = tex.replace('$$', '')
-    print(label, tex)
 
     return tex
 
@@ -172,15 +171,16 @@ if args.num_bar_plot > 0:
     # Make bar plot for args.y[0]
     import matplotlib.pyplot as plt
 
-    plt.rcParams["font.family"] = "serif"
-    plt.rcParams["mathtext.fontset"] = "dejavuserif"
+    if args.font is not None:
+        # Set specific font
+        plt.rcParams["font.family"].insert(0, args.font)
 
     N = args.num_bar_plot
     ixs = ix_sort[:N]
     r_ixs = reaction_ix[ixs]
     labels = [reaction_to_latex_format(reactions_list[i-1]) for i in r_ixs]
     colors = ['green' if x > 0 else 'red' for x in derivatives_mean[ixs, 0]]
-    fig, ax = plt.subplots(1, 1, figsize=(5.0, 4), layout='constrained')
+    fig, ax = plt.subplots(1, 1, figsize=(4.5, 3.6), layout='constrained')
     thickness = 0.8
     x_values = np.arange(N, 0, -1)
 
