@@ -313,7 +313,7 @@ contains
     integer, intent(in)        :: n_dt
     real(dp), intent(inout)    :: dt_lim(n_dt)
     logical, intent(in)        :: mask(DTIMES(box%n_cell))
-
+    real(dp)                   :: small_energy = 1.0e-9_dp
     real(dp)                   :: tmp, gain, loss_rate
     real(dp)                   :: rates(box%n_cell**NDIM, n_reactions)
     real(dp)                   :: derivs(box%n_cell**NDIM, n_species)
@@ -459,7 +459,7 @@ contains
 
     if (model_has_energy_equation) then
        ! Set time step restriction for energy loss
-       tmp = maxval(mean_energies)
+       tmp = maxval(mean_energies) + small_energy
        dt_lim(2) = tmp/LT_get_col(td_ee_tbl, td_ee_loss, tmp)
     end if
 
