@@ -436,6 +436,8 @@ contains
     case ("none")
        ST_source_factor = source_factor_none
     case ("flux")
+       if (model_has_energy_equation) &
+            error stop "source_factor flux incompatible with energy eq."
        ST_source_factor = source_factor_flux
     case default
        print *, "Options fixes%source_factor: none, flux"
