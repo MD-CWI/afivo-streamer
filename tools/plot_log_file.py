@@ -33,7 +33,7 @@ for i, log in enumerate(logs):
     v_hi = log["velocity"].abs().quantile(0.9)
     mask = np.logical_or(log['velocity'].abs() < 0.5 * v_low,
                          log['velocity'].abs() > 2 * v_hi)
-    log['velocity'].mask(mask, np.nan, inplace=True)
+    log['velocity'] = log['velocity'].mask(mask, np.nan)
 
     if args.velocity_window is not None:
         # Compute average
@@ -45,7 +45,7 @@ for i, log in enumerate(logs):
     v_hi = log['x.2'].abs().quantile(0.9)
     mask = np.logical_or(log['x.2'].abs() < 0.5 * v_low,
                          log['x.2'].abs() > 2 * v_hi)
-    log['x.2'].mask(mask, np.nan, inplace=True)
+    log['x.2'] = log['x.2'].mask(mask, np.nan)
 
     log.plot('time', coord, ax=axes[0, 0], label=f'y-{i}')
     log.plot('time', 'velocity', ax=axes[0, 1], label=f'velocity-{i}')
