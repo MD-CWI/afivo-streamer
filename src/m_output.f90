@@ -587,20 +587,20 @@ contains
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x max(n_e) x voltage current_J.E &
             &current_displ ne_zmin ne_zmax &
-            &max(Etip) x wc_time n_cells min(dx) dt_cfl dt_diff dt_drt dt_chem &
+            &max(Etip) x wc_time n_cells min(dx) dt_cfl dt_drt dt_chem dt_other &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) &
             &voltage current_J.E current_displ &
             &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) &
-            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
+            &dt_cfl dt_drt dt_chem dt_other highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
             &current_J.E current_displ &
             &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) &
-            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
+            &dt_cfl dt_drt dt_chem dt_other highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
           do i = 1, n_user_vars
