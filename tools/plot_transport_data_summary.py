@@ -16,7 +16,7 @@ p.add_argument("-SI_field", action='store_true',
                help="Use electric field in V/m rather than Td")
 args = p.parse_args()
 
-all_data = [pd.read_csv(f, delim_whitespace=True) for f in args.summary_file]
+all_data = [pd.read_csv(f, sep=r'\s+') for f in args.summary_file]
 
 if args.SI_field:
     for x in all_data:

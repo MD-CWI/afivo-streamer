@@ -14,7 +14,7 @@ p.add_argument("-savgol_width", type=int, default=5, help="Width of savgol filte
 p.add_argument("-savgol_order", type=int, default=2, help="Order of savgol filter")
 args = p.parse_args()
 
-logs = [pd.read_csv(f, delim_whitespace=True) for f in args.log_file]
+logs = [pd.read_csv(f, sep=r'\s+') for f in args.log_file]
 numbered_files = [f'{i}: {f}' for i, f in enumerate(args.log_file)]
 
 fig, axes = plt.subplots(1, 1, constrained_layout=True)

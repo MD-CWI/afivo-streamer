@@ -12,7 +12,7 @@ p.add_argument("-velocity_window", type=int,
                help="Compute average velocity over this window size")
 args = p.parse_args()
 
-logs = [pd.read_csv(f, delim_whitespace=True) for f in args.log_file]
+logs = [pd.read_csv(f, sep=r'\s+') for f in args.log_file]
 numbered_files = [f'{i}: {f}' for i, f in enumerate(args.log_file)]
 
 fig, axes = plt.subplots(2, 2, constrained_layout=True)
