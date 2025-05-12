@@ -13,6 +13,24 @@ name | value | description
 `seed_falloff` | N * string | Fall-off type for seed (sigmoid, gaussian, smoothstep, step, laser)
 `seed_width` | N * real | Seed decay width (m)
 
+So to define a single seed in 2D, one could use for example:
+
+    seed_density = 1e19
+    seed_charge_type = 0
+    seed_rel_r0 = 0.5 0.45
+    seed_rel_r1 = 0.5 0.55
+    seed_width = 1e-3
+    seed_falloff = smoothstep
+
+and to define two seeds, one could use for example:
+
+    seed_density = 1e19 1e18
+    seed_charge_type = 0 0
+    seed_rel_r0 = 0.5 0.45 0.4 0.45
+    seed_rel_r1 = 0.5 0.55 0.4 0.55
+    seed_width = 1e-3 1e-3
+    seed_falloff = smoothstep smoothstep
+
 Other settings that control the initial conditions are:
 
 name | value | description
