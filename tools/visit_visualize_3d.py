@@ -58,7 +58,7 @@ def get_args():
                     help='Step between frames')
 
     pr.add_argument('-rndr', type=str, default='texture',
-                    choices=['splatting', 'texture', 'raycast'],
+                    choices=['splatting', 'texture', 'raycast', 'Composite'],
                     help='Use this type of volume rendering')
     pr.add_argument('-scaling', type=str, default='lin',
                     choices=['lin', 'log'],
@@ -134,7 +134,10 @@ if __name__ == '__main__':
     # Treat databases as time-varying
     v.SetTreatAllDBsAsTimeVarying(1)
 
-    v.OpenDatabase(args.database + ' database')
+    if '*' in args.database:
+        v.OpenDatabase(args.database + ' database')
+    else:
+        v.OpenDatabase(args.database)
 
     if not args.no_volume_render:
         v.AddPlot('Volume', args.varname, 1, 1)
@@ -174,6 +177,10 @@ if __name__ == '__main__':
         vatts.rendererType = vatts.RayCasting
     elif args.rndr == 'texture':
         vatts.rendererType = vatts.Texture3D
+    elif args.rndr == 'Composite':
+        vatts.rendererType = vatts.Composite
+    else:
+        raise ValueError("Render type not implemented")
 
     # Set scaling
     if args.scaling == 'lin':
@@ -184,9 +191,15 @@ if __name__ == '__main__':
     if args.ct:
         vatts.SetColorControlPoints(v.GetColorTable(args.ct))
 
-    vatts.resampleFlag = 1
     vatts.resampleTarget = args.nsamples
     vatts.lightingFlag = 0
+
+    if args.rndr == 'Composite':
+        # Probably new visit (v3)
+        vatts.sampling = vatts.Trilinear
+    else:
+        # Probably old visit (v2)
+        vatts.resampleFlag = 1
 
     if args.cmin is not None:
         vatts.useColorVarMin = 1
