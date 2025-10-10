@@ -31,6 +31,7 @@ program streamer
   integer(int8)             :: t_start, t_current, count_rate
   real(dp)                  :: wc_time = 0.0_dp, inv_count_rate
   real(dp)                  :: time_last_print, time_last_output
+  integer                   :: it_last_output
   integer                   :: i, it, n, coord_type, box_bytes
   integer                   :: n_steps_rejected
   integer, allocatable      :: ref_links(:, :)
@@ -172,6 +173,7 @@ program streamer
   inv_count_rate   = 1.0_dp / count_rate
   time_last_print  = -1e10_dp
   time_last_output = time
+  it_last_output = it
 
   call field_compute_energy(tree, field_energy_prev)
   field_energy_prev_time = time
@@ -222,11 +224,13 @@ program streamer
         current_electrode_dx = electrode_derefine_factor*refine_electrode_dx
      end if
 
-     ! Every output_dt, write output
-     write_out = (time + dt >= time_last_output + current_output_dt)
+     ! Every output_dt or output_dit, write output
+     write_out = (time + dt >= time_last_output + current_output_dt .or. &
+          it >= it_last_output + output_dit)
+
      if (write_out) then
         ! Ensure that dt is non-negative, even when current_output_dt changes
-        dt = max(0.0_dp, time_last_output + current_output_dt - time)
+        dt = min(dt, max(0.0_dp, time_last_output + current_output_dt - time))
      end if
 
      ! Make sure to capture the start of the next pulse
@@ -368,6 +372,7 @@ program streamer
      if (write_out) then
         output_cnt       = output_cnt + 1
         time_last_output = global_time
+        it_last_output   = it
         call output_write(tree, output_cnt, wc_time, write_sim_data)
         if (ST_use_dielectric .and. surface_output) then
            call surface_write_output(tree, diel, [i_photon_flux, i_surf_dens], &

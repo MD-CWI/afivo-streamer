@@ -21,6 +21,9 @@ module m_output
   ! Time between writing output
   real(dp), public, protected :: output_dt = 1.0e-10_dp
 
+  ! Iterations between writing output
+  integer, public, protected :: output_dit = 2**30
+
   ! Write to a log file for regression testing
   logical, protected :: output_regression_test = .false.
 
@@ -139,6 +142,8 @@ contains
          "Name for the output files (e.g. output/my_sim)")
     call CFG_add_get(cfg, "output%dt", output_dt, &
          "The timestep for writing output (s)")
+    call CFG_add_get(cfg, "output%dit", output_dit, &
+         "Iterations between writing output")
     call CFG_add_get(cfg, "silo_write", silo_write, &
          "Write silo output")
     call CFG_add_get(cfg, "silo%per_outputs", silo_per_outputs, &
