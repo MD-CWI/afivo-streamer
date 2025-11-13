@@ -38,14 +38,16 @@ This list is not complete, any additions are welcome:
 * [3D simulations of negative streamers in CO2 with admixtures of C4F7N](https://arxiv.org/abs/2510.06794) (2025)
 * [Data-driven reduced modeling of streamer discharges in air](https://doi.org/10.1016/j.cpc.2025.109733) (2025)
 * [Positive streamer discharge simulations in humid air: uncertainty in input data and sensitivity analysis](https://doi.org/10.1088/1361-6595/adbd71) (2025)
-* [Macroscopic parameterization of positive streamer heads in air](https://doi.org/10.1088/1361-6595/adaf53) (to compare the model against) (2025)
+* [Macroscopic parameterization of positive streamer heads in air](https://doi.org/10.1088/1361-6595/adaf53) (comparison) (2025)
 * [Measurement of the electric field distribution in streamer discharges](https://doi.org/10.1103/PhysRevResearch.7.013051) (2025)
+* [Axisymmetric fluid streamer model in the AMReX library](https://doi.org/10.1088/1361-6595/ad6fce) (comparison) (2025)
 
-* [ Calculating radio emissions of positive streamer phenomena using 3D simulations](http://dx.doi.org/10.1029/2024JD041385) (2024)
+* [Calculating radio emissions of positive streamer phenomena using 3D simulations](http://dx.doi.org/10.1029/2024JD041385) (2024)
 * [Temporal evolution and mechanism of secondary streamers in N2/O2 mixtures at atmospheric pressure under DC voltage](https://doi.org/10.1088/1361-6463/ad15be) (2024)
 * [Associative electron detachment in sprites](10.22541/essoar.170534137.75776904/v1) (2024)
 * [Repetitively pulsed streamer discharge with laser-induced surface trapped electron desorption to exploit residual charges in situ](https://doi.org/10.1088/1361-6595/acf87d) (2024)
 
+* [A numerical and experimental study on positive diffusive ionization waves in different N2/O2 mixtures: the role of photoionization](https://doi.org/10.1088/1361-6595/acb813) (2023)
 * [3D modeling of positive streamers in air with inhomogeneous density](https://doi.org/10.1088/1361-6595/acf87d) (2023)
 * [Streamer dynamics and periodical discharge regime transitions under repetitive nanosecond pulses with airflow](https://doi.org/10.1088/1361-6595/acacc5) (2023)
 * [Estimating the properties of single positive air streamers from measurable parameters](https://doi.org/10.1088/1361-6595/ace792) (2023)
@@ -69,4 +71,3 @@ This list is not complete, any additions are welcome:
 * [On the emergence mechanism of carrot sprites](https://doi.org/10.1029/2019GL085776) (2019)
 
 * [The role of free electrons in the guiding of positive streamers](https://dx.doi.org/10.1088/0963-0252/25/4/044001) (2016)
-
