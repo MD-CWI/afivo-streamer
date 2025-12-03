@@ -616,7 +616,7 @@ contains
 
           tree%boxes(id)%cc(IJK, i_photo) = &
                tree%boxes(id)%cc(IJK, i_photo) + &
-               phmc_tbl%frac_in_tbl/(dt_fac * product(dr))
+               phmc_tbl%full_integral/(dt_fac * product(dr))
 #endif
        end if
     end do
