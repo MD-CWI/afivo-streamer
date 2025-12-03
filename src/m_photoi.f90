@@ -7,6 +7,7 @@ module m_photoi
   use m_streamer
   use m_types
   use m_chemistry
+  use m_units_constants
 
   implicit none
   private
@@ -39,8 +40,11 @@ module m_photoi
   !> Helmholtz-Luque should be 1.0
   real(dp) :: photoi_eta = 0.05_dp
 
-  !> Quenching pressure
+  !> Quenching pressure for dry air
   real(dp) :: photoi_quenching_pressure = 40e-3 ! bar
+
+  !> Photoionization quenching pressure for H2O in Aints model (bar)")
+  real(dp) :: photoi_quenching_pressure_H2O_Aints = 0.3 * UC_torr_to_bar
 
   !> Decay time in case photoi_source_type is 'from_species'
   real(dp) :: photoi_photoemission_time = 0.0_dp
@@ -76,9 +80,12 @@ contains
     call CFG_add_get(cfg, "photoi%eta", photoi_eta, &
          "Photoionization efficiency factor, typically around 0.05-0.1")
     call CFG_add_get(cfg, "photoi%quenching_pressure", photoi_quenching_pressure, &
-         "Photoionization quenching pressure (bar)")
+         "Photoionization quenching pressure for dry air (bar)")
+    call CFG_add_get(cfg, "photoi%quenching_pressure_H2O_Aints", &
+         photoi_quenching_pressure_H2O_Aints, &
+         "Photoionization quenching pressure for H2O in Aints model (bar)")
     call CFG_add_get(cfg, "photoi%source_type", photoi_source_type, &
-         "How to compute the photoi. source (Zheleznyak, from_species)")
+         "Model (Zheleznyak, Naidis_humid, Aints_humid, from_species)")
     call CFG_add_get(cfg, "photoi%excited_species", photoi_excited_species, &
          "Which excited species to use when photoi%source_type = from_species")
     call CFG_add_get(cfg, "photoi%species", photoi_species, &
@@ -111,6 +118,12 @@ contains
        case ('Zheleznyak')
           if (photoi_excited_species /= undefined_str) &
              error stop "Cannot use photoi%excited_species with Zheleznyak"
+       case ("Naidis_humid")
+          if (photoi_method /= "montecarlo") &
+               error stop "Naidis_humid is not implemented for helmholtz"
+       case ("Aints_humid")
+          if (photoi_method /= "montecarlo") &
+               error stop "Aints_humid is not implemented for helmholtz"
        case ('from_species')
           if (photoi_excited_species == undefined_str) &
              error stop "Please define photoi%excited_species"
@@ -125,10 +138,10 @@ contains
     select case (photoi_method)
        case ("helmholtz")
           call photoi_helmh_initialize(tree, cfg, photoi_enabled, photoi_eta)
-          call phmc_initialize(cfg, .false.)
+          call phmc_initialize(cfg, .false., photoi_source_type)
        case ("montecarlo")
           call photoi_helmh_initialize(tree, cfg, .false., photoi_eta)
-          call phmc_initialize(cfg, photoi_enabled)
+          call phmc_initialize(cfg, photoi_enabled, photoi_source_type)
        case default
           print *, "Unknown photoi_method: ", trim(photoi_method)
           error stop
@@ -138,22 +151,35 @@ contains
 
   !> Sets the photoionization
   subroutine photoi_set_src(tree, dt)
-    use m_units_constants
     use m_gas
-
-    type(af_t), intent(inout)     :: tree
+    type(af_t), intent(inout)      :: tree
+    integer                        :: ix
     real(dp), intent(in), optional :: dt
-    real(dp)                       :: quench_fac, decay_fraction, eff_decay_time, decay_rate
+    real(dp)                       :: quench_fac, decay_fraction
+    real(dp)                       :: eff_decay_time, decay_rate
+    real(dp)                       :: p_H2O
 
-    ! Compute quench factor, because some excited species will be quenched by
-    ! collisions, preventing the emission of a UV photon
-    quench_fac = photoi_quenching_pressure / &
-         (gas_pressure + photoi_quenching_pressure)
+    if (photoi_source_type == 'Aints_humid') then
+       ix = gas_index("H2O")
+       if (ix == -1) then
+          p_H2O = 0.0_dp
+       else
+          p_H2O = gas_fractions(ix) * gas_pressure
+       end if
+
+       ! Use custom quenching factor as discussed in doi:10.1002/ppap.200800031
+       quench_fac = 1/(1 + (gas_pressure - p_H2O)/photoi_quenching_pressure + &
+            p_H2O / photoi_quenching_pressure_H2O_Aints)
+    else
+       ! Compute standard quenching factor for dry air
+       quench_fac = photoi_quenching_pressure / &
+            (gas_pressure + photoi_quenching_pressure)
+    end if
 
     ! Set photon production rate per cell, which is proportional to the
     ! ionization rate.
     select case (photoi_source_type)
-    case ('Zheleznyak')
+    case ('Zheleznyak', 'Naidis_humid', 'Aints_humid')
        call af_loop_box_arg(tree, photoionization_rate_from_alpha, &
             [photoi_eta * quench_fac], .true.)
     case ('from_species')

@@ -12,7 +12,9 @@ module m_photoi_mc
   !> Type to quickly look up absorption lengths from a table
   type, public :: phmc_tbl_t
      type(LT_t) :: tbl         !< The lookup table
-     real(dp)   :: frac_in_tbl !< Fraction photons in table
+     !> Value of full integral over the absorption function (can be less than
+     !> one if non-ionizing absorption is present)
+     real(dp)   :: full_integral
   end type phmc_tbl_t
 
   !> Whether physical photons are used
@@ -36,25 +38,35 @@ module m_photoi_mc
   !> Table for photoionization
   type(phmc_tbl_t), public, protected :: phmc_tbl
 
+  interface
+     real(dp) function absfunc_t(dist, p_O2, p_H2O)
+       import
+       real(dp), intent(in) :: dist  !< Distance
+       real(dp), intent(in) :: p_O2  !< Partial pressure of oxygen (bar)
+       real(dp), intent(in) :: p_H2O !< Partial pressure of H2O (bar)
+     end function absfunc_t
+  end interface
+
   ! Public methods
   public :: phmc_initialize
   public :: phmc_print_grid_spacing
   public :: phmc_get_table_air
   public :: phmc_do_absorption
-  public :: phmc_absorption_func_air
   public :: phmc_set_src
   ! public :: phe_mc_set_src
 
 contains
 
   !> Initialize photoionization parameters
-  subroutine phmc_initialize(cfg, is_used)
+  subroutine phmc_initialize(cfg, is_used, source_type)
     use m_config
     use m_streamer
     use m_gas
-    type(CFG_t), intent(inout) :: cfg !< The configuration for the simulation
-    logical, intent(in)        :: is_used !< Whether Monte Carlo photoionization is used
-    integer                    :: ix
+    type(CFG_t), intent(inout)   :: cfg     !< The configuration for the simulation
+    logical, intent(in)          :: is_used !< Whether Monte Carlo photoionization is used
+    character(len=*), intent(in) :: source_type
+    integer                      :: ix
+    real(dp)                     :: p_O2, p_H2O
 
     !< [photoi_mc_parameters]
     call CFG_add_get(cfg, "photoi_mc%physical_photons", phmc_physical_photons, &
@@ -77,9 +89,32 @@ contains
     if (is_used) then
        ! Create table for photoionization
        ix = gas_index("O2")
-       if (ix == -1) error stop "Photoionization: no oxygen present"
-       call phmc_get_table_air(phmc_tbl, gas_fractions(ix) * gas_pressure, &
-            2 * maxval(ST_domain_len))
+       if (ix == -1) then
+          error stop "Photoionization: no oxygen present"
+       else
+          p_O2 = gas_fractions(ix) * gas_pressure
+       end if
+
+       ix = gas_index("H2O")
+       if (ix == -1) then
+          p_H2O = 0.0_dp
+       else
+          p_H2O = gas_fractions(ix) * gas_pressure
+       end if
+
+       select case (source_type)
+       case ("Zheleznyak")
+          ! Standard Zheleznyak model for dry air
+          call phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc_Zheleznyak)
+       case ("Naidis_humid")
+          ! Naidis model for humid air
+          call phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc_Naidis_humid)
+       case ("Aints_humid")
+          ! Aints model for humid air
+          call phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc_Aints_humid)
+       case default
+          error stop "Invalid photoionization source_type"
+       end select
 
        call phmc_print_grid_spacing(maxval(ST_domain_len/ST_box_size))
 
@@ -117,135 +152,170 @@ contains
   !> Compute the photonization table for air. If the absorption function is
   !> f(r), this table contains r as a function of F (the cumulative absorption
   !> function, between 0 and 1). Later on a distance can be sampled by drawing a
-  !> uniform 0,1 random number and finding the corresponding distance. The table
-  !> constructed up to max_dist; we can ignore photons that fly very far.
-  subroutine phmc_get_table_air(phmc_tbl, p_O2, max_dist)
+  !> uniform 0,1 random number and finding the corresponding distance.
+  subroutine phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc)
     !< The photonization table
     type(phmc_tbl_t), intent(inout) :: phmc_tbl
-    !< Partial pressure of oxygen (bar)
-    real(dp), intent(in)              :: p_O2
-    !< Maximum distance in lookup table
-    real(dp), intent(in)  :: max_dist
+    !> Partial pressure of oxygen (bar)
+    real(dp), intent(in)            :: p_O2
+    !> Partial pressure of H2O (bar)
+    real(dp), intent(in)            :: p_H2O
+    !> Absorption function to use
+    procedure(absfunc_t)            :: absfunc
 
+    ! Large distance, at which all photons have been absorbed
+    real(dp)              :: large_distance = 1e3_dp
     integer               :: n
-    integer, parameter    :: tbl_size  = 500
+    integer, parameter    :: tbl_size       = 500
     real(dp), allocatable :: fsum(:), dist(:)
-    real(dp)              :: dF, drdF, r, F, Fmax_guess
 
-    ! First estimate which fraction of photons are within max_dist (start with
-    ! the upper bound of 1.0)
-    Fmax_guess = 1.0_dp
+    allocate(fsum(tbl_size))
+    allocate(dist(tbl_size))
 
-    ! 5 loops should be enough for a good guess
-    do n = 1, 5
-       ! When Fmax_guess decreases so will dF, since we keep the number of
-       ! points the same
-       dF = Fmax_guess / (tbl_size-1)
-       r  = 0
-       F  = 0
+    call integrate_absfunc(p_O2, p_H2O, absfunc, 1.0_dp, large_distance, &
+         tbl_size, fsum, dist, n)
 
-       do
-          drdF = rk4_drdF(r, dF, p_O2)
-          r = r + dF * drdF
-          F = F + df
-
-          if (r > max_dist) then
-             ! A better estimate for the upper bound
-             Fmax_guess = F
-             exit
-          end if
-       end do
-    end do
-
-    ! Make arrays larger so that we surely are in range of maxdist
-    allocate(fsum(2 * tbl_size))
-    allocate(dist(2 * tbl_size))
-
-    ! Now create table
-    dF = Fmax_guess / (tbl_size-1)
-    dist(1) = 0
-    fsum(1) = 0
-
-    ! Compute r(F) for F = dF, 2 dF, 3 dF, ...
-    do n = 2, 2 * tbl_size
-       drdF = rk4_drdF(dist(n-1), dF, p_O2)
-       fsum(n) = fsum(n-1) + dF
-       dist(n) = dist(n-1) + dF * drdF
-       if (dist(n) > max_dist) exit
-    end do
-
-    if (n > tbl_size + 10) &
-         stop "phmc_get_table_air: integration accuracy fail"
-
-    if (ST_use_dielectric) then
-       ! Photons that fly outside the domain can be absorbed by the dielectric,
-       ! so don't apply any tricks
-       phmc_tbl%frac_in_tbl = 1.0_dp
-    else
-       ! Scale table to lie between 0 and 1 (later on we have to correct for this)
-       phmc_tbl%frac_in_tbl = fsum(n-1)
-       fsum(1:n-1) = fsum(1:n-1) / fsum(n-1)
-    end if
+    ! The full integral can be less than one (e.g. with Naidis_humid).
+    ! Normalize, and store the factor, which will be used when generating
+    ! photons.
+    phmc_tbl%full_integral = fsum(n)
+    fsum(1:n) = fsum(1:n) / fsum(n)
 
     phmc_tbl%tbl = LT_create(0.0_dp, 1.0_dp, tbl_size, 1)
-    call LT_set_col(phmc_tbl%tbl, 1, fsum(1:n-1), dist(1:n-1))
+    call LT_set_col(phmc_tbl%tbl, 1, fsum(1:n), dist(1:n))
 
     write(*, "(A,E12.3,A)") " Average photon absorption length", &
          1e3_dp * sum(dist(1:n-1))/(n-1), " mm"
   end subroutine phmc_get_table_air
 
+  subroutine integrate_absfunc(p_O2, p_H2O, absfunc, F_max, r_max, n_steps, fsum, r, n)
+    real(dp), intent(in)    :: p_O2  !< Partial pressure of oxygen (bar)
+    real(dp), intent(in)    :: p_H2O !< Partial pressure of H2O (bar)
+    procedure(absfunc_t)    :: absfunc
+    real(dp), intent(in)    :: F_max
+    real(dp), intent(in)    :: r_max
+    integer, intent(in)     :: n_steps
+    real(dp), intent(inout) :: fsum(n_steps)
+    real(dp), intent(inout) :: r(n_steps)
+    integer, intent(inout)  :: n
+    real(dp)                :: dF, drdF
+
+    dF = F_max / (n_steps-1)
+    fsum(1) = 0.0_dp
+    r(1) = 0.0_dp
+
+    do n = 2, n_steps
+       drdF = rk4_drdF(r(n-1), dF, p_O2, p_H2O, absfunc)
+       r(n) = r(n-1) + dF * drdF
+       fsum(n) = (n-1) * dF
+       if (fsum(n) > F_max .or. r(n) > r_max) exit
+    end do
+
+    ! We went past F_max or r_max, or the loop completed fully. Valid data is
+    ! up to index n
+    n = n - 1
+  end subroutine integrate_absfunc
+
   !> Runge Kutta 4 method to compute dr/dF, where r is the absorption distance
   !> and F is the cumulative absorption function (between 0 and 1)
-  real(dp) function rk4_drdF(r, dF, p_O2)
+  real(dp) function rk4_drdF(r, dF, p_O2, p_H2O, absfunc)
     real(dp), intent(in) :: r    !> Initial point
     real(dp), intent(in) :: dF   !> grid size
     real(dp), intent(in) :: p_O2 !< Partial pressure of oxygen (bar)
+    real(dp), intent(in) :: p_H2O !< Partial pressure of H2O (bar)
+    procedure(absfunc_t) :: absfunc
     real(dp)             :: drdF
     real(dp)             :: sum_drdF
     real(dp), parameter  :: one_sixth = 1 / 6.0_dp
 
     ! Step 1 (at initial r)
-    drdF = 1 / phmc_absorption_func_air(r, p_O2)
+    drdF = 1 / absfunc(r, p_O2, p_H2O)
     sum_drdF = drdF
 
     ! Step 2 (at initial r + dr/2)
-    drdF = 1 / phmc_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / absfunc(r + 0.5_dp * dF * drdF, p_O2, p_H2O)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 3 (at initial r + dr/2)
-    drdF = 1 / phmc_absorption_func_air(r + 0.5_dp * dF * drdF, p_O2)
+    drdF = 1 / absfunc(r + 0.5_dp * dF * drdF, p_O2, p_H2O)
     sum_drdF = sum_drdF + 2 * drdF
 
     ! Step 4 (at initial r + dr)
-    drdF = 1 / phmc_absorption_func_air(r + dF * drdF, p_O2)
+    drdF = 1 / absfunc(r + dF * drdF, p_O2, p_H2O)
     sum_drdF = sum_drdF + drdF
 
     ! Combine r derivatives at steps
     rk4_drdF = one_sixth * sum_drdF
   end function rk4_drdF
 
-  !> The absorption function for photons in air according to Zheleznyak's model
-  real(dp) function phmc_absorption_func_air(dist, p_O2)
+  !> Absorption function for photons in air according to Zheleznyak's model
+  !>
+  !> Reference: "Photoionization of nitrogen and oxygen mixtures by radiation
+  !> from a gas discharge", Zheleznyak and Mnatsakanian, 1982.
+  real(dp) function absfunc_Zheleznyak(dist, p_O2, p_H2O) result(f)
     use m_units_constants
     real(dp), intent(in) :: dist   !< Distance
     real(dp), intent(in) :: p_O2   !< Partial pressure of oxygen (bar)
+    real(dp), intent(in) :: p_H2O  !< Partial pressure of H2O (bar)
     real(dp)             :: r
-    real(dp), parameter  :: c0 = 3.5_dp / UC_torr_to_bar
-    real(dp), parameter  :: c1 = 200 / UC_torr_to_bar
+    real(dp), parameter  :: k1 = 3.5_dp / UC_torr_to_bar
+    real(dp), parameter  :: k2 = 200 / UC_torr_to_bar
     real(dp), parameter  :: eps = epsilon(1.0_dp)
 
+    ! Note: r is here distance times p_O2
     r = p_O2 * dist
-    if (r * (c0 + c1) < eps) then
-       ! Use limit to prevent over/underflow
-       phmc_absorption_func_air = (c1 - c0 + 0.5_dp * (c0**2 - c1**2) * r) &
-            * p_O2 / log(c1/c0)
-    else if (r * c0 > -log(eps)) then
-       ! Use limit to prevent over/underflow
-       phmc_absorption_func_air = eps
+
+    if (r * k1 < eps) then
+       ! Use Taylor series around r = 0
+       f = (k2 - k1 + 0.5_dp * (k1**2 - k2**2) * r) &
+            * p_O2 / log(k2/k1)
     else
-       phmc_absorption_func_air = (exp(-c0 * r) - exp(-c1 * r)) / (dist * log(c1/c0))
+       ! Avoid division by zero
+       f = max(1e-100_dp, &
+            (exp(-k1 * r) - exp(-k2 * r)) / (dist * log(k2/k1)))
     end if
-  end function phmc_absorption_func_air
+  end function absfunc_Zheleznyak
+
+  !> Absorption function for photons in humid according to Naidis model
+  !>
+  !> Reference: "On photoionization produced by discharges in air", Naidis, 2006
+  real(dp) function absfunc_Naidis_humid(dist, p_O2, p_H2O) result(f)
+    real(dp), intent(in) :: dist  !< Distance
+    real(dp), intent(in) :: p_O2  !< Partial pressure of oxygen (bar)
+    real(dp), intent(in) :: p_H2O !< Partial pressure of H2O (bar)
+    real(dp), parameter  :: k3 = 0.26e2_dp / UC_torr_to_bar
+
+    f = max(1e-100_dp, &
+         exp(-k3 * p_H2O * dist) * absfunc_Zheleznyak(dist, p_O2, p_H2O))
+  end function absfunc_Naidis_humid
+
+  !> Absorption function for photons in humid according to Aints model
+  !>
+  !> Reference: "Absorption of Photo-Ionizing Radiation of Corona Discharges in Air",
+  !> Aints et al, 2008. See also Guo et al, PSST 2025.
+  real(dp) function absfunc_Aints_humid(dist, p_O2, p_H2O) result(f)
+    real(dp), intent(in) :: dist  !< Distance
+    real(dp), intent(in) :: p_O2  !< Partial pressure of oxygen (bar)
+    real(dp), intent(in) :: p_H2O !< Partial pressure of H2O (bar)
+    real(dp), parameter  :: k1 = 3.5_dp / UC_torr_to_bar
+    real(dp), parameter  :: k2 = 200 / UC_torr_to_bar
+    real(dp), parameter  :: k4 = 0.13e2 / UC_torr_to_bar
+    real(dp), parameter  :: k5 = 0.57e2 / UC_torr_to_bar
+    real(dp)             :: k_a, k_b
+    real(dp), parameter  :: eps = epsilon(1.0_dp)
+
+    k_a = k1 * p_O2 + k4 * p_H2O
+    k_b = k2 * p_O2 + k5 * p_H2O
+
+    if (dist * k_a < eps) then
+       ! Use Taylor series around dist = 0
+       f = (k_b - k_a + 0.5_dp * (k_a**2 - k_b**2) * dist) / log(k_b/k_a)
+    else
+       ! Avoid division by zero
+       f = max(1e-100_dp, &
+            (exp(-k_a * dist) - exp(-k_b * dist)) / (dist * log(k_b/k_a)))
+    end if
+  end function absfunc_Aints_humid
 
   !> Determine the lowest level at which the grid spacing is smaller than 'length'.
   integer function get_lvl_length(dr_base, length)
@@ -521,7 +591,7 @@ contains
 
           tree%boxes(id)%cc(IJK, i_photo) = &
                   tree%boxes(id)%cc(IJK, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(dt_fac * product(dr))
+                  phmc_tbl%full_integral/(dt_fac * product(dr))
 #elif NDIM == 2
           i = ph_loc(n)%ix(1)
           j = ph_loc(n)%ix(2)
@@ -532,11 +602,11 @@ contains
              r(1:2) = af_r_cc(tree%boxes(id), [i, j])
              tree%boxes(id)%cc(i, j, i_photo) = &
                   tree%boxes(id)%cc(i, j, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(tmp * product(dr) * r(1))
+                  phmc_tbl%full_integral/(tmp * product(dr) * r(1))
           else
              tree%boxes(id)%cc(IJK, i_photo) = &
                   tree%boxes(id)%cc(IJK, i_photo) + &
-                  phmc_tbl%frac_in_tbl/(dt_fac * product(dr))
+                  phmc_tbl%full_integral/(dt_fac * product(dr))
           end if
 #elif NDIM == 3
           i = ph_loc(n)%ix(1)
