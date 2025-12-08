@@ -226,7 +226,7 @@ contains
 
     electrode_type = "rod"
     call CFG_add_get(cfg, "field_electrode_type", electrode_type, &
-         "Type of electrode (sphere, rod, rod_cone_top, rod_rod, user)")
+         "Electrode: sphere, rod, rod_cone_top, rod_rod, sphere_rod, user")
     !< [electrode_settings]
 
     if (associated(user_potential_bc)) then
@@ -292,6 +292,19 @@ contains
 
           ! Provide a function to set the voltage on the electrodes
           mg%lsf_boundary_function => rod_rod_get_potential
+       case ("sphere_rod")
+          ! Sphere and rod electrode with semi-spherical cap
+          call check_general_electrode_parameters()
+
+          if (any(rod2_r0 <= -1.0e10_dp)) &
+               error stop "field_rod2_r0 not set correctly"
+          if (any(rod2_r1 <= -1.0e10_dp)) &
+               error stop "field_rod2_r1 not set correctly"
+          if (rod2_radius <= 0) &
+               error stop "field_rod2_radius not set correctly"
+
+          mg%lsf => sphere_rod_lsf
+          mg%lsf_boundary_function => sphere_rod_get_potential
        case ("two_rod_cone_electrodes")
           ! Two rod-shaped electrodes with conical tops (for now assumed to have
           ! the same shape)
@@ -758,6 +771,41 @@ contains
        end if
     end if
   end function rod_rod_get_potential
+
+  !> Get level set function for case of sphere and rod
+  real(dp) function sphere_rod_lsf(r)
+    use m_geometry
+    real(dp), intent(in) :: r(NDIM)
+
+    sphere_rod_lsf = min(sphere_lsf(r), &
+         GM_dist_line(r, rod2_r0, rod2_r1, NDIM) - rod2_radius)
+  end function sphere_rod_lsf
+
+  !> Get potential to apply at electrode for sphere-rod case
+  function sphere_rod_get_potential(r) result(phi)
+    use m_geometry
+    real(dp), intent(in) :: r(NDIM)
+    real(dp)             :: phi, lsf_1, lsf_2
+
+    ! Determine distance to electrodes
+    lsf_1 = sphere_lsf(r)
+    lsf_2 = GM_dist_line(r, rod2_r0, rod2_r1, NDIM) - rod2_radius
+
+    if (lsf_1 < lsf_2) then
+       ! Closer to electrode 1
+       if (field_electrode_grounded) then
+          phi = 0.0_dp
+       else
+          phi = current_voltage
+       end if
+    else
+       if (field_electrode2_grounded) then
+          phi = 0.0_dp
+       else
+          phi = current_voltage
+       end if
+    end if
+  end function sphere_rod_get_potential
 
   !> Compute total field energy in Joule, defined as the volume integral over
   !> 1/2 * epsilon * E^2
