@@ -550,6 +550,8 @@ contains
        end if
     end if
 
+    call periodify_coordinates(n_used, xyz_abs)
+
     allocate(ph_loc(n_used))
 
     if (phmc_const_dx) then
@@ -649,6 +651,25 @@ contains
 
     call prng%update_seed(rng)
   end subroutine phmc_set_src
+
+  !> Map coordinates to a periodic domain
+  subroutine periodify_coordinates(n_points, coords)
+    integer, intent(in)     :: n_points
+    real(dp), intent(inout) :: coords(3, n_points)
+    real(dp)                :: xrel
+
+    integer                 :: i_dim, n
+
+    do i_dim = 1, NDIM
+       if (ST_periodic(i_dim)) then
+          do n = 1, n_points
+             xrel = coords(i_dim, n) - ST_domain_origin(i_dim)
+             coords(i_dim, n) = ST_domain_origin(i_dim) + &
+                  modulo(xrel, ST_domain_len(i_dim))
+          end do
+       end if
+    end do
+  end subroutine periodify_coordinates
 
 !   !> Whole photoemission procedure
 !   subroutine phe_mc_set_src(tree, rng, i_src, i_photo, use_cyl, dt)
