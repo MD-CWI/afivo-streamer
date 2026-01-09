@@ -335,7 +335,9 @@ contains
           mg%lsf_boundary_function => two_conical_rods_get_potential
        case ("coaxial")
           ! A coaxial geometry, with an inner and outer conductor
-
+#if NDIM == 1
+          error stop "coaxial not supported in 1D"
+#else
           if (rod_radius <= 0) &
                error stop "field_rod_radius not set correctly"
           if (rod2_radius <= 0) &
@@ -350,8 +352,8 @@ contains
                   error stop "field_rod2_radius too large"
           end if
 
-          if (NDIM == 3 .and. any(ST_periodic .neqv. [.false., .false., .true.])) &
-               error stop "Coaxial requires periodic = F F T (last dimension periodic)"
+          if (NDIM == 3 .and. .not. ST_periodic(NDIM)) &
+               error stop "Coaxial requires periodic = F F T (last dim. periodic)"
 
           mg%lsf => coaxial_lsf
           mg%lsf_boundary_function => coaxial_get_potential
@@ -360,6 +362,7 @@ contains
           field_electrode_grounded = .false.
           field_electrode2_grounded = .true.
           mg%sides_bc => field_bc_all_dirichlet
+#endif
        case ("user")
           if (.not. associated(user_lsf)) then
              error stop "user_lsf not set"
@@ -861,6 +864,10 @@ contains
     real(dp), intent(out) :: lsf_1, lsf_2
     real(dp)              :: domain_center(NDIM)
 
+#if NDIM == 1
+    lsf_1 = 0; lsf_2 = 0; domain_center = 0 ! prevent warnings
+    error stop "coaxial not supported in 1D"
+#else
     if (ST_cylindrical) then
        domain_center(1) = 0
        domain_center(2) = ST_domain_origin(2) + 0.5_dp * ST_domain_len(2)
@@ -871,9 +878,8 @@ contains
        ! Axis is parallel to last coordinate
        lsf_1 = norm2(r(1:2) - domain_center(1:2)) - rod_radius
        lsf_2 = rod2_radius - norm2(r(1:2) - domain_center(1:2))
-    else
-       error stop "coaxial not supported in 1D"
     end if
+#endif
   end subroutine coaxial_get_lsf
 
   real(dp) function coaxial_lsf(r)
