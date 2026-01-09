@@ -333,6 +333,33 @@ contains
 
           ! Provide a function to set the voltage on the electrodes
           mg%lsf_boundary_function => two_conical_rods_get_potential
+       case ("coaxial")
+          ! A coaxial geometry, with an inner and outer conductor
+
+          if (rod_radius <= 0) &
+               error stop "field_rod_radius not set correctly"
+          if (rod2_radius <= 0) &
+               error stop "field_rod2_radius not set correctly"
+
+          ! Check if outer radius is correctly set
+          if (ST_cylindrical) then
+             if (rod2_radius > ST_domain_len(1)) &
+                  error stop "field_rod2_radius too large"
+          else if (NDIM == 2 .or. NDIM == 3) then
+             if (rod2_radius > 0.5_dp * minval(ST_domain_len(1:2))) &
+                  error stop "field_rod2_radius too large"
+          end if
+
+          if (NDIM == 3 .and. any(ST_periodic .neqv. [.false., .false., .true.])) &
+               error stop "Coaxial requires periodic = F F T (last dimension periodic)"
+
+          mg%lsf => coaxial_lsf
+          mg%lsf_boundary_function => coaxial_get_potential
+
+          ! Ensure that outer electrode is grounded
+          field_electrode_grounded = .false.
+          field_electrode2_grounded = .true.
+          mg%sides_bc => field_bc_all_dirichlet
        case ("user")
           if (.not. associated(user_lsf)) then
              error stop "user_lsf not set"
@@ -617,6 +644,28 @@ contains
     bc_val = 0.0_dp
   end subroutine field_bc_all_neumann
 
+  !> All Dirichlet zero boundary conditions for the potential
+  subroutine field_bc_all_dirichlet(box, nb, iv, coords, bc_val, bc_type)
+    type(box_t), intent(in) :: box
+    integer, intent(in)     :: nb
+    integer, intent(in)     :: iv
+    real(dp), intent(in)    :: coords(NDIM, box%n_cell**(NDIM-1))
+    real(dp), intent(out)   :: bc_val(box%n_cell**(NDIM-1))
+    integer, intent(out)    :: bc_type
+
+    if (ST_cylindrical) then
+       if (nb == af_neighb_lowx) then
+          bc_type = af_bc_neumann
+       else
+          bc_type = af_bc_dirichlet
+       end if
+       bc_val = 0.0_dp
+    else
+       bc_type = af_bc_dirichlet
+       bc_val = 0.0_dp
+    end if
+  end subroutine field_bc_all_dirichlet
+
   ! This routine sets the level set function for a simple rod
   subroutine set_lsf_box(box, iv)
     type(box_t), intent(inout) :: box
@@ -806,6 +855,47 @@ contains
        end if
     end if
   end function sphere_rod_get_potential
+
+  subroutine coaxial_get_lsf(r, lsf_1, lsf_2)
+    real(dp), intent(in)  :: r(NDIM)
+    real(dp), intent(out) :: lsf_1, lsf_2
+    real(dp)              :: domain_center(NDIM)
+
+    if (ST_cylindrical) then
+       domain_center(1) = 0
+       domain_center(2) = ST_domain_origin(2) + 0.5_dp * ST_domain_len(2)
+       lsf_1 = norm2(r(1:2) - domain_center(1:2)) - rod_radius
+       lsf_2 = rod2_radius - norm2(r(1:2) - domain_center(1:2))
+    else if (NDIM == 2 .or. NDIM == 3) then
+       domain_center = ST_domain_origin + 0.5_dp * ST_domain_len
+       ! Axis is parallel to last coordinate
+       lsf_1 = norm2(r(1:2) - domain_center(1:2)) - rod_radius
+       lsf_2 = rod2_radius - norm2(r(1:2) - domain_center(1:2))
+    else
+       error stop "coaxial not supported in 1D"
+    end if
+  end subroutine coaxial_get_lsf
+
+  real(dp) function coaxial_lsf(r)
+    real(dp), intent(in) :: r(NDIM)
+    real(dp) :: lsf_1, lsf_2
+    call coaxial_get_lsf(r, lsf_1, lsf_2)
+    coaxial_lsf = min(lsf_1, lsf_2)
+  end function coaxial_lsf
+
+  !> Get potential to apply at electrode for sphere-rod case
+  function coaxial_get_potential(r) result(phi)
+    real(dp), intent(in) :: r(NDIM)
+    real(dp)             :: phi, lsf_1, lsf_2
+
+    call coaxial_get_lsf(r, lsf_1, lsf_2)
+
+    if (lsf_1 < lsf_2) then
+       phi = current_voltage
+    else
+       phi = 0.0_dp
+    end if
+  end function coaxial_get_potential
 
   !> Compute total field energy in Joule, defined as the volume integral over
   !> 1/2 * epsilon * E^2
