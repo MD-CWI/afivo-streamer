@@ -117,7 +117,7 @@ contains
 
     ! This is for backward compatibility
     call CFG_add_get(cfg, "field_amplitude", field_amplitude, &
-         "The (initial) vertical applied electric field (V/m)")
+         "The (initial) vertical applied electric field (V/m) (deprecated)")
 
     given_by = undefined_str
     call CFG_add_get(cfg, "field_given_by", given_by, &

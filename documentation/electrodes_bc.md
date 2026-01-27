@@ -4,6 +4,26 @@
 
 # Boundary conditions
 
+## Specifying the field and/or potential {#bc-value}
+
+The applied electric field or voltage can be set through the option `field_given_by`, which can take the following forms:
+
+    field_given_by = voltage <value in V>"
+    field_given_by = field <value in V/m>"
+    field_given_by = voltage_table <filename>"
+    field_given_by = field_table <filename>"
+
+In case of a table, the format of the table should be as follows:
+
+    voltage_vs_time (or field_vs_time)
+    --------
+    t1 v1
+    t2 v2
+    ...
+    --------
+
+where `t1`, `t2`, etc. are times and `v1`, `v2`, etc. are values. The lines with dashes should contain at least five dashes.
+
 ## Electric potential boundary conditions {#bc-phi}
 
 There is a parameter `field_bc_type`, that can be set to:
