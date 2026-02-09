@@ -438,7 +438,9 @@ contains
     integer                    :: lvl, iblock, id, IJK, n
     integer                    :: i_to, i_from, proc_id, n_procs
     real(dp)                   :: dV, lambda, product_dr, n_produced
+#if NDIM == 2
     real(dp), parameter        :: two_pi = 2 * acos(-1.0_dp)
+#endif
     type(PRNG_t)               :: prng
 
     ! Initialize parallel random numbers
@@ -460,11 +462,15 @@ contains
              i_from = stochastic_species_list(n)%i_from
 
              do KJI_DO(1, tree%n_cell)
+#if NDIM == 2
                 if (tree%coord_t == af_cyl) then
                    dV = two_pi * product_dr * af_cyl_radius_cc(tree%boxes(id), i)
                 else
                    dV = product_dr
                 end if
+#else
+                dV = product_dr
+#endif
 
                 lambda = dV * tree%boxes(id)%cc(IJK, i_from)
                 n_produced = prng%rngs(proc_id)%poisson(lambda)
