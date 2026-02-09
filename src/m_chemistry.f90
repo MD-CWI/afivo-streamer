@@ -6,6 +6,8 @@ module m_chemistry
   use m_lookup_table
   use m_table_data
   use m_model
+  use m_random
+  use omp_lib
 
   implicit none
   private
@@ -53,6 +55,12 @@ module m_chemistry
      integer, allocatable  :: ix_out(:)
      integer, allocatable  :: multiplicity_out(:)
   end type tiny_react_t
+
+  !> Type for stochastic reaction
+  type stochastic_species_t
+     integer :: i_from !< Index of stochastic density (in tree)
+     integer :: i_to   !< Index of regular density (in tree)
+  end type stochastic_species_t
 
   !> Reaction with a field-dependent reaction rate
   integer, parameter :: rate_tabulated_energy = 0
@@ -132,8 +140,14 @@ module m_chemistry
   !> Number of reactions present
   integer, public, protected :: n_reactions = 0
 
+  !> Number of stochastic species
+  integer, public, protected :: n_stochastic_species = 0
+
   !> List of the species
   character(len=comp_len), public, protected :: species_list(max_num_species)
+
+  !> List of stochastic species
+  type(stochastic_species_t) :: stochastic_species_list(max_num_species)
 
   !> Charge of the species
   integer, public, protected                 :: species_charge(max_num_species) = 0
@@ -165,6 +179,7 @@ module m_chemistry
   public :: chemistry_initialize
   public :: chemistry_write_summary
   public :: chemistry_get_breakdown_field
+  public :: chemistry_convert_stochastic_species
   public :: get_rates
   public :: get_derivatives
   public :: species_index
@@ -361,6 +376,8 @@ contains
        end if
     end do
 
+    call store_stochastic_species()
+
     print *, "--- List of reactions ---"
     do n = 1, n_reactions
        write(*, "(I4,' (',I0,') ',A15,A)") n, reactions(n)%n_species_in, &
@@ -385,6 +402,87 @@ contains
     call chemistry_modify_rates(cfg)
 
   end subroutine chemistry_initialize
+
+  !> Store stochastic species, for which species have a prefix "stoch_"
+  subroutine store_stochastic_species()
+    integer :: n, i_stoch, namelen, iv
+
+    i_stoch = 0
+    do n = n_gas_species+1, n_species
+       namelen = len_trim(species_list(n))
+
+       if (species_list(n)(1:6) == "stoch_") then
+          i_stoch = i_stoch + 1
+
+          stochastic_species_list(i_stoch)%i_from = species_itree(n)
+          iv = species_index(species_list(n)(7:))
+
+          if (iv == -1) then
+             print *, "Could not find [", species_list(n)(7:), "]"
+             print *, "which should be present for stochastic species (stoch_)"
+             error stop "Species for stochastic reaction not found"
+          else
+             stochastic_species_list(i_stoch)%i_to = species_itree(iv)
+          end if
+       end if
+    end do
+
+    n_stochastic_species = i_stoch
+
+  end subroutine store_stochastic_species
+
+  !> Convert stochastic species into regular species, using random numbers
+  subroutine chemistry_convert_stochastic_species(tree, rng)
+    type(af_t), intent(inout)  :: tree !< Tree
+    type(RNG_t), intent(inout) :: rng  !< Random number generator
+    integer                    :: lvl, iblock, id, IJK, n
+    integer                    :: i_to, i_from, proc_id, n_procs
+    real(dp)                   :: dV, lambda, product_dr, n_produced
+    real(dp), parameter        :: two_pi = 2 * acos(-1.0_dp)
+    type(PRNG_t)               :: prng
+
+    ! Initialize parallel random numbers
+    n_procs = omp_get_max_threads()
+    call prng%init_parallel(n_procs, rng)
+
+    !$omp parallel private(lvl, iblock, id, proc_id, dV, i_to, &
+    !$omp &i_from, n, n_produced, IJK, lambda, product_dr)
+    proc_id = 1+omp_get_thread_num()
+
+    do lvl = 1, tree%highest_lvl
+       !$omp do
+       do iblock = 1, size(tree%lvls(lvl)%leaves)
+          id = tree%lvls(lvl)%leaves(iblock)
+          product_dr = product(tree%boxes(id)%dr)
+
+          do n = 1, n_stochastic_species
+             i_to = stochastic_species_list(n)%i_to
+             i_from = stochastic_species_list(n)%i_from
+
+             do KJI_DO(1, tree%n_cell)
+                if (tree%coord_t == af_cyl) then
+                   dV = two_pi * product_dr * af_cyl_radius_cc(tree%boxes(id), i)
+                else
+                   dV = product_dr
+                end if
+
+                lambda = dV * tree%boxes(id)%cc(IJK, i_from)
+                n_produced = prng%rngs(proc_id)%poisson(lambda)
+
+                tree%boxes(id)%cc(IJK, i_from) = 0.0_dp
+                tree%boxes(id)%cc(IJK, i_to) = tree%boxes(id)%cc(IJK, i_to) + &
+                     n_produced/dV
+             end do; CLOSE_DO
+          end do
+
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+    call prng%update_seed(rng)
+
+  end subroutine chemistry_convert_stochastic_species
 
   !> Modify reaction rates for sensitivity analysis
   subroutine chemistry_modify_rates(cfg)
@@ -1275,7 +1373,7 @@ contains
     end do
 
     ! Handle some species separately
-    if (simple == "e") charge = -1
+    if (simple == "e" .or. simple == "stoch_e") charge = -1
   end subroutine to_simple_ascii
 
 end module m_chemistry
