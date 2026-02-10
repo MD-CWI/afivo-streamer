@@ -341,6 +341,10 @@ program streamer
         dt_gas_lim = dt_max
      end if
 
+     if (n_stochastic_species > 0) then
+        call chemistry_convert_stochastic_species(tree, ST_rng)
+     end if
+
      ! Do not increase time step when many steps are rejected. Here we use a
      ! pretty arbitrary threshold of 0.1
      tmp = dt_max_growth_factor
@@ -467,6 +471,9 @@ contains
     call dielectric_initialize(tree, cfg)
 
     call output_initial_summary(tree)
+
+    if (n_stochastic_species > 0 .and. NDIM < 3 .and. .not. ST_cylindrical) &
+         error stop "Stochastic species not supported in 1D/2D Cartesian"
 
   end subroutine initialize_modules
 
