@@ -34,6 +34,9 @@ Plasma Sources Sci. Technol. (2023)
 
 This list is not complete, any additions are welcome:
 
+* [Multispectral Optical Emission Modeling of Sprites Using Plasma Streamer Simulations: A Computational Electromagnetics Approach for Remote Sensing Applications](https://doi.org/10.2528/PIERB25112704) (2026)
+
+* [Repetitively nanosecond pulsed discharge along dielectric surfaces: discharge and surface charge dynamics and local streamer-to-filament transition](https://doi.org/10.1088/1361-6595/ae105a) (2025)
 * [Effects of pulse rise rate and pulse width on the dynamics of secondary streamers and radical production in atmospheric-pressure air](https://doi.org/10.1088/1361-6463/ada6ca) (2025)
 * [3D simulations of negative streamers in CO2 with admixtures of C4F7N](https://arxiv.org/abs/2510.06794) (2025)
 * [Data-driven reduced modeling of streamer discharges in air](https://doi.org/10.1016/j.cpc.2025.109733) (2025)
