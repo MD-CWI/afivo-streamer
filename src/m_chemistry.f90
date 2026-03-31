@@ -715,11 +715,13 @@ contains
              ! Note that we could use energy_eV if present, but this energy is
              ! not guaranteed to be well-behaved
              Te = electron_eV_to_K * LT_get_col(td_tbl, td_energy_eV, fields)
+             Te_available = .true.
           end if
           rates(:, n) = c0 * c(1) * (300 / Te)**c(2)
        case (rate_analytic_k3)
           if (.not. Te_available) then
              Te = electron_eV_to_K * LT_get_col(td_tbl, td_energy_eV, fields)
+             Te_available = .true.
           end if
           ! We convert boltzmann_const from J / K to eV / K
           rates(:, n) = c0 * (c(1) * ((UC_boltzmann_const / UC_elec_volt) * Te + c(2))**2 - c(3)) * c(4)
