@@ -51,6 +51,7 @@ if args.time_interval is not None:
 
     time = time[t1_idx:t2_idx]
     rates = rates[t1_idx:t2_idx]
+    amounts = amounts[t1_idx:t2_idx]
 
 # Subtract initial state from rates
 rates = rates - rates[0]
