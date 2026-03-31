@@ -48,8 +48,8 @@ This list is not complete, any additions are welcome:
 
 * [Calculating radio emissions of positive streamer phenomena using 3D simulations](http://dx.doi.org/10.1029/2024JD041385) (2024)
 * [Temporal evolution and mechanism of secondary streamers in N2/O2 mixtures at atmospheric pressure under DC voltage](https://doi.org/10.1088/1361-6463/ad15be) (2024)
-* [Associative electron detachment in sprites](10.22541/essoar.170534137.75776904/v1) (2024)
-* [Repetitively pulsed streamer discharge with laser-induced surface trapped electron desorption to exploit residual charges in situ](https://doi.org/10.1088/1361-6595/acf87d) (2024)
+* [Associative electron detachment in sprites](https://doi.org/10.1029/2023GL107990) (2024)
+* [Repetitively pulsed streamer discharge with laser-induced surface trapped electron desorption to exploit residual charges in situ](https://doi.org/10.1088/1361-6595/ad4671) (2024)
 
 * [A numerical and experimental study on positive diffusive ionization waves in different N2/O2 mixtures: the role of photoionization](https://doi.org/10.1088/1361-6595/acb813) (2023)
 * [3D modeling of positive streamers in air with inhomogeneous density](https://doi.org/10.1088/1361-6595/acf87d) (2023)
