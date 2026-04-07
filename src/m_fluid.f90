@@ -417,7 +417,7 @@ contains
        dt_lim(1) = tmp
 
        ! Keep track of chemical production at last time integration step
-       call chemical_rates_box(box, nc, rates, box_rates)
+       call chemical_rates_box(box, nc, rates, mask, box_rates)
 
        !> Integrate rates over space and time into global storage
        ST_current_rates(1:n_reactions, tid) = &
@@ -663,11 +663,12 @@ contains
   end subroutine handle_ion_se_flux
 
   !> Volume integrate chemical reaction rates
-  subroutine chemical_rates_box(box, nc, rates, box_rates)
+  subroutine chemical_rates_box(box, nc, rates, mask, box_rates)
     use m_chemistry
     type(box_t), intent(in) :: box
     integer, intent(in)     :: nc
     real(dp), intent(in)    :: rates(nc**NDIM, n_reactions)
+    logical, intent(in)     :: mask(nc**NDIM)
     real(dp), intent(out)   :: box_rates(n_reactions)
 #if NDIM == 2
     integer                 :: i, n
@@ -675,9 +676,12 @@ contains
 #endif
 
     if (box%coord_t == af_xyz) then
-       box_rates = sum(rates, dim=1) * product(box%dr)
+       do i = 1, n_reactions
+          box_rates(i) = sum(rates(:, i), mask=mask) * product(box%dr)
+       end do
 #if NDIM == 2
     else if (box%coord_t == af_cyl) then
+       ! Account for cylindrical geometry in volume integration
        box_rates(:) = 0
 
        ! Get volume versus radius
@@ -687,6 +691,11 @@ contains
 
        do n = 1, n_reactions
           tmp = reshape(rates(:, n), [nc, nc])
+
+          where (.not. reshape(mask, [nc, nc]))
+             tmp = 0.0_dp
+          end where
+
           do i = 1, nc
              tmp(i, :) = w(i) * tmp(i, :)
           end do
