@@ -104,6 +104,7 @@ This expression should not contain spaces, and it should be one of the following
 * `c1*exp(-(c2/(c3+Td))**c4)`
 * `c1*exp(-(Td/c2)**c3)`
 * `c1*exp(-(c2/(kb*(Tg+Td/c3)))**c4)`
+* `c1*(300/Te)**c2*exp(-c3/Tg)*exp(c4*(Te-Tg)/(Te*Tg))`
 
 For these expressions, the values specified should be `c1`, `c2`, etc. So for example
 
