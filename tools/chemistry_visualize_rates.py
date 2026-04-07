@@ -66,51 +66,58 @@ if args.list_reactions:
 
 if args.plot_all:
     # Visualize all the rates vs. time
-    plt.figure(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(10, 6), layout='constrained')
 
     ix = np.argsort(rates[-1, :])[::-1]
     sum_of_rates = rates[-1, :].sum()
 
     for i in ix:
-        plt.plot(time, rates[:, i], label=reactions_list[i] +
-                 f' ({100*rates[-1, i]/sum_of_rates:.2f}%)')
-    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-
-# Visualize the source and sink reactions for a given specie
-sidx = species_list.index(args.soi)
-fig, ax = plt.subplots(3, figsize=(5, 7.5), sharex=True,
-                       layout='constrained')
-
-srce_idx = np.where(stoich_matrix[sidx, :] > 0)[0]
-sink_idx = np.where(stoich_matrix[sidx, :] < 0)[0]
-titles = ['Source', 'Sink']
-
-for i, (ix, text) in enumerate(zip([srce_idx, sink_idx], titles)):
-    amount = stoich_matrix[sidx, ix] * rates[:, ix]
-    frac = amount[-1]/amount[-1].sum()
-
-    for j, idx in enumerate(ix):
-        if frac[j] > args.threshold:
-            ax[i].plot(time, amount[:, j], label=reactions_list[idx] +
-                       f' ({100*frac[j]:.2f}%)')
-
-    ax[i].set_title(text + ' reactions')
-    ax[i].set_ylabel('Production (#)')
-    ax[i].legend()
-
-gross_prod = np.dot(rates[:, srce_idx], stoich_matrix[sidx, srce_idx])
-net_prod = np.dot(rates, stoich_matrix[sidx])
-ax[2].plot(time, gross_prod, label='gross production')
-ax[2].plot(time, net_prod, label='net production')
-ax[2].plot(time, amounts[:, sidx], '--', label='amount present')
-ax[2].set_xlabel('Time (s)')
-ax[2].set_ylabel('Production (#)')
-ax[2].legend()
-fig.suptitle(f'{len(srce_idx)+len(sink_idx)} of {n_reactions}' +
-             f' influence {args.soi}')
-
-if args.savefig is not None:
-    plt.savefig(args.savefig, bbox_inches='tight', dpi=200)
-    print(f'Saved {args.savefig}')
-else:
+        ax.plot(time, rates[:, i], label=reactions_list[i] +
+                f' ({100*rates[-1, i]/sum_of_rates:.2f}%)')
+    ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+    ax.set_ylabel('Production (#)')
+    ax.set_xlabel('Time (s)')
     plt.show()
+
+if args.soi is not None:
+    # Visualize the source and sink reactions for a given specie
+    sidx = species_list.index(args.soi)
+    fig, ax = plt.subplots(3, figsize=(5, 7.5), sharex=True,
+                           layout='constrained')
+
+    srce_idx = np.where(stoich_matrix[sidx, :] > 0)[0]
+    sink_idx = np.where(stoich_matrix[sidx, :] < 0)[0]
+    titles = ['Source', 'Sink']
+
+    for i, (ix, text) in enumerate(zip([srce_idx, sink_idx], titles)):
+        amount = stoich_matrix[sidx, ix] * rates[:, ix]
+        frac = amount[-1]/amount[-1].sum()
+        n_shown = 0
+
+        for j, idx in enumerate(ix):
+            if frac[j] > args.threshold:
+                ax[i].plot(time, amount[:, j], label=reactions_list[idx] +
+                           f' ({100*frac[j]:.2f}%)')
+                n_shown += 1
+
+        ax[i].set_title(text + ' reactions')
+        ax[i].set_ylabel('Production (#)')
+        if n_shown > 0:
+            ax[i].legend()
+
+    gross_prod = np.dot(rates[:, srce_idx], stoich_matrix[sidx, srce_idx])
+    net_prod = np.dot(rates, stoich_matrix[sidx])
+    ax[2].plot(time, gross_prod, label='gross production')
+    ax[2].plot(time, net_prod, label='net production')
+    ax[2].plot(time, amounts[:, sidx], '--', label='amount present')
+    ax[2].set_xlabel('Time (s)')
+    ax[2].set_ylabel('Production (#)')
+    ax[2].legend()
+    fig.suptitle(f'{len(srce_idx)+len(sink_idx)} of {n_reactions}' +
+                 f' influence {args.soi}')
+
+    if args.savefig is not None:
+        plt.savefig(args.savefig, bbox_inches='tight', dpi=200)
+        print(f'Saved {args.savefig}')
+    else:
+        plt.show()
