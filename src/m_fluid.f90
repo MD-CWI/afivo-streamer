@@ -670,8 +670,9 @@ contains
     real(dp), intent(in)    :: rates(nc**NDIM, n_reactions)
     logical, intent(in)     :: mask(nc**NDIM)
     real(dp), intent(out)   :: box_rates(n_reactions)
+    integer                 :: i
 #if NDIM == 2
-    integer                 :: i, n
+    integer                 :: n
     real(dp)                :: w(nc), tmp(nc, nc)
 #endif
 
