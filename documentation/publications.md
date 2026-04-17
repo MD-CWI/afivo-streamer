@@ -34,6 +34,7 @@ Plasma Sources Sci. Technol. (2023)
 
 This list is not complete, any additions are welcome:
 
+* [Simulation of the Streamer Propagation in a Small Region with Monte Carlo Photoionization](https://doi.org/10.1134/S1063780X26600015) (2026)
 * [Investigation on the diffuse discharge under the double-pulse scheme in atmospheric N2/O2 mixtures](https://doi.org/10.1088/1361-6595/ae4450) (2026)
 * [Multispectral Optical Emission Modeling of Sprites Using Plasma Streamer Simulations: A Computational Electromagnetics Approach for Remote Sensing Applications](https://doi.org/10.2528/PIERB25112704) (2026)
 
