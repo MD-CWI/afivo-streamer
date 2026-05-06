@@ -35,6 +35,9 @@ module m_photoi_mc
   !> Minimal photon weight
   real(dp), protected :: phmc_min_weight = 1.0_dp
 
+  !> Non-ionizing absorption coefficient (1/m), 0 if none
+  real(dp), protected :: phmc_k3 = 0.0_dp
+
   !> Table for photoionization
   type(phmc_tbl_t), public, protected :: phmc_tbl
 
@@ -104,12 +107,15 @@ contains
 
        select case (source_type)
        case ("Zheleznyak")
+          phmc_k3 = 0.0_dp
           ! Standard Zheleznyak model for dry air
           call phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc_Zheleznyak)
        case ("Naidis_humid")
+          phmc_k3 = (0.26e2_dp / UC_torr_to_bar) * p_H2O
           ! Naidis model for humid air
-          call phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc_Naidis_humid)
+          call phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc_Zheleznyak)
        case ("Aints_humid")
+          phmc_k3 = 0.0_dp
           ! Aints model for humid air
           call phmc_get_table_air(phmc_tbl, p_O2, p_H2O, absfunc_Aints_humid)
        case default
@@ -354,49 +360,58 @@ contains
 
   !> Given a list of photon production positions (xyz_in), compute where they
   !> end up (xyz_out).
-  subroutine phmc_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, prng)
+  subroutine phmc_do_absorption(xyz_in, xyz_out, n_dim, n_photons, tbl, prng, k3)
     use m_lookup_table
     use m_random
     use omp_lib
-    integer, intent(in)        :: n_photons !< Number of photons
-    !> Input (x,y,z) values
-    real(dp), intent(in)       :: xyz_in(3, n_photons)
-    !> Output (x,y,z) values
-    real(dp), intent(out)      :: xyz_out(3, n_photons)
-    integer, intent(in)        :: n_dim     !< 2 or 3 dimensional
-    !< Lookup table
-    type(LT_t), intent(in)     :: tbl
-    type(PRNG_t), intent(inout) :: prng       !< Random number generator
-    integer                    :: n, proc_id
-    real(dp)                   :: rr, dist
+    !> Input: number of generated photons. Output: number of ionizing photons.
+    !> These can differ when k3 is non-zero.
+    integer, intent(inout)      :: n_photons
+    !> Input (x,y,z) values of photon production
+    real(dp), intent(in)        :: xyz_in(3, n_photons)
+    !> Output (x,y,z) values of photon absorption
+    real(dp), intent(out)       :: xyz_out(3, n_photons)
+    integer, intent(in)         :: n_dim !< 2 or 3 dimensional
+    type(LT_t), intent(in)      :: tbl   !< Lookup table for absorption distance
+    type(PRNG_t), intent(inout) :: prng  !< Random number generator
+    real(dp), intent(in)        :: k3    !< non-ionizing absorption coefficient
+    logical, allocatable        :: mask(:)
+    integer                     :: n, proc_id
+    real(dp)                    :: rr, dist, p_ionization
 
-    !$omp parallel private(n, rr, dist, proc_id)
+    if (n_dim < 2 .or. n_dim > 3) error stop "n_dim should be 2 or 3"
+
+    allocate(mask(n_photons))
+
+    !$omp parallel private(n, rr, dist, proc_id, p_ionization)
     proc_id = 1+omp_get_thread_num()
 
-    if (n_dim == 2) then
-       !$omp do
-       do n = 1, n_photons
-          rr = prng%rngs(proc_id)%unif_01()
-          dist = LT_get_col(tbl, 1, rr)
-          ! Pick a random point on a sphere, and ignore the last dimension
-          xyz_out(1:3, n) =  xyz_in(1:3, n) + &
-               prng%rngs(proc_id)%sphere(dist)
-       end do
-       !$omp end do
-    else if (n_dim == 3) then
-       !$omp do
-       do n = 1, n_photons
-          rr = prng%rngs(proc_id)%unif_01()
-          dist = LT_get_col(tbl, 1, rr)
-          xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
-       end do
-       !$omp end do
-    else
-       print *, "phmc_do_absorption: unknown n_dim", n_dim
-       stop
-    end if
+    !$omp do
+    do n = 1, n_photons
+       rr = prng%rngs(proc_id)%unif_01()
+       ! Sample travel distance
+       dist = LT_get_col(tbl, 1, rr)
+       ! Note that in 2D we ignore the last dimension
+       xyz_out(:, n) =  xyz_in(:, n) + prng%rngs(proc_id)%sphere(dist)
+
+       ! Test for non-ionizing absorption
+       if (k3 > 0) then
+          p_ionization = exp(-k3 * dist)
+          mask(n) = (prng%rngs(proc_id)%unif_01() < p_ionization)
+       else
+          mask(n) = .true.
+       end if
+    end do
     !$omp end parallel
 
+    ! Keep only photons that led to ionization
+    n_photons = 0
+    do n = 1, size(mask)
+       if (mask(n)) then
+          n_photons = n_photons + 1
+          xyz_out(:, n_photons) = xyz_out(:, n)
+       end if
+    end do
   end subroutine phmc_do_absorption
 
   ! !> Given a list of photon production positions (xyz_in), compute where they
@@ -524,7 +539,7 @@ contains
     if (use_cyl) then           ! 2D only
        ! Get location of absorption. On input, xyz is set to (r, z, 0). On
        ! output, the coordinates thus correspond to (x, z, y)
-       call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, prng)
+       call phmc_do_absorption(xyz_src, xyz_abs, 3, n_used, phmc_tbl%tbl, prng, phmc_k3)
 
        !$omp do
        do n = 1, n_used
@@ -541,7 +556,7 @@ contains
        end if
     else
        ! Get location of absorbption
-       call phmc_do_absorption(xyz_src, xyz_abs, NDIM, n_used, phmc_tbl%tbl, prng)
+       call phmc_do_absorption(xyz_src, xyz_abs, NDIM, n_used, phmc_tbl%tbl, prng, phmc_k3)
 
        if (ST_use_dielectric) then
           ! Handle photons that collide with dielectrics separately
