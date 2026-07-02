@@ -1361,8 +1361,9 @@ contains
     character(len=*), intent(inout) :: simple
     integer, intent(out)            :: charge
     integer                         :: n
-    logical                         :: in_brackets = .false.
+    logical                         :: in_brackets
 
+    in_brackets = .false.
     charge = 0
     simple = ""
 
