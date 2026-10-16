@@ -60,6 +60,8 @@ module m_config
      integer                       :: var_size
      !> Whether the variable size is flexible
      logical                       :: dynamic_size
+     !> Whether the variable has to be specified
+     logical                       :: required
      !> Whether the variable's value has been requested
      logical                       :: used
      !> How the variable has been set (default, command line, file)
@@ -78,6 +80,7 @@ module m_config
   !> The configuration that contains all the variables
   type CFG_t
      logical                      :: sorted = .false.
+     logical                      :: print_help = .false.
      integer                      :: num_vars = 0
      type(CFG_var_t), allocatable :: vars(:)
   end type CFG_t
@@ -100,10 +103,10 @@ module m_config
 
   !> Interface to get variables from the configuration
   interface CFG_add_get
-     module procedure  add_get_real, add_get_real_array
-     module procedure  add_get_int, add_get_int_array
-     module procedure  add_get_logic, add_get_logic_array
-     module procedure  add_get_string, add_get_string_array
+     module procedure  add_get_real, add_get_real_array, add_get_real_array_dyn
+     module procedure  add_get_int, add_get_int_array, add_get_int_array_dyn
+     module procedure  add_get_logic, add_get_logic_array, add_get_logic_array_dyn
+     module procedure  add_get_string, add_get_string_array, add_get_string_array_dyn
   end interface CFG_add_get
 
   ! Public types
@@ -127,6 +130,7 @@ module m_config
   public :: CFG_get_size
   public :: CFG_get_type
   public :: CFG_check
+  public :: CFG_print_help
   public :: CFG_sort
   public :: CFG_write
   public :: CFG_write_markdown
@@ -163,11 +167,14 @@ contains
        end if
 
        n = len_trim(arg)
+       extension = ""
        if (n > 3) extension = arg(n-3:)
 
-       ! Look for arguments starting with a single dash
-       if (arg(1:1) == '-' .and. arg(2:2) /= '-') then
-          ! This sets a variable
+       if (arg == "-help" .or. arg == "--help") then
+          ! Print a help message when CFG_check is called
+          cfg%print_help = .true.
+       else if (arg(1:1) == '-' .and. arg(2:2) /= '-') then
+          ! Look for arguments starting with a single dash, which set a variable
           call parse_line(cfg, CFG_set_by_arg, arg(2:), valid_syntax)
 
           if (.not. valid_syntax) then
@@ -239,7 +246,7 @@ contains
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: filename
 
-    integer, parameter            :: my_unit = 123
+    integer                       :: my_unit
     integer                       :: io_state
     integer                       :: line_number
     logical :: valid_syntax
@@ -248,7 +255,7 @@ contains
     character(len=CFG_max_line_len) :: line
     character(len=CFG_name_len)   :: category
 
-    open(my_unit, file=trim(filename), status="old", action="read")
+    open(newunit=my_unit, file=trim(filename), status="old", action="read")
     write(line_fmt, "(A,I0,A)") "(A", CFG_max_line_len, ")"
 
     category    = "" ! Default category is empty
@@ -274,9 +281,8 @@ contains
     end do
 
     ! Error handling
-998 write(err_string, "(A,I0,A,I0)") " IOSTAT = ", io_state, &
-         " while reading from " // trim(filename) // " at line ", &
-         line_number
+998 write(err_string, "(A,I0,A,I0)") " Error while reading from " // &
+         trim(filename) // " at line ", line_number
     call handle_error("CFG_read_file:" // err_string)
 
     ! Routine ends here if the end of "filename" is reached
@@ -326,7 +332,7 @@ contains
        end if
     end if
 
-    if (line(equal_sign_ix-1:equal_sign_ix) == '+=') then
+    if (line(max(equal_sign_ix-1, 1):equal_sign_ix) == '+=') then
        append = .true.
        var_name = line(1 : equal_sign_ix - 2) ! Set variable name
     else
@@ -337,10 +343,12 @@ contains
     ! If there are less than two spaces or a tab, reset to no category
     if (var_name(1:2) /= " " .and. var_name(1:1) /= tab_char) then
        category = ""
+       if (present(category_arg)) category_arg = ""
     end if
 
     ! Replace leading tabs by spaces
     ix = verify(var_name, tab_char) ! Find first non-tab character
+    if (ix == 0) ix = len(var_name) ! Case of all tabs
     var_name(1:ix-1) = ""
 
     ! Remove leading blanks
@@ -461,19 +469,116 @@ contains
 
   end subroutine trim_comment
 
-  subroutine CFG_check(cfg)
-    type(CFG_t), intent(in)       :: cfg
-    integer                       :: n
-    character(len=CFG_string_len) :: err_string
+  subroutine CFG_check(cfg, stop_after_help, help_printed)
+    type(CFG_t), intent(in)        :: cfg
+    logical, intent(in), optional  :: stop_after_help
+    logical, intent(out), optional :: help_printed
+    integer                        :: n
+    character(len=CFG_string_len)  :: err_string
+
+    if (present(help_printed)) help_printed = .false.
+
+    if (cfg%print_help) then
+       call CFG_print_help(cfg, stop_after_help)
+       if (present(help_printed)) help_printed = .true.
+    end if
 
     do n = 1, cfg%num_vars
        if (cfg%vars(n)%var_type == CFG_unknown_type) then
           write(err_string, *) "CFG_check: unknown variable ", &
                trim(cfg%vars(n)%var_name), " specified"
+          ! Hint for possible typo
+          call suggest_unknown_arg(cfg, trim(cfg%vars(n)%var_name))
           call handle_error(err_string)
        end if
     end do
   end subroutine CFG_check
+
+  !> Print a help message with all configuration variables, their types,
+  !> default values, and descriptions. Optionally stop the program afterwards.
+  subroutine CFG_print_help(cfg, stop_after)
+    type(CFG_t), intent(in)       :: cfg
+    !> Whether to stop the program after printing help (default: true)
+    logical, intent(in), optional :: stop_after
+    logical                       :: do_stop
+    integer                       :: i, j
+    type(CFG_t)                   :: cfg_sorted
+    character(len=CFG_name_len)   :: category, prev_category, var_name
+
+    do_stop = .true.
+    if (present(stop_after)) do_stop = stop_after
+
+    ! Work on a sorted copy
+    cfg_sorted = cfg
+    if (.not. cfg_sorted%sorted) call CFG_sort(cfg_sorted)
+
+    write(*, "(A)") ""
+    write(*, "(A)") "Available configuration options:"
+    write(*, "(A)") "================================"
+    write(*, "(A)") ""
+
+    prev_category = ""
+
+    do i = 1, cfg_sorted%num_vars
+       if (cfg_sorted%vars(i)%var_type == CFG_unknown_type) cycle
+
+       call split_category(cfg_sorted%vars(i), category, var_name)
+
+       if (category /= prev_category) then
+          write(*, "(A)") "[" // trim(category) // "]"
+          prev_category = category
+       end if
+
+       ! Print variable name and type
+       if (cfg_sorted%vars(i)%var_size > 1) then
+          write(*, "(A,A,A,A,A,I0,A)", advance="no") "  ", trim(var_name), &
+               " (", trim(CFG_type_names(cfg_sorted%vars(i)%var_type)), &
+               " array, size ", cfg_sorted%vars(i)%var_size, ")"
+       else
+          write(*, "(A,A,A,A,A)", advance="no") "  ", trim(var_name), &
+               " (", trim(CFG_type_names(cfg_sorted%vars(i)%var_type)), ")"
+       end if
+
+       if (cfg_sorted%vars(i)%dynamic_size) then
+          write(*, "(A)", advance="no") " [dynamic]"
+       end if
+       write(*, "(A)") ""
+
+       ! Print description
+       write(*, "(A,A)") "      ", trim(cfg_sorted%vars(i)%description)
+
+       ! Print default value(s)
+       write(*, "(A)", advance="no") "      Default:"
+       select case (cfg_sorted%vars(i)%var_type)
+       case (CFG_integer_type)
+          do j = 1, cfg_sorted%vars(i)%var_size
+             write(*, "(A,I0)", advance="no") " ", &
+                  cfg_sorted%vars(i)%int_data(j)
+          end do
+       case (CFG_real_type)
+          do j = 1, cfg_sorted%vars(i)%var_size
+             write(*, "(A,ES11.4)", advance="no") " ", &
+                  cfg_sorted%vars(i)%real_data(j)
+          end do
+       case (CFG_string_type)
+          do j = 1, cfg_sorted%vars(i)%var_size
+             write(*, "(A)", advance="no") " '" // &
+                  trim(cfg_sorted%vars(i)%char_data(j)) // "'"
+          end do
+       case (CFG_logic_type)
+          do j = 1, cfg_sorted%vars(i)%var_size
+             write(*, "(A,L1)", advance="no") " ", &
+                  cfg_sorted%vars(i)%logic_data(j)
+          end do
+       end select
+       write(*, "(A)") ""
+       write(*, "(A)") ""
+    end do
+
+    write(*, "(A)") "Usage: set variables with -name=value or via .cfg files"
+
+    if (do_stop) stop
+  end subroutine CFG_print_help
 
   !> This routine writes the current configuration to a file with descriptions
   subroutine CFG_write(cfg_in, filename, hide_unused, custom_first)
@@ -493,6 +598,8 @@ contains
     character(len=CFG_name_len)   :: category, prev_category
     character(len=CFG_string_len) :: err_string
 
+    var_name = ""
+
     hide_not_used = .false.
     if (present(hide_unused)) hide_not_used = hide_unused
 
@@ -503,12 +610,18 @@ contains
     cfg = cfg_in
     if (.not. cfg%sorted) call CFG_sort(cfg)
 
+    call CFG_check(cfg)
+
     write(name_format, FMT="(A,I0,A)") "(A,A", CFG_name_len, ",A)"
 
     if (filename == "stdout") then
        myUnit = output_unit
     else
-       open(newunit=myUnit, FILE=filename, ACTION="WRITE")
+       open(newunit=myUnit, FILE=filename, ACTION="WRITE", iostat=io_state)
+       if (io_state /= 0) then
+          write(err_string, *) "CFG_write error: could not open ", filename
+          call handle_error(err_string)
+       end if
     end if
 
     category      = ""
@@ -595,12 +708,11 @@ contains
     end do
 
     if (myUnit /= output_unit) close(myUnit, ERR=999, IOSTAT=io_state)
-    call CFG_check(cfg_in)
     return
 
 998 continue
-    write(err_string, *) "CFG_write error: io_state = ", io_state, &
-         " while writing ", trim(var_name), " to ", filename
+    write(err_string, *) "CFG_write error: while writing ", &
+         trim(var_name), " to ", filename
     call handle_error(err_string)
 
 999 continue ! If there was an error, the routine will end here
@@ -623,6 +735,8 @@ contains
     character(len=CFG_name_len)   :: category, prev_category
     character(len=CFG_string_len) :: err_string
 
+    var_name = ""
+
     hide_not_used = .false.
     if (present(hide_unused)) hide_not_used = hide_unused
 
@@ -630,13 +744,14 @@ contains
     cfg = cfg_in
     if (.not. cfg%sorted) call CFG_sort(cfg)
 
+    call CFG_check(cfg)
+
     write(name_format, FMT="(A,I0,A)") "(A,A", CFG_name_len, ",A)"
 
     if (filename == "stdout") then
        myUnit = output_unit
     else
-       myUnit = 333
-       open(myUnit, FILE=filename, ACTION="WRITE")
+       open(newunit=myUnit, FILE=filename, ACTION="WRITE")
     end if
 
     category      = ""
@@ -653,7 +768,6 @@ contains
        call split_category(cfg%vars(i), category, var_name)
 
        if (category /= prev_category) then
-          if (category == "") category = "No category"
           write(myUnit, ERR=998, FMT="(A)") '## ' // trim(category)
           write(myUnit, ERR=998, FMT="(A)") ""
           prev_category = category
@@ -691,12 +805,11 @@ contains
     end do
 
     if (myUnit /= output_unit) close(myUnit, ERR=999, IOSTAT=io_state)
-    call CFG_check(cfg_in)
     return
 
 998 continue
-    write(err_string, *) "CFG_write_markdown error: io_state = ", io_state, &
-         " while writing ", trim(var_name), " to ", filename
+    write(err_string, *) "CFG_write_markdown error: while writing ", &
+         trim(var_name), " to ", filename
     call handle_error(err_string)
 
 999 continue ! If there was an error, the routine will end here
@@ -748,12 +861,18 @@ contains
   !> Helper routine to store variables. This is useful because a lot of the same
   !> code is executed for the different types of variables.
   subroutine prepare_store_var(cfg, var_name, var_type, var_size, &
-       description, ix, dynamic_size)
+       description, ix, dynamic_size, required)
     type(CFG_t), intent(inout)    :: cfg
     character(len=*), intent(in)  :: var_name, description
     integer, intent(in)           :: var_type, var_size
     integer, intent(out)          :: ix !< Index of variable
     logical, intent(in), optional :: dynamic_size
+    logical, intent(in), optional :: required
+
+    if (len_trim(var_name) > CFG_name_len) then
+       call handle_error("prepare_store_var: variable length [" // &
+               & trim(var_name) // "] exceeds CFG_name_len")
+    end if
 
     ! Check if variable already exists
     call get_var_index(cfg, var_name, ix)
@@ -782,6 +901,12 @@ contains
        cfg%vars(ix)%dynamic_size = dynamic_size
     else
        cfg%vars(ix)%dynamic_size = .false.
+    end if
+
+    if (present(required)) then
+       cfg%vars(ix)%required = required
+    else
+       cfg%vars(ix)%required = .false.
     end if
 
     select case (var_type)
@@ -821,19 +946,26 @@ contains
             // var_name // "] has different size (", cfg%vars(ix)%var_size, &
             ") than requested (", var_size, ")"
        call handle_error(err_string)
+    else if (cfg%vars(ix)%required .and. &
+         cfg%vars(ix)%set_by == CFG_set_by_default) then
+       write(err_string, fmt="(A)") "CFG_get: variable [" &
+            // var_name // "] is required but was not specified"
+       call handle_error(err_string)
     else                        ! All good, variable will be used
        cfg%vars(ix)%used = .true.
     end if
   end subroutine prepare_get_var
 
   !> Add a configuration variable with a real value
-  subroutine add_real(cfg, var_name, real_data, comment)
+  subroutine add_real(cfg, var_name, real_data, comment, required)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name, comment
     real(dp), intent(in)         :: real_data
+    logical, intent(in), optional :: required
     integer                      :: ix
 
-    call prepare_store_var(cfg, var_name, CFG_real_type, 1, comment, ix)
+    call prepare_store_var(cfg, var_name, CFG_real_type, 1, comment, &
+         ix, .false., required)
 
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
@@ -844,15 +976,17 @@ contains
 
   !> Add a configuration variable with an array of type
   !  real
-  subroutine add_real_array(cfg, var_name, real_data, comment, dynamic_size)
+  subroutine add_real_array(cfg, var_name, real_data, comment, &
+       dynamic_size, required)
     type(CFG_t), intent(inout)    :: cfg
     character(len=*), intent(in)  :: var_name, comment
     real(dp), intent(in)          :: real_data(:)
     logical, intent(in), optional :: dynamic_size
+    logical, intent(in), optional :: required
     integer                       :: ix
 
     call prepare_store_var(cfg, var_name, CFG_real_type, &
-         size(real_data), comment, ix, dynamic_size)
+         size(real_data), comment, ix, dynamic_size, required)
 
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
@@ -862,13 +996,15 @@ contains
   end subroutine add_real_array
 
   !> Add a configuration variable with an integer value
-  subroutine add_int(cfg, var_name, int_data, comment)
+  subroutine add_int(cfg, var_name, int_data, comment, required)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name, comment
     integer, intent(in)          :: int_data
+    logical, intent(in), optional :: required
     integer                      :: ix
 
-    call prepare_store_var(cfg, var_name, CFG_integer_type, 1, comment, ix)
+    call prepare_store_var(cfg, var_name, CFG_integer_type, 1, comment, &
+         ix, .false., required)
 
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
@@ -878,15 +1014,17 @@ contains
   end subroutine add_int
 
   !> Add a configuration variable with an array of type integer
-  subroutine add_int_array(cfg, var_name, int_data, comment, dynamic_size)
+  subroutine add_int_array(cfg, var_name, int_data, comment, &
+       dynamic_size, required)
     type(CFG_t), intent(inout)    :: cfg
     character(len=*), intent(in)  :: var_name, comment
     integer, intent(in)           :: int_data(:)
     logical, intent(in), optional :: dynamic_size
+    logical, intent(in), optional :: required
     integer                       :: ix
 
     call prepare_store_var(cfg, var_name, CFG_integer_type, &
-         size(int_data), comment, ix, dynamic_size)
+         size(int_data), comment, ix, dynamic_size, required)
 
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
@@ -896,12 +1034,15 @@ contains
   end subroutine add_int_array
 
   !> Add a configuration variable with an character value
-  subroutine add_string(cfg, var_name, char_data, comment)
+  subroutine add_string(cfg, var_name, char_data, comment, required)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name, comment, char_data
+    logical, intent(in), optional :: required
     integer                      :: ix
 
-    call prepare_store_var(cfg, var_name, CFG_string_type, 1, comment, ix)
+    call prepare_store_var(cfg, var_name, CFG_string_type, 1, comment, &
+         ix, .false., required)
+
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
     else
@@ -911,14 +1052,15 @@ contains
 
   !> Add a configuration variable with an array of type character
   subroutine add_string_array(cfg, var_name, char_data, &
-       comment, dynamic_size)
+       comment, dynamic_size, required)
     type(CFG_t), intent(inout)    :: cfg
     character(len=*), intent(in)  :: var_name, comment, char_data(:)
     logical, intent(in), optional :: dynamic_size
+    logical, intent(in), optional :: required
     integer                       :: ix
 
     call prepare_store_var(cfg, var_name, CFG_string_type, &
-         size(char_data), comment, ix, dynamic_size)
+         size(char_data), comment, ix, dynamic_size, required)
 
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
@@ -928,13 +1070,15 @@ contains
   end subroutine add_string_array
 
   !> Add a configuration variable with an logical value
-  subroutine add_logic(cfg, var_name, logic_data, comment)
+  subroutine add_logic(cfg, var_name, logic_data, comment, required)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name, comment
     logical, intent(in)          :: logic_data
+    logical, intent(in), optional :: required
     integer                      :: ix
 
-    call prepare_store_var(cfg, var_name, CFG_logic_type, 1, comment, ix)
+    call prepare_store_var(cfg, var_name, CFG_logic_type, 1, comment, &
+         ix, .false., required)
 
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
@@ -945,15 +1089,16 @@ contains
 
   !> Add a configuration variable with an array of type logical
   subroutine add_logic_array(cfg, var_name, logic_data, &
-       comment, dynamic_size)
+       comment, dynamic_size, required)
     type(CFG_t), intent(inout)    :: cfg
     character(len=*), intent(in)  :: var_name, comment
     logical, intent(in)           :: logic_data(:)
     logical, intent(in), optional :: dynamic_size
+    logical, intent(in), optional :: required
     integer                       :: ix
 
     call prepare_store_var(cfg, var_name, CFG_logic_type, &
-         size(logic_data), comment, ix, dynamic_size)
+         size(logic_data), comment, ix, dynamic_size, required)
 
     if (cfg%vars(ix)%stored_data /= unstored_data_string) then
        call read_variable(cfg%vars(ix))
@@ -1025,7 +1170,7 @@ contains
   subroutine get_int(cfg, var_name, res)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name
-    integer, intent(inout)       :: res
+    integer, intent(out)         :: res
     integer                      :: ix
 
     call prepare_get_var(cfg, var_name, CFG_integer_type, 1, ix)
@@ -1056,51 +1201,119 @@ contains
 
   !> Get or add a real array of a given name
   subroutine add_get_real_array(cfg, var_name, real_data, &
-       comment, dynamic_size)
+       comment)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name, comment
     real(dp), intent(inout)      :: real_data(:)
-    logical, intent(in), optional :: dynamic_size
 
-    call add_real_array(cfg, var_name, real_data, comment, dynamic_size)
+    call add_real_array(cfg, var_name, real_data, comment)
     call get_real_array(cfg, var_name, real_data)
   end subroutine add_get_real_array
 
+  !> Get or add a real array of a given name
+  subroutine add_get_real_array_dyn(cfg, var_name, real_data, &
+       comment, dynamic_size)
+    type(CFG_t), intent(inout)           :: cfg
+    character(len=*), intent(in)         :: var_name, comment
+    real(dp), allocatable, intent(inout) :: real_data(:)
+    logical, intent(in)                  :: dynamic_size
+    integer                              :: ix
+
+    if (.not. allocated(real_data)) error stop "data is not allocated"
+    call add_real_array(cfg, var_name, real_data, comment, dynamic_size)
+
+    deallocate(real_data)
+    call get_var_index(cfg, var_name, ix)
+    allocate(real_data(cfg%vars(ix)%var_size))
+    call get_real_array(cfg, var_name, real_data)
+  end subroutine add_get_real_array_dyn
+
   !> Get or add a integer array of a given name
   subroutine add_get_int_array(cfg, var_name, int_data, &
-       comment, dynamic_size)
+       comment)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name, comment
     integer, intent(inout)       :: int_data(:)
-    logical, intent(in), optional :: dynamic_size
 
-    call add_int_array(cfg, var_name, int_data, comment, dynamic_size)
+    call add_int_array(cfg, var_name, int_data, comment)
     call get_int_array(cfg, var_name, int_data)
   end subroutine add_get_int_array
 
+  !> Get or add a integer array of a given name
+  subroutine add_get_int_array_dyn(cfg, var_name, int_data, &
+       comment, dynamic_size)
+    type(CFG_t), intent(inout)          :: cfg
+    character(len=*), intent(in)        :: var_name, comment
+    integer, allocatable, intent(inout) :: int_data(:)
+    logical, intent(in)                 :: dynamic_size
+    integer                             :: ix
+
+    if (.not. allocated(int_data)) error stop "data is not allocated"
+    call add_int_array(cfg, var_name, int_data, comment, dynamic_size)
+
+    deallocate(int_data)
+    call get_var_index(cfg, var_name, ix)
+    allocate(int_data(cfg%vars(ix)%var_size))
+    call get_int_array(cfg, var_name, int_data)
+  end subroutine add_get_int_array_dyn
+
   !> Get or add a character array of a given name
   subroutine add_get_string_array(cfg, var_name, char_data, &
-       comment, dynamic_size)
+       comment)
     type(CFG_t), intent(inout)      :: cfg
     character(len=*), intent(in)    :: var_name, comment
     character(len=*), intent(inout) :: char_data(:)
-    logical, intent(in), optional :: dynamic_size
 
-    call add_string_array(cfg, var_name, char_data, comment, dynamic_size)
+    call add_string_array(cfg, var_name, char_data, comment)
     call get_string_array(cfg, var_name, char_data)
   end subroutine add_get_string_array
 
+  !> Get or add a character array of a given name
+  subroutine add_get_string_array_dyn(cfg, var_name, char_data, &
+       comment, dynamic_size)
+    type(CFG_t), intent(inout)                   :: cfg
+    character(len=*), intent(in)                 :: var_name, comment
+    character(len=*), allocatable, intent(inout) :: char_data(:)
+    logical, intent(in)                          :: dynamic_size
+    integer                                      :: ix
+
+    if (.not. allocated(char_data)) error stop "data is not allocated"
+    call add_string_array(cfg, var_name, char_data, comment, dynamic_size)
+
+    deallocate(char_data)
+    call get_var_index(cfg, var_name, ix)
+    allocate(char_data(cfg%vars(ix)%var_size))
+    call get_string_array(cfg, var_name, char_data)
+  end subroutine add_get_string_array_dyn
+
   !> Get or add a logical array of a given name
   subroutine add_get_logic_array(cfg, var_name, logic_data, &
-       comment, dynamic_size)
+       comment)
     type(CFG_t), intent(inout)   :: cfg
     character(len=*), intent(in) :: var_name, comment
     logical, intent(inout)       :: logic_data(:)
-    logical, intent(in), optional :: dynamic_size
 
-    call add_logic_array(cfg, var_name, logic_data, comment, dynamic_size)
+    call add_logic_array(cfg, var_name, logic_data, comment)
     call get_logic_array(cfg, var_name, logic_data)
   end subroutine add_get_logic_array
+
+  !> Get or add a logical array of a given name
+  subroutine add_get_logic_array_dyn(cfg, var_name, logic_data, &
+       comment, dynamic_size)
+    type(CFG_t), intent(inout)          :: cfg
+    character(len=*), intent(in)        :: var_name, comment
+    logical, allocatable, intent(inout) :: logic_data(:)
+    logical, intent(in)                 :: dynamic_size
+    integer                             :: ix
+
+    if (.not. allocated(logic_data)) error stop "data is not allocated"
+    call add_logic_array(cfg, var_name, logic_data, comment, dynamic_size)
+
+    deallocate(logic_data)
+    call get_var_index(cfg, var_name, ix)
+    allocate(logic_data(cfg%vars(ix)%var_size))
+    call get_logic_array(cfg, var_name, logic_data)
+  end subroutine add_get_logic_array_dyn
 
   !> Get or add a real value of a given name
   subroutine add_get_real(cfg, var_name, real_data, comment)
@@ -1345,5 +1558,67 @@ contains
        deallocate(cfg%vars)
     endif
   end subroutine CFG_clear
+
+  !> Print a hint for an unknown command-line argument. If a known variable
+  !> name is close enough, suggest it.
+  subroutine suggest_unknown_arg(cfg, arg)
+    type(CFG_t), intent(in)      :: cfg
+    character(len=*), intent(in) :: arg
+    character(len=CFG_name_len)  :: candidate
+    integer                      :: i, best_dist, dist
+    integer, parameter           :: max_dist = 2
+
+    best_dist = huge(0)
+    candidate = ''
+
+    do i = 1, cfg%num_vars
+       if (cfg%vars(i)%var_type == CFG_unknown_type) cycle
+       dist = levenshtein(trim(arg), trim(cfg%vars(i)%var_name))
+       if (dist < best_dist) then
+          best_dist = dist
+          candidate = cfg%vars(i)%var_name
+       end if
+    end do
+
+    if (best_dist <= max_dist) then
+       write(*,*) ' Unknown variable: ' // trim(arg)
+       write(*,*) ' Did you mean: ' // trim(candidate) // ' ?'
+    end if
+  end subroutine suggest_unknown_arg
+
+  ! Simple Levenshtein distance (edit-distance) implementation. Returns the
+  ! number of single-character insertions, deletions or substitutions needed
+  ! to turn s1 into s2.
+  integer function levenshtein(s1, s2)
+    character(len=*), intent(in) :: s1, s2
+    character(len=:), allocatable :: a, b
+    integer, allocatable :: d(:,:)
+    integer :: i, j, cost, len1, len2
+
+    a = trim(s1); b = trim(s2)
+    len1 = len_trim(a); len2 = len_trim(b)
+
+    allocate(d(0:len1,0:len2))
+    do i = 0, len1
+       d(i,0) = i
+    end do
+    do j = 0, len2
+       d(0,j) = j
+    end do
+
+    do i = 1, len1
+       do j = 1, len2
+          if (a(i:i) == b(j:j)) then
+             cost = 0
+          else
+             cost = 1
+          end if
+          d(i,j) = min( d(i-1,j)   + 1,  &   ! deletion
+                        d(i,  j-1) + 1,  &   ! insertion
+                        d(i-1,j-1) + cost )   ! substitution
+       end do
+    end do
+    levenshtein = d(len1,len2)
+  end function levenshtein
 
 end module m_config
